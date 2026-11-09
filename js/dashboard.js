@@ -9,6 +9,8 @@
   let cursor = new Date(); cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   let state;
   let currentActivities = [];
+  let activeDate = null;
+  const detailPanel = document.getElementById('day-detail-panel');
   const weeks = [...document.querySelectorAll('.calendar-week')];
   const summaryValues = [...document.querySelectorAll('.summary-breakdown dd')];
   const heroMoney = (value) => Ipon.money(value);
@@ -33,6 +35,8 @@
   }
   function renderCalendar(activities) {
     currentActivities = activities;
+    activeDate = null;
+    if (detailPanel) detailPanel.hidden = true;
     const monthName = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(cursor);
     document.getElementById('calendar-month').textContent = monthName;
     document.getElementById('mobile-calendar-month').textContent = monthName;
@@ -106,16 +110,58 @@
     const prefix = button.dataset.type; const functionName = `review_${prefix}`; const idKey = `p_${prefix}_id`;
     try { await Ipon.rpc(functionName, { [idKey]:button.dataset.id, p_decision:decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED', p_review_note:note }); Ipon.toast(`Entry ${decision.toLowerCase()}ed.`); await load(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
   }));
-  document.querySelector('.comp-frame').addEventListener('click', (event) => {
+  function showDayTooltip(day, clientX, clientY) {
+    const date = day.dataset.date;
+    if (!date) return;
+    if (activeDate !== date) {
+      activeDate = date;
+      const items = currentActivities.filter((activity) => activity.activity_date === date);
+      document.getElementById('day-detail-title').textContent = Ipon.dateLabel(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      document.getElementById('day-detail-list').innerHTML = items.length
+        ? items.map((activity) => { const [, label] = statusClass(activity); return `<article><span><b>${Ipon.escapeHtml(label)}</b><small>${Ipon.escapeHtml(activity.approval_status)}</small></span><strong>${Ipon.money(activity.amount)}</strong>${activity.notes ? `<p>${Ipon.escapeHtml(activity.notes)}</p>` : ''}</article>`; }).join('')
+        : '<p class="empty-state">No recorded activity for this day.</p>';
+    }
+    detailPanel.hidden = false;
+    const rect = detailPanel.getBoundingClientRect();
+    const offset = 14;
+    let x = clientX + offset;
+    let y = clientY + offset;
+    if (x + rect.width > window.innerWidth - 12) x = clientX - rect.width - offset;
+    if (y + rect.height > window.innerHeight - 12) y = clientY - rect.height - offset;
+    detailPanel.style.left = `${Math.max(12, x)}px`;
+    detailPanel.style.top = `${Math.max(12, y)}px`;
+  }
+
+  const board = document.querySelector('.calendar-board') || document.querySelector('.comp-frame');
+  board.addEventListener('pointermove', (event) => {
+    const day = event.target.closest('.day[data-date]');
+    if (!day) {
+      detailPanel.hidden = true;
+      activeDate = null;
+      return;
+    }
+    showDayTooltip(day, event.clientX, event.clientY);
+  });
+  board.addEventListener('pointerleave', () => {
+    detailPanel.hidden = true;
+    activeDate = null;
+  });
+  board.addEventListener('focusin', (event) => {
     const day = event.target.closest('.day[data-date]');
     if (!day) return;
-    const items = currentActivities.filter((activity) => activity.activity_date === day.dataset.date);
-    document.getElementById('day-detail-title').textContent = Ipon.dateLabel(day.dataset.date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-    document.getElementById('day-detail-list').innerHTML = items.length
-      ? items.map((activity) => { const [, label] = statusClass(activity); return `<article><span><b>${Ipon.escapeHtml(label)}</b><small>${Ipon.escapeHtml(activity.approval_status)}</small></span><strong>${Ipon.money(activity.amount)}</strong>${activity.notes ? `<p>${Ipon.escapeHtml(activity.notes)}</p>` : ''}</article>`; }).join('')
-      : '<p class="empty-state">No recorded activity for this day.</p>';
-    document.getElementById('day-detail-panel').hidden = false;
+    const box = day.getBoundingClientRect();
+    showDayTooltip(day, box.left + box.width / 2, box.top + box.height / 2);
   });
-  document.getElementById('day-detail-close').addEventListener('click', () => { document.getElementById('day-detail-panel').hidden = true; });
+  board.addEventListener('focusout', (event) => {
+    if (!board.contains(event.relatedTarget)) {
+      detailPanel.hidden = true;
+      activeDate = null;
+    }
+  });
+  document.getElementById('day-detail-close')?.addEventListener('click', () => {
+    detailPanel.hidden = true;
+    activeDate = null;
+  });
+  renderCalendar([]);
   state = await Ipon.init(); await load();
 })();
