@@ -22,17 +22,67 @@
     if (monthInput && !monthInput.value) monthInput.value = today.slice(0, 7);
   }
 
+  let membersList = [];
+  const statusRowsByMonth = new Map();
+
   function statusBadge(status) {
     return `<span class="status status-${String(status).toLowerCase().replaceAll('_', '-')}">${Ipon.escapeHtml(status)}</span>`;
+  }
+
+  async function syncSuggestedAmount() {
+    if (page !== 'contributions') return;
+    const memberSelect = document.getElementById('member-id');
+    const monthInput = document.getElementById('contribution-month');
+    const amountInput = document.getElementById('amount');
+    if (!memberSelect || !monthInput || !amountInput) return;
+
+    const memberId = memberSelect.value;
+    const monthValue = monthInput.value;
+    if (!memberId || !monthValue) {
+      amountInput.value = '';
+      return;
+    }
+
+    const periodMonth = `${monthValue}-01`;
+    const cacheKey = `${memberId}:${periodMonth}`;
+    let statusRow = statusRowsByMonth.get(cacheKey);
+
+    if (statusRow === undefined) {
+      const { data, error } = await Ipon.client
+        .from('v_contribution_status')
+        .select('member_id,period_month,required_amount,paid_amount,outstanding_amount,payment_status')
+        .eq('member_id', memberId)
+        .eq('period_month', periodMonth)
+        .maybeSingle();
+      statusRow = !error && data ? data : null;
+      statusRowsByMonth.set(cacheKey, statusRow);
+    }
+
+    if (statusRow) {
+      const outstanding = Number(statusRow.outstanding_amount || 0);
+      if (outstanding > 0 && statusRow.payment_status !== 'PAID' && statusRow.payment_status !== 'OVERPAID') {
+        amountInput.value = outstanding.toFixed(2);
+      } else {
+        amountInput.value = '';
+      }
+      return;
+    }
+
+    const member = membersList.find((m) => m.id === memberId);
+    const fallbackAmount = Number(member?.monthly_contribution_amount || 0);
+    amountInput.value = fallbackAmount > 0 ? fallbackAmount.toFixed(2) : '';
   }
 
   async function loadMembers() {
     const select = document.getElementById('member-id');
     if (!select) return;
-    const { data, error } = await Ipon.client.from('members').select('id,full_name').eq('status', 'ACTIVE').order('full_name');
+    const currentSelection = select.value;
+    const { data, error } = await Ipon.client.from('members').select('id,full_name,monthly_contribution_amount').eq('status', 'ACTIVE').order('full_name');
     if (error) throw error;
-    select.innerHTML = data.length
-      ? `<option value="">Select member</option>${data.map((member) => `<option value="${member.id}" ${state.profile.member_id === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}`
+    membersList = data || [];
+    const selectedId = currentSelection || state.profile.member_id || '';
+    select.innerHTML = membersList.length
+      ? `<option value="">Select member</option>${membersList.map((member) => `<option value="${member.id}" ${selectedId === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}`
       : '<option value="">No active member profile found</option>';
     if (state.profile.role === 'MEMBER') select.setAttribute('aria-readonly', 'true');
   }
@@ -48,8 +98,12 @@
       }
       month.addEventListener('change', loadContributions);
     }
+    statusRowsByMonth.clear();
     const { data, error } = await Ipon.client.from('v_contribution_status').select('*').eq('period_month', month.value).order('member_name');
     if (error) throw error;
+    (data || []).forEach((row) => {
+      statusRowsByMonth.set(`${row.member_id}:${row.period_month}`, row);
+    });
     tbody.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No contribution periods for this month.</td></tr>';
 
     const { data: entries, error: entriesError } = await Ipon.client.from('contributions')
@@ -57,6 +111,7 @@
       .order('payment_date', { ascending: false }).limit(200);
     if (entriesError) throw entriesError;
     contributionEntriesBody.innerHTML = entries.length ? entries.map((entry) => `<tr><td>${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td>${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No additions recorded yet.</td></tr>';
+    await syncSuggestedAmount();
   }
 
   function actionButtons(row) {
@@ -129,6 +184,8 @@
       Ipon.toast(`Record ${action}ed.`); await load();
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
   }
+  document.getElementById('member-id')?.addEventListener('change', syncSuggestedAmount);
+  document.getElementById('contribution-month')?.addEventListener('change', syncSuggestedAmount);
   tbody.addEventListener('click', handleRecordAction);
   contributionEntriesBody?.addEventListener('click', handleRecordAction);
 
