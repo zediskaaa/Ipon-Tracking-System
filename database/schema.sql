@@ -676,12 +676,11 @@ begin
   select * into v_entry from public.contributions where id = p_contribution_id;
   if not found then raise exception 'Contribution not found.' using errcode = 'P0002'; end if;
   if v_role is null then raise exception 'Your account is not active.' using errcode = '42501'; end if;
-  if v_entry.approval_status in ('REJECTED', 'VOIDED') then
-    raise exception 'Rejected or voided entries cannot be edited.' using errcode = '22023';
+  if v_entry.approval_status <> 'PENDING' then
+    raise exception 'Only pending contributions can be edited. Void a confirmed entry and create a replacement.' using errcode = '22023';
   end if;
   if v_role <> 'ADMIN' and not (
-    v_entry.approval_status = 'PENDING'
-    and (v_entry.submitted_by = auth.uid() or v_role = 'TREASURER')
+    v_entry.submitted_by = auth.uid() or v_role = 'TREASURER'
   ) then
     raise exception 'You are not allowed to edit this entry.' using errcode = '42501';
   end if;
@@ -691,7 +690,9 @@ begin
       payment_date = p_payment_date,
       transaction_reference = nullif(btrim(p_transaction_reference), ''),
       notes = nullif(btrim(p_notes), '')
-  where id = p_contribution_id;
+  where id = p_contribution_id and approval_status = 'PENDING';
+
+  if not found then raise exception 'Pending contribution not found.' using errcode = 'P0002'; end if;
 end;
 $$;
 
@@ -800,8 +801,8 @@ begin
   select * into v_entry from public.withdrawals where id = p_withdrawal_id;
   if not found then raise exception 'Withdrawal not found.' using errcode = 'P0002'; end if;
   if v_role is null then raise exception 'Your account is not active.' using errcode = '42501'; end if;
-  if v_entry.approval_status in ('REJECTED', 'VOIDED') then raise exception 'Rejected or voided entries cannot be edited.' using errcode = '22023'; end if;
-  if v_role <> 'ADMIN' and not (v_entry.approval_status = 'PENDING' and (v_entry.submitted_by = auth.uid() or v_role = 'TREASURER')) then
+  if v_entry.approval_status <> 'PENDING' then raise exception 'Only pending withdrawals can be edited. Void a confirmed entry and create a replacement.' using errcode = '22023'; end if;
+  if v_role <> 'ADMIN' and not (v_entry.submitted_by = auth.uid() or v_role = 'TREASURER') then
     raise exception 'You are not allowed to edit this entry.' using errcode = '42501';
   end if;
 
@@ -809,7 +810,9 @@ begin
     transaction_date = p_transaction_date, amount = p_amount, category = btrim(p_category),
     description = btrim(p_description), person_responsible = btrim(p_person_responsible),
     reference_number = nullif(btrim(p_reference_number), ''), notes = nullif(btrim(p_notes), '')
-  where id = p_withdrawal_id;
+  where id = p_withdrawal_id and approval_status = 'PENDING';
+
+  if not found then raise exception 'Pending withdrawal not found.' using errcode = 'P0002'; end if;
 end;
 $$;
 
@@ -912,8 +915,8 @@ begin
   select * into v_entry from public.expenses where id = p_expense_id;
   if not found then raise exception 'Expense not found.' using errcode = 'P0002'; end if;
   if v_role is null then raise exception 'Your account is not active.' using errcode = '42501'; end if;
-  if v_entry.approval_status in ('REJECTED', 'VOIDED') then raise exception 'Rejected or voided entries cannot be edited.' using errcode = '22023'; end if;
-  if v_role <> 'ADMIN' and not (v_role = 'TREASURER' and v_entry.approval_status = 'PENDING') then
+  if v_entry.approval_status <> 'PENDING' then raise exception 'Only pending expenses can be edited. Void a confirmed entry and create a replacement.' using errcode = '22023'; end if;
+  if v_role <> 'ADMIN' and v_role <> 'TREASURER' then
     raise exception 'You are not allowed to edit this expense.' using errcode = '42501';
   end if;
 
@@ -921,7 +924,9 @@ begin
     transaction_date = p_transaction_date, amount = p_amount, category = btrim(p_category),
     description = btrim(p_description), person_responsible = btrim(p_person_responsible),
     reference_number = nullif(btrim(p_reference_number), ''), notes = nullif(btrim(p_notes), '')
-  where id = p_expense_id;
+  where id = p_expense_id and approval_status = 'PENDING';
+
+  if not found then raise exception 'Pending expense not found.' using errcode = 'P0002'; end if;
 end;
 $$;
 
