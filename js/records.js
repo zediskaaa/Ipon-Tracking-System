@@ -24,6 +24,7 @@
 
   let membersList = [];
   const statusRowsByMonth = new Map();
+  let pendingSubmissionKey = null;
 
   function statusBadge(status) {
     return `<span class="status status-${String(status).toLowerCase().replaceAll('_', '-')}">${Ipon.escapeHtml(status)}</span>`;
@@ -154,27 +155,33 @@
       const confirmed = await Ipon.confirmAction({ title: `Confirm ${page === 'contributions' ? 'addition' : page.slice(0, -1)}`, message: `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`, acceptLabel: 'Confirm and save' });
       if (!confirmed) return;
     }
+    pendingSubmissionKey ||= crypto.randomUUID();
     Ipon.setBusy(button, true);
     try {
       if (page === 'contributions') {
         await Ipon.rpc('record_contribution', {
           p_member_id: values.get('member_id'), p_contribution_month: `${values.get('contribution_month')}-01`,
           p_amount: amount, p_payment_date: values.get('payment_date'),
-          p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null
+          p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null,
+          p_idempotency_key: pendingSubmissionKey
         });
       } else {
         await Ipon.rpc(page === 'withdrawals' ? 'record_withdrawal' : 'record_expense', {
           p_transaction_date: values.get('transaction_date'), p_amount: amount,
           p_category: values.get('category'), p_description: values.get('description'),
           p_person_responsible: values.get('person_responsible'),
-          p_reference_number: values.get('reference_number') || null, p_notes: values.get('notes') || null
+          p_reference_number: values.get('reference_number') || null, p_notes: values.get('notes') || null,
+          p_idempotency_key: pendingSubmissionKey
         });
       }
+      pendingSubmissionKey = null;
       Ipon.toast(state.profile.role === 'ADMIN' ? 'Confirmed record saved.' : 'Record submitted for admin review.');
       form.reset(); setDefaults(); await load();
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });
+
+  form?.addEventListener('input', () => { pendingSubmissionKey = null; });
 
   async function handleRecordAction(event) {
     const button = event.target.closest('[data-action]');
