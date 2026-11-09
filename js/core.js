@@ -63,19 +63,70 @@
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
   }
 
+  const brandHtml = `
+    <a class="app-brand brand" data-region="brand" href="dashboard.html" aria-label="IPON home">
+      <svg class="brand-coins" viewBox="0 0 44 40" aria-hidden="true">
+        <ellipse cx="26" cy="9" rx="11" ry="4" fill="#edd189"/>
+        <path d="M15 11v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V11c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#d1a650"/>
+        <path d="M15 17v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V17c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#e5c270"/>
+        <path d="M15 23v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V23c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#c99c44"/>
+        <ellipse cx="14" cy="23" rx="9.5" ry="3.6" fill="#f3da99"/>
+        <path d="M4.5 25v4.2c0 2 4.3 3.6 9.5 3.6s9.5-1.6 9.5-3.6V25c0 2-4.3 3.6-9.5 3.6S4.5 27 4.5 25Z" fill="#d8b05c"/>
+        <path d="M4.5 30.8v4.2c0 2 4.3 3.6 9.5 3.6s9.5-1.6 9.5-3.6v-4.2c0 2-4.3 3.6-9.5 3.6s-9.5-1.6-9.5-3.6Z" fill="#eac878"/>
+      </svg>
+      <span class="brand-text">
+        <strong>IPON</strong>
+        <small>TRACKING SYSTEM</small>
+      </span>
+    </a>`;
+
+  const sidebarArtHtml = `
+    <div class="sidebar-art" aria-hidden="true">
+      <svg viewBox="0 0 180 145" fill="none">
+        <path d="M0 118c42-16 84-6 180-24v51H0v-27Z" fill="rgba(255,255,255,.04)"/>
+        <path d="M0 128c55-14 112 4 180-15v32H0v-17Z" fill="rgba(255,255,255,.06)"/>
+        <rect x="44" y="54" width="84" height="64" rx="12" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.26)" stroke-width="1.5"/>
+        <path d="M86 54V26" stroke="#62a87c" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M86 38c-2-12-15-18-24-14 2 11 12 17 24 14Z" fill="#5da377"/>
+        <path d="M86 31c3-13 16-20 26-16-2 12-13 19-26 16Z" fill="#7bc092"/>
+        <path d="M86 45c4-9 14-12 22-9-3 9-12 12-22 9Z" fill="#4b8d64"/>
+        <ellipse cx="67" cy="94" rx="14" ry="4.5" fill="#ebd089"/>
+        <path d="M53 94v6c0 2.5 6.3 4.5 14 4.5s14-2 14-4.5v-6c0 2.5-6.3 4.5-14 4.5s-14-2-14-4.5Z" fill="#c89b43"/>
+        <path d="M53 102v6c0 2.5 6.3 4.5 14 4.5s14-2 14-4.5v-6c0 2.5-6.3 4.5-14 4.5s-14-2-14-4.5Z" fill="#dfbe6f"/>
+        <ellipse cx="101" cy="78" rx="15" ry="4.8" fill="#f1d894"/>
+        <path d="M86 78v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z" fill="#cfa34b"/>
+        <path d="M86 86v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z" fill="#e5c473"/>
+        <path d="M86 94v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z" fill="#c5963e"/>
+        <path d="M86 102v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z" fill="#dfbe6f"/>
+      </svg>
+    </div>`;
+
   function mountShell() {
     const host = document.getElementById('app-sidebar');
     if (host) {
       const page = document.body.dataset.page;
       const activeId = ['contributions', 'withdrawals', 'expenses', 'savings'].includes(page) ? 'contributions' : page;
       host.innerHTML = `
-        <a class="app-brand" href="dashboard.html">IPON</a>
+        ${brandHtml}
         <nav class="app-nav" aria-label="Main navigation">
           ${navItems.map(([id, href, label, icon]) => `<a class="${activeId === id ? 'is-active' : ''}" href="${href}">${icon || ''}<span>${label}</span></a>`).join('')}
         </nav>
+        ${sidebarArtHtml}
         <div class="app-sidebar-footer">
-          <p id="sidebar-user">Checking session…</p>
-          <button class="text-button" id="sign-out" type="button">Sign out</button>
+          <div class="sidebar-user-card">
+            <span class="sidebar-user-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
+            </span>
+            <div class="sidebar-user-info" id="sidebar-user">
+              <strong>Checking session…</strong>
+              <small>ACCOUNT</small>
+            </div>
+            <svg class="sidebar-user-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+          <button class="sidebar-signout text-button" id="sign-out" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg>
+            <span>Sign out</span>
+          </button>
         </div>`;
       document.getElementById('sign-out')?.addEventListener('click', signOut);
     }
@@ -109,7 +160,8 @@
     try {
       if (!configured) {
         showSetupBanner();
-        document.getElementById('sidebar-user')?.replaceChildren(document.createTextNode('Supabase not connected'));
+        const sidebarUser = document.getElementById('sidebar-user');
+        if (sidebarUser) sidebarUser.innerHTML = '<strong>Offline mode</strong><small>NOT CONNECTED</small>';
         document.querySelectorAll('[data-requires-data]').forEach((element) => { element.disabled = true; });
         return { configured: false, profile: null, session: null };
       }
@@ -134,7 +186,7 @@
         return { configured: true, profile, session };
       }
       const sidebarUser = document.getElementById('sidebar-user');
-      if (sidebarUser) sidebarUser.textContent = `${profile.full_name} · ${profile.role}`;
+      if (sidebarUser) sidebarUser.innerHTML = `<strong>${escapeHtml(profile.full_name)}</strong><small>${escapeHtml(profile.role)}</small>`;
       document.querySelectorAll('[data-role]').forEach((element) => {
         const roles = element.dataset.role.split(',');
         element.hidden = !roles.includes(profile.role);
