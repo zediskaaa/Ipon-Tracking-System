@@ -1,0 +1,1 @@
+Origin: clean raw texture sample cropped from the user-approved IPON dashboard comp at `.impeccable/mocks/monthly-rhythm-balanced.png`, then mirror-tiled to the production plate size as required by the measured comp specification.

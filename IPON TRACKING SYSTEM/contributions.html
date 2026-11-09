@@ -1,0 +1,24 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Records — IPON</title><link rel="stylesheet" href="css/app.css"></head>
+<body data-page="contributions"><div class="app-layout"><aside class="app-sidebar" id="app-sidebar"></aside><main class="workspace">
+  <header class="page-header"><div><p class="eyebrow">Savings records</p><h1>Additions</h1><p>Record money added to the real-world savings fund. Non-admin entries stay pending until an administrator confirms them.</p></div></header>
+  <nav class="record-tabs" aria-label="Record types"><a class="is-active" href="contributions.html">Additions</a><a href="withdrawals.html">Deductions</a><a href="expenses.html">Expenses</a><a href="savings.html">Goals</a></nav>
+  <div class="split-layout">
+    <section class="panel sticky-panel"><div class="panel-header"><div><h2>Record addition</h2><p>This tracks a deposit; it does not move money.</p></div></div>
+      <form id="record-form" class="form-grid">
+        <div class="field field-wide"><label for="member-id">Member</label><select id="member-id" name="member_id" required><option value="">Loading members…</option></select></div>
+        <div class="field"><label for="contribution-month">For month</label><input id="contribution-month" name="contribution_month" type="month" required></div>
+        <div class="field"><label for="payment-date">Date added</label><input id="payment-date" name="payment_date" type="date" required></div>
+        <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required></div>
+        <div class="field"><label for="reference">Reference (optional)</label><input id="reference" name="reference" autocomplete="off"></div>
+        <div class="field field-wide"><label for="notes">Notes (optional)</label><textarea id="notes" name="notes"></textarea></div>
+        <div class="form-actions field-wide"><button class="button button-primary" type="submit" data-requires-data>Save addition</button></div>
+      </form>
+    </section>
+    <section class="panel"><div class="panel-header"><div><h2>Contribution status</h2><p>Required, paid, and outstanding amounts by month.</p></div><select id="status-month" aria-label="Filter by month"></select></div>
+      <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Member</th><th>Month</th><th>Required</th><th>Paid</th><th>Outstanding</th><th>Status</th></tr></thead><tbody id="records-body"><tr class="loading-row"><td colspan="6">Loading records…</td></tr></tbody></table></div>
+      <div class="panel-subsection"><div class="panel-header"><div><h2>Addition history</h2><p>Every submission and review state. Administrators can review or void records here.</p></div></div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Member</th><th>Month</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody id="contribution-entries-body"><tr class="loading-row"><td colspan="6">Loading additions…</td></tr></tbody></table></div>
+      </div>
+    </section>
+  </div>
+</main></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/core.js"></script><script src="js/records.js"></script></body></html>
