@@ -91,10 +91,13 @@ a { color:inherit; }
 .data-table tbody tr:hover { background:rgba(255,255,255,.28); }
 .table-actions { display:flex; gap:8px; }
 .icon-action { min-height:36px; padding:7px 10px; border:1px solid var(--rule); border-radius:6px; background:transparent; cursor:pointer; }
-.status { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; font-family:Arial,sans-serif; font-size:12px; font-weight:800; }
-.status-confirmed,.status-active { background:#dceade; color:#1f6a43; }
-.status-pending { background:#f2dfb4; color:#805410; }
+.status { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-family:Arial,sans-serif; font-size:11.5px; font-weight:800; letter-spacing:.03em; }
+.status-confirmed,.status-active,.status-paid,.status-overpaid { background:#dceade; color:#1f6a43; }
+.status-pending,.status-partially-paid { background:#f2dfb4; color:#805410; }
+.status-unpaid { background:#ebe3d5; color:#5a5247; }
 .status-rejected,.status-voided,.status-inactive,.status-disabled { background:#efd7d3; color:#91332e; }
+.row-voided td { color:var(--muted); }
+.row-voided .amount-cell { text-decoration:line-through; opacity:.72; }
 .empty-state { padding:44px 20px; color:var(--muted); font-family:Arial,sans-serif; text-align:center; }
 .loading-row td { color:var(--muted); font-family:Arial,sans-serif; text-align:center; }
 .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }

@@ -107,10 +107,14 @@
     tbody.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No contribution periods for this month.</td></tr>';
 
     const { data: entries, error: entriesError } = await Ipon.client.from('contributions')
-      .select('id,amount,payment_date,approval_status,contribution_periods!inner(period_month,members!inner(full_name))')
+      .select('id,amount,payment_date,approval_status,void_reason,review_note,contribution_periods!inner(period_month,members!inner(full_name))')
       .order('payment_date', { ascending: false }).limit(200);
     if (entriesError) throw entriesError;
-    contributionEntriesBody.innerHTML = entries.length ? entries.map((entry) => `<tr><td>${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td>${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No additions recorded yet.</td></tr>';
+    contributionEntriesBody.innerHTML = entries.length ? entries.map((entry) => {
+      const isCancelled = entry.approval_status === 'VOIDED' || entry.approval_status === 'REJECTED';
+      const reason = entry.void_reason || entry.review_note;
+      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${reason ? `<small class="field-help" style="display:block">${Ipon.escapeHtml(reason)}</small>` : ''}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`;
+    }).join('') : '<tr><td colspan="6" class="empty-state">No additions recorded yet.</td></tr>';
     await syncSuggestedAmount();
   }
 
@@ -124,7 +128,11 @@
   async function loadTransactions() {
     const { data, error } = await Ipon.client.from(page).select('*').order('transaction_date', { ascending: false }).limit(200);
     if (error) throw error;
-    tbody.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.dateLabel(row.transaction_date)}</td><td>${Ipon.escapeHtml(row.category)}</td><td>${Ipon.escapeHtml(row.description)}</td><td>${Ipon.escapeHtml(row.person_responsible)}</td><td>${Ipon.money(row.amount)}</td><td>${statusBadge(row.approval_status)}</td><td>${actionButtons(row)}</td></tr>`).join('') : `<tr><td colspan="7" class="empty-state">No ${page} recorded yet.</td></tr>`;
+    tbody.innerHTML = data.length ? data.map((row) => {
+      const isCancelled = row.approval_status === 'VOIDED' || row.approval_status === 'REJECTED';
+      const reason = row.void_reason || row.review_note;
+      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(row.transaction_date)}</td><td>${Ipon.escapeHtml(row.category)}</td><td>${Ipon.escapeHtml(row.description)}${reason ? `<small class="field-help" style="display:block">${Ipon.escapeHtml(reason)}</small>` : ''}</td><td>${Ipon.escapeHtml(row.person_responsible)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${statusBadge(row.approval_status)}</td><td>${actionButtons(row)}</td></tr>`;
+    }).join('') : `<tr><td colspan="7" class="empty-state">No ${page} recorded yet.</td></tr>`;
   }
 
   async function load() {

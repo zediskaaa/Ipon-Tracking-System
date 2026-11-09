@@ -1002,14 +1002,17 @@ as
 select c.id, c.payment_date as activity_date, 'ADDITION'::text as activity_type,
        c.amount, c.approval_status, c.submitted_by, c.notes, c.created_at
 from public.contributions c
+where c.approval_status in ('CONFIRMED', 'PENDING')
 union all
 select w.id, w.transaction_date, 'DEDUCTION'::text,
        w.amount, w.approval_status, w.submitted_by, w.notes, w.created_at
 from public.withdrawals w
+where w.approval_status in ('CONFIRMED', 'PENDING')
 union all
 select e.id, e.transaction_date, 'EXPENSE'::text,
        e.amount, e.approval_status, e.submitted_by, e.notes, e.created_at
-from public.expenses e;
+from public.expenses e
+where e.approval_status in ('CONFIRMED', 'PENDING');
 
 create or replace view public.v_monthly_financial_summary
 with (security_invoker = true)

@@ -27,14 +27,19 @@
     const year = cursor.getFullYear(), month = cursor.getMonth();
     const firstDay = new Date(year, month, 1).getDay(); const days = new Date(year, month + 1, 0).getDate();
     const count = Math.ceil((firstDay + days) / 7) * 7; const byDate = new Map();
-    activities.forEach((activity) => { if (!byDate.has(activity.activity_date)) byDate.set(activity.activity_date, []); byDate.get(activity.activity_date).push(activity); });
+    activities
+      .filter((activity) => activity.approval_status === 'CONFIRMED' || activity.approval_status === 'PENDING')
+      .forEach((activity) => {
+        if (!byDate.has(activity.activity_date)) byDate.set(activity.activity_date, []);
+        byDate.get(activity.activity_date).push(activity);
+      });
     return Array.from({ length: count }, (_, index) => {
       const day = index - firstDay + 1; if (day < 1 || day > days) return { empty: true };
       const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`; return { day, date, activities: byDate.get(date) || [] };
     });
   }
   function renderCalendar(activities) {
-    currentActivities = activities;
+    currentActivities = activities.filter((activity) => activity.approval_status === 'CONFIRMED' || activity.approval_status === 'PENDING');
     activeDate = null;
     if (detailPanel) detailPanel.hidden = true;
     const monthName = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(cursor);
@@ -91,7 +96,7 @@
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(0); total.classList.add('is-zero'); summaryValues.forEach((node) => { node.textContent = Ipon.money(0); }); renderCalendar([]); renderPending([]); return; }
     try {
-      const [summaryResult, calendarResult, pending] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_savings_calendar').select('*').gte('activity_date', start).lt('activity_date', end).order('activity_date'), getPending()]);
+      const [summaryResult, calendarResult, pending] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'), getPending()]);
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error;
       const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(summary.tracked_savings); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
       [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.reduce((sum,item)=>sum+Number(item.amount),0)].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
