@@ -215,7 +215,8 @@
   function friendlyError(error) {
     const message = error?.message || 'Something went wrong. Please try again.';
     if (/duplicate key|unique constraint/i.test(message)) return 'That reference was already used.';
-    if (/row-level security|permission|not allowed|administrator/i.test(message)) return 'You do not have permission for that action.';
+    if (/cannot remove or disable your own administrator/i.test(message)) return 'Bawal ibaba ang iyong Admin role hangga\'t walang kapalit na Admin mula sa mga members.';
+    if (/row-level security|permission denied|not allowed to|only an administrator/i.test(message)) return 'You do not have permission for that action.';
     return message;
   }
 

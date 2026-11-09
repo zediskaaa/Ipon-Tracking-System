@@ -284,8 +284,12 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_is_first boolean;
 begin
-  insert into public.profiles (id, full_name)
+  select not exists (select 1 from public.profiles) into v_is_first;
+
+  insert into public.profiles (id, full_name, role, status)
   values (
     new.id,
     case
@@ -294,7 +298,9 @@ begin
       when char_length(btrim(split_part(coalesce(new.email, ''), '@', 1))) >= 2
         then btrim(split_part(new.email, '@', 1))
       else 'New User'
-    end
+    end,
+    case when v_is_first then 'ADMIN'::public.app_role else 'MEMBER'::public.app_role end,
+    case when v_is_first then 'ACTIVE'::public.account_status else 'PENDING'::public.account_status end
   )
   on conflict (id) do nothing;
   return new;
@@ -393,8 +399,14 @@ begin
     raise exception 'Only an administrator can change user access.' using errcode = '42501';
   end if;
 
-  if p_user_id = auth.uid() and (p_role <> 'ADMIN' or p_status <> 'ACTIVE') then
-    raise exception 'You cannot remove or disable your own administrator access.' using errcode = '22023';
+  if p_user_id = auth.uid() and p_status <> 'ACTIVE' then
+    raise exception 'You cannot disable or set your own administrator account to pending.' using errcode = '22023';
+  end if;
+
+  if (p_role <> 'ADMIN' or p_status <> 'ACTIVE')
+     and exists (select 1 from public.profiles where id = p_user_id and role = 'ADMIN' and status = 'ACTIVE')
+     and not exists (select 1 from public.profiles where id <> p_user_id and role = 'ADMIN' and status = 'ACTIVE') then
+    raise exception 'Bawal ibaba ang Admin role hangga''t walang kapalit na Admin mula sa mga members.' using errcode = '22023';
   end if;
 
   update public.profiles

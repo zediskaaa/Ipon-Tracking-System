@@ -83,6 +83,11 @@ a { color:inherit; }
 .data-table th,.data-table td { padding:14px 12px; border-bottom:1px solid var(--rule); text-align:left; vertical-align:middle; }
 .data-table th { color:var(--muted); font-family:Arial,sans-serif; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
 .data-table td { font-size:16px; }
+.data-table select { min-height:36px; padding:6px 10px; border:1px solid rgba(20,45,43,.22); border-radius:7px; background:#fffdf9; color:var(--ink); font-family:Arial,sans-serif; font-size:13px; font-weight:700; }
+.data-table select:disabled { opacity:.55; cursor:not-allowed; background:rgba(20,45,43,.05); }
+.replacement-picker { display:grid; gap:5px; margin-top:8px; padding:9px 10px; border:1px solid rgba(185,121,18,.35); border-radius:8px; background:#fbf3df; }
+.replacement-picker label { color:#7a500d; font-family:Arial,sans-serif; font-size:11.5px; font-weight:700; }
+.role-lock-note { display:block; margin-top:5px; color:#8a5a10; font-family:Arial,sans-serif; font-size:11.5px; line-height:1.35; }
 .data-table tbody tr:hover { background:rgba(255,255,255,.28); }
 .table-actions { display:flex; gap:8px; }
 .icon-action { min-height:36px; padding:7px 10px; border:1px solid var(--rule); border-radius:6px; background:transparent; cursor:pointer; }
