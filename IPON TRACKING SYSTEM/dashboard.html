@@ -12,7 +12,7 @@
   <main class="comp-frame" aria-label="IPON savings calendar dashboard">
     <div class="paper-field" aria-hidden="true"></div>
     <div class="r-sidebar-ground sidebar" data-region="sidebar-ground" aria-hidden="true"></div>
-      <a class="r-brand brand" data-region="brand" href="dashboard.html" aria-label="IPON home">IPON</a>
+      <a class="r-brand brand" data-region="brand" href="dashboard.html" aria-label="IPON home"><span>IPON</span></a>
       <nav class="r-sidebar-nav sidebar-nav" data-region="sidebar-nav" aria-label="Main navigation">
         <a class="nav-link is-active" href="dashboard.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18M7 14h2m3 0h2m3 0h1M7 18h2m3 0h2m3 0h1"/></svg><span>Calendar</span></a>
         <a class="nav-link" href="contributions.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Records</span></a>
@@ -20,7 +20,10 @@
         <a class="nav-link" href="reports.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10m6 10V4m6 16v-7m5 7H2"/></svg><span>Reports</span></a>
         <a class="nav-link" href="settings.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06 2.83-2.83.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3h4v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06 2.83 2.83-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg><span>Settings</span></a>
       </nav>
-      <button class="dashboard-signout" id="dashboard-signout" type="button">Sign out</button>
+      <div class="dashboard-sidebar-footer app-sidebar-footer">
+        <p id="sidebar-user">Checking session…</p>
+        <button class="text-button" id="dashboard-signout" type="button">Sign out</button>
+      </div>
 
     <div class="r-summary-ground summary-ground" data-region="summary-ground" aria-hidden="true"></div>
       <figure class="r-tracked-label-brush plate" data-region="tracked-label-brush" aria-hidden="true"><img src="assets/plates/tracked-label-brush.png" alt=""></figure>
@@ -59,7 +62,6 @@
     <div class="r-calendar-week-5 calendar-week" data-region="calendar-week-5">
       <button class="day sunday"><b>29</b></button><button class="day"><b>30</b><span class="event addition">Dagdag</span><em>₱1,000.00</em></button><span class="day is-empty"></span><span class="day is-empty"></span><span class="day is-empty"></span><span class="day is-empty"></span><span class="day is-empty"></span>
     </div>
-    <div class="r-calendar-legend calendar-legend" data-region="calendar-legend"><strong>Marks:</strong><span><i class="legend-dot confirmed">✓</i>Confirmed addition (Dagdag)</span><span><i class="legend-dot deduction">−</i>Deduction (Bawas)</span><span><i class="legend-dot expense">×</i>Expense</span><span><i class="legend-dot pending">◷</i>Pending (for review)</span></div>
     <section class="day-detail-panel" id="day-detail-panel" hidden aria-labelledby="day-detail-title">
       <header><div><small>Selected day</small><h2 id="day-detail-title">Calendar activity</h2></div><button id="day-detail-close" type="button" aria-label="Close selected day details">×</button></header>
       <div id="day-detail-list" class="day-detail-list"></div>
