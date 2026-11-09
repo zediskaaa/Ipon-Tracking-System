@@ -9,6 +9,17 @@
     ? window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey)
     : null;
   let currentProfile = null;
+  const STARTUP_TIMEOUT_MS = 15000;
+
+  function withTimeout(request) {
+    let timer;
+    return Promise.race([
+      request,
+      new Promise((_, reject) => {
+        timer = window.setTimeout(() => reject(new Error('The connection timed out.')), STARTUP_TIMEOUT_MS);
+      })
+    ]).finally(() => window.clearTimeout(timer));
+  }
 
   const navItems = [
     ['dashboard', 'dashboard.html', 'Calendar', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18M7 14h2m3 0h2m3 0h1M7 18h2m3 0h2m3 0h1"/></svg>'],
@@ -154,6 +165,36 @@
       </div>`);
   }
 
+  function showStartupFailure(error) {
+    if (document.getElementById('startup-error')) return;
+    const offline = navigator.onLine === false;
+    const sessionProblem = /auth|jwt|refresh token|session/i.test(error?.message || '');
+    const message = offline
+      ? 'You appear to be offline. Reconnect to the internet, then retry.'
+      : sessionProblem
+        ? 'Your session could not be verified. Retry, or sign out and sign in again.'
+        : 'IPON could not connect to your records. Check your connection, then retry.';
+    document.querySelector('.app-layout, .comp-frame, .login-page')?.setAttribute('inert', '');
+    document.body.insertAdjacentHTML('beforeend', `
+      <section class="startup-error" id="startup-error" role="alert" aria-labelledby="startup-error-title">
+        <div class="startup-error-sheet">
+          <strong class="loader-brand">IPON</strong>
+          <div class="startup-error-mark" aria-hidden="true"><i></i></div>
+          <h1 id="startup-error-title">Unable to load your records</h1>
+          <p>${escapeHtml(message)}</p>
+          <div class="startup-error-actions">
+            <button class="button button-primary" id="startup-retry" type="button">Retry</button>
+            <button class="button button-secondary" id="startup-signout" type="button">Sign out</button>
+          </div>
+          <small>Your saved records were not changed.</small>
+        </div>
+      </section>`);
+    const retry = document.getElementById('startup-retry');
+    retry.addEventListener('click', () => window.location.reload());
+    document.getElementById('startup-signout').addEventListener('click', signOut);
+    retry.focus();
+  }
+
   async function init(options = {}) {
     mountShell();
     setLoading(true);
@@ -166,7 +207,7 @@
         return { configured: false, profile: null, session: null };
       }
 
-      const { data: { session }, error: sessionError } = await client.auth.getSession();
+      const { data: { session }, error: sessionError } = await withTimeout(client.auth.getSession());
       if (sessionError) throw sessionError;
       if (!session && options.requireAuth !== false) {
         window.location.replace('login.html');
@@ -174,10 +215,10 @@
       }
       if (!session) return { configured: true, profile: null, session: null };
 
-      const { data: profile, error } = await client.from('profiles')
+      const { data: profile, error } = await withTimeout(client.from('profiles')
         .select('id,full_name,role,status,member_id')
         .eq('id', session.user.id)
-        .single();
+        .single());
       if (error) throw error;
       currentProfile = profile;
       if (profile.status !== 'ACTIVE' && options.allowPending !== true) {
@@ -192,14 +233,20 @@
         element.hidden = !roles.includes(profile.role);
       });
       return { configured: true, profile, session };
+    } catch (error) {
+      showStartupFailure(error);
+      return { configured, profile: null, session: null, failed: true };
     } finally {
       setLoading(false);
     }
   }
 
   async function signOut() {
-    if (client) await client.auth.signOut();
-    window.location.replace('login.html');
+    try {
+      if (client) await withTimeout(client.auth.signOut({ scope: 'local' }));
+    } finally {
+      window.location.replace('login.html');
+    }
   }
 
   function toast(message, tone = 'success') {
@@ -250,6 +297,12 @@
     if (error) throw error;
     return data;
   }
+
+  window.addEventListener('unhandledrejection', (event) => {
+    event.preventDefault();
+    setLoading(false);
+    showStartupFailure(event.reason);
+  });
 
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,

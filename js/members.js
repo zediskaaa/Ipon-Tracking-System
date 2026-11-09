@@ -1,6 +1,7 @@
 (async function () {
   'use strict';
   const state = await Ipon.init();
+  if (state.failed) return;
   const tbody = document.getElementById('members-body');
   const form = document.getElementById('member-form');
   const search = document.getElementById('member-search');

@@ -168,5 +168,7 @@
     activeDate = null;
   });
   renderCalendar([]);
-  state = await Ipon.init(); await load();
+  state = await Ipon.init();
+  if (state.failed) return;
+  await load();
 })();

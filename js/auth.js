@@ -6,6 +6,7 @@
   let mode = 'login';
 
   const state = await Ipon.init({ requireAuth: false, allowPending: true });
+  if (state.failed) return;
   if (state.session && state.profile?.status === 'ACTIVE') window.location.replace('dashboard.html');
   if (!state.configured) {
     message.textContent = 'Add your Supabase URL and anon key in js/config.js before signing in.';

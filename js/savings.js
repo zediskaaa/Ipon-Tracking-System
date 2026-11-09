@@ -1,6 +1,7 @@
 (async function () {
   'use strict';
   const state = await Ipon.init();
+  if (state.failed) return;
   const list = document.getElementById('goal-list');
   const form = document.getElementById('goal-form');
   let goals = []; let tracked = 0;

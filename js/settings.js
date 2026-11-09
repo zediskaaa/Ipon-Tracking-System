@@ -1,6 +1,7 @@
 (async function () {
   'use strict';
   const state = await Ipon.init();
+  if (state.failed) return;
   const accessBody = document.getElementById('access-body');
   let profiles = [];
   let members = [];

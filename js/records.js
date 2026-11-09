@@ -5,6 +5,7 @@
   const tbody = document.getElementById('records-body');
   const contributionEntriesBody = document.getElementById('contribution-entries-body');
   const state = await Ipon.init();
+  if (state.failed) return;
   if (!state.configured || !state.profile) {
     tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Connect Supabase to load records.</td></tr>`;
     setDefaults();

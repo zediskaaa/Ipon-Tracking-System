@@ -1,6 +1,7 @@
 (async function () {
   'use strict';
   const state = await Ipon.init(); const tbody = document.getElementById('reports-body'); let rows = [];
+  if (state.failed) return;
   if (!state.configured || !state.profile) { if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Connect Supabase to load reports.</td></tr>'; return; }
   try {
     const { data: summary, error: summaryError } = await Ipon.client.rpc('get_savings_summary'); if (summaryError) throw summaryError;
