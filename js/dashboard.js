@@ -11,7 +11,7 @@
   let currentActivities = [];
   const weeks = [...document.querySelectorAll('.calendar-week')];
   const summaryValues = [...document.querySelectorAll('.summary-breakdown dd')];
-  const heroMoney = (value) => Number(value || 0) === 0 ? '₱00,000.00' : Ipon.money(value);
+  const heroMoney = (value) => Ipon.money(value);
   document.getElementById('dashboard-signout').addEventListener('click', async () => { if (Ipon.client) await Ipon.client.auth.signOut(); location.replace('login.html'); });
 
   function monthIso(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`; }
@@ -41,8 +41,6 @@
     if (cells.length === 42 && !extra) { extra = document.createElement('div'); extra.className = 'calendar-week dynamic-week-6'; document.getElementById('day-detail-panel').before(extra); }
     if (extra) extra.hidden = cells.length !== 42; if (cells.length === 42) allWeeks.push(extra);
     allWeeks.forEach((week, weekIndex) => {
-      if (cells.length === 42) { week.style.top = `${42 + weekIndex * (58 / 6)}%`; week.style.height = `${58 / 6}%`; week.style.left = '13.5%'; week.style.width = '64.1%'; week.style.position = 'absolute'; }
-      else if (!week.classList.contains('dynamic-week-6')) { week.style.top = ''; week.style.height = ''; }
       const row = cells.slice(weekIndex * 7, weekIndex * 7 + 7);
       week.innerHTML = row.map((cell, column) => {
         if (!cell || cell.empty) return '<span class="day is-empty"></span>';
@@ -56,11 +54,11 @@
     const buttons = [...document.querySelectorAll('.review-item')];
     buttons.forEach((button, index) => {
       const item = items[index];
-      button.hidden = false;
+      button.hidden = !item && (items.length > 0 || index > 0);
       button.classList.toggle('is-empty-review', !item);
       if (!item) {
         button.disabled = true; button.removeAttribute('data-id'); button.removeAttribute('data-type');
-        button.querySelector('b').textContent = 'No pending entry'; button.querySelector('small').textContent = 'All caught up'; button.querySelector('strong').textContent = '—';
+        button.querySelector('b').textContent = 'No pending entries'; button.querySelector('small').textContent = 'All caught up'; button.querySelector('strong').textContent = '';
         return;
       }
       button.dataset.id = item.id; button.dataset.type = item.type; button.disabled = state.profile?.role !== 'ADMIN';
