@@ -275,15 +275,20 @@
   window.addEventListener('hashchange', () => showView(true));
   showView();
 
-  try {
-    await load();
-  } catch (error) {
-    document.getElementById('platform-status').textContent = 'Platform data unavailable';
-    document.getElementById('platform-attention').innerHTML = '<p>Resolve the loading error below, then retry to restore the platform summary.</p>';
-    overviewError.hidden = false;
-    Ipon.showInlineError(overviewError, error, load);
-    Ipon.showInlineError(requestsBody, error, load, 5);
-    Ipon.showInlineError(administratorsBody, error, load, 6);
-    Ipon.showInlineError(activityBody, error, load, 3);
+  async function refresh() {
+    try {
+      await load();
+    } catch (error) {
+      document.getElementById('platform-status').textContent = 'Platform data unavailable';
+      document.getElementById('platform-attention').innerHTML = '<p>Resolve the loading error below, then retry to restore the platform summary.</p>';
+      overviewError.hidden = false;
+      Ipon.showInlineError(overviewError, error, refresh);
+      Ipon.showInlineError(requestsBody, error, refresh, 5);
+      Ipon.showInlineError(administratorsBody, error, refresh, 6);
+      Ipon.showInlineError(activityBody, error, refresh, 3);
+    }
   }
+
+  await refresh();
+  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'admin_requests', 'account_activity', 'audit_logs'], refresh);
 })();

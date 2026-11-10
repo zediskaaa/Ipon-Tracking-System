@@ -462,6 +462,30 @@
     return data;
   }
 
+  function subscribeToChanges(name, tables, refresh) {
+    if (!client || !tables.length) return null;
+    let timer;
+    let pending = Promise.resolve();
+    const run = () => { pending = pending.then(refresh).catch((error) => toast(friendlyError(error), 'error')); };
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { if (document.visibilityState === 'visible') run(); }, 350);
+    };
+    let channel = client.channel(`live:${name}:${currentProfile?.id || 'session'}`);
+    tables.forEach((table) => ['INSERT', 'UPDATE'].forEach((event) => {
+      channel = channel.on('postgres_changes', { event, schema: 'public', table }, schedule);
+    }));
+    channel.subscribe();
+    const resume = () => { if (document.visibilityState === 'visible') schedule(); };
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('pagehide', () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', resume);
+      client.removeChannel(channel);
+    }, { once: true });
+    return channel;
+  }
+
   window.addEventListener('unhandledrejection', (event) => {
     event.preventDefault();
     setLoading(false);
@@ -470,7 +494,7 @@
 
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, normalizeNamePart, validNamePart, homeForRole, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction,
+    escapeHtml, normalizeNamePart, validNamePart, homeForRole, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

@@ -218,4 +218,5 @@
   state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER'] });
   if (state.failed) return;
   await load();
+  Ipon.subscribeToChanges('dashboard', ['members', 'contribution_periods', 'contributions', 'withdrawals', 'expenses'], load);
 })();

@@ -68,10 +68,21 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.match(script, /super_admin_approve_request/);
   assert.match(script, /super_admin_reject_request/);
   assert.match(script, /super_admin_set_administrator_status/);
+  assert.match(script, /subscribeToChanges\('super-admin'/);
   assert.doesNotMatch(script, /from\(['"](?:contributions|withdrawals|expenses|members)['"]\)/);
   assert.match(core, /function homeForRole\(role\)/);
   assert.match(core, /\['super-admin', 'account'\]\.includes\(document\.body\.dataset\.page\)/);
   assert.match(core, /role === 'SUPER_ADMIN' \? 'super-admin\.html' : role === 'MEMBER' \? 'user\.html' : 'dashboard\.html'/);
+});
+
+test('all three role dashboards subscribe to permitted database changes', () => {
+  const core = read('js/core.js');
+  const realtimeHelper = core.match(/function subscribeToChanges[\s\S]*?return channel;/)?.[0] || '';
+  assert.match(realtimeHelper, /\['INSERT', 'UPDATE'\]/);
+  assert.doesNotMatch(realtimeHelper, /'DELETE'/);
+  assert.match(read('js/dashboard.js'), /subscribeToChanges\('dashboard'/);
+  assert.match(read('js/user.js'), /subscribeToChanges\('member-dashboard'/);
+  assert.match(read('database/migrations/20261111_010_enable_dashboard_realtime.sql'), /alter publication supabase_realtime add table/i);
 });
 
 test('three panels have separate routes and backend-owned account workflows', () => {
