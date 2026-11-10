@@ -62,6 +62,14 @@ test('every versioned migration is transactional and recorded', () => {
   }
 });
 
+test('SQL dollar quotes are balanced in the name migration and baseline schema', () => {
+  for (const file of ['database/schema.sql', 'database/migrations/20261110_002_structured_names.sql']) {
+    const sql = read(file);
+    assert.doesNotMatch(sql, /\$\$name\$/, `${file} contains a malformed name dollar quote`);
+    assert.equal((sql.match(/\$name\$/g) || []).length % 2, 0, `${file} has an unbalanced name dollar quote`);
+  }
+});
+
 test('pages keep baseline security and accessible table headings', () => {
   const pages = readdirSync(root).filter((name) => name.endsWith('.html'));
   assert.ok(pages.length >= 10);

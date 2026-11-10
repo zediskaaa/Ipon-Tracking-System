@@ -370,7 +370,7 @@ begin
   if char_length(v_value) > 80 then
     raise exception '% must not exceed 80 characters.', p_label using errcode = '22023';
   end if;
-  if v_value !~ $name$^[[:alpha:]]+([ '’-][[:alpha:]]+)*$$name$ then
+  if v_value !~ $name$^[[:alpha:]]+([ '’-][[:alpha:]]+)*$name$ then
     raise exception '% may contain only letters, spaces, hyphens, and apostrophes.', p_label using errcode = '22023';
   end if;
   return v_value;
@@ -387,8 +387,8 @@ with candidates as (
   where cardinality(parts) = 2
     and char_length(parts[1]) <= 80
     and char_length(parts[2]) <= 80
-    and parts[1] ~ $name$^[[:alpha:]]+([ '’-][[:alpha:]]+)*$$name$
-    and parts[2] ~ $name$^[[:alpha:]]+([ '’-][[:alpha:]]+)*$$name$
+    and parts[1] ~ $name$^[[:alpha:]]+([ '’-][[:alpha:]]+)*$name$
+    and parts[2] ~ $name$^[[:alpha:]]+([ '’-][[:alpha:]]+)*$name$
 )
 update public.profiles p
 set first_name = s.first_name, last_name = s.last_name
@@ -405,8 +405,8 @@ with candidates as (
   where cardinality(parts) = 2
     and char_length(parts[1]) <= 80
     and char_length(parts[2]) <= 80
-    and parts[1] ~ $name$^[[:alpha:]]+([ '’-][[:alpha:]]+)*$$name$
-    and parts[2] ~ $name$^[[:alpha:]]+([ '’-][[:alpha:]]+)*$$name$
+    and parts[1] ~ $name$^[[:alpha:]]+([ '’-][[:alpha:]]+)*$name$
+    and parts[2] ~ $name$^[[:alpha:]]+([ '’-][[:alpha:]]+)*$name$
 )
 update public.members m
 set first_name = s.first_name, last_name = s.last_name
