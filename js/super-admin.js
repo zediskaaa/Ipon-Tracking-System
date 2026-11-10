@@ -18,6 +18,32 @@
   let groups = [];
   let requests = [];
   let accountActivities = [];
+  const views = {
+    overview: ['Platform overview', 'Monitor administrator access, savings groups, and requests without exposing financial records.'],
+    requests: ['Administrator requests', 'Review pending applications and create an isolated savings group when access is approved.'],
+    administrators: ['Administrators', 'Create accounts and manage each administrator\'s platform access and assigned savings group.'],
+    activity: ['Platform activity', 'Review recent administrator and savings-group access changes recorded by the database.']
+  };
+
+  function showView(focusHeading = false) {
+    const requestedView = location.hash.slice(1);
+    const activeView = views[requestedView] ? requestedView : 'overview';
+    if (!views[requestedView]) history.replaceState(null, '', '#overview');
+    document.querySelectorAll('[data-platform-view]').forEach((section) => { section.hidden = section.dataset.platformView !== activeView; });
+    document.getElementById('platform-view-title').textContent = views[activeView][0];
+    document.getElementById('platform-view-description').textContent = views[activeView][1];
+    document.getElementById('create-administrator').hidden = activeView !== 'administrators';
+    document.querySelectorAll('[data-nav-section]').forEach((link) => {
+      const current = link.dataset.navSection === activeView;
+      link.classList.toggle('is-active', current);
+      if (current) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+    });
+    if (focusHeading) {
+      const heading = document.getElementById('platform-view-title');
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  }
 
   function statusLabel(status) {
     return `<span class="status status-${String(status).toLowerCase()}">${Ipon.escapeHtml(status)}</span>`;
@@ -57,7 +83,7 @@
         <td><strong>${Ipon.escapeHtml(profile.full_name)}</strong></td>
         <td>${group ? Ipon.escapeHtml(group.name) : '<span class="field-help">Not assigned</span>'}</td>
         <td>${Ipon.dateLabel(profile.created_at)}</td>
-        <td>${lastActivity.has(profile.id) ? `${Ipon.escapeHtml(lastActivity.get(profile.id).event.replaceAll('_', ' '))}<small class="field-help">${Ipon.dateLabel(lastActivity.get(profile.id).created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small>` : '<span class="field-help">No activity recorded</span>'}</td>
+        <td>${lastActivity.has(profile.id) ? `<span class="activity-kind">${Ipon.escapeHtml(lastActivity.get(profile.id).event.replaceAll('_', ' '))}</span><small class="field-help">${Ipon.dateLabel(lastActivity.get(profile.id).created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small>` : '<span class="field-help">No activity recorded</span>'}</td>
         <td>${statusLabel(profile.status)}</td>
         <td><div class="table-actions"><button class="icon-action" type="button" data-edit-admin="${profile.id}">Edit</button><button class="icon-action" type="button" data-reset-admin="${profile.id}">Reset password</button><button class="icon-action ${active ? 'danger-action' : ''}" type="button" data-admin-status="${profile.id}" data-next-status="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Suspend' : 'Reactivate'}</button><button class="icon-action danger-action" type="button" data-archive-admin="${profile.id}">Archive</button></div></td>
       </tr>`;
@@ -238,6 +264,8 @@
 
   document.getElementById('approve-request-close').addEventListener('click', closeApprovalDialog);
   document.getElementById('approve-request-cancel').addEventListener('click', closeApprovalDialog);
+  window.addEventListener('hashchange', () => showView(true));
+  showView();
 
   try {
     await load();

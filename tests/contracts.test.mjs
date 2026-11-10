@@ -57,6 +57,11 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.match(html, /data-panel="super-admin"/);
   assert.match(html, /id="requests-body"/);
   assert.match(html, /id="administrators-body"/);
+  for (const view of ['overview', 'requests', 'administrators', 'activity']) {
+    assert.match(html, new RegExp(`data-platform-view="${view}"`));
+    assert.match(core, new RegExp(`super-admin\\.html#${view}`));
+  }
+  assert.match(script, /addEventListener\('hashchange'/);
   assert.match(script, /Ipon\.init\(\{ allowedRoles: \['SUPER_ADMIN'\] \}\)/);
   assert.match(script, /super_admin_approve_request/);
   assert.match(script, /super_admin_reject_request/);

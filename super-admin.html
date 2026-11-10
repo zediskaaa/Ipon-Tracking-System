@@ -14,13 +14,13 @@
     <main class="workspace">
       <header class="page-header">
         <div>
-          <h1>Platform administration</h1>
-          <p>Review administrator requests and control access to isolated savings groups. Financial records stay outside this panel.</p>
+          <h1 id="platform-view-title">Platform overview</h1>
+          <p id="platform-view-description">Monitor administrator access, savings groups, and requests without exposing financial records.</p>
         </div>
-        <button class="button button-primary" id="create-administrator" type="button">Create administrator</button>
+        <button class="button button-primary" id="create-administrator" type="button" hidden>Create administrator</button>
       </header>
 
-      <section class="platform-overview" id="overview" aria-labelledby="overview-title">
+      <section class="platform-view platform-overview" id="overview" data-platform-view="overview" aria-labelledby="overview-title">
         <div class="platform-overview-heading">
           <h2 id="overview-title">System overview</h2>
           <p id="platform-status"><span aria-hidden="true"></span>Checking platform access…</p>
@@ -34,21 +34,21 @@
         </dl>
       </section>
 
-      <section class="panel" id="requests" aria-labelledby="requests-title">
+      <section class="platform-view panel" id="requests" data-platform-view="requests" aria-labelledby="requests-title" hidden>
         <div class="panel-header">
           <div><h2 id="requests-title">Administrator requests</h2><p>Approval creates a separate savings group and activates the administrator account in one database transaction.</p></div>
         </div>
         <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Requester</th><th>Contact</th><th>Reason</th><th>Requested</th><th>Actions</th></tr></thead><tbody id="requests-body"><tr class="loading-row"><td colspan="5">Loading requests…</td></tr></tbody></table></div>
       </section>
 
-      <section class="panel" id="administrators" aria-labelledby="administrators-title">
+      <section class="platform-view panel" id="administrators" data-platform-view="administrators" aria-labelledby="administrators-title" hidden>
         <div class="panel-header">
           <div><h2 id="administrators-title">Administrators</h2><p>Suspended administrators immediately lose access to their group while its records remain intact.</p></div>
         </div>
         <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Administrator</th><th>Group</th><th>Registered</th><th>Last activity</th><th>Status</th><th>Actions</th></tr></thead><tbody id="administrators-body"><tr class="loading-row"><td colspan="6">Loading administrators…</td></tr></tbody></table></div>
       </section>
 
-      <section class="panel" id="activity" aria-labelledby="activity-title">
+      <section class="platform-view panel" id="activity" data-platform-view="activity" aria-labelledby="activity-title" hidden>
         <div class="panel-header"><div><h2 id="activity-title">Recent platform activity</h2><p>Administrator and group access changes recorded by the database.</p></div></div>
         <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Event</th><th>Subject</th><th>When</th></tr></thead><tbody id="activity-body"><tr class="loading-row"><td colspan="3">Loading activity…</td></tr></tbody></table></div>
       </section>
