@@ -123,8 +123,11 @@ test('loading feedback uses savings motion with reduced-motion support', () => {
   const css = read('css/app.css');
   assert.match(core, /class="savings-loader"/);
   assert.match(core, /class="piggy-bank"/);
+  assert.match(core, /class="deposit-spark/);
   assert.match(core, /classList\.toggle\('is-busy', busy\)/);
   assert.match(css, /@keyframes coin-deposit/);
+  assert.match(css, /\.coin-one\s*\{[^}]*animation-delay:-\.4s/);
+  assert.match(css, /@keyframes deposit-spark/);
   assert.match(css, /@keyframes coin-flip/);
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)[^}]*[\s\S]*?\.falling-coin/);
 });

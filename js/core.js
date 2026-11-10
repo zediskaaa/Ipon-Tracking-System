@@ -47,13 +47,31 @@
               <span class="falling-coin coin-one"></span>
               <span class="falling-coin coin-two"></span>
               <span class="falling-coin coin-three"></span>
-              <svg class="piggy-bank" viewBox="0 0 160 112">
-                <path class="piggy-tail" d="M31 57c-16 2-17-16-6-18 8-2 11 9 4 13"/>
-                <path class="piggy-ear" d="m54 35 4-20 20 15"/>
-                <path class="piggy-body" d="M39 61c0-25 20-39 51-39 17 0 31 6 39 17l17 3-8 17c0 15-10 27-25 33l-2 13H94l-2-9H66l-3 9H46l-1-17c-7-7-10-16-10-27Z"/>
-                <path class="piggy-slot" d="M75 30h29"/>
-                <circle class="piggy-eye" cx="119" cy="47" r="3"/>
-                <circle class="piggy-snout" cx="137" cy="58" r="3"/>
+              <span class="deposit-spark spark-left"></span>
+              <span class="deposit-spark spark-right"></span>
+              <svg class="piggy-bank" viewBox="0 0 190 132">
+                <defs>
+                  <linearGradient id="piggy-green" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#4fa778"/>
+                    <stop offset=".55" stop-color="#287552"/>
+                    <stop offset="1" stop-color="#164b3d"/>
+                  </linearGradient>
+                  <linearGradient id="snout-green" x1="0" y1="0" x2="0" y2="1">
+                    <stop stop-color="#68bc8e"/>
+                    <stop offset="1" stop-color="#31805c"/>
+                  </linearGradient>
+                </defs>
+                <ellipse class="piggy-shadow" cx="96" cy="123" rx="61" ry="7"/>
+                <path class="piggy-tail" d="M39 72c-20 1-22-20-9-23 10-2 14 11 6 16"/>
+                <path class="piggy-ear" d="M66 38c-1-17 7-27 22-10"/>
+                <path class="piggy-body" d="M40 74c0-31 24-49 62-49 24 0 42 10 51 27l15 3c7 1 10 8 6 14l-10 14c-5 16-20 27-40 31l-3 12h-19l-3-10H74l-4 10H51l-1-20c-10-8-15-19-15-32Z"/>
+                <path class="piggy-shine" d="M58 61c8-15 23-23 44-24"/>
+                <path class="piggy-slot" d="M82 34h29"/>
+                <ellipse class="piggy-snout" cx="158" cy="69" rx="13" ry="11"/>
+                <circle class="piggy-eye" cx="139" cy="57" r="4"/>
+                <circle class="piggy-eye-glint" cx="140" cy="56" r="1.3"/>
+                <circle class="piggy-nostril" cx="154" cy="69" r="2"/>
+                <circle class="piggy-nostril" cx="162" cy="69" r="2"/>
               </svg>
             </div>
             <p id="loader-label">Opening your records…</p>
