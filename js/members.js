@@ -5,6 +5,10 @@
   const tbody = document.getElementById('members-body');
   const form = document.getElementById('member-form');
   const search = document.getElementById('member-search');
+  const firstName = document.getElementById('first-name');
+  const middleName = document.getElementById('middle-name');
+  const lastName = document.getElementById('last-name');
+  const nameMigrationHelp = document.getElementById('name-migration-help');
   const contactInput = document.getElementById('contact-number');
   const contactError = document.getElementById('contact-number-error');
   const dateRegistered = document.getElementById('date-registered');
@@ -12,6 +16,12 @@
   const monthlyAmount = document.getElementById('monthly-amount');
   const monthlyAmountHelp = document.getElementById('monthly-amount-help');
   const contactErrorMessage = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
+  const nameErrorMessage = "Use letters, spaces, hyphens, or apostrophes only.";
+  const nameFields = [
+    [firstName, document.getElementById('first-name-error'), true],
+    [middleName, document.getElementById('middle-name-error'), false],
+    [lastName, document.getElementById('last-name-error'), true]
+  ];
   let members = [];
   let contributionSettings = [];
   let monthlyAmountTouched = false;
@@ -57,6 +67,8 @@
   function resetForm() {
     form.reset(); form.elements.member_id.value = ''; dateRegistered.value = Ipon.isoDate(); monthlyAmountTouched = false; applyContributionDefault();
     dateRegistered.disabled = false; dateRegisteredHelp.hidden = true;
+    nameMigrationHelp.hidden = true; nameMigrationHelp.textContent = '';
+    nameFields.forEach(([input, error]) => setNameError(input, error, ''));
     setContactError('');
     document.getElementById('member-form-title').textContent = 'Add member'; document.getElementById('cancel-edit').hidden = true;
   }
@@ -72,6 +84,30 @@
     contactInput.setCustomValidity(message);
     if (message) contactInput.setAttribute('aria-invalid', 'true'); else contactInput.removeAttribute('aria-invalid');
   }
+  function setNameError(input, error, message) {
+    input.setCustomValidity(message);
+    if (message) input.setAttribute('aria-invalid', 'true'); else input.removeAttribute('aria-invalid');
+    error.textContent = message;
+    error.hidden = !message;
+  }
+  function validateNames() {
+    let firstInvalid = null;
+    nameFields.forEach(([input, error, required]) => {
+      const value = input.value.trim();
+      const valid = !value ? !required : Ipon.validNamePart(value);
+      const message = valid ? '' : (!value ? 'This name is required.' : nameErrorMessage);
+      setNameError(input, error, message);
+      if (!valid && !firstInvalid) firstInvalid = input;
+    });
+    if (!firstInvalid && nameFields.map(([input]) => Ipon.normalizeNamePart(input.value)).filter(Boolean).join(' ').length > 150) {
+      const error = document.getElementById('last-name-error');
+      setNameError(lastName, error, 'Combined full name must not exceed 150 characters.');
+      firstInvalid = lastName;
+    }
+    firstInvalid?.focus();
+    return !firstInvalid;
+  }
+  nameFields.forEach(([input, error]) => input.addEventListener('input', () => setNameError(input, error, '')));
   contactInput.addEventListener('input', () => setContactError(''));
   monthlyAmount.addEventListener('input', () => {
     monthlyAmountTouched = true;
@@ -86,18 +122,23 @@
   });
   form?.addEventListener('submit', async (event) => {
     event.preventDefault(); const button = form.querySelector('[type="submit"]'); const values = new FormData(form); const contactNumber = normalizeContactNumber(values.get('contact_number'));
+    if (!validateNames()) return;
     if (contactNumber === null) { setContactError(contactErrorMessage); contactInput.focus(); return; }
     Ipon.setBusy(button, true);
     try {
-      if (values.get('member_id')) await Ipon.rpc('update_member', { p_member_id: values.get('member_id'), p_full_name: values.get('full_name'), p_contact_number: contactNumber, p_monthly_contribution_amount: Number(values.get('monthly_contribution_amount')), p_notes: values.get('notes') || null });
-      else await Ipon.rpc('create_member', { p_full_name: values.get('full_name'), p_contact_number: contactNumber, p_date_registered: values.get('date_registered'), p_monthly_contribution_amount: Number(values.get('monthly_contribution_amount')), p_notes: values.get('notes') || null });
+      const name = { p_first_name: Ipon.normalizeNamePart(values.get('first_name')), p_middle_name: values.get('middle_name').trim() ? Ipon.normalizeNamePart(values.get('middle_name')) : null, p_last_name: Ipon.normalizeNamePart(values.get('last_name')) };
+      if (values.get('member_id')) await Ipon.rpc('update_member', { p_member_id: values.get('member_id'), ...name, p_contact_number: contactNumber, p_monthly_contribution_amount: Number(values.get('monthly_contribution_amount')), p_notes: values.get('notes') || null });
+      else await Ipon.rpc('create_member', { ...name, p_contact_number: contactNumber, p_date_registered: values.get('date_registered'), p_monthly_contribution_amount: Number(values.get('monthly_contribution_amount')), p_notes: values.get('notes') || null });
       Ipon.toast(values.get('member_id') ? 'Member updated.' : 'Member added.'); resetForm(); await load();
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); } finally { Ipon.setBusy(button, false); }
   });
   tbody.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-action]'); if (!button) return; const member = members.find((item) => item.id === button.dataset.id); if (!member) return;
     if (button.dataset.action === 'edit') {
-      form.elements.member_id.value = member.id; form.elements.full_name.value = member.full_name; form.elements.contact_number.value = member.contact_number || '';
+      form.elements.member_id.value = member.id; form.elements.first_name.value = member.first_name || ''; form.elements.middle_name.value = member.middle_name || ''; form.elements.last_name.value = member.last_name || ''; form.elements.contact_number.value = member.contact_number || '';
+      nameFields.forEach(([input, error]) => setNameError(input, error, ''));
+      nameMigrationHelp.hidden = Boolean(member.first_name && member.last_name);
+      nameMigrationHelp.textContent = nameMigrationHelp.hidden ? '' : `Legacy name kept as “${member.full_name}”. Enter its structured name parts before saving.`;
       setContactError('');
       form.elements.date_registered.value = member.date_registered; form.elements.monthly_contribution_amount.value = member.monthly_contribution_amount; form.elements.notes.value = member.notes || '';
       dateRegistered.disabled = true; dateRegisteredHelp.hidden = false;

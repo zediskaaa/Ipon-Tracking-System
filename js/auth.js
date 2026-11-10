@@ -3,21 +3,29 @@
   const form = document.getElementById('auth-form');
   const message = document.getElementById('auth-message');
   const submit = document.getElementById('auth-submit');
-  const fullNameField = document.getElementById('full-name-field');
-  const fullName = document.getElementById('full-name');
+  const firstNameField = document.getElementById('first-name-field');
+  const middleNameField = document.getElementById('middle-name-field');
+  const lastNameField = document.getElementById('last-name-field');
+  const firstName = document.getElementById('first-name');
+  const middleName = document.getElementById('middle-name');
+  const lastName = document.getElementById('last-name');
   const email = document.getElementById('email');
   const password = document.getElementById('password');
   const passwordConfirmationField = document.getElementById('password-confirmation-field');
   const passwordConfirmation = document.getElementById('password-confirmation');
   const passwordRequirements = document.getElementById('password-requirements');
   const passwordToggle = document.getElementById('password-toggle');
+  const nameInputs = [firstName, middleName, lastName];
   const fieldErrors = new Map([
-    [fullName, document.getElementById('full-name-error')],
+    [firstName, document.getElementById('first-name-error')],
+    [middleName, document.getElementById('middle-name-error')],
+    [lastName, document.getElementById('last-name-error')],
     [email, document.getElementById('email-error')],
     [password, document.getElementById('password-error')],
     [passwordConfirmation, document.getElementById('password-confirmation-error')]
   ]);
   const passwordRule = 'Use at least 8 characters with uppercase, lowercase, and a number.';
+  const nameRule = "Use letters, spaces, hyphens, or apostrophes only.";
   let mode = 'login';
 
   const state = await Ipon.init({ requireAuth: false, allowPending: true });
@@ -69,7 +77,16 @@
     clearFieldErrors();
     email.value = email.value.trim();
 
-    if (signup && fullName.value.trim().length < 2) setFieldError(fullName, 'Enter a full name with at least 2 characters.');
+    if (signup) {
+      if (!firstName.value.trim()) setFieldError(firstName, 'Enter your first name.');
+      else if (!Ipon.validNamePart(firstName.value)) setFieldError(firstName, nameRule);
+      if (middleName.value.trim() && !Ipon.validNamePart(middleName.value)) setFieldError(middleName, nameRule);
+      if (!lastName.value.trim()) setFieldError(lastName, 'Enter your last name or surname.');
+      else if (!Ipon.validNamePart(lastName.value)) setFieldError(lastName, nameRule);
+      if (nameInputs.map((input) => Ipon.normalizeNamePart(input.value)).filter(Boolean).join(' ').length > 150) {
+        setFieldError(lastName, 'Combined full name must not exceed 150 characters.');
+      }
+    }
     if (!email.value) setFieldError(email, 'Enter your email address.');
     else if (!email.validity.valid) setFieldError(email, 'Enter a valid email address.');
     if (!password.value) setFieldError(password, 'Enter your password.');
@@ -77,7 +94,7 @@
     if (signup && !passwordConfirmation.value) setFieldError(passwordConfirmation, 'Confirm your password.');
     else if (signup && passwordConfirmation.value !== password.value) setFieldError(passwordConfirmation, 'Passwords do not match.');
 
-    const inputs = signup ? [fullName, email, password, passwordConfirmation] : [email, password];
+    const inputs = signup ? [...nameInputs, email, password, passwordConfirmation] : [email, password];
     const firstInvalid = inputs.find((input) => !input.checkValidity());
     if (firstInvalid) firstInvalid.focus();
     return !firstInvalid;
@@ -88,8 +105,11 @@
     const signup = mode === 'signup';
     document.getElementById('show-login').classList.toggle('is-active', !signup);
     document.getElementById('show-signup').classList.toggle('is-active', signup);
-    fullNameField.hidden = !signup;
-    fullName.required = signup;
+    firstNameField.hidden = !signup;
+    middleNameField.hidden = !signup;
+    lastNameField.hidden = !signup;
+    firstName.required = signup;
+    lastName.required = signup;
     passwordConfirmationField.hidden = !signup;
     passwordConfirmation.required = signup;
     passwordRequirements.hidden = !signup;
@@ -118,10 +138,14 @@
     Ipon.setBusy(submit, true, mode === 'signup' ? 'Submitting...' : 'Signing in...');
     try {
       if (mode === 'signup') {
+        const first = Ipon.normalizeNamePart(firstName.value);
+        const middle = middleName.value.trim() ? Ipon.normalizeNamePart(middleName.value) : null;
+        const last = Ipon.normalizeNamePart(lastName.value);
+        const full = [first, middle, last].filter(Boolean).join(' ');
         const { error } = await Ipon.client.auth.signUp({
           email: email.value,
           password: password.value,
-          options: { data: { full_name: fullName.value.trim() } }
+          options: { data: { first_name: first, middle_name: middle, last_name: last, full_name: full } }
         });
         if (error) throw error;
         await Ipon.client.auth.signOut();

@@ -54,6 +54,14 @@
     })[character]);
   }
 
+  function normalizeNamePart(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ');
+  }
+
+  function validNamePart(value) {
+    return /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(normalizeNamePart(value));
+  }
+
   function money(value) {
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
       .format(Number(value || 0));
@@ -313,7 +321,7 @@
 
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, toast, friendlyError, setBusy, setLoading, confirmAction,
+    escapeHtml, normalizeNamePart, validNamePart, toast, friendlyError, setBusy, setLoading, confirmAction,
     get profile() { return currentProfile; }
   };
 })();
