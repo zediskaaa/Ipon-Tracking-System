@@ -28,7 +28,8 @@
   let pendingSubmissionKey = null;
 
   function statusBadge(status) {
-    return `<span class="status status-${String(status).toLowerCase().replaceAll('_', '-')}">${Ipon.escapeHtml(status)}</span>`;
+    const statusClass = String(status).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    return `<span class="status status-${statusClass}">${Ipon.escapeHtml(status)}</span>`;
   }
 
   async function syncSuggestedAmount() {
