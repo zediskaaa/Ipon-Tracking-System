@@ -678,7 +678,7 @@ button,a { color:inherit; font:inherit; }
   .comp-frame { display:flex; flex-direction:column; }
   .dashboard-sidebar { position:static; height:auto; padding:16px; }
   .dashboard-sidebar .sidebar-nav { display:flex; flex-direction:row; gap:6px; margin-top:14px; overflow-x:auto; padding:0; }
-  .dashboard-sidebar .sidebar-art, .dashboard-sidebar .app-sidebar-footer { display:none; }
+  .dashboard-sidebar .sidebar-art { display:none; }
   .dashboard-workspace { padding:16px; }
   .calendar-header { display:none; }
   .mobile-month-bar { display:grid; grid-template-columns:40px minmax(0,1fr) 40px; align-items:center; margin-bottom:12px; }

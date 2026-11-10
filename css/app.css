@@ -157,7 +157,11 @@ a { color:inherit; }
 @media (max-width:720px) {
   .app-layout { display:block; }.app-sidebar { position:relative; width:100%; height:auto; padding:16px; }
   .app-brand { font-size:34px; }.app-nav { display:flex; margin-top:18px; overflow-x:auto; }
-  .app-nav a { flex:0 0 auto; padding:10px 12px; font-size:16px; }.sidebar-art,.app-sidebar-footer { display:none; }
+  .app-nav a { flex:0 0 auto; padding:10px 12px; font-size:16px; }.sidebar-art { display:none; }
+  .app-sidebar-footer { margin-top:14px; border-top:1px solid rgba(255,255,255,.15); padding-top:12px; align-items:stretch; }
+  .sidebar-user-card { min-width:0; width:100%; }.sidebar-user-caret { display:none; }
+  .sidebar-signout { width:100%; min-height:44px; border:1px solid rgba(255,255,255,.24); border-radius:9px; padding:10px 13px; text-decoration:none; }
+  .sidebar-signout:focus-visible { outline:3px solid #edd189; outline-offset:3px; }
   .workspace { padding:28px 16px 58px; }.page-header { align-items:flex-start; flex-direction:column; }
   .stats-grid,.form-grid { grid-template-columns:1fr; }.field-wide { grid-column:auto; }
   .header-actions { width:100%; }.header-actions .button { flex:1; }
