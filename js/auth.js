@@ -103,8 +103,15 @@
   function setMode(next) {
     mode = next;
     const signup = mode === 'signup';
-    document.getElementById('show-login').classList.toggle('is-active', !signup);
-    document.getElementById('show-signup').classList.toggle('is-active', signup);
+    const loginTab = document.getElementById('show-login');
+    const signupTab = document.getElementById('show-signup');
+    loginTab.classList.toggle('is-active', !signup);
+    signupTab.classList.toggle('is-active', signup);
+    loginTab.setAttribute('aria-selected', String(!signup));
+    signupTab.setAttribute('aria-selected', String(signup));
+    loginTab.tabIndex = signup ? -1 : 0;
+    signupTab.tabIndex = signup ? 0 : -1;
+    form.setAttribute('aria-labelledby', signup ? 'show-signup' : 'show-login');
     firstNameField.hidden = !signup;
     middleNameField.hidden = !signup;
     lastNameField.hidden = !signup;
@@ -128,6 +135,13 @@
   passwordToggle.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
   document.getElementById('show-login').addEventListener('click', () => setMode('login'));
   document.getElementById('show-signup').addEventListener('click', () => setMode('signup'));
+  document.querySelector('.auth-tabs').addEventListener('keydown', (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const nextMode = event.key === 'ArrowLeft' || event.key === 'Home' ? 'login' : 'signup';
+    setMode(nextMode);
+    document.getElementById(nextMode === 'login' ? 'show-login' : 'show-signup').focus();
+  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();

@@ -134,7 +134,7 @@
       host.innerHTML = `
         ${brandHtml}
         <nav class="app-nav" aria-label="Main navigation">
-          ${navItems.map(([id, href, label, icon]) => `<a class="${activeId === id ? 'is-active' : ''}" href="${href}">${icon || ''}<span>${label}</span></a>`).join('')}
+          ${navItems.map(([id, href, label, icon]) => `<a class="${activeId === id ? 'is-active' : ''}" href="${href}"${activeId === id ? ' aria-current="page"' : ''}>${icon || ''}<span>${label}</span></a>`).join('')}
         </nav>
         ${sidebarArtHtml}
         <div class="app-sidebar-footer">
