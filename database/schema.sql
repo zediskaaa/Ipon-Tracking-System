@@ -1823,9 +1823,12 @@ alter table public.contribution_settings
 
 alter table public.contribution_periods add column if not exists due_date date;
 
+-- Migration backfill runs without an authenticated app user in the SQL Editor.
+alter table public.contribution_periods disable trigger contribution_periods_group_scope;
 update public.contribution_periods
 set due_date = (period_month + interval '1 month - 1 day')::date
 where due_date is null;
+alter table public.contribution_periods enable trigger contribution_periods_group_scope;
 
 alter table public.contribution_periods alter column due_date set not null;
 

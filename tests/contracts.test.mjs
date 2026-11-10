@@ -86,6 +86,15 @@ test('three panels have separate routes and backend-owned account workflows', ()
   assert.doesNotMatch(read('js/core.js') + read('js/super-admin.js') + read('js/members.js'), /SERVICE_ROLE_KEY/);
 });
 
+test('deadline backfill bypasses only the group-scope trigger during migration', () => {
+  const migration = read('database/migrations/20261110_007_complete_account_notifications.sql');
+  const disabled = migration.indexOf('disable trigger contribution_periods_group_scope');
+  const backfill = migration.indexOf('update public.contribution_periods');
+  const enabled = migration.indexOf('enable trigger contribution_periods_group_scope');
+  assert.ok(disabled >= 0 && disabled < backfill, 'group-scope trigger must be disabled before the backfill');
+  assert.ok(enabled > backfill, 'group-scope trigger must be restored after the backfill');
+});
+
 test('administrator approval and group creation are atomic database operations', () => {
   const migration = read('database/migrations/20261110_006_super_admin_account_workflow.sql');
   assert.match(migration, /create or replace function public\.super_admin_approve_request\(p_user_id uuid, p_group_name text\)/i);
