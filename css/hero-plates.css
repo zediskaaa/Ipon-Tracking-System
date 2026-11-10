@@ -684,11 +684,15 @@ button,a { color:inherit; font:inherit; }
   .mobile-month-bar { display:grid; grid-template-columns:40px minmax(0,1fr) 40px; align-items:center; margin-bottom:12px; }
   .mobile-month-bar button { height:38px; border:1px solid rgba(20,45,43,.2); border-radius:8px; background:#fffdf9; font-size:22px; }
   .mobile-month-bar strong { font-size:20px; text-align:center; }
-  .calendar-week { min-height:72px; }
-  .day { padding:6px; }
-  .day b { font-size:12px; }
-  .day .event { top:26px; right:4px; padding:1px 5px; font-size:9px; }
-  .day em { right:4px; bottom:4px; font-size:10px; }
+  .calendar-card { padding:14px 10px; }
+  .weekday-headings span { padding:9px 2px; font-size:10px; letter-spacing:0; }
+  .calendar-week { min-height:56px; }
+  .day { min-height:44px; padding:7px; touch-action:manipulation; }
+  .day b { font-size:13px; }
+  .day .event { top:auto; right:7px; bottom:7px; width:8px; height:8px; padding:0; overflow:hidden; border:0; border-radius:50%; color:transparent; }
+  .day em,.day .more-count { display:none; }
+  .day-detail-panel { right:12px; bottom:12px; left:12px!important; top:auto!important; width:auto; max-height:45vh; overflow:auto; pointer-events:auto; }
+  .day-detail-panel header button { display:grid; width:44px; height:44px; flex:0 0 44px; padding:0; place-items:center; border:0; background:transparent; color:var(--ink); font-size:24px; }
   .review-column { padding:0 16px 24px; }
 }
 

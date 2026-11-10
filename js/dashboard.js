@@ -51,7 +51,8 @@
         if (!cell || cell.empty) return '<span class="day is-empty"></span>';
         const activity = cell.activities[0]; let activityHtml = '';
         if (activity) { const [klass, label] = statusClass(activity); activityHtml = `<span class="event ${klass}">${label}</span><em>${Ipon.money(activity.amount)}</em>${cell.activities.length > 1 ? `<small class="more-count">+${cell.activities.length - 1}</small>` : ''}`; }
-        return `<button class="day ${column === 0 ? 'sunday' : ''}" type="button" data-date="${cell.date}"><b>${cell.day}</b>${activityHtml}</button>`;
+        const activityLabel = cell.activities.length ? `, ${cell.activities.length} recorded ${cell.activities.length === 1 ? 'activity' : 'activities'}` : ', no recorded activity';
+        return `<button class="day ${column === 0 ? 'sunday' : ''}" type="button" data-date="${cell.date}" aria-label="${monthName} ${cell.day}${activityLabel}"><b>${cell.day}</b>${activityHtml}</button>`;
       }).join('');
     });
   }
@@ -175,6 +176,12 @@
       detailPanel.hidden = true;
       activeDate = null;
     }
+  });
+  board.addEventListener('click', (event) => {
+    const day = event.target.closest('.day[data-date]');
+    if (!day || !window.matchMedia('(max-width:860px)').matches) return;
+    const box = day.getBoundingClientRect();
+    showDayTooltip(day, box.left + box.width / 2, box.bottom);
   });
   document.getElementById('day-detail-close')?.addEventListener('click', () => {
     detailPanel.hidden = true;
