@@ -58,7 +58,7 @@ create table if not exists public.members (
   middle_name text,
   last_name text,
   contact_number text,
-  date_registered date not null default current_date,
+  date_registered date not null default ((now() at time zone 'Asia/Manila')::date),
   monthly_contribution_amount numeric(14,2) not null check (monthly_contribution_amount > 0),
   status public.member_status not null default 'ACTIVE',
   notes text,
@@ -145,7 +145,7 @@ create table if not exists public.contributions (
   id uuid primary key default gen_random_uuid(),
   contribution_period_id uuid not null references public.contribution_periods(id) on delete restrict,
   amount numeric(14,2) not null check (amount > 0),
-  payment_date date not null default current_date,
+  payment_date date not null default ((now() at time zone 'Asia/Manila')::date),
   transaction_reference text,
   idempotency_key uuid not null unique default gen_random_uuid(),
   notes text,
@@ -171,7 +171,7 @@ create table if not exists public.contributions (
 
 create table if not exists public.expenses (
   id uuid primary key default gen_random_uuid(),
-  transaction_date date not null default current_date,
+  transaction_date date not null default ((now() at time zone 'Asia/Manila')::date),
   amount numeric(14,2) not null check (amount > 0),
   category text not null check (nullif(btrim(category), '') is not null),
   description text not null check (nullif(btrim(description), '') is not null),
@@ -201,7 +201,7 @@ create table if not exists public.expenses (
 
 create table if not exists public.withdrawals (
   id uuid primary key default gen_random_uuid(),
-  transaction_date date not null default current_date,
+  transaction_date date not null default ((now() at time zone 'Asia/Manila')::date),
   amount numeric(14,2) not null check (amount > 0),
   category text not null check (nullif(btrim(category), '') is not null),
   description text not null check (nullif(btrim(description), '') is not null),
@@ -291,7 +291,8 @@ insert into public.schema_migrations (version, name) values
   ('20261110_005', 'isolate savings data by group'),
   ('20261110_006', 'super administrator account workflow'),
   ('20261110_007', 'complete account notifications and user workflow'),
-  ('20261111_008', 'restore validation helper functions')
+  ('20261111_008', 'restore validation helper functions'),
+  ('20261111_009', 'use Philippine business date')
 on conflict (version) do nothing;
 
 create index if not exists members_name_idx on public.members (lower(full_name));
@@ -475,6 +476,7 @@ create or replace function public.enforce_data_quality()
 returns trigger
 language plpgsql
 set search_path = public
+set timezone = 'Asia/Manila'
 as $$
 begin
   if tg_table_name = 'profiles' then
@@ -1129,6 +1131,7 @@ returns uuid
 language plpgsql
 security definer
 set search_path = public
+set timezone = 'Asia/Manila'
 as $$
 declare
   v_role public.app_role := public.current_user_role();
@@ -2154,6 +2157,7 @@ language sql
 stable
 security definer
 set search_path = public
+set timezone = 'Asia/Manila'
 as $$
   select case when public.current_member_id() is null then null else jsonb_build_object(
     'total_contributed', (select coalesce(sum(c.amount), 0) from public.contributions c join public.contribution_periods cp on cp.id = c.contribution_period_id where cp.member_id = public.current_member_id() and c.approval_status = 'CONFIRMED'),
@@ -2229,6 +2233,7 @@ returns integer
 language plpgsql
 security definer
 set search_path = public
+set timezone = 'Asia/Manila'
 as $$
 declare v_count integer;
 begin

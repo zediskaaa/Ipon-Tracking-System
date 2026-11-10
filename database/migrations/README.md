@@ -23,4 +23,6 @@ Migration `20261110_007` completes administrator request details, the User panel
 
 Migration `20261111_008` restores the phone and money validation helper functions required by member and financial RPCs on upgraded databases. Apply it after `007`.
 
+Migration `20261111_009` makes date validation, current-month status, reminders, and database date defaults use Philippine business time while the Supabase database remains on UTC. Apply it after `008`.
+
 Do not edit an applied migration. Add the next numbered file for every future production database change, update `schema.sql` to the same final state, and test the sequence against a restored copy before production.

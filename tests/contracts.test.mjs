@@ -103,6 +103,14 @@ test('upgraded databases receive every validation helper used by RPCs', () => {
   assert.match(migration, /revoke execute on function public\.validated_money\(numeric, text\) from public, anon, authenticated/i);
 });
 
+test('business-date validation uses Philippine time without changing database timezone', () => {
+  const migration = read('database/migrations/20261111_009_use_philippine_business_date.sql');
+  assert.match(migration, /alter function public\.enforce_data_quality\(\) set timezone to 'Asia\/Manila'/i);
+  assert.match(migration, /alter function public\.create_due_reminders\(\) set timezone to 'Asia\/Manila'/i);
+  assert.match(migration, /now\(\) at time zone 'Asia\/Manila'/i);
+  assert.doesNotMatch(migration, /alter database/i);
+});
+
 test('administrator approval and group creation are atomic database operations', () => {
   const migration = read('database/migrations/20261110_006_super_admin_account_workflow.sql');
   assert.match(migration, /create or replace function public\.super_admin_approve_request\(p_user_id uuid, p_group_name text\)/i);
