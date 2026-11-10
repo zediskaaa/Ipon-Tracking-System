@@ -128,6 +128,8 @@ test('loading feedback uses savings motion with reduced-motion support', () => {
   assert.match(css, /@keyframes coin-deposit/);
   assert.match(css, /\.coin-one\s*\{[^}]*animation-delay:-\.4s/);
   assert.match(css, /@keyframes deposit-spark/);
+  assert.doesNotMatch(css, /\.loader-sheet::before/);
+  assert.match(css, /\.falling-coin\s*\{[^}]*z-index:0/);
   assert.match(css, /@keyframes coin-flip/);
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)[^}]*[\s\S]*?\.falling-coin/);
 });

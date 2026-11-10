@@ -66,7 +66,7 @@
                 <path class="piggy-ear" d="M66 38c-1-17 7-27 22-10"/>
                 <path class="piggy-body" d="M40 74c0-31 24-49 62-49 24 0 42 10 51 27l15 3c7 1 10 8 6 14l-10 14c-5 16-20 27-40 31l-3 12h-19l-3-10H74l-4 10H51l-1-20c-10-8-15-19-15-32Z"/>
                 <path class="piggy-shine" d="M58 61c8-15 23-23 44-24"/>
-                <path class="piggy-slot" d="M82 34h29"/>
+                <ellipse class="piggy-slot" cx="96.5" cy="34" rx="16" ry="5"/>
                 <ellipse class="piggy-snout" cx="158" cy="69" rx="13" ry="11"/>
                 <circle class="piggy-eye" cx="139" cy="57" r="4"/>
                 <circle class="piggy-eye-glint" cx="140" cy="56" r="1.3"/>

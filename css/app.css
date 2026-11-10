@@ -143,19 +143,19 @@ a { color:inherit; }
 .toast { position:fixed; right:24px; bottom:24px; z-index:120; max-width:390px; padding:14px 18px; border-radius:8px; background:var(--rail); color:#fff; box-shadow:var(--shadow); font-family:Arial,sans-serif; opacity:0; pointer-events:none; transform:translateY(12px); transition:.2s ease; }
 .toast.is-visible { opacity:1; transform:none; }
 .toast[data-tone="error"] { background:var(--red); }
-.app-loader { position:fixed; inset:0; z-index:200; display:grid; place-items:center; padding:24px; background:rgba(20,45,43,.86); backdrop-filter:blur(3px); }
-.loader-sheet { position:relative; width:min(360px,100%); overflow:hidden; border:1px solid rgba(20,45,43,.32); border-radius:12px; padding:32px 28px 28px; background-color:var(--paper); box-shadow:0 22px 55px rgba(0,0,0,.3); text-align:center; }
-.loader-sheet::before { position:absolute; inset:0 auto 0 0; width:8px; background:var(--rail); content:""; }
-.loader-brand { display:inline-block; border-bottom:3px solid var(--ink); font-size:36px; letter-spacing:1px; line-height:1.1; transform:rotate(-1deg); }
+.app-loader { position:fixed; inset:0; z-index:200; display:grid; place-items:center; padding:24px; background:linear-gradient(145deg,rgba(10,39,33,.76),rgba(20,45,43,.9)); backdrop-filter:blur(9px) saturate(.88); }
+.loader-sheet { position:relative; width:min(380px,100%); overflow:hidden; border:1px solid rgba(255,255,255,.48); border-radius:26px; padding:34px 30px 30px; background:linear-gradient(145deg,rgba(255,252,245,.97),rgba(242,230,211,.94)); box-shadow:0 30px 80px rgba(3,24,20,.34),inset 0 1px 0 rgba(255,255,255,.88); text-align:center; animation:paper-rise .35s cubic-bezier(.22,1,.36,1) both; }
+.loader-brand { display:inline-block; border-bottom:2px solid rgba(20,45,43,.72); font-size:34px; letter-spacing:2px; line-height:1.1; }
 .savings-loader { position:relative; width:190px; height:132px; margin:16px auto 12px; isolation:isolate; }
-.piggy-bank { position:absolute; inset:auto 0 0; width:190px; height:132px; overflow:visible; filter:drop-shadow(0 9px 8px rgba(20,45,43,.18)); transform-origin:50% 88%; animation:bank-receive .4s cubic-bezier(.22,1,.36,1) infinite; }
+.piggy-bank { position:absolute; z-index:1; inset:auto 0 0; width:190px; height:132px; overflow:visible; filter:drop-shadow(0 9px 8px rgba(20,45,43,.18)); transform-origin:50% 88%; animation:bank-receive .4s cubic-bezier(.22,1,.36,1) infinite; }
 .piggy-body,.piggy-ear { fill:url(#piggy-green); stroke:#123d34; stroke-linejoin:round; stroke-width:4; }
-.piggy-tail,.piggy-slot { fill:none; stroke:#123d34; stroke-linecap:round; stroke-width:5; }
+.piggy-tail { fill:none; stroke:#123d34; stroke-linecap:round; stroke-width:5; }
+.piggy-slot { fill:#092e27; stroke:#6ab78c; stroke-width:2; }
 .piggy-shine { fill:none; stroke:rgba(255,255,255,.46); stroke-linecap:round; stroke-width:5; }
 .piggy-snout { fill:url(#snout-green); stroke:#123d34; stroke-width:3; }
 .piggy-eye { fill:#092b25; }.piggy-eye-glint { fill:#fff; }.piggy-nostril { fill:#164b3d; }
 .piggy-shadow { fill:rgba(20,45,43,.16); filter:none; }
-.falling-coin { position:absolute; z-index:2; top:0; left:51%; width:26px; height:26px; border:3px solid #a96f12; border-radius:50%; background:linear-gradient(135deg,#fff0ad 0%,#f0c85e 48%,#c88b20 100%); box-shadow:inset 0 0 0 3px #f8dc8b,0 4px 8px rgba(20,45,43,.2); opacity:0; animation:coin-deposit 1.2s cubic-bezier(.32,.02,.2,1) infinite; }
+.falling-coin { position:absolute; z-index:0; top:0; left:51%; width:26px; height:26px; border:3px solid #a96f12; border-radius:50%; background:linear-gradient(135deg,#fff0ad 0%,#f0c85e 48%,#c88b20 100%); box-shadow:inset 0 0 0 3px #f8dc8b,0 4px 8px rgba(20,45,43,.2); opacity:0; animation:coin-deposit 1.2s cubic-bezier(.32,.02,.2,1) infinite; }
 .falling-coin::after { position:absolute; inset:4px 8px; border:2px solid rgba(145,88,7,.72); border-block:0; border-radius:2px; content:""; }
 .coin-one { animation-delay:-.4s; }.coin-two { animation-delay:0s; }.coin-three { animation-delay:.4s; }
 .deposit-spark { position:absolute; z-index:3; top:35px; left:50%; width:7px; height:7px; border-radius:50%; background:#f0c85e; opacity:0; animation:deposit-spark .4s ease-out infinite; }
