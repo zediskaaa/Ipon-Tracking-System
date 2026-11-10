@@ -116,4 +116,8 @@ begin
 end;
 $$;
 
+insert into public.schema_migrations (version, name)
+values ('20261110_001', 'lock confirmed financial records')
+on conflict (version) do nothing;
+
 commit;

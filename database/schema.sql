@@ -253,6 +253,18 @@ create table if not exists public.audit_logs (
   changed_at timestamptz not null default now()
 );
 
+create table if not exists public.schema_migrations (
+  version text primary key,
+  name text not null,
+  applied_at timestamptz not null default now()
+);
+
+insert into public.schema_migrations (version, name) values
+  ('0000', 'create migration ledger'),
+  ('20261110_001', 'lock confirmed financial records'),
+  ('20261110_002', 'structured profile and member names')
+on conflict (version) do nothing;
+
 create index if not exists members_name_idx on public.members (lower(full_name));
 create index if not exists members_status_idx on public.members (status);
 create index if not exists contribution_periods_month_idx on public.contribution_periods (period_month);
@@ -1433,7 +1445,8 @@ revoke all on all tables in schema public from anon;
 revoke create on schema public from public;
 revoke all on public.profiles, public.members, public.contribution_settings,
   public.contribution_periods, public.contributions, public.expenses,
-  public.withdrawals, public.savings_goals, public.audit_logs from authenticated;
+  public.withdrawals, public.savings_goals, public.audit_logs,
+  public.schema_migrations from authenticated;
 
 grant select on public.profiles, public.members, public.contribution_settings,
   public.contribution_periods, public.contributions, public.expenses,
