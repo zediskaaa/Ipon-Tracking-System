@@ -133,3 +133,16 @@ test('loading feedback uses savings motion with reduced-motion support', () => {
   assert.match(css, /@keyframes coin-flip/);
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)[^}]*[\s\S]*?\.falling-coin/);
 });
+
+test('calendar supports direct month and year navigation', () => {
+  const html = read('dashboard.html');
+  const script = read('js/dashboard.js');
+  const css = read('css/hero-plates.css');
+  assert.match(html, /id="calendar-jump-dialog"/);
+  assert.match(html, /id="calendar-jump-month"/);
+  assert.match(html, /id="calendar-jump-year"/);
+  assert.match(html, /id="calendar-jump-today"/);
+  assert.match(script, /function navigateTo\(date\)/);
+  assert.match(script, /classList|is-today/);
+  assert.match(css, /\.mobile-calendar-jump/);
+});

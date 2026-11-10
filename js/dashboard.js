@@ -7,6 +7,10 @@
   let currentActivities = [];
   let activeDate = null;
   const detailPanel = document.getElementById('day-detail-panel');
+  const calendarCard = document.querySelector('.calendar-card');
+  const jumpDialog = document.getElementById('calendar-jump-dialog');
+  const jumpMonth = document.getElementById('calendar-jump-month');
+  const jumpYear = document.getElementById('calendar-jump-year');
   const weeks = [...document.querySelectorAll('.calendar-week')];
   const summaryValues = [...document.querySelectorAll('.summary-breakdown dd')];
   const heroMoney = (value) => Ipon.money(value);
@@ -41,7 +45,7 @@
     const monthName = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(cursor);
     document.getElementById('calendar-month').textContent = monthName;
     document.getElementById('mobile-calendar-month').textContent = monthName;
-    const cells = calendarCells(activities); let allWeeks = [...weeks];
+    const cells = calendarCells(activities); const today = new Date(); let allWeeks = [...weeks];
     let extra = document.querySelector('.dynamic-week-6');
     if (cells.length === 42 && !extra) { extra = document.createElement('div'); extra.className = 'calendar-week dynamic-week-6'; document.getElementById('day-detail-panel').before(extra); }
     if (extra) extra.hidden = cells.length !== 42; if (cells.length === 42) allWeeks.push(extra);
@@ -52,7 +56,8 @@
         const activity = cell.activities[0]; let activityHtml = '';
         if (activity) { const [klass, label] = statusClass(activity); activityHtml = `<span class="event ${klass}">${label}</span><em>${Ipon.money(activity.amount)}</em>${cell.activities.length > 1 ? `<small class="more-count">+${cell.activities.length - 1}</small>` : ''}`; }
         const activityLabel = cell.activities.length ? `, ${cell.activities.length} recorded ${cell.activities.length === 1 ? 'activity' : 'activities'}` : ', no recorded activity';
-        return `<button class="day ${column === 0 ? 'sunday' : ''}" type="button" data-date="${cell.date}" aria-label="${monthName} ${cell.day}${activityLabel}"><b>${cell.day}</b>${activityHtml}</button>`;
+        const isToday = cell.day === today.getDate() && cursor.getMonth() === today.getMonth() && cursor.getFullYear() === today.getFullYear();
+        return `<button class="day ${column === 0 ? 'sunday' : ''}${isToday ? ' is-today' : ''}" type="button" data-date="${cell.date}"${isToday ? ' aria-current="date"' : ''} aria-label="${monthName} ${cell.day}${isToday ? ', today' : ''}${activityLabel}"><b>${cell.day}</b>${activityHtml}</button>`;
       }).join('');
     });
   }
@@ -100,6 +105,17 @@
       renderCalendar(calendarResult.data || []); renderPending(pending.slice(0,3));
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); renderCalendar([]); renderPending([]); }
   }
+  async function navigateTo(date) {
+    cursor = new Date(date.getFullYear(), date.getMonth(), 1);
+    calendarCard.setAttribute('aria-busy', 'true');
+    try { await load(); } finally { calendarCard.removeAttribute('aria-busy'); }
+  }
+  function openJumpDialog() {
+    jumpMonth.value = String(cursor.getMonth());
+    jumpYear.value = String(cursor.getFullYear());
+    jumpDialog.showModal();
+    jumpMonth.focus();
+  }
   async function loadVisualFixture() {
     const response = await fetch('tests/fixtures/dashboard.json');
     if (!response.ok) throw new Error('Dashboard visual fixture could not be loaded.');
@@ -117,10 +133,19 @@
     renderPending(fixture.pending.slice(0, 3));
   }
   if (visualFixture) { await loadVisualFixture(); return; }
-  document.querySelector('[data-region="month-previous"]').addEventListener('click', async () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1); await load(); });
-  document.querySelector('[data-region="month-next"]').addEventListener('click', async () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1); await load(); });
-  document.querySelector('[data-mobile-month="previous"]').addEventListener('click', async () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1); await load(); });
-  document.querySelector('[data-mobile-month="next"]').addEventListener('click', async () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1); await load(); });
+  document.querySelector('[data-region="month-previous"]').addEventListener('click', () => navigateTo(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1)));
+  document.querySelector('[data-region="month-next"]').addEventListener('click', () => navigateTo(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)));
+  document.querySelector('[data-mobile-month="previous"]').addEventListener('click', () => navigateTo(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1)));
+  document.querySelector('[data-mobile-month="next"]').addEventListener('click', () => navigateTo(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)));
+  document.querySelectorAll('[data-calendar-jump]').forEach((button) => button.addEventListener('click', openJumpDialog));
+  document.querySelector('.calendar-jump-close').addEventListener('click', () => jumpDialog.close());
+  document.getElementById('calendar-jump-today').addEventListener('click', async () => { jumpDialog.close(); await navigateTo(new Date()); });
+  document.getElementById('calendar-jump-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!event.currentTarget.reportValidity()) return;
+    jumpDialog.close();
+    await navigateTo(new Date(Number(jumpYear.value), Number(jumpMonth.value), 1));
+  });
   document.querySelectorAll('.review-item').forEach((button) => button.addEventListener('click', async () => {
     if (state.profile?.role !== 'ADMIN' || !button.dataset.id) return;
     const decision = window.prompt('Type CONFIRM or REJECT for this entry:')?.trim().toUpperCase(); if (!['CONFIRM','REJECT'].includes(decision)) return;

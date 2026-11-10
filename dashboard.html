@@ -105,10 +105,22 @@
               <circle cx="16" cy="17.5" r="1" fill="currentColor" stroke="none"/>
             </svg>
             <h2 class="calendar-title" data-region="calendar-title" id="calendar-month">Loading calendar…</h2>
+            <button class="calendar-jump-trigger" data-calendar-jump type="button" aria-haspopup="dialog" aria-controls="calendar-jump-dialog" aria-label="Jump to another month and year"><svg class="calendar-jump-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
           </div>
           <button class="month-button" data-region="month-next" type="button" aria-label="Next month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
         </div>
-        <div class="mobile-month-bar"><button type="button" data-mobile-month="previous" aria-label="Previous month">‹</button><strong id="mobile-calendar-month">Loading calendar…</strong><button type="button" data-mobile-month="next" aria-label="Next month">›</button></div>
+        <div class="mobile-month-bar"><button type="button" data-mobile-month="previous" aria-label="Previous month">‹</button><button class="mobile-calendar-jump" data-calendar-jump type="button" aria-haspopup="dialog" aria-controls="calendar-jump-dialog" aria-label="Jump to another month and year"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18"/></svg><strong id="mobile-calendar-month">Loading calendar…</strong></button><button type="button" data-mobile-month="next" aria-label="Next month">›</button></div>
+
+        <dialog class="calendar-jump-dialog" id="calendar-jump-dialog" aria-labelledby="calendar-jump-title">
+          <form id="calendar-jump-form" method="dialog">
+            <header><div><small>Calendar navigation</small><h2 id="calendar-jump-title">Jump to a month</h2></div><button class="calendar-jump-close" type="button" aria-label="Close month picker">×</button></header>
+            <div class="calendar-jump-fields">
+              <label><span>Month</span><select id="calendar-jump-month" required><option value="0">January</option><option value="1">February</option><option value="2">March</option><option value="3">April</option><option value="4">May</option><option value="5">June</option><option value="6">July</option><option value="7">August</option><option value="8">September</option><option value="9">October</option><option value="10">November</option><option value="11">December</option></select></label>
+              <label><span>Year</span><input id="calendar-jump-year" type="number" min="2000" max="2100" inputmode="numeric" required></label>
+            </div>
+            <div class="calendar-jump-actions"><button class="jump-today-button" id="calendar-jump-today" type="button">Today</button><button class="jump-confirm-button" type="submit">View month</button></div>
+          </form>
+        </dialog>
 
         <div class="calendar-board">
           <div class="weekday-headings" data-region="weekday-headings" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
