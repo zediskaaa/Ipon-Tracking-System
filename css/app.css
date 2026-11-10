@@ -77,6 +77,7 @@ a { color:inherit; }
 .table-pager { display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-top:16px; font-family:Arial,sans-serif; font-size:13px; }
 .table-pager button { min-height:44px; padding:8px 14px; border:1px solid var(--rule); border-radius:6px; background:#fffdf9; color:var(--ink); cursor:pointer; }
 .table-pager button:disabled { opacity:.45; cursor:not-allowed; }
+.audit-record-id { display:block; max-width:12ch; overflow:hidden; font-family:ui-monospace,monospace; text-overflow:ellipsis; white-space:nowrap; }
 .panel-subsection { margin-top:2rem; padding-top:1.5rem; border-top:1px solid var(--rule); }
 .day-detail-list { display:grid; gap:.65rem; margin-top:1rem; }
 .day-detail-list article { display:grid; grid-template-columns:1fr auto; gap:.25rem 1rem; padding:.8rem 0; border-bottom:1px solid var(--rule); }
@@ -98,9 +99,11 @@ a { color:inherit; }
 .icon-action { min-height:36px; padding:7px 10px; border:1px solid var(--rule); border-radius:6px; background:transparent; cursor:pointer; }
 .status { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-family:Arial,sans-serif; font-size:11.5px; font-weight:800; letter-spacing:.03em; }
 .status-confirmed,.status-active,.status-paid,.status-overpaid { background:#dceade; color:#1f6a43; }
+.status-insert,.status-confirm { background:#dceade; color:#1f6a43; }
 .status-pending,.status-partially-paid { background:#f2dfb4; color:#805410; }
+.status-update { background:#f2dfb4; color:#805410; }
 .status-unpaid { background:#ebe3d5; color:#5a5247; }
-.status-rejected,.status-voided,.status-inactive,.status-disabled { background:#efd7d3; color:#91332e; }
+.status-rejected,.status-voided,.status-inactive,.status-disabled,.status-delete,.status-reject,.status-void { background:#efd7d3; color:#91332e; }
 .row-voided td { color:var(--muted); }
 .row-voided .amount-cell { text-decoration:line-through; opacity:.72; }
 .empty-state { padding:44px 20px; color:var(--muted); font-family:Arial,sans-serif; text-align:center; }
