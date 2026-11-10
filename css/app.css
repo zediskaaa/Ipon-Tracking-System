@@ -72,6 +72,11 @@ a { color:inherit; }
 .panel-header h2 { margin:0; font-size:26px; }
 .panel-header p { margin:4px 0 0; color:var(--muted); font-family:Arial,sans-serif; }
 .data-table-wrap { overflow-x:auto; }
+.table-filters { display:flex; flex-wrap:wrap; gap:8px; }
+.panel-header > select,.table-filters input,.table-filters select { min-height:44px; padding:9px 11px; border:1px solid #9a9c93; border-radius:6px; background:#fffdf9; color:var(--ink); }
+.table-pager { display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-top:16px; font-family:Arial,sans-serif; font-size:13px; }
+.table-pager button { min-height:44px; padding:8px 14px; border:1px solid var(--rule); border-radius:6px; background:#fffdf9; color:var(--ink); cursor:pointer; }
+.table-pager button:disabled { opacity:.45; cursor:not-allowed; }
 .panel-subsection { margin-top:2rem; padding-top:1.5rem; border-top:1px solid var(--rule); }
 .day-detail-list { display:grid; gap:.65rem; margin-top:1rem; }
 .day-detail-list article { display:grid; grid-template-columns:1fr auto; gap:.25rem 1rem; padding:.8rem 0; border-bottom:1px solid var(--rule); }

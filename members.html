@@ -15,8 +15,9 @@
         <div class="form-actions field-wide"><button class="button button-primary" type="submit" data-requires-data>Save member</button><button class="button button-secondary" id="cancel-edit" type="button" hidden>Cancel edit</button></div>
       </form>
     </section>
-    <section class="panel"><div class="panel-header"><div><h2>Member directory</h2><p id="member-count">Loading members…</p></div><input id="member-search" type="search" placeholder="Search member" aria-label="Search members"></div>
+    <section class="panel"><div class="panel-header"><div><h2>Member directory</h2><p id="member-count">Loading members…</p></div><div class="table-filters"><input id="member-search" type="search" placeholder="Search member" aria-label="Search members"><select id="member-status-filter" aria-label="Filter members by status"><option value="">All statuses</option><option>ACTIVE</option><option>INACTIVE</option></select></div></div>
       <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Contact</th><th>Registered</th><th>Monthly amount</th><th>Status</th><th>Actions</th></tr></thead><tbody id="members-body"><tr class="loading-row"><td colspan="6">Loading members…</td></tr></tbody></table></div>
+      <nav class="table-pager" id="member-pager" aria-label="Member directory pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
     </section>
   </div>
 </main></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/config.js"></script><script src="js/core.js"></script><script src="js/members.js"></script></body></html>

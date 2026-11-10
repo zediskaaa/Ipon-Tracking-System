@@ -15,8 +15,9 @@
         <div class="form-actions field-wide"><button class="button button-primary" type="submit" data-requires-data>Save expense</button></div>
       </form>
     </section>
-    <section class="panel"><div class="panel-header"><div><h2>Expense history</h2><p>Only confirmed expenses reduce tracked savings.</p></div></div>
+    <section class="panel"><div class="panel-header"><div><h2>Expense history</h2><p>Only confirmed expenses reduce tracked savings.</p></div><select id="record-status-filter" aria-label="Filter expenses by status"><option value="">All statuses</option><option>PENDING</option><option>CONFIRMED</option><option>REJECTED</option><option>VOIDED</option></select></div>
       <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Responsible</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody id="records-body"><tr class="loading-row"><td colspan="7">Loading records…</td></tr></tbody></table></div>
+      <nav class="table-pager" id="record-pager" aria-label="Expense history pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
     </section>
   </div>
 </main></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/config.js"></script><script src="js/core.js"></script><script src="js/records.js"></script></body></html>

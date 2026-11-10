@@ -4,6 +4,10 @@
   const form = document.getElementById('record-form');
   const tbody = document.getElementById('records-body');
   const contributionEntriesBody = document.getElementById('contribution-entries-body');
+  const statusFilter = document.getElementById('record-status-filter');
+  const pager = document.getElementById('record-pager');
+  const pageSize = 25;
+  let historyPage = 0;
   const state = await Ipon.init();
   if (state.failed) return;
   if (!state.configured || !state.profile) {
@@ -30,6 +34,14 @@
   function statusBadge(status) {
     const statusClass = String(status).toLowerCase().replace(/[^a-z0-9]+/g, '-');
     return `<span class="status status-${statusClass}">${Ipon.escapeHtml(status)}</span>`;
+  }
+
+  function updatePager(count = 0) {
+    if (!pager) return;
+    const pages = Math.max(1, Math.ceil(count / pageSize));
+    pager.querySelector('span').textContent = `Page ${historyPage + 1} of ${pages} · ${count} record${count === 1 ? '' : 's'}`;
+    pager.querySelector('[data-page="previous"]').disabled = historyPage === 0;
+    pager.querySelector('[data-page="next"]').disabled = historyPage >= pages - 1;
   }
 
   async function syncSuggestedAmount() {
@@ -109,10 +121,13 @@
     });
     tbody.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No contribution periods for this month.</td></tr>';
 
-    const { data: entries, error: entriesError } = await Ipon.client.from('contributions')
-      .select('id,amount,payment_date,approval_status,void_reason,review_note,contribution_periods!inner(period_month,members!inner(full_name))')
-      .order('payment_date', { ascending: false }).limit(200);
+    let entriesQuery = Ipon.client.from('contributions')
+      .select('id,amount,payment_date,approval_status,void_reason,review_note,contribution_periods!inner(period_month,members!inner(full_name))', { count: 'exact' });
+    if (statusFilter?.value) entriesQuery = entriesQuery.eq('approval_status', statusFilter.value);
+    const { data: entries, count, error: entriesError } = await entriesQuery
+      .order('payment_date', { ascending: false }).range(historyPage * pageSize, (historyPage + 1) * pageSize - 1);
     if (entriesError) throw entriesError;
+    updatePager(count);
     contributionEntriesBody.innerHTML = entries.length ? entries.map((entry) => {
       const isCancelled = entry.approval_status === 'VOIDED' || entry.approval_status === 'REJECTED';
       const reason = entry.void_reason || entry.review_note;
@@ -129,8 +144,11 @@
   }
 
   async function loadTransactions() {
-    const { data, error } = await Ipon.client.from(page).select('*').order('transaction_date', { ascending: false }).limit(200);
+    let query = Ipon.client.from(page).select('*', { count: 'exact' });
+    if (statusFilter?.value) query = query.eq('approval_status', statusFilter.value);
+    const { data, count, error } = await query.order('transaction_date', { ascending: false }).range(historyPage * pageSize, (historyPage + 1) * pageSize - 1);
     if (error) throw error;
+    updatePager(count);
     tbody.innerHTML = data.length ? data.map((row) => {
       const isCancelled = row.approval_status === 'VOIDED' || row.approval_status === 'REJECTED';
       const reason = row.void_reason || row.review_note;
@@ -205,6 +223,13 @@
   document.getElementById('contribution-month')?.addEventListener('change', syncSuggestedAmount);
   tbody.addEventListener('click', handleRecordAction);
   contributionEntriesBody?.addEventListener('click', handleRecordAction);
+  statusFilter?.addEventListener('change', () => { historyPage = 0; page === 'contributions' ? loadContributions() : loadTransactions(); });
+  pager?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-page]');
+    if (!button || button.disabled) return;
+    historyPage += button.dataset.page === 'next' ? 1 : -1;
+    page === 'contributions' ? loadContributions() : loadTransactions();
+  });
 
   await load();
 })();

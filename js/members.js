@@ -5,6 +5,8 @@
   const tbody = document.getElementById('members-body');
   const form = document.getElementById('member-form');
   const search = document.getElementById('member-search');
+  const statusFilter = document.getElementById('member-status-filter');
+  const pager = document.getElementById('member-pager');
   const firstName = document.getElementById('first-name');
   const middleName = document.getElementById('middle-name');
   const lastName = document.getElementById('last-name');
@@ -25,6 +27,9 @@
   let members = [];
   let contributionSettings = [];
   let monthlyAmountTouched = false;
+  const pageSize = 25;
+  let memberPage = 0;
+  let searchTimer;
   dateRegistered.value = Ipon.isoDate();
   if (!state.configured || !state.profile) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Connect Supabase to load members.</td></tr>'; return; }
 
@@ -52,17 +57,25 @@
   }
 
   function render() {
-    const query = search.value.trim().toLowerCase();
-    const visible = members.filter((member) => member.full_name.toLowerCase().includes(query));
-    document.getElementById('member-count').textContent = `${visible.length} member${visible.length === 1 ? '' : 's'}`;
-    tbody.innerHTML = visible.length ? visible.map((member) => `<tr>
+    tbody.innerHTML = members.length ? members.map((member) => `<tr>
       <td><strong>${Ipon.escapeHtml(member.full_name)}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
       <td>${Ipon.money(member.monthly_contribution_amount)}</td><td><span class="status status-${member.status.toLowerCase()}">${member.status}</span></td>
       <td>${state.profile.role === 'ADMIN' ? `<div class="table-actions"><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${member.status === 'ACTIVE' ? `<button class="icon-action" data-action="deactivate" data-id="${member.id}">Deactivate</button>` : ''}</div>` : ''}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No matching members.</td></tr>';
   }
   async function load() {
-    const { data, error } = await Ipon.client.from('members').select('*').order('full_name');
-    if (error) throw error; members = data; render();
+    let query = Ipon.client.from('members').select('*', { count: 'exact' });
+    const term = search.value.trim().replace(/[%_]/g, '');
+    if (term) query = query.ilike('full_name', `%${term}%`);
+    if (statusFilter.value) query = query.eq('status', statusFilter.value);
+    const { data, count, error } = await query.order('full_name').range(memberPage * pageSize, (memberPage + 1) * pageSize - 1);
+    if (error) throw error;
+    members = data;
+    const pages = Math.max(1, Math.ceil(count / pageSize));
+    document.getElementById('member-count').textContent = `${count} member${count === 1 ? '' : 's'}`;
+    pager.querySelector('span').textContent = `Page ${memberPage + 1} of ${pages}`;
+    pager.querySelector('[data-page="previous"]').disabled = memberPage === 0;
+    pager.querySelector('[data-page="next"]').disabled = memberPage >= pages - 1;
+    render();
   }
   function resetForm() {
     form.reset(); form.elements.member_id.value = ''; dateRegistered.value = Ipon.isoDate(); monthlyAmountTouched = false; applyContributionDefault();
@@ -150,6 +163,14 @@
       try { await Ipon.rpc('deactivate_member', { p_member_id: member.id }); Ipon.toast('Member deactivated.'); await load(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     }
   });
-  document.getElementById('cancel-edit')?.addEventListener('click', resetForm); search.addEventListener('input', render);
+  document.getElementById('cancel-edit')?.addEventListener('click', resetForm);
+  search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { memberPage = 0; load(); }, 250); });
+  statusFilter.addEventListener('change', () => { memberPage = 0; load(); });
+  pager.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-page]');
+    if (!button || button.disabled) return;
+    memberPage += button.dataset.page === 'next' ? 1 : -1;
+    load();
+  });
   try { await Promise.all([loadContributionSettings(), load()]); } catch (error) { tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</td></tr>`; }
 })();
