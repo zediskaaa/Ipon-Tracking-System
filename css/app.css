@@ -234,7 +234,7 @@ a { color:inherit; }
   .app-nav a { display:grid; min-width:0; min-height:48px; padding:0; place-items:center; }.app-nav a:hover { transform:none; }.app-nav a svg { width:22px; height:22px; }.app-nav a span,.sidebar-signout span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
   .sidebar-art { display:none; }
   .app-sidebar-footer { display:flex; grid-column:2; grid-row:1; flex-direction:row; align-items:center; gap:5px; margin:0; border:0; padding:0; }
-  .sidebar-utilities { display:flex; gap:5px; margin:0; }.sidebar-utility { width:44px; min-height:44px; padding:0; }.sidebar-utility[data-donate-open] { display:none; }
+  .app-sidebar-footer .sidebar-utilities { display:flex; width:44px; gap:0; margin:0; }.sidebar-utility { width:44px; min-height:44px; padding:0; }.sidebar-utility[data-donate-open] { display:none; }
   .sidebar-user-card { display:grid; width:44px; min-width:44px; height:44px; padding:0; place-items:center; }.sidebar-user-info { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }.sidebar-user-caret { display:none; }
   .sidebar-signout { width:44px; min-height:44px; border:1px solid rgba(255,255,255,.24); border-radius:9px; padding:10px; text-decoration:none; }
   .sidebar-signout:focus-visible { outline:3px solid #edd189; outline-offset:3px; }
