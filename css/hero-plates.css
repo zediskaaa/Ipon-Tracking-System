@@ -694,7 +694,7 @@ button,a { color:inherit; font:inherit; }
   .comp-frame { display:flex; flex-direction:column; }
   .dashboard-sidebar { position:static; height:auto; padding:14px max(12px,env(safe-area-inset-right)) 14px max(12px,env(safe-area-inset-left)); }
   .dashboard-sidebar .sidebar-nav { display:grid; width:100%; grid-template-columns:repeat(auto-fit,minmax(44px,1fr)); gap:6px; margin-top:14px; overflow:visible; padding:0; }
-  .dashboard-sidebar .sidebar-nav .nav-link { display:grid; min-width:0; min-height:48px; padding:0; place-items:center; }
+  .dashboard-sidebar .sidebar-nav .nav-link { display:grid; width:44px; min-width:0; min-height:48px; justify-self:center; padding:0; place-items:center; }
   .dashboard-sidebar .sidebar-nav .nav-link span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
   .dashboard-sidebar .sidebar-art { display:none; }
   .dashboard-workspace { padding:16px; }
