@@ -44,11 +44,7 @@
           <div class="loader-sheet">
             <strong class="loader-brand">IPON</strong>
             <div class="savings-loader" aria-hidden="true">
-              <span class="falling-coin coin-one"></span>
-              <span class="falling-coin coin-two"></span>
-              <span class="falling-coin coin-three"></span>
-              <span class="deposit-spark spark-left"></span>
-              <span class="deposit-spark spark-right"></span>
+              <span class="loader-coin"><b>₱</b></span>
               <svg class="piggy-bank" viewBox="0 0 190 132">
                 <defs>
                   <linearGradient id="piggy-green" x1="0" y1="0" x2="1" y2="1">

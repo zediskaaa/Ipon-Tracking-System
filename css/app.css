@@ -147,7 +147,7 @@ a { color:inherit; }
 .loader-sheet { position:relative; width:min(380px,100%); overflow:hidden; border:1px solid rgba(255,255,255,.48); border-radius:26px; padding:34px 30px 30px; background:linear-gradient(145deg,rgba(255,252,245,.97),rgba(242,230,211,.94)); box-shadow:0 30px 80px rgba(3,24,20,.34),inset 0 1px 0 rgba(255,255,255,.88); text-align:center; animation:paper-rise .35s cubic-bezier(.22,1,.36,1) both; }
 .loader-brand { display:inline-block; border-bottom:2px solid rgba(20,45,43,.72); font-size:34px; letter-spacing:2px; line-height:1.1; }
 .savings-loader { position:relative; width:190px; height:132px; margin:16px auto 12px; isolation:isolate; }
-.piggy-bank { position:absolute; z-index:1; inset:auto 0 0; width:190px; height:132px; overflow:visible; filter:drop-shadow(0 9px 8px rgba(20,45,43,.18)); transform-origin:50% 88%; animation:bank-receive .4s cubic-bezier(.22,1,.36,1) infinite; }
+.piggy-bank { position:absolute; z-index:1; inset:auto 0 0; width:190px; height:132px; overflow:visible; filter:drop-shadow(0 9px 8px rgba(20,45,43,.18)); }
 .piggy-body,.piggy-ear { fill:url(#piggy-green); stroke:#123d34; stroke-linejoin:round; stroke-width:4; }
 .piggy-tail { fill:none; stroke:#123d34; stroke-linecap:round; stroke-width:5; }
 .piggy-slot { fill:#092e27; stroke:#6ab78c; stroke-width:2; }
@@ -155,11 +155,8 @@ a { color:inherit; }
 .piggy-snout { fill:url(#snout-green); stroke:#123d34; stroke-width:3; }
 .piggy-eye { fill:#092b25; }.piggy-eye-glint { fill:#fff; }.piggy-nostril { fill:#164b3d; }
 .piggy-shadow { fill:rgba(20,45,43,.16); filter:none; }
-.falling-coin { position:absolute; z-index:0; top:0; left:51%; width:26px; height:26px; border:3px solid #a96f12; border-radius:50%; background:linear-gradient(135deg,#fff0ad 0%,#f0c85e 48%,#c88b20 100%); box-shadow:inset 0 0 0 3px #f8dc8b,0 4px 8px rgba(20,45,43,.2); opacity:0; animation:coin-deposit 1.2s cubic-bezier(.32,.02,.2,1) infinite; }
-.falling-coin::after { position:absolute; inset:4px 8px; border:2px solid rgba(145,88,7,.72); border-block:0; border-radius:2px; content:""; }
-.coin-one { animation-delay:-.4s; }.coin-two { animation-delay:0s; }.coin-three { animation-delay:.4s; }
-.deposit-spark { position:absolute; z-index:3; top:35px; left:50%; width:7px; height:7px; border-radius:50%; background:#f0c85e; opacity:0; animation:deposit-spark .4s ease-out infinite; }
-.spark-left { margin-left:-22px; }.spark-right { margin-left:17px; animation-delay:.2s; }
+.loader-coin { position:absolute; z-index:2; top:-8px; left:50%; display:grid; width:38px; height:38px; place-items:center; border:3px solid #a96f12; border-radius:50%; background:linear-gradient(135deg,#fff1ac 0%,#efc34e 48%,#bf7d16 100%); color:#754508; box-shadow:inset 0 0 0 3px #f8dd8b,0 7px 14px rgba(20,45,43,.22); transform-style:preserve-3d; animation:coin-spin .8s linear infinite; }
+.loader-coin b { font:800 21px/1 Arial,sans-serif; backface-visibility:hidden; }
 .loader-sheet p { margin:0; font-size:21px; font-weight:750; }
 .loader-sheet small { display:block; margin-top:7px; color:var(--muted); font-family:Arial,sans-serif; line-height:1.45; }
 .button.is-busy { gap:8px; }
@@ -226,9 +223,8 @@ a { color:inherit; }
   .header-actions { width:100%; }.header-actions .button { flex:1; }
   .startup-error { padding:16px; }.startup-error-sheet { padding:26px 20px; }.startup-error-actions { flex-direction:column; }.startup-error-actions .button { width:100%; }
 }
-@media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; }.piggy-bank,.falling-coin,.deposit-spark,.button.is-busy::before { animation:none; }.falling-coin { display:none; }.coin-one { display:block; opacity:1; transform:translate(-50%,16px); }.deposit-spark { display:none; } }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; }.button.is-busy::before { animation:none; }.loader-coin { animation:coin-pulse 1.4s ease-in-out infinite; } }
 @keyframes paper-rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
-@keyframes coin-deposit { 0% { opacity:1; transform:translate(-50%,-38px) rotateY(0) scale(.92); } 64% { opacity:1; transform:translate(-50%,14px) rotateY(430deg) scale(1); } 74%,100% { opacity:0; transform:translate(-50%,22px) rotateY(520deg) scale(.84); } }
-@keyframes bank-receive { 0%,56%,100% { transform:translateY(0) scale(1); } 70% { transform:translateY(2px) scale(1.025,.975); } 86% { transform:translateY(-1px) scale(.99,1.01); } }
-@keyframes deposit-spark { 0%,55% { opacity:0; transform:translate(0,0) scale(.3); } 70% { opacity:1; } 100% { opacity:0; transform:translate(9px,-11px) scale(1); } }
+@keyframes coin-spin { from { transform:translateX(-50%) rotateY(0); } to { transform:translateX(-50%) rotateY(360deg); } }
+@keyframes coin-pulse { 0%,100% { opacity:.62; transform:translateX(-50%) scale(.92); } 50% { opacity:1; transform:translateX(-50%) scale(1.05); } }
 @keyframes coin-flip { 50% { transform:translateY(-2px) scaleX(.2); } }

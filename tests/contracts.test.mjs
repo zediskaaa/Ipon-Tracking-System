@@ -123,15 +123,15 @@ test('loading feedback uses savings motion with reduced-motion support', () => {
   const css = read('css/app.css');
   assert.match(core, /class="savings-loader"/);
   assert.match(core, /class="piggy-bank"/);
-  assert.match(core, /class="deposit-spark/);
+  assert.match(core, /class="loader-coin"/);
   assert.match(core, /classList\.toggle\('is-busy', busy\)/);
-  assert.match(css, /@keyframes coin-deposit/);
-  assert.match(css, /\.coin-one\s*\{[^}]*animation-delay:-\.4s/);
-  assert.match(css, /@keyframes deposit-spark/);
+  assert.match(css, /@keyframes coin-spin/);
+  assert.match(css, /@keyframes coin-pulse/);
   assert.doesNotMatch(css, /\.loader-sheet::before/);
-  assert.match(css, /\.falling-coin\s*\{[^}]*z-index:0/);
   assert.match(css, /@keyframes coin-flip/);
-  assert.match(css, /@media \(prefers-reduced-motion:reduce\)[^}]*[\s\S]*?\.falling-coin/);
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)[^}]*[\s\S]*?\.loader-coin/);
+  assert.match(read('dashboard.html'), /app\.css\?v=\d/);
+  assert.match(read('dashboard.html'), /core\.js\?v=\d/);
 });
 
 test('calendar supports direct month and year navigation', () => {
