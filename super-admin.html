@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Super Admin — IPON</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body data-page="super-admin" data-panel="super-admin">
+  <div class="app-layout">
+    <aside class="app-sidebar" id="app-sidebar"></aside>
+    <main class="workspace">
+      <header class="page-header">
+        <div>
+          <h1>Platform administration</h1>
+          <p>Review administrator requests and control access to isolated savings groups. Financial records stay outside this panel.</p>
+        </div>
+      </header>
+
+      <section class="platform-overview" id="overview" aria-labelledby="overview-title">
+        <div class="platform-overview-heading">
+          <h2 id="overview-title">System overview</h2>
+          <p id="platform-status"><span aria-hidden="true"></span>Checking platform access…</p>
+        </div>
+        <dl class="platform-metrics">
+          <div><dt>Administrators</dt><dd id="metric-total-admins">—</dd></div>
+          <div><dt>Active</dt><dd id="metric-active-admins">—</dd></div>
+          <div><dt>Suspended</dt><dd id="metric-suspended-admins">—</dd></div>
+          <div><dt>Pending requests</dt><dd id="metric-pending-requests">—</dd></div>
+          <div><dt>Savings groups</dt><dd id="metric-groups">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="panel" id="requests" aria-labelledby="requests-title">
+        <div class="panel-header">
+          <div><h2 id="requests-title">Administrator requests</h2><p>Approval creates a separate savings group and activates the administrator account in one database transaction.</p></div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Requester</th><th>Requested</th><th>Actions</th></tr></thead><tbody id="requests-body"><tr class="loading-row"><td colspan="3">Loading requests…</td></tr></tbody></table></div>
+      </section>
+
+      <section class="panel" id="administrators" aria-labelledby="administrators-title">
+        <div class="panel-header">
+          <div><h2 id="administrators-title">Administrators</h2><p>Suspended administrators immediately lose access to their group while its records remain intact.</p></div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Administrator</th><th>Group</th><th>Registered</th><th>Status</th><th>Actions</th></tr></thead><tbody id="administrators-body"><tr class="loading-row"><td colspan="5">Loading administrators…</td></tr></tbody></table></div>
+      </section>
+
+      <section class="panel" id="activity" aria-labelledby="activity-title">
+        <div class="panel-header"><div><h2 id="activity-title">Recent platform activity</h2><p>Administrator and group access changes recorded by the database.</p></div></div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Event</th><th>Subject</th><th>When</th></tr></thead><tbody id="activity-body"><tr class="loading-row"><td colspan="3">Loading activity…</td></tr></tbody></table></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="form-dialog" id="approve-request-dialog" aria-labelledby="approve-request-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div><h2 id="approve-request-title">Approve administrator</h2><p id="approve-request-copy">Create an isolated savings group for this administrator.</p></div>
+        <button class="dialog-close" id="approve-request-close" type="button" aria-label="Close approval dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </header>
+      <form id="approve-request-form">
+        <input id="approve-request-id" name="user_id" type="hidden">
+        <div class="field"><label for="approve-group-name">Savings group name</label><input id="approve-group-name" name="group_name" minlength="2" maxlength="150" autocomplete="organization" required><small class="field-help">This group keeps its members and savings records separate from every other administrator.</small></div>
+        <div class="form-actions"><button class="button button-secondary" id="approve-request-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Approve and create group</button></div>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script>
+  <script src="js/config.js"></script><script src="js/core.js"></script><script src="js/super-admin.js"></script>
+</body>
+</html>

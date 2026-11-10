@@ -17,4 +17,6 @@ order by version;
 
 Migration `20261110_005` assigns existing savings records to one `Primary Savings Group`. The earliest administrator keeps that group; additional administrator profiles are intentionally left unassigned so they cannot inherit the same financial data. After applying it, bootstrap one platform owner as `SUPER_ADMIN`, then use `super_admin_create_group` to give each additional administrator a separate group.
 
+Migration `20261110_006` adds the atomic administrator request workflow used by the Super Admin panel. Apply it before opening `super-admin.html`.
+
 Do not edit an applied migration. Add the next numbered file for every future production database change, update `schema.sql` to the same final state, and test the sequence against a restored copy before production.

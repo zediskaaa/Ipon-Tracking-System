@@ -30,7 +30,7 @@
 
   const state = await Ipon.init({ requireAuth: false, allowPending: true });
   if (state.failed) return;
-  if (state.session && state.profile?.status === 'ACTIVE') window.location.replace('dashboard.html');
+  if (state.session && state.profile?.status === 'ACTIVE') window.location.replace(Ipon.homeForRole(state.profile.role));
   if (!state.configured) {
     message.textContent = 'Add your Supabase URL and anon key in js/config.js before signing in.';
     submit.disabled = true;
@@ -121,9 +121,9 @@
     passwordConfirmation.required = signup;
     passwordRequirements.hidden = !signup;
     password.autocomplete = signup ? 'new-password' : 'current-password';
-    document.getElementById('auth-title').textContent = signup ? 'Request an account' : 'Welcome back';
-    document.getElementById('auth-copy').textContent = signup ? 'An administrator must activate new accounts.' : 'Sign in to view your savings records.';
-    submit.textContent = signup ? 'Submit request' : 'Sign in';
+    document.getElementById('auth-title').textContent = signup ? 'Request administrator access' : 'Welcome back';
+    document.getElementById('auth-copy').textContent = signup ? 'The Super Admin reviews administrator access requests.' : 'Sign in to open your assigned panel.';
+    submit.textContent = signup ? 'Request administrator access' : 'Sign in';
     clearFieldErrors();
     setPasswordVisibility(false);
     delete message.dataset.tone;
@@ -167,17 +167,17 @@
         clearFieldErrors();
         setPasswordVisibility(false);
         message.dataset.tone = 'success';
-        message.textContent = 'Request submitted. Wait for an administrator to activate your account.';
+        message.textContent = 'Request submitted. The Super Admin will review your access request.';
       } else {
         const { data, error } = await Ipon.client.auth.signInWithPassword({ email: email.value, password: password.value });
         if (error) throw error;
-        const { data: profile, error: profileError } = await Ipon.client.from('profiles').select('status').eq('id', data.user.id).single();
+        const { data: profile, error: profileError } = await Ipon.client.from('profiles').select('role,status').eq('id', data.user.id).single();
         if (profileError) throw profileError;
         if (profile.status !== 'ACTIVE') {
           await Ipon.client.auth.signOut();
           throw new Error('Your account is waiting for administrator approval.');
         }
-        window.location.replace('dashboard.html');
+        window.location.replace(Ipon.homeForRole(profile.role));
       }
     } catch (error) {
       if (mode === 'signup' && (error?.code === 'weak_password' || /weak password/i.test(error?.message || ''))) {

@@ -5,12 +5,11 @@
   const accessBody = document.getElementById('access-body');
   const effectiveMonth = document.getElementById('effective-month');
   const defaultAmount = document.getElementById('default-amount');
-  let profiles = [];
   let members = [];
 
   effectiveMonth.value = Ipon.isoDate().slice(0, 7);
   if (!state.configured || !state.profile) {
-    if (accessBody) accessBody.innerHTML = '<tr><td colspan="5" class="empty-state">Connect Supabase to manage access.</td></tr>';
+    if (accessBody) accessBody.innerHTML = '<tr><td colspan="4" class="empty-state">Connect Supabase to manage access.</td></tr>';
     return;
   }
 
@@ -21,185 +20,45 @@
 
   async function loadContributionDefault() {
     const month = effectiveMonth.value;
-    const { data, error } = await Ipon.client.from('contribution_settings')
-      .select('default_amount')
-      .eq('effective_month', `${month}-01`)
-      .maybeSingle();
+    const { data, error } = await Ipon.client.from('contribution_settings').select('default_amount').eq('effective_month', `${month}-01`).maybeSingle();
     if (error) throw error;
     if (effectiveMonth.value === month) defaultAmount.value = data?.default_amount ?? '';
   }
 
-  function getAdminContext(targetId) {
-    const otherActiveAdmins = profiles.filter((p) => p.id !== targetId && p.role === 'ADMIN' && p.status === 'ACTIVE');
-    const replacementCandidates = profiles.filter((p) => p.id !== targetId && p.status !== 'DISABLED');
-    return {
-      otherActiveAdmins,
-      replacementCandidates,
-      needsReplacement: otherActiveAdmins.length === 0,
-      hasMembersToReplace: replacementCandidates.length > 0
-    };
-  }
-
   async function loadAccess() {
     const [profileResult, memberResult] = await Promise.all([
-      Ipon.client.from('profiles').select('id,full_name,role,status,member_id,created_at').order('created_at'),
+      Ipon.client.from('profiles').select('id,full_name,status,member_id,created_at').eq('role', 'MEMBER').order('created_at'),
       Ipon.client.from('members').select('id,full_name').eq('status', 'ACTIVE').order('full_name')
     ]);
     if (profileResult.error) throw profileResult.error;
     if (memberResult.error) throw memberResult.error;
-    profiles = profileResult.data;
-    members = memberResult.data;
+    members = memberResult.data || [];
+    const profiles = profileResult.data || [];
 
-    accessBody.innerHTML = profiles.length ? profiles.map((profile, index) => {
-      const isSelf = profile.id === state.profile.id;
-      const isFirstAdmin = index === 0 && profile.role === 'ADMIN';
-      const ctx = getAdminContext(profile.id);
-      const lockDowngrade = isSelf && profile.role === 'ADMIN' && ctx.needsReplacement && !ctx.hasMembersToReplace;
-
-      return `<tr>
-        <td>
-          <strong>${Ipon.escapeHtml(profile.full_name)}</strong>
-          ${isSelf ? `<small class="field-help" style="display:block">${isFirstAdmin ? 'First administrator • You' : 'You (current administrator)'}</small>` : ''}
-        </td>
-        <td>
-          <select data-field="role" data-id="${profile.id}">
-            <option value="ADMIN" ${profile.role === 'ADMIN' ? 'selected' : ''}>ADMIN</option>
-            <option value="TREASURER" ${profile.role === 'TREASURER' ? 'selected' : ''} ${lockDowngrade ? 'disabled' : ''}>TREASURER</option>
-            <option value="MEMBER" ${profile.role === 'MEMBER' ? 'selected' : ''} ${lockDowngrade ? 'disabled' : ''}>MEMBER</option>
-          </select>
-          ${lockDowngrade ? '<small class="role-lock-note">This role cannot be changed until another member can become an administrator.</small>' : ''}
-          ${isSelf && profile.role === 'ADMIN' && ctx.needsReplacement && ctx.hasMembersToReplace ? `
-            <div class="replacement-picker" data-replacement-wrap="${profile.id}" hidden>
-              <label for="replacement-${profile.id}">Select a replacement administrator:</label>
-              <select id="replacement-${profile.id}" data-field="replacement" data-id="${profile.id}">
-                <option value="">Select a member</option>
-                ${ctx.replacementCandidates.map((candidate) => `<option value="${candidate.id}">${Ipon.escapeHtml(candidate.full_name)} (${candidate.role})</option>`).join('')}
-              </select>
-            </div>` : ''}
-        </td>
-        <td>
-          <select data-field="status" data-id="${profile.id}" ${isSelf ? 'disabled title="You cannot disable your own administrator account"' : ''}>
-            <option value="PENDING" ${profile.status === 'PENDING' ? 'selected' : ''}>PENDING</option>
-            <option value="ACTIVE" ${profile.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option>
-            <option value="DISABLED" ${profile.status === 'DISABLED' ? 'selected' : ''}>DISABLED</option>
-          </select>
-        </td>
-        <td>
-          <select data-field="member" data-id="${profile.id}">
-            <option value="">Not linked</option>
-            ${members.map((member) => `<option value="${member.id}" ${profile.member_id === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}
-          </select>
-        </td>
-        <td><button class="icon-action" data-save-access="${profile.id}">Save</button></td>
-      </tr>`;
-    }).join('') : '<tr><td colspan="5" class="empty-state">No account profiles.</td></tr>';
+    accessBody.innerHTML = profiles.length ? profiles.map((profile) => `<tr>
+      <td><strong>${Ipon.escapeHtml(profile.full_name)}</strong></td>
+      <td><select data-field="status" data-id="${profile.id}"><option value="PENDING" ${profile.status === 'PENDING' ? 'selected' : ''}>PENDING</option><option value="ACTIVE" ${profile.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option><option value="DISABLED" ${profile.status === 'DISABLED' ? 'selected' : ''}>DISABLED</option></select></td>
+      <td><select data-field="member" data-id="${profile.id}"><option value="">Not linked</option>${members.map((member) => `<option value="${member.id}" ${profile.member_id === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}</select></td>
+      <td><button class="icon-action" type="button" data-save-access="${profile.id}">Save</button></td>
+    </tr>`).join('') : '<tr><td colspan="4" class="empty-state">No member login accounts in this group.</td></tr>';
   }
-
-  accessBody.addEventListener('change', (event) => {
-    const select = event.target.closest('[data-field="role"]');
-    if (!select) return;
-    const id = select.dataset.id;
-    if (id !== state.profile.id) return;
-
-    const ctx = getAdminContext(id);
-    const wrap = accessBody.querySelector(`[data-replacement-wrap="${id}"]`);
-
-    if (select.value !== 'ADMIN' && ctx.needsReplacement) {
-      if (!ctx.hasMembersToReplace) {
-        select.value = 'ADMIN';
-        Ipon.toast('Add or activate another eligible member before changing your administrator role.', 'error');
-        return;
-      }
-      if (wrap) {
-        wrap.hidden = false;
-        wrap.querySelector('select')?.focus();
-      }
-    } else if (wrap) {
-      wrap.hidden = true;
-      const replacementSelect = wrap.querySelector('select');
-      if (replacementSelect) replacementSelect.value = '';
-    }
-  });
 
   accessBody.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-save-access]');
     if (!button) return;
     const id = button.dataset.saveAccess;
-    const isSelf = id === state.profile.id;
-    const role = accessBody.querySelector(`[data-field="role"][data-id="${id}"]`).value;
     const status = accessBody.querySelector(`[data-field="status"][data-id="${id}"]`).value;
     const memberId = accessBody.querySelector(`[data-field="member"][data-id="${id}"]`).value || null;
-    const targetProfile = profiles.find((p) => p.id === id);
-
-    if (isSelf && status !== 'ACTIVE') {
-      Ipon.toast('You cannot set your own administrator account to pending or disabled.', 'error');
+    if (status === 'ACTIVE' && !memberId) {
+      Ipon.toast('Link an active login to a member before activation.', 'error');
       return;
     }
-
-    if (targetProfile?.role === 'ADMIN' && (role !== 'ADMIN' || status !== 'ACTIVE')) {
-      const ctx = getAdminContext(id);
-      if (ctx.needsReplacement) {
-        if (!ctx.hasMembersToReplace) {
-          Ipon.toast('Add or activate another eligible member before changing your administrator role.', 'error');
-          return;
-        }
-        const replacementSelect = accessBody.querySelector(`[data-field="replacement"][data-id="${id}"]`);
-        const replacementId = replacementSelect?.value || '';
-        if (!replacementId) {
-          const wrap = accessBody.querySelector(`[data-replacement-wrap="${id}"]`);
-          if (wrap) wrap.hidden = false;
-          replacementSelect?.focus();
-          Ipon.toast('Select a replacement administrator before changing your role.', 'error');
-          return;
-        }
-        const replacementProfile = profiles.find((p) => p.id === replacementId);
-        const accepted = await Ipon.confirmAction({
-          title: 'Transfer administrator access?',
-          message: `${replacementProfile.full_name} will become an administrator and your role will change to ${role}.`,
-          acceptLabel: 'Transfer and save'
-        });
-        if (!accepted) return;
-
-        Ipon.setBusy(button, true);
-        try {
-          await Ipon.rpc('admin_set_user_access', {
-            p_user_id: replacementProfile.id,
-            p_role: 'ADMIN',
-            p_status: 'ACTIVE',
-            p_member_id: replacementProfile.member_id || null
-          });
-          await Ipon.rpc('admin_set_user_access', {
-            p_user_id: id,
-            p_role: role,
-            p_status: 'ACTIVE',
-            p_member_id: memberId
-          });
-          Ipon.toast(`Administrator access transferred to ${replacementProfile.full_name}.`);
-          window.location.reload();
-        } catch (error) {
-          Ipon.toast(Ipon.friendlyError(error), 'error');
-        } finally {
-          Ipon.setBusy(button, false);
-        }
-        return;
-      }
-    }
-
-    const accepted = await Ipon.confirmAction({
-      title: 'Update account access?',
-      message: `This user will be ${status.toLowerCase()} with the ${role.toLowerCase()} role.`,
-      acceptLabel: 'Update access'
-    });
+    const accepted = await Ipon.confirmAction({ title: 'Update member access?', message: `This member login will be ${status.toLowerCase()}.`, acceptLabel: 'Update access' });
     if (!accepted) return;
-
     Ipon.setBusy(button, true);
     try {
-      await Ipon.rpc('admin_set_user_access', { p_user_id: id, p_role: role, p_status: status, p_member_id: memberId });
-      Ipon.toast('Account access updated.');
-      if (isSelf && role !== 'ADMIN') {
-        window.location.reload();
-        return;
-      }
+      await Ipon.rpc('admin_set_user_access', { p_user_id: id, p_role: 'MEMBER', p_status: status, p_member_id: memberId });
+      Ipon.toast('Member account access updated.');
       await loadAccess();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
@@ -214,11 +73,8 @@
     const values = new FormData(event.target);
     Ipon.setBusy(button, true);
     try {
-      await Ipon.rpc('set_contribution_setting', {
-        p_effective_month: `${values.get('effective_month')}-01`,
-        p_default_amount: Number(values.get('default_amount'))
-      });
-      Ipon.toast('Contribution default saved. New member forms will use the latest default for their registration month.');
+      await Ipon.rpc('set_contribution_setting', { p_effective_month: `${values.get('effective_month')}-01`, p_default_amount: Number(values.get('default_amount')) });
+      Ipon.toast('Contribution default saved.');
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
@@ -228,11 +84,7 @@
 
   document.getElementById('generate-periods').addEventListener('click', async (event) => {
     const month = effectiveMonth.value;
-    const accepted = await Ipon.confirmAction({
-      title: 'Generate contribution periods?',
-      message: `Create missing member contribution periods for ${month} using each member's saved monthly amount. Existing periods will not be changed.`,
-      acceptLabel: 'Generate'
-    });
+    const accepted = await Ipon.confirmAction({ title: 'Generate contribution periods?', message: `Create missing periods for ${month}. Existing periods will not change.`, acceptLabel: 'Generate' });
     if (!accepted) return;
     Ipon.setBusy(event.currentTarget, true, 'Generating…');
     try {
@@ -246,16 +98,12 @@
   });
 
   effectiveMonth.addEventListener('change', async () => {
-    try {
-      await loadContributionDefault();
-    } catch (error) {
-      Ipon.toast(Ipon.friendlyError(error), 'error');
-    }
+    try { await loadContributionDefault(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
   });
 
   try {
     await Promise.all([loadContributionDefault(), loadAccess()]);
   } catch (error) {
-    Ipon.showInlineError(accessBody, error, () => Promise.all([loadContributionDefault(), loadAccess()]), 5);
+    Ipon.showInlineError(accessBody, error, () => Promise.all([loadContributionDefault(), loadAccess()]), 4);
   }
 })();

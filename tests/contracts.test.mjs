@@ -50,6 +50,31 @@ test('public signup cannot bootstrap privileged access', () => {
   assert.match(schema, /create or replace function public\.super_admin_create_group\(p_name text, p_admin_id uuid\)/i);
 });
 
+test('Super Admin panel is role-routed and excludes savings operations', () => {
+  const html = read('super-admin.html');
+  const script = read('js/super-admin.js');
+  const core = read('js/core.js');
+  assert.match(html, /data-panel="super-admin"/);
+  assert.match(html, /id="requests-body"/);
+  assert.match(html, /id="administrators-body"/);
+  assert.match(script, /Ipon\.init\(\{ allowedRoles: \['SUPER_ADMIN'\] \}\)/);
+  assert.match(script, /super_admin_approve_request/);
+  assert.match(script, /super_admin_reject_request/);
+  assert.match(script, /admin_set_user_access/);
+  assert.doesNotMatch(script, /from\(['"](?:contributions|withdrawals|expenses|members)['"]\)/);
+  assert.match(core, /function homeForRole\(role\)/);
+  assert.match(core, /role === 'SUPER_ADMIN' \? 'super-admin\.html' : 'dashboard\.html'/);
+});
+
+test('administrator approval and group creation are atomic database operations', () => {
+  const migration = read('database/migrations/20261110_006_super_admin_account_workflow.sql');
+  assert.match(migration, /create or replace function public\.super_admin_approve_request\(p_user_id uuid, p_group_name text\)/i);
+  assert.match(migration, /update public\.profiles[\s\S]*?insert into public\.groups[\s\S]*?update public\.profiles set group_id/i);
+  assert.match(migration, /create or replace function public\.super_admin_reject_request\(p_user_id uuid\)/i);
+  assert.match(migration, /public\.is_super_admin\(\)/i);
+  assert.doesNotMatch(migration, /service_role/i);
+});
+
 test('every versioned migration is transactional and recorded', () => {
   const directory = new URL('../database/migrations/', import.meta.url);
   const migrations = readdirSync(directory).filter((name) => name.endsWith('.sql')).sort();

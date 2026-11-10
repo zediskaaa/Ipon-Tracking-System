@@ -12,9 +12,9 @@ Static HTML5, CSS3, and modular Vanilla JavaScript, using Supabase for PostgreSQ
 
 ## Users
 
-- Administrators maintain members, confirm or reject entries, manage settings and goals, and access all reports.
-- Treasurers submit contributions and authorized financial records, then monitor reports.
-- Members submit their own savings additions or deduction requests and review their personal history and permitted group summaries.
+- Super Administrators manage administrator requests, administrator account status, savings-group ownership, and platform activity. They cannot access savings records.
+- Administrators manage only their assigned group's members, contribution settings, approvals, goals, and reports.
+- Users access only their own contribution status, submissions, history, and account settings.
 
 ## Product Purpose
 
@@ -35,9 +35,9 @@ Members or treasurers record an amount, date, and explanation. Their entries rem
 - Contributions support multiple payments within a month and member-specific expected amounts.
 - Required states are PENDING, CONFIRMED, REJECTED, and VOIDED.
 - Rejections and voids require reasons and remain in the audit history.
-- Supabase RLS and database functions are the authority for access and financial calculations.
+- Supabase RLS and database functions are the authority for access, strict group isolation, and financial calculations.
 - The frontend must be responsive, mobile-friendly, accessible, and usable without mock data or localStorage as its database.
-- The interface language may use concise Filipino-friendly wording while retaining unambiguous financial labels.
+- The interface language is English throughout, with concise and unambiguous financial labels.
 
 ## Evidence on Hand
 

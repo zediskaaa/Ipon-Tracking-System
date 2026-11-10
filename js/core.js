@@ -29,6 +29,11 @@
     ['audit', 'audit.html', 'Audit log', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>', 'ADMIN'],
     ['settings', 'settings.html', 'Settings', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06 2.83-2.83.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3h4v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06 2.83 2.83-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg>']
   ];
+  const superAdminNavItems = [
+    ['super-admin', '#overview', 'Overview', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>'],
+    ['administrators', '#administrators', 'Administrators', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-1 2 2 4-4"/></svg>'],
+    ['activity', '#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>']
+  ];
   const recordTabIcons = {
     'contributions.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8m-4-4h8"/></svg>',
     'withdrawals.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
@@ -163,11 +168,13 @@
     const host = document.getElementById('app-sidebar');
     if (host) {
       const page = document.body.dataset.page;
+      const superAdminPanel = document.body.dataset.panel === 'super-admin';
+      const navigation = superAdminPanel ? superAdminNavItems : navItems;
       const activeId = ['contributions', 'withdrawals', 'expenses', 'savings'].includes(page) ? 'contributions' : page;
       host.innerHTML = `
-        ${brandHtml}
+        ${brandHtml.replace('href="dashboard.html"', `href="${superAdminPanel ? 'super-admin.html' : 'dashboard.html'}"`)}
         <nav class="app-nav" aria-label="Main navigation">
-          ${navItems.map(([id, href, label, icon, role]) => `<a class="${activeId === id ? 'is-active' : ''}" href="${href}" aria-label="${label}"${activeId === id ? ' aria-current="page"' : ''}${role ? ` data-role="${role}"` : ''}>${icon || ''}<span>${label}</span></a>`).join('')}
+          ${navigation.map(([id, href, label, icon, role], index) => `<a class="${activeId === id || (superAdminPanel && index === 0) ? 'is-active' : ''}" href="${href}" aria-label="${label}"${activeId === id || (superAdminPanel && index === 0) ? ' aria-current="page"' : ''}${role ? ` data-role="${role}"` : ''}>${icon || ''}<span>${label}</span></a>`).join('')}
         </nav>
         ${sidebarArtHtml}
         <div class="app-sidebar-footer">
@@ -261,6 +268,10 @@
     retry.focus();
   }
 
+  function homeForRole(role) {
+    return role === 'SUPER_ADMIN' ? 'super-admin.html' : 'dashboard.html';
+  }
+
   async function init(options = {}) {
     mountShell();
     prepareResponsiveTables();
@@ -284,7 +295,7 @@
       if (!session) return { configured: true, profile: null, session: null };
 
       const { data: profile, error } = await withTimeout(client.from('profiles')
-        .select('id,full_name,role,status,member_id')
+        .select('id,full_name,role,status,member_id,group_id')
         .eq('id', session.user.id)
         .single());
       if (error) throw error;
@@ -294,6 +305,15 @@
         window.location.replace('login.html?status=pending');
         return { configured: true, profile, session };
       }
+      if (options.requireAuth !== false) {
+        const allowedRoles = options.allowedRoles || (document.body.dataset.panel === 'super-admin' ? ['SUPER_ADMIN'] : null);
+        const wrongPanel = profile.role === 'SUPER_ADMIN' && document.body.dataset.panel !== 'super-admin';
+        if (wrongPanel || (allowedRoles && !allowedRoles.includes(profile.role))) {
+          window.location.replace(homeForRole(profile.role));
+          return { configured: true, profile: null, session, redirecting: true };
+        }
+      }
+      document.querySelector('.app-brand')?.setAttribute('href', homeForRole(profile.role));
       const sidebarUser = document.getElementById('sidebar-user');
       if (sidebarUser) sidebarUser.innerHTML = `<strong>${escapeHtml(profile.full_name)}</strong><small>${escapeHtml(profile.role)}</small>`;
       document.querySelectorAll('[data-role]').forEach((element) => {
@@ -331,7 +351,7 @@
     const message = error?.message || 'Something went wrong. Please try again.';
     if (/duplicate key|unique constraint/i.test(message)) return 'That reference was already used.';
     if (/cannot remove or disable your own administrator|another active administrator/i.test(message)) return 'Assign another active administrator before changing administrator access.';
-    if (/row-level security|permission denied|not allowed to|only an administrator/i.test(message)) return 'You do not have permission for that action.';
+    if (/row-level security|permission denied|not allowed to|only (?:a |an )?.*administrator/i.test(message)) return 'You do not have permission for that action.';
     return message;
   }
 
@@ -386,7 +406,7 @@
 
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, normalizeNamePart, validNamePart, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction,
+    escapeHtml, normalizeNamePart, validNamePart, homeForRole, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction,
     get profile() { return currentProfile; }
   };
 })();
