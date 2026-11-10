@@ -2,10 +2,6 @@
   'use strict';
   const visualFixture = new URLSearchParams(location.search).get('visual') === 'approved'
     && ['localhost', '127.0.0.1'].includes(location.hostname);
-  if (visualFixture) {
-    document.querySelector('.visual-fixture-label').hidden = false;
-    return;
-  }
   let cursor = new Date(); cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   let state;
   let currentActivities = [];
@@ -103,6 +99,23 @@
       renderCalendar(calendarResult.data || []); renderPending(pending.slice(0,3));
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); renderCalendar([]); renderPending([]); }
   }
+  async function loadVisualFixture() {
+    const response = await fetch('tests/fixtures/dashboard.json');
+    if (!response.ok) throw new Error('Dashboard visual fixture could not be loaded.');
+    const fixture = await response.json();
+    cursor = new Date(`${fixture.month}T00:00:00`);
+    state = { profile: { role: 'ADMIN' } };
+    const label = document.createElement('span');
+    label.className = 'visual-fixture-label';
+    label.textContent = 'Synthetic sample amounts';
+    document.querySelector('.summary-hero').append(label);
+    const total = document.querySelector('.tracked-total');
+    total.textContent = heroMoney(fixture.summary.tracked_savings);
+    [fixture.summary.total_additions, fixture.summary.total_deductions, fixture.summary.total_expenses, fixture.pending.reduce((sum, item) => sum + Number(item.amount), 0)].forEach((value, index) => { summaryValues[index].textContent = Ipon.money(value); });
+    renderCalendar(fixture.activities);
+    renderPending(fixture.pending.slice(0, 3));
+  }
+  if (visualFixture) { await loadVisualFixture(); return; }
   document.querySelector('[data-region="month-previous"]').addEventListener('click', async () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1); await load(); });
   document.querySelector('[data-region="month-next"]').addEventListener('click', async () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1); await load(); });
   document.querySelector('[data-mobile-month="previous"]').addEventListener('click', async () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1); await load(); });

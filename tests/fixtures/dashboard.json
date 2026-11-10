@@ -1,0 +1,18 @@
+{
+  "month": "2026-11-01",
+  "summary": {
+    "tracked_savings": 12500,
+    "total_additions": 15000,
+    "total_deductions": 2000,
+    "total_expenses": 500
+  },
+  "activities": [
+    { "id": "fixture-addition", "activity_date": "2026-11-03", "activity_type": "ADDITION", "amount": 5000, "approval_status": "CONFIRMED", "notes": "Synthetic visual fixture" },
+    { "id": "fixture-deduction", "activity_date": "2026-11-12", "activity_type": "DEDUCTION", "amount": 2000, "approval_status": "CONFIRMED", "notes": "Synthetic visual fixture" },
+    { "id": "fixture-expense", "activity_date": "2026-11-18", "activity_type": "EXPENSE", "amount": 500, "approval_status": "CONFIRMED", "notes": "Synthetic visual fixture" },
+    { "id": "fixture-pending", "activity_date": "2026-11-24", "activity_type": "ADDITION", "amount": 1500, "approval_status": "PENDING", "notes": "Synthetic visual fixture" }
+  ],
+  "pending": [
+    { "id": "fixture-pending", "type": "contribution", "date": "2026-11-24", "amount": 1500 }
+  ]
+}
