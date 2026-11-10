@@ -21,4 +21,6 @@ Migration `20261110_006` adds the atomic administrator request workflow used by 
 
 Migration `20261110_007` completes administrator request details, the User panel, notifications, contribution deadlines, profile security, and managed account workflows. Apply it after `006`, then deploy `supabase/functions/manage-account` so Super Admin and Admin account-creation forms can create Auth users without exposing the service-role key.
 
+Migration `20261111_008` restores the phone and money validation helper functions required by member and financial RPCs on upgraded databases. Apply it after `007`.
+
 Do not edit an applied migration. Add the next numbered file for every future production database change, update `schema.sql` to the same final state, and test the sequence against a restored copy before production.

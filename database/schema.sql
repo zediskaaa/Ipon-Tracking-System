@@ -290,7 +290,8 @@ insert into public.schema_migrations (version, name) values
   ('20261110_004', 'add super administrator role'),
   ('20261110_005', 'isolate savings data by group'),
   ('20261110_006', 'super administrator account workflow'),
-  ('20261110_007', 'complete account notifications and user workflow')
+  ('20261110_007', 'complete account notifications and user workflow'),
+  ('20261111_008', 'restore validation helper functions')
 on conflict (version) do nothing;
 
 create index if not exists members_name_idx on public.members (lower(full_name));

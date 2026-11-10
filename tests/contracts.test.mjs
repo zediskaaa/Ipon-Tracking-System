@@ -95,6 +95,14 @@ test('deadline backfill bypasses only the group-scope trigger during migration',
   assert.ok(enabled > backfill, 'group-scope trigger must be restored after the backfill');
 });
 
+test('upgraded databases receive every validation helper used by RPCs', () => {
+  const migration = read('database/migrations/20261111_008_restore_validation_helpers.sql');
+  assert.match(migration, /create or replace function public\.normalize_ph_mobile\(p_contact_number text\)/i);
+  assert.match(migration, /create or replace function public\.validated_money\(p_amount numeric, p_label text\)/i);
+  assert.match(migration, /revoke execute on function public\.normalize_ph_mobile\(text\) from public, anon, authenticated/i);
+  assert.match(migration, /revoke execute on function public\.validated_money\(numeric, text\) from public, anon, authenticated/i);
+});
+
 test('administrator approval and group creation are atomic database operations', () => {
   const migration = read('database/migrations/20261110_006_super_admin_account_workflow.sql');
   assert.match(migration, /create or replace function public\.super_admin_approve_request\(p_user_id uuid, p_group_name text\)/i);
