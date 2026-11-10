@@ -1,10 +1,11 @@
 (async function () {
   'use strict';
-  const state = await Ipon.init();
+  const state = await Ipon.init({ allowedRoles: ['ADMIN'] });
   if (state.failed) return;
   const accessBody = document.getElementById('access-body');
   const effectiveMonth = document.getElementById('effective-month');
   const defaultAmount = document.getElementById('default-amount');
+  const deadlineDay = document.getElementById('deadline-day');
   let members = [];
 
   effectiveMonth.value = Ipon.isoDate().slice(0, 7);
@@ -20,9 +21,9 @@
 
   async function loadContributionDefault() {
     const month = effectiveMonth.value;
-    const { data, error } = await Ipon.client.from('contribution_settings').select('default_amount').eq('effective_month', `${month}-01`).maybeSingle();
+    const { data, error } = await Ipon.client.from('contribution_settings').select('default_amount,deadline_day').eq('effective_month', `${month}-01`).maybeSingle();
     if (error) throw error;
-    if (effectiveMonth.value === month) defaultAmount.value = data?.default_amount ?? '';
+    if (effectiveMonth.value === month) { defaultAmount.value = data?.default_amount ?? ''; deadlineDay.value = data?.deadline_day ?? 28; }
   }
 
   async function loadAccess() {
@@ -73,8 +74,8 @@
     const values = new FormData(event.target);
     Ipon.setBusy(button, true);
     try {
-      await Ipon.rpc('set_contribution_setting', { p_effective_month: `${values.get('effective_month')}-01`, p_default_amount: Number(values.get('default_amount')) });
-      Ipon.toast('Contribution default saved.');
+      await Ipon.rpc('set_contribution_setting', { p_effective_month: `${values.get('effective_month')}-01`, p_default_amount: Number(values.get('default_amount')), p_deadline_day: Number(values.get('deadline_day')) });
+      Ipon.toast('Contribution schedule saved.');
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {

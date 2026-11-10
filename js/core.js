@@ -27,13 +27,25 @@
     ['members', 'members.html', 'Members', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>'],
     ['reports', 'reports.html', 'Reports', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10m6 10V4m6 16v-7m5 7H2"/></svg>'],
     ['audit', 'audit.html', 'Audit log', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>', 'ADMIN'],
-    ['settings', 'settings.html', 'Settings', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06 2.83-2.83.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3h4v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06 2.83 2.83-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg>']
+    ['settings', 'settings.html', 'Settings', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06 2.83-2.83.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3h4v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06.06 2.83 2.83-.06-.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg>'],
+    ['account', 'account.html', 'My account', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg>']
   ];
   const superAdminNavItems = [
     ['super-admin', '#overview', 'Overview', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>'],
     ['administrators', '#administrators', 'Administrators', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-1 2 2 4-4"/></svg>'],
-    ['activity', '#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>']
+    ['activity', '#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2Z"/></svg>'],
+    ['account', 'account.html', 'My account', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg>']
   ];
+  const userNavItems = [
+    ['user', 'user.html', 'My savings', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>'],
+    ['account', 'account.html', 'My account', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg>']
+  ];
+  const pageRoles = {
+    dashboard: ['ADMIN', 'TREASURER'], members: ['ADMIN'], contributions: ['ADMIN', 'TREASURER'],
+    withdrawals: ['ADMIN', 'TREASURER'], expenses: ['ADMIN', 'TREASURER'], savings: ['ADMIN'],
+    reports: ['ADMIN', 'TREASURER'], audit: ['ADMIN'], settings: ['ADMIN'], user: ['MEMBER'],
+    'super-admin': ['SUPER_ADMIN'], account: ['SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER']
+  };
   const recordTabIcons = {
     'contributions.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8m-4-4h8"/></svg>',
     'withdrawals.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
@@ -164,12 +176,12 @@
       </svg>
     </div>`;
 
-  function mountShell() {
+  function mountShell(role = currentProfile?.role) {
     const host = document.getElementById('app-sidebar');
     if (host) {
       const page = document.body.dataset.page;
       const superAdminPanel = document.body.dataset.panel === 'super-admin';
-      const navigation = superAdminPanel ? superAdminNavItems : navItems;
+      const navigation = superAdminPanel || role === 'SUPER_ADMIN' ? superAdminNavItems : role === 'MEMBER' ? userNavItems : navItems;
       const activeId = ['contributions', 'withdrawals', 'expenses', 'savings'].includes(page) ? 'contributions' : page;
       host.innerHTML = `
         ${brandHtml.replace('href="dashboard.html"', `href="${superAdminPanel ? 'super-admin.html' : 'dashboard.html'}"`)}
@@ -178,6 +190,10 @@
         </nav>
         ${sidebarArtHtml}
         <div class="app-sidebar-footer">
+          <div class="sidebar-utilities">
+            <button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><span>Notifications</span><b data-notification-count hidden>0</b></button>
+            <button class="sidebar-utility" data-donate-open type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg><span>Donate</span></button>
+          </div>
           <div class="sidebar-user-card">
             <span class="sidebar-user-avatar" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
@@ -204,7 +220,6 @@
       <div class="toast" id="app-toast" role="status" aria-live="polite"></div>
       <dialog class="confirm-dialog" id="confirm-dialog">
         <form method="dialog">
-          <p class="eyebrow">Please confirm</p>
           <h2 id="confirm-title">Continue?</h2>
           <p id="confirm-message"></p>
           <div class="dialog-actions">
@@ -212,7 +227,49 @@
             <button class="button button-primary" id="confirm-accept" value="confirm">Confirm</button>
           </div>
         </form>
+      </dialog>
+      <dialog class="notification-dialog" id="notification-dialog" aria-labelledby="notification-title">
+        <div class="notification-sheet"><header><div><h2 id="notification-title">Notifications</h2><p>Account and savings activity intended for you.</p></div><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications">&times;</button></header><div class="notification-actions"><button class="text-button" id="mark-all-notifications" type="button">Mark all as read</button></div><div class="notification-list" id="notification-list"><p class="empty-state">Loading notifications…</p></div></div>
+      </dialog>
+      <dialog class="donate-dialog" id="donate-dialog" aria-labelledby="donate-title">
+        <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button></div>
       </dialog>`);
+    bindUtilityDialogs();
+  }
+
+  function bindUtilityDialogs() {
+    const notifications = document.getElementById('notification-dialog');
+    const donate = document.getElementById('donate-dialog');
+    document.querySelectorAll('[data-notifications-open]').forEach((button) => button.onclick = () => notifications?.showModal());
+    document.querySelectorAll('[data-notifications-close]').forEach((button) => button.onclick = () => notifications?.close());
+    document.querySelectorAll('[data-donate-open]').forEach((button) => button.onclick = () => donate?.showModal());
+    document.querySelectorAll('[data-donate-close]').forEach((button) => button.onclick = () => donate?.close());
+    const copy = document.getElementById('copy-donate-number');
+    if (copy) copy.onclick = async () => {
+      try { await navigator.clipboard.writeText('09913564248'); toast('GCash number copied.'); }
+      catch { toast('Copy 09913564248 manually.', 'error'); }
+    };
+  }
+
+  async function initNotifications(profile) {
+    const list = document.getElementById('notification-list');
+    if (!list || !client || !profile) return;
+    const load = async () => {
+      const { data, error } = await client.from('notifications').select('id,title,message,link,read_at,created_at').order('created_at', { ascending: false }).limit(40);
+      if (error) { showInlineError(list, error, load); return; }
+      const rows = data || [];
+      const unread = rows.filter((item) => !item.read_at).length;
+      document.querySelectorAll('[data-notification-count]').forEach((badge) => { badge.textContent = unread; badge.hidden = unread === 0; });
+      list.innerHTML = rows.length ? rows.map((item) => `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p><small>${dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small></div>${item.link ? `<a href="${escapeHtml(item.link)}">Open</a>` : ''}</article>`).join('') : '<p class="empty-state">You have no notifications yet.</p>';
+    };
+    list.onclick = async (event) => {
+      const item = event.target.closest('[data-notification-id]');
+      if (!item || item.classList.contains('is-read')) return;
+      try { await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) }); item.classList.remove('is-unread'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
+    };
+    document.getElementById('mark-all-notifications').onclick = async () => { try { await rpc('mark_all_notifications_read'); await load(); } catch (error) { toast(friendlyError(error), 'error'); } };
+    await load();
+    client.channel(`notifications:${profile.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, load).subscribe();
   }
 
   function prepareResponsiveTables() {
@@ -269,7 +326,7 @@
   }
 
   function homeForRole(role) {
-    return role === 'SUPER_ADMIN' ? 'super-admin.html' : 'dashboard.html';
+    return role === 'SUPER_ADMIN' ? 'super-admin.html' : role === 'MEMBER' ? 'user.html' : 'dashboard.html';
   }
 
   async function init(options = {}) {
@@ -305,14 +362,19 @@
         window.location.replace('login.html?status=pending');
         return { configured: true, profile, session };
       }
+      if (session.user.user_metadata?.must_change_password && document.body.dataset.page !== 'account') {
+        window.location.replace('account.html?force_password=1');
+        return { configured: true, profile: null, session, redirecting: true };
+      }
       if (options.requireAuth !== false) {
-        const allowedRoles = options.allowedRoles || (document.body.dataset.panel === 'super-admin' ? ['SUPER_ADMIN'] : null);
+        const allowedRoles = options.allowedRoles || pageRoles[document.body.dataset.page] || null;
         const wrongPanel = profile.role === 'SUPER_ADMIN' && document.body.dataset.panel !== 'super-admin';
         if (wrongPanel || (allowedRoles && !allowedRoles.includes(profile.role))) {
           window.location.replace(homeForRole(profile.role));
           return { configured: true, profile: null, session, redirecting: true };
         }
       }
+      mountShell(profile.role);
       document.querySelector('.app-brand')?.setAttribute('href', homeForRole(profile.role));
       const sidebarUser = document.getElementById('sidebar-user');
       if (sidebarUser) sidebarUser.innerHTML = `<strong>${escapeHtml(profile.full_name)}</strong><small>${escapeHtml(profile.role)}</small>`;
@@ -320,6 +382,7 @@
         const roles = element.dataset.role.split(',');
         element.hidden = !roles.includes(profile.role);
       });
+      initNotifications(profile).catch(() => {});
       return { configured: true, profile, session };
     } catch (error) {
       showStartupFailure(error);

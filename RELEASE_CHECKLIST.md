@@ -16,6 +16,7 @@ Complete this checklist on the exact commit that will be deployed. Record any fa
 - [ ] A current Supabase database backup is available and its restore procedure is known.
 - [ ] Pending SQL files in `database/migrations/` were tested against a restored copy first.
 - [ ] Pending migrations were applied in filename order.
+- [ ] Migration `20261110_007_complete_account_notifications.sql` was applied after `006`.
 - [ ] `public.schema_migrations` lists every shipped migration exactly once.
 - [ ] `database/schema.sql` still represents the final clean-install schema.
 - [ ] Row-level security remains enabled on profiles, members, contributions, withdrawals, expenses, goals, and audit logs.
@@ -31,9 +32,12 @@ order by version;
 
 ## 3. Authentication and authorization
 
-- [ ] A new signup creates a pending account and preserves the entered structured name.
+- [ ] An administrator request creates a pending account and preserves the entered structured name, contact, and reason.
+- [ ] A normal managed account is created only through the deployed `manage-account` Edge Function.
 - [ ] Pending and disabled accounts cannot open protected pages.
-- [ ] MEMBER can view and submit only permitted records.
+- [ ] SUPER_ADMIN opens only the platform panel and cannot read group savings records.
+- [ ] ADMIN opens only their isolated group data and can create linked member accounts.
+- [ ] MEMBER opens the User panel and can view and submit only their own permitted records.
 - [ ] TREASURER can perform the intended recording workflows but cannot use admin-only controls.
 - [ ] ADMIN can review entries, manage access, and open the read-only audit log.
 - [ ] A non-admin cannot read `audit_logs` through the Supabase API.
@@ -48,6 +52,8 @@ order by version;
 - [ ] Duplicate submission protection prevents a repeated request from creating a second record.
 - [ ] Dashboard totals include confirmed entries only and calculate additions minus deductions and expenses.
 - [ ] Calendar activity, monthly reports, contribution status, and CSV export match the same confirmed data.
+- [ ] Contribution deadline and reminder notifications match the configured deadline day.
+- [ ] Notification read state and notification preference persist after refresh.
 - [ ] Table status filters, member search, and Previous/Next pagination return correct server-side results.
 - [ ] Audit log records the actor, action, record type, and time for tested changes.
 
@@ -63,6 +69,8 @@ order by version;
 
 ## 6. Browser, network, and deployment smoke test
 
+- [ ] The `manage-account` Edge Function is deployed with JWT verification enabled.
+- [ ] A daily Supabase Cron job calls `public.create_due_reminders()`.
 - [ ] Login and the critical workflows pass in current Chrome or Edge and one additional browser.
 - [ ] A slow connection shows loading feedback without duplicate saves.
 - [ ] An offline or failed Supabase request shows recovery guidance and Retry where applicable.

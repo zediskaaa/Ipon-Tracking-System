@@ -98,10 +98,12 @@
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(0); total.classList.add('is-zero'); summaryValues.forEach((node) => { node.textContent = Ipon.money(0); }); renderCalendar([]); renderPending([]); return; }
     try {
-      const [summaryResult, calendarResult, pending] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'), getPending()]);
-      if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error;
+      const [summaryResult, calendarResult, pending, memberResult, progressResult] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'), getPending(), Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'), Ipon.client.from('v_contribution_status').select('payment_status,paid_amount').eq('period_month', start)]);
+      if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error;
       const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(summary.tracked_savings); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
       [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.reduce((sum,item)=>sum+Number(item.amount),0)].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
+      const progress = progressResult.data || []; const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
+      document.getElementById('dashboard-members').textContent = memberResult.count || 0; document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; document.getElementById('dashboard-completion').textContent = progress.length ? `${Math.round((paid / progress.length) * 100)}%` : '0%';
       renderCalendar(calendarResult.data || []); renderPending(pending.slice(0,3));
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); renderCalendar([]); renderPending([]); }
   }
@@ -213,7 +215,7 @@
     activeDate = null;
   });
   renderCalendar([]);
-  state = await Ipon.init();
+  state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER'] });
   if (state.failed) return;
   await load();
 })();

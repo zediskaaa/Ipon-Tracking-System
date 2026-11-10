@@ -60,10 +60,30 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.match(script, /Ipon\.init\(\{ allowedRoles: \['SUPER_ADMIN'\] \}\)/);
   assert.match(script, /super_admin_approve_request/);
   assert.match(script, /super_admin_reject_request/);
-  assert.match(script, /admin_set_user_access/);
+  assert.match(script, /super_admin_set_administrator_status/);
   assert.doesNotMatch(script, /from\(['"](?:contributions|withdrawals|expenses|members)['"]\)/);
   assert.match(core, /function homeForRole\(role\)/);
-  assert.match(core, /role === 'SUPER_ADMIN' \? 'super-admin\.html' : 'dashboard\.html'/);
+  assert.match(core, /role === 'SUPER_ADMIN' \? 'super-admin\.html' : role === 'MEMBER' \? 'user\.html' : 'dashboard\.html'/);
+});
+
+test('three panels have separate routes and backend-owned account workflows', () => {
+  const core = read('js/core.js');
+  const userHtml = read('user.html');
+  const userScript = read('js/user.js');
+  const accountHtml = read('account.html');
+  const migration = read('database/migrations/20261110_007_complete_account_notifications.sql');
+  const edgeFunction = read('supabase/functions/manage-account/index.ts');
+  assert.match(core, /user: \['MEMBER'\]/);
+  assert.match(userHtml, /data-page="user"/);
+  assert.match(userScript, /allowedRoles: \['MEMBER'\]/);
+  assert.match(userScript, /get_user_dashboard/);
+  assert.match(accountHtml, /id="password-form"/);
+  assert.match(migration, /create table if not exists public\.admin_requests/i);
+  assert.match(migration, /create table if not exists public\.notifications/i);
+  assert.match(migration, /alter table public\.notifications enable row level security/i);
+  assert.match(migration, /recipient_id = auth\.uid\(\)/i);
+  assert.match(edgeFunction, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.doesNotMatch(read('js/core.js') + read('js/super-admin.js') + read('js/members.js'), /SERVICE_ROLE_KEY/);
 });
 
 test('administrator approval and group creation are atomic database operations', () => {
@@ -87,10 +107,12 @@ test('every versioned migration is transactional and recorded', () => {
   }
 });
 
-test('SQL dollar quotes are balanced in the name migration and baseline schema', () => {
-  for (const file of ['database/schema.sql', 'database/migrations/20261110_002_structured_names.sql']) {
+test('SQL dollar quotes are balanced in the baseline and every migration', () => {
+  const migrations = readdirSync(new URL('../database/migrations/', import.meta.url)).filter((name) => name.endsWith('.sql')).map((name) => `database/migrations/${name}`);
+  for (const file of ['database/schema.sql', ...migrations]) {
     const sql = read(file);
     assert.doesNotMatch(sql, /\$\$name\$/, `${file} contains a malformed name dollar quote`);
+    assert.equal((sql.match(/\$\$/g) || []).length % 2, 0, `${file} has an unbalanced dollar quote`);
     assert.equal((sql.match(/\$name\$/g) || []).length % 2, 0, `${file} has an unbalanced name dollar quote`);
   }
 });

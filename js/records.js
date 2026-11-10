@@ -8,7 +8,7 @@
   const pager = document.getElementById('record-pager');
   const pageSize = 25;
   let historyPage = 0;
-  const state = await Ipon.init();
+  const state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER'] });
   if (state.failed) return;
   if (!state.configured || !state.profile) {
     tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Connect Supabase to load records.</td></tr>`;
@@ -30,6 +30,12 @@
   let membersList = [];
   const statusRowsByMonth = new Map();
   let pendingSubmissionKey = null;
+  let recordRows = [];
+
+  document.body.insertAdjacentHTML('beforeend', `<dialog class="form-dialog" id="record-edit-dialog" aria-labelledby="record-edit-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-edit-title">Edit pending record</h2><p>Only pending records can be corrected. Confirmed records must be voided and replaced.</p></div><button class="dialog-close" id="record-edit-close" type="button" aria-label="Close edit form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="record-edit-form" class="form-grid"><input type="hidden" name="record_id"><div class="field"><label for="edit-date">Date</label><input id="edit-date" name="date" type="date" min="2000-01-01" data-max-today required></div><div class="field"><label for="edit-amount">Amount</label><input id="edit-amount" name="amount" type="number" min="0.01" step="0.01" required></div><div class="field transaction-edit-field"><label for="edit-category">Category</label><input id="edit-category" name="category" maxlength="80"></div><div class="field transaction-edit-field"><label for="edit-responsible">Person responsible</label><input id="edit-responsible" name="person_responsible" maxlength="150"></div><div class="field field-wide transaction-edit-field"><label for="edit-description">Description</label><textarea id="edit-description" name="description" maxlength="500"></textarea></div><div class="field"><label for="edit-reference">Reference</label><input id="edit-reference" name="reference" maxlength="100"></div><div class="field field-wide"><label for="edit-notes">Notes</label><textarea id="edit-notes" name="notes" maxlength="1000"></textarea></div><div class="form-actions field-wide"><button class="button button-secondary" id="record-edit-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save correction</button></div></form></div></dialog>`);
+  const editDialog = document.getElementById('record-edit-dialog');
+  const editForm = document.getElementById('record-edit-form');
+  editDialog.querySelectorAll('.transaction-edit-field').forEach((field) => { field.hidden = page === 'contributions'; field.querySelector('input,textarea').required = page !== 'contributions'; });
 
   function statusBadge(status) {
     const statusClass = String(status).toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -122,11 +128,12 @@
     tbody.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No contribution periods for this month.</td></tr>';
 
     let entriesQuery = Ipon.client.from('contributions')
-      .select('id,amount,payment_date,approval_status,void_reason,review_note,contribution_periods!inner(period_month,members!inner(full_name))', { count: 'exact' });
+      .select('id,amount,payment_date,transaction_reference,notes,approval_status,void_reason,review_note,contribution_periods!inner(period_month,members!inner(full_name))', { count: 'exact' });
     if (statusFilter?.value) entriesQuery = entriesQuery.eq('approval_status', statusFilter.value);
     const { data: entries, count, error: entriesError } = await entriesQuery
       .order('payment_date', { ascending: false }).range(historyPage * pageSize, (historyPage + 1) * pageSize - 1);
     if (entriesError) throw entriesError;
+    recordRows = entries || [];
     updatePager(count);
     contributionEntriesBody.innerHTML = entries.length ? entries.map((entry) => {
       const isCancelled = entry.approval_status === 'VOIDED' || entry.approval_status === 'REJECTED';
@@ -138,7 +145,7 @@
 
   function actionButtons(row) {
     if (state.profile.role !== 'ADMIN') return '';
-    if (row.approval_status === 'PENDING') return `<div class="table-actions"><button class="icon-action" data-action="confirm" data-id="${row.id}">Confirm</button><button class="icon-action" data-action="reject" data-id="${row.id}">Reject</button></div>`;
+    if (row.approval_status === 'PENDING') return `<div class="table-actions"><button class="icon-action" data-action="edit" data-id="${row.id}">Edit</button><button class="icon-action" data-action="confirm" data-id="${row.id}">Confirm</button><button class="icon-action" data-action="reject" data-id="${row.id}">Reject</button></div>`;
     if (row.approval_status === 'CONFIRMED') return `<button class="icon-action" data-action="void" data-id="${row.id}">Void</button>`;
     return '';
   }
@@ -148,6 +155,7 @@
     if (statusFilter?.value) query = query.eq('approval_status', statusFilter.value);
     const { data, count, error } = await query.order('transaction_date', { ascending: false }).range(historyPage * pageSize, (historyPage + 1) * pageSize - 1);
     if (error) throw error;
+    recordRows = data || [];
     updatePager(count);
     tbody.innerHTML = data.length ? data.map((row) => {
       const isCancelled = row.approval_status === 'VOIDED' || row.approval_status === 'REJECTED';
@@ -208,6 +216,11 @@
     const button = event.target.closest('[data-action]');
     if (!button) return;
     const action = button.dataset.action;
+    if (action === 'edit') {
+      const row = recordRows.find((item) => item.id === button.dataset.id); if (!row) return;
+      editForm.elements.record_id.value = row.id; editForm.elements.date.value = row.payment_date || row.transaction_date; editForm.elements.amount.value = row.amount; editForm.elements.category.value = row.category || ''; editForm.elements.description.value = row.description || ''; editForm.elements.person_responsible.value = row.person_responsible || ''; editForm.elements.reference.value = row.transaction_reference || row.reference_number || ''; editForm.elements.notes.value = row.notes || '';
+      editDialog.showModal(); editForm.elements.amount.focus(); return;
+    }
     let note = null;
     if (action === 'reject') { note = window.prompt('Reason for rejection:'); if (!note?.trim()) return; }
     if (action === 'void') { note = window.prompt('Reason for voiding this confirmed record:'); if (!note?.trim()) return; }
@@ -220,6 +233,17 @@
       Ipon.toast(`Record ${action}ed.`); await load();
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
   }
+  document.getElementById('record-edit-close').addEventListener('click', () => editDialog.close());
+  document.getElementById('record-edit-cancel').addEventListener('click', () => editDialog.close());
+  editForm.addEventListener('submit', async (event) => {
+    event.preventDefault(); const values = new FormData(editForm); const button = event.submitter; Ipon.setBusy(button, true);
+    try {
+      if (page === 'contributions') await Ipon.rpc('update_contribution', { p_contribution_id: values.get('record_id'), p_amount: Number(values.get('amount')), p_payment_date: values.get('date'), p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null });
+      else { const type = page === 'withdrawals' ? 'withdrawal' : 'expense'; await Ipon.rpc(`update_${type}`, { [`p_${type}_id`]: values.get('record_id'), p_transaction_date: values.get('date'), p_amount: Number(values.get('amount')), p_category: values.get('category'), p_description: values.get('description'), p_person_responsible: values.get('person_responsible'), p_reference_number: values.get('reference') || null, p_notes: values.get('notes') || null }); }
+      editDialog.close(); Ipon.toast('Pending record updated.'); await load();
+    } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+    finally { Ipon.setBusy(button, false); }
+  });
   document.getElementById('member-id')?.addEventListener('change', syncSuggestedAmount);
   document.getElementById('contribution-month')?.addEventListener('change', syncSuggestedAmount);
   tbody.addEventListener('click', handleRecordAction);

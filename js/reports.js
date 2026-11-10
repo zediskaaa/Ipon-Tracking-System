@@ -1,23 +1,45 @@
 (async function () {
   'use strict';
-  const state = await Ipon.init(); const tbody = document.getElementById('reports-body'); let rows = [];
-  if (state.failed) return;
-  if (!state.configured || !state.profile) { if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Connect Supabase to load reports.</td></tr>'; return; }
-  try {
-    const { data: summary, error: summaryError } = await Ipon.client.rpc('get_savings_summary'); if (summaryError) throw summaryError;
-    document.getElementById('report-additions').textContent = Ipon.money(summary.total_additions);
-    document.getElementById('report-deductions').textContent = Ipon.money(summary.total_deductions);
-    document.getElementById('report-expenses').textContent = Ipon.money(summary.total_expenses);
-    document.getElementById('report-tracked').textContent = Ipon.money(summary.tracked_savings);
-    if (state.profile.role === 'MEMBER') return;
-    const { data, error } = await Ipon.client.from('v_monthly_financial_summary').select('*').order('month'); if (error) throw error; rows = data;
-    tbody.innerHTML = rows.length ? [...rows].reverse().map((row) => `<tr><td>${Ipon.dateLabel(row.month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.total_additions)}</td><td>${Ipon.money(row.total_deductions)}</td><td>${Ipon.money(row.total_expenses)}</td><td><strong>${Ipon.money(row.net_change)}</strong></td></tr>`).join('') : '<tr><td colspan="5" class="empty-state">No confirmed monthly activity yet.</td></tr>';
-    if (rows.length && window.Chart) new Chart(document.getElementById('monthly-chart'), { type: 'bar', data: { labels: rows.map((row) => Ipon.dateLabel(row.month, { month: 'short', year: '2-digit' })), datasets: [{ label: 'Additions', data: rows.map((row) => row.total_additions), backgroundColor: '#287a4c' }, { label: 'Deductions + expenses', data: rows.map((row) => Number(row.total_deductions) + Number(row.total_expenses)), backgroundColor: '#ae3934' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#142d2b', font: { family: 'Arial' } } } }, scales: { x: { stacked: false, grid: { color: 'rgba(20,45,43,.08)' } }, y: { beginAtZero: true, grid: { color: 'rgba(20,45,43,.1)' } } } } });
-  } catch (error) { Ipon.showInlineError(tbody, error, () => location.reload(), 5); }
-  document.getElementById('print-report')?.addEventListener('click', () => window.print());
-  document.getElementById('export-csv')?.addEventListener('click', () => {
-    const lines = [['Month','Additions','Deductions','Expenses','Net change'], ...rows.map((row) => [row.month,row.total_additions,row.total_deductions,row.total_expenses,row.net_change])];
-    const csv = lines.map((line) => line.map((cell) => `"${String(cell).replaceAll('"','""')}"`).join(',')).join('\r\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `ipon-monthly-report-${Ipon.isoDate()}.csv`; anchor.click(); URL.revokeObjectURL(url);
+  const state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER'] });
+  if (state.failed || !state.configured || !state.profile) return;
+  const monthlyBody = document.getElementById('reports-body');
+  const memberBody = document.getElementById('member-report-body');
+  const yearFilter = document.getElementById('report-year');
+  const monthFilter = document.getElementById('member-report-month');
+  const statusFilter = document.getElementById('member-report-status');
+  let monthlyRows = [], memberRows = [], chart;
+
+  function renderMonthly() {
+    const rows = monthlyRows.filter((row) => row.month.startsWith(yearFilter.value));
+    monthlyBody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${Ipon.dateLabel(row.month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.total_additions)}</td><td>${Ipon.money(row.total_deductions)}</td><td>${Ipon.money(row.total_expenses)}</td><td>${Ipon.money(row.net_change)}</td></tr>`).join('') : '<tr><td colspan="5" class="empty-state">No confirmed activity for this year.</td></tr>';
+    chart?.destroy();
+    if (rows.length && window.Chart) chart = new Chart(document.getElementById('monthly-chart'), { type: 'bar', data: { labels: rows.map((row) => Ipon.dateLabel(row.month, { month: 'short' })), datasets: [{ label: 'Additions', data: rows.map((row) => row.total_additions), backgroundColor: '#287a4c' }, { label: 'Deductions + expenses', data: rows.map((row) => Number(row.total_deductions) + Number(row.total_expenses)), backgroundColor: '#ae3934' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+  }
+
+  async function loadMembers() {
+    let query = Ipon.client.from('v_contribution_status').select('*').eq('period_month', `${monthFilter.value}-01`).order('member_name');
+    if (statusFilter.value) query = query.eq('payment_status', statusFilter.value);
+    const { data, error } = await query; if (error) throw error; memberRows = data || [];
+    memberBody.innerHTML = memberRows.length ? memberRows.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td><span class="status status-${row.payment_status.toLowerCase().replaceAll(' ', '-')}">${Ipon.escapeHtml(row.payment_status)}</span></td></tr>`).join('') : '<tr><td colspan="5" class="empty-state">No member periods match this report.</td></tr>';
+  }
+
+  async function load() {
+    const [{ data: summary, error: summaryError }, { data, error }] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_monthly_financial_summary').select('*').order('month')]);
+    if (summaryError) throw summaryError; if (error) throw error;
+    ['additions', 'deductions', 'expenses'].forEach((key) => { document.getElementById(`report-${key}`).textContent = Ipon.money(summary?.[`total_${key}`]); });
+    document.getElementById('report-tracked').textContent = Ipon.money(summary?.tracked_savings); monthlyRows = data || [];
+    const years = [...new Set([String(new Date().getFullYear()), ...monthlyRows.map((row) => row.month.slice(0, 4))])].sort().reverse();
+    yearFilter.innerHTML = years.map((year) => `<option>${year}</option>`).join(''); monthFilter.value = Ipon.monthStart().slice(0, 7); renderMonthly(); await loadMembers();
+  }
+
+  yearFilter.addEventListener('change', renderMonthly);
+  [monthFilter, statusFilter].forEach((filter) => filter.addEventListener('change', () => loadMembers().catch((error) => Ipon.showInlineError(memberBody, error, loadMembers, 5))));
+  document.getElementById('print-report').addEventListener('click', () => window.print());
+  document.getElementById('export-csv').addEventListener('click', () => {
+    const monthly = monthlyRows.filter((row) => row.month.startsWith(yearFilter.value)).map((row) => ['Monthly', row.month, row.total_additions, row.total_deductions, row.total_expenses, row.net_change]);
+    const members = memberRows.map((row) => ['Member', row.member_name, row.required_amount, row.paid_amount, row.outstanding_amount, row.payment_status]);
+    const csv = [['Report type', 'Subject', 'Required/Additions', 'Confirmed/Deductions', 'Outstanding/Expenses', 'Status/Net'], ...monthly, ...members].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+    const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-report-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
   });
+  try { await load(); } catch (error) { Ipon.showInlineError(monthlyBody, error, load, 5); Ipon.showInlineError(memberBody, error, load, 5); }
 })();

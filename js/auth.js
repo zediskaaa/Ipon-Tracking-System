@@ -10,6 +10,10 @@
   const middleName = document.getElementById('middle-name');
   const lastName = document.getElementById('last-name');
   const email = document.getElementById('email');
+  const contactField = document.getElementById('contact-number-field');
+  const contactNumber = document.getElementById('contact-number');
+  const reasonField = document.getElementById('request-reason-field');
+  const requestReason = document.getElementById('request-reason');
   const password = document.getElementById('password');
   const passwordConfirmationField = document.getElementById('password-confirmation-field');
   const passwordConfirmation = document.getElementById('password-confirmation');
@@ -21,6 +25,8 @@
     [middleName, document.getElementById('middle-name-error')],
     [lastName, document.getElementById('last-name-error')],
     [email, document.getElementById('email-error')],
+    [contactNumber, document.getElementById('contact-number-error')],
+    [requestReason, document.getElementById('request-reason-error')],
     [password, document.getElementById('password-error')],
     [passwordConfirmation, document.getElementById('password-confirmation-error')]
   ]);
@@ -86,6 +92,8 @@
       if (nameInputs.map((input) => Ipon.normalizeNamePart(input.value)).filter(Boolean).join(' ').length > 150) {
         setFieldError(lastName, 'Combined full name must not exceed 150 characters.');
       }
+      if (!/^(?:09\d{9}|\+639\d{9})$/.test(contactNumber.value.trim())) setFieldError(contactNumber, 'Enter 09XXXXXXXXX or +639XXXXXXXXX.');
+      if (requestReason.value.trim().length < 10) setFieldError(requestReason, 'Explain your request using at least 10 characters.');
     }
     if (!email.value) setFieldError(email, 'Enter your email address.');
     else if (!email.validity.valid) setFieldError(email, 'Enter a valid email address.');
@@ -94,7 +102,7 @@
     if (signup && !passwordConfirmation.value) setFieldError(passwordConfirmation, 'Confirm your password.');
     else if (signup && passwordConfirmation.value !== password.value) setFieldError(passwordConfirmation, 'Passwords do not match.');
 
-    const inputs = signup ? [...nameInputs, email, password, passwordConfirmation] : [email, password];
+    const inputs = signup ? [...nameInputs, contactNumber, requestReason, email, password, passwordConfirmation] : [email, password];
     const firstInvalid = inputs.find((input) => !input.checkValidity());
     if (firstInvalid) firstInvalid.focus();
     return !firstInvalid;
@@ -115,12 +123,17 @@
     firstNameField.hidden = !signup;
     middleNameField.hidden = !signup;
     lastNameField.hidden = !signup;
+    contactField.hidden = !signup;
+    reasonField.hidden = !signup;
     firstName.required = signup;
     lastName.required = signup;
+    contactNumber.required = signup;
+    requestReason.required = signup;
     passwordConfirmationField.hidden = !signup;
     passwordConfirmation.required = signup;
     passwordRequirements.hidden = !signup;
     password.autocomplete = signup ? 'new-password' : 'current-password';
+    document.getElementById('request-email-help').hidden = !signup;
     document.getElementById('auth-title').textContent = signup ? 'Request administrator access' : 'Welcome back';
     document.getElementById('auth-copy').textContent = signup ? 'The Super Admin reviews administrator access requests.' : 'Sign in to open your assigned panel.';
     submit.textContent = signup ? 'Request administrator access' : 'Sign in';
@@ -159,7 +172,7 @@
         const { error } = await Ipon.client.auth.signUp({
           email: email.value,
           password: password.value,
-          options: { data: { first_name: first, middle_name: middle, last_name: last, full_name: full } }
+          options: { data: { first_name: first, middle_name: middle, last_name: last, full_name: full, contact_number: contactNumber.value.trim(), request_reason: requestReason.value.trim(), account_kind: 'ADMIN_REQUEST' } }
         });
         if (error) throw error;
         await Ipon.client.auth.signOut();
@@ -177,7 +190,8 @@
           await Ipon.client.auth.signOut();
           throw new Error('Your account is waiting for administrator approval.');
         }
-        window.location.replace(Ipon.homeForRole(profile.role));
+        await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' });
+        window.location.replace(data.user.user_metadata?.must_change_password ? 'account.html?force_password=1' : Ipon.homeForRole(profile.role));
       }
     } catch (error) {
       if (mode === 'signup' && (error?.code === 'weak_password' || /weak password/i.test(error?.message || ''))) {
