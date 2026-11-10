@@ -57,6 +57,9 @@ create table if not exists public.members (
   updated_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint members_contact_number_format check (
+    contact_number is null or contact_number ~ '^09[0-9]{9}$'
+  ),
   constraint members_deactivation_consistent check (
     (status = 'ACTIVE' and deactivated_at is null)
     or (status = 'INACTIVE' and deactivated_at is not null)
@@ -233,6 +236,54 @@ begin
   return new;
 end;
 $$;
+
+create or replace function public.normalize_ph_mobile(p_contact_number text)
+returns text
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  v_number text := btrim(coalesce(p_contact_number, ''));
+begin
+  if v_number = '' then return null; end if;
+  if v_number ~ '^09[0-9]{9}$' then return v_number; end if;
+  if v_number ~ '^\+639[0-9]{9}$' then return '0' || substr(v_number, 4); end if;
+  raise exception 'Contact number must use 09XXXXXXXXX or +639XXXXXXXXX.' using errcode = '22023';
+end;
+$$;
+
+update public.members
+set contact_number = public.normalize_ph_mobile(contact_number)
+where contact_number is not null
+  and btrim(contact_number) ~ '^(09[0-9]{9}|\+639[0-9]{9})$'
+  and contact_number is distinct from public.normalize_ph_mobile(contact_number);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'members_contact_number_format'
+      and conrelid = 'public.members'::regclass
+  ) then
+    alter table public.members
+      add constraint members_contact_number_format
+      check (contact_number is null or contact_number ~ '^09[0-9]{9}$') not valid;
+  end if;
+
+  if exists (
+    select 1 from pg_constraint
+    where conname = 'members_contact_number_format'
+      and conrelid = 'public.members'::regclass
+      and not convalidated
+  ) and not exists (
+    select 1 from public.members
+    where contact_number is not null
+      and contact_number !~ '^09[0-9]{9}$'
+  ) then
+    alter table public.members validate constraint members_contact_number_format;
+  end if;
+end $$;
 
 create or replace function public.current_user_role()
 returns public.app_role
@@ -442,7 +493,7 @@ begin
     full_name, contact_number, date_registered, monthly_contribution_amount,
     notes, created_by, updated_by
   ) values (
-    btrim(p_full_name), nullif(btrim(p_contact_number), ''), p_date_registered,
+    btrim(p_full_name), public.normalize_ph_mobile(p_contact_number), p_date_registered,
     p_monthly_contribution_amount, nullif(btrim(p_notes), ''), auth.uid(), auth.uid()
   ) returning id into v_id;
 
@@ -469,7 +520,7 @@ begin
 
   update public.members
   set full_name = btrim(p_full_name),
-      contact_number = nullif(btrim(p_contact_number), ''),
+      contact_number = public.normalize_ph_mobile(p_contact_number),
       monthly_contribution_amount = p_monthly_contribution_amount,
       notes = nullif(btrim(p_notes), ''),
       updated_by = auth.uid()

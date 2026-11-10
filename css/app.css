@@ -107,7 +107,9 @@ a { color:inherit; }
 .field input,.field select,.field textarea { width:100%; min-height:44px; padding:10px 12px; border:1px solid #9a9c93; border-radius:6px; outline:none; background:rgba(255,252,247,.72); color:var(--ink); }
 .field textarea { min-height:96px; resize:vertical; }
 .field input:focus,.field select:focus,.field textarea:focus { border-color:var(--green); box-shadow:0 0 0 3px rgba(40,122,76,.12); }
-.field-help { color:var(--muted); font-family:Arial,sans-serif; font-size:12px; }
+.field-help { color:#52655f; font-family:Arial,sans-serif; font-size:12px; }
+.field-error { color:var(--red); font-family:Arial,sans-serif; font-size:12px; font-weight:700; line-height:1.4; }
+.field input[aria-invalid="true"] { border-color:var(--red); box-shadow:0 0 0 3px rgba(174,57,52,.12); }
 .split-layout { display:grid; grid-template-columns:minmax(280px,.72fr) minmax(0,1.28fr); align-items:start; gap:22px; }
 .sticky-panel { position:sticky; top:24px; }
 .callout { padding:14px 16px; border:1px solid var(--rule); background:#f2dfb4; font-family:Arial,sans-serif; line-height:1.5; }
