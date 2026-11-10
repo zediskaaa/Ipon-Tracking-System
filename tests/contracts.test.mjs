@@ -146,3 +146,14 @@ test('calendar supports direct month and year navigation', () => {
   assert.match(script, /classList|is-today/);
   assert.match(css, /\.mobile-calendar-jump/);
 });
+
+test('decorative section labels use an editorial rule instead of dot badges', () => {
+  const appCss = read('css/app.css');
+  const dashboardCss = read('css/hero-plates.css');
+  for (const [selector, css] of [['eyebrow', appCss], ['tracked-label', dashboardCss], ['review-title', dashboardCss]]) {
+    const block = css.match(new RegExp(`\\.${selector}\\s*\\{[^}]+\\}`))?.[0] || '';
+    assert.match(block, /background:transparent/);
+    assert.doesNotMatch(block, /border-radius:999px/);
+  }
+  assert.match(dashboardCss, /\.tracked-label::before\s*\{[^}]*width:24px[^}]*height:1px/);
+});
