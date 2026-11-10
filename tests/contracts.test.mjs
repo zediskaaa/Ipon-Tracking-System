@@ -20,10 +20,34 @@ test('database keeps financial writes behind RLS and reviewed RPCs', () => {
   for (const table of ['profiles', 'members', 'contributions', 'expenses', 'withdrawals', 'audit_logs']) {
     assert.match(schema, new RegExp(`alter table public\\.${table} enable row level security`, 'i'));
   }
-  assert.match(schema, /create policy audit_logs_select[\s\S]*?using \(public\.is_admin\(\)\)/i);
+  assert.match(schema, /create policy audit_logs_select[\s\S]*?group_id = public\.current_group_id\(\)/i);
   assert.match(schema, /revoke all on public\.profiles,[\s\S]*?public\.audit_logs[\s\S]*?from authenticated/i);
-  assert.match(schema, /grant select on public\.profiles,[\s\S]*?public\.audit_logs to authenticated/i);
+  assert.match(schema, /grant select on public\.profiles,[\s\S]*?public\.audit_logs, public\.groups to authenticated/i);
   assert.match(read('database/migrations/20261110_001_lock_confirmed_financial_records.sql'), /Only pending contributions can be edited/i);
+});
+
+test('savings data is isolated by database-enforced group scope', () => {
+  const schema = read('database/schema.sql');
+  const migration = read('database/migrations/20261110_005_isolate_savings_groups.sql');
+  for (const table of ['members', 'contribution_settings', 'contribution_periods', 'contributions', 'expenses', 'withdrawals', 'savings_goals']) {
+    assert.match(schema, new RegExp(`alter table public\\.${table} add column if not exists group_id uuid not null`, 'i'));
+  }
+  assert.match(schema, /create or replace function public\.enforce_group_scope\(\)/i);
+  assert.match(schema, /You cannot access another savings group/i);
+  assert.match(schema, /create policy contributions_select[\s\S]*?group_id = public\.current_group_id\(\)/i);
+  assert.match(schema, /create or replace function public\.get_savings_summary\(\)[\s\S]*?group_id = public\.current_group_id\(\)/i);
+  assert.match(migration, /Primary Savings Group/);
+  assert.match(migration, /alter table public\.members alter column group_id set not null/i);
+});
+
+test('public signup cannot bootstrap privileged access', () => {
+  const schema = read('database/schema.sql');
+  const handler = schema.match(/create or replace function public\.handle_new_user\(\)[\s\S]*?\$\$;/i)?.[0] || '';
+  assert.match(schema, /'SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER'/);
+  assert.match(handler, /'MEMBER'::public\.app_role/);
+  assert.match(handler, /'PENDING'::public\.account_status/);
+  assert.doesNotMatch(handler, /not exists \(select 1 from public\.profiles\)/i);
+  assert.match(schema, /create or replace function public\.super_admin_create_group\(p_name text, p_admin_id uuid\)/i);
 });
 
 test('every versioned migration is transactional and recorded', () => {

@@ -7,7 +7,7 @@ create extension if not exists pgcrypto;
 
 do $$
 begin
-  create type public.app_role as enum ('ADMIN', 'TREASURER', 'MEMBER');
+  create type public.app_role as enum ('SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER');
 exception when duplicate_object then null;
 end $$;
 
@@ -259,11 +259,36 @@ create table if not exists public.schema_migrations (
   applied_at timestamptz not null default now()
 );
 
+create table if not exists public.groups (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(btrim(name)) between 2 and 150),
+  owner_id uuid unique references public.profiles(id) on delete restrict,
+  status text not null default 'ACTIVE' check (status in ('ACTIVE', 'SUSPENDED')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.profiles add column if not exists group_id uuid references public.groups(id) on delete set null;
+alter table public.members add column if not exists group_id uuid not null references public.groups(id) on delete restrict;
+alter table public.contribution_settings add column if not exists group_id uuid not null references public.groups(id) on delete restrict;
+alter table public.contribution_periods add column if not exists group_id uuid not null references public.groups(id) on delete restrict;
+alter table public.contributions add column if not exists group_id uuid not null references public.groups(id) on delete restrict;
+alter table public.expenses add column if not exists group_id uuid not null references public.groups(id) on delete restrict;
+alter table public.withdrawals add column if not exists group_id uuid not null references public.groups(id) on delete restrict;
+alter table public.savings_goals add column if not exists group_id uuid not null references public.groups(id) on delete restrict;
+alter table public.audit_logs add column if not exists group_id uuid references public.groups(id) on delete set null;
+
+alter table public.contribution_settings drop constraint if exists contribution_settings_effective_month_key;
+create unique index if not exists contribution_settings_group_month_unique
+  on public.contribution_settings (group_id, effective_month);
+
 insert into public.schema_migrations (version, name) values
   ('0000', 'create migration ledger'),
   ('20261110_001', 'lock confirmed financial records'),
   ('20261110_002', 'structured profile and member names'),
-  ('20261110_003', 'standardize administrator access errors in English')
+  ('20261110_003', 'standardize administrator access errors in English'),
+  ('20261110_004', 'add super administrator role'),
+  ('20261110_005', 'isolate savings data by group')
 on conflict (version) do nothing;
 
 create index if not exists members_name_idx on public.members (lower(full_name));
@@ -287,6 +312,14 @@ create unique index if not exists withdrawals_reference_unique_idx
   where nullif(btrim(reference_number), '') is not null;
 create index if not exists audit_logs_record_idx on public.audit_logs (table_name, record_id, changed_at desc);
 create index if not exists audit_logs_actor_idx on public.audit_logs (changed_by, changed_at desc);
+create index if not exists profiles_group_idx on public.profiles (group_id);
+create index if not exists members_group_idx on public.members (group_id);
+create index if not exists contribution_periods_group_idx on public.contribution_periods (group_id, period_month);
+create index if not exists contributions_group_idx on public.contributions (group_id, payment_date);
+create index if not exists expenses_group_idx on public.expenses (group_id, transaction_date);
+create index if not exists withdrawals_group_idx on public.withdrawals (group_id, transaction_date);
+create index if not exists savings_goals_group_idx on public.savings_goals (group_id);
+create index if not exists audit_logs_group_idx on public.audit_logs (group_id, changed_at desc);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -516,6 +549,18 @@ as $$
   where id = auth.uid() and status = 'ACTIVE';
 $$;
 
+create or replace function public.current_group_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select group_id
+  from public.profiles
+  where id = auth.uid() and status = 'ACTIVE';
+$$;
+
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -524,6 +569,16 @@ security definer
 set search_path = public
 as $$
   select coalesce(public.current_user_role() = 'ADMIN', false);
+$$;
+
+create or replace function public.is_super_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(public.current_user_role() = 'SUPER_ADMIN', false);
 $$;
 
 create or replace function public.is_treasurer_or_admin()
@@ -536,6 +591,43 @@ as $$
   select coalesce(public.current_user_role() in ('ADMIN', 'TREASURER'), false);
 $$;
 
+create or replace function public.enforce_group_scope()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor_group uuid := public.current_group_id();
+  v_row_group uuid;
+begin
+  if tg_op = 'DELETE' then
+    v_row_group := old.group_id;
+  elsif tg_table_name = 'contribution_periods' then
+    select group_id into v_row_group from public.members where id = new.member_id;
+    new.group_id := v_row_group;
+  elsif tg_table_name = 'contributions' then
+    select group_id into v_row_group from public.contribution_periods where id = new.contribution_period_id;
+    new.group_id := v_row_group;
+  else
+    new.group_id := coalesce(new.group_id, v_actor_group);
+    v_row_group := new.group_id;
+  end if;
+
+  if v_actor_group is null or v_row_group is distinct from v_actor_group then
+    raise exception 'You cannot access another savings group.' using errcode = '42501';
+  end if;
+  if tg_op = 'UPDATE' and old.group_id is distinct from new.group_id then
+    raise exception 'A record cannot be moved to another savings group.' using errcode = '42501';
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -543,14 +635,11 @@ security definer
 set search_path = public
 as $$
 declare
-  v_is_first boolean;
   v_first_name text;
   v_middle_name text;
   v_last_name text;
   v_full_name text;
 begin
-  select not exists (select 1 from public.profiles) into v_is_first;
-
   if nullif(btrim(new.raw_user_meta_data ->> 'first_name'), '') is not null
      and nullif(btrim(new.raw_user_meta_data ->> 'last_name'), '') is not null then
     v_first_name := public.validated_name_part(new.raw_user_meta_data ->> 'first_name', 'First name');
@@ -574,8 +663,8 @@ begin
     v_first_name,
     v_middle_name,
     v_last_name,
-    case when v_is_first then 'ADMIN'::public.app_role else 'MEMBER'::public.app_role end,
-    case when v_is_first then 'ACTIVE'::public.account_status else 'PENDING'::public.account_status end
+    'MEMBER'::public.app_role,
+    'PENDING'::public.account_status
   )
   on conflict (id) do nothing;
   return new;
@@ -598,10 +687,12 @@ declare
   v_new jsonb;
   v_action text := tg_op;
   v_record_id uuid;
+  v_group_id uuid;
 begin
   v_old := case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) else null end;
   v_new := case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) else null end;
   v_record_id := coalesce((v_new ->> 'id')::uuid, (v_old ->> 'id')::uuid);
+  v_group_id := coalesce((v_new ->> 'group_id')::uuid, (v_old ->> 'group_id')::uuid);
 
   if tg_op = 'UPDATE' and v_old ->> 'approval_status' is distinct from v_new ->> 'approval_status' then
     v_action := case v_new ->> 'approval_status'
@@ -612,8 +703,8 @@ begin
     end;
   end if;
 
-  insert into public.audit_logs (table_name, record_id, action, old_data, new_data, changed_by)
-  values (tg_table_name, v_record_id, v_action, v_old, v_new, auth.uid());
+  insert into public.audit_logs (group_id, table_name, record_id, action, old_data, new_data, changed_by)
+  values (v_group_id, tg_table_name, v_record_id, v_action, v_old, v_new, auth.uid());
 
   if tg_op = 'DELETE' then
     return old;
@@ -624,6 +715,9 @@ $$;
 
 drop trigger if exists profiles_updated_at on public.profiles;
 create trigger profiles_updated_at before update on public.profiles
+  for each row execute function public.set_updated_at();
+drop trigger if exists groups_updated_at on public.groups;
+create trigger groups_updated_at before update on public.groups
   for each row execute function public.set_updated_at();
 drop trigger if exists members_updated_at on public.members;
 create trigger members_updated_at before update on public.members
@@ -663,6 +757,23 @@ declare
   table_name text;
 begin
   foreach table_name in array array[
+    'members', 'contribution_settings', 'contribution_periods', 'contributions',
+    'expenses', 'withdrawals', 'savings_goals'
+  ] loop
+    execute format('drop trigger if exists %I_group_scope on public.%I', table_name, table_name);
+    execute format(
+      'create trigger %I_group_scope before insert or update or delete on public.%I for each row execute function public.enforce_group_scope()',
+      table_name,
+      table_name
+    );
+  end loop;
+end $$;
+
+do $$
+declare
+  table_name text;
+begin
+  foreach table_name in array array[
     'profiles', 'members', 'contribution_settings', 'contribution_periods',
     'contributions', 'expenses', 'withdrawals', 'savings_goals'
   ] loop
@@ -675,6 +786,10 @@ begin
   end loop;
 end $$;
 
+drop trigger if exists groups_audit on public.groups;
+create trigger groups_audit after insert or update or delete on public.groups
+  for each row execute function public.write_audit_log();
+
 create or replace function public.admin_set_user_access(
   p_user_id uuid,
   p_role public.app_role,
@@ -686,28 +801,85 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_actor_role public.app_role := public.current_user_role();
+  v_actor_group uuid := public.current_group_id();
 begin
-  if not public.is_admin() then
-    raise exception 'Only an administrator can change user access.' using errcode = '42501';
-  end if;
+  if v_actor_role = 'SUPER_ADMIN' then
+    if p_role not in ('SUPER_ADMIN', 'ADMIN') or p_member_id is not null then
+      raise exception 'Super administrators can only manage platform administrator accounts.' using errcode = '42501';
+    end if;
+    if p_role = 'SUPER_ADMIN' and p_user_id <> auth.uid() then
+      raise exception 'Additional super administrator accounts cannot be assigned here.' using errcode = '42501';
+    end if;
+    if p_user_id = auth.uid() and (p_role <> 'SUPER_ADMIN' or p_status <> 'ACTIVE') then
+      raise exception 'You cannot remove or disable your own super administrator access.' using errcode = '22023';
+    end if;
 
-  if p_user_id = auth.uid() and p_status <> 'ACTIVE' then
-    raise exception 'You cannot disable or set your own administrator account to pending.' using errcode = '22023';
-  end if;
+    update public.profiles
+    set role = p_role, status = p_status, member_id = null
+    where id = p_user_id
+      and (
+        (role = 'SUPER_ADMIN' and id = auth.uid())
+        or role = 'ADMIN'
+        or (p_role = 'ADMIN' and role = 'MEMBER' and group_id is null and member_id is null)
+      );
+  elsif v_actor_role = 'ADMIN' and v_actor_group is not null then
+    if p_user_id = auth.uid() or p_role <> 'MEMBER' then
+      raise exception 'Group administrators can only manage member accounts in their own group.' using errcode = '42501';
+    end if;
+    if p_member_id is not null and not exists (
+      select 1 from public.members where id = p_member_id and group_id = v_actor_group
+    ) then
+      raise exception 'The selected member does not belong to your savings group.' using errcode = '42501';
+    end if;
 
-  if (p_role <> 'ADMIN' or p_status <> 'ACTIVE')
-     and exists (select 1 from public.profiles where id = p_user_id and role = 'ADMIN' and status = 'ACTIVE')
-     and not exists (select 1 from public.profiles where id <> p_user_id and role = 'ADMIN' and status = 'ACTIVE') then
-    raise exception 'Assign another active administrator before changing this administrator''s role or status.' using errcode = '22023';
+    update public.profiles
+    set role = 'MEMBER', status = p_status, member_id = p_member_id, group_id = v_actor_group
+    where id = p_user_id
+      and role = 'MEMBER'
+      and (group_id is null or group_id = v_actor_group);
+  else
+    raise exception 'You are not allowed to change user access.' using errcode = '42501';
   end if;
-
-  update public.profiles
-  set role = p_role, status = p_status, member_id = p_member_id
-  where id = p_user_id;
 
   if not found then
-    raise exception 'User profile not found.' using errcode = 'P0002';
+    raise exception 'User profile not found in your permitted account scope.' using errcode = 'P0002';
   end if;
+end;
+$$;
+
+create or replace function public.super_admin_create_group(p_name text, p_admin_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_group_id uuid;
+begin
+  if not public.is_super_admin() then
+    raise exception 'Only a super administrator can create savings groups.' using errcode = '42501';
+  end if;
+  if nullif(btrim(p_name), '') is null then
+    raise exception 'Group name is required.' using errcode = '22023';
+  end if;
+  if not exists (
+    select 1 from public.profiles
+    where id = p_admin_id and role = 'ADMIN' and group_id is null
+  ) then
+    raise exception 'An unassigned administrator account is required.' using errcode = '22023';
+  end if;
+
+  insert into public.groups (name, owner_id)
+  values (btrim(p_name), p_admin_id)
+  returning id into v_group_id;
+
+  update public.profiles
+  set group_id = v_group_id, status = 'ACTIVE'
+  where id = p_admin_id;
+
+  return v_group_id;
 end;
 $$;
 
@@ -832,15 +1004,16 @@ set search_path = public
 as $$
 declare
   v_id uuid;
+  v_group_id uuid := public.current_group_id();
   v_month date := date_trunc('month', p_effective_month)::date;
 begin
-  if not public.is_admin() then
-    raise exception 'Only an administrator can change contribution settings.' using errcode = '42501';
+  if not public.is_admin() or v_group_id is null then
+    raise exception 'Only a group administrator can change contribution settings.' using errcode = '42501';
   end if;
 
-  insert into public.contribution_settings (effective_month, default_amount, created_by)
-  values (v_month, public.validated_money(p_default_amount, 'Default amount'), auth.uid())
-  on conflict (effective_month) do update set
+  insert into public.contribution_settings (group_id, effective_month, default_amount, created_by)
+  values (v_group_id, v_month, public.validated_money(p_default_amount, 'Default amount'), auth.uid())
+  on conflict (group_id, effective_month) do update set
     default_amount = excluded.default_amount,
     created_by = auth.uid(),
     created_at = now()
@@ -860,7 +1033,7 @@ declare
   v_count integer;
   v_month date := date_trunc('month', p_month)::date;
 begin
-  if not public.is_treasurer_or_admin() then
+  if not public.is_treasurer_or_admin() or public.current_group_id() is null then
     raise exception 'You are not allowed to generate contribution periods.' using errcode = '42501';
   end if;
 
@@ -868,6 +1041,7 @@ begin
   select id, v_month, monthly_contribution_amount
   from public.members
   where status = 'ACTIVE'
+    and group_id = public.current_group_id()
     and date_registered <= (v_month + interval '1 month - 1 day')::date
   on conflict (member_id, period_month) do nothing;
 
@@ -1375,19 +1549,22 @@ stable
 security definer
 set search_path = public
 as $$
-  select case when public.current_user_role() is null then null else jsonb_build_object(
-    'total_additions', (select coalesce(sum(amount), 0) from public.contributions where approval_status = 'CONFIRMED'),
-    'total_deductions', (select coalesce(sum(amount), 0) from public.withdrawals where approval_status = 'CONFIRMED'),
-    'total_expenses', (select coalesce(sum(amount), 0) from public.expenses where approval_status = 'CONFIRMED'),
-    'tracked_savings',
-      (select coalesce(sum(amount), 0) from public.contributions where approval_status = 'CONFIRMED')
-      - (select coalesce(sum(amount), 0) from public.withdrawals where approval_status = 'CONFIRMED')
-      - (select coalesce(sum(amount), 0) from public.expenses where approval_status = 'CONFIRMED'),
-    'pending_entries',
-      (select count(*) from public.contributions where approval_status = 'PENDING')
-      + (select count(*) from public.withdrawals where approval_status = 'PENDING')
-      + (select count(*) from public.expenses where approval_status = 'PENDING')
-  ) end;
+  select case
+    when not public.is_treasurer_or_admin() or public.current_group_id() is null then null
+    else jsonb_build_object(
+      'total_additions', (select coalesce(sum(amount), 0) from public.contributions where group_id = public.current_group_id() and approval_status = 'CONFIRMED'),
+      'total_deductions', (select coalesce(sum(amount), 0) from public.withdrawals where group_id = public.current_group_id() and approval_status = 'CONFIRMED'),
+      'total_expenses', (select coalesce(sum(amount), 0) from public.expenses where group_id = public.current_group_id() and approval_status = 'CONFIRMED'),
+      'tracked_savings',
+        (select coalesce(sum(amount), 0) from public.contributions where group_id = public.current_group_id() and approval_status = 'CONFIRMED')
+        - (select coalesce(sum(amount), 0) from public.withdrawals where group_id = public.current_group_id() and approval_status = 'CONFIRMED')
+        - (select coalesce(sum(amount), 0) from public.expenses where group_id = public.current_group_id() and approval_status = 'CONFIRMED'),
+      'pending_entries',
+        (select count(*) from public.contributions where group_id = public.current_group_id() and approval_status = 'PENDING')
+        + (select count(*) from public.withdrawals where group_id = public.current_group_id() and approval_status = 'PENDING')
+        + (select count(*) from public.expenses where group_id = public.current_group_id() and approval_status = 'PENDING')
+    )
+  end;
 $$;
 
 alter table public.profiles enable row level security;
@@ -1399,66 +1576,92 @@ alter table public.expenses enable row level security;
 alter table public.withdrawals enable row level security;
 alter table public.savings_goals enable row level security;
 alter table public.audit_logs enable row level security;
+alter table public.groups enable row level security;
+
+drop policy if exists groups_select on public.groups;
+create policy groups_select on public.groups for select to authenticated
+using (public.is_super_admin() or id = public.current_group_id());
 
 drop policy if exists profiles_select on public.profiles;
 create policy profiles_select on public.profiles for select to authenticated
-using (id = auth.uid() or public.is_admin());
+using (
+  id = auth.uid()
+  or public.is_super_admin()
+  or (public.is_admin() and group_id = public.current_group_id())
+);
 
 drop policy if exists members_select on public.members;
 create policy members_select on public.members for select to authenticated
-using (public.is_treasurer_or_admin() or id = public.current_member_id());
+using (
+  group_id = public.current_group_id()
+  and (public.is_treasurer_or_admin() or id = public.current_member_id())
+);
 
 drop policy if exists contribution_settings_select on public.contribution_settings;
 create policy contribution_settings_select on public.contribution_settings for select to authenticated
-using (public.current_user_role() is not null);
+using (group_id = public.current_group_id() and public.current_user_role() <> 'SUPER_ADMIN');
 
 drop policy if exists contribution_periods_select on public.contribution_periods;
 create policy contribution_periods_select on public.contribution_periods for select to authenticated
-using (public.is_treasurer_or_admin() or member_id = public.current_member_id());
+using (
+  group_id = public.current_group_id()
+  and (public.is_treasurer_or_admin() or member_id = public.current_member_id())
+);
 
 drop policy if exists contributions_select on public.contributions;
 create policy contributions_select on public.contributions for select to authenticated
 using (
-  public.is_treasurer_or_admin()
-  or exists (
-    select 1 from public.contribution_periods cp
-    where cp.id = contribution_period_id and cp.member_id = public.current_member_id()
+  group_id = public.current_group_id()
+  and (
+    public.is_treasurer_or_admin()
+    or exists (
+      select 1 from public.contribution_periods cp
+      where cp.id = contribution_period_id and cp.member_id = public.current_member_id()
+    )
   )
 );
 
 drop policy if exists expenses_select on public.expenses;
 create policy expenses_select on public.expenses for select to authenticated
-using (public.is_treasurer_or_admin());
+using (group_id = public.current_group_id() and public.is_treasurer_or_admin());
 
 drop policy if exists withdrawals_select on public.withdrawals;
 create policy withdrawals_select on public.withdrawals for select to authenticated
-using (public.is_treasurer_or_admin() or submitted_by = auth.uid());
+using (
+  group_id = public.current_group_id()
+  and (public.is_treasurer_or_admin() or submitted_by = auth.uid())
+);
 
 drop policy if exists savings_goals_select on public.savings_goals;
 create policy savings_goals_select on public.savings_goals for select to authenticated
-using (public.current_user_role() is not null);
+using (group_id = public.current_group_id() and public.current_user_role() <> 'SUPER_ADMIN');
 
 drop policy if exists audit_logs_select on public.audit_logs;
 create policy audit_logs_select on public.audit_logs for select to authenticated
-using (public.is_admin());
+using (
+  (public.is_super_admin() and table_name in ('profiles', 'groups'))
+  or (public.is_admin() and group_id = public.current_group_id())
+);
 
 revoke all on all tables in schema public from anon;
 revoke create on schema public from public;
 revoke all on public.profiles, public.members, public.contribution_settings,
   public.contribution_periods, public.contributions, public.expenses,
-  public.withdrawals, public.savings_goals, public.audit_logs,
+  public.withdrawals, public.savings_goals, public.audit_logs, public.groups,
   public.schema_migrations from authenticated;
 
 grant select on public.profiles, public.members, public.contribution_settings,
   public.contribution_periods, public.contributions, public.expenses,
-  public.withdrawals, public.savings_goals, public.audit_logs to authenticated;
+  public.withdrawals, public.savings_goals, public.audit_logs, public.groups to authenticated;
 grant select on public.v_contribution_status, public.v_savings_calendar,
   public.v_monthly_financial_summary to authenticated;
 
 revoke execute on all functions in schema public from public, anon;
 grant execute on function public.current_user_role() to authenticated;
 grant execute on function public.current_member_id() to authenticated;
+grant execute on function public.current_group_id() to authenticated;
 grant execute on function public.is_admin() to authenticated;
+grant execute on function public.is_super_admin() to authenticated;
 grant execute on function public.is_treasurer_or_admin() to authenticated;
 grant execute on function public.admin_set_user_access(uuid, public.app_role, public.account_status, uuid) to authenticated;
 grant execute on function public.create_member(text, text, text, text, date, numeric, text) to authenticated;
@@ -1480,14 +1683,15 @@ grant execute on function public.update_expense(uuid, date, numeric, text, text,
 grant execute on function public.void_expense(uuid, text) to authenticated;
 grant execute on function public.save_savings_goal(uuid, text, numeric, date, public.goal_status, text) to authenticated;
 grant execute on function public.get_savings_summary() to authenticated;
+grant execute on function public.super_admin_create_group(text, uuid) to authenticated;
 
 commit;
 
--- BOOTSTRAP THE FIRST ADMIN
--- 1. Create your first user in Authentication > Users.
+-- BOOTSTRAP THE FIRST SUPER ADMIN
+-- 1. Create the platform owner in Authentication > Users.
 -- 2. Replace the email below, then run only this statement once:
 --
 -- update public.profiles p
--- set role = 'ADMIN', status = 'ACTIVE'
+-- set role = 'SUPER_ADMIN', status = 'ACTIVE', group_id = null, member_id = null
 -- from auth.users u
 -- where p.id = u.id and lower(u.email) = lower('your-email@example.com');
