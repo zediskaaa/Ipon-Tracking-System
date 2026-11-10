@@ -117,3 +117,14 @@ test('mobile navigation and data tables do not require horizontal scrolling', ()
   assert.doesNotMatch(css.match(/@media \(max-width:720px\)[\s\S]*?(?=@media \(prefers-reduced-motion)/)?.[0] || '', /overflow-x:auto/i);
   assert.doesNotMatch(dashboardCss.match(/@media \(max-width:860px\)[\s\S]*?(?=@media \(prefers-reduced-motion)/)?.[0] || '', /overflow-x:auto/i);
 });
+
+test('loading feedback uses savings motion with reduced-motion support', () => {
+  const core = read('js/core.js');
+  const css = read('css/app.css');
+  assert.match(core, /class="savings-loader"/);
+  assert.match(core, /class="piggy-bank"/);
+  assert.match(core, /classList\.toggle\('is-busy', busy\)/);
+  assert.match(css, /@keyframes coin-deposit/);
+  assert.match(css, /@keyframes coin-flip/);
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)[^}]*[\s\S]*?\.falling-coin/);
+});

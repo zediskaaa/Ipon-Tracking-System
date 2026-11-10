@@ -43,9 +43,21 @@
         <div class="app-loader" id="app-loader" role="status" aria-live="polite" hidden>
           <div class="loader-sheet">
             <strong class="loader-brand">IPON</strong>
-            <span class="loader-stamp" aria-hidden="true"><i></i></span>
+            <div class="savings-loader" aria-hidden="true">
+              <span class="falling-coin coin-one"></span>
+              <span class="falling-coin coin-two"></span>
+              <span class="falling-coin coin-three"></span>
+              <svg class="piggy-bank" viewBox="0 0 160 112">
+                <path class="piggy-tail" d="M31 57c-16 2-17-16-6-18 8-2 11 9 4 13"/>
+                <path class="piggy-ear" d="m54 35 4-20 20 15"/>
+                <path class="piggy-body" d="M39 61c0-25 20-39 51-39 17 0 31 6 39 17l17 3-8 17c0 15-10 27-25 33l-2 13H94l-2-9H66l-3 9H46l-1-17c-7-7-10-16-10-27Z"/>
+                <path class="piggy-slot" d="M75 30h29"/>
+                <circle class="piggy-eye" cx="119" cy="47" r="3"/>
+                <circle class="piggy-snout" cx="137" cy="58" r="3"/>
+              </svg>
+            </div>
             <p id="loader-label">Opening your records…</p>
-            <small>Checking your account and latest entries.</small>
+            <small>Counting your latest savings activity.</small>
           </div>
         </div>`);
       loader = document.getElementById('app-loader');
@@ -322,6 +334,7 @@
 
   function setBusy(button, busy, label = 'Saving…') {
     if (!button) return;
+    button.classList.toggle('is-busy', busy);
     if (busy) {
       button.dataset.originalLabel = button.textContent;
       button.textContent = label;

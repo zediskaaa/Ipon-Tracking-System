@@ -147,10 +147,19 @@ a { color:inherit; }
 .loader-sheet { position:relative; width:min(360px,100%); overflow:hidden; border:1px solid rgba(20,45,43,.32); border-radius:12px; padding:32px 28px 28px; background-color:var(--paper); box-shadow:0 22px 55px rgba(0,0,0,.3); text-align:center; }
 .loader-sheet::before { position:absolute; inset:0 auto 0 0; width:8px; background:var(--rail); content:""; }
 .loader-brand { display:inline-block; border-bottom:3px solid var(--ink); font-size:36px; letter-spacing:1px; line-height:1.1; transform:rotate(-1deg); }
-.loader-stamp { position:relative; display:grid; width:54px; height:54px; margin:24px auto 18px; place-items:center; border:4px dashed var(--ochre); border-radius:50%; animation:loader-turn 1.2s linear infinite; }
-.loader-stamp i { width:18px; height:18px; border-radius:50%; background:var(--green); box-shadow:0 0 0 5px rgba(40,122,76,.14); }
+.savings-loader { position:relative; width:160px; height:112px; margin:18px auto 14px; }
+.piggy-bank { position:absolute; inset:auto 0 0; width:160px; height:112px; overflow:visible; animation:bank-receive .6s cubic-bezier(.22,1,.36,1) infinite; }
+.piggy-body,.piggy-ear { fill:#2f7f5c; stroke:var(--ink); stroke-linejoin:round; stroke-width:4; }
+.piggy-tail,.piggy-slot { fill:none; stroke:var(--ink); stroke-linecap:round; stroke-width:5; }
+.piggy-eye,.piggy-snout { fill:var(--paper); stroke:var(--ink); stroke-width:2; }
+.falling-coin { position:absolute; z-index:2; top:0; left:56%; width:24px; height:24px; border:3px solid #b87c16; border-radius:50%; background:#f0ca62; box-shadow:inset 0 0 0 3px #f7dc91,0 3px 0 rgba(20,45,43,.14); opacity:0; animation:coin-deposit 1.8s cubic-bezier(.45,0,.2,1) infinite; }
+.falling-coin::after { position:absolute; inset:4px 8px; border-radius:999px; background:#b87c16; content:""; }
+.coin-two { animation-delay:.6s; }
+.coin-three { animation-delay:1.2s; }
 .loader-sheet p { margin:0; font-size:21px; font-weight:750; }
 .loader-sheet small { display:block; margin-top:7px; color:var(--muted); font-family:Arial,sans-serif; line-height:1.45; }
+.button.is-busy { gap:8px; }
+.button.is-busy::before { width:14px; height:14px; flex:0 0 14px; border:2px solid #a96f12; border-radius:50%; background:#f0ca62; box-shadow:inset 0 0 0 2px #f7dc91; content:""; animation:coin-flip .8s ease-in-out infinite; }
 .startup-error { position:fixed; inset:0; z-index:210; display:grid; place-items:center; padding:24px; background:rgba(20,45,43,.92); }
 .startup-error-sheet { width:min(460px,100%); border:1px solid rgba(20,45,43,.32); border-radius:14px; padding:32px; background:var(--paper); box-shadow:0 22px 55px rgba(0,0,0,.3); text-align:center; }
 .startup-error-mark { position:relative; width:54px; height:54px; margin:22px auto 18px; border:3px solid var(--red); border-radius:50%; }
@@ -213,6 +222,8 @@ a { color:inherit; }
   .header-actions { width:100%; }.header-actions .button { flex:1; }
   .startup-error { padding:16px; }.startup-error-sheet { padding:26px 20px; }.startup-error-actions { flex-direction:column; }.startup-error-actions .button { width:100%; }
 }
-@media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; }.loader-stamp { animation:none; } }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; }.piggy-bank,.falling-coin,.button.is-busy::before { animation:none; }.falling-coin { display:none; } }
 @keyframes paper-rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
-@keyframes loader-turn { to { transform:rotate(360deg); } }
+@keyframes coin-deposit { 0% { opacity:0; transform:translate(-50%,-34px) rotateY(0); } 12% { opacity:1; } 68% { opacity:1; transform:translate(-50%,14px) rotateY(540deg); } 76%,100% { opacity:0; transform:translate(-50%,20px) rotateY(620deg); } }
+@keyframes bank-receive { 0%,64%,100% { transform:translateY(0) scale(1); } 72% { transform:translateY(2px) scale(1.025,.975); } 82% { transform:translateY(-1px) scale(.99,1.01); } }
+@keyframes coin-flip { 50% { transform:translateY(-2px) scaleX(.2); } }
