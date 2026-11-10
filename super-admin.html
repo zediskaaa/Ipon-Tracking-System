@@ -32,6 +32,19 @@
           <div><dt>Pending requests</dt><dd id="metric-pending-requests">—</dd></div>
           <div><dt>Savings groups</dt><dd id="metric-groups">—</dd></div>
         </dl>
+        <div class="platform-briefing">
+          <section aria-labelledby="attention-title">
+            <h3 id="attention-title">Needs attention</h3>
+            <div class="platform-attention" id="platform-attention" aria-live="polite"><p>Checking pending platform work…</p></div>
+          </section>
+          <nav class="platform-shortcuts" aria-labelledby="shortcuts-title">
+            <h3 id="shortcuts-title">Platform workspaces</h3>
+            <a href="super-admin.html#requests"><span><strong>Administrator requests</strong><small>Review access applications</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a href="super-admin.html#administrators"><span><strong>Administrators</strong><small>Manage accounts and groups</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a href="super-admin.html#activity"><span><strong>Platform activity</strong><small>Inspect recent access changes</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+          </nav>
+        </div>
+        <div id="overview-error" hidden></div>
       </section>
 
       <section class="platform-view panel" id="requests" data-platform-view="requests" aria-labelledby="requests-title" hidden>

@@ -14,6 +14,7 @@
   const approvalCopy = document.getElementById('approve-request-copy');
   const administratorDialog = document.getElementById('administrator-dialog');
   const administratorForm = document.getElementById('administrator-form');
+  const overviewError = document.getElementById('overview-error');
   let profiles = [];
   let groups = [];
   let requests = [];
@@ -58,6 +59,11 @@
     document.getElementById('metric-pending-requests').textContent = pending.length;
     document.getElementById('metric-groups').textContent = groups.length;
     document.getElementById('platform-status').innerHTML = '<span aria-hidden="true"></span>Database access verified';
+    const suspended = admins.filter((profile) => profile.status === 'DISABLED');
+    const attention = [];
+    if (requests.length) attention.push(`<a href="super-admin.html#requests"><strong>${requests.length} administrator request${requests.length === 1 ? '' : 's'} awaiting review</strong><span>Approve or reject access before an account can manage a savings group.</span></a>`);
+    if (suspended.length) attention.push(`<a href="super-admin.html#administrators"><strong>${suspended.length} suspended administrator${suspended.length === 1 ? '' : 's'}</strong><span>Review disabled accounts and reactivate them only when access should be restored.</span></a>`);
+    document.getElementById('platform-attention').innerHTML = attention.length ? attention.join('') : '<div class="platform-clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span><strong>No urgent platform work</strong><small>Administrator access and requests are currently up to date.</small></span></div>';
   }
 
   function renderRequests() {
@@ -101,6 +107,8 @@
   }
 
   async function load() {
+    overviewError.hidden = true;
+    overviewError.replaceChildren();
     const [profileResult, groupResult, requestResult, activityResult, logResult] = await Promise.all([
       Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,created_at').order('created_at', { ascending: false }),
       Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false }),
@@ -270,6 +278,10 @@
   try {
     await load();
   } catch (error) {
+    document.getElementById('platform-status').textContent = 'Platform data unavailable';
+    document.getElementById('platform-attention').innerHTML = '<p>Resolve the loading error below, then retry to restore the platform summary.</p>';
+    overviewError.hidden = false;
+    Ipon.showInlineError(overviewError, error, load);
     Ipon.showInlineError(requestsBody, error, load, 5);
     Ipon.showInlineError(administratorsBody, error, load, 6);
     Ipon.showInlineError(activityBody, error, load, 3);

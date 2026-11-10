@@ -369,7 +369,7 @@
       }
       if (options.requireAuth !== false) {
         const allowedRoles = options.allowedRoles || pageRoles[document.body.dataset.page] || null;
-        const wrongPanel = profile.role === 'SUPER_ADMIN' && document.body.dataset.panel !== 'super-admin';
+        const wrongPanel = profile.role === 'SUPER_ADMIN' && !['super-admin', 'account'].includes(document.body.dataset.page);
         if (wrongPanel || (allowedRoles && !allowedRoles.includes(profile.role))) {
           window.location.replace(homeForRole(profile.role));
           return { configured: true, profile: null, session, redirecting: true };
