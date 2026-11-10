@@ -31,5 +31,5 @@
   });
   list.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-goal]'); if (!button) return; const goal = goals.find((item) => item.id === button.dataset.editGoal); if (!goal) return; form.elements.goal_id.value = goal.id; form.elements.title.value = goal.title; form.elements.target_amount.value = goal.target_amount; form.elements.target_date.value = goal.target_date || ''; form.elements.status.value = goal.status; form.elements.notes.value = goal.notes || ''; document.getElementById('goal-form-title').textContent = 'Edit goal'; document.getElementById('cancel-goal-edit').hidden = false; form.scrollIntoView({ behavior: 'smooth' }); });
   document.getElementById('cancel-goal-edit')?.addEventListener('click', resetForm);
-  try { await load(); } catch (error) { list.innerHTML = `<div class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</div>`; }
+  try { await load(); } catch (error) { Ipon.showInlineError(list, error, load); }
 })();

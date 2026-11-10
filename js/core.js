@@ -283,6 +283,17 @@
     return message;
   }
 
+  function showInlineError(container, error, retry, colspan = 1) {
+    if (!container) return;
+    const content = `<div class="inline-error" role="alert"><strong>Unable to load this section</strong><span>${escapeHtml(friendlyError(error))}</span>${retry ? '<button class="button button-secondary" type="button">Retry</button>' : ''}</div>`;
+    container.innerHTML = container.tagName === 'TBODY' ? `<tr><td colspan="${colspan}">${content}</td></tr>` : content;
+    const button = container.querySelector('button');
+    button?.addEventListener('click', async () => {
+      button.disabled = true;
+      try { await retry(); } catch (nextError) { showInlineError(container, nextError, retry, colspan); }
+    });
+  }
+
   function setBusy(button, busy, label = 'Saving…') {
     if (!button) return;
     if (busy) {
@@ -322,7 +333,7 @@
 
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, normalizeNamePart, validNamePart, toast, friendlyError, setBusy, setLoading, confirmAction,
+    escapeHtml, normalizeNamePart, validNamePart, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction,
     get profile() { return currentProfile; }
   };
 })();

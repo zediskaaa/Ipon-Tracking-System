@@ -256,6 +256,6 @@
   try {
     await Promise.all([loadContributionDefault(), loadAccess()]);
   } catch (error) {
-    accessBody.innerHTML = `<tr><td colspan="5" class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</td></tr>`;
+    Ipon.showInlineError(accessBody, error, () => Promise.all([loadContributionDefault(), loadAccess()]), 5);
   }
 })();

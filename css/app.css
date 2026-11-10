@@ -107,6 +107,9 @@ a { color:inherit; }
 .row-voided td { color:var(--muted); }
 .row-voided .amount-cell { text-decoration:line-through; opacity:.72; }
 .empty-state { padding:44px 20px; color:var(--muted); font-family:Arial,sans-serif; text-align:center; }
+.inline-error { display:grid; justify-items:center; gap:8px; padding:28px 16px; color:var(--red); font-family:Arial,sans-serif; text-align:center; }
+.inline-error span { max-width:52ch; color:var(--muted); line-height:1.45; }
+.inline-error .button { margin-top:4px; }
 .loading-row td { color:var(--muted); font-family:Arial,sans-serif; text-align:center; }
 .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
 .field { display:grid; gap:7px; }

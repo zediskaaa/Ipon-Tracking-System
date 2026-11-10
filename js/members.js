@@ -77,6 +77,9 @@
     pager.querySelector('[data-page="next"]').disabled = memberPage >= pages - 1;
     render();
   }
+  async function refresh() {
+    try { await load(); } catch (error) { Ipon.showInlineError(tbody, error, refresh, 6); }
+  }
   function resetForm() {
     form.reset(); form.elements.member_id.value = ''; dateRegistered.value = Ipon.isoDate(); monthlyAmountTouched = false; applyContributionDefault();
     dateRegistered.disabled = false; dateRegisteredHelp.hidden = true;
@@ -164,13 +167,13 @@
     }
   });
   document.getElementById('cancel-edit')?.addEventListener('click', resetForm);
-  search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { memberPage = 0; load(); }, 250); });
-  statusFilter.addEventListener('change', () => { memberPage = 0; load(); });
+  search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { memberPage = 0; refresh(); }, 250); });
+  statusFilter.addEventListener('change', () => { memberPage = 0; refresh(); });
   pager.addEventListener('click', (event) => {
     const button = event.target.closest('[data-page]');
     if (!button || button.disabled) return;
     memberPage += button.dataset.page === 'next' ? 1 : -1;
-    load();
+    refresh();
   });
-  try { await Promise.all([loadContributionSettings(), load()]); } catch (error) { tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</td></tr>`; }
+  try { await Promise.all([loadContributionSettings(), load()]); } catch (error) { Ipon.showInlineError(tbody, error, () => Promise.all([loadContributionSettings(), load()]), 6); }
 })();

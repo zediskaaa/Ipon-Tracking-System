@@ -111,7 +111,7 @@
         const value = Ipon.monthStart(date);
         month.insertAdjacentHTML('beforeend', `<option value="${value}" ${offset === 0 ? 'selected' : ''}>${Ipon.dateLabel(value, { month: 'long', year: 'numeric' })}</option>`);
       }
-      month.addEventListener('change', loadContributions);
+      month.addEventListener('change', load);
     }
     statusRowsByMonth.clear();
     const { data, error } = await Ipon.client.from('v_contribution_status').select('*').eq('period_month', month.value).order('member_name');
@@ -161,7 +161,8 @@
       if (page === 'contributions') { await loadMembers(); await loadContributions(); }
       else await loadTransactions();
     } catch (error) {
-      tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</td></tr>`;
+      Ipon.showInlineError(tbody, error, load, page === 'contributions' ? 6 : 7);
+      if (contributionEntriesBody) Ipon.showInlineError(contributionEntriesBody, error, load, 6);
     }
   }
 
@@ -223,12 +224,12 @@
   document.getElementById('contribution-month')?.addEventListener('change', syncSuggestedAmount);
   tbody.addEventListener('click', handleRecordAction);
   contributionEntriesBody?.addEventListener('click', handleRecordAction);
-  statusFilter?.addEventListener('change', () => { historyPage = 0; page === 'contributions' ? loadContributions() : loadTransactions(); });
+  statusFilter?.addEventListener('change', () => { historyPage = 0; load(); });
   pager?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-page]');
     if (!button || button.disabled) return;
     historyPage += button.dataset.page === 'next' ? 1 : -1;
-    page === 'contributions' ? loadContributions() : loadTransactions();
+    load();
   });
 
   await load();
