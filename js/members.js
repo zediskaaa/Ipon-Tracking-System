@@ -8,6 +8,7 @@
   const contactInput = document.getElementById('contact-number');
   const contactError = document.getElementById('contact-number-error');
   const dateRegistered = document.getElementById('date-registered');
+  const dateRegisteredHelp = document.getElementById('date-registered-help');
   const monthlyAmount = document.getElementById('monthly-amount');
   const monthlyAmountHelp = document.getElementById('monthly-amount-help');
   const contactErrorMessage = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
@@ -55,6 +56,7 @@
   }
   function resetForm() {
     form.reset(); form.elements.member_id.value = ''; dateRegistered.value = Ipon.isoDate(); monthlyAmountTouched = false; applyContributionDefault();
+    dateRegistered.disabled = false; dateRegisteredHelp.hidden = true;
     setContactError('');
     document.getElementById('member-form-title').textContent = 'Add member'; document.getElementById('cancel-edit').hidden = true;
   }
@@ -98,6 +100,7 @@
       form.elements.member_id.value = member.id; form.elements.full_name.value = member.full_name; form.elements.contact_number.value = member.contact_number || '';
       setContactError('');
       form.elements.date_registered.value = member.date_registered; form.elements.monthly_contribution_amount.value = member.monthly_contribution_amount; form.elements.notes.value = member.notes || '';
+      dateRegistered.disabled = true; dateRegisteredHelp.hidden = false;
       monthlyAmountTouched = true; monthlyAmountHelp.textContent = 'This member\'s saved amount is used when generating new periods.';
       document.getElementById('member-form-title').textContent = 'Edit member'; document.getElementById('cancel-edit').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
     } else {
