@@ -105,6 +105,20 @@ test('three panels have separate routes and backend-owned account workflows', ()
   assert.doesNotMatch(read('js/core.js') + read('js/super-admin.js') + read('js/members.js'), /SERVICE_ROLE_KEY/);
 });
 
+test('account settings open from the responsive identity control', () => {
+  const core = read('js/core.js');
+  const css = read('css/app.css');
+  const dashboard = read('dashboard.html');
+  assert.match(core, /data-account-open/);
+  assert.match(dashboard, /data-account-open/);
+  assert.match(core, /id="account-dialog"/);
+  assert.match(core, /function bindAccountDialog\(\)/);
+  assert.match(core, /update_own_profile/);
+  assert.doesNotMatch(core, /\['account', 'account\.html', 'My account'/);
+  assert.match(css, /grid-template-columns:repeat\(auto-fit,44px\)/);
+  assert.match(css, /\.account-dialog\{width:100%;height:100dvh/);
+});
+
 test('deadline backfill bypasses only the group-scope trigger during migration', () => {
   const migration = read('database/migrations/20261110_007_complete_account_notifications.sql');
   const disabled = migration.indexOf('disable trigger contribution_periods_group_scope');

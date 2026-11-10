@@ -703,9 +703,10 @@ button,a { color:inherit; font:inherit; }
   .summary-hero-left { min-width:0; }
   .tracked-total { max-width:100%; font-size:clamp(32px,10vw,48px); }
   .record-entry-action { width:100%; margin-top:0; min-height:44px; }
-  .summary-breakdown { padding:16px 8px 0; }
-  .summary-breakdown div { align-items:flex-start; }
+  .summary-breakdown { width:100%; min-width:0; padding:16px 8px 0; }
+  .summary-breakdown div { min-width:0; align-items:flex-start; }
   .summary-breakdown dt { min-width:0; white-space:normal; }
+  .summary-breakdown dd { flex:0 0 auto; }
   .calendar-header { display:none; }
   .mobile-month-bar { display:grid; grid-template-columns:40px minmax(0,1fr) 40px; align-items:center; gap:6px; margin-bottom:12px; }
   .mobile-month-bar button { height:38px; border:1px solid rgba(20,45,43,.2); border-radius:8px; background:#fffdf9; font-size:22px; }

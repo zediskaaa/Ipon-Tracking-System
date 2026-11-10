@@ -27,19 +27,16 @@
     ['members', 'members.html', 'Members', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>'],
     ['reports', 'reports.html', 'Reports', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10m6 10V4m6 16v-7m5 7H2"/></svg>'],
     ['audit', 'audit.html', 'Audit log', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>', 'ADMIN'],
-    ['settings', 'settings.html', 'Settings', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06 2.83-2.83.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3h4v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06.06 2.83 2.83-.06-.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg>'],
-    ['account', 'account.html', 'My account', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg>']
+    ['settings', 'settings.html', 'Settings', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06 2.83-2.83.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3h4v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06.06 2.83 2.83-.06-.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg>']
   ];
   const superAdminNavItems = [
     ['overview', 'super-admin.html#overview', 'Overview', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>'],
     ['requests', 'super-admin.html#requests', 'Requests', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8m-8 4h5"/></svg>'],
     ['administrators', 'super-admin.html#administrators', 'Administrators', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-1 2 2 4-4"/></svg>'],
-    ['activity', 'super-admin.html#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2Z"/></svg>'],
-    ['account', 'account.html', 'My account', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg>']
+    ['activity', 'super-admin.html#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2Z"/></svg>']
   ];
   const userNavItems = [
-    ['user', 'user.html', 'My savings', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>'],
-    ['account', 'account.html', 'My account', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg>']
+    ['user', 'user.html', 'My savings', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>']
   ];
   const pageRoles = {
     dashboard: ['ADMIN', 'TREASURER'], members: ['ADMIN'], contributions: ['ADMIN', 'TREASURER'],
@@ -195,7 +192,7 @@
             <button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><span>Notifications</span><b data-notification-count hidden>0</b></button>
             <button class="sidebar-utility" data-donate-open type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg><span>Donate</span></button>
           </div>
-          <div class="sidebar-user-card">
+          <button class="sidebar-user-card" data-account-open type="button" aria-label="Open my account">
             <span class="sidebar-user-avatar" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
             </span>
@@ -204,7 +201,7 @@
               <small>ACCOUNT</small>
             </div>
             <svg class="sidebar-user-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-          </div>
+          </button>
           <button class="sidebar-signout text-button" id="sign-out" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg>
             <span>Sign out</span>
@@ -234,22 +231,124 @@
       </dialog>
       <dialog class="donate-dialog" id="donate-dialog" aria-labelledby="donate-title">
         <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button></div>
+      </dialog>
+      <dialog class="account-dialog" id="account-dialog" aria-labelledby="quick-account-title">
+        <div class="account-dialog-sheet">
+          <header class="account-dialog-header"><div><h2 id="quick-account-title">My account</h2><p>Update your profile, sign-in security, and notifications.</p></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
+          <div class="account-dialog-identity"><span class="sidebar-user-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg></span><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div>
+          <div class="account-dialog-content">
+            <section><h3>Profile</h3><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" pattern="(?:09[0-9]{9}|\+639[0-9]{9})"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save profile</button></div></form></section>
+            <section><h3>Sign-in security</h3><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><form id="quick-password-form" class="form-grid"><div class="field"><label for="quick-password">New password</label><input id="quick-password" name="password" type="password" minlength="8" autocomplete="new-password" required><small class="field-help">At least 8 characters with uppercase, lowercase, and a number.</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></section>
+            <section class="account-preferences"><h3>Notifications</h3><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox"></label></section>
+          </div>
+        </div>
       </dialog>`);
     bindUtilityDialogs();
+    bindAccountDialog();
   }
 
   function bindUtilityDialogs() {
     const notifications = document.getElementById('notification-dialog');
     const donate = document.getElementById('donate-dialog');
+    const account = document.getElementById('account-dialog');
     document.querySelectorAll('[data-notifications-open]').forEach((button) => button.onclick = () => notifications?.showModal());
     document.querySelectorAll('[data-notifications-close]').forEach((button) => button.onclick = () => notifications?.close());
     document.querySelectorAll('[data-donate-open]').forEach((button) => button.onclick = () => donate?.showModal());
     document.querySelectorAll('[data-donate-close]').forEach((button) => button.onclick = () => donate?.close());
+    document.querySelectorAll('[data-account-open]').forEach((button) => button.onclick = openAccountDialog);
+    document.querySelectorAll('[data-account-close]').forEach((button) => button.onclick = () => account?.close());
     const copy = document.getElementById('copy-donate-number');
     if (copy) copy.onclick = async () => {
       try { await navigator.clipboard.writeText('09913564248'); toast('GCash number copied.'); }
       catch { toast('Copy 09913564248 manually.', 'error'); }
     };
+  }
+
+  async function loadAccountDialog() {
+    if (!client || !currentProfile) return;
+    const dialog = document.getElementById('account-dialog');
+    const profileForm = document.getElementById('quick-profile-form');
+    const emailForm = document.getElementById('quick-email-form');
+    dialog.setAttribute('aria-busy', 'true');
+    try {
+      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled').eq('id', currentProfile.id).single();
+      if (error) throw error;
+      profileForm.elements.first_name.value = data.first_name || data.full_name?.split(' ')[0] || '';
+      profileForm.elements.middle_name.value = data.middle_name || '';
+      profileForm.elements.last_name.value = data.last_name || data.full_name?.split(' ').slice(1).join(' ') || '';
+      profileForm.elements.contact_number.value = data.contact_number || '';
+      emailForm.elements.email.value = data.email || '';
+      document.getElementById('quick-notifications-enabled').checked = data.notifications_enabled !== false;
+      document.getElementById('quick-account-name').textContent = data.full_name;
+      document.getElementById('quick-account-role').textContent = currentProfile.role.replaceAll('_', ' ');
+    } finally {
+      dialog.removeAttribute('aria-busy');
+    }
+  }
+
+  async function openAccountDialog() {
+    const dialog = document.getElementById('account-dialog');
+    if (!dialog || !currentProfile) return;
+    dialog.showModal();
+    try { await loadAccountDialog(); }
+    catch (error) { toast(friendlyError(error), 'error'); }
+  }
+
+  function bindAccountDialog() {
+    const profileForm = document.getElementById('quick-profile-form');
+    if (!profileForm || profileForm.dataset.bound) return;
+    profileForm.dataset.bound = 'true';
+    const emailForm = document.getElementById('quick-email-form');
+    const passwordForm = document.getElementById('quick-password-form');
+    const notificationToggle = document.getElementById('quick-notifications-enabled');
+    profileForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      const values = new FormData(profileForm);
+      setBusy(button, true);
+      try {
+        await rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number') || null });
+        await loadAccountDialog();
+        const name = document.getElementById('quick-account-name').textContent;
+        currentProfile.full_name = name;
+        document.querySelector('#sidebar-user strong')?.replaceChildren(name);
+        toast('Profile updated.');
+      } catch (error) { toast(friendlyError(error), 'error'); }
+      finally { setBusy(button, false); }
+    });
+    emailForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      setBusy(button, true, 'Updating…');
+      try {
+        const { error } = await client.auth.updateUser({ email: emailForm.elements.email.value.trim() });
+        if (error) throw error;
+        toast('Check your email to confirm the change.');
+      } catch (error) { toast(friendlyError(error), 'error'); }
+      finally { setBusy(button, false); }
+    });
+    passwordForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const password = passwordForm.elements.password.value;
+      if (password !== passwordForm.elements.password_confirmation.value) return toast('Passwords do not match.', 'error');
+      if (!(password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password))) return toast('Use at least 8 characters with uppercase, lowercase, and a number.', 'error');
+      const button = event.submitter;
+      setBusy(button, true, 'Changing…');
+      try {
+        const { error } = await client.auth.updateUser({ password, data: { must_change_password: false } });
+        if (error) throw error;
+        await rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' });
+        passwordForm.reset();
+        toast('Password changed.');
+      } catch (error) { toast(friendlyError(error), 'error'); }
+      finally { setBusy(button, false); }
+    });
+    notificationToggle.addEventListener('change', async () => {
+      notificationToggle.disabled = true;
+      try { await rpc('set_notification_preferences', { p_enabled: notificationToggle.checked }); toast('Notification preference saved.'); }
+      catch (error) { notificationToggle.checked = !notificationToggle.checked; toast(friendlyError(error), 'error'); }
+      finally { notificationToggle.disabled = false; }
+    });
   }
 
   async function initNotifications(profile) {
