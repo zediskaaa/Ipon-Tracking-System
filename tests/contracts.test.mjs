@@ -119,6 +119,10 @@ test('account settings open from the responsive identity control', () => {
   assert.match(css, /\.account-dialog\{width:100%;height:100dvh/);
 });
 
+test('calendar navigation includes the administrator audit log', () => {
+  assert.match(read('dashboard.html'), /href="audit\.html" data-role="ADMIN"[^>]*>[\s\S]*?<span>Audit log<\/span>/);
+});
+
 test('deadline backfill bypasses only the group-scope trigger during migration', () => {
   const migration = read('database/migrations/20261110_007_complete_account_notifications.sql');
   const disabled = migration.indexOf('disable trigger contribution_periods_group_scope');
