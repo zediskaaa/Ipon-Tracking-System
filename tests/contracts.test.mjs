@@ -99,3 +99,17 @@ test('modal forms and settings layout include responsive fallbacks', () => {
   assert.match(css, /\.form-dialog\s*\{[^}]*max-height:/i);
   assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.form-grid-3\s*\{[^}]*grid-template-columns:1fr/i);
 });
+
+test('mobile navigation and data tables do not require horizontal scrolling', () => {
+  const css = read('css/app.css');
+  const dashboardCss = read('css/hero-plates.css');
+  const core = read('js/core.js');
+  assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.app-nav\s*\{[^}]*display:grid/i);
+  assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.record-tabs\s*\{[^}]*grid-template-columns:repeat\(4/i);
+  assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.data-table td\s*\{[^}]*grid-template-columns:/i);
+  assert.match(dashboardCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar \.sidebar-nav\s*\{[^}]*display:grid/i);
+  assert.match(core, /function prepareResponsiveTables\(\)/);
+  assert.match(core, /cell\.dataset\.label/);
+  assert.doesNotMatch(css.match(/@media \(max-width:720px\)[\s\S]*?(?=@media \(prefers-reduced-motion)/)?.[0] || '', /overflow-x:auto/i);
+  assert.doesNotMatch(dashboardCss.match(/@media \(max-width:860px\)[\s\S]*?(?=@media \(prefers-reduced-motion)/)?.[0] || '', /overflow-x:auto/i);
+});

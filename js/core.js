@@ -29,6 +29,12 @@
     ['audit', 'audit.html', 'Audit log', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>', 'ADMIN'],
     ['settings', 'settings.html', 'Settings', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06 2.83-2.83.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3h4v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06 2.83 2.83-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg>']
   ];
+  const recordTabIcons = {
+    'contributions.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8m-4-4h8"/></svg>',
+    'withdrawals.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
+    'expenses.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6m-6 4h6"/></svg>',
+    'savings.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 1h11l-2 4 2 4H5"/></svg>'
+  };
 
   function setLoading(visible, label = 'Opening your records…') {
     let loader = document.getElementById('app-loader');
@@ -135,7 +141,7 @@
       host.innerHTML = `
         ${brandHtml}
         <nav class="app-nav" aria-label="Main navigation">
-          ${navItems.map(([id, href, label, icon, role]) => `<a class="${activeId === id ? 'is-active' : ''}" href="${href}"${activeId === id ? ' aria-current="page"' : ''}${role ? ` data-role="${role}"` : ''}>${icon || ''}<span>${label}</span></a>`).join('')}
+          ${navItems.map(([id, href, label, icon, role]) => `<a class="${activeId === id ? 'is-active' : ''}" href="${href}" aria-label="${label}"${activeId === id ? ' aria-current="page"' : ''}${role ? ` data-role="${role}"` : ''}>${icon || ''}<span>${label}</span></a>`).join('')}
         </nav>
         ${sidebarArtHtml}
         <div class="app-sidebar-footer">
@@ -156,6 +162,11 @@
         </div>`;
       document.getElementById('sign-out')?.addEventListener('click', signOut);
     }
+    document.querySelectorAll('.record-tabs a').forEach((link) => {
+      const label = link.textContent.trim();
+      link.setAttribute('aria-label', label);
+      link.innerHTML = `${recordTabIcons[link.getAttribute('href')] || ''}<span>${escapeHtml(label)}</span>`;
+    });
     if (!document.getElementById('app-toast')) document.body.insertAdjacentHTML('beforeend', `
       <div class="toast" id="app-toast" role="status" aria-live="polite"></div>
       <dialog class="confirm-dialog" id="confirm-dialog">
@@ -169,6 +180,20 @@
           </div>
         </form>
       </dialog>`);
+  }
+
+  function prepareResponsiveTables() {
+    document.querySelectorAll('.data-table').forEach((table) => {
+      const labels = [...table.querySelectorAll('thead th')].map((heading) => heading.textContent.trim());
+      const applyLabels = () => table.querySelectorAll('tbody tr').forEach((row) => {
+        [...row.cells].forEach((cell, index) => {
+          if (!cell.hasAttribute('colspan')) cell.dataset.label = labels[index] || '';
+        });
+      });
+      applyLabels();
+      const body = table.tBodies[0];
+      if (body) new MutationObserver(applyLabels).observe(body, { childList:true });
+    });
   }
 
   function showSetupBanner() {
@@ -212,6 +237,7 @@
 
   async function init(options = {}) {
     mountShell();
+    prepareResponsiveTables();
     applyInputDateBounds();
     setLoading(true);
     try {
