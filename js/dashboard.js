@@ -15,9 +15,9 @@
   function monthIso(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`; }
   function statusClass(activity) {
     if (activity.approval_status === 'PENDING') return ['pending-event', 'Pending'];
-    if (activity.activity_type === 'DEDUCTION') return ['deduction-event', 'Bawas'];
+    if (activity.activity_type === 'DEDUCTION') return ['deduction-event', 'Deduction'];
     if (activity.activity_type === 'EXPENSE') return ['expense-event', 'Expense'];
-    return ['addition', 'Dagdag'];
+    return ['addition', 'Addition'];
   }
   function calendarCells(activities) {
     const year = cursor.getFullYear(), month = cursor.getMonth();
@@ -69,7 +69,7 @@
       }
       button.dataset.id = item.id; button.dataset.type = item.type; button.disabled = state.profile?.role !== 'ADMIN';
       button.querySelector('b').textContent = Ipon.dateLabel(item.date);
-      button.querySelector('small').textContent = item.type === 'contribution' ? 'Dagdag' : item.type === 'withdrawal' ? 'Bawas' : 'Expense';
+      button.querySelector('small').textContent = item.type === 'contribution' ? 'Addition' : item.type === 'withdrawal' ? 'Deduction' : 'Expense';
       button.querySelector('strong').textContent = Ipon.money(item.amount);
     });
     const total = items.reduce((sum, item) => sum + Number(item.amount), 0);

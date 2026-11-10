@@ -61,3 +61,41 @@ test('large record lists use server-side counts, filters, and ranges', () => {
   assert.match(members, /\.eq\('status'/);
   assert.match(members, /\.range\(/);
 });
+
+test('secondary member and goal editing uses accessible dialogs', () => {
+  const membersPage = read('members.html');
+  const goalsPage = read('savings.html');
+  assert.match(membersPage, /<dialog[^>]+id="member-dialog"[^>]+aria-labelledby="member-form-title"/);
+  assert.match(goalsPage, /<dialog[^>]+id="goal-dialog"[^>]+aria-labelledby="goal-form-title"/);
+  assert.match(read('js/members.js'), /dialog\.showModal\(\)/);
+  assert.match(read('js/savings.js'), /dialog\.showModal\(\)/);
+  assert.doesNotMatch(read('js/members.js'), /scrollIntoView/);
+  assert.doesNotMatch(read('js/savings.js'), /scrollIntoView/);
+});
+
+test('user-facing interface copy is English-only', () => {
+  const sources = [
+    ...readdirSync(root).filter((name) => name.endsWith('.html')).map(read),
+    ...readdirSync(new URL('../js/', import.meta.url)).filter((name) => name.endsWith('.js')).map((name) => read(`js/${name}`)),
+    read('database/schema.sql'),
+    read('README.md')
+  ].join('\n');
+  assert.doesNotMatch(sources, /\b(?:ako|ikaw|unang|kasalukuyang|bawal|hindi|kailangan|naipasa|pumili|pumalit|puwede|puwedeng|ibaba|kapalit|iyong|mga|muna|dagdag|bawas|magiging|bilang|wala)\b/i);
+});
+
+test('HTML dialogs are balanced and page IDs remain unique', () => {
+  for (const file of readdirSync(root).filter((name) => name.endsWith('.html'))) {
+    const html = read(file);
+    const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+    assert.equal(new Set(ids).size, ids.length, `${file} contains duplicate IDs`);
+    assert.equal((html.match(/<dialog\b/g) || []).length, (html.match(/<\/dialog>/g) || []).length, `${file} contains an unbalanced dialog`);
+  }
+});
+
+test('modal forms and settings layout include responsive fallbacks', () => {
+  const css = read('css/app.css');
+  assert.match(css, /\.form-grid-3\s*\{[^}]*grid-template-columns:repeat\(3/i);
+  assert.match(css, /\.settings-grid\s*\{[^}]*grid-template-columns:/i);
+  assert.match(css, /\.form-dialog\s*\{[^}]*max-height:/i);
+  assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.form-grid-3\s*\{[^}]*grid-template-columns:1fr/i);
+});

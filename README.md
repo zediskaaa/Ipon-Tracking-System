@@ -1,5 +1,6 @@
-# Ipon-Tracking-System
-pnag-track lang po ng mga ipon hehe
+# IPON Tracking System
+
+Track shared savings contributions, deductions, expenses, goals, and approvals.
 
 ## Release process
 

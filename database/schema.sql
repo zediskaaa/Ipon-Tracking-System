@@ -262,7 +262,8 @@ create table if not exists public.schema_migrations (
 insert into public.schema_migrations (version, name) values
   ('0000', 'create migration ledger'),
   ('20261110_001', 'lock confirmed financial records'),
-  ('20261110_002', 'structured profile and member names')
+  ('20261110_002', 'structured profile and member names'),
+  ('20261110_003', 'standardize administrator access errors in English')
 on conflict (version) do nothing;
 
 create index if not exists members_name_idx on public.members (lower(full_name));
@@ -697,7 +698,7 @@ begin
   if (p_role <> 'ADMIN' or p_status <> 'ACTIVE')
      and exists (select 1 from public.profiles where id = p_user_id and role = 'ADMIN' and status = 'ACTIVE')
      and not exists (select 1 from public.profiles where id <> p_user_id and role = 'ADMIN' and status = 'ACTIVE') then
-    raise exception 'Bawal ibaba ang Admin role hangga''t walang kapalit na Admin mula sa mga members.' using errcode = '22023';
+    raise exception 'Assign another active administrator before changing this administrator''s role or status.' using errcode = '22023';
   end if;
 
   update public.profiles

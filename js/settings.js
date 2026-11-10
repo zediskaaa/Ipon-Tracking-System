@@ -59,7 +59,7 @@
       return `<tr>
         <td>
           <strong>${Ipon.escapeHtml(profile.full_name)}</strong>
-          ${isSelf ? `<small class="field-help" style="display:block">${isFirstAdmin ? 'Unang Admin • Ikaw' : 'Ikaw (Kasalukuyang Admin)'}</small>` : ''}
+          ${isSelf ? `<small class="field-help" style="display:block">${isFirstAdmin ? 'First administrator • You' : 'You (current administrator)'}</small>` : ''}
         </td>
         <td>
           <select data-field="role" data-id="${profile.id}">
@@ -67,18 +67,18 @@
             <option value="TREASURER" ${profile.role === 'TREASURER' ? 'selected' : ''} ${lockDowngrade ? 'disabled' : ''}>TREASURER</option>
             <option value="MEMBER" ${profile.role === 'MEMBER' ? 'selected' : ''} ${lockDowngrade ? 'disabled' : ''}>MEMBER</option>
           </select>
-          ${lockDowngrade ? '<small class="role-lock-note">Bawal pang ibaba ang role — wala pang members na kapalit bilang Admin.</small>' : ''}
+          ${lockDowngrade ? '<small class="role-lock-note">This role cannot be changed until another member can become an administrator.</small>' : ''}
           ${isSelf && profile.role === 'ADMIN' && ctx.needsReplacement && ctx.hasMembersToReplace ? `
             <div class="replacement-picker" data-replacement-wrap="${profile.id}" hidden>
-              <label for="replacement-${profile.id}">Pumili ng kapalit na Admin sa mga members:</label>
+              <label for="replacement-${profile.id}">Select a replacement administrator:</label>
               <select id="replacement-${profile.id}" data-field="replacement" data-id="${profile.id}">
-                <option value="">— Pumili ng member —</option>
+                <option value="">Select a member</option>
                 ${ctx.replacementCandidates.map((candidate) => `<option value="${candidate.id}">${Ipon.escapeHtml(candidate.full_name)} (${candidate.role})</option>`).join('')}
               </select>
             </div>` : ''}
         </td>
         <td>
-          <select data-field="status" data-id="${profile.id}" ${isSelf ? 'disabled title="Hindi puwedeng i-disable ang sariling Admin account"' : ''}>
+          <select data-field="status" data-id="${profile.id}" ${isSelf ? 'disabled title="You cannot disable your own administrator account"' : ''}>
             <option value="PENDING" ${profile.status === 'PENDING' ? 'selected' : ''}>PENDING</option>
             <option value="ACTIVE" ${profile.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option>
             <option value="DISABLED" ${profile.status === 'DISABLED' ? 'selected' : ''}>DISABLED</option>
@@ -107,7 +107,7 @@
     if (select.value !== 'ADMIN' && ctx.needsReplacement) {
       if (!ctx.hasMembersToReplace) {
         select.value = 'ADMIN';
-        Ipon.toast('Bawal pang ibaba ang iyong Admin role dahil wala pang members na puwedeng pumalit bilang Admin.', 'error');
+        Ipon.toast('Add or activate another eligible member before changing your administrator role.', 'error');
         return;
       }
       if (wrap) {
@@ -132,7 +132,7 @@
     const targetProfile = profiles.find((p) => p.id === id);
 
     if (isSelf && status !== 'ACTIVE') {
-      Ipon.toast('Hindi puwedeng gawing pending o disabled ang sarili mong Admin account.', 'error');
+      Ipon.toast('You cannot set your own administrator account to pending or disabled.', 'error');
       return;
     }
 
@@ -140,7 +140,7 @@
       const ctx = getAdminContext(id);
       if (ctx.needsReplacement) {
         if (!ctx.hasMembersToReplace) {
-          Ipon.toast('Bawal pang ibaba ang iyong Admin role dahil wala pang members na puwedeng pumalit bilang Admin.', 'error');
+          Ipon.toast('Add or activate another eligible member before changing your administrator role.', 'error');
           return;
         }
         const replacementSelect = accessBody.querySelector(`[data-field="replacement"][data-id="${id}"]`);
@@ -149,14 +149,14 @@
           const wrap = accessBody.querySelector(`[data-replacement-wrap="${id}"]`);
           if (wrap) wrap.hidden = false;
           replacementSelect?.focus();
-          Ipon.toast('Kailangan munang pumili sa mga members ng kapalit na Admin bago ibaba ang iyong role.', 'error');
+          Ipon.toast('Select a replacement administrator before changing your role.', 'error');
           return;
         }
         const replacementProfile = profiles.find((p) => p.id === replacementId);
         const accepted = await Ipon.confirmAction({
-          title: 'Ipasa ang Admin role?',
-          message: `Si ${replacementProfile.full_name} ang magiging bagong ADMIN bilang kapalit mo, at magiging ${role} na ang iyong role.`,
-          acceptLabel: 'Ipasa ang Admin at i-save'
+          title: 'Transfer administrator access?',
+          message: `${replacementProfile.full_name} will become an administrator and your role will change to ${role}.`,
+          acceptLabel: 'Transfer and save'
         });
         if (!accepted) return;
 
@@ -174,7 +174,7 @@
             p_status: 'ACTIVE',
             p_member_id: memberId
           });
-          Ipon.toast(`Naipasa na ang Admin role kay ${replacementProfile.full_name}.`);
+          Ipon.toast(`Administrator access transferred to ${replacementProfile.full_name}.`);
           window.location.reload();
         } catch (error) {
           Ipon.toast(Ipon.friendlyError(error), 'error');

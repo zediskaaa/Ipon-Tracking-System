@@ -4,6 +4,7 @@
   if (state.failed) return;
   const tbody = document.getElementById('members-body');
   const form = document.getElementById('member-form');
+  const dialog = document.getElementById('member-dialog');
   const search = document.getElementById('member-search');
   const statusFilter = document.getElementById('member-status-filter');
   const pager = document.getElementById('member-pager');
@@ -86,7 +87,8 @@
     nameMigrationHelp.hidden = true; nameMigrationHelp.textContent = '';
     nameFields.forEach(([input, error]) => setNameError(input, error, ''));
     setContactError('');
-    document.getElementById('member-form-title').textContent = 'Add member'; document.getElementById('cancel-edit').hidden = true;
+    document.getElementById('member-form-title').textContent = 'Add member';
+    document.getElementById('member-form-copy').textContent = 'Create a tracking profile for a contributor.';
   }
   function normalizeContactNumber(value) {
     const number = String(value || '').trim();
@@ -145,7 +147,7 @@
       const name = { p_first_name: Ipon.normalizeNamePart(values.get('first_name')), p_middle_name: values.get('middle_name').trim() ? Ipon.normalizeNamePart(values.get('middle_name')) : null, p_last_name: Ipon.normalizeNamePart(values.get('last_name')) };
       if (values.get('member_id')) await Ipon.rpc('update_member', { p_member_id: values.get('member_id'), ...name, p_contact_number: contactNumber, p_monthly_contribution_amount: Number(values.get('monthly_contribution_amount')), p_notes: values.get('notes') || null });
       else await Ipon.rpc('create_member', { ...name, p_contact_number: contactNumber, p_date_registered: values.get('date_registered'), p_monthly_contribution_amount: Number(values.get('monthly_contribution_amount')), p_notes: values.get('notes') || null });
-      Ipon.toast(values.get('member_id') ? 'Member updated.' : 'Member added.'); resetForm(); await load();
+      Ipon.toast(values.get('member_id') ? 'Member updated.' : 'Member added.'); dialog.close(); await load();
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); } finally { Ipon.setBusy(button, false); }
   });
   tbody.addEventListener('click', async (event) => {
@@ -159,14 +161,17 @@
       form.elements.date_registered.value = member.date_registered; form.elements.monthly_contribution_amount.value = member.monthly_contribution_amount; form.elements.notes.value = member.notes || '';
       dateRegistered.disabled = true; dateRegisteredHelp.hidden = false;
       monthlyAmountTouched = true; monthlyAmountHelp.textContent = 'This member\'s saved amount is used when generating new periods.';
-      document.getElementById('member-form-title').textContent = 'Edit member'; document.getElementById('cancel-edit').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
+      document.getElementById('member-form-title').textContent = 'Edit member'; document.getElementById('member-form-copy').textContent = `Update ${member.full_name}'s profile.`; dialog.showModal(); firstName.focus();
     } else {
       const accepted = await Ipon.confirmAction({ title: 'Deactivate member?', message: `${member.full_name} will stop receiving new contribution periods. Existing records remain available.`, acceptLabel: 'Deactivate' });
       if (!accepted) return;
       try { await Ipon.rpc('deactivate_member', { p_member_id: member.id }); Ipon.toast('Member deactivated.'); await load(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     }
   });
-  document.getElementById('cancel-edit')?.addEventListener('click', resetForm);
+  document.getElementById('add-member')?.addEventListener('click', () => { resetForm(); dialog.showModal(); firstName.focus(); });
+  document.getElementById('cancel-edit')?.addEventListener('click', () => dialog.close());
+  document.getElementById('close-member-dialog')?.addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', resetForm);
   search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { memberPage = 0; refresh(); }, 250); });
   statusFilter.addEventListener('change', () => { memberPage = 0; refresh(); });
   pager.addEventListener('click', (event) => {
