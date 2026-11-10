@@ -3,10 +3,12 @@
   const state = await Ipon.init();
   if (state.failed) return;
   const accessBody = document.getElementById('access-body');
+  const effectiveMonth = document.getElementById('effective-month');
+  const defaultAmount = document.getElementById('default-amount');
   let profiles = [];
   let members = [];
 
-  document.getElementById('effective-month').value = Ipon.isoDate().slice(0, 7);
+  effectiveMonth.value = Ipon.isoDate().slice(0, 7);
   if (!state.configured || !state.profile) {
     if (accessBody) accessBody.innerHTML = '<tr><td colspan="5" class="empty-state">Connect Supabase to manage access.</td></tr>';
     return;
@@ -16,6 +18,16 @@
   document.getElementById('my-role').textContent = state.profile.role;
   document.getElementById('my-status').textContent = state.profile.status;
   if (state.profile.role !== 'ADMIN') return;
+
+  async function loadContributionDefault() {
+    const month = effectiveMonth.value;
+    const { data, error } = await Ipon.client.from('contribution_settings')
+      .select('default_amount')
+      .eq('effective_month', `${month}-01`)
+      .maybeSingle();
+    if (error) throw error;
+    if (effectiveMonth.value === month) defaultAmount.value = data?.default_amount ?? '';
+  }
 
   function getAdminContext(targetId) {
     const otherActiveAdmins = profiles.filter((p) => p.id !== targetId && p.role === 'ADMIN' && p.status === 'ACTIVE');
@@ -206,7 +218,7 @@
         p_effective_month: `${values.get('effective_month')}-01`,
         p_default_amount: Number(values.get('default_amount'))
       });
-      Ipon.toast('Contribution default saved.');
+      Ipon.toast('Contribution default saved. New member forms will use the latest default for their registration month.');
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
@@ -215,10 +227,10 @@
   });
 
   document.getElementById('generate-periods').addEventListener('click', async (event) => {
-    const month = document.getElementById('effective-month').value;
+    const month = effectiveMonth.value;
     const accepted = await Ipon.confirmAction({
       title: 'Generate contribution periods?',
-      message: `Create missing member contribution periods for ${month}. Existing periods will not be changed.`,
+      message: `Create missing member contribution periods for ${month} using each member's saved monthly amount. Existing periods will not be changed.`,
       acceptLabel: 'Generate'
     });
     if (!accepted) return;
@@ -233,8 +245,16 @@
     }
   });
 
+  effectiveMonth.addEventListener('change', async () => {
+    try {
+      await loadContributionDefault();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    }
+  });
+
   try {
-    await loadAccess();
+    await Promise.all([loadContributionDefault(), loadAccess()]);
   } catch (error) {
     accessBody.innerHTML = `<tr><td colspan="5" class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</td></tr>`;
   }

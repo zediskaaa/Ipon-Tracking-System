@@ -7,10 +7,38 @@
   const search = document.getElementById('member-search');
   const contactInput = document.getElementById('contact-number');
   const contactError = document.getElementById('contact-number-error');
+  const dateRegistered = document.getElementById('date-registered');
+  const monthlyAmount = document.getElementById('monthly-amount');
+  const monthlyAmountHelp = document.getElementById('monthly-amount-help');
   const contactErrorMessage = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
   let members = [];
-  document.getElementById('date-registered').value = Ipon.isoDate();
+  let contributionSettings = [];
+  let monthlyAmountTouched = false;
+  dateRegistered.value = Ipon.isoDate();
   if (!state.configured || !state.profile) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Connect Supabase to load members.</td></tr>'; return; }
+
+  function findApplicableContributionDefault(settings, registrationDate) {
+    const registrationMonth = `${registrationDate.slice(0, 7)}-01`;
+    return settings.find((item) => item.effective_month <= registrationMonth);
+  }
+
+  function applyContributionDefault() {
+    if (form.elements.member_id.value || monthlyAmountTouched) return;
+    const setting = findApplicableContributionDefault(contributionSettings, dateRegistered.value);
+    monthlyAmount.value = setting?.default_amount ?? '';
+    monthlyAmountHelp.textContent = setting
+      ? `Prefilled from the default effective ${setting.effective_month.slice(0, 7)}. You can change it before saving.`
+      : 'No default applies to this registration month. Enter a monthly amount.';
+  }
+
+  async function loadContributionSettings() {
+    const { data, error } = await Ipon.client.from('contribution_settings')
+      .select('effective_month,default_amount')
+      .order('effective_month', { ascending: false });
+    if (error) throw error;
+    contributionSettings = data;
+    applyContributionDefault();
+  }
 
   function render() {
     const query = search.value.trim().toLowerCase();
@@ -26,7 +54,7 @@
     if (error) throw error; members = data; render();
   }
   function resetForm() {
-    form.reset(); form.elements.member_id.value = ''; document.getElementById('date-registered').value = Ipon.isoDate();
+    form.reset(); form.elements.member_id.value = ''; dateRegistered.value = Ipon.isoDate(); monthlyAmountTouched = false; applyContributionDefault();
     setContactError('');
     document.getElementById('member-form-title').textContent = 'Add member'; document.getElementById('cancel-edit').hidden = true;
   }
@@ -43,6 +71,11 @@
     if (message) contactInput.setAttribute('aria-invalid', 'true'); else contactInput.removeAttribute('aria-invalid');
   }
   contactInput.addEventListener('input', () => setContactError(''));
+  monthlyAmount.addEventListener('input', () => {
+    monthlyAmountTouched = true;
+    monthlyAmountHelp.textContent = 'Custom amount entered. This amount will be used when generating new periods.';
+  });
+  dateRegistered.addEventListener('change', applyContributionDefault);
   contactInput.addEventListener('invalid', (event) => { event.preventDefault(); setContactError(contactErrorMessage); contactInput.focus(); });
   contactInput.addEventListener('blur', () => {
     const normalized = normalizeContactNumber(contactInput.value);
@@ -65,6 +98,7 @@
       form.elements.member_id.value = member.id; form.elements.full_name.value = member.full_name; form.elements.contact_number.value = member.contact_number || '';
       setContactError('');
       form.elements.date_registered.value = member.date_registered; form.elements.monthly_contribution_amount.value = member.monthly_contribution_amount; form.elements.notes.value = member.notes || '';
+      monthlyAmountTouched = true; monthlyAmountHelp.textContent = 'This member\'s saved amount is used when generating new periods.';
       document.getElementById('member-form-title').textContent = 'Edit member'; document.getElementById('cancel-edit').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
     } else {
       const accepted = await Ipon.confirmAction({ title: 'Deactivate member?', message: `${member.full_name} will stop receiving new contribution periods. Existing records remain available.`, acceptLabel: 'Deactivate' });
@@ -73,5 +107,5 @@
     }
   });
   document.getElementById('cancel-edit')?.addEventListener('click', resetForm); search.addEventListener('input', render);
-  try { await load(); } catch (error) { tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</td></tr>`; }
+  try { await Promise.all([loadContributionSettings(), load()]); } catch (error) { tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</td></tr>`; }
 })();
