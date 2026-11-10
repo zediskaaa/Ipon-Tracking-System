@@ -3,6 +3,21 @@
   const form = document.getElementById('auth-form');
   const message = document.getElementById('auth-message');
   const submit = document.getElementById('auth-submit');
+  const fullNameField = document.getElementById('full-name-field');
+  const fullName = document.getElementById('full-name');
+  const email = document.getElementById('email');
+  const password = document.getElementById('password');
+  const passwordConfirmationField = document.getElementById('password-confirmation-field');
+  const passwordConfirmation = document.getElementById('password-confirmation');
+  const passwordRequirements = document.getElementById('password-requirements');
+  const passwordToggle = document.getElementById('password-toggle');
+  const fieldErrors = new Map([
+    [fullName, document.getElementById('full-name-error')],
+    [email, document.getElementById('email-error')],
+    [password, document.getElementById('password-error')],
+    [passwordConfirmation, document.getElementById('password-confirmation-error')]
+  ]);
+  const passwordRule = 'Use at least 8 characters with uppercase, lowercase, and a number.';
   let mode = 'login';
 
   const state = await Ipon.init({ requireAuth: false, allowPending: true });
@@ -16,39 +31,107 @@
     message.textContent = 'Your account is waiting for administrator approval.';
   }
 
+  function setFieldError(input, errorMessage) {
+    const error = fieldErrors.get(input);
+    input.setCustomValidity(errorMessage);
+    input.setAttribute('aria-invalid', 'true');
+    error.textContent = errorMessage;
+    error.hidden = false;
+  }
+
+  function clearFieldError(input) {
+    const error = fieldErrors.get(input);
+    input.setCustomValidity('');
+    input.removeAttribute('aria-invalid');
+    error.textContent = '';
+    error.hidden = true;
+  }
+
+  function clearFieldErrors() {
+    fieldErrors.forEach((_, input) => clearFieldError(input));
+  }
+
+  function setPasswordVisibility(visible) {
+    const type = visible ? 'text' : 'password';
+    password.type = type;
+    passwordConfirmation.type = type;
+    passwordToggle.textContent = visible ? 'Hide' : 'Show';
+    passwordToggle.setAttribute('aria-pressed', String(visible));
+    passwordToggle.setAttribute('aria-label', `${visible ? 'Hide' : 'Show'} passwords`);
+  }
+
+  function passwordIsStrong(value) {
+    return value.length >= 8 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /[0-9]/.test(value);
+  }
+
+  function validateForm() {
+    const signup = mode === 'signup';
+    clearFieldErrors();
+    email.value = email.value.trim();
+
+    if (signup && fullName.value.trim().length < 2) setFieldError(fullName, 'Enter a full name with at least 2 characters.');
+    if (!email.value) setFieldError(email, 'Enter your email address.');
+    else if (!email.validity.valid) setFieldError(email, 'Enter a valid email address.');
+    if (!password.value) setFieldError(password, 'Enter your password.');
+    else if (signup && !passwordIsStrong(password.value)) setFieldError(password, passwordRule);
+    if (signup && !passwordConfirmation.value) setFieldError(passwordConfirmation, 'Confirm your password.');
+    else if (signup && passwordConfirmation.value !== password.value) setFieldError(passwordConfirmation, 'Passwords do not match.');
+
+    const inputs = signup ? [fullName, email, password, passwordConfirmation] : [email, password];
+    const firstInvalid = inputs.find((input) => !input.checkValidity());
+    if (firstInvalid) firstInvalid.focus();
+    return !firstInvalid;
+  }
+
   function setMode(next) {
     mode = next;
     const signup = mode === 'signup';
     document.getElementById('show-login').classList.toggle('is-active', !signup);
     document.getElementById('show-signup').classList.toggle('is-active', signup);
-    document.getElementById('full-name-field').hidden = !signup;
-    document.getElementById('full-name').required = signup;
+    fullNameField.hidden = !signup;
+    fullName.required = signup;
+    passwordConfirmationField.hidden = !signup;
+    passwordConfirmation.required = signup;
+    passwordRequirements.hidden = !signup;
+    password.autocomplete = signup ? 'new-password' : 'current-password';
     document.getElementById('auth-title').textContent = signup ? 'Request an account' : 'Welcome back';
     document.getElementById('auth-copy').textContent = signup ? 'An administrator must activate new accounts.' : 'Sign in to view your savings records.';
     submit.textContent = signup ? 'Submit request' : 'Sign in';
+    clearFieldErrors();
+    setPasswordVisibility(false);
+    delete message.dataset.tone;
     message.textContent = '';
   }
+
+  fieldErrors.forEach((_, input) => input.addEventListener('input', () => clearFieldError(input)));
+  email.addEventListener('blur', () => { email.value = email.value.trim(); });
+  passwordToggle.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
   document.getElementById('show-login').addEventListener('click', () => setMode('login'));
   document.getElementById('show-signup').addEventListener('click', () => setMode('signup'));
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    delete message.dataset.tone;
     message.textContent = '';
-    Ipon.setBusy(submit, true, mode === 'signup' ? 'Submitting…' : 'Signing in…');
-    const values = new FormData(form);
+    if (!validateForm()) return;
+
+    Ipon.setBusy(submit, true, mode === 'signup' ? 'Submitting...' : 'Signing in...');
     try {
       if (mode === 'signup') {
         const { error } = await Ipon.client.auth.signUp({
-          email: values.get('email'), password: values.get('password'),
-          options: { data: { full_name: values.get('full_name').trim() } }
+          email: email.value,
+          password: password.value,
+          options: { data: { full_name: fullName.value.trim() } }
         });
         if (error) throw error;
         await Ipon.client.auth.signOut();
         form.reset();
-        message.style.color = 'var(--green)';
+        clearFieldErrors();
+        setPasswordVisibility(false);
+        message.dataset.tone = 'success';
         message.textContent = 'Request submitted. Wait for an administrator to activate your account.';
       } else {
-        const { data, error } = await Ipon.client.auth.signInWithPassword({ email: values.get('email'), password: values.get('password') });
+        const { data, error } = await Ipon.client.auth.signInWithPassword({ email: email.value, password: password.value });
         if (error) throw error;
         const { data: profile, error: profileError } = await Ipon.client.from('profiles').select('status').eq('id', data.user.id).single();
         if (profileError) throw profileError;
@@ -59,8 +142,14 @@
         window.location.replace('dashboard.html');
       }
     } catch (error) {
-      message.style.color = 'var(--red)';
-      message.textContent = Ipon.friendlyError(error);
-    } finally { Ipon.setBusy(submit, false); }
+      if (mode === 'signup' && (error?.code === 'weak_password' || /weak password/i.test(error?.message || ''))) {
+        setFieldError(password, passwordRule);
+        password.focus();
+      } else {
+        message.textContent = Ipon.friendlyError(error);
+      }
+    } finally {
+      Ipon.setBusy(submit, false);
+    }
   });
 })();

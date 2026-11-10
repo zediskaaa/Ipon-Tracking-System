@@ -16,7 +16,8 @@
     .login-card h2{margin:0 0 7px;font-size:38px}.login-card>p{margin:0 0 26px;color:var(--muted);font-family:Arial,sans-serif}
     .auth-tabs{display:flex;gap:8px;margin-bottom:24px}.auth-tabs button{flex:1;padding:10px;border:1px solid var(--rule);border-radius:6px;background:transparent;cursor:pointer}
     .auth-tabs button.is-active{background:var(--rail);color:#fff}.login-card .form-grid{grid-template-columns:1fr}.login-card .button{width:100%;margin-top:8px}
-    .auth-message{min-height:22px;margin:16px 0 0!important;color:var(--red)!important;font-size:14px}.tracking-note{padding-top:30px;border-top:1px solid rgba(255,255,255,.18)}
+    .password-control{position:relative}.password-control input{padding-inline-end:72px}.password-toggle{position:absolute;inset-block:6px;inset-inline-end:6px;min-width:58px;border:0;border-radius:5px;background:rgba(20,45,43,.08);color:var(--ink);cursor:pointer;font:700 12px Arial,sans-serif}.password-toggle:hover{background:rgba(20,45,43,.14)}.password-toggle:focus-visible{outline:3px solid rgba(40,122,76,.28);outline-offset:2px}
+    .auth-message{min-height:22px;margin:16px 0 0!important;color:var(--red)!important;font-size:14px}.auth-message[data-tone="success"]{color:var(--green)!important}.tracking-note{padding-top:30px;border-top:1px solid rgba(255,255,255,.18)}
     @media(max-width:780px){.login-page{grid-template-columns:1fr}.login-story{min-height:300px}.login-form-wrap{padding:20px}.login-card{padding:26px}}
   </style>
 </head>
@@ -31,11 +32,12 @@
       <div class="login-card">
         <p class="eyebrow">Secure access</p><h2 id="auth-title">Welcome back</h2><p id="auth-copy">Sign in to view your savings records.</p>
         <div class="auth-tabs" role="tablist"><button class="is-active" id="show-login" type="button">Sign in</button><button id="show-signup" type="button">Request account</button></div>
-        <form id="auth-form">
+        <form id="auth-form" novalidate>
           <div class="form-grid">
-            <div class="field" id="full-name-field" hidden><label for="full-name">Full name</label><input id="full-name" name="full_name" autocomplete="name" minlength="2" maxlength="150"></div>
-            <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" maxlength="254" required></div>
-            <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" minlength="8" required></div>
+            <div class="field" id="full-name-field" hidden><label for="full-name">Full name</label><input id="full-name" name="full_name" autocomplete="name" minlength="2" maxlength="150" aria-describedby="full-name-error"><small class="field-error" id="full-name-error" role="alert" hidden></small></div>
+            <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" aria-describedby="email-error" required><small class="field-error" id="email-error" role="alert" hidden></small></div>
+            <div class="field"><label for="password">Password</label><div class="password-control"><input id="password" name="password" type="password" autocomplete="current-password" aria-describedby="password-requirements password-error" required><button class="password-toggle" id="password-toggle" type="button" aria-controls="password password-confirmation" aria-pressed="false" aria-label="Show passwords">Show</button></div><small class="field-help" id="password-requirements" hidden>Use at least 8 characters with uppercase, lowercase, and a number.</small><small class="field-error" id="password-error" role="alert" hidden></small></div>
+            <div class="field" id="password-confirmation-field" hidden><label for="password-confirmation">Confirm password</label><input id="password-confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" aria-describedby="password-confirmation-error"><small class="field-error" id="password-confirmation-error" role="alert" hidden></small></div>
           </div>
           <button class="button button-primary" id="auth-submit" type="submit">Sign in</button>
           <p class="auth-message" id="auth-message" role="alert"></p>
