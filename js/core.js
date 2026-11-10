@@ -74,6 +74,12 @@
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
   }
 
+  function applyInputDateBounds() {
+    const today = isoDate();
+    document.querySelectorAll('[data-max-today]').forEach((input) => { input.max = today; });
+    document.querySelectorAll('[data-max-current-month]').forEach((input) => { input.max = today.slice(0, 7); });
+  }
+
   const brandHtml = `
     <a class="app-brand brand" data-region="brand" href="dashboard.html" aria-label="IPON home">
       <svg class="brand-coins" viewBox="0 0 44 40" aria-hidden="true">
@@ -197,6 +203,7 @@
 
   async function init(options = {}) {
     mountShell();
+    applyInputDateBounds();
     setLoading(true);
     try {
       if (!configured) {

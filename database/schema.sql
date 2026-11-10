@@ -285,6 +285,69 @@ begin
   end if;
 end $$;
 
+create or replace function public.validated_money(p_amount numeric, p_label text)
+returns numeric
+language plpgsql
+immutable
+set search_path = public
+as $$
+begin
+  if p_amount is null or p_amount <= 0 then
+    raise exception '% must be greater than zero.', p_label using errcode = '22023';
+  end if;
+  if p_amount > 999999999999.99 then
+    raise exception '% must not exceed 999999999999.99.', p_label using errcode = '22023';
+  end if;
+  if p_amount <> round(p_amount, 2) then
+    raise exception '% must have no more than two decimal places.', p_label using errcode = '22023';
+  end if;
+  return p_amount;
+end;
+$$;
+
+create or replace function public.enforce_data_quality()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if tg_table_name = 'members' then
+    if nullif(btrim(new.full_name), '') is null then raise exception 'Full name is required.' using errcode = '22023'; end if;
+    if char_length(new.full_name) > 150 then raise exception 'Full name must not exceed 150 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if new.date_registered < date '2000-01-01' or new.date_registered > current_date then raise exception 'Date registered must be between 2000-01-01 and today.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'contribution_settings' then
+    if new.effective_month < date '2000-01-01' or new.effective_month > date '2100-12-01' then raise exception 'Effective month must be between January 2000 and December 2100.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'contribution_periods' then
+    if new.period_month < date '2000-01-01' or new.period_month > date '2100-12-01' then raise exception 'Contribution month must be between January 2000 and December 2100.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'contributions' then
+    if new.payment_date < date '2000-01-01' or new.payment_date > current_date then raise exception 'Date added must be between 2000-01-01 and today.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.transaction_reference, '')) > 100 then raise exception 'Reference must not exceed 100 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.review_note, '')) > 500 then raise exception 'Review note must not exceed 500 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.void_reason, '')) > 500 then raise exception 'Void reason must not exceed 500 characters.' using errcode = '22023'; end if;
+  elsif tg_table_name in ('expenses', 'withdrawals') then
+    if new.transaction_date < date '2000-01-01' or new.transaction_date > current_date then raise exception 'Transaction date must be between 2000-01-01 and today.' using errcode = '22023'; end if;
+    if nullif(btrim(new.category), '') is null then raise exception 'Category is required.' using errcode = '22023'; end if;
+    if nullif(btrim(new.description), '') is null then raise exception 'Description is required.' using errcode = '22023'; end if;
+    if nullif(btrim(new.person_responsible), '') is null then raise exception 'Person responsible is required.' using errcode = '22023'; end if;
+    if char_length(new.category) > 80 then raise exception 'Category must not exceed 80 characters.' using errcode = '22023'; end if;
+    if char_length(new.description) > 500 then raise exception 'Description must not exceed 500 characters.' using errcode = '22023'; end if;
+    if char_length(new.person_responsible) > 150 then raise exception 'Person responsible must not exceed 150 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.reference_number, '')) > 100 then raise exception 'Reference must not exceed 100 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.review_note, '')) > 500 then raise exception 'Review note must not exceed 500 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.void_reason, '')) > 500 then raise exception 'Void reason must not exceed 500 characters.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'savings_goals' then
+    if nullif(btrim(new.title), '') is null then raise exception 'Goal title is required.' using errcode = '22023'; end if;
+    if char_length(new.title) > 150 then raise exception 'Goal title must not exceed 150 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if new.target_date is not null and (new.target_date < date '2000-01-01' or new.target_date > date '2100-12-31') then raise exception 'Target date must be between 2000-01-01 and 2100-12-31.' using errcode = '22023'; end if;
+  end if;
+  return new;
+end;
+$$;
+
 create or replace function public.current_user_role()
 returns public.app_role
 language sql
@@ -422,6 +485,23 @@ declare
   table_name text;
 begin
   foreach table_name in array array[
+    'members', 'contribution_settings', 'contribution_periods',
+    'contributions', 'expenses', 'withdrawals', 'savings_goals'
+  ] loop
+    execute format('drop trigger if exists %I_data_quality on public.%I', table_name, table_name);
+    execute format(
+      'create trigger %I_data_quality before insert or update on public.%I for each row execute function public.enforce_data_quality()',
+      table_name,
+      table_name
+    );
+  end loop;
+end $$;
+
+do $$
+declare
+  table_name text;
+begin
+  foreach table_name in array array[
     'profiles', 'members', 'contribution_settings', 'contribution_periods',
     'contributions', 'expenses', 'withdrawals', 'savings_goals'
   ] loop
@@ -494,7 +574,7 @@ begin
     notes, created_by, updated_by
   ) values (
     btrim(p_full_name), public.normalize_ph_mobile(p_contact_number), p_date_registered,
-    p_monthly_contribution_amount, nullif(btrim(p_notes), ''), auth.uid(), auth.uid()
+    public.validated_money(p_monthly_contribution_amount, 'Monthly contribution amount'), nullif(btrim(p_notes), ''), auth.uid(), auth.uid()
   ) returning id into v_id;
 
   return v_id;
@@ -521,7 +601,7 @@ begin
   update public.members
   set full_name = btrim(p_full_name),
       contact_number = public.normalize_ph_mobile(p_contact_number),
-      monthly_contribution_amount = p_monthly_contribution_amount,
+      monthly_contribution_amount = public.validated_money(p_monthly_contribution_amount, 'Monthly contribution amount'),
       notes = nullif(btrim(p_notes), ''),
       updated_by = auth.uid()
   where id = p_member_id;
@@ -571,7 +651,7 @@ begin
   end if;
 
   insert into public.contribution_settings (effective_month, default_amount, created_by)
-  values (v_month, p_default_amount, auth.uid())
+  values (v_month, public.validated_money(p_default_amount, 'Default amount'), auth.uid())
   on conflict (effective_month) do update set
     default_amount = excluded.default_amount,
     created_by = auth.uid(),
@@ -633,6 +713,9 @@ begin
   if v_role is null then
     raise exception 'Your account is not active.' using errcode = '42501';
   end if;
+  if v_month is null or v_month < date '2000-01-01' or v_month > date_trunc('month', current_date)::date then
+    raise exception 'Contribution month must be between January 2000 and the current month.' using errcode = '22023';
+  end if;
 
   if v_role = 'MEMBER' and public.current_member_id() is distinct from p_member_id then
     raise exception 'Members can only submit their own savings entries.' using errcode = '42501';
@@ -663,7 +746,7 @@ begin
     idempotency_key, notes, approval_status, submitted_by,
     reviewed_by, reviewed_at
   ) values (
-    v_period_id, p_amount, p_payment_date,
+    v_period_id, public.validated_money(p_amount, 'Contribution amount'), p_payment_date,
     nullif(btrim(p_transaction_reference), ''), p_idempotency_key,
     nullif(btrim(p_notes), ''), v_status, auth.uid(),
     case when v_status = 'CONFIRMED' then auth.uid() end,
@@ -737,7 +820,7 @@ begin
   end if;
 
   update public.contributions
-  set amount = p_amount,
+  set amount = public.validated_money(p_amount, 'Contribution amount'),
       payment_date = p_payment_date,
       transaction_reference = nullif(btrim(p_transaction_reference), ''),
       notes = nullif(btrim(p_notes), '')
@@ -797,7 +880,7 @@ begin
     reference_number, idempotency_key, notes, approval_status, submitted_by,
     reviewed_by, reviewed_at
   ) values (
-    p_transaction_date, p_amount, btrim(p_category), btrim(p_description),
+    p_transaction_date, public.validated_money(p_amount, 'Withdrawal amount'), btrim(p_category), btrim(p_description),
     btrim(p_person_responsible), nullif(btrim(p_reference_number), ''),
     p_idempotency_key, nullif(btrim(p_notes), ''), v_status, auth.uid(),
     case when v_status = 'CONFIRMED' then auth.uid() end,
@@ -858,7 +941,7 @@ begin
   end if;
 
   update public.withdrawals set
-    transaction_date = p_transaction_date, amount = p_amount, category = btrim(p_category),
+    transaction_date = p_transaction_date, amount = public.validated_money(p_amount, 'Withdrawal amount'), category = btrim(p_category),
     description = btrim(p_description), person_responsible = btrim(p_person_responsible),
     reference_number = nullif(btrim(p_reference_number), ''), notes = nullif(btrim(p_notes), '')
   where id = p_withdrawal_id and approval_status = 'PENDING';
@@ -911,7 +994,7 @@ begin
     reference_number, idempotency_key, notes, approval_status, submitted_by,
     reviewed_by, reviewed_at
   ) values (
-    p_transaction_date, p_amount, btrim(p_category), btrim(p_description),
+    p_transaction_date, public.validated_money(p_amount, 'Expense amount'), btrim(p_category), btrim(p_description),
     btrim(p_person_responsible), nullif(btrim(p_reference_number), ''),
     p_idempotency_key, nullif(btrim(p_notes), ''), v_status, auth.uid(),
     case when v_status = 'CONFIRMED' then auth.uid() end,
@@ -972,7 +1055,7 @@ begin
   end if;
 
   update public.expenses set
-    transaction_date = p_transaction_date, amount = p_amount, category = btrim(p_category),
+    transaction_date = p_transaction_date, amount = public.validated_money(p_amount, 'Expense amount'), category = btrim(p_category),
     description = btrim(p_description), person_responsible = btrim(p_person_responsible),
     reference_number = nullif(btrim(p_reference_number), ''), notes = nullif(btrim(p_notes), '')
   where id = p_expense_id and approval_status = 'PENDING';
@@ -1016,11 +1099,11 @@ begin
   if not public.is_admin() then raise exception 'Only an administrator can manage goals.' using errcode = '42501'; end if;
   if p_goal_id is null then
     insert into public.savings_goals (title, target_amount, target_date, status, notes, created_by, updated_by)
-    values (btrim(p_title), p_target_amount, p_target_date, p_status, nullif(btrim(p_notes), ''), auth.uid(), auth.uid())
+    values (btrim(p_title), public.validated_money(p_target_amount, 'Target amount'), p_target_date, p_status, nullif(btrim(p_notes), ''), auth.uid(), auth.uid())
     returning id into v_id;
   else
     update public.savings_goals set
-      title = btrim(p_title), target_amount = p_target_amount, target_date = p_target_date,
+      title = btrim(p_title), target_amount = public.validated_money(p_target_amount, 'Target amount'), target_date = p_target_date,
       status = p_status, notes = nullif(btrim(p_notes), ''), updated_by = auth.uid()
     where id = p_goal_id returning id into v_id;
     if v_id is null then raise exception 'Savings goal not found.' using errcode = 'P0002'; end if;

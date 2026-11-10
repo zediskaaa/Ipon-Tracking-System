@@ -5,13 +5,13 @@
   <div class="split-layout">
     <section class="panel sticky-panel"><div class="panel-header"><div><h2>Record deduction</h2><p>Only confirmed deductions affect tracked savings.</p></div></div>
       <form id="record-form" class="form-grid">
-        <div class="field"><label for="transaction-date">Date</label><input id="transaction-date" name="transaction_date" type="date" required></div>
-        <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" type="number" min="0.01" step="0.01" required></div>
-        <div class="field"><label for="category">Category</label><input id="category" name="category" required placeholder="e.g. Emergency use"></div>
-        <div class="field"><label for="responsible">Person responsible</label><input id="responsible" name="person_responsible" required></div>
-        <div class="field field-wide"><label for="description">Reason / description</label><textarea id="description" name="description" required></textarea></div>
-        <div class="field"><label for="reference">Reference (optional)</label><input id="reference" name="reference_number"></div>
-        <div class="field"><label for="notes">Notes (optional)</label><input id="notes" name="notes"></div>
+        <div class="field"><label for="transaction-date">Date</label><input id="transaction-date" name="transaction_date" type="date" min="2000-01-01" data-max-today required></div>
+        <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" required></div>
+        <div class="field"><label for="category">Category</label><input id="category" name="category" maxlength="80" required placeholder="e.g. Emergency use"></div>
+        <div class="field"><label for="responsible">Person responsible</label><input id="responsible" name="person_responsible" maxlength="150" required></div>
+        <div class="field field-wide"><label for="description">Reason / description</label><textarea id="description" name="description" maxlength="500" required></textarea></div>
+        <div class="field"><label for="reference">Reference (optional)</label><input id="reference" name="reference_number" maxlength="100"></div>
+        <div class="field"><label for="notes">Notes (optional)</label><input id="notes" name="notes" maxlength="1000"></div>
         <div class="form-actions field-wide"><button class="button button-primary" type="submit" data-requires-data>Save deduction</button></div>
       </form>
     </section>

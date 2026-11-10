@@ -6,11 +6,11 @@
   <div class="split-layout">
     <section class="panel sticky-panel" data-role="ADMIN"><div class="panel-header"><div><h2 id="goal-form-title">Add goal</h2><p>Administrators can create and update targets.</p></div></div>
       <form id="goal-form" class="form-grid"><input type="hidden" name="goal_id">
-        <div class="field field-wide"><label for="goal-title">Goal title</label><input id="goal-title" name="title" minlength="2" required></div>
-        <div class="field"><label for="target-amount">Target amount</label><input id="target-amount" name="target_amount" type="number" min="0.01" step="0.01" required></div>
-        <div class="field"><label for="target-date">Target date</label><input id="target-date" name="target_date" type="date"></div>
+        <div class="field field-wide"><label for="goal-title">Goal title</label><input id="goal-title" name="title" minlength="2" maxlength="150" required></div>
+        <div class="field"><label for="target-amount">Target amount</label><input id="target-amount" name="target_amount" type="number" min="0.01" max="999999999999.99" step="0.01" required></div>
+        <div class="field"><label for="target-date">Target date</label><input id="target-date" name="target_date" type="date" min="2000-01-01" max="2100-12-31"></div>
         <div class="field field-wide"><label for="goal-status">Status</label><select id="goal-status" name="status"><option>ACTIVE</option><option>COMPLETED</option><option>CANCELLED</option></select></div>
-        <div class="field field-wide"><label for="goal-notes">Notes</label><textarea id="goal-notes" name="notes"></textarea></div>
+        <div class="field field-wide"><label for="goal-notes">Notes</label><textarea id="goal-notes" name="notes" maxlength="1000"></textarea></div>
         <div class="form-actions field-wide"><button class="button button-primary" type="submit" data-requires-data>Save goal</button><button class="button button-secondary" id="cancel-goal-edit" type="button" hidden>Cancel edit</button></div>
       </form>
     </section>

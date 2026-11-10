@@ -6,11 +6,11 @@
     <section class="panel sticky-panel"><div class="panel-header"><div><h2>Record addition</h2><p>This tracks a deposit; it does not move money.</p></div></div>
       <form id="record-form" class="form-grid">
         <div class="field field-wide"><label for="member-id">Member</label><select id="member-id" name="member_id" required><option value="">Loading members…</option></select></div>
-        <div class="field"><label for="contribution-month">For month</label><input id="contribution-month" name="contribution_month" type="month" required></div>
-        <div class="field"><label for="payment-date">Date added</label><input id="payment-date" name="payment_date" type="date" required></div>
-        <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required></div>
-        <div class="field"><label for="reference">Reference (optional)</label><input id="reference" name="reference" autocomplete="off"></div>
-        <div class="field field-wide"><label for="notes">Notes (optional)</label><textarea id="notes" name="notes"></textarea></div>
+        <div class="field"><label for="contribution-month">For month</label><input id="contribution-month" name="contribution_month" type="month" min="2000-01" data-max-current-month required></div>
+        <div class="field"><label for="payment-date">Date added</label><input id="payment-date" name="payment_date" type="date" min="2000-01-01" data-max-today required></div>
+        <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" inputmode="decimal" required></div>
+        <div class="field"><label for="reference">Reference (optional)</label><input id="reference" name="reference" maxlength="100" autocomplete="off"></div>
+        <div class="field field-wide"><label for="notes">Notes (optional)</label><textarea id="notes" name="notes" maxlength="1000"></textarea></div>
         <div class="form-actions field-wide"><button class="button button-primary" type="submit" data-requires-data>Save addition</button></div>
       </form>
     </section>
