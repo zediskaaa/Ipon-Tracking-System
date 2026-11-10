@@ -3,7 +3,7 @@
   --rail:#172929; --green:#287a4c; --red:#ae3934; --ochre:#b97912;
   --rule:rgba(20,45,43,.12); --shadow:0 18px 50px rgba(20,45,43,.12);
 }
-@font-face { font-family:"IPON Serif"; src:url("../assets/fonts/RobotoSerif.ttf") format("truetype"); font-style:normal; font-weight:100 900; font-stretch:50% 150%; font-display:swap; }
+@font-face { font-family:"IPON Serif"; src:url("../assets/fonts/RobotoSerif-latin.woff2") format("woff2"); font-style:normal; font-weight:100 900; font-stretch:50% 150%; font-display:swap; }
 * { box-sizing:border-box; }
 html { min-height:100%; background:var(--paper); }
 body { min-height:100vh; margin:0; color:var(--ink); background-color:var(--paper); font-family:"IPON Serif",serif; }

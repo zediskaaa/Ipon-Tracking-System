@@ -9,7 +9,7 @@
   --muted:#6c716a;
 }
 
-@font-face { font-family:"IPON Serif"; src:url("../assets/fonts/RobotoSerif.ttf") format("truetype"); font-style:normal; font-weight:100 900; font-stretch:50% 150%; font-display:swap; }
+@font-face { font-family:"IPON Serif"; src:url("../assets/fonts/RobotoSerif-latin.woff2") format("woff2"); font-style:normal; font-weight:100 900; font-stretch:50% 150%; font-display:swap; }
 * { box-sizing:border-box; }
 html,body { min-height:100%; margin:0; }
 body { background:var(--paper); color:var(--ink); font-family:"IPON Serif",serif; }
