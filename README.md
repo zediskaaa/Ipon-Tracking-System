@@ -34,4 +34,4 @@ Run `npm test`, then complete [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) befor
 
 ## Supabase Auth settings
 
-Keep the hosted Auth password policy aligned with the signup form. In the project's Supabase Auth password security settings, use a minimum length of 8 and require at least one lowercase letter, uppercase letter, and number.
+Keep the hosted Auth password policy aligned with the application. In the project's Supabase Auth password security settings, use a minimum length of 12 and require at least one lowercase letter, uppercase letter, number, and symbol. Enable leaked-password protection when the project plan supports it. Existing users may continue signing in, but new passwords and password changes must meet the stronger policy.

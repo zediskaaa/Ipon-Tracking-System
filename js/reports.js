@@ -24,12 +24,17 @@
   }
 
   async function load() {
+    const selectedYear = yearFilter.value;
+    const selectedMonth = monthFilter.value;
     const [{ data: summary, error: summaryError }, { data, error }] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_monthly_financial_summary').select('*').order('month')]);
     if (summaryError) throw summaryError; if (error) throw error;
     ['additions', 'deductions', 'expenses'].forEach((key) => { document.getElementById(`report-${key}`).textContent = Ipon.money(summary?.[`total_${key}`]); });
     document.getElementById('report-tracked').textContent = Ipon.money(summary?.tracked_savings); monthlyRows = data || [];
     const years = [...new Set([String(new Date().getFullYear()), ...monthlyRows.map((row) => row.month.slice(0, 4))])].sort().reverse();
-    yearFilter.innerHTML = years.map((year) => `<option>${year}</option>`).join(''); monthFilter.value = Ipon.monthStart().slice(0, 7); renderMonthly(); await loadMembers();
+    yearFilter.innerHTML = years.map((year) => `<option>${year}</option>`).join('');
+    yearFilter.value = years.includes(selectedYear) ? selectedYear : years[0];
+    monthFilter.value = selectedMonth || Ipon.monthStart().slice(0, 7);
+    renderMonthly(); await loadMembers();
   }
 
   yearFilter.addEventListener('change', renderMonthly);
@@ -42,4 +47,5 @@
     const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-report-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
   });
   try { await load(); } catch (error) { Ipon.showInlineError(monthlyBody, error, load, 5); Ipon.showInlineError(memberBody, error, load, 5); }
+  Ipon.subscribeToChanges('reports', ['contributions', 'withdrawals', 'expenses', 'contribution_periods', 'members'], load);
 })();

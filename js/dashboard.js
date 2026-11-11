@@ -6,6 +6,8 @@
   let state;
   let currentActivities = [];
   let activeDate = null;
+  let hasSnapshot = false;
+  const dataStatus = document.getElementById('dashboard-data-status');
   const detailPanel = document.getElementById('day-detail-panel');
   const calendarCard = document.querySelector('.calendar-card');
   const jumpDialog = document.getElementById('calendar-jump-dialog');
@@ -104,9 +106,20 @@
       ...expenses.data.map((item) => ({ ...item, type:'expense', date:item.transaction_date }))
     ].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
   }
+  function renderEmptySnapshot() {
+    const total = document.querySelector('.tracked-total');
+    total.textContent = heroMoney(0);
+    total.classList.add('is-zero');
+    summaryValues.forEach((node) => { node.textContent = Ipon.money(0); });
+    ['dashboard-members', 'dashboard-paid', 'dashboard-unpaid'].forEach((id) => { document.getElementById(id).textContent = '0'; });
+    document.getElementById('dashboard-month-collected').textContent = Ipon.money(0);
+    renderGoalOptions([]);
+    renderCalendar([]);
+    renderPending([]);
+  }
   async function load() {
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
-    if (!state.configured || !state.profile) { const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(0); total.classList.add('is-zero'); summaryValues.forEach((node) => { node.textContent = Ipon.money(0); }); renderGoalOptions([]); renderCalendar([]); renderPending([]); return; }
+    if (!state.configured || !state.profile) { renderEmptySnapshot(); return; }
     try {
       const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'), getPending(), Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'), Ipon.client.from('v_contribution_status').select('payment_status,paid_amount').eq('period_month', start), Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false })]);
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
@@ -115,7 +128,13 @@
       const progress = progressResult.data || []; const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
       document.getElementById('dashboard-members').textContent = memberResult.count || 0; document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; renderGoalOptions(goalResult.data || []);
       renderCalendar(calendarResult.data || []); renderPending(pending.slice(0,3));
-    } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); renderCalendar([]); renderPending([]); }
+      hasSnapshot = true; dataStatus.hidden = true;
+    } catch (error) {
+      if (!hasSnapshot) renderEmptySnapshot();
+      dataStatus.textContent = hasSnapshot ? 'Refresh failed. The previous complete snapshot remains visible and may be outdated.' : 'Dashboard data is unavailable. No financial snapshot could be loaded.';
+      dataStatus.hidden = false;
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    }
   }
   async function navigateTo(date) {
     cursor = new Date(date.getFullYear(), date.getMonth(), 1);

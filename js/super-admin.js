@@ -19,6 +19,7 @@
   let groups = [];
   let requests = [];
   let accountActivities = [];
+  Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
   const views = {
     overview: ['Platform overview', 'Monitor administrator access, savings groups, and requests without exposing financial records.'],
     requests: ['Administrator requests', 'Review pending applications and create an isolated savings group when access is approved.'],
@@ -269,6 +270,8 @@
       if (values.get('user_id')) {
         await Ipon.rpc('super_admin_update_administrator', { p_user_id: values.get('user_id'), p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_group_name: values.get('group_name') });
       } else {
+        const passwordIssue = Ipon.passwordIssue(values.get('password'), [values.get('first_name'), values.get('middle_name'), values.get('last_name'), values.get('email')]);
+        if (passwordIssue) throw new Error(passwordIssue);
         const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'ADMIN', first_name: values.get('first_name'), middle_name: values.get('middle_name') || null, last_name: values.get('last_name'), email: values.get('email'), password: values.get('password'), group_name: values.get('group_name') } });
         if (error) { const detail = await error.context?.json?.().catch(() => null); throw new Error(detail?.error || error.message); }
       }

@@ -292,7 +292,10 @@ insert into public.schema_migrations (version, name) values
   ('20261110_006', 'super administrator account workflow'),
   ('20261110_007', 'complete account notifications and user workflow'),
   ('20261111_008', 'restore validation helper functions'),
-  ('20261111_009', 'use Philippine business date')
+  ('20261111_009', 'use Philippine business date'),
+  ('20261111_010', 'enable dashboard realtime'),
+  ('20261111_011', 'scope references and restrict withdrawals'),
+  ('20261111_012', 'protect temporary password state')
 on conflict (version) do nothing;
 
 create index if not exists members_name_idx on public.members (lower(full_name));
@@ -302,17 +305,17 @@ create index if not exists contributions_period_idx on public.contributions (con
 create index if not exists contributions_payment_date_idx on public.contributions (payment_date);
 create index if not exists contributions_status_idx on public.contributions (approval_status);
 create unique index if not exists contributions_reference_unique_idx
-  on public.contributions (lower(btrim(transaction_reference)))
+  on public.contributions (group_id, lower(btrim(transaction_reference)))
   where nullif(btrim(transaction_reference), '') is not null;
 create index if not exists expenses_date_idx on public.expenses (transaction_date);
 create index if not exists expenses_status_idx on public.expenses (approval_status);
 create unique index if not exists expenses_reference_unique_idx
-  on public.expenses (lower(btrim(reference_number)))
+  on public.expenses (group_id, lower(btrim(reference_number)))
   where nullif(btrim(reference_number), '') is not null;
 create index if not exists withdrawals_date_idx on public.withdrawals (transaction_date);
 create index if not exists withdrawals_status_idx on public.withdrawals (approval_status);
 create unique index if not exists withdrawals_reference_unique_idx
-  on public.withdrawals (lower(btrim(reference_number)))
+  on public.withdrawals (group_id, lower(btrim(reference_number)))
   where nullif(btrim(reference_number), '') is not null;
 create index if not exists audit_logs_record_idx on public.audit_logs (table_name, record_id, changed_at desc);
 create index if not exists audit_logs_actor_idx on public.audit_logs (changed_by, changed_at desc);
@@ -1304,6 +1307,7 @@ declare
   v_id uuid;
 begin
   if v_role is null then raise exception 'Your account is not active.' using errcode = '42501'; end if;
+  if v_role not in ('ADMIN', 'TREASURER') then raise exception 'Only administrators and treasurers can record withdrawals.' using errcode = '42501'; end if;
   v_status := case when v_role = 'ADMIN' then 'CONFIRMED' else 'PENDING' end;
 
   insert into public.withdrawals (
@@ -1367,7 +1371,7 @@ begin
   if not found then raise exception 'Withdrawal not found.' using errcode = 'P0002'; end if;
   if v_role is null then raise exception 'Your account is not active.' using errcode = '42501'; end if;
   if v_entry.approval_status <> 'PENDING' then raise exception 'Only pending withdrawals can be edited. Void a confirmed entry and create a replacement.' using errcode = '22023'; end if;
-  if v_role <> 'ADMIN' and not (v_entry.submitted_by = auth.uid() or v_role = 'TREASURER') then
+  if v_role not in ('ADMIN', 'TREASURER') then
     raise exception 'You are not allowed to edit this entry.' using errcode = '42501';
   end if;
 

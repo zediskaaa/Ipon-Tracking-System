@@ -30,7 +30,7 @@
     [password, document.getElementById('password-error')],
     [passwordConfirmation, document.getElementById('password-confirmation-error')]
   ]);
-  const passwordRule = 'Use at least 8 characters with uppercase, lowercase, and a number.';
+  const passwordRule = 'Use 12–128 characters with uppercase, lowercase, a number, and a symbol.';
   const nameRule = "Use letters, spaces, hyphens, or apostrophes only.";
   let mode = 'login';
 
@@ -74,9 +74,7 @@
     passwordToggle.setAttribute('aria-label', `${visible ? 'Hide' : 'Show'} passwords`);
   }
 
-  function passwordIsStrong(value) {
-    return value.length >= 8 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /[0-9]/.test(value);
-  }
+  const passwordStrength = Ipon.bindPasswordStrength(password, () => [firstName.value, middleName.value, lastName.value, email.value]);
 
   function validateForm() {
     const signup = mode === 'signup';
@@ -98,7 +96,7 @@
     if (!email.value) setFieldError(email, 'Enter your email address.');
     else if (!email.validity.valid) setFieldError(email, 'Enter a valid email address.');
     if (!password.value) setFieldError(password, 'Enter your password.');
-    else if (signup && !passwordIsStrong(password.value)) setFieldError(password, passwordRule);
+    else if (signup && Ipon.passwordIssue(password.value, [firstName.value, middleName.value, lastName.value, email.value])) setFieldError(password, Ipon.passwordIssue(password.value, [firstName.value, middleName.value, lastName.value, email.value]));
     if (signup && !passwordConfirmation.value) setFieldError(passwordConfirmation, 'Confirm your password.');
     else if (signup && passwordConfirmation.value !== password.value) setFieldError(passwordConfirmation, 'Passwords do not match.');
 
@@ -133,7 +131,10 @@
     passwordConfirmationField.hidden = !signup;
     passwordConfirmation.required = signup;
     passwordRequirements.hidden = !signup;
+    passwordStrength.element.hidden = !signup;
     password.autocomplete = signup ? 'new-password' : 'current-password';
+    if (signup) { password.minLength = 12; password.maxLength = 128; }
+    else { password.removeAttribute('minlength'); password.removeAttribute('maxlength'); }
     document.getElementById('request-email-help').hidden = !signup;
     document.getElementById('auth-title').textContent = signup ? 'Request administrator access' : 'Welcome back';
     document.getElementById('auth-copy').textContent = signup ? 'The Super Admin reviews administrator access requests.' : 'Sign in to open your assigned panel.';
@@ -192,7 +193,7 @@
           throw new Error('Your account is waiting for administrator approval.');
         }
         await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' });
-        window.location.replace(data.user.user_metadata?.must_change_password ? 'account.html?force_password=1' : Ipon.homeForRole(profile.role));
+        window.location.replace(data.user.app_metadata?.must_change_password ? 'account.html?force_password=1' : Ipon.homeForRole(profile.role));
       }
     } catch (error) {
       if (mode === 'signup' && (error?.code === 'weak_password' || /weak password/i.test(error?.message || ''))) {

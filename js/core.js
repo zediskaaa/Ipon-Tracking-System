@@ -121,6 +121,35 @@
     return String(value || '').trim().replace(/\s+/g, ' ');
   }
 
+  const PASSWORD_RULE = 'Use 12–128 characters with uppercase, lowercase, a number, and a symbol.';
+
+  function passwordIssue(value, personalValues = []) {
+    if (value.length < 12 || value.length > 128) return PASSWORD_RULE;
+    if (!/[a-z]/.test(value) || !/[A-Z]/.test(value) || !/[0-9]/.test(value) || !/[^A-Za-z0-9]/.test(value)) return PASSWORD_RULE;
+    const password = value.toLocaleLowerCase();
+    const personalTokens = personalValues.flatMap((item) => String(item || '').split('@')[0].split(/[^\p{L}\p{N}]+/u)).filter((item) => item.length >= 3);
+    if (personalTokens.some((item) => password.includes(item.toLocaleLowerCase()))) return 'Do not include your name or email in your password.';
+    return '';
+  }
+
+  function bindPasswordStrength(input, personalValues = () => []) {
+    const indicator = document.createElement('div');
+    indicator.className = 'password-strength';
+    indicator.innerHTML = '<meter min="0" max="5" value="0" aria-label="Password strength"></meter><small aria-live="polite">Enter a new password.</small>';
+    input.closest('.field')?.append(indicator);
+    const update = () => {
+      const value = input.value;
+      const score = [value.length >= 12, /[a-z]/.test(value), /[A-Z]/.test(value), /[0-9]/.test(value), /[^A-Za-z0-9]/.test(value)].filter(Boolean).length;
+      const issue = value ? passwordIssue(value, personalValues()) : '';
+      indicator.querySelector('meter').value = score;
+      indicator.dataset.strength = !value ? 'empty' : issue ? (score >= 4 ? 'medium' : 'weak') : 'strong';
+      indicator.querySelector('small').textContent = !value ? 'Enter a new password.' : issue || 'Strong password. All requirements are met.';
+    };
+    input.addEventListener('input', update);
+    update();
+    return { element: indicator, update };
+  }
+
   function validNamePart(value) {
     return /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(normalizeNamePart(value));
   }
@@ -253,7 +282,7 @@
           <div class="account-dialog-identity"><span class="sidebar-user-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg></span><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div>
           <div class="account-dialog-content">
             <section><h3>Profile</h3><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" pattern="(?:09[0-9]{9}|\+639[0-9]{9})"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save profile</button></div></form></section>
-            <section><h3>Sign-in security</h3><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><form id="quick-password-form" class="form-grid"><div class="field"><label for="quick-password">New password</label><input id="quick-password" name="password" type="password" minlength="8" autocomplete="new-password" required><small class="field-help">At least 8 characters with uppercase, lowercase, and a number.</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></section>
+            <section><h3>Sign-in security</h3><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><form id="quick-password-form" class="form-grid"><div class="field"><label for="quick-password">New password</label><input id="quick-password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></section>
             <section class="account-preferences"><h3>Notifications</h3><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox"></label></section>
           </div>
         </div>
@@ -334,6 +363,7 @@
     const emailForm = document.getElementById('quick-email-form');
     const passwordForm = document.getElementById('quick-password-form');
     const notificationToggle = document.getElementById('quick-notifications-enabled');
+    bindPasswordStrength(passwordForm.elements.password, () => [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
     profileForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const button = event.submitter;
@@ -364,12 +394,12 @@
       event.preventDefault();
       const password = passwordForm.elements.password.value;
       if (password !== passwordForm.elements.password_confirmation.value) return toast('Passwords do not match.', 'error');
-      if (!(password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password))) return toast('Use at least 8 characters with uppercase, lowercase, and a number.', 'error');
+      const issue = passwordIssue(password, [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
+      if (issue) return toast(issue, 'error');
       const button = event.submitter;
       setBusy(button, true, 'Changing…');
       try {
-        const { error } = await client.auth.updateUser({ password, data: { must_change_password: false } });
-        if (error) throw error;
+        await changePassword(password);
         await rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' });
         passwordForm.reset();
         toast('Password changed.');
@@ -496,7 +526,7 @@
         window.location.replace('login.html?status=pending');
         return { configured: true, profile, session };
       }
-      if (session.user.user_metadata?.must_change_password && document.body.dataset.page !== 'account') {
+      if (session.user.app_metadata?.must_change_password && document.body.dataset.page !== 'account') {
         window.location.replace('account.html?force_password=1');
         return { configured: true, profile: null, session, redirecting: true };
       }
@@ -597,6 +627,16 @@
     return data;
   }
 
+  async function changePassword(password) {
+    const { error } = await client.functions.invoke('manage-account', { body: { action: 'change-password', password } });
+    if (error) {
+      const detail = await error.context?.json?.().catch(() => null);
+      throw new Error(detail?.error || error.message);
+    }
+    const { error: refreshError } = await client.auth.refreshSession();
+    if (refreshError) throw refreshError;
+  }
+
   function subscribeToChanges(name, tables, refresh) {
     if (!client || !tables.length) return null;
     let timer;
@@ -629,7 +669,7 @@
 
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, normalizeNamePart, validNamePart, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, subscribeToChanges,
+    escapeHtml, normalizeNamePart, validNamePart, passwordIssue, bindPasswordStrength, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

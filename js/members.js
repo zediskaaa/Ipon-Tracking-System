@@ -36,6 +36,10 @@
   const pageSize = 25;
   let memberPage = 0;
   let searchTimer;
+  Ipon.bindPasswordStrength(accountForm.elements.password, () => {
+    const member = members.find((item) => item.id === accountForm.elements.member_id.value);
+    return [member?.first_name, member?.middle_name, member?.last_name, accountForm.elements.email.value];
+  });
   dateRegistered.value = Ipon.isoDate();
   if (!state.configured || !state.profile) { tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Connect Supabase to load members.</td></tr>'; return; }
 
@@ -205,6 +209,8 @@
   accountForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const button = event.submitter; const member = members.find((item) => item.id === accountForm.elements.member_id.value); if (!member) return;
+    const passwordIssue = Ipon.passwordIssue(accountForm.elements.password.value, [member.first_name, member.middle_name, member.last_name, accountForm.elements.email.value]);
+    if (passwordIssue) return Ipon.toast(passwordIssue, 'error');
     Ipon.setBusy(button, true);
     try {
       const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'MEMBER', member_id: member.id, first_name: member.first_name, middle_name: member.middle_name || null, last_name: member.last_name, email: accountForm.elements.email.value.trim(), password: accountForm.elements.password.value } });

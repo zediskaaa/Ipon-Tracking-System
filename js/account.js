@@ -7,7 +7,8 @@
   const passwordForm = document.getElementById('password-form');
   const activityBody = document.getElementById('account-activity-body');
   const notificationToggle = document.getElementById('notifications-enabled');
-  const forcePasswordChange = new URLSearchParams(location.search).get('force_password') === '1' || state.session.user.user_metadata?.must_change_password;
+  Ipon.bindPasswordStrength(passwordForm.elements.password, () => [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
+  const forcePasswordChange = new URLSearchParams(location.search).get('force_password') === '1' || state.session.user.app_metadata?.must_change_password;
   document.getElementById('temporary-password-notice').hidden = !forcePasswordChange;
 
   async function load() {
@@ -51,10 +52,11 @@
     event.preventDefault();
     const password = passwordForm.elements.password.value;
     if (password !== passwordForm.elements.password_confirmation.value) { Ipon.toast('Passwords do not match.', 'error'); return; }
-    if (!(password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password))) { Ipon.toast('Use at least 8 characters with uppercase, lowercase, and a number.', 'error'); return; }
+    const issue = Ipon.passwordIssue(password, [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
+    if (issue) { Ipon.toast(issue, 'error'); return; }
     const button = event.submitter;
     Ipon.setBusy(button, true, 'Changing…');
-    try { const { error } = await Ipon.client.auth.updateUser({ password, data: { must_change_password: false } }); if (error) throw error; await Ipon.rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }); passwordForm.reset(); Ipon.toast('Password changed.'); if (forcePasswordChange) location.replace(Ipon.homeForRole(state.profile.role)); else await load(); }
+    try { await Ipon.changePassword(password); await Ipon.rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }); passwordForm.reset(); Ipon.toast('Password changed.'); if (forcePasswordChange) location.replace(Ipon.homeForRole(state.profile.role)); else await load(); }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });

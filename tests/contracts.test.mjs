@@ -40,6 +40,16 @@ test('savings data is isolated by database-enforced group scope', () => {
   assert.match(migration, /alter table public\.members alter column group_id set not null/i);
 });
 
+test('financial references and withdrawal RPCs respect group roles', () => {
+  const schema = read('database/schema.sql');
+  const migration = read('database/migrations/20261111_011_scope_references_and_restrict_withdrawals.sql');
+  for (const column of ['transaction_reference', 'reference_number']) {
+    assert.match(schema, new RegExp(`on public\\.(?:contributions|expenses|withdrawals) \\(group_id, lower\\(btrim\\(${column}\\)\\)\\)`, 'i'));
+  }
+  assert.match(migration, /if v_role not in \('ADMIN', 'TREASURER'\) then raise exception 'Only administrators and treasurers can record withdrawals\.'/i);
+  assert.match(migration, /create or replace function public\.update_withdrawal[\s\S]*?if v_role not in \('ADMIN', 'TREASURER'\)/i);
+});
+
 test('public signup cannot bootstrap privileged access', () => {
   const schema = read('database/schema.sql');
   const handler = schema.match(/create or replace function public\.handle_new_user\(\)[\s\S]*?\$\$;/i)?.[0] || '';
@@ -82,7 +92,16 @@ test('all three role dashboards subscribe to permitted database changes', () => 
   assert.doesNotMatch(realtimeHelper, /'DELETE'/);
   assert.match(read('js/dashboard.js'), /subscribeToChanges\('dashboard'/);
   assert.match(read('js/user.js'), /subscribeToChanges\('member-dashboard'/);
+  assert.match(read('js/reports.js'), /subscribeToChanges\('reports'/);
   assert.match(read('database/migrations/20261111_010_enable_dashboard_realtime.sql'), /alter publication supabase_realtime add table/i);
+});
+
+test('dashboard refresh failures never mix stale totals with cleared sections', () => {
+  const dashboard = read('js/dashboard.js');
+  assert.match(read('dashboard.html'), /id="dashboard-data-status"[^>]*role="status"/);
+  assert.match(dashboard, /if \(!hasSnapshot\) renderEmptySnapshot\(\)/);
+  assert.match(dashboard, /previous complete snapshot remains visible and may be outdated/);
+  assert.doesNotMatch(dashboard, /catch \(error\) \{ Ipon\.toast\([\s\S]*?renderCalendar\(\[\]\); renderPending\(\[\]\); \}/);
 });
 
 test('three panels have separate routes and backend-owned account workflows', () => {
@@ -103,6 +122,33 @@ test('three panels have separate routes and backend-owned account workflows', ()
   assert.match(migration, /recipient_id = auth\.uid\(\)/i);
   assert.match(edgeFunction, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.doesNotMatch(read('js/core.js') + read('js/super-admin.js') + read('js/members.js'), /SERVICE_ROLE_KEY/);
+});
+
+test('new passwords use one strong policy in browser and Edge boundaries', () => {
+  const core = read('js/core.js');
+  const edge = read('supabase/functions/manage-account/index.ts');
+  assert.match(core, /value\.length < 12 \|\| value\.length > 128/);
+  assert.match(core, /Do not include your name or email/);
+  assert.match(edge, /password\.length >= 12 && password\.length <= 128/);
+  assert.match(edge, /Password must not contain the account name or email/);
+  for (const file of ['account.html', 'members.html', 'super-admin.html']) assert.match(read(file), /minlength="12"[^>]*maxlength="128"/i);
+  assert.match(read('js/auth.js'), /Ipon\.passwordIssue/);
+  assert.match(core, /function bindPasswordStrength/);
+  assert.match(read('README.md'), /minimum length of 12/);
+});
+
+test('temporary password state is server-owned and cleared by the Edge workflow', () => {
+  const core = read('js/core.js');
+  const auth = read('js/auth.js');
+  const edge = read('supabase/functions/manage-account/index.ts');
+  const migration = read('database/migrations/20261111_012_protect_temporary_password_state.sql');
+  assert.match(edge, /app_metadata: \{ must_change_password: true \}/);
+  assert.match(edge, /body\.action === 'change-password'/);
+  assert.match(edge, /updateUserById\(userResult\.user\.id/);
+  assert.match(core + auth, /user\.app_metadata\?\.must_change_password/);
+  assert.doesNotMatch(core + auth, /user\.user_metadata\?\.must_change_password/);
+  assert.doesNotMatch(core, /updateUser\(\{ password, data:/);
+  assert.match(migration, /raw_app_meta_data[\s\S]*?raw_user_meta_data[\s\S]*?- 'must_change_password'/);
 });
 
 test('account settings open from the responsive identity control', () => {
