@@ -276,9 +276,11 @@ test('SQL dollar quotes are balanced in the baseline and every migration', () =>
 test('pages keep baseline security and accessible table headings', () => {
   const pages = readdirSync(root).filter((name) => name.endsWith('.html'));
   assert.ok(pages.length >= 10);
+  assert.match(read('assets/favicon.svg'), /<svg[^>]+viewBox="0 0 64 64"/i);
   for (const file of pages) {
     const html = read(file);
     assert.match(html, /Content-Security-Policy/i, `${file} must declare a CSP`);
+    assert.match(html, /<link rel="icon" href="assets\/favicon\.svg" type="image\/svg\+xml">/i, `${file} must use the IPON favicon`);
     assert.doesNotMatch(html, /<th>\s*<\/th>/i, `${file} has an unlabeled table column`);
   }
   assert.match(read('login.html'), /role="tab"/);
