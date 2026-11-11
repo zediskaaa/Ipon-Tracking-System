@@ -30,7 +30,7 @@
     [password, document.getElementById('password-error')],
     [passwordConfirmation, document.getElementById('password-confirmation-error')]
   ]);
-  const passwordRule = 'Use 12–128 characters with uppercase, lowercase, a number, and a symbol.';
+  const passwordRule = 'Use at least 12 characters with uppercase, lowercase, a number, and a symbol.';
   const nameRule = "Use letters, spaces, hyphens, or apostrophes only.";
   let mode = 'login';
 

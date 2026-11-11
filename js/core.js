@@ -121,7 +121,7 @@
     return String(value || '').trim().replace(/\s+/g, ' ');
   }
 
-  const PASSWORD_RULE = 'Use 12–128 characters with uppercase, lowercase, a number, and a symbol.';
+  const PASSWORD_RULE = 'Use at least 12 characters with uppercase, lowercase, a number, and a symbol.';
 
   function passwordIssue(value, personalValues = []) {
     if (value.length < 12 || value.length > 128) return PASSWORD_RULE;
