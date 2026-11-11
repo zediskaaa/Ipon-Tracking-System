@@ -269,17 +269,10 @@
     document.querySelectorAll('[data-notifications-open]').forEach((button) => button.onclick = () => {
       if (!notifications) return;
       if (notifications.open) return notifications.close();
-      const buttonRect = button.getBoundingClientRect();
-      const sidebarRect = button.closest('.app-sidebar')?.getBoundingClientRect();
       if (window.matchMedia('(max-width:720px)').matches) {
-        notifications.style.setProperty('--notification-top', `${Math.round(buttonRect.bottom + 8)}px`);
-        notifications.style.removeProperty('--notification-left');
-        notifications.style.removeProperty('--notification-bottom');
-      } else {
-        notifications.style.setProperty('--notification-left', `${Math.round((sidebarRect?.right || buttonRect.right) + 12)}px`);
-        notifications.style.setProperty('--notification-bottom', `${Math.max(16, Math.round(window.innerHeight - buttonRect.bottom))}px`);
-        notifications.style.removeProperty('--notification-top');
-      }
+        const headerBottom = button.closest('.app-sidebar')?.getBoundingClientRect().bottom || 68;
+        notifications.style.setProperty('--notification-top', `${Math.round(headerBottom + 8)}px`);
+      } else notifications.style.removeProperty('--notification-top');
       notifications.show();
     });
     document.querySelectorAll('[data-notifications-close]').forEach((button) => button.onclick = () => notifications?.close());

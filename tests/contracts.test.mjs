@@ -138,7 +138,9 @@ test('notifications use a responsive non-blocking activity panel', () => {
   assert.doesNotMatch(core, /notifications\?\.showModal\(\)/);
   assert.match(core, /notification-item-icon/);
   assert.match(core, /notification-unread/);
-  assert.match(css, /\.notification-dialog\{position:fixed/);
+  assert.match(core, /headerBottom = button\.closest\('\.app-sidebar'\)/);
+  assert.match(css, /\.notification-dialog\{position:fixed;[^}]*inset:16px 16px auto auto;[^}]*height:min\(620px/);
+  assert.match(css, /\.notification-list\{[^}]*flex:1;[^}]*overflow-y:auto/);
   assert.match(css, /@media\(max-width:720px\)\{\.notification-dialog/);
 });
 
