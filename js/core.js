@@ -527,6 +527,8 @@
   }
 
   async function signOut() {
+    const accepted = await confirmAction({ title: 'Sign out?', message: 'You will need to sign in again to access the system.', acceptLabel: 'Sign out' });
+    if (!accepted) return;
     try {
       if (client) await withTimeout(client.auth.signOut({ scope: 'local' }));
     } finally {

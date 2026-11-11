@@ -210,8 +210,15 @@
     }
     if (reset) {
       if (!profile.email) return Ipon.toast('This administrator has no saved email address.', 'error');
-      const { error } = await Ipon.client.auth.resetPasswordForEmail(profile.email, { redirectTo: new URL('account.html', location.href).href });
-      if (error) Ipon.toast(Ipon.friendlyError(error), 'error'); else Ipon.toast('Password recovery email sent.');
+      const accepted = await Ipon.confirmAction({ title: 'Send password recovery email?', message: `A password recovery link will be sent to ${profile.email}.`, acceptLabel: 'Send email' });
+      if (!accepted) return;
+      Ipon.setBusy(reset, true, 'Sending…');
+      try {
+        const { error } = await Ipon.client.auth.resetPasswordForEmail(profile.email, { redirectTo: new URL('account.html', location.href).href });
+        if (error) throw error;
+        Ipon.toast('Password recovery email sent.');
+      } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+      finally { Ipon.setBusy(reset, false); }
       return;
     }
     if (archive) {

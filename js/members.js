@@ -181,8 +181,15 @@
       accountDialog.showModal(); accountForm.elements.email.focus();
     } else if (button.dataset.action === 'reset') {
       const account = accountsByMember.get(member.id); if (!account?.email) return;
-      const { error } = await Ipon.client.auth.resetPasswordForEmail(account.email, { redirectTo: new URL('account.html', location.href).href });
-      if (error) Ipon.toast(Ipon.friendlyError(error), 'error'); else Ipon.toast('Password recovery email sent.');
+      const accepted = await Ipon.confirmAction({ title: 'Send password recovery email?', message: `A password recovery link will be sent to ${account.email}.`, acceptLabel: 'Send email' });
+      if (!accepted) return;
+      Ipon.setBusy(button, true, 'Sending…');
+      try {
+        const { error } = await Ipon.client.auth.resetPasswordForEmail(account.email, { redirectTo: new URL('account.html', location.href).href });
+        if (error) throw error;
+        Ipon.toast('Password recovery email sent.');
+      } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+      finally { Ipon.setBusy(button, false); }
     } else {
       const accepted = await Ipon.confirmAction({ title: 'Deactivate member?', message: `${member.full_name} will stop receiving new contribution periods. Existing records remain available.`, acceptLabel: 'Deactivate' });
       if (!accepted) return;

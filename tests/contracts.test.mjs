@@ -128,6 +128,7 @@ test('logout protects restored pages from browser history', () => {
   assert.match(core, /addEventListener\('pagehide'[\s\S]*?visibility = 'hidden'/);
   assert.match(core, /addEventListener\('pageshow'[\s\S]*?event\.persisted[\s\S]*?auth\.getSession\(\)[\s\S]*?location\.replace\('login\.html'\)/);
   assert.match(core, /homeForRole, signOut, toast/);
+  assert.match(core, /signOut\(\)[\s\S]*?confirmAction\(\{ title: 'Sign out\?'/);
   assert.match(read('js/dashboard.js'), /addEventListener\('click', Ipon\.signOut\)/);
 });
 
@@ -145,18 +146,25 @@ test('notifications use a responsive non-blocking activity panel', () => {
   assert.match(css, /\.sidebar-utility\[data-notifications-open\]\{position:fixed;[^}]*inset:16px 16px auto auto;[^}]*width:44px/);
   assert.match(css, /\.notification-dialog\{position:fixed;[^}]*inset:68px 16px auto auto;[^}]*height:min\(620px/);
   assert.match(css, /\.notification-list\{[^}]*flex:1;[^}]*overflow-y:auto/);
-  assert.match(css, /@media\(max-width:720px\)\{\.app-sidebar-footer \.sidebar-utilities\{order:3\}[\s\S]*?\.notification-dialog/);
+  assert.match(css, /@media\(max-width:720px\)\{\.app-sidebar-footer \.sidebar-utilities\{order:1\}[\s\S]*?\.notification-dialog/);
 });
 
-test('compact dashboard header keeps logout, profile, and notifications in one ordered row', () => {
+test('compact dashboard header keeps notifications, profile, and logout in one ordered row', () => {
   const dashboardCss = read('css/hero-plates.css');
   const appCss = read('css/app.css');
   assert.match(dashboardCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar \.app-sidebar-footer\s*\{[^}]*grid-row:1/);
-  assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-signout\s*\{[^}]*order:1/);
+  assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-signout\s*\{[^}]*order:3/);
   assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-user-card\s*\{[^}]*order:2/);
-  assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-utilities\s*\{[^}]*order:3/);
+  assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-utilities\s*\{[^}]*order:1/);
   assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-utility\[data-donate-open\]\s*\{\s*display:none/);
-  assert.match(appCss, /@media\(max-width:720px\)\{\.app-sidebar-footer \.sidebar-utilities\{order:3\}\.sidebar-user-card\{order:2\}\.sidebar-signout\{order:1\}/);
+  assert.match(appCss, /@media\(max-width:720px\)\{\.app-sidebar-footer \.sidebar-utilities\{order:1\}\.sidebar-user-card\{order:2\}\.sidebar-signout\{order:3\}/);
+});
+
+test('security-sensitive email recovery actions require confirmation', () => {
+  const members = read('js/members.js');
+  const superAdmin = read('js/super-admin.js');
+  assert.match(members, /action === 'reset'[\s\S]*?confirmAction\([\s\S]*?resetPasswordForEmail/);
+  assert.match(superAdmin, /if \(reset\)[\s\S]*?confirmAction\([\s\S]*?resetPasswordForEmail/);
 });
 
 test('deadline backfill bypasses only the group-scope trigger during migration', () => {
