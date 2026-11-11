@@ -154,6 +154,32 @@
     return /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(normalizeNamePart(value));
   }
 
+  const NAME_RULE = 'Use letters, spaces, hyphens, or apostrophes only.';
+
+  function validateNameInput(input) {
+    const value = normalizeNamePart(input.value);
+    const message = !value && input.required ? 'Enter this name.' : value && !validNamePart(value) ? NAME_RULE : '';
+    input.setCustomValidity(message);
+    input.toggleAttribute('aria-invalid', Boolean(message));
+    const error = (input.getAttribute('aria-describedby') || '').split(/\s+/).map((id) => document.getElementById(id)).find((element) => element?.classList.contains('field-error'));
+    if (error) { error.textContent = message; error.hidden = !message; }
+    return !message;
+  }
+
+  function prepareNameInputs() {
+    document.querySelectorAll('input[name="first_name"],input[name="middle_name"],input[name="last_name"]').forEach((input) => {
+      if (input.dataset.nameBound) return;
+      input.dataset.nameBound = 'true';
+      input.title = NAME_RULE;
+      input.addEventListener('input', () => {
+        input.value = input.value.replace(/[^\p{L}\p{M} '\u2019-]/gu, '');
+        if (input.hasAttribute('aria-invalid')) validateNameInput(input);
+      });
+      input.addEventListener('blur', () => validateNameInput(input));
+      input.addEventListener('invalid', () => validateNameInput(input));
+    });
+  }
+
   const PHONE_RULE = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
 
   function validPhoneNumber(value) {
@@ -333,6 +359,7 @@
       </dialog>`);
     bindUtilityDialogs();
     bindAccountDialog();
+    prepareNameInputs();
     preparePhoneInputs();
   }
 
@@ -541,6 +568,7 @@
 
   async function init(options = {}) {
     mountShell();
+    prepareNameInputs();
     preparePhoneInputs();
     prepareResponsiveTables();
     applyInputDateBounds();
@@ -717,7 +745,7 @@
 
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, normalizeNamePart, validNamePart, validPhoneNumber, validatePhoneInput, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, subscribeToChanges,
+    escapeHtml, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

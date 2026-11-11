@@ -159,6 +159,13 @@
   passwordToggle.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
   document.getElementById('show-login').addEventListener('click', () => setMode('login'));
   document.getElementById('show-signup').addEventListener('click', () => setMode('signup'));
+  const policyDialog = document.getElementById('policy-dialog');
+  document.querySelectorAll('[data-policy-open]').forEach((button) => button.addEventListener('click', () => {
+    const policy = button.dataset.policyOpen;
+    document.getElementById('policy-title').textContent = policy === 'privacy' ? 'Privacy policy' : 'Terms of use';
+    policyDialog.querySelectorAll('[data-policy-content]').forEach((section) => { section.hidden = section.dataset.policyContent !== policy; });
+    policyDialog.showModal();
+  }));
   document.querySelector('.auth-tabs').addEventListener('keydown', (event) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();

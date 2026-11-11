@@ -160,6 +160,28 @@ test('phone fields reject letters and incomplete accounts finish setup before pa
   assert.match(read('database/migrations/20261112_014_require_profile_mobile.sql'), /if v_contact is null[\s\S]*?Mobile number is required/);
 });
 
+test('name fields reject numbers and unsupported symbols across every form', () => {
+  const core = read('js/core.js');
+  assert.match(core, /function prepareNameInputs\(\)/);
+  assert.match(core, /input\[name="first_name"\],input\[name="middle_name"\],input\[name="last_name"\]/);
+  assert.ok(core.includes("input.value = input.value.replace(/[^\\p{L}\\p{M} '\\u2019-]/gu, '');"));
+  assert.match(core, /input\.addEventListener\('blur', \(\) => validateNameInput\(input\)\)/);
+  assert.match(core, /prepareNameInputs\(\);[\s\S]*preparePhoneInputs\(\)/);
+});
+
+test('login provides development, terms, and privacy disclosures', () => {
+  const html = read('login.html');
+  const auth = read('js/auth.js');
+  assert.match(html, /Development preview/);
+  assert.match(html, /IPON is still under active development/);
+  assert.match(html, /data-policy-open="terms"/);
+  assert.match(html, /data-policy-open="privacy"/);
+  assert.match(html, /<dialog class="policy-dialog" id="policy-dialog" aria-labelledby="policy-title">/);
+  assert.match(html, /tracking system only and does not hold, transfer, receive, or safeguard money/);
+  assert.match(html, /contact your assigned administrator/);
+  assert.match(auth, /policyDialog\.showModal\(\)/);
+});
+
 test('temporary password state is server-owned and cleared by the Edge workflow', () => {
   const core = read('js/core.js');
   const auth = read('js/auth.js');
