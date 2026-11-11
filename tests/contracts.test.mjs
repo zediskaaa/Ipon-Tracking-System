@@ -138,10 +138,13 @@ test('notifications use a responsive non-blocking activity panel', () => {
   assert.doesNotMatch(core, /notifications\?\.showModal\(\)/);
   assert.match(core, /notification-item-icon/);
   assert.match(core, /notification-unread/);
+  assert.doesNotMatch(core, /<span>Notifications<\/span>/);
+  assert.doesNotMatch(read('dashboard.html'), /<span>Notifications<\/span>/);
   assert.match(core, /headerBottom = button\.closest\('\.app-sidebar'\)/);
-  assert.match(css, /\.notification-dialog\{position:fixed;[^}]*inset:16px 16px auto auto;[^}]*height:min\(620px/);
+  assert.match(css, /\.sidebar-utility\[data-notifications-open\]\{position:fixed;[^}]*inset:16px 16px auto auto;[^}]*width:44px/);
+  assert.match(css, /\.notification-dialog\{position:fixed;[^}]*inset:68px 16px auto auto;[^}]*height:min\(620px/);
   assert.match(css, /\.notification-list\{[^}]*flex:1;[^}]*overflow-y:auto/);
-  assert.match(css, /@media\(max-width:720px\)\{\.notification-dialog/);
+  assert.match(css, /@media\(max-width:720px\)\{\.app-sidebar-footer \.sidebar-utilities\{order:3\}[\s\S]*?\.notification-dialog/);
 });
 
 test('deadline backfill bypasses only the group-scope trigger during migration', () => {
