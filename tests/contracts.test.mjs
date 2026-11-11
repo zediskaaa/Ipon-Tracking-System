@@ -339,10 +339,13 @@ test('administrator request form uses a desktop grid with a mobile fallback', ()
   const html = read('login.html');
   const script = read('js/auth.js');
   assert.match(script, /document\.body\.classList\.toggle\('is-request-mode', signup\)/);
+  assert.match(html, /body\.is-request-mode \.login-page\{grid-template-columns:minmax\(430px/);
+  assert.match(html, /body\.is-request-mode \.login-story\{display:flex\}/);
   assert.match(html, /body\.is-request-mode \.login-card \.form-grid\{grid-template-columns:repeat\(6/);
   assert.match(html, /#first-name-field,#middle-name-field,#last-name-field\)\{grid-column:span 2\}/);
   assert.match(html, /#contact-number-field,#email-field,#password-field,#password-confirmation-field\)\{grid-column:span 3\}/);
   assert.match(html, /@media\(max-width:780px\)[\s\S]*?body\.is-request-mode \.login-card \.form-grid\{grid-template-columns:1fr/);
+  assert.match(html, /@media\(max-width:1180px\)[\s\S]*?body\.is-request-mode \.login-story\{display:none\}/);
 });
 
 test('mobile navigation and data tables do not require horizontal scrolling', () => {
