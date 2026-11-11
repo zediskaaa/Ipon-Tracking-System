@@ -279,6 +279,7 @@ test('HTML dialogs are balanced and page IDs remain unique', () => {
 
 test('modal forms and settings layout include responsive fallbacks', () => {
   const css = read('css/app.css');
+  assert.match(css, /\.field\s*\{[^}]*align-content:start/i);
   assert.match(css, /\.form-grid-3\s*\{[^}]*grid-template-columns:repeat\(3/i);
   assert.match(css, /\.settings-grid\s*\{[^}]*grid-template-columns:/i);
   assert.match(css, /\.form-dialog\s*\{[^}]*max-height:/i);

@@ -148,7 +148,7 @@ a { color:inherit; }
 .loading-row td { color:var(--muted); font-family:Arial,sans-serif; text-align:center; }
 .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
 .form-grid-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
-.field { display:grid; min-width:0; gap:7px; }
+.field { display:grid; min-width:0; align-content:start; gap:7px; }
 .field-wide { grid-column:1/-1; }
 .field label { font-family:Arial,sans-serif; font-size:13px; font-weight:700; }
 .field input,.field select,.field textarea { width:100%; min-width:0; max-width:100%; min-height:44px; padding:10px 12px; border:1px solid #9a9c93; border-radius:6px; outline:none; background:rgba(255,252,247,.72); color:var(--ink); }
