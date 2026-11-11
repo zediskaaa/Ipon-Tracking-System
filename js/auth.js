@@ -75,6 +75,7 @@
   }
 
   const passwordStrength = Ipon.bindPasswordStrength(password, () => [firstName.value, middleName.value, lastName.value, email.value]);
+  passwordStrength.element.hidden = true;
 
   function validateForm() {
     const signup = mode === 'signup';

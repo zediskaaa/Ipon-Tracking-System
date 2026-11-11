@@ -133,6 +133,7 @@ test('new passwords use one strong policy in browser and Edge boundaries', () =>
   assert.match(edge, /Password must not contain the account name or email/);
   for (const file of ['account.html', 'members.html', 'super-admin.html']) assert.match(read(file), /minlength="12"[^>]*maxlength="128"/i);
   assert.match(read('js/auth.js'), /Ipon\.passwordIssue/);
+  assert.match(read('js/auth.js'), /passwordStrength\.element\.hidden = true/);
   assert.match(core, /function bindPasswordStrength/);
   assert.match(read('README.md'), /minimum length of 12/);
 });
