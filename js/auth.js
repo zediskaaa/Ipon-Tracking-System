@@ -116,9 +116,10 @@
     signupTab.classList.toggle('is-active', signup);
     loginTab.setAttribute('aria-selected', String(!signup));
     signupTab.setAttribute('aria-selected', String(signup));
-    loginTab.tabIndex = signup ? -1 : 0;
-    signupTab.tabIndex = signup ? 0 : -1;
-    form.setAttribute('aria-labelledby', signup ? 'show-signup' : 'show-login');
+    loginTab.tabIndex = 0;
+    signupTab.tabIndex = -1;
+    loginTab.textContent = signup ? 'Back to sign in' : 'Sign in';
+    form.setAttribute('aria-labelledby', signup ? 'auth-title' : 'show-login');
     firstNameField.hidden = !signup;
     middleNameField.hidden = !signup;
     lastNameField.hidden = !signup;
@@ -153,6 +154,11 @@
   document.querySelector('.auth-tabs').addEventListener('keydown', (event) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
+    if (mode === 'signup') {
+      setMode('login');
+      document.getElementById('show-login').focus();
+      return;
+    }
     const nextMode = event.key === 'ArrowLeft' || event.key === 'Home' ? 'login' : 'signup';
     setMode(nextMode);
     document.getElementById(nextMode === 'login' ? 'show-login' : 'show-signup').focus();
