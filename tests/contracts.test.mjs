@@ -303,8 +303,18 @@ test('mobile navigation and data tables do not require horizontal scrolling', ()
   assert.match(dashboardCss, /@media \(max-width:860px\)[\s\S]*?\.record-entry-action\s*\{[^}]*width:100%/i);
   assert.match(core, /function prepareResponsiveTables\(\)/);
   assert.match(core, /cell\.dataset\.label/);
+  assert.match(css, /html\s*\{[^}]*overflow-x:clip/);
+  assert.match(css, /body\s*\{[^}]*overflow-x:clip/);
   assert.doesNotMatch(css.match(/@media \(max-width:720px\)[\s\S]*?(?=@media \(prefers-reduced-motion)/)?.[0] || '', /overflow-x:auto/i);
   assert.doesNotMatch(dashboardCss.match(/@media \(max-width:860px\)[\s\S]*?(?=@media \(prefers-reduced-motion)/)?.[0] || '', /overflow-x:auto/i);
+});
+
+test('reports keep a compact desktop rhythm', () => {
+  const html = read('reports.html');
+  const css = read('css/app.css');
+  assert.equal((html.match(/class="panel report-panel"/g) || []).length, 3);
+  assert.match(css, /\.report-panel\s*\{[^}]*padding:20px 22px/);
+  assert.match(css, /\.report-chart\{height:240px\}/);
 });
 
 test('loading feedback uses savings motion with reduced-motion support', () => {
