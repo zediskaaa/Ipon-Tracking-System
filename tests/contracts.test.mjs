@@ -365,14 +365,16 @@ test('calendar supports direct month and year navigation', () => {
   assert.match(css, /\.mobile-calendar-jump/);
 });
 
-test('dashboard identifies the active calendar goal without a default completion metric', () => {
+test('dashboard lets users choose the calendar tracking goal without a default completion metric', () => {
   const html = read('dashboard.html');
   const script = read('js/dashboard.js');
   const css = read('css/app.css');
-  assert.match(html, /id="calendar-goal">General savings/);
-  assert.match(html, /id="mobile-calendar-goal">General savings/);
+  assert.match(html, /id="calendar-goal-select"[^>]*>[\s\S]*?General savings/);
+  assert.match(html, /id="mobile-calendar-goal-select"[^>]*>[\s\S]*?General savings/);
   assert.doesNotMatch(html, /id="dashboard-completion"/);
-  assert.match(script, /from\('savings_goals'\)[\s\S]*?eq\('status', 'ACTIVE'\)/);
+  assert.match(script, /from\('savings_goals'\)\.select\('id,title'\)[\s\S]*?eq\('status', 'ACTIVE'\)/);
+  assert.match(script, /renderGoalOptions\(goalResult\.data \|\| \[\]\)/);
+  assert.match(script, /goalSelects\.forEach\(\(select\) => select\.addEventListener\('change'/);
   assert.match(script, /subscribeToChanges\('dashboard',[\s\S]*?'savings_goals'/);
   assert.match(css, /\.admin-progress\{grid-column:1\/-1;grid-template-columns:repeat\(4/);
 });
