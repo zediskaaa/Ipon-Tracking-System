@@ -166,10 +166,15 @@ test('account settings open from the responsive identity control', () => {
   assert.match(core, /data-account-open/);
   assert.match(dashboard, /data-account-open/);
   assert.match(core, /id="account-dialog"/);
+  assert.match(core, /class="account-card account-profile-card"/);
+  assert.match(core, /class="account-side-stack"/);
+  assert.match(core, /class="account-password-disclosure"/);
   assert.match(core, /function bindAccountDialog\(\)/);
   assert.match(core, /update_own_profile/);
   assert.doesNotMatch(core, /\['account', 'account\.html', 'My account'/);
   assert.match(css, /grid-template-columns:repeat\(auto-fit,minmax\(44px,1fr\)\)/);
+  assert.match(css, /\.account-dialog-header\{[^}]*linear-gradient\(125deg,#062d23/);
+  assert.match(css, /\.account-dialog-content\{[^}]*grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
   assert.match(css, /\.account-dialog\{width:100%;height:100dvh/);
 });
 
