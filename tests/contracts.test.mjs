@@ -193,6 +193,17 @@ test('account settings open from the responsive identity control', () => {
   assert.match(css, /\.account-dialog\{width:100%;height:100dvh/);
 });
 
+test('first-login account setup opens as a locked responsive modal', () => {
+  const html = read('account.html');
+  const script = read('js/account.js');
+  const css = read('css/app.css');
+  assert.match(html, /<dialog class="account-dialog account-page-dialog" id="account-page-dialog" aria-labelledby="account-page-title">/);
+  assert.match(script, /pageDialog\.showModal\(\)/);
+  assert.match(script, /pageDialog\.addEventListener\('cancel',[\s\S]*event\.preventDefault\(\)/);
+  assert.match(script, /closeButton\.hidden = onboarding/);
+  assert.match(css, /body\.account-onboarding \.account-page-dialog \.account-grid>section:nth-child\(n\+3\)\{display:none\}/);
+});
+
 test('calendar navigation includes the administrator audit log', () => {
   assert.match(read('dashboard.html'), /href="audit\.html" data-role="ADMIN"[^>]*>[\s\S]*?<span>Audit log<\/span>/);
 });

@@ -7,12 +7,32 @@
   const passwordForm = document.getElementById('password-form');
   const activityBody = document.getElementById('account-activity-body');
   const notificationToggle = document.getElementById('notifications-enabled');
+  const pageDialog = document.getElementById('account-page-dialog');
+  const closeButton = document.getElementById('account-page-close');
   Ipon.bindPasswordStrength(passwordForm.elements.password, () => [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
   const params = new URLSearchParams(location.search);
-  const onboarding = params.get('force_password') === '1' || params.get('complete_profile') === '1';
+  let onboarding = params.get('force_password') === '1' || params.get('complete_profile') === '1';
   let passwordChangeRequired = params.get('force_password') === '1' || state.session.user.app_metadata?.must_change_password;
   let profileComplete = false;
   document.getElementById('temporary-password-notice').hidden = !passwordChangeRequired;
+
+  function updateDialogMode() {
+    document.body.classList.toggle('account-onboarding', onboarding);
+    closeButton.hidden = onboarding;
+    document.getElementById('account-page-title').textContent = onboarding ? 'Complete your account' : 'My account';
+    document.getElementById('account-page-copy').textContent = onboarding ? 'Add the missing details before opening your assigned panel.' : 'Keep your profile and sign-in security current.';
+  }
+
+  function closeAccount() {
+    if (!onboarding) location.replace(Ipon.homeForRole(state.profile.role));
+  }
+
+  closeButton.addEventListener('click', closeAccount);
+  pageDialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closeAccount();
+  });
+  updateDialogMode();
 
   function finishSetupIfReady() {
     if (onboarding && profileComplete && !passwordChangeRequired) location.replace(Ipon.homeForRole(state.profile.role));
@@ -31,11 +51,17 @@
     profileForm.elements.last_name.value = profile.last_name || profile.full_name?.split(' ').slice(1).join(' ') || '';
     profileForm.elements.contact_number.value = profile.contact_number || '';
     profileComplete = !Ipon.profileNeedsSetup(profile);
+    if (!profileComplete) onboarding = true;
+    updateDialogMode();
     document.getElementById('profile-setup-notice').hidden = profileComplete;
     emailForm.elements.email.value = profile.email || state.session.user.email || '';
     notificationToggle.checked = profile.notifications_enabled !== false;
     const activities = activityResult.data || [];
     activityBody.innerHTML = activities.length ? activities.map((row) => `<tr><td>${Ipon.escapeHtml(row.event.replaceAll('_', ' ').toLowerCase().replace(/^./, (character) => character.toUpperCase()))}</td><td>${Ipon.dateLabel(row.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">No account activity recorded yet.</td></tr>';
+    if (onboarding) {
+      const nextField = !profile.first_name ? profileForm.elements.first_name : !profile.last_name ? profileForm.elements.last_name : !profile.contact_number ? profileForm.elements.contact_number : passwordChangeRequired ? passwordForm.elements.password : null;
+      nextField?.focus();
+    }
   }
 
   profileForm.addEventListener('submit', async (event) => {
@@ -78,5 +104,6 @@
     finally { notificationToggle.disabled = false; }
   });
 
+  pageDialog.showModal();
   try { await load(); } catch (error) { Ipon.showInlineError(activityBody, error, load, 2); }
 })();
