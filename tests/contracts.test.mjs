@@ -327,6 +327,15 @@ test('reports keep a compact desktop rhythm', () => {
   assert.match(css, /\.report-chart\{height:240px\}/);
 });
 
+test('shared desktop surfaces use a compact layout rhythm', () => {
+  const css = read('css/app.css');
+  assert.match(css, /\.workspace\s*\{[^}]*padding:28px clamp\(20px,3vw,44px\) 48px/);
+  assert.match(css, /\.panel\s*\{[^}]*padding:20px 22px/);
+  assert.match(css, /\.data-table th,\.data-table td\s*\{[^}]*padding:11px 10px/);
+  assert.match(css, /\.form-grid\s*\{[^}]*gap:16px/);
+  assert.match(css, /@media \(max-width:980px\)[\s\S]*?\.workspace\s*\{[^}]*padding:26px 22px 44px/);
+});
+
 test('loading feedback uses savings motion with reduced-motion support', () => {
   const core = read('js/core.js');
   const css = read('css/app.css');
