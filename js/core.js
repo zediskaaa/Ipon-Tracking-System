@@ -269,7 +269,9 @@
     document.querySelectorAll('[data-notifications-open]').forEach((button) => button.onclick = () => {
       if (!notifications) return;
       if (notifications.open) return notifications.close();
-      if (window.matchMedia('(max-width:720px)').matches) {
+      const compactHeader = window.matchMedia('(max-width:720px)').matches
+        || (button.closest('.dashboard-sidebar') && window.matchMedia('(max-width:860px)').matches);
+      if (compactHeader) {
         const headerBottom = button.closest('.app-sidebar')?.getBoundingClientRect().bottom || 68;
         notifications.style.setProperty('--notification-top', `${Math.round(headerBottom + 8)}px`);
       } else notifications.style.removeProperty('--notification-top');
