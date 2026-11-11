@@ -154,6 +154,51 @@
     return /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(normalizeNamePart(value));
   }
 
+  const PHONE_RULE = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
+
+  function validPhoneNumber(value) {
+    return /^(?:09\d{9}|\+639\d{9})$/.test(String(value || '').trim());
+  }
+
+  function validatePhoneInput(input) {
+    const value = input.value.trim();
+    const message = !value && input.required ? 'Enter your mobile number.' : value && !validPhoneNumber(value) ? PHONE_RULE : '';
+    input.setCustomValidity(message);
+    input.toggleAttribute('aria-invalid', Boolean(message));
+    const error = (input.getAttribute('aria-describedby') || '').split(/\s+/).map((id) => document.getElementById(id)).find((element) => element?.classList.contains('field-error'));
+    if (error) { error.textContent = message; error.hidden = !message; }
+    return !message;
+  }
+
+  function preparePhoneInputs() {
+    document.querySelectorAll('input[type="tel"]').forEach((input) => {
+      if (input.dataset.phoneBound) return;
+      input.dataset.phoneBound = 'true';
+      input.inputMode = 'tel';
+      input.maxLength = 13;
+      input.title = PHONE_RULE;
+      input.addEventListener('input', () => {
+        const startsWithPlus = input.value.trimStart().startsWith('+');
+        const digits = input.value.replace(/\D/g, '').slice(0, startsWithPlus ? 12 : 11);
+        input.value = startsWithPlus ? `+${digits}` : digits;
+        if (input.hasAttribute('aria-invalid')) validatePhoneInput(input);
+      });
+      input.addEventListener('blur', () => validatePhoneInput(input));
+      input.addEventListener('invalid', () => validatePhoneInput(input));
+    });
+  }
+
+  function profileNeedsSetup(profile) {
+    return !profile?.first_name?.trim() || !profile?.last_name?.trim() || !/^09\d{9}$/.test(profile?.contact_number || '');
+  }
+
+  function accountSetupUrl(profile, user) {
+    const params = new URLSearchParams();
+    if (user.app_metadata?.must_change_password) params.set('force_password', '1');
+    if (profileNeedsSetup(profile)) params.set('complete_profile', '1');
+    return params.size ? `account.html?${params}` : '';
+  }
+
   function money(value) {
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
       .format(Number(value || 0));
@@ -280,7 +325,7 @@
         <div class="account-dialog-sheet">
           <header class="account-dialog-header"><div class="account-dialog-title"><span class="account-header-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg></span><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg></span><div><h3>Profile</h3><p>Update your personal information.</p></div></header><div class="account-profile-identity"><span class="account-profile-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg></span><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" pattern="(?:09[0-9]{9}|\+639[0-9]{9})"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form></section>
+            <section class="account-card account-profile-card"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg></span><div><h3>Profile</h3><p>Update your personal information.</p></div></header><div class="account-profile-identity"><span class="account-profile-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg></span><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.1 7.5 9.5 4.3-1.4 7.5-4.7 7.5-9.5V6L12 3Z"/><path d="M9.5 12.2 11.3 14l3.5-4"/></svg></span><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field"><label for="quick-password">New password</label><input id="quick-password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg></span><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label></section></div>
           </div>
@@ -288,6 +333,7 @@
       </dialog>`);
     bindUtilityDialogs();
     bindAccountDialog();
+    preparePhoneInputs();
   }
 
   function bindUtilityDialogs() {
@@ -365,6 +411,7 @@
     bindPasswordStrength(passwordForm.elements.password, () => [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
     profileForm.addEventListener('submit', async (event) => {
       event.preventDefault();
+      if (!validatePhoneInput(profileForm.elements.contact_number)) return profileForm.elements.contact_number.focus();
       const button = event.submitter;
       const values = new FormData(profileForm);
       setBusy(button, true);
@@ -494,6 +541,7 @@
 
   async function init(options = {}) {
     mountShell();
+    preparePhoneInputs();
     prepareResponsiveTables();
     applyInputDateBounds();
     setLoading(true);
@@ -515,7 +563,7 @@
       if (!session) return { configured: true, profile: null, session: null };
 
       const { data: profile, error } = await withTimeout(client.from('profiles')
-        .select('id,full_name,role,status,member_id,group_id')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id')
         .eq('id', session.user.id)
         .single());
       if (error) throw error;
@@ -525,8 +573,9 @@
         window.location.replace('login.html?status=pending');
         return { configured: true, profile, session };
       }
-      if (session.user.app_metadata?.must_change_password && document.body.dataset.page !== 'account') {
-        window.location.replace('account.html?force_password=1');
+      const setupUrl = accountSetupUrl(profile, session.user);
+      if (setupUrl && document.body.dataset.page !== 'account') {
+        window.location.replace(setupUrl);
         return { configured: true, profile: null, session, redirecting: true };
       }
       if (options.requireAuth !== false) {
@@ -668,7 +717,7 @@
 
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, normalizeNamePart, validNamePart, passwordIssue, bindPasswordStrength, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, subscribeToChanges,
+    escapeHtml, normalizeNamePart, validNamePart, validPhoneNumber, validatePhoneInput, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

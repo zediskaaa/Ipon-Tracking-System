@@ -145,6 +145,21 @@ test('login credential errors mark both fields without revealing account existen
   assert.match(auth, /message\.textContent = 'Incorrect email or password\.'/);
 });
 
+test('phone fields reject letters and incomplete accounts finish setup before panel access', () => {
+  const core = read('js/core.js');
+  const auth = read('js/auth.js');
+  const account = read('account.html') + read('js/account.js');
+  assert.match(core, /input\.value\.replace\(\/\\D\/g, ''\)/);
+  assert.match(core, /function validatePhoneInput\(input\)/);
+  assert.match(core, /function profileNeedsSetup\(profile\)/);
+  assert.match(core, /first_name,middle_name,last_name,contact_number,role,status/);
+  assert.match(auth, /Ipon\.accountSetupUrl\(profile, data\.user\)/);
+  assert.match(account, /id="profile-setup-notice"/);
+  assert.match(account, /id="account-contact"[^>]*maxlength="13"[^>]*required/);
+  assert.match(account, /finishSetupIfReady\(\)/);
+  assert.match(read('database/migrations/20261112_013_require_profile_mobile.sql'), /if v_contact is null[\s\S]*?Mobile number is required/);
+});
+
 test('temporary password state is server-owned and cleared by the Edge workflow', () => {
   const core = read('js/core.js');
   const auth = read('js/auth.js');

@@ -8,8 +8,15 @@
   const activityBody = document.getElementById('account-activity-body');
   const notificationToggle = document.getElementById('notifications-enabled');
   Ipon.bindPasswordStrength(passwordForm.elements.password, () => [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
-  const forcePasswordChange = new URLSearchParams(location.search).get('force_password') === '1' || state.session.user.app_metadata?.must_change_password;
-  document.getElementById('temporary-password-notice').hidden = !forcePasswordChange;
+  const params = new URLSearchParams(location.search);
+  const onboarding = params.get('force_password') === '1' || params.get('complete_profile') === '1';
+  let passwordChangeRequired = params.get('force_password') === '1' || state.session.user.app_metadata?.must_change_password;
+  let profileComplete = false;
+  document.getElementById('temporary-password-notice').hidden = !passwordChangeRequired;
+
+  function finishSetupIfReady() {
+    if (onboarding && profileComplete && !passwordChangeRequired) location.replace(Ipon.homeForRole(state.profile.role));
+  }
 
   async function load() {
     const [profileResult, activityResult] = await Promise.all([
@@ -23,6 +30,8 @@
     profileForm.elements.middle_name.value = profile.middle_name || '';
     profileForm.elements.last_name.value = profile.last_name || profile.full_name?.split(' ').slice(1).join(' ') || '';
     profileForm.elements.contact_number.value = profile.contact_number || '';
+    profileComplete = !Ipon.profileNeedsSetup(profile);
+    document.getElementById('profile-setup-notice').hidden = profileComplete;
     emailForm.elements.email.value = profile.email || state.session.user.email || '';
     notificationToggle.checked = profile.notifications_enabled !== false;
     const activities = activityResult.data || [];
@@ -31,10 +40,11 @@
 
   profileForm.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!Ipon.validatePhoneInput(profileForm.elements.contact_number)) return profileForm.elements.contact_number.focus();
     const button = event.submitter;
     const values = new FormData(profileForm);
     Ipon.setBusy(button, true);
-    try { await Ipon.rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number') || null }); Ipon.toast('Profile updated.'); await load(); }
+    try { await Ipon.rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number') }); Ipon.toast('Profile updated.'); await load(); finishSetupIfReady(); }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });
@@ -56,7 +66,7 @@
     if (issue) { Ipon.toast(issue, 'error'); return; }
     const button = event.submitter;
     Ipon.setBusy(button, true, 'Changing…');
-    try { await Ipon.changePassword(password); await Ipon.rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }); passwordForm.reset(); Ipon.toast('Password changed.'); if (forcePasswordChange) location.replace(Ipon.homeForRole(state.profile.role)); else await load(); }
+    try { await Ipon.changePassword(password); await Ipon.rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }); passwordForm.reset(); passwordChangeRequired = false; document.getElementById('temporary-password-notice').hidden = true; Ipon.toast('Password changed.'); finishSetupIfReady(); if (!onboarding) await load(); }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });

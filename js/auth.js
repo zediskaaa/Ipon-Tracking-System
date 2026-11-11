@@ -200,14 +200,14 @@
       } else {
         const { data, error } = await Ipon.client.auth.signInWithPassword({ email: email.value, password: password.value });
         if (error) throw error;
-        const { data: profile, error: profileError } = await Ipon.client.from('profiles').select('role,status').eq('id', data.user.id).single();
+        const { data: profile, error: profileError } = await Ipon.client.from('profiles').select('first_name,last_name,contact_number,role,status').eq('id', data.user.id).single();
         if (profileError) throw profileError;
         if (profile.status !== 'ACTIVE') {
           await Ipon.client.auth.signOut();
           throw new Error('Your account is waiting for administrator approval.');
         }
         await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' });
-        window.location.replace(data.user.app_metadata?.must_change_password ? 'account.html?force_password=1' : Ipon.homeForRole(profile.role));
+        window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(profile.role));
       }
     } catch (error) {
       if (mode === 'login' && (error?.code === 'invalid_credentials' || /invalid login credentials/i.test(error?.message || ''))) {
