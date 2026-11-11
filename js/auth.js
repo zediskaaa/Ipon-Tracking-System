@@ -111,6 +111,7 @@
   function setMode(next) {
     mode = next;
     const signup = mode === 'signup';
+    document.body.classList.toggle('is-request-mode', signup);
     const loginTab = document.getElementById('show-login');
     const signupTab = document.getElementById('show-signup');
     loginTab.classList.toggle('is-active', !signup);
