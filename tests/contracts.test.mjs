@@ -347,6 +347,7 @@ test('administrator request form uses a desktop grid with a mobile fallback', ()
   assert.match(html, /body\.is-request-mode \.login-card\{[^}]*width:min\(840px,100%\)/);
   assert.match(html, /body\.is-request-mode \.login-card \.form-grid\{grid-template-columns:repeat\(6/);
   assert.match(html, /body\.is-request-mode \.password-strength meter\{display:none\}/);
+  assert.match(html, /mail\.google\.com\/mail\/\?view=cm&amp;fs=1&amp;to=zediskaaa%40gmail\.com/);
   assert.match(html, /#first-name-field,#middle-name-field,#last-name-field\)\{grid-column:span 2\}/);
   assert.match(html, /#contact-number-field,#email-field,#password-field,#password-confirmation-field\)\{grid-column:span 3\}/);
   assert.match(html, /@media\(max-width:780px\)[\s\S]*?body\.is-request-mode \.login-card \.form-grid\{grid-template-columns:1fr/);
