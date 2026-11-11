@@ -243,6 +243,10 @@ button,a { color:inherit; font:inherit; }
   gap:11px;
 }
 
+.calendar-title-copy { display:grid; gap:3px; }
+.calendar-title-copy small { color:#5f6d68; font:12px/1.25 Arial,sans-serif; }
+.calendar-title-copy small b { color:#31594c; font-weight:700; }
+
 .calendar-jump-trigger { display:grid; width:36px; height:36px; padding:0; place-items:center; border:1px solid rgba(20,45,43,.12); border-radius:50%; background:#f7f1e7; color:inherit; cursor:pointer; transition:background-color .15s ease,border-color .15s ease,transform .15s ease; }
 .calendar-jump-trigger:hover { border-color:rgba(20,45,43,.25); background:#eee3d4; transform:translateY(-1px); }
 .calendar-jump-trigger:focus-visible { outline:3px solid rgba(197,150,62,.48); outline-offset:2px; }
@@ -710,7 +714,7 @@ button,a { color:inherit; font:inherit; }
   .calendar-header { display:none; }
   .mobile-month-bar { display:grid; grid-template-columns:40px minmax(0,1fr) 40px; align-items:center; gap:6px; margin-bottom:12px; }
   .mobile-month-bar button { height:38px; border:1px solid rgba(20,45,43,.2); border-radius:8px; background:#fffdf9; font-size:22px; }
-  .mobile-month-bar .mobile-calendar-jump { display:flex; min-width:0; align-items:center; justify-content:center; gap:7px; padding:0 8px; color:#17312e; cursor:pointer; }.mobile-calendar-jump svg { width:18px; height:18px; flex:0 0 18px; fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:2; }.mobile-month-bar strong { overflow:hidden; font-size:18px; text-align:center; text-overflow:ellipsis; white-space:nowrap; }
+  .mobile-month-bar .mobile-calendar-jump { display:flex; min-width:0; align-items:center; justify-content:center; gap:7px; padding:0 8px; color:#17312e; cursor:pointer; }.mobile-calendar-jump svg { width:18px; height:18px; flex:0 0 18px; fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:2; }.mobile-calendar-jump>span { display:grid; min-width:0; gap:1px; }.mobile-month-bar strong { overflow:hidden; font-size:16px; text-align:center; text-overflow:ellipsis; white-space:nowrap; }.mobile-calendar-jump small { overflow:hidden; color:#5f6d68; font:10px/1.2 Arial,sans-serif; text-overflow:ellipsis; white-space:nowrap; }
   .calendar-card { padding:14px 10px; }
   .weekday-headings span { padding:9px 2px; font-size:10px; letter-spacing:0; }
   .calendar-week { min-height:56px; }
