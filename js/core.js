@@ -11,6 +11,21 @@
   let currentProfile = null;
   const STARTUP_TIMEOUT_MS = 15000;
 
+  if (document.body.dataset.page) {
+    window.addEventListener('pagehide', () => { document.documentElement.style.visibility = 'hidden'; });
+    window.addEventListener('pageshow', async (event) => {
+      if (!event.persisted) return;
+      if (!client) return document.documentElement.style.removeProperty('visibility');
+      try {
+        const { data: { session }, error } = await client.auth.getSession();
+        if (error || !session) return window.location.replace('login.html');
+        document.documentElement.style.removeProperty('visibility');
+      } catch {
+        window.location.replace('login.html');
+      }
+    });
+  }
+
   function withTimeout(request) {
     let timer;
     return Promise.race([
@@ -227,7 +242,7 @@
         </form>
       </dialog>
       <dialog class="notification-dialog" id="notification-dialog" aria-labelledby="notification-title">
-        <div class="notification-sheet"><header><div><h2 id="notification-title">Notifications</h2><p>Account and savings activity intended for you.</p></div><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications">&times;</button></header><div class="notification-actions"><button class="text-button" id="mark-all-notifications" type="button">Mark all as read</button></div><div class="notification-list" id="notification-list"><p class="empty-state">Loading notifications…</p></div></div>
+        <div class="notification-sheet"><header><div class="notification-heading"><h2 id="notification-title">Notifications</h2><span>Recent activity</span></div><div class="notification-header-actions"><button class="notification-mark-read" id="mark-all-notifications" type="button">Mark all read</button><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header><div class="notification-list" id="notification-list" role="feed"><p class="empty-state">Loading notifications…</p></div></div>
       </dialog>
       <dialog class="donate-dialog" id="donate-dialog" aria-labelledby="donate-title">
         <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button></div>
@@ -251,12 +266,35 @@
     const notifications = document.getElementById('notification-dialog');
     const donate = document.getElementById('donate-dialog');
     const account = document.getElementById('account-dialog');
-    document.querySelectorAll('[data-notifications-open]').forEach((button) => button.onclick = () => notifications?.showModal());
+    document.querySelectorAll('[data-notifications-open]').forEach((button) => button.onclick = () => {
+      if (!notifications) return;
+      if (notifications.open) return notifications.close();
+      const buttonRect = button.getBoundingClientRect();
+      const sidebarRect = button.closest('.app-sidebar')?.getBoundingClientRect();
+      if (window.matchMedia('(max-width:720px)').matches) {
+        notifications.style.setProperty('--notification-top', `${Math.round(buttonRect.bottom + 8)}px`);
+        notifications.style.removeProperty('--notification-left');
+        notifications.style.removeProperty('--notification-bottom');
+      } else {
+        notifications.style.setProperty('--notification-left', `${Math.round((sidebarRect?.right || buttonRect.right) + 12)}px`);
+        notifications.style.setProperty('--notification-bottom', `${Math.max(16, Math.round(window.innerHeight - buttonRect.bottom))}px`);
+        notifications.style.removeProperty('--notification-top');
+      }
+      notifications.show();
+    });
     document.querySelectorAll('[data-notifications-close]').forEach((button) => button.onclick = () => notifications?.close());
     document.querySelectorAll('[data-donate-open]').forEach((button) => button.onclick = () => donate?.showModal());
     document.querySelectorAll('[data-donate-close]').forEach((button) => button.onclick = () => donate?.close());
     document.querySelectorAll('[data-account-open]').forEach((button) => button.onclick = openAccountDialog);
     document.querySelectorAll('[data-account-close]').forEach((button) => button.onclick = () => account?.close());
+    if (notifications && !notifications.dataset.bound) {
+      notifications.dataset.bound = 'true';
+      document.addEventListener('pointerdown', (event) => {
+        if (notifications.open && !notifications.contains(event.target) && !event.target.closest('[data-notifications-open]')) notifications.close();
+      });
+      document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && notifications.open) notifications.close(); });
+      window.addEventListener('resize', () => { if (notifications.open) notifications.close(); });
+    }
     const copy = document.getElementById('copy-donate-number');
     if (copy) copy.onclick = async () => {
       try { await navigator.clipboard.writeText('09913564248'); toast('GCash number copied.'); }
@@ -360,11 +398,12 @@
       const rows = data || [];
       const unread = rows.filter((item) => !item.read_at).length;
       document.querySelectorAll('[data-notification-count]').forEach((badge) => { badge.textContent = unread; badge.hidden = unread === 0; });
-      list.innerHTML = rows.length ? rows.map((item) => `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p><small>${dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small></div>${item.link ? `<a href="${escapeHtml(item.link)}">Open</a>` : ''}</article>`).join('') : '<p class="empty-state">You have no notifications yet.</p>';
+      document.getElementById('mark-all-notifications').hidden = unread === 0;
+      list.innerHTML = rows.length ? rows.map((item) => `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"><span class="notification-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg></span><div class="notification-item-copy"><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p><small>${dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small></div>${item.link ? `<a class="notification-item-open" href="${escapeHtml(item.link)}" aria-label="Open ${escapeHtml(item.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>` : ''}${item.read_at ? '' : '<i class="notification-unread" aria-label="Unread"></i>'}</article>`).join('') : '<p class="empty-state">You have no notifications yet.</p>';
     };
     list.onclick = async (event) => {
       const item = event.target.closest('[data-notification-id]');
-      if (!item || item.classList.contains('is-read')) return;
+      if (!item || !item.classList.contains('is-unread')) return;
       try { await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) }); item.classList.remove('is-unread'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
     };
     document.getElementById('mark-all-notifications').onclick = async () => { try { await rpc('mark_all_notifications_read'); await load(); } catch (error) { toast(friendlyError(error), 'error'); } };
@@ -593,7 +632,7 @@
 
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, normalizeNamePart, validNamePart, homeForRole, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, subscribeToChanges,
+    escapeHtml, normalizeNamePart, validNamePart, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

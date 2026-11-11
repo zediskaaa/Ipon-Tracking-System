@@ -123,6 +123,25 @@ test('calendar navigation includes the administrator audit log', () => {
   assert.match(read('dashboard.html'), /href="audit\.html" data-role="ADMIN"[^>]*>[\s\S]*?<span>Audit log<\/span>/);
 });
 
+test('logout protects restored pages from browser history', () => {
+  const core = read('js/core.js');
+  assert.match(core, /addEventListener\('pagehide'[\s\S]*?visibility = 'hidden'/);
+  assert.match(core, /addEventListener\('pageshow'[\s\S]*?event\.persisted[\s\S]*?auth\.getSession\(\)[\s\S]*?location\.replace\('login\.html'\)/);
+  assert.match(core, /homeForRole, signOut, toast/);
+  assert.match(read('js/dashboard.js'), /addEventListener\('click', Ipon\.signOut\)/);
+});
+
+test('notifications use a responsive non-blocking activity panel', () => {
+  const core = read('js/core.js');
+  const css = read('css/app.css');
+  assert.match(core, /notifications\.show\(\)/);
+  assert.doesNotMatch(core, /notifications\?\.showModal\(\)/);
+  assert.match(core, /notification-item-icon/);
+  assert.match(core, /notification-unread/);
+  assert.match(css, /\.notification-dialog\{position:fixed/);
+  assert.match(css, /@media\(max-width:720px\)\{\.notification-dialog/);
+});
+
 test('deadline backfill bypasses only the group-scope trigger during migration', () => {
   const migration = read('database/migrations/20261110_007_complete_account_notifications.sql');
   const disabled = migration.indexOf('disable trigger contribution_periods_group_scope');

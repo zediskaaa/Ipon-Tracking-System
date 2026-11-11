@@ -14,7 +14,7 @@
   const weeks = [...document.querySelectorAll('.calendar-week')];
   const summaryValues = [...document.querySelectorAll('.summary-breakdown dd')];
   const heroMoney = (value) => Ipon.money(value);
-  document.getElementById('dashboard-signout').addEventListener('click', async () => { if (Ipon.client) await Ipon.client.auth.signOut(); location.replace('login.html'); });
+  document.getElementById('dashboard-signout').addEventListener('click', Ipon.signOut);
 
   function monthIso(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`; }
   function statusClass(activity) {
