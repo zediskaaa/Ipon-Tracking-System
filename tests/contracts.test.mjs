@@ -138,6 +138,13 @@ test('new passwords use one strong policy in browser and Edge boundaries', () =>
   assert.match(read('README.md'), /minimum length of 12/);
 });
 
+test('login credential errors mark both fields without revealing account existence', () => {
+  const auth = read('js/auth.js');
+  assert.match(auth, /error\?\.code === 'invalid_credentials'/);
+  assert.match(auth, /\[email, password\]\.forEach\(\(input\) => input\.setAttribute\('aria-invalid', 'true'\)\)/);
+  assert.match(auth, /message\.textContent = 'Incorrect email or password\.'/);
+});
+
 test('temporary password state is server-owned and cleared by the Edge workflow', () => {
   const core = read('js/core.js');
   const auth = read('js/auth.js');

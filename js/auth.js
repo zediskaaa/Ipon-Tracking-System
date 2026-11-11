@@ -148,6 +148,13 @@
   }
 
   fieldErrors.forEach((_, input) => input.addEventListener('input', () => clearFieldError(input)));
+  const clearCredentialError = () => {
+    if (mode !== 'login' || message.textContent !== 'Incorrect email or password.') return;
+    [email, password].forEach((input) => input.removeAttribute('aria-invalid'));
+    message.textContent = '';
+  };
+  email.addEventListener('input', clearCredentialError);
+  password.addEventListener('input', clearCredentialError);
   email.addEventListener('blur', () => { email.value = email.value.trim(); });
   passwordToggle.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
   document.getElementById('show-login').addEventListener('click', () => setMode('login'));
@@ -203,7 +210,11 @@
         window.location.replace(data.user.app_metadata?.must_change_password ? 'account.html?force_password=1' : Ipon.homeForRole(profile.role));
       }
     } catch (error) {
-      if (mode === 'signup' && (error?.code === 'weak_password' || /weak password/i.test(error?.message || ''))) {
+      if (mode === 'login' && (error?.code === 'invalid_credentials' || /invalid login credentials/i.test(error?.message || ''))) {
+        [email, password].forEach((input) => input.setAttribute('aria-invalid', 'true'));
+        message.textContent = 'Incorrect email or password.';
+        password.focus();
+      } else if (mode === 'signup' && (error?.code === 'weak_password' || /weak password/i.test(error?.message || ''))) {
         setFieldError(password, passwordRule);
         password.focus();
       } else {
