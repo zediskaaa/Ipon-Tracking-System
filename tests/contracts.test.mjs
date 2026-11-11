@@ -157,7 +157,7 @@ test('phone fields reject letters and incomplete accounts finish setup before pa
   assert.match(account, /id="profile-setup-notice"/);
   assert.match(account, /id="account-contact"[^>]*maxlength="13"[^>]*required/);
   assert.match(account, /finishSetupIfReady\(\)/);
-  assert.match(read('database/migrations/20261112_013_require_profile_mobile.sql'), /if v_contact is null[\s\S]*?Mobile number is required/);
+  assert.match(read('database/migrations/20261112_014_require_profile_mobile.sql'), /if v_contact is null[\s\S]*?Mobile number is required/);
 });
 
 test('temporary password state is server-owned and cleared by the Edge workflow', () => {

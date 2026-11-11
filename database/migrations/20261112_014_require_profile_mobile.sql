@@ -44,7 +44,7 @@ revoke execute on function public.update_own_profile(text, text, text, text) fro
 grant execute on function public.update_own_profile(text, text, text, text) to authenticated;
 
 insert into public.schema_migrations (version, name)
-values ('20261112_013', 'require mobile number on profile updates')
+values ('20261112_014', 'require mobile number on profile updates')
 on conflict (version) do nothing;
 
 commit;
