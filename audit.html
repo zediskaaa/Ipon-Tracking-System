@@ -5,4 +5,14 @@
     <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Date and time</th><th>Actor</th><th>Record type</th><th>Action</th><th>Record ID</th><th>Summary</th></tr></thead><tbody id="audit-body"><tr class="loading-row"><td colspan="6">Loading audit activity…</td></tr></tbody></table></div>
     <nav class="table-pager" id="audit-pager" aria-label="Audit log pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
   </section>
+  <dialog class="form-dialog audit-detail-dialog" id="audit-detail-dialog" aria-labelledby="audit-detail-title"><div class="form-dialog-sheet">
+    <div class="form-dialog-header"><div><p class="eyebrow">Audit details</p><h2 id="audit-detail-title">Recorded change</h2><p id="audit-detail-meta"></p></div><button class="dialog-close" type="button" id="close-audit-dialog" aria-label="Close audit details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="audit-dialog-body">
+      <div class="audit-dialog-meta"><span>Record ID</span><code id="audit-detail-record">—</code></div>
+      <div class="audit-comparison">
+        <section><h3>Before</h3><pre id="audit-detail-before">—</pre></section>
+        <section><h3>After</h3><pre id="audit-detail-after">—</pre></section>
+      </div>
+    </div>
+  </div></dialog>
 </main></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/config.js"></script><script src="js/core.js?v=20261112-3"></script><script src="js/audit.js"></script></body></html>

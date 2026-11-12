@@ -260,6 +260,9 @@ test('first-login account setup opens as a locked responsive modal', () => {
 
 test('calendar navigation includes the administrator audit log', () => {
   assert.match(read('dashboard.html'), /href="audit\.html" data-role="ADMIN"[^>]*>[\s\S]*?<span>Audit log<\/span>/);
+  assert.match(read('audit.html'), /<dialog[^>]+id="audit-detail-dialog"[^>]+aria-labelledby="audit-detail-title"/);
+  assert.match(read('js/audit.js'), /detailDialog\.showModal\(\)/);
+  assert.doesNotMatch(read('js/audit.js'), /<details\b/);
 });
 
 test('logout protects restored pages from browser history', () => {

@@ -8,9 +8,16 @@
   const tableFilter = document.getElementById('audit-table-filter');
   const actionFilter = document.getElementById('audit-action-filter');
   const pager = document.getElementById('audit-pager');
+  const detailDialog = document.getElementById('audit-detail-dialog');
+  const detailTitle = document.getElementById('audit-detail-title');
+  const detailMeta = document.getElementById('audit-detail-meta');
+  const detailRecord = document.getElementById('audit-detail-record');
+  const detailBefore = document.getElementById('audit-detail-before');
+  const detailAfter = document.getElementById('audit-detail-after');
   const pageSize = 50;
   let page = 0;
   let actors = new Map();
+  let rows = [];
 
   function summary(row) {
     if (row.action === 'INSERT') return 'Record created';
@@ -29,13 +36,29 @@
     if (actionFilter.value) query = query.eq('action', actionFilter.value);
     const { data, count, error } = await query.order('changed_at', { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1);
     if (error) throw error;
+    rows = data || [];
     const pages = Math.max(1, Math.ceil(count / pageSize));
     document.getElementById('audit-count').textContent = `${count} recorded event${count === 1 ? '' : 's'}`;
     pager.querySelector('span').textContent = `Page ${page + 1} of ${pages}`;
     pager.querySelector('[data-page="previous"]').disabled = page === 0;
     pager.querySelector('[data-page="next"]').disabled = page >= pages - 1;
-    body.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.dateLabel(row.changed_at, { dateStyle: 'medium', timeStyle: 'short' })}</td><td>${Ipon.escapeHtml(actors.get(row.changed_by) || 'System')}</td><td>${Ipon.escapeHtml(row.table_name.replaceAll('_', ' '))}</td><td><span class="status status-${row.action.toLowerCase()}">${Ipon.escapeHtml(row.action)}</span></td><td><span class="audit-record-id" title="${Ipon.escapeHtml(row.record_id || '')}">${Ipon.escapeHtml(row.record_id || '—')}</span></td><td><details class="audit-detail"><summary>${Ipon.escapeHtml(summary(row))}</summary><div><strong>Before</strong><pre>${Ipon.escapeHtml(JSON.stringify(row.old_data, null, 2) || '—')}</pre><strong>After</strong><pre>${Ipon.escapeHtml(JSON.stringify(row.new_data, null, 2) || '—')}</pre></div></details></td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No matching audit activity.</td></tr>';
+    body.innerHTML = rows.length ? rows.map((row) => `<tr><td>${Ipon.dateLabel(row.changed_at, { dateStyle: 'medium', timeStyle: 'short' })}</td><td>${Ipon.escapeHtml(actors.get(row.changed_by) || 'System')}</td><td>${Ipon.escapeHtml(row.table_name.replaceAll('_', ' '))}</td><td><span class="status status-${row.action.toLowerCase()}">${Ipon.escapeHtml(row.action)}</span></td><td><span class="audit-record-id" title="${Ipon.escapeHtml(row.record_id || '')}">${Ipon.escapeHtml(row.record_id || '—')}</span></td><td><button class="audit-detail-trigger" type="button" data-audit-open="${Ipon.escapeHtml(row.id)}">${Ipon.escapeHtml(summary(row))}</button></td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No matching audit activity.</td></tr>';
   }
+
+  body.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-audit-open]');
+    if (!trigger) return;
+    const row = rows.find((item) => String(item.id) === trigger.dataset.auditOpen);
+    if (!row) return;
+    detailTitle.textContent = summary(row);
+    detailMeta.textContent = `${actors.get(row.changed_by) || 'System'} · ${row.table_name.replaceAll('_', ' ')} (${row.action}) · ${Ipon.dateLabel(row.changed_at, { dateStyle: 'medium', timeStyle: 'short' })}`;
+    detailRecord.textContent = row.record_id || '—';
+    detailBefore.textContent = row.old_data ? JSON.stringify(row.old_data, null, 2) : '—';
+    detailAfter.textContent = row.new_data ? JSON.stringify(row.new_data, null, 2) : '—';
+    detailDialog.showModal();
+  });
+  document.getElementById('close-audit-dialog').addEventListener('click', () => detailDialog.close());
+  detailDialog.addEventListener('click', (event) => { if (event.target === detailDialog) detailDialog.close(); });
 
   try {
     const { data: profiles, error } = await Ipon.client.from('profiles').select('id,full_name');
