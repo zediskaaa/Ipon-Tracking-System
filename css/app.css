@@ -29,8 +29,13 @@ a { color:inherit; }
 .app-sidebar-footer { position:relative; z-index:1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 8px; margin-top:auto; border-top:0; padding-top:12px; }
 .sidebar-user-card { display:flex; width:100%; grid-column:1/-1; grid-row:1; align-items:center; gap:10px; padding:9px 11px; border:1px solid rgba(255,255,255,.2); border-radius:12px; background:rgba(5,22,16,.56); color:inherit; cursor:pointer; text-align:left; }
 .sidebar-user-card:hover { border-color:rgba(255,255,255,.3); background:rgba(255,255,255,.08); }
-.sidebar-user-avatar { display:grid; width:30px; height:30px; flex:0 0 30px; place-items:center; border-radius:50%; background:#1e5a44; color:#f5eadb; }
+.sidebar-user-avatar { display:grid; width:30px; height:30px; flex:0 0 30px; place-items:center; overflow:hidden; border-radius:50%; background:#1e5a44; color:#f5eadb; }
 .sidebar-user-avatar svg { width:16px; height:16px; fill:currentColor; }
+.sidebar-user-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+.avatar-circle { display:inline-grid; width:34px; height:34px; flex:0 0 auto; place-items:center; overflow:hidden; border-radius:50%; border:2px solid #fffdf9; background:#1e5a44; color:#f5eadb; font:700 12px/1 Arial,sans-serif; letter-spacing:.03em; user-select:none; }
+.avatar-circle img { width:100%; height:100%; object-fit:cover; display:block; }
+.avatar-circle.avatar-lg { width:62px; height:62px; font-size:20px; border-color:#dcece2; }
+.avatar-circle.avatar-md { width:40px; height:40px; font-size:13px; border-color:#dcece2; }
 .sidebar-user-info { display:flex; min-width:0; flex:1; flex-direction:column; gap:2px; }
 .sidebar-user-info strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#f5eadb; font-family:Arial,sans-serif; font-size:12.5px; font-weight:700; line-height:1.15; }
 .sidebar-user-info small { color:#b6c7be; font-family:Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
@@ -310,8 +315,20 @@ body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame
 .account-section-icon svg{width:25px;height:25px;fill:currentColor;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .account-section-heading h3{margin:0;font:800 23px/1.1 Arial,sans-serif;letter-spacing:-.015em}
 .account-section-heading p{margin:4px 0 0;color:#61716d;font:14px/1.35 Arial,sans-serif}
-.account-profile-identity{display:block;margin-bottom:22px;padding:0 4px 22px;border-bottom:1px solid var(--rule)}
-.account-profile-identity>span:last-child{display:grid;min-width:0;gap:8px}
+.account-profile-identity{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:22px;padding:0 4px 22px;border-bottom:1px solid var(--rule)}
+.account-avatar-picker{position:relative;display:inline-flex;align-items:center}
+.account-avatar-trigger{position:relative;display:inline-flex;border-radius:50%;cursor:pointer}
+.account-avatar-trigger:hover .account-avatar-preview{filter:brightness(.94)}
+.account-avatar-trigger:hover .account-avatar-cam{background:#145e43;color:#fff}
+.account-avatar-trigger:focus-visible{outline:2px solid #145e43;outline-offset:3px}
+.account-avatar-preview{display:inline-flex}
+.account-avatar-cam{position:absolute;right:-2px;bottom:-2px;display:grid;width:24px;height:24px;place-items:center;border:2px solid #fff;border-radius:50%;background:#f0ece3;color:#142d2b;box-shadow:0 2px 6px rgba(10,36,27,.18);transition:background-color .15s ease,color .15s ease}
+.account-avatar-cam svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.account-avatar-remove{position:absolute;top:-3px;right:-3px;display:grid;width:22px;height:22px;padding:0;place-items:center;border:2px solid #fff;border-radius:50%;background:#fff;color:#8a2c2c;box-shadow:0 2px 6px rgba(10,36,27,.18);cursor:pointer}
+.account-avatar-remove:hover{background:#fdecec}
+.account-avatar-remove[hidden]{display:none!important}
+.account-avatar-remove svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+.account-profile-identity>span:last-child{display:grid;min-width:0;flex:1;gap:8px}
 .account-profile-identity strong{overflow:hidden;font:800 24px/1.1 Arial,sans-serif;text-overflow:ellipsis;white-space:nowrap}
 .account-profile-identity small{justify-self:start;border:1px solid #b8dec7;border-radius:999px;padding:6px 12px;background:#e1f2e8;color:#145e43;font:800 11px/1 Arial,sans-serif;letter-spacing:.08em}
 .account-profile-card{display:flex;flex-direction:column}

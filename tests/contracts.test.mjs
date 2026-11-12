@@ -136,6 +136,22 @@ test('users can submit bug reports with up to 5 images and Super Admin can inspe
   assert.match(migration, /grant insert \(reporter_id, title, description, attachments\) on public\.bug_reports to authenticated/i);
 });
 
+test('users can upload display pictures and calendar days show up to 4 contributor avatars plus modal details', () => {
+  const core = read('js/core.js');
+  const dashboardHtml = read('dashboard.html');
+  const dashboardJs = read('js/dashboard.js');
+  const migration = read('database/migrations/20261112_022_user_avatars_and_calendar_contributors.sql');
+  assert.match(core, /id="quick-avatar-input"[^>]*accept="image\/\*"/);
+  assert.match(core, /rpc\('update_own_avatar'/);
+  assert.match(dashboardHtml, /id="day-contributors-dialog"/);
+  assert.match(dashboardJs, /contributors\.slice\(0, 4\)/);
+  assert.match(dashboardJs, /day-avatar-more/);
+  assert.match(dashboardJs, /function openDayModal\(date\)/);
+  assert.match(migration, /create or replace function public\.group_member_avatar\(p_member_id uuid\)/i);
+  assert.match(migration, /create or replace function public\.update_own_avatar\(p_avatar_url text\)/i);
+  assert.match(migration, /subject_avatar_url/i);
+});
+
 test('all three role dashboards subscribe to permitted database changes', () => {
   const core = read('js/core.js');
   const realtimeHelper = core.match(/function subscribeToChanges[\s\S]*?return channel;/)?.[0] || '';

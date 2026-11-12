@@ -478,7 +478,7 @@
         <div class="account-dialog-sheet">
           <header class="account-dialog-header"><div class="account-dialog-title"><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><div class="account-profile-identity"><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
+            <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.1 7.5 9.5 4.3-1.4 7.5-4.7 7.5-9.5V6L12 3Z"/><path d="M9.5 12.2 11.3 14l3.5-4"/></svg></span><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required></div><div class="field"><label for="quick-password">New password</label><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg></span><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label></section></div>
           </div>
@@ -494,7 +494,59 @@
 
   const MAX_BUG_IMAGES = 5;
   const MAX_BUG_IMAGE_BYTES = 2 * 1024 * 1024;
+  const MAX_AVATAR_BYTES = 450 * 1024;
   const PICTURE_FILE_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif|ico|tiff?|jfif|apng)$/i;
+
+  function initials(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return parts.length === 1 ? parts[0].slice(0, 2).toUpperCase() : `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+
+  function avatarMarkup(avatarUrl, name, className = '') {
+    const safeUrl = typeof avatarUrl === 'string' && avatarUrl.startsWith('data:image/') ? avatarUrl : '';
+    const letters = escapeHtml(initials(name));
+    const cls = escapeHtml(className);
+    if (!safeUrl) return `<span class="avatar-circle avatar-fallback ${cls}" title="${escapeHtml(name || '')}">${letters}</span>`;
+    return `<span class="avatar-circle ${cls}" title="${escapeHtml(name || '')}"><img src="${safeUrl}" alt="${escapeHtml(name || 'User picture')}" data-avatar-img><span class="avatar-fallback-inner" hidden>${letters}</span></span>`;
+  }
+
+  function bindAvatarFallbacks(root = document) {
+    root.querySelectorAll('img[data-avatar-img]').forEach((img) => {
+      if (img.dataset.boundFallback) return;
+      img.dataset.boundFallback = 'true';
+      img.addEventListener('error', () => {
+        img.hidden = true;
+        const fallback = img.nextElementSibling;
+        if (fallback) fallback.hidden = false;
+      });
+    });
+  }
+
+  function syncProfileAvatars(profile = currentProfile) {
+    if (!profile) return;
+    const safeUrl = typeof profile.avatar_url === 'string' && profile.avatar_url.startsWith('data:image/') ? profile.avatar_url : '';
+    document.querySelectorAll('.sidebar-user-avatar').forEach((slot) => {
+      if (safeUrl) {
+        slot.innerHTML = `<img src="${safeUrl}" alt="${escapeHtml(profile.full_name || 'Profile picture')}" data-avatar-img><svg viewBox="0 0 24 24" hidden><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>`;
+        const img = slot.querySelector('img');
+        img?.addEventListener('error', () => {
+          img.hidden = true;
+          const svg = img.nextElementSibling;
+          if (svg) svg.removeAttribute('hidden');
+        });
+      } else {
+        slot.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>';
+      }
+    });
+    const quickPreview = document.getElementById('quick-avatar-preview');
+    if (quickPreview) {
+      quickPreview.innerHTML = avatarMarkup(profile.avatar_url, profile.full_name, 'avatar-lg');
+      bindAvatarFallbacks(quickPreview);
+    }
+    const quickRemove = document.getElementById('quick-avatar-remove');
+    if (quickRemove) quickRemove.hidden = !safeUrl;
+  }
 
   function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
@@ -505,20 +557,20 @@
     });
   }
 
-  function compressRasterDataUrl(dataUrl) {
+  function compressRasterDataUrl(dataUrl, maxEdge = 1440, quality = 0.82) {
     return new Promise((resolve) => {
       const image = new Image();
       image.onload = () => {
         const longest = Math.max(image.naturalWidth || 0, image.naturalHeight || 0);
         if (!longest) return resolve(dataUrl);
-        const scale = Math.min(1, 1440 / longest);
+        const scale = Math.min(1, maxEdge / longest);
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
         canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
         const context = canvas.getContext('2d');
         if (!context) return resolve(dataUrl);
         context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        const compressed = canvas.toDataURL('image/jpeg', 0.82);
+        const compressed = canvas.toDataURL('image/jpeg', quality);
         resolve(compressed && compressed.length < dataUrl.length ? compressed : dataUrl);
       };
       image.onerror = () => resolve(dataUrl);
@@ -526,7 +578,7 @@
     });
   }
 
-  async function prepareBugImage(file) {
+  async function prepareImageDataUrl(file, { maxEdge = 1440, skipCompressBytes = 350 * 1024, maxBytes = MAX_BUG_IMAGE_BYTES } = {}) {
     const ext = (file.name || '').match(PICTURE_FILE_RE)?.[1]?.toLowerCase() || '';
     const isImage = file.type.startsWith('image/') || Boolean(ext);
     if (!isImage) throw new Error(`"${file.name}" is not a picture file.`);
@@ -536,12 +588,16 @@
       dataUrl = dataUrl.replace(/^data:[^;,]*/, `data:${type}`);
     }
     if (!dataUrl.startsWith('data:image/')) throw new Error(`"${file.name}" is not a valid picture format.`);
-    if (file.size > 350 * 1024 && !/^image\/(gif|svg\+xml)$/i.test(type)) {
-      dataUrl = await compressRasterDataUrl(dataUrl);
+    if (file.size > skipCompressBytes && !/^image\/(gif|svg\+xml)$/i.test(type)) {
+      dataUrl = await compressRasterDataUrl(dataUrl, maxEdge, 0.84);
     }
     const approxBytes = Math.ceil((dataUrl.length * 3) / 4);
-    if (approxBytes > MAX_BUG_IMAGE_BYTES) throw new Error(`"${file.name}" exceeds the 2 MB image limit.`);
+    if (approxBytes > maxBytes) throw new Error(`"${file.name}" is too large even after compression.`);
     return { name: String(file.name || 'picture').slice(0, 120), type, dataUrl };
+  }
+
+  function prepareBugImage(file) {
+    return prepareImageDataUrl(file, { maxEdge: 1440, skipCompressBytes: 350 * 1024, maxBytes: MAX_BUG_IMAGE_BYTES });
   }
 
   function bindUtilityDialogs() {
@@ -750,8 +806,9 @@
     const emailForm = document.getElementById('quick-email-form');
     dialog.setAttribute('aria-busy', 'true');
     try {
-      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled').eq('id', currentProfile.id).single();
+      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url').eq('id', currentProfile.id).single();
       if (error) throw error;
+      currentProfile.avatar_url = data.avatar_url || null;
       profileForm.elements.first_name.value = data.first_name || data.full_name?.split(' ')[0] || '';
       profileForm.elements.middle_name.value = data.middle_name || '';
       profileForm.elements.last_name.value = data.last_name || data.full_name?.split(' ').slice(1).join(' ') || '';
@@ -760,6 +817,7 @@
       document.getElementById('quick-notifications-enabled').checked = data.notifications_enabled !== false;
       document.getElementById('quick-account-name').textContent = data.full_name;
       document.getElementById('quick-account-role').textContent = currentProfile.role.replaceAll('_', ' ');
+      syncProfileAvatars({ ...currentProfile, ...data });
       const support = dialog.querySelector('.account-support');
       if (support) support.hidden = currentProfile.role === 'SUPER_ADMIN';
     } finally {
@@ -782,6 +840,43 @@
     const emailForm = document.getElementById('quick-email-form');
     const passwordForm = document.getElementById('quick-password-form');
     const notificationToggle = document.getElementById('quick-notifications-enabled');
+    const avatarInput = document.getElementById('quick-avatar-input');
+    const avatarTrigger = document.querySelector('.account-avatar-trigger');
+    const avatarRemove = document.getElementById('quick-avatar-remove');
+    if (avatarTrigger && avatarInput) avatarTrigger.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      avatarInput.click();
+    });
+    if (avatarInput) avatarInput.addEventListener('change', async () => {
+      const file = avatarInput.files?.[0];
+      avatarInput.value = '';
+      if (!file) return;
+      try {
+        const prepared = await prepareImageDataUrl(file, { maxEdge: 256, skipCompressBytes: 60 * 1024, maxBytes: MAX_AVATAR_BYTES });
+        await rpc('update_own_avatar', { p_avatar_url: prepared.dataUrl });
+        currentProfile.avatar_url = prepared.dataUrl;
+        syncProfileAvatars(currentProfile);
+        window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
+        toast('Profile picture updated.');
+      } catch (error) {
+        toast(friendlyError(error), 'error');
+      }
+    });
+    if (avatarRemove) avatarRemove.addEventListener('click', async () => {
+      avatarRemove.disabled = true;
+      try {
+        await rpc('update_own_avatar', { p_avatar_url: null });
+        currentProfile.avatar_url = null;
+        syncProfileAvatars(currentProfile);
+        window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
+        toast('Profile picture removed.');
+      } catch (error) {
+        toast(friendlyError(error), 'error');
+      } finally {
+        avatarRemove.disabled = false;
+      }
+    });
     quickMfaController = bindMfaSettings(document.querySelector('#account-dialog [data-mfa-settings]'));
     bindPasswordStrength(passwordForm.elements.password, () => [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
     profileForm.addEventListener('submit', async (event) => {
@@ -1063,7 +1158,7 @@
       }
 
       const { data: profile, error } = await withTimeout(client.from('profiles')
-        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url')
         .eq('id', session.user.id)
         .single());
       if (error) throw error;
@@ -1090,6 +1185,7 @@
       document.querySelector('.app-brand')?.setAttribute('href', homeForRole(profile.role));
       const sidebarUser = document.getElementById('sidebar-user');
       if (sidebarUser) sidebarUser.innerHTML = `<strong>${escapeHtml(profile.full_name)}</strong><small>${escapeHtml(profile.role)}</small>`;
+      syncProfileAvatars(profile);
       document.querySelectorAll('[data-role]').forEach((element) => {
         const roles = element.dataset.role.split(',');
         element.hidden = !roles.includes(profile.role);
@@ -1270,7 +1366,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, subscribeToChanges,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();
