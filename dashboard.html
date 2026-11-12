@@ -99,22 +99,26 @@
         <div class="calendar-header" data-region="calendar-header-ground">
           <button class="month-button" data-region="month-previous" type="button" aria-label="Previous month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
           <div class="calendar-title-wrap">
-            <svg class="calendar-title-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3" y="5" width="18" height="16" rx="2.5"/>
-              <path d="M8 3v4m8-4v4M3 10h18"/>
-              <circle cx="8" cy="14" r="1" fill="currentColor" stroke="none"/>
-              <circle cx="12" cy="14" r="1" fill="currentColor" stroke="none"/>
-              <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none"/>
-              <circle cx="8" cy="17.5" r="1" fill="currentColor" stroke="none"/>
-              <circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none"/>
-              <circle cx="16" cy="17.5" r="1" fill="currentColor" stroke="none"/>
-            </svg>
-            <div class="calendar-title-copy"><h2 class="calendar-title" data-region="calendar-title" id="calendar-month">Loading calendar…</h2></div>
-            <button class="calendar-jump-trigger" data-calendar-jump type="button" aria-haspopup="dialog" aria-controls="calendar-jump-dialog" aria-label="Jump to another month and year"><svg class="calendar-jump-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
+            <div class="calendar-title-row">
+              <svg class="calendar-title-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="16" rx="2.5"/>
+                <path d="M8 3v4m8-4v4M3 10h18"/>
+                <circle cx="8" cy="14" r="1" fill="currentColor" stroke="none"/>
+                <circle cx="12" cy="14" r="1" fill="currentColor" stroke="none"/>
+                <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none"/>
+                <circle cx="8" cy="17.5" r="1" fill="currentColor" stroke="none"/>
+                <circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none"/>
+                <circle cx="16" cy="17.5" r="1" fill="currentColor" stroke="none"/>
+              </svg>
+              <div class="calendar-title-copy"><h2 class="calendar-title" data-region="calendar-title" id="calendar-month">Loading calendar…</h2></div>
+              <button class="calendar-jump-trigger" data-calendar-jump type="button" aria-haspopup="dialog" aria-controls="calendar-jump-dialog" aria-label="Jump to another month and year"><svg class="calendar-jump-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
+            </div>
+            <label class="calendar-goal-picker" for="calendar-goal-select"><span>Tracking</span><select id="calendar-goal-select" aria-label="Calendar tracking goal"><option value="">General savings</option></select></label>
           </div>
           <button class="month-button" data-region="month-next" type="button" aria-label="Next month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
         </div>
         <div class="mobile-month-bar"><button type="button" data-mobile-month="previous" aria-label="Previous month">‹</button><button class="mobile-calendar-jump" data-calendar-jump type="button" aria-haspopup="dialog" aria-controls="calendar-jump-dialog" aria-label="Jump to another month and year"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18"/></svg><span><strong id="mobile-calendar-month">Loading calendar…</strong><small>Choose month and year</small></span></button><button type="button" data-mobile-month="next" aria-label="Next month">›</button></div>
+        <label class="mobile-goal-picker" for="mobile-calendar-goal-select"><span>Tracking goal</span><select id="mobile-calendar-goal-select" aria-label="Calendar tracking goal on mobile"><option value="">General savings</option></select></label>
 
         <dialog class="calendar-jump-dialog" id="calendar-jump-dialog" aria-labelledby="calendar-jump-title">
           <form id="calendar-jump-form" method="dialog">
