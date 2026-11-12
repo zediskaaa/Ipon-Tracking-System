@@ -1,6 +1,6 @@
 (async function () {
   'use strict';
-  const state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER'] });
+  const state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });
   if (state.failed || !state.configured || !state.profile) return;
   const monthlyBody = document.getElementById('reports-body');
   const memberBody = document.getElementById('member-report-body');

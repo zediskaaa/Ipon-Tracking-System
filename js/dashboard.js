@@ -182,7 +182,7 @@
       const items = currentActivities.filter((activity) => activity.activity_date === date);
       document.getElementById('day-detail-title').textContent = Ipon.dateLabel(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       document.getElementById('day-detail-list').innerHTML = items.length
-        ? items.map((activity) => { const [, label] = statusClass(activity); return `<article><span><b>${Ipon.escapeHtml(label)}</b><small>${Ipon.escapeHtml(activity.approval_status)}</small></span><strong>${Ipon.money(activity.amount)}</strong>${activity.notes ? `<p>${Ipon.escapeHtml(activity.notes)}</p>` : ''}</article>`; }).join('')
+        ? items.map((activity) => { const [, label] = statusClass(activity); return `<article><span><b>${Ipon.escapeHtml(label)}</b><small>${Ipon.escapeHtml([activity.subject_name, activity.approval_status].filter(Boolean).join(' · '))}</small></span><strong>${Ipon.money(activity.amount)}</strong>${activity.notes ? `<p>${Ipon.escapeHtml(activity.notes)}</p>` : ''}</article>`; }).join('')
         : '<p class="empty-state">No recorded activity for this day.</p>';
     }
     detailPanel.hidden = false;
@@ -237,9 +237,10 @@
     goalSelects.forEach((other) => { other.value = selectedGoalId; });
   }));
   renderCalendar([]);
-  state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER'] });
+  state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });
   if (state.failed || state.redirecting) return;
-  if (state.profile?.role === 'TREASURER') document.querySelectorAll('a[href="members.html"],a[href="settings.html"],a[href="audit.html"]').forEach((link) => link.remove());
+  if (state.profile?.role !== 'ADMIN') document.querySelectorAll('a[href="members.html"],a[href="settings.html"],a[href="audit.html"]').forEach((link) => link.remove());
+  if (state.profile?.role !== 'MEMBER') document.querySelectorAll('a[href="user.html"]').forEach((link) => link.remove());
   try { await load(); } finally { Ipon.setLoading(false); }
   Ipon.subscribeToChanges('dashboard', ['members', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals'], load);
 })();

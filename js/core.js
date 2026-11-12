@@ -69,12 +69,15 @@
     ['activity', 'super-admin.html#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2Z"/></svg>']
   ];
   const userNavItems = [
-    ['user', 'user.html', 'My savings', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>']
+    ['dashboard', 'dashboard.html', 'Calendar', navItems[0][3]],
+    ['user', 'user.html', 'My savings', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M16 12h5m-5-2a2 2 0 1 0 0 4"/></svg>'],
+    ['contributions', 'contributions.html', 'Records', navItems[1][3]],
+    ['reports', 'reports.html', 'Reports', navItems[3][3]]
   ];
   const pageRoles = {
-    dashboard: ['ADMIN', 'TREASURER'], members: ['ADMIN'], contributions: ['ADMIN', 'TREASURER'],
-    withdrawals: ['ADMIN', 'TREASURER'], expenses: ['ADMIN', 'TREASURER'], savings: ['ADMIN'],
-    reports: ['ADMIN', 'TREASURER'], audit: ['ADMIN'], settings: ['ADMIN'], user: ['MEMBER'],
+    dashboard: ['ADMIN', 'TREASURER', 'MEMBER'], members: ['ADMIN'], contributions: ['ADMIN', 'TREASURER', 'MEMBER'],
+    withdrawals: ['ADMIN', 'TREASURER', 'MEMBER'], expenses: ['ADMIN', 'TREASURER', 'MEMBER'], savings: ['ADMIN', 'TREASURER', 'MEMBER'],
+    reports: ['ADMIN', 'TREASURER', 'MEMBER'], audit: ['ADMIN'], settings: ['ADMIN'], user: ['MEMBER'],
     'super-admin': ['SUPER_ADMIN'], account: ['SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER']
   };
   const recordTabIcons = {
@@ -454,7 +457,7 @@
         <div class="notification-sheet"><header><div class="notification-heading"><h2 id="notification-title">Notifications</h2><span>Recent activity</span></div><div class="notification-header-actions"><button class="notification-mark-read" id="mark-all-notifications" type="button">Mark all read</button><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header><div class="notification-list" id="notification-list" role="feed"><p class="empty-state">Loading notifications…</p></div></div>
       </dialog>
       <dialog class="donate-dialog" id="donate-dialog" aria-labelledby="donate-title">
-        <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><img class="donate-sticker" src="assets/donate-sticker.jpg" alt="" aria-hidden="true"><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button></div>
+        <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><img class="donate-sticker" src="assets/donate-sticker.jpg" alt="" aria-hidden="true"><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><div class="donate-actions"><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button><button class="button button-secondary" id="toggle-donate-qr" type="button" aria-expanded="false" aria-controls="donate-qr-panel">Scan me</button></div><div class="donate-qr-panel" id="donate-qr-panel" hidden><img class="donate-qr-image" src="assets/donate-qr.jpg" alt="InstaPay QR code for voluntary donations"><small>Scan with GCash, Maya, or any InstaPay banking app.</small></div></div>
       </dialog>
       <dialog class="form-dialog feature-request-dialog" id="feature-request-dialog" aria-labelledby="feature-request-title">
         <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="feature-request-title">Request a feature</h2><p>Describe an improvement that would make IPON more useful to you.</p></div><button class="dialog-close" data-feature-request-close type="button" aria-label="Close feature request form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="feature-request-form" class="form-grid"><div class="field field-wide"><label for="feature-request-name">Feature name</label><input id="feature-request-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="feature-request-details">How should it work?</label><textarea id="feature-request-details" name="details" minlength="10" maxlength="2000" aria-describedby="feature-request-help" required></textarea><small class="field-help" id="feature-request-help">Explain the problem and the result you want. Do not include passwords or financial account details.</small></div><p class="mfa-message field-wide" id="feature-request-message" role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" data-feature-request-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit request</button></div></form><div class="feature-request-success" id="feature-request-success" role="status" aria-live="polite" hidden><span class="feature-request-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><h3>Feature request submitted</h3><p>Your suggestion <strong id="feature-request-submitted-title"></strong> has been sent to the Super Admin for review.</p><div class="form-actions"><button class="button button-secondary" id="feature-request-another" type="button">Submit another</button><button class="button button-primary" data-feature-request-close type="button">Done</button></div></div></div>
@@ -507,8 +510,17 @@
       notifications.show();
     });
     document.querySelectorAll('[data-notifications-close]').forEach((button) => button.onclick = () => notifications?.close());
-    document.querySelectorAll('[data-donate-open]').forEach((button) => button.onclick = () => donate?.showModal());
+    const qrPanel = document.getElementById('donate-qr-panel');
+    const qrToggle = document.getElementById('toggle-donate-qr');
+    const setQrOpen = (open) => {
+      if (!qrPanel || !qrToggle) return;
+      qrPanel.hidden = !open;
+      qrToggle.setAttribute('aria-expanded', String(open));
+      qrToggle.textContent = open ? 'Hide QR' : 'Scan me';
+    };
+    document.querySelectorAll('[data-donate-open]').forEach((button) => button.onclick = () => { setQrOpen(false); donate?.showModal(); });
     document.querySelectorAll('[data-donate-close]').forEach((button) => button.onclick = () => donate?.close());
+    if (qrToggle) qrToggle.onclick = () => setQrOpen(Boolean(qrPanel?.hidden));
     document.querySelectorAll('[data-feature-request-open]').forEach((button) => button.onclick = () => { resetFeatureDialog(); featureDialog?.showModal(); featureForm?.elements.title.focus(); });
     document.querySelectorAll('[data-feature-request-close]').forEach((button) => button.onclick = () => featureDialog?.close());
     const anotherFeature = document.getElementById('feature-request-another');
@@ -847,7 +859,7 @@
   }
 
   function homeForRole(role) {
-    return role === 'SUPER_ADMIN' ? 'super-admin.html' : role === 'MEMBER' ? 'user.html' : 'dashboard.html';
+    return role === 'SUPER_ADMIN' ? 'super-admin.html' : 'dashboard.html';
   }
 
   async function init(options = {}) {

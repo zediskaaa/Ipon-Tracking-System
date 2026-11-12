@@ -1574,17 +1574,22 @@ create or replace view public.v_savings_calendar
 with (security_invoker = true)
 as
 select c.id, c.payment_date as activity_date, 'ADDITION'::text as activity_type,
-       c.amount, c.approval_status, c.submitted_by, c.notes, c.created_at
+       c.amount, c.approval_status, c.submitted_by, c.notes, c.created_at,
+       m.full_name as subject_name
 from public.contributions c
+join public.contribution_periods cp on cp.id = c.contribution_period_id
+join public.members m on m.id = cp.member_id
 where c.approval_status in ('CONFIRMED', 'PENDING')
 union all
 select w.id, w.transaction_date, 'DEDUCTION'::text,
-       w.amount, w.approval_status, w.submitted_by, w.notes, w.created_at
+       w.amount, w.approval_status, w.submitted_by, w.notes, w.created_at,
+       w.person_responsible as subject_name
 from public.withdrawals w
 where w.approval_status in ('CONFIRMED', 'PENDING')
 union all
 select e.id, e.transaction_date, 'EXPENSE'::text,
-       e.amount, e.approval_status, e.submitted_by, e.notes, e.created_at
+       e.amount, e.approval_status, e.submitted_by, e.notes, e.created_at,
+       e.person_responsible as subject_name
 from public.expenses e
 where e.approval_status in ('CONFIRMED', 'PENDING');
 
@@ -1612,7 +1617,7 @@ select month,
        coalesce(sum(expenses), 0)::numeric(14,2) as total_expenses,
        (coalesce(sum(additions), 0) - coalesce(sum(deductions), 0) - coalesce(sum(expenses), 0))::numeric(14,2) as net_change
 from activity
-where public.is_treasurer_or_admin()
+where public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
 group by month;
 
 create or replace function public.get_savings_summary()
@@ -1623,7 +1628,7 @@ security definer
 set search_path = public
 as $$
   select case
-    when not public.is_treasurer_or_admin() or public.current_group_id() is null then null
+    when public.current_user_role() not in ('ADMIN', 'TREASURER', 'MEMBER') or public.current_group_id() is null then null
     else jsonb_build_object(
       'total_additions', (select coalesce(sum(amount), 0) from public.contributions where group_id = public.current_group_id() and approval_status = 'CONFIRMED'),
       'total_deductions', (select coalesce(sum(amount), 0) from public.withdrawals where group_id = public.current_group_id() and approval_status = 'CONFIRMED'),
@@ -1667,7 +1672,7 @@ drop policy if exists members_select on public.members;
 create policy members_select on public.members for select to authenticated
 using (
   group_id = public.current_group_id()
-  and (public.is_treasurer_or_admin() or id = public.current_member_id())
+  and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
 );
 
 drop policy if exists contribution_settings_select on public.contribution_settings;
@@ -1678,31 +1683,28 @@ drop policy if exists contribution_periods_select on public.contribution_periods
 create policy contribution_periods_select on public.contribution_periods for select to authenticated
 using (
   group_id = public.current_group_id()
-  and (public.is_treasurer_or_admin() or member_id = public.current_member_id())
+  and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
 );
 
 drop policy if exists contributions_select on public.contributions;
 create policy contributions_select on public.contributions for select to authenticated
 using (
   group_id = public.current_group_id()
-  and (
-    public.is_treasurer_or_admin()
-    or exists (
-      select 1 from public.contribution_periods cp
-      where cp.id = contribution_period_id and cp.member_id = public.current_member_id()
-    )
-  )
+  and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
 );
 
 drop policy if exists expenses_select on public.expenses;
 create policy expenses_select on public.expenses for select to authenticated
-using (group_id = public.current_group_id() and public.is_treasurer_or_admin());
+using (
+  group_id = public.current_group_id()
+  and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
+);
 
 drop policy if exists withdrawals_select on public.withdrawals;
 create policy withdrawals_select on public.withdrawals for select to authenticated
 using (
   group_id = public.current_group_id()
-  and (public.is_treasurer_or_admin() or submitted_by = auth.uid())
+  and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
 );
 
 drop policy if exists savings_goals_select on public.savings_goals;
@@ -2500,7 +2502,7 @@ returns jsonb language sql stable security definer set search_path = public as $
     union all select id, amount, transaction_date, created_at, 'withdrawal' from public.withdrawals where group_id = public.current_group_id() and approval_status = 'PENDING'
     union all select id, amount, transaction_date, created_at, 'expense' from public.expenses where group_id = public.current_group_id() and approval_status = 'PENDING'
   ), recent as (select * from entries order by created_at desc limit 3)
-  select case when public.current_user_role() in ('ADMIN', 'TREASURER') then jsonb_build_object(
+  select case when public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER') and public.current_group_id() is not null then jsonb_build_object(
     'count', (select count(*) from entries), 'amount', (select coalesce(sum(amount), 0) from entries),
     'items', coalesce((select jsonb_agg(jsonb_build_object('id', id, 'amount', amount, 'date', activity_date, 'type', entry_type) order by created_at desc) from recent), '[]'::jsonb)
   ) else jsonb_build_object('count', 0, 'amount', 0, 'items', '[]'::jsonb) end;

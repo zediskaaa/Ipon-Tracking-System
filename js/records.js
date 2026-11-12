@@ -8,7 +8,7 @@
   const pager = document.getElementById('record-pager');
   const pageSize = 25;
   let historyPage = 0;
-  const state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER'] });
+  const state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });
   if (state.failed || state.redirecting) return;
   if (!state.configured || !state.profile) {
     tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Connect Supabase to load records.</td></tr>`;
@@ -16,8 +16,10 @@
     Ipon.setLoading(false);
     return;
   }
-  if (page === 'expenses' && state.profile.role === 'MEMBER') {
-    form.closest('.panel').innerHTML = '<div class="empty-state">Only administrators and treasurers can record expenses.</div>';
+  if ((page === 'expenses' || page === 'withdrawals') && state.profile.role === 'MEMBER') {
+    form.closest('.panel').innerHTML = `<div class="empty-state">Only administrators and treasurers can record ${page === 'expenses' ? 'expenses' : 'deductions'}. You can review the group history here.</div>`;
+  } else if (page === 'contributions' && state.profile.role === 'MEMBER' && !state.profile.member_id) {
+    form.closest('.panel').innerHTML = '<div class="empty-state">Ask your group administrator to link this login to your member profile before submitting additions.</div>';
   }
   setDefaults();
 

@@ -86,7 +86,7 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.doesNotMatch(script, /from\(['"](?:contributions|withdrawals|expenses|members)['"]\)/);
   assert.match(core, /function homeForRole\(role\)/);
   assert.match(core, /\['super-admin', 'account'\]\.includes\(document\.body\.dataset\.page\)/);
-  assert.match(core, /role === 'SUPER_ADMIN' \? 'super-admin\.html' : role === 'MEMBER' \? 'user\.html' : 'dashboard\.html'/);
+  assert.match(core, /role === 'SUPER_ADMIN' \? 'super-admin\.html' : 'dashboard\.html'/);
 });
 
 test('users can submit feature requests and Super Admin can review them', () => {
@@ -139,10 +139,18 @@ test('three panels have separate routes and backend-owned account workflows', ()
   const accountHtml = read('account.html');
   const migration = read('database/migrations/20261110_007_complete_account_notifications.sql');
   const edgeFunction = read('supabase/functions/manage-account/index.ts');
+  assert.match(core, /dashboard: \['ADMIN', 'TREASURER', 'MEMBER'\]/);
+  assert.match(core, /reports: \['ADMIN', 'TREASURER', 'MEMBER'\]/);
   assert.match(core, /user: \['MEMBER'\]/);
   assert.match(userHtml, /data-page="user"/);
   assert.match(userScript, /allowedRoles: \['MEMBER'\]/);
   assert.match(userScript, /get_user_dashboard/);
+  assert.match(read('js/dashboard.js'), /allowedRoles: \['ADMIN', 'TREASURER', 'MEMBER'\]/);
+  assert.match(read('js/dashboard.js'), /activity\.subject_name/);
+  assert.match(read('js/records.js'), /allowedRoles: \['ADMIN', 'TREASURER', 'MEMBER'\]/);
+  assert.match(read('js/records.js'), /page === 'expenses' \|\| page === 'withdrawals'/);
+  assert.match(read('js/reports.js'), /allowedRoles: \['ADMIN', 'TREASURER', 'MEMBER'\]/);
+  assert.match(read('database/migrations/20261112_018_member_group_visibility.sql'), /current_user_role\(\) in \('ADMIN', 'TREASURER', 'MEMBER'\)/);
   assert.match(accountHtml, /id="password-form"/);
   assert.match(migration, /create table if not exists public\.admin_requests/i);
   assert.match(migration, /create table if not exists public\.notifications/i);
@@ -239,7 +247,7 @@ test('account settings open from the responsive identity control', () => {
   assert.match(core, /id="account-dialog"/);
   assert.match(core, /class="account-card account-profile-card"/);
   assert.match(core, /class="account-support"[\s\S]*?data-donate-open[\s\S]*?>Donate me</);
-  assert.match(core, /id="donate-dialog"[\s\S]*?class="donate-sticker" src="assets\/donate-sticker\.jpg"[\s\S]*?id="copy-donate-number"/);
+  assert.match(core, /id="donate-dialog"[\s\S]*?class="donate-sticker" src="assets\/donate-sticker\.jpg"[\s\S]*?id="copy-donate-number"[\s\S]*?id="toggle-donate-qr"[^>]*>Scan me<\/button>[\s\S]*?src="assets\/donate-qr\.jpg"/);
   assert.match(core, /data-donate-open[\s\S]*?donate\?\.showModal\(\)/);
   assert.match(core, /class="account-side-stack"/);
   assert.match(core, /class="account-password-disclosure"/);
