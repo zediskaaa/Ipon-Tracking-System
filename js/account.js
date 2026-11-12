@@ -5,6 +5,8 @@
   const profileForm = document.getElementById('profile-form');
   const emailForm = document.getElementById('email-form');
   const passwordForm = document.getElementById('password-form');
+  passwordForm.closest('.panel').insertAdjacentHTML('beforeend', Ipon.mfaSettingsMarkup());
+  const mfaController = Ipon.bindMfaSettings(passwordForm.closest('.panel').querySelector('[data-mfa-settings]'));
   const activityBody = document.getElementById('account-activity-body');
   const notificationToggle = document.getElementById('notifications-enabled');
   const pageDialog = document.getElementById('account-page-dialog');
@@ -102,5 +104,5 @@
   });
 
   pageDialog.showModal();
-  try { await load(); } catch (error) { Ipon.showInlineError(activityBody, error, load, 2); }
+  try { await Promise.all([load(), mfaController.load()]); } catch (error) { Ipon.showInlineError(activityBody, error, load, 2); }
 })();

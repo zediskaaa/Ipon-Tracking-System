@@ -43,6 +43,10 @@ order by version;
 - [ ] A non-admin cannot read `audit_logs` through the Supabase API.
 - [ ] The last active administrator cannot accidentally remove their own required admin access.
 - [ ] Sign out clears the local session and returns to the login page.
+- [ ] A user can enroll and remove a TOTP authenticator from account security settings.
+- [ ] An enrolled user is redirected to the MFA challenge after password sign-in and cannot query protected records at AAL1.
+- [ ] The hosted Reset password email template displays `{{ .Token }}` and the recovery code opens the new-password flow.
+- [ ] Password recovery, MFA enrollment, and MFA removal security-notification emails use the intended production SMTP sender.
 
 ## 4. Critical financial workflows
 

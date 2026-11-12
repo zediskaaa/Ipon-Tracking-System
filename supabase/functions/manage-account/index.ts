@@ -8,6 +8,12 @@ const passwordError = (password: string, personalValues: unknown[]) => {
   const personalTokens = personalValues.flatMap((value) => String(value || '').split(/[^\p{L}\p{N}]+/u)).filter((value) => value.length >= 3);
   return personalTokens.some((value) => passwordText.includes(value.toLocaleLowerCase())) ? 'Password must not contain the account name or email.' : '';
 };
+const tokenAal = (token: string) => {
+  try {
+    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return String(JSON.parse(atob(part.padEnd(Math.ceil(part.length / 4) * 4, '='))).aal || 'aal1');
+  } catch { return 'aal1'; }
+};
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -24,6 +30,8 @@ Deno.serve(async (request) => {
   const token = authorization.replace(/^Bearer\s+/i, '');
   const { data: userResult, error: userError } = await admin.auth.getUser(token);
   if (userError || !userResult.user) return json({ error: 'Your session is invalid.' }, 401);
+  const hasVerifiedMfa = userResult.user.factors?.some((factor) => factor.status === 'verified');
+  if (hasVerifiedMfa && tokenAal(token) !== 'aal2') return json({ error: 'Complete multi-factor authentication before continuing.' }, 403);
 
   const { data: actor, error: actorError } = await admin.from('profiles').select('role,status,group_id,first_name,middle_name,last_name,email').eq('id', userResult.user.id).single();
   if (actorError || actor?.status !== 'ACTIVE') return json({ error: 'Your account is not active.' }, 403);

@@ -538,3 +538,36 @@ test('password changes reauthenticate and financial decisions use the shared dia
   assert.match(records, /Ipon\.requestRecordAction/);
   assert.doesNotMatch(`${dashboard}\n${records}`, /window\.prompt/);
 });
+
+test('password recovery uses an emailed OTP before accepting a new password', () => {
+  const login = read('login.html');
+  const auth = read('js/auth.js');
+  const reset = read('js/reset-password.js');
+  const config = read('supabase/config.toml');
+  const template = read('supabase/templates/recovery.html');
+  assert.match(login, /id="forgot-password-open"/);
+  assert.match(login, /id="recovery-code"[^>]+autocomplete="one-time-code"/);
+  assert.match(auth, /resetPasswordForEmail\(recoveryEmail\)/);
+  assert.match(auth, /verifyOtp\(\{ email: recoveryCodeForm\.dataset\.email, token: code, type: 'recovery' \}\)/);
+  assert.match(reset, /auth\.updateUser\(\{ password: password\.value \}\)/);
+  assert.match(config, /\[auth\.email\.template\.recovery\][\s\S]*?content_path = "\.\/supabase\/templates\/recovery\.html"/);
+  assert.match(template, /\{\{ \.Token \}\}/);
+});
+
+test('opt-in TOTP MFA is enrolled, challenged, and enforced at AAL2', () => {
+  const core = read('js/core.js');
+  const challenge = read('js/mfa.js');
+  const migration = read('database/migrations/20261112_014_enforce_opt_in_mfa.sql');
+  const config = read('supabase/config.toml');
+  const edge = read('supabase/functions/manage-account/index.ts');
+  assert.match(core, /auth\.mfa\.enroll\(\{ factorType: 'totp'/);
+  assert.match(core, /auth\.mfa\.listFactors\(\)/);
+  assert.match(core, /auth\.mfa\.unenroll\(\{ factorId/);
+  assert.match(core, /getAuthenticatorAssuranceLevel\(\)/);
+  assert.match(challenge, /challengeAndVerify\(\{ factorId: factorSelect\.value, code \}\)/);
+  assert.match(migration, /from auth\.mfa_factors[\s\S]*?status = 'verified'/);
+  assert.match(migration, /as restrictive for all to authenticated/);
+  assert.match(migration, /and public\.mfa_access_allowed\(\)/);
+  assert.match(config, /\[auth\.mfa\.totp\]\s*enroll_enabled = true\s*verify_enabled = true/);
+  assert.match(edge, /hasVerifiedMfa && tokenAal\(token\) !== 'aal2'/);
+});

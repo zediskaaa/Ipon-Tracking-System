@@ -9,6 +9,7 @@
     ? window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey)
     : null;
   let currentProfile = null;
+  let quickMfaController = null;
   const STARTUP_TIMEOUT_MS = 15000;
 
   if (document.body.dataset.page) {
@@ -357,6 +358,7 @@
           </div>
         </div>
       </dialog>`);
+    document.querySelector('#account-dialog .account-security-card')?.insertAdjacentHTML('beforeend', mfaSettingsMarkup());
     bindUtilityDialogs();
     bindAccountDialog();
     prepareNameInputs();
@@ -416,7 +418,7 @@
     const dialog = document.getElementById('account-dialog');
     if (!dialog || !currentProfile) return;
     dialog.showModal();
-    try { await loadAccountDialog(); }
+    try { await Promise.all([loadAccountDialog(), quickMfaController?.load()]); }
     catch (error) { toast(friendlyError(error), 'error'); }
   }
 
@@ -427,6 +429,7 @@
     const emailForm = document.getElementById('quick-email-form');
     const passwordForm = document.getElementById('quick-password-form');
     const notificationToggle = document.getElementById('quick-notifications-enabled');
+    quickMfaController = bindMfaSettings(document.querySelector('#account-dialog [data-mfa-settings]'));
     bindPasswordStrength(passwordForm.elements.password, () => [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
     profileForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -477,6 +480,99 @@
       catch (error) { notificationToggle.checked = !notificationToggle.checked; toast(friendlyError(error), 'error'); }
       finally { notificationToggle.disabled = false; }
     });
+  }
+
+  function mfaSettingsMarkup() {
+    return '<div class="mfa-settings" data-mfa-settings><div class="mfa-status"><span><strong>Authenticator app</strong><small>Use a rotating code when you sign in.</small></span><b data-mfa-status>Checking…</b></div><div class="mfa-factor-list" data-mfa-list></div><button class="button button-secondary" type="button" data-mfa-enroll>Set up authenticator</button><div class="mfa-enrollment" data-mfa-enrollment hidden><p>Scan this QR code with Google Authenticator, Microsoft Authenticator, Authy, or another TOTP app.</p><img data-mfa-qr alt="Authenticator setup QR code"><p class="mfa-secret-label">Manual setup key</p><code data-mfa-secret></code><form class="form-grid" data-mfa-verify-form><div class="field field-wide"><label>6-digit authenticator code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required></label></div><div class="form-actions field-wide"><button class="button button-secondary" type="button" data-mfa-cancel>Cancel</button><button class="button button-primary" type="submit">Enable MFA</button></div></form></div><p class="mfa-message" data-mfa-message role="status" aria-live="polite"></p></div>';
+  }
+
+  function bindMfaSettings(root) {
+    if (!root) return null;
+    if (root.mfaController) return root.mfaController;
+    const status = root.querySelector('[data-mfa-status]');
+    const list = root.querySelector('[data-mfa-list]');
+    const enrollment = root.querySelector('[data-mfa-enrollment]');
+    const enrollButton = root.querySelector('[data-mfa-enroll]');
+    const form = root.querySelector('[data-mfa-verify-form]');
+    const message = root.querySelector('[data-mfa-message]');
+    const qr = root.querySelector('[data-mfa-qr]');
+    const secret = root.querySelector('[data-mfa-secret]');
+    let factorId = null;
+
+    const say = (text, tone = '') => {
+      message.textContent = text;
+      if (tone) message.dataset.tone = tone;
+      else delete message.dataset.tone;
+    };
+    const resetEnrollment = () => {
+      factorId = null;
+      form.reset();
+      enrollment.hidden = true;
+      enrollButton.hidden = false;
+      qr.removeAttribute('src');
+      secret.textContent = '';
+    };
+    const load = async () => {
+      say('');
+      status.textContent = 'Checking…';
+      const { data, error } = await client.auth.mfa.listFactors();
+      if (error) throw error;
+      const factors = (data.totp || []).filter((factor) => factor.status === 'verified');
+      status.textContent = factors.length ? `${factors.length} authenticator${factors.length === 1 ? '' : 's'} enabled` : 'Not enabled';
+      enrollButton.textContent = factors.length ? 'Add another authenticator' : 'Set up authenticator';
+      list.innerHTML = factors.map((factor) => `<div class="mfa-factor"><span><strong>${escapeHtml(factor.friendly_name || 'Authenticator app')}</strong><small>Verified</small></span><button class="button button-secondary" type="button" data-mfa-remove="${escapeHtml(factor.id)}">Remove</button></div>`).join('');
+    };
+    enrollButton.addEventListener('click', async () => {
+      setBusy(enrollButton, true, 'Preparing…');
+      say('');
+      try {
+        const { data, error } = await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: `IPON ${new Date().toISOString()}` });
+        if (error) throw error;
+        factorId = data.id;
+        qr.src = data.totp.qr_code;
+        secret.textContent = data.totp.secret;
+        enrollment.hidden = false;
+        enrollButton.hidden = true;
+        form.elements.code.focus();
+      } catch (error) { say(friendlyError(error), 'error'); }
+      finally { setBusy(enrollButton, false); }
+    });
+    root.querySelector('[data-mfa-cancel]').addEventListener('click', async () => {
+      if (factorId) await client.auth.mfa.unenroll({ factorId }).catch(() => {});
+      resetEnrollment();
+    });
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      const code = form.elements.code.value.trim();
+      if (!/^\d{6}$/.test(code)) return say('Enter the 6-digit code from your authenticator app.', 'error');
+      setBusy(button, true, 'Verifying…');
+      try {
+        const { error } = await client.auth.mfa.challengeAndVerify({ factorId, code });
+        if (error) throw error;
+        resetEnrollment();
+        await load();
+        say('Multi-factor authentication is enabled.', 'success');
+      } catch (error) { say(friendlyError(error), 'error'); }
+      finally { setBusy(button, false); }
+    });
+    list.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-mfa-remove]');
+      if (!button) return;
+      const accepted = await confirmAction({ title: 'Remove authenticator?', message: 'This authenticator will no longer be accepted during sign in.', acceptLabel: 'Remove' });
+      if (!accepted) return;
+      setBusy(button, true, 'Removing…');
+      try {
+        const { error } = await client.auth.mfa.unenroll({ factorId: button.dataset.mfaRemove });
+        if (error) throw error;
+        await client.auth.refreshSession();
+        await load();
+        say('Authenticator removed.', 'success');
+      } catch (error) { say(friendlyError(error), 'error'); }
+      finally { setBusy(button, false); }
+    });
+    root.mfaController = { load };
+    return root.mfaController;
   }
 
   async function initNotifications(profile) {
@@ -582,6 +678,11 @@
       }
       if (!session) return { configured: true, profile: null, session: null };
 
+      if (document.body.dataset.page !== 'mfa' && await requiresMfaChallenge()) {
+        window.location.replace('mfa.html');
+        return { configured: true, profile: null, session, redirecting: true };
+      }
+
       const { data: profile, error } = await withTimeout(client.from('profiles')
         .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id')
         .eq('id', session.user.id)
@@ -646,6 +747,8 @@
 
   function friendlyError(error) {
     const message = error?.message || 'Something went wrong. Please try again.';
+    if (/mfa_verification_failed|invalid.*totp|challenge.*expired/i.test(`${error?.code || ''} ${message}`)) return 'That authenticator code is invalid or expired. Enter the latest code and try again.';
+    if (/rate limit|too many requests|over_email_send_rate_limit/i.test(`${error?.code || ''} ${message}`)) return 'Too many attempts. Wait a moment, then try again.';
     if (/duplicate key|unique constraint/i.test(message)) return 'That reference was already used.';
     if (/cannot remove or disable your own administrator|another active administrator/i.test(message)) return 'Assign another active administrator before changing administrator access.';
     if (/row-level security|permission denied|not allowed to|only (?:a |an )?.*administrator/i.test(message)) return 'You do not have permission for that action.';
@@ -734,6 +837,13 @@
     if (refreshError) throw refreshError;
   }
 
+  async function requiresMfaChallenge() {
+    if (!client) return false;
+    const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (error) throw error;
+    return data.currentLevel === 'aal1' && data.nextLevel === 'aal2';
+  }
+
   function subscribeToChanges(name, tables, refresh) {
     if (!client || !tables.length) return null;
     let timer;
@@ -766,7 +876,7 @@
 
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, subscribeToChanges,
+    escapeHtml, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

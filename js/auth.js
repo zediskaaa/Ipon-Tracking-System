@@ -19,6 +19,11 @@
   const passwordConfirmation = document.getElementById('password-confirmation');
   const passwordRequirements = document.getElementById('password-requirements');
   const passwordToggle = document.getElementById('password-toggle');
+  const forgotButton = document.getElementById('forgot-password-open');
+  const recoveryDialog = document.getElementById('recovery-dialog');
+  const recoveryRequestForm = document.getElementById('recovery-request-form');
+  const recoveryCodeForm = document.getElementById('recovery-code-form');
+  const recoveryMessage = document.getElementById('recovery-message');
   const nameInputs = [firstName, middleName, lastName];
   const fieldErrors = new Map([
     [firstName, document.getElementById('first-name-error')],
@@ -40,9 +45,14 @@
   if (!state.configured) {
     message.textContent = 'Add your Supabase URL and anon key in js/config.js before signing in.';
     submit.disabled = true;
+    forgotButton.disabled = true;
   }
   if (new URLSearchParams(location.search).get('status') === 'pending') {
     message.textContent = 'Your account is waiting for administrator approval.';
+  }
+  if (new URLSearchParams(location.search).get('status') === 'password-reset') {
+    message.dataset.tone = 'success';
+    message.textContent = 'Password changed. Sign in with your new password.';
   }
 
   function setFieldError(input, errorMessage) {
@@ -130,6 +140,7 @@
     passwordConfirmation.required = signup;
     passwordRequirements.hidden = !signup;
     passwordStrength.element.hidden = !signup;
+    forgotButton.hidden = signup;
     password.autocomplete = signup ? 'new-password' : 'current-password';
     if (signup) { password.minLength = 12; password.maxLength = 128; }
     else { password.removeAttribute('minlength'); password.removeAttribute('maxlength'); }
@@ -154,6 +165,61 @@
   passwordToggle.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
   document.getElementById('show-login').addEventListener('click', () => setMode('login'));
   document.getElementById('show-signup').addEventListener('click', () => setMode('signup'));
+  const resetRecoveryDialog = () => {
+    recoveryRequestForm.hidden = false;
+    recoveryCodeForm.hidden = true;
+    recoveryCodeForm.reset();
+    recoveryMessage.textContent = '';
+    delete recoveryMessage.dataset.tone;
+  };
+  const sendRecoveryCode = async (button) => {
+    const recoveryEmail = recoveryRequestForm.elements.email.value.trim().toLowerCase();
+    recoveryRequestForm.elements.email.value = recoveryEmail;
+    if (!recoveryRequestForm.reportValidity()) return;
+    Ipon.setBusy(button, true, 'Sending…');
+    recoveryMessage.textContent = '';
+    try {
+      const { error } = await Ipon.client.auth.resetPasswordForEmail(recoveryEmail);
+      if (error) throw error;
+      recoveryRequestForm.hidden = true;
+      recoveryCodeForm.hidden = false;
+      recoveryCodeForm.dataset.email = recoveryEmail;
+      document.getElementById('recovery-sent-copy').textContent = `If an account exists for ${recoveryEmail}, a one-time reset code was sent.`;
+      recoveryCodeForm.elements.code.focus();
+    } catch (error) { recoveryMessage.textContent = Ipon.friendlyError(error); recoveryMessage.dataset.tone = 'error'; }
+    finally { Ipon.setBusy(button, false); }
+  };
+  forgotButton.addEventListener('click', () => {
+    resetRecoveryDialog();
+    recoveryRequestForm.elements.email.value = email.value.trim();
+    recoveryDialog.showModal();
+    recoveryRequestForm.elements.email.focus();
+  });
+  document.querySelectorAll('[data-recovery-close]').forEach((button) => button.addEventListener('click', () => recoveryDialog.close()));
+  recoveryDialog.addEventListener('close', resetRecoveryDialog);
+  recoveryRequestForm.addEventListener('submit', (event) => { event.preventDefault(); sendRecoveryCode(event.submitter); });
+  document.getElementById('recovery-resend').addEventListener('click', (event) => {
+    recoveryRequestForm.elements.email.value = recoveryCodeForm.dataset.email;
+    sendRecoveryCode(event.currentTarget);
+  });
+  recoveryCodeForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const code = recoveryCodeForm.elements.code.value.trim();
+    if (!/^\d{6,8}$/.test(code)) {
+      recoveryMessage.dataset.tone = 'error';
+      recoveryMessage.textContent = 'Enter the numeric code from your password reset email.';
+      return recoveryCodeForm.elements.code.focus();
+    }
+    const button = event.submitter;
+    Ipon.setBusy(button, true, 'Verifying…');
+    try {
+      const { error } = await Ipon.client.auth.verifyOtp({ email: recoveryCodeForm.dataset.email, token: code, type: 'recovery' });
+      if (error) throw error;
+      sessionStorage.setItem('iponPasswordRecovery', '1');
+      window.location.replace('reset-password.html');
+    } catch (error) { recoveryMessage.textContent = Ipon.friendlyError(error); recoveryMessage.dataset.tone = 'error'; }
+    finally { Ipon.setBusy(button, false); }
+  });
   const policyDialog = document.getElementById('policy-dialog');
   document.querySelectorAll('[data-policy-open]').forEach((button) => button.addEventListener('click', () => {
     const policy = button.dataset.policyOpen;
@@ -190,6 +256,10 @@
       } else {
         const { data, error } = await Ipon.client.auth.signInWithPassword({ email: email.value, password: password.value });
         if (error) throw error;
+        if (await Ipon.requiresMfaChallenge()) {
+          window.location.replace('mfa.html');
+          return;
+        }
         const { data: profile, error: profileError } = await Ipon.client.from('profiles').select('first_name,last_name,contact_number,role,status').eq('id', data.user.id).single();
         if (profileError) throw profileError;
         if (profile.status !== 'ACTIVE') {

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Verify sign in — IPON</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body data-page="mfa" class="security-page">
+  <main class="security-card" aria-labelledby="mfa-title">
+    <a class="security-brand" href="login.html" aria-label="IPON sign in">IPON</a>
+    <h1 id="mfa-title">Verify it’s you</h1>
+    <p>Enter the current code from your authenticator app to finish signing in.</p>
+    <form id="mfa-form" class="form-grid" novalidate>
+      <div class="field field-wide" id="mfa-factor-field" hidden><label for="mfa-factor">Authenticator</label><select id="mfa-factor" name="factor"></select></div>
+      <div class="field field-wide"><label for="mfa-code">6-digit authenticator code</label><input id="mfa-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required autofocus></div>
+      <button class="button button-primary field-wide" type="submit">Verify and continue</button>
+      <button class="button button-secondary field-wide" id="mfa-signout" type="button">Sign in with another account</button>
+      <p class="security-message field-wide" id="mfa-message" role="alert" aria-live="polite"></p>
+    </form>
+    <small class="security-help">Lost access to your authenticator? Contact the system owner to recover your account.</small>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script>
+  <script src="js/config.js"></script><script src="js/core.js?v=20261112-3"></script><script src="js/mfa.js?v=20261112-3"></script>
+</body>
+</html>
