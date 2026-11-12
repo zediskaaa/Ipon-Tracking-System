@@ -247,7 +247,7 @@ test('account settings open from the responsive identity control', () => {
   assert.match(core, /id="account-dialog"/);
   assert.match(core, /class="account-card account-profile-card"/);
   assert.match(core, /class="account-support"[\s\S]*?data-donate-open[\s\S]*?>Donate me</);
-  assert.match(core, /id="donate-dialog"[\s\S]*?class="donate-sticker" src="assets\/donate-sticker\.jpg"[\s\S]*?id="copy-donate-number"[\s\S]*?id="toggle-donate-qr"[^>]*>Scan me<\/button>[\s\S]*?src="assets\/donate-qr\.jpg"/);
+  assert.match(core, /id="donate-dialog"[\s\S]*?class="donate-sticker" src="assets\/donate-sticker\.jpg"[\s\S]*?id="copy-donate-number"[\s\S]*?id="open-donate-qr"[^>]*>Scan me<\/button>[\s\S]*?id="donate-qr-dialog"[\s\S]*?src="assets\/donate-qr\.jpg"[\s\S]*?>Scan with GCash<\/p>/);
   assert.match(core, /data-donate-open[\s\S]*?donate\?\.showModal\(\)/);
   assert.match(core, /class="account-side-stack"/);
   assert.match(core, /class="account-password-disclosure"/);
