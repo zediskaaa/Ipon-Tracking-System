@@ -41,6 +41,10 @@
   const binTypeFilter = document.getElementById('bin-type-filter');
   const binCount = document.getElementById('bin-count');
   const binList = document.getElementById('bin-list');
+  const groupAvatarEl = document.getElementById('members-group-avatar');
+  const groupNameEl = document.getElementById('members-group-name');
+  const groupSwitcherWrap = document.getElementById('members-group-switcher-wrap');
+  const groupSelect = document.getElementById('members-group-select');
   const contactErrorMessage = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
   const nameErrorMessage = "Use letters, spaces, hyphens, or apostrophes only.";
   const nameFields = [
@@ -55,6 +59,7 @@
   let pendingDeleteMember = null;
   let pendingDeleteReason = '';
   let monthlyAmountTouched = false;
+  let currentGroupId = state.profile?.group_id || '';
   const pageSize = 25;
   let memberPage = 0;
   let searchTimer;
@@ -89,6 +94,23 @@
     applyContributionDefault();
   }
 
+  function renderGroupContext(groups) {
+    const list = Array.isArray(groups) ? groups : [];
+    const current = list.find((item) => item.is_current) || list[0] || null;
+    currentGroupId = current?.group_id || state.profile?.group_id || '';
+    const safeName = current?.name || 'Savings group';
+    if (groupAvatarEl) {
+      groupAvatarEl.innerHTML = Ipon.avatarMarkup(current?.avatar_url, safeName, 'avatar-md');
+      Ipon.bindAvatarFallbacks(groupAvatarEl);
+    }
+    if (groupNameEl) groupNameEl.textContent = safeName;
+    if (groupSwitcherWrap && groupSelect) {
+      groupSwitcherWrap.hidden = list.length <= 1;
+      groupSelect.replaceChildren(...list.map((item) => new Option(`${item.name} (${item.role})`, item.group_id)));
+      if (current?.group_id) groupSelect.value = current.group_id;
+    }
+  }
+
   function render() {
     tbody.innerHTML = members.length ? members.map((member) => { const account = accountsByMember.get(member.id); const canDelete = !membersWithContributions.has(member.id); return `<tr>
       <td><strong>${Ipon.escapeHtml(member.full_name)}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
@@ -101,11 +123,13 @@
     const term = search.value.trim().replace(/[%_]/g, '');
     if (term) query = query.ilike('full_name', `%${term}%`);
     if (statusFilter.value) query = query.eq('status', statusFilter.value);
-    const [{ data, count, error }, accessRows] = await Promise.all([
+    const [{ data, count, error }, accessRows, groups] = await Promise.all([
       query.order('full_name').range(memberPage * pageSize, (memberPage + 1) * pageSize - 1),
-      Ipon.rpc('get_group_access_list')
+      Ipon.rpc('get_group_access_list'),
+      Ipon.rpc('get_my_groups')
     ]);
     if (error) throw error;
+    renderGroupContext(groups);
     const memberIds = (data || []).map((member) => member.id);
     const contribResult = memberIds.length
       ? await Ipon.client.from('contribution_periods').select('member_id,contributions!inner(id)').in('member_id', memberIds)
@@ -413,6 +437,22 @@
   document.getElementById('close-member-history-dialog').addEventListener('click', () => historyDialog.close());
   search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { memberPage = 0; refresh(); }, 250); });
   statusFilter.addEventListener('change', () => { memberPage = 0; refresh(); });
+  groupSelect?.addEventListener('change', async () => {
+    const nextGroupId = groupSelect.value;
+    if (!nextGroupId || nextGroupId === currentGroupId) return;
+    groupSelect.disabled = true;
+    try {
+      await Ipon.switchActiveGroup(nextGroupId);
+      memberPage = 0;
+      await Promise.all([loadContributionSettings(), load(), ...(binDialog.open ? [loadBin()] : [])]);
+      Ipon.toast('Switched active savings group.');
+    } catch (error) {
+      groupSelect.value = currentGroupId;
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      groupSelect.disabled = false;
+    }
+  });
   pager.addEventListener('click', (event) => {
     const button = event.target.closest('[data-page]');
     if (!button || button.disabled) return;
@@ -420,5 +460,5 @@
     refresh();
   });
   try { await Promise.all([loadContributionSettings(), load()]); } catch (error) { Ipon.showInlineError(tbody, error, () => Promise.all([loadContributionSettings(), load()]), 7); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('members', ['members', 'profiles', 'contribution_settings', 'contributions', 'announcements'], () => Promise.all([loadContributionSettings(), refresh(), ...(binDialog.open ? [loadBin()] : [])]));
+  Ipon.subscribeToChanges('members', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_settings', 'contributions', 'announcements'], () => Promise.all([loadContributionSettings(), refresh(), ...(binDialog.open ? [loadBin()] : [])]));
 })();

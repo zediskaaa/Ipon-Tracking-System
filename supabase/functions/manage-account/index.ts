@@ -46,6 +46,68 @@ function parseSender(raw: string | undefined, fallbackName: string, fallbackEmai
   return { name: fallbackName, email: fallbackEmail };
 }
 
+async function deliverEmail({
+  toEmail,
+  recipientName,
+  subject,
+  html,
+  plainText,
+  fallbackEmail
+}: {
+  toEmail: string;
+  recipientName: string;
+  subject: string;
+  html: string;
+  plainText: string;
+  fallbackEmail?: string | null;
+}) {
+  async function postEmail(endpoint: string, headers: Record<string, string>, payload: unknown, providerName: string) {
+    try {
+      const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(payload) });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        return { email_sent: false, email_error: errData?.message || `${providerName} returned status ${res.status}.`, invite_subject: subject, invite_message: plainText };
+      }
+      return { email_sent: true, email_error: null, invite_subject: subject, invite_message: plainText };
+    } catch (err) {
+      return { email_sent: false, email_error: err instanceof Error ? err.message : `Unable to reach ${providerName}.`, invite_subject: subject, invite_message: plainText };
+    }
+  }
+
+  const brevoKey = Deno.env.get('BREVO_API_KEY')?.trim();
+  const resendKey = Deno.env.get('RESEND_API_KEY')?.trim();
+  const rawFrom = Deno.env.get('INVITE_FROM_EMAIL')?.trim() || Deno.env.get('BREVO_SENDER_EMAIL')?.trim();
+
+  if (brevoKey) {
+    const sender = parseSender(rawFrom, SYSTEM_NAME, String(fallbackEmail || '').trim());
+    if (!sender.email) {
+      return { email_sent: false, email_error: 'Set INVITE_FROM_EMAIL (or BREVO_SENDER_EMAIL) to your verified Brevo sender email.', invite_subject: subject, invite_message: plainText };
+    }
+    return postEmail(
+      'https://api.brevo.com/v3/smtp/email',
+      { Accept: 'application/json', 'Content-Type': 'application/json', 'api-key': brevoKey },
+      { sender, to: [{ email: toEmail, name: recipientName }], subject, htmlContent: html, textContent: plainText },
+      'Brevo'
+    );
+  }
+
+  if (resendKey) {
+    return postEmail(
+      'https://api.resend.com/emails',
+      { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+      { from: rawFrom || `${SYSTEM_NAME} <onboarding@resend.dev>`, to: [toEmail], subject, html, text: plainText },
+      'Resend'
+    );
+  }
+
+  return {
+    email_sent: false,
+    email_error: 'Automatic email service (BREVO_API_KEY or RESEND_API_KEY) is not configured yet.',
+    invite_subject: subject,
+    invite_message: plainText
+  };
+}
+
 async function sendInviteEmail({
   toEmail,
   recipientName,
@@ -104,51 +166,92 @@ async function sendInviteEmail({
     </div>
   `.trim();
 
-  async function postEmail(endpoint: string, headers: Record<string, string>, payload: unknown, providerName: string) {
-    try {
-      const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(payload) });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        return { email_sent: false, email_error: errData?.message || `${providerName} returned status ${res.status}.`, invite_subject: subject, invite_message: plainText };
-      }
-      return { email_sent: true, email_error: null, invite_subject: subject, invite_message: plainText };
-    } catch (err) {
-      return { email_sent: false, email_error: err instanceof Error ? err.message : `Unable to reach ${providerName}.`, invite_subject: subject, invite_message: plainText };
-    }
-  }
+  return deliverEmail({
+    toEmail,
+    recipientName,
+    subject,
+    html,
+    plainText,
+    fallbackEmail: inviterEmail
+  });
+}
 
-  const brevoKey = Deno.env.get('BREVO_API_KEY')?.trim();
-  const resendKey = Deno.env.get('RESEND_API_KEY')?.trim();
-  const rawFrom = Deno.env.get('INVITE_FROM_EMAIL')?.trim() || Deno.env.get('BREVO_SENDER_EMAIL')?.trim();
+async function sendAdminRequestDecisionEmail({
+  toEmail,
+  recipientName,
+  decision,
+  groupName,
+  reviewNote,
+  senderEmail,
+  loginUrl
+}: {
+  toEmail: string;
+  recipientName: string;
+  decision: 'APPROVED' | 'REJECTED';
+  groupName?: string | null;
+  reviewNote?: string | null;
+  senderEmail?: string | null;
+  loginUrl: string;
+}) {
+  const approved = decision === 'APPROVED';
+  const safeGroup = String(groupName || '').trim() || 'your savings group';
+  const safeReason = String(reviewNote || '').trim();
+  const subject = approved
+    ? `Congratulations! Your administrator request on ${SYSTEM_NAME} was approved`
+    : `We're sorry, your administrator request on ${SYSTEM_NAME} was declined`;
+  const plainText = approved
+    ? [
+        `Hello ${recipientName},`,
+        '',
+        `Congratulations! Your administrator access request on ${SYSTEM_NAME} has been approved.`,
+        `Your savings group "${safeGroup}" is now ready.`,
+        '',
+        `Sign in here using the email and password you registered: ${loginUrl}`,
+        '',
+        'You can now manage your savings group, customize its picture, and invite your members.'
+      ].join('\n')
+    : [
+        `Hello ${recipientName},`,
+        '',
+        `We're sorry, but your administrator access request on ${SYSTEM_NAME} was not approved at this time.`,
+        safeReason ? `Reason for decline: ${safeReason}` : '',
+        '',
+        'Please note that this email address cannot submit another administrator request.',
+        'You may reach out to the platform owner if you have questions.'
+      ].filter(Boolean).join('\n');
 
-  if (brevoKey) {
-    const sender = parseSender(rawFrom, SYSTEM_NAME, String(inviterEmail || '').trim());
-    if (!sender.email) {
-      return { email_sent: false, email_error: 'Set INVITE_FROM_EMAIL (or BREVO_SENDER_EMAIL) to your verified Brevo sender email.', invite_subject: subject, invite_message: plainText };
-    }
-    return postEmail(
-      'https://api.brevo.com/v3/smtp/email',
-      { Accept: 'application/json', 'Content-Type': 'application/json', 'api-key': brevoKey },
-      { sender, to: [{ email: toEmail, name: recipientName }], subject, htmlContent: html, textContent: plainText },
-      'Brevo'
-    );
-  }
+  const html = approved
+    ? `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #163029; line-height: 1.55; max-width: 560px; margin: 0 auto; padding: 24px; background: #fbf9f2; border: 1px solid #d9d6c8; border-radius: 14px;">
+        <p style="margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #1f6a43;">${escapeHtml(SYSTEM_NAME)}</p>
+        <h2 style="margin: 0 0 14px; font-size: 20px; color: #163029;">Congratulations!</h2>
+        <p style="margin: 0 0 14px;">Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p style="margin: 0 0 16px;">Congratulations! Your administrator access request on <strong>${escapeHtml(SYSTEM_NAME)}</strong> has been approved. Your savings group <strong>${escapeHtml(safeGroup)}</strong> is ready to use.</p>
+        <p style="margin: 0 0 18px;">
+          <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #163029; color: #ffffff; text-decoration: none; font-weight: 600; padding: 10px 18px; border-radius: 10px;">Sign in to ${escapeHtml(SYSTEM_NAME)}</a>
+        </p>
+        <p style="margin: 0; font-size: 13px; color: #5c5749;">Sign in with the email address (<strong>${escapeHtml(toEmail)}</strong>) and password you provided when requesting access.</p>
+      </div>
+    `.trim()
+    : `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #163029; line-height: 1.55; max-width: 560px; margin: 0 auto; padding: 24px; background: #fbf9f2; border: 1px solid #d9d6c8; border-radius: 14px;">
+        <p style="margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #91332e;">${escapeHtml(SYSTEM_NAME)}</p>
+        <h2 style="margin: 0 0 14px; font-size: 20px; color: #163029;">Administrator request declined</h2>
+        <p style="margin: 0 0 14px;">Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p style="margin: 0 0 14px;">We're sorry, but your administrator access request on <strong>${escapeHtml(SYSTEM_NAME)}</strong> was not approved at this time.</p>
+        ${safeReason ? `<p style="margin: 0 0 14px; padding: 12px 14px; border-radius: 8px; background: #fff; border: 1px solid #e4c6c3;"><strong>Reason for decline:</strong> ${escapeHtml(safeReason)}</p>` : ''}
+        <p style="margin: 0; font-size: 13px; color: #5c5749;">Please note that this email address cannot submit another administrator request. Contact the platform owner if you need further assistance.</p>
+      </div>
+    `.trim();
 
-  if (resendKey) {
-    return postEmail(
-      'https://api.resend.com/emails',
-      { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-      { from: rawFrom || `${SYSTEM_NAME} <onboarding@resend.dev>`, to: [toEmail], subject, html, text: plainText },
-      'Resend'
-    );
-  }
-
-  return {
-    email_sent: false,
-    email_error: 'Automatic email service (BREVO_API_KEY or RESEND_API_KEY) is not configured yet.',
-    invite_subject: subject,
-    invite_message: plainText
-  };
+  return deliverEmail({
+    toEmail,
+    recipientName,
+    subject,
+    html,
+    plainText,
+    fallbackEmail: senderEmail
+  });
 }
 
 Deno.serve(async (request) => {
@@ -277,6 +380,43 @@ Deno.serve(async (request) => {
     const { data: targetAuth } = await admin.auth.admin.getUserById(target.id);
     const { error } = await admin.auth.admin.updateUserById(target.id, { password, app_metadata: { ...(targetAuth?.user?.app_metadata || {}), must_change_password: false } });
     return error ? json({ error: 'Password could not be updated.' }, 400) : json({ updated: true });
+  }
+
+  if (body.action === 'admin-request-decision-email') {
+    if (actor.role !== 'SUPER_ADMIN') return json({ error: 'Only the Super Admin can send decision emails.' }, 403);
+    const targetId = String(body.user_id || '').trim();
+    const decision = body.decision === 'APPROVED' ? 'APPROVED' : body.decision === 'REJECTED' ? 'REJECTED' : null;
+    if (!UUID_RE.test(targetId) || !decision) return json({ error: 'A valid target account and decision are required.' }, 400);
+    const { data: target, error: targetError } = await admin
+      .from('profiles')
+      .select('id,email,full_name,first_name,middle_name,last_name,status,group_id')
+      .eq('id', targetId)
+      .single();
+    if (targetError || !target || !target.email) return json({ error: 'Target account or email not found.' }, 404);
+    const expectedStatus = decision === 'APPROVED' ? 'ACTIVE' : 'DISABLED';
+    if (target.status !== expectedStatus) return json({ error: 'Target request status does not match decision.' }, 400);
+
+    let resolvedGroupName = String(body.group_name || '').trim() || null;
+    if (!resolvedGroupName && target.group_id) {
+      const { data: groupRow } = await admin.from('groups').select('name').eq('id', target.group_id).maybeSingle();
+      resolvedGroupName = groupRow?.name || null;
+    }
+    const recipientName = target.full_name || [target.first_name, target.middle_name, target.last_name].filter(Boolean).join(' ') || target.email;
+    const originUrl = typeof body.login_url === 'string' && /^https?:\/\//i.test(body.login_url)
+      ? body.login_url
+      : 'https://ipon-tracking-group-records.vercel.app/login.html';
+
+    const emailOutcome = await sendAdminRequestDecisionEmail({
+      toEmail: target.email,
+      recipientName,
+      decision,
+      groupName: resolvedGroupName,
+      reviewNote: String(body.review_note || '').trim() || null,
+      senderEmail: actor.email || userResult.user.email || null,
+      loginUrl: originUrl
+    });
+
+    return json({ email_sent: emailOutcome.email_sent, email_error: emailOutcome.email_error });
   }
 
   const role = body.role === 'ADMIN' ? 'ADMIN' : body.role === 'MEMBER' ? 'MEMBER' : body.role === 'TREASURER' ? 'TREASURER' : null;

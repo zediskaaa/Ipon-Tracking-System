@@ -7,8 +7,8 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>IPON — Savings calendar</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261112-16">
-  <link rel="stylesheet" href="css/hero-plates.css?v=20261112-9">
+  <link rel="stylesheet" href="css/app.css?v=20261113-5">
+  <link rel="stylesheet" href="css/hero-plates.css?v=20261113-1">
 </head>
 <body data-page="dashboard">
   <main class="comp-frame" aria-label="IPON savings calendar dashboard">
@@ -90,14 +90,19 @@
             </div>
           </div>
           <div class="group-bar-controls">
-            <label class="group-switcher-wrap">
+            <label class="group-switcher-wrap" id="dashboard-group-switcher-wrap" hidden>
               <span class="sr-only">Select savings group</span>
               <select class="group-switcher-select" id="dashboard-group-select" aria-label="Select savings group"></select>
             </label>
             <div class="group-bar-actions" id="dashboard-group-actions" data-role="ADMIN" hidden>
-              <button class="group-bar-btn" id="dashboard-edit-group" type="button">Edit group</button>
-              <button class="group-bar-btn" id="dashboard-invite-member" type="button">+ Invite</button>
-              <button class="group-bar-btn is-primary" id="dashboard-create-group" type="button">+ New group</button>
+              <button class="group-bar-btn" id="dashboard-manage-group" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.66 0-1.25.4-1.51 1Z"/></svg>
+                <span>Manage</span>
+              </button>
+              <button class="group-bar-btn is-primary" id="dashboard-create-group" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                <span>Add group</span>
+              </button>
             </div>
           </div>
         </div>
@@ -239,6 +244,70 @@
       </div>
     </aside>
   </main>
+  <dialog class="form-dialog group-hub-dialog" id="group-manage-hub-dialog" aria-labelledby="group-hub-title">
+    <div class="group-hub-sheet">
+      <header class="group-hub-hero">
+        <div class="group-hub-identity">
+          <div class="group-hub-avatar" id="group-hub-avatar" aria-hidden="true"></div>
+          <div class="group-hub-copy">
+            <span class="group-hub-eyebrow">Group workspace</span>
+            <div class="group-hub-name-row">
+              <h2 id="group-hub-title">Savings Group</h2>
+              <span class="group-hub-role" id="group-hub-role">ADMIN</span>
+            </div>
+            <p id="group-hub-meta">Manage members, appearance, and contributor access.</p>
+          </div>
+        </div>
+        <button class="dialog-close" type="button" id="close-group-hub-dialog" aria-label="Close group management"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </header>
+      <div class="group-hub-body">
+        <div class="group-hub-switcher" id="group-hub-switcher-wrap" hidden>
+          <label for="group-hub-select">Active group</label>
+          <select id="group-hub-select" aria-label="Switch active group"></select>
+        </div>
+        <div class="group-hub-grid">
+          <button class="group-hub-card" id="dashboard-edit-group" type="button">
+            <span class="group-hub-card-icon is-emerald" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+            <span class="group-hub-card-copy">
+              <strong>Edit group &amp; picture</strong>
+              <small>Rename group, upload group chat DP, and update appearance.</small>
+            </span>
+            <svg class="group-hub-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </button>
+          <button class="group-hub-card" id="dashboard-invite-member" type="button">
+            <span class="group-hub-card-icon is-gold" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>
+            <span class="group-hub-card-copy">
+              <strong>Invite members</strong>
+              <small>Send email sign-in credentials with recommended temporary passwords.</small>
+            </span>
+            <svg class="group-hub-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </button>
+        </div>
+        <label class="group-hub-switch-card" for="manage-hub-self-toggle">
+          <span class="group-hub-card-icon is-sage" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="group-hub-card-copy">
+            <strong>Include me as a contributor</strong>
+            <small>Join monthly contribution periods and appear in contributor rosters for this group.</small>
+          </span>
+          <input class="toggle-switch-input" id="manage-hub-self-toggle" type="checkbox" role="switch">
+        </label>
+        <div class="group-hub-links">
+          <a class="group-hub-link" href="members.html">
+            <span><strong>Member directory &amp; recycle bin</strong><small>Edit shares, reset passwords, or recover removed members</small></span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </a>
+          <a class="group-hub-link" href="settings.html">
+            <span><strong>Contribution defaults &amp; treasurers</strong><small>Configure monthly schedules and group access</small></span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </a>
+        </div>
+      </div>
+      <footer class="group-hub-footer">
+        <button class="button button-secondary" type="button" id="group-hub-create-another">+ Add another group</button>
+        <button class="button button-primary" type="button" id="done-group-hub-dialog">Done</button>
+      </footer>
+    </div>
+  </dialog>
   <dialog class="form-dialog group-form-dialog" id="group-form-dialog" aria-labelledby="group-form-title">
     <div class="form-dialog-sheet">
       <header class="form-dialog-header">
@@ -250,7 +319,7 @@
       </header>
       <form id="group-form" class="form-grid">
         <input type="hidden" name="mode" value="edit">
-        <div class="field field-wide group-dp-field">
+        <div class="field group-dp-field">
           <span class="field-label">Group chat picture (optional)</span>
           <div class="group-dp-picker">
             <div class="group-dp-preview" id="group-dp-preview" aria-hidden="true"></div>
@@ -258,13 +327,14 @@
               <label class="button button-secondary group-dp-upload" for="group-dp-input">Choose image</label>
               <button class="button button-secondary" id="group-dp-remove" type="button" hidden>Remove</button>
               <input id="group-dp-input" type="file" accept="image/*" hidden>
-              <small class="field-help">Displayed at the top of this group workspace.</small>
+              <small class="field-help">Shown in group header.</small>
             </div>
           </div>
         </div>
-        <div class="field field-wide">
+        <div class="field group-name-field">
           <label for="group-name-input">Group name</label>
           <input id="group-name-input" name="name" minlength="2" maxlength="150" placeholder="e.g., Family Savings Fund" required>
+          <small class="field-help">Displayed at the top of this workspace and in invite emails.</small>
         </div>
         <div class="field field-wide">
           <label class="toggle-switch-row" for="group-self-contributor">
@@ -320,6 +390,6 @@
       </form>
     </div>
   </dialog>
-  <script src="js/config.js"></script><script src="js/core.js?v=20261112-17"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/dashboard.js?v=20261112-15"></script>
+  <script src="js/config.js"></script><script src="js/core.js?v=20261113-2"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/dashboard.js?v=20261113-1"></script>
 </body>
 </html>

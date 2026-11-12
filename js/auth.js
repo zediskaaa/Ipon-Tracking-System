@@ -23,6 +23,8 @@
   const recoveryDialog = document.getElementById('recovery-dialog');
   const recoveryRequestForm = document.getElementById('recovery-request-form');
   const recoveryMessage = document.getElementById('recovery-message');
+  const requestSuccessDialog = document.getElementById('request-success-dialog');
+  const requestSuccessEmail = document.getElementById('request-success-email');
   const nameInputs = [firstName, middleName, lastName];
   const fieldErrors = new Map([
     [firstName, document.getElementById('first-name-error')],
@@ -201,6 +203,21 @@
     policyDialog.showModal();
   }));
 
+  document.querySelectorAll('[data-request-success-close]').forEach((btn) => btn.addEventListener('click', () => {
+    requestSuccessDialog?.close();
+    password.focus();
+  }));
+
+  email.addEventListener('blur', async () => {
+    if (mode !== 'signup' || !email.value || !email.validity.valid) return;
+    try {
+      const eligibility = await Ipon.rpc('check_admin_request_eligibility', { p_email: email.value.trim().toLowerCase() });
+      if (eligibility?.reason === 'rejected') {
+        setFieldError(email, 'This email was declined for administrator access and cannot request again.');
+      }
+    } catch (_) {}
+  });
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     delete message.dataset.tone;
@@ -214,18 +231,36 @@
         const middle = middleName.value.trim() ? Ipon.normalizeNamePart(middleName.value) : null;
         const last = Ipon.normalizeNamePart(lastName.value);
         const full = [first, middle, last].filter(Boolean).join(' ');
-        const { error } = await Ipon.client.auth.signUp({
-          email: email.value,
+        const submittedEmail = email.value.trim().toLowerCase();
+        const eligibility = await Ipon.rpc('check_admin_request_eligibility', { p_email: submittedEmail });
+        if (eligibility && !eligibility.eligible) {
+          const fallbackMsg = eligibility.message || 'This email cannot submit an administrator request.';
+          setFieldError(email, eligibility.reason === 'rejected' ? 'This email was declined for administrator access and cannot request again.' : fallbackMsg);
+          message.textContent = fallbackMsg;
+          email.focus();
+          return;
+        }
+        const { data: signUpData, error } = await Ipon.client.auth.signUp({
+          email: submittedEmail,
           password: password.value,
           options: { data: { first_name: first, middle_name: middle, last_name: last, full_name: full, contact_number: contactNumber.value.trim(), request_reason: requestReason.value.trim(), account_kind: 'ADMIN_REQUEST' } }
         });
         if (error) throw error;
+        if (signUpData?.user && Array.isArray(signUpData.user.identities) && signUpData.user.identities.length === 0) {
+          setFieldError(email, 'An account or administrator request with this email already exists.');
+          message.textContent = 'An account or administrator request with this email already exists.';
+          email.focus();
+          return;
+        }
         await Ipon.client.auth.signOut();
         form.reset();
-        clearFieldErrors();
-        setPasswordVisibility(false);
+        setMode('login');
+        email.value = submittedEmail;
         message.dataset.tone = 'success';
-        message.textContent = 'Request submitted. The Super Admin will review your access request.';
+        message.textContent = 'Request submitted. Wait for an email update on your approval, then sign in once approved.';
+        Ipon.toast('Administrator request submitted. Check your email for the decision.');
+        if (requestSuccessEmail) requestSuccessEmail.textContent = `Updates will be sent to ${submittedEmail}`;
+        requestSuccessDialog?.showModal();
       } else {
         const { data, error } = await Ipon.client.auth.signInWithPassword({ email: email.value, password: password.value });
         if (error) throw error;
@@ -235,11 +270,19 @@
         }
         const { data: profile, error: profileError } = await Ipon.client.from('profiles').select('first_name,last_name,contact_number,role,status').eq('id', data.user.id).single();
         if (profileError) throw profileError;
+        if (profile.status === 'DISABLED') {
+          await Ipon.client.auth.signOut();
+          throw new Error('Your administrator request was declined or your account is disabled.');
+        }
         if (profile.status !== 'ACTIVE') {
           await Ipon.client.auth.signOut();
           throw new Error('Your account is waiting for administrator approval.');
         }
         await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' });
+        try {
+          sessionStorage.setItem('ipon_active_role', profile.role);
+          localStorage.setItem('ipon_active_role', profile.role);
+        } catch {}
         Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
         window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(profile.role));
       }

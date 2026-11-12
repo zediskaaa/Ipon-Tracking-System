@@ -14,6 +14,12 @@
   const approvalId = document.getElementById('approve-request-id');
   const groupName = document.getElementById('approve-group-name');
   const approvalCopy = document.getElementById('approve-request-copy');
+  const rejectDialog = document.getElementById('reject-request-dialog');
+  const rejectForm = document.getElementById('reject-request-form');
+  const rejectId = document.getElementById('reject-request-id');
+  const rejectPreset = document.getElementById('reject-reason-preset');
+  const rejectText = document.getElementById('reject-reason-text');
+  const rejectCopy = document.getElementById('reject-request-copy');
   const administratorDialog = document.getElementById('administrator-dialog');
   const administratorForm = document.getElementById('administrator-form');
   const userPasswordDialog = document.getElementById('user-password-dialog');
@@ -125,7 +131,7 @@
     requestsBody.innerHTML = visible.length ? visible.map((request) => { const profile = profileById.get(request.requester_id); const pending = request.status === 'PENDING'; return `<tr>
       <td><strong>${Ipon.escapeHtml(profile.full_name)}</strong><small class="field-help platform-id">${Ipon.escapeHtml(profile.id)}</small></td>
       <td>${Ipon.escapeHtml(request.contact_number || 'Not provided')}<small class="field-help">${Ipon.escapeHtml(request.email)}</small></td>
-      <td>${Ipon.escapeHtml(request.reason)}</td>
+      <td>${Ipon.escapeHtml(request.reason)}${request.status === 'REJECTED' && request.review_note ? `<small class="field-help" style="color:var(--red);display:block;margin-top:4px;">Declined reason: ${Ipon.escapeHtml(request.review_note)}</small>` : ''}</td>
       <td>${Ipon.dateLabel(request.created_at)}</td><td>${statusLabel(request.status)}</td>
       <td><div class="table-actions">${pending ? `<button class="icon-action" type="button" data-approve-request="${profile.id}">Approve</button><button class="icon-action danger-action" type="button" data-reject-request="${profile.id}">Reject</button>` : request.status === 'REJECTED' ? `<button class="icon-action" type="button" data-reopen-request="${profile.id}">Reopen</button>` : ''}</div></td>
     </tr>`; }).join('') : `<tr><td colspan="6" class="empty-state">${query || status ? 'No matching administrator requests.' : 'No administrator requests.'}</td></tr>`;
@@ -228,7 +234,7 @@
     const [profileResult, groupResult, requestResult, featureRequestResult, bugReportResult, activityResult, logResult] = await Promise.all([
       Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,created_at').order('created_at', { ascending: false }),
       Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false }),
-      Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,created_at').order('created_at', { ascending: false }).limit(200),
+      Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,review_note,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('feature_requests').select('id,requester_id,title,details,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200),
@@ -262,6 +268,39 @@
     approvalForm.reset();
   }
 
+  function closeRejectDialog() {
+    rejectDialog?.close();
+    rejectForm?.reset();
+  }
+
+  rejectPreset?.addEventListener('change', () => {
+    if (rejectPreset.value === 'custom') {
+      rejectText.value = '';
+      rejectText.placeholder = 'Enter custom rejection reason…';
+      rejectText.focus();
+    } else {
+      rejectText.value = rejectPreset.value;
+    }
+  });
+
+  rejectText?.addEventListener('input', () => {
+    const matched = [...rejectPreset.options].some((option) => option.value !== 'custom' && option.value === rejectText.value);
+    if (!matched && rejectPreset.value !== 'custom') rejectPreset.value = 'custom';
+  });
+
+  async function sendDecisionNotice(payload, baseSuccess) {
+    try {
+      const result = await Ipon.notifyAdminRequestDecision(payload);
+      if (result?.email_sent) {
+        Ipon.toast(`${baseSuccess} Email update sent.`);
+      } else {
+        Ipon.toast(`${baseSuccess}${result?.email_error ? ` (Email not sent: ${result.email_error})` : ''}`);
+      }
+    } catch (emailErr) {
+      Ipon.toast(`${baseSuccess} (Email failed: ${Ipon.friendlyError(emailErr)})`);
+    }
+  }
+
   requestsBody.addEventListener('click', async (event) => {
     const approve = event.target.closest('[data-approve-request]');
     const reject = event.target.closest('[data-reject-request]');
@@ -291,28 +330,65 @@
     if (!reject) return;
     const profile = profiles.find((item) => item.id === reject.dataset.rejectRequest);
     if (!profile) return;
-    const accepted = await Ipon.confirmAction({ title: 'Reject administrator request?', message: `${profile.full_name} will not receive administrator access.`, acceptLabel: 'Reject request' });
-    if (!accepted) return;
-    Ipon.setBusy(reject, true, 'Rejecting…');
+    rejectId.value = profile.id;
+    rejectCopy.textContent = `Decline administrator request for ${profile.full_name}.`;
+    rejectPreset.value = 'Incomplete or unverifiable contact information';
+    rejectText.value = 'Incomplete or unverifiable contact information';
+    rejectDialog.showModal();
+    rejectText.focus();
+  });
+
+  rejectForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const targetUserId = rejectId.value;
+    const profile = profiles.find((item) => item.id === targetUserId);
+    const note = rejectText.value.trim();
+    if (!profile || note.length < 5) {
+      Ipon.setFieldError(rejectText, 'Enter at least 5 characters explaining why the request is rejected.');
+      rejectText.focus();
+      return;
+    }
+    const confirmed = await Ipon.confirmAction({
+      title: 'Reject administrator request?',
+      message: `Decline ${profile.full_name}'s administrator request? Once rejected, this email cannot submit another request.`,
+      acceptLabel: 'Reject request'
+    });
+    if (!confirmed) return;
+
+    const button = rejectForm.querySelector('[type="submit"]');
+    Ipon.setBusy(button, true, 'Rejecting…');
     try {
-      await Ipon.rpc('super_admin_reject_request', { p_user_id: profile.id, p_review_note: null });
-      Ipon.toast('Administrator request rejected.');
+      await Ipon.rpc('super_admin_reject_request', { p_user_id: targetUserId, p_review_note: note });
+      closeRejectDialog();
+      await sendDecisionNotice({ user_id: targetUserId, decision: 'REJECTED', review_note: note }, 'Administrator request rejected.');
       await load();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
-      Ipon.setBusy(reject, false);
+      Ipon.setBusy(button, false);
     }
   });
 
   approvalForm.addEventListener('submit', async (event) => {
     event.preventDefault();
+    const targetUserId = approvalId.value;
+    const profile = profiles.find((item) => item.id === targetUserId);
+    const approvedGroupName = groupName.value.trim();
+    if (!approvedGroupName) return;
+
+    const confirmed = await Ipon.confirmAction({
+      title: 'Approve administrator request?',
+      message: `Approve ${profile?.full_name || 'this applicant'} as an administrator and create savings group "${approvedGroupName}"?`,
+      acceptLabel: 'Approve and create group'
+    });
+    if (!confirmed) return;
+
     const button = approvalForm.querySelector('[type="submit"]');
     Ipon.setBusy(button, true, 'Approving…');
     try {
-      await Ipon.rpc('super_admin_approve_request', { p_user_id: approvalId.value, p_group_name: groupName.value.trim() });
+      await Ipon.rpc('super_admin_approve_request', { p_user_id: targetUserId, p_group_name: approvedGroupName });
       closeApprovalDialog();
-      Ipon.toast('Administrator approved and group created.');
+      await sendDecisionNotice({ user_id: targetUserId, decision: 'APPROVED', group_name: approvedGroupName }, 'Administrator approved and group created.');
       await load();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
@@ -474,6 +550,8 @@
 
   document.getElementById('approve-request-close').addEventListener('click', closeApprovalDialog);
   document.getElementById('approve-request-cancel').addEventListener('click', closeApprovalDialog);
+  document.getElementById('reject-request-close')?.addEventListener('click', closeRejectDialog);
+  document.getElementById('reject-request-cancel')?.addEventListener('click', closeRejectDialog);
   document.getElementById('bug-viewer-close')?.addEventListener('click', () => bugViewerDialog?.close());
   bugReportsBody?.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-view-bug]');

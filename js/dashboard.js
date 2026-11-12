@@ -37,7 +37,16 @@
   const groupRoleEl = document.getElementById('dashboard-group-role');
   const groupMetaEl = document.getElementById('dashboard-group-meta');
   const groupSelect = document.getElementById('dashboard-group-select');
+  const groupSwitcherWrap = document.getElementById('dashboard-group-switcher-wrap');
   const groupActionsEl = document.getElementById('dashboard-group-actions');
+  const groupHubDialog = document.getElementById('group-manage-hub-dialog');
+  const groupHubAvatar = document.getElementById('group-hub-avatar');
+  const groupHubTitle = document.getElementById('group-hub-title');
+  const groupHubRole = document.getElementById('group-hub-role');
+  const groupHubMeta = document.getElementById('group-hub-meta');
+  const groupHubSwitcherWrap = document.getElementById('group-hub-switcher-wrap');
+  const groupHubSelect = document.getElementById('group-hub-select');
+  const groupHubSelfToggle = document.getElementById('manage-hub-self-toggle');
   const groupDialog = document.getElementById('group-form-dialog');
   const groupForm = document.getElementById('group-form');
   const groupDpPreview = document.getElementById('group-dp-preview');
@@ -53,6 +62,27 @@
   const inviteOnlyRows = document.getElementById('invite-only-rows');
   document.getElementById('dashboard-signout').addEventListener('click', Ipon.signOut);
 
+  function syncGroupHub() {
+    if (!currentGroup) return;
+    const safeName = currentGroup.name || 'Savings Group';
+    if (groupHubAvatar) {
+      groupHubAvatar.innerHTML = Ipon.avatarMarkup(currentGroup.avatar_url, safeName, 'avatar-lg');
+      Ipon.bindAvatarFallbacks(groupHubAvatar);
+    }
+    if (groupHubTitle) groupHubTitle.textContent = safeName;
+    if (groupHubRole) groupHubRole.textContent = currentGroup.role || state?.profile?.role || 'ADMIN';
+    const contributorCount = Number(currentGroup.active_member_count || 0);
+    if (groupHubMeta) {
+      groupHubMeta.textContent = `${contributorCount} active contributor${contributorCount === 1 ? '' : 's'} · ${currentGroup.is_contributor ? 'You are participating' : 'Manager view only'}`;
+    }
+    if (groupHubSwitcherWrap && groupHubSelect) {
+      groupHubSwitcherWrap.hidden = myGroups.length <= 1;
+      groupHubSelect.replaceChildren(...myGroups.map((group) => new Option(`${group.name} (${group.role})`, group.group_id)));
+      groupHubSelect.value = currentGroup.group_id;
+    }
+    if (groupHubSelfToggle) groupHubSelfToggle.checked = Boolean(currentGroup.is_contributor);
+  }
+
   function renderGroupHeader(groups) {
     myGroups = Array.isArray(groups) ? groups : [];
     currentGroup = myGroups.find((group) => group.is_current) || myGroups[0] || null;
@@ -61,7 +91,7 @@
       if (groupRoleEl) groupRoleEl.textContent = state?.profile?.role || '—';
       if (groupMetaEl) groupMetaEl.textContent = 'Active workspace';
       if (groupActionsEl) groupActionsEl.hidden = true;
-      if (groupSelect) groupSelect.hidden = true;
+      if (groupSwitcherWrap) groupSwitcherWrap.hidden = true;
       return;
     }
     const safeName = currentGroup.name || 'Savings Group';
@@ -75,12 +105,13 @@
     const metaParts = [`${contributorCount} contributor${contributorCount === 1 ? '' : 's'}`];
     if (currentGroup.role === 'ADMIN') metaParts.push(currentGroup.is_contributor ? 'Included as contributor' : 'Manager only');
     if (groupMetaEl) groupMetaEl.textContent = metaParts.join(' · ');
-    if (groupSelect) {
-      groupSelect.hidden = myGroups.length === 0;
+    if (groupSelect && groupSwitcherWrap) {
+      groupSwitcherWrap.hidden = myGroups.length <= 1;
       groupSelect.replaceChildren(...myGroups.map((group) => new Option(`${group.name} (${group.role})`, group.group_id)));
       groupSelect.value = currentGroup.group_id;
     }
     if (groupActionsEl) groupActionsEl.hidden = state?.profile?.role !== 'ADMIN';
+    syncGroupHub();
   }
 
   function renderGroupDpPreview(avatarUrl, name) {
@@ -90,25 +121,40 @@
     if (groupDpRemove) groupDpRemove.hidden = !avatarUrl;
   }
 
+  function syncInviteRemoveButtons(container, required) {
+    if (!container) return;
+    const rows = [...container.querySelectorAll('.invite-row-card')];
+    const hideOnlyRow = required && rows.length <= 1;
+    rows.forEach((item) => {
+      const btn = item.querySelector('.invite-row-remove');
+      if (btn) btn.hidden = hideOnlyRow;
+    });
+  }
+
   function appendInviteRow(container, { defaultAmount = 100, required = false } = {}) {
     if (!container) return null;
     const row = document.createElement('div');
     row.className = 'invite-row-card';
     row.innerHTML = `
+      <div class="invite-row-head">
+        <span class="invite-row-badge">Member invite</span>
+        <button class="invite-row-remove" type="button" title="Remove member" aria-label="Remove invite row">&times;</button>
+      </div>
       <div class="invite-row-grid">
         <div class="field"><label>Email</label><input name="invite_email" type="email" autocomplete="off" maxlength="254" placeholder="member@example.com"${required ? ' required' : ''}></div>
         <div class="field"><label>Full name (optional)</label><input name="invite_name" type="text" maxlength="120" placeholder="e.g., Juan Dela Cruz"></div>
         <div class="field"><label>Monthly share</label><input name="invite_amount" type="number" min="1" max="1000000" step="0.01" value="${Ipon.escapeHtml(String(defaultAmount))}"></div>
         <div class="field"><label>Temporary password</label><input name="invite_password" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-temp-password placeholder="Recommended or custom password"${required ? ' required' : ''}></div>
       </div>
-      <button class="invite-row-remove" type="button" title="Remove row" aria-label="Remove invite row">&times;</button>
     `;
     Ipon.prepareTemporaryPassword(row.querySelector('[name="invite_password"]'));
     row.querySelector('.invite-row-remove').addEventListener('click', () => {
       if (required && container.querySelectorAll('.invite-row-card').length <= 1) return;
       row.remove();
+      syncInviteRemoveButtons(container, required);
     });
     container.append(row);
+    syncInviteRemoveButtons(container, required);
     return row;
   }
 
@@ -560,18 +606,44 @@
     activeDate = null;
   });
   window.addEventListener('ipon:profile-updated', load);
-  groupSelect?.addEventListener('change', async () => {
-    const targetId = groupSelect.value;
+  async function handleGroupSwitch(selectEl) {
+    const targetId = selectEl.value;
     if (!targetId || targetId === currentGroup?.group_id) return;
-    groupSelect.disabled = true;
+    selectEl.disabled = true;
     try {
       await Ipon.switchActiveGroup(targetId);
       location.reload();
     } catch (error) {
-      groupSelect.value = currentGroup?.group_id || '';
+      selectEl.value = currentGroup?.group_id || '';
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
-      groupSelect.disabled = false;
+      selectEl.disabled = false;
+    }
+  }
+  groupSelect?.addEventListener('change', () => handleGroupSwitch(groupSelect));
+  groupHubSelect?.addEventListener('change', () => handleGroupSwitch(groupHubSelect));
+  document.getElementById('dashboard-manage-group')?.addEventListener('click', () => {
+    syncGroupHub();
+    groupHubDialog?.showModal();
+  });
+  document.getElementById('close-group-hub-dialog')?.addEventListener('click', () => groupHubDialog?.close());
+  document.getElementById('done-group-hub-dialog')?.addEventListener('click', () => groupHubDialog?.close());
+  document.getElementById('group-hub-create-another')?.addEventListener('click', () => {
+    groupHubDialog?.close();
+    openGroupDialog('create');
+  });
+  groupHubSelfToggle?.addEventListener('change', async () => {
+    const enabled = groupHubSelfToggle.checked;
+    groupHubSelfToggle.disabled = true;
+    try {
+      await Ipon.rpc('set_admin_contributor', { p_enabled: enabled });
+      Ipon.toast(enabled ? 'You are now included as a contributor.' : 'You have been removed from active contributors.');
+      await load();
+    } catch (error) {
+      groupHubSelfToggle.checked = !enabled;
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      groupHubSelfToggle.disabled = false;
     }
   });
   function openGroupDialog(mode) {
@@ -626,7 +698,10 @@
   document.getElementById('group-add-invite-row')?.addEventListener('click', () => {
     appendInviteRow(groupInviteRows, { defaultAmount: Number(groupMonthlyInput.value) > 0 ? Number(groupMonthlyInput.value) : 100, required: false });
   });
-  document.getElementById('dashboard-edit-group')?.addEventListener('click', () => openGroupDialog('edit'));
+  document.getElementById('dashboard-edit-group')?.addEventListener('click', () => {
+    groupHubDialog?.close();
+    openGroupDialog('edit');
+  });
   document.getElementById('dashboard-create-group')?.addEventListener('click', () => openGroupDialog('create'));
   document.getElementById('close-group-dialog')?.addEventListener('click', () => groupDialog?.close());
   document.getElementById('cancel-group-dialog')?.addEventListener('click', () => groupDialog?.close());
@@ -684,6 +759,7 @@
   });
   document.getElementById('dashboard-invite-member')?.addEventListener('click', () => {
     if (!inviteDialog || !inviteOnlyRows) return;
+    groupHubDialog?.close();
     inviteOnlyRows.replaceChildren();
     appendInviteRow(inviteOnlyRows, { defaultAmount: 100, required: true });
     inviteDialog.showModal();

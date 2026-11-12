@@ -7,7 +7,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Super Admin — IPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261112-16">
+  <link rel="stylesheet" href="css/app.css?v=20261113-5">
 </head>
 <body data-page="super-admin" data-panel="super-admin">
   <div class="app-layout">
@@ -136,12 +136,44 @@
     </div>
   </dialog>
 
+  <dialog class="form-dialog" id="reject-request-dialog" aria-labelledby="reject-request-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div><h2 id="reject-request-title">Reject administrator request</h2><p id="reject-request-copy">Choose a reason or enter custom details for declining this request.</p></div>
+        <button class="dialog-close" id="reject-request-close" type="button" aria-label="Close rejection dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </header>
+      <form id="reject-request-form" class="form-grid">
+        <input id="reject-request-id" name="user_id" type="hidden">
+        <div class="field field-wide">
+          <label for="reject-reason-preset">Rejection reason</label>
+          <select id="reject-reason-preset">
+            <option value="Incomplete or unverifiable contact information">Incomplete or unverifiable contact information</option>
+            <option value="Duplicate or unverified administrator request">Duplicate or unverified administrator request</option>
+            <option value="Savings group criteria not met">Savings group criteria not met</option>
+            <option value="Application details could not be validated">Application details could not be validated</option>
+            <option value="custom">Other (custom reason)</option>
+          </select>
+          <small class="field-help">Select a preset reason or choose Other to write your own explanation.</small>
+        </div>
+        <div class="field field-wide">
+          <label for="reject-reason-text">Reason details (sent in email update)</label>
+          <textarea id="reject-reason-text" name="review_note" minlength="5" maxlength="500" required></textarea>
+          <small class="field-help">Once rejected, this email address cannot submit another administrator request.</small>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" id="reject-request-cancel" type="button">Cancel</button>
+          <button class="button button-danger" type="submit">Reject request</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <dialog class="form-dialog" id="administrator-dialog" aria-labelledby="administrator-dialog-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="administrator-dialog-title">Create administrator</h2><p>Create a confirmed Auth account and an isolated savings group.</p></div><button class="dialog-close" id="administrator-dialog-close" type="button" aria-label="Close administrator form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="administrator-form" class="form-grid form-grid-3"><input type="hidden" name="user_id"><div class="field"><label for="administrator-first-name">First name</label><input id="administrator-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="administrator-middle-name">Middle name</label><input id="administrator-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="administrator-last-name">Last name</label><input id="administrator-last-name" name="last_name" maxlength="80" required></div><div class="field"><label for="administrator-email">Email</label><input id="administrator-email" name="email" type="email" required></div><div class="field"><label for="administrator-password">Temporary password</label><input id="administrator-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-temp-password required><small class="field-help">Pre-filled with a recommended password, or clear it to enter a custom password.</small></div><div class="field"><label for="administrator-group">Savings group</label><input id="administrator-group" name="group_name" minlength="2" maxlength="150" required></div><div class="form-actions field-wide"><button class="button button-secondary" id="administrator-dialog-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Create administrator</button></div></form></div></dialog>
 
   <dialog class="form-dialog" id="user-password-dialog" aria-labelledby="user-password-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="user-password-title">Change account password</h2><p id="user-password-copy">Set a new password for this account.</p></div><button class="dialog-close" id="user-password-close" type="button" aria-label="Close password form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="user-password-form" class="form-grid"><input type="hidden" name="user_id"><div class="field field-wide"><label for="user-password-input">New password</label><input id="user-password-input" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><small class="field-help">Use at least 8 characters with uppercase, lowercase, a number, and a symbol.</small></div><div class="field field-wide"><label for="user-password-confirm">Confirm new password</label><input id="user-password-confirm" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></div><div class="form-actions field-wide"><button class="button button-secondary" id="user-password-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save password</button></div></form></div></dialog>
 
   <dialog class="form-dialog bug-viewer-dialog" id="bug-viewer-dialog" aria-labelledby="bug-viewer-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="bug-viewer-title">Bug report</h2><p id="bug-viewer-meta"></p></div><button class="dialog-close" id="bug-viewer-close" type="button" aria-label="Close bug report details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="bug-viewer-body"><p class="feature-request-details" id="bug-viewer-description"></p><div class="bug-viewer-grid" id="bug-viewer-images"></div></div></div></dialog>
 
-  <script src="js/config.js"></script><script src="js/core.js?v=20261112-17"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261112-12"></script>
+  <script src="js/config.js"></script><script src="js/core.js?v=20261113-2"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261113-2"></script>
 </body>
 </html>

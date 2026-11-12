@@ -44,6 +44,15 @@
       if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
       const url = new URL(link.href, window.location.href);
       if (url.origin !== window.location.origin || (url.pathname === window.location.pathname && url.search === window.location.search)) return;
+      const navLink = link.closest('.app-nav a, .record-tabs a');
+      if (navLink) {
+        navLink.closest('.app-nav, .record-tabs')?.querySelectorAll('a').forEach((item) => {
+          item.classList.remove('is-active');
+          item.removeAttribute('aria-current');
+        });
+        navLink.classList.add('is-active');
+        navLink.setAttribute('aria-current', 'page');
+      }
       setLoading(true);
     });
   }
@@ -474,15 +483,41 @@
       </svg>
     </div>`;
 
+  const ACTIVE_ROLE_KEY = 'ipon_active_role';
+
+  function resolveActiveRole(passedRole) {
+    if (passedRole) return passedRole;
+    if (currentProfile?.role) return currentProfile.role;
+    const page = document.body.dataset.page;
+    if (document.body.dataset.panel === 'super-admin' || page === 'super-admin') return 'SUPER_ADMIN';
+    try {
+      const cached = sessionStorage.getItem(ACTIVE_ROLE_KEY) || localStorage.getItem(ACTIVE_ROLE_KEY);
+      if (cached && ['SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER'].includes(cached)) return cached;
+    } catch {}
+    if (page === 'user') return 'MEMBER';
+    if (['members', 'audit', 'settings'].includes(page)) return 'ADMIN';
+    return 'ADMIN';
+  }
+
   function mountShell(role = currentProfile?.role) {
     const host = document.getElementById('app-sidebar');
+    const effectiveRole = resolveActiveRole(role);
     if (host) {
       const page = document.body.dataset.page;
       const superAdminPanel = document.body.dataset.panel === 'super-admin';
-      const navigation = (superAdminPanel || role === 'SUPER_ADMIN' ? superAdminNavItems : role === 'MEMBER' ? userNavItems : navItems)
-        .filter(([, , , , requiredRole]) => !requiredRole || requiredRole === role);
+      const navigation = (superAdminPanel || effectiveRole === 'SUPER_ADMIN' ? superAdminNavItems : effectiveRole === 'MEMBER' ? userNavItems : navItems)
+        .filter(([, , , , requiredRole]) => !requiredRole || requiredRole === effectiveRole);
       const activeId = superAdminPanel ? location.hash.slice(1) || 'overview' : ['contributions', 'withdrawals', 'expenses', 'savings'].includes(page) ? 'contributions' : page;
-      host.innerHTML = `
+      if (host.dataset.renderedRole === effectiveRole) {
+        host.querySelectorAll('.app-nav a').forEach((link) => {
+          const isActive = link.dataset.navSection === activeId;
+          link.classList.toggle('is-active', isActive);
+          if (isActive) link.setAttribute('aria-current', 'page');
+          else link.removeAttribute('aria-current');
+        });
+      } else {
+        host.dataset.renderedRole = effectiveRole;
+        host.innerHTML = `
         ${brandHtml.replace('href="dashboard.html"', `href="${superAdminPanel ? 'super-admin.html' : 'dashboard.html'}"`)}
         <nav class="app-nav" aria-label="Main navigation">
           ${navigation.map(([id, href, label, icon, role]) => `<a class="${activeId === id ? 'is-active' : ''}" href="${href}" aria-label="${label}" data-nav-section="${id}"${activeId === id ? ' aria-current="page"' : ''}${role ? ` data-role="${role}"` : ''}>${icon || ''}<span>${label}</span></a>`).join('')}
@@ -507,10 +542,13 @@
             <span>Sign out</span>
           </button>
         </div>`;
-      document.getElementById('sign-out')?.addEventListener('click', signOut);
+        document.getElementById('sign-out')?.addEventListener('click', signOut);
+      }
     }
     document.querySelectorAll('.record-tabs a').forEach((link) => {
-      if (role === 'TREASURER' && link.getAttribute('href') === 'savings.html') return link.remove();
+      if (effectiveRole === 'TREASURER' && link.getAttribute('href') === 'savings.html') return link.remove();
+      if (link.dataset.tabBound === '1') return;
+      link.dataset.tabBound = '1';
       const label = link.textContent.trim();
       link.setAttribute('aria-label', label);
       link.innerHTML = `${recordTabIcons[link.getAttribute('href')] || ''}<span>${escapeHtml(label)}</span>`;
@@ -1223,6 +1261,7 @@
         return { configured: true, profile: null, session: null, redirecting: true };
       }
       if (!session) {
+        clearStoredAuthTokens();
         watchCrossTabAuth(client, null, { loginPage: options.requireAuth === false });
         setLoading(false);
         return { configured: true, profile: null, session: null };
@@ -1239,6 +1278,10 @@
         .single());
       if (error) throw error;
       currentProfile = profile;
+      try {
+        sessionStorage.setItem(ACTIVE_ROLE_KEY, profile.role);
+        localStorage.setItem(ACTIVE_ROLE_KEY, profile.role);
+      } catch {}
       if (profile.status !== 'ACTIVE' && options.allowPending !== true) {
         await client.auth.signOut();
         window.location.replace('login.html?status=pending');
@@ -1293,6 +1336,8 @@
 
   function clearStoredAuthTokens() {
     try {
+      sessionStorage.removeItem(ACTIVE_ROLE_KEY);
+      localStorage.removeItem(ACTIVE_ROLE_KEY);
       Object.keys(localStorage).forEach((key) => {
         if (key.startsWith('sb-') && key.endsWith('-auth-token')) localStorage.removeItem(key);
       });
@@ -2107,6 +2152,14 @@
     });
   }
 
+  async function notifyAdminRequestDecision(payload) {
+    return invokeAccountFunction({
+      action: 'admin-request-decision-email',
+      ...payload,
+      login_url: new URL('login.html', location.href).href
+    });
+  }
+
   async function switchActiveGroup(groupId) {
     const result = await rpc('switch_active_group', { p_group_id: groupId });
     if (currentProfile && result) {
@@ -2171,7 +2224,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();
