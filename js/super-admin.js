@@ -7,6 +7,7 @@
   const requestsBody = document.getElementById('requests-body');
   const featureRequestsBody = document.getElementById('feature-requests-body');
   const administratorsBody = document.getElementById('administrators-body');
+  const usersBody = document.getElementById('users-body');
   const activityBody = document.getElementById('activity-body');
   const approvalDialog = document.getElementById('approve-request-dialog');
   const approvalForm = document.getElementById('approve-request-form');
@@ -15,6 +16,8 @@
   const approvalCopy = document.getElementById('approve-request-copy');
   const administratorDialog = document.getElementById('administrator-dialog');
   const administratorForm = document.getElementById('administrator-form');
+  const userPasswordDialog = document.getElementById('user-password-dialog');
+  const userPasswordForm = document.getElementById('user-password-form');
   const overviewError = document.getElementById('overview-error');
   let profiles = [];
   let groups = [];
@@ -22,11 +25,15 @@
   let featureRequests = [];
   let accountActivities = [];
   Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
+  Ipon.bindPasswordStrength(userPasswordForm.elements.password, () => {
+    const target = profiles.find((item) => item.id === userPasswordForm.elements.user_id.value);
+    return target ? [target.first_name, target.middle_name, target.last_name, target.email] : [];
+  });
   const views = {
     overview: ['Platform overview', 'Monitor administrator access, savings groups, and requests without exposing financial records.'],
     requests: ['Administrator requests', 'Review pending applications and create an isolated savings group when access is approved.'],
     'feature-requests': ['Feature requests', 'Review improvements suggested by active IPON users.'],
-    administrators: ['Administrators', 'Create accounts and manage each administrator\'s platform access and assigned savings group.'],
+    administrators: ['Accounts', 'Manage administrators, group users, passwords, and assigned savings groups.'],
     activity: ['Platform activity', 'Review recent administrator and savings-group access changes recorded by the database.']
   };
 
@@ -96,9 +103,26 @@
         <td>${Ipon.dateLabel(profile.created_at)}</td>
         <td>${lastActivity.has(profile.id) ? `<span class="activity-kind">${Ipon.escapeHtml(lastActivity.get(profile.id).event.replaceAll('_', ' '))}</span><small class="field-help">${Ipon.dateLabel(lastActivity.get(profile.id).created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small>` : '<span class="field-help">No activity recorded</span>'}</td>
         <td>${statusLabel(profile.status)}</td>
-        <td><div class="table-actions"><button class="icon-action" type="button" data-edit-admin="${profile.id}">Edit</button><button class="icon-action" type="button" data-reset-admin="${profile.id}">Reset password</button><button class="icon-action ${active ? 'danger-action' : ''}" type="button" data-admin-status="${profile.id}" data-next-status="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Suspend' : 'Reactivate'}</button><button class="icon-action danger-action" type="button" data-archive-admin="${profile.id}">Archive</button></div></td>
+        <td><div class="table-actions"><button class="icon-action" type="button" data-edit-admin="${profile.id}">Edit</button><button class="icon-action" type="button" data-set-password="${profile.id}">Change password</button><button class="icon-action" type="button" data-reset-admin="${profile.id}">Reset password</button><button class="icon-action ${active ? 'danger-action' : ''}" type="button" data-admin-status="${profile.id}" data-next-status="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Suspend' : 'Reactivate'}</button><button class="icon-action danger-action" type="button" data-archive-admin="${profile.id}">Archive</button></div></td>
       </tr>`;
     }).join('') : '<tr><td colspan="6" class="empty-state">No administrator accounts.</td></tr>';
+  }
+
+  function renderUsers() {
+    if (!usersBody) return;
+    const groupById = new Map(groups.map((group) => [group.id, group]));
+    const users = profiles.filter((profile) => ['TREASURER', 'MEMBER'].includes(profile.role));
+    usersBody.innerHTML = users.length ? users.map((profile) => {
+      const group = profile.group_id ? groupById.get(profile.group_id) : null;
+      return `<tr>
+        <td><strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}</td>
+        <td>${Ipon.escapeHtml(profile.role)}</td>
+        <td>${group ? Ipon.escapeHtml(group.name) : '<span class="field-help">Unassigned</span>'}</td>
+        <td>${Ipon.dateLabel(profile.created_at)}</td>
+        <td>${statusLabel(profile.status)}</td>
+        <td><div class="table-actions"><button class="icon-action" type="button" data-set-password="${profile.id}">Change password</button></div></td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="6" class="empty-state">No user accounts.</td></tr>';
   }
 
   function renderFeatureRequests() {
@@ -151,6 +175,7 @@
     renderRequests();
     renderFeatureRequests();
     renderAdministrators();
+    renderUsers();
     renderActivity(logResult.data || []);
   }
 
@@ -291,10 +316,53 @@
     administratorForm.querySelector('[type="submit"]').textContent = 'Create administrator';
   }
 
+  function openPasswordDialog(userId) {
+    const target = profiles.find((item) => item.id === userId);
+    if (!target) return;
+    userPasswordForm.reset();
+    userPasswordForm.elements.user_id.value = target.id;
+    document.getElementById('user-password-copy').textContent = `Set a new password for ${target.full_name} (${target.role.toLowerCase()}).`;
+    userPasswordDialog.showModal();
+    userPasswordForm.elements.password.focus();
+  }
+
   document.getElementById('create-administrator').addEventListener('click', () => { resetAdministratorForm(); administratorDialog.showModal(); administratorForm.elements.first_name.focus(); });
   document.getElementById('administrator-dialog-close').addEventListener('click', () => administratorDialog.close());
   document.getElementById('administrator-dialog-cancel').addEventListener('click', () => administratorDialog.close());
   administratorDialog.addEventListener('close', resetAdministratorForm);
+  document.getElementById('administrators').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-set-password]');
+    if (button) openPasswordDialog(button.dataset.setPassword);
+  });
+  document.getElementById('user-password-close').addEventListener('click', () => userPasswordDialog.close());
+  document.getElementById('user-password-cancel').addEventListener('click', () => userPasswordDialog.close());
+  userPasswordDialog.addEventListener('close', () => userPasswordForm.reset());
+  userPasswordForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const target = profiles.find((item) => item.id === userPasswordForm.elements.user_id.value);
+    if (!target) return;
+    const password = userPasswordForm.elements.password.value;
+    if (password !== userPasswordForm.elements.password_confirmation.value) {
+      Ipon.setFieldError(userPasswordForm.elements.password_confirmation, 'Passwords do not match.');
+      userPasswordForm.elements.password_confirmation.focus();
+      return;
+    }
+    const issue = Ipon.passwordIssue(password, [target.first_name, target.middle_name, target.last_name, target.email]);
+    if (issue) {
+      Ipon.setFieldError(userPasswordForm.elements.password, issue);
+      userPasswordForm.elements.password.focus();
+      return;
+    }
+    const button = event.submitter;
+    Ipon.setBusy(button, true, 'Saving…');
+    try {
+      const { error } = await Ipon.client.functions.invoke('manage-account', { body: { action: 'admin-set-password', user_id: target.id, password } });
+      if (error) { const detail = await error.context?.json?.().catch(() => null); throw new Error(detail?.error || error.message); }
+      userPasswordDialog.close();
+      Ipon.toast(`Password updated for ${target.full_name}.`);
+    } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+    finally { Ipon.setBusy(button, false); }
+  });
   administratorForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const button = event.submitter;
@@ -330,6 +398,7 @@
       Ipon.showInlineError(requestsBody, error, refresh, 5);
       Ipon.showInlineError(featureRequestsBody, error, refresh, 5);
       Ipon.showInlineError(administratorsBody, error, refresh, 6);
+      Ipon.showInlineError(usersBody, error, refresh, 6);
       Ipon.showInlineError(activityBody, error, refresh, 3);
     }
   }

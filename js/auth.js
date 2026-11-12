@@ -34,7 +34,7 @@
     [password, document.getElementById('password-error')],
     [passwordConfirmation, document.getElementById('password-confirmation-error')]
   ]);
-  const passwordRule = 'Use at least 12 characters with uppercase, lowercase, a number, and a symbol.';
+  const passwordRule = 'Use at least 8 characters with uppercase, lowercase, a number, and a symbol.';
   const nameRule = "Use letters, spaces, hyphens, or apostrophes only.";
   let mode = 'login';
 
@@ -141,7 +141,7 @@
     passwordStrength.element.hidden = !signup;
     forgotButton.hidden = signup;
     password.autocomplete = signup ? 'new-password' : 'current-password';
-    if (signup) { password.minLength = 12; password.maxLength = 128; }
+    if (signup) { password.minLength = 8; password.maxLength = 128; }
     else { password.removeAttribute('minlength'); password.removeAttribute('maxlength'); }
     document.getElementById('auth-title').textContent = signup ? 'Request administrator access' : 'Welcome back';
     document.getElementById('auth-copy').textContent = signup ? 'The Super Admin reviews administrator access requests.' : 'Sign in to view your savings records.';

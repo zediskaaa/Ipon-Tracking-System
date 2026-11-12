@@ -44,7 +44,7 @@ Run `npm test`, then complete [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) befor
 
 ## Supabase Auth settings
 
-Keep the hosted Auth password policy aligned with the application. In the project's Supabase Auth password security settings, use a minimum length of 12 and require at least one lowercase letter, uppercase letter, number, and symbol. Enable leaked-password protection when the project plan supports it. Existing users may continue signing in, but new passwords and password changes must meet the stronger policy.
+Keep the hosted Auth password policy aligned with the application. In the project's Supabase Auth password security settings, use a minimum length of 8 and require at least one lowercase letter, uppercase letter, number, and symbol. Enable leaked-password protection when the project plan supports it. Existing users may continue signing in, but new passwords and password changes must meet the stronger policy.
 
 Enable **App Authenticator (TOTP)** enrollment and verification in the hosted Auth MFA settings. Users can then add one or more authenticator apps from **My account → Sign-in security**. Migration `20261112_014_enforce_opt_in_mfa.sql` requires an AAL2 session across database access and account-management functions after a user enrolls a verified factor.
 

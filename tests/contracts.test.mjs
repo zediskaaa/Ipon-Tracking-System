@@ -68,6 +68,8 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.match(html, /id="requests-body"/);
   assert.match(html, /id="feature-requests-body"/);
   assert.match(html, /id="administrators-body"/);
+  assert.match(html, /id="users-body"/);
+  assert.match(html, /id="user-password-dialog"/);
   for (const view of ['overview', 'requests', 'feature-requests', 'administrators', 'activity']) {
     assert.match(html, new RegExp(`data-platform-view="${view}"`));
     assert.match(core, new RegExp(`super-admin\\.html#${view}`));
@@ -79,6 +81,7 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.match(script, /super_admin_approve_request/);
   assert.match(script, /super_admin_reject_request/);
   assert.match(script, /super_admin_set_administrator_status/);
+  assert.match(script, /admin-set-password/);
   assert.match(script, /subscribeToChanges\('super-admin'/);
   assert.doesNotMatch(script, /from\(['"](?:contributions|withdrawals|expenses|members)['"]\)/);
   assert.match(core, /function homeForRole\(role\)/);
@@ -152,15 +155,15 @@ test('three panels have separate routes and backend-owned account workflows', ()
 test('new passwords use one strong policy in browser and Edge boundaries', () => {
   const core = read('js/core.js');
   const edge = read('supabase/functions/manage-account/index.ts');
-  assert.match(core, /value\.length < 12 \|\| value\.length > 128/);
+  assert.match(core, /value\.length < 8 \|\| value\.length > 128/);
   assert.match(core, /Do not include your name or email/);
-  assert.match(edge, /password\.length >= 12 && password\.length <= 128/);
+  assert.match(edge, /password\.length >= 8 && password\.length <= 128/);
   assert.match(edge, /Password must not contain the account name or email/);
-  for (const file of ['account.html', 'members.html', 'super-admin.html']) assert.match(read(file), /minlength="12"[^>]*maxlength="128"/i);
+  for (const file of ['account.html', 'members.html', 'super-admin.html']) assert.match(read(file), /minlength="8"[^>]*maxlength="128"/i);
   assert.match(read('js/auth.js'), /Ipon\.passwordIssue/);
   assert.match(read('js/auth.js'), /passwordStrength\.element\.hidden = true/);
   assert.match(core, /function bindPasswordStrength/);
-  assert.match(read('README.md'), /minimum length of 12/);
+  assert.match(read('README.md'), /minimum length of 8/);
 });
 
 test('login credential errors mark both fields without revealing account existence', () => {
@@ -417,7 +420,7 @@ test('secondary member and goal editing uses accessible dialogs', () => {
   const goalsPage = read('savings.html');
   assert.match(membersPage, /<dialog[^>]+id="member-dialog"[^>]+aria-labelledby="member-form-title"/);
   assert.match(membersPage, /id="member-email"[^>]+type="email"[^>]+required/);
-  assert.match(membersPage, /id="member-password"[^>]+type="password"[^>]+minlength="12"/);
+  assert.match(membersPage, /id="member-password"[^>]+type="password"[^>]+minlength="8"/);
   assert.match(goalsPage, /<dialog[^>]+id="goal-dialog"[^>]+aria-labelledby="goal-form-title"/);
   assert.match(read('js/members.js'), /dialog\.showModal\(\)/);
   assert.match(read('js/savings.js'), /dialog\.showModal\(\)/);

@@ -51,6 +51,7 @@
     profileForm.elements.contact_number.value = profile.contact_number || '';
     profileComplete = !Ipon.profileNeedsSetup(profile);
     if (!profileComplete) onboarding = true;
+    else if (!passwordChangeRequired) onboarding = false;
     updateDialogMode();
     document.getElementById('profile-setup-notice').hidden = profileComplete;
     emailForm.elements.email.value = profile.email || state.session.user.email || '';
@@ -58,7 +59,9 @@
     const activities = activityResult.data || [];
     activityBody.innerHTML = activities.length ? activities.map((row) => `<tr><td>${Ipon.escapeHtml(row.event.replaceAll('_', ' ').toLowerCase().replace(/^./, (character) => character.toUpperCase()))}</td><td>${Ipon.dateLabel(row.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">No account activity recorded yet.</td></tr>';
     if (onboarding) {
-      const nextField = !profile.first_name ? profileForm.elements.first_name : !profile.last_name ? profileForm.elements.last_name : !profile.contact_number ? profileForm.elements.contact_number : passwordChangeRequired ? (passwordForm.elements.current_password || passwordForm.elements.password) : null;
+      const nextField = !profileComplete
+        ? (!profile.first_name ? profileForm.elements.first_name : !profile.last_name ? profileForm.elements.last_name : profileForm.elements.contact_number)
+        : (passwordChangeRequired ? (passwordForm.elements.current_password || passwordForm.elements.password) : null);
       nextField?.focus();
     }
   }

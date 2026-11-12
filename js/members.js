@@ -177,7 +177,7 @@
         form.elements.member_id.value = memberId;
       }
       if (creatingAccount) {
-        const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'MEMBER', member_id: memberId, first_name: name.p_first_name, middle_name: name.p_middle_name, last_name: name.p_last_name, email: emailInput.value.trim(), password: passwordInput.value } });
+        const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'MEMBER', member_id: memberId, first_name: name.p_first_name, middle_name: name.p_middle_name, last_name: name.p_last_name, contact_number: contactNumber || null, email: emailInput.value.trim(), password: passwordInput.value } });
         if (error) { const detail = await error.context?.json?.().catch(() => null); throw new Error(detail?.error || error.message); }
       }
       Ipon.toast(creatingAccount ? 'Member and account created.' : 'Member updated.'); dialog.close(); await load();
@@ -240,7 +240,7 @@
     if (passwordIssue) { Ipon.setFieldError(accountForm.elements.password, passwordIssue); accountForm.elements.password.focus(); return; }
     Ipon.setBusy(button, true);
     try {
-      const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'MEMBER', member_id: member.id, first_name: member.first_name, middle_name: member.middle_name || null, last_name: member.last_name, email: accountForm.elements.email.value.trim(), password: accountForm.elements.password.value } });
+      const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'MEMBER', member_id: member.id, first_name: member.first_name, middle_name: member.middle_name || null, last_name: member.last_name, contact_number: member.contact_number || null, email: accountForm.elements.email.value.trim(), password: accountForm.elements.password.value } });
       if (error) { const detail = await error.context?.json?.().catch(() => null); throw new Error(detail?.error || error.message); }
       accountDialog.close(); Ipon.toast('Member account created.'); await load();
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
