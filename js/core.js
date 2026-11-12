@@ -1148,6 +1148,7 @@
         return { configured: true, profile: null, session: null, redirecting: true };
       }
       if (!session) {
+        watchCrossTabAuth(client, null, { loginPage: options.requireAuth === false });
         setLoading(false);
         return { configured: true, profile: null, session: null };
       }
@@ -1190,6 +1191,7 @@
         const roles = element.dataset.role.split(',');
         element.hidden = !roles.includes(profile.role);
       });
+      if (options.requireAuth !== false) watchCrossTabAuth(client, profile.id);
       initNotifications(profile).catch(() => {});
       return { configured: true, profile, session };
     } catch (error) {
@@ -1199,6 +1201,94 @@
     }
   }
 
+  const AUTH_CHANNEL_NAME = 'ipon-auth-sync';
+  const AUTH_STORAGE_KEY = 'iponAuthEvent';
+
+  function broadcastAuthEvent(type, userId = null) {
+    const payload = { type, userId, at: Date.now() };
+    try {
+      const channel = 'BroadcastChannel' in window ? new BroadcastChannel(AUTH_CHANNEL_NAME) : null;
+      channel?.postMessage(payload);
+      channel?.close();
+    } catch {}
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(payload));
+    } catch {}
+  }
+
+  function clearStoredAuthTokens() {
+    try {
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sb-') && key.endsWith('-auth-token')) localStorage.removeItem(key);
+      });
+    } catch {}
+  }
+
+  function watchCrossTabAuth(client, expectedUserId, { loginPage = false } = {}) {
+    if (!client || document.documentElement.dataset.crossTabAuthBound) return;
+    document.documentElement.dataset.crossTabAuthBound = 'true';
+    let redirecting = false;
+    const redirectTo = (target) => {
+      if (redirecting) return;
+      redirecting = true;
+      document.documentElement.style.visibility = 'hidden';
+      window.location.replace(target);
+    };
+    const handlePayload = (payload) => {
+      if (!payload || typeof payload !== 'object') return;
+      if (loginPage) {
+        if (payload.type === 'SIGNED_IN' && payload.userId) window.location.reload();
+        return;
+      }
+      if (payload.type === 'SIGNED_OUT') return redirectTo('login.html');
+      if (payload.type === 'SIGNED_IN' && payload.userId && expectedUserId && payload.userId !== expectedUserId) {
+        window.location.reload();
+      }
+    };
+    const checkSessionConsistency = async () => {
+      try {
+        const { data: { session } } = await client.auth.getSession();
+        if (loginPage) {
+          if (session?.user?.id) {
+            const { data: profile } = await client.from('profiles').select('role,status').eq('id', session.user.id).maybeSingle();
+            if (profile?.status === 'ACTIVE') redirectTo(homeForRole(profile.role));
+          }
+          return;
+        }
+        if (!session) return redirectTo('login.html');
+        if (expectedUserId && session.user.id !== expectedUserId) window.location.reload();
+      } catch {}
+    };
+    client.auth.onAuthStateChange((event, nextSession) => {
+      if (loginPage || event === 'INITIAL_SESSION') return;
+      if (event === 'SIGNED_OUT' || !nextSession) return redirectTo('login.html');
+      if (expectedUserId && nextSession.user?.id && nextSession.user.id !== expectedUserId) {
+        window.location.reload();
+      }
+    });
+    try {
+      if ('BroadcastChannel' in window) {
+        const channel = new BroadcastChannel(AUTH_CHANNEL_NAME);
+        channel.addEventListener('message', (event) => handlePayload(event.data));
+        window.addEventListener('pagehide', () => channel.close(), { once: true });
+      }
+    } catch {}
+    window.addEventListener('storage', (event) => {
+      if (event.key === AUTH_STORAGE_KEY && event.newValue) {
+        try { handlePayload(JSON.parse(event.newValue)); } catch {}
+        return;
+      }
+      if (event.key && event.key.startsWith('sb-') && event.key.endsWith('-auth-token')) {
+        if (!loginPage && !event.newValue) return redirectTo('login.html');
+        checkSessionConsistency();
+      }
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkSessionConsistency();
+    });
+    window.addEventListener('focus', checkSessionConsistency);
+  }
+
   async function signOut() {
     const accepted = await confirmAction({ title: 'Sign out?', message: 'You will need to sign in again to access the system.', acceptLabel: 'Sign out' });
     if (!accepted) return;
@@ -1206,6 +1296,8 @@
       const client = getClient();
       if (client) await withTimeout(client.auth.signOut({ scope: 'local' }));
     } finally {
+      clearStoredAuthTokens();
+      broadcastAuthEvent('SIGNED_OUT');
       window.location.replace('login.html');
     }
   }
@@ -1732,7 +1824,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, bindAnnouncements, subscribeToChanges,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, bindAnnouncements, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

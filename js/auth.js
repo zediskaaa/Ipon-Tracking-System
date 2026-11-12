@@ -240,6 +240,7 @@
           throw new Error('Your account is waiting for administrator approval.');
         }
         await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' });
+        Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
         window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(profile.role));
       }
     } catch (error) {

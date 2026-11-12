@@ -1121,6 +1121,40 @@ begin
 end;
 $$;
 
+create or replace function public.contribution_period_due_date(
+  p_group_id uuid,
+  p_month date
+)
+returns date
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with m as (
+    select date_trunc('month', p_month)::date as period_month
+  )
+  select make_date(
+    extract(year from m.period_month)::integer,
+    extract(month from m.period_month)::integer,
+    least(
+      coalesce(
+        (
+          select deadline_day
+          from public.contribution_settings
+          where group_id = p_group_id
+            and effective_month <= m.period_month
+          order by effective_month desc
+          limit 1
+        ),
+        28
+      ),
+      extract(day from (m.period_month + interval '1 month - 1 day'))::integer
+    )
+  )
+  from m;
+$$;
+
 create or replace function public.record_contribution(
   p_member_id uuid,
   p_contribution_month date,
@@ -1138,13 +1172,14 @@ set timezone = 'Asia/Manila'
 as $$
 declare
   v_role public.app_role := public.current_user_role();
+  v_group_id uuid := public.current_group_id();
   v_period_id uuid;
   v_required numeric(14,2);
   v_id uuid;
   v_status public.approval_status;
   v_month date := date_trunc('month', p_contribution_month)::date;
 begin
-  if v_role is null then
+  if v_role is null or v_group_id is null then
     raise exception 'Your account is not active.' using errcode = '42501';
   end if;
   if v_month is null or v_month < date '2000-01-01' or v_month > date_trunc('month', current_date)::date then
@@ -1158,6 +1193,7 @@ begin
   select monthly_contribution_amount into v_required
   from public.members
   where id = p_member_id
+    and group_id = v_group_id
     and status = 'ACTIVE'
     and date_registered <= (v_month + interval '1 month - 1 day')::date;
 
@@ -1165,8 +1201,8 @@ begin
     raise exception 'Active member not found.' using errcode = 'P0002';
   end if;
 
-  insert into public.contribution_periods (member_id, period_month, required_amount)
-  values (p_member_id, v_month, v_required)
+  insert into public.contribution_periods (member_id, period_month, required_amount, due_date)
+  values (p_member_id, v_month, v_required, public.contribution_period_due_date(v_group_id, v_month))
   on conflict (member_id, period_month) do nothing;
 
   select id into v_period_id
@@ -2147,17 +2183,14 @@ as $$
 declare
   v_count integer;
   v_month date := date_trunc('month', p_month)::date;
-  v_deadline integer;
+  v_group_id uuid := public.current_group_id();
   v_due_date date;
 begin
-  if not public.is_admin() or public.current_group_id() is null then raise exception 'Only a group administrator can generate contribution periods.' using errcode = '42501'; end if;
-  select deadline_day into v_deadline from public.contribution_settings
-  where group_id = public.current_group_id() and effective_month <= v_month order by effective_month desc limit 1;
-  v_deadline := coalesce(v_deadline, 28);
-  v_due_date := make_date(extract(year from v_month)::integer, extract(month from v_month)::integer, v_deadline);
+  if not public.is_admin() or v_group_id is null then raise exception 'Only a group administrator can generate contribution periods.' using errcode = '42501'; end if;
+  v_due_date := public.contribution_period_due_date(v_group_id, v_month);
   insert into public.contribution_periods (member_id, period_month, required_amount, due_date)
   select id, v_month, monthly_contribution_amount, v_due_date from public.members
-  where status = 'ACTIVE' and group_id = public.current_group_id() and date_registered <= (v_month + interval '1 month - 1 day')::date
+  where status = 'ACTIVE' and group_id = v_group_id and date_registered <= (v_month + interval '1 month - 1 day')::date
   on conflict (member_id, period_month) do nothing;
   get diagnostics v_count = row_count;
   return v_count;
@@ -2485,9 +2518,8 @@ returns integer language plpgsql security definer set search_path = public as $$
 declare v_month date := date_trunc('month', p_month)::date; v_count integer;
 begin
   insert into public.contribution_periods (member_id, period_month, required_amount, due_date)
-  select m.id, v_month, m.monthly_contribution_amount, make_date(extract(year from v_month)::integer, extract(month from v_month)::integer, coalesce(s.deadline_day, 28))
+  select m.id, v_month, m.monthly_contribution_amount, public.contribution_period_due_date(m.group_id, v_month)
   from public.members m
-  left join lateral (select cs.deadline_day from public.contribution_settings cs where cs.group_id = m.group_id and cs.effective_month <= v_month order by cs.effective_month desc limit 1) s on true
   where m.status = 'ACTIVE' and m.date_registered <= (v_month + interval '1 month - 1 day')::date
   on conflict (member_id, period_month) do nothing;
   get diagnostics v_count = row_count;
@@ -2518,6 +2550,7 @@ begin
 end;
 $$;
 
+revoke execute on function public.contribution_period_due_date(uuid, date) from public, anon, authenticated;
 revoke execute on function public.generate_all_contribution_periods(date) from public, anon, authenticated;
 revoke execute on function public.reactivate_member(uuid) from public, anon;
 revoke execute on function public.super_admin_reopen_request(uuid) from public, anon;
@@ -3167,7 +3200,9 @@ revoke all on public.v_announcements from public, anon;
 grant select on public.v_announcements to authenticated;
 
 insert into public.schema_migrations (version, name)
-values ('20261112_024', 'announcement avatars and group scope')
+values
+  ('20261112_024', 'announcement avatars and group scope'),
+  ('20261112_025', 'fix contribution period due date')
 on conflict (version) do nothing;
 
 commit;

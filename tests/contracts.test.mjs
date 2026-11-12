@@ -190,6 +190,17 @@ test('Owner and Admins can post and delete unlimited-length announcements with p
   assert.match(migration024, /group_id = public\.current_group_id\(\)/i);
 });
 
+test('sessions stay synchronized across browser tabs for sign-in and logout', () => {
+  const core = read('js/core.js');
+  const auth = read('js/auth.js');
+  assert.match(core, /function watchCrossTabAuth/);
+  assert.match(core, /'ipon-auth-sync'/);
+  assert.match(core, /window\.addEventListener\('storage'/);
+  assert.match(core, /onAuthStateChange/);
+  assert.match(core, /broadcastAuthEvent\('SIGNED_OUT'\)/);
+  assert.match(auth, /Ipon\.broadcastAuthEvent\('SIGNED_IN'/);
+});
+
 test('all three role dashboards subscribe to permitted database changes', () => {
   const core = read('js/core.js');
   const realtimeHelper = core.match(/function subscribeToChanges[\s\S]*?return channel;/)?.[0] || '';
@@ -724,4 +735,13 @@ test('opt-in TOTP MFA is enrolled, challenged, and enforced at AAL2', () => {
   assert.match(migration, /and public\.mfa_access_allowed\(\)/);
   assert.match(config, /\[auth\.mfa\.totp\]\s*enroll_enabled = true\s*verify_enabled = true/);
   assert.match(edge, /hasVerifiedMfa && tokenAal\(token\) !== 'aal2'/);
+});
+
+test('record_contribution supplies required due_date when auto-creating a contribution period', () => {
+  const schema = read('database/schema.sql');
+  const migration = read('database/migrations/20261112_025_fix_contribution_period_due_date.sql');
+  for (const sql of [schema, migration]) {
+    assert.match(sql, /create or replace function public\.contribution_period_due_date\(/);
+    assert.match(sql, /create or replace function public\.record_contribution\([\s\S]*?insert into public\.contribution_periods \(member_id, period_month, required_amount, due_date\)[\s\S]*?public\.contribution_period_due_date\(v_group_id, v_month\)/);
+  }
 });

@@ -39,6 +39,7 @@
       await Ipon.rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }).catch(() => {});
       sessionStorage.removeItem('iponPasswordRecovery');
       await Ipon.client.auth.signOut({ scope: 'global' });
+      Ipon.broadcastAuthEvent('SIGNED_OUT');
       window.location.replace('login.html?status=password-reset');
     } catch (submitError) { message.textContent = Ipon.friendlyError(submitError); }
     finally { Ipon.setBusy(button, false); }

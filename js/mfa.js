@@ -25,6 +25,7 @@
       return window.location.replace('login.html?status=pending');
     }
     await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => {});
+    Ipon.broadcastAuthEvent('SIGNED_IN', session.user.id);
     window.location.replace(Ipon.homeForRole(profile.role));
   }
 
@@ -62,6 +63,7 @@
     sessionStorage.removeItem('iponMfaNext');
     sessionStorage.removeItem('iponPasswordRecovery');
     await Ipon.client.auth.signOut({ scope: 'local' });
+    Ipon.broadcastAuthEvent('SIGNED_OUT');
     window.location.replace('login.html');
   });
 })();
