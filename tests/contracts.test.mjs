@@ -66,8 +66,9 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   const core = read('js/core.js');
   assert.match(html, /data-panel="super-admin"/);
   assert.match(html, /id="requests-body"/);
+  assert.match(html, /id="feature-requests-body"/);
   assert.match(html, /id="administrators-body"/);
-  for (const view of ['overview', 'requests', 'administrators', 'activity']) {
+  for (const view of ['overview', 'requests', 'feature-requests', 'administrators', 'activity']) {
     assert.match(html, new RegExp(`data-platform-view="${view}"`));
     assert.match(core, new RegExp(`super-admin\\.html#${view}`));
   }
@@ -83,6 +84,25 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.match(core, /function homeForRole\(role\)/);
   assert.match(core, /\['super-admin', 'account'\]\.includes\(document\.body\.dataset\.page\)/);
   assert.match(core, /role === 'SUPER_ADMIN' \? 'super-admin\.html' : role === 'MEMBER' \? 'user\.html' : 'dashboard\.html'/);
+});
+
+test('users can submit feature requests and Super Admin can review them', () => {
+  const core = read('js/core.js');
+  const html = read('super-admin.html');
+  const script = read('js/super-admin.js');
+  const schema = read('database/schema.sql');
+  const migration = read('database/migrations/20261112_016_add_feature_requests.sql');
+  assert.match(core, /id="feature-request-dialog"[\s\S]*?id="feature-request-form"/);
+  assert.match(core, /data-feature-request-open[\s\S]*?>Request a feature</);
+  assert.match(core, /from\('feature_requests'\)\.insert\(\{ requester_id: currentProfile\.id, title:/);
+  assert.match(html, /data-platform-view="feature-requests"/);
+  assert.match(script, /from\('feature_requests'\)\.select\('id,requester_id,title,details,created_at'\)/);
+  assert.match(script, /subscribeToChanges\('super-admin',[\s\S]*?'feature_requests'/);
+  assert.match(schema, /create table if not exists public\.feature_requests/i);
+  assert.match(migration, /create policy feature_requests_select[\s\S]*?requester_id = auth\.uid\(\) or public\.is_super_admin\(\)/i);
+  assert.match(migration, /create policy feature_requests_insert[\s\S]*?requester_id = auth\.uid\(\)/i);
+  assert.match(migration, /create policy mfa_verified_for_opted_in on public\.feature_requests as restrictive/i);
+  assert.match(migration, /grant insert \(requester_id, title, details\) on public\.feature_requests to authenticated/i);
 });
 
 test('all three role dashboards subscribe to permitted database changes', () => {
@@ -176,6 +196,7 @@ test('login provides development, terms, and privacy disclosures', () => {
   assert.match(html, /IPON is still under active development/);
   assert.match(html, /data-policy-open="terms"/);
   assert.match(html, /data-policy-open="privacy"/);
+  assert.match(html, /body\.is-request-mode :is\(\.development-notice,\.login-legal\)\{display:none\}/);
   assert.match(html, /<dialog class="policy-dialog" id="policy-dialog" aria-labelledby="policy-title">/);
   assert.match(html, /tracking system only and does not hold, transfer, receive, or safeguard money/);
   assert.match(html, /contact your assigned administrator/);
@@ -204,6 +225,9 @@ test('account settings open from the responsive identity control', () => {
   assert.match(dashboard, /data-account-open/);
   assert.match(core, /id="account-dialog"/);
   assert.match(core, /class="account-card account-profile-card"/);
+  assert.match(core, /class="account-support"[\s\S]*?data-donate-open[\s\S]*?>Donate me</);
+  assert.match(core, /id="donate-dialog"[\s\S]*?id="copy-donate-number"/);
+  assert.match(core, /data-donate-open[\s\S]*?donate\?\.showModal\(\)/);
   assert.match(core, /class="account-side-stack"/);
   assert.match(core, /class="account-password-disclosure"/);
   assert.doesNotMatch(`${core}\n${read('account.html')}`, /account-header-avatar|account-profile-avatar/);
@@ -214,6 +238,7 @@ test('account settings open from the responsive identity control', () => {
   assert.match(css, /grid-template-columns:repeat\(auto-fit,minmax\(44px,1fr\)\)/);
   assert.match(css, /\.account-dialog-header\{[^}]*linear-gradient\(125deg,#062d23/);
   assert.match(css, /\.account-dialog-content\{[^}]*grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
+  assert.match(css, /\.account-support\{[^}]*margin-top:auto/);
   assert.match(css, /\.account-dialog\{width:100%;height:100dvh/);
 });
 
@@ -351,6 +376,7 @@ test('pages keep baseline security and accessible table headings', () => {
     assert.match(html, /<link rel="icon" href="assets\/favicon\.svg" type="image\/svg\+xml">/i, `${file} must use the IPON favicon`);
     assert.doesNotMatch(html, /<th>\s*<\/th>/i, `${file} has an unlabeled table column`);
   }
+  assert.match(read('login.html'), /<div class="login-brand"><img class="login-brand-logo" src="assets\/favicon\.svg" alt=""><span>IPON<\/span><\/div>/);
   assert.match(read('login.html'), /class="auth-tabs"[^>]*aria-label="Account access"/);
   assert.doesNotMatch(read('login.html'), /role="tab(?:list|panel)?"/);
 });
@@ -568,8 +594,14 @@ test('opt-in TOTP MFA is enrolled, challenged, and enforced at AAL2', () => {
   const config = read('supabase/config.toml');
   const edge = read('supabase/functions/manage-account/index.ts');
   assert.match(core, /auth\.mfa\.enroll\(\{ factorType: 'totp'/);
+  assert.match(core, /auth\.mfa\.enroll\([^\n]+issuer: 'IPON'/);
   assert.match(core, /auth\.mfa\.listFactors\(\)/);
   assert.match(core, /auth\.mfa\.unenroll\(\{ factorId/);
+  assert.match(core, /!securityCard\.querySelector\('\[data-mfa-settings\]'\)/);
+  assert.match(core, /<dialog class="mfa-enrollment-dialog"[^>]+data-mfa-enrollment/);
+  assert.match(core, /enrollment\.showModal\(\)/);
+  assert.match(core, /enrollment\.addEventListener\('cancel'/);
+  assert.match(read('css/app.css'), /\.account-dialog-sheet\{[^}]*scrollbar-width:none\}[\s\S]*?\.account-dialog-sheet::-webkit-scrollbar\{display:none\}/);
   assert.match(core, /getAuthenticatorAssuranceLevel\(\)/);
   assert.match(challenge, /challengeAndVerify\(\{ factorId: factorSelect\.value, code \}\)/);
   assert.match(migration, /from auth\.mfa_factors[\s\S]*?status = 'verified'/);

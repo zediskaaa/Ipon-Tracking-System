@@ -48,6 +48,7 @@
   const superAdminNavItems = [
     ['overview', 'super-admin.html#overview', 'Overview', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>'],
     ['requests', 'super-admin.html#requests', 'Requests', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8m-8 4h5"/></svg>'],
+    ['feature-requests', 'super-admin.html#feature-requests', 'Feature requests', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 22h4M8.5 14.5A7 7 0 1 1 15.5 14.5C14.5 15.2 14 16 14 17h-4c0-1-.5-1.8-1.5-2.5Z"/></svg>'],
     ['administrators', 'super-admin.html#administrators', 'Administrators', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-1 2 2 4-4"/></svg>'],
     ['activity', 'super-admin.html#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2Z"/></svg>']
   ];
@@ -348,17 +349,24 @@
       <dialog class="notification-dialog" id="notification-dialog" aria-labelledby="notification-title">
         <div class="notification-sheet"><header><div class="notification-heading"><h2 id="notification-title">Notifications</h2><span>Recent activity</span></div><div class="notification-header-actions"><button class="notification-mark-read" id="mark-all-notifications" type="button">Mark all read</button><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header><div class="notification-list" id="notification-list" role="feed"><p class="empty-state">Loading notifications…</p></div></div>
       </dialog>
+      <dialog class="donate-dialog" id="donate-dialog" aria-labelledby="donate-title">
+        <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button></div>
+      </dialog>
+      <dialog class="form-dialog feature-request-dialog" id="feature-request-dialog" aria-labelledby="feature-request-title">
+        <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="feature-request-title">Request a feature</h2><p>Describe an improvement that would make IPON more useful to you.</p></div><button class="dialog-close" data-feature-request-close type="button" aria-label="Close feature request form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="feature-request-form" class="form-grid"><div class="field field-wide"><label for="feature-request-name">Feature name</label><input id="feature-request-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="feature-request-details">How should it work?</label><textarea id="feature-request-details" name="details" minlength="10" maxlength="2000" aria-describedby="feature-request-help" required></textarea><small class="field-help" id="feature-request-help">Explain the problem and the result you want. Do not include passwords or financial account details.</small></div><div class="form-actions field-wide"><button class="button button-secondary" data-feature-request-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit request</button></div></form></div>
+      </dialog>
       <dialog class="account-dialog" id="account-dialog" aria-labelledby="quick-account-title">
         <div class="account-dialog-sheet">
           <header class="account-dialog-header"><div class="account-dialog-title"><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><div class="account-profile-identity"><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form></section>
+            <section class="account-card account-profile-card"><div class="account-profile-identity"><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.1 7.5 9.5 4.3-1.4 7.5-4.7 7.5-9.5V6L12 3Z"/><path d="M9.5 12.2 11.3 14l3.5-4"/></svg></span><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required></div><div class="field"><label for="quick-password">New password</label><input id="quick-password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg></span><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label></section></div>
           </div>
         </div>
       </dialog>`);
-    document.querySelector('#account-dialog .account-security-card')?.insertAdjacentHTML('beforeend', mfaSettingsMarkup());
+    const securityCard = document.querySelector('#account-dialog .account-security-card');
+    if (securityCard && !securityCard.querySelector('[data-mfa-settings]')) securityCard.insertAdjacentHTML('beforeend', mfaSettingsMarkup());
     bindUtilityDialogs();
     bindAccountDialog();
     prepareNameInputs();
@@ -367,6 +375,9 @@
 
   function bindUtilityDialogs() {
     const notifications = document.getElementById('notification-dialog');
+    const donate = document.getElementById('donate-dialog');
+    const featureDialog = document.getElementById('feature-request-dialog');
+    const featureForm = document.getElementById('feature-request-form');
     const account = document.getElementById('account-dialog');
     document.querySelectorAll('[data-notifications-open]').forEach((button) => button.onclick = () => {
       if (!notifications) return;
@@ -380,6 +391,10 @@
       notifications.show();
     });
     document.querySelectorAll('[data-notifications-close]').forEach((button) => button.onclick = () => notifications?.close());
+    document.querySelectorAll('[data-donate-open]').forEach((button) => button.onclick = () => donate?.showModal());
+    document.querySelectorAll('[data-donate-close]').forEach((button) => button.onclick = () => donate?.close());
+    document.querySelectorAll('[data-feature-request-open]').forEach((button) => button.onclick = () => { featureDialog?.showModal(); featureForm?.elements.title.focus(); });
+    document.querySelectorAll('[data-feature-request-close]').forEach((button) => button.onclick = () => featureDialog?.close());
     document.querySelectorAll('[data-account-open]').forEach((button) => button.onclick = openAccountDialog);
     document.querySelectorAll('[data-account-close]').forEach((button) => button.onclick = () => account?.close());
     if (notifications && !notifications.dataset.bound) {
@@ -390,6 +405,25 @@
       document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && notifications.open) notifications.close(); });
       window.addEventListener('resize', () => { if (notifications.open) notifications.close(); });
     }
+    const copy = document.getElementById('copy-donate-number');
+    if (copy) copy.onclick = async () => {
+      try { await navigator.clipboard.writeText('09913564248'); toast('GCash number copied.'); }
+      catch { toast('Copy 09913564248 manually.', 'error'); }
+    };
+    if (featureForm) featureForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      const values = new FormData(featureForm);
+      setBusy(button, true, 'Submitting…');
+      try {
+        const { error } = await client.from('feature_requests').insert({ requester_id: currentProfile.id, title: values.get('title').trim(), details: values.get('details').trim() });
+        if (error) throw error;
+        featureDialog.close();
+        toast('Feature request submitted.');
+      } catch (error) { toast(friendlyError(error), 'error'); }
+      finally { setBusy(button, false); }
+    };
+    if (featureDialog && featureForm) featureDialog.onclose = () => featureForm.reset();
   }
 
   async function loadAccountDialog() {
@@ -483,7 +517,7 @@
   }
 
   function mfaSettingsMarkup() {
-    return '<div class="mfa-settings" data-mfa-settings><div class="mfa-status"><span><strong>Authenticator app</strong><small>Use a rotating code when you sign in.</small></span><b data-mfa-status>Checking…</b></div><div class="mfa-factor-list" data-mfa-list></div><button class="button button-secondary" type="button" data-mfa-enroll>Set up authenticator</button><div class="mfa-enrollment" data-mfa-enrollment hidden><p>Scan this QR code with Google Authenticator, Microsoft Authenticator, Authy, or another TOTP app.</p><img data-mfa-qr alt="Authenticator setup QR code"><p class="mfa-secret-label">Manual setup key</p><code data-mfa-secret></code><form class="form-grid" data-mfa-verify-form><div class="field field-wide"><label>6-digit authenticator code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required></label></div><div class="form-actions field-wide"><button class="button button-secondary" type="button" data-mfa-cancel>Cancel</button><button class="button button-primary" type="submit">Enable MFA</button></div></form></div><p class="mfa-message" data-mfa-message role="status" aria-live="polite"></p></div>';
+    return '<div class="mfa-settings" data-mfa-settings><div class="mfa-status"><span><strong>Authenticator app</strong><small>Use a rotating code when you sign in.</small></span><b data-mfa-status>Checking…</b></div><div class="mfa-factor-list" data-mfa-list></div><button class="button button-secondary" type="button" data-mfa-enroll>Set up authenticator</button><dialog class="mfa-enrollment-dialog" data-mfa-enrollment aria-label="Set up authenticator"><div class="mfa-enrollment"><h3>Set up authenticator</h3><p>Scan this QR code with Google Authenticator, Microsoft Authenticator, Authy, or another TOTP app.</p><img data-mfa-qr alt="Authenticator setup QR code"><p class="mfa-secret-label">Manual setup key</p><code data-mfa-secret></code><form class="form-grid" data-mfa-verify-form><div class="field field-wide"><label>6-digit authenticator code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required></label></div><p class="mfa-message field-wide" data-mfa-enrollment-message role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" type="button" data-mfa-cancel>Cancel</button><button class="button button-primary" type="submit">Enable MFA</button></div></form></div></dialog><p class="mfa-message" data-mfa-message role="status" aria-live="polite"></p></div>';
   }
 
   function bindMfaSettings(root) {
@@ -495,6 +529,7 @@
     const enrollButton = root.querySelector('[data-mfa-enroll]');
     const form = root.querySelector('[data-mfa-verify-form]');
     const message = root.querySelector('[data-mfa-message]');
+    const enrollmentMessage = root.querySelector('[data-mfa-enrollment-message]');
     const qr = root.querySelector('[data-mfa-qr]');
     const secret = root.querySelector('[data-mfa-secret]');
     let factorId = null;
@@ -504,13 +539,19 @@
       if (tone) message.dataset.tone = tone;
       else delete message.dataset.tone;
     };
+    const sayEnrollment = (text, tone = '') => {
+      enrollmentMessage.textContent = text;
+      if (tone) enrollmentMessage.dataset.tone = tone;
+      else delete enrollmentMessage.dataset.tone;
+    };
     const resetEnrollment = () => {
       factorId = null;
       form.reset();
-      enrollment.hidden = true;
+      if (enrollment.open) enrollment.close();
       enrollButton.hidden = false;
       qr.removeAttribute('src');
       secret.textContent = '';
+      sayEnrollment('');
     };
     const load = async () => {
       say('');
@@ -525,27 +566,30 @@
     enrollButton.addEventListener('click', async () => {
       setBusy(enrollButton, true, 'Preparing…');
       say('');
+      sayEnrollment('');
       try {
-        const { data, error } = await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: `IPON ${new Date().toISOString()}` });
+        const { data, error } = await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: `IPON ${new Date().toISOString()}`, issuer: 'IPON' });
         if (error) throw error;
         factorId = data.id;
         qr.src = data.totp.qr_code;
         secret.textContent = data.totp.secret;
-        enrollment.hidden = false;
+        enrollment.showModal();
         enrollButton.hidden = true;
         form.elements.code.focus();
       } catch (error) { say(friendlyError(error), 'error'); }
       finally { setBusy(enrollButton, false); }
     });
-    root.querySelector('[data-mfa-cancel]').addEventListener('click', async () => {
+    const cancelEnrollment = async () => {
       if (factorId) await client.auth.mfa.unenroll({ factorId }).catch(() => {});
       resetEnrollment();
-    });
+    };
+    root.querySelector('[data-mfa-cancel]').addEventListener('click', cancelEnrollment);
+    enrollment.addEventListener('cancel', (event) => { event.preventDefault(); cancelEnrollment(); });
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const button = event.submitter;
       const code = form.elements.code.value.trim();
-      if (!/^\d{6}$/.test(code)) return say('Enter the 6-digit code from your authenticator app.', 'error');
+      if (!/^\d{6}$/.test(code)) return sayEnrollment('Enter the 6-digit code from your authenticator app.', 'error');
       setBusy(button, true, 'Verifying…');
       try {
         const { error } = await client.auth.mfa.challengeAndVerify({ factorId, code });
@@ -553,7 +597,7 @@
         resetEnrollment();
         await load();
         say('Multi-factor authentication is enabled.', 'success');
-      } catch (error) { say(friendlyError(error), 'error'); }
+      } catch (error) { sayEnrollment(friendlyError(error), 'error'); }
       finally { setBusy(button, false); }
     });
     list.addEventListener('click', async (event) => {

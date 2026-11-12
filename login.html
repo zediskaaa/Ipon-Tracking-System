@@ -11,7 +11,7 @@
   <style>
     .login-page{display:grid;min-height:100vh;grid-template-columns:minmax(280px,.9fr) minmax(360px,1.1fr)}
     .login-story{display:flex;flex-direction:column;justify-content:space-between;padding:clamp(32px,6vw,86px);background:#172929;color:#f4e9dd}
-    .login-brand{font-size:clamp(58px,8vw,112px);font-weight:800;line-height:1}.login-story h1{max-width:680px;margin:0;font-size:clamp(38px,5vw,72px);line-height:1.02}
+    .login-brand{display:flex;align-items:center;gap:clamp(14px,2vw,24px);font-size:clamp(58px,8vw,112px);font-weight:800;line-height:1}.login-brand-logo{width:clamp(52px,7vw,92px);height:clamp(52px,7vw,92px);flex:0 0 auto}.login-story h1{max-width:680px;margin:0;font-size:clamp(38px,5vw,72px);line-height:1.02}
     .login-story p{max-width:560px;color:#d4d4c9;font:18px/1.6 Arial,sans-serif}.login-form-wrap{display:grid;place-items:center;padding:30px}
     .login-card{width:min(470px,100%);padding:36px;border:1px solid var(--rule);border-radius:14px;background:rgba(248,239,229,.9);box-shadow:var(--shadow)}
     .login-card h2{margin:0 0 7px;font-size:38px}.login-card>p{margin:0 0 26px;color:var(--muted);font-family:Arial,sans-serif}
@@ -25,6 +25,7 @@
     body.is-request-mode .login-card>p{grid-column:1;grid-row:2;margin-bottom:18px}
     body.is-request-mode .auth-tabs{width:180px;grid-column:2;grid-row:1/3;align-self:start;margin:2px 0 0}
     body.is-request-mode #show-signup{display:none}
+    body.is-request-mode :is(.development-notice,.login-legal){display:none}
     body.is-request-mode #auth-form{grid-column:1/-1}
     body.is-request-mode .login-card .form-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px 18px}
     body.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field){grid-column:span 2}
@@ -44,7 +45,7 @@
 <body>
   <main class="login-page">
     <section class="login-story">
-      <div class="login-brand">IPON</div>
+      <div class="login-brand"><img class="login-brand-logo" src="assets/favicon.svg" alt=""><span>IPON</span></div>
       <div><h1>Your group’s savings, clearly recorded.</h1><p>Additions, deductions, and expenses stay traceable on one monthly calendar. This records real-world money; it does not hold or transfer funds.</p></div>
       <p class="tracking-note">Only confirmed records affect the tracked savings total.</p>
     </section>

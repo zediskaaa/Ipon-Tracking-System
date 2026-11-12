@@ -5,6 +5,7 @@
   if (state.failed || !state.configured || !state.profile) return;
 
   const requestsBody = document.getElementById('requests-body');
+  const featureRequestsBody = document.getElementById('feature-requests-body');
   const administratorsBody = document.getElementById('administrators-body');
   const activityBody = document.getElementById('activity-body');
   const approvalDialog = document.getElementById('approve-request-dialog');
@@ -18,11 +19,13 @@
   let profiles = [];
   let groups = [];
   let requests = [];
+  let featureRequests = [];
   let accountActivities = [];
   Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
   const views = {
     overview: ['Platform overview', 'Monitor administrator access, savings groups, and requests without exposing financial records.'],
     requests: ['Administrator requests', 'Review pending applications and create an isolated savings group when access is approved.'],
+    'feature-requests': ['Feature requests', 'Review improvements suggested by active IPON users.'],
     administrators: ['Administrators', 'Create accounts and manage each administrator\'s platform access and assigned savings group.'],
     activity: ['Platform activity', 'Review recent administrator and savings-group access changes recorded by the database.']
   };
@@ -98,6 +101,20 @@
     }).join('') : '<tr><td colspan="6" class="empty-state">No administrator accounts.</td></tr>';
   }
 
+  function renderFeatureRequests() {
+    const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+    featureRequestsBody.innerHTML = featureRequests.length ? featureRequests.map((request) => {
+      const profile = profileById.get(request.requester_id);
+      return `<tr>
+        <td><strong>${Ipon.escapeHtml(profile?.full_name || 'Former user')}</strong>${profile?.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}</td>
+        <td>${Ipon.escapeHtml(profile?.role?.replaceAll('_', ' ') || 'Unavailable')}</td>
+        <td><strong>${Ipon.escapeHtml(request.title)}</strong></td>
+        <td><span class="feature-request-details">${Ipon.escapeHtml(request.details)}</span></td>
+        <td>${Ipon.dateLabel(request.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="5" class="empty-state">No feature requests yet.</td></tr>';
+  }
+
   function renderActivity(logs) {
     const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
     const groupById = new Map(groups.map((group) => [group.id, group]));
@@ -111,24 +128,28 @@
   async function load() {
     overviewError.hidden = true;
     overviewError.replaceChildren();
-    const [profileResult, groupResult, requestResult, activityResult, logResult] = await Promise.all([
+    const [profileResult, groupResult, requestResult, featureRequestResult, activityResult, logResult] = await Promise.all([
       Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,created_at').order('created_at', { ascending: false }),
       Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false }),
       Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,created_at').order('created_at', { ascending: false }).limit(200),
+      Ipon.client.from('feature_requests').select('id,requester_id,title,details,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(12)
     ]);
     if (profileResult.error) throw profileResult.error;
     if (groupResult.error) throw groupResult.error;
     if (requestResult.error) throw requestResult.error;
+    if (featureRequestResult.error) throw featureRequestResult.error;
     if (activityResult.error) throw activityResult.error;
     if (logResult.error) throw logResult.error;
     profiles = profileResult.data || [];
     groups = groupResult.data || [];
     requests = requestResult.data || [];
+    featureRequests = featureRequestResult.data || [];
     accountActivities = activityResult.data || [];
     renderOverview();
     renderRequests();
+    renderFeatureRequests();
     renderAdministrators();
     renderActivity(logResult.data || []);
   }
@@ -307,11 +328,12 @@
       overviewError.hidden = false;
       Ipon.showInlineError(overviewError, error, refresh);
       Ipon.showInlineError(requestsBody, error, refresh, 5);
+      Ipon.showInlineError(featureRequestsBody, error, refresh, 5);
       Ipon.showInlineError(administratorsBody, error, refresh, 6);
       Ipon.showInlineError(activityBody, error, refresh, 3);
     }
   }
 
   await refresh();
-  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'admin_requests', 'account_activity', 'audit_logs'], refresh);
+  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'admin_requests', 'feature_requests', 'account_activity', 'audit_logs'], refresh);
 })();

@@ -41,6 +41,7 @@
           <nav class="platform-shortcuts" aria-labelledby="shortcuts-title">
             <h3 id="shortcuts-title">Platform workspaces</h3>
             <a href="super-admin.html#requests"><span><strong>Administrator requests</strong><small>Review access applications</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a href="super-admin.html#feature-requests"><span><strong>Feature requests</strong><small>Read suggestions from IPON users</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
             <a href="super-admin.html#administrators"><span><strong>Administrators</strong><small>Manage accounts and groups</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
             <a href="super-admin.html#activity"><span><strong>Platform activity</strong><small>Inspect recent access changes</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
           </nav>
@@ -53,6 +54,13 @@
           <div><h2 id="requests-title">Administrator requests</h2><p>Approval creates a separate savings group and activates the administrator account in one database transaction.</p></div>
         </div>
         <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Requester</th><th>Contact</th><th>Reason</th><th>Requested</th><th>Status</th><th>Actions</th></tr></thead><tbody id="requests-body"><tr class="loading-row"><td colspan="6">Loading requests…</td></tr></tbody></table></div>
+      </section>
+
+      <section class="platform-view panel" id="feature-requests" data-platform-view="feature-requests" aria-labelledby="feature-requests-title" hidden>
+        <div class="panel-header">
+          <div><h2 id="feature-requests-title">Feature requests</h2><p>Suggestions submitted by active IPON users, newest first.</p></div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Requester</th><th>Role</th><th>Feature</th><th>Details</th><th>Submitted</th></tr></thead><tbody id="feature-requests-body"><tr class="loading-row"><td colspan="5">Loading feature requests…</td></tr></tbody></table></div>
       </section>
 
       <section class="platform-view panel" id="administrators" data-platform-view="administrators" aria-labelledby="administrators-title" hidden>
