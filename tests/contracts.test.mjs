@@ -68,7 +68,7 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.match(html, /id="requests-body"/);
   assert.match(html, /id="feature-requests-body"/);
   assert.match(html, /id="administrators-body"/);
-  assert.match(html, /id="users-body"/);
+  assert.match(html, /id="users-role-filter"/);
   assert.match(html, /id="user-password-dialog"/);
   for (const view of ['overview', 'requests', 'feature-requests', 'administrators', 'activity']) {
     assert.match(html, new RegExp(`data-platform-view="${view}"`));
@@ -111,6 +111,29 @@ test('users can submit feature requests and Super Admin can review them', () => 
   assert.match(migration, /create policy feature_requests_insert[\s\S]*?requester_id = auth\.uid\(\) and public\.current_user_role\(\) in \('ADMIN', 'TREASURER', 'MEMBER'\)/i);
   assert.match(migration, /create policy mfa_verified_for_opted_in on public\.feature_requests as restrictive/i);
   assert.match(migration, /grant insert \(requester_id, title, details\) on public\.feature_requests to authenticated/i);
+});
+
+test('users can submit bug reports with up to 5 images and Super Admin can inspect them', () => {
+  const core = read('js/core.js');
+  const html = read('super-admin.html');
+  const script = read('js/super-admin.js');
+  const schema = read('database/schema.sql');
+  const migration = read('database/migrations/20261112_020_add_bug_reports.sql');
+  assert.match(core, /MAX_BUG_IMAGES = 5/);
+  assert.match(core, /id="bug-report-dialog"[\s\S]*?id="bug-report-form"/);
+  assert.match(core, /id="bug-report-images"[^>]*accept="image\/\*"[^>]*multiple/);
+  assert.match(core, /data-bug-report-open[\s\S]*?>Report a bug</);
+  assert.match(core, /from\('bug_reports'\)\.insert\(\{ reporter_id: currentProfile\.id, title, description, attachments: bugImages \}\)/);
+  assert.match(html, /data-platform-view="bug-reports"/);
+  assert.match(html, /id="bug-viewer-dialog"/);
+  assert.match(script, /from\('bug_reports'\)\.select\('id,reporter_id,title,description,image_count,created_at'\)/);
+  assert.match(script, /subscribeToChanges\('super-admin',[\s\S]*?'bug_reports'/);
+  assert.match(schema, /create table if not exists public\.bug_reports/i);
+  assert.match(migration, /jsonb_array_length\(attachments\) <= 5/i);
+  assert.match(migration, /create policy bug_reports_select[\s\S]*?reporter_id = auth\.uid\(\) or public\.is_super_admin\(\)/i);
+  assert.match(migration, /create policy bug_reports_insert[\s\S]*?reporter_id = auth\.uid\(\) and public\.current_user_role\(\) in \('ADMIN', 'TREASURER', 'MEMBER'\)/i);
+  assert.match(migration, /create policy mfa_verified_for_opted_in on public\.bug_reports as restrictive/i);
+  assert.match(migration, /grant insert \(reporter_id, title, description, attachments\) on public\.bug_reports to authenticated/i);
 });
 
 test('all three role dashboards subscribe to permitted database changes', () => {

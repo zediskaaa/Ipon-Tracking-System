@@ -5,9 +5,13 @@
   const configured = /^https:\/\/.+\.supabase\.co$/i.test(config.supabaseUrl || '')
     && config.supabaseAnonKey
     && !config.supabaseAnonKey.startsWith('YOUR_');
-  const client = configured && window.supabase
-    ? window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey)
-    : null;
+  let clientInstance = null;
+  function getClient() {
+    if (!clientInstance && configured && window.supabase) {
+      clientInstance = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+    }
+    return clientInstance;
+  }
   let currentProfile = null;
   let quickMfaController = null;
   const STARTUP_TIMEOUT_MS = 15000;
@@ -24,6 +28,7 @@
     window.addEventListener('pagehide', () => { document.documentElement.style.visibility = 'hidden'; });
     window.addEventListener('pageshow', async (event) => {
       if (!event.persisted) return;
+      const client = getClient();
       if (!client) { setLoading(false); return document.documentElement.style.removeProperty('visibility'); }
       try {
         const { data: { session }, error } = await client.auth.getSession();
@@ -33,6 +38,13 @@
       } catch {
         window.location.replace('login.html');
       }
+    });
+    document.addEventListener('click', (event) => {
+      const link = event.target.closest('a[href]');
+      if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin || (url.pathname === window.location.pathname && url.search === window.location.search)) return;
+      setLoading(true);
     });
   }
 
@@ -58,7 +70,8 @@
     ['overview', 'super-admin.html#overview', 'Overview', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>'],
     ['requests', 'super-admin.html#requests', 'Requests', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8m-8 4h5"/></svg>'],
     ['feature-requests', 'super-admin.html#feature-requests', 'Feature requests', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 22h4M8.5 14.5A7 7 0 1 1 15.5 14.5C14.5 15.2 14 16 14 17h-4c0-1-.5-1.8-1.5-2.5Z"/></svg>'],
-    ['administrators', 'super-admin.html#administrators', 'Administrators', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-1 2 2 4-4"/></svg>'],
+    ['bug-reports', 'super-admin.html#bug-reports', 'Bug reports', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6V5a4 4 0 0 1 8 0v1m-9 4h10a2 2 0 0 1 2 2v3a7 7 0 0 1-14 0v-3a2 2 0 0 1 2-2Zm-3 3H3m18 0h-1M6 9 4 7m14 2 2-2M6 17l-2 2m14-2 2 2"/></svg>'],
+    ['administrators', 'super-admin.html#administrators', 'Users', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-1 2 2 4-4"/></svg>'],
     ['activity', 'super-admin.html#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2Z"/></svg>']
   ];
   const userNavItems = [
@@ -458,11 +471,14 @@
       <dialog class="form-dialog feature-request-dialog" id="feature-request-dialog" aria-labelledby="feature-request-title">
         <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="feature-request-title">Request a feature</h2><p>Describe an improvement that would make IPON more useful to you.</p></div><button class="dialog-close" data-feature-request-close type="button" aria-label="Close feature request form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="feature-request-form" class="form-grid"><div class="field field-wide"><label for="feature-request-name">Feature name</label><input id="feature-request-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="feature-request-details">How should it work?</label><textarea id="feature-request-details" name="details" minlength="10" maxlength="2000" aria-describedby="feature-request-help" required></textarea><small class="field-help" id="feature-request-help">Explain the problem and the result you want. Do not include passwords or financial account details.</small></div><p class="mfa-message field-wide" id="feature-request-message" role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" data-feature-request-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit request</button></div></form><div class="feature-request-success" id="feature-request-success" role="status" aria-live="polite" hidden><span class="feature-request-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><h3>Feature request submitted</h3><p>Your suggestion <strong id="feature-request-submitted-title"></strong> has been sent to the Super Admin for review.</p><div class="form-actions"><button class="button button-secondary" id="feature-request-another" type="button">Submit another</button><button class="button button-primary" data-feature-request-close type="button">Done</button></div></div></div>
       </dialog>
+      <dialog class="form-dialog feature-request-dialog bug-report-dialog" id="bug-report-dialog" aria-labelledby="bug-report-title">
+        <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="bug-report-title">Report a problem</h2><p>Describe the error or bug you encountered and optionally attach screenshots.</p></div><button class="dialog-close" data-bug-report-close type="button" aria-label="Close bug report form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="bug-report-form" class="form-grid"><div class="field field-wide"><label for="bug-report-name">Title</label><input id="bug-report-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="bug-report-details">Description</label><textarea id="bug-report-details" name="description" minlength="10" maxlength="2000" aria-describedby="bug-report-help" required></textarea><small class="field-help" id="bug-report-help">Explain what happened and how to reproduce it. Do not include passwords or financial account details.</small></div><div class="field field-wide"><label for="bug-report-images">Pictures (optional, up to 5)</label><div class="bug-upload-box"><input id="bug-report-images" type="file" accept="image/*" multiple aria-describedby="bug-report-image-count"><small class="field-help" id="bug-report-image-count">0 of 5 images selected. Any picture format is accepted.</small></div><div class="bug-image-grid" id="bug-report-previews" hidden></div></div><p class="mfa-message field-wide" id="bug-report-message" role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" data-bug-report-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit report</button></div></form><div class="feature-request-success" id="bug-report-success" role="status" aria-live="polite" hidden><span class="feature-request-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><h3>Bug report submitted</h3><p>Your report <strong id="bug-report-submitted-title"></strong> has been sent to the Super Admin for review.</p><div class="form-actions"><button class="button button-secondary" id="bug-report-another" type="button">Submit another</button><button class="button button-primary" data-bug-report-close type="button">Done</button></div></div></div>
+      </dialog>
       <dialog class="account-dialog" id="account-dialog" aria-labelledby="quick-account-title">
         <div class="account-dialog-sheet">
           <header class="account-dialog-header"><div class="account-dialog-title"><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><div class="account-profile-identity"><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div></div></section>
+            <section class="account-card account-profile-card"><div class="account-profile-identity"><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.1 7.5 9.5 4.3-1.4 7.5-4.7 7.5-9.5V6L12 3Z"/><path d="M9.5 12.2 11.3 14l3.5-4"/></svg></span><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required></div><div class="field"><label for="quick-password">New password</label><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg></span><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label></section></div>
           </div>
@@ -476,6 +492,58 @@
     preparePhoneInputs();
   }
 
+  const MAX_BUG_IMAGES = 5;
+  const MAX_BUG_IMAGE_BYTES = 2 * 1024 * 1024;
+  const PICTURE_FILE_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif|ico|tiff?|jfif|apng)$/i;
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error(`Unable to read ${file.name || 'image'}.`));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function compressRasterDataUrl(dataUrl) {
+    return new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => {
+        const longest = Math.max(image.naturalWidth || 0, image.naturalHeight || 0);
+        if (!longest) return resolve(dataUrl);
+        const scale = Math.min(1, 1440 / longest);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext('2d');
+        if (!context) return resolve(dataUrl);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const compressed = canvas.toDataURL('image/jpeg', 0.82);
+        resolve(compressed && compressed.length < dataUrl.length ? compressed : dataUrl);
+      };
+      image.onerror = () => resolve(dataUrl);
+      image.src = dataUrl;
+    });
+  }
+
+  async function prepareBugImage(file) {
+    const ext = (file.name || '').match(PICTURE_FILE_RE)?.[1]?.toLowerCase() || '';
+    const isImage = file.type.startsWith('image/') || Boolean(ext);
+    if (!isImage) throw new Error(`"${file.name}" is not a picture file.`);
+    let dataUrl = await readFileAsDataUrl(file);
+    const type = file.type.startsWith('image/') ? file.type : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+    if (!dataUrl.startsWith('data:image/') && ext) {
+      dataUrl = dataUrl.replace(/^data:[^;,]*/, `data:${type}`);
+    }
+    if (!dataUrl.startsWith('data:image/')) throw new Error(`"${file.name}" is not a valid picture format.`);
+    if (file.size > 350 * 1024 && !/^image\/(gif|svg\+xml)$/i.test(type)) {
+      dataUrl = await compressRasterDataUrl(dataUrl);
+    }
+    const approxBytes = Math.ceil((dataUrl.length * 3) / 4);
+    if (approxBytes > MAX_BUG_IMAGE_BYTES) throw new Error(`"${file.name}" exceeds the 2 MB image limit.`);
+    return { name: String(file.name || 'picture').slice(0, 120), type, dataUrl };
+  }
+
   function bindUtilityDialogs() {
     const notifications = document.getElementById('notification-dialog');
     const donate = document.getElementById('donate-dialog');
@@ -484,15 +552,54 @@
     const featureMessage = document.getElementById('feature-request-message');
     const featureSuccess = document.getElementById('feature-request-success');
     const featureSubmittedTitle = document.getElementById('feature-request-submitted-title');
+    const bugDialog = document.getElementById('bug-report-dialog');
+    const bugForm = document.getElementById('bug-report-form');
+    const bugMessage = document.getElementById('bug-report-message');
+    const bugSuccess = document.getElementById('bug-report-success');
+    const bugSubmittedTitle = document.getElementById('bug-report-submitted-title');
+    const bugImageInput = document.getElementById('bug-report-images');
+    const bugImageCount = document.getElementById('bug-report-image-count');
+    const bugPreviews = document.getElementById('bug-report-previews');
+    let bugImages = [];
     const account = document.getElementById('account-dialog');
+    const setFeedbackMessage = (target, text = '', tone = '') => {
+      if (!target) return;
+      target.textContent = text;
+      if (tone) target.dataset.tone = tone;
+      else delete target.dataset.tone;
+    };
+    const renderBugPreviews = () => {
+      if (bugImageCount) bugImageCount.textContent = `${bugImages.length} of ${MAX_BUG_IMAGES} images selected. Any picture format is accepted.`;
+      if (!bugPreviews) return;
+      bugPreviews.hidden = !bugImages.length;
+      bugPreviews.innerHTML = bugImages.map((item, index) => `
+        <div class="bug-image-card">
+          <img src="${item.dataUrl}" alt="${escapeHtml(item.name)}">
+          <span class="bug-image-fallback" hidden>${escapeHtml(item.name)}</span>
+          <button class="bug-image-remove" type="button" data-remove-bug-image="${index}" aria-label="Remove ${escapeHtml(item.name)}">&times;</button>
+          <small>${escapeHtml(item.name)}</small>
+        </div>`).join('');
+      bugPreviews.querySelectorAll('img').forEach((img) => {
+        img.onerror = () => {
+          img.hidden = true;
+          const fallback = img.nextElementSibling;
+          if (fallback) fallback.hidden = false;
+        };
+      });
+    };
     const resetFeatureDialog = () => {
       featureForm?.reset();
-      if (featureMessage) {
-        featureMessage.textContent = '';
-        delete featureMessage.dataset.tone;
-      }
+      setFeedbackMessage(featureMessage);
       if (featureForm) featureForm.hidden = false;
       if (featureSuccess) featureSuccess.hidden = true;
+    };
+    const resetBugDialog = () => {
+      bugForm?.reset();
+      bugImages = [];
+      renderBugPreviews();
+      setFeedbackMessage(bugMessage);
+      if (bugForm) bugForm.hidden = false;
+      if (bugSuccess) bugSuccess.hidden = true;
     };
     document.querySelectorAll('[data-notifications-open]').forEach((button) => button.onclick = () => {
       if (!notifications) return;
@@ -516,6 +623,44 @@
     document.querySelectorAll('[data-feature-request-close]').forEach((button) => button.onclick = () => featureDialog?.close());
     const anotherFeature = document.getElementById('feature-request-another');
     if (anotherFeature) anotherFeature.onclick = () => { resetFeatureDialog(); featureForm?.elements.title.focus(); };
+    document.querySelectorAll('[data-bug-report-open]').forEach((button) => button.onclick = () => { resetBugDialog(); bugDialog?.showModal(); bugForm?.elements.title.focus(); });
+    document.querySelectorAll('[data-bug-report-close]').forEach((button) => button.onclick = () => bugDialog?.close());
+    const anotherBug = document.getElementById('bug-report-another');
+    if (anotherBug) anotherBug.onclick = () => { resetBugDialog(); bugForm?.elements.title.focus(); };
+    if (bugImageInput) bugImageInput.onchange = async () => {
+      const files = Array.from(bugImageInput.files || []);
+      bugImageInput.value = '';
+      if (!files.length) return;
+      setFeedbackMessage(bugMessage);
+      const remaining = MAX_BUG_IMAGES - bugImages.length;
+      if (remaining <= 0) {
+        const message = `You can upload up to ${MAX_BUG_IMAGES} images per report.`;
+        setFeedbackMessage(bugMessage, message, 'error');
+        return toast(message, 'error');
+      }
+      if (files.length > remaining) {
+        const message = `Only ${remaining} more image${remaining === 1 ? '' : 's'} can be added (maximum ${MAX_BUG_IMAGES}).`;
+        setFeedbackMessage(bugMessage, message, 'error');
+        toast(message, 'error');
+      }
+      for (const file of files.slice(0, remaining)) {
+        try {
+          bugImages.push(await prepareBugImage(file));
+        } catch (error) {
+          const message = friendlyError(error);
+          setFeedbackMessage(bugMessage, message, 'error');
+          toast(message, 'error');
+        }
+      }
+      renderBugPreviews();
+    };
+    if (bugPreviews) bugPreviews.onclick = (event) => {
+      const removeButton = event.target.closest('[data-remove-bug-image]');
+      if (!removeButton) return;
+      bugImages.splice(Number(removeButton.dataset.removeBugImage), 1);
+      setFeedbackMessage(bugMessage);
+      renderBugPreviews();
+    };
     document.querySelectorAll('[data-account-open]').forEach((button) => button.onclick = openAccountDialog);
     document.querySelectorAll('[data-account-close]').forEach((button) => button.onclick = () => account?.close());
     if (notifications && !notifications.dataset.bound) {
@@ -538,10 +683,7 @@
       const values = new FormData(featureForm);
       const title = values.get('title').trim();
       const details = values.get('details').trim();
-      if (featureMessage) {
-        featureMessage.textContent = '';
-        delete featureMessage.dataset.tone;
-      }
+      setFeedbackMessage(featureMessage);
       const accepted = await confirmAction({
         title: 'Submit feature request?',
         message: `Send "${title}" to the Super Admin for review?`,
@@ -550,7 +692,7 @@
       if (!accepted) return;
       setBusy(button, true, 'Submitting…');
       try {
-        const { error } = await client.from('feature_requests').insert({ requester_id: currentProfile.id, title: values.get('title').trim(), details });
+        const { error } = await getClient().from('feature_requests').insert({ requester_id: currentProfile.id, title: values.get('title').trim(), details });
         if (error) throw error;
         if (featureSubmittedTitle) featureSubmittedTitle.textContent = `"${title}"`;
         featureForm.hidden = true;
@@ -559,19 +701,49 @@
         toast('Feature request submitted.');
       } catch (error) {
         const message = friendlyError(error);
-        if (featureMessage) {
-          featureMessage.textContent = message;
-          featureMessage.dataset.tone = 'error';
-        }
+        setFeedbackMessage(featureMessage, message, 'error');
+        toast(message, 'error');
+      } finally {
+        setBusy(button, false);
+      }
+    };
+    if (bugForm) bugForm.onsubmit = async (event) => {
+      event.preventDefault();
+      if (!bugForm.reportValidity()) return;
+      const button = event.submitter;
+      const values = new FormData(bugForm);
+      const title = values.get('title').trim();
+      const description = values.get('description').trim();
+      setFeedbackMessage(bugMessage);
+      const accepted = await confirmAction({
+        title: 'Submit bug report?',
+        message: `Send "${title}"${bugImages.length ? ` with ${bugImages.length} attached picture${bugImages.length === 1 ? '' : 's'}` : ''} to the Super Admin?`,
+        acceptLabel: 'Submit report'
+      });
+      if (!accepted) return;
+      setBusy(button, true, 'Submitting…');
+      try {
+        const { error } = await getClient().from('bug_reports').insert({ reporter_id: currentProfile.id, title, description, attachments: bugImages });
+        if (error) throw error;
+        if (bugSubmittedTitle) bugSubmittedTitle.textContent = `"${title}"`;
+        bugForm.hidden = true;
+        if (bugSuccess) bugSuccess.hidden = false;
+        bugSuccess?.querySelector('[data-bug-report-close]')?.focus();
+        toast('Bug report submitted.');
+      } catch (error) {
+        const message = friendlyError(error);
+        setFeedbackMessage(bugMessage, message, 'error');
         toast(message, 'error');
       } finally {
         setBusy(button, false);
       }
     };
     if (featureDialog && featureForm) featureDialog.onclose = resetFeatureDialog;
+    if (bugDialog && bugForm) bugDialog.onclose = resetBugDialog;
   }
 
   async function loadAccountDialog() {
+    const client = getClient();
     if (!client || !currentProfile) return;
     const dialog = document.getElementById('account-dialog');
     const profileForm = document.getElementById('quick-profile-form');
@@ -633,7 +805,7 @@
       const button = event.submitter;
       setBusy(button, true, 'Updating…');
       try {
-        const { error } = await client.auth.updateUser({ email: emailForm.elements.email.value.trim() });
+        const { error } = await getClient().auth.updateUser({ email: emailForm.elements.email.value.trim() });
         if (error) throw error;
         toast('Check your email to confirm the change.');
       } catch (error) { toast(friendlyError(error), 'error'); }
@@ -711,7 +883,7 @@
     const load = async () => {
       say('');
       status.textContent = 'Checking…';
-      const { data, error } = await client.auth.mfa.listFactors();
+      const { data, error } = await getClient().auth.mfa.listFactors();
       if (error) throw error;
       const factors = (data.totp || []).filter((factor) => factor.status === 'verified');
       status.textContent = factors.length ? `${factors.length} authenticator${factors.length === 1 ? '' : 's'} enabled` : 'Not enabled';
@@ -723,7 +895,7 @@
       say('');
       sayEnrollment('');
       try {
-        const { data, error } = await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: `IPON ${new Date().toISOString()}`, issuer: 'IPON' });
+        const { data, error } = await getClient().auth.mfa.enroll({ factorType: 'totp', friendlyName: `IPON ${new Date().toISOString()}`, issuer: 'IPON' });
         if (error) throw error;
         factorId = data.id;
         qr.src = data.totp.qr_code;
@@ -735,7 +907,7 @@
       finally { setBusy(enrollButton, false); }
     });
     const cancelEnrollment = async () => {
-      if (factorId) await client.auth.mfa.unenroll({ factorId }).catch(() => {});
+      if (factorId) await getClient().auth.mfa.unenroll({ factorId }).catch(() => {});
       resetEnrollment();
     };
     root.querySelector('[data-mfa-cancel]').addEventListener('click', cancelEnrollment);
@@ -747,7 +919,7 @@
       if (!/^\d{6}$/.test(code)) return sayEnrollment('Enter the 6-digit code from your authenticator app.', 'error');
       setBusy(button, true, 'Verifying…');
       try {
-        const { error } = await client.auth.mfa.challengeAndVerify({ factorId, code });
+        const { error } = await getClient().auth.mfa.challengeAndVerify({ factorId, code });
         if (error) throw error;
         resetEnrollment();
         await load();
@@ -762,6 +934,7 @@
       if (!accepted) return;
       setBusy(button, true, 'Removing…');
       try {
+        const client = getClient();
         const { error } = await client.auth.mfa.unenroll({ factorId: button.dataset.mfaRemove });
         if (error) throw error;
         await client.auth.refreshSession();
@@ -775,6 +948,7 @@
   }
 
   async function initNotifications(profile) {
+    const client = getClient();
     const list = document.getElementById('notification-list');
     if (!list || !client || !profile) return;
     const load = async () => {
@@ -871,6 +1045,7 @@
         return { configured: false, profile: null, session: null };
       }
 
+      const client = getClient();
       const { data: { session }, error: sessionError } = await withTimeout(client.auth.getSession());
       if (sessionError) throw sessionError;
       if (!session && options.requireAuth !== false) {
@@ -932,6 +1107,7 @@
     const accepted = await confirmAction({ title: 'Sign out?', message: 'You will need to sign in again to access the system.', acceptLabel: 'Sign out' });
     if (!accepted) return;
     try {
+      const client = getClient();
       if (client) await withTimeout(client.auth.signOut({ scope: 'local' }));
     } finally {
       window.location.replace('login.html');
@@ -1028,6 +1204,7 @@
   }
 
   async function rpc(name, params) {
+    const client = getClient();
     if (!client) throw new Error('Supabase is not connected.');
     const { data, error } = await client.rpc(name, params);
     if (error) throw error;
@@ -1035,6 +1212,7 @@
   }
 
   async function changePassword(password, currentPassword) {
+    const client = getClient();
     const { data: refreshed } = await client.auth.refreshSession().catch(() => ({ data: { session: null } }));
     const headers = refreshed?.session?.access_token ? { Authorization: `Bearer ${refreshed.session.access_token}` } : undefined;
     const { error } = await client.functions.invoke('manage-account', { headers, body: { action: 'change-password', password, current_password: currentPassword } });
@@ -1047,6 +1225,7 @@
   }
 
   async function requiresMfaChallenge() {
+    const client = getClient();
     if (!client) return false;
     const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
     if (error) throw error;
@@ -1054,6 +1233,7 @@
   }
 
   function subscribeToChanges(name, tables, refresh) {
+    const client = getClient();
     if (!client || !tables.length) return null;
     let timer;
     let pending = Promise.resolve();
@@ -1069,9 +1249,11 @@
     channel.subscribe();
     const resume = () => { if (document.visibilityState === 'visible') schedule(); };
     document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', resume);
     window.addEventListener('pagehide', () => {
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', resume);
       client.removeChannel(channel);
     }, { once: true });
     return channel;
@@ -1083,10 +1265,11 @@
     showStartupFailure(event.reason);
   });
 
+  if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
   prepareFormValidation();
 
   window.Ipon = {
-    client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
+    get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, subscribeToChanges,
     get profile() { return currentProfile; }
   };

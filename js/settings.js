@@ -136,4 +136,10 @@
   } finally {
     Ipon.setLoading(false);
   }
+  Ipon.subscribeToChanges('settings', ['profiles', 'members', 'contribution_settings'], async () => {
+    const tasks = [];
+    if (document.activeElement !== defaultAmount && document.activeElement !== deadlineDay && document.activeElement !== effectiveMonth) tasks.push(loadContributionDefault());
+    if (!document.activeElement?.closest('#access-body')) tasks.push(loadAccess());
+    await Promise.all(tasks);
+  });
 })();

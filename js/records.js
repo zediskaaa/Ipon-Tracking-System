@@ -139,7 +139,7 @@
     }
   }
 
-  async function loadContributions() {
+  async function loadContributions(preserveAmount = false) {
     const month = document.getElementById('status-month');
     if (!month.options.length) {
       const now = new Date();
@@ -148,7 +148,7 @@
         const value = Ipon.monthStart(date);
         month.insertAdjacentHTML('beforeend', `<option value="${value}" ${offset === 0 ? 'selected' : ''}>${Ipon.dateLabel(value, { month: 'long', year: 'numeric' })}</option>`);
       }
-      month.addEventListener('change', load);
+      month.addEventListener('change', () => load());
     }
     statusRowsByMonth.clear();
     const { data, error } = await Ipon.client.from('v_contribution_status').select('*').eq('period_month', month.value).order('member_name');
@@ -171,7 +171,7 @@
       const reason = entry.void_reason || entry.review_note;
       return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${reason ? `<small class="field-help" style="display:block">${Ipon.escapeHtml(reason)}</small>` : ''}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`;
     }).join('') : '<tr><td colspan="6" class="empty-state">No additions recorded yet.</td></tr>';
-    await syncSuggestedAmount();
+    if (!preserveAmount) await syncSuggestedAmount();
   }
 
   function actionButtons(row) {
@@ -195,10 +195,10 @@
     }).join('') : `<tr><td colspan="7" class="empty-state">No ${page} recorded yet.</td></tr>`;
   }
 
-  async function load() {
+  async function load(preserveAmount = false) {
     try {
       await loadMembers();
-      if (page === 'contributions') await loadContributions();
+      if (page === 'contributions') await loadContributions(preserveAmount);
       else await loadTransactions();
     } catch (error) {
       Ipon.showInlineError(tbody, error, load, page === 'contributions' ? 6 : 7);
@@ -290,4 +290,5 @@
   });
 
   try { await load(); } finally { Ipon.setLoading(false); }
+  Ipon.subscribeToChanges(page, ['members', 'contribution_periods', 'contributions', 'withdrawals', 'expenses'], () => load(true));
 })();

@@ -7,7 +7,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Super Admin — IPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261112-9">
+  <link rel="stylesheet" href="css/app.css?v=20261112-10">
 </head>
 <body data-page="super-admin" data-panel="super-admin">
   <div class="app-layout">
@@ -42,7 +42,8 @@
             <h3 id="shortcuts-title">Platform workspaces</h3>
             <a href="super-admin.html#requests"><span><strong>Administrator requests</strong><small>Review access applications</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
             <a href="super-admin.html#feature-requests"><span><strong>Feature requests</strong><small>Read suggestions from IPON users</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a href="super-admin.html#administrators"><span><strong>Administrators</strong><small>Manage accounts and groups</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a href="super-admin.html#bug-reports"><span><strong>Bug reports</strong><small>Review reported errors and screenshots</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a href="super-admin.html#administrators"><span><strong>Users</strong><small>Manage accounts and groups</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
             <a href="super-admin.html#activity"><span><strong>Platform activity</strong><small>Inspect recent access changes</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
           </nav>
         </div>
@@ -52,36 +53,61 @@
       <section class="platform-view panel" id="requests" data-platform-view="requests" aria-labelledby="requests-title" hidden>
         <div class="panel-header">
           <div><h2 id="requests-title">Administrator requests</h2><p>Approval creates a separate savings group and activates the administrator account in one database transaction.</p></div>
+          <div class="table-filters">
+            <input id="requests-search" type="search" placeholder="Search requests" aria-label="Search administrator requests">
+            <select id="requests-status-filter" aria-label="Filter administrator requests by status"><option value="">All statuses</option><option>PENDING</option><option>APPROVED</option><option>REJECTED</option></select>
+          </div>
         </div>
         <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Requester</th><th>Contact</th><th>Reason</th><th>Requested</th><th>Status</th><th>Actions</th></tr></thead><tbody id="requests-body"><tr class="loading-row"><td colspan="6">Loading requests…</td></tr></tbody></table></div>
+        <nav class="table-pager" id="requests-pager" aria-label="Administrator requests pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
       </section>
 
       <section class="platform-view panel" id="feature-requests" data-platform-view="feature-requests" aria-labelledby="feature-requests-title" hidden>
         <div class="panel-header">
           <div><h2 id="feature-requests-title">Feature requests</h2><p>Suggestions submitted by active IPON users, newest first.</p></div>
+          <div class="table-filters">
+            <input id="feature-requests-search" type="search" placeholder="Search feature requests" aria-label="Search feature requests">
+          </div>
         </div>
         <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Requester</th><th>Role</th><th>Feature</th><th>Details</th><th>Submitted</th></tr></thead><tbody id="feature-requests-body"><tr class="loading-row"><td colspan="5">Loading feature requests…</td></tr></tbody></table></div>
+        <nav class="table-pager" id="feature-requests-pager" aria-label="Feature requests pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
+      </section>
+
+      <section class="platform-view panel" id="bug-reports" data-platform-view="bug-reports" aria-labelledby="bug-reports-title" hidden>
+        <div class="panel-header">
+          <div><h2 id="bug-reports-title">Bug reports</h2><p>Errors and problems reported by active IPON users, newest first.</p></div>
+          <div class="table-filters">
+            <input id="bug-reports-search" type="search" placeholder="Search bug reports" aria-label="Search bug reports">
+          </div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Reporter</th><th>Role</th><th>Title</th><th>Description</th><th>Pictures</th><th>Submitted</th></tr></thead><tbody id="bug-reports-body"><tr class="loading-row"><td colspan="6">Loading bug reports…</td></tr></tbody></table></div>
+        <nav class="table-pager" id="bug-reports-pager" aria-label="Bug reports pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
       </section>
 
       <div class="platform-view" id="administrators" data-platform-view="administrators" hidden>
-        <section class="panel" aria-labelledby="administrators-title">
-          <div class="panel-header">
-            <div><h2 id="administrators-title">Administrators</h2><p>Suspended administrators immediately lose access to their group while its records remain intact.</p></div>
-          </div>
-          <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Administrator</th><th>Group</th><th>Registered</th><th>Last activity</th><th>Status</th><th>Actions</th></tr></thead><tbody id="administrators-body"><tr class="loading-row"><td colspan="6">Loading administrators…</td></tr></tbody></table></div>
-        </section>
-
         <section class="panel" aria-labelledby="users-title">
           <div class="panel-header">
-            <div><h2 id="users-title">Users</h2><p>Treasurer and member accounts across all savings groups. Change account passwords here when needed.</p></div>
+            <div><h2 id="users-title">Users</h2><p>Manage administrators, treasurers, and members across all savings groups.</p></div>
+            <div class="table-filters">
+              <input id="users-search" type="search" placeholder="Search name, email, or group" aria-label="Search users">
+              <select id="users-role-filter" aria-label="Filter users by role"><option value="">All roles</option><option value="ADMIN">Administrator</option><option value="TREASURER">Treasurer</option><option value="MEMBER">Member</option></select>
+              <select id="users-status-filter" aria-label="Filter users by status"><option value="">All statuses</option><option>ACTIVE</option><option>PENDING</option><option>DISABLED</option></select>
+            </div>
           </div>
-          <div class="data-table-wrap"><table class="data-table"><thead><tr><th>User</th><th>Role</th><th>Group</th><th>Registered</th><th>Status</th><th>Actions</th></tr></thead><tbody id="users-body"><tr class="loading-row"><td colspan="6">Loading users…</td></tr></tbody></table></div>
+          <div class="data-table-wrap"><table class="data-table"><thead><tr><th>User</th><th>Role</th><th>Group</th><th>Registered</th><th>Last activity</th><th>Status</th><th>Actions</th></tr></thead><tbody id="administrators-body"><tr class="loading-row"><td colspan="7">Loading users…</td></tr></tbody></table></div>
+          <nav class="table-pager" id="users-pager" aria-label="Users pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
         </section>
       </div>
 
       <section class="platform-view panel" id="activity" data-platform-view="activity" aria-labelledby="activity-title" hidden>
-        <div class="panel-header"><div><h2 id="activity-title">Recent platform activity</h2><p>Administrator and group access changes recorded by the database.</p></div></div>
+        <div class="panel-header">
+          <div><h2 id="activity-title">Recent platform activity</h2><p>Administrator and group access changes recorded by the database.</p></div>
+          <div class="table-filters">
+            <input id="activity-search" type="search" placeholder="Search activity" aria-label="Search platform activity">
+          </div>
+        </div>
         <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Event</th><th>Subject</th><th>When</th></tr></thead><tbody id="activity-body"><tr class="loading-row"><td colspan="3">Loading activity…</td></tr></tbody></table></div>
+        <nav class="table-pager" id="activity-pager" aria-label="Platform activity pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
       </section>
     </main>
   </div>
@@ -104,7 +130,8 @@
 
   <dialog class="form-dialog" id="user-password-dialog" aria-labelledby="user-password-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="user-password-title">Change account password</h2><p id="user-password-copy">Set a new password for this account.</p></div><button class="dialog-close" id="user-password-close" type="button" aria-label="Close password form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="user-password-form" class="form-grid"><input type="hidden" name="user_id"><div class="field field-wide"><label for="user-password-input">New password</label><input id="user-password-input" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><small class="field-help">Use at least 8 characters with uppercase, lowercase, a number, and a symbol.</small></div><div class="field field-wide"><label for="user-password-confirm">Confirm new password</label><input id="user-password-confirm" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></div><div class="form-actions field-wide"><button class="button button-secondary" id="user-password-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save password</button></div></form></div></dialog>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script>
-  <script src="js/config.js"></script><script src="js/core.js?v=20261112-10"></script><script src="js/super-admin.js?v=20261112-10"></script>
+  <dialog class="form-dialog bug-viewer-dialog" id="bug-viewer-dialog" aria-labelledby="bug-viewer-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="bug-viewer-title">Bug report</h2><p id="bug-viewer-meta"></p></div><button class="dialog-close" id="bug-viewer-close" type="button" aria-label="Close bug report details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="bug-viewer-body"><p class="feature-request-details" id="bug-viewer-description"></p><div class="bug-viewer-grid" id="bug-viewer-images"></div></div></div></dialog>
+
+  <script src="js/config.js"></script><script src="js/core.js?v=20261112-11"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261112-11"></script>
 </body>
 </html>

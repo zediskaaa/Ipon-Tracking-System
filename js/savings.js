@@ -36,4 +36,5 @@
   document.getElementById('close-goal-dialog')?.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', resetForm);
   try { await load(); } catch (error) { Ipon.showInlineError(list, error, load); } finally { Ipon.setLoading(false); }
+  Ipon.subscribeToChanges('savings', ['savings_goals', 'contributions', 'withdrawals', 'expenses'], load);
 })();

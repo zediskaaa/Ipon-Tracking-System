@@ -256,4 +256,5 @@
     refresh();
   });
   try { await Promise.all([loadContributionSettings(), load()]); } catch (error) { Ipon.showInlineError(tbody, error, () => Promise.all([loadContributionSettings(), load()]), 7); } finally { Ipon.setLoading(false); }
+  Ipon.subscribeToChanges('members', ['members', 'profiles', 'contribution_settings', 'contributions'], () => Promise.all([loadContributionSettings(), refresh()]));
 })();

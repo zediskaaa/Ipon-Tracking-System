@@ -2590,6 +2590,233 @@ on conflict (version) do nothing;
 
 commit;
 
+-- Migration 20261112_019: publish savings_goals and contribution_settings for realtime refresh.
+begin;
+
+do $$
+declare
+  v_table text;
+begin
+  foreach v_table in array array['savings_goals', 'contribution_settings'] loop
+    if not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = v_table
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', v_table);
+    end if;
+  end loop;
+end $$;
+
+insert into public.schema_migrations (version, name)
+values ('20261112_019', 'enable remaining realtime tables')
+on conflict (version) do nothing;
+
+commit;
+
+-- Migration 20261112_020: store bug reports and optional image attachments for Super Admin review.
+begin;
+
+create table if not exists public.bug_reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid not null references public.profiles(id) on delete cascade,
+  title text not null check (char_length(btrim(title)) between 3 and 120),
+  description text not null check (char_length(btrim(description)) between 10 and 2000),
+  attachments jsonb not null default '[]'::jsonb check (jsonb_typeof(attachments) = 'array' and jsonb_array_length(attachments) <= 5),
+  image_count integer generated always as (jsonb_array_length(attachments)) stored,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists bug_reports_created_at_idx
+  on public.bug_reports (created_at desc);
+
+alter table public.bug_reports enable row level security;
+
+drop policy if exists bug_reports_select on public.bug_reports;
+create policy bug_reports_select on public.bug_reports for select to authenticated
+using (reporter_id = auth.uid() or public.is_super_admin());
+
+drop policy if exists bug_reports_insert on public.bug_reports;
+create policy bug_reports_insert on public.bug_reports for insert to authenticated
+with check (reporter_id = auth.uid() and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER'));
+
+drop policy if exists mfa_verified_for_opted_in on public.bug_reports;
+create policy mfa_verified_for_opted_in on public.bug_reports as restrictive for all to authenticated
+using (public.mfa_access_allowed()) with check (public.mfa_access_allowed());
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'bug_reports'
+  ) then
+    alter publication supabase_realtime add table public.bug_reports;
+  end if;
+end;
+$$;
+
+revoke all on public.bug_reports from public, anon, authenticated;
+grant select on public.bug_reports to authenticated;
+grant insert (reporter_id, title, description, attachments) on public.bug_reports to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261112_020', 'add bug reports')
+on conflict (version) do nothing;
+
+commit;
+
+-- Migration 20261112_021: allow Super Admin user management and activity tracking for all user roles.
+begin;
+
+create or replace function public.super_admin_update_administrator(
+  p_user_id uuid,
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_group_name text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_first text := public.validated_name_part(p_first_name, 'First name');
+  v_middle text := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last text := public.validated_name_part(p_last_name, 'Last name');
+  v_role public.app_role;
+begin
+  if not public.is_super_admin() then
+    raise exception 'Only a super administrator can edit user accounts.' using errcode = '42501';
+  end if;
+
+  select role into v_role
+  from public.profiles
+  where id = p_user_id and role in ('ADMIN', 'TREASURER', 'MEMBER');
+
+  if v_role is null then
+    raise exception 'User account not found.' using errcode = 'P0002';
+  end if;
+
+  if v_role = 'ADMIN' and char_length(btrim(coalesce(p_group_name, ''))) not between 2 and 150 then
+    raise exception 'Group name must contain between 2 and 150 characters.' using errcode = '22023';
+  end if;
+
+  update public.profiles
+  set first_name = v_first,
+      middle_name = v_middle,
+      last_name = v_last,
+      full_name = concat_ws(' ', v_first, v_middle, v_last)
+  where id = p_user_id;
+
+  if v_role = 'ADMIN' then
+    update public.groups set name = btrim(p_group_name) where owner_id = p_user_id;
+  end if;
+end;
+$$;
+
+create or replace function public.super_admin_set_administrator_status(
+  p_user_id uuid,
+  p_status public.account_status
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_role public.app_role;
+begin
+  if not public.is_super_admin() then
+    raise exception 'Only a super administrator can change account status.' using errcode = '42501';
+  end if;
+
+  if p_status not in ('ACTIVE', 'DISABLED') then
+    raise exception 'Account status must be ACTIVE or DISABLED.' using errcode = '22023';
+  end if;
+
+  update public.profiles
+  set status = p_status
+  where id = p_user_id and role in ('ADMIN', 'TREASURER', 'MEMBER')
+  returning role into v_role;
+
+  if v_role is null then
+    raise exception 'User account not found.' using errcode = 'P0002';
+  end if;
+
+  if v_role = 'ADMIN' then
+    update public.groups
+    set status = case when p_status = 'ACTIVE' then 'ACTIVE' else 'SUSPENDED' end
+    where owner_id = p_user_id;
+  end if;
+
+  perform public.push_notification(
+    auth.uid(),
+    'USER_STATUS',
+    'Account status changed',
+    'A user account is now ' || lower(p_status::text) || '.',
+    'super-admin.html#administrators'
+  );
+end;
+$$;
+
+create or replace function public.super_admin_archive_administrator(p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_role public.app_role;
+begin
+  if not public.is_super_admin() then
+    raise exception 'Only a super administrator can archive user accounts.' using errcode = '42501';
+  end if;
+
+  update public.profiles
+  set status = 'DISABLED'
+  where id = p_user_id and role in ('ADMIN', 'TREASURER', 'MEMBER')
+  returning role into v_role;
+
+  if v_role is null then
+    raise exception 'User account not found.' using errcode = 'P0002';
+  end if;
+
+  if v_role = 'ADMIN' then
+    update public.groups set status = 'SUSPENDED' where owner_id = p_user_id;
+  end if;
+
+  perform public.push_notification(
+    auth.uid(),
+    'USER_ARCHIVED',
+    'Account archived',
+    'A user account was disabled.',
+    'super-admin.html#administrators'
+  );
+end;
+$$;
+
+drop policy if exists account_activity_select on public.account_activity;
+create policy account_activity_select on public.account_activity for select to authenticated
+using (
+  user_id = auth.uid()
+  or (
+    public.is_super_admin()
+    and exists (
+      select 1 from public.profiles p
+      where p.id = user_id and p.role in ('ADMIN', 'TREASURER', 'MEMBER')
+    )
+  )
+);
+
+insert into public.schema_migrations (version, name)
+values ('20261112_021', 'super admin manage all users')
+on conflict (version) do nothing;
+
+commit;
+
 -- BOOTSTRAP THE FIRST SUPER ADMIN
 -- 1. Create the platform owner in Authentication > Users.
 -- 2. Replace the email below, then run only this statement once:

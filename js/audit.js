@@ -29,8 +29,14 @@
     return fields.length ? `Changed: ${fields.slice(0, 4).join(', ')}${fields.length > 4 ? '…' : ''}` : 'Record updated';
   }
 
+  async function loadActors() {
+    const { data: profiles, error } = await Ipon.client.from('profiles').select('id,full_name');
+    if (error) throw error;
+    actors = new Map(profiles.map((profile) => [profile.id, profile.full_name]));
+  }
+
   async function load() {
-    body.innerHTML = '<tr class="loading-row"><td colspan="6">Loading audit activity…</td></tr>';
+    if (!rows.length) body.innerHTML = '<tr class="loading-row"><td colspan="6">Loading audit activity…</td></tr>';
     let query = Ipon.client.from('audit_logs').select('id,table_name,record_id,action,old_data,new_data,changed_by,changed_at', { count: 'exact' });
     if (tableFilter.value) query = query.eq('table_name', tableFilter.value);
     if (actionFilter.value) query = query.eq('action', actionFilter.value);
@@ -61,11 +67,13 @@
   detailDialog.addEventListener('click', (event) => { if (event.target === detailDialog) detailDialog.close(); });
 
   try {
-    const { data: profiles, error } = await Ipon.client.from('profiles').select('id,full_name');
-    if (error) throw error;
-    actors = new Map(profiles.map((profile) => [profile.id, profile.full_name]));
+    await loadActors();
     await load();
   } catch (error) { Ipon.showInlineError(body, error, load, 6); } finally { Ipon.setLoading(false); }
+  Ipon.subscribeToChanges('audit', ['audit_logs', 'profiles'], async () => {
+    await loadActors();
+    await load();
+  });
 
   [tableFilter, actionFilter].forEach((filter) => filter.addEventListener('change', async () => { page = 0; try { await load(); } catch (error) { Ipon.showInlineError(body, error, load, 6); } }));
   pager.addEventListener('click', async (event) => {
