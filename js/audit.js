@@ -65,7 +65,7 @@
     if (error) throw error;
     actors = new Map(profiles.map((profile) => [profile.id, profile.full_name]));
     await load();
-  } catch (error) { Ipon.showInlineError(body, error, load, 6); }
+  } catch (error) { Ipon.showInlineError(body, error, load, 6); } finally { Ipon.setLoading(false); }
 
   [tableFilter, actionFilter].forEach((filter) => filter.addEventListener('change', async () => { page = 0; try { await load(); } catch (error) { Ipon.showInlineError(body, error, load, 6); } }));
   pager.addEventListener('click', async (event) => {

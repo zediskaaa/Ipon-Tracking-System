@@ -104,5 +104,5 @@
   });
 
   pageDialog.showModal();
-  try { await Promise.all([load(), mfaController.load()]); } catch (error) { Ipon.showInlineError(activityBody, error, load, 2); }
+  try { await Promise.all([load(), mfaController.load()]); } catch (error) { Ipon.showInlineError(activityBody, error, load, 2); } finally { Ipon.setLoading(false); }
 })();

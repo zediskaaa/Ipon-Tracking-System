@@ -414,6 +414,8 @@ test('secondary member and goal editing uses accessible dialogs', () => {
   const membersPage = read('members.html');
   const goalsPage = read('savings.html');
   assert.match(membersPage, /<dialog[^>]+id="member-dialog"[^>]+aria-labelledby="member-form-title"/);
+  assert.match(membersPage, /id="member-email"[^>]+type="email"[^>]+required/);
+  assert.match(membersPage, /id="member-password"[^>]+type="password"[^>]+minlength="12"/);
   assert.match(goalsPage, /<dialog[^>]+id="goal-dialog"[^>]+aria-labelledby="goal-form-title"/);
   assert.match(read('js/members.js'), /dialog\.showModal\(\)/);
   assert.match(read('js/savings.js'), /dialog\.showModal\(\)/);

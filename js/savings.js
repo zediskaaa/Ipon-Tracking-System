@@ -1,12 +1,12 @@
 (async function () {
   'use strict';
   const state = await Ipon.init();
-  if (state.failed) return;
+  if (state.failed || state.redirecting) return;
   const list = document.getElementById('goal-list');
   const form = document.getElementById('goal-form');
   const dialog = document.getElementById('goal-dialog');
   let goals = []; let tracked = 0;
-  if (!state.configured || !state.profile) { list.innerHTML = '<div class="empty-state">Connect Supabase to load goals.</div>'; return; }
+  if (!state.configured || !state.profile) { list.innerHTML = '<div class="empty-state">Connect Supabase to load goals.</div>'; Ipon.setLoading(false); return; }
 
   function render() {
     const active = goals.filter((goal) => goal.status === 'ACTIVE');
@@ -35,5 +35,5 @@
   document.getElementById('cancel-goal-edit')?.addEventListener('click', () => dialog.close());
   document.getElementById('close-goal-dialog')?.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', resetForm);
-  try { await load(); } catch (error) { Ipon.showInlineError(list, error, load); }
+  try { await load(); } catch (error) { Ipon.showInlineError(list, error, load); } finally { Ipon.setLoading(false); }
 })();

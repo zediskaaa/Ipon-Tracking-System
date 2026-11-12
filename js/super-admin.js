@@ -334,6 +334,6 @@
     }
   }
 
-  await refresh();
+  try { await refresh(); } finally { Ipon.setLoading(false); }
   Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'admin_requests', 'feature_requests', 'account_activity', 'audit_logs'], refresh);
 })();

@@ -153,7 +153,7 @@
     renderCalendar(fixture.activities);
     renderPending(fixture.pending.slice(0, 3));
   }
-  if (visualFixture) { await loadVisualFixture(); return; }
+  if (visualFixture) { try { await loadVisualFixture(); } finally { Ipon.setLoading(false); } return; }
   document.querySelector('[data-region="month-previous"]').addEventListener('click', () => navigateTo(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1)));
   document.querySelector('[data-region="month-next"]').addEventListener('click', () => navigateTo(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)));
   document.querySelector('[data-mobile-month="previous"]').addEventListener('click', () => navigateTo(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1)));
@@ -238,8 +238,8 @@
   }));
   renderCalendar([]);
   state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER'] });
-  if (state.failed) return;
-  if (state.profile.role === 'TREASURER') document.querySelectorAll('a[href="members.html"],a[href="settings.html"],a[href="audit.html"]').forEach((link) => link.remove());
-  await load();
+  if (state.failed || state.redirecting) return;
+  if (state.profile?.role === 'TREASURER') document.querySelectorAll('a[href="members.html"],a[href="settings.html"],a[href="audit.html"]').forEach((link) => link.remove());
+  try { await load(); } finally { Ipon.setLoading(false); }
   Ipon.subscribeToChanges('dashboard', ['members', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals'], load);
 })();

@@ -13,13 +13,14 @@
   effectiveMonth.value = Ipon.isoDate().slice(0, 7);
   if (!state.configured || !state.profile) {
     if (accessBody) accessBody.innerHTML = '<tr><td colspan="4" class="empty-state">Connect Supabase to manage access.</td></tr>';
+    Ipon.setLoading(false);
     return;
   }
 
   document.getElementById('my-name').textContent = state.profile.full_name;
   document.getElementById('my-role').textContent = state.profile.role;
   document.getElementById('my-status').textContent = state.profile.status;
-  if (state.profile.role !== 'ADMIN') return;
+  if (state.profile.role !== 'ADMIN') { Ipon.setLoading(false); return; }
 
   async function loadContributionDefault() {
     const month = effectiveMonth.value;
@@ -132,5 +133,7 @@
     await Promise.all([loadContributionDefault(), loadAccess()]);
   } catch (error) {
     Ipon.showInlineError(accessBody, error, () => Promise.all([loadContributionDefault(), loadAccess()]), 4);
+  } finally {
+    Ipon.setLoading(false);
   }
 })();

@@ -13,17 +13,26 @@
   const STARTUP_TIMEOUT_MS = 15000;
 
   if (document.body.dataset.page) {
+    if (!document.body.classList.contains('security-page')) setLoading(true);
     window.addEventListener('pagehide', () => { document.documentElement.style.visibility = 'hidden'; });
     window.addEventListener('pageshow', async (event) => {
       if (!event.persisted) return;
-      if (!client) return document.documentElement.style.removeProperty('visibility');
+      if (!client) { setLoading(false); return document.documentElement.style.removeProperty('visibility'); }
       try {
         const { data: { session }, error } = await client.auth.getSession();
         if (error || !session) return window.location.replace('login.html');
+        setLoading(false);
         document.documentElement.style.removeProperty('visibility');
       } catch {
         window.location.replace('login.html');
       }
+    });
+    document.addEventListener('click', (event) => {
+      const link = event.target.closest('a[href]');
+      if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin || (url.pathname === window.location.pathname && url.search === window.location.search)) return;
+      setLoading(true);
     });
   }
 
@@ -108,6 +117,7 @@
         </div>`);
       loader = document.getElementById('app-loader');
     }
+    if (!visible) document.body.classList.add('is-ready');
     document.getElementById('loader-label').textContent = label;
     loader.hidden = !visible;
     loader.setAttribute('aria-busy', String(visible));
@@ -847,6 +857,7 @@
         const sidebarUser = document.getElementById('sidebar-user');
         if (sidebarUser) sidebarUser.innerHTML = '<strong>Offline mode</strong><small>NOT CONNECTED</small>';
         document.querySelectorAll('[data-requires-data]').forEach((element) => { element.disabled = true; });
+        setLoading(false);
         return { configured: false, profile: null, session: null };
       }
 
@@ -854,9 +865,12 @@
       if (sessionError) throw sessionError;
       if (!session && options.requireAuth !== false) {
         window.location.replace('login.html');
+        return { configured: true, profile: null, session: null, redirecting: true };
+      }
+      if (!session) {
+        setLoading(false);
         return { configured: true, profile: null, session: null };
       }
-      if (!session) return { configured: true, profile: null, session: null };
 
       if (document.body.dataset.page !== 'mfa' && await requiresMfaChallenge()) {
         window.location.replace('mfa.html');
@@ -872,7 +886,7 @@
       if (profile.status !== 'ACTIVE' && options.allowPending !== true) {
         await client.auth.signOut();
         window.location.replace('login.html?status=pending');
-        return { configured: true, profile, session };
+        return { configured: true, profile, session, redirecting: true };
       }
       const setupUrl = accountSetupUrl(profile, session.user);
       if (setupUrl && document.body.dataset.page !== 'account') {
@@ -898,10 +912,9 @@
       initNotifications(profile).catch(() => {});
       return { configured: true, profile, session };
     } catch (error) {
+      setLoading(false);
       showStartupFailure(error);
       return { configured, profile: null, session: null, failed: true };
-    } finally {
-      setLoading(false);
     }
   }
 

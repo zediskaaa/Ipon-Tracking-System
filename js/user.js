@@ -57,6 +57,6 @@
     finally { Ipon.setBusy(button, false); }
   });
 
-  try { await refresh(); } catch (error) { Ipon.showInlineError(body, error, refresh, 5); }
+  try { await refresh(); } catch (error) { Ipon.showInlineError(body, error, refresh, 5); } finally { Ipon.setLoading(false); }
   Ipon.subscribeToChanges('member-dashboard', ['profiles', 'contribution_periods', 'contributions'], refresh);
 })();

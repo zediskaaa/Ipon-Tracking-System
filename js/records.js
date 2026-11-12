@@ -9,10 +9,11 @@
   const pageSize = 25;
   let historyPage = 0;
   const state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER'] });
-  if (state.failed) return;
+  if (state.failed || state.redirecting) return;
   if (!state.configured || !state.profile) {
     tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Connect Supabase to load records.</td></tr>`;
     setDefaults();
+    Ipon.setLoading(false);
     return;
   }
   if (page === 'expenses' && state.profile.role === 'MEMBER') {
@@ -286,5 +287,5 @@
     load();
   });
 
-  await load();
+  try { await load(); } finally { Ipon.setLoading(false); }
 })();
