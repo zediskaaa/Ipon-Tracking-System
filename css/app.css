@@ -189,9 +189,9 @@ a { color:inherit; }
 .toast { position:fixed; inset:auto 24px 24px auto; z-index:120; width:auto; height:auto; max-width:390px; margin:0; border:0; padding:14px 18px; border-radius:8px; background:var(--rail); color:#fff; box-shadow:var(--shadow); font-family:Arial,sans-serif; opacity:0; pointer-events:none; transform:translateY(12px); transition:.2s ease; }
 .toast.is-visible { opacity:1; transform:none; }
 .toast[data-tone="error"] { background:var(--red); }
-body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame) { visibility:hidden; opacity:0; pointer-events:none; }
-.app-loader { position:fixed; inset:0; z-index:200; display:grid; place-items:center; padding:24px; background:transparent; }
-.loader-sheet { position:relative; width:min(380px,100%); overflow:hidden; border:1px solid rgba(20,45,43,.14); border-radius:26px; padding:34px 30px 30px; background:linear-gradient(145deg,rgba(255,252,245,.98),rgba(242,230,211,.96)); box-shadow:0 24px 60px rgba(20,45,43,.22),inset 0 1px 0 rgba(255,255,255,.88); text-align:center; animation:paper-rise .35s cubic-bezier(.22,1,.36,1) both; }
+body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame) { pointer-events:none; user-select:none; }
+.app-loader { position:fixed; inset:0; z-index:200; display:grid; place-items:center; padding:24px; background:rgba(16,43,36,.18); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+.loader-sheet { position:relative; width:min(380px,100%); overflow:hidden; border:1px solid rgba(255,255,255,.55); border-radius:26px; padding:34px 30px 30px; background:linear-gradient(145deg,rgba(255,252,245,.98),rgba(242,230,211,.96)); box-shadow:0 24px 60px rgba(20,45,43,.28),inset 0 1px 0 rgba(255,255,255,.88); text-align:center; animation:paper-rise .35s cubic-bezier(.22,1,.36,1) both; }
 .loader-brand { display:inline-block; border-bottom:2px solid rgba(20,45,43,.72); font-size:34px; letter-spacing:2px; line-height:1.1; }
 .savings-loader { position:relative; width:190px; height:132px; margin:16px auto 12px; isolation:isolate; }
 .piggy-bank { position:absolute; z-index:1; inset:auto 0 0; width:190px; height:132px; overflow:visible; filter:drop-shadow(0 9px 8px rgba(20,45,43,.18)); }
