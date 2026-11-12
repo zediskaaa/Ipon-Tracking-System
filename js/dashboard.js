@@ -5,6 +5,7 @@
   let cursor = new Date(); cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   let state;
   let currentActivities = [];
+  let pendingItemsById = new Map();
   let activeDate = null;
   let hasSnapshot = false;
   const dataStatus = document.getElementById('dashboard-data-status');
@@ -122,6 +123,7 @@
     Ipon.bindAvatarFallbacks(calendarCard);
   }
   function renderPending(items, count = items.length, total = items.reduce((sum, item) => sum + Number(item.amount), 0)) {
+    pendingItemsById = new Map((items || []).filter((item) => item?.id).map((item) => [item.id, item]));
     const buttons = [...document.querySelectorAll('.review-item')];
     buttons.forEach((button, index) => {
       const item = items[index];
@@ -218,10 +220,48 @@
   });
   document.querySelectorAll('.review-item').forEach((button) => button.addEventListener('click', async () => {
     if (state.profile?.role !== 'ADMIN' || !button.dataset.id) return;
-    const review = await Ipon.requestRecordAction({ title: 'Review pending entry', actions: ['CONFIRM', 'REJECT'] }); if (!review) return;
-    const { decision, note } = review;
-    const prefix = button.dataset.type; const functionName = `review_${prefix}`; const idKey = `p_${prefix}_id`;
-    try { await Ipon.rpc(functionName, { [idKey]:button.dataset.id, p_decision:decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED', p_review_note:note }); Ipon.toast(`Entry ${decision.toLowerCase()}ed.`); await load(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+    const item = pendingItemsById.get(button.dataset.id);
+    const prefix = button.dataset.type;
+    const typeLabel = prefix === 'contribution' ? 'Savings Addition' : prefix === 'withdrawal' ? 'Deduction' : 'Expense';
+    const entry = item ? {
+      type: item.type,
+      typeLabel: item.entry_label || typeLabel,
+      authorName: item.member_name || 'Group member',
+      submittedByName: item.submitted_by_name || '',
+      avatarUrl: item.avatar_url || '',
+      amount: item.amount,
+      date: item.date,
+      periodMonth: item.period_month || '',
+      category: item.category || '',
+      reference: item.reference || '',
+      notes: item.notes || '',
+      description: item.description || '',
+      status: 'PENDING'
+    } : {
+      type: prefix,
+      typeLabel,
+      authorName: 'Group member',
+      amount: null,
+      date: '',
+      status: 'PENDING'
+    };
+    const review = await Ipon.requestRecordAction({
+      title: 'Review pending entry',
+      actions: ['CONFIRM', 'REJECT'],
+      entry,
+      onSubmit: async ({ decision, note }) => {
+        const functionName = `review_${prefix}`;
+        const idKey = `p_${prefix}_id`;
+        await Ipon.rpc(functionName, {
+          [idKey]: button.dataset.id,
+          p_decision: decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED',
+          p_review_note: note
+        });
+        Ipon.toast(`${typeLabel} ${decision === 'CONFIRM' ? 'confirmed' : 'rejected'}.`);
+        await load();
+      }
+    });
+    if (!review) return;
   }));
   function showDayTooltip(day, clientX, clientY) {
     const date = day.dataset.date;

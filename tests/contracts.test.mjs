@@ -746,3 +746,22 @@ test('record_contribution supplies required due_date when auto-creating a contri
     assert.match(sql, /create or replace function public\.record_contribution\([\s\S]*?insert into public\.contribution_periods \(member_id, period_month, required_amount, due_date\)[\s\S]*?public\.contribution_period_due_date\(v_group_id, v_month\)/);
   }
 });
+
+test('review notifications cast approval_status to text and review modal displays entry DP, user, type, amount, and confirmation', () => {
+  const schema = read('database/schema.sql');
+  const migration = read('database/migrations/20261112_026_fix_review_notification_and_enrich_pending.sql');
+  const core = read('js/core.js');
+  const dashboard = read('js/dashboard.js');
+  const records = read('js/records.js');
+  for (const sql of [schema, migration]) {
+    assert.doesNotMatch(sql, /lower\(new\.approval_status\)(?!::text)/);
+    assert.match(sql, /lower\(new\.approval_status::text\)/);
+    assert.match(sql, /create or replace function public\.get_pending_review_summary\(\)[\s\S]*?'entry_label'[\s\S]*?'member_name'[\s\S]*?'avatar_url'/);
+  }
+  assert.match(core, /id="record-action-summary"/);
+  assert.match(core, /id="record-action-step-confirm"/);
+  assert.match(core, /record-type-pill/);
+  assert.match(core, /avatarMarkup\(entry\.avatarUrl \|\| ''/);
+  assert.match(dashboard, /Ipon\.requestRecordAction\(\{[\s\S]*?entry,[\s\S]*?onSubmit:/);
+  assert.match(records, /Ipon\.requestRecordAction\(\{[\s\S]*?entry,[\s\S]*?onSubmit:/);
+});

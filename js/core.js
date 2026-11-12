@@ -456,8 +456,8 @@
           </div>
         </form>
       </dialog>
-      <dialog class="form-dialog" id="record-action-dialog" aria-labelledby="record-action-title">
-        <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-action-title">Review record</h2><p>Every decision remains in the audit trail.</p></div><button class="dialog-close" type="button" data-record-action-close aria-label="Close review dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="record-action-form" class="form-grid"><fieldset class="decision-options field-wide"><legend>Decision</legend><div id="record-action-options"></div></fieldset><div class="field field-wide"><label for="record-action-reason">Reason</label><textarea id="record-action-reason" name="reason" maxlength="500" aria-describedby="record-action-help"></textarea><small class="field-help" id="record-action-help">Required for rejection and voiding.</small></div><div class="form-actions field-wide"><button class="button button-secondary" type="button" data-record-action-close>Cancel</button><button class="button button-primary" type="submit">Continue</button></div></form></div>
+      <dialog class="form-dialog record-review-dialog" id="record-action-dialog" aria-labelledby="record-action-title">
+        <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-action-title">Review record</h2><p id="record-action-subtitle">Verify the contributor, type, and amount before saving.</p></div><button class="dialog-close" type="button" data-record-action-close aria-label="Close review dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="record-review-body"><section class="record-review-summary" id="record-action-summary" hidden></section><form id="record-action-form" class="form-grid"><div class="record-review-step field-wide" id="record-action-step-edit"><fieldset class="decision-options field-wide"><legend>Decision</legend><div id="record-action-options"></div></fieldset><div class="field field-wide"><label id="record-action-reason-label" for="record-action-reason">Review note (optional)</label><textarea id="record-action-reason" name="reason" maxlength="500" aria-describedby="record-action-help"></textarea><small class="field-help" id="record-action-help">Optional note when confirming; required when rejecting or voiding.</small></div><div class="form-actions field-wide"><button class="button button-secondary" type="button" data-record-action-close>Cancel</button><button class="button button-primary" id="record-action-next" type="submit">Continue</button></div></div><div class="record-review-step record-review-confirm field-wide" id="record-action-step-confirm" hidden><div class="record-review-confirm-box" id="record-action-confirm-box"><strong id="record-action-confirm-heading">Confirm this decision?</strong><p id="record-action-confirm-text"></p><p class="record-review-note-preview" id="record-action-confirm-note" hidden></p></div><p class="mfa-message field-wide" id="record-action-error" role="alert" hidden></p><div class="form-actions field-wide"><button class="button button-secondary" id="record-action-back" type="button">Back</button><button class="button button-primary" id="record-action-submit" type="button">Confirm entry</button></div></div></form></div></div>
       </dialog>
       <dialog class="notification-dialog" id="notification-dialog" aria-labelledby="notification-title">
         <div class="notification-sheet"><header><div class="notification-heading"><h2 id="notification-title">Notifications</h2><span>Recent activity</span></div><div class="notification-header-actions"><button class="notification-mark-read" id="mark-all-notifications" type="button">Mark all read</button><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header><div class="notification-list" id="notification-list" role="feed"><p class="empty-state">Loading notifications…</p></div></div>
@@ -1307,13 +1307,18 @@
     if (!element) return;
     element.textContent = message;
     element.dataset.tone = tone;
-    try { element.hidePopover?.(); element.showPopover?.(); } catch {}
+    try {
+      if (typeof element.showPopover === 'function') {
+        if (element.matches?.(':popover-open')) element.hidePopover?.();
+        element.showPopover();
+      }
+    } catch {}
     element.classList.add('is-visible');
     window.clearTimeout(toast.timer);
     toast.timer = window.setTimeout(() => {
       element.classList.remove('is-visible');
-      try { element.hidePopover?.(); } catch {}
-    }, 3500);
+      try { if (element.matches?.(':popover-open')) element.hidePopover?.(); } catch {}
+    }, 4000);
   }
 
   function friendlyError(error) {
@@ -1363,29 +1368,231 @@
     });
   }
 
-  function requestRecordAction({ title = 'Review record', actions = ['CONFIRM', 'REJECT'] } = {}) {
+  const recordReviewMeta = {
+    actions: {
+      CONFIRM: {
+        label: 'Confirm',
+        hint: 'Approve and include in group savings',
+        verb: 'confirm',
+        confirmTitle: 'Confirm this entry?',
+        submitLabel: 'Yes, confirm entry',
+        tone: 'confirm'
+      },
+      REJECT: {
+        label: 'Reject',
+        hint: 'Decline and keep out of group savings',
+        verb: 'reject',
+        confirmTitle: 'Reject this entry?',
+        submitLabel: 'Yes, reject entry',
+        tone: 'danger'
+      },
+      VOID: {
+        label: 'Void record',
+        hint: 'Cancel confirmed entry from totals',
+        verb: 'void',
+        confirmTitle: 'Void this record?',
+        submitLabel: 'Yes, void record',
+        tone: 'danger'
+      }
+    },
+    types: {
+      contribution: { label: 'Savings Addition', klass: 'is-addition' },
+      withdrawal: { label: 'Deduction', klass: 'is-deduction' },
+      expense: { label: 'Expense', klass: 'is-expense' }
+    }
+  };
+
+  function requestRecordAction({ title = 'Review record', actions = ['CONFIRM', 'REJECT'], entry = null, onSubmit = null } = {}) {
     const dialog = document.getElementById('record-action-dialog');
     if (!dialog || typeof dialog.showModal !== 'function') return Promise.resolve(null);
     const form = document.getElementById('record-action-form');
+    const summaryBox = document.getElementById('record-action-summary');
+    const editStep = document.getElementById('record-action-step-edit');
+    const confirmStep = document.getElementById('record-action-step-confirm');
     const options = document.getElementById('record-action-options');
+    const reasonLabel = document.getElementById('record-action-reason-label');
+    const reasonHelp = document.getElementById('record-action-help');
     const reason = document.getElementById('record-action-reason');
+    const nextButton = document.getElementById('record-action-next');
+    const backButton = document.getElementById('record-action-back');
+    const submitButton = document.getElementById('record-action-submit');
+    const confirmBox = document.getElementById('record-action-confirm-box');
+    const confirmHeading = document.getElementById('record-action-confirm-heading');
+    const confirmText = document.getElementById('record-action-confirm-text');
+    const confirmNote = document.getElementById('record-action-confirm-note');
+    const errorBox = document.getElementById('record-action-error');
+
     dialog.returnValue = '';
     document.getElementById('record-action-title').textContent = title;
-    options.innerHTML = actions.map((action, index) => `<label><input type="radio" name="decision" value="${escapeHtml(action)}" ${index === 0 ? 'checked' : ''}> <span>${escapeHtml(action[0] + action.slice(1).toLowerCase())}</span></label>`).join('');
+
+    const entryType = recordReviewMeta.types[entry?.type] || { label: entry?.typeLabel || 'Financial Record', klass: 'is-addition' };
+    const personName = entry?.authorName || entry?.memberName || 'Group member';
+    const submitterName = entry?.submittedByName && entry.submittedByName !== personName ? entry.submittedByName : '';
+    const amountText = entry && entry.amount !== undefined && entry.amount !== null ? money(entry.amount) : '';
+
+    if (summaryBox) {
+      if (entry) {
+        const metaChips = [
+          entry.date ? `Date: ${dateLabel(entry.date)}` : '',
+          entry.periodMonth ? `For ${dateLabel(entry.periodMonth, { month: 'short', year: 'numeric' })}` : '',
+          entry.category ? `Category: ${entry.category}` : '',
+          entry.reference ? `Ref: ${entry.reference}` : ''
+        ].filter(Boolean);
+        const detailText = entry.notes || entry.description || '';
+        summaryBox.innerHTML = `
+          <div class="record-review-summary-top">
+            <span class="record-type-pill ${entryType.klass}">${escapeHtml(entryType.label)}</span>
+            ${entry.status ? `<span class="status status-${escapeHtml(String(entry.status).toLowerCase().replace(/[^a-z0-9]+/g, '-'))}">${escapeHtml(entry.status)}</span>` : '<span class="status status-pending">PENDING</span>'}
+          </div>
+          <div class="record-review-summary-main">
+            <div class="record-review-author">
+              ${avatarMarkup(entry.avatarUrl || '', personName, 'avatar-md')}
+              <div>
+                <strong>${escapeHtml(personName)}</strong>
+                ${submitterName ? `<small>Added by ${escapeHtml(submitterName)}</small>` : `<small>${escapeHtml(entryType.label)} contributor</small>`}
+              </div>
+            </div>
+            <div class="record-review-amount">
+              <small>Amount</small>
+              <strong>${escapeHtml(amountText)}</strong>
+            </div>
+          </div>
+          ${metaChips.length ? `<div class="record-review-meta">${metaChips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join('')}</div>` : ''}
+          ${detailText ? `<p class="record-review-detail-note">${escapeHtml(detailText)}</p>` : ''}`;
+        bindAvatarFallbacks(summaryBox);
+        summaryBox.hidden = false;
+      } else {
+        summaryBox.innerHTML = '';
+        summaryBox.hidden = true;
+      }
+    }
+
+    options.innerHTML = actions.map((action, index) => {
+      const meta = recordReviewMeta.actions[action] || {
+        label: action[0] + action.slice(1).toLowerCase(),
+        hint: ''
+      };
+      return `<label class="decision-card">
+        <input type="radio" name="decision" value="${escapeHtml(action)}" ${index === 0 ? 'checked' : ''}>
+        <span class="decision-card-copy">
+          <strong>${escapeHtml(meta.label)}</strong>
+          ${meta.hint ? `<small>${escapeHtml(meta.hint)}</small>` : ''}
+        </span>
+      </label>`;
+    }).join('');
     reason.value = '';
-    const syncReason = () => { reason.required = form.elements.decision.value !== 'CONFIRM'; };
+
+    const setStep = (step) => {
+      const isConfirm = step === 'confirm';
+      if (editStep) editStep.hidden = isConfirm;
+      if (confirmStep) confirmStep.hidden = !isConfirm;
+      if (errorBox) { errorBox.hidden = true; errorBox.textContent = ''; }
+    };
+
+    const syncReason = () => {
+      const decision = form.elements.decision.value;
+      const requiresReason = decision !== 'CONFIRM';
+      reason.required = requiresReason;
+      if (reasonLabel) reasonLabel.textContent = decision === 'VOID' ? 'Void reason (required)' : decision === 'REJECT' ? 'Rejection reason (required)' : 'Review note (optional)';
+      if (reasonHelp) reasonHelp.textContent = requiresReason ? 'Required so the contributor sees why this entry was declined or voided.' : 'Optional note for the permanent audit trail.';
+      if (nextButton) nextButton.textContent = actions.length === 1 ? (recordReviewMeta.actions[decision]?.label || 'Continue') : 'Review & confirm';
+    };
+
     options.onchange = syncReason;
     syncReason();
-    dialog.querySelectorAll('[data-record-action-close]').forEach((button) => { button.onclick = () => dialog.close('cancel'); });
+    setStep('edit');
+
+    let isSubmitting = false;
+    const setDialogSubmitting = (busy) => {
+      isSubmitting = busy;
+      setBusy(submitButton, busy);
+      if (backButton) backButton.disabled = busy;
+      dialog.querySelectorAll('[data-record-action-close]').forEach((btn) => { btn.disabled = busy; });
+    };
+
+    dialog.querySelectorAll('[data-record-action-close]').forEach((button) => {
+      button.onclick = () => { if (!isSubmitting) dialog.close('cancel'); };
+    });
+
     return new Promise((resolve) => {
+      let pendingResult = null;
+
       form.onsubmit = (event) => {
         event.preventDefault();
         if (!form.reportValidity()) return;
-        const result = { decision: form.elements.decision.value, note: reason.value.trim() || null };
-        dialog.close('submit');
-        resolve(result);
+        const decision = form.elements.decision.value;
+        const note = reason.value.trim() || null;
+        const meta = recordReviewMeta.actions[decision] || {
+          label: decision,
+          verb: decision.toLowerCase(),
+          confirmTitle: `${decision[0] + decision.slice(1).toLowerCase()} this record?`,
+          submitLabel: `Yes, ${decision.toLowerCase()}`,
+          tone: decision === 'CONFIRM' ? 'confirm' : 'danger'
+        };
+        pendingResult = { decision, note };
+
+        if (confirmBox) confirmBox.dataset.tone = meta.tone;
+        if (confirmHeading) confirmHeading.textContent = meta.confirmTitle;
+        if (confirmText) {
+          const targetDesc = entry
+            ? `${amountText ? `${amountText} ` : ''}(${entryType.label}) for ${personName}`
+            : 'this record';
+          confirmText.textContent = `You are about to ${meta.verb} ${targetDesc}. Every decision is recorded in the audit trail.`;
+        }
+        if (confirmNote) {
+          confirmNote.hidden = !note;
+          confirmNote.textContent = note ? `Note: "${note}"` : '';
+        }
+        if (submitButton) {
+          submitButton.className = `button ${meta.tone === 'danger' ? 'button-danger' : 'button-primary'}`;
+          submitButton.textContent = decision === 'CONFIRM' && amountText ? `Yes, confirm ${amountText}` : meta.submitLabel;
+        }
+        setStep('confirm');
+        submitButton?.focus();
       };
-      dialog.addEventListener('close', () => { if (dialog.returnValue !== 'submit') resolve(null); }, { once: true });
+
+      if (backButton) {
+        backButton.onclick = () => {
+          if (isSubmitting) return;
+          setStep('edit');
+          reason.focus();
+        };
+      }
+
+      if (submitButton) {
+        submitButton.onclick = async () => {
+          if (isSubmitting || !pendingResult) return;
+          if (typeof onSubmit === 'function') {
+            setDialogSubmitting(true);
+            if (errorBox) { errorBox.hidden = true; errorBox.textContent = ''; }
+            try {
+              await onSubmit(pendingResult);
+              dialog.close('submit');
+              resolve(pendingResult);
+            } catch (error) {
+              const message = friendlyError(error);
+              if (errorBox) {
+                errorBox.textContent = message;
+                errorBox.hidden = false;
+              }
+              toast(message, 'error');
+            } finally {
+              setDialogSubmitting(false);
+            }
+            return;
+          }
+          dialog.close('submit');
+          resolve(pendingResult);
+        };
+      }
+
+      dialog.oncancel = (event) => {
+        if (isSubmitting) event.preventDefault();
+      };
+      dialog.addEventListener('close', () => {
+        setDialogSubmitting(false);
+        if (dialog.returnValue !== 'submit') resolve(null);
+      }, { once: true });
       dialog.showModal();
       options.querySelector('input')?.focus();
     });

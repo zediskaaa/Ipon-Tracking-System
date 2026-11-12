@@ -31,6 +31,9 @@
   }
 
   let membersList = [];
+  const profilesByUserId = new Map();
+  const profilesByMemberId = new Map();
+  const profilesByName = new Map();
   const statusRowsByMonth = new Map();
   let pendingSubmissionKey = null;
   let recordRows = [];
@@ -114,6 +117,17 @@
     const { data, error } = await Ipon.client.from('members').select('id,full_name,monthly_contribution_amount').eq('status', 'ACTIVE').order('full_name');
     if (error) throw error;
     membersList = data || [];
+    if (state.profile.role === 'ADMIN') {
+      const { data: groupProfiles } = await Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE');
+      profilesByUserId.clear();
+      profilesByMemberId.clear();
+      profilesByName.clear();
+      (groupProfiles || []).forEach((profile) => {
+        profilesByUserId.set(profile.id, profile);
+        if (profile.member_id) profilesByMemberId.set(profile.member_id, profile);
+        if (profile.full_name) profilesByName.set(profile.full_name.trim().toLowerCase(), profile);
+      });
+    }
     if (select) {
       const currentSelection = select.value;
       const selectedId = currentSelection || state.profile.member_id || '';
@@ -159,7 +173,7 @@
     tbody.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No contribution periods for this month.</td></tr>';
 
     let entriesQuery = Ipon.client.from('contributions')
-      .select('id,amount,payment_date,transaction_reference,notes,approval_status,void_reason,review_note,contribution_periods!inner(period_month,members!inner(full_name))', { count: 'exact' });
+      .select('id,amount,payment_date,transaction_reference,notes,approval_status,void_reason,review_note,submitted_by,contribution_periods!inner(period_month,members!inner(id,full_name))', { count: 'exact' });
     if (statusFilter?.value) entriesQuery = entriesQuery.eq('approval_status', statusFilter.value);
     const { data: entries, count, error: entriesError } = await entriesQuery
       .order('payment_date', { ascending: false }).range(historyPage * pageSize, (historyPage + 1) * pageSize - 1);
@@ -256,15 +270,40 @@
       editForm.elements.record_id.value = row.id; editForm.elements.date.value = row.payment_date || row.transaction_date; editForm.elements.amount.value = row.amount; editForm.elements.category.value = row.category || ''; editForm.elements.description.value = row.description || ''; editForm.elements.person_responsible.value = row.person_responsible || ''; editForm.elements.reference.value = row.transaction_reference || row.reference_number || ''; editForm.elements.notes.value = row.notes || '';
       editDialog.showModal(); editForm.elements.amount.focus(); return;
     }
-    const review = await Ipon.requestRecordAction({ title: `${action[0].toUpperCase()}${action.slice(1)} record`, actions: [action.toUpperCase()] });
-    if (!review) return;
-    const note = review.note;
-    try {
-      const recordType = page === 'contributions' ? 'contribution' : page === 'withdrawals' ? 'withdrawal' : 'expense';
-      if (action === 'void') await Ipon.rpc(`void_${recordType}`, { [`p_${recordType}_id`]: button.dataset.id, p_reason: note });
-      else await Ipon.rpc(`review_${recordType}`, { [`p_${recordType}_id`]: button.dataset.id, p_decision: action === 'confirm' ? 'CONFIRMED' : 'REJECTED', p_review_note: note });
-      Ipon.toast(`Record ${action}ed.`); await load();
-    } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+    const row = recordRows.find((item) => item.id === button.dataset.id);
+    const recordType = page === 'contributions' ? 'contribution' : page === 'withdrawals' ? 'withdrawal' : 'expense';
+    const typeLabel = recordType === 'contribution' ? 'Savings Addition' : recordType === 'withdrawal' ? 'Deduction' : 'Expense';
+    const submitterProfile = row?.submitted_by ? profilesByUserId.get(row.submitted_by) : null;
+    const memberInfo = row?.contribution_periods?.members;
+    const memberProfile = memberInfo
+      ? (profilesByMemberId.get(memberInfo.id) || profilesByName.get((memberInfo.full_name || '').trim().toLowerCase()))
+      : profilesByName.get((row?.person_responsible || '').trim().toLowerCase());
+    const entry = row ? {
+      type: recordType,
+      typeLabel,
+      authorName: memberInfo?.full_name || row.person_responsible || 'Group member',
+      submittedByName: submitterProfile?.full_name || '',
+      avatarUrl: memberProfile?.avatar_url || submitterProfile?.avatar_url || '',
+      amount: row.amount,
+      date: row.payment_date || row.transaction_date,
+      periodMonth: row.contribution_periods?.period_month || '',
+      category: row.category || '',
+      reference: row.transaction_reference || row.reference_number || '',
+      notes: row.notes || '',
+      description: row.description || '',
+      status: row.approval_status || ''
+    } : null;
+    await Ipon.requestRecordAction({
+      title: `${action[0].toUpperCase()}${action.slice(1)} record`,
+      actions: [action.toUpperCase()],
+      entry,
+      onSubmit: async ({ note }) => {
+        if (action === 'void') await Ipon.rpc(`void_${recordType}`, { [`p_${recordType}_id`]: button.dataset.id, p_reason: note });
+        else await Ipon.rpc(`review_${recordType}`, { [`p_${recordType}_id`]: button.dataset.id, p_decision: action === 'confirm' ? 'CONFIRMED' : 'REJECTED', p_review_note: note });
+        Ipon.toast(`${typeLabel} ${action === 'void' ? 'voided' : action === 'confirm' ? 'confirmed' : 'rejected'}.`);
+        await load();
+      }
+    });
   }
   document.getElementById('record-edit-close').addEventListener('click', () => editDialog.close());
   document.getElementById('record-edit-cancel').addEventListener('click', () => editDialog.close());
