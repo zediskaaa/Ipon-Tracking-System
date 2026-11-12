@@ -7,8 +7,8 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>IPON — Savings calendar</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261112-14">
-  <link rel="stylesheet" href="css/hero-plates.css?v=20261112-8">
+  <link rel="stylesheet" href="css/app.css?v=20261112-16">
+  <link rel="stylesheet" href="css/hero-plates.css?v=20261112-9">
 </head>
 <body data-page="dashboard">
   <main class="comp-frame" aria-label="IPON savings calendar dashboard">
@@ -78,6 +78,29 @@
     <div class="dashboard-workspace">
       <div class="inline-notice" id="dashboard-data-status" role="status" hidden></div>
       <section class="summary-card" data-region="summary-ground">
+        <div class="summary-group-bar" id="dashboard-group-bar" data-region="group-bar">
+          <div class="group-bar-identity">
+            <div class="group-bar-avatar" id="dashboard-group-avatar" aria-hidden="true"></div>
+            <div class="group-bar-copy">
+              <div class="group-bar-title-row">
+                <strong class="group-bar-name" id="dashboard-group-name">Loading group…</strong>
+                <span class="group-bar-badge" id="dashboard-group-role">—</span>
+              </div>
+              <small class="group-bar-meta" id="dashboard-group-meta">Active workspace</small>
+            </div>
+          </div>
+          <div class="group-bar-controls">
+            <label class="group-switcher-wrap">
+              <span class="sr-only">Select savings group</span>
+              <select class="group-switcher-select" id="dashboard-group-select" aria-label="Select savings group"></select>
+            </label>
+            <div class="group-bar-actions" id="dashboard-group-actions" data-role="ADMIN" hidden>
+              <button class="group-bar-btn" id="dashboard-edit-group" type="button">Edit group</button>
+              <button class="group-bar-btn" id="dashboard-invite-member" type="button">+ Invite</button>
+              <button class="group-bar-btn is-primary" id="dashboard-create-group" type="button">+ New group</button>
+            </div>
+          </div>
+        </div>
         <div class="summary-hero">
           <div class="summary-hero-body">
             <div class="summary-hero-left">
@@ -216,6 +239,87 @@
       </div>
     </aside>
   </main>
-  <script src="js/config.js"></script><script src="js/core.js?v=20261112-15"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/dashboard.js?v=20261112-13"></script>
+  <dialog class="form-dialog group-form-dialog" id="group-form-dialog" aria-labelledby="group-form-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="group-form-title">Edit group</h2>
+          <p id="group-form-copy">Update your group name, picture, and contributor settings.</p>
+        </div>
+        <button class="dialog-close" type="button" id="close-group-dialog" aria-label="Close group dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </header>
+      <form id="group-form" class="form-grid">
+        <input type="hidden" name="mode" value="edit">
+        <div class="field field-wide group-dp-field">
+          <span class="field-label">Group chat picture (optional)</span>
+          <div class="group-dp-picker">
+            <div class="group-dp-preview" id="group-dp-preview" aria-hidden="true"></div>
+            <div class="group-dp-actions">
+              <label class="button button-secondary group-dp-upload" for="group-dp-input">Choose image</label>
+              <button class="button button-secondary" id="group-dp-remove" type="button" hidden>Remove</button>
+              <input id="group-dp-input" type="file" accept="image/*" hidden>
+              <small class="field-help">Displayed at the top of this group workspace.</small>
+            </div>
+          </div>
+        </div>
+        <div class="field field-wide">
+          <label for="group-name-input">Group name</label>
+          <input id="group-name-input" name="name" minlength="2" maxlength="150" placeholder="e.g., Family Savings Fund" required>
+        </div>
+        <div class="field field-wide">
+          <label class="toggle-switch-row" for="group-self-contributor">
+            <span>
+              <strong>Include me as a contributor</strong>
+              <small>Join monthly contribution periods and appear in contributor lists for this group.</small>
+            </span>
+            <input class="toggle-switch-input" id="group-self-contributor" name="include_self" type="checkbox" role="switch">
+          </label>
+        </div>
+        <div class="field field-wide" id="group-monthly-wrap">
+          <label for="group-default-amount">Monthly contribution amount</label>
+          <input id="group-default-amount" name="monthly_amount" type="number" min="1" max="1000000" step="0.01" value="100" required>
+        </div>
+        <div class="field field-wide" id="group-invite-section">
+          <div class="invite-section-head">
+            <div>
+              <strong>Invite members by email (optional)</strong>
+              <small class="field-help">Each member receives their sign-in email and temporary password right after creation.</small>
+            </div>
+            <button class="button button-secondary" id="group-add-invite-row" type="button">+ Add another</button>
+          </div>
+          <div class="invite-rows" id="group-invite-rows"></div>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" type="button" id="cancel-group-dialog">Cancel</button>
+          <button class="button button-primary" type="submit" id="save-group-dialog">Save changes</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+  <dialog class="form-dialog group-invite-dialog" id="group-invite-dialog" aria-labelledby="group-invite-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="group-invite-title">Invite members</h2>
+          <p id="group-invite-copy">Add members by email with a temporary password. Invitation emails are sent automatically once created.</p>
+        </div>
+        <button class="dialog-close" type="button" id="close-invite-dialog" aria-label="Close invite dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </header>
+      <form id="group-invite-form" class="form-grid">
+        <div class="field field-wide">
+          <div class="invite-section-head">
+            <span><strong>Members to invite</strong></span>
+            <button class="button button-secondary" id="invite-add-row" type="button">+ Add another</button>
+          </div>
+          <div class="invite-rows" id="invite-only-rows"></div>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" type="button" id="cancel-invite-dialog">Cancel</button>
+          <button class="button button-primary" type="submit">Send invites</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+  <script src="js/config.js"></script><script src="js/core.js?v=20261112-17"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/dashboard.js?v=20261112-15"></script>
 </body>
 </html>

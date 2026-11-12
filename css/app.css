@@ -475,3 +475,39 @@ body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame
 .bin-item-reason{margin:0;padding:6px 10px;border-left:3px solid #efc0ba;border-radius:0 8px 8px 0;background:#fdf5f4;color:#5a2420;font:12.5px/1.4 Arial,sans-serif;overflow-wrap:anywhere}
 .bin-item .button{flex-shrink:0;align-self:center}
 @media (max-width:620px){.record-review-body,.bin-body{padding:16px 18px 18px}.record-review-amount{text-align:left;margin-left:0}.bin-item{flex-direction:column}.bin-item .button{width:100%;align-self:stretch}}
+.settings-contributor-toggle{margin-top:16px;padding-top:16px;border-top:1px solid var(--rule)}
+.toggle-switch-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border:1px solid #b9ddc8;border-radius:12px;background:linear-gradient(120deg,#edf6f0,#f6fbf8);cursor:pointer}
+.toggle-switch-row>span{display:grid;gap:3px;min-width:0}
+.toggle-switch-row strong{font:700 14.5px/1.25 Arial,sans-serif;color:var(--ink)}
+.toggle-switch-row small{font:12.5px/1.4 Arial,sans-serif;color:var(--muted)}
+.toggle-switch-input{position:relative;flex:0 0 48px;width:48px;height:28px;margin:0;appearance:none;border:0;border-radius:999px;background:#a8b8b0;box-shadow:inset 0 0 0 1px rgba(20,45,43,.14);cursor:pointer;transition:background .18s ease}
+.toggle-switch-input::before{display:block;width:22px;height:22px;margin:3px;border-radius:50%;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.2);content:"";transition:transform .18s ease}
+.toggle-switch-input:checked{background:#0a5a40}
+.toggle-switch-input:checked::before{transform:translateX(20px)}
+.toggle-switch-input:focus-visible{outline:3px solid rgba(40,122,76,.28);outline-offset:2px}
+.group-dp-picker{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--rule);border-radius:12px;background:#fffdf9}
+.group-dp-preview{display:inline-flex;flex:0 0 auto}
+.group-dp-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;flex:1}
+.group-dp-actions .field-help{flex:1 0 100%;margin:0}
+.group-dp-upload{cursor:pointer}
+.group-form-dialog,.group-invite-dialog,.invite-summary-dialog{width:min(680px,calc(100vw - 24px))}
+.invite-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.invite-section-head .button{min-height:36px;padding:6px 12px;font-size:13px}
+.invite-rows{display:grid;gap:10px}
+.invite-row-card{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px;padding:12px;border:1px solid var(--rule);border-radius:12px;background:#fffdf9}
+.invite-row-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0}
+.invite-row-remove{display:grid;width:30px;height:30px;margin-top:22px;place-items:center;border:1px solid var(--rule);border-radius:8px;background:#fff;color:var(--red);font:700 18px/1 Arial,sans-serif;cursor:pointer}
+.invite-row-remove:hover{background:#fdf2f0;border-color:#efc0ba}
+.invite-summary-list{display:grid;gap:10px;max-height:56vh;overflow-y:auto;padding:16px 22px 4px}
+.invite-summary-item{display:grid;gap:8px;padding:12px 14px;border:1px solid var(--rule);border-radius:12px;background:#fffdf9}
+.invite-summary-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.invite-summary-note{margin:0;font:13px/1.45 Arial,sans-serif;color:var(--muted)}
+.invite-summary-note.is-error{color:var(--red)}
+.invite-summary-preview{margin:0;padding:10px 12px;border:1px solid var(--rule);border-radius:8px;background:#f7f4ec;color:var(--ink);font:12px/1.45 ui-monospace,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.invite-summary-dialog .form-actions{padding:14px 22px 20px}
+@media (max-width:620px){.invite-row-grid{grid-template-columns:1fr}.invite-row-card{grid-template-columns:minmax(0,1fr)}.invite-row-remove{margin-top:0;justify-self:end}.invite-summary-list{padding:14px 16px 4px}}
+.temp-password-box{display:flex;align-items:stretch;gap:6px;min-width:0}
+.temp-password-box input{flex:1 1 auto;min-width:0;font-family:ui-monospace,Consolas,monospace;font-size:13.5px}
+.temp-password-tools{display:inline-flex;align-items:stretch;gap:4px;flex:0 0 auto}
+.temp-pw-btn{min-height:38px;padding:0 10px;border:1px solid var(--rule);border-radius:8px;background:#fff;color:var(--ink);font:700 12px/1 Arial,sans-serif;cursor:pointer;white-space:nowrap}
+.temp-pw-btn:hover{background:#f3efe6;border-color:rgba(20,45,43,.35)}

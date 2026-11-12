@@ -177,6 +177,75 @@
     return { element: indicator, update };
   }
 
+  function generateTemporaryPassword() {
+    const sets = [
+      'ABCDEFGHJKLMNPQRSTUVWXYZ',
+      'abcdefghijkmnpqrstuvwxyz',
+      '23456789',
+      '!@#$%&*?'
+    ];
+    const all = sets.join('');
+    const pick = (pool) => {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return pool[buf[0] % pool.length];
+    };
+    const chars = [...sets.map(pick)];
+    while (chars.length < 12) chars.push(pick(all));
+    for (let i = chars.length - 1; i > 0; i -= 1) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      const j = buf[0] % (i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+    return chars.join('');
+  }
+
+  function autofillTemporaryPassword(input) {
+    if (!(input instanceof HTMLInputElement)) return '';
+    const next = generateTemporaryPassword();
+    input.value = next;
+    input.type = 'text';
+    const toggle = input.closest('.temp-password-box')?.querySelector('[data-temp-pw-toggle]');
+    if (toggle) {
+      toggle.textContent = 'Hide';
+      toggle.setAttribute('aria-label', 'Hide password');
+    }
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return next;
+  }
+
+  function prepareTemporaryPassword(input) {
+    if (!(input instanceof HTMLInputElement)) return;
+    if (input.dataset.tempPwBound) {
+      if (!input.value) autofillTemporaryPassword(input);
+      return;
+    }
+    input.dataset.tempPwBound = 'true';
+    input.setAttribute('data-temp-password', '');
+    const wrap = document.createElement('div');
+    wrap.className = 'temp-password-box';
+    input.parentNode?.insertBefore(wrap, input);
+    wrap.append(input);
+    const tools = document.createElement('div');
+    tools.className = 'temp-password-tools';
+    tools.innerHTML = `
+      <button class="temp-pw-btn" type="button" data-temp-pw-toggle aria-label="Hide password">Hide</button>
+      <button class="temp-pw-btn" type="button" data-temp-pw-refresh title="Generate another recommended password" aria-label="Generate another recommended password">New</button>
+    `;
+    wrap.append(tools);
+    const toggleBtn = tools.querySelector('[data-temp-pw-toggle]');
+    const refreshBtn = tools.querySelector('[data-temp-pw-refresh]');
+    toggleBtn.addEventListener('click', () => {
+      const hidden = input.type === 'password';
+      input.type = hidden ? 'text' : 'password';
+      toggleBtn.textContent = hidden ? 'Hide' : 'Show';
+      toggleBtn.setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');
+    });
+    refreshBtn.addEventListener('click', () => autofillTemporaryPassword(input));
+    if (!input.value) autofillTemporaryPassword(input);
+  }
+
   function validNamePart(value) {
     return /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(normalizeNamePart(value));
   }
@@ -324,8 +393,10 @@
           control.setCustomValidity('');
           setFieldError(control, '');
         });
+        form.querySelectorAll('[data-temp-password]').forEach((control) => autofillTemporaryPassword(control));
       });
     });
+    document.querySelectorAll('[data-temp-password]').forEach(prepareTemporaryPassword);
   }
 
   function profileNeedsSetup(profile) {
@@ -600,6 +671,10 @@
     return prepareImageDataUrl(file, { maxEdge: 1440, skipCompressBytes: 350 * 1024, maxBytes: MAX_BUG_IMAGE_BYTES });
   }
 
+  function prepareAvatarDataUrl(file) {
+    return prepareImageDataUrl(file, { maxEdge: 256, skipCompressBytes: 60 * 1024, maxBytes: MAX_AVATAR_BYTES });
+  }
+
   function bindUtilityDialogs() {
     const notifications = document.getElementById('notification-dialog');
     const donate = document.getElementById('donate-dialog');
@@ -853,7 +928,7 @@
       avatarInput.value = '';
       if (!file) return;
       try {
-        const prepared = await prepareImageDataUrl(file, { maxEdge: 256, skipCompressBytes: 60 * 1024, maxBytes: MAX_AVATAR_BYTES });
+        const prepared = await prepareAvatarDataUrl(file);
         await rpc('update_own_avatar', { p_avatar_url: prepared.dataUrl });
         currentProfile.avatar_url = prepared.dataUrl;
         syncProfileAvatars(currentProfile);
@@ -2025,12 +2100,78 @@
     showStartupFailure(event.reason);
   });
 
+  async function inviteAccount(payload) {
+    return invokeAccountFunction({
+      ...payload,
+      login_url: new URL('login.html', location.href).href
+    });
+  }
+
+  async function switchActiveGroup(groupId) {
+    const result = await rpc('switch_active_group', { p_group_id: groupId });
+    if (currentProfile && result) {
+      currentProfile.group_id = result.group_id;
+      currentProfile.role = result.role;
+      currentProfile.member_id = result.member_id ?? null;
+    }
+    return result;
+  }
+
+  function showInviteSummary({ title = 'Member invites', results = [] } = {}) {
+    if (!results.length) return;
+    let dialog = document.getElementById('invite-summary-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog invite-summary-dialog" id="invite-summary-dialog" aria-labelledby="invite-summary-title">
+          <div class="form-dialog-sheet">
+            <header class="form-dialog-header">
+              <div><h2 id="invite-summary-title">Member invites</h2><p id="invite-summary-subtitle">Review invitation delivery status and copy sign-in credentials if needed.</p></div>
+              <button class="dialog-close" type="button" data-invite-summary-close aria-label="Close invite summary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+            </header>
+            <div class="invite-summary-list" id="invite-summary-list"></div>
+            <div class="form-actions"><button class="button button-primary" type="button" data-invite-summary-close>Done</button></div>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('invite-summary-dialog');
+      dialog.querySelectorAll('[data-invite-summary-close]').forEach((btn) => btn.addEventListener('click', () => dialog.close()));
+      dialog.addEventListener('click', async (event) => {
+        const copyBtn = event.target.closest('[data-copy-invite]');
+        if (!copyBtn) return;
+        const text = copyBtn.dataset.copyInvite || '';
+        try {
+          await navigator.clipboard.writeText(text);
+          toast('Invite credentials copied.');
+        } catch {
+          toast('Copy failed. Select the text below manually.', 'error');
+        }
+      });
+    }
+    document.getElementById('invite-summary-title').textContent = title;
+    const list = document.getElementById('invite-summary-list');
+    list.innerHTML = results.map((item) => {
+      const ok = Boolean(item.ok);
+      const sent = Boolean(item.email_sent);
+      const badge = !ok
+        ? '<span class="status status-disabled">Failed</span>'
+        : sent
+          ? '<span class="status status-active">Email sent</span>'
+          : '<span class="status status-pending">Share manually</span>';
+      const detail = !ok
+        ? `<p class="invite-summary-note is-error">${escapeHtml(item.error || 'Could not create invite.')}</p>`
+        : sent
+          ? `<p class="invite-summary-note">Sign-in credentials were emailed automatically to ${escapeHtml(item.email)}.</p>`
+          : `<p class="invite-summary-note">${escapeHtml(item.email_error || 'Email service is not configured yet.')} Share these details with them:</p><pre class="invite-summary-preview">${escapeHtml(item.invite_message || '')}</pre><button class="button button-secondary" type="button" data-copy-invite="${escapeHtml(item.invite_message || '')}">Copy credentials</button>`;
+      return `<article class="invite-summary-item"><div class="invite-summary-head"><strong>${escapeHtml(item.email)}</strong>${badge}</div>${detail}</article>`;
+    }).join('');
+    dialog.showModal();
+  }
+
   if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
   prepareFormValidation();
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, bindAnnouncements, subscribeToChanges,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

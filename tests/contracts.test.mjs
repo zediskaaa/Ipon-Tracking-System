@@ -823,3 +823,50 @@ test('calendar day cells display circular status icons instead of text words', (
   assert.match(heroCss, /\.day \{[^}]*display:grid;[^}]*grid-template-rows:auto minmax\(0,1fr\) auto/);
   assert.match(heroCss, /\.day-avatars \{[^}]*grid-row:2;[^}]*overflow:hidden/);
 });
+
+test('multi-group workspaces support editable group name/DP, admin contributor toggle, and email invites', () => {
+  const schema = read('database/schema.sql');
+  const migration = read('database/migrations/20261112_029_multi_groups_dp_and_admin_contributor.sql');
+  const edge = read('supabase/functions/manage-account/index.ts');
+  const core = read('js/core.js');
+  const dashboardHtml = read('dashboard.html');
+  const dashboardJs = read('js/dashboard.js');
+  const settingsHtml = read('settings.html');
+  const settingsJs = read('js/settings.js');
+  for (const sql of [schema, migration]) {
+    assert.match(sql, /create table if not exists public\.group_memberships/i);
+    assert.match(sql, /create or replace function public\.get_my_groups\(\)/i);
+    assert.match(sql, /create or replace function public\.switch_active_group\(p_group_id uuid\)/i);
+    assert.match(sql, /create or replace function public\.update_group_profile\(/i);
+    assert.match(sql, /create or replace function public\.set_admin_contributor\(/i);
+    assert.match(sql, /create or replace function public\.admin_create_group\(/i);
+    assert.match(sql, /create or replace function public\.get_group_access_list\(\)/i);
+  }
+  assert.match(edge, /async function sendInviteEmail\(/);
+  assert.match(edge, /BREVO_API_KEY/);
+  assert.match(edge, /RESEND_API_KEY/);
+  assert.match(edge, /IPON Group Savings Tracker/);
+  assert.match(core, /function inviteAccount\(/);
+  assert.match(core, /function showInviteSummary\(/);
+  assert.match(core, /function switchActiveGroup\(/);
+  assert.match(dashboardHtml, /id="dashboard-group-bar"/);
+  assert.match(dashboardHtml, /id="dashboard-group-select"/);
+  assert.match(dashboardHtml, /id="dashboard-edit-group"/);
+  assert.match(dashboardHtml, /id="dashboard-invite-member"/);
+  assert.match(dashboardHtml, /id="dashboard-create-group"/);
+  assert.match(dashboardHtml, /id="group-self-contributor"[^>]*role="switch"/);
+  assert.match(dashboardHtml, /id="group-add-invite-row"/);
+  assert.match(dashboardJs, /rpc\('update_group_profile'/);
+  assert.match(dashboardJs, /rpc\('admin_create_group'/);
+  assert.match(dashboardJs, /rpc\('set_admin_contributor'/);
+  assert.match(settingsHtml, /id="settings-group-select"/);
+  assert.match(settingsHtml, /id="settings-admin-contributor"[^>]*role="switch"/);
+  assert.match(settingsJs, /rpc\('get_group_access_list'\)/);
+  assert.match(settingsJs, /rpc\('set_admin_contributor'/);
+  assert.match(core, /function generateTemporaryPassword\(\)/);
+  assert.match(core, /function prepareTemporaryPassword\(input\)/);
+  assert.match(dashboardJs, /prepareTemporaryPassword\(/);
+  assert.match(read('members.html'), /id="member-password"[^>]*data-temp-password/);
+  assert.match(settingsHtml, /id="treasurer-password"[^>]*data-temp-password/);
+  assert.match(read('super-admin.html'), /id="administrator-password"[^>]*data-temp-password/);
+});

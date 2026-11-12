@@ -101,16 +101,18 @@
     const term = search.value.trim().replace(/[%_]/g, '');
     if (term) query = query.ilike('full_name', `%${term}%`);
     if (statusFilter.value) query = query.eq('status', statusFilter.value);
-    const [{ data, count, error }, accountResult] = await Promise.all([query.order('full_name').range(memberPage * pageSize, (memberPage + 1) * pageSize - 1), Ipon.client.from('profiles').select('id,email,status,member_id').eq('role', 'MEMBER').not('member_id', 'is', null)]);
+    const [{ data, count, error }, accessRows] = await Promise.all([
+      query.order('full_name').range(memberPage * pageSize, (memberPage + 1) * pageSize - 1),
+      Ipon.rpc('get_group_access_list')
+    ]);
     if (error) throw error;
-    if (accountResult.error) throw accountResult.error;
     const memberIds = (data || []).map((member) => member.id);
     const contribResult = memberIds.length
       ? await Ipon.client.from('contribution_periods').select('member_id,contributions!inner(id)').in('member_id', memberIds)
       : { data: [], error: null };
     if (contribResult.error) throw contribResult.error;
     members = data;
-    accountsByMember = new Map((accountResult.data || []).map((account) => [account.member_id, account]));
+    accountsByMember = new Map((Array.isArray(accessRows) ? accessRows : []).filter((row) => row.member_id).map((row) => [row.member_id, { id: row.user_id, email: row.email, status: row.status, member_id: row.member_id }]));
     membersWithContributions = new Set((contribResult.data || []).map((row) => row.member_id));
     const pages = Math.max(1, Math.ceil(count / pageSize));
     document.getElementById('member-count').textContent = `${count} member${count === 1 ? '' : 's'}`;
@@ -399,9 +401,12 @@
     if (passwordIssue) { Ipon.setFieldError(accountForm.elements.password, passwordIssue); accountForm.elements.password.focus(); return; }
     Ipon.setBusy(button, true);
     try {
-      const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'MEMBER', member_id: member.id, first_name: member.first_name, middle_name: member.middle_name || null, last_name: member.last_name, contact_number: member.contact_number || null, email: accountForm.elements.email.value.trim(), password: accountForm.elements.password.value } });
-      if (error) { const detail = await error.context?.json?.().catch(() => null); throw new Error(detail?.error || error.message); }
-      accountDialog.close(); Ipon.toast('Member account created.'); await load();
+      const email = accountForm.elements.email.value.trim();
+      const res = await Ipon.inviteAccount({ role: 'MEMBER', member_id: member.id, first_name: member.first_name, middle_name: member.middle_name || null, last_name: member.last_name, contact_number: member.contact_number || null, email, password: accountForm.elements.password.value });
+      accountDialog.close();
+      Ipon.toast(res.email_sent ? 'Member account created and invite email sent.' : 'Member account created.');
+      if (!res.email_sent) Ipon.showInviteSummary({ title: 'Member sign-in credentials', results: [{ ok: true, email, ...res }] });
+      await load();
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });

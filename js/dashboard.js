@@ -27,8 +27,160 @@
     addButton: addAnnouncementButton
   });
   let selectedGoalId = '';
+  let myGroups = [];
+  let currentGroup = null;
+  let pendingGroupAvatarUrl = null;
+  let pendingGroupClearAvatar = false;
   const heroMoney = (value) => Ipon.money(value);
+  const groupAvatarEl = document.getElementById('dashboard-group-avatar');
+  const groupNameEl = document.getElementById('dashboard-group-name');
+  const groupRoleEl = document.getElementById('dashboard-group-role');
+  const groupMetaEl = document.getElementById('dashboard-group-meta');
+  const groupSelect = document.getElementById('dashboard-group-select');
+  const groupActionsEl = document.getElementById('dashboard-group-actions');
+  const groupDialog = document.getElementById('group-form-dialog');
+  const groupForm = document.getElementById('group-form');
+  const groupDpPreview = document.getElementById('group-dp-preview');
+  const groupDpInput = document.getElementById('group-dp-input');
+  const groupDpRemove = document.getElementById('group-dp-remove');
+  const groupSelfToggle = document.getElementById('group-self-contributor');
+  const groupMonthlyWrap = document.getElementById('group-monthly-wrap');
+  const groupMonthlyInput = document.getElementById('group-default-amount');
+  const groupInviteSection = document.getElementById('group-invite-section');
+  const groupInviteRows = document.getElementById('group-invite-rows');
+  const inviteDialog = document.getElementById('group-invite-dialog');
+  const inviteForm = document.getElementById('group-invite-form');
+  const inviteOnlyRows = document.getElementById('invite-only-rows');
   document.getElementById('dashboard-signout').addEventListener('click', Ipon.signOut);
+
+  function renderGroupHeader(groups) {
+    myGroups = Array.isArray(groups) ? groups : [];
+    currentGroup = myGroups.find((group) => group.is_current) || myGroups[0] || null;
+    if (!currentGroup) {
+      if (groupNameEl) groupNameEl.textContent = 'No group selected';
+      if (groupRoleEl) groupRoleEl.textContent = state?.profile?.role || '—';
+      if (groupMetaEl) groupMetaEl.textContent = 'Active workspace';
+      if (groupActionsEl) groupActionsEl.hidden = true;
+      if (groupSelect) groupSelect.hidden = true;
+      return;
+    }
+    const safeName = currentGroup.name || 'Savings Group';
+    if (groupAvatarEl) {
+      groupAvatarEl.innerHTML = Ipon.avatarMarkup(currentGroup.avatar_url, safeName, 'avatar-md');
+      Ipon.bindAvatarFallbacks(groupAvatarEl);
+    }
+    if (groupNameEl) groupNameEl.textContent = safeName;
+    if (groupRoleEl) groupRoleEl.textContent = currentGroup.role || state?.profile?.role || 'MEMBER';
+    const contributorCount = Number(currentGroup.active_member_count || 0);
+    const metaParts = [`${contributorCount} contributor${contributorCount === 1 ? '' : 's'}`];
+    if (currentGroup.role === 'ADMIN') metaParts.push(currentGroup.is_contributor ? 'Included as contributor' : 'Manager only');
+    if (groupMetaEl) groupMetaEl.textContent = metaParts.join(' · ');
+    if (groupSelect) {
+      groupSelect.hidden = myGroups.length === 0;
+      groupSelect.replaceChildren(...myGroups.map((group) => new Option(`${group.name} (${group.role})`, group.group_id)));
+      groupSelect.value = currentGroup.group_id;
+    }
+    if (groupActionsEl) groupActionsEl.hidden = state?.profile?.role !== 'ADMIN';
+  }
+
+  function renderGroupDpPreview(avatarUrl, name) {
+    if (!groupDpPreview) return;
+    groupDpPreview.innerHTML = Ipon.avatarMarkup(avatarUrl, name || 'Group', 'avatar-lg');
+    Ipon.bindAvatarFallbacks(groupDpPreview);
+    if (groupDpRemove) groupDpRemove.hidden = !avatarUrl;
+  }
+
+  function appendInviteRow(container, { defaultAmount = 100, required = false } = {}) {
+    if (!container) return null;
+    const row = document.createElement('div');
+    row.className = 'invite-row-card';
+    row.innerHTML = `
+      <div class="invite-row-grid">
+        <div class="field"><label>Email</label><input name="invite_email" type="email" autocomplete="off" maxlength="254" placeholder="member@example.com"${required ? ' required' : ''}></div>
+        <div class="field"><label>Full name (optional)</label><input name="invite_name" type="text" maxlength="120" placeholder="e.g., Juan Dela Cruz"></div>
+        <div class="field"><label>Monthly share</label><input name="invite_amount" type="number" min="1" max="1000000" step="0.01" value="${Ipon.escapeHtml(String(defaultAmount))}"></div>
+        <div class="field"><label>Temporary password</label><input name="invite_password" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-temp-password placeholder="Recommended or custom password"${required ? ' required' : ''}></div>
+      </div>
+      <button class="invite-row-remove" type="button" title="Remove row" aria-label="Remove invite row">&times;</button>
+    `;
+    Ipon.prepareTemporaryPassword(row.querySelector('[name="invite_password"]'));
+    row.querySelector('.invite-row-remove').addEventListener('click', () => {
+      if (required && container.querySelectorAll('.invite-row-card').length <= 1) return;
+      row.remove();
+    });
+    container.append(row);
+    return row;
+  }
+
+  function parseFullNameParts(fullName, email) {
+    const cleaned = String(fullName || '').trim().replace(/\s+/g, ' ');
+    if (!cleaned) {
+      const local = String(email || '').split('@')[0] || 'Member';
+      const tokens = local.replace(/[^a-zA-Z\s._-]/g, ' ').split(/[._\s-]+/).map((v) => v.trim()).filter((v) => /^[a-zA-Z]{2,}$/.test(v));
+      const cap = (v) => v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
+      return {
+        first_name: tokens[0] ? cap(tokens[0]).slice(0, 40) : 'Group',
+        middle_name: null,
+        last_name: tokens[1] ? cap(tokens.slice(1).join(' ')).slice(0, 40) : 'Member'
+      };
+    }
+    const parts = cleaned.split(' ');
+    if (parts.length === 1) return { first_name: parts[0], middle_name: null, last_name: 'Member' };
+    if (parts.length === 2) return { first_name: parts[0], middle_name: null, last_name: parts[1] };
+    return { first_name: parts[0], middle_name: parts.slice(1, -1).join(' '), last_name: parts[parts.length - 1] };
+  }
+
+  function collectInvitePayloads(container, { allowEmptyRows = true } = {}) {
+    const entries = [];
+    const rows = [...(container?.querySelectorAll('.invite-row-card') || [])];
+    for (const row of rows) {
+      const emailEl = row.querySelector('[name="invite_email"]');
+      const nameEl = row.querySelector('[name="invite_name"]');
+      const amountEl = row.querySelector('[name="invite_amount"]');
+      const passEl = row.querySelector('[name="invite_password"]');
+      const email = emailEl.value.trim().toLowerCase();
+      const name = nameEl.value.trim();
+      const password = passEl.value;
+      const monthlyAmount = Number(amountEl.value) > 0 ? Number(amountEl.value) : 100;
+      Ipon.setFieldError(emailEl, '');
+      Ipon.setFieldError(passEl, '');
+      if (allowEmptyRows && !email && !name) continue;
+      if (!/^\S+@\S+\.\S+$/.test(email)) {
+        Ipon.setFieldError(emailEl, 'Enter a valid email address.');
+        emailEl.focus();
+        return null;
+      }
+      const pwIssue = Ipon.passwordIssue(password, [name, email.split('@')[0]]);
+      if (pwIssue) {
+        Ipon.setFieldError(passEl, pwIssue);
+        passEl.focus();
+        return null;
+      }
+      const parsed = parseFullNameParts(name, email);
+      entries.push({
+        role: 'MEMBER',
+        create_member: true,
+        ...parsed,
+        email,
+        password,
+        monthly_contribution_amount: monthlyAmount
+      });
+    }
+    return entries;
+  }
+
+  async function dispatchInvites(payloads) {
+    const results = [];
+    for (const payload of payloads) {
+      try {
+        const res = await Ipon.inviteAccount(payload);
+        results.push({ ok: true, email: payload.email, ...res });
+      } catch (error) {
+        results.push({ ok: false, email: payload.email, error: Ipon.friendlyError(error) });
+      }
+    }
+    return results;
+  }
 
   function monthIso(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`; }
   function renderGoalOptions(goals) {
@@ -174,8 +326,18 @@
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { renderEmptySnapshot(); return; }
     try {
-      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'), getPending(), Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'), Ipon.client.from('v_contribution_status').select('payment_status,paid_amount').eq('period_month', start), Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }), announcements ? announcements.load() : Promise.resolve()]);
+      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult, groupsResult] = await Promise.all([
+        Ipon.client.rpc('get_savings_summary'),
+        Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'),
+        getPending(),
+        Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
+        Ipon.client.from('v_contribution_status').select('payment_status,paid_amount').eq('period_month', start),
+        Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
+        Ipon.rpc('get_my_groups'),
+        announcements ? announcements.load() : Promise.resolve()
+      ]);
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
+      renderGroupHeader(groupsResult || []);
       const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(summary.tracked_savings); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
       [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.amount].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
       const progress = progressResult.data || []; const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
@@ -206,6 +368,7 @@
     const fixture = await response.json();
     cursor = new Date(`${fixture.month}T00:00:00`);
     state = { profile: { role: 'ADMIN' } };
+    renderGroupHeader([{ group_id: 'fixture', name: 'Primary Savings Group', role: 'ADMIN', is_current: true, is_contributor: true, active_member_count: 2 }]);
     const label = document.createElement('span');
     label.className = 'visual-fixture-label';
     label.textContent = 'Synthetic sample amounts';
@@ -397,6 +560,157 @@
     activeDate = null;
   });
   window.addEventListener('ipon:profile-updated', load);
+  groupSelect?.addEventListener('change', async () => {
+    const targetId = groupSelect.value;
+    if (!targetId || targetId === currentGroup?.group_id) return;
+    groupSelect.disabled = true;
+    try {
+      await Ipon.switchActiveGroup(targetId);
+      location.reload();
+    } catch (error) {
+      groupSelect.value = currentGroup?.group_id || '';
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      groupSelect.disabled = false;
+    }
+  });
+  function openGroupDialog(mode) {
+    if (!groupDialog || !groupForm) return;
+    groupForm.reset();
+    groupForm.elements.mode.value = mode;
+    const isCreate = mode === 'create';
+    document.getElementById('group-form-title').textContent = isCreate ? 'Create savings group' : 'Edit group';
+    document.getElementById('group-form-copy').textContent = isCreate
+      ? 'Set a group name, optional group picture, your contributor preference, and optional member invites.'
+      : 'Update your group name, picture, and whether you participate as a contributor.';
+    document.getElementById('save-group-dialog').textContent = isCreate ? 'Create group' : 'Save changes';
+    pendingGroupAvatarUrl = isCreate ? null : (currentGroup?.avatar_url || null);
+    pendingGroupClearAvatar = false;
+    groupForm.elements.name.value = isCreate ? '' : (currentGroup?.name || '');
+    const initialIncludeSelf = isCreate ? true : Boolean(currentGroup?.is_contributor);
+    groupSelfToggle.checked = initialIncludeSelf;
+    groupMonthlyInput.value = '100';
+    groupMonthlyWrap.hidden = !isCreate ? (!initialIncludeSelf || Boolean(currentGroup?.is_contributor)) : !initialIncludeSelf;
+    groupMonthlyInput.required = !groupMonthlyWrap.hidden;
+    groupInviteSection.hidden = !isCreate;
+    groupInviteRows.replaceChildren();
+    if (isCreate) appendInviteRow(groupInviteRows, { defaultAmount: 100, required: false });
+    renderGroupDpPreview(pendingGroupAvatarUrl, groupForm.elements.name.value || (isCreate ? 'New Group' : currentGroup?.name));
+    groupDialog.showModal();
+    groupForm.elements.name.focus();
+  }
+  groupSelfToggle?.addEventListener('change', () => {
+    const isCreate = groupForm.elements.mode.value === 'create';
+    const on = groupSelfToggle.checked;
+    groupMonthlyWrap.hidden = isCreate ? !on : (!on || Boolean(currentGroup?.is_contributor));
+    groupMonthlyInput.required = !groupMonthlyWrap.hidden;
+  });
+  groupDpInput?.addEventListener('change', async () => {
+    const file = groupDpInput.files?.[0];
+    groupDpInput.value = '';
+    if (!file) return;
+    try {
+      const prepared = await Ipon.prepareAvatarDataUrl(file);
+      pendingGroupAvatarUrl = prepared.dataUrl;
+      pendingGroupClearAvatar = false;
+      renderGroupDpPreview(pendingGroupAvatarUrl, groupForm.elements.name.value);
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    }
+  });
+  groupDpRemove?.addEventListener('click', () => {
+    pendingGroupAvatarUrl = null;
+    pendingGroupClearAvatar = true;
+    renderGroupDpPreview(null, groupForm.elements.name.value || 'Group');
+  });
+  document.getElementById('group-add-invite-row')?.addEventListener('click', () => {
+    appendInviteRow(groupInviteRows, { defaultAmount: Number(groupMonthlyInput.value) > 0 ? Number(groupMonthlyInput.value) : 100, required: false });
+  });
+  document.getElementById('dashboard-edit-group')?.addEventListener('click', () => openGroupDialog('edit'));
+  document.getElementById('dashboard-create-group')?.addEventListener('click', () => openGroupDialog('create'));
+  document.getElementById('close-group-dialog')?.addEventListener('click', () => groupDialog?.close());
+  document.getElementById('cancel-group-dialog')?.addEventListener('click', () => groupDialog?.close());
+  groupForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const isCreate = groupForm.elements.mode.value === 'create';
+    const name = groupForm.elements.name.value.trim();
+    const includeSelf = groupSelfToggle.checked;
+    const monthlyAmount = Number(groupMonthlyInput.value) > 0 ? Number(groupMonthlyInput.value) : 100;
+    let invitePayloads = [];
+    if (isCreate) {
+      invitePayloads = collectInvitePayloads(groupInviteRows, { allowEmptyRows: true });
+      if (invitePayloads === null) return;
+    }
+    const button = document.getElementById('save-group-dialog');
+    Ipon.setBusy(button, true, isCreate ? 'Creating…' : 'Saving…');
+    try {
+      if (isCreate) {
+        await Ipon.rpc('admin_create_group', {
+          p_name: name,
+          p_avatar_url: pendingGroupAvatarUrl,
+          p_include_self: includeSelf,
+          p_monthly_amount: monthlyAmount
+        });
+        const inviteResults = invitePayloads.length ? await dispatchInvites(invitePayloads) : [];
+        groupDialog.close();
+        Ipon.toast('Savings group created.');
+        if (inviteResults.length) {
+          Ipon.showInviteSummary({ title: `Invites for ${name}`, results: inviteResults });
+          document.getElementById('invite-summary-dialog')?.addEventListener('close', () => location.reload(), { once: true });
+        } else {
+          location.reload();
+        }
+      } else {
+        await Ipon.rpc('update_group_profile', {
+          p_name: name,
+          p_avatar_url: pendingGroupAvatarUrl,
+          p_clear_avatar: pendingGroupClearAvatar
+        });
+        if (includeSelf !== Boolean(currentGroup?.is_contributor)) {
+          await Ipon.rpc('set_admin_contributor', {
+            p_enabled: includeSelf,
+            p_monthly_amount: includeSelf && !currentGroup?.is_contributor ? monthlyAmount : null
+          });
+        }
+        groupDialog.close();
+        Ipon.toast('Group updated.');
+        await load();
+      }
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(button, false);
+    }
+  });
+  document.getElementById('dashboard-invite-member')?.addEventListener('click', () => {
+    if (!inviteDialog || !inviteOnlyRows) return;
+    inviteOnlyRows.replaceChildren();
+    appendInviteRow(inviteOnlyRows, { defaultAmount: 100, required: true });
+    inviteDialog.showModal();
+    inviteOnlyRows.querySelector('[name="invite_email"]')?.focus();
+  });
+  document.getElementById('invite-add-row')?.addEventListener('click', () => {
+    appendInviteRow(inviteOnlyRows, { defaultAmount: 100, required: true });
+  });
+  document.getElementById('close-invite-dialog')?.addEventListener('click', () => inviteDialog?.close());
+  document.getElementById('cancel-invite-dialog')?.addEventListener('click', () => inviteDialog?.close());
+  inviteForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const payloads = collectInvitePayloads(inviteOnlyRows, { allowEmptyRows: false });
+    if (!payloads || !payloads.length) return;
+    const button = event.submitter;
+    Ipon.setBusy(button, true, 'Sending…');
+    try {
+      const results = await dispatchInvites(payloads);
+      inviteDialog.close();
+      await load();
+      Ipon.showInviteSummary({ title: `Invites for ${currentGroup?.name || 'group'}`, results });
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(button, false);
+    }
+  });
   goalSelects.forEach((select) => select.addEventListener('change', () => {
     selectedGoalId = select.value;
     goalSelects.forEach((other) => { other.value = selectedGoalId; });
@@ -408,5 +722,5 @@
   if (state.profile?.role !== 'MEMBER') document.querySelectorAll('a[href="user.html"]').forEach((link) => link.remove());
   if (addAnnouncementButton) addAnnouncementButton.hidden = state.profile?.role !== 'ADMIN';
   try { await load(); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'announcements'], load);
+  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'announcements'], load);
 })();
