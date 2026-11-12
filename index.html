@@ -1,1 +1,650 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="IPON Group Savings Tracker — Private non-custodial record-keeping web application for tracking group contributions, expenses, and withdrawals."><meta name="application-name" content="IPON Group Savings Tracker"><meta name="robots" content="noindex, nofollow"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>IPON — Group Savings Record Tracker</title><meta name="theme-color" content="#0b3428"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="IPON"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/icon-192.png"><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261113-5"></head><body class="security-page"><main class="security-card"><h1>IPON Group Savings Tracker</h1><p>Private group record-keeping application for tracking contributions, expenses, and withdrawals. This system is a non-custodial ledger and does not hold or transfer money.</p><p><a class="button button-primary" href="login.html">Open IPON portal</a></p></main><script src="js/config.js"></script><script src="js/core.js?v=20261113-2"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/index.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="IPON is a private, non-custodial record keeper for group savings. Track contributions, expenses, and withdrawals with approvals, reports, and a full audit trail.">
+  <meta name="application-name" content="IPON Group Savings Tracker">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>IPON — Group Savings, Kept Honest</title>
+  <meta name="theme-color" content="#0b3428">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="IPON">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/icon-192.png">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css?v=20261113-5">
+  <link rel="stylesheet" href="css/landing.css?v=20261113-6">
+</head>
+<body class="landing">
+  <header class="l-nav">
+    <div class="l-wrap">
+      <a class="l-brand" href="#top" aria-label="IPON home"><img src="assets/favicon.svg" alt=""><span><strong>IPON</strong><small>TRACKING SYSTEM</small></span></a>
+      <nav class="l-links" aria-label="Page sections">
+        <a href="#features">Features</a><a href="#how">How it works</a><a href="#roles">Roles</a><a href="#security">Security</a><a href="#faq">FAQ</a>
+      </nav>
+      <div class="l-nav-cta">
+        <a class="l-btn l-btn-ghost" href="login.html?mode=signup">Request access</a>
+        <a class="l-btn l-btn-gold" href="login.html">Sign in</a>
+        <button class="l-menu-toggle" id="menu-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobile-menu">
+          <span class="l-menu-bar"></span>
+          <span class="l-menu-bar"></span>
+        </button>
+      </div>
+    </div>
+    <!-- Mobile Quick Tabs Strip -->
+    <nav class="l-mobile-tabs" id="mobile-tabs" aria-label="Quick sections">
+      <div class="l-wrap l-mobile-tabs-inner">
+        <a class="l-mobile-tab" href="#features">Features</a>
+        <a class="l-mobile-tab" href="#how">How it works</a>
+        <a class="l-mobile-tab" href="#roles">Roles</a>
+        <a class="l-mobile-tab" href="#security">Security</a>
+        <a class="l-mobile-tab" href="#faq">FAQ</a>
+      </div>
+    </nav>
+    <!-- Mobile Drawer Menu -->
+    <div class="l-mobile-drawer" id="mobile-menu" hidden>
+      <div class="l-drawer-inner">
+        <nav class="l-drawer-links" aria-label="Mobile sections">
+          <a class="l-drawer-link" href="#features">Features</a>
+          <a class="l-drawer-link" href="#how">How it works</a>
+          <a class="l-drawer-link" href="#roles">Roles</a>
+          <a class="l-drawer-link" href="#security">Security</a>
+          <a class="l-drawer-link" href="#faq">FAQ</a>
+        </nav>
+        <div class="l-drawer-actions">
+          <a class="l-btn l-btn-gold" href="login.html">Sign in</a>
+          <a class="l-btn l-btn-ghost" href="login.html?mode=signup">Request access</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="l-hero">
+      <div class="l-wrap">
+        <div class="l-hero-copy">
+          <span class="l-pill"><b>NEW</b>Multi-group workspaces &amp; live announcements</span>
+          <h1>Group savings,<br><em>kept honest.</em></h1>
+          <p class="l-hero-lead">IPON replaces the notebook, the spreadsheet, and the endless group-chat screenshots. Every contribution, expense, and withdrawal is recorded, reviewed, and visible to the people who need to see it.</p>
+          <div class="l-hero-actions">
+            <a class="l-btn l-btn-gold" href="login.html">Sign in to IPON <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+            <a class="l-btn l-btn-ghost" href="#how">See how it works</a>
+          </div>
+          <div class="l-hero-proof">
+            <div><strong>₱0</strong><span>held by IPON —<br>fully non-custodial</span></div>
+            <div><strong>3 roles</strong><span>Admin, Treasurer,<br>and Member views</span></div>
+            <div><strong>100%</strong><span>of changes kept in<br>the audit trail</span></div>
+          </div>
+        </div>
+
+        <div class="l-mock" aria-hidden="true">
+          <div class="l-glow"></div>
+          <div class="l-float l-float-a"><span class="l-float-ico" style="background:#e2f2e8;color:#1f6a43"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span><span><strong>Contribution confirmed</strong><small>Maria D. · ₱500.00</small></span></div>
+          <div class="l-mock-card">
+            <div class="l-mock-head"><span class="l-mock-avatar">BS</span><span><strong>Barkada Savings</strong><small>12 contributors · Monthly</small></span><span class="l-mock-badge"><span class="l-pulse-dot" aria-hidden="true"></span>ADMIN</span></div>
+            <p class="l-mock-label">TRACKED SAVINGS</p>
+            <p class="l-mock-total" id="hero-total" data-target="48250">₱48,250.00</p>
+            <div class="l-mock-rows">
+              <div class="l-mock-row"><i class="i-add">+</i>Additions<b>₱52,000.00</b></div>
+              <div class="l-mock-row"><i class="i-ded">−</i>Expenses<b>₱3,750.00</b></div>
+              <div class="l-mock-row"><i class="i-pen">!</i>Pending review<b>₱1,500.00</b></div>
+            </div>
+            <div class="l-mock-cal-board" aria-label="Interactive demo calendar">
+              <div class="l-mock-cal-head" aria-hidden="true">
+                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+              </div>
+              <div class="l-mock-cal-grid">
+                <div class="l-mock-day is-sun">
+                  <div class="l-mday-top"><b>01</b><span class="status-icon confirmed" title="Confirmed addition"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">MS</span></div>
+                  <em>₱1,500</em>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>02</b><span class="status-icon confirmed" title="Confirmed addition"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">JD</span></div>
+                  <em>₱2,000</em>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>03</b></div>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>04</b><span class="status-icon confirmed" title="Confirmed addition"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">ER</span></div>
+                  <em>₱500</em>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>05</b><span class="status-icon confirmed" title="Confirmed addition"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">PT</span></div>
+                  <em>₱1,000</em>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>06</b><span class="status-icon pending" title="Pending review"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">MS</span></div>
+                  <em>₱500</em>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>07</b></div>
+                </div>
+                <div class="l-mock-day is-sun">
+                  <div class="l-mday-top"><b>08</b><span class="status-icon confirmed" title="Confirmed addition"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">CP</span></div>
+                  <em>₱1,500</em>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>09</b><span class="status-icon confirmed" title="Confirmed addition"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">JD</span></div>
+                  <em>₱2,000</em>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>10</b><span class="status-icon deduction" title="Voucher withdrawal"><svg viewBox="0 0 24 24"><path d="M7 12h10"/></svg></span></div>
+                  <em>−₱1,200</em>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>11</b><span class="status-icon pending" title="Pending review"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">ER</span></div>
+                  <em>₱1,000</em>
+                </div>
+                <div class="l-mock-day is-today">
+                  <div class="l-mday-top"><b class="today-b">12</b><span class="status-icon confirmed" title="Confirmed addition"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">MS</span><span class="day-avatar">JD</span></div>
+                  <em>₱2,500</em>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>13</b></div>
+                </div>
+                <div class="l-mock-day">
+                  <div class="l-mday-top"><b>14</b></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="l-float l-float-b"><span class="l-float-ico" style="background:#fbefd2;color:#8a5a0c"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg></span><span><strong>2 entries awaiting review</strong><small>Tap to approve or reject</small></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="l-trust" aria-label="Highlights">
+      <div class="l-wrap">
+        <ul>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>Non-custodial ledger</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Optional two-factor sign-in</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 15l2 2 4-4"/></svg>Full audit trail</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>Works on any phone</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="l-section">
+      <div class="l-wrap">
+        <div class="l-head l-reveal">
+          <p class="l-eyebrow">Why IPON</p>
+          <h2>Trust is easier when the numbers are clear</h2>
+          <p>Saving together should bring a group closer, not start arguments about who paid, who forgot, and where the money went.</p>
+        </div>
+        <div class="l-compare">
+          <article class="l-old l-reveal">
+            <div class="l-compare-title">
+              <h3>The Chat &amp; Spreadsheet Chaos</h3>
+              <span class="l-badge-disputed">DISPUTED</span>
+            </div>
+            <div class="l-chat-box">
+              <div class="l-chat-bubble l-chat-in">
+                "Wait, did Maria pay for October or November? Look at this receipt screenshot."
+                <span class="l-chat-meta">GCash_ref_99214.png · 8:14 PM</span>
+              </div>
+              <div class="l-chat-bubble l-chat-out">
+                "Check the spreadsheet... but someone edited cell B12 last week and the formula broke 😭"
+                <span class="l-chat-meta">Sent · 8:16 PM</span>
+              </div>
+              <div class="l-chat-bubble l-chat-in">
+                "The notebook total is ₱3,500 short! Who has the balance?"
+                <span class="l-chat-meta">Unresolved · 8:22 PM</span>
+              </div>
+            </div>
+            <div class="l-sheet-error">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span><strong>Missing Audit Trail:</strong> Receipts get lost in photo galleries and chats.</span>
+            </div>
+          </article>
+          <article class="l-new l-reveal">
+            <div class="l-compare-title">
+              <h3>The Verified IPON Ledger</h3>
+              <span class="l-badge-verified">VERIFIED</span>
+            </div>
+            <div class="l-ledger-list">
+              <div class="l-ledger-item">
+                <div>
+                  <strong>Maria Santos · Monthly Deposit</strong>
+                  <small>Oct 12, 2026 · Confirmed by Admin</small>
+                </div>
+                <div class="l-ledger-val">
+                  <b>+₱2,500.00</b>
+                  <span>Locked in audit</span>
+                </div>
+              </div>
+              <div class="l-ledger-item">
+                <div>
+                  <strong>Juan Dela Cruz · Emergency Withdrawal</strong>
+                  <small>Oct 10, 2026 · Voucher #WD-088 approved</small>
+                </div>
+                <div class="l-ledger-val">
+                  <b style="color:#f2a7a4">−₱1,200.00</b>
+                  <span>Voucher signed</span>
+                </div>
+              </div>
+            </div>
+            <div class="l-progress-box">
+              <div class="l-progress-head">
+                <span>Group Target Progress</span>
+                <span>₱48,250 / ₱50,000 (96.5%)</span>
+              </div>
+              <div class="l-progress-bar">
+                <div class="l-progress-fill" style="width: 96.5%;"></div>
+              </div>
+              <div class="l-progress-sub">
+                <span class="l-progress-rem">₱1,750.00 remaining</span>
+                <span class="l-progress-pct">96.5% reached</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="l-section" id="features" style="padding-top:0">
+      <div class="l-wrap">
+        <div class="l-head l-reveal">
+          <p class="l-eyebrow">Features</p>
+          <h2>Everything a savings group needs</h2>
+          <p>Built for barkadas, families, co-workers, and community groups who save on a schedule.</p>
+        </div>
+        <div class="l-features">
+          <!-- 1. Contribution Calendar -->
+          <article class="l-feat-card l-reveal">
+            <span class="l-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="3"></rect><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"></path></svg></span>
+            <h3>Contribution calendar</h3>
+            <p>See each day at a glance with status icons and contributor photos. Set a monthly goal and watch the group reach it.</p>
+            <div class="l-feat-preview">
+              <div class="l-prev-cal" aria-label="Interactive mini calendar">
+                <div class="l-prev-day">
+                  <div class="l-prev-day-top"><b>01</b><span class="status-icon confirmed" title="Confirmed addition"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">MS</span></div>
+                  <em>₱1,500</em>
+                </div>
+                <div class="l-prev-day">
+                  <div class="l-prev-day-top"><b>02</b><span class="status-icon confirmed" title="Confirmed addition"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">JD</span></div>
+                  <em>₱2,000</em>
+                </div>
+                <div class="l-prev-day">
+                  <div class="l-prev-day-top"><b>03</b><span class="status-icon pending" title="Pending review"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">ER</span></div>
+                  <em>₱500</em>
+                </div>
+                <div class="l-prev-day is-today">
+                  <div class="l-prev-day-top"><b class="today-b">05</b><span class="status-icon confirmed" title="Confirmed addition"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></span></div>
+                  <div class="day-avatars"><span class="day-avatar">PT</span></div>
+                  <em>₱1,000</em>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 2. Review & Approval Simulator -->
+          <article class="l-feat-card l-reveal">
+            <span class="l-ico gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12c0 1.821.487 3.53 1.338 5L2.5 21.5l4.5-.838A9.955 9.955 0 0 0 12 22z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
+            <h3>Review &amp; approval</h3>
+            <p>Members submit, admins confirm. Rejections and voids always carry a reason the submitter can read.</p>
+            <div class="l-feat-preview">
+              <div class="l-prev-approval" id="demo-approval">
+                <div class="l-prev-review-item">
+                  <i class="status-icon pending" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></i>
+                  <div class="l-prev-review-copy">
+                    <b>Carlos M. · GCash #8102</b>
+                    <small class="l-prev-badge">Addition</small>
+                  </div>
+                  <strong class="l-prev-review-amount">₱1,000.00</strong>
+                </div>
+                <div class="l-prev-btns" id="demo-approval-actions">
+                  <button type="button" class="l-prev-btn l-prev-btn-app" id="demo-btn-approve">Confirm addition ✓</button>
+                  <button type="button" class="l-prev-btn l-prev-btn-dec" id="demo-btn-decline">Reject with reason ✕</button>
+                </div>
+                <div id="demo-approval-status" style="display:none;font:700 12.5px/1.3 Arial,sans-serif;color:#155e43;background:#e6f3eb;padding:8px 12px;border-radius:8px;border:1px solid #b5dec6;text-align:center">
+                  ✓ Confirmed · Recorded to group ledger
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 3. Expenses & Withdrawals Record -->
+          <article class="l-feat-card l-reveal">
+            <span class="l-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 6v2M12 16v2"></path></svg></span>
+            <h3>Expenses &amp; withdrawals</h3>
+            <p>Record group spending and payouts with references, so every peso that leaves the pot is accounted for.</p>
+            <div class="l-feat-preview">
+              <div class="l-prev-record">
+                <div class="l-prev-record-head">
+                  <span class="l-tag-category">Venue &amp; Catering</span>
+                  <span class="status-pill-confirmed">Confirmed</span>
+                </div>
+                <div class="l-prev-record-body">
+                  <span class="l-prev-record-title">Year-end gathering deposit</span>
+                  <strong class="l-prev-record-amount">−₱4,500.00</strong>
+                </div>
+                <div class="l-prev-record-footer">
+                  <span>Receipt #OR-8821 attached</span>
+                  <span>Recorded by Admin</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 4. Clear Reports & Charts -->
+          <article class="l-feat-card l-reveal">
+            <span class="l-ico gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"></path><path d="m7 15 4-4 3 3 5-6"></path><path d="M15 8h4v4"></path></svg></span>
+            <h3>Clear reports</h3>
+            <p>Monthly summaries, per-member totals, and balances that anyone in the group can verify for themselves.</p>
+            <div class="l-feat-preview">
+              <div class="l-prev-report">
+                <div class="l-prev-report-meta">
+                  <span>Net Tracked: <strong>₱48,250.00</strong></span>
+                  <span class="l-report-progress">96.5% of Goal</span>
+                </div>
+                <div class="l-prev-chart">
+                  <div class="l-chart-col" style="height:55%" title="Jul: ₱22,000"><small>22k</small></div>
+                  <div class="l-chart-col" style="height:68%" title="Aug: ₱31,000"><small>31k</small></div>
+                  <div class="l-chart-col" style="height:80%" title="Sep: ₱38,500"><small>38k</small></div>
+                  <div class="l-chart-col" style="height:90%" title="Oct: ₱45,000"><small>45k</small></div>
+                  <div class="l-chart-col is-current" style="height:98%" title="Nov: ₱48,250"><small>48k</small></div>
+                </div>
+                <div class="l-prev-chart-labels">
+                  <span>JUL</span><span>AUG</span><span>SEP</span><span>OCT</span><span>NOV</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 5. Live Announcements (Supabase Realtime) -->
+          <article class="l-feat-card l-reveal">
+            <span class="l-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 11 18-5v12L3 14v-3z"></path><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"></path></svg></span>
+            <h3>Live announcements</h3>
+            <p>Post updates with pictures or videos. Everyone in the group sees them instantly, no refresh needed.</p>
+            <div class="l-feat-preview">
+              <div class="l-prev-ann">
+                <div class="l-prev-ann-head">
+                  <span class="day-avatar" style="width:24px;height:24px;font-size:10px;line-height:24px">MS</span>
+                  <div>
+                    <strong style="color:var(--ink);font-size:12px;display:inline-block">Maria Santos</strong>
+                    <span class="group-bar-badge" style="font-size:8.5px;padding:1px 6px;margin-left:4px">ADMIN</span>
+                  </div>
+                  <span class="l-live-tag">● Live Sync</span>
+                </div>
+                <div class="l-prev-ann-body">
+                  <strong>🎉 Milestone reached!</strong>
+                  <p>96% of our annual target is secured before December!</p>
+                </div>
+                <div class="l-prev-ann-footer">
+                  <span class="l-attachment-pill">📷 1 receipt photo attached</span>
+                  <span style="font-size:11px;color:var(--muted)">Just now</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 6. Multi-Group Workspaces -->
+          <article class="l-feat-card l-reveal">
+            <span class="l-ico gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>
+            <h3>Multiple groups</h3>
+            <p>Run several savings groups from one account. Each group keeps its own members, picture, and records.</p>
+            <div class="l-feat-preview">
+              <div class="l-prev-group-bar" id="demo-group-box">
+                <div class="group-bar-identity">
+                  <div class="day-avatar" id="demo-grp-avatar" style="width:32px;height:32px;font-size:12px;line-height:32px;background:#155e43;color:#fff;border-radius:50%;text-align:center;font-weight:700">BS</div>
+                  <div class="group-bar-copy">
+                    <div class="group-bar-title-row">
+                      <strong class="group-bar-name" id="demo-grp-name" style="font-size:14px">Barkada Savings</strong>
+                      <span class="group-bar-badge" id="demo-grp-role">ADMIN</span>
+                    </div>
+                    <small class="group-bar-meta" id="demo-grp-meta">12 active contributors · Monthly</small>
+                  </div>
+                </div>
+                <div class="l-prev-group-select-wrap">
+                  <select class="group-switcher-select" id="demo-group-select" aria-label="Select savings group">
+                    <option value="barkada">Barkada Savings (Admin)</option>
+                    <option value="family">Family House Fund (Admin)</option>
+                    <option value="office">Office Emergency Pot (Treasurer)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="l-section l-steps-band" id="how">
+      <div class="l-wrap">
+        <div class="l-head l-reveal">
+          <p class="l-eyebrow">How it works</p>
+          <h2>Up and running in three steps</h2>
+          <p>No installation, no spreadsheets. Open IPON in your browser or add it to your home screen.</p>
+        </div>
+        <div class="l-steps">
+          <article class="l-step l-reveal">
+            <span class="l-step-num">01</span>
+            <h3>Request admin access</h3>
+            <p>Verify your email with a one-time code and tell us about your group. The platform owner reviews every request.</p>
+            <div class="l-step-widget">
+              <div class="l-otp-preview" aria-label="One-time password preview">
+                <span class="l-otp-cell">8</span>
+                <span class="l-otp-cell">4</span>
+                <span class="l-otp-cell">9</span>
+                <span class="l-otp-cell">2</span>
+                <span class="l-otp-cell">0</span>
+                <span class="l-otp-cell">1</span>
+              </div>
+              <div style="margin-top:8px;font:700 11.5px/1 Arial,sans-serif;color:var(--green)">✓ Email ownership confirmed</div>
+            </div>
+          </article>
+
+          <article class="l-step l-reveal">
+            <span class="l-step-num">02</span>
+            <h3>Create your group</h3>
+            <p>Once approved, name your group, set the monthly contribution, and invite members by email in seconds.</p>
+            <div class="l-step-widget">
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:700;margin-bottom:6px">
+                <span>Barkada 2026</span>
+                <span style="color:var(--ochre)">₱2,000 / mo</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:center;gap:6px">
+                <span style="width:24px;height:24px;border-radius:50%;background:#0b3428;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:700">JD</span>
+                <span style="width:24px;height:24px;border-radius:50%;background:#deb152;color:#0b2b20;display:grid;place-items:center;font-size:10px;font-weight:700">MS</span>
+                <span style="width:24px;height:24px;border-radius:50%;background:#2e7656;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:700">PT</span>
+                <span style="font-size:11.5px;color:var(--muted);font-weight:700">+9 invited</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="l-step l-reveal">
+            <span class="l-step-num">03</span>
+            <h3>Track together</h3>
+            <p>Members record their contributions, you review them, and everyone watches the savings grow in real time.</p>
+            <div class="l-step-widget">
+              <div style="display:flex;align-items:center;justify-content:center;gap:8px;font:700 12.5px/1 Arial,sans-serif;color:var(--green)">
+                <span class="l-pulse-dot"></span>
+                <span>Real-Time Sync Active</span>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:6px">100% ledger audit trail enabled</div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="l-section" id="roles">
+      <div class="l-wrap">
+        <div class="l-head l-reveal">
+          <p class="l-eyebrow">Roles</p>
+          <h2>The right view for every person</h2>
+          <p>Each person sees exactly what their role allows — nothing more, nothing less.</p>
+        </div>
+        <div class="l-roles">
+          <article class="l-role l-reveal">
+            <span class="l-role-tag t-admin">ADMIN</span>
+            <h3>Group Administrator</h3>
+            <ul>
+              <li>Create groups and invite members</li>
+              <li>Confirm, reject, or void entries</li>
+              <li>Post announcements</li>
+              <li>Review the full audit log</li>
+            </ul>
+            <div class="l-role-device">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span style="font-weight:700">Admin Control</span>
+                <span style="font-size:11px;background:#e2f2e8;color:#1f6a43;padding:2px 8px;border-radius:6px;font-weight:700">3 Pending</span>
+              </div>
+              <div style="display:grid;gap:5px;font-size:11.5px;color:#46524d">
+                <div>• Quick Batch Review Panel</div>
+                <div>• Broadcast Announcement to Group</div>
+                <div>• Export Full CSV Audit Log</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="l-role l-reveal">
+            <span class="l-role-tag t-treas">TREASURER</span>
+            <h3>Treasurer</h3>
+            <ul>
+              <li>Help review pending entries</li>
+              <li>Record expenses and withdrawals</li>
+              <li>Monitor group balances</li>
+              <li>Generate reports</li>
+            </ul>
+            <div class="l-role-device">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span style="font-weight:700">Treasury Desk</span>
+                <span style="font-size:11px;background:#fbefd2;color:#8a5a0c;padding:2px 8px;border-radius:6px;font-weight:700">Balance Verified</span>
+              </div>
+              <div style="display:grid;gap:5px;font-size:11.5px;color:#46524d">
+                <div>• Bank / Cash Pot Reconciliation</div>
+                <div>• Digital Voucher Issuance</div>
+                <div>• Expenditure Tracking &amp; Receipts</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="l-role l-reveal">
+            <span class="l-role-tag t-member">MEMBER</span>
+            <h3>Member</h3>
+            <ul>
+              <li>Submit contributions</li>
+              <li>See your own payment history</li>
+              <li>Get notified on every decision</li>
+              <li>Read group announcements</li>
+            </ul>
+            <div class="l-role-device">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span style="font-weight:700">My Member Portal</span>
+                <span style="font-size:11px;background:#dcefe3;color:#1f6a43;padding:2px 8px;border-radius:6px;font-weight:700">Up to date ✓</span>
+              </div>
+              <div style="display:grid;gap:5px;font-size:11.5px;color:#46524d">
+                <div>• Instant Payment Submission</div>
+                <div>• Personal Monthly Calendar View</div>
+                <div>• Instant Push &amp; In-App Notifications</div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="l-section l-security" id="security">
+      <div class="l-wrap">
+        <div class="l-head l-reveal">
+          <p class="l-eyebrow">Security</p>
+          <h2>Built to protect your group's records</h2>
+          <p>Security is enforced by the database itself, not just by the screens you click.</p>
+        </div>
+        <div class="l-sec-grid">
+          <article class="l-sec l-reveal">
+            <span class="l-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
+            <h3>Group isolation</h3>
+            <p>Row-level security keeps every group's data separate. No group can ever see another's records.</p>
+            <div class="l-sec-widget">RLS: current_group_id()</div>
+          </article>
+
+          <article class="l-sec l-reveal">
+            <span class="l-ico gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="3"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path><circle cx="12" cy="16.5" r="1.5" fill="currentColor"></circle></svg></span>
+            <h3>Two-factor sign-in</h3>
+            <p>Turn on authenticator-app codes for an extra layer of protection on your account.</p>
+            <div class="l-sec-widget">TOTP 2FA: 6-Digit Code</div>
+          </article>
+
+          <article class="l-sec l-reveal">
+            <span class="l-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 9h18M9 21V9M14 14l2 2 4-4"></path></svg></span>
+            <h3>Locked records</h3>
+            <p>Confirmed entries cannot be silently edited. Corrections are made through voids with a reason.</p>
+            <div class="l-sec-widget">Audit: Trigger-Enforced Void</div>
+          </article>
+
+          <article class="l-sec l-reveal">
+            <span class="l-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="m3 7 9 6 9-6"></path><path d="m15 19 2 2 4-4"></path></svg></span>
+            <h3>Verified requests</h3>
+            <p>Admin requests require email verification, so no one can apply using an address they don't own.</p>
+            <div class="l-sec-widget">10-Min Email OTP</div>
+          </article>
+        </div>
+        <p class="l-note l-reveal"><strong>IPON never holds your money.</strong> It is a record-keeping tool only — funds stay with your group's chosen treasurer, bank, or e-wallet.</p>
+      </div>
+    </section>
+
+    <section class="l-section" id="faq">
+      <div class="l-wrap">
+        <div class="l-head l-reveal">
+          <p class="l-eyebrow">FAQ</p>
+          <h2>Questions, answered</h2>
+        </div>
+        <div class="l-faq l-reveal">
+          <details name="faq"><summary>Does IPON store or transfer money?</summary><div class="l-faq-content"><p>No. IPON is a non-custodial ledger. It records what your group saves and spends, but the actual money stays wherever your group keeps it — cash, bank, or e-wallet.</p></div></details>
+          <details name="faq"><summary>How much does it cost?</summary><div class="l-faq-content"><p>IPON is free to use while it is in active development. Voluntary donations to the developer are welcome but never required, and they are never mixed with group savings.</p></div></details>
+          <details name="faq"><summary>Do my members need to install an app?</summary><div class="l-faq-content"><p>No. IPON runs in any modern browser. On phones, members can add it to their home screen for an app-like experience.</p></div></details>
+          <details name="faq"><summary>How do I start a savings group?</summary><div class="l-faq-content"><p>Click "Request access", verify your email, and submit a short request. Once the platform owner approves it, you'll receive an email and can sign in to create your group.</p></div></details>
+          <details name="faq"><summary>I was invited by my group admin. What now?</summary><div class="l-faq-content"><p>Check your email for your sign-in details, then click "Sign in". You'll be asked to set your own password on first login.</p></div></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="l-cta">
+      <div class="l-wrap">
+        <div class="l-cta-card l-reveal">
+          <div>
+            <h2>Ready to save together, the clear way?</h2>
+            <p>Sign in to your group, or request administrator access to start a new one.</p>
+          </div>
+          <div class="l-cta-actions">
+            <a class="l-btn l-btn-gold" href="login.html">Sign in</a>
+            <a class="l-btn l-btn-ghost" href="login.html?mode=signup">Request access</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="l-footer">
+    <div class="l-wrap">
+      <a class="l-brand" href="#top" aria-label="Back to top"><img src="assets/favicon.svg" alt=""><span><strong>IPON</strong><small>TRACKING SYSTEM</small></span></a>
+      <nav aria-label="Footer"><a href="#features">Features</a><a href="#security">Security</a><a href="#faq">FAQ</a><a href="login.html">Sign in</a></nav>
+      <span>© 2026 IPON · A non-custodial savings record tracker.</span>
+    </div>
+  </footer>
+
+  <button class="l-back-top" id="back-to-top" type="button" aria-label="Back to top">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+  </button>
+  <script src="js/config.js"></script><script src="js/core.js?v=20261113-2"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/index.js?v=20261113-5"></script>
+</body>
+</html>

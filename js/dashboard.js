@@ -27,6 +27,8 @@
     addButton: addAnnouncementButton
   });
   let selectedGoalId = '';
+  let activeGoalsList = [];
+  let lastTrackedSavings = 0;
   let myGroups = [];
   let currentGroup = null;
   let pendingGroupAvatarUrl = null;
@@ -363,16 +365,49 @@
     summaryValues.forEach((node) => { node.textContent = Ipon.money(0); });
     ['dashboard-members', 'dashboard-paid', 'dashboard-unpaid'].forEach((id) => { document.getElementById(id).textContent = '0'; });
     document.getElementById('dashboard-month-collected').textContent = Ipon.money(0);
+    activeGoalsList = [];
+    updateDashboardGoalProgress(0);
     renderGoalOptions([]);
     renderCalendar([]);
     renderPending([]);
     announcements?.clear();
   }
+  function updateDashboardGoalProgress(trackedSavings) {
+    const box = document.getElementById('dashboard-goal-box');
+    if (!box) return;
+    if (typeof trackedSavings === 'number') lastTrackedSavings = trackedSavings;
+    const tracked = Number(lastTrackedSavings || 0);
+    let targetGoal = null;
+    if (selectedGoalId) {
+      targetGoal = activeGoalsList.find((g) => g.id === selectedGoalId);
+    } else if (activeGoalsList.length > 0) {
+      targetGoal = activeGoalsList[0];
+    }
+    if (!targetGoal) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    const target = Number(targetGoal.target_amount) || 0;
+    const pct = target > 0 ? (tracked / target) * 100 : 0;
+    const pctClamped = Math.min(100, Math.max(0, pct));
+    const pctFormatted = (Math.round(pct * 10) / 10).toFixed(pct % 1 === 0 ? 0 : 1) + '%';
+    const remaining = Math.max(0, target - tracked);
+    const isReached = target > 0 && tracked >= target;
+
+    document.getElementById('dashboard-goal-label').textContent = `${targetGoal.title} · Target Progress`;
+    document.getElementById('dashboard-goal-fraction').textContent = `${Ipon.money(tracked)} / ${Ipon.money(target)} (${pctFormatted})`;
+    document.getElementById('dashboard-goal-fill').style.width = `${pctClamped}%`;
+    const remEl = document.getElementById('dashboard-goal-remaining');
+    remEl.textContent = isReached ? '✓ Target achieved!' : `${Ipon.money(remaining)} remaining`;
+    remEl.classList.toggle('is-reached', isReached);
+    document.getElementById('dashboard-goal-pct').textContent = `${pctFormatted} reached`;
+  }
   async function load() {
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { renderEmptySnapshot(); return; }
     try {
-      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult, groupsResult] = await Promise.all([
+      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult, groupsResult, , allGoalsResult] = await Promise.all([
         Ipon.client.rpc('get_savings_summary'),
         Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'),
         getPending(),
@@ -380,14 +415,17 @@
         Ipon.client.from('v_contribution_status').select('payment_status,paid_amount').eq('period_month', start),
         Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.rpc('get_my_groups'),
-        announcements ? announcements.load() : Promise.resolve()
+        announcements ? announcements.load() : Promise.resolve(),
+        Ipon.client.from('savings_goals').select('id,title,target_amount,target_date').eq('status', 'ACTIVE').order('created_at', { ascending: false })
       ]);
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
+      activeGoalsList = allGoalsResult?.data || [];
       renderGroupHeader(groupsResult || []);
       const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(summary.tracked_savings); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
       [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.amount].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
       const progress = progressResult.data || []; const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
       document.getElementById('dashboard-members').textContent = memberResult.count || 0; document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; renderGoalOptions(goalResult.data || []);
+      updateDashboardGoalProgress(summary.tracked_savings);
       renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
       hasSnapshot = true; dataStatus.hidden = true;
     } catch (error) {
@@ -790,6 +828,7 @@
   goalSelects.forEach((select) => select.addEventListener('change', () => {
     selectedGoalId = select.value;
     goalSelects.forEach((other) => { other.value = selectedGoalId; });
+    updateDashboardGoalProgress();
   }));
   renderCalendar([]);
   state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });

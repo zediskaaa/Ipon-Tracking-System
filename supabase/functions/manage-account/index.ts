@@ -486,7 +486,7 @@ Deno.serve(async (request) => {
     const recipientName = target.full_name || [target.first_name, target.middle_name, target.last_name].filter(Boolean).join(' ') || target.email;
     const originUrl = typeof body.login_url === 'string' && /^https?:\/\//i.test(body.login_url)
       ? body.login_url
-      : 'https://ipon-tracking-group-records.vercel.app/login.html';
+      : 'https://my-ipon.vercel.app/login.html';
 
     const emailOutcome = await sendAdminRequestDecisionEmail({
       toEmail: target.email,
@@ -626,7 +626,7 @@ Deno.serve(async (request) => {
     const recipientName = existingProfile?.full_name || [firstName, middleName, lastName].filter(Boolean).join(' ');
     const originUrl = typeof body.login_url === 'string' && /^https?:\/\//i.test(body.login_url)
       ? body.login_url
-      : 'https://ipon-tracking-group-records.vercel.app/login.html';
+      : 'https://my-ipon.vercel.app/login.html';
 
     if (existingProfile && actor.group_id) {
       await admin.from('notifications').insert({

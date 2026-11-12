@@ -16,8 +16,13 @@
     const dates = active.map((goal) => goal.target_date).filter(Boolean).sort();
     document.getElementById('nearest-date').textContent = dates[0] ? Ipon.dateLabel(dates[0], { month: 'short', day: 'numeric' }) : 'None';
     list.innerHTML = goals.length ? goals.map((goal) => {
-      const progress = Math.min(100, Math.max(0, tracked / Number(goal.target_amount) * 100));
-      return `<article class="goal-card"><header><div><h3>${Ipon.escapeHtml(goal.title)}</h3><p>${Ipon.money(goal.target_amount)}${goal.target_date ? ` · target ${Ipon.dateLabel(goal.target_date)}` : ''}</p></div><span class="status status-${goal.status.toLowerCase()}">${goal.status}</span></header><div class="progress" aria-label="${Math.round(progress)} percent"><span style="width:${progress}%"></span></div><p>${Math.round(progress)} compared with the group’s shared confirmed balance. Funds are not allocated to individual goals.</p>${state.profile.role === 'ADMIN' ? `<button class="icon-action" data-edit-goal="${goal.id}">Edit goal</button>` : ''}</article>`;
+      const target = Number(goal.target_amount) || 0;
+      const pct = target > 0 ? (tracked / target) * 100 : 0;
+      const pctClamped = Math.min(100, Math.max(0, pct));
+      const pctFormatted = (Math.round(pct * 10) / 10).toFixed(pct % 1 === 0 ? 0 : 1) + '%';
+      const remaining = Math.max(0, target - tracked);
+      const isReached = target > 0 && tracked >= target;
+      return `<article class="goal-card"><header><div><h3>${Ipon.escapeHtml(goal.title)}</h3><p>Target: <strong>${Ipon.money(goal.target_amount)}</strong>${goal.target_date ? ` · Target date ${Ipon.dateLabel(goal.target_date)}` : ''}</p></div><span class="status status-${goal.status.toLowerCase()}">${goal.status}</span></header><div class="goal-progress-box"><div class="goal-progress-head"><span>Group Target Progress</span><strong>${Ipon.money(tracked)} / ${Ipon.money(goal.target_amount)} (${pctFormatted})</strong></div><div class="progress" aria-label="${pctFormatted} of target reached"><span style="width:${pctClamped}%"></span></div><div class="goal-progress-sub"><span class="goal-remaining ${isReached ? 'is-reached' : ''}">${isReached ? '✓ Target achieved!' : `${Ipon.money(remaining)} remaining`}</span><span class="goal-pct">${pctFormatted} reached</span></div></div><p class="goal-note">${goal.notes ? Ipon.escapeHtml(goal.notes) : 'Progress tracks against the group’s shared confirmed balance. Funds are not locked or allocated to individual goals.'}</p>${state.profile.role === 'ADMIN' ? `<div class="goal-actions"><button class="icon-action" data-edit-goal="${goal.id}">Edit goal</button></div>` : ''}</article>`;
     }).join('') : '<div class="empty-state">No savings goals yet.</div>';
   }
   async function load() {

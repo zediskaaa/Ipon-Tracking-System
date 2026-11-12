@@ -174,6 +174,7 @@
   passwordToggle.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
   document.getElementById('show-login').addEventListener('click', () => setMode('login'));
   document.getElementById('show-signup').addEventListener('click', () => setMode('signup'));
+  if (new URLSearchParams(location.search).get('mode') === 'signup') setMode('signup');
   const resetRecoveryDialog = () => {
     recoveryRequestForm.reset();
     recoveryMessage.textContent = '';
