@@ -353,7 +353,7 @@
         <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button></div>
       </dialog>
       <dialog class="form-dialog feature-request-dialog" id="feature-request-dialog" aria-labelledby="feature-request-title">
-        <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="feature-request-title">Request a feature</h2><p>Describe an improvement that would make IPON more useful to you.</p></div><button class="dialog-close" data-feature-request-close type="button" aria-label="Close feature request form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="feature-request-form" class="form-grid"><div class="field field-wide"><label for="feature-request-name">Feature name</label><input id="feature-request-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="feature-request-details">How should it work?</label><textarea id="feature-request-details" name="details" minlength="10" maxlength="2000" aria-describedby="feature-request-help" required></textarea><small class="field-help" id="feature-request-help">Explain the problem and the result you want. Do not include passwords or financial account details.</small></div><div class="form-actions field-wide"><button class="button button-secondary" data-feature-request-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit request</button></div></form></div>
+        <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="feature-request-title">Request a feature</h2><p>Describe an improvement that would make IPON more useful to you.</p></div><button class="dialog-close" data-feature-request-close type="button" aria-label="Close feature request form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="feature-request-form" class="form-grid"><div class="field field-wide"><label for="feature-request-name">Feature name</label><input id="feature-request-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="feature-request-details">How should it work?</label><textarea id="feature-request-details" name="details" minlength="10" maxlength="2000" aria-describedby="feature-request-help" required></textarea><small class="field-help" id="feature-request-help">Explain the problem and the result you want. Do not include passwords or financial account details.</small></div><p class="mfa-message field-wide" id="feature-request-message" role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" data-feature-request-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit request</button></div></form><div class="feature-request-success" id="feature-request-success" role="status" aria-live="polite" hidden><span class="feature-request-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><h3>Feature request submitted</h3><p>Your suggestion <strong id="feature-request-submitted-title"></strong> has been sent to the Super Admin for review.</p><div class="form-actions"><button class="button button-secondary" id="feature-request-another" type="button">Submit another</button><button class="button button-primary" data-feature-request-close type="button">Done</button></div></div></div>
       </dialog>
       <dialog class="account-dialog" id="account-dialog" aria-labelledby="quick-account-title">
         <div class="account-dialog-sheet">
@@ -378,7 +378,19 @@
     const donate = document.getElementById('donate-dialog');
     const featureDialog = document.getElementById('feature-request-dialog');
     const featureForm = document.getElementById('feature-request-form');
+    const featureMessage = document.getElementById('feature-request-message');
+    const featureSuccess = document.getElementById('feature-request-success');
+    const featureSubmittedTitle = document.getElementById('feature-request-submitted-title');
     const account = document.getElementById('account-dialog');
+    const resetFeatureDialog = () => {
+      featureForm?.reset();
+      if (featureMessage) {
+        featureMessage.textContent = '';
+        delete featureMessage.dataset.tone;
+      }
+      if (featureForm) featureForm.hidden = false;
+      if (featureSuccess) featureSuccess.hidden = true;
+    };
     document.querySelectorAll('[data-notifications-open]').forEach((button) => button.onclick = () => {
       if (!notifications) return;
       if (notifications.open) return notifications.close();
@@ -393,8 +405,10 @@
     document.querySelectorAll('[data-notifications-close]').forEach((button) => button.onclick = () => notifications?.close());
     document.querySelectorAll('[data-donate-open]').forEach((button) => button.onclick = () => donate?.showModal());
     document.querySelectorAll('[data-donate-close]').forEach((button) => button.onclick = () => donate?.close());
-    document.querySelectorAll('[data-feature-request-open]').forEach((button) => button.onclick = () => { featureDialog?.showModal(); featureForm?.elements.title.focus(); });
+    document.querySelectorAll('[data-feature-request-open]').forEach((button) => button.onclick = () => { resetFeatureDialog(); featureDialog?.showModal(); featureForm?.elements.title.focus(); });
     document.querySelectorAll('[data-feature-request-close]').forEach((button) => button.onclick = () => featureDialog?.close());
+    const anotherFeature = document.getElementById('feature-request-another');
+    if (anotherFeature) anotherFeature.onclick = () => { resetFeatureDialog(); featureForm?.elements.title.focus(); };
     document.querySelectorAll('[data-account-open]').forEach((button) => button.onclick = openAccountDialog);
     document.querySelectorAll('[data-account-close]').forEach((button) => button.onclick = () => account?.close());
     if (notifications && !notifications.dataset.bound) {
@@ -412,18 +426,42 @@
     };
     if (featureForm) featureForm.onsubmit = async (event) => {
       event.preventDefault();
+      if (!featureForm.reportValidity()) return;
       const button = event.submitter;
       const values = new FormData(featureForm);
+      const title = values.get('title').trim();
+      const details = values.get('details').trim();
+      if (featureMessage) {
+        featureMessage.textContent = '';
+        delete featureMessage.dataset.tone;
+      }
+      const accepted = await confirmAction({
+        title: 'Submit feature request?',
+        message: `Send "${title}" to the Super Admin for review?`,
+        acceptLabel: 'Submit request'
+      });
+      if (!accepted) return;
       setBusy(button, true, 'Submitting…');
       try {
-        const { error } = await client.from('feature_requests').insert({ requester_id: currentProfile.id, title: values.get('title').trim(), details: values.get('details').trim() });
+        const { error } = await client.from('feature_requests').insert({ requester_id: currentProfile.id, title: values.get('title').trim(), details });
         if (error) throw error;
-        featureDialog.close();
+        if (featureSubmittedTitle) featureSubmittedTitle.textContent = `"${title}"`;
+        featureForm.hidden = true;
+        if (featureSuccess) featureSuccess.hidden = false;
+        featureSuccess?.querySelector('[data-feature-request-close]')?.focus();
         toast('Feature request submitted.');
-      } catch (error) { toast(friendlyError(error), 'error'); }
-      finally { setBusy(button, false); }
+      } catch (error) {
+        const message = friendlyError(error);
+        if (featureMessage) {
+          featureMessage.textContent = message;
+          featureMessage.dataset.tone = 'error';
+        }
+        toast(message, 'error');
+      } finally {
+        setBusy(button, false);
+      }
     };
-    if (featureDialog && featureForm) featureDialog.onclose = () => featureForm.reset();
+    if (featureDialog && featureForm) featureDialog.onclose = resetFeatureDialog;
   }
 
   async function loadAccountDialog() {

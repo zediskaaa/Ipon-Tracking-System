@@ -93,7 +93,9 @@ test('users can submit feature requests and Super Admin can review them', () => 
   const schema = read('database/schema.sql');
   const migration = read('database/migrations/20261112_016_add_feature_requests.sql');
   assert.match(core, /id="feature-request-dialog"[\s\S]*?id="feature-request-form"/);
+  assert.match(core, /id="feature-request-success"/);
   assert.match(core, /data-feature-request-open[\s\S]*?>Request a feature</);
+  assert.match(core, /confirmAction\(\{[\s\S]*?title: 'Submit feature request\?'/);
   assert.match(core, /from\('feature_requests'\)\.insert\(\{ requester_id: currentProfile\.id, title:/);
   assert.match(html, /data-platform-view="feature-requests"/);
   assert.match(script, /from\('feature_requests'\)\.select\('id,requester_id,title,details,created_at'\)/);
