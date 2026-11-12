@@ -295,10 +295,10 @@
       if (result?.email_sent) {
         Ipon.toast(`${baseSuccess} Email update sent.`);
       } else {
-        Ipon.toast(`${baseSuccess}${result?.email_error ? ` (Email not sent: ${result.email_error})` : ''}`);
+        Ipon.toast(`${baseSuccess}${result?.email_error ? ` (Email not sent: ${result.email_error})` : ''}`, 'warning');
       }
     } catch (emailErr) {
-      Ipon.toast(`${baseSuccess} (Email failed: ${Ipon.friendlyError(emailErr)})`);
+      Ipon.toast(`${baseSuccess} (Email failed: ${Ipon.friendlyError(emailErr)})`, 'warning');
     }
   }
 
@@ -370,6 +370,8 @@
     event.preventDefault();
     const targetUserId = rejectId.value;
     const profile = profiles.find((item) => item.id === targetUserId);
+    const req = requests.find((item) => item.requester_id === targetUserId);
+    const targetEmail = req?.email || profile?.email || '';
     const note = rejectText.value.trim();
     const subject = rejectSubject?.value.trim() || "We're sorry, your administrator request on IPON was declined";
     if (!profile || note.length < 5) {
@@ -389,7 +391,13 @@
     try {
       await Ipon.rpc('super_admin_reject_request', { p_user_id: targetUserId, p_review_note: note });
       closeRejectDialog();
-      await sendDecisionNotice({ user_id: targetUserId, decision: 'REJECTED', review_note: note, subject }, 'Administrator request rejected.');
+      await sendDecisionNotice({
+        user_id: targetUserId,
+        email: targetEmail,
+        decision: 'REJECTED',
+        review_note: note,
+        subject
+      }, 'Administrator request rejected.');
       await load();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
@@ -402,6 +410,8 @@
     event.preventDefault();
     const targetUserId = approvalId.value;
     const profile = profiles.find((item) => item.id === targetUserId);
+    const req = requests.find((item) => item.requester_id === targetUserId);
+    const targetEmail = req?.email || profile?.email || '';
     const approvedGroupName = groupName.value.trim();
     if (!approvedGroupName) return;
 
@@ -417,7 +427,12 @@
     try {
       await Ipon.rpc('super_admin_approve_request', { p_user_id: targetUserId, p_group_name: approvedGroupName });
       closeApprovalDialog();
-      await sendDecisionNotice({ user_id: targetUserId, decision: 'APPROVED', group_name: approvedGroupName }, 'Administrator approved and group created.');
+      await sendDecisionNotice({
+        user_id: targetUserId,
+        email: targetEmail,
+        decision: 'APPROVED',
+        group_name: approvedGroupName
+      }, 'Administrator approved and group created.');
       await load();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');

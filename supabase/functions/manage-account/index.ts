@@ -52,7 +52,8 @@ async function deliverEmail({
   subject,
   html,
   plainText,
-  fallbackEmail
+  fallbackEmail,
+  bccEmail
 }: {
   toEmail: string;
   recipientName: string;
@@ -60,6 +61,7 @@ async function deliverEmail({
   html: string;
   plainText: string;
   fallbackEmail?: string | null;
+  bccEmail?: string | null;
 }) {
   async function postEmail(endpoint: string, headers: Record<string, string>, payload: unknown, providerName: string) {
     try {
@@ -77,25 +79,46 @@ async function deliverEmail({
   const brevoKey = Deno.env.get('BREVO_API_KEY')?.trim();
   const resendKey = Deno.env.get('RESEND_API_KEY')?.trim();
   const rawFrom = Deno.env.get('INVITE_FROM_EMAIL')?.trim() || Deno.env.get('BREVO_SENDER_EMAIL')?.trim();
+  const safeBcc = bccEmail && bccEmail.trim().toLowerCase() !== toEmail.trim().toLowerCase() ? bccEmail.trim().toLowerCase() : null;
 
   if (brevoKey) {
     const sender = parseSender(rawFrom, SYSTEM_NAME, String(fallbackEmail || '').trim());
     if (!sender.email) {
       return { email_sent: false, email_error: 'Set INVITE_FROM_EMAIL (or BREVO_SENDER_EMAIL) to your verified Brevo sender email.', invite_subject: subject, invite_message: plainText };
     }
+    const brevoPayload: Record<string, unknown> = {
+      sender,
+      to: [{ email: toEmail, name: recipientName }],
+      subject,
+      htmlContent: html,
+      textContent: plainText
+    };
+    if (safeBcc) {
+      brevoPayload.bcc = [{ email: safeBcc }];
+    }
     return postEmail(
       'https://api.brevo.com/v3/smtp/email',
       { Accept: 'application/json', 'Content-Type': 'application/json', 'api-key': brevoKey },
-      { sender, to: [{ email: toEmail, name: recipientName }], subject, htmlContent: html, textContent: plainText },
+      brevoPayload,
       'Brevo'
     );
   }
 
   if (resendKey) {
+    const resendPayload: Record<string, unknown> = {
+      from: rawFrom || `${SYSTEM_NAME} <onboarding@resend.dev>`,
+      to: [toEmail],
+      subject,
+      html,
+      text: plainText
+    };
+    if (safeBcc) {
+      resendPayload.bcc = [safeBcc];
+    }
     return postEmail(
       'https://api.resend.com/emails',
       { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-      { from: rawFrom || `${SYSTEM_NAME} <onboarding@resend.dev>`, to: [toEmail], subject, html, text: plainText },
+      resendPayload,
       'Resend'
     );
   }
@@ -184,7 +207,8 @@ async function sendAdminRequestDecisionEmail({
   reviewNote,
   subject: customSubject,
   senderEmail,
-  loginUrl
+  loginUrl,
+  bccSuperAdmin
 }: {
   toEmail: string;
   recipientName: string;
@@ -194,6 +218,7 @@ async function sendAdminRequestDecisionEmail({
   subject?: string | null;
   senderEmail?: string | null;
   loginUrl: string;
+  bccSuperAdmin?: string | null;
 }) {
   const approved = decision === 'APPROVED';
   const safeGroup = String(groupName || '').trim() || 'your savings group';
@@ -252,7 +277,8 @@ async function sendAdminRequestDecisionEmail({
     subject,
     html,
     plainText,
-    fallbackEmail: senderEmail
+    fallbackEmail: senderEmail,
+    bccEmail: bccSuperAdmin
   });
 }
 
@@ -474,7 +500,30 @@ Deno.serve(async (request) => {
       .select('id,email,full_name,first_name,middle_name,last_name,status,group_id')
       .eq('id', targetId)
       .single();
-    if (targetError || !target || !target.email) return json({ error: 'Target account or email not found.' }, 404);
+    if (targetError || !target) return json({ error: 'Target account not found.' }, 404);
+
+    let recipientEmail = String(body.email || '').trim().toLowerCase() || (target.email ? String(target.email).trim().toLowerCase() : null);
+    if (!recipientEmail) {
+      const { data: reqRow } = await admin
+        .from('admin_requests')
+        .select('email')
+        .eq('requester_id', targetId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (reqRow?.email) recipientEmail = String(reqRow.email).trim().toLowerCase();
+    }
+    if (!recipientEmail) {
+      const { data: authUser } = await admin.auth.admin.getUserById(targetId);
+      if (authUser?.user?.email) recipientEmail = String(authUser.user.email).trim().toLowerCase();
+    }
+    if (!recipientEmail) return json({ error: 'Target email address not found.' }, 404);
+
+    // Sync profiles.email if it was missing
+    if (!target.email && recipientEmail) {
+      await admin.from('profiles').update({ email: recipientEmail }).eq('id', targetId);
+    }
+
     const expectedStatus = decision === 'APPROVED' ? 'ACTIVE' : 'DISABLED';
     if (target.status !== expectedStatus) return json({ error: 'Target request status does not match decision.' }, 400);
 
@@ -483,19 +532,22 @@ Deno.serve(async (request) => {
       const { data: groupRow } = await admin.from('groups').select('name').eq('id', target.group_id).maybeSingle();
       resolvedGroupName = groupRow?.name || null;
     }
-    const recipientName = target.full_name || [target.first_name, target.middle_name, target.last_name].filter(Boolean).join(' ') || target.email;
+    const recipientName = target.full_name || [target.first_name, target.middle_name, target.last_name].filter(Boolean).join(' ') || recipientEmail;
     const originUrl = typeof body.login_url === 'string' && /^https?:\/\//i.test(body.login_url)
       ? body.login_url
       : 'https://my-ipon.vercel.app/login.html';
 
+    const superAdminEmail = actor.email || userResult.user.email || null;
+
     const emailOutcome = await sendAdminRequestDecisionEmail({
-      toEmail: target.email,
+      toEmail: recipientEmail,
       recipientName,
       decision,
       groupName: resolvedGroupName,
       reviewNote: String(body.review_note || '').trim() || null,
       subject: String(body.subject || body.email_subject || '').trim() || null,
-      senderEmail: actor.email || userResult.user.email || null,
+      senderEmail: superAdminEmail,
+      bccSuperAdmin: superAdminEmail,
       loginUrl: originUrl
     });
 

@@ -928,4 +928,12 @@ test('multi-group workspaces support editable group name/DP, admin contributor t
   assert.match(schema, /delete from public\.contribution_periods cp[\s\S]*cp\.member_id = v_member_id[\s\S]*not exists \([\s\S]*select 1 from public\.contributions c/);
   const migration033 = read('database/migrations/20261113_033_clean_unpaid_periods_on_admin_contributor_toggle.sql');
   assert.match(migration033, /m\.status = 'ACTIVE' or c\.id is not null/);
+  const migration034 = read('database/migrations/20261113_034_ensure_admin_request_email_and_decision_delivery.sql');
+  assert.match(migration034, /set email = lower\(ar\.email\)/);
+  assert.match(migration034, /create or replace function public\.super_admin_reject_request/);
+  assert.match(migration034, /create or replace function public\.super_admin_approve_request/);
+  assert.match(schema, /insert into public\.schema_migrations[\s\S]*20261113_034/);
+  assert.match(manageAccountEdge, /from\('admin_requests'\)\s*\.select\('email'\)/);
+  assert.match(manageAccountEdge, /bccSuperAdmin/);
+  assert.match(superAdminJs, /email:\s*targetEmail/);
 });

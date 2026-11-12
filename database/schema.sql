@@ -5344,6 +5344,244 @@ insert into public.schema_migrations (version, name)
 values ('20261113_032', 'admin request email ownership verification and unblock')
 on conflict (version) do nothing;
 
+create or replace function public.set_admin_contributor(
+  p_enabled boolean,
+  p_monthly_amount numeric default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_group_id uuid := public.current_group_id();
+  v_profile public.profiles;
+  v_gm public.group_memberships;
+  v_member_id uuid;
+  v_default_amount numeric;
+  v_amount numeric;
+  v_first text;
+  v_middle text;
+  v_last text;
+  v_full text;
+begin
+  if not public.is_admin() or v_group_id is null then
+    raise exception 'Only a group administrator can update contributor participation.' using errcode = '42501';
+  end if;
+
+  if p_monthly_amount is not null and (p_monthly_amount <= 0 or p_monthly_amount > 1000000) then
+    raise exception 'Monthly contribution amount must be greater than zero.' using errcode = '22023';
+  end if;
+
+  select * into v_profile
+  from public.profiles
+  where id = auth.uid() and group_id = v_group_id and status = 'ACTIVE';
+
+  if not found then
+    raise exception 'Active profile not found.' using errcode = 'P0002';
+  end if;
+
+  select * into v_gm
+  from public.group_memberships
+  where group_id = v_group_id and user_id = auth.uid() and status = 'ACTIVE';
+
+  v_member_id := coalesce(v_profile.member_id, v_gm.member_id);
+
+  if p_enabled then
+    select default_amount into v_default_amount
+    from public.contribution_settings
+    where group_id = v_group_id
+    order by effective_month desc
+    limit 1;
+
+    v_amount := round(coalesce(p_monthly_amount, v_default_amount, 100), 2);
+
+    if v_member_id is not null then
+      update public.members
+      set status = 'ACTIVE',
+          deactivated_at = null,
+          monthly_contribution_amount = coalesce(p_monthly_amount, monthly_contribution_amount, v_amount),
+          updated_by = auth.uid()
+      where id = v_member_id and group_id = v_group_id;
+    else
+      v_full := coalesce(nullif(btrim(v_profile.full_name), ''), 'Group Admin');
+      v_first := coalesce(nullif(btrim(v_profile.first_name), ''), split_part(v_full, ' ', 1));
+      v_middle := nullif(btrim(v_profile.middle_name), '');
+      v_last := coalesce(nullif(btrim(v_profile.last_name), ''), nullif(btrim(substr(v_full, char_length(split_part(v_full, ' ', 1)) + 1)), ''), 'Admin');
+
+      insert into public.members (
+        group_id, first_name, middle_name, last_name, full_name,
+        contact_number, date_registered, monthly_contribution_amount,
+        status, notes, created_by
+      ) values (
+        v_group_id,
+        v_first,
+        v_middle,
+        v_last,
+        concat_ws(' ', v_first, v_middle, v_last),
+        coalesce(nullif(btrim(v_profile.contact_number), ''), '09000000000'),
+        (now() at time zone 'Asia/Manila')::date,
+        v_amount,
+        'ACTIVE',
+        'Group administrator contributor',
+        auth.uid()
+      )
+      returning id into v_member_id;
+    end if;
+
+    update public.group_memberships
+    set member_id = v_member_id
+    where group_id = v_group_id and user_id = auth.uid();
+
+    update public.profiles
+    set member_id = v_member_id
+    where id = auth.uid() and group_id = v_group_id;
+
+    perform public.generate_contribution_periods(date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date);
+
+    return jsonb_build_object('is_contributor', true, 'member_id', v_member_id);
+  else
+    if v_member_id is not null then
+      update public.members
+      set status = 'INACTIVE',
+          deactivated_at = now(),
+          updated_by = auth.uid()
+      where id = v_member_id
+        and group_id = v_group_id
+        and deleted_at is null;
+
+      delete from public.contribution_periods cp
+      where cp.member_id = v_member_id
+        and not exists (
+          select 1 from public.contributions c
+          where c.contribution_period_id = cp.id
+        );
+    end if;
+
+    update public.profiles
+    set member_id = null
+    where id = auth.uid() and group_id = v_group_id;
+
+    return jsonb_build_object('is_contributor', false, 'member_id', null);
+  end if;
+end;
+$$;
+
+create or replace view public.v_contribution_status
+with (security_invoker = true)
+as
+select
+  cp.id as contribution_period_id,
+  cp.member_id,
+  m.full_name as member_name,
+  cp.period_month,
+  cp.required_amount,
+  coalesce(sum(c.amount) filter (where c.approval_status = 'CONFIRMED'), 0)::numeric(14,2) as paid_amount,
+  greatest(cp.required_amount - coalesce(sum(c.amount) filter (where c.approval_status = 'CONFIRMED'), 0), 0)::numeric(14,2) as outstanding_amount,
+  greatest(coalesce(sum(c.amount) filter (where c.approval_status = 'CONFIRMED'), 0) - cp.required_amount, 0)::numeric(14,2) as overpaid_amount,
+  case
+    when coalesce(sum(c.amount) filter (where c.approval_status = 'CONFIRMED'), 0) = 0 then 'UNPAID'
+    when coalesce(sum(c.amount) filter (where c.approval_status = 'CONFIRMED'), 0) < cp.required_amount then 'PARTIALLY PAID'
+    when coalesce(sum(c.amount) filter (where c.approval_status = 'CONFIRMED'), 0) = cp.required_amount then 'PAID'
+    else 'OVERPAID'
+  end as payment_status
+from public.contribution_periods cp
+join public.members m on m.id = cp.member_id
+left join public.contributions c on c.contribution_period_id = cp.id
+where m.deleted_at is null
+  and (m.status = 'ACTIVE' or c.id is not null)
+group by cp.id, cp.member_id, m.full_name, cp.period_month, cp.required_amount;
+
+insert into public.schema_migrations (version, name)
+values ('20261113_033', 'clean unpaid periods on admin contributor toggle')
+on conflict (version) do nothing;
+
+update public.profiles p
+set email = lower(ar.email)
+from public.admin_requests ar
+where p.id = ar.requester_id
+  and (p.email is null or btrim(p.email) = '');
+
+update public.profiles p
+set email = lower(u.email)
+from auth.users u
+where p.id = u.id
+  and (p.email is null or btrim(p.email) = '');
+
+create or replace function public.super_admin_reject_request(p_user_id uuid, p_review_note text default null)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_note text := nullif(btrim(coalesce(p_review_note, '')), '');
+  v_admin_email text;
+begin
+  if not public.is_super_admin() then raise exception 'Only a super administrator can reject administrator requests.' using errcode = '42501'; end if;
+  if v_note is null or char_length(v_note) < 3 then
+    raise exception 'A reason of at least 3 characters is required when rejecting an administrator request.' using errcode = '22023';
+  end if;
+
+  select lower(ar.email) into v_admin_email
+  from public.admin_requests ar
+  where ar.requester_id = p_user_id and ar.status = 'PENDING'
+  order by ar.created_at desc limit 1;
+
+  update public.profiles
+  set status = 'DISABLED',
+      email = coalesce(email, v_admin_email)
+  where id = p_user_id and role = 'MEMBER' and status = 'PENDING' and group_id is null and member_id is null;
+  if not found then raise exception 'Pending administrator request not found.' using errcode = 'P0002'; end if;
+
+  update public.admin_requests set status = 'REJECTED', reviewed_by = auth.uid(), reviewed_at = now(), review_note = v_note
+  where requester_id = p_user_id and status = 'PENDING';
+
+  perform public.push_notification(p_user_id, 'ADMIN_REJECTED', 'Administrator request declined', v_note, null);
+end;
+$$;
+
+create or replace function public.super_admin_approve_request(p_user_id uuid, p_group_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_group_name text := nullif(btrim(p_group_name), '');
+  v_group_id uuid;
+  v_admin_email text;
+begin
+  if not public.is_super_admin() then raise exception 'Only a super administrator can approve administrator requests.' using errcode = '42501'; end if;
+  if v_group_name is null or char_length(v_group_name) < 2 then raise exception 'A group name of at least 2 characters is required.' using errcode = '22023'; end if;
+
+  select lower(ar.email) into v_admin_email
+  from public.admin_requests ar
+  where ar.requester_id = p_user_id and ar.status = 'PENDING'
+  order by ar.created_at desc limit 1;
+
+  insert into public.groups (name, owner_id) values (v_group_name, p_user_id) returning id into v_group_id;
+
+  update public.profiles
+  set role = 'ADMIN',
+      status = 'ACTIVE',
+      group_id = v_group_id,
+      email = coalesce(email, v_admin_email)
+  where id = p_user_id and role = 'MEMBER' and status = 'PENDING' and group_id is null and member_id is null;
+  if not found then raise exception 'Pending administrator request not found.' using errcode = 'P0002'; end if;
+
+  update public.admin_requests set status = 'APPROVED', reviewed_by = auth.uid(), reviewed_at = now()
+  where requester_id = p_user_id and status = 'PENDING';
+
+  perform public.push_notification(p_user_id, 'ADMIN_APPROVED', 'Administrator request approved', 'Your request was approved. Group "' || v_group_name || '" is ready.', 'admin.html');
+  return v_group_id;
+end;
+$$;
+
+insert into public.schema_migrations (version, name)
+values ('20261113_034', 'ensure admin request email backfill and decision delivery')
+on conflict (version) do nothing;
+
 commit;
 
 -- BOOTSTRAP THE FIRST SUPER ADMIN

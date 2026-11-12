@@ -101,47 +101,7 @@
 
   const desktopLinks = document.querySelectorAll('.l-links a');
   const mobileLinks = document.querySelectorAll('.l-mobile-tab');
-  const drawerLinks = document.querySelectorAll('.l-drawer-link');
   const ctaSection = document.querySelector('.l-cta');
-  const menuToggle = document.getElementById('menu-toggle');
-  const mobileMenu = document.getElementById('mobile-menu');
-
-  // Mobile Hamburger Drawer Toggle
-  function setDrawerOpen(open) {
-    if (!menuToggle || !mobileMenu) return;
-    menuToggle.classList.toggle('is-open', open);
-    menuToggle.setAttribute('aria-expanded', String(open));
-    if (open) {
-      mobileMenu.removeAttribute('hidden');
-    } else {
-      mobileMenu.setAttribute('hidden', '');
-    }
-  }
-
-  if (menuToggle && mobileMenu) {
-    menuToggle.addEventListener('click', () => {
-      const isOpen = menuToggle.classList.contains('is-open');
-      setDrawerOpen(!isOpen);
-    });
-
-    drawerLinks.forEach((link) => {
-      link.addEventListener('click', () => {
-        setDrawerOpen(false);
-      });
-    });
-
-    document.addEventListener('click', (event) => {
-      if (navHeader && !navHeader.contains(event.target) && menuToggle.classList.contains('is-open')) {
-        setDrawerOpen(false);
-      }
-    });
-
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && menuToggle.classList.contains('is-open')) {
-        setDrawerOpen(false);
-      }
-    });
-  }
 
   function updateActiveNav() {
     const scrollY = window.pageYOffset || document.documentElement.scrollTop;
