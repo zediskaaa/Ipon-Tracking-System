@@ -26,9 +26,15 @@
     const monthText = monthFilter.value ? Ipon.dateLabel(`${monthFilter.value}-01`, { month: 'long', year: 'numeric' }) : '';
     const statusText = statusFilter.options[statusFilter.selectedIndex]?.text || 'All statuses';
     monthFilter.closest('.panel-header')?.setAttribute('data-print-meta', [monthText, statusText].filter(Boolean).join(' · '));
-    let query = Ipon.client.from('v_contribution_status').select('*').eq('period_month', `${monthFilter.value}-01`).order('member_name');
-    if (statusFilter.value) query = query.eq('payment_status', statusFilter.value);
-    const { data, error } = await query; if (error) throw error; memberRows = data || [];
+    const [{ data, error }, { data: activeMembers, error: membersError }] = await Promise.all([
+      Ipon.client.from('v_contribution_status').select('*').eq('period_month', `${monthFilter.value}-01`).order('member_name'),
+      Ipon.client.from('members').select('id').eq('status', 'ACTIVE')
+    ]);
+    if (error) throw error;
+    if (membersError) throw membersError;
+    const activeIds = new Set((activeMembers || []).map((m) => m.id));
+    memberRows = (data || []).filter((row) => activeIds.has(row.member_id) || Number(row.paid_amount || 0) > 0);
+    if (statusFilter.value) memberRows = memberRows.filter((row) => row.payment_status === statusFilter.value);
     memberBody.innerHTML = memberRows.length ? memberRows.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td><span class="status status-${row.payment_status.toLowerCase().replaceAll(' ', '-')}">${Ipon.escapeHtml(row.payment_status)}</span></td></tr>`).join('') : '<tr><td colspan="5" class="empty-state">No member periods match this report.</td></tr>';
   }
 

@@ -411,8 +411,8 @@
         Ipon.client.rpc('get_savings_summary'),
         Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'),
         getPending(),
-        Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
-        Ipon.client.from('v_contribution_status').select('payment_status,paid_amount').eq('period_month', start),
+        Ipon.client.from('members').select('id', { count: 'exact' }).eq('status', 'ACTIVE'),
+        Ipon.client.from('v_contribution_status').select('member_id,payment_status,paid_amount').eq('period_month', start),
         Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.rpc('get_my_groups'),
         announcements ? announcements.load() : Promise.resolve(),
@@ -423,8 +423,10 @@
       renderGroupHeader(groupsResult || []);
       const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(summary.tracked_savings); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
       [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.amount].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
-      const progress = progressResult.data || []; const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
-      document.getElementById('dashboard-members').textContent = memberResult.count || 0; document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; renderGoalOptions(goalResult.data || []);
+      const activeIds = new Set((memberResult.data || []).map((m) => m.id));
+      const progress = (progressResult.data || []).filter((item) => activeIds.has(item.member_id) || Number(item.paid_amount || 0) > 0);
+      const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
+      document.getElementById('dashboard-members').textContent = memberResult.count ?? (memberResult.data?.length || 0); document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; renderGoalOptions(goalResult.data || []);
       updateDashboardGoalProgress(summary.tracked_savings);
       renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
       hasSnapshot = true; dataStatus.hidden = true;

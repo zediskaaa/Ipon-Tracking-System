@@ -924,4 +924,8 @@ test('multi-group workspaces support editable group name/DP, admin contributor t
   assert.match(superAdminJs, /unblockAdminRequest/);
   assert.match(authJs, /sendAdminRequestVerificationCode/);
   assert.match(authJs, /verifyAdminRequestVerificationCode/);
+  assert.match(dashboardJs, /activeIds\.has\(item\.member_id\)/);
+  assert.match(schema, /delete from public\.contribution_periods cp[\s\S]*cp\.member_id = v_member_id[\s\S]*not exists \([\s\S]*select 1 from public\.contributions c/);
+  const migration033 = read('database/migrations/20261113_033_clean_unpaid_periods_on_admin_contributor_toggle.sql');
+  assert.match(migration033, /m\.status = 'ACTIVE' or c\.id is not null/);
 });

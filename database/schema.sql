@@ -3367,6 +3367,7 @@ from public.contribution_periods cp
 join public.members m on m.id = cp.member_id
 left join public.contributions c on c.contribution_period_id = cp.id
 where m.deleted_at is null
+  and (m.status = 'ACTIVE' or c.id is not null)
 group by cp.id, cp.member_id, m.full_name, cp.period_month, cp.required_amount;
 
 create or replace function public.group_member_avatar(p_member_id uuid)
@@ -4778,6 +4779,13 @@ begin
       where id = v_member_id
         and group_id = v_group_id
         and deleted_at is null;
+
+      delete from public.contribution_periods cp
+      where cp.member_id = v_member_id
+        and not exists (
+          select 1 from public.contributions c
+          where c.contribution_period_id = cp.id
+        );
     end if;
 
     update public.profiles
