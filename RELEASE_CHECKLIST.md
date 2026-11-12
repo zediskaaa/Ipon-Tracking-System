@@ -71,6 +71,7 @@ order by version;
 
 - [ ] The `manage-account` Edge Function is deployed with JWT verification enabled.
 - [ ] A daily Supabase Cron job calls `public.create_due_reminders()`.
+- [ ] A monthly Supabase Cron job calls `public.generate_all_contribution_periods(current_date)` before reminders run.
 - [ ] Login and the critical workflows pass in current Chrome or Edge and one additional browser.
 - [ ] A slow connection shows loading feedback without duplicate saves.
 - [ ] An offline or failed Supabase request shows recovery guidance and Retry where applicable.

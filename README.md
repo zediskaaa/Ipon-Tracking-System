@@ -26,6 +26,12 @@ To send deadline reminders automatically, enable Supabase Cron and schedule this
 select public.create_due_reminders();
 ```
 
+Create a monthly Supabase Cron job on the first day of each month before the reminder job runs:
+
+```sql
+select public.generate_all_contribution_periods(current_date);
+```
+
 After deployment, sign out and sign in again so the new role route and notification subscription start with a fresh session.
 
 ## Release process

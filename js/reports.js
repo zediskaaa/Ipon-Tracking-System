@@ -46,6 +46,26 @@
     const csv = [['Report type', 'Subject', 'Required/Additions', 'Confirmed/Deductions', 'Outstanding/Expenses', 'Status/Net'], ...monthly, ...members].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
     const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-report-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
   });
+  document.getElementById('export-transactions').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    Ipon.setBusy(button, true, 'Exporting…');
+    try {
+      const [contributions, withdrawals, expenses] = await Promise.all([
+        Ipon.client.from('contributions').select('payment_date,amount,transaction_reference,approval_status,review_note,void_reason,created_at,contribution_periods!inner(period_month,members!inner(full_name))').order('payment_date'),
+        Ipon.client.from('withdrawals').select('transaction_date,amount,category,description,person_responsible,reference_number,approval_status,review_note,void_reason,created_at').order('transaction_date'),
+        Ipon.client.from('expenses').select('transaction_date,amount,category,description,person_responsible,reference_number,approval_status,review_note,void_reason,created_at').order('transaction_date')
+      ]);
+      for (const result of [contributions, withdrawals, expenses]) if (result.error) throw result.error;
+      const rows = [
+        ...contributions.data.map((row) => ['Contribution', row.payment_date, row.contribution_periods.members.full_name, row.amount, '', '', row.transaction_reference, row.approval_status, row.review_note || row.void_reason || '', row.created_at]),
+        ...withdrawals.data.map((row) => ['Withdrawal', row.transaction_date, row.person_responsible, row.amount, row.category, row.description, row.reference_number, row.approval_status, row.review_note || row.void_reason || '', row.created_at]),
+        ...expenses.data.map((row) => ['Expense', row.transaction_date, row.person_responsible, row.amount, row.category, row.description, row.reference_number, row.approval_status, row.review_note || row.void_reason || '', row.created_at])
+      ].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+      const csv = [['Type', 'Activity date', 'Member or responsible person', 'Amount', 'Category', 'Description', 'Reference', 'Status', 'Review or void reason', 'Recorded at'], ...rows].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-transactions-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
+    } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+    finally { Ipon.setBusy(button, false); }
+  });
   try { await load(); } catch (error) { Ipon.showInlineError(monthlyBody, error, load, 5); Ipon.showInlineError(memberBody, error, load, 5); }
   Ipon.subscribeToChanges('reports', ['contributions', 'withdrawals', 'expenses', 'contribution_periods', 'members'], load);
 })();

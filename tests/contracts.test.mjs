@@ -206,6 +206,8 @@ test('account settings open from the responsive identity control', () => {
   assert.match(core, /class="account-card account-profile-card"/);
   assert.match(core, /class="account-side-stack"/);
   assert.match(core, /class="account-password-disclosure"/);
+  assert.doesNotMatch(`${core}\n${read('account.html')}`, /account-header-avatar|account-profile-avatar/);
+  assert.doesNotMatch(core, /<h3>Profile<\/h3>|Update your personal information\./);
   assert.match(core, /function bindAccountDialog\(\)/);
   assert.match(core, /update_own_profile/);
   assert.doesNotMatch(core, /\['account', 'account\.html', 'My account'/);
@@ -219,9 +221,9 @@ test('first-login account setup opens as a locked responsive modal', () => {
   const html = read('account.html');
   const script = read('js/account.js');
   const css = read('css/app.css');
-  assert.match(html, /<dialog class="account-dialog account-page-dialog" id="account-page-dialog" aria-labelledby="account-page-title">/);
+  assert.match(html, /<dialog[^>]+id="account-page-dialog"[^>]+aria-labelledby="account-page-title"/);
   assert.match(script, /pageDialog\.showModal\(\)/);
-  assert.match(script, /pageDialog\.addEventListener\('cancel',[\s\S]*event\.preventDefault\(\)/);
+  assert.match(script, /pageDialog\.addEventListener\('cancel',[\s\S]*?event\.preventDefault\(\)/);
   assert.match(script, /closeButton\.hidden = onboarding/);
   assert.match(css, /body\.account-onboarding \.account-page-dialog \.account-grid>section:nth-child\(n\+3\)\{display:none\}/);
 });
@@ -343,8 +345,8 @@ test('pages keep baseline security and accessible table headings', () => {
     assert.match(html, /<link rel="icon" href="assets\/favicon\.svg" type="image\/svg\+xml">/i, `${file} must use the IPON favicon`);
     assert.doesNotMatch(html, /<th>\s*<\/th>/i, `${file} has an unlabeled table column`);
   }
-  assert.match(read('login.html'), /role="tab"/);
-  assert.match(read('login.html'), /role="tabpanel"/);
+  assert.match(read('login.html'), /class="auth-tabs"[^>]*aria-label="Account access"/);
+  assert.doesNotMatch(read('login.html'), /role="tab(?:list|panel)?"/);
 });
 
 test('large record lists use server-side counts, filters, and ranges', () => {
@@ -408,8 +410,8 @@ test('administrator request form uses a desktop grid with a mobile fallback', ()
   assert.match(html, /body\.is-request-mode \.login-story\{display:flex\}/);
   assert.match(html, /body\.is-request-mode \.login-card\{[^}]*width:min\(840px,100%\)/);
   assert.match(html, /body\.is-request-mode \.login-card \.form-grid\{grid-template-columns:repeat\(6/);
-  assert.match(html, /body\.is-request-mode \.password-strength meter\{display:none\}/);
-  assert.match(html, /mail\.google\.com\/mail\/\?view=cm&amp;fs=1&amp;to=zediskaaa%40gmail\.com/);
+  assert.doesNotMatch(read('js/core.js'), /<meter\b/i);
+  assert.doesNotMatch(html, /zediskaaa(?:%40|@)gmail\.com/i);
   assert.match(html, /#first-name-field,#middle-name-field,#last-name-field\)\{grid-column:span 2\}/);
   assert.match(html, /#contact-number-field,#email-field,#password-field,#password-confirmation-field\)\{grid-column:span 3\}/);
   assert.match(html, /@media\(max-width:780px\)[\s\S]*?body\.is-request-mode \.login-card \.form-grid\{grid-template-columns:1fr/);
@@ -482,17 +484,15 @@ test('calendar supports direct month and year navigation', () => {
   assert.match(css, /\.mobile-calendar-jump/);
 });
 
-test('dashboard lets users choose the calendar tracking goal without a default completion metric', () => {
+test('dashboard avoids a false goal selector and uses a bounded pending summary', () => {
   const html = read('dashboard.html');
   const script = read('js/dashboard.js');
   const css = read('css/app.css');
-  assert.match(html, /id="calendar-goal-select"[^>]*>[\s\S]*?General savings/);
-  assert.match(html, /id="mobile-calendar-goal-select"[^>]*>[\s\S]*?General savings/);
+  assert.doesNotMatch(html, /calendar-goal-select/);
+  assert.doesNotMatch(html, /mobile-calendar-goal-select/);
   assert.doesNotMatch(html, /id="dashboard-completion"/);
-  assert.match(script, /from\('savings_goals'\)\.select\('id,title'\)[\s\S]*?eq\('status', 'ACTIVE'\)/);
-  assert.match(script, /renderGoalOptions\(goalResult\.data \|\| \[\]\)/);
-  assert.match(script, /goalSelects\.forEach\(\(select\) => select\.addEventListener\('change'/);
-  assert.match(script, /subscribeToChanges\('dashboard',[\s\S]*?'savings_goals'/);
+  assert.match(script, /rpc\('get_pending_review_summary'\)/);
+  assert.doesNotMatch(script, /function renderGoalOptions/);
   assert.match(css, /\.admin-progress\{grid-column:1\/-1;grid-template-columns:repeat\(4/);
 });
 
@@ -505,4 +505,36 @@ test('decorative section labels use an editorial rule instead of dot badges', ()
     assert.doesNotMatch(block, /border-radius:999px/);
   }
   assert.match(dashboardCss, /\.tracked-label::before\s*\{[^}]*width:24px[^}]*height:1px/);
+});
+
+test('production headers are configured for Vercel response delivery', () => {
+  const config = JSON.parse(read('vercel.json'));
+  const headers = Object.fromEntries(config.headers[0].headers.map(({ key, value }) => [key, value]));
+  assert.match(headers['Content-Security-Policy'], /frame-ancestors 'none'/);
+  assert.equal(headers['X-Frame-Options'], 'DENY');
+  assert.equal(headers['X-Content-Type-Options'], 'nosniff');
+  assert.match(headers['Strict-Transport-Security'], /max-age=31536000/);
+});
+
+test('operational workflow migration supports recovery, treasurers, automation, and bounded reviews', () => {
+  const migration = read('database/migrations/20261112_013_complete_operational_workflows.sql');
+  const edge = read('supabase/functions/manage-account/index.ts');
+  assert.match(migration, /p_role not in \('MEMBER', 'TREASURER'\)/);
+  assert.match(migration, /create or replace function public\.reactivate_member/);
+  assert.match(migration, /create or replace function public\.super_admin_reopen_request/);
+  assert.match(migration, /create or replace function public\.generate_all_contribution_periods/);
+  assert.match(migration, /recent as \(select \* from entries order by created_at desc limit 3\)/);
+  assert.match(edge, /body\.role === 'TREASURER'/);
+});
+
+test('password changes reauthenticate and financial decisions use the shared dialog', () => {
+  const edge = read('supabase/functions/manage-account/index.ts');
+  const core = read('js/core.js');
+  const dashboard = read('js/dashboard.js');
+  const records = read('js/records.js');
+  assert.match(edge, /signInWithPassword\(\{ email: userResult\.user\.email, password: currentPassword \}\)/);
+  assert.match(core, /function requestRecordAction/);
+  assert.match(dashboard, /Ipon\.requestRecordAction/);
+  assert.match(records, /Ipon\.requestRecordAction/);
+  assert.doesNotMatch(`${dashboard}\n${records}`, /window\.prompt/);
 });

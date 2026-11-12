@@ -6,7 +6,9 @@
   const effectiveMonth = document.getElementById('effective-month');
   const defaultAmount = document.getElementById('default-amount');
   const deadlineDay = document.getElementById('deadline-day');
+  const treasurerForm = document.getElementById('treasurer-account-form');
   let members = [];
+  Ipon.bindPasswordStrength(treasurerForm.elements.password, () => [treasurerForm.elements.first_name.value, treasurerForm.elements.middle_name.value, treasurerForm.elements.last_name.value, treasurerForm.elements.email.value]);
 
   effectiveMonth.value = Ipon.isoDate().slice(0, 7);
   if (!state.configured || !state.profile) {
@@ -28,7 +30,7 @@
 
   async function loadAccess() {
     const [profileResult, memberResult] = await Promise.all([
-      Ipon.client.from('profiles').select('id,full_name,status,member_id,created_at').eq('role', 'MEMBER').order('created_at'),
+      Ipon.client.from('profiles').select('id,full_name,role,status,member_id,created_at').in('role', ['MEMBER', 'TREASURER']).order('created_at'),
       Ipon.client.from('members').select('id,full_name').eq('status', 'ACTIVE').order('full_name')
     ]);
     if (profileResult.error) throw profileResult.error;
@@ -38,19 +40,21 @@
 
     accessBody.innerHTML = profiles.length ? profiles.map((profile) => `<tr>
       <td><strong>${Ipon.escapeHtml(profile.full_name)}</strong></td>
+      <td><select data-field="role" data-id="${profile.id}"><option value="MEMBER" ${profile.role === 'MEMBER' ? 'selected' : ''}>MEMBER</option><option value="TREASURER" ${profile.role === 'TREASURER' ? 'selected' : ''}>TREASURER</option></select></td>
       <td><select data-field="status" data-id="${profile.id}"><option value="PENDING" ${profile.status === 'PENDING' ? 'selected' : ''}>PENDING</option><option value="ACTIVE" ${profile.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option><option value="DISABLED" ${profile.status === 'DISABLED' ? 'selected' : ''}>DISABLED</option></select></td>
       <td><select data-field="member" data-id="${profile.id}"><option value="">Not linked</option>${members.map((member) => `<option value="${member.id}" ${profile.member_id === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}</select></td>
       <td><button class="icon-action" type="button" data-save-access="${profile.id}">Save</button></td>
-    </tr>`).join('') : '<tr><td colspan="4" class="empty-state">No member login accounts in this group.</td></tr>';
+    </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No member or treasurer login accounts in this group.</td></tr>';
   }
 
   accessBody.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-save-access]');
     if (!button) return;
     const id = button.dataset.saveAccess;
+    const role = accessBody.querySelector(`[data-field="role"][data-id="${id}"]`).value;
     const status = accessBody.querySelector(`[data-field="status"][data-id="${id}"]`).value;
-    const memberId = accessBody.querySelector(`[data-field="member"][data-id="${id}"]`).value || null;
-    if (status === 'ACTIVE' && !memberId) {
+    const memberId = role === 'MEMBER' ? accessBody.querySelector(`[data-field="member"][data-id="${id}"]`).value || null : null;
+    if (role === 'MEMBER' && status === 'ACTIVE' && !memberId) {
       Ipon.toast('Link an active login to a member before activation.', 'error');
       return;
     }
@@ -58,14 +62,33 @@
     if (!accepted) return;
     Ipon.setBusy(button, true);
     try {
-      await Ipon.rpc('admin_set_user_access', { p_user_id: id, p_role: 'MEMBER', p_status: status, p_member_id: memberId });
-      Ipon.toast('Member account access updated.');
+      await Ipon.rpc('admin_set_user_access', { p_user_id: id, p_role: role, p_status: status, p_member_id: memberId });
+      Ipon.toast('Account access updated.');
       await loadAccess();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
       Ipon.setBusy(button, false);
     }
+  });
+
+  treasurerForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const values = new FormData(treasurerForm);
+    const password = String(values.get('password'));
+    const personal = [values.get('first_name'), values.get('middle_name'), values.get('last_name'), values.get('email')];
+    const issue = Ipon.passwordIssue(password, personal);
+    if (issue) return Ipon.toast(issue, 'error');
+    const button = event.submitter;
+    Ipon.setBusy(button, true, 'Creating…');
+    try {
+      const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'TREASURER', first_name: values.get('first_name'), middle_name: values.get('middle_name') || null, last_name: values.get('last_name'), email: values.get('email'), password } });
+      if (error) { const detail = await error.context?.json?.().catch(() => null); throw new Error(detail?.error || error.message); }
+      treasurerForm.reset();
+      Ipon.toast('Treasurer account created.');
+      await loadAccess();
+    } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+    finally { Ipon.setBusy(button, false); }
   });
 
   document.getElementById('contribution-setting-form').addEventListener('submit', async (event) => {

@@ -15,20 +15,10 @@
   const jumpYear = document.getElementById('calendar-jump-year');
   const weeks = [...document.querySelectorAll('.calendar-week')];
   const summaryValues = [...document.querySelectorAll('.summary-breakdown dd')];
-  const goalSelects = [document.getElementById('calendar-goal-select'), document.getElementById('mobile-calendar-goal-select')];
-  let selectedGoalId = '';
   const heroMoney = (value) => Ipon.money(value);
   document.getElementById('dashboard-signout').addEventListener('click', Ipon.signOut);
 
   function monthIso(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`; }
-  function renderGoalOptions(goals) {
-    const options = [{ id:'', title:'General savings' }, ...goals.map((goal) => ({ id:goal.id, title:goal.title?.trim() || 'Untitled goal' }))];
-    if (!options.some((goal) => goal.id === selectedGoalId)) selectedGoalId = '';
-    goalSelects.forEach((select) => {
-      select.replaceChildren(...options.map((goal) => new Option(goal.title, goal.id)));
-      select.value = selectedGoalId;
-    });
-  }
   function statusClass(activity) {
     if (activity.approval_status === 'PENDING') return ['pending-event', 'Pending'];
     if (activity.activity_type === 'DEDUCTION') return ['deduction-event', 'Deduction'];
@@ -73,7 +63,7 @@
       }).join('');
     });
   }
-  function renderPending(items) {
+  function renderPending(items, count = items.length, total = items.reduce((sum, item) => sum + Number(item.amount), 0)) {
     const buttons = [...document.querySelectorAll('.review-item')];
     buttons.forEach((button, index) => {
       const item = items[index];
@@ -89,22 +79,12 @@
       button.querySelector('small').textContent = item.type === 'contribution' ? 'Addition' : item.type === 'withdrawal' ? 'Deduction' : 'Expense';
       button.querySelector('strong').textContent = Ipon.money(item.amount);
     });
-    const total = items.reduce((sum, item) => sum + Number(item.amount), 0);
-    const summary = document.querySelector('.review-summary'); summary.querySelector('em').textContent = `${items.length} item${items.length === 1 ? '' : 's'} for review`; summary.querySelector('strong').textContent = Ipon.money(total);
+    const summary = document.querySelector('.review-summary'); summary.querySelector('em').textContent = `${count} item${count === 1 ? '' : 's'} for review`; summary.querySelector('strong').textContent = Ipon.money(total);
   }
   async function getPending() {
-    if (state.profile.role === 'MEMBER') return [];
-    const [contributions, withdrawals, expenses] = await Promise.all([
-      Ipon.client.from('contributions').select('id,amount,payment_date,created_at').eq('approval_status','PENDING'),
-      Ipon.client.from('withdrawals').select('id,amount,transaction_date,created_at').eq('approval_status','PENDING'),
-      Ipon.client.from('expenses').select('id,amount,transaction_date,created_at').eq('approval_status','PENDING')
-    ]);
-    for (const result of [contributions, withdrawals, expenses]) if (result.error) throw result.error;
-    return [
-      ...contributions.data.map((item) => ({ ...item, type:'contribution', date:item.payment_date })),
-      ...withdrawals.data.map((item) => ({ ...item, type:'withdrawal', date:item.transaction_date })),
-      ...expenses.data.map((item) => ({ ...item, type:'expense', date:item.transaction_date }))
-    ].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    const { data, error } = await Ipon.client.rpc('get_pending_review_summary');
+    if (error) throw error;
+    return data || { count: 0, amount: 0, items: [] };
   }
   function renderEmptySnapshot() {
     const total = document.querySelector('.tracked-total');
@@ -113,7 +93,6 @@
     summaryValues.forEach((node) => { node.textContent = Ipon.money(0); });
     ['dashboard-members', 'dashboard-paid', 'dashboard-unpaid'].forEach((id) => { document.getElementById(id).textContent = '0'; });
     document.getElementById('dashboard-month-collected').textContent = Ipon.money(0);
-    renderGoalOptions([]);
     renderCalendar([]);
     renderPending([]);
   }
@@ -121,13 +100,13 @@
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { renderEmptySnapshot(); return; }
     try {
-      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'), getPending(), Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'), Ipon.client.from('v_contribution_status').select('payment_status,paid_amount').eq('period_month', start), Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false })]);
-      if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
+      const [summaryResult, calendarResult, pending, memberResult, progressResult] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'), getPending(), Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'), Ipon.client.from('v_contribution_status').select('payment_status,paid_amount').eq('period_month', start)]);
+      if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error;
       const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(summary.tracked_savings); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
-      [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.reduce((sum,item)=>sum+Number(item.amount),0)].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
+      [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.amount].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
       const progress = progressResult.data || []; const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
-      document.getElementById('dashboard-members').textContent = memberResult.count || 0; document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; renderGoalOptions(goalResult.data || []);
-      renderCalendar(calendarResult.data || []); renderPending(pending.slice(0,3));
+      document.getElementById('dashboard-members').textContent = memberResult.count || 0; document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid;
+      renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
       hasSnapshot = true; dataStatus.hidden = true;
     } catch (error) {
       if (!hasSnapshot) renderEmptySnapshot();
@@ -179,9 +158,8 @@
   });
   document.querySelectorAll('.review-item').forEach((button) => button.addEventListener('click', async () => {
     if (state.profile?.role !== 'ADMIN' || !button.dataset.id) return;
-    const decision = window.prompt('Type CONFIRM or REJECT for this entry:')?.trim().toUpperCase(); if (!['CONFIRM','REJECT'].includes(decision)) return;
-    const note = decision === 'REJECT' ? window.prompt('Rejection reason:')?.trim() : null; if (decision === 'REJECT' && !note) return;
-    const accepted = await Ipon.confirmAction({ title: `${decision === 'CONFIRM' ? 'Confirm' : 'Reject'} entry?`, message: decision === 'CONFIRM' ? 'The amount will affect tracked savings.' : 'The rejection and reason will remain in the audit trail.', acceptLabel: decision === 'CONFIRM' ? 'Confirm' : 'Reject' }); if (!accepted) return;
+    const review = await Ipon.requestRecordAction({ title: 'Review pending entry', actions: ['CONFIRM', 'REJECT'] }); if (!review) return;
+    const { decision, note } = review;
     const prefix = button.dataset.type; const functionName = `review_${prefix}`; const idKey = `p_${prefix}_id`;
     try { await Ipon.rpc(functionName, { [idKey]:button.dataset.id, p_decision:decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED', p_review_note:note }); Ipon.toast(`Entry ${decision.toLowerCase()}ed.`); await load(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
   }));
@@ -243,13 +221,10 @@
     detailPanel.hidden = true;
     activeDate = null;
   });
-  goalSelects.forEach((select) => select.addEventListener('change', () => {
-    selectedGoalId = select.value;
-    goalSelects.forEach((other) => { other.value = selectedGoalId; });
-  }));
   renderCalendar([]);
   state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER'] });
   if (state.failed) return;
+  if (state.profile.role === 'TREASURER') document.querySelectorAll('a[href="members.html"],a[href="settings.html"],a[href="audit.html"]').forEach((link) => link.remove());
   await load();
   Ipon.subscribeToChanges('dashboard', ['members', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals'], load);
 })();

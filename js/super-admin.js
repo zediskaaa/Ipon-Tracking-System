@@ -62,20 +62,21 @@
     document.getElementById('platform-status').innerHTML = '<span aria-hidden="true"></span>Database access verified';
     const suspended = admins.filter((profile) => profile.status === 'DISABLED');
     const attention = [];
-    if (requests.length) attention.push(`<a href="super-admin.html#requests"><strong>${requests.length} administrator request${requests.length === 1 ? '' : 's'} awaiting review</strong><span>Approve or reject access before an account can manage a savings group.</span></a>`);
+    const pendingRequests = requests.filter((request) => request.status === 'PENDING');
+    if (pendingRequests.length) attention.push(`<a href="super-admin.html#requests"><strong>${pendingRequests.length} administrator request${pendingRequests.length === 1 ? '' : 's'} awaiting review</strong><span>Approve or reject access before an account can manage a savings group.</span></a>`);
     if (suspended.length) attention.push(`<a href="super-admin.html#administrators"><strong>${suspended.length} suspended administrator${suspended.length === 1 ? '' : 's'}</strong><span>Review disabled accounts and reactivate them only when access should be restored.</span></a>`);
     document.getElementById('platform-attention').innerHTML = attention.length ? attention.join('') : '<div class="platform-clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span><strong>No urgent platform work</strong><small>Administrator access and requests are currently up to date.</small></span></div>';
   }
 
   function renderRequests() {
     const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
-    requestsBody.innerHTML = requests.length ? requests.map((request) => { const profile = profileById.get(request.requester_id); return `<tr>
+    requestsBody.innerHTML = requests.length ? requests.map((request) => { const profile = profileById.get(request.requester_id); if (!profile) return ''; const pending = request.status === 'PENDING'; return `<tr>
       <td><strong>${Ipon.escapeHtml(profile.full_name)}</strong><small class="field-help platform-id">${Ipon.escapeHtml(profile.id)}</small></td>
       <td>${Ipon.escapeHtml(request.contact_number || 'Not provided')}<small class="field-help">${Ipon.escapeHtml(request.email)}</small></td>
       <td>${Ipon.escapeHtml(request.reason)}</td>
-      <td>${Ipon.dateLabel(request.created_at)}</td>
-      <td><div class="table-actions"><button class="icon-action" type="button" data-approve-request="${profile.id}">Approve</button><button class="icon-action danger-action" type="button" data-reject-request="${profile.id}">Reject</button></div></td>
-    </tr>`; }).join('') : '<tr><td colspan="5" class="empty-state">No pending administrator requests.</td></tr>';
+      <td>${Ipon.dateLabel(request.created_at)}</td><td>${statusLabel(request.status)}</td>
+      <td><div class="table-actions">${pending ? `<button class="icon-action" type="button" data-approve-request="${profile.id}">Approve</button><button class="icon-action danger-action" type="button" data-reject-request="${profile.id}">Reject</button>` : request.status === 'REJECTED' ? `<button class="icon-action" type="button" data-reopen-request="${profile.id}">Reopen</button>` : ''}</div></td>
+    </tr>`; }).join('') : '<tr><td colspan="6" class="empty-state">No administrator requests.</td></tr>';
   }
 
   function renderAdministrators() {
@@ -113,7 +114,7 @@
     const [profileResult, groupResult, requestResult, activityResult, logResult] = await Promise.all([
       Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,created_at').order('created_at', { ascending: false }),
       Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false }),
-      Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,created_at').eq('status', 'PENDING').order('created_at', { ascending: false }),
+      Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(12)
     ]);
@@ -140,6 +141,18 @@
   requestsBody.addEventListener('click', async (event) => {
     const approve = event.target.closest('[data-approve-request]');
     const reject = event.target.closest('[data-reject-request]');
+    const reopen = event.target.closest('[data-reopen-request]');
+    if (reopen) {
+      const profile = profiles.find((item) => item.id === reopen.dataset.reopenRequest);
+      if (!profile) return;
+      const accepted = await Ipon.confirmAction({ title: 'Reopen administrator request?', message: `${profile.full_name} can be reviewed again.`, acceptLabel: 'Reopen request' });
+      if (!accepted) return;
+      Ipon.setBusy(reopen, true, 'Reopening…');
+      try { await Ipon.rpc('super_admin_reopen_request', { p_user_id: profile.id }); Ipon.toast('Administrator request reopened.'); await load(); }
+      catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+      finally { Ipon.setBusy(reopen, false); }
+      return;
+    }
     if (approve) {
       const profile = profiles.find((item) => item.id === approve.dataset.approveRequest);
       if (!profile) return;

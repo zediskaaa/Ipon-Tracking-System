@@ -17,7 +17,7 @@
     document.getElementById('nearest-date').textContent = dates[0] ? Ipon.dateLabel(dates[0], { month: 'short', day: 'numeric' }) : 'None';
     list.innerHTML = goals.length ? goals.map((goal) => {
       const progress = Math.min(100, Math.max(0, tracked / Number(goal.target_amount) * 100));
-      return `<article class="goal-card"><header><div><h3>${Ipon.escapeHtml(goal.title)}</h3><p>${Ipon.money(goal.target_amount)}${goal.target_date ? ` · target ${Ipon.dateLabel(goal.target_date)}` : ''}</p></div><span class="status status-${goal.status.toLowerCase()}">${goal.status}</span></header><div class="progress" aria-label="${Math.round(progress)} percent"><span style="width:${progress}%"></span></div><p>${Math.round(progress)}% of target based on confirmed tracked savings.</p>${state.profile.role === 'ADMIN' ? `<button class="icon-action" data-edit-goal="${goal.id}">Edit goal</button>` : ''}</article>`;
+      return `<article class="goal-card"><header><div><h3>${Ipon.escapeHtml(goal.title)}</h3><p>${Ipon.money(goal.target_amount)}${goal.target_date ? ` · target ${Ipon.dateLabel(goal.target_date)}` : ''}</p></div><span class="status status-${goal.status.toLowerCase()}">${goal.status}</span></header><div class="progress" aria-label="${Math.round(progress)} percent"><span style="width:${progress}%"></span></div><p>${Math.round(progress)} compared with the group’s shared confirmed balance. Funds are not allocated to individual goals.</p>${state.profile.role === 'ADMIN' ? `<button class="icon-action" data-edit-goal="${goal.id}">Edit goal</button>` : ''}</article>`;
     }).join('') : '<div class="empty-state">No savings goals yet.</div>';
   }
   async function load() {

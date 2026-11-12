@@ -115,12 +115,8 @@
     const signupTab = document.getElementById('show-signup');
     loginTab.classList.toggle('is-active', !signup);
     signupTab.classList.toggle('is-active', signup);
-    loginTab.setAttribute('aria-selected', String(!signup));
-    signupTab.setAttribute('aria-selected', String(signup));
-    loginTab.tabIndex = 0;
-    signupTab.tabIndex = -1;
     loginTab.textContent = signup ? 'Back to sign in' : 'Sign in';
-    form.setAttribute('aria-labelledby', signup ? 'auth-title' : 'show-login');
+    form.setAttribute('aria-labelledby', 'auth-title');
     firstNameField.hidden = !signup;
     middleNameField.hidden = !signup;
     lastNameField.hidden = !signup;
@@ -137,7 +133,6 @@
     password.autocomplete = signup ? 'new-password' : 'current-password';
     if (signup) { password.minLength = 12; password.maxLength = 128; }
     else { password.removeAttribute('minlength'); password.removeAttribute('maxlength'); }
-    document.getElementById('request-email-help').hidden = !signup;
     document.getElementById('auth-title').textContent = signup ? 'Request administrator access' : 'Welcome back';
     document.getElementById('auth-copy').textContent = signup ? 'The Super Admin reviews administrator access requests.' : 'Sign in to open your assigned panel.';
     submit.textContent = signup ? 'Request administrator access' : 'Sign in';
@@ -166,18 +161,6 @@
     policyDialog.querySelectorAll('[data-policy-content]').forEach((section) => { section.hidden = section.dataset.policyContent !== policy; });
     policyDialog.showModal();
   }));
-  document.querySelector('.auth-tabs').addEventListener('keydown', (event) => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    if (mode === 'signup') {
-      setMode('login');
-      document.getElementById('show-login').focus();
-      return;
-    }
-    const nextMode = event.key === 'ArrowLeft' || event.key === 'Home' ? 'login' : 'signup';
-    setMode(nextMode);
-    document.getElementById(nextMode === 'login' ? 'show-login' : 'show-signup').focus();
-  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();

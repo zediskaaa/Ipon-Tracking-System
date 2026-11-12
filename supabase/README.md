@@ -15,3 +15,5 @@ For automatic contribution reminders, enable Supabase Cron and schedule this SQL
 ```sql
 select public.create_due_reminders();
 ```
+
+Also schedule `select public.generate_all_contribution_periods(current_date);` for the first day of every month. The function is intentionally unavailable to browser roles and is safe to rerun because existing member/month periods are ignored.

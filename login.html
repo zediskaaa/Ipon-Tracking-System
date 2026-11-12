@@ -32,14 +32,13 @@
     body.is-request-mode #request-reason-field{grid-column:1/-1}
     body.is-request-mode #request-reason{min-height:64px}
     body.is-request-mode .password-strength{display:block;margin-top:4px}
-    body.is-request-mode .password-strength meter{display:none}
     .password-control{position:relative}.password-control input{padding-inline-end:72px}.password-toggle{position:absolute;inset-block:6px;inset-inline-end:6px;min-width:58px;border:0;border-radius:5px;background:rgba(20,45,43,.08);color:var(--ink);cursor:pointer;font:700 12px Arial,sans-serif}.password-toggle:hover{background:rgba(20,45,43,.14)}.password-toggle:focus-visible{outline:3px solid rgba(40,122,76,.28);outline-offset:2px}
     .auth-message{min-height:22px;margin:16px 0 0!important;color:var(--red)!important;font-size:14px}.auth-message[data-tone="success"]{color:var(--green)!important}.tracking-note{padding-top:30px;border-top:1px solid rgba(255,255,255,.18)}
     .development-notice{display:grid;gap:3px;margin-top:18px;padding:12px 14px;border:1px solid #c89942;border-radius:10px;background:#fff3ce;color:#554522;font:13px/1.45 Arial,sans-serif}.development-notice strong{color:var(--ink)}
     .login-legal{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:15px;color:var(--muted);font:13px/1.4 Arial,sans-serif}.login-legal button{border:0;padding:2px;background:transparent;color:var(--green);cursor:pointer;font:700 inherit;text-decoration:underline;text-underline-offset:3px}
     .policy-dialog{width:min(680px,calc(100vw - 28px));max-height:min(82dvh,760px);padding:0;border:0;border-radius:16px;background:var(--paper);color:var(--ink);box-shadow:0 24px 70px rgba(7,35,26,.3)}.policy-dialog::backdrop{background:rgba(7,35,26,.64)}.policy-sheet{max-height:min(82dvh,760px);overflow:auto}.policy-header{position:sticky;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:22px 24px 18px;border-bottom:1px solid var(--rule);background:var(--paper)}.policy-header h2{margin:0;font-size:30px}.policy-header p{margin:5px 0 0;color:var(--muted);font:13px/1.4 Arial,sans-serif}.policy-content{padding:22px 24px 28px}.policy-content h3{margin:22px 0 7px;font-size:20px}.policy-content h3:first-child{margin-top:0}.policy-content p,.policy-content li{color:#465651;font:14px/1.6 Arial,sans-serif}.policy-content ul{padding-inline-start:20px}.policy-content a{color:var(--green);font-weight:700}
     @media(max-width:1180px){body.is-request-mode .login-page{grid-template-columns:1fr}body.is-request-mode .login-story{display:none}}
-    @media(max-width:780px){.login-page{grid-template-columns:1fr}.login-story{min-height:300px}.login-form-wrap{padding:20px}.login-card{padding:26px}body.is-request-mode .login-form-wrap{padding:16px}body.is-request-mode .login-card{display:block;padding:24px}body.is-request-mode .login-card h2{font-size:34px}body.is-request-mode .login-card>p{margin-bottom:22px}body.is-request-mode .auth-tabs{width:100%;margin-bottom:24px}body.is-request-mode .login-card .form-grid{grid-template-columns:1fr;gap:18px}body.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field,#contact-number-field,#email-field,#request-reason-field,#password-field,#password-confirmation-field){grid-column:auto}}
+    @media(max-width:780px){.login-page{grid-template-columns:1fr}.login-form-wrap{grid-row:1;padding:20px}.login-story{grid-row:2;min-height:0;padding:28px;gap:24px}.login-story h1{font-size:34px}.login-brand{font-size:46px}.login-card{padding:26px}body.is-request-mode .login-form-wrap{padding:16px}body.is-request-mode .login-card{display:block;padding:24px}body.is-request-mode .login-card h2{font-size:34px}body.is-request-mode .login-card>p{margin-bottom:22px}body.is-request-mode .auth-tabs{width:100%;margin-bottom:24px}body.is-request-mode .login-card .form-grid{grid-template-columns:1fr;gap:18px}body.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field,#contact-number-field,#email-field,#request-reason-field,#password-field,#password-confirmation-field){grid-column:auto}}
   </style>
 </head>
 <body>
@@ -52,8 +51,8 @@
     <section class="login-form-wrap">
       <div class="login-card">
 <h2 id="auth-title">Welcome back</h2><p id="auth-copy">Sign in to view your savings records.</p>
-        <div class="auth-tabs" role="tablist" aria-label="Account access"><button class="is-active" id="show-login" type="button" role="tab" aria-selected="true" aria-controls="auth-form">Sign in</button><button id="show-signup" type="button" role="tab" aria-selected="false" aria-controls="auth-form" tabindex="-1">Request admin access</button></div>
-        <form id="auth-form" role="tabpanel" aria-labelledby="show-login" novalidate>
+        <div class="auth-tabs" aria-label="Account access"><button class="is-active" id="show-login" type="button" aria-controls="auth-form">Sign in</button><button id="show-signup" type="button" aria-controls="auth-form">Request admin access</button></div>
+        <form id="auth-form" aria-labelledby="auth-title" novalidate>
           <div class="form-grid">
             <div class="field" id="first-name-field" hidden><label for="first-name">First name</label><input id="first-name" name="first_name" autocomplete="given-name" maxlength="80" aria-describedby="first-name-error"><small class="field-error" id="first-name-error" role="alert" hidden></small></div>
             <div class="field" id="middle-name-field" hidden><label for="middle-name">Middle name (optional)</label><input id="middle-name" name="middle_name" autocomplete="additional-name" maxlength="80" aria-describedby="middle-name-error"><small class="field-error" id="middle-name-error" role="alert" hidden></small></div>
@@ -66,7 +65,6 @@
           </div>
           <button class="button button-primary" id="auth-submit" type="submit">Sign in</button>
           <p class="auth-message" id="auth-message" role="alert"></p>
-          <p class="request-help" id="request-email-help" hidden>Need help with your request? <a href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=zediskaaa%40gmail.com&amp;su=IPON%20administrator%20account%20request" target="_blank" rel="noopener noreferrer">Email the Super Admin</a>.</p>
         </form>
         <div class="development-notice" role="note"><strong>Development preview</strong><span>IPON is still under active development. Errors, incomplete features, and service changes may occur.</span></div>
         <footer class="login-legal"><button type="button" data-policy-open="terms">Terms of use</button><span aria-hidden="true">&middot;</span><button type="button" data-policy-open="privacy">Privacy policy</button></footer>

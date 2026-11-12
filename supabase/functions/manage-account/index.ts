@@ -33,13 +33,18 @@ Deno.serve(async (request) => {
   catch { return json({ error: 'A valid JSON request body is required.' }, 400); }
   if (body.action === 'change-password') {
     const password = String(body.password || '');
+    const currentPassword = String(body.current_password || '');
+    if (!currentPassword || !userResult.user.email) return json({ error: 'Your current password is required.' }, 400);
+    const verifier = createClient(url, anon, { auth: { persistSession: false } });
+    const { error: verificationError } = await verifier.auth.signInWithPassword({ email: userResult.user.email, password: currentPassword });
+    if (verificationError) return json({ error: 'Your current password is incorrect.' }, 400);
     const issue = passwordError(password, [actor.first_name, actor.middle_name, actor.last_name, String(actor.email || userResult.user.email || '').split('@')[0]]);
     if (issue) return json({ error: issue }, 400);
     const { error } = await admin.auth.admin.updateUserById(userResult.user.id, { password, app_metadata: { ...userResult.user.app_metadata, must_change_password: false } });
     return error ? json({ error: 'Password could not be changed.' }, 400) : json({ updated: true });
   }
-  const role = body.role === 'ADMIN' ? 'ADMIN' : body.role === 'MEMBER' ? 'MEMBER' : null;
-  if (!role || (role === 'ADMIN' && actor.role !== 'SUPER_ADMIN') || (role === 'MEMBER' && actor.role !== 'ADMIN')) return json({ error: 'You cannot create this account type.' }, 403);
+  const role = body.role === 'ADMIN' ? 'ADMIN' : body.role === 'MEMBER' ? 'MEMBER' : body.role === 'TREASURER' ? 'TREASURER' : null;
+  if (!role || (role === 'ADMIN' && actor.role !== 'SUPER_ADMIN') || (role !== 'ADMIN' && actor.role !== 'ADMIN')) return json({ error: 'You cannot create this account type.' }, 403);
   const email = String(body.email || '').trim().toLowerCase();
   const password = String(body.password || '');
   const firstName = String(body.first_name || '').trim();
@@ -61,7 +66,7 @@ Deno.serve(async (request) => {
   try {
     const result = role === 'ADMIN'
       ? await caller.rpc('super_admin_approve_request', { p_user_id: created.user.id, p_group_name: String(body.group_name).trim() })
-      : await caller.rpc('admin_set_user_access', { p_user_id: created.user.id, p_role: 'MEMBER', p_status: 'ACTIVE', p_member_id: body.member_id });
+      : await caller.rpc('admin_set_user_access', { p_user_id: created.user.id, p_role: role, p_status: 'ACTIVE', p_member_id: role === 'MEMBER' ? body.member_id : null });
     if (result.error) throw result.error;
     return json({ id: created.user.id });
   } catch (error) {

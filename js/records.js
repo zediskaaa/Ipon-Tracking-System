@@ -221,11 +221,9 @@
       editForm.elements.record_id.value = row.id; editForm.elements.date.value = row.payment_date || row.transaction_date; editForm.elements.amount.value = row.amount; editForm.elements.category.value = row.category || ''; editForm.elements.description.value = row.description || ''; editForm.elements.person_responsible.value = row.person_responsible || ''; editForm.elements.reference.value = row.transaction_reference || row.reference_number || ''; editForm.elements.notes.value = row.notes || '';
       editDialog.showModal(); editForm.elements.amount.focus(); return;
     }
-    let note = null;
-    if (action === 'reject') { note = window.prompt('Reason for rejection:'); if (!note?.trim()) return; }
-    if (action === 'void') { note = window.prompt('Reason for voiding this confirmed record:'); if (!note?.trim()) return; }
-    const accepted = await Ipon.confirmAction({ title: `${action[0].toUpperCase()}${action.slice(1)} record?`, message: action === 'confirm' ? 'This amount will affect tracked savings.' : 'The audit log will preserve this action.', acceptLabel: action === 'confirm' ? 'Confirm' : action === 'reject' ? 'Reject' : 'Void' });
-    if (!accepted) return;
+    const review = await Ipon.requestRecordAction({ title: `${action[0].toUpperCase()}${action.slice(1)} record`, actions: [action.toUpperCase()] });
+    if (!review) return;
+    const note = review.note;
     try {
       const recordType = page === 'contributions' ? 'contribution' : page === 'withdrawals' ? 'withdrawal' : 'expense';
       if (action === 'void') await Ipon.rpc(`void_${recordType}`, { [`p_${recordType}_id`]: button.dataset.id, p_reason: note });

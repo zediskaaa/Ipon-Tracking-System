@@ -71,7 +71,7 @@
       <td><strong>${Ipon.escapeHtml(member.full_name)}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
       <td>${Ipon.money(member.monthly_contribution_amount)}</td><td><span class="status status-${member.status.toLowerCase()}">${member.status}</span></td>
       <td>${account ? `<span class="status status-${account.status.toLowerCase()}">${account.status}</span><small class="field-help">${Ipon.escapeHtml(account.email || '')}</small>` : '<span class="field-help">No sign-in</span>'}</td>
-      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}${member.status === 'ACTIVE' ? `<button class="icon-action" data-action="deactivate" data-id="${member.id}">Deactivate</button>` : ''}</div></td></tr>`; }).join('') : '<tr><td colspan="7" class="empty-state">No matching members.</td></tr>';
+      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button></div></td></tr>`; }).join('') : '<tr><td colspan="7" class="empty-state">No matching members.</td></tr>';
   }
   async function load() {
     let query = Ipon.client.from('members').select('*', { count: 'exact' });
@@ -194,10 +194,14 @@
         Ipon.toast('Password recovery email sent.');
       } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
       finally { Ipon.setBusy(button, false); }
-    } else {
+    } else if (button.dataset.action === 'deactivate') {
       const accepted = await Ipon.confirmAction({ title: 'Deactivate member?', message: `${member.full_name} will stop receiving new contribution periods. Existing records remain available.`, acceptLabel: 'Deactivate' });
       if (!accepted) return;
       try { await Ipon.rpc('deactivate_member', { p_member_id: member.id }); Ipon.toast('Member deactivated.'); await load(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+    } else if (button.dataset.action === 'reactivate') {
+      const accepted = await Ipon.confirmAction({ title: 'Reactivate member?', message: `${member.full_name} will be included when new contribution periods are generated.`, acceptLabel: 'Reactivate' });
+      if (!accepted) return;
+      try { await Ipon.rpc('reactivate_member', { p_member_id: member.id }); Ipon.toast('Member reactivated.'); await load(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     }
   });
   document.getElementById('add-member')?.addEventListener('click', () => { resetForm(); dialog.showModal(); firstName.focus(); });

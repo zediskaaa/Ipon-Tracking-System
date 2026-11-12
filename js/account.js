@@ -20,7 +20,7 @@
     document.body.classList.toggle('account-onboarding', onboarding);
     closeButton.hidden = onboarding;
     document.getElementById('account-page-title').textContent = onboarding ? 'Complete your account' : 'My account';
-    document.getElementById('account-page-copy').textContent = onboarding ? 'Add the missing details before opening your assigned panel.' : 'Keep your profile and sign-in security current.';
+    document.getElementById('account-page-copy').textContent = onboarding ? 'Add the required profile details and secure your sign-in before continuing.' : 'Manage your profile, sign-in security, and preferences.';
   }
 
   function closeAccount() {
@@ -28,10 +28,7 @@
   }
 
   closeButton.addEventListener('click', closeAccount);
-  pageDialog.addEventListener('cancel', (event) => {
-    event.preventDefault();
-    closeAccount();
-  });
+  pageDialog.addEventListener('cancel', (event) => { event.preventDefault(); closeAccount(); });
   updateDialogMode();
 
   function finishSetupIfReady() {
@@ -59,7 +56,7 @@
     const activities = activityResult.data || [];
     activityBody.innerHTML = activities.length ? activities.map((row) => `<tr><td>${Ipon.escapeHtml(row.event.replaceAll('_', ' ').toLowerCase().replace(/^./, (character) => character.toUpperCase()))}</td><td>${Ipon.dateLabel(row.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">No account activity recorded yet.</td></tr>';
     if (onboarding) {
-      const nextField = !profile.first_name ? profileForm.elements.first_name : !profile.last_name ? profileForm.elements.last_name : !profile.contact_number ? profileForm.elements.contact_number : passwordChangeRequired ? passwordForm.elements.password : null;
+      const nextField = !profile.first_name ? profileForm.elements.first_name : !profile.last_name ? profileForm.elements.last_name : !profile.contact_number ? profileForm.elements.contact_number : passwordChangeRequired ? (passwordForm.elements.current_password || passwordForm.elements.password) : null;
       nextField?.focus();
     }
   }
@@ -92,7 +89,7 @@
     if (issue) { Ipon.toast(issue, 'error'); return; }
     const button = event.submitter;
     Ipon.setBusy(button, true, 'Changing…');
-    try { await Ipon.changePassword(password); await Ipon.rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }); passwordForm.reset(); passwordChangeRequired = false; document.getElementById('temporary-password-notice').hidden = true; Ipon.toast('Password changed.'); finishSetupIfReady(); if (!onboarding) await load(); }
+    try { await Ipon.changePassword(password, passwordForm.elements.current_password.value); await Ipon.rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }); passwordForm.reset(); passwordChangeRequired = false; document.getElementById('temporary-password-notice').hidden = true; Ipon.toast('Password changed.'); finishSetupIfReady(); if (!onboarding) await load(); }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });
