@@ -20,6 +20,10 @@
   const userPasswordForm = document.getElementById('user-password-form');
   const bugViewerDialog = document.getElementById('bug-viewer-dialog');
   const overviewError = document.getElementById('overview-error');
+  const announcements = Ipon.bindAnnouncements({
+    listElement: document.getElementById('sa-announcement-list'),
+    addButton: document.getElementById('sa-add-announcement')
+  });
   let profiles = [];
   let groups = [];
   let requests = [];
@@ -228,7 +232,8 @@
       Ipon.client.from('feature_requests').select('id,requester_id,title,details,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200),
-      Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200)
+      Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200),
+      announcements ? announcements.load() : Promise.resolve()
     ]);
     if (profileResult.error) throw profileResult.error;
     if (groupResult.error) throw groupResult.error;
@@ -543,5 +548,5 @@
   }
 
   try { await refresh(); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs'], refresh);
+  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements'], refresh);
 })();

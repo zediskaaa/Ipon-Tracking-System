@@ -152,6 +152,44 @@ test('users can upload display pictures and calendar days show up to 4 contribut
   assert.match(migration, /subject_avatar_url/i);
 });
 
+test('Owner and Admins can post and delete unlimited-length announcements with pictures or videos synced live', () => {
+  const core = read('js/core.js');
+  const dashboardHtml = read('dashboard.html');
+  const dashboardJs = read('js/dashboard.js');
+  const superAdminHtml = read('super-admin.html');
+  const superAdminJs = read('js/super-admin.js');
+  const edge = read('supabase/functions/manage-account/index.ts');
+  const migration = read('database/migrations/20261112_023_add_announcements.sql');
+  const css = read('css/app.css');
+  assert.match(dashboardHtml, /id="dashboard-announcement-list"/);
+  assert.match(dashboardHtml, /id="dashboard-add-announcement"/);
+  assert.match(superAdminHtml, /id="sa-announcement-list"/);
+  assert.match(superAdminHtml, /id="sa-add-announcement"/);
+  assert.match(dashboardJs, /subscribeToChanges\('dashboard',[\s\S]*?'announcements'/);
+  assert.match(superAdminJs, /subscribeToChanges\('super-admin',[\s\S]*?'announcements'/);
+  assert.match(core, /id="announcement-media-input"[^>]*accept="image\/\*,video\/\*"/);
+  assert.doesNotMatch(core, /id="announcement-(?:title|description)-input"[^>]*maxlength/i);
+  assert.match(core, /announcement-role-badge is-owner/);
+  assert.match(core, /announcement-author[\s\S]*?is-owner/);
+  assert.match(core, /announcement-empty-state/);
+  assert.match(core, /from\('v_announcements'\)/);
+  assert.match(css, /\.announcement-list\{[^}]*overflow-y:auto/);
+  assert.match(css, /\.announcement-author\.is-owner\{/);
+  assert.match(core, /rpc\('create_announcement'/);
+  assert.match(core, /rpc\('delete_announcement'/);
+  assert.match(edge, /announcement-upload-urls/);
+  assert.match(edge, /announcement-view-urls/);
+  assert.match(edge, /announcement-cleanup-media/);
+  assert.match(migration, /create table if not exists public\.announcements/i);
+  assert.match(migration, /create or replace function public\.create_announcement/i);
+  assert.match(migration, /create or replace function public\.delete_announcement/i);
+  assert.match(migration, /alter publication supabase_realtime add table public\.announcements/i);
+  const migration024 = read('database/migrations/20261112_024_announcement_avatars_and_group_scope.sql');
+  assert.match(migration024, /create or replace view public\.v_announcements/i);
+  assert.match(migration024, /create or replace function public\.announcement_author_avatar/i);
+  assert.match(migration024, /group_id = public\.current_group_id\(\)/i);
+});
+
 test('all three role dashboards subscribe to permitted database changes', () => {
   const core = read('js/core.js');
   const realtimeHelper = core.match(/function subscribeToChanges[\s\S]*?return channel;/)?.[0] || '';

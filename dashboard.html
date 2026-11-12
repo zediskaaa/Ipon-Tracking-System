@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>IPON — Savings calendar</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261112-10">
-  <link rel="stylesheet" href="css/hero-plates.css?v=20261112-5">
+  <link rel="stylesheet" href="css/app.css?v=20261112-11">
+  <link rel="stylesheet" href="css/hero-plates.css?v=20261112-6">
 </head>
 <body data-page="dashboard">
   <main class="comp-frame" aria-label="IPON savings calendar dashboard">
@@ -179,6 +179,19 @@
         </svg>
       </div>
 
+      <section class="announcement-panel" aria-labelledby="announcement-heading">
+        <div class="announcement-panel-header">
+          <div>
+            <h2 class="review-title" id="announcement-heading">Announcements</h2>
+            <p class="review-subtitle">Updates from Owner and Group Admin</p>
+          </div>
+          <button class="announcement-add-btn" id="dashboard-add-announcement" type="button" hidden>+ Add</button>
+        </div>
+        <div class="announcement-list" id="dashboard-announcement-list" aria-live="polite">
+          <p class="empty-state">Loading announcements…</p>
+        </div>
+      </section>
+
       <div class="workspace-corner-art" aria-hidden="true">
         <svg viewBox="0 0 240 210" fill="none">
           <ellipse cx="125" cy="186" rx="95" ry="16" fill="rgba(180, 172, 154, 0.22)"/>
@@ -203,6 +216,6 @@
       </div>
     </aside>
   </main>
-  <script src="js/config.js"></script><script src="js/core.js?v=20261112-11"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/dashboard.js?v=20261112-9"></script>
+  <script src="js/config.js"></script><script src="js/core.js?v=20261112-12"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/dashboard.js?v=20261112-10"></script>
 </body>
 </html>

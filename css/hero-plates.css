@@ -542,7 +542,7 @@ button,a { color:inherit; font:inherit; }
 .review-column {
   display:flex;
   flex-direction:column;
-  justify-content:space-between;
+  gap:16px;
   padding:24px 24px 18px 0;
 }
 
@@ -728,9 +728,45 @@ button,a { color:inherit; font:inherit; }
   justify-content:center;
   align-items:flex-end;
   margin-top:auto;
-  padding-top:20px;
+  padding-top:8px;
   pointer-events:none;
 }
+
+.announcement-panel {
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:18px 16px;
+  border:1px solid rgba(255,255,255,.7);
+  border-radius:16px;
+  background:#fbf7f0;
+  box-shadow:0 8px 26px rgba(20,45,43,.06), 0 1px 3px rgba(20,45,43,.04);
+}
+.announcement-panel-header {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.announcement-panel-header > div {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+.announcement-add-btn {
+  flex:0 0 auto;
+  min-height:32px;
+  padding:5px 11px;
+  border:1px solid #0f3b2e;
+  border-radius:8px;
+  background:var(--rail);
+  color:#fff;
+  font:700 12px/1 Arial,sans-serif;
+  cursor:pointer;
+}
+.announcement-add-btn:hover { background:#21453d; }
 
 .workspace-corner-art svg {
   width:210px;

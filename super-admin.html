@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Super Admin — IPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261112-10">
+  <link rel="stylesheet" href="css/app.css?v=20261112-11">
 </head>
 <body data-page="super-admin" data-panel="super-admin">
   <div class="app-layout">
@@ -47,6 +47,16 @@
             <a href="super-admin.html#activity"><span><strong>Platform activity</strong><small>Inspect recent access changes</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
           </nav>
         </div>
+        <section class="panel super-admin-announcements" aria-labelledby="sa-announcement-heading">
+          <div class="panel-header">
+            <div>
+              <h3 id="sa-announcement-heading">Announcements</h3>
+              <p>Post updates with unlimited text, pictures, or videos across all groups.</p>
+            </div>
+            <button class="button button-primary" id="sa-add-announcement" type="button">+ Add announcement</button>
+          </div>
+          <div class="announcement-list" id="sa-announcement-list" aria-live="polite"><p class="empty-state">Loading announcements…</p></div>
+        </section>
         <div id="overview-error" hidden></div>
       </section>
 
@@ -132,6 +142,6 @@
 
   <dialog class="form-dialog bug-viewer-dialog" id="bug-viewer-dialog" aria-labelledby="bug-viewer-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="bug-viewer-title">Bug report</h2><p id="bug-viewer-meta"></p></div><button class="dialog-close" id="bug-viewer-close" type="button" aria-label="Close bug report details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="bug-viewer-body"><p class="feature-request-details" id="bug-viewer-description"></p><div class="bug-viewer-grid" id="bug-viewer-images"></div></div></div></dialog>
 
-  <script src="js/config.js"></script><script src="js/core.js?v=20261112-11"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261112-11"></script>
+  <script src="js/config.js"></script><script src="js/core.js?v=20261112-12"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261112-12"></script>
 </body>
 </html>

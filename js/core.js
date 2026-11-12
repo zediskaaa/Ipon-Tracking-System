@@ -1328,6 +1328,372 @@
     return data.currentLevel === 'aal1' && data.nextLevel === 'aal2';
   }
 
+  async function invokeAccountFunction(body) {
+    const client = getClient();
+    if (!client) throw new Error('Supabase is not connected.');
+    const { data, error } = await client.functions.invoke('manage-account', { body });
+    if (error) {
+      const detail = await error.context?.json?.().catch(() => null);
+      throw new Error(detail?.error || error.message);
+    }
+    return data || {};
+  }
+
+  const VIDEO_FILE_RE = /\.(mp4|webm|mov|m4v|avi|mkv|3gp|ogv|mpeg|mpg|flv|wmv)$/i;
+  const MAX_ANNOUNCEMENT_MEDIA_BYTES = 50 * 1024 * 1024;
+  const MAX_ANNOUNCEMENT_FILES = 20;
+
+  function classifyAnnouncementFile(file) {
+    const type = String(file?.type || '');
+    const name = String(file?.name || '');
+    const isImage = type.startsWith('image/') || PICTURE_FILE_RE.test(name);
+    const isVideo = type.startsWith('video/') || VIDEO_FILE_RE.test(name);
+    if (!isImage && !isVideo) throw new Error(`"${name || 'File'}" is not a supported picture or video format.`);
+    if (file.size > MAX_ANNOUNCEMENT_MEDIA_BYTES) throw new Error(`"${name || 'File'}" exceeds the 50 MB size limit.`);
+    return isVideo ? 'video' : 'image';
+  }
+
+  function ensureAnnouncementDialogs() {
+    if (document.getElementById('announcement-viewer-dialog')) return;
+    document.body.insertAdjacentHTML('beforeend', `
+      <dialog class="form-dialog announcement-viewer-dialog" id="announcement-viewer-dialog" aria-labelledby="announcement-viewer-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div class="announcement-viewer-head">
+              <div class="announcement-item-meta" id="announcement-viewer-meta"></div>
+              <h2 id="announcement-viewer-title">Announcement</h2>
+            </div>
+            <button class="dialog-close" id="announcement-viewer-close" type="button" aria-label="Close announcement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="announcement-viewer-body">
+            <p class="announcement-viewer-description" id="announcement-viewer-description"></p>
+            <div class="announcement-viewer-media" id="announcement-viewer-media"></div>
+          </div>
+          <div class="announcement-viewer-actions">
+            <button class="button button-danger" id="announcement-viewer-delete" type="button" hidden>Delete announcement</button>
+            <button class="button button-secondary" id="announcement-viewer-done" type="button">Close</button>
+          </div>
+        </div>
+      </dialog>
+      <dialog class="form-dialog announcement-compose-dialog" id="announcement-compose-dialog" aria-labelledby="announcement-compose-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div><h2 id="announcement-compose-title">Add announcement</h2><p>Share updates with unlimited text, pictures, or videos.</p></div>
+            <button class="dialog-close" id="announcement-compose-close" type="button" aria-label="Close announcement form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <form id="announcement-compose-form" class="form-grid">
+            <div class="field field-wide"><label for="announcement-title-input">Title</label><input id="announcement-title-input" name="title" placeholder="Announcement title" required></div>
+            <div class="field field-wide"><label for="announcement-description-input">Description</label><textarea id="announcement-description-input" name="description" rows="6" placeholder="Write the full announcement…" required></textarea></div>
+            <div class="field field-wide">
+              <label for="announcement-media-input">Pictures or videos (optional)</label>
+              <div class="bug-upload-box">
+                <input id="announcement-media-input" type="file" accept="image/*,video/*" multiple aria-describedby="announcement-media-help">
+                <small class="field-help" id="announcement-media-help">No files selected. Any picture or video format up to 50 MB each.</small>
+              </div>
+              <div class="bug-image-grid" id="announcement-media-previews" hidden></div>
+            </div>
+            <div class="form-actions field-wide">
+              <button class="button button-secondary" id="announcement-compose-cancel" type="button">Cancel</button>
+              <button class="button button-primary" type="submit">Publish announcement</button>
+            </div>
+          </form>
+        </div>
+      </dialog>`);
+  }
+
+  function announcementAuthorMeta(item) {
+    const isOwner = item.author_role === 'SUPER_ADMIN';
+    const name = item.author_name || (isOwner ? 'Owner' : 'Administrator');
+    const avatarHtml = avatarMarkup(item.author_avatar_url, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`);
+    const roleBadge = isOwner
+      ? '<span class="announcement-role-badge is-owner">Owner</span>'
+      : '<span class="announcement-role-badge is-admin">Admin</span>';
+    const authorHtml = `<span class="announcement-author${isOwner ? ' is-owner' : ''}">${escapeHtml(name)}</span>`;
+    const dateText = dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' });
+    return `${avatarHtml}${roleBadge}${authorHtml}<span class="announcement-meta-dot" aria-hidden="true">&middot;</span><time datetime="${escapeHtml(item.created_at)}">${escapeHtml(dateText)}</time>`;
+  }
+
+  function bindAnnouncements({ listElement, addButton, emptyTitle = 'No announcements yet', emptyNote = 'Stay tuned for updates' } = {}) {
+    if (!listElement) return null;
+    ensureAnnouncementDialogs();
+    const viewerDialog = document.getElementById('announcement-viewer-dialog');
+    const viewerMeta = document.getElementById('announcement-viewer-meta');
+    const viewerTitle = document.getElementById('announcement-viewer-title');
+    const viewerDescription = document.getElementById('announcement-viewer-description');
+    const viewerMedia = document.getElementById('announcement-viewer-media');
+    const viewerDelete = document.getElementById('announcement-viewer-delete');
+    const composeDialog = document.getElementById('announcement-compose-dialog');
+    const composeForm = document.getElementById('announcement-compose-form');
+    const mediaInput = document.getElementById('announcement-media-input');
+    const mediaHelp = document.getElementById('announcement-media-help');
+    const mediaPreviews = document.getElementById('announcement-media-previews');
+    let items = [];
+    let queuedMedia = [];
+    let openItemId = null;
+
+    const canDelete = (item) => {
+      if (!item || !currentProfile) return false;
+      if (currentProfile.role === 'SUPER_ADMIN') return true;
+      return currentProfile.role === 'ADMIN' && item.author_role === 'ADMIN' && item.group_id === currentProfile.group_id;
+    };
+
+    const clearQueuedMedia = () => {
+      queuedMedia.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+      queuedMedia = [];
+      if (mediaInput) mediaInput.value = '';
+      renderQueuedMedia();
+    };
+
+    const renderQueuedMedia = () => {
+      if (mediaHelp) {
+        mediaHelp.textContent = queuedMedia.length
+          ? `${queuedMedia.length} file${queuedMedia.length === 1 ? '' : 's'} ready to upload (pictures or videos up to 50 MB each).`
+          : 'No files selected. Any picture or video format up to 50 MB each.';
+      }
+      if (!mediaPreviews) return;
+      if (!queuedMedia.length) {
+        mediaPreviews.hidden = true;
+        mediaPreviews.replaceChildren();
+        return;
+      }
+      mediaPreviews.hidden = false;
+      mediaPreviews.innerHTML = queuedMedia.map((entry, index) => `
+        <figure class="bug-image-card announcement-preview-card">
+          ${entry.kind === 'video'
+            ? `<video src="${escapeHtml(entry.previewUrl)}" muted playsinline preload="metadata"></video>`
+            : `<img src="${escapeHtml(entry.previewUrl)}" alt="${escapeHtml(entry.file.name)}">`}
+          <button class="bug-image-remove" type="button" data-remove-announcement-media="${index}" aria-label="Remove ${escapeHtml(entry.file.name)}">&times;</button>
+        </figure>`).join('');
+    };
+
+    const renderList = () => {
+      if (!items.length) {
+        listElement.innerHTML = `
+          <div class="announcement-empty-state">
+            <span class="announcement-empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.6 5.4A1 1 0 0 0 11 19v-5l8.4 3.2A1 1 0 0 0 21 16.3V7.7a1 1 0 0 0-1.6-.9L11 10H4a1 1 0 0 0-1 1Z"/></svg>
+            </span>
+            <b>${escapeHtml(emptyTitle)}</b>
+            <small>${escapeHtml(emptyNote)}</small>
+          </div>`;
+        return;
+      }
+      listElement.innerHTML = items.map((item) => {
+        const isOwner = item.author_role === 'SUPER_ADMIN';
+        const media = Array.isArray(item.attachments) ? item.attachments : [];
+        return `
+          <button class="announcement-item${isOwner ? ' is-owner' : ''}" type="button" data-announcement-id="${escapeHtml(item.id)}">
+            <div class="announcement-item-head">
+              <strong class="announcement-item-title">${escapeHtml(item.title)}</strong>
+              ${media.length ? `<span class="announcement-media-chip">${media.length} ${media.length === 1 ? 'file' : 'files'}</span>` : ''}
+            </div>
+            <p class="announcement-item-snippet">${escapeHtml(item.description)}</p>
+            <div class="announcement-item-meta">${announcementAuthorMeta(item)}</div>
+          </button>`;
+      }).join('');
+      bindAvatarFallbacks(listElement);
+    };
+
+    const stopViewerMedia = () => {
+      viewerMedia?.querySelectorAll('video').forEach((video) => video.pause());
+    };
+
+    const openViewer = async (item) => {
+      if (!item || !viewerDialog) return;
+      openItemId = item.id;
+      viewerMeta.innerHTML = announcementAuthorMeta(item);
+      bindAvatarFallbacks(viewerMeta);
+      viewerTitle.textContent = item.title;
+      viewerDescription.textContent = item.description;
+      viewerDelete.hidden = !canDelete(item);
+      const attachments = Array.isArray(item.attachments) ? item.attachments : [];
+      if (!attachments.length) {
+        viewerMedia.hidden = true;
+        viewerMedia.replaceChildren();
+        viewerDialog.showModal();
+        return;
+      }
+      viewerMedia.hidden = false;
+      viewerMedia.innerHTML = '<p class="empty-state">Loading media…</p>';
+      viewerDialog.showModal();
+      try {
+        const { urls = {} } = await invokeAccountFunction({ action: 'announcement-view-urls', announcement_id: item.id });
+        if (openItemId !== item.id || !viewerDialog.open) return;
+        const rendered = attachments.map((media) => {
+          const url = urls[media.path] || '';
+          const safeName = escapeHtml(media.name || (media.kind === 'video' ? 'video' : 'picture'));
+          if (!url) return '';
+          if (media.kind === 'video') {
+            return `<figure class="announcement-media-item is-video"><video controls playsinline preload="metadata" src="${escapeHtml(url)}"></video><figcaption><span>${safeName}</span><a class="icon-action" href="${escapeHtml(url)}" target="_blank" rel="noopener">Open</a></figcaption></figure>`;
+          }
+          return `<figure class="announcement-media-item"><img src="${escapeHtml(url)}" alt="${safeName}"><figcaption><span>${safeName}</span><a class="icon-action" href="${escapeHtml(url)}" target="_blank" rel="noopener">Open</a></figcaption></figure>`;
+        }).filter(Boolean).join('');
+        viewerMedia.innerHTML = rendered || '<p class="empty-state">Attachments unavailable.</p>';
+      } catch (error) {
+        viewerMedia.innerHTML = `<p class="empty-state">${escapeHtml(friendlyError(error))}</p>`;
+      }
+    };
+
+    const load = async () => {
+      const client = getClient();
+      if (!client || !currentProfile) { items = []; renderList(); return []; }
+      const { data, error } = await client
+        .from('v_announcements')
+        .select('id,group_id,author_id,author_name,author_role,author_avatar_url,title,description,attachments,created_at')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      items = data || [];
+      renderList();
+      if (viewerDialog?.open && openItemId && !items.some((entry) => entry.id === openItemId)) {
+        stopViewerMedia();
+        viewerDialog.close();
+        openItemId = null;
+        toast('This announcement was removed.');
+      }
+      return items;
+    };
+
+    if (!listElement.dataset.boundAnnouncements) {
+      listElement.dataset.boundAnnouncements = 'true';
+      listElement.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-announcement-id]');
+        if (!trigger) return;
+        const target = items.find((entry) => entry.id === trigger.dataset.announcementId);
+        if (target) openViewer(target);
+      });
+    }
+
+    if (addButton && !addButton.dataset.boundAnnouncements) {
+      addButton.dataset.boundAnnouncements = 'true';
+      addButton.addEventListener('click', () => {
+        composeForm.reset();
+        clearQueuedMedia();
+        composeDialog.showModal();
+        document.getElementById('announcement-title-input')?.focus();
+      });
+    }
+
+    if (!composeDialog.dataset.bound) {
+      composeDialog.dataset.bound = 'true';
+      const closeCompose = () => { composeDialog.close(); clearQueuedMedia(); };
+      document.getElementById('announcement-compose-close')?.addEventListener('click', closeCompose);
+      document.getElementById('announcement-compose-cancel')?.addEventListener('click', closeCompose);
+      composeDialog.addEventListener('click', (event) => { if (event.target === composeDialog) closeCompose(); });
+      document.getElementById('announcement-viewer-close')?.addEventListener('click', () => viewerDialog.close());
+      document.getElementById('announcement-viewer-done')?.addEventListener('click', () => viewerDialog.close());
+      viewerDialog.addEventListener('click', (event) => { if (event.target === viewerDialog) viewerDialog.close(); });
+      viewerDialog.addEventListener('close', () => { stopViewerMedia(); openItemId = null; });
+
+      mediaInput?.addEventListener('change', () => {
+        const chosen = [...(mediaInput.files || [])];
+        mediaInput.value = '';
+        for (const file of chosen) {
+          if (queuedMedia.length >= MAX_ANNOUNCEMENT_FILES) {
+            toast(`You can attach up to ${MAX_ANNOUNCEMENT_FILES} files per announcement.`, 'error');
+            break;
+          }
+          try {
+            const kind = classifyAnnouncementFile(file);
+            queuedMedia.push({ file, kind, previewUrl: URL.createObjectURL(file) });
+          } catch (error) {
+            toast(friendlyError(error), 'error');
+          }
+        }
+        renderQueuedMedia();
+      });
+
+      mediaPreviews?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-remove-announcement-media]');
+        if (!button) return;
+        const index = Number(button.dataset.removeAnnouncementMedia);
+        const [removed] = queuedMedia.splice(index, 1);
+        if (removed) URL.revokeObjectURL(removed.previewUrl);
+        renderQueuedMedia();
+      });
+    }
+
+    viewerDelete.onclick = async () => {
+      const target = items.find((entry) => entry.id === openItemId);
+      if (!target || !canDelete(target)) return;
+      const confirmed = await confirmAction({
+        title: 'Delete announcement',
+        message: 'This announcement will be deleted for all users right away.',
+        confirmLabel: 'Delete'
+      });
+      if (!confirmed) return;
+      setBusy(viewerDelete, true, 'Deleting…');
+      try {
+        const removedAttachments = await rpc('delete_announcement', { p_announcement_id: target.id });
+        const paths = (Array.isArray(removedAttachments) ? removedAttachments : []).map((entry) => entry?.path).filter(Boolean);
+        if (paths.length) invokeAccountFunction({ action: 'announcement-cleanup-media', paths }).catch(() => {});
+        openItemId = null;
+        viewerDialog.close();
+        await load();
+        toast('Announcement deleted.');
+      } catch (error) {
+        toast(friendlyError(error), 'error');
+      } finally {
+        setBusy(viewerDelete, false);
+      }
+    };
+
+    composeForm.onsubmit = async (event) => {
+      event.preventDefault();
+      if (!composeForm.reportValidity()) return;
+      const title = document.getElementById('announcement-title-input')?.value.trim() || '';
+      const description = document.getElementById('announcement-description-input')?.value.trim() || '';
+      if (!title || !description) return;
+      const button = composeForm.querySelector('button[type="submit"]');
+      const client = getClient();
+      const announcementId = crypto.randomUUID();
+      const uploadedPaths = [];
+      setBusy(button, true, 'Publishing…');
+      try {
+        const attachments = [];
+        if (queuedMedia.length) {
+          const { uploads = [] } = await invokeAccountFunction({
+            action: 'announcement-upload-urls',
+            announcement_id: announcementId,
+            files: queuedMedia.map((entry) => ({ name: entry.file.name, kind: entry.kind, type: entry.file.type }))
+          });
+          for (let i = 0; i < queuedMedia.length; i += 1) {
+            const entry = queuedMedia[i];
+            const upload = uploads[i];
+            if (!upload?.path || !upload?.token) throw new Error('Upload authorization missing.');
+            const { error: uploadError } = await client.storage
+              .from('announcements')
+              .uploadToSignedUrl(upload.path, upload.token, entry.file, { contentType: entry.file.type || undefined });
+            if (uploadError) throw uploadError;
+            uploadedPaths.push(upload.path);
+            attachments.push({ path: upload.path, name: upload.name, kind: entry.kind, type: entry.type || entry.file.type || '' });
+          }
+        }
+        await rpc('create_announcement', {
+          p_id: announcementId,
+          p_title: title,
+          p_description: description,
+          p_attachments: attachments
+        });
+        composeDialog.close();
+        composeForm.reset();
+        clearQueuedMedia();
+        await load();
+        toast('Announcement published.');
+      } catch (error) {
+        if (uploadedPaths.length) invokeAccountFunction({ action: 'announcement-cleanup-media', paths: uploadedPaths }).catch(() => {});
+        toast(friendlyError(error), 'error');
+      } finally {
+        setBusy(button, false);
+      }
+    };
+
+    return {
+      load,
+      clear: () => { items = []; renderList(); }
+    };
+  }
+
   function subscribeToChanges(name, tables, refresh) {
     const client = getClient();
     if (!client || !tables.length) return null;
@@ -1366,7 +1732,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, subscribeToChanges,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, bindAnnouncements, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

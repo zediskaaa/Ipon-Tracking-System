@@ -33,12 +33,75 @@ Deno.serve(async (request) => {
   const hasVerifiedMfa = userResult.user.factors?.some((factor) => factor.status === 'verified');
   if (hasVerifiedMfa && tokenAal(token) !== 'aal2') return json({ error: 'Complete multi-factor authentication before continuing.' }, 403);
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ANNOUNCEMENTS_BUCKET = 'announcements';
+
+async function ensureAnnouncementsBucket(admin: ReturnType<typeof createClient>) {
+  const { error } = await admin.storage.createBucket(ANNOUNCEMENTS_BUCKET, { public: false, fileSizeLimit: 52428800 });
+  if (error && !/already exists/i.test(error.message || '')) throw error;
+}
+
+function actorAnnouncementPrefix(actor: { role: string; group_id: string | null }, userId: string) {
+  if (actor.role === 'SUPER_ADMIN') return `platform/${userId}/`;
+  if (actor.role === 'ADMIN' && actor.group_id) return `group/${actor.group_id}/`;
+  return null;
+}
+
   const { data: actor, error: actorError } = await admin.from('profiles').select('role,status,group_id,first_name,middle_name,last_name,email').eq('id', userResult.user.id).single();
   if (actorError || actor?.status !== 'ACTIVE') return json({ error: 'Your account is not active.' }, 403);
 
   let body: Record<string, unknown>;
   try { body = await request.json(); }
   catch { return json({ error: 'A valid JSON request body is required.' }, 400); }
+  if (body.action === 'announcement-upload-urls') {
+    const prefix = actorAnnouncementPrefix(actor, userResult.user.id);
+    const announcementId = String(body.announcement_id || '').trim();
+    const files = Array.isArray(body.files) ? body.files : [];
+    if (!prefix) return json({ error: 'Only Owner or Group Administrators can attach announcement media.' }, 403);
+    if (!UUID_RE.test(announcementId) || !files.length || files.length > 20) return json({ error: 'Invalid announcement media upload request.' }, 400);
+    try {
+      await ensureAnnouncementsBucket(admin);
+      const uploads = [];
+      for (let i = 0; i < files.length; i += 1) {
+        const entry = (files[i] || {}) as { name?: unknown; kind?: unknown; type?: unknown };
+        const cleanName = String(entry.name || 'media').replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80) || 'media';
+        const kind = entry.kind === 'video' ? 'video' : 'image';
+        const path = `${prefix}${announcementId}/${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
+        const { data, error } = await admin.storage.from(ANNOUNCEMENTS_BUCKET).createSignedUploadUrl(path);
+        if (error || !data) throw error || new Error('Could not create upload URL.');
+        uploads.push({ path, token: data.token, name: String(entry.name || cleanName).slice(0, 120), kind, type: String(entry.type || '') });
+      }
+      return json({ uploads });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Unable to prepare media uploads.' }, 400);
+    }
+  }
+  if (body.action === 'announcement-view-urls') {
+    const announcementId = String(body.announcement_id || '').trim();
+    if (!UUID_RE.test(announcementId)) return json({ error: 'Invalid announcement ID.' }, 400);
+    const { data: row, error: rowError } = await caller.from('announcements').select('id,attachments').eq('id', announcementId).is('deleted_at', null).single();
+    if (rowError || !row) return json({ error: 'Announcement not found.' }, 404);
+    const list = Array.isArray(row.attachments) ? row.attachments : [];
+    const paths = list.map((item: { path?: unknown }) => String(item?.path || '')).filter(Boolean);
+    if (!paths.length) return json({ urls: {} });
+    const { data: signed, error: signError } = await admin.storage.from(ANNOUNCEMENTS_BUCKET).createSignedUrls(paths, 3600);
+    if (signError) return json({ error: signError.message || 'Unable to sign media URLs.' }, 400);
+    const urls: Record<string, string> = {};
+    (signed || []).forEach((item: { path?: string | null; signedUrl?: string | null }) => {
+      if (item.path && item.signedUrl) urls[item.path] = item.signedUrl;
+    });
+    return json({ urls });
+  }
+  if (body.action === 'announcement-cleanup-media') {
+    const prefix = actorAnnouncementPrefix(actor, userResult.user.id);
+    if (!prefix) return json({ error: 'Permission denied.' }, 403);
+    const requested = Array.isArray(body.paths) ? body.paths.map((value) => String(value || '')).filter(Boolean) : [];
+    const allowedPaths = requested.filter((path) => !path.includes('..') && (actor.role === 'SUPER_ADMIN' || path.startsWith(prefix)));
+    if (!allowedPaths.length) return json({ removed: 0 });
+    const { error: removeError } = await admin.storage.from(ANNOUNCEMENTS_BUCKET).remove(allowedPaths);
+    if (removeError) return json({ error: removeError.message || 'Unable to delete media files.' }, 400);
+    return json({ removed: allowedPaths.length });
+  }
   if (body.action === 'change-password') {
     const password = String(body.password || '');
     const currentPassword = String(body.current_password || '');

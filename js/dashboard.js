@@ -20,6 +20,11 @@
   const weeks = [...document.querySelectorAll('.calendar-week')];
   const summaryValues = [...document.querySelectorAll('.summary-breakdown dd')];
   const goalSelects = [document.getElementById('calendar-goal-select'), document.getElementById('mobile-calendar-goal-select')];
+  const addAnnouncementButton = document.getElementById('dashboard-add-announcement');
+  const announcements = Ipon.bindAnnouncements({
+    listElement: document.getElementById('dashboard-announcement-list'),
+    addButton: addAnnouncementButton
+  });
   let selectedGoalId = '';
   const heroMoney = (value) => Ipon.money(value);
   document.getElementById('dashboard-signout').addEventListener('click', Ipon.signOut);
@@ -149,12 +154,13 @@
     renderGoalOptions([]);
     renderCalendar([]);
     renderPending([]);
+    announcements?.clear();
   }
   async function load() {
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { renderEmptySnapshot(); return; }
     try {
-      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'), getPending(), Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'), Ipon.client.from('v_contribution_status').select('payment_status,paid_amount').eq('period_month', start), Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false })]);
+      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult] = await Promise.all([Ipon.client.rpc('get_savings_summary'), Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'), getPending(), Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'), Ipon.client.from('v_contribution_status').select('payment_status,paid_amount').eq('period_month', start), Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }), announcements ? announcements.load() : Promise.resolve()]);
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
       const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(summary.tracked_savings); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
       [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.amount].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
@@ -345,6 +351,7 @@
   if (state.failed || state.redirecting) return;
   if (state.profile?.role !== 'ADMIN') document.querySelectorAll('a[href="members.html"],a[href="settings.html"],a[href="audit.html"]').forEach((link) => link.remove());
   if (state.profile?.role !== 'MEMBER') document.querySelectorAll('a[href="user.html"]').forEach((link) => link.remove());
+  if (addAnnouncementButton) addAnnouncementButton.hidden = state.profile?.role !== 'ADMIN';
   try { await load(); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals'], load);
+  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'announcements'], load);
 })();
