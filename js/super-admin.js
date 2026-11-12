@@ -18,6 +18,7 @@
   const rejectForm = document.getElementById('reject-request-form');
   const rejectId = document.getElementById('reject-request-id');
   const rejectPreset = document.getElementById('reject-reason-preset');
+  const rejectSubject = document.getElementById('reject-email-subject');
   const rejectText = document.getElementById('reject-reason-text');
   const rejectCopy = document.getElementById('reject-request-copy');
   const administratorDialog = document.getElementById('administrator-dialog');
@@ -133,7 +134,7 @@
       <td>${Ipon.escapeHtml(request.contact_number || 'Not provided')}<small class="field-help">${Ipon.escapeHtml(request.email)}</small></td>
       <td>${Ipon.escapeHtml(request.reason)}${request.status === 'REJECTED' && request.review_note ? `<small class="field-help" style="color:var(--red);display:block;margin-top:4px;">Declined reason: ${Ipon.escapeHtml(request.review_note)}</small>` : ''}</td>
       <td>${Ipon.dateLabel(request.created_at)}</td><td>${statusLabel(request.status)}</td>
-      <td><div class="table-actions">${pending ? `<button class="icon-action" type="button" data-approve-request="${profile.id}">Approve</button><button class="icon-action danger-action" type="button" data-reject-request="${profile.id}">Reject</button>` : request.status === 'REJECTED' ? `<button class="icon-action" type="button" data-reopen-request="${profile.id}">Reopen</button>` : ''}</div></td>
+      <td><div class="table-actions">${pending ? `<button class="icon-action" type="button" data-approve-request="${profile.id}">Approve</button><button class="icon-action danger-action" type="button" data-reject-request="${profile.id}">Reject</button>` : request.status === 'REJECTED' ? `<button class="icon-action" type="button" data-reopen-request="${profile.id}">Reopen</button><button class="icon-action danger-action" type="button" data-unblock-request="${profile.id}">Unblock email</button>` : ''}</div></td>
     </tr>`; }).join('') : `<tr><td colspan="6" class="empty-state">${query || status ? 'No matching administrator requests.' : 'No administrator requests.'}</td></tr>`;
   }
 
@@ -276,7 +277,7 @@
   rejectPreset?.addEventListener('change', () => {
     if (rejectPreset.value === 'custom') {
       rejectText.value = '';
-      rejectText.placeholder = 'Enter custom rejection reason…';
+      rejectText.placeholder = 'Compose email explaining why this request is declined…';
       rejectText.focus();
     } else {
       rejectText.value = rejectPreset.value;
@@ -305,6 +306,30 @@
     const approve = event.target.closest('[data-approve-request]');
     const reject = event.target.closest('[data-reject-request]');
     const reopen = event.target.closest('[data-reopen-request]');
+    const unblock = event.target.closest('[data-unblock-request]');
+    if (unblock) {
+      const profile = profiles.find((item) => item.id === unblock.dataset.unblockRequest);
+      const req = requests.find((item) => item.requester_id === unblock.dataset.unblockRequest);
+      if (!profile) return;
+      const targetEmail = req?.email || profile.email;
+      const accepted = await Ipon.confirmAction({
+        title: 'Unblock email address?',
+        message: `Clear rejected status and purge bogus record for ${profile.full_name} (${targetEmail})? This frees up the email so the legitimate applicant can submit a fresh request.`,
+        acceptLabel: 'Unblock email'
+      });
+      if (!accepted) return;
+      Ipon.setBusy(unblock, true, 'Unblocking…');
+      try {
+        await Ipon.unblockAdminRequest({ user_id: profile.id });
+        Ipon.toast(`Email ${targetEmail} unblocked. The legitimate owner can now apply.`);
+        await load();
+      } catch (error) {
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      } finally {
+        Ipon.setBusy(unblock, false);
+      }
+      return;
+    }
     if (reopen) {
       const profile = profiles.find((item) => item.id === reopen.dataset.reopenRequest);
       if (!profile) return;
@@ -331,9 +356,12 @@
     const profile = profiles.find((item) => item.id === reject.dataset.rejectRequest);
     if (!profile) return;
     rejectId.value = profile.id;
-    rejectCopy.textContent = `Decline administrator request for ${profile.full_name}.`;
-    rejectPreset.value = 'Incomplete or unverifiable contact information';
-    rejectText.value = 'Incomplete or unverifiable contact information';
+    rejectCopy.textContent = profile.email
+      ? `Decline administrator request for ${profile.full_name} (${profile.email}).`
+      : `Decline administrator request for ${profile.full_name}.`;
+    if (rejectSubject) rejectSubject.value = "We're sorry, your administrator request on IPON was declined";
+    rejectPreset.value = 'Duplicate or unverified administrator request';
+    rejectText.value = 'Duplicate or unverified administrator request';
     rejectDialog.showModal();
     rejectText.focus();
   });
@@ -343,6 +371,7 @@
     const targetUserId = rejectId.value;
     const profile = profiles.find((item) => item.id === targetUserId);
     const note = rejectText.value.trim();
+    const subject = rejectSubject?.value.trim() || "We're sorry, your administrator request on IPON was declined";
     if (!profile || note.length < 5) {
       Ipon.setFieldError(rejectText, 'Enter at least 5 characters explaining why the request is rejected.');
       rejectText.focus();
@@ -360,7 +389,7 @@
     try {
       await Ipon.rpc('super_admin_reject_request', { p_user_id: targetUserId, p_review_note: note });
       closeRejectDialog();
-      await sendDecisionNotice({ user_id: targetUserId, decision: 'REJECTED', review_note: note }, 'Administrator request rejected.');
+      await sendDecisionNotice({ user_id: targetUserId, decision: 'REJECTED', review_note: note, subject }, 'Administrator request rejected.');
       await load();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');

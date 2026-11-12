@@ -177,7 +177,30 @@
     <section data-policy-content="terms"><h3>Purpose</h3><p>IPON records savings-related activity entered by authorized users. It is a tracking system only and does not hold, transfer, receive, or safeguard money.</p><h3>Your responsibilities</h3><ul><li>Provide accurate information and keep your sign-in credentials private.</li><li>Use only accounts and savings-group records you are authorized to access.</li><li>Verify important totals against receipts or the group's official records.</li></ul><h3>Approvals and records</h3><p>Only confirmed entries affect tracked savings. Rejected and voided entries may remain in the audit history for accountability.</p><h3>Development availability</h3><p>The system is under active development. Features may be incomplete, changed, unavailable, or contain errors. Do not treat IPON as a bank, wallet, or the sole official financial record.</p></section>
     <section data-policy-content="privacy" hidden><h3>Information we process</h3><p>IPON may store your name, email address, mobile number, role, savings-group membership, submitted records, review activity, and security-related account events.</p><h3>How information is used</h3><p>Information is used to authenticate users, enforce role and group access, display savings records, process approvals, send in-app notifications, and maintain an audit trail.</p><h3>Who can access it</h3><p>Access is limited by assigned role and savings group. Authorized administrators may review relevant account and activity information. Platform administrators manage account access but are not intended to view a group's savings records.</p><h3>Security and retention</h3><p>Reasonable technical controls are used, but no developing system can guarantee uninterrupted or error-free security. Records may be retained for audit and accountability purposes.</p><h3>Questions</h3><p>For privacy or account concerns, contact your assigned administrator.</p></section>
   </div></div></dialog>
+  <dialog class="form-dialog request-verify-dialog" id="request-verify-dialog" aria-labelledby="request-verify-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="request-verify-title">Verify your email</h2>
+          <p id="request-verify-subtitle">Enter the 6-digit code sent to your email.</p>
+        </div>
+        <button class="dialog-close" type="button" id="request-verify-close" aria-label="Close email verification"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
+      </header>
+      <form id="request-verify-form" class="form-grid">
+        <div class="field field-wide" style="text-align: center;">
+          <label for="request-verify-code">6-digit verification code</label>
+          <input id="request-verify-code" name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="123456" style="text-align: center; font-size: 28px; font-weight: 700; letter-spacing: 0.35em;" required>
+          <small class="field-help" id="request-verify-timer">Code expires in 10 minutes.</small>
+          <small class="field-error" id="request-verify-error" role="alert" hidden></small>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" id="request-verify-resend" type="button">Resend code</button>
+          <button class="button button-primary" type="submit">Verify &amp; submit request</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
   <dialog class="form-dialog request-success-dialog" id="request-success-dialog" aria-labelledby="request-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="request-success-title">Administrator request submitted</h2><p>Your request is now under review.</p></div><button class="dialog-close" type="button" data-request-success-close aria-label="Close request confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p>Please check your inbox and wait for an email confirming whether your administrator access was approved or declined.</p><div class="request-success-email" id="request-success-email"></div><p>Once your request is approved, return to this sign-in panel and sign in using the email and password you registered.</p><div class="request-success-actions"><button class="button button-primary" id="request-success-ok" type="button" data-request-success-close>Back to sign in</button></div></div></div></dialog>
-  <script src="js/config.js"></script><script src="js/core.js?v=20261113-2"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/auth.js?v=20261113-2"></script>
+  <script src="js/config.js"></script><script src="js/core.js?v=20261113-2"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/auth.js?v=20261113-3"></script>
 </body>
 </html>

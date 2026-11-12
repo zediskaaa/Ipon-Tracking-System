@@ -2160,6 +2160,28 @@
     });
   }
 
+  async function sendAdminRequestVerificationCode(payload) {
+    return invokeAccountFunction({
+      action: 'send-verification-otp',
+      ...payload
+    });
+  }
+
+  async function verifyAdminRequestVerificationCode(payload) {
+    const { email, code } = payload || {};
+    return rpc('verify_admin_email_verification', {
+      p_email: email,
+      p_code: code
+    });
+  }
+
+  async function unblockAdminRequest(payload) {
+    return invokeAccountFunction({
+      action: 'unblock-admin-request',
+      ...payload
+    });
+  }
+
   async function switchActiveGroup(groupId) {
     const result = await rpc('switch_active_group', { p_group_id: groupId });
     if (currentProfile && result) {
@@ -2224,7 +2246,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

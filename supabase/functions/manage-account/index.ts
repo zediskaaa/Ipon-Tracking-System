@@ -182,6 +182,7 @@ async function sendAdminRequestDecisionEmail({
   decision,
   groupName,
   reviewNote,
+  subject: customSubject,
   senderEmail,
   loginUrl
 }: {
@@ -190,15 +191,16 @@ async function sendAdminRequestDecisionEmail({
   decision: 'APPROVED' | 'REJECTED';
   groupName?: string | null;
   reviewNote?: string | null;
+  subject?: string | null;
   senderEmail?: string | null;
   loginUrl: string;
 }) {
   const approved = decision === 'APPROVED';
   const safeGroup = String(groupName || '').trim() || 'your savings group';
   const safeReason = String(reviewNote || '').trim();
-  const subject = approved
+  const subject = String(customSubject || '').trim() || (approved
     ? `Congratulations! Your administrator request on ${SYSTEM_NAME} was approved`
-    : `We're sorry, your administrator request on ${SYSTEM_NAME} was declined`;
+    : `We're sorry, your administrator request on ${SYSTEM_NAME} was declined`);
   const plainText = approved
     ? [
         `Hello ${recipientName},`,
@@ -254,6 +256,54 @@ async function sendAdminRequestDecisionEmail({
   });
 }
 
+async function sendAdminRequestOtpEmail({
+  toEmail,
+  recipientName,
+  code,
+  senderEmail
+}: {
+  toEmail: string;
+  recipientName: string;
+  code: string;
+  senderEmail?: string | null;
+}) {
+  const safeName = String(recipientName || '').trim() || 'Applicant';
+  const subject = `Your ${SYSTEM_NAME} verification code is ${code}`;
+  const plainText = [
+    `Hello ${safeName},`,
+    '',
+    `Your email verification code for requesting administrator access on ${SYSTEM_NAME} is:`,
+    '',
+    code,
+    '',
+    'This verification code expires in 10 minutes.',
+    'If you did not request administrator access on IPON, please ignore this email. No account or request has been created.'
+  ].join('\n');
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #163029; line-height: 1.55; max-width: 540px; margin: 0 auto; padding: 24px; background: #fbf9f2; border: 1px solid #d9d6c8; border-radius: 14px;">
+      <p style="margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #1f6a43;">${escapeHtml(SYSTEM_NAME)}</p>
+      <h2 style="margin: 0 0 12px; font-size: 20px; color: #163029;">Confirm your email address</h2>
+      <p style="margin: 0 0 14px;">Hello <strong>${escapeHtml(safeName)}</strong>,</p>
+      <p style="margin: 0 0 18px;">Enter the 6-digit verification code below to verify that you own this email address and complete your administrator request on <strong>${escapeHtml(SYSTEM_NAME)}</strong>:</p>
+      <div style="margin: 0 0 18px; padding: 16px 20px; background: #ffffff; border: 1px solid #c9c5b5; border-radius: 12px; text-align: center;">
+        <span style="font-family: monospace, Consolas, sans-serif; font-size: 32px; font-weight: 700; letter-spacing: 0.35em; color: #163029;">${escapeHtml(code)}</span>
+      </div>
+      <p style="margin: 0 0 14px; font-size: 13px; color: #5c5749;">This verification code will expire in <strong>10 minutes</strong>.</p>
+      <p style="margin: 0; font-size: 12px; color: #7a7566; border-top: 1px solid #e0ddd0; padding-top: 14px;">If you did not submit this request, you can safely ignore this email. No administrator request or account will be created without this verification code.</p>
+    </div>
+  `.trim();
+
+  return deliverEmail({
+    toEmail,
+    recipientName: safeName,
+    subject,
+    html,
+    plainText,
+    fallbackEmail: senderEmail
+  });
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -265,6 +315,38 @@ Deno.serve(async (request) => {
   if (!url || !anon || !service || !authorization) return json({ error: 'Account service is not configured.' }, 500);
 
   const admin = createClient(url, service, { auth: { persistSession: false } });
+
+  let body: Record<string, unknown>;
+  try { body = await request.json(); }
+  catch { return json({ error: 'A valid JSON request body is required.' }, 400); }
+
+  if (body.action === 'send-verification-otp') {
+    const email = String(body.email || '').trim().toLowerCase();
+    const fullName = String(body.full_name || '').trim();
+    if (!email || !email.includes('@')) return json({ error: 'A valid email address is required.' }, 400);
+
+    const { data: result, error: rpcError } = await admin.rpc('request_admin_email_verification', {
+      p_email: email,
+      p_full_name: fullName
+    });
+
+    if (rpcError || !result || !result.success) {
+      return json({ error: result?.message || rpcError?.message || 'Could not generate verification code.' }, 400);
+    }
+
+    const emailOutcome = await sendAdminRequestOtpEmail({
+      toEmail: email,
+      recipientName: fullName,
+      code: result.code
+    });
+
+    return json({
+      success: true,
+      email_sent: emailOutcome.email_sent,
+      email_error: emailOutcome.email_error
+    });
+  }
+
   const caller = createClient(url, anon, { global: { headers: { Authorization: authorization } }, auth: { persistSession: false } });
   const token = authorization.replace(/^Bearer\s+/i, '');
   const { data: userResult, error: userError } = await admin.auth.getUser(token);
@@ -412,11 +494,34 @@ Deno.serve(async (request) => {
       decision,
       groupName: resolvedGroupName,
       reviewNote: String(body.review_note || '').trim() || null,
+      subject: String(body.subject || body.email_subject || '').trim() || null,
       senderEmail: actor.email || userResult.user.email || null,
       loginUrl: originUrl
     });
 
     return json({ email_sent: emailOutcome.email_sent, email_error: emailOutcome.email_error });
+  }
+
+  if (body.action === 'unblock-admin-request') {
+    if (actor.role !== 'SUPER_ADMIN') return json({ error: 'Only the Super Admin can unblock requests.' }, 403);
+    const targetId = String(body.user_id || '').trim();
+    if (!UUID_RE.test(targetId)) return json({ error: 'A valid target user ID is required.' }, 400);
+
+    const { data: unblockResult, error: unblockError } = await admin.rpc('super_admin_unblock_admin_request', {
+      p_user_id: targetId
+    });
+
+    if (unblockError) {
+      return json({ error: unblockError.message || 'Could not unblock administrator request.' }, 400);
+    }
+
+    await admin.auth.admin.deleteUser(targetId);
+
+    return json({
+      unblocked: true,
+      email: unblockResult?.email || null,
+      full_name: unblockResult?.full_name || null
+    });
   }
 
   const role = body.role === 'ADMIN' ? 'ADMIN' : body.role === 'MEMBER' ? 'MEMBER' : body.role === 'TREASURER' ? 'TREASURER' : null;
