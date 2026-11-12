@@ -26,6 +26,21 @@
   const passwordField = document.getElementById('member-password-field');
   const emailInput = document.getElementById('member-email');
   const passwordInput = document.getElementById('member-password');
+  const deleteDialog = document.getElementById('member-delete-dialog');
+  const deleteForm = document.getElementById('member-delete-form');
+  const deleteSummary = document.getElementById('member-delete-summary');
+  const deleteReasonSelect = document.getElementById('member-delete-reason-select');
+  const deleteCustomWrap = document.getElementById('member-delete-custom-wrap');
+  const deleteCustomReason = document.getElementById('member-delete-custom-reason');
+  const deleteConfirmStep = document.getElementById('member-delete-confirm-step');
+  const deleteConfirmCopy = document.getElementById('member-delete-confirm-copy');
+  const deleteReasonPreview = document.getElementById('member-delete-reason-preview');
+  const deleteBackBtn = document.getElementById('member-delete-back');
+  const deleteConfirmBtn = document.getElementById('member-delete-confirm-btn');
+  const binDialog = document.getElementById('bin-dialog');
+  const binTypeFilter = document.getElementById('bin-type-filter');
+  const binCount = document.getElementById('bin-count');
+  const binList = document.getElementById('bin-list');
   const contactErrorMessage = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
   const nameErrorMessage = "Use letters, spaces, hyphens, or apostrophes only.";
   const nameFields = [
@@ -35,7 +50,10 @@
   ];
   let members = [];
   let accountsByMember = new Map();
+  let membersWithContributions = new Set();
   let contributionSettings = [];
+  let pendingDeleteMember = null;
+  let pendingDeleteReason = '';
   let monthlyAmountTouched = false;
   const pageSize = 25;
   let memberPage = 0;
@@ -72,11 +90,11 @@
   }
 
   function render() {
-    tbody.innerHTML = members.length ? members.map((member) => { const account = accountsByMember.get(member.id); return `<tr>
+    tbody.innerHTML = members.length ? members.map((member) => { const account = accountsByMember.get(member.id); const canDelete = !membersWithContributions.has(member.id); return `<tr>
       <td><strong>${Ipon.escapeHtml(member.full_name)}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
       <td>${Ipon.money(member.monthly_contribution_amount)}</td><td><span class="status status-${member.status.toLowerCase()}">${member.status}</span></td>
       <td>${account ? `<span class="status status-${account.status.toLowerCase()}">${account.status}</span><small class="field-help">${Ipon.escapeHtml(account.email || '')}</small>` : '<span class="field-help">No sign-in</span>'}</td>
-      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button></div></td></tr>`; }).join('') : '<tr><td colspan="7" class="empty-state">No matching members.</td></tr>';
+      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>${canDelete ? `<button class="icon-action icon-action-danger" data-action="delete" data-id="${member.id}">Delete</button>` : ''}</div></td></tr>`; }).join('') : '<tr><td colspan="7" class="empty-state">No matching members.</td></tr>';
   }
   async function load() {
     let query = Ipon.client.from('members').select('*', { count: 'exact' });
@@ -86,8 +104,14 @@
     const [{ data, count, error }, accountResult] = await Promise.all([query.order('full_name').range(memberPage * pageSize, (memberPage + 1) * pageSize - 1), Ipon.client.from('profiles').select('id,email,status,member_id').eq('role', 'MEMBER').not('member_id', 'is', null)]);
     if (error) throw error;
     if (accountResult.error) throw accountResult.error;
+    const memberIds = (data || []).map((member) => member.id);
+    const contribResult = memberIds.length
+      ? await Ipon.client.from('contribution_periods').select('member_id,contributions!inner(id)').in('member_id', memberIds)
+      : { data: [], error: null };
+    if (contribResult.error) throw contribResult.error;
     members = data;
     accountsByMember = new Map((accountResult.data || []).map((account) => [account.member_id, account]));
+    membersWithContributions = new Set((contribResult.data || []).map((row) => row.member_id));
     const pages = Math.max(1, Math.ceil(count / pageSize));
     document.getElementById('member-count').textContent = `${count} member${count === 1 ? '' : 's'}`;
     pager.querySelector('span').textContent = `Page ${memberPage + 1} of ${pages}`;
@@ -187,9 +211,9 @@
     const button = event.target.closest('[data-action]'); if (!button) return; const member = members.find((item) => item.id === button.dataset.id); if (!member) return;
     if (button.dataset.action === 'history') {
       document.getElementById('member-history-title').textContent = `${member.full_name} — contribution history`;
-      historyBody.innerHTML = '<tr><td colspan="4">Loading history…</td></tr>'; historyDialog.showModal();
-      const { data, error } = await Ipon.client.from('contributions').select('amount,payment_date,approval_status,contribution_periods!inner(period_month,member_id)').eq('contribution_periods.member_id', member.id).order('payment_date', { ascending: false }).limit(100);
-      historyBody.innerHTML = error ? `<tr><td colspan="4" class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</td></tr>` : data.length ? data.map((row) => `<tr><td>${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.dateLabel(row.payment_date)}</td><td>${Ipon.money(row.amount)}</td><td><span class="status status-${row.approval_status.toLowerCase()}">${row.approval_status}</span></td></tr>`).join('') : '<tr><td colspan="4" class="empty-state">No contribution history yet.</td></tr>';
+      historyBody.innerHTML = '<tr><td colspan="5">Loading history…</td></tr>'; historyDialog.showModal();
+      const { data, error } = await Ipon.client.from('contributions').select('amount,payment_date,approval_status,review_note,void_reason,contribution_periods!inner(period_month,member_id)').eq('contribution_periods.member_id', member.id).order('payment_date', { ascending: false }).limit(100);
+      historyBody.innerHTML = error ? `<tr><td colspan="5" class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</td></tr>` : data.length ? data.map((row) => `<tr><td>${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.dateLabel(row.payment_date)}</td><td>${Ipon.money(row.amount)}</td><td><span class="status status-${row.approval_status.toLowerCase()}">${row.approval_status}</span></td><td>${Ipon.escapeHtml(row.review_note || row.void_reason || '—')}</td></tr>`).join('') : '<tr><td colspan="5" class="empty-state">No contribution history yet.</td></tr>';
     } else if (button.dataset.action === 'edit') {
       form.elements.member_id.value = member.id; form.elements.first_name.value = member.first_name || ''; form.elements.middle_name.value = member.middle_name || ''; form.elements.last_name.value = member.last_name || ''; form.elements.contact_number.value = member.contact_number || '';
       emailField.hidden = true; emailInput.required = false;
@@ -225,6 +249,141 @@
       const accepted = await Ipon.confirmAction({ title: 'Reactivate member?', message: `${member.full_name} will be included when new contribution periods are generated.`, acceptLabel: 'Reactivate' });
       if (!accepted) return;
       try { await Ipon.rpc('reactivate_member', { p_member_id: member.id }); Ipon.toast('Member reactivated.'); await load(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+    } else if (button.dataset.action === 'delete') {
+      openDeleteDialog(member);
+    }
+  });
+  function resetDeleteDialog() {
+    pendingDeleteMember = null;
+    pendingDeleteReason = '';
+    deleteForm.reset();
+    deleteForm.hidden = false;
+    deleteConfirmStep.hidden = true;
+    deleteCustomWrap.hidden = true;
+    deleteCustomReason.required = false;
+    Ipon.setFieldError(deleteCustomReason, '');
+    Ipon.setFieldError(deleteReasonSelect, '');
+  }
+  function openDeleteDialog(member) {
+    if (!member || membersWithContributions.has(member.id)) return;
+    resetDeleteDialog();
+    pendingDeleteMember = member;
+    deleteForm.elements.member_id.value = member.id;
+    const account = accountsByMember.get(member.id);
+    deleteSummary.innerHTML = `<div class="record-review-summary-top"><span class="record-type-pill is-expense">Delete member</span><span class="status status-${member.status.toLowerCase()}">${Ipon.escapeHtml(member.status)}</span></div><div class="record-review-summary-main"><div class="record-review-author"><div><strong>${Ipon.escapeHtml(member.full_name)}</strong><small>${Ipon.escapeHtml(account?.email || member.contact_number || 'No sign-in account')}</small></div></div><div class="record-review-amount"><small>Monthly target</small><strong>${Ipon.money(member.monthly_contribution_amount)}</strong></div></div><div class="record-review-meta"><span>Registered ${Ipon.escapeHtml(Ipon.dateLabel(member.date_registered))}</span><span>0 recorded contributions</span></div>`;
+    deleteDialog.showModal();
+    deleteReasonSelect.focus();
+  }
+  function resolveDeleteReason() {
+    if (deleteReasonSelect.value === 'OTHERS') return deleteCustomReason.value.trim();
+    return deleteReasonSelect.value.trim();
+  }
+  deleteReasonSelect.addEventListener('change', () => {
+    const isOther = deleteReasonSelect.value === 'OTHERS';
+    deleteCustomWrap.hidden = !isOther;
+    deleteCustomReason.required = isOther;
+    Ipon.setFieldError(deleteReasonSelect, '');
+    Ipon.setFieldError(deleteCustomReason, '');
+    if (isOther) deleteCustomReason.focus();
+  });
+  deleteCustomReason.addEventListener('input', () => Ipon.setFieldError(deleteCustomReason, ''));
+  deleteForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!pendingDeleteMember) return;
+    if (!deleteReasonSelect.value) {
+      Ipon.setFieldError(deleteReasonSelect, 'Select a deletion reason.');
+      deleteReasonSelect.focus();
+      return;
+    }
+    const reason = resolveDeleteReason();
+    if (reason.length < 3 || reason.length > 500) {
+      Ipon.setFieldError(deleteCustomReason, 'Enter a reason between 3 and 500 characters.');
+      deleteCustomReason.focus();
+      return;
+    }
+    pendingDeleteReason = reason;
+    const linkedAccount = accountsByMember.get(pendingDeleteMember.id);
+    deleteConfirmCopy.textContent = `${pendingDeleteMember.full_name} will be moved to the recycle bin for 1 month${linkedAccount ? ' and their sign-in account will be temporarily disabled until recovered' : ''}.`;
+    deleteReasonPreview.textContent = `Reason: "${reason}"`;
+    deleteForm.hidden = true;
+    deleteConfirmStep.hidden = false;
+    deleteConfirmBtn.focus();
+  });
+  deleteBackBtn.addEventListener('click', () => {
+    deleteConfirmStep.hidden = true;
+    deleteForm.hidden = false;
+    deleteReasonSelect.focus();
+  });
+  deleteConfirmBtn.addEventListener('click', async () => {
+    if (!pendingDeleteMember || !pendingDeleteReason) return;
+    Ipon.setBusy(deleteConfirmBtn, true, 'Deleting…');
+    try {
+      await Ipon.rpc('delete_member', { p_member_id: pendingDeleteMember.id, p_reason: pendingDeleteReason });
+      deleteDialog.close();
+      Ipon.toast('Member moved to recycle bin.');
+      await load();
+      if (binDialog.open) await loadBin();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(deleteConfirmBtn, false);
+    }
+  });
+  document.getElementById('close-member-delete-dialog')?.addEventListener('click', () => deleteDialog.close());
+  document.getElementById('cancel-member-delete')?.addEventListener('click', () => deleteDialog.close());
+  deleteDialog.addEventListener('close', resetDeleteDialog);
+
+  function binDaysLeftLabel(expiresAt) {
+    const remainingMs = new Date(expiresAt).getTime() - Date.now();
+    const days = Math.max(0, Math.ceil(remainingMs / 86400000));
+    if (days <= 0) return 'Expires today';
+    return `${days} day${days === 1 ? '' : 's'} left to recover`;
+  }
+  async function loadBin() {
+    binCount.textContent = 'Loading deleted items…';
+    binList.innerHTML = '<p class="empty-state">Loading deleted items…</p>';
+    try {
+      const result = await Ipon.rpc('get_bin_items', { p_type: binTypeFilter.value || null });
+      const items = Array.isArray(result) ? result : [];
+      binCount.textContent = `${items.length} recoverable item${items.length === 1 ? '' : 's'}`;
+      binList.innerHTML = items.length ? items.map((item) => {
+        const typeClass = item.item_type === 'announcement' ? 'is-deduction' : 'is-addition';
+        return `<article class="bin-item"><div class="bin-item-main"><div class="bin-item-top"><span class="record-type-pill ${typeClass}">${Ipon.escapeHtml(item.type_label || item.item_type)}</span><span class="bin-item-expiry">${Ipon.escapeHtml(binDaysLeftLabel(item.expires_at))}</span></div><strong>${Ipon.escapeHtml(item.title)}</strong>${item.subtitle ? `<p class="bin-item-subtitle">${Ipon.escapeHtml(item.subtitle)}</p>` : ''}<p class="bin-item-reason">Reason: ${Ipon.escapeHtml(item.reason || 'No reason provided')}</p><p class="bin-item-meta">Deleted by ${Ipon.escapeHtml(item.deleted_by_name || 'Group Administrator')} on ${Ipon.escapeHtml(Ipon.dateLabel(item.deleted_at))}</p></div><button class="button button-secondary" type="button" data-recover-type="${Ipon.escapeHtml(item.item_type)}" data-recover-id="${Ipon.escapeHtml(item.item_id)}" data-recover-label="${Ipon.escapeHtml(item.type_label || item.item_type)}" data-recover-title="${Ipon.escapeHtml(item.title)}">Recover</button></article>`;
+      }).join('') : '<p class="empty-state">No deleted items found within the 1-month recovery window.</p>';
+    } catch (error) {
+      binCount.textContent = 'Unable to load bin';
+      binList.innerHTML = `<p class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</p>`;
+    }
+  }
+  document.getElementById('see-bin')?.addEventListener('click', () => {
+    binTypeFilter.value = '';
+    binDialog.showModal();
+    loadBin();
+  });
+  document.getElementById('close-bin-dialog')?.addEventListener('click', () => binDialog.close());
+  binTypeFilter.addEventListener('change', loadBin);
+  binList.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-recover-id]');
+    if (!button) return;
+    const itemType = button.dataset.recoverType;
+    const itemId = button.dataset.recoverId;
+    const itemLabel = button.dataset.recoverLabel || 'Item';
+    const itemTitle = button.dataset.recoverTitle || 'this item';
+    const accepted = await Ipon.confirmAction({
+      title: `Recover ${itemLabel.toLowerCase()}?`,
+      message: `"${itemTitle}" will be restored to active records.`,
+      acceptLabel: 'Recover'
+    });
+    if (!accepted) return;
+    Ipon.setBusy(button, true, 'Recovering…');
+    try {
+      await Ipon.rpc('recover_bin_item', { p_item_type: itemType, p_item_id: itemId });
+      Ipon.toast(`${itemLabel} recovered.`);
+      await Promise.all([loadBin(), load()]);
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(button, false);
     }
   });
   document.getElementById('add-member')?.addEventListener('click', () => { resetForm(); dialog.showModal(); firstName.focus(); });
@@ -256,5 +415,5 @@
     refresh();
   });
   try { await Promise.all([loadContributionSettings(), load()]); } catch (error) { Ipon.showInlineError(tbody, error, () => Promise.all([loadContributionSettings(), load()]), 7); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('members', ['members', 'profiles', 'contribution_settings', 'contributions'], () => Promise.all([loadContributionSettings(), refresh()]));
+  Ipon.subscribeToChanges('members', ['members', 'profiles', 'contribution_settings', 'contributions', 'announcements'], () => Promise.all([loadContributionSettings(), refresh(), ...(binDialog.open ? [loadBin()] : [])]));
 })();

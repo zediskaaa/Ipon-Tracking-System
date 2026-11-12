@@ -45,6 +45,16 @@
     if (activity.activity_type === 'EXPENSE') return ['expense-event', 'Expense'];
     return ['addition', 'Addition'];
   }
+  function eventIconMarkup(klass) {
+    const meta = {
+      'pending-event': ['pending', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'],
+      'deduction-event': ['deduction', '<path d="M7 12h10"/>'],
+      'expense-event': ['expense', '<path d="m6 6 12 12M18 6 6 18"/>'],
+      addition: ['confirmed', '<path d="m7 12 3 3 7-7"/>']
+    };
+    const [iconClass, paths] = meta[klass] || meta.addition;
+    return `<i class="status-icon ${iconClass}"><svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg></i>`;
+  }
   function calendarCells(activities) {
     const year = cursor.getFullYear(), month = cursor.getMonth();
     const firstDay = new Date(year, month, 1).getDay(); const days = new Date(year, month + 1, 0).getDate();
@@ -73,7 +83,8 @@
           totalAmount: 0,
           count: 0,
           statuses: new Set(),
-          notes: []
+          notes: [],
+          reviewNotes: []
         });
       }
       const entry = byContributor.get(key);
@@ -82,6 +93,7 @@
       entry.count += 1;
       if (activity.approval_status) entry.statuses.add(activity.approval_status);
       if (activity.notes) entry.notes.push(activity.notes);
+      if (activity.review_note) entry.reviewNotes.push(activity.review_note);
     });
     return [...byContributor.values()].sort((a, b) => b.totalAmount - a.totalAmount);
   }
@@ -113,7 +125,7 @@
           const [klass, label] = statusClass(activity);
           const dayAmount = contributors.length ? contributors.reduce((sum, person) => sum + person.totalAmount, 0) : Number(activity.amount);
           const moreCount = !contributors.length && cell.activities.length > 1 ? `<small class="more-count">+${cell.activities.length - 1}</small>` : '';
-          activityHtml = `<span class="event ${klass}">${label}</span><em>${Ipon.money(dayAmount)}</em>${avatarsHtml}${moreCount}`;
+          activityHtml = `<span class="event ${klass}" title="${Ipon.escapeHtml(label)}" aria-label="${Ipon.escapeHtml(label)}">${eventIconMarkup(klass)}</span><em>${Ipon.money(dayAmount)}</em>${avatarsHtml}${moreCount}`;
         }
         const activityLabel = cell.activities.length ? `, ${cell.activities.length} recorded ${cell.activities.length === 1 ? 'activity' : 'activities'}` : ', no recorded activity';
         const isToday = cell.day === today.getDate() && cursor.getMonth() === today.getMonth() && cursor.getFullYear() === today.getFullYear();
@@ -271,7 +283,7 @@
       const items = currentActivities.filter((activity) => activity.activity_date === date);
       document.getElementById('day-detail-title').textContent = Ipon.dateLabel(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       document.getElementById('day-detail-list').innerHTML = items.length
-        ? items.map((activity) => { const [, label] = statusClass(activity); return `<article><span><b>${Ipon.escapeHtml(label)}</b><small>${Ipon.escapeHtml([activity.subject_name, activity.approval_status].filter(Boolean).join(' · '))}</small></span><strong>${Ipon.money(activity.amount)}</strong>${activity.notes ? `<p>${Ipon.escapeHtml(activity.notes)}</p>` : ''}</article>`; }).join('')
+        ? items.map((activity) => { const [, label] = statusClass(activity); const detailText = [activity.notes, activity.review_note ? `Review note: ${activity.review_note}` : ''].filter(Boolean).join(' · '); return `<article><span><b>${Ipon.escapeHtml(label)}</b><small>${Ipon.escapeHtml([activity.subject_name, activity.approval_status].filter(Boolean).join(' · '))}</small></span><strong>${Ipon.money(activity.amount)}</strong>${detailText ? `<p>${Ipon.escapeHtml(detailText)}</p>` : ''}</article>`; }).join('')
         : '<p class="empty-state">No recorded activity for this day.</p>';
     }
     detailPanel.hidden = false;
@@ -306,12 +318,14 @@
           ${contributors.map((person) => {
             const statuses = [...person.statuses].map((s) => s.charAt(0) + s.slice(1).toLowerCase()).join(', ');
             const notes = person.notes.length ? `<p class="day-contributor-notes">${Ipon.escapeHtml(person.notes.join(' · '))}</p>` : '';
+            const reviewNotes = person.reviewNotes.length ? `<small class="record-reason-note is-confirmed">Review note: ${Ipon.escapeHtml(person.reviewNotes.join(' · '))}</small>` : '';
             return `<article class="day-contributor-row">
               ${Ipon.avatarMarkup(person.avatarUrl, person.name, 'avatar-md')}
               <div class="day-contributor-info">
                 <strong>${Ipon.escapeHtml(person.name)}</strong>
                 <small>${person.count} contribution${person.count === 1 ? '' : 's'} · ${Ipon.escapeHtml(statuses)}</small>
                 ${notes}
+                ${reviewNotes}
               </div>
               <strong class="day-contributor-amount">+${Ipon.money(person.totalAmount)}</strong>
             </article>`;
@@ -330,6 +344,7 @@
                 <strong>${Ipon.escapeHtml(activity.subject_name || label)}</strong>
                 <small>${Ipon.escapeHtml([label, activity.approval_status].filter(Boolean).join(' · '))}</small>
                 ${activity.notes ? `<p class="day-contributor-notes">${Ipon.escapeHtml(activity.notes)}</p>` : ''}
+                ${activity.review_note ? `<small class="record-reason-note is-confirmed">Review note: ${Ipon.escapeHtml(activity.review_note)}</small>` : ''}
               </div>
               <strong class="day-contributor-amount is-deduction">−${Ipon.money(activity.amount)}</strong>
             </article>`;

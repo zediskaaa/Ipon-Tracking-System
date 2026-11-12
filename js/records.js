@@ -48,6 +48,18 @@
     return `<span class="status status-${statusClass}">${Ipon.escapeHtml(status)}</span>`;
   }
 
+  function reasonNoteHtml(row) {
+    const text = row.void_reason || row.review_note;
+    if (!text) return '';
+    const label = row.approval_status === 'VOIDED'
+      ? 'Void reason'
+      : row.approval_status === 'REJECTED'
+        ? 'Rejection reason'
+        : 'Review note';
+    const tone = row.approval_status === 'CONFIRMED' ? ' is-confirmed' : ' is-rejected';
+    return `<small class="record-reason-note${tone}">${label}: ${Ipon.escapeHtml(text)}</small>`;
+  }
+
   function updatePager(count = 0) {
     if (!pager) return;
     const pages = Math.max(1, Math.ceil(count / pageSize));
@@ -182,8 +194,7 @@
     updatePager(count);
     contributionEntriesBody.innerHTML = entries.length ? entries.map((entry) => {
       const isCancelled = entry.approval_status === 'VOIDED' || entry.approval_status === 'REJECTED';
-      const reason = entry.void_reason || entry.review_note;
-      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${reason ? `<small class="field-help" style="display:block">${Ipon.escapeHtml(reason)}</small>` : ''}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`;
+      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${reasonNoteHtml(entry)}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`;
     }).join('') : '<tr><td colspan="6" class="empty-state">No additions recorded yet.</td></tr>';
     if (!preserveAmount) await syncSuggestedAmount();
   }
@@ -204,8 +215,7 @@
     updatePager(count);
     tbody.innerHTML = data.length ? data.map((row) => {
       const isCancelled = row.approval_status === 'VOIDED' || row.approval_status === 'REJECTED';
-      const reason = row.void_reason || row.review_note;
-      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(row.transaction_date)}</td><td>${Ipon.escapeHtml(row.category)}</td><td>${Ipon.escapeHtml(row.description)}${reason ? `<small class="field-help" style="display:block">${Ipon.escapeHtml(reason)}</small>` : ''}</td><td>${Ipon.escapeHtml(row.person_responsible)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${statusBadge(row.approval_status)}</td><td>${actionButtons(row)}</td></tr>`;
+      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(row.transaction_date)}</td><td>${Ipon.escapeHtml(row.category)}</td><td>${Ipon.escapeHtml(row.description)}${reasonNoteHtml(row)}</td><td>${Ipon.escapeHtml(row.person_responsible)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${statusBadge(row.approval_status)}</td><td>${actionButtons(row)}</td></tr>`;
     }).join('') : `<tr><td colspan="7" class="empty-state">No ${page} recorded yet.</td></tr>`;
   }
 

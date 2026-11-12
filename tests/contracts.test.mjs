@@ -765,3 +765,61 @@ test('review notifications cast approval_status to text and review modal display
   assert.match(dashboard, /Ipon\.requestRecordAction\(\{[\s\S]*?entry,[\s\S]*?onSubmit:/);
   assert.match(records, /Ipon\.requestRecordAction\(\{[\s\S]*?entry,[\s\S]*?onSubmit:/);
 });
+
+test('members without contributions can be soft-deleted with a reason and recovered from the bin within 1 month', () => {
+  const schema = read('database/schema.sql');
+  const migration = read('database/migrations/20261112_027_add_member_delete_and_recycle_bin.sql');
+  const membersHtml = read('members.html');
+  const membersJs = read('js/members.js');
+  const core = read('js/core.js');
+  for (const sql of [schema, migration]) {
+    assert.match(sql, /create or replace function public\.delete_member\(/);
+    assert.match(sql, /from public\.contributions c[\s\S]*?join public\.contribution_periods cp/);
+    assert.match(sql, /create or replace function public\.get_bin_items\(/);
+    assert.match(sql, /create or replace function public\.recover_bin_item\(/);
+    assert.match(sql, /interval '1 month'/);
+    assert.match(sql, /group by|and deleted_at is null/i);
+  }
+  assert.match(membersHtml, /id="see-bin"[^>]*>See bin</);
+  assert.match(membersHtml, /id="member-delete-dialog"/);
+  assert.match(membersHtml, /id="member-delete-reason-select"[\s\S]*?value="OTHERS"/);
+  assert.match(membersHtml, /id="member-delete-custom-reason"/);
+  assert.match(membersHtml, /id="member-delete-confirm-step"/);
+  assert.match(membersHtml, /id="bin-dialog"/);
+  assert.match(membersHtml, /id="bin-type-filter"/);
+  assert.match(membersJs, /!membersWithContributions\.has\(member\.id\)/);
+  assert.match(membersJs, /rpc\('delete_member'/);
+  assert.match(membersJs, /rpc\('get_bin_items'/);
+  assert.match(membersJs, /rpc\('recover_bin_item'/);
+  const deleteBlock = core.match(/viewerDelete\.onclick[\s\S]*?finally \{[\s\S]*?\}\s*\};/)?.[0] || '';
+  assert.match(deleteBlock, /rpc\('delete_announcement'/);
+  assert.doesNotMatch(deleteBlock, /announcement-cleanup-media/);
+});
+
+test('review and void reasons appear in submitter notifications, calendar details, and record tables', () => {
+  const schema = read('database/schema.sql');
+  const migration = read('database/migrations/20261112_028_include_review_reason_in_notifications_and_calendar.sql');
+  const dashboard = read('js/dashboard.js');
+  const records = read('js/records.js');
+  const members = read('js/members.js');
+  const css = read('css/app.css');
+  for (const sql of [schema, migration]) {
+    assert.match(sql, /create or replace function public\.notify_record_activity\(\)[\s\S]*?'\\nReason: '[\s\S]*?char_length\(v_message\) > 500/);
+    assert.match(sql, /create or replace view public\.v_savings_calendar[\s\S]*?c\.review_note[\s\S]*?w\.review_note[\s\S]*?e\.review_note/);
+  }
+  assert.match(dashboard, /activity\.review_note/);
+  assert.match(records, /function reasonNoteHtml/);
+  assert.match(members, /review_note,void_reason/);
+  assert.match(css, /\.notification-item p\{[^}]*white-space:pre-line/);
+  assert.match(css, /\.record-reason-note/);
+});
+
+test('calendar day cells display circular status icons instead of text words', () => {
+  const dashboard = read('js/dashboard.js');
+  const heroCss = read('css/hero-plates.css');
+  assert.match(dashboard, /function eventIconMarkup\(klass\)/);
+  assert.match(dashboard, /aria-label="\$\{Ipon\.escapeHtml\(label\)\}">\$\{eventIconMarkup\(klass\)\}<\/span>/);
+  assert.match(heroCss, /\.day \.event \.status-icon/);
+  assert.match(heroCss, /\.day \{[^}]*display:grid;[^}]*grid-template-rows:auto minmax\(0,1fr\) auto/);
+  assert.match(heroCss, /\.day-avatars \{[^}]*grid-row:2;[^}]*overflow:hidden/);
+});

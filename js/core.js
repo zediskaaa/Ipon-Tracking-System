@@ -1923,13 +1923,12 @@
       if (!confirmed) return;
       setBusy(viewerDelete, true, 'Deleting…');
       try {
-        const removedAttachments = await rpc('delete_announcement', { p_announcement_id: target.id });
-        const paths = (Array.isArray(removedAttachments) ? removedAttachments : []).map((entry) => entry?.path).filter(Boolean);
-        if (paths.length) invokeAccountFunction({ action: 'announcement-cleanup-media', paths }).catch(() => {});
+        await rpc('delete_announcement', { p_announcement_id: target.id });
+        // Retain announcement attachments while deleted items remain recoverable for 1 month.
         openItemId = null;
         viewerDialog.close();
         await load();
-        toast('Announcement deleted.');
+        toast('Announcement moved to bin.');
       } catch (error) {
         toast(friendlyError(error), 'error');
       } finally {
