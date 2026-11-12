@@ -436,7 +436,7 @@
       link.innerHTML = `${recordTabIcons[link.getAttribute('href')] || ''}<span>${escapeHtml(label)}</span>`;
     });
     if (!document.getElementById('app-toast')) document.body.insertAdjacentHTML('beforeend', `
-      <div class="toast" id="app-toast" role="status" aria-live="polite"></div>
+      <div class="toast" id="app-toast" popover="manual" role="status" aria-live="polite"></div>
       <dialog class="confirm-dialog" id="confirm-dialog">
         <form method="dialog">
           <h2 id="confirm-title">Continue?</h2>
@@ -940,9 +940,13 @@
     if (!element) return;
     element.textContent = message;
     element.dataset.tone = tone;
+    try { element.hidePopover?.(); element.showPopover?.(); } catch {}
     element.classList.add('is-visible');
     window.clearTimeout(toast.timer);
-    toast.timer = window.setTimeout(() => element.classList.remove('is-visible'), 3500);
+    toast.timer = window.setTimeout(() => {
+      element.classList.remove('is-visible');
+      try { element.hidePopover?.(); } catch {}
+    }, 3500);
   }
 
   function friendlyError(error) {
@@ -1028,7 +1032,9 @@
   }
 
   async function changePassword(password, currentPassword) {
-    const { error } = await client.functions.invoke('manage-account', { body: { action: 'change-password', password, current_password: currentPassword } });
+    const { data: refreshed } = await client.auth.refreshSession().catch(() => ({ data: { session: null } }));
+    const headers = refreshed?.session?.access_token ? { Authorization: `Bearer ${refreshed.session.access_token}` } : undefined;
+    const { error } = await client.functions.invoke('manage-account', { headers, body: { action: 'change-password', password, current_password: currentPassword } });
     if (error) {
       const detail = await error.context?.json?.().catch(() => null);
       throw new Error(detail?.error || error.message);

@@ -186,7 +186,7 @@ a { color:inherit; }
 .dialog-close { display:grid; width:44px; height:44px; flex:0 0 44px; padding:0; place-items:center; border:1px solid var(--rule); border-radius:9px; background:#fffdf9; color:var(--ink); cursor:pointer; }
 .dialog-close svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
 .callout { padding:14px 16px; border:1px solid var(--rule); background:#f2dfb4; font-family:Arial,sans-serif; line-height:1.5; }
-.toast { position:fixed; right:24px; bottom:24px; z-index:120; max-width:390px; padding:14px 18px; border-radius:8px; background:var(--rail); color:#fff; box-shadow:var(--shadow); font-family:Arial,sans-serif; opacity:0; pointer-events:none; transform:translateY(12px); transition:.2s ease; }
+.toast { position:fixed; inset:auto 24px 24px auto; z-index:120; width:auto; height:auto; max-width:390px; margin:0; border:0; padding:14px 18px; border-radius:8px; background:var(--rail); color:#fff; box-shadow:var(--shadow); font-family:Arial,sans-serif; opacity:0; pointer-events:none; transform:translateY(12px); transition:.2s ease; }
 .toast.is-visible { opacity:1; transform:none; }
 .toast[data-tone="error"] { background:var(--red); }
 body[data-page]:not(.security-page):not(.is-ready) { background-color:#102b24; }
