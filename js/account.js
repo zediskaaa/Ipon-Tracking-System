@@ -86,9 +86,9 @@
   passwordForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const password = passwordForm.elements.password.value;
-    if (password !== passwordForm.elements.password_confirmation.value) { Ipon.toast('Passwords do not match.', 'error'); return; }
+    if (password !== passwordForm.elements.password_confirmation.value) { Ipon.setFieldError(passwordForm.elements.password_confirmation, 'Passwords do not match.'); passwordForm.elements.password_confirmation.focus(); return; }
     const issue = Ipon.passwordIssue(password, [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
-    if (issue) { Ipon.toast(issue, 'error'); return; }
+    if (issue) { Ipon.setFieldError(passwordForm.elements.password, issue); passwordForm.elements.password.focus(); return; }
     const button = event.submitter;
     Ipon.setBusy(button, true, 'Changing…');
     try { await Ipon.changePassword(password, passwordForm.elements.current_password.value); await Ipon.rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }); passwordForm.reset(); passwordChangeRequired = false; document.getElementById('temporary-password-notice').hidden = true; Ipon.toast('Password changed.'); finishSetupIfReady(); if (!onboarding) await load(); }

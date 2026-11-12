@@ -144,7 +144,7 @@
     if (signup) { password.minLength = 12; password.maxLength = 128; }
     else { password.removeAttribute('minlength'); password.removeAttribute('maxlength'); }
     document.getElementById('auth-title').textContent = signup ? 'Request administrator access' : 'Welcome back';
-    document.getElementById('auth-copy').textContent = signup ? 'The Super Admin reviews administrator access requests.' : 'Sign in to open your assigned panel.';
+    document.getElementById('auth-copy').textContent = signup ? 'The Super Admin reviews administrator access requests.' : 'Sign in to view your savings records.';
     submit.textContent = signup ? 'Request administrator access' : 'Sign in';
     clearFieldErrors();
     setPasswordVisibility(false);

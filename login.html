@@ -7,52 +7,140 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Sign in — IPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261110-2">
+  <link rel="stylesheet" href="css/app.css?v=20261112-8">
   <style>
-    .login-page{display:grid;min-height:100vh;grid-template-columns:minmax(280px,.9fr) minmax(360px,1.1fr)}
-    .login-story{display:flex;flex-direction:column;justify-content:space-between;padding:clamp(32px,6vw,86px);background:#172929;color:#f4e9dd}
-    .login-brand{display:flex;align-items:center;gap:clamp(14px,2vw,24px);font-size:clamp(58px,8vw,112px);font-weight:800;line-height:1}.login-brand-logo{width:clamp(52px,7vw,92px);height:clamp(52px,7vw,92px);flex:0 0 auto}.login-story h1{max-width:680px;margin:0;font-size:clamp(38px,5vw,72px);line-height:1.02}
-    .login-story p{max-width:560px;color:#d4d4c9;font:18px/1.6 Arial,sans-serif}.login-form-wrap{display:grid;place-items:center;padding:30px}
-    .login-card{width:min(470px,100%);padding:36px;border:1px solid var(--rule);border-radius:14px;background:rgba(248,239,229,.9);box-shadow:var(--shadow)}
-    .login-card h2{margin:0 0 7px;font-size:38px}.login-card>p{margin:0 0 26px;color:var(--muted);font-family:Arial,sans-serif}
-    .auth-tabs{display:flex;gap:8px;margin-bottom:24px}.auth-tabs button{flex:1;padding:10px;border:1px solid var(--rule);border-radius:6px;background:transparent;cursor:pointer}
-    .auth-tabs button.is-active{background:var(--rail);color:#fff}.login-card .form-grid{grid-template-columns:1fr}.login-card .button{width:100%;margin-top:8px}
+    .login-page{display:grid;min-height:100vh;grid-template-columns:minmax(380px,1.1fr) minmax(380px,.9fr);align-items:stretch;background:radial-gradient(circle at 30% 62%,rgba(48,104,74,.36) 0%,rgba(19,48,39,.2) 38%,transparent 66%),linear-gradient(135deg,#0d221d 0%,#081714 100%);color:#f4efe6}
+    .login-story{display:flex;width:100%;max-width:820px;min-height:100vh;justify-self:end;flex-direction:column;justify-content:flex-start;gap:0;padding:clamp(28px,4vw,52px) clamp(16px,2.5vw,36px) clamp(24px,3.5vw,42px) clamp(28px,5vw,72px);background:transparent;color:#f4efe6}
+    .login-brand{display:inline-flex;align-items:center;gap:14px;margin-bottom:clamp(18px,2.5vw,28px);color:#fff;font:800 clamp(34px,3.6vw,46px)/1 Arial,sans-serif;letter-spacing:-.02em}.login-brand-logo{width:52px;height:52px;flex:0 0 auto;padding:7px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(28,72,55,.78);box-shadow:0 6px 16px rgba(0,0,0,.25)}.login-story-copy{margin:0}.login-story-copy h1{max-width:680px;margin:0 0 14px;color:#fff;font:800 clamp(38px,4.3vw,58px)/1.06 Arial,sans-serif;letter-spacing:-.025em}
+    .login-story p{max-width:580px;margin:0;color:#a7b9b2;font:clamp(15px,1.15vw,17.5px)/1.58 Arial,sans-serif}.login-illustration{position:relative;display:flex;width:100%;flex:1;align-items:center;justify-content:center;margin:14px 0 6px;padding:0}.login-illustration svg{display:block;width:min(580px,100%);height:auto;overflow:visible}.login-form-wrap{display:grid;width:100%;max-width:660px;justify-self:start;place-items:center;padding:clamp(24px,3.5vw,48px) clamp(28px,4.5vw,64px) clamp(24px,3.5vw,48px) clamp(12px,2vw,28px)}
+    .login-card{position:relative;width:min(520px,100%);padding:42px 46px 36px 56px;border:0;border-radius:0 10px 10px 0;background:radial-gradient(circle at 0 11px,#0a1b17 6.5px,#f5eee0 7px) 0 6px/100% 22px repeat-y;color:#112622;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+    .login-card::before{position:absolute;top:0;bottom:0;left:20px;border-left:1px dashed rgba(20,45,43,.18);content:"";pointer-events:none}
+    .login-card h2{margin:0 0 6px;color:#112622;font:800 34px/1.12 Arial,sans-serif;letter-spacing:-.02em}.login-card>p{margin:0 0 24px;color:#6d7570;font:14.5px/1.45 Arial,sans-serif}
+    .auth-tabs{display:flex;align-items:center;gap:24px;margin:0 0 24px;border-bottom:1px solid rgba(20,45,43,.14)}.auth-tabs button{flex:0 0 auto;margin-bottom:-1px;padding:0 0 11px;border:0;border-bottom:2.5px solid transparent;border-radius:0;background:transparent;color:#7a827c;cursor:pointer;font:700 14px/1.2 Arial,sans-serif}
+    .auth-tabs button.is-active{border-bottom-color:#112622;background:transparent;color:#112622}.login-card .form-grid{grid-template-columns:1fr;gap:20px}.login-card .field{gap:5px}.login-card .field label{color:#5a655f;font:700 13px/1.2 Arial,sans-serif}.login-card .field input,.login-card .field textarea{min-height:40px;padding:8px 2px 9px;border:0;border-bottom:1.5px solid #2b3e39;border-radius:0;background:transparent;color:#112622;font:15.5px/1.35 Arial,sans-serif;box-shadow:none}.login-card .field input:-webkit-autofill,.login-card .field input:-webkit-autofill:hover,.login-card .field input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 1000px #f5eee0 inset!important;-webkit-text-fill-color:#112622!important;caret-color:#112622}.login-card .field textarea{min-height:58px}.login-card .field input:focus,.login-card .field textarea:focus{border-bottom-color:var(--green);box-shadow:0 1px 0 0 var(--green)}.login-card .field input[aria-invalid="true"],.login-card .field textarea[aria-invalid="true"],.login-card .field input[aria-invalid="true"]:focus,.login-card .field textarea[aria-invalid="true"]:focus{border-bottom-color:var(--red);background:rgba(174,57,52,.05);box-shadow:0 1px 0 0 var(--red)}.login-card .button{width:100%;min-height:48px;margin-top:22px;border-radius:6px;background:#112622;color:#fff;font:700 15px/1 Arial,sans-serif;box-shadow:0 6px 16px rgba(10,28,23,.2)}.login-card .button:hover{background:#1a3832}#auth-submit:not(.is-busy)::after{margin-left:8px;content:"\2192";font-size:16px;line-height:1}
     body.is-request-mode .login-page{grid-template-columns:minmax(280px,.9fr) minmax(680px,1.1fr)}
     body.is-request-mode .login-story{display:flex}
-    body.is-request-mode .login-form-wrap{padding:clamp(24px,3vw,44px)}
-    body.is-request-mode .login-card{display:grid;width:min(840px,100%);grid-template-columns:minmax(0,1fr) auto;column-gap:22px;padding:clamp(24px,2.5vw,30px)}
-    body.is-request-mode .login-card h2{grid-column:1;grid-row:1;margin-bottom:5px;font-size:clamp(32px,2.5vw,40px)}
-    body.is-request-mode .login-card>p{grid-column:1;grid-row:2;margin-bottom:18px}
-    body.is-request-mode .auth-tabs{width:180px;grid-column:2;grid-row:1/3;align-self:start;margin:2px 0 0}
+    body.is-request-mode .login-form-wrap{max-width:920px;padding:clamp(24px,3vw,44px)}
+    body.is-request-mode .login-card{display:grid;width:min(840px,100%);grid-template-columns:minmax(0,1fr) auto;column-gap:22px;padding:clamp(26px,2.5vw,32px) clamp(28px,3vw,36px) clamp(26px,2.5vw,32px) 48px}
+    body.is-request-mode .login-card h2{grid-column:1;grid-row:2;margin-bottom:5px;font-size:clamp(26px,2.3vw,32px)}
+    body.is-request-mode .login-card>p{grid-column:1;grid-row:3;margin-bottom:18px}
+    body.is-request-mode .auth-tabs{width:100%;grid-column:1/-1;grid-row:1;margin:0 0 16px}
     body.is-request-mode #show-signup{display:none}
     body.is-request-mode :is(.development-notice,.login-legal){display:none}
     body.is-request-mode #auth-form{grid-column:1/-1}
-    body.is-request-mode .login-card .form-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px 18px}
+    body.is-request-mode .login-card .form-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:14px 18px}
     body.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field){grid-column:span 2}
     body.is-request-mode :is(#contact-number-field,#email-field,#password-field,#password-confirmation-field){grid-column:span 3}
     body.is-request-mode #request-reason-field{grid-column:1/-1}
-    body.is-request-mode #request-reason{min-height:64px}
+    body.is-request-mode #request-reason{min-height:54px}
     body.is-request-mode .password-strength{display:block;margin-top:4px}
-    .password-control{position:relative}.password-control input{padding-inline-end:72px}.password-toggle{position:absolute;inset-block:6px;inset-inline-end:6px;min-width:58px;border:0;border-radius:5px;background:rgba(20,45,43,.08);color:var(--ink);cursor:pointer;font:700 12px Arial,sans-serif}.password-toggle:hover{background:rgba(20,45,43,.14)}.password-toggle:focus-visible{outline:3px solid rgba(40,122,76,.28);outline-offset:2px}
-    .auth-message{min-height:22px;margin:16px 0 0!important;color:var(--red)!important;font-size:14px}.auth-message[data-tone="success"]{color:var(--green)!important}.tracking-note{padding-top:30px;border-top:1px solid rgba(255,255,255,.18)}
-    .development-notice{display:grid;gap:3px;margin-top:18px;padding:12px 14px;border:1px solid #c89942;border-radius:10px;background:#fff3ce;color:#554522;font:13px/1.45 Arial,sans-serif}.development-notice strong{color:var(--ink)}
-    .login-legal{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:15px;color:var(--muted);font:13px/1.4 Arial,sans-serif}.login-legal button{border:0;padding:2px;background:transparent;color:var(--green);cursor:pointer;font:700 inherit;text-decoration:underline;text-underline-offset:3px}
-    .policy-dialog{width:min(680px,calc(100vw - 28px));max-height:min(82dvh,760px);padding:0;border:0;border-radius:16px;background:var(--paper);color:var(--ink);box-shadow:0 24px 70px rgba(7,35,26,.3)}.policy-dialog::backdrop{background:rgba(7,35,26,.64)}.policy-sheet{max-height:min(82dvh,760px);overflow:auto}.policy-header{position:sticky;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:22px 24px 18px;border-bottom:1px solid var(--rule);background:var(--paper)}.policy-header h2{margin:0;font-size:30px}.policy-header p{margin:5px 0 0;color:var(--muted);font:13px/1.4 Arial,sans-serif}.policy-content{padding:22px 24px 28px}.policy-content h3{margin:22px 0 7px;font-size:20px}.policy-content h3:first-child{margin-top:0}.policy-content p,.policy-content li{color:#465651;font:14px/1.6 Arial,sans-serif}.policy-content ul{padding-inline-start:20px}.policy-content a{color:var(--green);font-weight:700}
+    .password-control{position:relative}.password-control input{padding-inline-end:52px}.password-toggle{position:absolute;inset-block:2px;inset-inline-end:0;min-width:44px;border:0;border-radius:4px;padding:4px 2px;background:transparent;color:#112622;cursor:pointer;font:700 12.5px Arial,sans-serif;text-decoration:underline;text-underline-offset:3px}.password-toggle:hover{color:var(--green)}.password-toggle:focus-visible{outline:3px solid rgba(40,122,76,.28);outline-offset:2px}
+    .auth-message{min-height:18px;margin:10px 0 0!important;color:var(--red)!important;font:13px/1.4 Arial,sans-serif}.auth-message:empty{display:none}.auth-message[data-tone="success"]{color:var(--green)!important}.tracking-note{display:flex;align-items:center;gap:10px;padding-top:12px;border-top:0;color:#9eb0a9!important;font:13.5px/1.4 Arial,sans-serif!important}.tracking-note::before{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#dfb15b;content:""}
+    .login-card .auth-link{margin:12px auto 0;color:#2f6f52;font:600 13px/1.2 Arial,sans-serif}
+    .development-notice{display:grid;gap:3px;margin-top:16px;padding:12px 14px;border:1px dashed #cbb07a;border-radius:6px;background:#efe4cc;color:#5c4b2b;font:12px/1.45 Arial,sans-serif}.development-notice strong{color:#3f3116;font-size:12.5px}
+    .login-legal{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:14px;color:var(--muted);font:12.5px/1.4 Arial,sans-serif}.login-legal span{display:none}.login-legal button{border:0;padding:2px;background:transparent;color:#2f6f52;cursor:pointer;font:600 inherit;text-decoration:underline;text-underline-offset:3px}
+    .policy-dialog{width:min(680px,calc(100vw - 28px));max-height:min(82dvh,760px);padding:0;border:0;border-radius:16px;background:#f5eee0;color:var(--ink);box-shadow:0 24px 70px rgba(7,35,26,.4)}.policy-dialog::backdrop{background:rgba(7,35,26,.68)}.policy-sheet{max-height:min(82dvh,760px);overflow:auto}.policy-header{position:sticky;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:22px 24px 18px;border-bottom:1px solid var(--rule);background:#f5eee0}.policy-header h2{margin:0;font:800 28px/1.1 Arial,sans-serif}.policy-header p{margin:5px 0 0;color:var(--muted);font:13px/1.4 Arial,sans-serif}.policy-content{padding:22px 24px 28px}.policy-content h3{margin:22px 0 7px;font:800 18px/1.2 Arial,sans-serif}.policy-content h3:first-child{margin-top:0}.policy-content p,.policy-content li{color:#465651;font:14px/1.6 Arial,sans-serif}.policy-content ul{padding-inline-start:20px}.policy-content a{color:var(--green);font-weight:700}
     @media(max-width:1180px){body.is-request-mode .login-page{grid-template-columns:1fr}body.is-request-mode .login-story{display:none}}
-    @media(max-width:780px){.login-page{grid-template-columns:1fr}.login-form-wrap{grid-row:1;padding:20px}.login-story{grid-row:2;min-height:0;padding:28px;gap:24px}.login-story h1{font-size:34px}.login-brand{font-size:46px}.login-card{padding:26px}body.is-request-mode .login-form-wrap{padding:16px}body.is-request-mode .login-card{display:block;padding:24px}body.is-request-mode .login-card h2{font-size:34px}body.is-request-mode .login-card>p{margin-bottom:22px}body.is-request-mode .auth-tabs{width:100%;margin-bottom:24px}body.is-request-mode .login-card .form-grid{grid-template-columns:1fr;gap:18px}body.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field,#contact-number-field,#email-field,#request-reason-field,#password-field,#password-confirmation-field){grid-column:auto}}
+    @media(max-width:780px){.login-page{grid-template-columns:1fr}.login-form-wrap{grid-row:1;padding:20px}.login-story{grid-row:2;min-height:0;padding:28px;gap:24px}.login-story-copy h1{font-size:32px}.login-brand{font-size:30px}.login-card{padding:26px 24px 24px 38px}body.is-request-mode .login-form-wrap{padding:16px}body.is-request-mode .login-card{display:block;padding:24px 22px 24px 38px}body.is-request-mode .login-card h2{font-size:28px}body.is-request-mode .login-card>p{margin-bottom:20px}body.is-request-mode .auth-tabs{width:100%;margin-bottom:18px}body.is-request-mode .login-card .form-grid{grid-template-columns:1fr;gap:16px}body.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field,#contact-number-field,#email-field,#request-reason-field,#password-field,#password-confirmation-field){grid-column:auto}}
   </style>
 </head>
 <body>
   <main class="login-page">
     <section class="login-story">
       <div class="login-brand"><img class="login-brand-logo" src="assets/favicon.svg" alt=""><span>IPON</span></div>
-      <div><h1>Your group’s savings, clearly recorded.</h1><p>Additions, deductions, and expenses stay traceable on one monthly calendar. This records real-world money; it does not hold or transfer funds.</p></div>
+      <div class="login-story-copy"><h1>Your group’s savings, clearly recorded.</h1><p>Additions, deductions, and expenses stay traceable on one monthly calendar. This records real-world money; it does not hold or transfer funds.</p></div>
+      <div class="login-illustration" aria-hidden="true">
+        <svg viewBox="32 22 356 296" role="presentation">
+          <defs>
+            <radialGradient id="hero-glow" cx="50%" cy="54%" r="50%">
+              <stop offset="0%" stop-color="#c69c3a" stop-opacity=".28"/>
+              <stop offset="55%" stop-color="#2c6e49" stop-opacity=".14"/>
+              <stop offset="100%" stop-color="#0d221d" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="coin-edge" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#8b5e14"/>
+              <stop offset="22%" stop-color="#d8a848"/>
+              <stop offset="48%" stop-color="#fae08c"/>
+              <stop offset="76%" stop-color="#c69231"/>
+              <stop offset="100%" stop-color="#754c0c"/>
+            </linearGradient>
+            <linearGradient id="coin-face" x1="15%" y1="10%" x2="85%" y2="90%">
+              <stop offset="0%" stop-color="#fbe59b"/>
+              <stop offset="50%" stop-color="#deb152"/>
+              <stop offset="100%" stop-color="#a8761e"/>
+            </linearGradient>
+            <linearGradient id="leaf-left" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#85d89a"/>
+              <stop offset="100%" stop-color="#2f8554"/>
+            </linearGradient>
+            <linearGradient id="leaf-right" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#358c58"/>
+              <stop offset="100%" stop-color="#9be3ab"/>
+            </linearGradient>
+          </defs>
+          <circle cx="210" cy="178" r="158" fill="url(#hero-glow)"/>
+          <circle cx="210" cy="178" r="148" fill="none" stroke="rgba(218,184,104,.14)" stroke-width="1"/>
+          <circle cx="210" cy="178" r="112" fill="none" stroke="rgba(218,184,104,.17)" stroke-width="1"/>
+          <circle cx="210" cy="178" r="76" fill="none" stroke="rgba(218,184,104,.22)" stroke-width="1"/>
+          <path d="M318 88l4 10 10 4-10 4-4 10-4-10-10-4 10-4zM96 146l3 7.5 7.5 3-7.5 3-3 7.5-3-7.5-7.5-3 7.5-3zM340 168l2.5 6.5 6.5 2.5-6.5 2.5-2.5 6.5-2.5-6.5-6.5-2.5 6.5-2.5z" fill="#e6c46a" opacity=".9"/>
+          <ellipse cx="208" cy="302" rx="160" ry="20" fill="rgba(0,0,0,.44)"/>
+          <g transform="translate(-4, -34) scale(1.18)">
+            <g transform="translate(46,258)">
+              <ellipse cx="42" cy="24" rx="44" ry="10" fill="rgba(0,0,0,.3)"/>
+              <path d="M2 10h80v10c0 5.5-17.9 10-40 10S2 25.5 2 20z" fill="url(#coin-edge)"/>
+              <path d="M2 20a40 10 0 0 0 80 0" fill="none" stroke="#5e3b06" stroke-width="1.2"/>
+              <ellipse cx="42" cy="10" rx="40" ry="10" fill="url(#coin-face)" stroke="#f8e49c" stroke-width="1"/>
+            </g>
+            <g transform="translate(122,118)">
+              <g>
+                <path d="M0 20h136v130c0 12-30.4 22-68 22S0 162 0 150z" fill="url(#coin-edge)"/>
+                <g stroke="#7a4e0c" stroke-opacity=".42" stroke-width="1.15">
+                  <line x1="8" y1="26" x2="8" y2="156"/><line x1="16" y1="30" x2="16" y2="160"/><line x1="25" y1="34" x2="25" y2="164"/><line x1="35" y1="37" x2="35" y2="167"/><line x1="46" y1="39" x2="46" y2="169"/><line x1="57" y1="41" x2="57" y2="171"/><line x1="68" y1="42" x2="68" y2="172"/><line x1="79" y1="41" x2="79" y2="171"/><line x1="90" y1="39" x2="90" y2="169"/><line x1="101" y1="37" x2="101" y2="167"/><line x1="111" y1="34" x2="111" y2="164"/><line x1="120" y1="30" x2="120" y2="160"/><line x1="128" y1="26" x2="128" y2="156"/>
+                </g>
+                <g fill="none" stroke="#5c3906" stroke-width="2">
+                  <path d="M0 36a68 22 0 0 0 136 0"/>
+                  <path d="M0 52a68 22 0 0 0 136 0"/>
+                  <path d="M0 68a68 22 0 0 0 136 0"/>
+                  <path d="M0 84a68 22 0 0 0 136 0"/>
+                  <path d="M0 100a68 22 0 0 0 136 0"/>
+                  <path d="M0 116a68 22 0 0 0 136 0"/>
+                  <path d="M0 132a68 22 0 0 0 136 0"/>
+                  <path d="M0 150a68 22 0 0 0 136 0"/>
+                </g>
+                <g fill="none" stroke="#fce9a6" stroke-opacity=".75" stroke-width="1">
+                  <path d="M0 37.5a68 22 0 0 0 136 0"/>
+                  <path d="M0 53.5a68 22 0 0 0 136 0"/>
+                  <path d="M0 69.5a68 22 0 0 0 136 0"/>
+                  <path d="M0 85.5a68 22 0 0 0 136 0"/>
+                  <path d="M0 101.5a68 22 0 0 0 136 0"/>
+                  <path d="M0 117.5a68 22 0 0 0 136 0"/>
+                  <path d="M0 133.5a68 22 0 0 0 136 0"/>
+                </g>
+                <ellipse cx="68" cy="20" rx="68" ry="22" fill="url(#coin-face)" stroke="#fae6a0" stroke-width="1.2"/>
+                <ellipse cx="68" cy="20" rx="56" ry="17" fill="none" stroke="#9e6d19" stroke-opacity=".5" stroke-width="1.2"/>
+                <text x="68" y="28" text-anchor="middle" fill="#8a5b10" font-family="Arial,sans-serif" font-size="26" font-weight="900" transform="translate(68,20) scale(1.3,.56) translate(-68,-20)">&#8369;</text>
+              </g>
+              <path d="M68 18V-30" fill="none" stroke="#459c67" stroke-width="4.5" stroke-linecap="round"/>
+              <path d="M68-12C40-12 18-30 16-54c26-4 50 10 52 42z" fill="url(#leaf-left)"/>
+              <path d="M68-20C98-24 122-44 126-70c-28-4-54 14-58 50z" fill="url(#leaf-right)"/>
+              <path d="M68-12C48-22 34-36 20-50M68-20c18-14 35-30 52-46" fill="none" stroke="#a9ecc0" stroke-opacity=".55" stroke-width="1.4" stroke-linecap="round"/>
+            </g>
+            <g transform="translate(302,244) rotate(-14)">
+              <ellipse cx="0" cy="34" rx="34" ry="8" fill="rgba(0,0,0,.32)" transform="rotate(14)"/>
+              <circle cx="4" cy="2" r="32" fill="#875a12"/>
+              <circle cx="0" cy="0" r="32" fill="url(#coin-face)" stroke="#fae6a2" stroke-width="1"/>
+              <circle cx="0" cy="0" r="24" fill="#d7a644" stroke="#9b6a17" stroke-opacity=".5" stroke-width="1.2"/>
+              <text x="0" y="9" text-anchor="middle" fill="#7c4f0b" font-family="Arial,sans-serif" font-size="26" font-weight="900">&#8369;</text>
+            </g>
+          </g>
+        </svg>
+      </div>
       <p class="tracking-note">Only confirmed records affect the tracked savings total.</p>
     </section>
     <section class="login-form-wrap">
       <div class="login-card">
-<h2 id="auth-title">Welcome back</h2><p id="auth-copy">Sign in to view your savings records.</p>
         <div class="auth-tabs" aria-label="Account access"><button class="is-active" id="show-login" type="button" aria-controls="auth-form">Sign in</button><button id="show-signup" type="button" aria-controls="auth-form">Request admin access</button></div>
+        <h2 id="auth-title">Welcome back</h2><p id="auth-copy">Sign in to view your savings records.</p>
         <form id="auth-form" aria-labelledby="auth-title" novalidate>
           <div class="form-grid">
             <div class="field" id="first-name-field" hidden><label for="first-name">First name</label><input id="first-name" name="first_name" autocomplete="given-name" maxlength="80" aria-describedby="first-name-error"><small class="field-error" id="first-name-error" role="alert" hidden></small></div>

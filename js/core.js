@@ -157,13 +157,60 @@
 
   const NAME_RULE = 'Use letters, spaces, hyphens, or apostrophes only.';
 
+  function getFieldErrorElement(control, create = false) {
+    let error = (control.getAttribute('aria-describedby') || '').split(/\s+/).map((id) => document.getElementById(id)).find((element) => element?.classList.contains('field-error'));
+    const container = control.closest('.field,.decision-options');
+    if (!error && container) error = container.querySelector('.field-error');
+    if (!error && create && container) {
+      error = document.createElement('small');
+      error.className = 'field-error';
+      error.setAttribute('role', 'alert');
+      error.hidden = true;
+      container.append(error);
+    }
+    return error || null;
+  }
+
+  function setFieldError(control, message) {
+    control.toggleAttribute('aria-invalid', Boolean(message));
+    const error = getFieldErrorElement(control, Boolean(message));
+    if (error) {
+      error.textContent = message;
+      error.hidden = !message;
+    }
+  }
+
+  function getValidationMessage(control) {
+    const validity = control.validity;
+    if (!validity || validity.valid) return '';
+    if (validity.customError) return control.validationMessage;
+    const rawLabel = (control.labels?.[0]?.textContent || control.closest('.field')?.querySelector('label')?.textContent || 'This field').replace(/\s*\(optional\)\s*/i, '').trim();
+    const lowerLabel = rawLabel.toLowerCase();
+    if (validity.valueMissing) return control.tagName === 'SELECT' ? `Select a ${lowerLabel}.` : `${rawLabel} is required.`;
+    if (validity.typeMismatch) return control.type === 'email' ? 'Enter a valid email address.' : `Enter a valid ${lowerLabel}.`;
+    if (validity.badInput) return `Enter a valid ${lowerLabel}.`;
+    if (validity.rangeUnderflow) {
+      if (control.type === 'number' && Number(control.min) > 0 && Number(control.min) <= 1) return 'Enter an amount greater than zero.';
+      if (control.type === 'date' || control.type === 'month') return `${rawLabel} cannot be earlier than ${control.min}.`;
+      return `Enter a value of at least ${control.min}.`;
+    }
+    if (validity.rangeOverflow) {
+      if (control.hasAttribute('data-max-today')) return `${rawLabel} cannot be in the future.`;
+      if (control.hasAttribute('data-max-current-month')) return `${rawLabel} cannot be after the current month.`;
+      return `Enter a value no greater than ${control.max}.`;
+    }
+    if (validity.stepMismatch) return control.step === '0.01' ? 'Enter a valid amount with up to 2 decimal places.' : `Enter a valid ${lowerLabel}.`;
+    if (validity.tooShort) return `Enter at least ${control.minLength} characters.`;
+    if (validity.tooLong) return `Use ${control.maxLength} characters or fewer.`;
+    if (validity.patternMismatch) return control.title || `Enter a valid ${lowerLabel}.`;
+    return control.validationMessage || `Enter a valid ${lowerLabel}.`;
+  }
+
   function validateNameInput(input) {
     const value = normalizeNamePart(input.value);
     const message = !value && input.required ? 'Enter this name.' : value && !validNamePart(value) ? NAME_RULE : '';
     input.setCustomValidity(message);
-    input.toggleAttribute('aria-invalid', Boolean(message));
-    const error = (input.getAttribute('aria-describedby') || '').split(/\s+/).map((id) => document.getElementById(id)).find((element) => element?.classList.contains('field-error'));
-    if (error) { error.textContent = message; error.hidden = !message; }
+    setFieldError(input, message);
     return !message;
   }
 
@@ -191,9 +238,7 @@
     const value = input.value.trim();
     const message = !value && input.required ? 'Enter your mobile number.' : value && !validPhoneNumber(value) ? PHONE_RULE : '';
     input.setCustomValidity(message);
-    input.toggleAttribute('aria-invalid', Boolean(message));
-    const error = (input.getAttribute('aria-describedby') || '').split(/\s+/).map((id) => document.getElementById(id)).find((element) => element?.classList.contains('field-error'));
-    if (error) { error.textContent = message; error.hidden = !message; }
+    setFieldError(input, message);
     return !message;
   }
 
@@ -212,6 +257,48 @@
       });
       input.addEventListener('blur', () => validatePhoneInput(input));
       input.addEventListener('invalid', () => validatePhoneInput(input));
+    });
+  }
+
+  function prepareFormValidation() {
+    if (document.documentElement.dataset.validationBound) return;
+    document.documentElement.dataset.validationBound = 'true';
+    const syncControl = (control) => {
+      if (!(control instanceof HTMLElement) || !control.matches('input,select,textarea')) return;
+      if (control.matches('input[name="first_name"],input[name="middle_name"],input[name="last_name"]')) {
+        validateNameInput(control);
+        return;
+      }
+      if (control.matches('input[type="tel"]')) {
+        validatePhoneInput(control);
+        return;
+      }
+      setFieldError(control, control.checkValidity() ? '' : getValidationMessage(control));
+    };
+    document.addEventListener('invalid', (event) => {
+      const control = event.target;
+      if (!(control instanceof HTMLElement) || !control.matches('input,select,textarea')) return;
+      event.preventDefault();
+      syncControl(control);
+      const firstInvalid = control.form?.querySelector(':invalid,[aria-invalid="true"]');
+      if (!firstInvalid || firstInvalid === control) control.focus();
+    }, true);
+    const onEdit = (event) => {
+      const control = event.target;
+      if (!(control instanceof HTMLElement) || !control.matches('input,select,textarea') || !control.hasAttribute('aria-invalid')) return;
+      syncControl(control);
+    };
+    document.addEventListener('input', onEdit);
+    document.addEventListener('change', onEdit);
+    document.addEventListener('reset', (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      window.requestAnimationFrame(() => {
+        form.querySelectorAll('input,select,textarea').forEach((control) => {
+          control.setCustomValidity('');
+          setFieldError(control, '');
+        });
+      });
     });
   }
 
@@ -350,7 +437,7 @@
         <div class="notification-sheet"><header><div class="notification-heading"><h2 id="notification-title">Notifications</h2><span>Recent activity</span></div><div class="notification-header-actions"><button class="notification-mark-read" id="mark-all-notifications" type="button">Mark all read</button><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header><div class="notification-list" id="notification-list" role="feed"><p class="empty-state">Loading notifications…</p></div></div>
       </dialog>
       <dialog class="donate-dialog" id="donate-dialog" aria-labelledby="donate-title">
-        <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button></div>
+        <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><img class="donate-sticker" src="assets/donate-sticker.jpg" alt="" aria-hidden="true"><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button></div>
       </dialog>
       <dialog class="form-dialog feature-request-dialog" id="feature-request-dialog" aria-labelledby="feature-request-title">
         <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="feature-request-title">Request a feature</h2><p>Describe an improvement that would make IPON more useful to you.</p></div><button class="dialog-close" data-feature-request-close type="button" aria-label="Close feature request form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="feature-request-form" class="form-grid"><div class="field field-wide"><label for="feature-request-name">Feature name</label><input id="feature-request-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="feature-request-details">How should it work?</label><textarea id="feature-request-details" name="details" minlength="10" maxlength="2000" aria-describedby="feature-request-help" required></textarea><small class="field-help" id="feature-request-help">Explain the problem and the result you want. Do not include passwords or financial account details.</small></div><p class="mfa-message field-wide" id="feature-request-message" role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" data-feature-request-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit request</button></div></form><div class="feature-request-success" id="feature-request-success" role="status" aria-live="polite" hidden><span class="feature-request-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><h3>Feature request submitted</h3><p>Your suggestion <strong id="feature-request-submitted-title"></strong> has been sent to the Super Admin for review.</p><div class="form-actions"><button class="button button-secondary" id="feature-request-another" type="button">Submit another</button><button class="button button-primary" data-feature-request-close type="button">Done</button></div></div></div>
@@ -535,9 +622,17 @@
     passwordForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const password = passwordForm.elements.password.value;
-      if (password !== passwordForm.elements.password_confirmation.value) return toast('Passwords do not match.', 'error');
+      if (password !== passwordForm.elements.password_confirmation.value) {
+        setFieldError(passwordForm.elements.password_confirmation, 'Passwords do not match.');
+        passwordForm.elements.password_confirmation.focus();
+        return;
+      }
       const issue = passwordIssue(password, [profileForm.elements.first_name.value, profileForm.elements.middle_name.value, profileForm.elements.last_name.value, emailForm.elements.email.value]);
-      if (issue) return toast(issue, 'error');
+      if (issue) {
+        setFieldError(passwordForm.elements.password, issue);
+        passwordForm.elements.password.focus();
+        return;
+      }
       const button = event.submitter;
       setBusy(button, true, 'Changing…');
       try {
@@ -740,6 +835,7 @@
 
   async function init(options = {}) {
     mountShell();
+    prepareFormValidation();
     prepareNameInputs();
     preparePhoneInputs();
     prepareResponsiveTables();
@@ -958,9 +1054,11 @@
     showStartupFailure(event.reason);
   });
 
+  prepareFormValidation();
+
   window.Ipon = {
     client, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, subscribeToChanges,
+    escapeHtml, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();

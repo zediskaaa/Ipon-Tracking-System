@@ -187,6 +187,11 @@ test('phone fields reject letters and incomplete accounts finish setup before pa
 
 test('name fields reject numbers and unsupported symbols across every form', () => {
   const core = read('js/core.js');
+  const css = read('css/app.css');
+  assert.match(core, /function prepareFormValidation\(\)/);
+  assert.match(core, /function getValidationMessage\(control\)/);
+  assert.match(core, /document\.addEventListener\('invalid',[\s\S]*?event\.preventDefault\(\)/);
+  assert.match(css, /\.field select\[aria-invalid="true"\]:focus/);
   assert.match(core, /function prepareNameInputs\(\)/);
   assert.match(core, /input\[name="first_name"\],input\[name="middle_name"\],input\[name="last_name"\]/);
   assert.ok(core.includes("input.value = input.value.replace(/[^\\p{L}\\p{M} '\\u2019-]/gu, '');"));
@@ -231,7 +236,7 @@ test('account settings open from the responsive identity control', () => {
   assert.match(core, /id="account-dialog"/);
   assert.match(core, /class="account-card account-profile-card"/);
   assert.match(core, /class="account-support"[\s\S]*?data-donate-open[\s\S]*?>Donate me</);
-  assert.match(core, /id="donate-dialog"[\s\S]*?id="copy-donate-number"/);
+  assert.match(core, /id="donate-dialog"[\s\S]*?class="donate-sticker" src="assets\/donate-sticker\.jpg"[\s\S]*?id="copy-donate-number"/);
   assert.match(core, /data-donate-open[\s\S]*?donate\?\.showModal\(\)/);
   assert.match(core, /class="account-side-stack"/);
   assert.match(core, /class="account-password-disclosure"/);
@@ -396,6 +401,10 @@ test('large record lists use server-side counts, filters, and ranges', () => {
   assert.match(records, /\.eq\('approval_status'/);
   assert.match(records, /\.range\(/);
   assert.doesNotMatch(records, /\.limit\(200\)/);
+  assert.match(read('withdrawals.html'), /<select id="responsible" name="person_responsible" required>/);
+  assert.match(read('expenses.html'), /<select id="responsible" name="person_responsible" required>/);
+  assert.match(records, /function populateResponsibleSelect/);
+  assert.match(records, /responsibleSelect\.closest\('\.field'\)\.hidden = true/);
   assert.match(members, /\.ilike\('full_name'/);
   assert.match(members, /\.eq\('status'/);
   assert.match(members, /\.range\(/);
@@ -481,9 +490,13 @@ test('mobile navigation and data tables do not require horizontal scrolling', ()
 test('reports keep a compact desktop rhythm', () => {
   const html = read('reports.html');
   const css = read('css/app.css');
+  const script = read('js/reports.js');
   assert.equal((html.match(/class="panel report-panel"/g) || []).length, 3);
   assert.match(css, /\.report-panel\s*\{[^}]*padding:20px 22px/);
   assert.match(css, /\.report-chart\{height:240px\}/);
+  assert.match(css, /@media print\{[\s\S]*?\.compact-filter,\.table-filters,\.panel-header>select[\s\S]*?display:none!important/);
+  assert.match(css, /@media print\{[\s\S]*?\.panel-header\[data-print-meta\]::after/);
+  assert.match(script, /setAttribute\('data-print-meta'/);
 });
 
 test('shared desktop surfaces use a compact layout rhythm', () => {

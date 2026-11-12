@@ -499,6 +499,10 @@ button,a { color:inherit; font:inherit; }
   text-align:left;
 }
 
+.day-detail-panel .day-detail-list .empty-state::before {
+  display:none;
+}
+
 .day-detail-panel .day-detail-list article {
   display:grid;
   grid-template-columns:1fr auto;
@@ -637,7 +641,29 @@ button,a { color:inherit; font:inherit; }
 }
 
 .review-item.is-empty-review {
+  grid-template-columns:1fr;
+  justify-items:center;
+  padding:22px 14px;
+  text-align:center;
   cursor:default;
+}
+
+.review-item.is-empty-review .status-icon {
+  width:52px;
+  height:52px;
+  flex:0 0 52px;
+  border-radius:13px;
+  background:url("../assets/favicon.svg") center/contain no-repeat;
+  box-shadow:0 6px 16px rgba(10,37,31,.14);
+}
+
+.review-item.is-empty-review .status-icon svg,
+.review-item.is-empty-review strong {
+  display:none;
+}
+
+.review-item.is-empty-review span {
+  align-items:center;
 }
 
 .review-summary {

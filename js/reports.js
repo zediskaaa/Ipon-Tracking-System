@@ -10,13 +10,22 @@
   let monthlyRows = [], memberRows = [], chart;
 
   function renderMonthly() {
+    yearFilter.closest('.panel-header')?.setAttribute('data-print-meta', `Year: ${yearFilter.value}`);
     const rows = monthlyRows.filter((row) => row.month.startsWith(yearFilter.value));
     monthlyBody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${Ipon.dateLabel(row.month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.total_additions)}</td><td>${Ipon.money(row.total_deductions)}</td><td>${Ipon.money(row.total_expenses)}</td><td>${Ipon.money(row.net_change)}</td></tr>`).join('') : '<tr><td colspan="5" class="empty-state">No confirmed activity for this year.</td></tr>';
     chart?.destroy();
-    if (rows.length && window.Chart) chart = new Chart(document.getElementById('monthly-chart'), { type: 'bar', data: { labels: rows.map((row) => Ipon.dateLabel(row.month, { month: 'short' })), datasets: [{ label: 'Additions', data: rows.map((row) => row.total_additions), backgroundColor: '#287a4c' }, { label: 'Deductions + expenses', data: rows.map((row) => Number(row.total_deductions) + Number(row.total_expenses)), backgroundColor: '#ae3934' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+    const chartCanvas = document.getElementById('monthly-chart');
+    const chartEmpty = document.getElementById('monthly-chart-empty');
+    if (chartCanvas) chartCanvas.hidden = !rows.length;
+    if (chartEmpty) chartEmpty.hidden = Boolean(rows.length);
+    const baselineMax = Math.max(1000, memberRows.reduce((sum, row) => sum + (Number(row.required_amount) || 0), 0));
+    if (rows.length && window.Chart) chart = new Chart(chartCanvas, { type: 'bar', data: { labels: rows.map((row) => Ipon.dateLabel(row.month, { month: 'short' })), datasets: [{ label: 'Additions', data: rows.map((row) => row.total_additions), backgroundColor: '#287a4c', maxBarThickness: 42 }, { label: 'Deductions + expenses', data: rows.map((row) => Number(row.total_deductions) + Number(row.total_expenses)), backgroundColor: '#ae3934', maxBarThickness: 42 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, suggestedMax: baselineMax, ticks: { maxTicksLimit: 6, precision: 0, callback: (value) => `₱${Number(value).toLocaleString('en-PH')}` } } } } });
   }
 
   async function loadMembers() {
+    const monthText = monthFilter.value ? Ipon.dateLabel(`${monthFilter.value}-01`, { month: 'long', year: 'numeric' }) : '';
+    const statusText = statusFilter.options[statusFilter.selectedIndex]?.text || 'All statuses';
+    monthFilter.closest('.panel-header')?.setAttribute('data-print-meta', [monthText, statusText].filter(Boolean).join(' · '));
     let query = Ipon.client.from('v_contribution_status').select('*').eq('period_month', `${monthFilter.value}-01`).order('member_name');
     if (statusFilter.value) query = query.eq('payment_status', statusFilter.value);
     const { data, error } = await query; if (error) throw error; memberRows = data || [];
@@ -34,12 +43,14 @@
     yearFilter.innerHTML = years.map((year) => `<option>${year}</option>`).join('');
     yearFilter.value = years.includes(selectedYear) ? selectedYear : years[0];
     monthFilter.value = selectedMonth || Ipon.monthStart().slice(0, 7);
-    renderMonthly(); await loadMembers();
+    await loadMembers(); renderMonthly();
   }
 
   yearFilter.addEventListener('change', renderMonthly);
   [monthFilter, statusFilter].forEach((filter) => filter.addEventListener('change', () => loadMembers().catch((error) => Ipon.showInlineError(memberBody, error, loadMembers, 5))));
-  document.getElementById('print-report').addEventListener('click', () => window.print());
+  window.addEventListener('beforeprint', () => chart?.resize(720, 120));
+  window.addEventListener('afterprint', () => chart?.resize());
+  document.getElementById('print-report').addEventListener('click', () => { chart?.resize(720, 120); window.print(); setTimeout(() => chart?.resize(), 300); });
   document.getElementById('export-csv').addEventListener('click', () => {
     const monthly = monthlyRows.filter((row) => row.month.startsWith(yearFilter.value)).map((row) => ['Monthly', row.month, row.total_additions, row.total_deductions, row.total_expenses, row.net_change]);
     const members = memberRows.map((row) => ['Member', row.member_name, row.required_amount, row.paid_amount, row.outstanding_amount, row.payment_status]);

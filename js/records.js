@@ -32,10 +32,10 @@
   let pendingSubmissionKey = null;
   let recordRows = [];
 
-  document.body.insertAdjacentHTML('beforeend', `<dialog class="form-dialog" id="record-edit-dialog" aria-labelledby="record-edit-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-edit-title">Edit pending record</h2><p>Only pending records can be corrected. Confirmed records must be voided and replaced.</p></div><button class="dialog-close" id="record-edit-close" type="button" aria-label="Close edit form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="record-edit-form" class="form-grid"><input type="hidden" name="record_id"><div class="field"><label for="edit-date">Date</label><input id="edit-date" name="date" type="date" min="2000-01-01" data-max-today required></div><div class="field"><label for="edit-amount">Amount</label><input id="edit-amount" name="amount" type="number" min="0.01" step="0.01" required></div><div class="field transaction-edit-field"><label for="edit-category">Category</label><input id="edit-category" name="category" maxlength="80"></div><div class="field transaction-edit-field"><label for="edit-responsible">Person responsible</label><input id="edit-responsible" name="person_responsible" maxlength="150"></div><div class="field field-wide transaction-edit-field"><label for="edit-description">Description</label><textarea id="edit-description" name="description" maxlength="500"></textarea></div><div class="field"><label for="edit-reference">Reference</label><input id="edit-reference" name="reference" maxlength="100"></div><div class="field field-wide"><label for="edit-notes">Notes</label><textarea id="edit-notes" name="notes" maxlength="1000"></textarea></div><div class="form-actions field-wide"><button class="button button-secondary" id="record-edit-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save correction</button></div></form></div></dialog>`);
+  document.body.insertAdjacentHTML('beforeend', `<dialog class="form-dialog" id="record-edit-dialog" aria-labelledby="record-edit-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-edit-title">Edit pending record</h2><p>Only pending records can be corrected. Confirmed records must be voided and replaced.</p></div><button class="dialog-close" id="record-edit-close" type="button" aria-label="Close edit form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="record-edit-form" class="form-grid"><input type="hidden" name="record_id"><div class="field"><label for="edit-date">Date</label><input id="edit-date" name="date" type="date" min="2000-01-01" data-max-today required></div><div class="field"><label for="edit-amount">Amount</label><input id="edit-amount" name="amount" type="number" min="0.01" step="0.01" required></div><div class="field transaction-edit-field"><label for="edit-category">Category</label><input id="edit-category" name="category" maxlength="80"></div><div class="field transaction-edit-field"><label for="edit-responsible">Person responsible</label><select id="edit-responsible" name="person_responsible"><option value="">Select member</option></select></div><div class="field field-wide transaction-edit-field"><label for="edit-description">Description</label><textarea id="edit-description" name="description" maxlength="500"></textarea></div><div class="field"><label for="edit-reference">Reference</label><input id="edit-reference" name="reference" maxlength="100"></div><div class="field field-wide"><label for="edit-notes">Notes</label><textarea id="edit-notes" name="notes" maxlength="1000"></textarea></div><div class="form-actions field-wide"><button class="button button-secondary" id="record-edit-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save correction</button></div></form></div></dialog>`);
   const editDialog = document.getElementById('record-edit-dialog');
   const editForm = document.getElementById('record-edit-form');
-  editDialog.querySelectorAll('.transaction-edit-field').forEach((field) => { field.hidden = page === 'contributions'; field.querySelector('input,textarea').required = page !== 'contributions'; });
+  editDialog.querySelectorAll('.transaction-edit-field').forEach((field) => { field.hidden = page === 'contributions'; field.querySelector('input,select,textarea').required = page !== 'contributions'; });
 
   function statusBadge(status) {
     const statusClass = String(status).toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -94,18 +94,46 @@
     amountInput.value = fallbackAmount > 0 ? fallbackAmount.toFixed(2) : '';
   }
 
+  function populateResponsibleSelect(select, selectedName = '') {
+    if (!select) return;
+    const names = membersList.map((member) => member.full_name).filter(Boolean);
+    if (selectedName && !names.includes(selectedName)) names.unshift(selectedName);
+    select.innerHTML = names.length
+      ? `<option value="">Select member</option>${names.map((name) => `<option value="${Ipon.escapeHtml(name)}" ${selectedName === name ? 'selected' : ''}>${Ipon.escapeHtml(name)}</option>`).join('')}`
+      : '<option value="">No active member profile found</option>';
+  }
+
   async function loadMembers() {
     const select = document.getElementById('member-id');
-    if (!select) return;
-    const currentSelection = select.value;
+    const responsibleSelect = document.getElementById('responsible');
+    const editResponsibleSelect = document.getElementById('edit-responsible');
+    if (!select && !responsibleSelect && !editResponsibleSelect) return;
     const { data, error } = await Ipon.client.from('members').select('id,full_name,monthly_contribution_amount').eq('status', 'ACTIVE').order('full_name');
     if (error) throw error;
     membersList = data || [];
-    const selectedId = currentSelection || state.profile.member_id || '';
-    select.innerHTML = membersList.length
-      ? `<option value="">Select member</option>${membersList.map((member) => `<option value="${member.id}" ${selectedId === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}`
-      : '<option value="">No active member profile found</option>';
-    if (state.profile.role === 'MEMBER') select.setAttribute('aria-readonly', 'true');
+    if (select) {
+      const currentSelection = select.value;
+      const selectedId = currentSelection || state.profile.member_id || '';
+      select.innerHTML = membersList.length
+        ? `<option value="">Select member</option>${membersList.map((member) => `<option value="${member.id}" ${selectedId === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}`
+        : '<option value="">No active member profile found</option>';
+      if (state.profile.role === 'MEMBER') {
+        select.closest('.field').hidden = true;
+        select.required = false;
+      }
+    }
+    if (responsibleSelect) {
+      const ownMember = membersList.find((member) => member.id === state.profile.member_id);
+      const defaultResponsible = responsibleSelect.value || ownMember?.full_name || '';
+      populateResponsibleSelect(responsibleSelect, defaultResponsible);
+      if (state.profile.role === 'MEMBER') {
+        responsibleSelect.closest('.field').hidden = true;
+        responsibleSelect.required = false;
+      }
+    }
+    if (editResponsibleSelect) {
+      populateResponsibleSelect(editResponsibleSelect, editResponsibleSelect.value);
+    }
   }
 
   async function loadContributions() {
@@ -166,7 +194,8 @@
 
   async function load() {
     try {
-      if (page === 'contributions') { await loadMembers(); await loadContributions(); }
+      await loadMembers();
+      if (page === 'contributions') await loadContributions();
       else await loadTransactions();
     } catch (error) {
       Ipon.showInlineError(tbody, error, load, page === 'contributions' ? 6 : 7);
@@ -179,7 +208,7 @@
     const button = form.querySelector('[type="submit"]');
     const values = new FormData(form);
     const amount = Number(values.get('amount'));
-    if (!(amount > 0)) return Ipon.toast('Enter an amount greater than zero.', 'error');
+    if (!(amount > 0)) { Ipon.setFieldError(form.elements.amount, 'Enter an amount greater than zero.'); form.elements.amount.focus(); return; }
     if (state.profile.role === 'ADMIN') {
       const confirmed = await Ipon.confirmAction({ title: `Confirm ${page === 'contributions' ? 'addition' : page.slice(0, -1)}`, message: `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`, acceptLabel: 'Confirm and save' });
       if (!confirmed) return;
@@ -189,16 +218,18 @@
     try {
       if (page === 'contributions') {
         await Ipon.rpc('record_contribution', {
-          p_member_id: values.get('member_id'), p_contribution_month: `${values.get('contribution_month')}-01`,
+          p_member_id: state.profile.role === 'MEMBER' ? state.profile.member_id : values.get('member_id'),
+          p_contribution_month: `${values.get('contribution_month')}-01`,
           p_amount: amount, p_payment_date: values.get('payment_date'),
           p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null,
           p_idempotency_key: pendingSubmissionKey
         });
       } else {
+        const ownResponsible = membersList.find((member) => member.id === state.profile.member_id)?.full_name || state.profile.full_name;
         await Ipon.rpc(page === 'withdrawals' ? 'record_withdrawal' : 'record_expense', {
           p_transaction_date: values.get('transaction_date'), p_amount: amount,
           p_category: values.get('category'), p_description: values.get('description'),
-          p_person_responsible: values.get('person_responsible'),
+          p_person_responsible: state.profile.role === 'MEMBER' ? ownResponsible : values.get('person_responsible'),
           p_reference_number: values.get('reference_number') || null, p_notes: values.get('notes') || null,
           p_idempotency_key: pendingSubmissionKey
         });
@@ -218,6 +249,7 @@
     const action = button.dataset.action;
     if (action === 'edit') {
       const row = recordRows.find((item) => item.id === button.dataset.id); if (!row) return;
+      populateResponsibleSelect(editForm.elements.person_responsible, row.person_responsible || '');
       editForm.elements.record_id.value = row.id; editForm.elements.date.value = row.payment_date || row.transaction_date; editForm.elements.amount.value = row.amount; editForm.elements.category.value = row.category || ''; editForm.elements.description.value = row.description || ''; editForm.elements.person_responsible.value = row.person_responsible || ''; editForm.elements.reference.value = row.transaction_reference || row.reference_number || ''; editForm.elements.notes.value = row.notes || '';
       editDialog.showModal(); editForm.elements.amount.focus(); return;
     }

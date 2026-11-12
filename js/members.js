@@ -214,7 +214,7 @@
     event.preventDefault();
     const button = event.submitter; const member = members.find((item) => item.id === accountForm.elements.member_id.value); if (!member) return;
     const passwordIssue = Ipon.passwordIssue(accountForm.elements.password.value, [member.first_name, member.middle_name, member.last_name, accountForm.elements.email.value]);
-    if (passwordIssue) return Ipon.toast(passwordIssue, 'error');
+    if (passwordIssue) { Ipon.setFieldError(accountForm.elements.password, passwordIssue); accountForm.elements.password.focus(); return; }
     Ipon.setBusy(button, true);
     try {
       const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'MEMBER', member_id: member.id, first_name: member.first_name, middle_name: member.middle_name || null, last_name: member.last_name, email: accountForm.elements.email.value.trim(), password: accountForm.elements.password.value } });

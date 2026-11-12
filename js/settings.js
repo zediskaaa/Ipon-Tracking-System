@@ -53,8 +53,11 @@
     const id = button.dataset.saveAccess;
     const role = accessBody.querySelector(`[data-field="role"][data-id="${id}"]`).value;
     const status = accessBody.querySelector(`[data-field="status"][data-id="${id}"]`).value;
-    const memberId = role === 'MEMBER' ? accessBody.querySelector(`[data-field="member"][data-id="${id}"]`).value || null : null;
+    const memberSelect = accessBody.querySelector(`[data-field="member"][data-id="${id}"]`);
+    const memberId = role === 'MEMBER' ? memberSelect.value || null : null;
     if (role === 'MEMBER' && status === 'ACTIVE' && !memberId) {
+      Ipon.setFieldError(memberSelect, 'Link an active login to a member before activation.');
+      memberSelect.focus();
       Ipon.toast('Link an active login to a member before activation.', 'error');
       return;
     }
@@ -78,7 +81,7 @@
     const password = String(values.get('password'));
     const personal = [values.get('first_name'), values.get('middle_name'), values.get('last_name'), values.get('email')];
     const issue = Ipon.passwordIssue(password, personal);
-    if (issue) return Ipon.toast(issue, 'error');
+    if (issue) { Ipon.setFieldError(treasurerForm.elements.password, issue); treasurerForm.elements.password.focus(); return; }
     const button = event.submitter;
     Ipon.setBusy(button, true, 'Creating…');
     try {
