@@ -175,6 +175,7 @@ test('Owner and Admins can post and delete unlimited-length announcements with p
   assert.match(core, /from\('v_announcements'\)/);
   assert.match(css, /\.announcement-list\{[^}]*overflow-y:auto/);
   assert.match(css, /\.announcement-author\.is-owner\{/);
+  assert.match(css, /\.bug-image-card\{[^}]*margin:0/);
   assert.match(core, /rpc\('create_announcement'/);
   assert.match(core, /rpc\('delete_announcement'/);
   assert.match(edge, /announcement-upload-urls/);
