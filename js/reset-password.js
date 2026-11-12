@@ -5,6 +5,9 @@
   const password = form.elements.password;
   Ipon.bindPasswordStrength(password);
 
+  const recoveryLink = new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery'
+    || new URLSearchParams(window.location.search).get('type') === 'recovery';
+  if (recoveryLink) sessionStorage.setItem('iponPasswordRecovery', '1');
   if (!Ipon.configured || sessionStorage.getItem('iponPasswordRecovery') !== '1') return window.location.replace('login.html');
   const { data: { session }, error } = await Ipon.client.auth.getSession();
   if (error || !session) {

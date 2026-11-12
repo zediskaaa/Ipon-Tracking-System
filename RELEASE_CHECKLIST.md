@@ -45,7 +45,7 @@ order by version;
 - [ ] Sign out clears the local session and returns to the login page.
 - [ ] A user can enroll and remove a TOTP authenticator from account security settings.
 - [ ] An enrolled user is redirected to the MFA challenge after password sign-in and cannot query protected records at AAL1.
-- [ ] The hosted Reset password email template displays `{{ .Token }}` and the recovery code opens the new-password flow.
+- [ ] The hosted Reset password link opens the deployed `reset-password.html` page and the URL is present in the Auth redirect allow list.
 - [ ] Password recovery, MFA enrollment, and MFA removal security-notification emails use the intended production SMTP sender.
 
 ## 4. Critical financial workflows

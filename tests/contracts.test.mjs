@@ -539,19 +539,20 @@ test('password changes reauthenticate and financial decisions use the shared dia
   assert.doesNotMatch(`${dashboard}\n${records}`, /window\.prompt/);
 });
 
-test('password recovery uses an emailed OTP before accepting a new password', () => {
+test('password recovery uses a hosted reset link before accepting a new password', () => {
   const login = read('login.html');
   const auth = read('js/auth.js');
   const reset = read('js/reset-password.js');
   const config = read('supabase/config.toml');
   const template = read('supabase/templates/recovery.html');
   assert.match(login, /id="forgot-password-open"/);
-  assert.match(login, /id="recovery-code"[^>]+autocomplete="one-time-code"/);
-  assert.match(auth, /resetPasswordForEmail\(recoveryEmail\)/);
-  assert.match(auth, /verifyOtp\(\{ email: recoveryCodeForm\.dataset\.email, token: code, type: 'recovery' \}\)/);
+  assert.match(login, /Email reset link/);
+  assert.doesNotMatch(login, /id="recovery-code"/);
+  assert.match(auth, /resetPasswordForEmail\(recoveryEmail, \{ redirectTo \}\)/);
+  assert.doesNotMatch(auth, /verifyOtp/);
   assert.match(reset, /auth\.updateUser\(\{ password: password\.value \}\)/);
   assert.match(config, /\[auth\.email\.template\.recovery\][\s\S]*?content_path = "\.\/supabase\/templates\/recovery\.html"/);
-  assert.match(template, /\{\{ \.Token \}\}/);
+  assert.match(template, /\{\{ \.ConfirmationURL \}\}/);
 });
 
 test('opt-in TOTP MFA is enrolled, challenged, and enforced at AAL2', () => {

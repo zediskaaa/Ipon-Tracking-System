@@ -22,7 +22,6 @@
   const forgotButton = document.getElementById('forgot-password-open');
   const recoveryDialog = document.getElementById('recovery-dialog');
   const recoveryRequestForm = document.getElementById('recovery-request-form');
-  const recoveryCodeForm = document.getElementById('recovery-code-form');
   const recoveryMessage = document.getElementById('recovery-message');
   const nameInputs = [firstName, middleName, lastName];
   const fieldErrors = new Map([
@@ -166,26 +165,22 @@
   document.getElementById('show-login').addEventListener('click', () => setMode('login'));
   document.getElementById('show-signup').addEventListener('click', () => setMode('signup'));
   const resetRecoveryDialog = () => {
-    recoveryRequestForm.hidden = false;
-    recoveryCodeForm.hidden = true;
-    recoveryCodeForm.reset();
+    recoveryRequestForm.reset();
     recoveryMessage.textContent = '';
     delete recoveryMessage.dataset.tone;
   };
-  const sendRecoveryCode = async (button) => {
+  const sendRecoveryLink = async (button) => {
     const recoveryEmail = recoveryRequestForm.elements.email.value.trim().toLowerCase();
     recoveryRequestForm.elements.email.value = recoveryEmail;
     if (!recoveryRequestForm.reportValidity()) return;
     Ipon.setBusy(button, true, 'Sending…');
     recoveryMessage.textContent = '';
     try {
-      const { error } = await Ipon.client.auth.resetPasswordForEmail(recoveryEmail);
+      const redirectTo = new URL('reset-password.html', window.location.href).href;
+      const { error } = await Ipon.client.auth.resetPasswordForEmail(recoveryEmail, { redirectTo });
       if (error) throw error;
-      recoveryRequestForm.hidden = true;
-      recoveryCodeForm.hidden = false;
-      recoveryCodeForm.dataset.email = recoveryEmail;
-      document.getElementById('recovery-sent-copy').textContent = `If an account exists for ${recoveryEmail}, a one-time reset code was sent.`;
-      recoveryCodeForm.elements.code.focus();
+      recoveryMessage.dataset.tone = 'success';
+      recoveryMessage.textContent = `If an account exists for ${recoveryEmail}, a secure reset link was sent.`;
     } catch (error) { recoveryMessage.textContent = Ipon.friendlyError(error); recoveryMessage.dataset.tone = 'error'; }
     finally { Ipon.setBusy(button, false); }
   };
@@ -197,29 +192,7 @@
   });
   document.querySelectorAll('[data-recovery-close]').forEach((button) => button.addEventListener('click', () => recoveryDialog.close()));
   recoveryDialog.addEventListener('close', resetRecoveryDialog);
-  recoveryRequestForm.addEventListener('submit', (event) => { event.preventDefault(); sendRecoveryCode(event.submitter); });
-  document.getElementById('recovery-resend').addEventListener('click', (event) => {
-    recoveryRequestForm.elements.email.value = recoveryCodeForm.dataset.email;
-    sendRecoveryCode(event.currentTarget);
-  });
-  recoveryCodeForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const code = recoveryCodeForm.elements.code.value.trim();
-    if (!/^\d{6,8}$/.test(code)) {
-      recoveryMessage.dataset.tone = 'error';
-      recoveryMessage.textContent = 'Enter the numeric code from your password reset email.';
-      return recoveryCodeForm.elements.code.focus();
-    }
-    const button = event.submitter;
-    Ipon.setBusy(button, true, 'Verifying…');
-    try {
-      const { error } = await Ipon.client.auth.verifyOtp({ email: recoveryCodeForm.dataset.email, token: code, type: 'recovery' });
-      if (error) throw error;
-      sessionStorage.setItem('iponPasswordRecovery', '1');
-      window.location.replace('reset-password.html');
-    } catch (error) { recoveryMessage.textContent = Ipon.friendlyError(error); recoveryMessage.dataset.tone = 'error'; }
-    finally { Ipon.setBusy(button, false); }
-  });
+  recoveryRequestForm.addEventListener('submit', (event) => { event.preventDefault(); sendRecoveryLink(event.submitter); });
   const policyDialog = document.getElementById('policy-dialog');
   document.querySelectorAll('[data-policy-open]').forEach((button) => button.addEventListener('click', () => {
     const policy = button.dataset.policyOpen;
