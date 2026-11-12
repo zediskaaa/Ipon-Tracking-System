@@ -88,10 +88,13 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
 
 test('users can submit feature requests and Super Admin can review them', () => {
   const core = read('js/core.js');
+  const css = read('css/app.css');
   const html = read('super-admin.html');
   const script = read('js/super-admin.js');
   const schema = read('database/schema.sql');
   const migration = read('database/migrations/20261112_016_add_feature_requests.sql');
+  assert.match(core, /class="account-support" data-role="ADMIN,TREASURER,MEMBER"/);
+  assert.match(css, /body\[data-panel="super-admin"\] \.account-support\{display:none\}/);
   assert.match(core, /id="feature-request-dialog"[\s\S]*?id="feature-request-form"/);
   assert.match(core, /id="feature-request-success"/);
   assert.match(core, /data-feature-request-open[\s\S]*?>Request a feature</);
@@ -102,7 +105,7 @@ test('users can submit feature requests and Super Admin can review them', () => 
   assert.match(script, /subscribeToChanges\('super-admin',[\s\S]*?'feature_requests'/);
   assert.match(schema, /create table if not exists public\.feature_requests/i);
   assert.match(migration, /create policy feature_requests_select[\s\S]*?requester_id = auth\.uid\(\) or public\.is_super_admin\(\)/i);
-  assert.match(migration, /create policy feature_requests_insert[\s\S]*?requester_id = auth\.uid\(\)/i);
+  assert.match(migration, /create policy feature_requests_insert[\s\S]*?requester_id = auth\.uid\(\) and public\.current_user_role\(\) in \('ADMIN', 'TREASURER', 'MEMBER'\)/i);
   assert.match(migration, /create policy mfa_verified_for_opted_in on public\.feature_requests as restrictive/i);
   assert.match(migration, /grant insert \(requester_id, title, details\) on public\.feature_requests to authenticated/i);
 });

@@ -2303,7 +2303,7 @@ create policy feature_requests_select on public.feature_requests for select to a
 using (requester_id = auth.uid() or public.is_super_admin());
 drop policy if exists feature_requests_insert on public.feature_requests;
 create policy feature_requests_insert on public.feature_requests for insert to authenticated
-with check (requester_id = auth.uid() and public.current_user_role() is not null);
+with check (requester_id = auth.uid() and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER'));
 drop policy if exists notifications_select on public.notifications;
 create policy notifications_select on public.notifications for select to authenticated
 using (recipient_id = auth.uid());

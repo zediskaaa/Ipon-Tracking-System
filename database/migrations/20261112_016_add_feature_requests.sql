@@ -21,7 +21,7 @@ using (requester_id = auth.uid() or public.is_super_admin());
 
 drop policy if exists feature_requests_insert on public.feature_requests;
 create policy feature_requests_insert on public.feature_requests for insert to authenticated
-with check (requester_id = auth.uid() and public.current_user_role() is not null);
+with check (requester_id = auth.uid() and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER'));
 
 drop policy if exists mfa_verified_for_opted_in on public.feature_requests;
 create policy mfa_verified_for_opted_in on public.feature_requests as restrictive for all to authenticated
