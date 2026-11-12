@@ -1,0 +1,49 @@
+name: Deploy Supabase database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - database/migrations/**
+      - .github/workflows/deploy-database.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-supabase-database
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+      - name: Apply pending migrations
+        shell: bash
+        env:
+          PGSSLMODE: require
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_DB_URL" || { echo "Missing SUPABASE_DB_URL repository secret." >&2; exit 1; }
+
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --file database/migrations/0000_create_migration_ledger.sql
+
+          for migration in database/migrations/20*.sql; do
+            filename="${migration##*/}"
+            version="$(cut -d_ -f1-2 <<< "$filename")"
+            [[ "$version" =~ ^[0-9]{8}_[0-9]{3}$ ]] || { echo "Invalid migration filename: $filename" >&2; exit 1; }
+
+            applied="$(psql "$SUPABASE_DB_URL" -Atqc "select exists (select 1 from public.schema_migrations where version = '$version');")"
+            if [[ "$applied" == "t" ]]; then
+              echo "Skipping $filename (already applied)"
+            else
+              echo "Applying $filename"
+              psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --file "$migration"
+            fi
+          done

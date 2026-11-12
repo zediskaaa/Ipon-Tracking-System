@@ -294,7 +294,8 @@ insert into public.schema_migrations (version, name) values
   ('20261111_008', 'restore validation helper functions'),
   ('20261111_009', 'use Philippine business date'),
   ('20261111_011', 'scope references and restrict withdrawals'),
-  ('20261111_012', 'protect temporary password state')
+  ('20261111_012', 'protect temporary password state'),
+  ('20261112_015', 'require mobile number on profile updates')
 on conflict (version) do nothing;
 
 create index if not exists members_name_idx on public.members (lower(full_name));

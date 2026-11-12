@@ -8,9 +8,13 @@ Track real-world group savings contributions, deductions, expenses, goals, deadl
 - **Admin** manages members, managed member accounts, contribution settings, approvals, reports, and audit history for one savings group.
 - **User** views personal contribution progress and history, submits additions for review, manages profile security, and receives reminders.
 
-## Existing Supabase project upgrade
+## Automatic Supabase database updates
 
-Back up the database, then run the SQL files in `database/migrations/` in filename order. For the current release, migration `20261110_007_complete_account_notifications.sql` must be applied after `006`.
+Database changes are deployed automatically after a migration is merged or pushed to `main`. Add the GitHub repository secret `SUPABASE_DB_URL` once, using the hosted project's **Session pooler** connection string from Supabase's **Connect** dialog. The workflow applies only migration versions that are not yet listed in `public.schema_migrations`.
+
+For every database change, add the next numbered file under `database/migrations/` and update `database/schema.sql` to the same final state. Do not edit an already-applied migration or make production schema changes in the SQL/Table Editor, because those changes bypass the repository history. Back up the production database and test destructive or data-changing migrations against a restored copy before merging.
+
+The deployment can also be started manually from GitHub Actions under **Deploy Supabase database**. A failed migration stops the job and is not recorded as applied.
 
 Deploy the secure account-management function from a terminal authenticated with the Supabase CLI:
 

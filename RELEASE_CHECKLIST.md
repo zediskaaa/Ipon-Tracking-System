@@ -8,6 +8,7 @@ Complete this checklist on the exact commit that will be deployed. Record any fa
 - [ ] Local `main` matches `origin/main`.
 - [ ] `npm test` passes with no failed or skipped tests.
 - [ ] The latest GitHub Actions **Quality checks** run is green.
+- [ ] The latest GitHub Actions **Deploy Supabase database** run is green when this release contains a migration.
 - [ ] No real password, service-role key, or private token is present in tracked files.
 - [ ] `js/config.js` contains only the intended Supabase project URL and publishable/anon key.
 
@@ -15,7 +16,7 @@ Complete this checklist on the exact commit that will be deployed. Record any fa
 
 - [ ] A current Supabase database backup is available and its restore procedure is known.
 - [ ] Pending SQL files in `database/migrations/` were tested against a restored copy first.
-- [ ] Pending migrations were applied in filename order.
+- [ ] Pending migrations were applied in filename order by the deployment workflow (or documented manual recovery).
 - [ ] Migration `20261110_007_complete_account_notifications.sql` was applied after `006`.
 - [ ] `public.schema_migrations` lists every shipped migration exactly once.
 - [ ] `database/schema.sql` still represents the final clean-install schema.

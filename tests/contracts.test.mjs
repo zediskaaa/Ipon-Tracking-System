@@ -157,7 +157,7 @@ test('phone fields reject letters and incomplete accounts finish setup before pa
   assert.match(account, /id="profile-setup-notice"/);
   assert.match(account, /id="account-contact"[^>]*maxlength="13"[^>]*required/);
   assert.match(account, /finishSetupIfReady\(\)/);
-  assert.match(read('database/migrations/20261112_014_require_profile_mobile.sql'), /if v_contact is null[\s\S]*?Mobile number is required/);
+  assert.match(read('database/migrations/20261112_015_require_profile_mobile.sql'), /if v_contact is null[\s\S]*?Mobile number is required/);
 });
 
 test('name fields reject numbers and unsupported symbols across every form', () => {
@@ -316,12 +316,18 @@ test('administrator approval and group creation are atomic database operations',
 test('every versioned migration is transactional and recorded', () => {
   const directory = new URL('../database/migrations/', import.meta.url);
   const migrations = readdirSync(directory).filter((name) => name.endsWith('.sql')).sort();
+  const versions = new Set();
   assert.ok(migrations.length >= 3);
   for (const file of migrations) {
     const sql = readFileSync(new URL(file, directory), 'utf8');
+    const expectedVersion = file === '0000_create_migration_ledger.sql' ? '0000' : file.match(/^(\d{8}_\d{3})_/i)?.[1];
+    const recordedVersion = sql.match(/insert into public\.schema_migrations\s*\(version, name\)\s*values\s*\(\s*'([^']+)'/i)?.[1];
     assert.match(sql, /^begin;/im, `${file} must begin a transaction`);
     assert.match(sql, /^commit;/im, `${file} must commit its transaction`);
     assert.match(sql, /schema_migrations/i, `${file} must update the migration ledger`);
+    assert.equal(recordedVersion, expectedVersion, `${file} must record its filename version`);
+    assert.ok(!versions.has(recordedVersion), `${file} has a duplicate migration version`);
+    versions.add(recordedVersion);
   }
 });
 
