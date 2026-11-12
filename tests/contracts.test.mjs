@@ -392,6 +392,8 @@ test('pages keep baseline security and accessible table headings', () => {
   assert.match(read('login.html'), /<div class="login-brand"><img class="login-brand-logo" src="assets\/favicon\.svg" alt=""><span>IPON<\/span><\/div>/);
   assert.match(read('login.html'), /class="auth-tabs"[^>]*aria-label="Account access"/);
   assert.doesNotMatch(read('login.html'), /role="tab(?:list|panel)?"/);
+  assert.match(read('manifest.webmanifest'), /"display":\s*"standalone"/);
+  assert.match(read('js/core.js'), /serviceWorker\.register\('\/sw\.js'\)/);
 });
 
 test('large record lists use server-side counts, filters, and ranges', () => {
