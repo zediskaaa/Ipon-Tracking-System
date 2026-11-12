@@ -401,10 +401,6 @@ Deno.serve(async (request) => {
     .single();
   if (actorError || actor?.status !== 'ACTIVE') return json({ error: 'Your account is not active.' }, 403);
 
-  let body: Record<string, unknown>;
-  try { body = await request.json(); }
-  catch { return json({ error: 'A valid JSON request body is required.' }, 400); }
-
   if (body.action === 'announcement-upload-urls') {
     const prefix = actorAnnouncementPrefix(actor, userResult.user.id);
     const announcementId = String(body.announcement_id || '').trim();
