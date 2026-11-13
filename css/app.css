@@ -439,7 +439,8 @@ body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame
 .super-admin-announcements .panel-header h3{margin:0;font-size:20px}
 .announcement-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:14px;max-height:480px;overflow-y:auto;overflow-x:hidden;padding:4px 2px 6px;align-items:stretch;box-sizing:border-box}
 .super-admin-announcements .announcement-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),360px));gap:16px;overflow-x:hidden}
-.announcement-panel .announcement-list{display:flex;flex-direction:column;gap:12px;max-height:440px;overflow-y:auto;overflow-x:hidden;padding:2px 1px 6px}
+.announcement-panel .announcement-list{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden;padding:2px 1px 6px}
+@media(max-width:1180px){.announcement-panel .announcement-list{max-height:480px}}
 .announcement-panel .announcement-item{width:100%;max-width:100%;box-sizing:border-box}
 .announcement-list>.empty-state,.announcement-list>.announcement-empty-state{grid-column:1/-1}
 .announcement-empty-state{display:grid;justify-items:center;gap:6px;padding:22px 14px;border:1px solid rgba(20,45,43,.08);border-radius:12px;background:#fdfbf7;text-align:center}
@@ -826,7 +827,8 @@ button.record-entry-action:focus-visible{outline:2px solid #fff;outline-offset:2
 .action-implement:hover{text-decoration:underline}
 .announcement-item.is-release-update{border-color:rgba(22,163,74,.35);background:linear-gradient(180deg,#f0fdf4 0%,#ffffff 100%)}
 .announcement-release-banner{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-.announcement-release-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;font:800 11px/1.2 Arial,sans-serif;letter-spacing:.03em;text-transform:uppercase}
+.announcement-release-banner:not(:has(.announcement-version-chip)){display:none!important}
+.announcement-release-badge{display:none!important}
 .announcement-release-badge .release-star-icon{width:13px;height:13px;color:#16a34a}
 .announcement-version-chip{display:inline-flex;align-items:center;padding:2.5px 9px;border-radius:999px;background:#15803d;color:#fff;font:800 11px/1.2 Arial,sans-serif;letter-spacing:.02em}
 .announcement-viewer-release{margin-bottom:8px}

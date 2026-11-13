@@ -678,7 +678,7 @@ button,a { color:inherit; font:inherit; }
   display:flex;
   flex-direction:column;
   gap:16px;
-  padding:24px 24px 18px 0;
+  padding:24px 24px 28px 0;
 }
 
 .review-panel {
@@ -859,17 +859,14 @@ button,a { color:inherit; font:inherit; }
 }
 
 .workspace-corner-art {
-  display:flex;
-  justify-content:center;
-  align-items:flex-end;
-  margin-top:auto;
-  padding-top:8px;
-  pointer-events:none;
+  display:none !important;
 }
 
 .announcement-panel {
   position:relative;
   display:flex;
+  flex:1;
+  min-height:0;
   flex-direction:column;
   gap:12px;
   padding:18px 16px;
