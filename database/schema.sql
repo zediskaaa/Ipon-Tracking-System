@@ -1843,8 +1843,14 @@ create table if not exists public.feature_requests (
   requester_id uuid not null references public.profiles(id) on delete cascade,
   title text not null check (char_length(btrim(title)) between 3 and 120),
   details text not null check (char_length(btrim(details)) between 10 and 2000),
+  status text not null default 'PENDING' check (status in ('PENDING', 'IMPLEMENTED', 'REJECTED')),
+  reviewed_at timestamptz,
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  release_version text,
   created_at timestamptz not null default now()
 );
+
+create index if not exists feature_requests_status_idx on public.feature_requests (status, created_at desc);
 
 create table if not exists public.notifications (
   id bigint generated always as identity primary key,
@@ -3074,6 +3080,8 @@ create table if not exists public.announcements (
   title text not null check (char_length(btrim(title)) > 0),
   description text not null check (char_length(btrim(description)) > 0),
   attachments jsonb not null default '[]'::jsonb check (jsonb_typeof(attachments) = 'array'),
+  announcement_type text not null default 'GENERAL' check (announcement_type in ('GENERAL', 'RELEASE')),
+  release_version text,
   deleted_at timestamptz,
   created_at timestamptz not null default now()
 );
@@ -3081,6 +3089,10 @@ create table if not exists public.announcements (
 create index if not exists announcements_active_created_idx
   on public.announcements (created_at desc)
   where deleted_at is null;
+
+create unique index if not exists announcements_release_version_unique_idx
+  on public.announcements (btrim(lower(release_version)))
+  where deleted_at is null and release_version is not null;
 
 alter table public.announcements enable row level security;
 
@@ -3110,11 +3122,58 @@ begin
 end;
 $$;
 
+create or replace function public.review_feature_request(
+  p_request_id uuid,
+  p_status text,
+  p_release_version text default null
+)
+returns public.feature_requests
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_status text := upper(btrim(coalesce(p_status, '')));
+  v_row public.feature_requests;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+
+  if not public.is_super_admin() then
+    raise exception 'Only the Super Admin can review feature requests.' using errcode = '42501';
+  end if;
+
+  if v_status not in ('PENDING', 'IMPLEMENTED', 'REJECTED') then
+    raise exception 'Invalid feature request status.' using errcode = '22023';
+  end if;
+
+  update public.feature_requests
+  set status = v_status,
+      reviewed_at = case when v_status = 'PENDING' then null else now() end,
+      reviewed_by = case when v_status = 'PENDING' then null else auth.uid() end,
+      release_version = case when v_status = 'IMPLEMENTED' then nullif(btrim(coalesce(p_release_version, release_version, '')), '') else null end
+  where id = p_request_id
+  returning * into v_row;
+
+  if not found then
+    raise exception 'Feature request not found.' using errcode = 'P0002';
+  end if;
+
+  return v_row;
+end;
+$$;
+
+revoke all on function public.review_feature_request(uuid, text, text) from public, anon;
+grant execute on function public.review_feature_request(uuid, text, text) to authenticated;
+
 create or replace function public.create_announcement(
   p_id uuid default null,
   p_title text default '',
   p_description text default '',
-  p_attachments jsonb default '[]'::jsonb
+  p_attachments jsonb default '[]'::jsonb,
+  p_announcement_type text default 'GENERAL',
+  p_release_version text default null
 )
 returns public.announcements
 language plpgsql
@@ -3127,6 +3186,8 @@ declare
   v_prefix text;
   v_item jsonb;
   v_path text;
+  v_type text := upper(btrim(coalesce(p_announcement_type, 'GENERAL')));
+  v_version text := nullif(btrim(coalesce(p_release_version, '')), '');
   v_row public.announcements;
 begin
   if auth.uid() is null then
@@ -3147,6 +3208,28 @@ begin
 
   if v_profile.role = 'ADMIN' and v_profile.group_id is null then
     raise exception 'Administrator account is not assigned to a savings group.' using errcode = '42501';
+  end if;
+
+  if v_type not in ('GENERAL', 'RELEASE') then
+    raise exception 'Invalid announcement type.' using errcode = '22023';
+  end if;
+
+  if v_type = 'RELEASE' then
+    if v_profile.role <> 'SUPER_ADMIN' then
+      raise exception 'Only the Super Admin can publish system release updates.' using errcode = '42501';
+    end if;
+    if v_version is null then
+      raise exception 'Release version is required for system release updates.' using errcode = '22023';
+    end if;
+    if exists (
+      select 1 from public.announcements
+      where deleted_at is null
+        and lower(btrim(coalesce(release_version, ''))) = lower(v_version)
+    ) then
+      raise exception 'Release version "%" has already been published. Please use a unique version.', v_version using errcode = '23505';
+    end if;
+  else
+    v_version := null;
   end if;
 
   if char_length(btrim(coalesce(p_title, ''))) = 0 or char_length(btrim(coalesce(p_description, ''))) = 0 then
@@ -3170,7 +3253,7 @@ begin
   end loop;
 
   insert into public.announcements (
-    id, group_id, author_id, author_name, author_role, title, description, attachments
+    id, group_id, author_id, author_name, author_role, title, description, attachments, announcement_type, release_version
   ) values (
     v_id,
     case when v_profile.role = 'SUPER_ADMIN' then null else v_profile.group_id end,
@@ -3179,9 +3262,17 @@ begin
     v_profile.role,
     btrim(p_title),
     btrim(p_description),
-    coalesce(p_attachments, '[]'::jsonb)
+    coalesce(p_attachments, '[]'::jsonb),
+    v_type,
+    v_version
   )
   returning * into v_row;
+
+  if v_type = 'RELEASE' and v_version is not null then
+    update public.feature_requests
+    set release_version = v_version
+    where status = 'IMPLEMENTED' and release_version is null;
+  end if;
 
   return v_row;
 end;
@@ -3295,7 +3386,9 @@ select a.id,
        a.title,
        a.description,
        a.attachments,
-       a.created_at
+       a.created_at,
+       a.announcement_type,
+       a.release_version
 from public.announcements a
 where a.deleted_at is null;
 

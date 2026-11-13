@@ -7,7 +7,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Super Admin — IPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261113-5">
+  <link rel="stylesheet" href="css/app.css?v=20261113-7">
 </head>
 <body data-page="super-admin" data-panel="super-admin">
   <div class="app-layout">
@@ -53,7 +53,13 @@
               <h3 id="sa-announcement-heading">Announcements</h3>
               <p>Post updates with unlimited text, pictures, or videos across all groups.</p>
             </div>
-            <button class="button button-primary" id="sa-add-announcement" type="button">+ Add announcement</button>
+            <div class="panel-header-actions">
+              <button class="button button-secondary" id="sa-add-announcement" type="button">+ Add announcement</button>
+              <button class="button button-primary" id="sa-add-release-update" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px;margin-right:6px;vertical-align:-1px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                + Release update
+              </button>
+            </div>
           </div>
           <div class="announcement-list" id="sa-announcement-list" aria-live="polite"><p class="empty-state">Loading announcements…</p></div>
         </section>
@@ -79,7 +85,15 @@
             <input id="feature-requests-search" type="search" placeholder="Search feature requests" aria-label="Search feature requests">
           </div>
         </div>
-        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Requester</th><th>Role</th><th>Feature</th><th>Details</th><th>Submitted</th></tr></thead><tbody id="feature-requests-body"><tr class="loading-row"><td colspan="5">Loading feature requests…</td></tr></tbody></table></div>
+        <div class="feature-status-tabs-wrap">
+          <div class="segmented-control" id="feature-requests-status-tabs" role="tablist" aria-label="Filter feature requests by status">
+            <button class="segmented-control-btn is-active" type="button" data-status-filter="ALL">All <span class="badge" id="count-feat-all">0</span></button>
+            <button class="segmented-control-btn" type="button" data-status-filter="PENDING">Pending <span class="badge" id="count-feat-pending">0</span></button>
+            <button class="segmented-control-btn" type="button" data-status-filter="IMPLEMENTED">Implemented <span class="badge" id="count-feat-implemented">0</span></button>
+            <button class="segmented-control-btn" type="button" data-status-filter="REJECTED">Rejected <span class="badge" id="count-feat-rejected">0</span></button>
+          </div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Requester</th><th>Role</th><th>Feature</th><th>Details</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead><tbody id="feature-requests-body"><tr class="loading-row"><td colspan="7">Loading feature requests…</td></tr></tbody></table></div>
         <nav class="table-pager" id="feature-requests-pager" aria-label="Feature requests pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
       </section>
 
@@ -178,7 +192,43 @@
 
   <dialog class="form-dialog bug-viewer-dialog" id="bug-viewer-dialog" aria-labelledby="bug-viewer-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="bug-viewer-title">Bug report</h2><p id="bug-viewer-meta"></p></div><button class="dialog-close" id="bug-viewer-close" type="button" aria-label="Close bug report details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="bug-viewer-body"><p class="feature-request-details" id="bug-viewer-description"></p><div class="bug-viewer-grid" id="bug-viewer-images"></div></div></div></dialog>
 
-  <script src="js/config.js"></script><script src="js/core.js?v=20261113-3"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261113-3"></script>
+  <dialog class="form-dialog" id="release-update-dialog" aria-labelledby="release-update-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="release-update-title">Publish release update</h2>
+          <p id="release-update-copy">Announce a new system version and automatically link implemented requests.</p>
+        </div>
+        <button class="dialog-close" id="release-update-close" type="button" aria-label="Close release update form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </header>
+      <form id="release-update-form" class="form-grid">
+        <div class="field">
+          <label for="release-update-version">Release version</label>
+          <input id="release-update-version" name="version" maxlength="50" placeholder="e.g. Update 1.0" required>
+          <small class="field-help">Unique version tag. Implemented feature requests will be tagged with this version.</small>
+        </div>
+        <div class="field">
+          <label for="release-update-date">Release date</label>
+          <input id="release-update-date" name="release_date" type="date" required>
+        </div>
+        <div class="field field-wide">
+          <label for="release-update-heading">Announcement title</label>
+          <input id="release-update-heading" name="title" maxlength="150" placeholder="e.g. System Update 1.0 Released" required>
+        </div>
+        <div class="field field-wide">
+          <label for="release-update-details">Release notes and changes</label>
+          <textarea id="release-update-details" name="details" rows="8" required></textarea>
+          <small class="field-help">Pre-filled with implemented feature requests in English. You can edit or add notes anytime.</small>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" id="release-update-cancel" type="button">Cancel</button>
+          <button class="button button-primary" type="submit">Publish release update</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="js/config.js"></script><script src="js/core.js?v=20261113-4"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261113-4"></script>
 </body>
 </html>
 

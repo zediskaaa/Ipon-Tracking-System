@@ -2103,6 +2103,7 @@
         <div class="form-dialog-sheet">
           <header class="form-dialog-header">
             <div class="announcement-viewer-head">
+              <div id="announcement-viewer-release-banner"></div>
               <div class="announcement-item-meta" id="announcement-viewer-meta"></div>
               <h2 id="announcement-viewer-title">Announcement</h2>
             </div>
@@ -2182,6 +2183,7 @@
     if (!listElement) return null;
     ensureAnnouncementDialogs();
     const viewerDialog = document.getElementById('announcement-viewer-dialog');
+    const viewerReleaseBanner = document.getElementById('announcement-viewer-release-banner');
     const viewerMeta = document.getElementById('announcement-viewer-meta');
     const viewerTitle = document.getElementById('announcement-viewer-title');
     const viewerDescription = document.getElementById('announcement-viewer-description');
@@ -2427,10 +2429,19 @@
       }
       listElement.innerHTML = items.map((item) => {
         const isOwner = item.author_role === 'SUPER_ADMIN';
+        const isRelease = item.announcement_type === 'RELEASE' || Boolean(item.release_version);
         const media = Array.isArray(item.attachments) ? item.attachments : [];
         return `
-          <article class="announcement-item${isOwner ? ' is-owner' : ''}" data-announcement-id="${escapeHtml(item.id)}">
+          <article class="announcement-item${isOwner ? ' is-owner' : ''}${isRelease ? ' is-release-update' : ''}" data-announcement-id="${escapeHtml(item.id)}">
             <div class="announcement-item-content" role="button" tabindex="0" aria-label="Open announcement ${escapeHtml(item.title)}">
+              ${isRelease ? `
+                <div class="announcement-release-banner">
+                  <span class="announcement-release-badge">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" class="release-star-icon"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>
+                    Release update
+                  </span>
+                  ${item.release_version ? `<span class="announcement-version-chip">${escapeHtml(item.release_version)}</span>` : ''}
+                </div>` : ''}
               <div class="announcement-item-head">
                 <strong class="announcement-item-title">${escapeHtml(item.title)}</strong>
                 ${media.length ? `<span class="announcement-media-chip">${media.length} ${media.length === 1 ? 'file' : 'files'}</span>` : ''}
@@ -2453,6 +2464,17 @@
     const openViewer = async (item) => {
       if (!item || !viewerDialog) return;
       openItemId = item.id;
+      const isRelease = item.announcement_type === 'RELEASE' || Boolean(item.release_version);
+      if (viewerReleaseBanner) {
+        viewerReleaseBanner.innerHTML = isRelease ? `
+          <div class="announcement-release-banner announcement-viewer-release">
+            <span class="announcement-release-badge">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="release-star-icon"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>
+              Release update
+            </span>
+            ${item.release_version ? `<span class="announcement-version-chip">${escapeHtml(item.release_version)}</span>` : ''}
+          </div>` : '';
+      }
       viewerMeta.innerHTML = announcementAuthorMeta(item);
       bindAvatarFallbacks(viewerMeta);
       viewerTitle.textContent = item.title;
@@ -2493,7 +2515,7 @@
       const [announcementsRes, reactionsRes] = await Promise.all([
         client
           .from('v_announcements')
-          .select('id,group_id,author_id,author_name,author_role,author_avatar_url,title,description,attachments,created_at')
+          .select('id,group_id,author_id,author_name,author_role,author_avatar_url,title,description,attachments,created_at,announcement_type,release_version')
           .order('created_at', { ascending: false })
           .limit(200),
         client

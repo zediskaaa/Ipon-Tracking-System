@@ -104,7 +104,7 @@ test('users can submit feature requests and Super Admin can review them', () => 
   assert.match(core, /confirmAction\(\{[\s\S]*?title: 'Submit feature request\?'/);
   assert.match(core, /from\('feature_requests'\)\.insert\(\{ requester_id: currentProfile\.id, title:/);
   assert.match(html, /data-platform-view="feature-requests"/);
-  assert.match(script, /from\('feature_requests'\)\.select\('id,requester_id,title,details,created_at'\)/);
+  assert.match(script, /from\('feature_requests'\)\.select\('id,requester_id,title,details,status,reviewed_at,reviewed_by,release_version,created_at'\)/);
   assert.match(script, /subscribeToChanges\('super-admin',[\s\S]*?'feature_requests'/);
   assert.match(schema, /create table if not exists public\.feature_requests/i);
   assert.match(migration, /create policy feature_requests_select[\s\S]*?requester_id = auth\.uid\(\) or public\.is_super_admin\(\)/i);
@@ -1031,4 +1031,53 @@ test('dashboard provides modal shortcut for recording additions, deductions, and
   assert.match(css, /\.quick-record-type-tabs/);
   assert.match(css, /\.quick-type-tab/);
   assert.match(css, /\.quick-member-auto-chip/);
+});
+
+test('Super Admin can manage feature request statuses and publish release updates', () => {
+  const migration = read('database/migrations/20261113_036_feature_request_workflow_and_release_updates.sql');
+  const schema = read('database/schema.sql');
+  const html = read('super-admin.html');
+  const script = read('js/super-admin.js');
+  const core = read('js/core.js');
+  const css = read('css/app.css');
+
+  assert.match(migration, /alter table public\.feature_requests[\s\S]*?status text not null default 'PENDING'/i);
+  assert.match(migration, /create or replace function public\.review_feature_request/i);
+  assert.match(migration, /create or replace function public\.create_announcement/i);
+  assert.match(migration, /announcements_release_version_unique_idx/i);
+  assert.match(schema, /review_feature_request/i);
+  assert.match(schema, /announcement_type/i);
+  assert.match(schema, /release_version/i);
+
+  assert.match(html, /id="feature-requests-status-tabs"/);
+  assert.match(html, /data-status-filter="ALL"/);
+  assert.match(html, /data-status-filter="PENDING"/);
+  assert.match(html, /data-status-filter="IMPLEMENTED"/);
+  assert.match(html, /data-status-filter="REJECTED"/);
+  assert.match(html, /id="sa-add-release-update"/);
+  assert.match(html, /id="release-update-dialog"/);
+  assert.match(html, /id="release-update-form"/);
+  assert.match(html, /id="release-update-version"/);
+  assert.match(html, /id="release-update-heading"/);
+  assert.match(html, /id="release-update-details"/);
+
+  assert.match(script, /updateFeatureCounts/);
+  assert.match(script, /data-feat-action="IMPLEMENTED"/);
+  assert.match(script, /data-feat-action="REJECTED"/);
+  assert.match(script, /data-feat-action="PENDING"/);
+  assert.match(script, /review_feature_request/);
+  assert.match(script, /openReleaseUpdateDialog/);
+  assert.match(script, /p_announcement_type:\s*'RELEASE'/);
+
+  assert.match(core, /is-release-update/);
+  assert.match(core, /announcement-release-banner/);
+  assert.match(core, /announcement-release-badge/);
+  assert.match(core, /announcement-version-chip/);
+  assert.match(core, /announcement-viewer-release-banner/);
+
+  assert.match(css, /\.segmented-control/);
+  assert.match(css, /\.status-pill\.status-implemented/);
+  assert.match(css, /\.status-pill\.status-rejected/);
+  assert.match(css, /\.announcement-item\.is-release-update/);
+  assert.match(css, /\.announcement-release-badge/);
 });

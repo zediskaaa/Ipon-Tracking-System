@@ -27,6 +27,10 @@
   const userPasswordForm = document.getElementById('user-password-form');
   const bugViewerDialog = document.getElementById('bug-viewer-dialog');
   const overviewError = document.getElementById('overview-error');
+  const releaseUpdateDialog = document.getElementById('release-update-dialog');
+  const releaseUpdateForm = document.getElementById('release-update-form');
+  const releaseUpdateBtn = document.getElementById('sa-add-release-update');
+  const featureStatusTabs = document.getElementById('feature-requests-status-tabs');
   const announcements = Ipon.bindAnnouncements({
     listElement: document.getElementById('sa-announcement-list'),
     addButton: document.getElementById('sa-add-announcement')
@@ -38,6 +42,7 @@
   let bugReports = [];
   let accountActivities = [];
   let activityLogs = [];
+  let activeFeatureStatusFilter = 'ALL';
   const PAGE_SIZE = 10;
   const pageState = { requests: 0, 'feature-requests': 0, 'bug-reports': 0, users: 0, activity: 0 };
   Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
@@ -172,24 +177,63 @@
     }).join('') : `<tr><td colspan="7" class="empty-state">${query || role || status ? 'No matching user accounts.' : 'No user accounts.'}</td></tr>`;
   }
 
+  function updateFeatureCounts() {
+    const counts = { ALL: featureRequests.length, PENDING: 0, IMPLEMENTED: 0, REJECTED: 0 };
+    featureRequests.forEach((req) => {
+      const st = req.status || 'PENDING';
+      if (counts[st] !== undefined) counts[st]++;
+    });
+    const allEl = document.getElementById('count-feat-all');
+    const pendEl = document.getElementById('count-feat-pending');
+    const implEl = document.getElementById('count-feat-implemented');
+    const rejEl = document.getElementById('count-feat-rejected');
+    if (allEl) allEl.textContent = counts.ALL;
+    if (pendEl) pendEl.textContent = counts.PENDING;
+    if (implEl) implEl.textContent = counts.IMPLEMENTED;
+    if (rejEl) rejEl.textContent = counts.REJECTED;
+  }
+
   function renderFeatureRequests() {
+    updateFeatureCounts();
     const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
     const query = filterValue('feature-requests-search');
     const filtered = featureRequests.filter((request) => {
+      const status = request.status || 'PENDING';
+      if (activeFeatureStatusFilter !== 'ALL' && status !== activeFeatureStatusFilter) return false;
       const profile = profileById.get(request.requester_id);
-      return matchesQuery(query, [profile?.full_name, profile?.email, profile?.role, request.title, request.details]);
+      return matchesQuery(query, [profile?.full_name, profile?.email, profile?.role, request.title, request.details, status, request.release_version]);
     });
     const visible = paginateRows('feature-requests', filtered);
     featureRequestsBody.innerHTML = visible.length ? visible.map((request) => {
       const profile = profileById.get(request.requester_id);
+      const status = request.status || 'PENDING';
+      const statusPill = status === 'IMPLEMENTED'
+        ? `<span class="status-pill status-implemented">Implemented</span>${request.release_version ? `<br><small class="version-tag">${Ipon.escapeHtml(request.release_version)}</small>` : ''}`
+        : status === 'REJECTED'
+          ? '<span class="status-pill status-rejected">Rejected</span>'
+          : '<span class="status-pill status-pending">Pending</span>';
+
+      let actions = '';
+      if (status !== 'IMPLEMENTED') {
+        actions += `<button class="icon-action action-implement" type="button" data-feat-action="IMPLEMENTED" data-feat-id="${request.id}">Mark implemented</button>`;
+      }
+      if (status !== 'REJECTED') {
+        actions += `<button class="icon-action danger-action" type="button" data-feat-action="REJECTED" data-feat-id="${request.id}">Reject</button>`;
+      }
+      if (status !== 'PENDING') {
+        actions += `<button class="icon-action" type="button" data-feat-action="PENDING" data-feat-id="${request.id}">Reset to pending</button>`;
+      }
+
       return `<tr>
         <td><strong>${Ipon.escapeHtml(profile?.full_name || 'Former user')}</strong>${profile?.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}</td>
-        <td>${Ipon.escapeHtml(profile?.role?.replaceAll('_', ' ') || 'Unavailable')}</td>
+        <td><span class="role-badge role-${(profile?.role || 'member').toLowerCase()}">${Ipon.escapeHtml(ROLE_LABELS[profile?.role] || profile?.role || 'Member')}</span></td>
         <td><strong>${Ipon.escapeHtml(request.title)}</strong></td>
         <td><span class="feature-request-details">${Ipon.escapeHtml(request.details)}</span></td>
+        <td>${statusPill}</td>
         <td>${Ipon.dateLabel(request.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td>
+        <td><div class="table-actions">${actions}</div></td>
       </tr>`;
-    }).join('') : `<tr><td colspan="5" class="empty-state">${query ? 'No matching feature requests.' : 'No feature requests yet.'}</td></tr>`;
+    }).join('') : `<tr><td colspan="7" class="empty-state">${query || activeFeatureStatusFilter !== 'ALL' ? 'No matching feature requests.' : 'No feature requests yet.'}</td></tr>`;
   }
 
   function renderBugReports() {
@@ -236,7 +280,7 @@
       Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,created_at').order('created_at', { ascending: false }),
       Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false }),
       Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,review_note,created_at').order('created_at', { ascending: false }).limit(200),
-      Ipon.client.from('feature_requests').select('id,requester_id,title,details,created_at').order('created_at', { ascending: false }).limit(200),
+      Ipon.client.from('feature_requests').select('id,requester_id,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200),
@@ -628,6 +672,188 @@
       Ipon.setBusy(button, false);
     }
   });
+  featureStatusTabs?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-status-filter]');
+    if (!button) return;
+    activeFeatureStatusFilter = button.dataset.statusFilter;
+    featureStatusTabs.querySelectorAll('.segmented-control-btn').forEach((btn) => {
+      btn.classList.toggle('is-active', btn === button);
+    });
+    pageState['feature-requests'] = 0;
+    renderFeatureRequests();
+  });
+
+  featureRequestsBody?.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-feat-action]');
+    if (!button) return;
+    const id = button.dataset.featId;
+    const nextStatus = button.dataset.featAction;
+    const request = featureRequests.find((item) => item.id === id);
+    if (!request) return;
+
+    if (nextStatus === 'REJECTED') {
+      const confirmed = await Ipon.confirmAction({
+        title: 'Reject feature request?',
+        message: `Mark "${request.title}" as rejected?`,
+        acceptLabel: 'Reject request'
+      });
+      if (!confirmed) return;
+    } else if (nextStatus === 'PENDING') {
+      const confirmed = await Ipon.confirmAction({
+        title: 'Reset feature request?',
+        message: `Reset "${request.title}" back to pending status?`,
+        acceptLabel: 'Reset to pending'
+      });
+      if (!confirmed) return;
+    }
+
+    Ipon.setBusy(button, true);
+    try {
+      await Ipon.rpc('review_feature_request', { p_request_id: id, p_status: nextStatus });
+      request.status = nextStatus;
+      if (nextStatus === 'PENDING') {
+        request.reviewed_at = null;
+        request.release_version = null;
+      } else {
+        request.reviewed_at = new Date().toISOString();
+      }
+      renderFeatureRequests();
+      const message = nextStatus === 'IMPLEMENTED'
+        ? 'Feature request marked as implemented.'
+        : nextStatus === 'REJECTED'
+          ? 'Feature request marked as rejected.'
+          : 'Feature request reset to pending.';
+      Ipon.toast(message);
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(button, false);
+    }
+  });
+
+  async function openReleaseUpdateDialog() {
+    if (!releaseUpdateDialog || !releaseUpdateForm) return;
+
+    let existingVersions = new Set();
+    try {
+      const { data } = await Ipon.client.from('announcements')
+        .select('release_version')
+        .not('release_version', 'is', null)
+        .is('deleted_at', null);
+      (data || []).forEach((row) => {
+        if (row.release_version) existingVersions.add(row.release_version.trim().toLowerCase());
+      });
+    } catch (_) {}
+
+    let nextVersion = 'Update 1.0';
+    let major = 1;
+    let minor = 0;
+    if (existingVersions.size > 0) {
+      existingVersions.forEach((ver) => {
+        const match = ver.match(/(\d+)(?:\.(\d+))?/);
+        if (match) {
+          const maj = parseInt(match[1], 10);
+          const min = match[2] !== undefined ? parseInt(match[2], 10) : 0;
+          if (maj > major || (maj === major && min >= minor)) {
+            major = maj;
+            minor = min + 1;
+          }
+        }
+      });
+      nextVersion = `Update ${major}.${minor}`;
+    }
+
+    const profileById = new Map(profiles.map((p) => [p.id, p]));
+    const implementedUnreleased = featureRequests.filter(
+      (req) => req.status === 'IMPLEMENTED' && !req.release_version
+    );
+    const targetImplemented = implementedUnreleased.length
+      ? implementedUnreleased
+      : featureRequests.filter((req) => req.status === 'IMPLEMENTED');
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const versionInput = document.getElementById('release-update-version');
+    const dateInput = document.getElementById('release-update-date');
+    const titleInput = document.getElementById('release-update-heading');
+    const detailsInput = document.getElementById('release-update-details');
+
+    if (versionInput) versionInput.value = nextVersion;
+    if (dateInput) dateInput.value = todayIso;
+    if (titleInput) titleInput.value = `System ${nextVersion} Released`;
+
+    let releaseBody = `We are excited to announce System ${nextVersion}! This release includes new features, enhancements, and improvements requested by our community:\n\n`;
+    if (targetImplemented.length > 0) {
+      targetImplemented.forEach((req) => {
+        const author = profileById.get(req.requester_id)?.full_name || 'Community Member';
+        releaseBody += `• ${req.title}: ${req.details} (Requested by ${author})\n`;
+      });
+    } else {
+      releaseBody += '• User interface enhancements and styling refinements.\n• System performance improvements and stability updates.\n';
+    }
+    releaseBody += '\nThank you for contributing and helping us make IPON better!';
+
+    if (detailsInput) detailsInput.value = releaseBody;
+    releaseUpdateDialog.showModal();
+    if (versionInput) versionInput.focus();
+  }
+
+  releaseUpdateBtn?.addEventListener('click', openReleaseUpdateDialog);
+  document.getElementById('release-update-close')?.addEventListener('click', () => releaseUpdateDialog?.close());
+  document.getElementById('release-update-cancel')?.addEventListener('click', () => releaseUpdateDialog?.close());
+  releaseUpdateDialog?.addEventListener('close', () => releaseUpdateForm?.reset());
+
+  releaseUpdateForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const versionInput = document.getElementById('release-update-version');
+    const titleInput = document.getElementById('release-update-heading');
+    const detailsInput = document.getElementById('release-update-details');
+
+    const version = (versionInput?.value || '').trim();
+    const title = (titleInput?.value || '').trim();
+    const details = (detailsInput?.value || '').trim();
+
+    if (!version) {
+      Ipon.setFieldError(versionInput, 'Please specify a release version.');
+      versionInput.focus();
+      return;
+    }
+    if (!title) {
+      Ipon.setFieldError(titleInput, 'Please enter an announcement title.');
+      titleInput.focus();
+      return;
+    }
+    if (!details) {
+      Ipon.setFieldError(detailsInput, 'Please enter release notes and changes.');
+      detailsInput.focus();
+      return;
+    }
+
+    const button = releaseUpdateForm.querySelector('[type="submit"]');
+    Ipon.setBusy(button, true, 'Publishing…');
+    try {
+      await Ipon.rpc('create_announcement', {
+        p_title: title,
+        p_description: details,
+        p_attachments: [],
+        p_announcement_type: 'RELEASE',
+        p_release_version: version
+      });
+      releaseUpdateDialog.close();
+      releaseUpdateForm.reset();
+      Ipon.toast('Release update published successfully.');
+      await load();
+    } catch (error) {
+      if (String(error?.message || '').toLowerCase().includes('already been published')) {
+        Ipon.setFieldError(versionInput, 'Release version already exists. Please choose a unique version.');
+        versionInput.focus();
+      } else {
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      }
+    } finally {
+      Ipon.setBusy(button, false);
+    }
+  });
+
   [
     ['requests', ['requests-search', 'requests-status-filter'], renderRequests],
     ['feature-requests', ['feature-requests-search'], renderFeatureRequests],
