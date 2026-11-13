@@ -168,12 +168,16 @@ html {
   align-items: center;
   gap: 12px;
   color: var(--cream);
+  text-decoration: none;
   transition: transform 0.2s ease;
 }
 .l-brand:hover { transform: scale(1.02); }
-.l-brand img { width: 38px; height: 38px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); }
-.l-brand strong { display: block; font-size: 25px; font-weight: 800; line-height: 0.95; letter-spacing: 0.03em; }
-.l-brand small { display: block; margin-top: 3px; font: 700 9.5px/1 Arial, sans-serif; letter-spacing: 0.2em; color: rgba(245, 234, 219, 0.74); }
+.l-brand img { width: 38px; height: 38px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); flex-shrink: 0; }
+.l-brand .brand-divider { width: 2px; height: 30px; background: rgba(245, 234, 219, 0.38); border-radius: 2px; flex-shrink: 0; }
+.l-brand .brand-text { display: flex; flex-direction: column; line-height: 1; }
+.l-brand .brand-prefix { font-weight: 600; text-transform: lowercase; opacity: .92; }
+.l-brand strong { display: block; font-size: 24px; font-weight: 800; line-height: 1; letter-spacing: -0.01em; color: #fff; }
+.l-brand small { display: block; margin-top: 3px; font: 700 8px/1 Arial, sans-serif; letter-spacing: 0.16em; color: rgba(245, 234, 219, 0.78); text-transform: uppercase; white-space: nowrap; }
 
 .l-links {
   display: flex;
@@ -1841,6 +1845,8 @@ html {
   font: 13.5px/1.55 Arial, sans-serif;
 }
 .l-footer .l-brand { color: var(--ink); }
+.l-footer .l-brand .brand-divider { background: rgba(14, 43, 33, 0.22); }
+.l-footer .l-brand strong { color: var(--ink); }
 .l-footer .l-brand small { color: var(--muted); }
 .l-footer nav { display: flex; flex-wrap: wrap; gap: 20px; }
 .l-footer nav a:hover { color: var(--ink); }
@@ -1920,9 +1926,10 @@ html {
   .l-wrap { width: calc(100% - 28px); }
   .l-nav .l-wrap { min-height: 56px; }
   .l-mobile-tabs { padding: 6px 0; }
-  .l-brand img { width: 34px; height: 34px; }
-  .l-brand strong { font-size: 22px; }
-  .l-brand small { font-size: 8.5px; }
+  .l-brand img { width: 32px; height: 32px; }
+  .l-brand .brand-divider { height: 24px; }
+  .l-brand strong { font-size: 20px; }
+  .l-brand small { font-size: 6.8px; }
   .l-nav-cta .l-btn { min-height: 36px; padding: 7px 14px; font-size: 13px; }
   .l-hero { padding: 48px 0 84px; }
   .l-hero-lead { font-size: 16px; }

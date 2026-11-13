@@ -113,7 +113,7 @@
       document.body.insertAdjacentHTML('beforeend', `
         <div class="app-loader" id="app-loader" role="status" aria-live="polite" hidden>
           <div class="loader-sheet">
-            <strong class="loader-brand">IPON</strong>
+            <strong class="loader-brand"><span class="brand-prefix">my</span>IPON</strong>
             <div class="savings-loader" aria-hidden="true">
               <span class="loader-coin"><b>₱</b></span>
               <svg class="piggy-bank" viewBox="0 0 190 132">
@@ -511,19 +511,21 @@
   }
 
   const brandHtml = `
-    <a class="app-brand brand" data-region="brand" href="dashboard.html" aria-label="IPON home">
-      <svg class="brand-coins" viewBox="0 0 44 40" aria-hidden="true">
-        <ellipse cx="26" cy="9" rx="11" ry="4" fill="#edd189"/>
-        <path d="M15 11v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V11c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#d1a650"/>
-        <path d="M15 17v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V17c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#e5c270"/>
-        <path d="M15 23v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V23c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#c99c44"/>
-        <ellipse cx="14" cy="23" rx="9.5" ry="3.6" fill="#f3da99"/>
-        <path d="M4.5 25v4.2c0 2 4.3 3.6 9.5 3.6s9.5-1.6 9.5-3.6V25c0 2-4.3 3.6-9.5 3.6S4.5 27 4.5 25Z" fill="#d8b05c"/>
-        <path d="M4.5 30.8v4.2c0 2 4.3 3.6 9.5 3.6s9.5-1.6 9.5-3.6v-4.2c0 2-4.3 3.6-9.5 3.6s-9.5-1.6-9.5-3.6Z" fill="#eac878"/>
+    <a class="app-brand brand" data-region="brand" href="dashboard.html" aria-label="myIPON home">
+      <svg class="brand-coins" viewBox="6 8 50 48" aria-hidden="true">
+        <path d="M34 27V14" fill="none" stroke="#78b981" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M34 18c4-7 10-9 16-7-1 7-7 11-16 11Z" fill="#78b981"/>
+        <path d="M34 22c-4-6-9-8-14-6 1 6 6 9 14 9Z" fill="#5d9c6a"/>
+        <ellipse cx="38" cy="31" rx="14" ry="5" fill="#f1d27e"/>
+        <path d="M24 31v8c0 3 6 5 14 5s14-2 14-5v-8c0 3-6 5-14 5s-14-2-14-5Z" fill="#d3a74e"/>
+        <path d="M24 39v8c0 3 6 5 14 5s14-2 14-5v-8c0 3-6 5-14 5s-14-2-14-5Z" fill="#e7bf66"/>
+        <ellipse cx="18" cy="42" rx="10" ry="4" fill="#f1d27e"/>
+        <path d="M8 42v7c0 2 4 4 10 4s10-2 10-4v-7c0 2-4 4-10 4S8 44 8 42Z" fill="#d9ad55"/>
       </svg>
+      <span class="brand-divider" aria-hidden="true"></span>
       <span class="brand-text">
-        <strong>IPON</strong>
-        <small>TRACKING SYSTEM</small>
+        <strong><span class="brand-prefix">my</span>IPON</strong>
+        <small>SAVINGS MANAGEMENT SYSTEM</small>
       </span>
     </a>`;
 
@@ -1787,7 +1789,7 @@
     document.body.insertAdjacentHTML('beforeend', `
       <section class="startup-error" id="startup-error" role="alert" aria-labelledby="startup-error-title">
         <div class="startup-error-sheet">
-          <strong class="loader-brand">IPON</strong>
+          <strong class="loader-brand"><span class="brand-prefix">my</span>IPON</strong>
           <div class="startup-error-mark" aria-hidden="true"><i></i></div>
           <h1 id="startup-error-title">Unable to load your records</h1>
           <p>${escapeHtml(message)}</p>

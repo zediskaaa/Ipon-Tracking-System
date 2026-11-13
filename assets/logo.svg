@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 288" width="512" height="288">
+  <rect width="512" height="288" rx="44" fill="#043224"/>
+  <!-- Sprout stem -->
+  <path d="M128 126V74" fill="none" stroke="#72ba43" stroke-width="12" stroke-linecap="round"/>
+  <!-- Leaves -->
+  <path d="M128 92c15-28 42-36 64-28-4 28-26 44-64 44Z" fill="#76be45"/>
+  <path d="M128 106c-16-24-38-32-58-24 4 24 24 38 58 38Z" fill="#529431"/>
+  <!-- Taller Coin Stack on Right -->
+  <ellipse cx="144" cy="144" rx="54" ry="18" fill="#f8da82"/>
+  <path d="M90 144v30c0 11 24 18 54 18s54-7 54-18v-30c0 11-24 18-54 18s-54-7-54-18Z" fill="#d9a341"/>
+  <path d="M90 174v30c0 11 24 18 54 18s54-7 54-18v-30c0 11-24 18-54 18s-54-7-54-18Z" fill="#e9bc5a"/>
+  <!-- Shorter Coin Stack on Left -->
+  <ellipse cx="68" cy="186" rx="42" ry="15" fill="#f8da82"/>
+  <path d="M26 186v28c0 9 19 15 42 15s42-6 42-15v-28c0 9-19 15-42 15S26 195 26 186Z" fill="#dda847"/>
+  <!-- Vertical Divider Bar -->
+  <line x1="228" y1="92" x2="228" y2="204" stroke="#e0ece2" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- Typography -->
+  <text x="256" y="152" fill="#faf8ef" font-family="system-ui, -apple-system, Arial, sans-serif" font-size="64" font-weight="800" letter-spacing="-1.5">
+    <tspan font-weight="600" fill="#faf8ef">my</tspan>IPON
+  </text>
+  <text x="258" y="186" fill="#e7ded0" font-family="Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="3.8">
+    SAVINGS MANAGEMENT SYSTEM
+  </text>
+</svg>

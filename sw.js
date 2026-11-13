@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v1';
+const CACHE_NAME = 'ipon-shell-v2';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
   'assets/favicon.svg',

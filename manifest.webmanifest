@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "IPON Group Savings Tracker",
-  "short_name": "IPON",
-  "description": "Private non-custodial group savings record-keeping application for tracking contributions, expenses, and withdrawals.",
+  "name": "myIPON — Savings Management System",
+  "short_name": "myIPON",
+  "description": "Private non-custodial group savings management system for tracking contributions, expenses, and withdrawals.",
   "lang": "en",
   "dir": "ltr",
   "start_url": "/login.html",

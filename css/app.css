@@ -15,11 +15,13 @@ a { color:inherit; }
 .setup-banner { position:relative; z-index:100; padding:10px 20px; background:#f4dca5; color:#3f321b; font-family:Arial,sans-serif; font-size:14px; text-align:center; }
 .app-layout { display:grid; min-height:100vh; grid-template-columns:220px minmax(0,1fr); }
 .app-sidebar { position:sticky; top:0; isolation:isolate; display:flex; height:100dvh; flex-direction:column; padding:26px 16px 18px; background:radial-gradient(ellipse 140% 28% at 20% 22%, rgba(46,118,86,.22) 0%, transparent 70%), linear-gradient(180deg, #0b3428 0%, #07231a 100%); color:#f5eadb; box-shadow:2px 0 24px rgba(7,35,26,.16); }
-.app-brand { display:flex; align-items:center; gap:10px; align-self:flex-start; border:0; text-decoration:none; transform:none; color:#f5eadb; }
-.brand-coins { width:38px; height:36px; flex-shrink:0; }
-.brand-text { display:flex; flex-direction:column; }
-.brand-text strong { font-size:32px; font-weight:800; line-height:.95; letter-spacing:.03em; }
-.brand-text small { margin-top:3px; font-family:Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:.16em; color:rgba(245,234,219,.78); }
+.app-brand { display:flex; align-items:center; gap:8px; align-self:flex-start; border:0; text-decoration:none; transform:none; color:#f5eadb; }
+.brand-coins { width:36px; height:34px; flex-shrink:0; }
+.brand-divider { width:2px; height:28px; background:rgba(255,255,255,.32); border-radius:2px; flex-shrink:0; margin:0 1px; }
+.brand-text { display:flex; flex-direction:column; line-height:1; }
+.brand-prefix { font-weight:600; text-transform:lowercase; opacity:.92; }
+.brand-text strong { font-size:24px; font-weight:800; line-height:1; letter-spacing:-.02em; color:#fff; }
+.brand-text small { margin-top:3px; font-family:Arial,sans-serif; font-size:7.2px; font-weight:700; letter-spacing:.16em; color:rgba(245,234,219,.82); text-transform:uppercase; white-space:nowrap; }
 .app-nav { display:grid; gap:6px; margin-top:34px; }
 .app-nav a { display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:11px; font-size:16px; text-decoration:none; color:rgba(245,234,219,.88); transition:background-color .15s ease, color .15s ease; }
 .app-nav a svg { width:20px; height:20px; min-width:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
@@ -291,7 +293,7 @@ body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame
 }
 @media (max-width:720px) {
   .app-layout { display:block; }.app-sidebar { position:relative; display:grid; width:100%; height:auto; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:0 8px; padding:12px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left)); }
-  .app-brand { min-width:0; font-size:34px; }.brand-coins{width:34px;height:32px}.brand-text strong{font-size:30px}.brand-text small{font-size:9px}.app-nav { display:grid; width:100%; min-height:58px; grid-column:1/-1; grid-template-columns:repeat(auto-fit,minmax(44px,1fr)); gap:4px; margin-top:12px; border-top:1px solid rgba(255,255,255,.14); padding-top:10px; overflow:visible; }
+  .app-brand { min-width:0; font-size:34px; }.brand-coins{width:30px;height:28px}.brand-divider{height:22px}.brand-text strong{font-size:20px}.brand-text small{font-size:6.5px;letter-spacing:.12em}.app-nav { display:grid; width:100%; min-height:58px; grid-column:1/-1; grid-template-columns:repeat(auto-fit,minmax(44px,1fr)); gap:4px; margin-top:12px; border-top:1px solid rgba(255,255,255,.14); padding-top:10px; overflow:visible; }
   .app-nav a { display:grid; width:min(44px,100%); min-width:0; min-height:48px; justify-self:center; padding:0; place-items:center; -webkit-tap-highlight-color:transparent; }.app-nav a:hover { transform:none; }.app-nav a svg { width:22px; height:22px; }.app-nav a span,.sidebar-signout span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
   .sidebar-art { display:none; }
   .app-sidebar-footer { display:flex; grid-column:2; grid-row:1; flex-direction:row; align-items:center; gap:5px; margin:0; border:0; padding:0; }
