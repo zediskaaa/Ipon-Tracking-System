@@ -58,8 +58,13 @@
   let mode = 'login';
 
   const state = await Ipon.init({ requireAuth: false, allowPending: true });
+  Ipon.setLoading(false);
   if (state.failed) return;
-  if (state.session && state.profile?.status === 'ACTIVE') window.location.replace(Ipon.homeForRole(state.profile.role));
+  if (state.session && state.profile?.status === 'ACTIVE') {
+    Ipon.setLoading(true, 'Opening your records…');
+    window.location.replace(Ipon.homeForRole(state.profile.role));
+    return;
+  }
   if (!state.configured) {
     message.textContent = 'Add your Supabase URL and anon key in js/config.js before signing in.';
     submit.disabled = true;
@@ -168,7 +173,7 @@
     requestReason.required = false;
     passwordConfirmationField.hidden = !signup;
     passwordConfirmation.required = signup;
-    passwordRequirements.hidden = !signup;
+    passwordRequirements.hidden = true;
     passwordStrength.element.hidden = !signup;
     forgotButton.hidden = signup;
     password.autocomplete = signup ? 'new-password' : 'current-password';
@@ -353,6 +358,7 @@
     requestConfirmDialog?.close();
 
     try {
+      Ipon.setLoading(true, 'Activating your account…');
       Ipon.toast('Account verified! Signing you in…');
       const { data, error: loginError } = await Ipon.client.auth.signInWithPassword({
         email: submittedEmail,
@@ -367,8 +373,9 @@
         } catch {}
       }
       Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
-      window.location.replace('dashboard.html');
+      window.location.replace(Ipon.homeForRole(profile?.role || 'MEMBER'));
     } catch (_) {
+      Ipon.setLoading(false);
       form.reset();
       setMode('login');
       email.value = submittedEmail;

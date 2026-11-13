@@ -1294,5 +1294,35 @@ test('Super Admin can deactivate and delete user accounts with required reasons 
   assert.match(schema, /20261113_040/);
 });
 
+test('live password validation feedback and non-blocking authentication flow', () => {
+  const core = read('js/core.js');
+  const auth = read('js/auth.js');
+  const css = read('css/app.css');
+  const migration = read('database/migrations/20261113_041_activate_all_new_accounts_and_fix_loading.sql');
+  const schema = read('database/schema.sql');
+
+  assert.match(core, /password-rules-list/);
+  assert.match(core, /password-rule-item/);
+  assert.match(core, /data-rule="length"/);
+  assert.match(core, /data-rule="upper"/);
+  assert.match(core, /data-rule="lower"/);
+  assert.match(core, /data-rule="number"/);
+  assert.match(core, /data-rule="symbol"/);
+  assert.match(core, /loaderSafetyTimer/);
+  assert.match(core, /options\.requireAuth !== false/);
+
+  assert.match(auth, /Ipon\.setLoading\(false\)/);
+  assert.match(auth, /passwordRequirements\.hidden = true/);
+
+  assert.match(css, /\.password-rules-list/);
+  assert.match(css, /\.password-rule-item/);
+  assert.match(css, /\.password-rule-item\.is-met/);
+  assert.match(css, /\.password-rule-item\.is-unmet/);
+
+  assert.match(migration, /update public\.profiles\s+set status = 'ACTIVE'/);
+  assert.match(schema, /20261113_041/);
+});
+
+
 
 

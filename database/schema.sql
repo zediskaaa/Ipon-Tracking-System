@@ -5350,8 +5350,9 @@ declare
   v_full_name text;
   v_contact text;
   v_reason text;
-  v_account_kind text := coalesce(new.raw_user_meta_data ->> 'account_kind', 'MANAGED');
+  v_account_kind text := coalesce(new.raw_user_meta_data ->> 'account_kind', 'DIRECT_SIGNUP');
   v_super_admin record;
+  v_status public.account_status := 'ACTIVE';
 begin
   if nullif(btrim(new.raw_user_meta_data ->> 'first_name'), '') is not null
      and nullif(btrim(new.raw_user_meta_data ->> 'last_name'), '') is not null then
@@ -5370,7 +5371,9 @@ begin
   v_contact := public.normalize_ph_mobile(new.raw_user_meta_data ->> 'contact_number');
   v_reason := nullif(btrim(new.raw_user_meta_data ->> 'request_reason'), '');
 
-  if v_account_kind = 'ADMIN_REQUEST' then
+  if v_account_kind = 'DISABLED' then
+    v_status := 'DISABLED';
+  elsif v_account_kind = 'ADMIN_REQUEST' then
     if exists (
       select 1 from public.admin_requests ar
       where lower(ar.email) = lower(new.email)
@@ -5398,11 +5401,19 @@ begin
     ) then
       raise exception 'Email ownership has not been verified. Please verify your email before submitting.' using errcode = '22023';
     end if;
+    v_status := 'PENDING';
+  else
+    v_status := 'ACTIVE';
   end if;
 
   insert into public.profiles (id, full_name, first_name, middle_name, last_name, email, contact_number, role, status)
-  values (new.id, v_full_name, v_first_name, v_middle_name, v_last_name, lower(new.email), v_contact, 'MEMBER', 'PENDING')
-  on conflict (id) do nothing;
+  values (new.id, v_full_name, v_first_name, v_middle_name, v_last_name, lower(new.email), v_contact, 'MEMBER', v_status)
+  on conflict (id) do update set
+    status = case when public.profiles.status = 'PENDING' then 'ACTIVE' else public.profiles.status end,
+    full_name = coalesce(public.profiles.full_name, excluded.full_name),
+    first_name = coalesce(public.profiles.first_name, excluded.first_name),
+    last_name = coalesce(public.profiles.last_name, excluded.last_name),
+    contact_number = coalesce(public.profiles.contact_number, excluded.contact_number);
 
   if v_account_kind = 'ADMIN_REQUEST' then
     insert into public.admin_requests (requester_id, email, contact_number, reason)
@@ -6236,6 +6247,10 @@ grant execute on function public.super_admin_delete_user(uuid) to authenticated;
 
 insert into public.schema_migrations (version, name)
 values ('20261113_040', 'super admin account actions with reasons and safe delete')
+on conflict (version) do nothing;
+
+insert into public.schema_migrations (version, name)
+values ('20261113_041', 'activate all new verified accounts and fix auth loading')
 on conflict (version) do nothing;
 
 commit;

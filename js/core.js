@@ -102,7 +102,12 @@
     'savings.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 1h11l-2 4 2 4H5"/></svg>'
   };
 
+  let loaderSafetyTimer = null;
   function setLoading(visible, label = 'Opening your records…') {
+    if (loaderSafetyTimer) {
+      clearTimeout(loaderSafetyTimer);
+      loaderSafetyTimer = null;
+    }
     let loader = document.getElementById('app-loader');
     if (!loader) {
       document.body.insertAdjacentHTML('beforeend', `
@@ -143,9 +148,19 @@
       loader = document.getElementById('app-loader');
     }
     if (!visible) document.body.classList.add('is-ready');
-    document.getElementById('loader-label').textContent = label;
+    const labelEl = document.getElementById('loader-label');
+    if (labelEl) labelEl.textContent = label;
     loader.hidden = !visible;
     loader.setAttribute('aria-busy', String(visible));
+    if (visible) {
+      loaderSafetyTimer = setTimeout(() => {
+        if (loader && !loader.hidden) {
+          loader.hidden = true;
+          loader.setAttribute('aria-busy', 'false');
+          document.body.classList.add('is-ready');
+        }
+      }, 8000);
+    }
   }
 
   function escapeHtml(value) {
@@ -172,14 +187,64 @@
   function bindPasswordStrength(input, personalValues = () => []) {
     const indicator = document.createElement('div');
     indicator.className = 'password-strength';
-    indicator.innerHTML = '<small aria-live="polite">Enter a new password.</small>';
+    indicator.innerHTML = `
+      <small aria-live="polite">Enter a new password.</small>
+      <ul class="password-rules-list" aria-label="Password requirements">
+        <li class="password-rule-item" data-rule="length"><span class="rule-icon" aria-hidden="true">○</span><span>At least 8 characters</span></li>
+        <li class="password-rule-item" data-rule="upper"><span class="rule-icon" aria-hidden="true">○</span><span>Uppercase letter (A-Z)</span></li>
+        <li class="password-rule-item" data-rule="lower"><span class="rule-icon" aria-hidden="true">○</span><span>Lowercase letter (a-z)</span></li>
+        <li class="password-rule-item" data-rule="number"><span class="rule-icon" aria-hidden="true">○</span><span>Number (0-9)</span></li>
+        <li class="password-rule-item" data-rule="symbol"><span class="rule-icon" aria-hidden="true">○</span><span>Special symbol (!@#$…)</span></li>
+      </ul>`;
     input.closest('.field')?.append(indicator);
+
+    const ruleLength = indicator.querySelector('[data-rule="length"]');
+    const ruleUpper = indicator.querySelector('[data-rule="upper"]');
+    const ruleLower = indicator.querySelector('[data-rule="lower"]');
+    const ruleNumber = indicator.querySelector('[data-rule="number"]');
+    const ruleSymbol = indicator.querySelector('[data-rule="symbol"]');
+    const summary = indicator.querySelector('small');
+
     const update = () => {
-      const value = input.value;
-      const score = [value.length >= 8, /[a-z]/.test(value), /[A-Z]/.test(value), /[0-9]/.test(value), /[^A-Za-z0-9]/.test(value)].filter(Boolean).length;
+      const value = input.value || '';
+      const lengthMet = value.length >= 8 && value.length <= 128;
+      const lowerMet = /[a-z]/.test(value);
+      const upperMet = /[A-Z]/.test(value);
+      const numberMet = /[0-9]/.test(value);
+      const symbolMet = /[^A-Za-z0-9]/.test(value);
+      const score = [lengthMet, lowerMet, upperMet, numberMet, symbolMet].filter(Boolean).length;
       const issue = value ? passwordIssue(value, personalValues()) : '';
+
+      const setRuleState = (el, isMet) => {
+        if (!el) return;
+        el.className = `password-rule-item ${value ? (isMet ? 'is-met' : 'is-unmet') : ''}`;
+        const icon = el.querySelector('.rule-icon');
+        if (icon) icon.textContent = value ? (isMet ? '✓' : '✕') : '○';
+      };
+
+      setRuleState(ruleLength, lengthMet);
+      setRuleState(ruleUpper, upperMet);
+      setRuleState(ruleLower, lowerMet);
+      setRuleState(ruleNumber, numberMet);
+      setRuleState(ruleSymbol, symbolMet);
+
       indicator.dataset.strength = !value ? 'empty' : issue ? (score >= 4 ? 'medium' : 'weak') : 'strong';
-      indicator.querySelector('small').textContent = !value ? 'Enter a new password.' : issue || 'Strong password. All requirements are met.';
+
+      if (!value) {
+        if (summary) summary.textContent = 'Enter a new password.';
+      } else if (!issue) {
+        if (summary) summary.textContent = 'Strong password. All requirements are met.';
+      } else if (issue.startsWith('Do not include')) {
+        if (summary) summary.textContent = issue;
+      } else {
+        const missing = [];
+        if (!lengthMet) missing.push(value.length < 8 ? 'at least 8 characters' : 'max 128 characters');
+        if (!upperMet) missing.push('uppercase letter (A-Z)');
+        if (!lowerMet) missing.push('lowercase letter (a-z)');
+        if (!numberMet) missing.push('number (0-9)');
+        if (!symbolMet) missing.push('special symbol (!@#$…)');
+        if (summary) summary.textContent = `Missing: ${missing.join(', ')}.`;
+      }
     };
     input.addEventListener('input', update);
     update();
@@ -1752,7 +1817,7 @@
     preparePhoneInputs();
     prepareResponsiveTables();
     applyInputDateBounds();
-    setLoading(true);
+    if (options.requireAuth !== false) setLoading(true);
     try {
       if (!configured) {
         showSetupBanner();
@@ -1823,6 +1888,7 @@
       initNotifications(profile).catch(() => { });
       initPresence(profile);
       appInitialized = true;
+      if (options.requireAuth === false) setLoading(false);
       return { configured: true, profile, session };
     } catch (error) {
       setLoading(false);
