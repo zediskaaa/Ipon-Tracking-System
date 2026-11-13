@@ -551,7 +551,7 @@ Deno.serve(async (request) => {
 
     const { data: profile } = await admin
       .from('profiles')
-      .select('id, status, role, group_id')
+      .select('id, status, role, group_id, member_id')
       .eq('email', email)
       .maybeSingle();
 
@@ -573,10 +573,30 @@ Deno.serve(async (request) => {
       return json({ error: 'Invitation not found. Please contact your administrator.' }, 404);
     }
 
+    // Lookup group membership details for this invited user
+    const { data: membership } = await admin
+      .from('group_memberships')
+      .select('group_id, role, member_id')
+      .eq('user_id', targetUserId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const targetGroupId = profile?.group_id || membership?.group_id || null;
+    const targetMemberId = profile?.member_id || membership?.member_id || null;
+    const targetRole = membership?.role || profile?.role || 'MEMBER';
+
+    let groupName = '';
+    if (targetGroupId) {
+      const { data: grp } = await admin.from('groups').select('name').eq('id', targetGroupId).maybeSingle();
+      groupName = grp?.name || '';
+    }
+
     if (profile && profile.status === 'ACTIVE') {
       return json({
         success: true,
         already_active: true,
+        group_name: groupName,
         message: 'Your account is already active. Please sign in with your credentials.'
       });
     }
@@ -586,18 +606,33 @@ Deno.serve(async (request) => {
       return json({ error: 'Invalid or expired invitation link. Please ask your administrator to send a new invite.' }, 400);
     }
 
+    const updatePayload: Record<string, unknown> = {
+      status: 'ACTIVE',
+      role: targetRole
+    };
+    if (targetGroupId) updatePayload.group_id = targetGroupId;
+    if (targetMemberId) updatePayload.member_id = targetMemberId;
+
     const { error: profileUpdateError } = await admin
       .from('profiles')
-      .update({ status: 'ACTIVE' })
+      .update(updatePayload)
       .eq('id', targetUserId);
     if (profileUpdateError) {
       return json({ error: 'Could not activate account. Please try again.' }, 500);
     }
 
-    await admin
-      .from('group_memberships')
-      .update({ status: 'ACTIVE' })
-      .eq('user_id', targetUserId);
+    if (targetGroupId) {
+      await admin
+        .from('group_memberships')
+        .update({ status: 'ACTIVE' })
+        .eq('user_id', targetUserId)
+        .eq('group_id', targetGroupId);
+    } else {
+      await admin
+        .from('group_memberships')
+        .update({ status: 'ACTIVE' })
+        .eq('user_id', targetUserId);
+    }
 
     const currentMeta = authUser.user_metadata || {};
     const { invite_token: _, ...cleanMeta } = currentMeta;
@@ -610,6 +645,7 @@ Deno.serve(async (request) => {
 
     return json({
       success: true,
+      group_name: groupName,
       message: 'Invitation accepted! Your account is now active.'
     });
   }
@@ -674,7 +710,22 @@ Deno.serve(async (request) => {
     const email = String(body.email || '').trim().toLowerCase();
     const userId = String(body.user_id || '').trim();
     if (userId) {
-      await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', userId).neq('status', 'DISABLED');
+      const { data: prof } = await admin.from('profiles').select('group_id, role, member_id').eq('id', userId).maybeSingle();
+      if (prof && !prof.group_id) {
+        const { data: mem } = await admin.from('group_memberships').select('group_id, role, member_id').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (mem?.group_id) {
+          await admin.from('profiles').update({
+            status: 'ACTIVE',
+            group_id: mem.group_id,
+            role: mem.role || prof.role || 'MEMBER',
+            member_id: mem.member_id || prof.member_id
+          }).eq('id', userId);
+        } else {
+          await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', userId).neq('status', 'DISABLED');
+        }
+      } else {
+        await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', userId).neq('status', 'DISABLED');
+      }
     }
     if (email) {
       await admin.from('profiles').update({ status: 'ACTIVE' }).eq('email', email).neq('status', 'DISABLED');

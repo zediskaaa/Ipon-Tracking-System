@@ -26,6 +26,10 @@
   const recoveryMessage = document.getElementById('recovery-message');
   const requestSuccessDialog = document.getElementById('request-success-dialog');
   const requestSuccessEmail = document.getElementById('request-success-email');
+  const inviteSuccessDialog = document.getElementById('invite-success-dialog');
+  const inviteSuccessMessage = document.getElementById('invite-success-message');
+  const inviteSuccessGroupHint = document.getElementById('invite-success-group-hint');
+  const inviteSuccessEmail = document.getElementById('invite-success-email');
   const requestConfirmDialog = document.getElementById('request-confirm-dialog');
   const requestConfirmClose = document.getElementById('request-confirm-close');
   const requestConfirmEdit = document.getElementById('request-confirm-edit');
@@ -104,8 +108,23 @@
         message.dataset.tone = 'success';
         message.textContent = res.already_active
           ? 'Your account is already active. Please sign in with your credentials.'
-          : 'Invitation accepted! Your account is now active. Please sign in with your temporary password.';
-        Ipon.toast('Invitation accepted! Please sign in.', 'success');
+          : 'Account activation successful! Log in to your account using the provided credentials.';
+        Ipon.toast('Account activated! Please sign in.', 'success');
+
+        if (inviteSuccessDialog) {
+          if (inviteSuccessEmail) inviteSuccessEmail.textContent = acceptInviteEmail;
+          if (inviteSuccessMessage) {
+            inviteSuccessMessage.textContent = res.group_name
+              ? `Account activation successful! Log in to your account using the provided credentials to access "${res.group_name}".`
+              : 'Account activation successful! Log in to your account using the provided credentials.';
+          }
+          if (inviteSuccessGroupHint) {
+            inviteSuccessGroupHint.textContent = res.group_name
+              ? `Your savings group workspace "${res.group_name}" is ready and linked to your account.`
+              : 'Your savings group workspace has been linked and will open automatically after sign in.';
+          }
+          inviteSuccessDialog.showModal();
+        }
         password.focus();
       }
     } catch (err) {
@@ -306,6 +325,11 @@
 
   document.querySelectorAll('[data-request-success-close]').forEach((btn) => btn.addEventListener('click', () => {
     requestSuccessDialog?.close();
+    password.focus();
+  }));
+
+  document.querySelectorAll('[data-invite-success-close]').forEach((btn) => btn.addEventListener('click', () => {
+    inviteSuccessDialog?.close();
     password.focus();
   }));
 

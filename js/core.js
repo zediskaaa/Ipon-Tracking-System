@@ -2086,6 +2086,16 @@
         .eq('id', session.user.id)
         .single());
       if (error) throw error;
+      if (!profile.group_id && profile.role !== 'SUPER_ADMIN' && profile.status === 'ACTIVE') {
+        const { data: myGroups } = await client.rpc('get_my_groups').catch(() => ({ data: null }));
+        if (myGroups && myGroups.length > 0) {
+          const firstGroup = myGroups[0];
+          await client.rpc('switch_active_group', { p_group_id: firstGroup.group_id }).catch(() => null);
+          profile.group_id = firstGroup.group_id;
+          profile.role = firstGroup.role || profile.role;
+          profile.member_id = firstGroup.member_id || profile.member_id;
+        }
+      }
       currentProfile = profile;
       try {
         sessionStorage.setItem(ACTIVE_ROLE_KEY, profile.role);
