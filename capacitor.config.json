@@ -2,8 +2,16 @@
   "appId": "com.myipon.app",
   "appName": "myIPON",
   "webDir": "www",
+  "appendUserAgent": "myIPONApp/18",
   "server": {
-    "androidScheme": "https"
+    "url": "https://my-ipon.vercel.app/login.html?app=1",
+    "androidScheme": "https",
+    "allowNavigation": [
+      "my-ipon.vercel.app",
+      "*.vercel.app",
+      "woslmwokhhyszkgevnli.supabase.co"
+    ],
+    "errorPath": "offline.html"
   },
   "plugins": {
     "SplashScreen": {
@@ -18,4 +26,3 @@
     }
   }
 }
-

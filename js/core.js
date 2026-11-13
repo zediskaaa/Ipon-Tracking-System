@@ -1913,13 +1913,25 @@
     return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
 
+  function getInstalledNativeBuild() {
+    const uaMatch = navigator.userAgent.match(/myIPONApp\/(\d+)/i);
+    if (uaMatch) return Number(uaMatch[1]);
+    return Number(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 0);
+  }
+
   function isInstalledAppUser() {
     if (isIosDevice()) return false;
+    try {
+      if (new URLSearchParams(window.location.search).get('app') === '1') {
+        sessionStorage.setItem('myipon_is_app', '1');
+      }
+    } catch (_) { }
     return Boolean(window.Capacitor) ||
       document.body.classList.contains('is-app') ||
       Boolean(window.MYIPON_APP_VERSION?.isApp) ||
       (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
-      /myIPON/i.test(navigator.userAgent);
+      /myIPON/i.test(navigator.userAgent) ||
+      sessionStorage.getItem('myipon_is_app') === '1';
   }
 
   async function initNotifications(profile) {
@@ -1934,18 +1946,18 @@
       let allRows = rows;
 
       if (isApp) {
-        const latestVersion = localStorage.getItem('myipon_latest_remote_version') || '1.0.15';
-        const currentBuild = Number(window.MYIPON_APP_VERSION?.build || 0);
-        const remoteBuild = Number(localStorage.getItem('myipon_latest_remote_build') || 15);
-        const hasPendingUpdate = remoteBuild > currentBuild || !window.MYIPON_APP_VERSION?.build;
+        const latestVersion = localStorage.getItem('myipon_latest_remote_version') || '1.0.18';
+        const installedNativeBuild = getInstalledNativeBuild();
+        const remoteNativeBuild = Number(localStorage.getItem('myipon_latest_native_build') || 18);
+        const hasPendingUpdate = remoteNativeBuild > installedNativeBuild;
 
         if (hasPendingUpdate) {
-          const isReleaseRead = Boolean(localStorage.getItem(`myipon_read_release_notice_${remoteBuild}`));
+          const isReleaseRead = Boolean(localStorage.getItem(`myipon_read_release_notice_${remoteNativeBuild}`));
           const releaseNotice = {
             id: 'system-app-release-notice',
             type: 'RELEASE',
             title: `Update available: Version ${latestVersion}`,
-            message: `A new version of myIPON (${latestVersion}) is ready. If you skipped updating earlier, tap Download APK below to install the latest version now.`,
+            message: `A new version of myIPON (${latestVersion}) is ready with instant live updates. Tap Download APK below to install.`,
             link: 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest',
             read_at: isReleaseRead ? 'read' : null,
             created_at: new Date().toISOString()
@@ -2015,7 +2027,7 @@
       const item = event.target.closest('[data-notification-id]');
       if (!item || !item.classList.contains('is-unread')) return;
       if (item.dataset.notificationId === 'system-app-release-notice') {
-        const remoteBuild = localStorage.getItem('myipon_latest_remote_build') || '15';
+        const remoteBuild = localStorage.getItem('myipon_latest_native_build') || '18';
         localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
         item.classList.remove('is-unread');
         await load();
@@ -2024,7 +2036,7 @@
       try { await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) }); item.classList.remove('is-unread'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
     };
     document.getElementById('mark-all-notifications').onclick = async () => {
-      const remoteBuild = localStorage.getItem('myipon_latest_remote_build') || '15';
+      const remoteBuild = localStorage.getItem('myipon_latest_native_build') || '18';
       localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
       try { await rpc('mark_all_notifications_read'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
     };
@@ -3976,10 +3988,7 @@
 
   async function checkForAppUpdate({ force = false } = {}) {
     if (isIosDevice()) return;
-    const isNativeApp = Boolean(window.Capacitor) ||
-      document.body.classList.contains('is-app') ||
-      Boolean(window.MYIPON_APP_VERSION?.isApp) ||
-      /myIPON/i.test(navigator.userAgent);
+    const isNativeApp = isInstalledAppUser();
     const isMobile = isNativeApp || isMobileAppContext();
 
     const justLoggedIn = sessionStorage.getItem('myipon_just_logged_in');
@@ -3989,49 +3998,28 @@
 
     if (!isMobile && !force && !justLoggedIn) return;
 
-    const currentBuild = Number(window.MYIPON_APP_VERSION?.build || 0);
-    const localTime = window.MYIPON_APP_VERSION?.updated_at ? new Date(window.MYIPON_APP_VERSION.updated_at).getTime() : 0;
+    const installedNativeBuild = getInstalledNativeBuild();
 
     let remoteVersion = null;
     let remoteBuild = 0;
     let remoteNotes = '';
     let updateFound = false;
 
-    // 1. Check raw github version.json (Fast CDN, no rate limits)
+    // Check raw github version.json; only prompt APK reinstall when nativeBuild increases
     try {
       const res = await fetch('https://raw.githubusercontent.com/zediskaaa/Ipon-Tracking-System/main/version.json?_t=' + Date.now(), { cache: 'no-store' });
       if (res.ok) {
         const remote = await res.json();
         remoteVersion = remote.version;
-        remoteBuild = Number(remote.build || 0);
+        remoteBuild = Number(remote.nativeBuild || remote.build || 0);
         if (remoteVersion) localStorage.setItem('myipon_latest_remote_version', remoteVersion);
-        if (remoteBuild) localStorage.setItem('myipon_latest_remote_build', String(remoteBuild));
-        if (remoteBuild > currentBuild) {
+        if (remoteBuild) localStorage.setItem('myipon_latest_native_build', String(remoteBuild));
+        if (isNativeApp && remoteBuild > installedNativeBuild) {
           updateFound = true;
-          remoteNotes = `A new version (${remoteVersion || 'Latest'}) of myIPON is ready with the latest features. Tap Update now to download and install.`;
+          remoteNotes = `A new version (${remoteVersion || 'Latest'}) of myIPON is ready with automatic live updates. Tap Update now to download and install.`;
         }
       }
     } catch (_) { }
-
-    // 2. Check github release asset timestamp as backup/realtime check
-    if (!updateFound) {
-      try {
-        const ghRes = await fetch('https://api.github.com/repos/zediskaaa/Ipon-Tracking-System/releases/latest?_t=' + Date.now(), { cache: 'no-store' });
-        if (ghRes.ok) {
-          const release = await ghRes.json();
-          const apkAsset = release.assets?.find((a) => a.name === 'myIPON.apk');
-          const assetTime = apkAsset?.updated_at ? new Date(apkAsset.updated_at).getTime() : new Date(release.updated_at || release.published_at).getTime();
-          if (assetTime && assetTime > (localTime + 60000)) {
-            updateFound = true;
-            remoteVersion = release.tag_name || release.name || 'Latest';
-            remoteBuild = release.id || Date.now();
-            if (remoteVersion) localStorage.setItem('myipon_latest_remote_version', remoteVersion);
-            if (remoteBuild) localStorage.setItem('myipon_latest_remote_build', String(remoteBuild));
-            remoteNotes = release.body || 'A new update is available. Tap Update now to download and install.';
-          }
-        }
-      } catch (_) { }
-    }
 
     if (updateFound) {
       window.dispatchEvent(new CustomEvent('myipon_update_available', { detail: { version: remoteVersion, build: remoteBuild } }));
@@ -4054,6 +4042,9 @@
   }
 
   function initAppUpdateChecker() {
+    if (isInstalledAppUser()) {
+      document.body.classList.add('is-app');
+    }
     setTimeout(() => {
       checkForAppUpdate();
     }, 200);
