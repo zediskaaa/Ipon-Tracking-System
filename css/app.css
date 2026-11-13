@@ -436,7 +436,7 @@ body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame
 .announcement-avatar.is-owner{border-color:#e8b954}
 .announcement-item{display:grid;gap:6px;width:100%;padding:12px;border:1px solid rgba(20,45,43,.1);border-radius:12px;background:#fdfbf7;color:var(--ink);text-align:left;transition:border-color .16s ease,box-shadow .16s ease}
 .announcement-item:hover{border-color:rgba(20,45,43,.28);box-shadow:0 4px 12px rgba(20,45,43,.07)}
-.announcement-item.is-owner{border-color:#e8cb88;border-left:3.5px solid #c98515;background:linear-gradient(135deg,#fffcf2 0%,#fdf4de 100%)}
+.announcement-item.is-owner{border-color:#e8cb88;background:linear-gradient(135deg,#fffcf2 0%,#fdf4de 100%)}
 .announcement-item-content{display:grid;gap:6px;cursor:pointer;outline:none;border-radius:6px}
 .announcement-item-content:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .announcement-card-footer{display:flex;width:100%}
