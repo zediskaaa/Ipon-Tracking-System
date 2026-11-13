@@ -3191,13 +3191,20 @@
 
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': key
+          },
           body: JSON.stringify(body)
         });
 
         if (!res.ok) {
           const errData = await res.json().catch(() => null);
-          const errMsg = errData?.error?.message || `HTTP ${res.status} (${res.statusText})`;
+          let errMsg = errData?.error?.message || `HTTP ${res.status} (${res.statusText})`;
+          const errReason = errData?.error?.details?.[0]?.reason;
+          if (errReason === 'ACCESS_TOKEN_TYPE_UNSUPPORTED') {
+            errMsg += ' (Key format unsupported: in Google Cloud Console / AI Studio, ensure key is unrestricted or set to Generative Language API, not Vertex/Enterprise Gemini).';
+          }
           if (res.status === 404) {
             lastError = new Error(`Model ${curModel} unavailable: ${errMsg}`);
             continue;
@@ -3228,6 +3235,9 @@
         };
       } catch (err) {
         lastError = err;
+        if (/failed to fetch/i.test(err.message)) {
+          throw new Error('Connection blocked (Failed to fetch). Check your internet connection or ad-blocker for generativelanguage.googleapis.com.');
+        }
         if (!/404|unavailable/i.test(err.message)) {
           throw err;
         }
