@@ -480,7 +480,6 @@ body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame
 .reaction-user-role-badge.is-admin{border:1px solid #b8dec7;background:#e1f2e8;color:#145e43}
 .reaction-user-role-badge.is-treasurer{border:1px solid #c7d2fe;background:#e0e7ff;color:#3730a3}
 .reaction-user-role-badge.is-member{border:1px solid #d5ded9;background:#edf2ee;color:#496359}
-.reaction-user-emoji-display{flex:0 0 auto;font-size:18px;line-height:1;margin-left:auto}
 .announcement-reactions-actions{display:flex;align-items:center;justify-content:flex-end;padding:12px 22px 18px;border-top:1px solid var(--rule)}
 .announcement-item-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .announcement-item-title{font:700 13.5px/1.3 Arial,sans-serif;color:var(--ink);word-break:break-word}

@@ -2016,7 +2016,6 @@
               <strong class="reaction-user-name">${escapeHtml(name)}</strong>
               <span class="reaction-user-role-badge ${roleClass}">${roleLabel}</span>
             </div>
-            <div class="reaction-user-emoji-display" aria-hidden="true">${entry.reaction}</div>
           </div>`;
       }).join('');
       bindAvatarFallbacks(reactionsList);
