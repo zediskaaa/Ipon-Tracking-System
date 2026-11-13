@@ -1494,6 +1494,9 @@ test('group switchers reuse custom avatar dropdown with DP and role badge across
 
   assert.match(core, /function populateGroupSelect\(/);
   assert.match(core, /custom-select-badge/);
+  assert.match(core, /data-notification-link="/);
+  assert.match(css, /\.notification-item\[data-notification-link\]/);
+  assert.match(css, /max-width:none;max-height:none;inset:0;margin:0;border-radius:0/);
   assert.match(dashboardJs, /Ipon\.populateGroupSelect\(groupSelect/);
   assert.match(dashboardJs, /Ipon\.populateGroupSelect\(groupHubSelect/);
   assert.match(membersJs, /Ipon\.populateGroupSelect\(groupSelect/);

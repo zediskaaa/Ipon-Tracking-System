@@ -2448,7 +2448,8 @@
       list.innerHTML = allRows.length ? allRows.map((item) => {
         const isInvite = item.type === 'GROUP_INVITE' && !item.read_at;
         const isReleaseNotif = item.type === 'RELEASE' || (item.title && /release|version|app update/i.test(item.title));
-        return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}">
+        const targetLink = !isInvite ? safeNotificationTarget(item.link) : '';
+        return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"${targetLink ? ` data-notification-link="${escapeHtml(targetLink)}"` : ''}>
           <span class="notification-item-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="${item.type === 'GROUP_INVITE' ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4'}"/></svg>
           </span>
@@ -2468,7 +2469,7 @@
               </div>
             ` : ''}
           </div>
-          ${item.link && !isInvite ? `<a class="notification-item-open" href="${escapeHtml(item.link)}" aria-label="Open ${escapeHtml(item.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>` : ''}
+          ${targetLink ? `<a class="notification-item-open" href="${escapeHtml(targetLink)}" aria-label="Open ${escapeHtml(item.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>` : ''}
           ${item.read_at ? '' : '<i class="notification-unread" aria-label="Unread"></i>'}
         </article>`;
       }).join('') : '<p class="empty-state">You have no notifications yet.</p>';
@@ -2500,16 +2501,45 @@
         }
         return;
       }
+      if (event.target.closest('.notification-download-row a')) return;
       const item = event.target.closest('[data-notification-id]');
-      if (!item || !item.classList.contains('is-unread')) return;
-      if (item.dataset.notificationId === 'system-app-release-notice') {
-        const remoteBuild = localStorage.getItem('myipon_latest_native_build') || '18';
-        localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
-        item.classList.remove('is-unread');
-        await load();
-        return;
+      if (!item) return;
+      const targetLink = item.dataset.notificationLink ? safeNotificationTarget(item.dataset.notificationLink) : '';
+      if (targetLink) event.preventDefault();
+      if (item.classList.contains('is-unread')) {
+        if (item.dataset.notificationId === 'system-app-release-notice') {
+          const remoteBuild = localStorage.getItem('myipon_latest_native_build') || '18';
+          localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
+          item.classList.remove('is-unread');
+          if (!targetLink) {
+            await load();
+            return;
+          }
+        } else {
+          try {
+            await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) });
+            item.classList.remove('is-unread');
+            if (!targetLink) {
+              await load();
+              return;
+            }
+          } catch (error) {
+            if (!targetLink) {
+              toast(friendlyError(error), 'error');
+              return;
+            }
+          }
+        }
       }
-      try { await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) }); item.classList.remove('is-unread'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
+      if (targetLink) {
+        document.getElementById('notification-dialog')?.close?.();
+        if (/^https:\/\//i.test(targetLink)) {
+          window.open(targetLink, '_blank', 'noopener');
+          load().catch(() => { });
+        } else {
+          window.location.href = targetLink;
+        }
+      }
     };
     document.getElementById('mark-all-notifications').onclick = async () => {
       const remoteBuild = localStorage.getItem('myipon_latest_native_build') || '18';
