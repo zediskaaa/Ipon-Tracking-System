@@ -529,7 +529,6 @@
       <span class="brand-divider" aria-hidden="true"></span>
       <span class="brand-text">
         <strong><span class="brand-prefix">my</span>IPON</strong>
-        <small>SAVINGS MANAGEMENT SYSTEM</small>
       </span>
     </a>`;
 
