@@ -424,7 +424,7 @@
   async function load() {
     overviewError.hidden = true;
     overviewError.replaceChildren();
-    const safeQuery = (promise) => (Ipon.withTimeout ? Ipon.withTimeout(promise) : promise).catch((err) => ({ data: [], error: err }));
+    const safeQuery = (query) => (Ipon.withTimeout ? Ipon.withTimeout(query) : Promise.resolve(query)).catch((err) => ({ data: [], error: err }));
     const [profileResult, groupResult, requestResult, featureRequestResult, bugReportResult, activityResult, logResult] = await Promise.all([
       safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false })),
@@ -711,14 +711,22 @@
         if (actionType === 'DELETE') {
           try {
             await Ipon.rpc('super_admin_delete_user', { p_user_id: userId });
-          } catch (deleteErr) {
-            await Ipon.rpc('super_admin_set_administrator_status', {
-              p_user_id: userId,
-              p_status: 'DISABLED'
-            }).catch(() => {});
-            await Ipon.client.from('groups').update({ status: 'SUSPENDED', owner_id: null }).eq('owner_id', userId).catch(() => {});
-            await Ipon.client.from('group_memberships').delete().eq('user_id', userId).catch(() => {});
-            await Ipon.client.from('profiles').delete().eq('id', userId).catch(() => {});
+          } catch (_) {
+            try {
+              await Ipon.rpc('super_admin_set_administrator_status', {
+                p_user_id: userId,
+                p_status: 'DISABLED'
+              });
+            } catch (_) {}
+            try {
+              await Ipon.client.from('groups').update({ status: 'SUSPENDED', owner_id: null }).eq('owner_id', userId);
+            } catch (_) {}
+            try {
+              await Ipon.client.from('group_memberships').delete().eq('user_id', userId);
+            } catch (_) {}
+            try {
+              await Ipon.client.from('profiles').delete().eq('id', userId);
+            } catch (_) {}
           }
         } else {
           await Ipon.rpc('super_admin_set_administrator_status', {
