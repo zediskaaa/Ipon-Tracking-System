@@ -1014,6 +1014,7 @@
       <div class="custom-select-selection">
         <span class="custom-select-trigger-avatar"></span>
         <span class="custom-select-trigger-label">Select member</span>
+        <span class="custom-select-badge" hidden></span>
       </div>
       <svg class="custom-select-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1030,6 +1031,7 @@
 
     const triggerAvatar = trigger.querySelector('.custom-select-trigger-avatar');
     const triggerLabel = trigger.querySelector('.custom-select-trigger-label');
+    const triggerBadge = trigger.querySelector('.custom-select-badge');
 
     let isOpen = false;
 
@@ -1058,17 +1060,23 @@
       const selectedIndex = selectEl.selectedIndex;
       const opt = selectedIndex >= 0 ? selectEl.options[selectedIndex] : null;
       const val = opt ? opt.value : '';
-      const text = opt ? opt.textContent.trim() : 'Select member';
+      const rawText = opt ? opt.textContent.trim() : 'Select member';
+      const displayLabel = opt?.dataset?.label ? opt.dataset.label.trim() : rawText;
+      const badge = opt?.dataset?.badge ? opt.dataset.badge.trim() : '';
       const isPlaceholder = !val || (opt && opt.disabled);
 
-      triggerLabel.textContent = text;
+      triggerLabel.textContent = displayLabel;
       triggerLabel.classList.toggle('is-placeholder', isPlaceholder);
+      if (triggerBadge) {
+        triggerBadge.textContent = badge;
+        triggerBadge.hidden = !badge || isPlaceholder;
+      }
 
       if (isPlaceholder) {
         triggerAvatar.innerHTML = `<span class="custom-avatar-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg></span>`;
       } else {
-        const avatarUrl = opt.dataset.avatar || getMemberAvatar(val) || getMemberAvatar(text) || null;
-        triggerAvatar.innerHTML = avatarMarkup(avatarUrl, text, 'custom-select-avatar');
+        const avatarUrl = opt.dataset.avatar || getMemberAvatar(val) || getMemberAvatar(displayLabel) || getMemberAvatar(rawText) || null;
+        triggerAvatar.innerHTML = avatarMarkup(avatarUrl, displayLabel, 'custom-select-avatar');
         bindAvatarFallbacks(triggerAvatar);
         syncPresenceDots(triggerAvatar);
       }
@@ -1081,7 +1089,9 @@
 
       Array.from(selectEl.options).forEach((opt) => {
         const val = opt.value;
-        const text = opt.textContent.trim();
+        const rawText = opt.textContent.trim();
+        const displayLabel = opt.dataset?.label ? opt.dataset.label.trim() : rawText;
+        const badge = opt.dataset?.badge ? opt.dataset.badge.trim() : '';
         const isPlaceholder = !val;
         const isSelected = opt.selected;
 
@@ -1091,15 +1101,16 @@
         optEl.setAttribute('aria-selected', isSelected ? 'true' : 'false');
         optEl.dataset.value = val;
 
-        const avatarUrl = opt.dataset.avatar || getMemberAvatar(val) || getMemberAvatar(text) || null;
+        const avatarUrl = opt.dataset.avatar || getMemberAvatar(val) || getMemberAvatar(displayLabel) || getMemberAvatar(rawText) || null;
         const avatarHtml = isPlaceholder
           ? `<span class="custom-avatar-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg></span>`
-          : avatarMarkup(avatarUrl, text, 'custom-select-avatar');
+          : avatarMarkup(avatarUrl, displayLabel, 'custom-select-avatar');
 
         optEl.innerHTML = `
           <div class="custom-select-option-main">
             <span class="custom-select-avatar-slot">${avatarHtml}</span>
-            <span class="custom-select-option-name">${escapeHtml(text)}</span>
+            <span class="custom-select-option-name">${escapeHtml(displayLabel)}</span>
+            ${badge && !isPlaceholder ? `<span class="custom-select-badge">${escapeHtml(badge)}</span>` : ''}
           </div>
           ${isSelected && !isPlaceholder ? `
             <span class="custom-select-check" aria-hidden="true">
@@ -1192,6 +1203,23 @@
 
     selectEl._customSelect = api;
     return api;
+  }
+
+  function populateGroupSelect(selectEl, groups, selectedId) {
+    if (!selectEl) return null;
+    const list = Array.isArray(groups) ? groups : [];
+    const options = list.map((group) => {
+      const name = group.name || 'Savings group';
+      const role = group.role || '';
+      const opt = new Option(role ? `${name} (${role})` : name, group.group_id);
+      opt.dataset.label = name;
+      if (role) opt.dataset.badge = role;
+      if (group.avatar_url) opt.dataset.avatar = group.avatar_url;
+      return opt;
+    });
+    selectEl.replaceChildren(...options);
+    if (selectedId) selectEl.value = selectedId;
+    return enhanceMemberSelect(selectEl);
   }
 
   function readFileAsDataUrl(file) {

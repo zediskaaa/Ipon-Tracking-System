@@ -1483,3 +1483,23 @@ test('background notification feed, permission banner, and native poll receiver 
   assert.match(css, /\.notification-permission-bar/);
 });
 
+test('group switchers reuse custom avatar dropdown with DP and role badge across dashboard and members', () => {
+  const core = read('js/core.js');
+  const dashboardJs = read('js/dashboard.js');
+  const membersJs = read('js/members.js');
+  const dashboardHtml = read('dashboard.html');
+  const membersHtml = read('members.html');
+  const css = read('css/app.css');
+  const heroCss = read('css/hero-plates.css');
+
+  assert.match(core, /function populateGroupSelect\(/);
+  assert.match(core, /custom-select-badge/);
+  assert.match(dashboardJs, /Ipon\.populateGroupSelect\(groupSelect/);
+  assert.match(dashboardJs, /Ipon\.populateGroupSelect\(groupHubSelect/);
+  assert.match(membersJs, /Ipon\.populateGroupSelect\(groupSelect/);
+  assert.match(dashboardHtml, /<div class="group-switcher-wrap" id="dashboard-group-switcher-wrap"/);
+  assert.match(membersHtml, /<div class="group-context-switcher" id="members-group-switcher-wrap"/);
+  assert.match(css, /\.custom-select-badge/);
+  assert.match(heroCss, /\.group-switcher-wrap \.custom-select-trigger/);
+});
+

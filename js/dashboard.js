@@ -123,8 +123,7 @@
     }
     if (groupHubSwitcherWrap && groupHubSelect) {
       groupHubSwitcherWrap.hidden = myGroups.length <= 1;
-      groupHubSelect.replaceChildren(...myGroups.map((group) => new Option(`${group.name} (${group.role})`, group.group_id)));
-      groupHubSelect.value = currentGroup.group_id;
+      Ipon.populateGroupSelect(groupHubSelect, myGroups, currentGroup.group_id);
     }
     if (groupHubSelfToggle) {
       const isContributor = Boolean(currentGroup.is_contributor);
@@ -163,8 +162,7 @@
     if (groupMetaEl) groupMetaEl.textContent = metaParts.join(' · ');
     if (groupSelect && groupSwitcherWrap) {
       groupSwitcherWrap.hidden = myGroups.length <= 1;
-      groupSelect.replaceChildren(...myGroups.map((group) => new Option(`${group.name} (${group.role})`, group.group_id)));
-      groupSelect.value = currentGroup.group_id;
+      Ipon.populateGroupSelect(groupSelect, myGroups, currentGroup.group_id);
     }
     if (groupActionsEl) groupActionsEl.hidden = state?.profile?.role !== 'ADMIN';
     syncGroupHub();
@@ -727,6 +725,7 @@
       location.reload();
     } catch (error) {
       selectEl.value = currentGroup?.group_id || '';
+      selectEl._customSelect?.sync();
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
       selectEl.disabled = false;

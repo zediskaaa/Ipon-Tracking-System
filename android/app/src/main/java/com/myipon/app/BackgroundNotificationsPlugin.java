@@ -87,3 +87,4 @@ public class BackgroundNotificationsPlugin extends Plugin {
         call.resolve(result);
     }
 }
+
