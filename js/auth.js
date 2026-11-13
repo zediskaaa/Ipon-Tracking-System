@@ -75,10 +75,48 @@
     submit.disabled = true;
     forgotButton.disabled = true;
   }
-  if (new URLSearchParams(location.search).get('status') === 'pending') {
+  const queryParams = new URLSearchParams(location.search);
+  const acceptInviteToken = queryParams.get('accept_invite');
+  const acceptInviteEmail = (queryParams.get('email') || '').trim();
+
+  if (acceptInviteToken && acceptInviteEmail) {
+    try {
+      history.replaceState({}, '', location.pathname);
+    } catch { }
+    setMode('login');
+    email.value = acceptInviteEmail;
+    Ipon.setLoading(true, 'Activating your invitation…');
+    message.dataset.tone = 'loading';
+    message.textContent = 'Activating your account…';
+
+    try {
+      const res = await Ipon.invokeAccountFunction({
+        action: 'accept-email-invite',
+        email: acceptInviteEmail,
+        token: acceptInviteToken
+      });
+      Ipon.setLoading(false);
+      if (res?.error) {
+        message.removeAttribute('data-tone');
+        message.textContent = res.error;
+        Ipon.toast(res.error, 'error');
+      } else {
+        message.dataset.tone = 'success';
+        message.textContent = res.already_active
+          ? 'Your account is already active. Please sign in with your credentials.'
+          : 'Invitation accepted! Your account is now active. Please sign in with your temporary password.';
+        Ipon.toast('Invitation accepted! Please sign in.', 'success');
+        password.focus();
+      }
+    } catch (err) {
+      Ipon.setLoading(false);
+      message.removeAttribute('data-tone');
+      message.textContent = Ipon.friendlyError(err);
+      Ipon.toast(Ipon.friendlyError(err), 'error');
+    }
+  } else if (queryParams.get('status') === 'pending') {
     message.textContent = 'Your account is waiting for administrator approval.';
-  }
-  if (new URLSearchParams(location.search).get('status') === 'password-reset') {
+  } else if (queryParams.get('status') === 'password-reset') {
     message.dataset.tone = 'success';
     message.textContent = 'Password changed. Sign in with your new password.';
   }
@@ -338,6 +376,9 @@
         }
         if (profile.status !== 'ACTIVE') {
           await Ipon.client.auth.signOut();
+          if (profile.role === 'MEMBER' || profile.role === 'TREASURER') {
+            throw new Error('Please accept the invitation email sent to your inbox to activate your account before signing in.');
+          }
           throw new Error('Your account is waiting for administrator approval.');
         }
         await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' });

@@ -5402,6 +5402,8 @@ begin
       raise exception 'Email ownership has not been verified. Please verify your email before submitting.' using errcode = '22023';
     end if;
     v_status := 'PENDING';
+  elsif v_account_kind in ('INVITED', 'MANAGED') then
+    v_status := 'PENDING';
   else
     v_status := 'ACTIVE';
   end if;
@@ -5409,7 +5411,7 @@ begin
   insert into public.profiles (id, full_name, first_name, middle_name, last_name, email, contact_number, role, status)
   values (new.id, v_full_name, v_first_name, v_middle_name, v_last_name, lower(new.email), v_contact, 'MEMBER', v_status)
   on conflict (id) do update set
-    status = case when public.profiles.status = 'PENDING' then 'ACTIVE' else public.profiles.status end,
+    status = case when v_account_kind in ('INVITED', 'MANAGED') then 'PENDING' when public.profiles.status = 'PENDING' then 'ACTIVE' else public.profiles.status end,
     full_name = coalesce(public.profiles.full_name, excluded.full_name),
     first_name = coalesce(public.profiles.first_name, excluded.first_name),
     last_name = coalesce(public.profiles.last_name, excluded.last_name),
@@ -6251,6 +6253,10 @@ on conflict (version) do nothing;
 
 insert into public.schema_migrations (version, name)
 values ('20261113_041', 'activate all new verified accounts and fix auth loading')
+on conflict (version) do nothing;
+
+insert into public.schema_migrations (version, name)
+values ('20261113_042', 'invited account activation flow via email accept')
 on conflict (version) do nothing;
 
 commit;

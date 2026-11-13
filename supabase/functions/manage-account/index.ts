@@ -157,7 +157,8 @@ async function sendInviteEmail({
   roleLabel,
   temporaryPassword,
   existingAccount,
-  loginUrl
+  loginUrl,
+  inviteToken
 }: {
   toEmail: string;
   recipientName: string;
@@ -168,21 +169,30 @@ async function sendInviteEmail({
   temporaryPassword: string;
   existingAccount: boolean;
   loginUrl: string;
+  inviteToken?: string | null;
 }) {
   const subject = `${inviterName} invited you to join "${groupName}" on ${SYSTEM_NAME}`;
+  const baseLogin = loginUrl.split('?')[0];
+  const acceptUrl = (!existingAccount && inviteToken)
+    ? `${baseLogin}?accept_invite=${encodeURIComponent(inviteToken)}&email=${encodeURIComponent(toEmail)}`
+    : loginUrl;
+
   const credentialBlock = existingAccount
     ? `Email: ${toEmail}\nPassword: Use your existing ${SYSTEM_NAME} password`
     : `Email: ${toEmail}\nTemporary password: ${temporaryPassword}`;
   const noteLine = existingAccount
     ? 'Sign in with your existing account and check your notifications to accept the invitation.'
-    : 'Use the email and temporary password provided above to sign in, then update your password after logging in.';
+    : 'Click the Accept Invitation button to activate your account. Your login credentials will become active once you accept the invitation.';
   const plainText = [
     `Hello ${recipientName},`,
     '',
     `${inviterName} invited you to join the "${groupName}" savings group as a ${roleLabel} on ${SYSTEM_NAME}.`,
     '',
+    (!existingAccount && inviteToken)
+      ? `Click this link to accept your invitation and activate your account:\n${acceptUrl}`
+      : `Sign in here: ${loginUrl}`,
+    '',
     credentialBlock,
-    `Sign in here: ${loginUrl}`,
     '',
     noteLine
   ].join('\n');
@@ -193,15 +203,24 @@ async function sendInviteEmail({
       <h2 style="margin: 0 0 14px; font-size: 20px; color: #163029;">You're invited to ${escapeHtml(groupName)}</h2>
       <p style="margin: 0 0 16px;">Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
       <p style="margin: 0 0 16px;"><strong>${escapeHtml(inviterName)}</strong> invited you to join the savings group <strong>${escapeHtml(groupName)}</strong> (${escapeHtml(roleLabel)}) on <strong>${escapeHtml(SYSTEM_NAME)}</strong>.</p>
+      ${!existingAccount ? `
+      <p style="margin: 0 0 14px; font-size: 14px; color: #5c5749;">
+        To activate your account and start using your credentials, please accept the invitation below:
+      </p>
+      <p style="margin: 0 0 18px;">
+        <a href="${escapeHtml(acceptUrl)}" style="display: inline-block; background: #163029; color: #ffffff; text-decoration: none; font-weight: 600; padding: 12px 22px; border-radius: 10px; font-size: 15px;">Accept Invitation &amp; Activate Account</a>
+      </p>` : ''}
       <div style="background: #ffffff; border: 1px solid #d9d6c8; border-radius: 10px; padding: 14px 16px; margin: 0 0 18px;">
         <p style="margin: 0 0 6px;"><strong>Email:</strong> ${escapeHtml(toEmail)}</p>
         ${existingAccount
           ? `<p style="margin: 0;"><strong>Password:</strong> Use your existing ${escapeHtml(SYSTEM_NAME)} password</p>`
-          : `<p style="margin: 0;"><strong>Temporary password:</strong> <code style="background: #f1efe7; padding: 2px 6px; border-radius: 6px; font-size: 14px;">${escapeHtml(temporaryPassword)}</code></p>`}
+          : `<p style="margin: 0 0 6px;"><strong>Temporary password:</strong> <code style="background: #f1efe7; padding: 2px 6px; border-radius: 6px; font-size: 14px;">${escapeHtml(temporaryPassword)}</code></p>
+             <p style="margin: 0; font-size: 12px; color: #8a826f;">Note: Credentials will activate once you click "Accept Invitation" above.</p>`}
       </div>
+      ${existingAccount ? `
       <p style="margin: 0 0 18px;">
         <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #163029; color: #ffffff; text-decoration: none; font-weight: 600; padding: 10px 18px; border-radius: 10px;">Sign in to ${escapeHtml(SYSTEM_NAME)}</a>
-      </p>
+      </p>` : ''}
       <p style="margin: 0; font-size: 13px; color: #5c5749;">${escapeHtml(noteLine)}</p>
     </div>
   `.trim();
@@ -519,6 +538,77 @@ Deno.serve(async (request) => {
   let body: Record<string, unknown>;
   try { body = await request.json(); }
   catch { return json({ error: 'A valid JSON request body is required.' }, 400); }
+
+  if (body.action === 'accept-email-invite') {
+    const email = String(body.email || '').trim().toLowerCase();
+    const token = String(body.token || '').trim();
+    if (!email || !email.includes('@')) return json({ error: 'A valid email address is required.' }, 400);
+    if (!token) return json({ error: 'An invitation token is required.' }, 400);
+
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('id, status, role, group_id')
+      .eq('email', email)
+      .maybeSingle();
+
+    let targetUserId = profile?.id;
+    let authUser = null;
+
+    if (targetUserId) {
+      const { data: userRes } = await admin.auth.admin.getUserById(targetUserId).catch(() => ({ data: null }));
+      authUser = userRes?.user;
+    }
+
+    if (!authUser) {
+      const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 100 }).catch(() => ({ data: null }));
+      authUser = usersData?.users?.find((u) => u.email?.toLowerCase() === email) || null;
+      if (authUser) targetUserId = authUser.id;
+    }
+
+    if (!authUser || !targetUserId) {
+      return json({ error: 'Invitation not found. Please contact your administrator.' }, 404);
+    }
+
+    if (profile && profile.status === 'ACTIVE') {
+      return json({
+        success: true,
+        already_active: true,
+        message: 'Your account is already active. Please sign in with your credentials.'
+      });
+    }
+
+    const expectedToken = authUser.user_metadata?.invite_token;
+    if (!expectedToken || expectedToken !== token) {
+      return json({ error: 'Invalid or expired invitation link. Please ask your administrator to send a new invite.' }, 400);
+    }
+
+    const { error: profileUpdateError } = await admin
+      .from('profiles')
+      .update({ status: 'ACTIVE' })
+      .eq('id', targetUserId);
+    if (profileUpdateError) {
+      return json({ error: 'Could not activate account. Please try again.' }, 500);
+    }
+
+    await admin
+      .from('group_memberships')
+      .update({ status: 'ACTIVE' })
+      .eq('user_id', targetUserId);
+
+    const currentMeta = authUser.user_metadata || {};
+    const { invite_token: _, ...cleanMeta } = currentMeta;
+    await admin.auth.admin.updateUserById(targetUserId, {
+      user_metadata: {
+        ...cleanMeta,
+        invite_accepted_at: new Date().toISOString()
+      }
+    });
+
+    return json({
+      success: true,
+      message: 'Invitation accepted! Your account is now active.'
+    });
+  }
 
   if (body.action === 'send-verification-otp') {
     const email = String(body.email || '').trim().toLowerCase();
@@ -1170,9 +1260,11 @@ Generate 3 personalized, realistic financial tips in English in JSON format:
 
   let targetUserId: string;
   let createdAuthHere = false;
+  let inviteToken: string | null = null;
   if (existingProfile) {
     targetUserId = existingProfile.id;
   } else {
+    inviteToken = crypto.randomUUID();
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
       password,
@@ -1183,7 +1275,8 @@ Generate 3 personalized, realistic financial tips in English in JSON format:
         last_name: lastName,
         full_name: [firstName, middleName, lastName].filter(Boolean).join(' '),
         contact_number: contactNumber,
-        account_kind: 'MANAGED'
+        account_kind: 'INVITED',
+        invite_token: inviteToken
       },
       app_metadata: { must_change_password: true }
     });
@@ -1198,11 +1291,16 @@ Generate 3 personalized, realistic financial tips in English in JSON format:
   }
 
   try {
-    const initialStatus = existingProfile ? 'PENDING' : 'ACTIVE';
+    const initialStatus = 'PENDING';
     const result = role === 'ADMIN'
       ? await caller.rpc('super_admin_approve_request', { p_user_id: targetUserId, p_group_name: String(body.group_name).trim() })
       : await caller.rpc('admin_set_user_access', { p_user_id: targetUserId, p_role: role, p_status: initialStatus, p_member_id: role === 'MEMBER' ? targetMemberId : null });
     if (result.error) throw result.error;
+
+    if (!existingProfile) {
+      await admin.from('profiles').update({ status: 'PENDING' }).eq('id', targetUserId);
+      await admin.from('group_memberships').update({ status: 'PENDING' }).eq('user_id', targetUserId);
+    }
 
     if (role === 'ADMIN') return json({ id: targetUserId });
 
@@ -1238,13 +1336,15 @@ Generate 3 personalized, realistic financial tips in English in JSON format:
           roleLabel: role === 'TREASURER' ? 'Treasurer' : 'Member',
           temporaryPassword: password,
           existingAccount: Boolean(existingProfile),
-          loginUrl: originUrl
+          loginUrl: originUrl,
+          inviteToken: existingProfile ? null : inviteToken
         });
 
     return json({
       id: targetUserId,
       member_id: targetMemberId,
       existing_account: Boolean(existingProfile),
+      invite_token: inviteToken,
       ...emailOutcome
     });
   } catch (error) {

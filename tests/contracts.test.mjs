@@ -1258,9 +1258,13 @@ test('self-serve group creation, direct signup, and interactive invitation accep
   assert.match(migration, /create or replace function public\.accept_group_invitation/);
   assert.match(migration, /create or replace function public\.decline_group_invitation/);
   assert.match(schema, /20261113_039/);
+  assert.match(schema, /20261113_042/);
 
   assert.match(auth, /direct_signup:\s*true/);
+  assert.match(auth, /accept_invite/);
   assert.match(manageAccountEdge, /body\.direct_signup !== false \? 'DIRECT_SIGNUP' : 'ADMIN_REQUEST'/);
+  assert.match(manageAccountEdge, /action === 'accept-email-invite'/);
+  assert.match(manageAccountEdge, /invite_token/);
 
   assert.match(dashHtml, /id="dashboard-no-group-card"/);
   assert.match(dashHtml, /id="no-group-create-btn"/);
