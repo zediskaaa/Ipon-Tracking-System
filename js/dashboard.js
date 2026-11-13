@@ -1296,6 +1296,9 @@
         return String(backendRes.reply).trim();
       }
       if (backendRes?.error) {
+        if (/create this account type/i.test(String(backendRes.error))) {
+          throw new Error('AI Coach server function needs to be deployed to Supabase production first.');
+        }
         throw new Error(backendRes.error);
       }
     } catch (backendErr) {
@@ -1307,6 +1310,9 @@
           jsonResponse: false
         });
         if (res?.text) return String(res.text).trim();
+      }
+      if (/create this account type/i.test(String(backendErr?.message || ''))) {
+        throw new Error('AI Coach server function needs to be deployed to Supabase production first.');
       }
       throw backendErr;
     }
