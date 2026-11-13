@@ -483,9 +483,17 @@ async function generateWithGemini({
     ? contents
     : [{ role: 'user', parts: [{ text: String(prompt || '') }] }];
 
+  const trimmedKey = String(apiKey || '').trim();
+  const isExpressKey = trimmedKey.startsWith('AQ.');
+  const models = isExpressKey
+    ? EDGE_GEMINI_MODELS.filter((m) => !m.endsWith('-latest'))
+    : EDGE_GEMINI_MODELS;
+
   let lastError: Error | null = null;
-  for (const model of EDGE_GEMINI_MODELS) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  for (const model of models) {
+    const url = isExpressKey
+      ? `https://aiplatform.googleapis.com/v1/publishers/google/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(trimmedKey)}`
+      : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
     const body: Record<string, unknown> = {
       contents: payloadContents,
       generationConfig: {
@@ -496,20 +504,27 @@ async function generateWithGemini({
       }
     };
     if (systemInstruction) {
-      body.systemInstruction = { parts: [{ text: systemInstruction }] };
+      body.systemInstruction = { role: 'system', parts: [{ text: systemInstruction }] };
     }
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': trimmedKey
+      },
       body: JSON.stringify(body)
     });
     if (!response.ok) {
       const errorText = await response.text();
+      let cleanMsg = errorText;
+      try {
+        cleanMsg = JSON.parse(errorText)?.error?.message || errorText;
+      } catch { /* use raw text */ }
       if (response.status === 404 || response.status === 429 || response.status === 503) {
-        lastError = new Error(`Gemini (${model}) error ${response.status}: ${errorText}`);
+        lastError = new Error(`Gemini (${model}) error ${response.status}: ${cleanMsg}`);
         continue;
       }
-      throw new Error(`Gemini API error (${response.status}): ${errorText}`);
+      throw new Error(`Gemini API error (${response.status}): ${cleanMsg}`);
     }
     const data = await response.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;

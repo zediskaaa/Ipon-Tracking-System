@@ -3847,23 +3847,17 @@
     if (configKey.startsWith('base64:')) {
       try { configKey = atob(configKey.slice(7)).trim(); } catch (_) { }
     }
-    if (configKey && !configKey.startsWith('AQ.')) {
-      return configKey;
-    }
+    if (configKey) return configKey;
 
     let storageKey = (localStorage.getItem('ipon_gemini_api_key') || '').trim();
     if (storageKey.startsWith('base64:')) {
       try { storageKey = atob(storageKey.slice(7)).trim(); } catch (_) { }
     }
-    if (storageKey.startsWith('AQ.')) {
-      try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
-      return '';
-    }
     return storageKey;
   }
 
   function getGeminiModel() {
-    return cachedWorkingGeminiModel || 'gemini-1.5-flash';
+    return cachedWorkingGeminiModel || 'gemini-2.5-flash';
   }
 
   async function callGemini({ prompt, systemInstruction, apiKey, model, jsonResponse = true }) {
@@ -3871,17 +3865,16 @@
     if (!key) {
       throw new Error('No Gemini API key found. Please save your API key in the configuration dialog or define geminiApiKey in js/config.js.');
     }
-    if (key.startsWith('AQ.')) {
-      try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
-      throw new Error('API key is a Google Cloud service account token (AQ.) which is not supported by Gemini API. Please generate a fresh key starting with AIzaSy from Google AI Studio (aistudio.google.com/app/apikey).');
-    }
+    const isExpressKey = key.startsWith('AQ.');
+    const baseModels = isExpressKey
+      ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash']
+      : STABLE_GEMINI_MODELS;
 
-    // Fast candidate resolution: at most 3 models with quick 3s timeout per model
-    let candidateModels = STABLE_GEMINI_MODELS;
-    if (cachedWorkingGeminiModel) {
-      candidateModels = [cachedWorkingGeminiModel, ...STABLE_GEMINI_MODELS.filter((m) => m !== cachedWorkingGeminiModel)];
-    } else if (model && STABLE_GEMINI_MODELS.includes(model)) {
-      candidateModels = [model, ...STABLE_GEMINI_MODELS.filter((m) => m !== model)];
+    let candidateModels = baseModels;
+    if (cachedWorkingGeminiModel && baseModels.includes(cachedWorkingGeminiModel)) {
+      candidateModels = [cachedWorkingGeminiModel, ...baseModels.filter((m) => m !== cachedWorkingGeminiModel)];
+    } else if (model && baseModels.includes(model)) {
+      candidateModels = [model, ...baseModels.filter((m) => m !== model)];
     }
 
     let lastError = null;
@@ -3889,8 +3882,10 @@
       let timer = null;
       try {
         const ctrl = new AbortController();
-        timer = setTimeout(() => ctrl.abort(), 3500);
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(curModel)}:generateContent?key=${encodeURIComponent(key)}`;
+        timer = setTimeout(() => ctrl.abort(), 5000);
+        const url = isExpressKey
+          ? `https://aiplatform.googleapis.com/v1/publishers/google/models/${encodeURIComponent(curModel)}:generateContent?key=${encodeURIComponent(key)}`
+          : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(curModel)}:generateContent?key=${encodeURIComponent(key)}`;
         const body = {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
@@ -3902,7 +3897,7 @@
           body.generationConfig.responseMimeType = 'application/json';
         }
         if (systemInstruction) {
-          body.systemInstruction = { parts: [{ text: systemInstruction }] };
+          body.systemInstruction = { role: 'system', parts: [{ text: systemInstruction }] };
         }
 
         const res = await fetch(url, {
@@ -3918,11 +3913,9 @@
 
         if (!res.ok) {
           const errData = await res.json().catch(() => null);
-          let errMsg = errData?.error?.message || `HTTP ${res.status} (${res.statusText})`;
-          const errReason = errData?.error?.details?.[0]?.reason;
-          if (errReason === 'ACCESS_TOKEN_TYPE_UNSUPPORTED' || res.status === 401) {
-            try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
-            throw new Error('API key is revoked or invalid (ACCESS_TOKEN_TYPE_UNSUPPORTED). Please generate a fresh key from Google AI Studio (aistudio.google.com/app/apikey).');
+          const errMsg = errData?.error?.message || `HTTP ${res.status} (${res.statusText})`;
+          if (res.status === 401) {
+            throw new Error(errMsg || 'API key is invalid or unauthorized.');
           }
           if (res.status === 404 || res.status === 503 || res.status === 429) {
             lastError = new Error(`Model ${curModel} (${res.status}): ${errMsg}`);
