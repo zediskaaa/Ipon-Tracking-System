@@ -185,7 +185,9 @@ a { color:inherit; }
 .settings-grid > .panel,
 .settings-grid > .panel + .panel,
 .reports-grid > .panel,
-.reports-grid > .panel + .panel { margin-top:0; }
+.reports-grid > .panel + .panel,
+.savings-layout > .panel,
+.savings-layout > .panel + .panel { margin-top:0; }
 .split-layout > .panel { border-radius:16px; }
 .sticky-panel { position:sticky; top:24px; }
 .split-layout .sticky-panel { background:#fffdf9; border:1px solid rgba(20,45,43,.14); border-radius:16px; box-shadow:0 4px 20px rgba(20,45,43,.05); }
