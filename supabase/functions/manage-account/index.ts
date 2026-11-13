@@ -297,6 +297,78 @@ async function sendAdminRequestDecisionEmail({
   });
 }
 
+async function sendAccountStatusEmail({
+  toEmail,
+  recipientName,
+  actionType,
+  reason,
+  senderEmail
+}: {
+  toEmail: string;
+  recipientName: string;
+  actionType: 'DEACTIVATE' | 'DELETE' | 'REACTIVATE';
+  reason?: string;
+  senderEmail?: string | null;
+}) {
+  const isDeact = actionType === 'DEACTIVATE';
+  const isDelete = actionType === 'DELETE';
+  const actionTitle = isDelete
+    ? 'Account Deleted'
+    : isDeact
+    ? 'Account Deactivated'
+    : 'Account Reactivated';
+  const subject = `Your ${SYSTEM_NAME} account has been ${isDelete ? 'deleted' : isDeact ? 'deactivated' : 'reactivated'}`;
+
+  const plainText = [
+    `Hello ${recipientName},`,
+    '',
+    `Your ${SYSTEM_NAME} account has been ${isDelete ? 'permanently deleted' : isDeact ? 'deactivated' : 'reactivated'} by the platform administrator.`,
+    reason ? '' : null,
+    reason ? 'Reason provided by administrator:' : null,
+    reason ? `${reason}` : null,
+    '',
+    isDelete
+      ? 'All your access has been removed. If you have questions or believe this was done in error, please reach out to the platform administrator.'
+      : isDeact
+      ? 'You can no longer sign in while your account is deactivated. If you believe this was done in error, please contact the platform administrator.'
+      : 'You can now sign in with your email and password to access your savings workspace.',
+    '',
+    'Thank you,',
+    `${SYSTEM_NAME} Administration`
+  ].filter((line) => line !== null).join('\n');
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #163029; line-height: 1.6; max-width: 560px; margin: 0 auto; padding: 24px; background: #fbf9f2; border: 1px solid #d9d6c8; border-radius: 14px;">
+      <p style="margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6d6552;">${escapeHtml(SYSTEM_NAME)}</p>
+      <h2 style="margin: 0 0 14px; font-size: 22px; color: ${isDelete ? '#9a241c' : isDeact ? '#b85d19' : '#186145'};">${escapeHtml(actionTitle)}</h2>
+      <p style="margin: 0 0 14px;">Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
+      <p style="margin: 0 0 14px;">Your <strong>${escapeHtml(SYSTEM_NAME)}</strong> account has been ${isDelete ? '<span style="color:#9a241c;font-weight:700;">permanently deleted</span>' : isDeact ? '<span style="color:#b85d19;font-weight:700;">deactivated</span>' : '<span style="color:#186145;font-weight:700;">reactivated</span>'} by the platform administrator.</p>
+      ${reason ? `
+        <div style="background: #ffffff; border-left: 4px solid ${isDelete ? '#9a241c' : isDeact ? '#b85d19' : '#186145'}; border-radius: 6px; padding: 12px 16px; margin: 16px 0;">
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #6d6552;">Reason provided:</p>
+          <p style="margin: 0; font-size: 14px; color: #23342e; white-space: pre-wrap;">${escapeHtml(reason)}</p>
+        </div>
+      ` : ''}
+      <p style="margin: 16px 0 0; font-size: 13px; color: #5c5749;">
+        ${isDelete
+          ? 'All your access has been removed. If you have any questions, please contact the platform administrator.'
+          : isDeact
+          ? 'Your account is currently disabled and cannot sign in. If you believe this was done in error, please contact the platform administrator.'
+          : 'You can now return to the application and sign in with your credentials.'}
+      </p>
+    </div>
+  `.trim();
+
+  return deliverEmail({
+    toEmail,
+    recipientName,
+    subject,
+    html,
+    plainText,
+    fallbackEmail: senderEmail
+  });
+}
+
 async function sendAdminRequestOtpEmail({
   toEmail,
   recipientName,
@@ -744,6 +816,75 @@ Deno.serve(async (request) => {
     });
 
     return json({ email_sent: emailOutcome.email_sent, email_error: emailOutcome.email_error });
+  }
+
+  if (body.action === 'super-admin-account-action') {
+    if (actor.role !== 'SUPER_ADMIN') return json({ error: 'Only the Super Admin can perform account actions.' }, 403);
+    const targetUserId = String(body.user_id || '').trim();
+    const actionType = String(body.action_type || '').toUpperCase();
+    const reason = String(body.reason || '').trim();
+
+    if (!UUID_RE.test(targetUserId)) return json({ error: 'A valid target user ID is required.' }, 400);
+    if (!['DEACTIVATE', 'DELETE', 'REACTIVATE'].includes(actionType)) {
+      return json({ error: 'Invalid action type.' }, 400);
+    }
+    if ((actionType === 'DEACTIVATE' || actionType === 'DELETE') && reason.length < 3) {
+      return json({ error: 'A reason of at least 3 characters is required.' }, 400);
+    }
+
+    if (targetUserId === actor.id) {
+      return json({ error: 'You cannot deactivate or delete your own super administrator account.' }, 400);
+    }
+
+    const { data: targetProfile, error: targetError } = await admin
+      .from('profiles')
+      .select('id,role,full_name,email,first_name,last_name,status')
+      .eq('id', targetUserId)
+      .maybeSingle();
+
+    if (targetError || !targetProfile) return json({ error: 'Target user not found.' }, 404);
+    if (targetProfile.role === 'SUPER_ADMIN') {
+      return json({ error: 'Super administrator accounts cannot be modified here.' }, 400);
+    }
+
+    const targetEmail = targetProfile.email;
+    const targetName = targetProfile.full_name || [targetProfile.first_name, targetProfile.last_name].filter(Boolean).join(' ') || 'User';
+
+    if (actionType === 'DEACTIVATE') {
+      await caller.rpc('super_admin_set_administrator_status', {
+        p_user_id: targetUserId,
+        p_status: 'DISABLED'
+      });
+    } else if (actionType === 'REACTIVATE') {
+      await caller.rpc('super_admin_set_administrator_status', {
+        p_user_id: targetUserId,
+        p_status: 'ACTIVE'
+      });
+    } else if (actionType === 'DELETE') {
+      await caller.rpc('super_admin_delete_user', {
+        p_user_id: targetUserId
+      });
+      await admin.auth.admin.deleteUser(targetUserId).catch(() => null);
+    }
+
+    let emailOutcome = { email_sent: false, email_error: null };
+    if (targetEmail) {
+      emailOutcome = await sendAccountStatusEmail({
+        toEmail: targetEmail,
+        recipientName: targetName,
+        actionType: actionType as 'DEACTIVATE' | 'DELETE' | 'REACTIVATE',
+        reason,
+        senderEmail: actor.email
+      });
+    }
+
+    return json({
+      success: true,
+      action: actionType,
+      user_id: targetUserId,
+      email_sent: emailOutcome.email_sent,
+      email_error: emailOutcome.email_error
+    });
   }
 
   if (body.action === 'unblock-admin-request') {

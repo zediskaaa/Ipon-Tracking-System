@@ -882,7 +882,7 @@ button.record-entry-action:focus-visible{outline:2px solid #fff;outline-offset:2
 .ai-generation-status{display:flex;align-items:center;gap:8px;padding:6px 12px;margin:6px 0;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font:700 12px/1.3 Arial,sans-serif}
 .ai-pulse-dot{width:8px;height:8px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 0 rgba(22,163,74,.7);animation:aiPulse 1.4s infinite}
 @keyframes aiPulse{0%{transform:scale(.95);box-shadow:0 0 0 0 rgba(22,163,74,.7)}70%{transform:scale(1);box-shadow:0 0 0 7px rgba(22,163,74,0)}100%{transform:scale(.95);box-shadow:0 0 0 0 rgba(22,163,74,0)}}
-.gemini-status-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font:700 11.5px/1.2 Arial,sans-serif;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1}
+.account-summary-pill{display:flex;flex-direction:column;gap:2px;padding:10px 14px;background:#f3ede4;border-radius:8px;border:1px solid rgba(20,45,43,.12);}.account-summary-pill strong{font-size:14px;color:#163029;}.account-summary-pill small{font-size:12px;color:#5a6862;}.button-danger{background:#a62b24 !important;color:#fff !important;border:none !important;}.button-danger:hover{background:#8a211b !important;}.gemini-status-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font:700 11.5px/1.2 Arial,sans-serif;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1}
 .gemini-status-badge.is-connected{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
 .gemini-status-badge.is-verified{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
 

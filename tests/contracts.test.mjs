@@ -1272,4 +1272,27 @@ test('self-serve group creation, direct signup, and interactive invitation accep
   assert.match(css, /\.no-group-card/);
 });
 
+test('Super Admin can deactivate and delete user accounts with required reasons and email delivery', () => {
+  const superAdminHtml = read('super-admin.html');
+  const superAdminJs = read('js/super-admin.js');
+  const core = read('js/core.js');
+  const manageAccountEdge = read('supabase/functions/manage-account/index.ts');
+  const migration = read('database/migrations/20261113_040_super_admin_account_actions_and_reasons.sql');
+  const schema = read('database/schema.sql');
+
+  assert.match(superAdminHtml, /id="account-action-dialog"/);
+  assert.match(superAdminHtml, /id="account-action-form"/);
+  assert.match(superAdminHtml, /id="account-action-reason"/);
+  assert.match(superAdminJs, /openAccountActionDialog/);
+  assert.match(superAdminJs, /data-delete-user/);
+  assert.match(superAdminJs, /notifyAccountStatusChange/);
+  assert.match(core, /notifyAccountStatusChange/);
+  assert.match(core, /action:\s*'super-admin-account-action'/);
+  assert.match(manageAccountEdge, /action === 'super-admin-account-action'/);
+  assert.match(manageAccountEdge, /sendAccountStatusEmail/);
+  assert.match(migration, /create or replace function public\.super_admin_delete_user/);
+  assert.match(schema, /20261113_040/);
+});
+
+
 

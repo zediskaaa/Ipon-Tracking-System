@@ -476,6 +476,40 @@
     </div>
   </dialog>
 
+  <dialog class="form-dialog" id="account-action-dialog" aria-labelledby="account-action-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="account-action-title">Deactivate account</h2>
+          <p id="account-action-subtitle">Enter the reason for this action. An email notification will be sent to the user.</p>
+        </div>
+        <button class="dialog-close" type="button" id="account-action-close" aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <form id="account-action-form" class="form-grid" novalidate>
+        <input type="hidden" name="user_id" id="account-action-user-id">
+        <input type="hidden" name="action_type" id="account-action-type">
+        <div class="field field-wide">
+          <div class="account-summary-pill" id="account-action-user-pill">
+            <strong id="account-action-user-name">User Name</strong>
+            <small id="account-action-user-email">user@example.com</small>
+          </div>
+        </div>
+        <div class="field field-wide">
+          <label for="account-action-reason" id="account-action-reason-label">Reason for deactivation</label>
+          <textarea id="account-action-reason" name="reason" rows="3" minlength="3" maxlength="500" required placeholder="Explain why this action is being taken..."></textarea>
+          <small class="field-help" id="account-action-reason-help">This reason will be included in the email sent directly to the user.</small>
+          <small class="field-error" id="account-action-error" role="alert" hidden></small>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" type="button" id="account-action-cancel">Cancel</button>
+          <button class="button button-danger" type="submit" id="account-action-submit">Confirm</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <dialog class="form-dialog bug-viewer-dialog" id="bug-viewer-dialog" aria-labelledby="bug-viewer-title">
     <div class="form-dialog-sheet">
       <header class="form-dialog-header">
@@ -536,7 +570,7 @@
                 <span>Write with AI</span>
               </button>
                 <button class="button-link-subtle" id="release-update-key-btn" type="button"
-                  title="Configure Gemini API Key" style="display:none;" aria-hidden="true">
+                  title="Configure Gemini API Key" hidden style="display:none !important;" aria-hidden="true">
                   <svg viewBox="0 0 24 24" aria-hidden="true"
                     style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;">
                     <path d="M15 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-7 6 2-2M9 13l-4 4v3h3l1-1v-2h2v-2l-2-2" fill="none"
@@ -545,7 +579,7 @@
                   API key
                 </button>
                 <button class="button-link-subtle" id="release-update-shuffle" type="button"
-                  title="Shuffle intro and outro greeting" style="display:none;" aria-hidden="true">
+                  title="Shuffle intro and outro greeting" hidden style="display:none !important;" aria-hidden="true">
                   <svg viewBox="0 0 24 24" aria-hidden="true"
                     style="width:13px;height:13px;vertical-align:-1px;margin-right:4px;">
                     <path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5" fill="none" stroke="currentColor"
@@ -587,13 +621,12 @@
       <form id="gemini-key-form" class="form-grid">
         <div class="field field-wide">
           <label for="gemini-api-key-input">Gemini API key</label>
-          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AQ.Ab... or AIzaSy..."
+          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AIzaSy…"
             autocomplete="off">
           <small class="field-help">
             Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank"
               rel="noopener noreferrer" style="color:#16a34a;font-weight:700;">Google AI Studio</a>.
-            You can save it here in your browser, define it in <code>js/config.js</code> (<code>geminiApiKey</code>), or
-            set it in Supabase Secrets as <code>GEMINI_API_KEY</code>.
+            Standard Gemini API keys start with <code>AIzaSy…</code>.
           </small>
         </div>
         <div class="field field-wide">
@@ -622,12 +655,12 @@
     </div>
   </dialog>
 
-  <script src="js/config.js?v=20261113-21"></script>
-  <script src="js/core.js?v=20261113-22"></script>
+  <script src="js/config.js?v=20261113-24"></script>
+  <script src="js/core.js?v=20261113-24"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261113-21"></script>
+  <script src="js/super-admin.js?v=20261113-24"></script>
 </body>
 
 </html>

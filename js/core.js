@@ -3136,6 +3136,13 @@
     });
   }
 
+  async function notifyAccountStatusChange(payload) {
+    return invokeAccountFunction({
+      action: 'super-admin-account-action',
+      ...payload
+    });
+  }
+
   async function switchActiveGroup(groupId) {
     const result = await rpc('switch_active_group', { p_group_id: groupId });
     if (currentProfile && result) {
@@ -3214,14 +3221,17 @@
     if (configKey.startsWith('base64:')) {
       try { configKey = atob(configKey.slice(7)).trim(); } catch (_) { }
     }
-    if (configKey) {
-      try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
+    if (configKey && !configKey.startsWith('AQ.')) {
       return configKey;
     }
 
     let storageKey = (localStorage.getItem('ipon_gemini_api_key') || '').trim();
     if (storageKey.startsWith('base64:')) {
       try { storageKey = atob(storageKey.slice(7)).trim(); } catch (_) { }
+    }
+    if (storageKey.startsWith('AQ.')) {
+      try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
+      return '';
     }
     return storageKey;
   }
@@ -3234,6 +3244,10 @@
     const key = (apiKey || getGeminiApiKey()).trim();
     if (!key) {
       throw new Error('No Gemini API key found. Please save your API key in the configuration dialog or define geminiApiKey in js/config.js.');
+    }
+    if (key.startsWith('AQ.')) {
+      try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
+      throw new Error('API key is a Google Cloud service account token (AQ.) which is not supported by Gemini API. Please generate a fresh key starting with AIzaSy from Google AI Studio (aistudio.google.com/app/apikey).');
     }
 
     // Fast candidate resolution: at most 3 models with quick 3s timeout per model
@@ -3342,7 +3356,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange,
     get profile() { return currentProfile; }
   };
 })();

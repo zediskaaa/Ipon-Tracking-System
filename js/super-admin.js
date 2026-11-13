@@ -30,6 +30,20 @@
   const releaseUpdateDialog = document.getElementById('release-update-dialog');
   const releaseUpdateForm = document.getElementById('release-update-form');
   const releaseUpdateBtn = document.getElementById('sa-add-release-update');
+  const accountActionDialog = document.getElementById('account-action-dialog');
+  const accountActionForm = document.getElementById('account-action-form');
+  const accountActionUserId = document.getElementById('account-action-user-id');
+  const accountActionType = document.getElementById('account-action-type');
+  const accountActionTitle = document.getElementById('account-action-title');
+  const accountActionSubtitle = document.getElementById('account-action-subtitle');
+  const accountActionUserName = document.getElementById('account-action-user-name');
+  const accountActionUserEmail = document.getElementById('account-action-user-email');
+  const accountActionReason = document.getElementById('account-action-reason');
+  const accountActionReasonLabel = document.getElementById('account-action-reason-label');
+  const accountActionError = document.getElementById('account-action-error');
+  const accountActionSubmit = document.getElementById('account-action-submit');
+  const accountActionClose = document.getElementById('account-action-close');
+  const accountActionCancel = document.getElementById('account-action-cancel');
   const featureStatusTabs = document.getElementById('feature-requests-status-tabs');
   const featureCardsContainer = document.getElementById('feature-requests-cards');
   const featureTableWrap = document.getElementById('feature-requests-table-wrap');
@@ -200,7 +214,7 @@
     administratorsBody.innerHTML = visible.length ? visible.map((profile) => {
       const group = (profile.group_id ? groupById.get(profile.group_id) : null) || groupByOwner.get(profile.id);
       const active = profile.status === 'ACTIVE';
-      const actions = `<button class="icon-action" type="button" data-edit-admin="${profile.id}">Edit</button><button class="icon-action" type="button" data-set-password="${profile.id}">Change password</button><button class="icon-action" type="button" data-reset-admin="${profile.id}">Reset password</button><button class="icon-action ${active ? 'danger-action' : ''}" type="button" data-admin-status="${profile.id}" data-next-status="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Suspend' : 'Reactivate'}</button><button class="icon-action danger-action" type="button" data-archive-admin="${profile.id}">Archive</button>`;
+      const actions = `<button class="icon-action" type="button" data-edit-admin="${profile.id}">Edit</button><button class="icon-action" type="button" data-set-password="${profile.id}">Change password</button><button class="icon-action" type="button" data-reset-admin="${profile.id}">Reset password</button><button class="icon-action ${active ? 'danger-action' : ''}" type="button" data-admin-status="${profile.id}" data-next-status="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Deactivate' : 'Reactivate'}</button><button class="icon-action danger-action" type="button" data-delete-user="${profile.id}" data-archive-admin="${profile.id}">Delete</button>`;
       return `<tr>
         <td>
           <div class="table-user-cell">
@@ -619,12 +633,112 @@
     }
   });
 
+  function openAccountActionDialog(targetProfile, actionType) {
+    if (!accountActionDialog || !accountActionForm) return;
+    accountActionForm.reset();
+    accountActionUserId.value = targetProfile.id;
+    accountActionType.value = actionType;
+    accountActionUserName.textContent = targetProfile.full_name || 'User';
+    accountActionUserEmail.textContent = targetProfile.email || 'No email address';
+
+    const isDelete = actionType === 'DELETE';
+    const isDeact = actionType === 'DEACTIVATE';
+
+    accountActionTitle.textContent = isDelete
+      ? 'Delete user account'
+      : isDeact
+      ? 'Deactivate account'
+      : 'Reactivate account';
+
+    accountActionSubtitle.textContent = isDelete
+      ? 'Permanently delete this account. An email notification with the reason will be sent to the user.'
+      : isDeact
+      ? 'Deactivate this account and suspend access. An email notification with the reason will be sent to the user.'
+      : 'Reactivate this account so the user can sign in again.';
+
+    accountActionReasonLabel.textContent = isDelete
+      ? 'Reason for account deletion'
+      : isDeact
+      ? 'Reason for deactivation'
+      : 'Note (optional)';
+
+    accountActionReason.placeholder = isDelete
+      ? 'Explain why this account is being deleted...'
+      : isDeact
+      ? 'Explain why this account is being deactivated...'
+      : 'Optional note regarding reactivation...';
+
+    accountActionReason.required = isDelete || isDeact;
+    accountActionSubmit.textContent = isDelete
+      ? 'Delete account'
+      : isDeact
+      ? 'Deactivate account'
+      : 'Reactivate account';
+
+    accountActionSubmit.className = isDelete || isDeact
+      ? 'button button-danger'
+      : 'button button-primary';
+
+    if (accountActionError) accountActionError.hidden = true;
+    accountActionDialog.showModal();
+    accountActionReason.focus();
+  }
+
+  accountActionClose?.addEventListener('click', () => accountActionDialog?.close());
+  accountActionCancel?.addEventListener('click', () => accountActionDialog?.close());
+
+  accountActionForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const userId = accountActionUserId.value;
+    const actionType = accountActionType.value;
+    const reason = accountActionReason.value.trim();
+
+    if ((actionType === 'DELETE' || actionType === 'DEACTIVATE') && reason.length < 3) {
+      if (accountActionError) {
+        accountActionError.textContent = 'Please enter a reason of at least 3 characters.';
+        accountActionError.hidden = false;
+      }
+      accountActionReason?.focus();
+      return;
+    }
+    if (accountActionError) accountActionError.hidden = true;
+
+    Ipon.setBusy(accountActionSubmit, true, 'Processing…');
+    try {
+      try {
+        await Ipon.notifyAccountStatusChange({
+          user_id: userId,
+          action_type: actionType,
+          reason
+        });
+      } catch (_) {
+        if (actionType === 'DELETE') {
+          await Ipon.rpc('super_admin_delete_user', { p_user_id: userId });
+        } else {
+          await Ipon.rpc('super_admin_set_administrator_status', {
+            p_user_id: userId,
+            p_status: actionType === 'DEACTIVATE' ? 'DISABLED' : 'ACTIVE'
+          });
+        }
+      }
+
+      accountActionDialog.close();
+      const actionPast = actionType === 'DELETE' ? 'deleted' : actionType === 'DEACTIVATE' ? 'deactivated' : 'reactivated';
+      Ipon.toast(`Account successfully ${actionPast}. User notified by email.`);
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(accountActionSubmit, false);
+    }
+  });
+
   administratorsBody.addEventListener('click', async (event) => {
     const edit = event.target.closest('[data-edit-admin]');
     const reset = event.target.closest('[data-reset-admin]');
-    const archive = event.target.closest('[data-archive-admin]');
+    const deleteBtn = event.target.closest('[data-delete-user]') || event.target.closest('[data-archive-admin]');
     const button = event.target.closest('[data-admin-status]');
-    const id = edit?.dataset.editAdmin || reset?.dataset.resetAdmin || archive?.dataset.archiveAdmin || button?.dataset.adminStatus;
+    const id = edit?.dataset.editAdmin || reset?.dataset.resetAdmin || deleteBtn?.dataset.deleteUser || deleteBtn?.dataset.archiveAdmin || button?.dataset.adminStatus;
     if (!id) return;
     const profile = profiles.find((item) => item.id === id);
     if (!profile) return;
@@ -661,34 +775,14 @@
       finally { Ipon.setBusy(reset, false); }
       return;
     }
-    if (archive) {
-      const accepted = await Ipon.confirmAction({
-        title: `Archive ${roleLabel}?`,
-        message: isAdmin ? `${profile.full_name} will lose access and the group will be suspended. Records will be preserved.` : `${profile.full_name} will lose access to IPON. Existing group records will be preserved.`,
-        acceptLabel: 'Archive'
-      });
-      if (!accepted) return;
-      try { await Ipon.rpc('super_admin_archive_administrator', { p_user_id: profile.id }); Ipon.toast(`${ROLE_LABELS[profile.role]} archived.`); await load(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+    if (deleteBtn) {
+      openAccountActionDialog(profile, 'DELETE');
       return;
     }
-    const nextStatus = button.dataset.nextStatus;
-    const accepted = await Ipon.confirmAction({
-      title: `${nextStatus === 'ACTIVE' ? 'Reactivate' : 'Suspend'} ${roleLabel}?`,
-      message: isAdmin
-        ? (nextStatus === 'ACTIVE' ? `${profile.full_name} will regain access to their assigned group.` : `${profile.full_name} will immediately lose access. Their group records will remain unchanged.`)
-        : (nextStatus === 'ACTIVE' ? `${profile.full_name} will regain access to IPON.` : `${profile.full_name} will immediately lose access. Group records will remain unchanged.`),
-      acceptLabel: nextStatus === 'ACTIVE' ? 'Reactivate' : 'Suspend'
-    });
-    if (!accepted) return;
-    Ipon.setBusy(button, true, nextStatus === 'ACTIVE' ? 'Reactivating…' : 'Suspending…');
-    try {
-      await Ipon.rpc('super_admin_set_administrator_status', { p_user_id: profile.id, p_status: nextStatus });
-      Ipon.toast(`${ROLE_LABELS[profile.role]} ${nextStatus === 'ACTIVE' ? 'reactivated' : 'suspended'}.`);
-      await load();
-    } catch (error) {
-      Ipon.toast(Ipon.friendlyError(error), 'error');
-    } finally {
-      Ipon.setBusy(button, false);
+    if (button) {
+      const nextStatus = button.dataset.nextStatus;
+      openAccountActionDialog(profile, nextStatus === 'ACTIVE' ? 'REACTIVATE' : 'DEACTIVATE');
+      return;
     }
   });
 
@@ -1112,6 +1206,10 @@
     event.preventDefault();
     const val = (geminiKeyInput?.value || '').trim();
     if (val) {
+      if (val.startsWith('AQ.')) {
+        Ipon.toast('Keys starting with AQ. are Google Cloud service account tokens, not Gemini API keys. Please generate a key from Google AI Studio (starts with AIzaSy).', 'error');
+        return;
+      }
       localStorage.setItem('ipon_gemini_api_key', val);
       Ipon.toast('Gemini API key saved in browser.');
     } else {
@@ -1175,7 +1273,13 @@
 
       const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
       if (!apiKey) {
-        Ipon.toast('Please add your Gemini API key in js/config.js (geminiApiKey).', 'error');
+        if (geminiKeyDialog) {
+          if (geminiKeyInput) geminiKeyInput.value = '';
+          updateGeminiStatusBadge();
+          geminiKeyDialog.showModal();
+          geminiKeyInput?.focus();
+        }
+        Ipon.toast('Please enter your Google AI Studio API key (starts with AIzaSy) to write with AI.', 'error');
         return;
       }
 
