@@ -913,6 +913,235 @@
     if (quickRemove) quickRemove.hidden = !safeUrl;
   }
 
+  const memberAvatarStore = new Map();
+
+  function registerMemberAvatars(profilesOrMembers) {
+    if (!Array.isArray(profilesOrMembers)) return;
+    profilesOrMembers.forEach((item) => {
+      if (!item) return;
+      const url = item.avatar_url || null;
+      if (item.id) memberAvatarStore.set(String(item.id), url);
+      if (item.member_id) memberAvatarStore.set(String(item.member_id), url);
+      if (item.full_name) memberAvatarStore.set(String(item.full_name).trim().toLowerCase(), url);
+      if (item.user_id) memberAvatarStore.set(String(item.user_id), url);
+    });
+  }
+
+  function getMemberAvatar(idOrName) {
+    if (!idOrName) return null;
+    const raw = String(idOrName).trim();
+    const key = raw.toLowerCase();
+    return memberAvatarStore.get(raw) || memberAvatarStore.get(key) || null;
+  }
+
+  function enhanceMemberSelect(selectEl) {
+    if (!selectEl || selectEl.dataset.customEnhanced === 'true') {
+      selectEl?._customSelect?.sync();
+      return selectEl?._customSelect || null;
+    }
+
+    const parent = selectEl.parentNode;
+    if (!parent) return null;
+
+    selectEl.dataset.customEnhanced = 'true';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'custom-member-select-wrap';
+
+    parent.insertBefore(wrap, selectEl);
+    wrap.appendChild(selectEl);
+    selectEl.classList.add('custom-select-native');
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'custom-select-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+
+    trigger.innerHTML = `
+      <div class="custom-select-selection">
+        <span class="custom-select-trigger-avatar"></span>
+        <span class="custom-select-trigger-label">Select member</span>
+      </div>
+      <svg class="custom-select-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+
+    const menu = document.createElement('div');
+    menu.className = 'custom-select-menu';
+    menu.setAttribute('role', 'listbox');
+    menu.hidden = true;
+
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+
+    const triggerAvatar = trigger.querySelector('.custom-select-trigger-avatar');
+    const triggerLabel = trigger.querySelector('.custom-select-trigger-label');
+
+    let isOpen = false;
+
+    function openMenu() {
+      if (selectEl.disabled) return;
+      document.querySelectorAll('.custom-member-select-wrap.is-open').forEach((w) => {
+        if (w !== wrap && w._customSelectClose) w._customSelectClose();
+      });
+      isOpen = true;
+      wrap.classList.add('is-open');
+      menu.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeMenu() {
+      if (!isOpen) return;
+      isOpen = false;
+      wrap.classList.remove('is-open');
+      menu.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+
+    wrap._customSelectClose = closeMenu;
+
+    function syncTrigger() {
+      const selectedIndex = selectEl.selectedIndex;
+      const opt = selectedIndex >= 0 ? selectEl.options[selectedIndex] : null;
+      const val = opt ? opt.value : '';
+      const text = opt ? opt.textContent.trim() : 'Select member';
+      const isPlaceholder = !val || (opt && opt.disabled);
+
+      triggerLabel.textContent = text;
+      triggerLabel.classList.toggle('is-placeholder', isPlaceholder);
+
+      if (isPlaceholder) {
+        triggerAvatar.innerHTML = `<span class="custom-avatar-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg></span>`;
+      } else {
+        const avatarUrl = opt.dataset.avatar || getMemberAvatar(val) || getMemberAvatar(text) || null;
+        triggerAvatar.innerHTML = avatarMarkup(avatarUrl, text, 'custom-select-avatar');
+        bindAvatarFallbacks(triggerAvatar);
+        syncPresenceDots(triggerAvatar);
+      }
+    }
+
+    function rebuildOptions() {
+      menu.replaceChildren();
+      const optionsContainer = document.createElement('div');
+      optionsContainer.className = 'custom-select-options';
+
+      Array.from(selectEl.options).forEach((opt) => {
+        const val = opt.value;
+        const text = opt.textContent.trim();
+        const isPlaceholder = !val;
+        const isSelected = opt.selected;
+
+        const optEl = document.createElement('div');
+        optEl.className = `custom-select-option${isSelected ? ' is-selected' : ''}${isPlaceholder ? ' is-placeholder' : ''}`;
+        optEl.setAttribute('role', 'option');
+        optEl.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+        optEl.dataset.value = val;
+
+        const avatarUrl = opt.dataset.avatar || getMemberAvatar(val) || getMemberAvatar(text) || null;
+        const avatarHtml = isPlaceholder
+          ? `<span class="custom-avatar-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg></span>`
+          : avatarMarkup(avatarUrl, text, 'custom-select-avatar');
+
+        optEl.innerHTML = `
+          <div class="custom-select-option-main">
+            <span class="custom-select-avatar-slot">${avatarHtml}</span>
+            <span class="custom-select-option-name">${escapeHtml(text)}</span>
+          </div>
+          ${isSelected && !isPlaceholder ? `
+            <span class="custom-select-check" aria-hidden="true">
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4L16 6.5" stroke="#15803d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>` : ''}
+        `;
+
+        optEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectEl.value = val;
+          selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+          selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+          syncTrigger();
+          rebuildOptions();
+          closeMenu();
+          trigger.focus();
+        });
+
+        optionsContainer.appendChild(optEl);
+      });
+
+      menu.appendChild(optionsContainer);
+      bindAvatarFallbacks(menu);
+      syncPresenceDots(menu);
+      syncTrigger();
+    }
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (isOpen) closeMenu();
+      else openMenu();
+    });
+
+    trigger.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openMenu();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!wrap.contains(e.target)) closeMenu();
+    });
+
+    wrap.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeMenu();
+        trigger.focus();
+      }
+    });
+
+    selectEl.addEventListener('change', () => {
+      trigger.classList.remove('has-error');
+      syncTrigger();
+      rebuildOptions();
+    });
+
+    selectEl.addEventListener('invalid', () => {
+      trigger.classList.add('has-error');
+    });
+
+    selectEl.form?.addEventListener('reset', () => {
+      setTimeout(() => {
+        trigger.classList.remove('has-error');
+        syncTrigger();
+        rebuildOptions();
+      }, 0);
+    });
+
+    const observer = new MutationObserver(() => {
+      rebuildOptions();
+    });
+    observer.observe(selectEl, { childList: true, subtree: true });
+
+    rebuildOptions();
+
+    const api = {
+      wrap,
+      sync: () => {
+        rebuildOptions();
+      },
+      destroy: () => {
+        observer.disconnect();
+        wrap.replaceWith(selectEl);
+        selectEl.classList.remove('custom-select-native');
+        delete selectEl.dataset.customEnhanced;
+        delete selectEl._customSelect;
+      }
+    };
+
+    selectEl._customSelect = api;
+    return api;
+  }
+
   function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -3563,7 +3792,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
     get profile() { return currentProfile; }
   };
 })();

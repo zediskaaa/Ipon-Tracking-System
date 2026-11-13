@@ -461,7 +461,7 @@
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { renderEmptySnapshot(); return; }
     try {
-      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult, groupsResult, , allGoalsResult] = await Promise.all([
+      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult, groupsResult, groupProfilesResult, allGoalsResult] = await Promise.all([
         Ipon.client.rpc('get_savings_summary'),
         Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'),
         getPending(),
@@ -469,10 +469,20 @@
         Ipon.client.from('v_contribution_status').select('member_id,payment_status,paid_amount').eq('period_month', start),
         Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.rpc('get_my_groups'),
-        announcements ? announcements.load() : Promise.resolve(),
+        Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE'),
         Ipon.client.from('savings_goals').select('id,title,target_amount,target_date').eq('status', 'ACTIVE').order('created_at', { ascending: false })
       ]);
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
+      const profilesList = groupProfilesResult?.data || [];
+      Ipon.registerMemberAvatars(profilesList);
+      const profileByMemberId = new Map(profilesList.filter((p) => p.member_id).map((p) => [p.member_id, p]));
+      const profileByName = new Map(profilesList.map((p) => [(p.full_name || '').trim().toLowerCase(), p]));
+      (memberResult.data || []).forEach((m) => {
+        const prof = profileByMemberId.get(m.id) || profileByName.get((m.full_name || '').trim().toLowerCase());
+        if (prof?.avatar_url) m.avatar_url = prof.avatar_url;
+        if (prof?.id) m.user_id = prof.id;
+      });
+      Ipon.registerMemberAvatars(memberResult.data || []);
       activeGoalsList = allGoalsResult?.data || [];
       renderGroupHeader(groupsResult || []);
       const adminMember = (memberResult.data || []).find((m) => m.id === currentGroup?.member_id || m.id === state?.profile?.member_id);
@@ -970,17 +980,20 @@
   });
   function populateQuickRecordMembers(members) {
     cachedMembers = members || [];
+    Ipon.registerMemberAvatars(cachedMembers);
     if (quickMemberSelect) {
       const cur = quickMemberSelect.value;
-      quickMemberSelect.innerHTML = `<option value="">Select member</option>${cachedMembers.map((m) => `<option value="${m.id}" ${cur === m.id ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
+      quickMemberSelect.innerHTML = `<option value="">Select member</option>${cachedMembers.map((m) => `<option value="${m.id}" data-avatar="${Ipon.escapeHtml(m.avatar_url || '')}" ${cur === m.id ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
       if (state.profile?.role === 'MEMBER' && state.profile.member_id) {
         quickMemberSelect.value = state.profile.member_id;
       }
+      Ipon.enhanceMemberSelect(quickMemberSelect);
     }
     if (quickResponsibleSelect) {
       const cur = quickResponsibleSelect.value;
       const ownName = cachedMembers.find((m) => m.id === state.profile?.member_id)?.full_name || state.profile?.full_name || '';
-      quickResponsibleSelect.innerHTML = `<option value="">Select member</option>${cachedMembers.map((m) => `<option value="${Ipon.escapeHtml(m.full_name)}" ${(cur || ownName) === m.full_name ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
+      quickResponsibleSelect.innerHTML = `<option value="">Select member</option>${cachedMembers.map((m) => `<option value="${Ipon.escapeHtml(m.full_name)}" data-avatar="${Ipon.escapeHtml(m.avatar_url || '')}" ${(cur || ownName) === m.full_name ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
+      Ipon.enhanceMemberSelect(quickResponsibleSelect);
     }
   }
 

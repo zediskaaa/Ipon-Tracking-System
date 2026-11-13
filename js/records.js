@@ -138,7 +138,10 @@
     const names = membersList.map((member) => member.full_name).filter(Boolean);
     if (selectedName && !names.includes(selectedName)) names.unshift(selectedName);
     select.innerHTML = names.length
-      ? `<option value="">Select member</option>${names.map((name) => `<option value="${Ipon.escapeHtml(name)}" ${selectedName === name ? 'selected' : ''}>${Ipon.escapeHtml(name)}</option>`).join('')}`
+      ? `<option value="">Select member</option>${names.map((name) => {
+        const avatarUrl = Ipon.getMemberAvatar(name) || '';
+        return `<option value="${Ipon.escapeHtml(name)}" data-avatar="${Ipon.escapeHtml(avatarUrl)}" ${selectedName === name ? 'selected' : ''}>${Ipon.escapeHtml(name)}</option>`;
+      }).join('')}`
       : '<option value="">No active member profile found</option>';
   }
 
@@ -160,6 +163,13 @@
       if (profile.member_id) profilesByMemberId.set(profile.member_id, profile);
       if (profile.full_name) profilesByName.set(profile.full_name.trim().toLowerCase(), profile);
     });
+    Ipon.registerMemberAvatars(groupProfiles || []);
+    membersList.forEach((m) => {
+      const prof = profilesByMemberId.get(m.id) || profilesByName.get((m.full_name || '').trim().toLowerCase());
+      if (prof?.avatar_url) m.avatar_url = prof.avatar_url;
+      if (prof?.id) m.user_id = prof.id;
+    });
+    Ipon.registerMemberAvatars(membersList);
 
     if (memberFilter) {
       const matched = membersList.find((m) => m.id === selectedMemberId || m.full_name === selectedMemberId);
@@ -170,20 +180,22 @@
         selectedMemberId = '';
         selectedMemberName = '';
       }
-      memberFilter.innerHTML = `<option value="">All members</option>${membersList.map((m) => `<option value="${m.id}" ${selectedMemberId === m.id ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
+      memberFilter.innerHTML = `<option value="">All members</option>${membersList.map((m) => `<option value="${m.id}" data-avatar="${Ipon.escapeHtml(m.avatar_url || '')}" ${selectedMemberId === m.id ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
       updateTabLinksWithMember();
+      Ipon.enhanceMemberSelect(memberFilter);
     }
 
     if (select) {
       const currentSelection = select.value;
       const selectedId = currentSelection || (selectedMemberId && membersList.some((m) => m.id === selectedMemberId) ? selectedMemberId : state.profile.member_id || '');
       select.innerHTML = membersList.length
-        ? `<option value="">Select member</option>${membersList.map((member) => `<option value="${member.id}" ${selectedId === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}`
+        ? `<option value="">Select member</option>${membersList.map((member) => `<option value="${member.id}" data-avatar="${Ipon.escapeHtml(member.avatar_url || '')}" ${selectedId === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}`
         : '<option value="">No active member profile found</option>';
       if (state.profile.role === 'MEMBER') {
         select.closest('.field').hidden = true;
         select.required = false;
       }
+      Ipon.enhanceMemberSelect(select);
     }
     if (responsibleSelect) {
       const ownMember = membersList.find((member) => member.id === state.profile.member_id);
@@ -193,9 +205,11 @@
         responsibleSelect.closest('.field').hidden = true;
         responsibleSelect.required = false;
       }
+      Ipon.enhanceMemberSelect(responsibleSelect);
     }
     if (editResponsibleSelect) {
       populateResponsibleSelect(editResponsibleSelect, editResponsibleSelect.value);
+      Ipon.enhanceMemberSelect(editResponsibleSelect);
     }
   }
 
