@@ -1172,80 +1172,73 @@
       return `- "${req.title}": ${req.details || 'Feature improvement'}${credit}`;
     }).join('\n') || '- General performance improvements, responsive layout refinements, and stability enhancements.';
 
-    // Instant 0ms pre-fill so user never waits on spinner:
-    const draft = composeReleaseNotes(ver, targetImplemented);
-    if (titleInput) titleInput.value = draft.title;
-    if (detailsInput) detailsInput.value = draft.body;
-
-    const storedKey = (localStorage.getItem('ipon_gemini_api_key') || window.IPON_CONFIG?.geminiApiKey || '').trim();
-    if (!storedKey) {
-      Ipon.toast('✨ Announcement drafted with smart composer!');
+    const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
+    if (!apiKey) {
+      Ipon.toast('Please add your Gemini API key in js/config.js (geminiApiKey).', 'error');
       return;
     }
 
-    const prompt = `Write an engaging, celebratory product release announcement intro and outro for IPON (Group Savings and Financial Tracker) ${ver}.
-Implemented user features:
+    const prompt = `You are the product communications writer for IPON (Group Savings and Financial Tracker) ${ver}.
+Release Date: ${relDate}
+
+Implemented community-requested features:
 ${featuresList}
 
-Return a valid JSON object with keys:
+Key system updates included in this rollout:
+- Live Active Now presence indicators on member profile avatars
+- Interactive profile picture cropper, 90-degree rotation, and avatar controls
+- Messenger-style announcement reactions (Heart, Thumbs up, Haha, Sad, Angry) with who-reacted modal
+- Quick financial record entry shortcut modal on the calendar dashboard
+- Financial records member spotlight card with personal contribution graph and totals
+- Group administrator monthly pledge synchronization across member rosters and reports
+
+Generate a JSON object with this exact structure:
 {
-  "title": "A punchy, attractive title mentioning ${ver}",
-  "intro": "A fresh, non-cliché 1-2 paragraph introduction celebrating this release",
-  "outro": "A warm, inspiring 1-paragraph closing message thanking savers"
+  "title": "A punchy, attractive announcement title mentioning ${ver}",
+  "intro": "A 1-2 paragraph engaging, fresh intro celebrating this milestone and thanking savers",
+  "highlights": [
+    "A concise, punchy bullet point describing a key feature or community request with user credits if applicable",
+    "Another concise bullet point describing an update",
+    "Additional bullet points covering the remaining improvements"
+  ],
+  "outro": "A warm, inspiring 1-paragraph closing message encouraging saving consistency"
 }`;
 
     try {
       Ipon.setBusy(releaseAiBtn, true);
       if (releaseAiStatus) {
         releaseAiStatus.hidden = false;
-        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Enhancing with Gemini AI…';
+        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Google Gemini AI is writing your announcement…';
       }
 
       // Action: ai-generate-release-notes (Direct client fetch to Gemini API with fallback)
       const res = await Ipon.callGemini({
         prompt,
-        systemInstruction: 'Respond in English and valid JSON only. Keep concise, inspiring, and polished.',
+        systemInstruction: 'You are an expert product communicator. Write authentic, polished, encouraging release copy in English. Output strictly valid JSON.',
         jsonResponse: true
       });
 
       const parsed = res.parsed;
-      const title = String(parsed?.title || draft.title).trim();
-      const intro = String(parsed?.intro || '').trim();
-      const outro = String(parsed?.outro || '').trim();
-
-      if (intro && outro) {
-        const pickedFeatures = Object.values(FEATURE_VARIATIONS).map((pool) => {
-          return pool[Math.floor(Math.random() * pool.length)];
-        });
-        for (let i = pickedFeatures.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [pickedFeatures[i], pickedFeatures[j]] = [pickedFeatures[j], pickedFeatures[i]];
-        }
-
-        let enhancedBody = `${intro}\n\n`;
-        pickedFeatures.forEach((feat) => {
-          enhancedBody += `• ${feat}\n`;
-        });
-
-        if (targetImplemented.length > 0) {
-          enhancedBody += `\nCommunity Feature Requests Implemented in this Release:\n`;
-          targetImplemented.forEach((req) => {
-            const prof = profileById.get(req.requester_id);
-            const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
-            enhancedBody += `• ${req.title}: ${req.details || 'Feature improvement'}${credit}\n`;
-          });
-        }
-
-        enhancedBody += `\n${outro}`;
-
-        if (titleInput && title) titleInput.value = title;
-        if (detailsInput) detailsInput.value = enhancedBody;
-        Ipon.toast(`✨ Announcement enhanced with Gemini AI (${res.model})!`);
-      } else {
-        Ipon.toast('✨ Announcement drafted with smart composer!');
+      if (!parsed || (!parsed.title && !parsed.intro)) {
+        throw new Error('Gemini did not return valid release content.');
       }
+
+      const title = String(parsed.title || `System ${ver} Released`).trim();
+      const intro = String(parsed.intro || '').trim();
+      const outro = String(parsed.outro || '').trim();
+      const highlights = Array.isArray(parsed.highlights)
+        ? parsed.highlights.map((h) => `• ${String(h).replace(/^[•\s*-]+/, '').trim()}`).join('\n')
+        : '';
+
+      const details = [intro, highlights, outro].filter(Boolean).join('\n\n');
+
+      if (titleInput && title) titleInput.value = title;
+      if (detailsInput && details) detailsInput.value = details;
+
+      Ipon.toast(`✨ Real announcement generated by Google Gemini AI (${res.model})!`);
     } catch (err) {
-      Ipon.toast('✨ Announcement drafted with smart composer!');
+      // Real AI only - report genuine Gemini status, no silent fake substitution
+      Ipon.toast(`Gemini AI: ${err.message || 'Generation failed'}.`, 'error');
     } finally {
       Ipon.setBusy(releaseAiBtn, false);
       if (releaseAiStatus) releaseAiStatus.hidden = true;

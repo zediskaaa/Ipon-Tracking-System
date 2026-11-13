@@ -3153,17 +3153,20 @@
   const STABLE_GEMINI_MODELS = [
     'gemini-2.5-flash',
     'gemini-1.5-flash',
-    'gemini-flash-latest'
+    'gemini-flash-latest',
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-3.8-flash'
   ];
 
   let cachedWorkingGeminiModel = null;
 
   function getGeminiApiKey() {
-    const fromStorage = (localStorage.getItem('ipon_gemini_api_key') || '').trim();
-    if (fromStorage) return fromStorage;
-    const fromConfig = (window.IPON_CONFIG?.geminiApiKey || '').trim();
-    if (fromConfig) return fromConfig;
-    return '';
+    let key = (localStorage.getItem('ipon_gemini_api_key') || '').trim() || (window.IPON_CONFIG?.geminiApiKey || '').trim();
+    if (key.startsWith('base64:')) {
+      try { key = atob(key.slice(7)).trim(); } catch (_) {}
+    }
+    return key;
   }
 
   function getGeminiModel() {
