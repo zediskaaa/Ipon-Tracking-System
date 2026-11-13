@@ -847,19 +847,47 @@ Deno.serve(async (request) => {
       return json({ error: 'Super administrator accounts cannot be modified here.' }, 400);
     }
 
-    const targetEmail = targetProfile.email;
+    let targetEmail = targetProfile.email;
+    if (!targetEmail) {
+      const { data: authUser } = await admin.auth.admin.getUserById(targetUserId).catch(() => ({ data: null }));
+      targetEmail = authUser?.user?.email || null;
+    }
     const targetName = targetProfile.full_name || [targetProfile.first_name, targetProfile.last_name].filter(Boolean).join(' ') || 'User';
 
+    let emailOutcome = { email_sent: false, email_error: null as string | null };
+    if (targetEmail) {
+      try {
+        emailOutcome = await sendAccountStatusEmail({
+          toEmail: targetEmail,
+          recipientName: targetName,
+          actionType: actionType as 'DEACTIVATE' | 'DELETE' | 'REACTIVATE',
+          reason,
+          senderEmail: actor.email
+        });
+      } catch (err) {
+        emailOutcome = {
+          email_sent: false,
+          email_error: err instanceof Error ? err.message : 'Failed to deliver status email.'
+        };
+      }
+    }
+
     if (actionType === 'DEACTIVATE') {
-      await caller.rpc('super_admin_set_administrator_status', {
+      const { error: rpcErr } = await caller.rpc('super_admin_set_administrator_status', {
         p_user_id: targetUserId,
         p_status: 'DISABLED'
       });
+      if (rpcErr) {
+        await admin.from('profiles').update({ status: 'DISABLED' }).eq('id', targetUserId);
+      }
     } else if (actionType === 'REACTIVATE') {
-      await caller.rpc('super_admin_set_administrator_status', {
+      const { error: rpcErr } = await caller.rpc('super_admin_set_administrator_status', {
         p_user_id: targetUserId,
         p_status: 'ACTIVE'
       });
+      if (rpcErr) {
+        await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', targetUserId);
+      }
     } else if (actionType === 'DELETE') {
       const { error: rpcError } = await caller.rpc('super_admin_delete_user', {
         p_user_id: targetUserId
@@ -870,17 +898,6 @@ Deno.serve(async (request) => {
         await admin.from('profiles').delete().eq('id', targetUserId);
       }
       await admin.auth.admin.deleteUser(targetUserId).catch(() => null);
-    }
-
-    let emailOutcome = { email_sent: false, email_error: null };
-    if (targetEmail) {
-      emailOutcome = await sendAccountStatusEmail({
-        toEmail: targetEmail,
-        recipientName: targetName,
-        actionType: actionType as 'DEACTIVATE' | 'DELETE' | 'REACTIVATE',
-        reason,
-        senderEmail: actor.email
-      });
     }
 
     return json({
