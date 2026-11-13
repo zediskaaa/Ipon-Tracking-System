@@ -274,9 +274,22 @@ set search_path = public
 as $$
 declare
   v_record_id uuid := null;
+  v_action text := 'DELETE';
 begin
   if p_details ? 'target_user_id' and (p_details ->> 'target_user_id') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
     v_record_id := (p_details ->> 'target_user_id')::uuid;
+  end if;
+
+  if p_action in ('INSERT', 'UPDATE', 'DELETE', 'CONFIRM', 'REJECT', 'VOID') then
+    v_action := p_action;
+  elsif p_action like '%UNBLOCK%' or p_action like '%DELETE%' or p_action like '%REMOVE%' or p_action like '%PURGE%' then
+    v_action := 'DELETE';
+  elsif p_action like '%APPROVE%' or p_action like '%CONFIRM%' then
+    v_action := 'CONFIRM';
+  elsif p_action like '%REJECT%' or p_action like '%DECLINE%' then
+    v_action := 'REJECT';
+  else
+    v_action := 'UPDATE';
   end if;
 
   insert into public.audit_logs (
@@ -289,10 +302,10 @@ begin
     changed_by
   ) values (
     null,
-    'system',
+    'admin_requests',
     v_record_id,
-    p_action,
-    jsonb_build_object('target', p_target),
+    v_action,
+    jsonb_build_object('target', p_target, 'system_action', p_action),
     p_details,
     auth.uid()
   );
