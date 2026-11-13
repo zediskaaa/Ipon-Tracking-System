@@ -60,6 +60,26 @@ jobs:
           path: android/app/build/outputs/apk/debug/myIPON.apk
           if-no-files-found: error
 
+      - name: Publish Android APK to GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: latest
+          name: "myIPON Mobile Apps (Latest Build)"
+          body: |
+            Automated mobile build for myIPON.
+
+            - **Android:** Direct APK download: `myIPON.apk`
+            - **iOS:** IPA package: `myIPON.ipa`
+
+            *Automatically compiled and updated from the latest main branch commit.*
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: android/app/build/outputs/apk/debug/myIPON.apk
+
   build-ios:
     name: Build iOS Package
     runs-on: macos-15
@@ -111,59 +131,16 @@ jobs:
           path: build-output/myIPON-unsigned.ipa
           if-no-files-found: warn
 
-  publish-release:
-    name: Publish Latest App Release
-    runs-on: ubuntu-latest
-    needs: [build-android, build-ios]
-    if: always() && github.ref == 'refs/heads/main' && (needs.build-android.result == 'success' || needs.build-ios.result == 'success')
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download Android APK
-        uses: actions/download-artifact@v4
-        with:
-          name: myIPON-Android-APK
-          path: release-assets
-
-      - name: Download iOS App
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: myIPON-iOS-IPA
-          path: release-assets
-
-      - name: Prepare release assets
-        run: |
-          mkdir -p dist-release
-          if [ -f release-assets/myIPON.apk ]; then
-            cp release-assets/myIPON.apk dist-release/myIPON.apk
-          elif [ -f release-assets/app-debug.apk ]; then
-            cp release-assets/app-debug.apk dist-release/myIPON.apk
-          fi
-          if [ -f release-assets/myIPON-unsigned.ipa ]; then
-            cp release-assets/myIPON-unsigned.ipa dist-release/myIPON.ipa
-          fi
-          ls -la dist-release
-
-      - name: Publish or Update GitHub Release
+      - name: Publish iOS IPA to GitHub Release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: latest
-          name: "myIPON Mobile Apps (Latest Build)"
-          body: |
-            Automated mobile build for myIPON.
-
-            - **Android:** Direct APK download: `myIPON.apk`
-            - **iOS:** Unsigned IPA package: `myIPON.ipa`
-
-            *Automatically compiled and updated from the latest main branch commit.*
           draft: false
           prerelease: false
           make_latest: true
-          files: |
-            dist-release/myIPON.apk
-            dist-release/myIPON.ipa
+          files: build-output/myIPON-unsigned.ipa
 
