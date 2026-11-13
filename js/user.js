@@ -12,13 +12,16 @@
   const paymentChannelEl = document.getElementById('member-payment-channel');
   const paymentDetailsEl = document.getElementById('member-payment-details');
   const paymentNotesEl = document.getElementById('member-payment-instructions');
-  const receiptInput = document.getElementById('user-receipt-input');
-  const receiptPreview = document.getElementById('user-receipt-preview');
-  const receiptThumb = document.getElementById('user-receipt-thumb');
-  const receiptName = document.getElementById('user-receipt-name');
-  const receiptClear = document.getElementById('user-receipt-clear');
+  const receiptPicker = Ipon.bindReceiptPicker({
+    input: document.getElementById('user-receipt-input'),
+    dropzone: document.getElementById('user-receipt-dropzone'),
+    emptyBox: document.getElementById('user-receipt-empty'),
+    preview: document.getElementById('user-receipt-preview'),
+    thumb: document.getElementById('user-receipt-thumb'),
+    nameEl: document.getElementById('user-receipt-name'),
+    clearBtn: document.getElementById('user-receipt-clear')
+  });
   let groupPaymentInfo = null;
-  let pendingReceiptUrl = null;
   let historyRowsById = new Map();
   function badge(status) { return `<span class="status status-${String(status).toLowerCase().replaceAll(' ', '-')}">${Ipon.escapeHtml(status)}</span>`; }
 
@@ -43,13 +46,6 @@
     paymentDetailsEl.innerHTML = items.join('');
     paymentNotesEl.textContent = info.payment_instructions || '';
     paymentNotesEl.hidden = !info.payment_instructions;
-  }
-
-  function clearPendingReceipt() {
-    pendingReceiptUrl = null;
-    if (receiptInput) receiptInput.value = '';
-    if (receiptPreview) receiptPreview.hidden = true;
-    if (receiptThumb) receiptThumb.removeAttribute('src');
   }
 
   async function load() {
@@ -90,7 +86,7 @@
     await load();
   }
 
-  document.getElementById('submit-contribution').addEventListener('click', () => { form.reset(); clearPendingReceipt(); form.elements.contribution_month.value = Ipon.monthStart().slice(0, 7); form.elements.payment_date.value = Ipon.isoDate(); dialog.showModal(); form.elements.amount.focus(); });
+  document.getElementById('submit-contribution').addEventListener('click', () => { form.reset(); receiptPicker.clear(); form.elements.contribution_month.value = Ipon.monthStart().slice(0, 7); form.elements.payment_date.value = Ipon.isoDate(); dialog.showModal(); form.elements.amount.focus(); });
   document.getElementById('close-contribution-dialog').addEventListener('click', () => dialog.close());
   document.getElementById('cancel-contribution').addEventListener('click', () => dialog.close());
   paymentQrBtn?.addEventListener('click', () => {
@@ -102,21 +98,6 @@
     try { await navigator.clipboard.writeText(btn.dataset.copyAccount || ''); Ipon.toast('Account number copied.'); }
     catch { Ipon.toast('Unable to copy automatically.', 'error'); }
   });
-  receiptInput?.addEventListener('change', async () => {
-    const file = receiptInput.files?.[0];
-    if (!file) return;
-    try {
-      const prepared = await Ipon.prepareImageDataUrl(file, { maxEdge: 1200, skipCompressBytes: 180 * 1024, maxBytes: 440 * 1024 });
-      pendingReceiptUrl = prepared.dataUrl;
-      receiptThumb.src = pendingReceiptUrl;
-      receiptName.textContent = prepared.name;
-      receiptPreview.hidden = false;
-    } catch (error) {
-      clearPendingReceipt();
-      Ipon.toast(Ipon.friendlyError(error), 'error');
-    }
-  });
-  receiptClear?.addEventListener('click', clearPendingReceipt);
   body.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-view-receipt]');
     if (!btn) return;
@@ -129,7 +110,7 @@
     const button = event.submitter;
     const values = new FormData(form);
     Ipon.setBusy(button, true, 'Submitting…');
-    try { await Ipon.rpc('record_contribution', { p_member_id: state.profile.member_id, p_contribution_month: `${values.get('contribution_month')}-01`, p_amount: Number(values.get('amount')), p_payment_date: values.get('payment_date'), p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null, p_idempotency_key: crypto.randomUUID(), p_receipt_url: pendingReceiptUrl }); clearPendingReceipt(); dialog.close(); Ipon.toast('Contribution submitted for review.'); await load(); }
+    try { await Ipon.rpc('record_contribution', { p_member_id: state.profile.member_id, p_contribution_month: `${values.get('contribution_month')}-01`, p_amount: Number(values.get('amount')), p_payment_date: values.get('payment_date'), p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null, p_idempotency_key: crypto.randomUUID(), p_receipt_url: receiptPicker.get() }); receiptPicker.clear(); dialog.close(); Ipon.toast('Contribution submitted for review.'); await load(); }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });

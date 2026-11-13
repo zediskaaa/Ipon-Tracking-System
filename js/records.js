@@ -14,35 +14,15 @@
   let selectedMemberId = new URLSearchParams(window.location.search).get('member') || '';
   let selectedMemberName = '';
   let spotlightChart = null;
-  let pendingReceiptUrl = null;
-  const receiptInput = document.getElementById('record-receipt-input');
-  const receiptPreview = document.getElementById('record-receipt-preview');
-  const receiptThumb = document.getElementById('record-receipt-thumb');
-  const receiptName = document.getElementById('record-receipt-name');
-  const receiptClear = document.getElementById('record-receipt-clear');
-
-  function clearPendingReceipt() {
-    pendingReceiptUrl = null;
-    if (receiptInput) receiptInput.value = '';
-    if (receiptPreview) receiptPreview.hidden = true;
-    if (receiptThumb) receiptThumb.removeAttribute('src');
-  }
-
-  receiptInput?.addEventListener('change', async () => {
-    const file = receiptInput.files?.[0];
-    if (!file) return;
-    try {
-      const prepared = await Ipon.prepareImageDataUrl(file, { maxEdge: 1200, skipCompressBytes: 180 * 1024, maxBytes: 440 * 1024 });
-      pendingReceiptUrl = prepared.dataUrl;
-      receiptThumb.src = pendingReceiptUrl;
-      receiptName.textContent = prepared.name;
-      receiptPreview.hidden = false;
-    } catch (error) {
-      clearPendingReceipt();
-      Ipon.toast(Ipon.friendlyError(error), 'error');
-    }
+  const receiptPicker = Ipon.bindReceiptPicker({
+    input: document.getElementById('record-receipt-input'),
+    dropzone: document.getElementById('record-receipt-dropzone'),
+    emptyBox: document.getElementById('record-receipt-empty'),
+    preview: document.getElementById('record-receipt-preview'),
+    thumb: document.getElementById('record-receipt-thumb'),
+    nameEl: document.getElementById('record-receipt-name'),
+    clearBtn: document.getElementById('record-receipt-clear')
   });
-  receiptClear?.addEventListener('click', clearPendingReceipt);
 
   const state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });
   if (state.failed || state.redirecting) return;
@@ -515,7 +495,7 @@
           p_amount: amount, p_payment_date: values.get('payment_date'),
           p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null,
           p_idempotency_key: pendingSubmissionKey,
-          p_receipt_url: pendingReceiptUrl
+          p_receipt_url: receiptPicker.get()
         });
       } else {
         const ownResponsible = membersList.find((member) => member.id === state.profile.member_id)?.full_name || state.profile.full_name;
@@ -526,11 +506,11 @@
           p_reference_number: values.get('reference_number') || null, p_notes: values.get('notes') || null,
           p_idempotency_key: pendingSubmissionKey
         };
-        if (page === 'expenses') payload.p_receipt_url = pendingReceiptUrl;
+        if (page === 'expenses') payload.p_receipt_url = receiptPicker.get();
         await Ipon.rpc(page === 'withdrawals' ? 'record_withdrawal' : 'record_expense', payload);
       }
       pendingSubmissionKey = null;
-      clearPendingReceipt();
+      receiptPicker.clear();
       Ipon.toast(state.profile.role === 'ADMIN' ? 'Confirmed record saved.' : 'Record submitted for admin review.');
       form.reset(); setDefaults(); await load();
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
@@ -578,6 +558,7 @@
       reference: row.transaction_reference || row.reference_number || '',
       notes: row.notes || '',
       description: row.description || '',
+      receiptUrl: row.receipt_url || '',
       status: row.approval_status || ''
     } : null;
     await Ipon.requestRecordAction({

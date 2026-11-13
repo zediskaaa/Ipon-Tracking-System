@@ -568,6 +568,7 @@
       reference: item.reference || '',
       notes: item.notes || '',
       description: item.description || '',
+      receiptUrl: item.receipt_url || '',
       status: 'PENDING'
     } : {
       type: prefix,

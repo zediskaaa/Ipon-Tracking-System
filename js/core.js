@@ -1167,6 +1167,8 @@
         canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
         const context = canvas.getContext('2d');
         if (!context) return resolve(dataUrl);
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
         context.drawImage(image, 0, 0, canvas.width, canvas.height);
         const compressed = canvas.toDataURL('image/jpeg', quality);
         resolve(compressed && compressed.length < dataUrl.length ? compressed : dataUrl);
@@ -1176,7 +1178,7 @@
     });
   }
 
-  async function prepareImageDataUrl(file, { maxEdge = 1440, skipCompressBytes = 350 * 1024, maxBytes = MAX_BUG_IMAGE_BYTES } = {}) {
+  async function prepareImageDataUrl(file, { maxEdge = 1440, skipCompressBytes = 350 * 1024, maxBytes = MAX_BUG_IMAGE_BYTES, maxDataUrlLength = 585000 } = {}) {
     const ext = (file.name || '').match(PICTURE_FILE_RE)?.[1]?.toLowerCase() || '';
     const isImage = file.type.startsWith('image/') || Boolean(ext);
     if (!isImage) throw new Error(`"${file.name}" is not a picture file.`);
@@ -1186,11 +1188,20 @@
       dataUrl = dataUrl.replace(/^data:[^;,]*/, `data:${type}`);
     }
     if (!dataUrl.startsWith('data:image/')) throw new Error(`"${file.name}" is not a valid picture format.`);
-    if (file.size > skipCompressBytes && !/^image\/(gif|svg\+xml)$/i.test(type)) {
-      dataUrl = await compressRasterDataUrl(dataUrl, maxEdge, 0.84);
+    if (!/^image\/(gif|svg\+xml)$/i.test(type)) {
+      const passes = [[maxEdge, 0.84], [Math.min(maxEdge, 1000), 0.72], [820, 0.6], [660, 0.5]];
+      for (let i = 0; i < passes.length; i += 1) {
+        const approxBytes = Math.ceil((dataUrl.length * 3) / 4);
+        if (i === 0 && file.size <= skipCompressBytes && approxBytes <= maxBytes && dataUrl.length <= maxDataUrlLength) break;
+        if (approxBytes <= maxBytes && dataUrl.length <= maxDataUrlLength && i > 0) break;
+        const [edge, quality] = passes[i];
+        dataUrl = await compressRasterDataUrl(dataUrl, edge, quality);
+      }
     }
     const approxBytes = Math.ceil((dataUrl.length * 3) / 4);
-    if (approxBytes > maxBytes) throw new Error(`"${file.name}" is too large even after compression.`);
+    if (approxBytes > maxBytes || dataUrl.length > maxDataUrlLength) {
+      throw new Error(`"${file.name}" is still too large after compression. Please use a clearer screenshot.`);
+    }
     return { name: String(file.name || 'picture').slice(0, 120), type, dataUrl };
   }
 
@@ -2483,8 +2494,16 @@
             </div>
           </div>
           ${metaChips.length ? `<div class="record-review-meta">${metaChips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join('')}</div>` : ''}
-          ${detailText ? `<p class="record-review-detail-note">${escapeHtml(detailText)}</p>` : ''}`;
+          ${detailText ? `<p class="record-review-detail-note">${escapeHtml(detailText)}</p>` : ''}
+          ${entry.receiptUrl && String(entry.receiptUrl).startsWith('data:image/') ? `
+            <button class="record-review-receipt" type="button" id="record-review-receipt-btn">
+              <img src="${entry.receiptUrl}" alt="Attached payment receipt">
+              <span><strong>Attached payment receipt</strong><small>Tap to view full screenshot</small></span>
+            </button>` : ''}`;
         bindAvatarFallbacks(summaryBox);
+        summaryBox.querySelector('#record-review-receipt-btn')?.addEventListener('click', () => {
+          openImageViewer(entry.receiptUrl, `${personName} receipt`, `${amountText}${entry.date ? ` · ${dateLabel(entry.date)}` : ''}`);
+        });
         summaryBox.hidden = false;
       } else {
         summaryBox.innerHTML = '';
@@ -4095,13 +4114,65 @@
     if (!dialog.open) dialog.showModal();
   }
 
+  function bindReceiptPicker({ input, dropzone, preview, thumb, nameEl, clearBtn, emptyBox, onChange } = {}) {
+    let dataUrl = null;
+    const sync = (fileName = '') => {
+      const hasFile = Boolean(dataUrl);
+      if (preview) preview.hidden = !hasFile;
+      if (emptyBox) emptyBox.hidden = hasFile;
+      if (thumb) {
+        if (hasFile) thumb.src = dataUrl;
+        else thumb.removeAttribute('src');
+      }
+      if (nameEl && fileName) nameEl.textContent = fileName;
+      onChange?.(dataUrl);
+    };
+    const handleFile = async (file) => {
+      if (!file) return;
+      try {
+        const prepared = await prepareImageDataUrl(file, { maxEdge: 1200, skipCompressBytes: 120 * 1024, maxBytes: 420 * 1024 });
+        dataUrl = prepared.dataUrl;
+        sync(prepared.name);
+      } catch (error) {
+        dataUrl = null;
+        if (input) input.value = '';
+        sync();
+        toast(friendlyError(error), 'error');
+      }
+    };
+    input?.addEventListener('change', () => handleFile(input.files?.[0]));
+    if (dropzone) {
+      ['dragenter', 'dragover'].forEach((evt) => dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('is-dragover'); }));
+      ['dragleave', 'drop'].forEach((evt) => dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('is-dragover'); }));
+      dropzone.addEventListener('drop', (e) => {
+        const file = e.dataTransfer?.files?.[0];
+        if (file) handleFile(file);
+      });
+    }
+    thumb?.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (dataUrl) openImageViewer(dataUrl, 'Receipt preview', nameEl?.textContent || '');
+    });
+    clearBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dataUrl = null;
+      if (input) input.value = '';
+      sync();
+    });
+    return {
+      get: () => dataUrl,
+      clear: () => { dataUrl = null; if (input) input.value = ''; sync(); }
+    };
+  }
+
   if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
   prepareFormValidation();
   initAppUpdateChecker();
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
     checkForAppUpdate, showAppUpdatePrompt,
     get profile() { return currentProfile; }
   };

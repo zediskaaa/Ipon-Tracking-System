@@ -1369,14 +1369,20 @@ test('group payment QR, receipt uploads, and savings goal calculator are wired a
 
   assert.match(coreJs, /openImageViewer/);
   assert.match(coreJs, /prepareImageDataUrl/);
+  assert.match(coreJs, /bindReceiptPicker/);
+  assert.match(coreJs, /record-review-receipt-btn/);
 
   assert.match(css, /\.savings-layout/);
   assert.match(css, /\.goal-calc-panel/);
   assert.match(css, /\.payment-info-card/);
+  assert.match(css, /\.receipt-dropzone/);
+  assert.match(css, /\.record-review-receipt/);
   assert.match(css, /\.image-viewer-dialog/);
 
   assert.match(migration, /payment_qr_url/);
   assert.match(migration, /receipt_url/);
   assert.match(migration, /20261114_043/);
+  const migration044 = read('database/migrations/20261114_044_pending_review_receipts.sql');
+  assert.match(migration044, /20261114_044/);
 });
 
