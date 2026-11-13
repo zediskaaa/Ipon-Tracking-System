@@ -805,7 +805,7 @@ Deno.serve(async (request) => {
           ? features.map((f) => `- "${f.title}": ${f.description || 'System enhancement'}${f.requester_name ? ` (Requested by: ${f.requester_name})` : ''}`).join('\n')
           : '- General performance improvements, UI refinements, and stability enhancements across IPON.';
 
-        const prompt = `Write an official, engaging, and celebratory product release announcement for IPON (Group Savings and Financial Tracker).
+        const prompt = `Write an official, engaging, and celebratory product release announcement for myIPON (Group Savings and Financial Tracker). The system name is strictly "myIPON".
 Version: ${version}
 Release Date: ${releaseDate}
 
@@ -822,21 +822,21 @@ System-wide improvements included in this release:
 
 Please generate a JSON object with this exact structure:
 {
-  "title": "A punchy, attractive announcement title mentioning ${version}",
-  "intro": "A 1-2 paragraph fresh, engaging, non-cliché introduction celebrating this release and explaining its value to users",
+  "title": "A punchy, attractive announcement title mentioning myIPON ${version}",
+  "intro": "A 1-2 paragraph fresh, engaging, non-cliché introduction celebrating this milestone for myIPON and explaining its value to users",
   "highlights": [
     "A concise bullet point describing the first major feature with user credit if applicable",
     "A concise bullet point describing the second feature",
     "A concise bullet point describing the third feature",
     "Additional bullet points for the remaining features"
   ],
-  "outro": "A warm, inspiring 1-paragraph closing message thanking savers for their continuous feedback and encouraging them to keep reaching their financial goals"
+  "outro": "A warm, inspiring 1-paragraph closing message thanking myIPON savers for their continuous feedback and encouraging them to keep reaching their financial goals"
 }`;
 
         const aiResult = await generateWithGemini({
           apiKey: geminiKey,
           prompt,
-          systemInstruction: 'You are the head of product communications for IPON, a modern group savings platform. Write polished, engaging, inspiring release copy in English. Avoid stale corporate jargon. Output strictly valid JSON.'
+          systemInstruction: 'You are the head of product communications for myIPON, a modern group savings platform in the Philippines. The official name is strictly "myIPON". Write polished, engaging, inspiring release copy in English. Output strictly valid JSON.'
         });
 
         const title = String(aiResult.title || `System ${version} Released`).trim();

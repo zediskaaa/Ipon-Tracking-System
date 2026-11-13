@@ -873,31 +873,31 @@
   });
 
   const RELEASE_INTROS = [
-    (ver) => `Welcome to System ${ver}! We've packed this release with fresh features, community-requested improvements, and refined performance across IPON:`,
-    (ver) => `Big news for our saving community! System ${ver} is officially live, delivering our latest upgrades, community suggestions, and smoother tracking tools:`,
-    (ver) => `Introducing System ${ver}! Designed with your feedback in mind, this update rolls out powerful enhancements, modern controls, and brand new capabilities:`,
-    (ver) => `System ${ver} has arrived! Explore the newest features, workflow refinements, and user-requested updates built to elevate your daily saving journey:`,
-    (ver) => `We are thrilled to launch System ${ver}! Check out what's new, what's improved, and the latest community-driven additions now ready across the platform:`,
+    (ver) => `Welcome to System ${ver}! We've packed this release with fresh features, community-requested improvements, and refined performance across myIPON:`,
+    (ver) => `Big news for our saving community! System ${ver} is officially live on myIPON, delivering our latest upgrades, community suggestions, and smoother tracking tools:`,
+    (ver) => `Introducing System ${ver}! Designed with your feedback in mind, this myIPON update rolls out powerful enhancements, modern controls, and brand new capabilities:`,
+    (ver) => `System ${ver} has arrived! Explore the newest features, workflow refinements, and user-requested updates built to elevate your daily saving journey on myIPON:`,
+    (ver) => `We are thrilled to launch System ${ver}! Check out what's new, what's improved, and the latest community-driven additions now ready across myIPON:`,
     (ver) => `Fresh off the press: System ${ver} is here! Discover the newest improvements, upgraded tools, and community-requested features in this milestone release:`,
     (ver) => `Say hello to System ${ver}! Here is a breakdown of the new capabilities, system refinements, and user requests implemented in this rollout:`,
-    (ver) => `Another major step forward: System ${ver} is ready! We've listened to your feedback and brought a fresh wave of features and enhancements to IPON:`,
+    (ver) => `Another major step forward: System ${ver} is ready! We've listened to your feedback and brought a fresh wave of features and enhancements to myIPON:`,
     (ver) => `What an exciting release! System ${ver} brings key quality-of-life updates, community feature implementations, and system-wide performance polishes:`,
     (ver) => `Here is what is new in System ${ver}! Packed with user-inspired updates, visual upgrades, and exciting new tools for your daily group tracking:`
   ];
 
   const RELEASE_TITLES = [
-    (ver) => `System ${ver} Released`,
-    (ver) => `System ${ver} is Now Live!`,
-    (ver) => `What's New in System ${ver}`,
-    (ver) => `Introducing System ${ver}`,
-    (ver) => `System ${ver} Feature Update`,
-    (ver) => `System ${ver}: Community & Performance Rollout`,
-    (ver) => `Official Rollout: System ${ver}`,
-    (ver) => `System ${ver} Milestone Update`
+    (ver) => `myIPON ${ver} Released`,
+    (ver) => `myIPON ${ver} is Now Live!`,
+    (ver) => `What's New in myIPON ${ver}`,
+    (ver) => `Introducing myIPON ${ver}`,
+    (ver) => `myIPON ${ver} Feature Update`,
+    (ver) => `myIPON ${ver}: Community & Performance Rollout`,
+    (ver) => `Official Rollout: myIPON ${ver}`,
+    (ver) => `myIPON ${ver} Milestone Update`
   ];
 
   const RELEASE_OUTROS = [
-    () => `Thank you for contributing, testing, and helping us make IPON better with every update! Enjoy saving together.`,
+    () => `Thank you for contributing, testing, and helping us make myIPON better with every update! Enjoy saving together.`,
     () => `We're grateful for your continued support and feedback. Enjoy the new update and happy saving!`,
     () => `Your ideas drive IPON forward! Keep submitting your suggestions, and let us know what you think of this release.`,
     () => `Special thanks to our active community for shaping these improvements. More exciting updates are on the way!`,
@@ -1179,31 +1179,31 @@
         return;
       }
 
-    const prompt = `You are the product communications writer for IPON(Group Savings and Financial Tracker) ${ ver }.
-Release Date: ${ relDate }
+    const prompt = `You are the product communications writer for myIPON (Group Savings and Financial Tracker) ${ver}. The official product and system name is strictly "myIPON".
+Release Date: ${relDate}
 
-Implemented community - requested features:
-${ featuresList }
+Implemented community-requested features:
+${featuresList}
 
 Key system updates included in this rollout:
-      - Live Active Now presence indicators on member profile avatars
-        - Interactive profile picture cropper, 90 - degree rotation, and avatar controls
-          - Messenger - style announcement reactions(Heart, Thumbs up, Haha, Sad, Angry) with who - reacted modal
-            - Quick financial record entry shortcut modal on the calendar dashboard
-              - Financial records member spotlight card with personal contribution graph and totals
-                - Group administrator monthly pledge synchronization across member rosters and reports
+- Live Active Now presence indicators on member profile avatars
+- Interactive profile picture cropper, 90-degree rotation, and avatar controls
+- Messenger-style announcement reactions (Heart, Thumbs up, Haha, Sad, Angry) with who-reacted modal
+- Quick financial record entry shortcut modal on the calendar dashboard
+- Financial records member spotlight card with personal contribution graph and totals
+- Group administrator monthly pledge synchronization across member rosters and reports
 
 Generate a JSON object with this exact structure:
-      {
-        "title": "A punchy, attractive announcement title mentioning ${ver}",
-          "intro": "A 1-2 paragraph engaging, fresh intro celebrating this milestone and thanking savers",
-            "highlights": [
-              "A concise, punchy bullet point describing a key feature or community request with user credits if applicable",
-              "Another concise bullet point describing an update",
-              "Additional bullet points covering the remaining improvements"
-            ],
-              "outro": "A warm, inspiring 1-paragraph closing message encouraging saving consistency"
-      } `;
+{
+  "title": "A punchy, attractive announcement title mentioning myIPON ${ver}",
+  "intro": "A 1-2 paragraph engaging, fresh intro celebrating this milestone for myIPON, thanking savers, and highlighting platform enhancements",
+  "highlights": [
+    "A concise, punchy bullet point describing a key feature or community request with user credits if applicable",
+    "Another concise bullet point describing an update",
+    "Additional bullet points covering the remaining improvements"
+  ],
+  "outro": "A warm, inspiring 1-paragraph closing message encouraging myIPON saving consistency"
+}`;
 
     try {
       Ipon.setBusy(releaseAiBtn, true);
@@ -1215,7 +1215,7 @@ Generate a JSON object with this exact structure:
       // Action: ai-generate-release-notes (Direct client fetch to Gemini API with fallback)
       const res = await Ipon.callGemini({
         prompt,
-        systemInstruction: 'You are an expert product communicator. Write authentic, polished, encouraging release copy in English. Output strictly valid JSON.',
+        systemInstruction: 'You are an expert product communicator for myIPON, a modern group savings platform in the Philippines. The official platform name is strictly "myIPON". Write authentic, polished, encouraging release copy in English. Output strictly valid JSON.',
         jsonResponse: true
       });
 
@@ -1224,7 +1224,7 @@ Generate a JSON object with this exact structure:
         throw new Error('Gemini did not return valid release content.');
       }
 
-      const title = String(parsed.title || `System ${ ver } Released`).trim();
+      const title = String(parsed.title || `myIPON ${ver} Released`).trim();
       const intro = String(parsed.intro || '').trim();
       const outro = String(parsed.outro || '').trim();
       const highlights = Array.isArray(parsed.highlights)

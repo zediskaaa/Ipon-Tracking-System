@@ -1211,7 +1211,7 @@
         throw new Error('No Gemini API key configured. Define geminiApiKey in js/config.js or configure in Super Admin.');
       }
 
-      const prompt = `You are an expert, encouraging personal finance coach for a group savings system in the Philippines. Analyze this savings progress:
+      const prompt = `You are an expert, encouraging personal finance coach for myIPON (Group Savings and Financial Tracker) in the Philippines. The system is named "myIPON". Analyze this savings progress:
 - Goal: "${goalTitle}"
 - Target Amount: ₱${targetAmt}
 - Saved So Far: ₱${tracked} (${pct}% complete)
@@ -1222,13 +1222,13 @@ Generate helpful financial guidance. Return a valid JSON object with EXACTLY the
 {
   "forecast": "1-2 concise sentences on realistic timeline/completion based on monthly pledge and remaining balance",
   "smart_tip": "1 actionable, practical micro-saving or budget optimization tip tailored to this goal",
-  "motivation": "1 inspiring, encouraging sentence celebrating their progress and momentum"
+  "motivation": "1 inspiring, encouraging sentence celebrating their progress and momentum on myIPON"
 }`;
 
       // Action: ai-savings-insights (Direct client fetch to Gemini API with fallback)
       const res = await Ipon.callGemini({
         prompt,
-        systemInstruction: 'You are an intelligent, encouraging personal financial assistant. Respond strictly in English and valid JSON format.',
+        systemInstruction: 'You are an intelligent, encouraging personal financial assistant for myIPON savers. The platform name is strictly "myIPON". Respond strictly in English and valid JSON format.',
         jsonResponse: true
       });
 
