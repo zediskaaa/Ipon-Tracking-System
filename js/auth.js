@@ -273,7 +273,7 @@
     try {
       const eligibility = await Ipon.rpc('check_admin_request_eligibility', { p_email: email.value.trim().toLowerCase() });
       if (eligibility?.reason === 'rejected') {
-        setFieldError(email, 'This email was declined for administrator access and cannot request again.');
+        setFieldError(email, 'This email was declined and cannot register again.');
       }
     } catch (_) { }
   });
@@ -284,7 +284,7 @@
     message.textContent = '';
     if (!validateForm()) return;
 
-    Ipon.setBusy(submit, true, mode === 'signup' ? 'Submitting administrator access…' : 'Signing in...');
+    Ipon.setBusy(submit, true, mode === 'signup' ? 'Creating account…' : 'Signing in...');
     try {
       if (mode === 'signup') {
         const first = Ipon.normalizeNamePart(firstName.value);
@@ -294,8 +294,8 @@
         const submittedEmail = email.value.trim().toLowerCase();
         const eligibility = await Ipon.rpc('check_admin_request_eligibility', { p_email: submittedEmail });
         if (eligibility && !eligibility.eligible) {
-          const fallbackMsg = eligibility.message || 'This email cannot submit an administrator request.';
-          setFieldError(email, eligibility.reason === 'rejected' ? 'This email was declined for administrator access and cannot request again.' : fallbackMsg);
+          const fallbackMsg = eligibility.message || 'This email cannot register.';
+          setFieldError(email, eligibility.reason === 'rejected' ? 'This email was declined and cannot register again.' : fallbackMsg);
           message.textContent = fallbackMsg;
           email.focus();
           return;
@@ -466,20 +466,14 @@
         full_name: pendingSignupPayload.full
       });
       if (res?.error) throw new Error(res.error);
-      if (res?.bypassed || !res?.email_sent) {
-        await completeAdminRequestSubmission(pendingSignupPayload);
-        return;
-      }
       const verifyTimer = document.getElementById('request-verify-timer');
-      if (res?.code) {
-        if (verifyCode) {
-          verifyCode.value = res.code;
-        }
-        if (verifyTimer) {
-          verifyTimer.innerHTML = `Code expires in 10 minutes. If email is delayed: <strong style="color:var(--green);font-size:15px;letter-spacing:2px;background:#e1f5e8;padding:2px 8px;border-radius:6px;display:inline-block;margin-top:4px;">${res.code}</strong>`;
-        }
+      if (verifyCode) {
+        verifyCode.value = '';
       }
-      Ipon.toast(`Verification code resent to ${pendingSignupPayload.email}.`);
+      if (verifyTimer) {
+        verifyTimer.textContent = 'Code expires in 10 minutes.';
+      }
+      Ipon.toast(`Verification code resent to ${pendingSignupPayload.email}. Please check your inbox or spam folder.`);
       verifyCode?.focus();
     } catch (err) {
       if (verifyError) {
@@ -513,11 +507,6 @@
 
       requestConfirmDialog?.close();
 
-      if (otpOutcome?.bypassed || !otpOutcome?.email_sent) {
-        await completeAdminRequestSubmission(pendingSignupPayload);
-        return;
-      }
-
       if (verifySubtitle) {
         verifySubtitle.textContent = `Enter the 6-digit verification code sent to ${pendingSignupPayload.email}.`;
       }
@@ -526,19 +515,15 @@
         verifyError.textContent = '';
       }
       const verifyTimer = document.getElementById('request-verify-timer');
-      if (otpOutcome?.code) {
-        if (verifyCode) {
-          verifyCode.value = otpOutcome.code;
-        }
-        if (verifyTimer) {
-          verifyTimer.innerHTML = `Code expires in 10 minutes. If email is delayed: <strong style="color:var(--green);font-size:15px;letter-spacing:2px;background:#e1f5e8;padding:2px 8px;border-radius:6px;display:inline-block;margin-top:4px;">${otpOutcome.code}</strong>`;
-        }
-      } else if (verifyCode) {
+      if (verifyTimer) {
+        verifyTimer.textContent = 'Code expires in 10 minutes.';
+      }
+      if (verifyCode) {
         verifyCode.value = '';
       }
       verifyDialog?.showModal();
       verifyCode?.focus();
-      Ipon.toast(`Verification code sent to ${pendingSignupPayload.email}.`);
+      Ipon.toast(`Verification code sent to ${pendingSignupPayload.email}. Please check your inbox or spam folder.`);
     } catch (err) {
       Ipon.toast(Ipon.friendlyError(err), 'error');
     } finally {

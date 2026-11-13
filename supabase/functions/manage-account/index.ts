@@ -99,6 +99,7 @@ async function deliverEmail({
     } else {
       const brevoPayload: Record<string, unknown> = {
         sender,
+        replyTo: sender,
         to: [{ email: toEmail, name: recipientName }],
         subject,
         htmlContent: html,
@@ -380,30 +381,30 @@ async function sendAdminRequestOtpEmail({
   code: string;
   senderEmail?: string | null;
 }) {
-  const safeName = String(recipientName || '').trim() || 'Applicant';
+  const safeName = String(recipientName || '').trim() || 'Saver';
   const subject = `Your ${SYSTEM_NAME} verification code is ${code}`;
   const plainText = [
     `Hello ${safeName},`,
     '',
-    `Your email verification code for requesting administrator access on ${SYSTEM_NAME} is:`,
+    `Your email verification code for activating your ${SYSTEM_NAME} account is:`,
     '',
     code,
     '',
     'This verification code expires in 10 minutes.',
-    'If you did not request administrator access on IPON, please ignore this email. No account or request has been created.'
+    'If you did not sign up for myIPON, please ignore this email. No account has been created.'
   ].join('\n');
 
   const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #163029; line-height: 1.55; max-width: 540px; margin: 0 auto; padding: 24px; background: #fbf9f2; border: 1px solid #d9d6c8; border-radius: 14px;">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #163029; line-height: 1.55; max-width: 540px; margin: 0 auto; padding: 24px; background: #fbf9f2; border: 1px solid #d9d6c8; border-radius: 14px;">
       <p style="margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #1f6a43;">${escapeHtml(SYSTEM_NAME)}</p>
-      <h2 style="margin: 0 0 12px; font-size: 20px; color: #163029;">Confirm your email address</h2>
+      <h2 style="margin: 0 0 12px; font-size: 20px; color: #163029;">Verify your email address</h2>
       <p style="margin: 0 0 14px;">Hello <strong>${escapeHtml(safeName)}</strong>,</p>
-      <p style="margin: 0 0 18px;">Enter the 6-digit verification code below to verify that you own this email address and complete your administrator request on <strong>${escapeHtml(SYSTEM_NAME)}</strong>:</p>
+      <p style="margin: 0 0 18px;">Enter the 6-digit verification code below to verify your email address and activate your account on <strong>${escapeHtml(SYSTEM_NAME)}</strong>:</p>
       <div style="margin: 0 0 18px; padding: 16px 20px; background: #ffffff; border: 1px solid #c9c5b5; border-radius: 12px; text-align: center;">
         <span style="font-family: monospace, Consolas, sans-serif; font-size: 32px; font-weight: 700; letter-spacing: 0.35em; color: #163029;">${escapeHtml(code)}</span>
       </div>
       <p style="margin: 0 0 14px; font-size: 13px; color: #5c5749;">This verification code will expire in <strong>10 minutes</strong>.</p>
-      <p style="margin: 0; font-size: 12px; color: #7a7566; border-top: 1px solid #e0ddd0; padding-top: 14px;">If you did not submit this request, you can safely ignore this email. No administrator request or account will be created without this verification code.</p>
+      <p style="margin: 0; font-size: 12px; color: #7a7566; border-top: 1px solid #e0ddd0; padding-top: 14px;">If you did not sign up for myIPON, you can safely ignore this email.</p>
     </div>
   `.trim();
 
@@ -549,26 +550,17 @@ Deno.serve(async (request) => {
     });
 
     if (!emailOutcome.email_sent) {
-      await admin
-        .from('email_verifications')
-        .update({ verified_at: new Date().toISOString() })
-        .eq('email', email)
-        .eq('purpose', 'ADMIN_REQUEST');
-
       return json({
-        success: true,
+        success: false,
         email_sent: false,
-        email_error: emailOutcome.email_error,
-        code: result.code,
-        bypassed: true
-      });
+        error: emailOutcome.email_error || 'Could not deliver verification email. Please check your email address or try again.'
+      }, 400);
     }
 
     return json({
       success: true,
       email_sent: true,
-      email_error: null,
-      code: result.code
+      email_error: null
     });
   }
 
