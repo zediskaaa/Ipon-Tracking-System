@@ -66,14 +66,26 @@
   const nameRule = "Use letters, spaces, hyphens, or apostrophes only.";
   let mode = 'login';
 
+  const dismissSplash = () => {
+    const splash = document.getElementById('app-splash');
+    if (!splash) return;
+    splash.classList.add('is-hidden');
+    setTimeout(() => { try { splash.remove(); } catch (_) { } }, 450);
+  };
+  setTimeout(dismissSplash, 2000);
+
   const state = await Ipon.init({ requireAuth: false, allowPending: true });
   Ipon.setLoading(false);
-  if (state.failed) return;
+  if (state.failed) {
+    dismissSplash();
+    return;
+  }
   if (state.session && state.profile?.status === 'ACTIVE') {
     Ipon.setLoading(true, 'Opening your records…');
     window.location.replace(Ipon.homeForRole(state.profile.role));
     return;
   }
+  setTimeout(dismissSplash, 600);
   if (!state.configured) {
     message.textContent = 'Add your Supabase URL and anon key in js/config.js before signing in.';
     submit.disabled = true;
