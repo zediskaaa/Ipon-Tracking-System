@@ -182,7 +182,7 @@ async function sendInviteEmail({
     : `Email: ${toEmail}\nTemporary password: ${temporaryPassword}`;
   const noteLine = existingAccount
     ? 'Sign in with your existing account and check your notifications to accept the invitation.'
-    : 'Click the Accept Invitation button to activate your account. Your login credentials will become active once you accept the invitation.';
+    : '';
   const plainText = [
     `Hello ${recipientName},`,
     '',
@@ -193,8 +193,7 @@ async function sendInviteEmail({
       : `Sign in here: ${loginUrl}`,
     '',
     credentialBlock,
-    '',
-    noteLine
+    ...(noteLine ? ['', noteLine] : [])
   ].join('\n');
 
   const html = `
@@ -221,7 +220,7 @@ async function sendInviteEmail({
       <p style="margin: 0 0 18px;">
         <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #163029; color: #ffffff; text-decoration: none; font-weight: 600; padding: 10px 18px; border-radius: 10px;">Sign in to ${escapeHtml(SYSTEM_NAME)}</a>
       </p>` : ''}
-      <p style="margin: 0 0 14px; font-size: 13px; color: #5c5749;">${escapeHtml(noteLine)}</p>
+      ${noteLine ? `<p style="margin: 0 0 14px; font-size: 13px; color: #5c5749;">${escapeHtml(noteLine)}</p>` : ''}
       <div style="padding: 10px 14px; background: #f0ede1; border-radius: 8px; font-size: 12px; color: #6d6552; border: 1px dashed #cfcaba;">
         <strong>Tip:</strong> If this email appeared in your Spam or Junk folder, please click <strong>"Report not spam"</strong> or move it to your Inbox so that future savings notifications arrive directly in your inbox.
       </div>
