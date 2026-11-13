@@ -16,6 +16,7 @@
   let quickMfaController = null;
   const STARTUP_TIMEOUT_MS = 15000;
   let loaderSafetyTimer = null;
+  let navLoaderTimer = null;
 
   if (!document.querySelector('link[rel="manifest"]')) {
     document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#0b3428"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="IPON"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/icon-192.png">');
@@ -26,7 +27,10 @@
 
   if (document.body.dataset.page) {
     if (!document.body.classList.contains('security-page')) setLoading(true);
-    window.addEventListener('pagehide', () => { document.documentElement.style.visibility = 'hidden'; });
+    window.addEventListener('pagehide', (event) => {
+      if (navLoaderTimer) { clearTimeout(navLoaderTimer); navLoaderTimer = null; }
+      if (event.persisted) document.documentElement.style.visibility = 'hidden';
+    });
     window.addEventListener('pageshow', async (event) => {
       if (!event.persisted) return;
       const client = getClient();
@@ -54,7 +58,8 @@
         navLink.classList.add('is-active');
         navLink.setAttribute('aria-current', 'page');
       }
-      setLoading(true);
+      if (navLoaderTimer) clearTimeout(navLoaderTimer);
+      navLoaderTimer = window.setTimeout(() => setLoading(true), 220);
     });
   }
 
