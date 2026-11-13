@@ -709,7 +709,17 @@
         });
       } catch (_) {
         if (actionType === 'DELETE') {
-          await Ipon.rpc('super_admin_delete_user', { p_user_id: userId });
+          try {
+            await Ipon.rpc('super_admin_delete_user', { p_user_id: userId });
+          } catch (deleteErr) {
+            await Ipon.rpc('super_admin_set_administrator_status', {
+              p_user_id: userId,
+              p_status: 'DISABLED'
+            }).catch(() => {});
+            await Ipon.client.from('groups').update({ status: 'SUSPENDED', owner_id: null }).eq('owner_id', userId).catch(() => {});
+            await Ipon.client.from('group_memberships').delete().eq('user_id', userId).catch(() => {});
+            await Ipon.client.from('profiles').delete().eq('id', userId).catch(() => {});
+          }
         } else {
           await Ipon.rpc('super_admin_set_administrator_status', {
             p_user_id: userId,

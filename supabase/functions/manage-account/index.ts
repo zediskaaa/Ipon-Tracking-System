@@ -861,9 +861,14 @@ Deno.serve(async (request) => {
         p_status: 'ACTIVE'
       });
     } else if (actionType === 'DELETE') {
-      await caller.rpc('super_admin_delete_user', {
+      const { error: rpcError } = await caller.rpc('super_admin_delete_user', {
         p_user_id: targetUserId
       });
+      if (rpcError) {
+        await admin.from('groups').update({ owner_id: null, status: 'SUSPENDED' }).eq('owner_id', targetUserId);
+        await admin.from('group_memberships').delete().eq('user_id', targetUserId);
+        await admin.from('profiles').delete().eq('id', targetUserId);
+      }
       await admin.auth.admin.deleteUser(targetUserId).catch(() => null);
     }
 

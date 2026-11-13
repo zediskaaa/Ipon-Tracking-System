@@ -118,6 +118,7 @@
   }
 
   const passwordStrength = Ipon.bindPasswordStrength(password, () => [firstName.value, middleName.value, lastName.value, email.value]);
+  passwordConfirmationField?.after(passwordStrength.element);
   passwordStrength.element.hidden = true;
 
   function validateForm() {
@@ -190,7 +191,7 @@
     requestReason.required = false;
     passwordConfirmationField.hidden = !signup;
     passwordConfirmation.required = signup;
-    passwordRequirements.hidden = true;
+    if (passwordRequirements) passwordRequirements.hidden = true;
     passwordStrength.element.hidden = !signup;
     forgotButton.hidden = signup;
     password.autocomplete = signup ? 'new-password' : 'current-password';
