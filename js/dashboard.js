@@ -497,18 +497,6 @@
       const progress = (progressResult.data || []).filter((item) => activeIds.has(item.member_id) || Number(item.paid_amount || 0) > 0);
       const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
       document.getElementById('dashboard-members').textContent = memberResult.count ?? (memberResult.data?.length || 0); document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; renderGoalOptions(goalResult.data || []);
-      lastDashboardSnapshot = {
-        groupName: currentGroup?.name || 'Savings Group',
-        summary,
-        membersCount: memberResult.count ?? (memberResult.data?.length || 0),
-        members: (memberResult.data || []).map((m) => ({ name: m.full_name, monthly_pledge: Number(m.monthly_contribution_amount || 0) })),
-        paidCount: paid,
-        unpaidCount: unpaid,
-        monthCollected: progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0),
-        pendingCount: Number(pending.count || 0),
-        pendingAmount: Number(pending.amount || 0),
-        goals: activeGoalsList
-      };
       populateQuickRecordMembers(memberResult.data || []);
       updateDashboardGoalProgress(summary.tracked_savings);
       renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
@@ -1234,108 +1222,6 @@
   const aiGoalMetaEl = document.getElementById('ai-insights-goal-meta');
   const aiGoalBarEl = document.getElementById('ai-insights-goal-bar');
   const aiGoalRemainingEl = document.getElementById('ai-insights-goal-remaining');
-  const aiCoachMessages = document.getElementById('ai-coach-messages');
-  const aiCoachChips = document.getElementById('ai-coach-chips');
-  const aiCoachForm = document.getElementById('ai-coach-form');
-  const aiCoachInput = document.getElementById('ai-coach-input');
-  const aiCoachSend = document.getElementById('ai-coach-send');
-  const aiCoachClear = document.getElementById('ai-coach-clear');
-  let lastCoachContext = null;
-  let lastDashboardSnapshot = null;
-  const coachChatHistory = [];
-
-  function buildCoachContext(monthlyPledge = 0) {
-    let targetGoal = null;
-    if (selectedGoalId) {
-      targetGoal = activeGoalsList.find((g) => g.id === selectedGoalId);
-    } else if (activeGoalsList.length > 0) {
-      targetGoal = activeGoalsList[0];
-    }
-    const goalTitle = targetGoal?.title || 'General Savings';
-    const targetAmt = Number(targetGoal?.target_amount || 0);
-    const tracked = Number(lastTrackedSavings || 0);
-    const targetDate = targetGoal?.target_date || '';
-    const remaining = Math.max(0, targetAmt - tracked);
-    const pct = targetAmt > 0 ? Math.min(100, Math.round((tracked / targetAmt) * 100)) : 0;
-    const today = new Date(`${Ipon.isoDate()}T00:00:00`);
-    const end = targetDate ? new Date(`${targetDate}T00:00:00`) : null;
-    const daysLeft = end && !Number.isNaN(end.getTime()) ? Math.max(0, Math.round((end - today) / 86400000)) : 0;
-    const membersCount = Math.max(1, Number(document.getElementById('dashboard-members')?.textContent) || 1);
-    return { goalTitle, targetAmt, tracked, remaining, pct, monthlyPledge, targetDate, daysLeft, membersCount };
-  }
-
-  function appendCoachMessage(role, text) {
-    if (!aiCoachMessages) return;
-    aiCoachMessages.hidden = false;
-    if (aiCoachClear) aiCoachClear.hidden = false;
-    const item = document.createElement('div');
-    item.className = `ai-coach-msg ${role === 'user' ? 'is-user' : 'is-coach'}`;
-    item.textContent = text;
-    aiCoachMessages.appendChild(item);
-    aiCoachMessages.scrollTop = aiCoachMessages.scrollHeight;
-  }
-
-  async function answerCoachQuestion(question) {
-    const ctx = lastCoachContext || buildCoachContext(0);
-    const q = String(question || '').trim();
-    if (!q) return '';
-
-    const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
-    const priorHistory = coachChatHistory.slice(-8);
-
-    try {
-      const backendRes = await Ipon.invokeAccountFunction({
-        action: 'ai-coach-chat',
-        question: q,
-        history: priorHistory,
-        selected_goal_id: selectedGoalId || '',
-        month: monthIso(cursor),
-        api_key: apiKey || ''
-      });
-      if (backendRes?.reply) {
-        return String(backendRes.reply).trim();
-      }
-      if (backendRes?.error) {
-        if (/create this account type/i.test(String(backendRes.error))) {
-          throw new Error('AI Coach server function needs to be deployed to Supabase production first.');
-        }
-        throw new Error(backendRes.error);
-      }
-    } catch (backendErr) {
-      if (apiKey) {
-        const snap = lastDashboardSnapshot || {};
-        const res = await Ipon.callGemini({
-          prompt: `LIVE SYSTEM DATA:\n${JSON.stringify({ focus_goal: ctx, snapshot: snap })}\n\nRecent conversation: ${JSON.stringify(priorHistory)}\nUser message: "${q}"`,
-          systemInstruction: 'You are myIPON AI Savings Coach, grounded strictly in the live system data provided. Never invent numbers or transactions. Respond warmly and naturally in 1-4 concise sentences in the language used by the user.',
-          jsonResponse: false
-        });
-        if (res?.text) return String(res.text).trim();
-      }
-      if (/create this account type/i.test(String(backendErr?.message || ''))) {
-        throw new Error('AI Coach server function needs to be deployed to Supabase production first.');
-      }
-      throw backendErr;
-    }
-    throw new Error('Could not get a response from AI Coach right now.');
-  }
-
-  async function handleCoachAsk(question) {
-    const q = String(question || '').trim();
-    if (!q) return;
-    appendCoachMessage('user', q);
-    if (aiCoachInput) aiCoachInput.value = '';
-    if (aiCoachSend) Ipon.setBusy(aiCoachSend, true, '…');
-    try {
-      const reply = await answerCoachQuestion(q);
-      coachChatHistory.push({ role: 'user', text: q });
-      coachChatHistory.push({ role: 'coach', text: reply });
-      appendCoachMessage('coach', reply);
-    } catch (error) {
-      appendCoachMessage('coach', error?.message || 'AI Coach is temporarily unavailable. Please try again in a moment.');
-    } finally {
-      if (aiCoachSend) Ipon.setBusy(aiCoachSend, false);
-    }
-  }
 
   function applyLocalInsightsFallback({ targetAmt, tracked, remaining, pct, monthlyPledge, targetDate, forceOverwrite = true }) {
     const monthsNeeded = monthlyPledge > 0 ? Math.ceil(remaining / monthlyPledge) : 0;
@@ -1398,8 +1284,18 @@
   }
 
   async function fetchAndRenderAiInsights(showRefreshToast = false) {
-    const { goalTitle, targetAmt, tracked, remaining, pct, targetDate } = buildCoachContext(0);
-    lastCoachContext = buildCoachContext(0);
+    let targetGoal = null;
+    if (selectedGoalId) {
+      targetGoal = activeGoalsList.find((g) => g.id === selectedGoalId);
+    } else if (activeGoalsList.length > 0) {
+      targetGoal = activeGoalsList[0];
+    }
+    const goalTitle = targetGoal?.title || 'General Savings';
+    const targetAmt = Number(targetGoal?.target_amount || 0);
+    const tracked = Number(lastTrackedSavings || 0);
+    const targetDate = targetGoal?.target_date || '';
+    const remaining = Math.max(0, targetAmt - tracked);
+    const pct = targetAmt > 0 ? Math.min(100, Math.round((tracked / targetAmt) * 100)) : 0;
 
     if (aiGoalNameEl) aiGoalNameEl.textContent = goalTitle;
     if (aiGoalMetaEl) aiGoalMetaEl.textContent = targetAmt > 0 ? `${Ipon.money(tracked)} / ${Ipon.money(targetAmt)} (${pct}%)` : Ipon.money(tracked);
@@ -1427,29 +1323,10 @@
       monthlyPledge = Number(setRow?.default_amount || 0);
     } catch (_) { }
 
-    lastCoachContext = buildCoachContext(monthlyPledge);
     applyLocalInsightsFallback({ targetAmt, tracked, remaining, pct, monthlyPledge, targetDate, forceOverwrite: false });
 
     try {
       const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
-      const backendRes = await Ipon.invokeAccountFunction({
-        action: 'ai-savings-insights',
-        goal_name: goalTitle,
-        target_amount: targetAmt,
-        current_saved: tracked,
-        monthly_pledge: monthlyPledge,
-        target_date: targetDate,
-        month: monthIso(cursor),
-        api_key: apiKey || ''
-      });
-      if (backendRes?.forecast) {
-        if (aiForecastText) aiForecastText.textContent = backendRes.forecast;
-        if (aiTipText) aiTipText.textContent = backendRes.smart_tip || 'Regular deposits build steady momentum.';
-        if (aiMotivationText) aiMotivationText.textContent = backendRes.motivation || 'Consistency beats intensity every time!';
-        if (showRefreshToast) Ipon.toast('Savings insights updated.');
-        return;
-      }
-
       if (apiKey) {
         const prompt = `You are an expert, encouraging personal finance coach for myIPON (Group Savings and Financial Tracker) in the Philippines. Analyze this savings progress:
 - Goal: "${goalTitle}"
@@ -1477,6 +1354,22 @@ Return a valid JSON object with EXACTLY these three keys:
           if (showRefreshToast) Ipon.toast('Savings insights updated.');
           return;
         }
+      }
+
+      const backendRes = await Ipon.invokeAccountFunction({
+        action: 'ai-savings-insights',
+        goal_name: goalTitle,
+        target_amount: targetAmt,
+        current_saved: tracked,
+        monthly_pledge: monthlyPledge,
+        target_date: targetDate
+      });
+      if (backendRes?.forecast) {
+        if (aiForecastText) aiForecastText.textContent = backendRes.forecast;
+        if (aiTipText) aiTipText.textContent = backendRes.smart_tip || 'Regular deposits build steady momentum.';
+        if (aiMotivationText) aiMotivationText.textContent = backendRes.motivation || 'Consistency beats intensity every time!';
+        if (showRefreshToast) Ipon.toast('Savings insights updated.');
+        return;
       }
     } catch (_) {
       // Fallback below handles offline / unconfigured environments cleanly
@@ -1509,22 +1402,6 @@ Return a valid JSON object with EXACTLY these three keys:
   aiInsightsRefresh?.addEventListener('click', () => {
     Ipon.setBusy(aiInsightsRefresh, true);
     fetchAndRenderAiInsights(true).finally(() => Ipon.setBusy(aiInsightsRefresh, false));
-  });
-  aiCoachChips?.addEventListener('click', (event) => {
-    const chip = event.target.closest('[data-coach-prompt]');
-    if (chip) handleCoachAsk(chip.dataset.coachPrompt);
-  });
-  aiCoachForm?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    handleCoachAsk(aiCoachInput?.value);
-  });
-  aiCoachClear?.addEventListener('click', () => {
-    coachChatHistory.length = 0;
-    if (aiCoachMessages) {
-      aiCoachMessages.innerHTML = '';
-      aiCoachMessages.hidden = true;
-    }
-    aiCoachClear.hidden = true;
   });
   renderCalendar([]);
   state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });

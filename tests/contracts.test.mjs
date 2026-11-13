@@ -1214,9 +1214,7 @@ test('system integrates Gemini AI for release updates and smart savings financia
   assert.match(edge, /generateProceduralReleaseNotes/);
   assert.match(edge, /action === 'ai-generate-release-notes'/);
   assert.match(edge, /action === 'ai-savings-insights'/);
-  assert.match(edge, /action === 'ai-coach-chat'/);
   assert.match(edge, /action === 'test-gemini-key'/);
-  assert.match(edge, /loadGroupCoachSnapshot/);
   assert.match(edge, /gemini-1\.5-flash/);
 
   assert.match(superAdminHtml, /id="release-update-ai-btn"/);
@@ -1237,21 +1235,17 @@ test('system integrates Gemini AI for release updates and smart savings financia
   assert.match(dashboardHtml, /id="ai-forecast-text"/);
   assert.match(dashboardHtml, /id="ai-tip-text"/);
   assert.match(dashboardHtml, /id="ai-motivation-text"/);
-  assert.match(dashboardHtml, /id="ai-coach-form"/);
-  assert.match(dashboardHtml, /id="ai-coach-messages"/);
 
   assert.match(dashboardJs, /ai-insights-dialog/);
   assert.match(dashboardJs, /ai-savings-insights/);
   assert.match(dashboardJs, /current_saved/);
   assert.match(dashboardJs, /applyLocalInsightsFallback/);
-  assert.match(dashboardJs, /answerCoachQuestion/);
 
   assert.match(css, /\.button-ai-trigger/);
   assert.match(css, /\.button-ai-inline/);
   assert.match(css, /\.ai-insights-dialog/);
   assert.match(css, /\.ai-back-btn/);
   assert.match(css, /\.ai-insight-card/);
-  assert.match(css, /\.ai-coach-chat/);
 });
 
 test('self-serve group creation, direct signup, and interactive invitation acceptance/decline', () => {

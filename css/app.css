@@ -1015,22 +1015,6 @@ input::-ms-reveal,input::-ms-clear{display:none!important}
 .ai-insight-card.is-expanded .ai-insight-chevron{transform:rotate(90deg);stroke:#0b5e42}
 .ai-insight-card-content p{margin:0;font-size:13.5px;line-height:1.52;color:#374151}
 .ai-insight-detail{margin-top:6px;padding-top:8px;border-top:1px dashed rgba(20,45,43,.14);font-size:12px;font-weight:600;line-height:1.45;color:#0b5e42}
-.ai-coach-chat{display:grid;gap:10px;padding:13px 14px;border-radius:14px;background:rgba(255,255,255,.84);border:1px solid rgba(20,45,43,.11);box-shadow:0 3px 10px rgba(20,45,43,.04)}
-.ai-coach-chat-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.ai-coach-chat-head strong{font-size:13px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
-.ai-coach-clear{border:0;background:transparent;padding:2px 6px;font:700 11.5px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--muted);cursor:pointer;border-radius:6px}
-.ai-coach-clear:hover{color:var(--red);background:rgba(174,57,52,.08)}
-.ai-coach-chips{display:flex;flex-wrap:wrap;gap:6px}
-.ai-coach-chip{border:1px solid rgba(11,94,66,.22);background:#f3faf6;color:#0b5e42;padding:5px 10px;border-radius:999px;font:700 11.5px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;cursor:pointer;transition:background-color .15s ease,border-color .15s ease,transform .12s ease}
-.ai-coach-chip:hover{background:#dcfce7;border-color:#0b5e42;transform:translateY(-1px)}
-.ai-coach-messages{display:grid;gap:8px;max-height:180px;overflow-y:auto;padding:4px 2px}
-.ai-coach-msg{max-width:90%;padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.48;word-break:break-word}
-.ai-coach-msg.is-user{justify-self:end;background:#0b3428;color:#f5eadb;border-bottom-right-radius:4px;font-weight:600}
-.ai-coach-msg.is-coach{justify-self:start;background:#fdfbf7;border:1px solid rgba(20,45,43,.12);color:var(--ink);border-bottom-left-radius:4px}
-.ai-coach-form{display:flex;align-items:center;gap:8px;padding:0!important}
-.ai-coach-input{flex:1;min-width:0;min-height:38px;padding:8px 12px;border:1.5px solid rgba(20,45,43,.16);border-radius:999px;background:#fff;color:var(--ink);font-size:13px}
-.ai-coach-input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(40,122,76,.12)}
-.ai-coach-send{min-height:38px!important;padding:0 16px!important;border-radius:999px!important;flex-shrink:0}
 .ai-insights-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 20px 18px;border-top:1px solid var(--rule);background:rgba(255,253,249,.8)}
 
 /* Universal High-End Select & Dropdown Styling */
