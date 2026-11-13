@@ -877,6 +877,8 @@ button,a { color:inherit; font:inherit; }
   border-radius:16px;
   background:#fbf7f0;
   box-shadow:0 8px 26px rgba(20,45,43,.06), 0 1px 3px rgba(20,45,43,.04);
+  min-width:0;
+  overflow:hidden;
 }
 .announcement-panel-header {
   display:flex;
