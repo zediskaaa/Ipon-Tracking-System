@@ -1413,3 +1413,40 @@ test('group payment QR, receipt uploads, and savings goal calculator are wired a
   assert.match(css, /\.ptr-spinner/);
 });
 
+test('role-based notifications and device drawer alerts are wired across SQL, SW, Android, and UI', () => {
+  const migration046 = read('database/migrations/20261114_046_complete_role_notifications.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+  const accountHtml = read('account.html');
+  const accountJs = read('js/account.js');
+  const sw = read('sw.js');
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
+  const pkg = JSON.parse(read('package.json'));
+
+  assert.match(migration046, /create or replace function public\.group_admin_ids/i);
+  assert.match(migration046, /create or replace function public\.notify_record_activity/i);
+  assert.match(migration046, /create or replace function public\.notify_feature_request_created/i);
+  assert.match(migration046, /create or replace function public\.notify_bug_report_created/i);
+  assert.match(migration046, /create or replace function public\.notify_announcement_created/i);
+  assert.match(migration046, /create or replace function public\.sync_my_due_reminders/i);
+  assert.match(migration046, /new\.role in \('MEMBER', 'TREASURER'\)/i);
+  assert.match(migration046, /'ACCESS_UPDATED'/);
+  assert.match(migration046, /'GROUP_INVITE_ACCEPTED'/);
+  assert.match(migration046, /'GROUP_INVITE_DECLINED'/);
+  assert.match(migration046, /'FEATURE_REQUEST_REVIEWED'/);
+  assert.match(migration046, /20261114_046/);
+  assert.match(schema, /20261114_046/);
+
+  assert.match(manifest, /android\.permission\.POST_NOTIFICATIONS/);
+  assert.ok(pkg.devDependencies['@capacitor/local-notifications'], 'Capacitor LocalNotifications must be installed');
+  assert.match(sw, /addEventListener\('push'/);
+  assert.match(sw, /addEventListener\('notificationclick'/);
+  assert.match(core, /dispatchDeviceNotification/);
+  assert.match(core, /requestDeviceNotificationPermission/);
+  assert.match(core, /scheduleNativeDueReminders/);
+  assert.match(core, /bindDeviceNotificationControls/);
+  assert.match(core, /sync_my_due_reminders/);
+  assert.match(accountHtml, /data-device-notif-row/);
+  assert.match(accountJs, /bindDeviceNotificationControls/);
+});
+

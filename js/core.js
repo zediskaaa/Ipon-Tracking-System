@@ -714,7 +714,7 @@
           <div class="account-dialog-content">
             <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.1 7.5 9.5 4.3-1.4 7.5-4.7 7.5-9.5V6L12 3Z"/><path d="M9.5 12.2 11.3 14l3.5-4"/></svg></span><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
-            <section class="account-card account-preferences"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg></span><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label></section></div>
+            <section class="account-card account-preferences"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg></span><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label><div class="preference-row preference-device-row" data-device-notif-row><span><strong>Phone &amp; drawer alerts</strong><small data-device-notif-status>Checking device permission…</small></span><button class="button button-secondary button-sm" type="button" data-device-notif-btn>Enable alerts</button></div></section></div>
           </div>
         </div>
       </dialog>
@@ -1322,6 +1322,10 @@
     document.querySelectorAll('[data-notifications-open]').forEach((button) => button.onclick = () => {
       if (!notifications) return;
       if (notifications.open) return notifications.close();
+      if (currentProfile?.notifications_enabled !== false && !localStorage.getItem('myipon_device_notif_prompted')) {
+        localStorage.setItem('myipon_device_notif_prompted', '1');
+        requestDeviceNotificationPermission({ userInitiated: true }).catch(() => { });
+      }
       const compactHeader = window.matchMedia('(max-width:720px)').matches
         || (button.closest('.dashboard-sidebar') && window.matchMedia('(max-width:860px)').matches);
       if (compactHeader) {
@@ -1998,16 +2002,298 @@
       sessionStorage.getItem('myipon_is_app') === '1';
   }
 
+  let androidChannelReady = false;
+  let nativeNotifListenerAttached = false;
+
+  function getLocalNotificationsPlugin() {
+    return window.Capacitor?.Plugins?.LocalNotifications || null;
+  }
+
+  async function ensureAndroidNotificationChannel() {
+    const plugin = getLocalNotificationsPlugin();
+    if (!plugin || androidChannelReady) return;
+    androidChannelReady = true;
+    try {
+      await plugin.createChannel?.({
+        id: 'myipon_alerts',
+        name: 'myIPON Alerts',
+        description: 'Role updates, approvals, announcements, and due reminders',
+        importance: 4,
+        visibility: 1,
+        vibration: true
+      });
+    } catch {
+      androidChannelReady = false;
+    }
+  }
+
+  function normalizeNotificationPermission(value) {
+    if (value === 'granted') return 'granted';
+    if (value === 'denied') return 'denied';
+    if (value === 'prompt' || value === 'prompt-with-rationale' || value === 'default') return 'default';
+    return 'unsupported';
+  }
+
+  async function getDeviceNotificationPermission() {
+    const plugin = getLocalNotificationsPlugin();
+    if (plugin?.checkPermissions) {
+      try {
+        const res = await plugin.checkPermissions();
+        return normalizeNotificationPermission(res?.display);
+      } catch {
+        return 'unsupported';
+      }
+    }
+    if ('Notification' in window) return normalizeNotificationPermission(Notification.permission);
+    return 'unsupported';
+  }
+
+  async function syncDevicePermissionUI() {
+    const rows = document.querySelectorAll('[data-device-notif-row]');
+    if (!rows.length) return;
+    const status = await getDeviceNotificationPermission();
+    rows.forEach((row) => {
+      const label = row.querySelector('[data-device-notif-status]');
+      const button = row.querySelector('[data-device-notif-btn]');
+      if (!label || !button) return;
+      if (status === 'granted') {
+        label.textContent = 'Enabled — new alerts appear in your phone notification drawer.';
+        button.textContent = 'Enabled';
+        button.disabled = true;
+        button.hidden = false;
+      } else if (status === 'denied') {
+        label.textContent = 'Blocked in device or browser settings. Allow notifications to see drawer alerts.';
+        button.textContent = 'Blocked';
+        button.disabled = true;
+        button.hidden = false;
+      } else if (status === 'default') {
+        label.textContent = 'Permission needed so alerts appear in your phone notification drawer.';
+        button.textContent = 'Allow notifications';
+        button.disabled = false;
+        button.hidden = false;
+      } else {
+        label.textContent = 'Device notification drawer alerts are unavailable on this browser.';
+        button.hidden = true;
+      }
+    });
+  }
+
+  async function requestDeviceNotificationPermission({ userInitiated = false } = {}) {
+    const plugin = getLocalNotificationsPlugin();
+    let status = await getDeviceNotificationPermission();
+    if (status === 'default') {
+      if (plugin?.requestPermissions) {
+        await ensureAndroidNotificationChannel();
+        try {
+          const res = await plugin.requestPermissions();
+          status = normalizeNotificationPermission(res?.display);
+        } catch { /* ignore */ }
+      } else if ('Notification' in window && userInitiated) {
+        try {
+          const res = await Notification.requestPermission();
+          status = normalizeNotificationPermission(res);
+        } catch { /* ignore */ }
+      }
+    } else if (status === 'granted' && plugin) {
+      await ensureAndroidNotificationChannel();
+    }
+    await syncDevicePermissionUI();
+    return status;
+  }
+
+  function bindDeviceNotificationControls() {
+    document.querySelectorAll('[data-device-notif-btn]').forEach((button) => {
+      if (button.dataset.boundDeviceNotif) return;
+      button.dataset.boundDeviceNotif = 'true';
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        const result = await requestDeviceNotificationPermission({ userInitiated: true });
+        if (result === 'granted') toast('Phone notification alerts enabled.');
+        else if (result === 'denied') toast('Notifications are blocked in your device or browser settings.', 'error');
+      });
+    });
+    syncDevicePermissionUI().catch(() => { });
+  }
+
+  function safeNotificationTarget(link) {
+    if (!link || typeof link !== 'string') return '';
+    if (/^https:\/\//i.test(link)) return link;
+    const clean = link.replace(/^\/+/, '');
+    return /^[a-z0-9_-]+\.html(?:#[a-z0-9_-]+)?$/i.test(clean) ? clean : '';
+  }
+
+  function attachNativeNotificationTapListener() {
+    const plugin = getLocalNotificationsPlugin();
+    if (!plugin?.addListener || nativeNotifListenerAttached) return;
+    nativeNotifListenerAttached = true;
+    plugin.addListener('localNotificationActionPerformed', (event) => {
+      const target = safeNotificationTarget(event?.notification?.extra?.link);
+      if (!target) return;
+      if (/^https:\/\//i.test(target)) {
+        window.open(target, '_blank', 'noopener');
+      } else {
+        window.location.href = target;
+      }
+    }).catch?.(() => { });
+  }
+
+  function buildLocalNotificationId(rawId) {
+    const numeric = Number(rawId);
+    if (Number.isInteger(numeric) && numeric > 0 && numeric < 900000) return numeric;
+    const text = String(rawId || Date.now());
+    let hash = 0;
+    for (let i = 0; i < text.length; i += 1) hash = ((hash * 31) + text.charCodeAt(i)) % 890000;
+    return Math.abs(hash) + 1000;
+  }
+
+  function readShownNotificationIds(userId) {
+    try {
+      const raw = JSON.parse(localStorage.getItem(`myipon_shown_notifs_${userId}`) || '[]');
+      return Array.isArray(raw) ? raw.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function markDeviceNotificationShown(userId, id) {
+    const key = String(id);
+    const list = readShownNotificationIds(userId).filter((item) => item !== key);
+    list.push(key);
+    try {
+      localStorage.setItem(`myipon_shown_notifs_${userId}`, JSON.stringify(list.slice(-80)));
+    } catch { /* ignore storage quota errors */ }
+  }
+
+  async function dispatchDeviceNotification(item, userId) {
+    if (!item || item.read_at || currentProfile?.notifications_enabled === false) return;
+    const notifKey = String(item.id);
+    if (readShownNotificationIds(userId).includes(notifKey)) return;
+    const permission = await getDeviceNotificationPermission();
+    if (permission !== 'granted') return;
+    markDeviceNotificationShown(userId, notifKey);
+
+    const title = item.title || 'myIPON';
+    const body = item.message || '';
+    const target = safeNotificationTarget(item.link) || 'dashboard.html';
+    const plugin = getLocalNotificationsPlugin();
+    if (plugin?.schedule) {
+      await ensureAndroidNotificationChannel();
+      try {
+        await plugin.schedule({
+          notifications: [{
+            id: buildLocalNotificationId(item.id),
+            title,
+            body,
+            channelId: 'myipon_alerts',
+            extra: { link: target }
+          }]
+        });
+        return;
+      } catch { /* fall through */ }
+    }
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration().catch(() => null) : null;
+        if (reg?.showNotification) {
+          await reg.showNotification(title, {
+            body,
+            icon: '/assets/icon-192.png',
+            badge: '/assets/icon-192.png',
+            tag: `myipon-${notifKey}`,
+            data: { url: target }
+          });
+          return;
+        }
+        const n = new Notification(title, { body, icon: '/assets/icon-192.png', tag: `myipon-${notifKey}` });
+        n.onclick = () => {
+          window.focus();
+          if (target) window.location.href = target;
+          n.close();
+        };
+      } catch { /* ignore */ }
+    }
+  }
+
+  async function scheduleNativeDueReminders(scheduleRows) {
+    const plugin = getLocalNotificationsPlugin();
+    if (!plugin?.schedule || currentProfile?.notifications_enabled === false) return;
+    const permission = await getDeviceNotificationPermission();
+    if (permission !== 'granted') return;
+    await ensureAndroidNotificationChannel();
+
+    const cancelList = [];
+    for (let id = 900000; id < 900040; id += 1) cancelList.push({ id });
+    try { await plugin.cancel?.({ notifications: cancelList }); } catch { /* ignore */ }
+
+    const nowMs = Date.now();
+    const notifications = [];
+    let nextId = 900000;
+    for (const row of Array.isArray(scheduleRows) ? scheduleRows : []) {
+      if (!row?.due_date || nextId >= 900038) continue;
+      const dueDay = new Date(`${row.due_date}T09:00:00+08:00`);
+      if (Number.isNaN(dueDay.getTime())) continue;
+      const threeDaysBefore = new Date(dueDay.getTime() - (3 * 86400000));
+      const amountCopy = row.outstanding_amount ? ` (PHP ${Number(row.outstanding_amount).toFixed(2)} remaining)` : '';
+      for (const triggerAt of [threeDaysBefore, dueDay]) {
+        if (triggerAt.getTime() > nowMs + 60000 && nextId < 900040) {
+          notifications.push({
+            id: nextId++,
+            title: 'Contribution deadline approaching',
+            body: `Your ${row.period_label || 'savings'} contribution for ${row.group_name || 'your group'} is due on ${row.due_date}${amountCopy}.`,
+            channelId: 'myipon_alerts',
+            schedule: { at: triggerAt, allowWhileIdle: true },
+            extra: { link: 'user.html' }
+          });
+        }
+      }
+    }
+    if (notifications.length) {
+      await plugin.schedule({ notifications }).catch(() => { });
+    }
+  }
+
   async function initNotifications(profile) {
     const client = getClient();
     const list = document.getElementById('notification-list');
     if (!list || !client || !profile) return;
     const isApp = isInstalledAppUser();
-    const load = async () => {
+    attachNativeNotificationTapListener();
+    bindDeviceNotificationControls();
+
+    if (isApp && profile.notifications_enabled !== false && !localStorage.getItem(`myipon_app_notif_prompt_${profile.id}`)) {
+      localStorage.setItem(`myipon_app_notif_prompt_${profile.id}`, '1');
+      requestDeviceNotificationPermission({ userInitiated: true }).catch(() => { });
+    }
+
+    const lastSeenKey = `myipon_last_notif_seen_${profile.id}`;
+    const storedLastSeen = localStorage.getItem(lastSeenKey);
+    let lastSeenMs = storedLastSeen ? Number(storedLastSeen) : null;
+
+    const load = async (realtimePayload) => {
       const { data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,read_at,created_at').order('created_at', { ascending: false }).limit(40);
       if (error) { showInlineError(list, error, load); return; }
       const rows = data || [];
       let allRows = rows;
+
+      if (realtimePayload?.new) {
+        const match = rows.find((item) => String(item.id) === String(realtimePayload.new.id)) || realtimePayload.new;
+        dispatchDeviceNotification(match, profile.id).catch(() => { });
+      } else if (lastSeenMs === null) {
+        const newestMs = rows.reduce((max, item) => Math.max(max, Date.parse(item.created_at || '') || 0), Date.now());
+        lastSeenMs = newestMs;
+        try { localStorage.setItem(lastSeenKey, String(lastSeenMs)); } catch { /* ignore */ }
+      } else {
+        const unseenNew = rows.filter((item) => !item.read_at && (Date.parse(item.created_at || '') || 0) > lastSeenMs);
+        unseenNew.slice(0, 3).reverse().forEach((item) => {
+          dispatchDeviceNotification(item, profile.id).catch(() => { });
+        });
+      }
+
+      const latestMs = rows.reduce((max, item) => Math.max(max, Date.parse(item.created_at || '') || 0), lastSeenMs || 0);
+      if (latestMs > (lastSeenMs || 0)) {
+        lastSeenMs = latestMs;
+        try { localStorage.setItem(lastSeenKey, String(lastSeenMs)); } catch { /* ignore */ }
+      }
 
       if (isApp) {
         const latestVersion = localStorage.getItem('myipon_latest_remote_version') || '1.0.18';
@@ -2105,8 +2391,28 @@
       try { await rpc('mark_all_notifications_read'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
     };
     window.addEventListener('myipon_update_available', () => { load(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        syncDevicePermissionUI().catch(() => { });
+        load().catch(() => { });
+      }
+    });
+    window.addEventListener('online', () => { load().catch(() => { }); });
+
     await load();
-    client.channel(`notifications:${profile.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, load).subscribe();
+    client.channel(`notifications:${profile.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, (payload) => load(payload)).subscribe();
+
+    if (profile.notifications_enabled !== false) {
+      const syncKey = `myipon_due_sync_${profile.id}`;
+      const lastSync = Number(localStorage.getItem(syncKey) || 0);
+      if (Date.now() - lastSync > 15 * 60 * 1000) {
+        localStorage.setItem(syncKey, String(Date.now()));
+        rpc('sync_my_due_reminders').then((scheduleRows) => {
+          scheduleNativeDueReminders(scheduleRows).catch(() => { });
+          load().catch(() => { });
+        }).catch(() => { });
+      }
+    }
   }
 
   function prepareResponsiveTables() {
@@ -4348,6 +4654,7 @@
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
+    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls,
     get profile() { return currentProfile; }
   };
 })();

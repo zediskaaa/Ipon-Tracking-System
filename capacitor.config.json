@@ -23,6 +23,9 @@
       "showSpinner": false,
       "splashFullScreen": true,
       "splashImmersive": true
+    },
+    "LocalNotifications": {
+      "iconColor": "#0b3428"
     }
   }
 }
