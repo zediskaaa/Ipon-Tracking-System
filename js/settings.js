@@ -223,6 +223,12 @@
     event.preventDefault();
     const button = event.target.querySelector('[type="submit"]');
     const values = new FormData(event.target);
+    const accepted = await Ipon.confirmAction({
+      title: 'Save contribution schedule?',
+      message: `Set default amount to ${Ipon.money(Number(values.get('default_amount')))} with deadline day ${values.get('deadline_day')} starting ${values.get('effective_month')}?`,
+      acceptLabel: 'Save schedule'
+    });
+    if (!accepted) return;
     Ipon.setBusy(button, true);
     try {
       await Ipon.rpc('set_contribution_setting', { p_effective_month: `${values.get('effective_month')}-01`, p_default_amount: Number(values.get('default_amount')), p_deadline_day: Number(values.get('deadline_day')) });
@@ -312,6 +318,16 @@
 
   paymentForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (paymentForm.elements.payment_account_number && !Ipon.validateNumericInput(paymentForm.elements.payment_account_number)) {
+      paymentForm.elements.payment_account_number.focus();
+      return;
+    }
+    const accepted = await Ipon.confirmAction({
+      title: 'Save group payment details?',
+      message: 'Members will see this QR code and payment details when submitting contributions.',
+      acceptLabel: 'Save details'
+    });
+    if (!accepted) return;
     const button = paymentForm.querySelector('[type="submit"]');
     const values = new FormData(paymentForm);
     Ipon.setBusy(button, true);

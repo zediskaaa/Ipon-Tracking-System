@@ -849,6 +849,12 @@
       userPasswordForm.elements.password.focus();
       return;
     }
+    const accepted = await Ipon.confirmAction({
+      title: 'Update user password?',
+      message: `Set a new temporary password for ${target.full_name}? They will need to use this new password on their next sign-in.`,
+      acceptLabel: 'Update password'
+    });
+    if (!accepted) return;
     const button = event.submitter;
     Ipon.setBusy(button, true, 'Saving…');
     try {
@@ -863,13 +869,25 @@
     event.preventDefault();
     const button = event.submitter;
     const values = new FormData(administratorForm);
+    const isEdit = Boolean(values.get('user_id'));
+    if (!isEdit) {
+      const passwordIssue = Ipon.passwordIssue(values.get('password'), [values.get('first_name'), values.get('middle_name'), values.get('last_name'), values.get('email')]);
+      if (passwordIssue) { Ipon.setFieldError(administratorForm.elements.password, passwordIssue); administratorForm.elements.password.focus(); return; }
+    }
+    const fullName = [values.get('first_name'), values.get('middle_name'), values.get('last_name')].filter(Boolean).join(' ').trim();
+    const accepted = await Ipon.confirmAction({
+      title: isEdit ? 'Save administrator changes?' : 'Create administrator account?',
+      message: isEdit
+        ? `Update administrator details and group name for ${fullName}?`
+        : `Create administrator "${fullName}" for group "${values.get('group_name')}"?`,
+      acceptLabel: isEdit ? 'Save changes' : 'Create administrator'
+    });
+    if (!accepted) return;
     Ipon.setBusy(button, true);
     try {
-      if (values.get('user_id')) {
+      if (isEdit) {
         await Ipon.rpc('super_admin_update_administrator', { p_user_id: values.get('user_id'), p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_group_name: values.get('group_name') || '' });
       } else {
-        const passwordIssue = Ipon.passwordIssue(values.get('password'), [values.get('first_name'), values.get('middle_name'), values.get('last_name'), values.get('email')]);
-        if (passwordIssue) { Ipon.setFieldError(administratorForm.elements.password, passwordIssue); administratorForm.elements.password.focus(); return; }
         const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'ADMIN', first_name: values.get('first_name'), middle_name: values.get('middle_name') || null, last_name: values.get('last_name'), email: values.get('email'), password: values.get('password'), group_name: values.get('group_name') } });
         if (error) { const detail = await error.context?.json?.().catch(() => null); throw new Error(detail?.error || error.message); }
       }

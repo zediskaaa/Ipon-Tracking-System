@@ -57,6 +57,7 @@
   document.body.insertAdjacentHTML('beforeend', `<dialog class="form-dialog" id="record-edit-dialog" aria-labelledby="record-edit-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-edit-title">Edit pending record</h2><p>Only pending records can be corrected. Confirmed records must be voided and replaced.</p></div><button class="dialog-close" id="record-edit-close" type="button" aria-label="Close edit form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="record-edit-form" class="form-grid"><input type="hidden" name="record_id"><div class="field"><label for="edit-date">Date</label><input id="edit-date" name="date" type="date" min="2000-01-01" data-max-today required></div><div class="field"><label for="edit-amount">Amount</label><input id="edit-amount" name="amount" type="number" min="0.01" step="0.01" required></div><div class="field transaction-edit-field"><label for="edit-category">Category</label><input id="edit-category" name="category" maxlength="80"></div><div class="field transaction-edit-field"><label for="edit-responsible">Person responsible</label><select id="edit-responsible" name="person_responsible"><option value="">Select member</option></select></div><div class="field field-wide transaction-edit-field"><label for="edit-description">Description</label><textarea id="edit-description" name="description" maxlength="500"></textarea></div><div class="field"><label for="edit-reference">Reference</label><input id="edit-reference" name="reference" maxlength="100"></div><div class="field field-wide"><label for="edit-notes">Notes</label><textarea id="edit-notes" name="notes" maxlength="1000"></textarea></div><div class="form-actions field-wide"><button class="button button-secondary" id="record-edit-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save correction</button></div></form></div></dialog>`);
   const editDialog = document.getElementById('record-edit-dialog');
   const editForm = document.getElementById('record-edit-form');
+  Ipon.prepareNumericInputs();
   editDialog.querySelectorAll('.transaction-edit-field').forEach((field) => { field.hidden = page === 'contributions'; field.querySelector('input,select,textarea').required = page !== 'contributions'; });
 
   function statusBadge(status) {
@@ -478,13 +479,21 @@
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const button = form.querySelector('[type="submit"]');
+    const refInput = form.elements.reference || form.elements.reference_number;
+    if (refInput && !Ipon.validateNumericInput(refInput)) { refInput.focus(); return; }
     const values = new FormData(form);
     const amount = Number(values.get('amount'));
     if (!(amount > 0)) { Ipon.setFieldError(form.elements.amount, 'Enter an amount greater than zero.'); form.elements.amount.focus(); return; }
-    if (state.profile.role === 'ADMIN') {
-      const confirmed = await Ipon.confirmAction({ title: `Confirm ${page === 'contributions' ? 'addition' : page.slice(0, -1)}`, message: `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`, acceptLabel: 'Confirm and save' });
-      if (!confirmed) return;
-    }
+    const typeLabel = page === 'contributions' ? 'addition' : page.slice(0, -1);
+    const isAdmin = state.profile.role === 'ADMIN';
+    const confirmed = await Ipon.confirmAction({
+      title: isAdmin ? `Confirm ${typeLabel}?` : `Submit ${typeLabel} for review?`,
+      message: isAdmin
+        ? `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`
+        : `${Ipon.money(amount)} will be submitted as pending until an administrator confirms it.`,
+      acceptLabel: isAdmin ? 'Confirm and save' : 'Submit for review'
+    });
+    if (!confirmed) return;
     pendingSubmissionKey ||= crypto.randomUUID();
     Ipon.setBusy(button, true);
     try {
@@ -576,7 +585,16 @@
   document.getElementById('record-edit-close').addEventListener('click', () => editDialog.close());
   document.getElementById('record-edit-cancel').addEventListener('click', () => editDialog.close());
   editForm.addEventListener('submit', async (event) => {
-    event.preventDefault(); const values = new FormData(editForm); const button = event.submitter; Ipon.setBusy(button, true);
+    event.preventDefault();
+    if (editForm.elements.reference && !Ipon.validateNumericInput(editForm.elements.reference)) { editForm.elements.reference.focus(); return; }
+    const values = new FormData(editForm);
+    const confirmed = await Ipon.confirmAction({
+      title: 'Save record changes?',
+      message: `Update this pending entry to ${Ipon.money(Number(values.get('amount') || 0))}?`,
+      acceptLabel: 'Save changes'
+    });
+    if (!confirmed) return;
+    const button = event.submitter; Ipon.setBusy(button, true);
     try {
       if (page === 'contributions') await Ipon.rpc('update_contribution', { p_contribution_id: values.get('record_id'), p_amount: Number(values.get('amount')), p_payment_date: values.get('date'), p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null });
       else { const type = page === 'withdrawals' ? 'withdrawal' : 'expense'; await Ipon.rpc(`update_${type}`, { [`p_${type}_id`]: values.get('record_id'), p_transaction_date: values.get('date'), p_amount: Number(values.get('amount')), p_category: values.get('category'), p_description: values.get('description'), p_person_responsible: values.get('person_responsible'), p_reference_number: values.get('reference') || null, p_notes: values.get('notes') || null }); }

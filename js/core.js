@@ -434,6 +434,36 @@
     });
   }
 
+  const NUMERIC_ONLY_RULE = 'Use numbers only (0–9). Letters and symbols are not allowed.';
+
+  function validNumericOnly(value) {
+    return /^\d+$/.test(String(value || '').trim());
+  }
+
+  function validateNumericInput(input) {
+    const raw = input.value.trim();
+    const message = !raw && input.required ? 'Enter numbers only.' : raw && !validNumericOnly(raw) ? NUMERIC_ONLY_RULE : '';
+    input.setCustomValidity(message);
+    setFieldError(input, message);
+    return !message;
+  }
+
+  function prepareNumericInputs() {
+    document.querySelectorAll('input[name="reference"], input[name="reference_number"], input[name="payment_account_number"], input[data-numeric-only]').forEach((input) => {
+      if (input.dataset.numericBound) return;
+      input.dataset.numericBound = 'true';
+      input.inputMode = 'numeric';
+      input.title = NUMERIC_ONLY_RULE;
+      input.addEventListener('input', () => {
+        const cleaned = input.value.replace(/\D/g, '');
+        if (input.value !== cleaned) input.value = cleaned;
+        if (input.hasAttribute('aria-invalid')) validateNumericInput(input);
+      });
+      input.addEventListener('blur', () => validateNumericInput(input));
+      input.addEventListener('invalid', () => validateNumericInput(input));
+    });
+  }
+
   function prepareFormValidation() {
     if (document.documentElement.dataset.validationBound) return;
     document.documentElement.dataset.validationBound = 'true';
@@ -445,6 +475,10 @@
       }
       if (control.matches('input[type="tel"]')) {
         validatePhoneInput(control);
+        return;
+      }
+      if (control.matches('input[name="reference"],input[name="reference_number"],input[name="payment_account_number"],input[data-numeric-only]')) {
+        validateNumericInput(control);
         return;
       }
       setFieldError(control, control.checkValidity() ? '' : getValidationMessage(control));
@@ -2132,6 +2166,7 @@
     prepareFormValidation();
     prepareNameInputs();
     preparePhoneInputs();
+    prepareNumericInputs();
     prepareResponsiveTables();
     applyInputDateBounds();
     if (options.requireAuth !== false) setLoading(true);
@@ -4168,11 +4203,12 @@
 
   if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
   prepareFormValidation();
+  prepareNumericInputs();
   initAppUpdateChecker();
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
     checkForAppUpdate, showAppUpdatePrompt,
     get profile() { return currentProfile; }
   };

@@ -218,6 +218,18 @@
       const passwordIssue = Ipon.passwordIssue(passwordInput.value, [name.p_first_name, name.p_middle_name, name.p_last_name, emailInput.value]);
       if (passwordIssue) { Ipon.setFieldError(passwordInput, passwordIssue); passwordInput.focus(); return; }
     }
+    const existingMemberId = values.get('member_id');
+    const fullName = [name.p_first_name, name.p_middle_name, name.p_last_name].filter(Boolean).join(' ');
+    const accepted = await Ipon.confirmAction({
+      title: existingMemberId ? 'Save member changes?' : creatingAccount ? 'Add member & create login?' : 'Add member?',
+      message: existingMemberId
+        ? `Update member profile for ${fullName}?`
+        : creatingAccount
+          ? `Create member "${fullName}" and activate a sign-in account for ${emailInput.value.trim()}?`
+          : `Add "${fullName}" with monthly contribution ${Ipon.money(Number(values.get('monthly_contribution_amount')))}?`,
+      acceptLabel: existingMemberId ? 'Save changes' : 'Add member'
+    });
+    if (!accepted) return;
     Ipon.setBusy(button, true);
     try {
       let memberId = values.get('member_id');

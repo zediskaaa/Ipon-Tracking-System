@@ -148,7 +148,16 @@
   }
   function resetForm() { form.reset(); form.elements.goal_id.value = ''; form.elements.status.value = 'ACTIVE'; document.getElementById('goal-form-title').textContent = 'Add goal'; document.getElementById('goal-form-copy').textContent = 'Create a shared savings target.'; }
   form?.addEventListener('submit', async (event) => {
-    event.preventDefault(); const button = form.querySelector('[type="submit"]'); const values = new FormData(form); Ipon.setBusy(button, true);
+    event.preventDefault(); const button = form.querySelector('[type="submit"]'); const values = new FormData(form);
+    const isEdit = Boolean(values.get('goal_id'));
+    const status = String(values.get('status') || 'ACTIVE');
+    const accepted = await Ipon.confirmAction({
+      title: isEdit ? 'Save goal changes?' : 'Create savings goal?',
+      message: `${isEdit ? 'Update' : 'Create'} "${String(values.get('title') || '').trim()}" with target ${Ipon.money(Number(values.get('target_amount')))} (${status})?`,
+      acceptLabel: isEdit ? 'Save goal' : 'Create goal'
+    });
+    if (!accepted) return;
+    Ipon.setBusy(button, true);
     try { await Ipon.rpc('save_savings_goal', { p_goal_id: values.get('goal_id') || null, p_title: values.get('title'), p_target_amount: Number(values.get('target_amount')), p_target_date: values.get('target_date') || null, p_status: values.get('status'), p_notes: values.get('notes') || null }); Ipon.toast('Savings goal saved.'); dialog.close(); await load(); }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); } finally { Ipon.setBusy(button, false); }
   });

@@ -107,10 +107,22 @@
   statusFilter.addEventListener('change', () => load().catch((error) => Ipon.showInlineError(body, error, load, 6)));
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (form.elements.reference && !Ipon.validateNumericInput(form.elements.reference)) {
+      form.elements.reference.focus();
+      return;
+    }
     const button = event.submitter;
     const values = new FormData(form);
+    const amount = Number(values.get('amount'));
+    if (!(amount > 0)) { Ipon.setFieldError(form.elements.amount, 'Enter an amount greater than zero.'); form.elements.amount.focus(); return; }
+    const confirmed = await Ipon.confirmAction({
+      title: 'Submit contribution?',
+      message: `Submit ${Ipon.money(amount)} for administrator review? It will count toward group totals once confirmed.`,
+      acceptLabel: 'Submit contribution'
+    });
+    if (!confirmed) return;
     Ipon.setBusy(button, true, 'Submitting…');
-    try { await Ipon.rpc('record_contribution', { p_member_id: state.profile.member_id, p_contribution_month: `${values.get('contribution_month')}-01`, p_amount: Number(values.get('amount')), p_payment_date: values.get('payment_date'), p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null, p_idempotency_key: crypto.randomUUID(), p_receipt_url: receiptPicker.get() }); receiptPicker.clear(); dialog.close(); Ipon.toast('Contribution submitted for review.'); await load(); }
+    try { await Ipon.rpc('record_contribution', { p_member_id: state.profile.member_id, p_contribution_month: `${values.get('contribution_month')}-01`, p_amount: amount, p_payment_date: values.get('payment_date'), p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null, p_idempotency_key: crypto.randomUUID(), p_receipt_url: receiptPicker.get() }); receiptPicker.clear(); dialog.close(); Ipon.toast('Contribution submitted for review.'); await load(); }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });

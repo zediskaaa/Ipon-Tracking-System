@@ -1371,6 +1371,12 @@ test('group payment QR, receipt uploads, and savings goal calculator are wired a
   assert.match(coreJs, /prepareImageDataUrl/);
   assert.match(coreJs, /bindReceiptPicker/);
   assert.match(coreJs, /record-review-receipt-btn/);
+  assert.match(coreJs, /prepareNumericInputs/);
+  assert.match(coreJs, /validateNumericInput/);
+  assert.match(userJs, /Ipon\.confirmAction/);
+  assert.match(recordsJs, /Save record changes\?/);
+  assert.match(savingsJs, /Ipon\.confirmAction/);
+  assert.match(settingsJs, /Save group payment details\?/);
 
   assert.match(css, /\.savings-layout/);
   assert.match(css, /\.goal-calc-panel/);

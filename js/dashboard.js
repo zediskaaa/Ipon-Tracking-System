@@ -892,10 +892,23 @@
     const name = groupForm.elements.name.value.trim();
     const includeSelf = groupSelfToggle.checked;
     const monthlyAmount = Number(groupMonthlyInput.value) > 0 ? Number(groupMonthlyInput.value) : 100;
-    let invitePayloads = [];
-    if (isCreate) {
-      invitePayloads = collectInvitePayloads(groupInviteRows, { allowEmptyRows: true });
-      if (invitePayloads === null) return;
+    const invitePayloads = isCreate ? collectInvitePayloads(groupInviteRows, { allowEmptyRows: true }) : [];
+    if (isCreate && invitePayloads === null) return;
+    const removingSelf = !isCreate && !includeSelf && Boolean(currentGroup?.is_contributor);
+    const confirmed = await Ipon.confirmAction(removingSelf ? {
+      title: 'Save group & remove contributor?',
+      message: `Save changes to "${name}" and remove yourself as a contributor from this group?`,
+      acceptLabel: 'Save & remove contributor'
+    } : {
+      title: isCreate ? 'Create savings group?' : 'Save group changes?',
+      message: isCreate
+        ? `Create "${name}"${invitePayloads.length ? ` and send ${invitePayloads.length} member invitation${invitePayloads.length === 1 ? '' : 's'}` : ''}?`
+        : `Save updated settings for "${name}"?`,
+      acceptLabel: isCreate ? 'Create group' : 'Save changes'
+    });
+    if (!confirmed) {
+      if (removingSelf) groupSelfToggle.checked = true;
+      return;
     }
     const button = document.getElementById('save-group-dialog');
     Ipon.setBusy(button, true, isCreate ? 'Creating…' : 'Saving…');
@@ -923,17 +936,6 @@
           p_clear_avatar: pendingGroupClearAvatar
         });
         if (includeSelf !== Boolean(currentGroup?.is_contributor) || (includeSelf && monthlyAmount)) {
-          if (!includeSelf && Boolean(currentGroup?.is_contributor)) {
-            const confirmed = await Ipon.confirmAction({
-              title: 'Remove yourself as a contributor?',
-              message: 'Are you sure you want to remove yourself as a contributor from this group?',
-              acceptLabel: 'Remove contributor'
-            });
-            if (!confirmed) {
-              groupSelfToggle.checked = true;
-              return;
-            }
-          }
           await Ipon.rpc('set_admin_contributor', {
             p_enabled: includeSelf,
             p_monthly_amount: includeSelf ? monthlyAmount : null
@@ -1144,15 +1146,20 @@
       return;
     }
 
-    if (state.profile?.role === 'ADMIN') {
-      const typeLabel = isAddition ? 'addition' : isDeduction ? 'deduction' : 'expense';
-      const confirmed = await Ipon.confirmAction({
-        title: `Confirm ${typeLabel}`,
-        message: `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`,
-        acceptLabel: 'Confirm and save'
-      });
-      if (!confirmed) return;
+    if (quickRecordForm.elements.reference && !Ipon.validateNumericInput(quickRecordForm.elements.reference)) {
+      quickRecordForm.elements.reference.focus();
+      return;
     }
+    const typeLabel = isAddition ? 'addition' : isDeduction ? 'deduction' : 'expense';
+    const isAdmin = state.profile?.role === 'ADMIN';
+    const confirmed = await Ipon.confirmAction({
+      title: isAdmin ? `Confirm ${typeLabel}?` : `Submit ${typeLabel} for review?`,
+      message: isAdmin
+        ? `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`
+        : `${Ipon.money(amount)} will be submitted as pending until an administrator confirms it.`,
+      acceptLabel: isAdmin ? 'Confirm and save' : 'Submit for review'
+    });
+    if (!confirmed) return;
 
     quickPendingKey ||= crypto.randomUUID();
     Ipon.setBusy(quickSubmitBtn, true);
