@@ -3152,16 +3152,8 @@
 
   const STABLE_GEMINI_MODELS = [
     'gemini-2.5-flash',
-    'gemini-2.0-flash',
     'gemini-1.5-flash',
-    'gemini-flash-latest',
-    'gemini-3.5-flash',
-    'gemini-3.8-flash',
-    'gemini-3.7-flash',
-    'gemini-3.6-flash',
-    'gemini-3.1-flash-lite',
-    'gemini-2.5-flash-lite',
-    'gemini-1.5-pro'
+    'gemini-flash-latest'
   ];
 
   let cachedWorkingGeminiModel = null;
@@ -3184,7 +3176,7 @@
       throw new Error('No Gemini API key found. Please save your API key in the configuration dialog or define geminiApiKey in js/config.js.');
     }
 
-    // Dynamic candidate resolution with stable fallback
+    // Fast candidate resolution: at most 3 models with quick 3s timeout per model
     let candidateModels = STABLE_GEMINI_MODELS;
     if (cachedWorkingGeminiModel) {
       candidateModels = [cachedWorkingGeminiModel, ...STABLE_GEMINI_MODELS.filter((m) => m !== cachedWorkingGeminiModel)];
@@ -3194,13 +3186,16 @@
 
     let lastError = null;
     for (const curModel of candidateModels) {
+      let timer = null;
       try {
+        const ctrl = new AbortController();
+        timer = setTimeout(() => ctrl.abort(), 3500);
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(curModel)}:generateContent?key=${encodeURIComponent(key)}`;
         const body = {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.75,
-            maxOutputTokens: 1400
+            maxOutputTokens: 1000
           }
         };
         if (jsonResponse) {
@@ -3216,8 +3211,10 @@
             'Content-Type': 'application/json',
             'x-goog-api-key': key
           },
-          body: JSON.stringify(body)
+          body: JSON.stringify(body),
+          signal: ctrl.signal
         });
+        clearTimeout(timer);
 
         if (!res.ok) {
           const errData = await res.json().catch(() => null);
@@ -3259,7 +3256,12 @@
           success: true
         };
       } catch (err) {
+        if (timer) clearTimeout(timer);
         lastError = err;
+        if (/aborted/i.test(err.message)) {
+          lastError = new Error(`Model ${curModel} timed out.`);
+          continue;
+        }
         if (/failed to fetch/i.test(err.message)) {
           throw new Error('Connection blocked (Failed to fetch). Check your internet connection or ad-blocker for generativelanguage.googleapis.com.');
         }

@@ -1122,67 +1122,65 @@
       return `- "${req.title}": ${req.details || 'Feature improvement'}${credit}`;
     }).join('\n') || '- General performance improvements, responsive layout refinements, and stability enhancements.';
 
-    const prompt = `Write an official, engaging, and celebratory product release announcement for IPON (Group Savings and Financial Tracker).
-Version: ${ver}
-Release Date: ${relDate}
+    // Instant 0ms pre-fill so user never waits on spinner:
+    const draft = composeReleaseNotes(ver, targetImplemented);
+    if (titleInput) titleInput.value = draft.title;
+    if (detailsInput) detailsInput.value = draft.body;
 
-Implemented User-Requested Features:
+    const storedKey = (localStorage.getItem('ipon_gemini_api_key') || window.IPON_CONFIG?.geminiApiKey || '').trim();
+    if (!storedKey) {
+      Ipon.toast('✨ Announcement drafted with smart composer!');
+      return;
+    }
+
+    const prompt = `Write an engaging, celebratory product release announcement intro and outro for IPON (Group Savings and Financial Tracker) ${ver}.
+Implemented user features:
 ${featuresList}
 
-System-wide improvements included in this release:
-- Real-time online presence indicators (active now green dot on profile avatars)
-- Interactive profile picture cropper, 90-degree rotation, and avatar controls
-- Announcement reactions (Messenger-style emoji picker: Like, Love, Haha, Wow, Sad, Angry) with who-reacted modal
-- Quick financial record entry modal on the calendar dashboard
-- Financial records member spotlight card with personal contribution graph and totals
-- Group administrator monthly pledge synchronization across member rosters and reports
-
-Generate a JSON object with this exact structure:
+Return a valid JSON object with keys:
 {
-  "title": "A punchy, attractive announcement title mentioning ${ver}",
-  "intro": "A 1-2 paragraph fresh, engaging, non-cliché introduction celebrating this release and explaining its value to users",
-  "highlights": [
-    "A concise bullet point describing the first major feature with user credit if applicable",
-    "A concise bullet point describing the second feature",
-    "A concise bullet point describing the third feature",
-    "Additional bullet points for the remaining features"
-  ],
-  "outro": "A warm, inspiring 1-paragraph closing message thanking savers for their continuous feedback and encouraging them to keep reaching their financial goals"
+  "title": "A punchy, attractive title mentioning ${ver}",
+  "intro": "A fresh, non-cliché 1-2 paragraph introduction celebrating this release",
+  "outro": "A warm, inspiring 1-paragraph closing message thanking savers"
 }`;
 
     try {
       Ipon.setBusy(releaseAiBtn, true);
       if (releaseAiStatus) {
         releaseAiStatus.hidden = false;
-        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Generating unique release announcement with Gemini AI…';
+        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Enhancing with Gemini AI…';
       }
 
       // Action: ai-generate-release-notes (Direct client fetch to Gemini API with fallback)
       const res = await Ipon.callGemini({
         prompt,
-        systemInstruction: 'You are the head of product communications for IPON, a modern group savings platform. Write polished, engaging, inspiring release copy in English. Avoid stale corporate jargon. Output strictly valid JSON.',
+        systemInstruction: 'Respond in English and valid JSON only. Keep concise, inspiring, and polished.',
         jsonResponse: true
       });
 
       const parsed = res.parsed;
-      const title = String(parsed?.title || `System ${ver} Released`).trim();
-      const intro = String(parsed?.intro || `We are excited to roll out System ${ver}!`).trim();
-      const highlights = Array.isArray(parsed?.highlights)
-        ? parsed.highlights.map((h) => `• ${String(h).replace(/^[•\s*-]+/, '').trim()}`).join('\n')
-        : '';
-      const outro = String(parsed?.outro || 'Thank you for being part of IPON. Happy saving!').trim();
+      const title = String(parsed?.title || draft.title).trim();
+      const intro = String(parsed?.intro || '').trim();
+      const outro = String(parsed?.outro || '').trim();
 
-      const details = `${intro}\n\n${highlights}\n\n${outro}`;
+      if (intro && outro) {
+        let enhancedBody = `${intro}\n\n`;
+        enhancedBody += `• Live Active Now Presence: See who is currently using the system in real time with live Facebook-style green indicators on profile avatars.\n`;
+        enhancedBody += `• Profile Picture Editor: Interactive avatar cropper with real-time preview, 90-degree image rotation, and deletion confirmation.\n`;
+        enhancedBody += `• Announcement Reactions: Messenger-style interactive emoji picker (Heart, Thumbs up, Haha, Sad, Angry) and Facebook-style reaction counter pill with a who-reacted modal list.\n`;
+        enhancedBody += `• Quick Record Entry Modal: Convenient shortcut on the dashboard to record additions, deductions, and expenses without switching pages.\n`;
+        enhancedBody += `• Financial Records Spotlight & Graph: Filter records by member to spotlight their profile, contribution pledge, totals, and monthly activity graph.\n`;
+        enhancedBody += `• Contributor Pledge Setup: Group administrators can set and update their monthly contribution pledge directly, reflected in member rosters and reports.\n`;
+        enhancedBody += `\n${outro}`;
 
-      if (titleInput) titleInput.value = title;
-      if (detailsInput) detailsInput.value = details;
-
-      Ipon.toast(`✨ Announcement generated with Gemini AI (${res.model})!`);
+        if (titleInput && title) titleInput.value = title;
+        if (detailsInput) detailsInput.value = enhancedBody;
+        Ipon.toast(`✨ Announcement enhanced with Gemini AI (${res.model})!`);
+      } else {
+        Ipon.toast('✨ Announcement drafted with smart composer!');
+      }
     } catch (err) {
-      Ipon.toast(`Gemini: ${err.message || 'Generation failed'}. Using local composer.`, 'error');
-      const { title, body } = composeReleaseNotes(ver, targetImplemented);
-      if (titleInput) titleInput.value = title;
-      if (detailsInput) detailsInput.value = body;
+      Ipon.toast('✨ Announcement drafted with smart composer!');
     } finally {
       Ipon.setBusy(releaseAiBtn, false);
       if (releaseAiStatus) releaseAiStatus.hidden = true;
