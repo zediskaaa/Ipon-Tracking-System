@@ -1118,6 +1118,9 @@ test('Super Admin feature requests display requester avatars and system tracks r
   assert.match(css, /\.feature-cards-grid/);
   assert.match(css, /\.feature-card/);
   assert.match(css, /\.table-user-cell/);
+  assert.match(css, /\.account-avatar-picker \.presence-dot,\.reaction-user-avatar-wrap \.presence-dot\{display:none!important\}/);
+  assert.doesNotMatch(core, /quickPreview\.innerHTML = avatarMarkup\([^)]*profile\.id\)/);
+  assert.doesNotMatch(core, /avatarMarkup\(entry\.avatar_url,\s*name,\s*'reaction-user-avatar',\s*entry\.user_id\)/);
 });
 
 test('admin contributor toggle prompts for monthly contribution amount with confirmation and synchronizes to member pledge', () => {

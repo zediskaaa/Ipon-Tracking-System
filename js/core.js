@@ -836,7 +836,7 @@
     });
     const quickPreview = document.getElementById('quick-avatar-preview');
     if (quickPreview) {
-      quickPreview.innerHTML = avatarMarkup(profile.avatar_url, profile.full_name, 'avatar-lg', profile.id);
+      quickPreview.innerHTML = avatarMarkup(profile.avatar_url, profile.full_name, 'avatar-lg');
       bindAvatarFallbacks(quickPreview);
     }
     const quickRemove = document.getElementById('quick-avatar-remove');
@@ -2464,7 +2464,7 @@
         const roleClass = isOwner ? 'is-owner' : isAdmin ? 'is-admin' : isTreasurer ? 'is-treasurer' : 'is-member';
         const roleLabel = isOwner ? 'Owner' : isAdmin ? 'Admin' : isTreasurer ? 'Treasurer' : 'Member';
         const name = entry.full_name || 'Member';
-        const avatarHtml = avatarMarkup(entry.avatar_url, name, 'reaction-user-avatar', entry.user_id);
+        const avatarHtml = avatarMarkup(entry.avatar_url, name, 'reaction-user-avatar');
 
         return `
           <div class="reaction-user-item">
@@ -2479,7 +2479,6 @@
           </div>`;
       }).join('');
       bindAvatarFallbacks(reactionsList);
-      syncPresenceDots(reactionsList);
     };
 
     const openReactionsModal = async (announcementId) => {

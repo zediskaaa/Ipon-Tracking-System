@@ -823,6 +823,7 @@ button.record-entry-action:focus-visible{outline:2px solid #fff;outline-offset:2
 .presence-dot.is-online{opacity:1;transform:scale(1)}
 .sidebar-user-card .presence-dot{width:11.5px;height:11.5px;right:1px;bottom:1px;border-width:2px}
 .avatar-lg-wrap .presence-dot{width:13px;height:13px;right:2px;bottom:2px;border-width:2.5px}
+.account-avatar-picker .presence-dot,.reaction-user-avatar-wrap .presence-dot{display:none!important}
 
 .view-mode-toggle{display:inline-flex;align-items:center;background:rgba(20,45,43,.07);border:1px solid var(--rule);border-radius:10px;padding:3px;gap:3px}
 .view-mode-btn{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;padding:5px 10px;border-radius:7px;font:700 12px/1 Arial,sans-serif;color:var(--muted);cursor:pointer;transition:all .15s ease;user-select:none}
