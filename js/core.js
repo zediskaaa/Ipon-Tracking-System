@@ -612,6 +612,7 @@
                 <span>Zoom</span>
                 <input id="avatar-crop-zoom" type="range" min="1" max="3" step="0.01" value="1" aria-label="Zoom photo">
               </label>
+              <button class="button button-secondary avatar-crop-rotate-btn" id="avatar-crop-rotate" type="button" title="Rotate 90°" aria-label="Rotate photo 90 degrees"><svg viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px;"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85 1.05 6.51 2.74L21 8m0 0V3m0 5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Rotate</button>
               <div class="avatar-crop-preview-box">
                 <small>Preview</small>
                 <div class="avatar-crop-preview-circle" id="avatar-crop-preview-thumb"></div>
@@ -984,6 +985,7 @@
       const titleEl = document.getElementById('avatar-crop-title');
       const zoomInput = document.getElementById('avatar-crop-zoom');
       const previewThumb = document.getElementById('avatar-crop-preview-thumb');
+      const rotateBtn = document.getElementById('avatar-crop-rotate');
       const saveBtn = document.getElementById('avatar-crop-save');
       const cancelBtn = document.getElementById('avatar-crop-cancel');
       const closeBtn = document.getElementById('avatar-crop-close');
@@ -1017,6 +1019,7 @@
       let minScale = 1;
       let zoom = 1;
       let scale = 1;
+      let rotation = 0;
       let imgW = 0;
       let imgH = 0;
       let offsetX = 0;
@@ -1026,6 +1029,22 @@
       let startPointerY = 0;
       let startOffsetX = 0;
       let startOffsetY = 0;
+
+      function getEffectiveDimensions() {
+        const isRotated = rotation === 90 || rotation === 270;
+        return {
+          w: isRotated ? img.naturalHeight : img.naturalWidth,
+          h: isRotated ? img.naturalWidth : img.naturalHeight
+        };
+      }
+
+      function updateScaleAndDimensions() {
+        const eff = getEffectiveDimensions();
+        minScale = Math.max(CROP_SIZE / eff.w, CROP_SIZE / eff.h);
+        scale = minScale * zoom;
+        imgW = Math.round(eff.w * scale);
+        imgH = Math.round(eff.h * scale);
+      }
 
       function clampOffsets() {
         const minX = (CROP_X + CROP_SIZE) - imgW;
@@ -1039,7 +1058,15 @@
       function draw() {
         if (!ctx) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, offsetX, offsetY, imgW, imgH);
+        const cx = offsetX + imgW / 2;
+        const cy = offsetY + imgH / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate((rotation * Math.PI) / 180);
+        const naturalW = img.naturalWidth * scale;
+        const naturalH = img.naturalHeight * scale;
+        ctx.drawImage(img, -naturalW / 2, -naturalH / 2, naturalW, naturalH);
+        ctx.restore();
         if (thumbCtx) {
           thumbCtx.clearRect(0, 0, 44, 44);
           thumbCtx.drawImage(canvas, CROP_X, CROP_Y, CROP_SIZE, CROP_SIZE, 0, 0, 44, 44);
@@ -1048,20 +1075,27 @@
 
       function applyZoom(newZoom) {
         newZoom = Math.min(3, Math.max(1, newZoom));
-        const newScale = minScale * newZoom;
-        const ratio = newScale / scale;
         const px = CENTER - offsetX;
         const py = CENTER - offsetY;
+        const prevScale = scale;
         zoom = newZoom;
-        scale = newScale;
-        imgW = Math.round(img.naturalWidth * scale);
-        imgH = Math.round(img.naturalHeight * scale);
+        updateScaleAndDimensions();
+        const ratio = scale / prevScale;
         offsetX = CENTER - px * ratio;
         offsetY = CENTER - py * ratio;
         clampOffsets();
         if (zoomInput) zoomInput.value = String(zoom);
         draw();
       }
+
+      const onRotate = () => {
+        rotation = (rotation + 90) % 360;
+        updateScaleAndDimensions();
+        offsetX = CENTER - imgW / 2;
+        offsetY = CENTER - imgH / 2;
+        clampOffsets();
+        draw();
+      };
 
       const onPointerDown = (e) => {
         if (e.button !== 0) return;
@@ -1104,6 +1138,7 @@
         viewport.removeEventListener('pointercancel', onPointerUp);
         viewport.removeEventListener('wheel', onWheel);
         zoomInput?.removeEventListener('input', onZoomInput);
+        rotateBtn?.removeEventListener('click', onRotate);
         cancelBtn?.removeEventListener('click', onCancel);
         closeBtn?.removeEventListener('click', onCancel);
         saveBtn?.removeEventListener('click', onSaveClick);
@@ -1160,11 +1195,9 @@
       }
 
       img.onload = () => {
-        minScale = Math.max(CROP_SIZE / img.naturalWidth, CROP_SIZE / img.naturalHeight);
+        rotation = 0;
         zoom = 1;
-        scale = minScale;
-        imgW = Math.round(img.naturalWidth * scale);
-        imgH = Math.round(img.naturalHeight * scale);
+        updateScaleAndDimensions();
         offsetX = CENTER - imgW / 2;
         offsetY = CENTER - imgH / 2;
         clampOffsets();
@@ -1178,6 +1211,7 @@
         viewport.addEventListener('pointerup', onPointerUp);
         viewport.addEventListener('pointercancel', onPointerUp);
         viewport.addEventListener('wheel', onWheel, { passive: false });
+        rotateBtn?.addEventListener('click', onRotate);
         cancelBtn?.addEventListener('click', onCancel);
         closeBtn?.addEventListener('click', onCancel);
         saveBtn?.addEventListener('click', onSaveClick);
