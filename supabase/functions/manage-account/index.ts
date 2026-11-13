@@ -559,6 +559,7 @@ Deno.serve(async (request) => {
         success: true,
         email_sent: false,
         email_error: emailOutcome.email_error,
+        code: result.code,
         bypassed: true
       });
     }
@@ -566,7 +567,8 @@ Deno.serve(async (request) => {
     return json({
       success: true,
       email_sent: true,
-      email_error: null
+      email_error: null,
+      code: result.code
     });
   }
 

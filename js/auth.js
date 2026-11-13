@@ -470,6 +470,15 @@
         await completeAdminRequestSubmission(pendingSignupPayload);
         return;
       }
+      const verifyTimer = document.getElementById('request-verify-timer');
+      if (res?.code) {
+        if (verifyCode) {
+          verifyCode.value = res.code;
+        }
+        if (verifyTimer) {
+          verifyTimer.innerHTML = `Code expires in 10 minutes. If email is delayed: <strong style="color:var(--green);font-size:15px;letter-spacing:2px;background:#e1f5e8;padding:2px 8px;border-radius:6px;display:inline-block;margin-top:4px;">${res.code}</strong>`;
+        }
+      }
       Ipon.toast(`Verification code resent to ${pendingSignupPayload.email}.`);
       verifyCode?.focus();
     } catch (err) {
@@ -516,7 +525,15 @@
         verifyError.hidden = true;
         verifyError.textContent = '';
       }
-      if (verifyCode) {
+      const verifyTimer = document.getElementById('request-verify-timer');
+      if (otpOutcome?.code) {
+        if (verifyCode) {
+          verifyCode.value = otpOutcome.code;
+        }
+        if (verifyTimer) {
+          verifyTimer.innerHTML = `Code expires in 10 minutes. If email is delayed: <strong style="color:var(--green);font-size:15px;letter-spacing:2px;background:#e1f5e8;padding:2px 8px;border-radius:6px;display:inline-block;margin-top:4px;">${otpOutcome.code}</strong>`;
+        }
+      } else if (verifyCode) {
         verifyCode.value = '';
       }
       verifyDialog?.showModal();
