@@ -497,6 +497,18 @@
       const progress = (progressResult.data || []).filter((item) => activeIds.has(item.member_id) || Number(item.paid_amount || 0) > 0);
       const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
       document.getElementById('dashboard-members').textContent = memberResult.count ?? (memberResult.data?.length || 0); document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; renderGoalOptions(goalResult.data || []);
+      lastDashboardSnapshot = {
+        groupName: currentGroup?.name || 'Savings Group',
+        summary,
+        membersCount: memberResult.count ?? (memberResult.data?.length || 0),
+        members: (memberResult.data || []).map((m) => ({ name: m.full_name, monthly_pledge: Number(m.monthly_contribution_amount || 0) })),
+        paidCount: paid,
+        unpaidCount: unpaid,
+        monthCollected: progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0),
+        pendingCount: Number(pending.count || 0),
+        pendingAmount: Number(pending.amount || 0),
+        goals: activeGoalsList
+      };
       populateQuickRecordMembers(memberResult.data || []);
       updateDashboardGoalProgress(summary.tracked_savings);
       renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
@@ -1229,6 +1241,8 @@
   const aiCoachSend = document.getElementById('ai-coach-send');
   const aiCoachClear = document.getElementById('ai-coach-clear');
   let lastCoachContext = null;
+  let lastDashboardSnapshot = null;
+  const coachChatHistory = [];
 
   function buildCoachContext(monthlyPledge = 0) {
     let targetGoal = null;
@@ -1264,63 +1278,39 @@
   async function answerCoachQuestion(question) {
     const ctx = lastCoachContext || buildCoachContext(0);
     const q = String(question || '').trim();
-    if (!q) return;
+    if (!q) return '';
 
     const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
-    if (apiKey) {
-      try {
+    const priorHistory = coachChatHistory.slice(-8);
+
+    try {
+      const backendRes = await Ipon.invokeAccountFunction({
+        action: 'ai-coach-chat',
+        question: q,
+        history: priorHistory,
+        selected_goal_id: selectedGoalId || '',
+        month: monthIso(cursor),
+        api_key: apiKey || ''
+      });
+      if (backendRes?.reply) {
+        return String(backendRes.reply).trim();
+      }
+      if (backendRes?.error) {
+        throw new Error(backendRes.error);
+      }
+    } catch (backendErr) {
+      if (apiKey) {
+        const snap = lastDashboardSnapshot || {};
         const res = await Ipon.callGemini({
-          prompt: `Savings Goal: "${ctx.goalTitle}"\nTarget: ₱${ctx.targetAmt}\nSaved: ₱${ctx.tracked} (${ctx.pct}%)\nRemaining: ₱${ctx.remaining}\nMonthly group schedule default: ₱${ctx.monthlyPledge}\nActive members: ${ctx.membersCount}\nDays until target date: ${ctx.daysLeft || 'None set'}\n\nUser question: "${q}"`,
-          systemInstruction: 'You are myIPON Savings Coach. Answer concisely in 1-3 short, practical English sentences using the exact numbers provided.',
+          prompt: `LIVE SYSTEM DATA:\n${JSON.stringify({ focus_goal: ctx, snapshot: snap })}\n\nRecent conversation: ${JSON.stringify(priorHistory)}\nUser message: "${q}"`,
+          systemInstruction: 'You are myIPON AI Savings Coach, grounded strictly in the live system data provided. Never invent numbers or transactions. Respond warmly and naturally in 1-4 concise sentences in the language used by the user.',
           jsonResponse: false
         });
         if (res?.text) return String(res.text).trim();
-      } catch (_) { }
-    }
-
-    if (ctx.targetAmt <= 0) {
-      return 'You have no active target selected yet. Add a shared goal in Savings Goals first so I can calculate exact timelines and splits.';
-    }
-    if (ctx.remaining <= 0) {
-      return `"${ctx.goalTitle}" is already 100% funded (${Ipon.money(ctx.tracked)} / ${Ipon.money(ctx.targetAmt)}). You can mark it completed or create your next savings milestone!`;
-    }
-
-    const lower = q.toLowerCase();
-    const numMatch = lower.match(/(\d[\d,]*(?:\.\d+)?)/);
-    const typedAmt = numMatch ? Number(numMatch[1].replace(/,/g, '')) : 0;
-
-    if ((lower.includes('if') || lower.includes('add') || lower.includes('extra') || lower.includes('+')) && typedAmt > 0) {
-      const perMonthExtra = lower.includes('day') ? typedAmt * 30.4375 : lower.includes('month') ? typedAmt : typedAmt * 4.345;
-      const baseMonth = ctx.monthlyPledge > 0 ? ctx.monthlyPledge : 0;
-      const newMonth = baseMonth + perMonthExtra;
-      const newMonths = Math.max(1, Math.ceil(ctx.remaining / newMonth));
-      const oldMonths = baseMonth > 0 ? Math.ceil(ctx.remaining / baseMonth) : null;
-      const savedText = oldMonths && oldMonths > newMonths ? ` — finishing about ${oldMonths - newMonths} month${oldMonths - newMonths === 1 ? '' : 's'} earlier` : '';
-      return `Adding ${Ipon.money(typedAmt)} ${lower.includes('day') ? 'per day' : lower.includes('month') ? 'per month' : 'per week'} brings your pace to ${Ipon.money(newMonth)}/month. You can reach "${ctx.goalTitle}" in ~${newMonths} month${newMonths === 1 ? '' : 's'}${savedText}.`;
-    }
-
-    if (lower.includes('member') || lower.includes('split') || lower.includes('each')) {
-      const perMemberRem = ctx.remaining / ctx.membersCount;
-      const perMemberWeek = ctx.daysLeft > 7 ? perMemberRem / (ctx.daysLeft / 7) : perMemberRem / 4;
-      return `Split evenly across ${ctx.membersCount} active member${ctx.membersCount === 1 ? '' : 's'}, the ${Ipon.money(ctx.remaining)} balance comes to ${Ipon.money(perMemberRem)} total per person (about ${Ipon.money(perMemberWeek)}/week each).`;
-    }
-
-    if (lower.includes('day') || lower.includes('daily') || lower.includes('pace')) {
-      if (ctx.daysLeft > 0) {
-        const perDay = ctx.remaining / ctx.daysLeft;
-        return `With ${ctx.daysLeft} days left until ${Ipon.dateLabel(ctx.targetDate)}, the group needs ${Ipon.money(perDay)}/day total — or ${Ipon.money(perDay / ctx.membersCount)}/day per member.`;
       }
-      const perDay30 = ctx.remaining / 30;
-      return `To cover ${Ipon.money(ctx.remaining)} within 30 days, aim for ${Ipon.money(perDay30)}/day (${Ipon.money(perDay30 / ctx.membersCount)}/day per member). Set a target date on your goal for an exact deadline pace.`;
+      throw backendErr;
     }
-
-    if (lower.includes('fast') || lower.includes('quick') || lower.includes('best') || lower.includes('plan')) {
-      const boostWeek = Math.max(50, Math.round(ctx.remaining / 12));
-      return `Fastest strategy for "${ctx.goalTitle}": combine your ${ctx.monthlyPledge > 0 ? Ipon.money(ctx.monthlyPledge) + '/mo schedule' : 'regular deposits'} with an extra ${Ipon.money(boostWeek)}/week group push (${Ipon.money(boostWeek / ctx.membersCount)} each) to clear the ${Ipon.money(ctx.remaining)} gap steadily.`;
-    }
-
-    const monthsAtPledge = ctx.monthlyPledge > 0 ? Math.ceil(ctx.remaining / ctx.monthlyPledge) : null;
-    return `For "${ctx.goalTitle}", ${Ipon.money(ctx.remaining)} remains (${ctx.pct}% done across ${ctx.membersCount} member${ctx.membersCount === 1 ? '' : 's'}). ${monthsAtPledge ? `At ${Ipon.money(ctx.monthlyPledge)}/month, estimated completion is ~${monthsAtPledge} month${monthsAtPledge === 1 ? '' : 's'}.` : 'Try asking "If we add ₱200 per week?" or "Split per member".'}`;
+    throw new Error('Could not get a response from AI Coach right now.');
   }
 
   async function handleCoachAsk(question) {
@@ -1331,7 +1321,11 @@
     if (aiCoachSend) Ipon.setBusy(aiCoachSend, true, '…');
     try {
       const reply = await answerCoachQuestion(q);
+      coachChatHistory.push({ role: 'user', text: q });
+      coachChatHistory.push({ role: 'coach', text: reply });
       appendCoachMessage('coach', reply);
+    } catch (error) {
+      appendCoachMessage('coach', error?.message || 'AI Coach is temporarily unavailable. Please try again in a moment.');
     } finally {
       if (aiCoachSend) Ipon.setBusy(aiCoachSend, false);
     }
@@ -1432,6 +1426,24 @@
 
     try {
       const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
+      const backendRes = await Ipon.invokeAccountFunction({
+        action: 'ai-savings-insights',
+        goal_name: goalTitle,
+        target_amount: targetAmt,
+        current_saved: tracked,
+        monthly_pledge: monthlyPledge,
+        target_date: targetDate,
+        month: monthIso(cursor),
+        api_key: apiKey || ''
+      });
+      if (backendRes?.forecast) {
+        if (aiForecastText) aiForecastText.textContent = backendRes.forecast;
+        if (aiTipText) aiTipText.textContent = backendRes.smart_tip || 'Regular deposits build steady momentum.';
+        if (aiMotivationText) aiMotivationText.textContent = backendRes.motivation || 'Consistency beats intensity every time!';
+        if (showRefreshToast) Ipon.toast('Savings insights updated.');
+        return;
+      }
+
       if (apiKey) {
         const prompt = `You are an expert, encouraging personal finance coach for myIPON (Group Savings and Financial Tracker) in the Philippines. Analyze this savings progress:
 - Goal: "${goalTitle}"
@@ -1459,22 +1471,6 @@ Return a valid JSON object with EXACTLY these three keys:
           if (showRefreshToast) Ipon.toast('Savings insights updated.');
           return;
         }
-      }
-
-      const backendRes = await Ipon.invokeAccountFunction({
-        action: 'ai-savings-insights',
-        goal_name: goalTitle,
-        target_amount: targetAmt,
-        current_saved: tracked,
-        monthly_pledge: monthlyPledge,
-        target_date: targetDate
-      });
-      if (backendRes?.forecast) {
-        if (aiForecastText) aiForecastText.textContent = backendRes.forecast;
-        if (aiTipText) aiTipText.textContent = backendRes.smart_tip || 'Regular deposits build steady momentum.';
-        if (aiMotivationText) aiMotivationText.textContent = backendRes.motivation || 'Consistency beats intensity every time!';
-        if (showRefreshToast) Ipon.toast('Savings insights updated.');
-        return;
       }
     } catch (_) {
       // Fallback below handles offline / unconfigured environments cleanly
@@ -1517,6 +1513,7 @@ Return a valid JSON object with EXACTLY these three keys:
     handleCoachAsk(aiCoachInput?.value);
   });
   aiCoachClear?.addEventListener('click', () => {
+    coachChatHistory.length = 0;
     if (aiCoachMessages) {
       aiCoachMessages.innerHTML = '';
       aiCoachMessages.hidden = true;

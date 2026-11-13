@@ -1214,7 +1214,9 @@ test('system integrates Gemini AI for release updates and smart savings financia
   assert.match(edge, /generateProceduralReleaseNotes/);
   assert.match(edge, /action === 'ai-generate-release-notes'/);
   assert.match(edge, /action === 'ai-savings-insights'/);
+  assert.match(edge, /action === 'ai-coach-chat'/);
   assert.match(edge, /action === 'test-gemini-key'/);
+  assert.match(edge, /loadGroupCoachSnapshot/);
   assert.match(edge, /gemini-1\.5-flash/);
 
   assert.match(superAdminHtml, /id="release-update-ai-btn"/);
