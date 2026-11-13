@@ -139,11 +139,14 @@
   function renderGroupHeader(groups) {
     myGroups = Array.isArray(groups) ? groups : [];
     currentGroup = myGroups.find((group) => group.is_current) || myGroups[0] || null;
+    const noGroupCard = document.getElementById('dashboard-no-group-card');
+    if (noGroupCard) noGroupCard.hidden = Boolean(currentGroup);
+    const manageBtn = document.getElementById('dashboard-manage-group');
+    if (manageBtn) manageBtn.hidden = !(currentGroup && currentGroup.role === 'ADMIN');
     if (!currentGroup) {
       if (groupNameEl) groupNameEl.textContent = 'No group selected';
       if (groupRoleEl) groupRoleEl.textContent = state?.profile?.role || '—';
-      if (groupMetaEl) groupMetaEl.textContent = 'Active workspace';
-      if (groupActionsEl) groupActionsEl.hidden = true;
+      if (groupMetaEl) groupMetaEl.textContent = 'Create or join a savings group';
       if (groupSwitcherWrap) groupSwitcherWrap.hidden = true;
       return;
     }
@@ -868,6 +871,7 @@
     openGroupDialog('edit');
   });
   document.getElementById('dashboard-create-group')?.addEventListener('click', () => openGroupDialog('create'));
+  document.getElementById('no-group-create-btn')?.addEventListener('click', () => openGroupDialog('create'));
   document.getElementById('close-group-dialog')?.addEventListener('click', () => groupDialog?.close());
   document.getElementById('cancel-group-dialog')?.addEventListener('click', () => groupDialog?.close());
   groupForm?.addEventListener('submit', async (event) => {

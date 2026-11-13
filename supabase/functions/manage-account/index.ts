@@ -172,7 +172,7 @@ async function sendInviteEmail({
     ? `Email: ${toEmail}\nPassword: Use your existing ${SYSTEM_NAME} password`
     : `Email: ${toEmail}\nTemporary password: ${temporaryPassword}`;
   const noteLine = existingAccount
-    ? 'Sign in with your existing account and select this group from the group switcher at the top of your dashboard.'
+    ? 'Sign in with your existing account and check your notifications to accept the invitation.'
     : 'Use the email and temporary password provided above to sign in, then update your password after logging in.';
   const plainText = [
     `Hello ${recipientName},`,
@@ -549,7 +549,7 @@ Deno.serve(async (request) => {
         full_name: full,
         contact_number: contact,
         request_reason: reason,
-        account_kind: 'ADMIN_REQUEST'
+        account_kind: body.direct_signup !== false ? 'DIRECT_SIGNUP' : 'ADMIN_REQUEST'
       }
     });
 
@@ -1029,9 +1029,10 @@ Generate 3 personalized, realistic financial tips in English in JSON format:
   }
 
   try {
+    const initialStatus = existingProfile ? 'PENDING' : 'ACTIVE';
     const result = role === 'ADMIN'
       ? await caller.rpc('super_admin_approve_request', { p_user_id: targetUserId, p_group_name: String(body.group_name).trim() })
-      : await caller.rpc('admin_set_user_access', { p_user_id: targetUserId, p_role: role, p_status: 'ACTIVE', p_member_id: role === 'MEMBER' ? targetMemberId : null });
+      : await caller.rpc('admin_set_user_access', { p_user_id: targetUserId, p_role: role, p_status: initialStatus, p_member_id: role === 'MEMBER' ? targetMemberId : null });
     if (result.error) throw result.error;
 
     if (role === 'ADMIN') return json({ id: targetUserId });
@@ -1051,8 +1052,8 @@ Generate 3 personalized, realistic financial tips in English in JSON format:
         recipient_id: targetUserId,
         group_id: actor.group_id,
         type: 'GROUP_INVITE',
-        title: `Added to ${groupName}`,
-        body: `${inviterName} added you to ${groupName} as a ${role.toLowerCase()}.`,
+        title: `Invitation: ${groupName}`,
+        message: `${inviterName} invited you to join "${groupName}" as a ${role.toLowerCase()}.`,
         link: 'dashboard.html'
       }).then(() => null, () => null);
     }

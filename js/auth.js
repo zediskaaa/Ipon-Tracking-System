@@ -130,7 +130,9 @@
         setFieldError(lastName, 'Combined full name must not exceed 150 characters.');
       }
       if (!/^(?:09\d{9}|\+639\d{9})$/.test(contactNumber.value.trim())) setFieldError(contactNumber, 'Enter 09XXXXXXXXX or +639XXXXXXXXX.');
-      if (requestReason.value.trim().length < 10) setFieldError(requestReason, 'Explain your request using at least 10 characters.');
+      if (!requestReason.value.trim() || requestReason.value.trim().length < 10) {
+        requestReason.value = 'Personal group savings account registration';
+      }
     }
     if (!email.value) setFieldError(email, 'Enter your email address.');
     else if (!email.validity.valid) setFieldError(email, 'Enter a valid email address.');
@@ -159,11 +161,11 @@
     middleNameField.hidden = !signup;
     lastNameField.hidden = !signup;
     contactField.hidden = !signup;
-    reasonField.hidden = !signup;
+    reasonField.hidden = true;
     firstName.required = signup;
     lastName.required = signup;
     contactNumber.required = signup;
-    requestReason.required = signup;
+    requestReason.required = false;
     passwordConfirmationField.hidden = !signup;
     passwordConfirmation.required = signup;
     passwordRequirements.hidden = !signup;
@@ -172,9 +174,9 @@
     password.autocomplete = signup ? 'new-password' : 'current-password';
     if (signup) { password.minLength = 8; password.maxLength = 128; }
     else { password.removeAttribute('minlength'); password.removeAttribute('maxlength'); }
-    document.getElementById('auth-title').textContent = signup ? 'Request administrator access' : 'Welcome back';
-    document.getElementById('auth-copy').textContent = signup ? 'The Super Admin reviews administrator access requests.' : 'Sign in to view your savings records.';
-    submit.textContent = signup ? 'Request administrator access' : 'Sign in';
+    document.getElementById('auth-title').textContent = signup ? 'Create your account' : 'Welcome back';
+    document.getElementById('auth-copy').textContent = signup ? 'Sign up with myIPON to track and manage your group savings.' : 'Sign in to view your savings records.';
+    submit.textContent = signup ? 'Create account' : 'Sign in';
     clearFieldErrors();
     setPasswordVisibility(false);
     delete message.dataset.tone;
@@ -338,23 +340,44 @@
       last: payload.last,
       full: payload.full,
       contact: payload.contact,
-      reason: payload.reason
+      reason: payload.reason || 'Personal group savings account registration',
+      direct_signup: true
     });
 
     if (res?.error) throw new Error(res.error);
 
     const submittedEmail = payload.email;
+    const submittedPassword = payload.password;
     pendingSignupPayload = null;
     verifyDialog?.close();
     requestConfirmDialog?.close();
-    form.reset();
-    setMode('login');
-    email.value = submittedEmail;
-    message.dataset.tone = 'success';
-    message.textContent = 'Request submitted. Wait for an email update on your approval, then sign in once approved.';
-    Ipon.toast('Administrator request submitted. Check your email for the decision.');
-    if (requestSuccessEmail) requestSuccessEmail.textContent = `Updates will be sent to ${submittedEmail}`;
-    requestSuccessDialog?.showModal();
+
+    try {
+      Ipon.toast('Account verified! Signing you in…');
+      const { data, error: loginError } = await Ipon.client.auth.signInWithPassword({
+        email: submittedEmail,
+        password: submittedPassword
+      });
+      if (loginError) throw loginError;
+      const { data: profile } = await Ipon.client.from('profiles').select('id,role,status').eq('id', data.user.id).single();
+      if (profile?.role) {
+        try {
+          sessionStorage.setItem('ipon_active_role', profile.role);
+          localStorage.setItem('ipon_active_role', profile.role);
+        } catch {}
+      }
+      Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
+      window.location.replace('dashboard.html');
+    } catch (_) {
+      form.reset();
+      setMode('login');
+      email.value = submittedEmail;
+      message.dataset.tone = 'success';
+      message.textContent = 'Account created successfully! Please sign in with your password.';
+      Ipon.toast('Account created. Sign in to start using myIPON.');
+      if (requestSuccessEmail) requestSuccessEmail.textContent = `Account created for ${submittedEmail}. Sign in to continue.`;
+      requestSuccessDialog?.showModal();
+    }
   }
 
   verifyForm?.addEventListener('submit', async (event) => {

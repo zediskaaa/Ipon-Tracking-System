@@ -5949,6 +5949,233 @@ insert into public.schema_migrations (version, name)
 values ('20261113_037', 'admin contributor amount sync')
 on conflict (version) do nothing;
 
+-- 20261113_038_feature_request_credit_and_release_sections.sql
+alter table public.feature_requests
+  add column if not exists allow_credit boolean not null default true;
+
+drop policy if exists feature_requests_select on public.feature_requests;
+create policy feature_requests_select on public.feature_requests for select to authenticated
+using (
+  requester_id = auth.uid()
+  or public.is_super_admin()
+  or (status = 'IMPLEMENTED' and release_version is not null)
+);
+
+create or replace function public.get_release_features(p_release_version text)
+returns table (
+  id uuid,
+  title text,
+  details text,
+  requester_id uuid,
+  requester_name text,
+  requester_avatar_url text,
+  allow_credit boolean,
+  created_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    f.id,
+    f.title,
+    f.details,
+    case when f.allow_credit then f.requester_id else null end as requester_id,
+    case when f.allow_credit then coalesce(p.full_name, 'Contributor') else 'Community Member' end as requester_name,
+    case when f.allow_credit then p.avatar_url else null end as requester_avatar_url,
+    f.allow_credit,
+    f.created_at
+  from public.feature_requests f
+  left join public.profiles p on p.id = f.requester_id
+  where f.status = 'IMPLEMENTED'
+    and f.release_version = nullif(btrim(p_release_version), '')
+  order by f.created_at asc;
+$$;
+
+revoke all on function public.get_release_features(text) from public, anon;
+grant execute on function public.get_release_features(text) to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261113_038', 'feature request credit consent and release sections')
+on conflict (version) do nothing;
+
+-- 20261113_039_self_serve_groups_and_invitations.sql
+create or replace function public.admin_create_group(
+  p_name text,
+  p_avatar_url text default null,
+  p_include_self boolean default true,
+  p_monthly_amount numeric default 100
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := btrim(coalesce(p_name, ''));
+  v_new_group_id uuid;
+  v_amount numeric := round(coalesce(p_monthly_amount, 100), 2);
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+
+  if public.is_super_admin() then
+    raise exception 'Super administrators manage platform access from the Super Admin console.' using errcode = '42501';
+  end if;
+
+  if char_length(v_name) < 2 or char_length(v_name) > 150 then
+    raise exception 'Group name must contain between 2 and 150 characters.' using errcode = '22023';
+  end if;
+
+  if p_avatar_url is not null and (p_avatar_url !~ '^data:image/' or char_length(p_avatar_url) > 600000) then
+    raise exception 'Group picture must be a valid image under 450 KB.' using errcode = '22023';
+  end if;
+
+  if v_amount <= 0 or v_amount > 1000000 then
+    raise exception 'Monthly contribution amount must be between 1 and 1,000,000.' using errcode = '22023';
+  end if;
+
+  insert into public.groups (name, owner_id, avatar_url, status)
+  values (v_name, auth.uid(), p_avatar_url, 'ACTIVE')
+  returning id into v_new_group_id;
+
+  insert into public.group_memberships (group_id, user_id, role, status, member_id)
+  values (v_new_group_id, auth.uid(), 'ADMIN', 'ACTIVE', null)
+  on conflict (group_id, user_id) do update
+  set role = 'ADMIN', status = 'ACTIVE';
+
+  update public.profiles
+  set group_id = v_new_group_id,
+      role = 'ADMIN',
+      status = 'ACTIVE',
+      member_id = null
+  where id = auth.uid();
+
+  insert into public.contribution_settings (group_id, effective_month, default_amount, created_by)
+  values (v_new_group_id, date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date, v_amount, auth.uid());
+
+  if p_include_self then
+    perform public.set_admin_contributor(true, v_amount);
+  end if;
+
+  return v_new_group_id;
+end;
+$$;
+
+revoke execute on function public.admin_create_group(text, text, boolean, numeric) from public, anon;
+grant execute on function public.admin_create_group(text, text, boolean, numeric) to authenticated;
+
+create or replace function public.accept_group_invitation(p_notification_id bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_notif record;
+  v_group record;
+  v_membership record;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+
+  select * into v_notif
+  from public.notifications
+  where id = p_notification_id
+    and recipient_id = auth.uid();
+
+  if not found then
+    raise exception 'Invitation notification not found.' using errcode = 'P0002';
+  end if;
+
+  if v_notif.group_id is null then
+    raise exception 'This notification is not associated with a savings group.' using errcode = '22023';
+  end if;
+
+  select * into v_group
+  from public.groups
+  where id = v_notif.group_id and status = 'ACTIVE';
+
+  if not found then
+    raise exception 'The invited savings group is no longer active.' using errcode = 'P0002';
+  end if;
+
+  insert into public.group_memberships (group_id, user_id, role, status, member_id)
+  values (v_notif.group_id, auth.uid(), 'MEMBER', 'ACTIVE', null)
+  on conflict (group_id, user_id) do update
+  set status = 'ACTIVE'
+  returning * into v_membership;
+
+  update public.profiles
+  set group_id = coalesce(group_id, v_notif.group_id),
+      role = case when group_id is null then v_membership.role else role end,
+      member_id = case when group_id is null then v_membership.member_id else member_id end,
+      status = 'ACTIVE'
+  where id = auth.uid();
+
+  update public.notifications
+  set read_at = coalesce(read_at, now())
+  where id = p_notification_id;
+
+  return jsonb_build_object(
+    'success', true,
+    'group_id', v_notif.group_id,
+    'group_name', v_group.name,
+    'role', v_membership.role
+  );
+end;
+$$;
+
+revoke execute on function public.accept_group_invitation(bigint) from public, anon;
+grant execute on function public.accept_group_invitation(bigint) to authenticated;
+
+create or replace function public.decline_group_invitation(p_notification_id bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_notif record;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+
+  select * into v_notif
+  from public.notifications
+  where id = p_notification_id
+    and recipient_id = auth.uid();
+
+  if not found then
+    raise exception 'Invitation notification not found.' using errcode = 'P0002';
+  end if;
+
+  if v_notif.group_id is not null then
+    update public.group_memberships
+    set status = 'REJECTED'
+    where group_id = v_notif.group_id
+      and user_id = auth.uid();
+  end if;
+
+  update public.notifications
+  set read_at = coalesce(read_at, now())
+  where id = p_notification_id;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+revoke execute on function public.decline_group_invitation(bigint) from public, anon;
+grant execute on function public.decline_group_invitation(bigint) to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261113_039', 'self serve groups and interactive invitations')
+on conflict (version) do nothing;
+
 commit;
 
 -- BOOTSTRAP THE FIRST SUPER ADMIN

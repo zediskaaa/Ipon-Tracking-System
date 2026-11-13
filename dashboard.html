@@ -108,9 +108,6 @@
             <strong>Checking session…</strong>
             <small>ACCOUNT</small>
           </div>
-          <svg class="sidebar-user-caret" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m6 9 6 6 6-6" />
-          </svg>
         </button>
         <button class="sidebar-signout text-button" id="dashboard-signout" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -141,8 +138,8 @@
               <select class="group-switcher-select" id="dashboard-group-select"
                 aria-label="Select savings group"></select>
             </label>
-            <div class="group-bar-actions" id="dashboard-group-actions" data-role="ADMIN" hidden>
-              <button class="group-bar-btn" id="dashboard-manage-group" type="button">
+            <div class="group-bar-actions" id="dashboard-group-actions">
+              <button class="group-bar-btn" id="dashboard-manage-group" type="button" hidden>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="3" />
                   <path
@@ -159,6 +156,19 @@
             </div>
           </div>
         </div>
+        <section class="no-group-card" id="dashboard-no-group-card" hidden>
+          <div class="no-group-content">
+            <div class="no-group-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <h2>Welcome to myIPON!</h2>
+            <p>You are not a member of any savings group yet. Create your own group to start tracking savings, or wait for an invitation from your group administrator.</p>
+            <button class="button button-primary" id="no-group-create-btn" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;margin-right:6px;"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              Create savings group
+            </button>
+          </div>
+        </section>
         <div class="summary-hero">
           <div class="summary-hero-body">
             <div class="summary-hero-left">
@@ -839,11 +849,11 @@
     </div>
   </dialog>
   <script src="js/config.js?v=20261113-21"></script>
-  <script src="js/core.js?v=20261113-21"></script>
+  <script src="js/core.js?v=20261113-22"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/dashboard.js?v=20261113-21"></script>
+  <script src="js/dashboard.js?v=20261113-22"></script>
 </body>
 
 </html>

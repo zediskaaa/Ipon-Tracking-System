@@ -1243,3 +1243,33 @@ test('system integrates Gemini AI for release updates and smart savings financia
   assert.match(css, /\.ai-insight-card/);
 });
 
+test('self-serve group creation, direct signup, and interactive invitation acceptance/decline', () => {
+  const migration = read('database/migrations/20261113_039_self_serve_groups_and_invitations.sql');
+  const schema = read('database/schema.sql');
+  const dashHtml = read('dashboard.html');
+  const dashJs = read('js/dashboard.js');
+  const core = read('js/core.js');
+  const auth = read('js/auth.js');
+  const css = read('css/app.css');
+  const manageAccountEdge = read('supabase/functions/manage-account/index.ts');
+
+  assert.match(migration, /create or replace function public\.admin_create_group/);
+  assert.match(migration, /create or replace function public\.accept_group_invitation/);
+  assert.match(migration, /create or replace function public\.decline_group_invitation/);
+  assert.match(schema, /20261113_039/);
+
+  assert.match(auth, /direct_signup:\s*true/);
+  assert.match(manageAccountEdge, /body\.direct_signup !== false \? 'DIRECT_SIGNUP' : 'ADMIN_REQUEST'/);
+
+  assert.match(dashHtml, /id="dashboard-no-group-card"/);
+  assert.match(dashHtml, /id="no-group-create-btn"/);
+  assert.match(dashJs, /dashboard-no-group-card/);
+  assert.match(core, /data-invite-action="accept"/);
+  assert.match(core, /data-invite-action="decline"/);
+  assert.match(core, /accept_group_invitation/);
+  assert.match(core, /decline_group_invitation/);
+  assert.match(css, /\.notification-invite-actions/);
+  assert.match(css, /\.no-group-card/);
+});
+
+

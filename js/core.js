@@ -538,7 +538,6 @@
               <strong>Checking session…</strong>
               <small>ACCOUNT</small>
             </div>
-            <svg class="sidebar-user-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
           </button>
           <button class="sidebar-signout text-button" id="sign-out" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg>
@@ -1616,15 +1615,61 @@
     const list = document.getElementById('notification-list');
     if (!list || !client || !profile) return;
     const load = async () => {
-      const { data, error } = await client.from('notifications').select('id,title,message,link,read_at,created_at').order('created_at', { ascending: false }).limit(40);
+      const { data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,read_at,created_at').order('created_at', { ascending: false }).limit(40);
       if (error) { showInlineError(list, error, load); return; }
       const rows = data || [];
       const unread = rows.filter((item) => !item.read_at).length;
       document.querySelectorAll('[data-notification-count]').forEach((badge) => { badge.textContent = unread; badge.hidden = unread === 0; });
       document.getElementById('mark-all-notifications').hidden = unread === 0;
-      list.innerHTML = rows.length ? rows.map((item) => `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"><span class="notification-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg></span><div class="notification-item-copy"><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p><small>${dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small></div>${item.link ? `<a class="notification-item-open" href="${escapeHtml(item.link)}" aria-label="Open ${escapeHtml(item.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>` : ''}${item.read_at ? '' : '<i class="notification-unread" aria-label="Unread"></i>'}</article>`).join('') : '<p class="empty-state">You have no notifications yet.</p>';
+      list.innerHTML = rows.length ? rows.map((item) => {
+        const isInvite = item.type === 'GROUP_INVITE' && !item.read_at;
+        return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}">
+          <span class="notification-item-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="${item.type === 'GROUP_INVITE' ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4'}"/></svg>
+          </span>
+          <div class="notification-item-copy">
+            <strong>${escapeHtml(item.title)}</strong>
+            <p>${escapeHtml(item.message)}</p>
+            <small>${dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small>
+            ${isInvite ? `
+              <div class="notification-invite-actions">
+                <button class="button button-sm button-primary" type="button" data-invite-action="accept" data-notif-id="${item.id}">Accept</button>
+                <button class="button button-sm button-secondary" type="button" data-invite-action="decline" data-notif-id="${item.id}">Decline</button>
+              </div>
+            ` : ''}
+          </div>
+          ${item.link && !isInvite ? `<a class="notification-item-open" href="${escapeHtml(item.link)}" aria-label="Open ${escapeHtml(item.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>` : ''}
+          ${item.read_at ? '' : '<i class="notification-unread" aria-label="Unread"></i>'}
+        </article>`;
+      }).join('') : '<p class="empty-state">You have no notifications yet.</p>';
     };
     list.onclick = async (event) => {
+      const inviteBtn = event.target.closest('[data-invite-action]');
+      if (inviteBtn) {
+        event.stopPropagation();
+        event.preventDefault();
+        const action = inviteBtn.dataset.inviteAction;
+        const notifId = Number(inviteBtn.dataset.notifId);
+        inviteBtn.disabled = true;
+        try {
+          if (action === 'accept') {
+            const res = await rpc('accept_group_invitation', { p_notification_id: notifId });
+            toast(`Invitation accepted! Welcome to ${res?.group_name || 'the group'}.`);
+            if (res?.group_id) {
+              await switchActiveGroup(res.group_id);
+            }
+            location.reload();
+          } else {
+            await rpc('decline_group_invitation', { p_notification_id: notifId });
+            toast('Invitation declined.');
+            await load();
+          }
+        } catch (err) {
+          inviteBtn.disabled = false;
+          toast(friendlyError(err), 'error');
+        }
+        return;
+      }
       const item = event.target.closest('[data-notification-id]');
       if (!item || !item.classList.contains('is-unread')) return;
       try { await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) }); item.classList.remove('is-unread'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
