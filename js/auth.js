@@ -25,6 +25,14 @@
   const recoveryMessage = document.getElementById('recovery-message');
   const requestSuccessDialog = document.getElementById('request-success-dialog');
   const requestSuccessEmail = document.getElementById('request-success-email');
+  const requestConfirmDialog = document.getElementById('request-confirm-dialog');
+  const requestConfirmClose = document.getElementById('request-confirm-close');
+  const requestConfirmEdit = document.getElementById('request-confirm-edit');
+  const requestConfirmProceed = document.getElementById('request-confirm-proceed');
+  const summaryFullName = document.getElementById('summary-full-name');
+  const summaryContactNumber = document.getElementById('summary-contact-number');
+  const summaryEmail = document.getElementById('summary-email');
+  const summaryRequestReason = document.getElementById('summary-request-reason');
   const verifyDialog = document.getElementById('request-verify-dialog');
   const verifyForm = document.getElementById('request-verify-form');
   const verifySubtitle = document.getElementById('request-verify-subtitle');
@@ -260,34 +268,12 @@
           reason: requestReason.value.trim()
         };
 
-        Ipon.setBusy(submit, true, 'Submitting administrator access…');
-        const otpOutcome = await Ipon.sendAdminRequestVerificationCode({
-          email: submittedEmail,
-          full_name: full
-        });
+        if (summaryFullName) summaryFullName.textContent = full;
+        if (summaryContactNumber) summaryContactNumber.textContent = contactNumber.value.trim();
+        if (summaryEmail) summaryEmail.textContent = submittedEmail;
+        if (summaryRequestReason) summaryRequestReason.textContent = requestReason.value.trim();
 
-        if (otpOutcome?.error) {
-          throw new Error(otpOutcome.error);
-        }
-
-        if (otpOutcome?.bypassed || !otpOutcome?.email_sent) {
-          await completeAdminRequestSubmission(pendingSignupPayload);
-          return;
-        }
-
-        if (verifySubtitle) {
-          verifySubtitle.textContent = `Enter the 6-digit verification code sent to ${submittedEmail}.`;
-        }
-        if (verifyError) {
-          verifyError.hidden = true;
-          verifyError.textContent = '';
-        }
-        if (verifyCode) {
-          verifyCode.value = '';
-        }
-        verifyDialog?.showModal();
-        verifyCode?.focus();
-        Ipon.toast(`Verification code sent to ${submittedEmail}.`);
+        requestConfirmDialog?.showModal();
         return;
       } else {
         const { data, error } = await Ipon.client.auth.signInWithPassword({ email: email.value, password: password.value });
@@ -437,6 +423,54 @@
       Ipon.setBusy(verifyResend, false);
     }
   });
+  requestConfirmEdit?.addEventListener('click', () => {
+    requestConfirmDialog?.close();
+  });
+
+  requestConfirmClose?.addEventListener('click', () => {
+    requestConfirmDialog?.close();
+  });
+
+  requestConfirmProceed?.addEventListener('click', async () => {
+    if (!pendingSignupPayload) return;
+    Ipon.setBusy(requestConfirmProceed, true, 'Sending code…');
+    try {
+      const otpOutcome = await Ipon.sendAdminRequestVerificationCode({
+        email: pendingSignupPayload.email,
+        full_name: pendingSignupPayload.full
+      });
+
+      if (otpOutcome?.error) {
+        throw new Error(otpOutcome.error);
+      }
+
+      requestConfirmDialog?.close();
+
+      if (otpOutcome?.bypassed || !otpOutcome?.email_sent) {
+        await completeAdminRequestSubmission(pendingSignupPayload);
+        return;
+      }
+
+      if (verifySubtitle) {
+        verifySubtitle.textContent = `Enter the 6-digit verification code sent to ${pendingSignupPayload.email}.`;
+      }
+      if (verifyError) {
+        verifyError.hidden = true;
+        verifyError.textContent = '';
+      }
+      if (verifyCode) {
+        verifyCode.value = '';
+      }
+      verifyDialog?.showModal();
+      verifyCode?.focus();
+      Ipon.toast(`Verification code sent to ${pendingSignupPayload.email}.`);
+    } catch (err) {
+      Ipon.toast(Ipon.friendlyError(err), 'error');
+    } finally {
+      Ipon.setBusy(requestConfirmProceed, false);
+    }
+  });
+
   verifyClose?.addEventListener('click', () => {
     verifyDialog?.close();
   });
