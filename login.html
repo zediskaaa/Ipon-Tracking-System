@@ -144,7 +144,8 @@
     body.is-app .login-card-close{display:none!important}
     body.is-app .login-page{display:flex;min-height:100vh;align-items:center;justify-content:center;grid-template-columns:none;padding:clamp(16px,4vw,32px)}
     body.is-app .login-form-wrap{max-width:480px;width:100%;margin:0 auto;padding:0}
-    body.is-app .login-card{width:100%;padding:34px 28px 28px;border-radius:16px;background:#f5eee0;box-shadow:0 20px 56px rgba(0,0,0,.5)}
+    body.is-app .login-card{position:relative;width:min(480px,100%);padding:38px 32px 30px 48px;border:0;border-radius:0 12px 12px 0;background:radial-gradient(circle at 0 11px,#0a1b17 6.5px,#f5eee0 7px) 0 6px/100% 22px repeat-y;color:#112622;box-shadow:0 20px 56px rgba(0,0,0,.5)}
+    body.is-app .login-card::before{position:absolute;top:0;bottom:0;left:18px;border-left:1px dashed rgba(20,45,43,.18);content:"";pointer-events:none}
     body.is-app .login-card-brand{display:inline-flex}
     body.is-app.is-request-mode .login-card{width:min(620px,100%)}
     body.is-app.is-request-mode .login-card .form-grid{grid-template-columns:1fr;gap:14px}

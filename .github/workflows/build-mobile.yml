@@ -53,7 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: myIPON-Android-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/myIPON.apk
           if-no-files-found: error
 
   build-ios:
@@ -132,7 +132,9 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p dist-release
-          if [ -f release-assets/app-debug.apk ]; then
+          if [ -f release-assets/myIPON.apk ]; then
+            cp release-assets/myIPON.apk dist-release/myIPON.apk
+          elif [ -f release-assets/app-debug.apk ]; then
             cp release-assets/app-debug.apk dist-release/myIPON.apk
           fi
           if [ -f release-assets/myIPON-unsigned.ipa ]; then
