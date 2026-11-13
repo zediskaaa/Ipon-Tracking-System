@@ -274,7 +274,7 @@
       if (eligibility?.reason === 'rejected') {
         setFieldError(email, 'This email was declined for administrator access and cannot request again.');
       }
-    } catch (_) {}
+    } catch (_) { }
   });
 
   form.addEventListener('submit', async (event) => {
@@ -338,7 +338,7 @@
         try {
           sessionStorage.setItem('ipon_active_role', profile.role);
           localStorage.setItem('ipon_active_role', profile.role);
-        } catch {}
+        } catch { }
         Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
         window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(profile.role));
       }
@@ -393,7 +393,7 @@
         try {
           sessionStorage.setItem('ipon_active_role', profile.role);
           localStorage.setItem('ipon_active_role', profile.role);
-        } catch {}
+        } catch { }
       }
       Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
       window.location.replace(Ipon.homeForRole(profile?.role || 'MEMBER'));

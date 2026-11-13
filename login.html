@@ -21,58 +21,104 @@
   <style>
     .login-page{display:grid;min-height:100vh;grid-template-columns:minmax(380px,1.1fr) minmax(380px,.9fr);align-items:stretch;background:radial-gradient(circle at 30% 62%,rgba(48,104,74,.36) 0%,rgba(19,48,39,.2) 38%,transparent 66%),linear-gradient(135deg,#0d221d 0%,#081714 100%);color:#f4efe6}
     .login-story{display:flex;width:100%;max-width:820px;min-height:100vh;justify-self:end;flex-direction:column;justify-content:flex-start;gap:0;padding:clamp(28px,4vw,52px) clamp(16px,2.5vw,36px) clamp(24px,3.5vw,42px) clamp(28px,5vw,72px);background:transparent;color:#f4efe6}
-    .login-brand{display:inline-flex;align-items:center;gap:14px;margin-bottom:clamp(18px,2.5vw,28px);color:#fff;font:800 clamp(34px,3.6vw,46px)/1 Arial,sans-serif;letter-spacing:-.02em}.login-brand-logo{width:52px;height:52px;flex:0 0 auto;padding:7px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(28,72,55,.78);box-shadow:0 6px 16px rgba(0,0,0,.25)}.login-story-copy{margin:0}.login-story-copy h1{max-width:680px;margin:0 0 14px;color:#fff;font:800 clamp(38px,4.3vw,58px)/1.06 Arial,sans-serif;letter-spacing:-.025em}
-    .login-story p{max-width:580px;margin:0;color:#a7b9b2;font:clamp(15px,1.15vw,17.5px)/1.58 Arial,sans-serif}.login-illustration{position:relative;display:flex;width:100%;flex:1;align-items:center;justify-content:center;margin:14px 0 6px;padding:0}.login-illustration svg{display:block;width:min(580px,100%);height:auto;overflow:visible}.login-form-wrap{display:grid;width:100%;max-width:660px;justify-self:start;place-items:center;padding:clamp(24px,3.5vw,48px) clamp(28px,4.5vw,64px) clamp(24px,3.5vw,48px) clamp(12px,2vw,28px)}
-    .login-card{position:relative;width:min(520px,100%);padding:42px 46px 36px 56px;border:0;border-radius:0 10px 10px 0;background:radial-gradient(circle at 0 11px,#0a1b17 6.5px,#f5eee0 7px) 0 6px/100% 22px repeat-y;color:#112622;box-shadow:0 24px 60px rgba(0,0,0,.4);transition:width .26s ease}
-    .login-card-close{position:absolute;top:18px;right:18px;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:1px solid rgba(20,45,43,.14);background:rgba(255,255,255,.65);color:#112622;text-decoration:none;cursor:pointer;transition:background .2s ease,border-color .2s ease,color .2s ease,transform .2s ease;z-index:10}.login-card-close:hover{background:#fff;border-color:rgba(20,45,43,.35);color:var(--green);transform:scale(1.08);box-shadow:0 4px 12px rgba(0,0,0,.1)}.login-card-close svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    .login-brand{display:inline-flex;align-items:center;gap:14px;margin-bottom:clamp(18px,2.5vw,28px);color:#fff;font:800 clamp(34px,3.6vw,46px)/1 Arial,sans-serif;letter-spacing:-.02em}
+    .login-brand-logo{width:52px;height:52px;flex:0 0 auto;padding:7px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(28,72,55,.78);box-shadow:0 6px 16px rgba(0,0,0,.25)}
+    .login-story-copy{margin:0}
+    .login-story-copy h1{max-width:680px;margin:0 0 14px;color:#fff;font:800 clamp(38px,4.3vw,58px)/1.06 Arial,sans-serif;letter-spacing:-.025em}
+    .login-story p{max-width:580px;margin:0;color:#a7b9b2;font:clamp(15px,1.15vw,17.5px)/1.58 Arial,sans-serif}
+    .login-illustration{position:relative;display:flex;width:100%;flex:1;align-items:center;justify-content:center;margin:14px 0 6px;padding:0}
+    .login-illustration svg{display:block;width:min(580px,100%);height:auto;overflow:visible}
+    .login-form-wrap{display:grid;width:100%;max-width:660px;justify-self:start;place-items:center;padding:clamp(24px,3.5vw,48px) clamp(28px,4.5vw,64px) clamp(24px,3.5vw,48px) clamp(12px,2vw,28px)}
+    .login-card{position:relative;width:min(520px,100%);padding:42px 46px 36px 56px;border:0;border-radius:0 10px 10px 0;background:radial-gradient(circle at 0 11px,#0a1b17 6.5px,#f5eee0 7px) 0 6px/100% 22px repeat-y;color:#112622;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+    .login-card-close{position:absolute;top:18px;right:18px;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:1px solid rgba(20,45,43,.14);background:rgba(255,255,255,.65);color:#112622;text-decoration:none;cursor:pointer;transition:background .2s ease,border-color .2s ease,color .2s ease,transform .2s ease;z-index:10}
+    .login-card-close:hover{background:#fff;border-color:rgba(20,45,43,.35);color:var(--green);transform:scale(1.08);box-shadow:0 4px 12px rgba(0,0,0,.1)}
+    .login-card-close svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
     .login-card::before{position:absolute;top:0;bottom:0;left:20px;border-left:1px dashed rgba(20,45,43,.18);content:"";pointer-events:none}
-    .login-card h2{margin:0 0 6px;color:#112622;font:800 32px/1.12 Arial,sans-serif;letter-spacing:-.02em}.login-card>p{margin:0 0 22px;color:#5c6863;font:14.5px/1.45 Arial,sans-serif}
+    .login-card h2{margin:0 0 6px;color:#112622;font:800 32px/1.12 Arial,sans-serif;letter-spacing:-.02em}
+    .login-card>p{margin:0 0 22px;color:#5c6863;font:14.5px/1.45 Arial,sans-serif}
     .auth-tabs{position:relative;display:inline-flex;align-items:center;gap:26px;margin:0 0 24px;border-bottom:1.5px solid rgba(20,45,43,.14)}
     .auth-tabs button{position:relative;flex:0 0 auto;margin:0;padding:0 2px 11px;border:0;border-bottom:2.5px solid transparent;border-radius:0;background:transparent;color:#7a827c;cursor:pointer;font:700 14.5px/1.2 Arial,sans-serif;letter-spacing:-.01em;transition:color .2s ease;z-index:2}
     .auth-tabs button:hover{color:#112622}
     .auth-tabs button.is-active{border-bottom-color:transparent;background:transparent;color:#112622;font-weight:800}
     .auth-tab-indicator{position:absolute;bottom:-1.5px;left:0;height:3px;width:56px;border-radius:3px 3px 0 0;background:#112622;pointer-events:none;transition:transform .32s cubic-bezier(.22,1,.36,1),width .24s cubic-bezier(.22,1,.36,1);z-index:3;will-change:transform,width}
-    .login-card .form-grid{grid-template-columns:1fr;gap:20px}
-    .login-card .field{gap:6px}
-    .login-card .field label{color:#44534d;font:700 13px/1.25 Arial,sans-serif}
-    .login-card .field input,.login-card .field textarea{min-height:42px;padding:9px 6px 9px;border:0;border-bottom:1.5px solid #364843;border-radius:4px 4px 0 0;background:rgba(255,255,255,.24);color:#112622;font:15px/1.35 Arial,sans-serif;box-shadow:none;transition:background .18s ease,border-color .18s ease,box-shadow .18s ease}
-    .login-card .field input:hover,.login-card .field textarea:hover{background:rgba(255,255,255,.45);border-bottom-color:#112622}
-    .login-card .field input:focus,.login-card .field textarea:focus{background:rgba(255,255,255,.7);border-bottom-color:var(--green);box-shadow:0 1.5px 0 0 var(--green);outline:none}
+    .login-card .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
+    .login-card .field{display:grid;gap:6px;min-width:0}
+    .login-card .field:not([hidden]){display:grid}
+    .login-card .field[hidden]{display:none!important}
+    .login-card .field label{color:#44534d;font:700 13px/1.25 Arial,sans-serif;letter-spacing:-.01em}
+    .login-card .field input:not([type="checkbox"]):not([type="radio"]),.login-card .field textarea{width:100%;min-height:44px;padding:10px 14px;border:1px solid rgba(20,45,43,.22);border-radius:8px;background:rgba(255,255,255,.58);color:#112622;font:15px/1.35 Arial,sans-serif;box-shadow:none;transition:border-color .18s ease,background-color .18s ease,box-shadow .18s ease}
+    .login-card .field input:hover,.login-card .field textarea:hover{border-color:rgba(20,45,43,.38);background:rgba(255,255,255,.8)}
+    .login-card .field input:focus,.login-card .field textarea:focus{border-color:var(--green);background:#fff;box-shadow:0 0 0 3px rgba(40,122,76,.16);outline:none}
     .login-card .field input:-webkit-autofill,.login-card .field input:-webkit-autofill:hover,.login-card .field input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 1000px #f5eee0 inset!important;-webkit-text-fill-color:#112622!important;caret-color:#112622}
     .login-card .field textarea{min-height:58px}
-    .login-card .field input[aria-invalid="true"],.login-card .field textarea[aria-invalid="true"],.login-card .field input[aria-invalid="true"]:focus,.login-card .field textarea[aria-invalid="true"]:focus{border-bottom-color:var(--red);background:rgba(174,57,52,.06);box-shadow:0 1.5px 0 0 var(--red)}
-    .login-card .button{width:100%;min-height:48px;margin-top:22px;border:0;border-radius:8px;background:#112622;color:#fff;font:700 15px/1 Arial,sans-serif;box-shadow:0 6px 16px rgba(10,28,23,.2);cursor:pointer;transition:background .2s ease,transform .15s ease,box-shadow .2s ease}
+    .login-card .field input[aria-invalid="true"],.login-card .field textarea[aria-invalid="true"],.login-card .field input[aria-invalid="true"]:focus,.login-card .field textarea[aria-invalid="true"]:focus{border-color:var(--red);background:rgba(174,57,52,.06);box-shadow:0 0 0 3px rgba(174,57,52,.14)}
+    .password-control{position:relative;display:flex;align-items:center;width:100%}
+    .login-card .password-control input{width:100%;padding-inline-end:42px!important}
+    .password-toggle{position:absolute;top:50%;transform:translateY(-50%);right:6px;display:inline-grid;place-items:center;width:32px;height:32px;border:0;border-radius:6px;padding:0;background:transparent;color:#5a655f;cursor:pointer;transition:color .18s ease,background .18s ease}
+    .password-toggle:hover{color:var(--green);background:rgba(20,45,43,.06)}
+    .password-toggle:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+    .password-toggle svg{width:19px;height:19px;display:block;pointer-events:none}
+    .login-card .button{grid-column:1/-1;width:100%;min-height:48px;margin-top:20px;border:0;border-radius:8px;background:#112622;color:#fff;font:700 15px/1 Arial,sans-serif;box-shadow:0 6px 16px rgba(10,28,23,.2);cursor:pointer;transition:background .2s ease,transform .15s ease,box-shadow .2s ease}
     .login-card .button:hover{background:#183630;box-shadow:0 8px 20px rgba(10,28,23,.28);transform:translateY(-1px)}
     .login-card .button:active{transform:translateY(0)}
     #auth-submit:not(.is-busy)::after{margin-left:8px;content:"\2192";font-size:16px;line-height:1}
-    body.is-request-mode .login-page{grid-template-columns:minmax(280px,.9fr) minmax(680px,1.1fr)}
-    body.is-request-mode .login-story{display:flex}
-    body.is-request-mode .login-form-wrap{max-width:920px;padding:clamp(24px,3vw,44px)}
-    body.is-request-mode .login-card{display:grid;width:min(840px,100%);grid-template-columns:1fr;padding:clamp(28px,2.8vw,36px) clamp(28px,3.2vw,44px) clamp(26px,2.5vw,34px) 52px}
-    body.is-request-mode .login-card h2{grid-column:1;grid-row:2;margin-bottom:5px;font-size:clamp(26px,2.3vw,32px)}
-    body.is-request-mode .login-card>p{grid-column:1;grid-row:3;margin-bottom:18px}
-    body.is-request-mode .auth-tabs{width:100%;grid-column:1/-1;grid-row:1;margin:0 0 16px}
+    .auth-message{grid-column:1/-1;min-height:18px;margin:10px 0 0!important;color:var(--red)!important;font:13px/1.4 Arial,sans-serif}
+    .auth-message:empty{display:none}
+    .auth-message[data-tone="success"]{color:var(--green)!important}
+    .tracking-note{display:flex;align-items:center;gap:10px;padding-top:12px;border-top:0;color:#9eb0a9!important;font:13.5px/1.4 Arial,sans-serif!important}
+    .tracking-note::before{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#dfb15b;content:""}
+    .login-card .auth-link{grid-column:1/-1;display:block;margin:14px auto 0;background:transparent;border:0;color:#205e45;cursor:pointer;font:700 13px/1.2 Arial,sans-serif;text-decoration:underline;text-underline-offset:3px}
+    .development-notice{display:grid;gap:3px;margin-top:16px;padding:12px 14px;border:1px dashed #cbb07a;border-radius:6px;background:#efe4cc;color:#5c4b2b;font:12px/1.45 Arial,sans-serif}
+    .development-notice strong{color:#3f3116;font-size:12.5px}
+    .login-legal{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:14px;color:var(--muted);font:12.5px/1.4 Arial,sans-serif}
+    .login-legal span{display:none}
+    .login-legal button{border:0;padding:2px;background:transparent;color:#2f6f52;cursor:pointer;font:600 inherit;text-decoration:underline;text-underline-offset:3px}
+
+    /* Column spans for form layout */
+    #email-field,#password-field{grid-column:1/-1}
+    body.is-request-mode #first-name-field,body.is-request-mode #last-name-field{grid-column:span 1}
+    body.is-request-mode #middle-name-field,body.is-request-mode #contact-number-field{grid-column:span 1}
+    body.is-request-mode :is(#email-field,#request-reason-field,#password-field,#password-confirmation-field){grid-column:1/-1}
+    body.is-request-mode .password-strength{grid-column:1/-1;display:block;margin-top:4px}
     body.is-request-mode :is(.development-notice,.login-legal){display:none}
-    body.is-request-mode #auth-form{grid-column:1/-1}
-    body.is-request-mode .login-card .form-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:14px 18px}
-    body.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field){grid-column:span 2}
-    body.is-request-mode :is(#contact-number-field,#email-field,#password-field,#password-confirmation-field){grid-column:span 3}
-    body.is-request-mode #request-reason-field{grid-column:1/-1}
-    body.is-request-mode #request-reason{min-height:54px}
-    body.is-request-mode .password-strength{display:block;margin-top:4px}
-    .password-control{position:relative;display:flex;align-items:center}.password-control input{width:100%;padding-inline-end:38px}.password-toggle{position:absolute;top:50%;transform:translateY(-50%);right:2px;display:inline-grid;place-items:center;width:32px;height:32px;border:0;border-radius:6px;padding:0;background:transparent;color:#5a655f;cursor:pointer;transition:color .18s ease,background .18s ease}.password-toggle:hover{color:var(--green);background:rgba(20,45,43,.06)}.password-toggle:focus-visible{outline:2px solid var(--green);outline-offset:2px}.password-toggle svg{width:19px;height:19px;display:block;pointer-events:none}
-    .auth-message{min-height:18px;margin:10px 0 0!important;color:var(--red)!important;font:13px/1.4 Arial,sans-serif}.auth-message:empty{display:none}.auth-message[data-tone="success"]{color:var(--green)!important}.tracking-note{display:flex;align-items:center;gap:10px;padding-top:12px;border-top:0;color:#9eb0a9!important;font:13.5px/1.4 Arial,sans-serif!important}.tracking-note::before{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#dfb15b;content:""}
-    .login-card .auth-link{margin:12px auto 0;color:#2f6f52;font:600 13px/1.2 Arial,sans-serif}
-    .development-notice{display:grid;gap:3px;margin-top:16px;padding:12px 14px;border:1px dashed #cbb07a;border-radius:6px;background:#efe4cc;color:#5c4b2b;font:12px/1.45 Arial,sans-serif}.development-notice strong{color:#3f3116;font-size:12.5px}
-    .login-legal{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:14px;color:var(--muted);font:12.5px/1.4 Arial,sans-serif}.login-legal span{display:none}.login-legal button{border:0;padding:2px;background:transparent;color:#2f6f52;cursor:pointer;font:600 inherit;text-decoration:underline;text-underline-offset:3px}
-    .policy-dialog{width:min(680px,calc(100vw - 28px));max-height:min(82dvh,760px);padding:0;border:0;border-radius:16px;background:#f5eee0;color:var(--ink);box-shadow:0 24px 70px rgba(7,35,26,.4)}.policy-dialog::backdrop{background:rgba(7,35,26,.68)}.policy-sheet{max-height:min(82dvh,760px);overflow:auto}.policy-header{position:sticky;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:22px 24px 18px;border-bottom:1px solid var(--rule);background:#f5eee0}.policy-header h2{margin:0;font:800 28px/1.1 Arial,sans-serif}.policy-header p{margin:5px 0 0;color:var(--muted);font:13px/1.4 Arial,sans-serif}.policy-content{padding:22px 24px 28px}.policy-content h3{margin:22px 0 7px;font:800 18px/1.2 Arial,sans-serif}.policy-content h3:first-child{margin-top:0}.policy-content p,.policy-content li{color:#465651;font:14px/1.6 Arial,sans-serif}.policy-content ul{padding-inline-start:20px}.policy-content a{color:var(--green);font-weight:700}
-    .request-confirm-dialog{width:min(480px,calc(100vw - 28px))}.request-confirm-body{display:grid;gap:14px;padding:20px 24px 24px}.request-summary-list{margin:0;display:grid;gap:10px;background:#fff;border:1px solid var(--rule);border-radius:12px;padding:14px 16px}.request-summary-list div{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:13px;line-height:1.45}.request-summary-list dt{color:#5c5749;font-weight:600}.request-summary-list dd{margin:0;color:var(--ink);font-weight:600;word-break:break-word}.request-summary-hint{margin:0;font:13px/1.5 Arial,sans-serif;color:#5c5749}@media(max-width:480px){.request-summary-list div{grid-template-columns:1fr;gap:2px}.request-confirm-body{padding:16px 18px 20px}}
-    .request-success-dialog{width:min(460px,calc(100vw - 28px))}.request-success-body{display:grid;gap:14px;justify-items:start;padding:22px 24px 24px}.request-success-badge{display:inline-grid;place-items:center;width:48px;height:48px;border-radius:14px;background:rgba(31,106,67,.12);color:#1f6a43}.request-success-badge svg{width:24px;height:24px;stroke:currentColor;stroke-width:2.4;fill:none}.request-success-body p{margin:0;color:#465651;font:14px/1.6 Arial,sans-serif}.request-success-email{width:100%;padding:10px 12px;border:1px solid var(--rule);border-radius:10px;background:#fff;color:var(--ink);font:600 13.5px/1.4 Arial,sans-serif;word-break:break-word}.request-success-actions{display:flex;justify-content:flex-end;width:100%;margin-top:4px}
-    @media(max-width:1180px){body.is-request-mode .login-page{grid-template-columns:1fr}body.is-request-mode .login-story{display:none}}
-    @media(max-width:780px){.login-page{grid-template-columns:1fr}.login-form-wrap{grid-row:1;padding:20px}.login-story{grid-row:2;min-height:0;padding:28px;gap:24px}.login-story-copy h1{font-size:32px}.login-brand{font-size:30px}.login-card{padding:26px 24px 24px 38px}.login-card-close{top:12px;right:12px;width:32px;height:32px}body.is-request-mode .login-form-wrap{padding:16px}body.is-request-mode .login-card{display:block;padding:24px 22px 24px 38px}body.is-request-mode .login-card h2{font-size:28px}body.is-request-mode .login-card>p{margin-bottom:20px}body.is-request-mode .auth-tabs{width:100%;margin-bottom:18px}body.is-request-mode .login-card .form-grid{grid-template-columns:1fr;gap:16px}body.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field,#contact-number-field,#email-field,#request-reason-field,#password-field,#password-confirmation-field){grid-column:auto}}
-    body.is-request-mode #auth-submit{font-size:13px;letter-spacing:-.01em;padding:10px 12px}
-    @media(max-width:480px){body.is-request-mode #auth-submit{font-size:12px;padding:10px 8px}}
-    @media(max-width:360px){body.is-request-mode #auth-submit{font-size:11px;padding:10px 4px}}
+
+    /* Compact card sizing - SAME SIZE in both login and request/signup mode! */
+    body.is-request-mode .login-page{grid-template-columns:minmax(380px,1.1fr) minmax(380px,.9fr)}
+    body.is-request-mode .login-story{display:flex}
+    body.is-request-mode .login-form-wrap{max-width:660px;padding:clamp(24px,3.5vw,48px) clamp(28px,4.5vw,64px) clamp(24px,3.5vw,48px) clamp(12px,2vw,28px)}
+    body.is-request-mode .login-card{position:relative;width:min(520px,100%);padding:42px 46px 36px 56px}
+    body.is-request-mode .login-card h2{margin-bottom:6px;font-size:32px}
+    body.is-request-mode .login-card>p{margin-bottom:22px}
+    body.is-request-mode .auth-tabs{margin-bottom:24px}
+
+    .policy-dialog{width:min(680px,calc(100vw - 28px));max-height:min(82dvh,760px);padding:0;border:0;border-radius:16px;background:#f5eee0;color:var(--ink);box-shadow:0 24px 70px rgba(7,35,26,.4)}
+    .policy-dialog::backdrop{background:rgba(7,35,26,.68)}
+    .policy-sheet{max-height:min(82dvh,760px);overflow:auto}
+    .policy-header{position:sticky;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:22px 24px 18px;border-bottom:1px solid var(--rule);background:#f5eee0}
+    .policy-header h2{margin:0;font:800 28px/1.1 Arial,sans-serif}
+    .policy-header p{margin:5px 0 0;color:var(--muted);font:13px/1.4 Arial,sans-serif}
+    .policy-content{padding:22px 24px 28px}
+    .policy-content h3{margin:22px 0 7px;font:800 18px/1.2 Arial,sans-serif}
+    .policy-content h3:first-child{margin-top:0}
+    .policy-content p,.policy-content li{color:#465651;font:14px/1.6 Arial,sans-serif}
+    .policy-content ul{padding-inline-start:20px}
+    .policy-content a{color:var(--green);font-weight:700}
+    .request-confirm-dialog{width:min(480px,calc(100vw - 28px))}
+    .request-confirm-body{display:grid;gap:14px;padding:20px 24px 24px}
+    .request-summary-list{margin:0;display:grid;gap:10px;background:#fff;border:1px solid var(--rule);border-radius:12px;padding:14px 16px}
+    .request-summary-list div{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:13px;line-height:1.45}
+    .request-summary-list dt{color:#5c5749;font-weight:600}
+    .request-summary-list dd{margin:0;color:var(--ink);font-weight:600;word-break:break-word}
+    .request-summary-hint{margin:0;font:13px/1.5 Arial,sans-serif;color:#5c5749}
+    @media(max-width:480px){.request-summary-list div{grid-template-columns:1fr;gap:2px}.request-confirm-body{padding:16px 18px 20px}}
+    .request-success-dialog{width:min(460px,calc(100vw - 28px))}
+    .request-success-body{display:grid;gap:14px;justify-items:start;padding:22px 24px 24px}
+    .request-success-badge{display:inline-grid;place-items:center;width:48px;height:48px;border-radius:14px;background:rgba(31,106,67,.12);color:#1f6a43}
+    .request-success-badge svg{width:24px;height:24px;stroke:currentColor;stroke-width:2.4;fill:none}
+    .request-success-body p{margin:0;color:#465651;font:14px/1.6 Arial,sans-serif}
+    .request-success-email{width:100%;padding:10px 12px;border:1px solid var(--rule);border-radius:10px;background:#fff;color:var(--ink);font:600 13.5px/1.4 Arial,sans-serif;word-break:break-word}
+    .request-success-actions{display:flex;justify-content:flex-end;width:100%;margin-top:4px}
+    @media(max-width:780px){.login-page{grid-template-columns:1fr}.login-form-wrap{grid-row:1;padding:20px}.login-story{grid-row:2;min-height:0;padding:28px;gap:24px}.login-story-copy h1{font-size:32px}.login-brand{font-size:30px}.login-card{padding:26px 24px 24px 38px}.login-card-close{top:12px;right:12px;width:32px;height:32px}body.is-request-mode .login-form-wrap{padding:20px}body.is-request-mode .login-card{padding:26px 24px 24px 38px}.login-card .form-grid{grid-template-columns:1fr;gap:14px}body.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field,#contact-number-field,#email-field,#request-reason-field,#password-field,#password-confirmation-field){grid-column:auto}}
   </style>
 </head>
 <body>
@@ -126,30 +172,17 @@
               <g>
                 <path d="M0 20h136v130c0 12-30.4 22-68 22S0 162 0 150z" fill="url(#coin-edge)"/>
                 <g stroke="#7a4e0c" stroke-opacity=".42" stroke-width="1.15">
-                  <line x1="8" y1="26" x2="8" y2="156"/><line x1="16" y1="30" x2="16" y2="160"/><line x1="25" y1="34" x2="25" y2="164"/><line x1="35" y1="37" x2="35" y2="167"/><line x1="46" y1="39" x2="46" y2="169"/><line x1="57" y1="41" x2="57" y2="171"/><line x1="68" y1="42" x2="68" y2="172"/><line x1="79" y1="41" x2="79" y2="171"/><line x1="90" y1="39" x2="90" y2="169"/><line x1="101" y1="37" x2="101" y2="167"/><line x1="111" y1="34" x2="111" y2="164"/><line x1="120" y1="30" x2="120" y2="160"/><line x1="128" y1="26" x2="128" y2="156"/>
+                  <path d="M0 32a68 18 0 0 0 136 0M0 48a68 18 0 0 0 136 0M0 64a68 18 0 0 0 136 0M0 80a68 18 0 0 0 136 0M0 96a68 18 0 0 0 136 0M0 112a68 18 0 0 0 136 0M0 128a68 18 0 0 0 136 0M0 144a68 18 0 0 0 136 0"/>
                 </g>
-                <g fill="none" stroke="#5c3906" stroke-width="2">
-                  <path d="M0 36a68 22 0 0 0 136 0"/>
-                  <path d="M0 52a68 22 0 0 0 136 0"/>
-                  <path d="M0 68a68 22 0 0 0 136 0"/>
-                  <path d="M0 84a68 22 0 0 0 136 0"/>
-                  <path d="M0 100a68 22 0 0 0 136 0"/>
-                  <path d="M0 116a68 22 0 0 0 136 0"/>
-                  <path d="M0 132a68 22 0 0 0 136 0"/>
-                  <path d="M0 150a68 22 0 0 0 136 0"/>
-                </g>
-                <g fill="none" stroke="#fce9a6" stroke-opacity=".75" stroke-width="1">
-                  <path d="M0 37.5a68 22 0 0 0 136 0"/>
-                  <path d="M0 53.5a68 22 0 0 0 136 0"/>
-                  <path d="M0 69.5a68 22 0 0 0 136 0"/>
-                  <path d="M0 85.5a68 22 0 0 0 136 0"/>
-                  <path d="M0 101.5a68 22 0 0 0 136 0"/>
-                  <path d="M0 117.5a68 22 0 0 0 136 0"/>
-                  <path d="M0 133.5a68 22 0 0 0 136 0"/>
-                </g>
-                <ellipse cx="68" cy="20" rx="68" ry="22" fill="url(#coin-face)" stroke="#fae6a0" stroke-width="1.2"/>
-                <ellipse cx="68" cy="20" rx="56" ry="17" fill="none" stroke="#9e6d19" stroke-opacity=".5" stroke-width="1.2"/>
-                <text x="68" y="28" text-anchor="middle" fill="#8a5b10" font-family="Arial,sans-serif" font-size="26" font-weight="900" transform="translate(68,20) scale(1.3,.56) translate(-68,-20)">&#8369;</text>
+                <ellipse cx="68" cy="20" rx="68" ry="20" fill="url(#coin-face)" stroke="#fae6a2" stroke-width="1.2"/>
+                <ellipse cx="68" cy="20" rx="56" ry="15" fill="#fcebb1" stroke="#9b6a17" stroke-opacity=".45" stroke-width="1.2"/>
+                <ellipse cx="68" cy="20" rx="50" ry="13" fill="#dfad49"/>
+              </g>
+              <g transform="translate(24,-72)">
+                <ellipse cx="44" cy="56" rx="42" ry="10" fill="rgba(0,0,0,.28)"/>
+                <path d="M4 14h80v26c0 6.5-17.9 12-40 12S4 46.5 4 40z" fill="url(#coin-edge)"/>
+                <path d="M4 27a40 12 0 0 0 80 0M4 40a40 12 0 0 0 80 0" fill="none" stroke="#754c0c" stroke-width="1.2"/>
+                <ellipse cx="44" cy="14" rx="40" ry="12" fill="url(#coin-face)" stroke="#fbe499" stroke-width="1"/>
               </g>
               <path d="M68 18V-30" fill="none" stroke="#459c67" stroke-width="4.5" stroke-linecap="round"/>
               <path d="M68-12C40-12 18-30 16-54c26-4 50 10 52 42z" fill="url(#leaf-left)"/>
@@ -198,30 +231,7 @@
     <section data-policy-content="terms"><h3>Purpose</h3><p>IPON records savings-related activity entered by authorized users. It is a tracking system only and does not hold, transfer, receive, or safeguard money.</p><h3>Your responsibilities</h3><ul><li>Provide accurate information and keep your sign-in credentials private.</li><li>Use only accounts and savings-group records you are authorized to access.</li><li>Verify important totals against receipts or the group's official records.</li></ul><h3>Approvals and records</h3><p>Only confirmed entries affect tracked savings. Rejected and voided entries may remain in the audit history for accountability.</p><h3>Development availability</h3><p>The system is under active development. Features may be incomplete, changed, unavailable, or contain errors. Do not treat IPON as a bank, wallet, or the sole official financial record.</p></section>
     <section data-policy-content="privacy" hidden><h3>Information we process</h3><p>IPON may store your name, email address, mobile number, role, savings-group membership, submitted records, review activity, and security-related account events.</p><h3>How information is used</h3><p>Information is used to authenticate users, enforce role and group access, display savings records, process approvals, send in-app notifications, and maintain an audit trail.</p><h3>Who can access it</h3><p>Access is limited by assigned role and savings group. Authorized administrators may review relevant account and activity information. Platform administrators manage account access but are not intended to view a group's savings records.</p><h3>Security and retention</h3><p>Reasonable technical controls are used, but no developing system can guarantee uninterrupted or error-free security. Records may be retained for audit and accountability purposes.</p><h3>Questions</h3><p>For privacy or account concerns, contact your assigned administrator.</p></section>
   </div></div></dialog>
-  <dialog class="form-dialog request-confirm-dialog" id="request-confirm-dialog" aria-labelledby="request-confirm-title">
-    <div class="form-dialog-sheet">
-      <header class="form-dialog-header">
-        <div>
-          <h2 id="request-confirm-title">Confirm account details</h2>
-          <p>Please double-check your information before requesting your verification code.</p>
-        </div>
-        <button class="dialog-close" type="button" id="request-confirm-close" aria-label="Close confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
-      </header>
-      <div class="request-confirm-body">
-        <dl class="request-summary-list">
-          <div><dt>Full name</dt><dd id="summary-full-name">&mdash;</dd></div>
-          <div><dt>Contact number</dt><dd id="summary-contact-number">&mdash;</dd></div>
-          <div><dt>Email address</dt><dd id="summary-email">&mdash;</dd></div>
-          <div style="display:none;" aria-hidden="true"><dt>Request reason</dt><dd id="summary-request-reason">&mdash;</dd></div>
-        </dl>
-        <p class="request-summary-hint">A 6-digit verification code will be sent to your email to verify ownership and activate your account.</p>
-        <div class="form-actions field-wide">
-          <button class="button button-secondary" id="request-confirm-edit" type="button">Edit details</button>
-          <button class="button button-primary" id="request-confirm-proceed" type="button">Confirm &amp; send code</button>
-        </div>
-      </div>
-    </div>
-  </dialog>
+  <dialog class="form-dialog request-confirm-dialog" id="request-confirm-dialog" aria-labelledby="request-confirm-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="request-confirm-title">Confirm account details</h2><p>Please double-check your information before requesting your verification code.</p></div><button class="dialog-close" type="button" id="request-confirm-close" aria-label="Close confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-confirm-body"><dl class="request-summary-list"><div><dt>Full name</dt><dd id="summary-full-name">&mdash;</dd></div><div><dt>Contact number</dt><dd id="summary-contact-number">&mdash;</dd></div><div><dt>Email address</dt><dd id="summary-email">&mdash;</dd></div><div style="display:none;" aria-hidden="true"><dt>Request reason</dt><dd id="summary-request-reason">&mdash;</dd></div></dl><p class="request-summary-hint">A 6-digit verification code will be sent to your email to verify ownership and activate your account.</p><div class="form-actions field-wide"><button class="button button-secondary" id="request-confirm-edit" type="button">Edit details</button><button class="button button-primary" id="request-confirm-proceed" type="button">Confirm &amp; send code</button></div></div></div></dialog>
   <dialog class="form-dialog request-verify-dialog" id="request-verify-dialog" aria-labelledby="request-verify-title">
     <div class="form-dialog-sheet">
       <header class="form-dialog-header">
@@ -249,4 +259,3 @@
   <script src="js/config.js?v=20261113-26"></script><script src="js/core.js?v=20261113-26"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/auth.js?v=20261113-26"></script>
 </body>
 </html>
-
