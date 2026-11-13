@@ -233,7 +233,7 @@
     message.textContent = '';
     if (!validateForm()) return;
 
-    Ipon.setBusy(submit, true, mode === 'signup' ? 'Submitting...' : 'Signing in...');
+    Ipon.setBusy(submit, true, mode === 'signup' ? 'Submitting administrator access…' : 'Signing in...');
     try {
       if (mode === 'signup') {
         const first = Ipon.normalizeNamePart(firstName.value);
@@ -260,7 +260,7 @@
           reason: requestReason.value.trim()
         };
 
-        Ipon.setBusy(submit, true, 'Sending verification code…');
+        Ipon.setBusy(submit, true, 'Submitting administrator access…');
         const otpOutcome = await Ipon.sendAdminRequestVerificationCode({
           email: submittedEmail,
           full_name: full

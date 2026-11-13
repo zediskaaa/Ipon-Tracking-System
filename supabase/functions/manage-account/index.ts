@@ -347,8 +347,7 @@ Deno.serve(async (request) => {
   const url = Deno.env.get('SUPABASE_URL');
   const anon = Deno.env.get('SUPABASE_ANON_KEY');
   const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  const authorization = request.headers.get('Authorization');
-  if (!url || !anon || !service || !authorization) return json({ error: 'Account service is not configured.' }, 500);
+  if (!url || !anon || !service) return json({ error: 'Account service is not configured.' }, 500);
 
   const admin = createClient(url, service, { auth: { persistSession: false } });
 
@@ -382,6 +381,9 @@ Deno.serve(async (request) => {
       email_error: emailOutcome.email_error
     });
   }
+
+  const authorization = request.headers.get('Authorization');
+  if (!authorization) return json({ error: 'Your session is invalid.' }, 401);
 
   const caller = createClient(url, anon, { global: { headers: { Authorization: authorization } }, auth: { persistSession: false } });
   const token = authorization.replace(/^Bearer\s+/i, '');

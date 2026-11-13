@@ -1478,11 +1478,14 @@
     if (!button) return;
     button.classList.toggle('is-busy', busy);
     if (busy) {
-      button.dataset.originalLabel = button.textContent;
+      if (!button.dataset.originalLabel) {
+        button.dataset.originalLabel = button.textContent;
+      }
       button.textContent = label;
       button.disabled = true;
     } else {
       button.textContent = button.dataset.originalLabel || button.textContent;
+      delete button.dataset.originalLabel;
       button.disabled = false;
     }
   }
@@ -1762,7 +1765,14 @@
   async function invokeAccountFunction(body) {
     const client = getClient();
     if (!client) throw new Error('Supabase is not connected.');
-    const { data, error } = await client.functions.invoke('manage-account', { body });
+    const headers = {};
+    const { data: { session } } = await client.auth.getSession().catch(() => ({ data: {} }));
+    if (session?.access_token) {
+      headers.Authorization = `Bearer ${session.access_token}`;
+    } else if (config.supabaseAnonKey) {
+      headers.Authorization = `Bearer ${config.supabaseAnonKey}`;
+    }
+    const { data, error } = await client.functions.invoke('manage-account', { body, headers });
     if (error) {
       const detail = await error.context?.json?.().catch(() => null);
       throw new Error(detail?.error || error.message);
