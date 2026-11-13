@@ -269,9 +269,12 @@ test('new passwords use one strong policy in browser and Edge boundaries', () =>
 
 test('login credential errors mark both fields without revealing account existence', () => {
   const auth = read('js/auth.js');
+  const loginHtml = read('login.html');
   assert.match(auth, /error\?\.code === 'invalid_credentials'/);
   assert.match(auth, /\[email, password\]\.forEach\(\(input\) => input\.setAttribute\('aria-invalid', 'true'\)\)/);
   assert.match(auth, /message\.textContent = 'Incorrect email or password\.'/);
+  assert.match(loginHtml, /class="password-toggle"[^>]*><svg/);
+  assert.doesNotMatch(loginHtml, /class="password-toggle"[^>]*>Show<\/button>/);
 });
 
 test('phone fields reject letters and incomplete accounts finish setup before panel access', () => {

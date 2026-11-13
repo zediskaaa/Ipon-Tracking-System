@@ -19,6 +19,7 @@
   const passwordConfirmation = document.getElementById('password-confirmation');
   const passwordRequirements = document.getElementById('password-requirements');
   const passwordToggle = document.getElementById('password-toggle');
+  const passwordConfirmationToggle = document.getElementById('password-confirmation-toggle');
   const forgotButton = document.getElementById('forgot-password-open');
   const recoveryDialog = document.getElementById('recovery-dialog');
   const recoveryRequestForm = document.getElementById('recovery-request-form');
@@ -92,13 +93,23 @@
     fieldErrors.forEach((_, input) => clearFieldError(input));
   }
 
+  const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+  const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
   function setPasswordVisibility(visible) {
     const type = visible ? 'text' : 'password';
     password.type = type;
     passwordConfirmation.type = type;
-    passwordToggle.textContent = visible ? 'Hide' : 'Show';
-    passwordToggle.setAttribute('aria-pressed', String(visible));
-    passwordToggle.setAttribute('aria-label', `${visible ? 'Hide' : 'Show'} passwords`);
+    const svg = visible ? EYE_OFF_SVG : EYE_OPEN_SVG;
+    const label = `${visible ? 'Hide' : 'Show'} passwords`;
+    const pressed = String(visible);
+    [passwordToggle, passwordConfirmationToggle].forEach((btn) => {
+      if (!btn) return;
+      btn.innerHTML = svg;
+      btn.setAttribute('aria-pressed', pressed);
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('title', label);
+    });
   }
 
   const passwordStrength = Ipon.bindPasswordStrength(password, () => [firstName.value, middleName.value, lastName.value, email.value]);
@@ -179,7 +190,8 @@
   email.addEventListener('input', clearCredentialError);
   password.addEventListener('input', clearCredentialError);
   email.addEventListener('blur', () => { email.value = email.value.trim(); });
-  passwordToggle.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
+  passwordToggle?.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
+  passwordConfirmationToggle?.addEventListener('click', () => setPasswordVisibility(passwordConfirmation.type === 'password'));
   document.getElementById('show-login').addEventListener('click', () => setMode('login'));
   document.getElementById('show-signup').addEventListener('click', () => setMode('signup'));
   if (new URLSearchParams(location.search).get('mode') === 'signup') setMode('signup');

@@ -531,6 +531,12 @@ button.record-entry-action:focus-visible{outline:2px solid #fff;outline-offset:2
 .avatar-crop-preview-box small{font:700 10.5px/1 Arial,sans-serif;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .avatar-crop-preview-circle{width:44px;height:44px;border-radius:50%;overflow:hidden;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.18);background-size:cover;background-position:center;background-color:#274c3d}
 .avatar-crop-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:14px 22px 18px;border-top:1px solid var(--rule)}
+.password-control{position:relative;display:flex;align-items:center;width:100%}
+.password-control input{width:100%;padding-inline-end:38px!important}
+.password-toggle{position:absolute;top:50%;transform:translateY(-50%);right:2px;display:inline-grid;place-items:center;width:32px;height:32px;border:0;border-radius:6px;padding:0;background:transparent;color:#5a655f;cursor:pointer;transition:color .18s ease,background .18s ease}
+.password-toggle:hover{color:var(--green);background:rgba(20,45,43,.06)}
+.password-toggle:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.password-toggle svg{width:19px;height:19px;display:block;pointer-events:none}
 .record-review-dialog{width:min(620px,calc(100vw - 28px))}
 .record-review-body{display:grid;gap:14px;padding:18px 22px 22px}
 .record-review-body .form-grid{padding:0}
