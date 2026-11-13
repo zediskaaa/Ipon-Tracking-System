@@ -221,7 +221,10 @@ async function sendInviteEmail({
       <p style="margin: 0 0 18px;">
         <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #163029; color: #ffffff; text-decoration: none; font-weight: 600; padding: 10px 18px; border-radius: 10px;">Sign in to ${escapeHtml(SYSTEM_NAME)}</a>
       </p>` : ''}
-      <p style="margin: 0; font-size: 13px; color: #5c5749;">${escapeHtml(noteLine)}</p>
+      <p style="margin: 0 0 14px; font-size: 13px; color: #5c5749;">${escapeHtml(noteLine)}</p>
+      <div style="padding: 10px 14px; background: #f0ede1; border-radius: 8px; font-size: 12px; color: #6d6552; border: 1px dashed #cfcaba;">
+        <strong>Tip:</strong> If this email appeared in your Spam or Junk folder, please click <strong>"Report not spam"</strong> or move it to your Inbox so that future savings notifications arrive directly in your inbox.
+      </div>
     </div>
   `.trim();
 
@@ -424,7 +427,8 @@ async function sendAdminRequestOtpEmail({
         <span style="font-family: monospace, Consolas, sans-serif; font-size: 32px; font-weight: 700; letter-spacing: 0.35em; color: #163029;">${escapeHtml(code)}</span>
       </div>
       <p style="margin: 0 0 14px; font-size: 13px; color: #5c5749;">This verification code will expire in <strong>10 minutes</strong>.</p>
-      <p style="margin: 0; font-size: 12px; color: #7a7566; border-top: 1px solid #e0ddd0; padding-top: 14px;">If you did not sign up for myIPON, you can safely ignore this email.</p>
+      <p style="margin: 0 0 12px; font-size: 12px; color: #7a7566; border-top: 1px solid #e0ddd0; padding-top: 14px;">If you did not sign up for myIPON, you can safely ignore this email.</p>
+      <p style="margin: 0; font-size: 11px; color: #8a826f;">Tip: If this verification code landed in your Spam folder, mark it as "Not Spam" to receive future group notifications in your inbox.</p>
     </div>
   `.trim();
 

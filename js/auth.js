@@ -570,7 +570,7 @@
       requestConfirmDialog?.close();
 
       if (verifySubtitle) {
-        verifySubtitle.textContent = `Enter the 6-digit verification code sent to ${pendingSignupPayload.email}.`;
+        verifySubtitle.textContent = `Enter the 6-digit verification code sent to ${pendingSignupPayload.email}. If not in your inbox, check your Spam folder.`;
       }
       if (verifyError) {
         verifyError.hidden = true;

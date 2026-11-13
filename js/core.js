@@ -3649,7 +3649,7 @@
       const detail = !ok
         ? `<p class="invite-summary-note is-error">${escapeHtml(item.error || 'Could not create invite.')}</p>`
         : sent
-          ? `<p class="invite-summary-note">An invitation email was sent to ${escapeHtml(item.email)}. Their account will activate once they accept the invite.</p>`
+          ? `<p class="invite-summary-note">An invitation email was sent to ${escapeHtml(item.email)}. Their account will activate once they accept the invite. If they do not see it in their Inbox, please ask them to check their <strong>Spam</strong> or <strong>Junk</strong> folder.</p>`
           : `<p class="invite-summary-note">${escapeHtml(item.email_error || 'Email service is not configured yet.')} Share these details with them:</p><pre class="invite-summary-preview">${escapeHtml(item.invite_message || '')}</pre><button class="button button-secondary" type="button" data-copy-invite="${escapeHtml(item.invite_message || '')}">Copy credentials</button>`;
       return `<article class="invite-summary-item"><div class="invite-summary-head"><strong>${escapeHtml(item.email)}</strong>${badge}</div>${detail}</article>`;
     }).join('');
