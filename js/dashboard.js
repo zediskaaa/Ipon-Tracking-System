@@ -760,15 +760,26 @@
     groupDpInput.value = '';
     if (!file) return;
     try {
-      const prepared = await Ipon.prepareAvatarDataUrl(file);
-      pendingGroupAvatarUrl = prepared.dataUrl;
-      pendingGroupClearAvatar = false;
-      renderGroupDpPreview(pendingGroupAvatarUrl, groupForm.elements.name.value);
+      await Ipon.openAvatarCropper(file, {
+        title: 'Crop group display picture',
+        onSave: (croppedDataUrl) => {
+          pendingGroupAvatarUrl = croppedDataUrl;
+          pendingGroupClearAvatar = false;
+          renderGroupDpPreview(pendingGroupAvatarUrl, groupForm.elements.name.value);
+        }
+      });
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
     }
   });
-  groupDpRemove?.addEventListener('click', () => {
+  groupDpRemove?.addEventListener('click', async () => {
+    if (!pendingGroupAvatarUrl) return;
+    const accepted = await Ipon.confirmAction({
+      title: 'Remove group picture?',
+      message: 'Are you sure you want to remove the group display picture?',
+      acceptLabel: 'Remove'
+    });
+    if (!accepted) return;
     pendingGroupAvatarUrl = null;
     pendingGroupClearAvatar = true;
     renderGroupDpPreview(null, groupForm.elements.name.value || 'Group');

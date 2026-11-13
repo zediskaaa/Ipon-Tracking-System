@@ -143,6 +143,10 @@ test('users can upload display pictures and calendar days show up to 4 contribut
   const migration = read('database/migrations/20261112_022_user_avatars_and_calendar_contributors.sql');
   assert.match(core, /id="quick-avatar-input"[^>]*accept="image\/\*"/);
   assert.match(core, /rpc\('update_own_avatar'/);
+  assert.match(core, /id="avatar-crop-dialog"/);
+  assert.match(core, /id="avatar-crop-canvas"/);
+  assert.match(core, /function openAvatarCropper\(/);
+  assert.match(core, /confirmAction\(\{\s*title:\s*'Remove display picture\?'/);
   assert.match(dashboardHtml, /id="day-contributors-dialog"/);
   assert.match(dashboardJs, /contributors\.slice\(0, 4\)/);
   assert.match(dashboardJs, /day-avatar-more/);

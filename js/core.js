@@ -592,6 +592,37 @@
             <section class="account-card account-preferences"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg></span><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label></section></div>
           </div>
         </div>
+      </dialog>
+      <dialog class="form-dialog avatar-crop-dialog" id="avatar-crop-dialog" aria-labelledby="avatar-crop-title">
+        <div class="form-dialog-sheet avatar-crop-sheet">
+          <header class="form-dialog-header">
+            <div>
+              <h2 id="avatar-crop-title">Crop display picture</h2>
+              <p>Drag to reposition or adjust zoom to frame your profile picture.</p>
+            </div>
+            <button class="dialog-close" id="avatar-crop-close" type="button" aria-label="Close photo editor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="avatar-crop-body">
+            <div class="avatar-crop-viewport-wrap">
+              <canvas class="avatar-crop-canvas" id="avatar-crop-canvas" width="280" height="280" aria-label="Photo crop preview"></canvas>
+              <div class="avatar-crop-overlay" aria-hidden="true"></div>
+            </div>
+            <div class="avatar-crop-controls">
+              <label for="avatar-crop-zoom" class="avatar-crop-zoom-label">
+                <span>Zoom</span>
+                <input id="avatar-crop-zoom" type="range" min="1" max="3" step="0.01" value="1" aria-label="Zoom photo">
+              </label>
+              <div class="avatar-crop-preview-box">
+                <small>Preview</small>
+                <div class="avatar-crop-preview-circle" id="avatar-crop-preview-thumb"></div>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions field-wide avatar-crop-actions">
+            <button class="button button-secondary" id="avatar-crop-cancel" type="button">Cancel</button>
+            <button class="button button-primary" id="avatar-crop-save" type="button">Save display picture</button>
+          </div>
+        </div>
       </dialog>`);
     const securityCard = document.querySelector('#account-dialog .account-security-card');
     if (securityCard && !securityCard.querySelector('[data-mfa-settings]')) securityCard.insertAdjacentHTML('beforeend', mfaSettingsMarkup());
@@ -946,6 +977,227 @@
     catch (error) { toast(friendlyError(error), 'error'); }
   }
 
+  function openAvatarCropper(file, { title = 'Crop display picture', onSave } = {}) {
+    return new Promise((resolve) => {
+      const dialog = document.getElementById('avatar-crop-dialog');
+      const canvas = document.getElementById('avatar-crop-canvas');
+      const titleEl = document.getElementById('avatar-crop-title');
+      const zoomInput = document.getElementById('avatar-crop-zoom');
+      const previewThumb = document.getElementById('avatar-crop-preview-thumb');
+      const saveBtn = document.getElementById('avatar-crop-save');
+      const cancelBtn = document.getElementById('avatar-crop-cancel');
+      const closeBtn = document.getElementById('avatar-crop-close');
+      const viewport = dialog?.querySelector('.avatar-crop-viewport-wrap');
+
+      if (!dialog || !canvas || !viewport) return resolve(null);
+      if (titleEl) titleEl.textContent = title;
+
+      if (file instanceof File && !file.type.startsWith('image/') && !PICTURE_FILE_RE.test(file.name || '')) {
+        toast('Please choose a valid picture file.', 'error');
+        return resolve(null);
+      }
+
+      const CROP_X = 15;
+      const CROP_Y = 15;
+      const CROP_SIZE = 250;
+      const CENTER = 140;
+
+      let thumbCanvas = previewThumb?.querySelector('canvas');
+      if (!thumbCanvas && previewThumb) {
+        previewThumb.innerHTML = '<canvas width="44" height="44" style="display:block;width:44px;height:44px;border-radius:50%;"></canvas>';
+        thumbCanvas = previewThumb.querySelector('canvas');
+      }
+      const thumbCtx = thumbCanvas?.getContext('2d');
+      const ctx = canvas.getContext('2d');
+
+      const isBlob = typeof Blob !== 'undefined' && file instanceof Blob;
+      const objectUrl = isBlob ? URL.createObjectURL(file) : String(file);
+      const img = new Image();
+
+      let minScale = 1;
+      let zoom = 1;
+      let scale = 1;
+      let imgW = 0;
+      let imgH = 0;
+      let offsetX = 0;
+      let offsetY = 0;
+      let isDragging = false;
+      let startPointerX = 0;
+      let startPointerY = 0;
+      let startOffsetX = 0;
+      let startOffsetY = 0;
+
+      function clampOffsets() {
+        const minX = (CROP_X + CROP_SIZE) - imgW;
+        const maxX = CROP_X;
+        const minY = (CROP_Y + CROP_SIZE) - imgH;
+        const maxY = CROP_Y;
+        offsetX = Math.min(maxX, Math.max(minX, offsetX));
+        offsetY = Math.min(maxY, Math.max(minY, offsetY));
+      }
+
+      function draw() {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, offsetX, offsetY, imgW, imgH);
+        if (thumbCtx) {
+          thumbCtx.clearRect(0, 0, 44, 44);
+          thumbCtx.drawImage(canvas, CROP_X, CROP_Y, CROP_SIZE, CROP_SIZE, 0, 0, 44, 44);
+        }
+      }
+
+      function applyZoom(newZoom) {
+        newZoom = Math.min(3, Math.max(1, newZoom));
+        const newScale = minScale * newZoom;
+        const ratio = newScale / scale;
+        const px = CENTER - offsetX;
+        const py = CENTER - offsetY;
+        zoom = newZoom;
+        scale = newScale;
+        imgW = Math.round(img.naturalWidth * scale);
+        imgH = Math.round(img.naturalHeight * scale);
+        offsetX = CENTER - px * ratio;
+        offsetY = CENTER - py * ratio;
+        clampOffsets();
+        if (zoomInput) zoomInput.value = String(zoom);
+        draw();
+      }
+
+      const onPointerDown = (e) => {
+        if (e.button !== 0) return;
+        isDragging = true;
+        try { viewport.setPointerCapture(e.pointerId); } catch {}
+        startPointerX = e.clientX;
+        startPointerY = e.clientY;
+        startOffsetX = offsetX;
+        startOffsetY = offsetY;
+      };
+
+      const onPointerMove = (e) => {
+        if (!isDragging) return;
+        offsetX = startOffsetX + (e.clientX - startPointerX);
+        offsetY = startOffsetY + (e.clientY - startPointerY);
+        clampOffsets();
+        draw();
+      };
+
+      const onPointerUp = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        try { viewport.releasePointerCapture(e.pointerId); } catch {}
+      };
+
+      const onWheel = (e) => {
+        e.preventDefault();
+        const delta = -Math.sign(e.deltaY) * 0.1;
+        applyZoom(zoom + delta);
+      };
+
+      const onZoomInput = () => {
+        applyZoom(Number(zoomInput.value));
+      };
+
+      function cleanup() {
+        viewport.removeEventListener('pointerdown', onPointerDown);
+        viewport.removeEventListener('pointermove', onPointerMove);
+        viewport.removeEventListener('pointerup', onPointerUp);
+        viewport.removeEventListener('pointercancel', onPointerUp);
+        viewport.removeEventListener('wheel', onWheel);
+        zoomInput?.removeEventListener('input', onZoomInput);
+        cancelBtn?.removeEventListener('click', onCancel);
+        closeBtn?.removeEventListener('click', onCancel);
+        saveBtn?.removeEventListener('click', onSaveClick);
+        dialog.removeEventListener('cancel', onDialogCancel);
+        dialog.removeEventListener('click', onBackdropClick);
+        if (isBlob) URL.revokeObjectURL(objectUrl);
+      }
+
+      function onCancel() {
+        cleanup();
+        dialog.close();
+        resolve(null);
+      }
+
+      function onDialogCancel(e) {
+        e.preventDefault();
+        onCancel();
+      }
+
+      function onBackdropClick(e) {
+        if (e.target === dialog) onCancel();
+      }
+
+      async function onSaveClick() {
+        const exportCanvas = document.createElement('canvas');
+        exportCanvas.width = 256;
+        exportCanvas.height = 256;
+        const exportCtx = exportCanvas.getContext('2d');
+        if (!exportCtx) return onCancel();
+        exportCtx.imageSmoothingEnabled = true;
+        exportCtx.imageSmoothingQuality = 'high';
+        exportCtx.drawImage(canvas, CROP_X, CROP_Y, CROP_SIZE, CROP_SIZE, 0, 0, 256, 256);
+        const croppedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.88);
+
+        setBusy(saveBtn, true, 'Saving…');
+        try {
+          if (typeof onSave === 'function') {
+            await onSave(croppedDataUrl);
+          } else {
+            await rpc('update_own_avatar', { p_avatar_url: croppedDataUrl });
+            currentProfile.avatar_url = croppedDataUrl;
+            syncProfileAvatars(currentProfile);
+            window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
+            toast('Profile picture updated.');
+          }
+          cleanup();
+          dialog.close();
+          resolve(croppedDataUrl);
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          setBusy(saveBtn, false);
+        }
+      }
+
+      img.onload = () => {
+        minScale = Math.max(CROP_SIZE / img.naturalWidth, CROP_SIZE / img.naturalHeight);
+        zoom = 1;
+        scale = minScale;
+        imgW = Math.round(img.naturalWidth * scale);
+        imgH = Math.round(img.naturalHeight * scale);
+        offsetX = CENTER - imgW / 2;
+        offsetY = CENTER - imgH / 2;
+        clampOffsets();
+
+        if (zoomInput) {
+          zoomInput.value = '1';
+          zoomInput.addEventListener('input', onZoomInput);
+        }
+        viewport.addEventListener('pointerdown', onPointerDown);
+        viewport.addEventListener('pointermove', onPointerMove);
+        viewport.addEventListener('pointerup', onPointerUp);
+        viewport.addEventListener('pointercancel', onPointerUp);
+        viewport.addEventListener('wheel', onWheel, { passive: false });
+        cancelBtn?.addEventListener('click', onCancel);
+        closeBtn?.addEventListener('click', onCancel);
+        saveBtn?.addEventListener('click', onSaveClick);
+        dialog.addEventListener('cancel', onDialogCancel);
+        dialog.addEventListener('click', onBackdropClick);
+
+        draw();
+        dialog.showModal();
+      };
+
+      img.onerror = () => {
+        cleanup();
+        toast('Unable to open image for cropping.', 'error');
+        resolve(null);
+      };
+
+      img.src = objectUrl;
+    });
+  }
+
   function bindAccountDialog() {
     const profileForm = document.getElementById('quick-profile-form');
     if (!profileForm || profileForm.dataset.bound) return;
@@ -966,17 +1218,18 @@
       avatarInput.value = '';
       if (!file) return;
       try {
-        const prepared = await prepareAvatarDataUrl(file);
-        await rpc('update_own_avatar', { p_avatar_url: prepared.dataUrl });
-        currentProfile.avatar_url = prepared.dataUrl;
-        syncProfileAvatars(currentProfile);
-        window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
-        toast('Profile picture updated.');
+        await openAvatarCropper(file);
       } catch (error) {
         toast(friendlyError(error), 'error');
       }
     });
     if (avatarRemove) avatarRemove.addEventListener('click', async () => {
+      const accepted = await confirmAction({
+        title: 'Remove display picture?',
+        message: 'Are you sure you want to remove your display picture? Your initials will be displayed instead.',
+        acceptLabel: 'Remove'
+      });
+      if (!accepted) return;
       avatarRemove.disabled = true;
       try {
         await rpc('update_own_avatar', { p_avatar_url: null });
@@ -2604,7 +2857,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges,
     get profile() { return currentProfile; }
   };
 })();
