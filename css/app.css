@@ -506,6 +506,17 @@ body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame
 .announcement-viewer-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px;padding:14px 22px 20px;border-top:1px solid var(--rule)}
 .announcement-viewer-actions .button-danger{margin-right:auto}
 .announcement-compose-dialog textarea{min-height:160px;resize:vertical}
+button.record-entry-action{cursor:pointer;outline:none}
+button.record-entry-action:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.quick-record-dialog{width:min(560px,calc(100vw - 28px))}
+.quick-record-type-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px;background:rgba(20,45,43,.07);border-radius:12px;margin:8px 0 16px}
+.quick-type-tab{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 10px;border-radius:9px;border:none;background:transparent;color:var(--muted);font:700 12.5px/1 Arial,sans-serif;cursor:pointer;transition:all .16s ease;user-select:none;white-space:nowrap}
+.quick-type-tab:hover{color:var(--ink);background:rgba(255,255,255,.6)}
+.quick-type-tab.is-active{background:#fff;color:var(--ink);box-shadow:0 2px 6px rgba(20,45,43,.08)}
+.quick-type-tab svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;flex:0 0 auto}
+.quick-member-auto-chip{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:9px;background:#eff6f2;border:1px solid #c7ded2;color:#174b37;font:600 13px/1.3 Arial,sans-serif}
+.quick-member-auto-chip strong{color:#0b2f22;font-weight:700}
+@media(max-width:480px){.quick-type-tab{padding:0 6px;font-size:11.5px;gap:4px}.quick-type-tab svg{width:13px;height:13px}}
 .record-review-dialog{width:min(620px,calc(100vw - 28px))}
 .record-review-body{display:grid;gap:14px;padding:18px 22px 22px}
 .record-review-body .form-grid{padding:0}

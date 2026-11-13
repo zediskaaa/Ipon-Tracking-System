@@ -22,6 +22,43 @@
   const summaryValues = [...document.querySelectorAll('.summary-breakdown dd')];
   const goalSelects = [document.getElementById('calendar-goal-select'), document.getElementById('mobile-calendar-goal-select')];
   const addAnnouncementButton = document.getElementById('dashboard-add-announcement');
+  const quickRecordDialog = document.getElementById('quick-record-dialog');
+  const quickRecordForm = document.getElementById('quick-record-form');
+  const quickRecordTypeTabs = document.getElementById('quick-record-type-tabs');
+  const quickTabAddition = document.getElementById('quick-tab-addition');
+  const quickTabDeduction = document.getElementById('quick-tab-deduction');
+  const quickTabExpense = document.getElementById('quick-tab-expense');
+  const quickTitle = document.getElementById('quick-record-title');
+  const quickSubtitle = document.getElementById('quick-record-subtitle');
+  const quickEntryTypeInput = document.getElementById('quick-entry-type');
+  const quickFieldMember = document.getElementById('quick-field-member');
+  const quickMemberSelect = document.getElementById('quick-member-id');
+  const quickMemberAuto = document.getElementById('quick-member-auto');
+  const quickMemberAutoName = document.getElementById('quick-member-auto-name');
+  const quickFieldResponsible = document.getElementById('quick-field-responsible');
+  const quickResponsibleSelect = document.getElementById('quick-responsible');
+  const quickFieldMonth = document.getElementById('quick-field-month');
+  const quickMonthInput = document.getElementById('quick-month');
+  const quickFieldDate = document.getElementById('quick-field-date');
+  const quickDateLabel = document.getElementById('quick-date-label');
+  const quickDateInput = document.getElementById('quick-date');
+  const quickFieldAmount = document.getElementById('quick-field-amount');
+  const quickAmountInput = document.getElementById('quick-amount');
+  const quickFieldCategory = document.getElementById('quick-field-category');
+  const quickCategoryInput = document.getElementById('quick-category');
+  const quickFieldReference = document.getElementById('quick-field-reference');
+  const quickReferenceInput = document.getElementById('quick-reference');
+  const quickFieldDescription = document.getElementById('quick-field-description');
+  const quickDescLabel = document.getElementById('quick-desc-label');
+  const quickDescriptionInput = document.getElementById('quick-description');
+  const quickFieldNotes = document.getElementById('quick-field-notes');
+  const quickNotesInput = document.getElementById('quick-notes');
+  const quickSubmitBtn = document.getElementById('quick-record-submit');
+  const dashboardRecordEntryBtn = document.getElementById('dashboard-record-entry');
+
+  let cachedMembers = [];
+  let currentQuickType = 'addition';
+  let quickPendingKey = null;
   const announcements = Ipon.bindAnnouncements({
     listElement: document.getElementById('dashboard-announcement-list'),
     addButton: addAnnouncementButton
@@ -411,7 +448,7 @@
         Ipon.client.rpc('get_savings_summary'),
         Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'),
         getPending(),
-        Ipon.client.from('members').select('id', { count: 'exact' }).eq('status', 'ACTIVE'),
+        Ipon.client.from('members').select('id,full_name,monthly_contribution_amount', { count: 'exact' }).eq('status', 'ACTIVE').order('full_name'),
         Ipon.client.from('v_contribution_status').select('member_id,payment_status,paid_amount').eq('period_month', start),
         Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.rpc('get_my_groups'),
@@ -427,6 +464,7 @@
       const progress = (progressResult.data || []).filter((item) => activeIds.has(item.member_id) || Number(item.paid_amount || 0) > 0);
       const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
       document.getElementById('dashboard-members').textContent = memberResult.count ?? (memberResult.data?.length || 0); document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; renderGoalOptions(goalResult.data || []);
+      populateQuickRecordMembers(memberResult.data || []);
       updateDashboardGoalProgress(summary.tracked_savings);
       renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
       hasSnapshot = true; dataStatus.hidden = true;
@@ -602,7 +640,7 @@
       </section>` : '';
     dayModalBody.innerHTML = items.length
       ? `${contributorsHtml}${othersHtml}`
-      : '<div class="day-modal-empty"><p>No contributions or activity recorded for this day.</p><a class="button button-primary" href="contributions.html">+ Record entry</a></div>';
+      : '<div class="day-modal-empty"><p>No contributions or activity recorded for this day.</p><button class="button button-primary" type="button" data-action="quick-record-day">+ Record entry</button></div>';
     Ipon.bindAvatarFallbacks(dayModalBody);
     dayModal.showModal();
   }
@@ -827,6 +865,204 @@
       Ipon.setBusy(button, false);
     }
   });
+  function populateQuickRecordMembers(members) {
+    cachedMembers = members || [];
+    if (quickMemberSelect) {
+      const cur = quickMemberSelect.value;
+      quickMemberSelect.innerHTML = `<option value="">Select member</option>${cachedMembers.map((m) => `<option value="${m.id}" ${cur === m.id ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
+      if (state.profile?.role === 'MEMBER' && state.profile.member_id) {
+        quickMemberSelect.value = state.profile.member_id;
+      }
+    }
+    if (quickResponsibleSelect) {
+      const cur = quickResponsibleSelect.value;
+      const ownName = cachedMembers.find((m) => m.id === state.profile?.member_id)?.full_name || state.profile?.full_name || '';
+      quickResponsibleSelect.innerHTML = `<option value="">Select member</option>${cachedMembers.map((m) => `<option value="${Ipon.escapeHtml(m.full_name)}" ${(cur || ownName) === m.full_name ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
+    }
+  }
+
+  function setQuickRecordType(type) {
+    currentQuickType = type;
+    const isAddition = type === 'addition';
+    const isDeduction = type === 'deduction';
+    const isExpense = type === 'expense';
+    const isMemberRole = state.profile?.role === 'MEMBER';
+
+    quickTabAddition?.classList.toggle('is-active', isAddition);
+    quickTabAddition?.setAttribute('aria-selected', isAddition ? 'true' : 'false');
+    quickTabDeduction?.classList.toggle('is-active', isDeduction);
+    quickTabDeduction?.setAttribute('aria-selected', isDeduction ? 'true' : 'false');
+    quickTabExpense?.classList.toggle('is-active', isExpense);
+    quickTabExpense?.setAttribute('aria-selected', isExpense ? 'true' : 'false');
+
+    if (quickEntryTypeInput) quickEntryTypeInput.value = type;
+
+    if (isAddition) {
+      if (quickTitle) quickTitle.textContent = isMemberRole ? 'Record addition' : 'Record savings addition';
+      if (quickSubtitle) quickSubtitle.textContent = 'Record money added to the group savings fund.';
+      if (quickSubmitBtn) quickSubmitBtn.textContent = 'Save addition';
+      if (quickDateLabel) quickDateLabel.textContent = 'Date added';
+    } else if (isDeduction) {
+      if (quickTitle) quickTitle.textContent = 'Record deduction';
+      if (quickSubtitle) quickSubtitle.textContent = 'Track money deducted or withdrawn from the savings fund.';
+      if (quickSubmitBtn) quickSubmitBtn.textContent = 'Save deduction';
+      if (quickDateLabel) quickDateLabel.textContent = 'Date deducted';
+      if (quickDescLabel) quickDescLabel.textContent = 'Reason / description';
+      if (quickCategoryInput) quickCategoryInput.placeholder = 'e.g. Emergency use, Loan repayment';
+    } else {
+      if (quickTitle) quickTitle.textContent = 'Record expense';
+      if (quickSubtitle) quickSubtitle.textContent = 'Track group expenses separately from deductions.';
+      if (quickSubmitBtn) quickSubmitBtn.textContent = 'Save expense';
+      if (quickDateLabel) quickDateLabel.textContent = 'Date incurred';
+      if (quickDescLabel) quickDescLabel.textContent = 'Description';
+      if (quickCategoryInput) quickCategoryInput.placeholder = 'e.g. Supplies, Office, Operations';
+    }
+
+    if (quickFieldMember) quickFieldMember.hidden = !isAddition || isMemberRole;
+    if (quickMemberSelect) quickMemberSelect.required = isAddition && !isMemberRole;
+
+    if (quickMemberAuto) {
+      quickMemberAuto.hidden = !isAddition || !isMemberRole;
+      if (quickMemberAutoName) quickMemberAutoName.textContent = state.profile?.full_name || 'Member';
+    }
+
+    if (quickFieldResponsible) quickFieldResponsible.hidden = isAddition;
+    if (quickResponsibleSelect) quickResponsibleSelect.required = !isAddition;
+
+    if (quickFieldMonth) quickFieldMonth.hidden = !isAddition;
+    if (quickMonthInput) quickMonthInput.required = isAddition;
+
+    if (quickFieldCategory) quickFieldCategory.hidden = isAddition;
+    if (quickCategoryInput) quickCategoryInput.required = !isAddition;
+
+    if (quickFieldDescription) quickFieldDescription.hidden = isAddition;
+    if (quickDescriptionInput) quickDescriptionInput.required = !isAddition;
+  }
+
+  function openQuickRecordDialog(presetDate = null, presetType = 'addition') {
+    if (!quickRecordDialog) return;
+    quickPendingKey = null;
+    quickRecordForm.reset();
+
+    const today = Ipon.isoDate();
+    const dateVal = presetDate || today;
+    if (quickDateInput) quickDateInput.value = dateVal;
+    if (quickMonthInput) quickMonthInput.value = dateVal.slice(0, 7);
+
+    const isMemberRole = state.profile?.role === 'MEMBER';
+    if (quickRecordTypeTabs) quickRecordTypeTabs.hidden = isMemberRole;
+
+    setQuickRecordType(isMemberRole ? 'addition' : presetType);
+
+    if (isMemberRole) {
+      if (quickMemberSelect) quickMemberSelect.value = state.profile.member_id || '';
+      if (quickMemberAutoName) quickMemberAutoName.textContent = state.profile.full_name || 'Member';
+    }
+
+    quickRecordDialog.showModal();
+    quickAmountInput?.focus();
+  }
+
+  dashboardRecordEntryBtn?.addEventListener('click', () => {
+    openQuickRecordDialog();
+  });
+
+  dayModalBody?.addEventListener('click', (event) => {
+    const quickBtn = event.target.closest('[data-action="quick-record-day"]');
+    if (quickBtn) {
+      dayModal.close();
+      openQuickRecordDialog(activeDate || null, 'addition');
+    }
+  });
+
+  quickTabAddition?.addEventListener('click', () => setQuickRecordType('addition'));
+  quickTabDeduction?.addEventListener('click', () => setQuickRecordType('deduction'));
+  quickTabExpense?.addEventListener('click', () => setQuickRecordType('expense'));
+
+  quickMemberSelect?.addEventListener('change', () => {
+    const chosen = cachedMembers.find((m) => m.id === quickMemberSelect.value);
+    if (chosen && chosen.monthly_contribution_amount > 0 && !quickAmountInput.value) {
+      quickAmountInput.value = chosen.monthly_contribution_amount;
+    }
+  });
+
+  document.getElementById('quick-record-close')?.addEventListener('click', () => quickRecordDialog?.close());
+  document.getElementById('quick-record-cancel')?.addEventListener('click', () => quickRecordDialog?.close());
+  quickRecordDialog?.addEventListener('click', (event) => {
+    if (event.target === quickRecordDialog) quickRecordDialog.close();
+  });
+
+  quickRecordForm?.addEventListener('input', () => { quickPendingKey = null; });
+  quickRecordForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!quickRecordForm.reportValidity()) return;
+    const values = new FormData(quickRecordForm);
+    const amount = Number(values.get('amount'));
+    if (!(amount > 0)) {
+      Ipon.setFieldError(quickAmountInput, 'Enter an amount greater than zero.');
+      quickAmountInput.focus();
+      return;
+    }
+
+    const type = currentQuickType;
+    const isAddition = type === 'addition';
+    const isDeduction = type === 'deduction';
+    const isMemberRole = state.profile?.role === 'MEMBER';
+
+    if (isAddition && isMemberRole && !state.profile.member_id) {
+      Ipon.toast('Your account is not linked to a member profile. Ask your group administrator to link your account.', 'error');
+      return;
+    }
+
+    if (state.profile?.role === 'ADMIN') {
+      const typeLabel = isAddition ? 'addition' : isDeduction ? 'deduction' : 'expense';
+      const confirmed = await Ipon.confirmAction({
+        title: `Confirm ${typeLabel}`,
+        message: `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`,
+        acceptLabel: 'Confirm and save'
+      });
+      if (!confirmed) return;
+    }
+
+    quickPendingKey ||= crypto.randomUUID();
+    Ipon.setBusy(quickSubmitBtn, true);
+
+    try {
+      if (isAddition) {
+        await Ipon.rpc('record_contribution', {
+          p_member_id: isMemberRole ? state.profile.member_id : values.get('member_id'),
+          p_contribution_month: `${values.get('contribution_month')}-01`,
+          p_amount: amount,
+          p_payment_date: values.get('date'),
+          p_transaction_reference: values.get('reference') || null,
+          p_notes: values.get('notes') || null,
+          p_idempotency_key: quickPendingKey
+        });
+      } else {
+        const ownResponsible = cachedMembers.find((m) => m.id === state.profile?.member_id)?.full_name || state.profile?.full_name;
+        await Ipon.rpc(isDeduction ? 'record_withdrawal' : 'record_expense', {
+          p_transaction_date: values.get('date'),
+          p_amount: amount,
+          p_category: values.get('category'),
+          p_description: values.get('description'),
+          p_person_responsible: isMemberRole ? ownResponsible : values.get('person_responsible'),
+          p_reference_number: values.get('reference') || null,
+          p_notes: values.get('notes') || null,
+          p_idempotency_key: quickPendingKey
+        });
+      }
+
+      quickPendingKey = null;
+      Ipon.toast(state.profile?.role === 'ADMIN' ? 'Confirmed record saved.' : 'Record submitted for admin review.');
+      quickRecordDialog.close();
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(quickSubmitBtn, false);
+    }
+  });
+
   goalSelects.forEach((select) => select.addEventListener('change', () => {
     selectedGoalId = select.value;
     goalSelects.forEach((other) => { other.value = selectedGoalId; });

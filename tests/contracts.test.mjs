@@ -996,3 +996,32 @@ test('announcements support Messenger-style reaction picker, Facebook-style reac
   assert.match(css, /\.announcement-reactions-dialog/);
   assert.match(css, /\.reaction-user-item/);
 });
+
+test('dashboard provides modal shortcut for recording additions, deductions, and expenses with role-aware member flow', () => {
+  const html = read('dashboard.html');
+  const js = read('js/dashboard.js');
+  const css = read('css/app.css');
+
+  assert.match(html, /id="dashboard-record-entry"/);
+  assert.match(html, /id="quick-record-dialog"/);
+  assert.match(html, /id="quick-record-form"/);
+  assert.match(html, /id="quick-record-type-tabs"/);
+  assert.match(html, /id="quick-tab-addition"/);
+  assert.match(html, /id="quick-tab-deduction"/);
+  assert.match(html, /id="quick-tab-expense"/);
+  assert.match(html, /id="quick-member-id"/);
+  assert.match(html, /id="quick-member-auto"/);
+  assert.match(html, /id="quick-responsible"/);
+
+  assert.match(js, /function openQuickRecordDialog/);
+  assert.match(js, /function setQuickRecordType/);
+  assert.match(js, /function populateQuickRecordMembers/);
+  assert.match(js, /record_contribution/);
+  assert.match(js, /record_withdrawal/);
+  assert.match(js, /record_expense/);
+
+  assert.match(css, /\.quick-record-dialog/);
+  assert.match(css, /\.quick-record-type-tabs/);
+  assert.match(css, /\.quick-type-tab/);
+  assert.match(css, /\.quick-member-auto-chip/);
+});
