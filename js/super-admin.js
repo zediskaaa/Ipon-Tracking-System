@@ -890,12 +890,11 @@
     }
 
     const profileById = new Map(profiles.map((p) => [p.id, p]));
-    const implementedUnreleased = featureRequests.filter(
+    // Collect ONLY implemented feature requests that have not yet been released.
+    // Once released in an update, they will never appear in subsequent update drafts.
+    const targetImplemented = featureRequests.filter(
       (req) => req.status === 'IMPLEMENTED' && !req.release_version
     );
-    const targetImplemented = implementedUnreleased.length
-      ? implementedUnreleased
-      : featureRequests.filter((req) => req.status === 'IMPLEMENTED');
 
     const todayIso = new Date().toISOString().slice(0, 10);
     const versionInput = document.getElementById('release-update-version');
@@ -907,16 +906,24 @@
     if (dateInput) dateInput.value = todayIso;
     if (titleInput) titleInput.value = `System ${nextVersion} Released`;
 
-    let releaseBody = `We are excited to announce System ${nextVersion}! This release includes new features, enhancements, and improvements requested by our community:\n\n`;
+    let releaseBody = `We are excited to announce System ${nextVersion}! Here are the latest user features, enhancements, and requested improvements available across IPON:\n\n`;
+    releaseBody += `• Live Active Now Presence: See who is currently using the system in real time with live Facebook-style green indicators on profile avatars.\n`;
+    releaseBody += `• Profile Picture Editor: Interactive avatar cropper with real-time preview, 90-degree image rotation, and deletion confirmation.\n`;
+    releaseBody += `• Announcement Reactions: Messenger-style interactive emoji picker (Heart, Thumbs up, Haha, Sad, Angry) and Facebook-style reaction counter pill with a who-reacted modal list.\n`;
+    releaseBody += `• Quick Record Entry Modal: Convenient shortcut on the dashboard to record additions, deductions, and expenses without switching pages.\n`;
+    releaseBody += `• Financial Records Spotlight & Graph: Filter records by member to spotlight their profile, contribution pledge, totals, and monthly activity graph.\n`;
+    releaseBody += `• Contributor Pledge Setup: Group administrators can set and update their monthly contribution pledge directly, reflected in member rosters and reports.\n`;
+    releaseBody += `• Password Visibility Toggle: Modern SVG eye icon toggle buttons for cleaner, intuitive password inputs.\n`;
+
     if (targetImplemented.length > 0) {
+      releaseBody += `\nCommunity Feature Requests Implemented in this Release:\n`;
       targetImplemented.forEach((req) => {
         const author = profileById.get(req.requester_id)?.full_name || 'Community Member';
         releaseBody += `• ${req.title}: ${req.details} (Requested by ${author})\n`;
       });
-    } else {
-      releaseBody += '• User interface enhancements and styling refinements.\n• System performance improvements and stability updates.\n';
     }
-    releaseBody += '\nThank you for contributing and helping us make IPON better!';
+
+    releaseBody += `\nThank you for contributing and helping us make IPON better!`;
 
     if (detailsInput) detailsInput.value = releaseBody;
     releaseUpdateDialog.showModal();
@@ -954,6 +961,13 @@
       return;
     }
 
+    const confirmed = await Ipon.confirmAction({
+      title: 'Publish release update?',
+      message: `Publish "${title}" as a system release announcement to all users?`,
+      acceptLabel: 'Publish update'
+    });
+    if (!confirmed) return;
+
     const button = releaseUpdateForm.querySelector('[type="submit"]');
     Ipon.setBusy(button, true, 'Publishing…');
     try {
@@ -963,6 +977,12 @@
         p_attachments: [],
         p_announcement_type: 'RELEASE',
         p_release_version: version
+      });
+      // Mark all currently unreleased implemented requests locally with this version
+      featureRequests.forEach((req) => {
+        if (req.status === 'IMPLEMENTED' && !req.release_version) {
+          req.release_version = version;
+        }
       });
       releaseUpdateDialog.close();
       releaseUpdateForm.reset();
