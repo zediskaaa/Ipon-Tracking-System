@@ -2726,7 +2726,8 @@
     };
 
     const isRequestedHeader = (l) => {
-      return /(?:features\s+requested|community\s+feature|community\s+spotlight)/i.test(l) && l.trim().endsWith(':');
+      const trimmed = (l || '').trim();
+      return /^(?:features?\s+requested|community\s+requested|requested\s+by\s+savers|community\s+spotlight|user-requested\s+features)\b/i.test(trimmed) && trimmed.endsWith(':');
     };
 
     const isOutro = (l) => {
