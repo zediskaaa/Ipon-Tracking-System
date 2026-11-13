@@ -470,7 +470,8 @@
         Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.rpc('get_my_groups'),
         Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE'),
-        Ipon.client.from('savings_goals').select('id,title,target_amount,target_date').eq('status', 'ACTIVE').order('created_at', { ascending: false })
+        Ipon.client.from('savings_goals').select('id,title,target_amount,target_date').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
+        announcements ? announcements.load().catch((err) => console.warn('Announcement load error:', err)) : Promise.resolve()
       ]);
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
       const profilesList = groupProfilesResult?.data || [];
