@@ -262,6 +262,46 @@ grant execute on function public.verify_admin_email_verification(text, text) to 
 revoke execute on function public.super_admin_unblock_admin_request(uuid) from public, anon;
 grant execute on function public.super_admin_unblock_admin_request(uuid) to authenticated;
 
+create or replace function public.log_system_action(
+  p_action text,
+  p_target text,
+  p_details jsonb default '{}'::jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_record_id uuid := null;
+begin
+  if p_details ? 'target_user_id' and (p_details ->> 'target_user_id') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    v_record_id := (p_details ->> 'target_user_id')::uuid;
+  end if;
+
+  insert into public.audit_logs (
+    group_id,
+    table_name,
+    record_id,
+    action,
+    old_data,
+    new_data,
+    changed_by
+  ) values (
+    null,
+    'system',
+    v_record_id,
+    p_action,
+    jsonb_build_object('target', p_target),
+    p_details,
+    auth.uid()
+  );
+end;
+$$;
+
+revoke execute on function public.log_system_action(text, text, jsonb) from public, anon;
+grant execute on function public.log_system_action(text, text, jsonb) to authenticated;
+
 insert into public.schema_migrations (version, name)
 values ('20261113_032', 'admin request email ownership verification and unblock')
 on conflict (version) do nothing;
