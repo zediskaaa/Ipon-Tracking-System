@@ -97,4 +97,3 @@ values ('20261114_047', 'background notification feed token for mobile drawer po
 on conflict (version) do nothing;
 
 commit;
-

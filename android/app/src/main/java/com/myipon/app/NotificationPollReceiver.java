@@ -233,4 +233,3 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         });
     }
 }
-
