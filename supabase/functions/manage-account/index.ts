@@ -68,7 +68,11 @@ async function deliverEmail({
       const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(payload) });
       if (!res.ok) {
         const errData = await res.json().catch(() => null);
-        return { email_sent: false, email_error: errData?.message || `${providerName} returned status ${res.status}.`, invite_subject: subject, invite_message: plainText };
+        let errorMsg = errData?.message || `${providerName} returned status ${res.status}.`;
+        if (res.status === 401 || /key not found|unauthorized|invalid api key/i.test(errorMsg)) {
+          errorMsg = `${providerName} API key is invalid or unauthorized (${errData?.message || res.statusText || 'Key not found'}). Check ${providerName === 'Brevo' ? 'BREVO_API_KEY' : 'RESEND_API_KEY'} in Supabase secrets.`;
+        }
+        return { email_sent: false, email_error: errorMsg, invite_subject: subject, invite_message: plainText };
       }
       return { email_sent: true, email_error: null, invite_subject: subject, invite_message: plainText };
     } catch (err) {
@@ -84,24 +88,30 @@ async function deliverEmail({
   if (brevoKey) {
     const sender = parseSender(rawFrom, SYSTEM_NAME, String(fallbackEmail || '').trim());
     if (!sender.email) {
-      return { email_sent: false, email_error: 'Set INVITE_FROM_EMAIL (or BREVO_SENDER_EMAIL) to your verified Brevo sender email.', invite_subject: subject, invite_message: plainText };
+      if (!resendKey) {
+        return { email_sent: false, email_error: 'Set INVITE_FROM_EMAIL (or BREVO_SENDER_EMAIL) to your verified Brevo sender email.', invite_subject: subject, invite_message: plainText };
+      }
+    } else {
+      const brevoPayload: Record<string, unknown> = {
+        sender,
+        to: [{ email: toEmail, name: recipientName }],
+        subject,
+        htmlContent: html,
+        textContent: plainText
+      };
+      if (safeBcc) {
+        brevoPayload.bcc = [{ email: safeBcc }];
+      }
+      const brevoResult = await postEmail(
+        'https://api.brevo.com/v3/smtp/email',
+        { Accept: 'application/json', 'Content-Type': 'application/json', 'api-key': brevoKey },
+        brevoPayload,
+        'Brevo'
+      );
+      if (brevoResult.email_sent || !resendKey) {
+        return brevoResult;
+      }
     }
-    const brevoPayload: Record<string, unknown> = {
-      sender,
-      to: [{ email: toEmail, name: recipientName }],
-      subject,
-      htmlContent: html,
-      textContent: plainText
-    };
-    if (safeBcc) {
-      brevoPayload.bcc = [{ email: safeBcc }];
-    }
-    return postEmail(
-      'https://api.brevo.com/v3/smtp/email',
-      { Accept: 'application/json', 'Content-Type': 'application/json', 'api-key': brevoKey },
-      brevoPayload,
-      'Brevo'
-    );
   }
 
   if (resendKey) {

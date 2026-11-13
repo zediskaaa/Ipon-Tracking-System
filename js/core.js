@@ -1201,8 +1201,15 @@
       </div>`);
   }
 
+  let appInitialized = false;
+
+  function dismissStartupFailure() {
+    document.getElementById('startup-error')?.remove();
+    document.querySelector('.app-layout, .comp-frame, .login-page')?.removeAttribute('inert');
+  }
+
   function showStartupFailure(error) {
-    if (document.getElementById('startup-error')) return;
+    if (appInitialized || currentProfile || document.getElementById('startup-error')) return;
     const offline = navigator.onLine === false;
     const sessionProblem = /auth|jwt|refresh token|session/i.test(error?.message || '');
     const message = offline
@@ -1220,6 +1227,7 @@
           <p>${escapeHtml(message)}</p>
           <div class="startup-error-actions">
             <button class="button button-primary" id="startup-retry" type="button">Retry</button>
+            <button class="button button-secondary" id="startup-dismiss" type="button">Dismiss</button>
             <button class="button button-secondary" id="startup-signout" type="button">Sign out</button>
           </div>
           <small>Your saved records were not changed.</small>
@@ -1227,6 +1235,7 @@
       </section>`);
     const retry = document.getElementById('startup-retry');
     retry.addEventListener('click', () => window.location.reload());
+    document.getElementById('startup-dismiss')?.addEventListener('click', dismissStartupFailure);
     document.getElementById('startup-signout').addEventListener('click', signOut);
     retry.focus();
   }
@@ -1311,11 +1320,14 @@
       });
       if (options.requireAuth !== false) watchCrossTabAuth(client, profile.id);
       initNotifications(profile).catch(() => {});
+      appInitialized = true;
       return { configured: true, profile, session };
     } catch (error) {
       setLoading(false);
-      showStartupFailure(error);
-      return { configured, profile: null, session: null, failed: true };
+      if (options.requireAuth !== false) {
+        showStartupFailure(error);
+      }
+      return { configured, profile: null, session: null, failed: true, error };
     }
   }
 
@@ -2142,6 +2154,13 @@
   window.addEventListener('unhandledrejection', (event) => {
     event.preventDefault();
     setLoading(false);
+    console.warn('Unhandled rejection:', event.reason);
+    if (appInitialized || currentProfile || !document.body.dataset.page) {
+      if (currentProfile) {
+        toast(friendlyError(event.reason), 'error');
+      }
+      return;
+    }
     showStartupFailure(event.reason);
   });
 

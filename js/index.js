@@ -373,8 +373,12 @@
   let hasStoredSession = false;
   try { hasStoredSession = Object.keys(localStorage).some((key) => /^sb-.+-auth-token$/.test(key)); } catch {}
   if (!hasStoredSession) return;
-  const state = await Ipon.init({ requireAuth: false, allowPending: true });
-  if (!state.failed && state.session && state.profile?.status === 'ACTIVE') {
-    location.replace(Ipon.homeForRole(state.profile.role));
+  try {
+    const state = await Ipon.init({ requireAuth: false, allowPending: true });
+    if (!state.failed && state.session && state.profile?.status === 'ACTIVE') {
+      location.replace(Ipon.homeForRole(state.profile.role));
+    }
+  } catch (err) {
+    console.warn('Landing session check failed:', err);
   }
 })();
