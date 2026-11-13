@@ -1189,7 +1189,185 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
 .calc-footer-actions {
   margin-top: 16px;
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
+}
+.calc-plan-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.calc-plan-actions-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.calc-saved-plans {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(20, 45, 43, 0.04);
+  border: 1px solid var(--rule);
+}
+.calc-plans-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-family: Arial, sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.calc-plans-head small {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.calc-plan-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.calc-plan-pill {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 999px;
+  border: 1px solid rgba(20, 45, 43, 0.16);
+  background: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+.calc-plan-pill.is-active {
+  border-color: var(--green);
+  background: rgba(40, 122, 76, 0.1);
+  box-shadow: 0 4px 12px rgba(14, 61, 47, 0.12);
+}
+.calc-plan-load {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 12px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ink);
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+.calc-plan-load strong {
+  font-weight: 700;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calc-plan-load span {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.calc-plan-remove {
+  display: grid;
+  place-items: center;
+  padding: 0 10px 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.calc-plan-remove:hover {
+  color: var(--red);
+}
+.goal-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 290px;
+  padding: 36px 24px;
+  border-radius: 16px;
+  border: 1.5px dashed rgba(20, 45, 43, 0.2);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.6) 0%, rgba(244, 233, 221, 0.45) 100%);
+  gap: 10px;
+}
+.goal-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: #f5eadb;
+  background: linear-gradient(145deg, #0e3d2f 0%, #1b5c47 100%);
+  box-shadow: 0 10px 24px rgba(14, 61, 47, 0.18);
+  margin-bottom: 4px;
+}
+.goal-empty-icon svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.goal-empty-card h3 {
+  margin: 0;
+  font-size: 20px;
+}
+.goal-empty-card p {
+  margin: 0;
+  max-width: 38ch;
+  color: var(--muted);
+  font-family: Arial, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.goal-empty-card .button {
+  margin-top: 8px;
+}
+.goal-pace-chip {
+  margin-top: 10px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: rgba(40, 122, 76, 0.08);
+  border: 1px solid rgba(40, 122, 76, 0.22);
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+.goal-pace-chip span {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  font-size: 10.5px;
+  color: var(--green);
+}
+.goal-pace-chip strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+.goal-pace-chip small {
+  color: var(--muted);
+}
+.goal-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ── Group Payment QR & Member Payment Card ─────────────────────────────────── */
@@ -1581,5 +1759,49 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
   .receipt-preview-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+  .calc-plan-actions,
+  .calc-footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .calc-plan-actions-right {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .calc-plan-actions button,
+  .calc-footer-actions button {
+    width: 100%;
+  }
+  .goal-empty-card {
+    min-height: 220px;
+    padding: 28px 18px;
+  }
+  .receipt-dropzone-empty {
+    flex-wrap: wrap;
+  }
+  .receipt-preview-chip {
+    flex-wrap: wrap;
+  }
+  .receipt-preview-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .calc-plan-actions,
+  .calc-footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .calc-plan-actions-right {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .calc-plan-actions button,
+  .calc-footer-actions button {
+    width: 100%;
+  }
+  .goal-empty-card {
+    min-height: 220px;
+    padding: 28px 18px;
   }
 }

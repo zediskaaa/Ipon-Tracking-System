@@ -1377,6 +1377,14 @@ test('group payment QR, receipt uploads, and savings goal calculator are wired a
   assert.match(recordsJs, /Save record changes\?/);
   assert.match(savingsJs, /Ipon\.confirmAction/);
   assert.match(settingsJs, /Save group payment details\?/);
+  assert.match(coreJs, /bindReceiptPicker/);
+  assert.match(coreJs, /record-review-receipt-btn/);
+  assert.match(coreJs, /prepareNumericInputs/);
+  assert.match(coreJs, /validateNumericInput/);
+  assert.match(userJs, /Ipon\.confirmAction/);
+  assert.match(recordsJs, /Save record changes\?/);
+  assert.match(savingsJs, /Ipon\.confirmAction/);
+  assert.match(settingsJs, /Save group payment details\?/);
 
   assert.match(css, /\.savings-layout/);
   assert.match(css, /\.goal-calc-panel/);
@@ -1390,5 +1398,15 @@ test('group payment QR, receipt uploads, and savings goal calculator are wired a
   assert.match(migration, /20261114_043/);
   const migration044 = read('database/migrations/20261114_044_pending_review_receipts.sql');
   assert.match(migration044, /20261114_044/);
+
+  const migration045 = read('database/migrations/20261114_045_delete_savings_goal.sql');
+  assert.match(migration045, /create or replace function public\.delete_savings_goal/i);
+  assert.match(migration045, /20261114_045/);
+  assert.match(savingsHtml, /id="calc-plan-name"/);
+  assert.match(savingsHtml, /id="calc-save-plan"/);
+  assert.match(savingsHtml, /id="calc-delete-plan"/);
+  assert.match(savingsJs, /delete_savings_goal/);
+  assert.match(savingsJs, /Delete savings goal\?/);
+  assert.match(savingsJs, /Delete saved plan\?/);
 });
 
