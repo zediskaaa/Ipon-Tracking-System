@@ -1368,7 +1368,7 @@ Generate a JSON object with this exact structure:
       // 2. If no client key or client call failed, invoke backend action: 'ai-generate-release-notes'
       if (!title || !details) {
         try {
-          const backendRes = await Ipon.invokeAccountFunction('manage-account', {
+          const backendRes = await Ipon.invokeAccountFunction({
             action: 'ai-generate-release-notes',
             version: ver,
             release_date: relDate,
@@ -1391,34 +1391,19 @@ Generate a JSON object with this exact structure:
         }
       }
 
-      // 3. Fallback to rich local procedural composer if both were unreachable
-      if (!title || !details) {
-        title = `myIPON ${ver} Released: Smarter Tracking & Community Features`;
-        const intro = `We are delighted to bring you myIPON ${ver}! This release delivers key enhancements shaped directly by our savers' everyday needs, making group tracking smoother and more engaging than ever.`;
-        const outro = `Thank you for contributing, testing, and helping us make myIPON better with every update. Happy saving!`;
-        const bullets = [
-          '• Live Active Now Presence: See who is online in real time with live green activity indicators on profile avatars.',
-          '• Profile Picture Editor: Crop, rotate 90 degrees, and preview your avatar before saving.',
-          '• Announcement Reactions: Messenger-style reaction picker (Like, Love, Haha, Wow, Sad, Angry) and who-reacted summary dialog.',
-          '• Quick Record Entry: Convenient dashboard shortcut to log additions, deductions, and expenses on the fly.',
-          '• Records Spotlight & Chart: Filter financial records by member with dedicated personal graphs and totals.',
-          '• Monthly Contribution Pledge: Group administrators can manage their monthly contribution pledge directly.'
-        ];
-        if (targetImplemented.length) {
-          const userBullets = targetImplemented.map((req) => {
-            const prof = profileById.get(req.requester_id);
-            const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
-            return `• ${req.title}: ${req.details || 'Community feature request'}${credit}`;
-          });
-          bullets.unshift(...userBullets);
-        }
-        details = `${intro}\n\n${bullets.join('\n')}\n\n${outro}`;
+      // 3. Fallback to dynamic procedural composer if AI wasn't used or matched existing text
+      const prevTitle = titleInput?.value?.trim() || '';
+      const prevDetails = detailsInput?.value?.trim() || '';
+      if (!title || !details || (!usedGemini && title.trim() === prevTitle && details.trim() === prevDetails)) {
+        const composed = composeReleaseNotes(ver, targetImplemented);
+        title = composed.title;
+        details = composed.body;
       }
 
       if (titleInput && title) titleInput.value = title;
       if (detailsInput && details) detailsInput.value = details;
 
-      Ipon.toast(usedGemini ? '✨ Release announcement generated with Gemini AI!' : '✨ Release announcement composed successfully!');
+      Ipon.toast(usedGemini ? '✨ Release announcement generated with Gemini AI!' : '✨ Drafted a fresh release announcement variation!');
     } catch (err) {
       Ipon.toast(`Release composer: ${err.message || 'Generation failed'}`, 'error');
     } finally {
