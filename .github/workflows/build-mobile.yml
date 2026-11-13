@@ -1,4 +1,4 @@
-name: Build Mobile Apps (Android APK & iOS)
+name: Build Android App (APK)
 
 on:
   push:
@@ -67,80 +67,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: latest
-          name: "myIPON Mobile Apps (Latest Build)"
+          name: "myIPON Mobile App (Latest Build)"
           body: |
             Automated mobile build for myIPON.
 
             - **Android:** Direct APK download: `myIPON.apk`
-            - **iOS:** IPA package: `myIPON.ipa`
 
             *Automatically compiled and updated from the latest main branch commit.*
           draft: false
           prerelease: false
           make_latest: true
           files: android/app/build/outputs/apk/debug/myIPON.apk
-
-  build-ios:
-    name: Build iOS Package
-    runs-on: macos-15
-    timeout-minutes: 20
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Prepare and sync mobile assets
-        run: npm run mobile:sync
-
-      - name: Build iOS Xcode App
-        run: |
-          cd ios/App
-          xcodebuild build \
-            -project App.xcodeproj \
-            -scheme App \
-            -destination 'generic/platform=iOS' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
-
-      - name: Package Payload into IPA
-        run: |
-          mkdir -p build-output/Payload
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
-          if [ -d "$APP_PATH" ]; then
-            cp -r "$APP_PATH" build-output/Payload/
-            cd build-output
-            zip -r myIPON-unsigned.ipa Payload
-          else
-            echo "App.app not found"
-          fi
-
-      - name: Upload iOS App Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: myIPON-iOS-IPA
-          path: build-output/myIPON-unsigned.ipa
-          if-no-files-found: warn
-
-      - name: Publish iOS IPA to GitHub Release
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: latest
-          draft: false
-          prerelease: false
-          make_latest: true
-          files: build-output/myIPON-unsigned.ipa
-

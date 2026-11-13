@@ -1909,7 +1909,12 @@
     return root.mfaController;
   }
 
+  function isIosDevice() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
   function isInstalledAppUser() {
+    if (isIosDevice()) return false;
     return Boolean(window.Capacitor) ||
       document.body.classList.contains('is-app') ||
       Boolean(window.MYIPON_APP_VERSION?.isApp) ||
@@ -1972,7 +1977,6 @@
             ${isReleaseNotif ? `
               <div class="notification-download-row" style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
                 <a class="button button-sm button-primary" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk" download="myIPON.apk" target="_blank" rel="noopener" style="padding: 3px 8px; font-size: 11px; text-decoration: none;">Download APK</a>
-                <a class="button button-sm button-secondary" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.ipa" download="myIPON.ipa" target="_blank" rel="noopener" style="padding: 3px 8px; font-size: 11px; text-decoration: none;">Download iOS</a>
               </div>
             ` : ''}
           </div>
@@ -3179,7 +3183,6 @@
               </div>
               <div style="display: inline-flex; gap: 8px; flex-wrap: wrap;">
                 <a class="button button-sm button-primary" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk" download="myIPON.apk" target="_blank" rel="noopener" style="padding: 4px 10px; font-size: 12px; text-decoration: none;">Download Android (.apk)</a>
-                <a class="button button-sm button-secondary" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.ipa" download="myIPON.ipa" target="_blank" rel="noopener" style="padding: 4px 10px; font-size: 12px; text-decoration: none;">Download iOS (.ipa)</a>
               </div>
             </div>
           </div>` : '';
@@ -3944,12 +3947,9 @@
       laterBtn.addEventListener('click', dismiss);
 
       updateBtn.addEventListener('click', () => {
-        const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        const downloadUrl = isIos
-          ? 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.ipa'
-          : 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk';
+        const downloadUrl = 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk';
         updateBtn.href = downloadUrl;
-        updateBtn.setAttribute('download', isIos ? 'myIPON.ipa' : 'myIPON.apk');
+        updateBtn.setAttribute('download', 'myIPON.apk');
         if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
           try { window.open(downloadUrl, '_system'); } catch (_) { }
         }
@@ -3975,6 +3975,7 @@
   }
 
   async function checkForAppUpdate({ force = false } = {}) {
+    if (isIosDevice()) return;
     const isNativeApp = Boolean(window.Capacitor) ||
       document.body.classList.contains('is-app') ||
       Boolean(window.MYIPON_APP_VERSION?.isApp) ||
@@ -4046,7 +4047,7 @@
         showAppUpdatePrompt({
           version: 'Mobile App',
           build: 'mobile_app_prompt',
-          notes: 'Download the official myIPON mobile app for Android (.apk) or iOS (.ipa) for the fastest, full-screen savings experience.'
+          notes: 'Download the official myIPON Android app (.apk) for the fastest, full-screen savings experience.'
         });
       }
     }
