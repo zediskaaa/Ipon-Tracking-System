@@ -603,7 +603,15 @@ body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame
 .announcement-media-item img,.announcement-media-item video{width:100%;max-height:380px;border-radius:8px;background:#101c18;object-fit:contain}
 .announcement-media-item figcaption{display:flex;align-items:center;justify-content:space-between;gap:8px;font:12px/1.3 Arial,sans-serif;color:var(--muted)}
 .announcement-media-item figcaption span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.announcement-viewer-actions .button-danger{margin-right:8px}
+.announcement-viewer-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:14px 26px 18px;border-top:1px solid rgba(20,45,43,.1);background:#ffffff;box-sizing:border-box}
+.announcement-viewer-actions #announcement-viewer-delete{margin-right:auto}
+.announcement-viewer-actions .announcement-viewer-reactions-wrap{flex:1 1 auto;display:flex;align-items:center;justify-content:flex-end;margin:0;padding:0;border:0}
+.announcement-viewer-actions .announcement-reactions-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;width:100%;margin:0;padding:0;border:0}
+.announcement-viewer-actions .announcement-reactions-pill{margin-right:auto}
+.announcement-viewer-actions .announcement-react-container{margin-left:0}
+.announcement-viewer-done-btn{background:#0d4a36!important;color:#ffffff!important;font:700 13.5px/1 Arial,sans-serif!important;border:none!important;border-radius:10px!important;padding:10px 24px!important;cursor:pointer;transition:background-color .15s ease,transform .1s ease;min-height:36px;display:inline-flex;align-items:center;justify-content:center}
+.announcement-viewer-done-btn:hover{background:#083425!important;transform:translateY(-1px)}
+.announcement-viewer-done-btn:active{transform:translateY(0)}
 .announcement-compose-dialog textarea{min-height:160px;resize:vertical}
 button.record-entry-action{cursor:pointer;outline:none}
 button.record-entry-action:focus-visible{outline:2px solid #fff;outline-offset:2px}

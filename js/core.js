@@ -2619,10 +2619,8 @@
             <div class="announcement-viewer-media" id="announcement-viewer-media"></div>
           </div>
           <div class="announcement-viewer-actions">
-            <div class="announcement-viewer-actions-left">
-              <button class="button button-danger" id="announcement-viewer-delete" type="button" hidden>Delete announcement</button>
-              <div class="announcement-viewer-reactions-wrap" id="announcement-viewer-reactions"></div>
-            </div>
+            <button class="button button-danger" id="announcement-viewer-delete" type="button" hidden>Delete announcement</button>
+            <div class="announcement-viewer-reactions-wrap" id="announcement-viewer-reactions"></div>
             <button class="button announcement-viewer-done-btn" id="announcement-viewer-done" type="button">Close</button>
           </div>
         </div>
