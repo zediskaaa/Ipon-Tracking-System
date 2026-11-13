@@ -2373,23 +2373,28 @@
     document.body.insertAdjacentHTML('beforeend', `
       <dialog class="form-dialog announcement-viewer-dialog" id="announcement-viewer-dialog" aria-labelledby="announcement-viewer-title">
         <div class="form-dialog-sheet">
-          <header class="form-dialog-header">
-            <div class="announcement-viewer-head">
-              <div id="announcement-viewer-release-banner"></div>
-              <div class="announcement-item-meta" id="announcement-viewer-meta"></div>
-              <h2 id="announcement-viewer-title">Announcement</h2>
+          <header class="announcement-viewer-topbar">
+            <div class="announcement-category-indicator">
+              <span class="announcement-category-bar" aria-hidden="true"></span>
+              <span class="announcement-category-label">Announcement</span>
             </div>
-            <button class="dialog-close" id="announcement-viewer-close" type="button" aria-label="Close announcement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+            <button class="dialog-close announcement-modal-close" id="announcement-viewer-close" type="button" aria-label="Close announcement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
           <div class="announcement-viewer-body">
-            <p class="announcement-viewer-description" id="announcement-viewer-description"></p>
+            <div id="announcement-viewer-release-banner"></div>
+            <div class="announcement-item-meta" id="announcement-viewer-meta"></div>
+            <h2 class="announcement-viewer-title" id="announcement-viewer-title">Announcement</h2>
+            <hr class="announcement-viewer-rule" aria-hidden="true">
+            <div class="announcement-viewer-description" id="announcement-viewer-description"></div>
             <div class="announcement-viewer-release-features" id="announcement-viewer-release-features"></div>
             <div class="announcement-viewer-media" id="announcement-viewer-media"></div>
-            <div class="announcement-viewer-reactions-wrap" id="announcement-viewer-reactions"></div>
           </div>
           <div class="announcement-viewer-actions">
-            <button class="button button-danger" id="announcement-viewer-delete" type="button" hidden>Delete announcement</button>
-            <button class="button button-secondary" id="announcement-viewer-done" type="button">Close</button>
+            <div class="announcement-viewer-actions-left">
+              <button class="button button-danger" id="announcement-viewer-delete" type="button" hidden>Delete announcement</button>
+              <div class="announcement-viewer-reactions-wrap" id="announcement-viewer-reactions"></div>
+            </div>
+            <button class="button announcement-viewer-done-btn" id="announcement-viewer-done" type="button">Close</button>
           </div>
         </div>
       </dialog>
@@ -2450,6 +2455,129 @@
     const authorHtml = `<span class="announcement-author${isOwner ? ' is-owner' : ''}">${escapeHtml(name)}</span>`;
     const dateText = dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' });
     return `${avatarHtml}${roleBadge}${authorHtml}<span class="announcement-meta-dot" aria-hidden="true">&middot;</span><time datetime="${escapeHtml(item.created_at)}">${escapeHtml(dateText)}</time>`;
+  }
+
+  function renderAnnouncementDescriptionHtml(rawText, releaseVersion) {
+    if (!rawText) return '';
+    const text = String(rawText).trim();
+    const lines = text.split('\n');
+
+    let html = '';
+    let inRequestedBox = false;
+    let requestedBoxItems = [];
+    let requestedBoxHeading = '';
+
+    const flushRequestedBox = () => {
+      if (!inRequestedBox) return;
+      html += `
+        <div class="announcement-requested-card">
+          <div class="announcement-requested-accent" aria-hidden="true"></div>
+          <div class="announcement-requested-inner">
+            <strong class="announcement-requested-title">${escapeHtml(requestedBoxHeading)}</strong>
+            <div class="announcement-requested-list">
+              ${requestedBoxItems.map((item) => {
+                const creditMatch = item.match(/\((Requested by:[^)]+)\)/i);
+                let itemHtml = escapeHtml(item);
+                if (creditMatch) {
+                  const escapedCredit = escapeHtml(creditMatch[0]);
+                  itemHtml = itemHtml.replace(escapedCredit, `<em class="announcement-requester-credit">${escapedCredit}</em>`);
+                }
+                return `
+                  <div class="announcement-requested-item">
+                    <span class="announcement-bullet-dot" aria-hidden="true">•</span>
+                    <span>${itemHtml}</span>
+                  </div>`;
+              }).join('')}
+            </div>
+          </div>
+        </div>`;
+      inRequestedBox = false;
+      requestedBoxItems = [];
+      requestedBoxHeading = '';
+    };
+
+    const isRequestedHeader = (l) => {
+      return /(?:features\s+requested|community\s+feature|community\s+spotlight)/i.test(l) && l.trim().endsWith(':');
+    };
+
+    const isOutro = (l) => {
+      return /(?:grateful|thank\s+you|happy\s+saving|enjoy\s+the\s+new\s+update)/i.test(l);
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
+      if (!line) {
+        if (inRequestedBox && i + 1 < lines.length && isOutro(lines[i + 1])) {
+          flushRequestedBox();
+        }
+        continue;
+      }
+
+      if (isRequestedHeader(line)) {
+        flushRequestedBox();
+        inRequestedBox = true;
+        requestedBoxHeading = line;
+        continue;
+      }
+
+      if (inRequestedBox) {
+        if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
+          const itemText = line.replace(/^[•\-*]\s*/, '').trim();
+          requestedBoxItems.push(itemText);
+          continue;
+        } else if (isOutro(line)) {
+          flushRequestedBox();
+        } else {
+          requestedBoxItems.push(line);
+          continue;
+        }
+      }
+
+      if (isOutro(line)) {
+        flushRequestedBox();
+        const restLines = lines.slice(i).map((l) => l.trim()).filter(Boolean);
+        html += `<div class="announcement-outro-block"><p>${restLines.map((l) => escapeHtml(l)).join('<br>')}</p></div>`;
+        break;
+      }
+
+      if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
+        const cleanLine = line.replace(/^[•\-*]\s*/, '').trim();
+        let titlePart = '';
+        let descPart = cleanLine;
+
+        const delimMatch = cleanLine.match(/^(.*?)(:\s+|—\s*|\s+-\s+)(.*)$/);
+        if (delimMatch) {
+          titlePart = delimMatch[1].trim();
+          descPart = delimMatch[3].trim();
+        }
+
+        html += `
+          <div class="announcement-feature-row">
+            <span class="announcement-feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20" fill="none" width="18" height="18">
+                <circle cx="10" cy="10" r="9" fill="#0d4a36" />
+                <path d="M6 10.2l2.6 2.6L14 7.6" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <div class="announcement-feature-text">
+              ${titlePart ? `<strong class="announcement-feature-name">${escapeHtml(titlePart)} — </strong>` : ''}
+              <span class="announcement-feature-desc">${escapeHtml(descPart)}</span>
+            </div>
+          </div>`;
+        continue;
+      }
+
+      let paraHtml = escapeHtml(line);
+      paraHtml = paraHtml.replace(/\b(myIPON\s+Update\s+[\w\.\-]+|v\d+[\w\.\-]*)\b/gi, (match) => {
+        return `<span class="announcement-version-highlight">${match}</span>`;
+      });
+
+      html += `<p class="announcement-intro-para">${paraHtml}</p>`;
+    }
+
+    flushRequestedBox();
+    return html;
   }
 
   function bindAnnouncements({ listElement, addButton, emptyTitle = 'No announcements yet', emptyNote = 'Stay tuned for updates' } = {}) {
@@ -2757,14 +2885,21 @@
       viewerMeta.innerHTML = announcementAuthorMeta(item);
       bindAvatarFallbacks(viewerMeta);
       syncPresenceDots(viewerMeta);
-      viewerTitle.textContent = item.title;
-      viewerDescription.textContent = item.description;
+      const titleParts = (item.title || '').split(/:\s+/);
+      if (titleParts.length > 1) {
+        viewerTitle.innerHTML = `<span class="announcement-hero-headline">${escapeHtml(titleParts[0])}:</span><span class="announcement-hero-subhead">${escapeHtml(titleParts.slice(1).join(': '))}</span>`;
+      } else {
+        viewerTitle.innerHTML = `<span class="announcement-hero-headline">${escapeHtml(item.title || '')}</span>`;
+      }
+      viewerDescription.innerHTML = renderAnnouncementDescriptionHtml(item.description, item.release_version);
       viewerDelete.hidden = !canDelete(item);
       if (viewerReactions) viewerReactions.innerHTML = renderReactionsBarHtml(item.id);
       const viewerReleaseFeatures = document.getElementById('announcement-viewer-release-features');
       if (viewerReleaseFeatures) viewerReleaseFeatures.replaceChildren();
       const loadReleaseFeatures = async () => {
         if (!viewerReleaseFeatures || !isRelease || !item.release_version) return;
+        const descHasRequested = /(?:features\s+requested|community\s+feature|community\s+spotlight)/i.test(item.description || '');
+        if (descHasRequested) return;
         try {
           const { data: relFeats } = await getClient().rpc('get_release_features', {
             p_release_version: item.release_version
