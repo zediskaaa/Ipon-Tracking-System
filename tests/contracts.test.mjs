@@ -1450,3 +1450,36 @@ test('role-based notifications and device drawer alerts are wired across SQL, SW
   assert.match(accountJs, /bindDeviceNotificationControls/);
 });
 
+test('background notification feed, permission banner, and native poll receiver stay synchronized', () => {
+  const migration047 = read('database/migrations/20261114_047_background_notification_feed.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+  const css = read('css/app.css');
+  const versionJson = JSON.parse(read('version.json'));
+  const capConfig = JSON.parse(read('capacitor.config.json'));
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
+  const mainActivity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
+  const pollReceiver = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
+
+  assert.match(migration047, /create table if not exists public\.notification_feed_tokens/i);
+  assert.match(migration047, /create or replace function public\.ensure_notification_feed_token/i);
+  assert.match(migration047, /create or replace function public\.revoke_notification_feed_token/i);
+  assert.match(migration047, /create or replace function public\.get_unread_notifications_by_token/i);
+  assert.match(migration047, /20261114_047/);
+  assert.match(schema, /20261114_047/);
+
+  assert.equal(versionJson.nativeBuild, 19);
+  assert.match(capConfig.appendUserAgent, /myIPONApp\/19/);
+  assert.match(manifest, /com\.myipon\.app\.NotificationPollReceiver/);
+  assert.match(mainActivity, /registerPlugin\(BackgroundNotificationsPlugin\.class\)/);
+  assert.match(bgPlugin, /@CapacitorPlugin\(name = "BackgroundNotifications"\)/);
+  assert.match(pollReceiver, /get_unread_notifications_by_token/);
+
+  assert.match(core, /id="notification-permission-bar"/);
+  assert.match(core, /ensure_notification_feed_token/);
+  assert.match(core, /syncBackgroundNotificationPolling/);
+  assert.match(core, /setNotificationPreference/);
+  assert.match(css, /\.notification-permission-bar/);
+});
+

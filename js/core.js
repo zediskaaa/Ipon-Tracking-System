@@ -694,7 +694,7 @@
         <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-action-title">Review record</h2><p id="record-action-subtitle">Verify the contributor, type, and amount before saving.</p></div><button class="dialog-close" type="button" data-record-action-close aria-label="Close review dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="record-review-body"><section class="record-review-summary" id="record-action-summary" hidden></section><form id="record-action-form" class="form-grid"><div class="record-review-step field-wide" id="record-action-step-edit"><fieldset class="decision-options field-wide"><legend>Decision</legend><div id="record-action-options"></div></fieldset><div class="field field-wide"><label id="record-action-reason-label" for="record-action-reason">Review note (optional)</label><textarea id="record-action-reason" name="reason" maxlength="500" aria-describedby="record-action-help"></textarea><small class="field-help" id="record-action-help">Optional note when confirming; required when rejecting or voiding.</small></div><div class="form-actions field-wide"><button class="button button-secondary" type="button" data-record-action-close>Cancel</button><button class="button button-primary" id="record-action-next" type="submit">Continue</button></div></div><div class="record-review-step record-review-confirm field-wide" id="record-action-step-confirm" hidden><div class="record-review-confirm-box" id="record-action-confirm-box"><strong id="record-action-confirm-heading">Confirm this decision?</strong><p id="record-action-confirm-text"></p><p class="record-review-note-preview" id="record-action-confirm-note" hidden></p></div><p class="mfa-message field-wide" id="record-action-error" role="alert" hidden></p><div class="form-actions field-wide"><button class="button button-secondary" id="record-action-back" type="button">Back</button><button class="button button-primary" id="record-action-submit" type="button">Confirm entry</button></div></div></form></div></div>
       </dialog>
       <dialog class="notification-dialog" id="notification-dialog" aria-labelledby="notification-title">
-        <div class="notification-sheet"><header><div class="notification-heading"><h2 id="notification-title">Notifications</h2><span>Recent activity</span></div><div class="notification-header-actions"><button class="notification-mark-read" id="mark-all-notifications" type="button">Mark all read</button><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header><div class="notification-list" id="notification-list" role="feed"><p class="empty-state">Loading notifications…</p></div></div>
+        <div class="notification-sheet"><header><div class="notification-heading"><h2 id="notification-title">Notifications</h2><span>Recent activity</span></div><div class="notification-header-actions"><button class="notification-mark-read" id="mark-all-notifications" type="button">Mark all read</button><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header><div class="notification-permission-bar" id="notification-permission-bar" hidden></div><div class="notification-list" id="notification-list" role="feed"><p class="empty-state">Loading notifications…</p></div></div>
       </dialog>
       <dialog class="donate-dialog" id="donate-dialog" aria-labelledby="donate-title">
         <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><img class="donate-sticker" src="assets/donate-sticker.jpg" alt="" aria-hidden="true"><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><div class="donate-actions"><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button><button class="button button-secondary" id="open-donate-qr" type="button">Scan me</button></div></div>
@@ -1867,7 +1867,7 @@
     });
     notificationToggle.addEventListener('change', async () => {
       notificationToggle.disabled = true;
-      try { await rpc('set_notification_preferences', { p_enabled: notificationToggle.checked }); toast('Notification preference saved.'); }
+      try { await setNotificationPreference(notificationToggle.checked); toast('Notification preference saved.'); }
       catch (error) { notificationToggle.checked = !notificationToggle.checked; toast(friendlyError(error), 'error'); }
       finally { notificationToggle.disabled = false; }
     });
@@ -2002,11 +2002,21 @@
       sessionStorage.getItem('myipon_is_app') === '1';
   }
 
+  const APK_LATEST_DOWNLOAD_URL = 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk';
   let androidChannelReady = false;
   let nativeNotifListenerAttached = false;
+  let lastBgPollSyncAt = 0;
 
   function getLocalNotificationsPlugin() {
     return window.Capacitor?.Plugins?.LocalNotifications || null;
+  }
+
+  function getBackgroundNotificationsPlugin() {
+    return window.Capacitor?.Plugins?.BackgroundNotifications || null;
+  }
+
+  function hasNativeNotificationBridge() {
+    return Boolean(getLocalNotificationsPlugin() || getBackgroundNotificationsPlugin());
   }
 
   async function ensureAndroidNotificationChannel() {
@@ -2049,15 +2059,22 @@
   }
 
   async function syncDevicePermissionUI() {
-    const rows = document.querySelectorAll('[data-device-notif-row]');
-    if (!rows.length) return;
     const status = await getDeviceNotificationPermission();
+    const isApp = isInstalledAppUser();
+    const needsApkUpdate = isApp && !hasNativeNotificationBridge();
+
+    const rows = document.querySelectorAll('[data-device-notif-row]');
     rows.forEach((row) => {
       const label = row.querySelector('[data-device-notif-status]');
       const button = row.querySelector('[data-device-notif-btn]');
       if (!label || !button) return;
-      if (status === 'granted') {
-        label.textContent = 'Enabled — new alerts appear in your phone notification drawer.';
+      if (needsApkUpdate) {
+        label.textContent = 'Update to the latest myIPON APK to enable phone notification permissions and background alerts.';
+        button.textContent = 'Update APK';
+        button.disabled = false;
+        button.hidden = false;
+      } else if (status === 'granted') {
+        label.textContent = 'Enabled — alerts appear in your phone notification drawer even when outside the app.';
         button.textContent = 'Enabled';
         button.disabled = true;
         button.hidden = false;
@@ -2076,10 +2093,28 @@
         button.hidden = true;
       }
     });
+
+    const bar = document.getElementById('notification-permission-bar');
+    if (bar) {
+      if (needsApkUpdate) {
+        bar.hidden = false;
+        bar.innerHTML = '<span>Update your installed APK to enable notification permission and background alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Update APK</button>';
+      } else if (status === 'default') {
+        bar.hidden = false;
+        bar.innerHTML = '<span>Allow device alerts so you still receive updates outside the app.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Allow notifications</button>';
+      } else if (status === 'denied') {
+        bar.hidden = false;
+        bar.innerHTML = '<span>Device notifications are blocked. Enable notifications for myIPON in your phone settings.</span>';
+      } else {
+        bar.hidden = true;
+        bar.textContent = '';
+      }
+    }
   }
 
   async function requestDeviceNotificationPermission({ userInitiated = false } = {}) {
     const plugin = getLocalNotificationsPlugin();
+    const bgPlugin = getBackgroundNotificationsPlugin();
     let status = await getDeviceNotificationPermission();
     if (status === 'default') {
       if (plugin?.requestPermissions) {
@@ -2088,7 +2123,15 @@
           const res = await plugin.requestPermissions();
           status = normalizeNotificationPermission(res?.display);
         } catch { /* ignore */ }
-      } else if ('Notification' in window && userInitiated) {
+      }
+      if (status === 'default' && bgPlugin?.requestSystemPermission) {
+        try {
+          await bgPlugin.requestSystemPermission();
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          status = await getDeviceNotificationPermission();
+        } catch { /* ignore */ }
+      }
+      if (status === 'default' && 'Notification' in window && userInitiated) {
         try {
           const res = await Notification.requestPermission();
           status = normalizeNotificationPermission(res);
@@ -2098,20 +2141,29 @@
       await ensureAndroidNotificationChannel();
     }
     await syncDevicePermissionUI();
+    if (status === 'granted' && currentProfile?.notifications_enabled !== false) {
+      lastBgPollSyncAt = 0;
+      syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+    }
     return status;
   }
 
   function bindDeviceNotificationControls() {
-    document.querySelectorAll('[data-device-notif-btn]').forEach((button) => {
-      if (button.dataset.boundDeviceNotif) return;
-      button.dataset.boundDeviceNotif = 'true';
-      button.addEventListener('click', async () => {
+    if (!document.body.dataset.boundDeviceNotifDelegation) {
+      document.body.dataset.boundDeviceNotifDelegation = 'true';
+      document.body.addEventListener('click', async (event) => {
+        const button = event.target.closest('[data-device-notif-btn]');
+        if (!button) return;
+        if (isInstalledAppUser() && !hasNativeNotificationBridge()) {
+          window.open(APK_LATEST_DOWNLOAD_URL, '_blank', 'noopener');
+          return;
+        }
         button.disabled = true;
         const result = await requestDeviceNotificationPermission({ userInitiated: true });
         if (result === 'granted') toast('Phone notification alerts enabled.');
         else if (result === 'denied') toast('Notifications are blocked in your device or browser settings.', 'error');
       });
-    });
+    }
     syncDevicePermissionUI().catch(() => { });
   }
 
@@ -2162,6 +2214,47 @@
     try {
       localStorage.setItem(`myipon_shown_notifs_${userId}`, JSON.stringify(list.slice(-80)));
     } catch { /* ignore storage quota errors */ }
+    getBackgroundNotificationsPlugin()?.markShown?.({ id: key }).catch?.(() => { });
+  }
+
+  async function syncBackgroundNotificationPolling(profile, rows = []) {
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    if (!bgPlugin?.configure || !configured) return;
+    if (!profile || profile.notifications_enabled === false) {
+      await bgPlugin.clear?.().catch?.(() => { });
+      return;
+    }
+    const now = Date.now();
+    if (now - lastBgPollSyncAt < 60_000) return;
+    lastBgPollSyncAt = now;
+    try {
+      const feedToken = await rpc('ensure_notification_feed_token');
+      if (!feedToken) return;
+      const shownIds = new Set(readShownNotificationIds(profile.id));
+      rows.forEach((item) => {
+        if (item?.id != null) shownIds.add(String(item.id));
+      });
+      await bgPlugin.configure({
+        supabaseUrl: config.supabaseUrl,
+        anonKey: config.supabaseAnonKey,
+        feedToken: String(feedToken),
+        shownIds: [...shownIds].slice(-80)
+      });
+    } catch {
+      lastBgPollSyncAt = 0;
+    }
+  }
+
+  async function setNotificationPreference(enabled) {
+    await rpc('set_notification_preferences', { p_enabled: Boolean(enabled) });
+    if (currentProfile) currentProfile.notifications_enabled = Boolean(enabled);
+    lastBgPollSyncAt = 0;
+    if (enabled) {
+      await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+    } else {
+      await rpc('revoke_notification_feed_token').catch(() => { });
+      await getBackgroundNotificationsPlugin()?.clear?.().catch?.(() => { });
+    }
   }
 
   async function dispatchDeviceNotification(item, userId) {
@@ -2260,9 +2353,13 @@
     attachNativeNotificationTapListener();
     bindDeviceNotificationControls();
 
-    if (isApp && profile.notifications_enabled !== false && !localStorage.getItem(`myipon_app_notif_prompt_${profile.id}`)) {
-      localStorage.setItem(`myipon_app_notif_prompt_${profile.id}`, '1');
-      requestDeviceNotificationPermission({ userInitiated: true }).catch(() => { });
+    if (isApp && hasNativeNotificationBridge() && profile.notifications_enabled !== false) {
+      const promptKey = `myipon_native_notif_prompt_${profile.id}`;
+      const perm = await getDeviceNotificationPermission();
+      if (perm === 'default' && !localStorage.getItem(promptKey)) {
+        localStorage.setItem(promptKey, '1');
+        requestDeviceNotificationPermission({ userInitiated: true }).catch(() => { });
+      }
     }
 
     const lastSeenKey = `myipon_last_notif_seen_${profile.id}`;
@@ -2294,6 +2391,7 @@
         lastSeenMs = latestMs;
         try { localStorage.setItem(lastSeenKey, String(lastSeenMs)); } catch { /* ignore */ }
       }
+      syncBackgroundNotificationPolling(profile, rows).catch(() => { });
 
       if (isApp) {
         const latestVersion = localStorage.getItem('myipon_latest_remote_version') || '1.0.18';
@@ -2676,7 +2774,11 @@
     if (!accepted) return;
     try {
       const client = getClient();
-      if (client) await withTimeout(client.auth.signOut({ scope: 'local' }));
+      if (client) {
+        await withTimeout(rpc('revoke_notification_feed_token')).catch(() => { });
+        await getBackgroundNotificationsPlugin()?.clear?.().catch?.(() => { });
+        await withTimeout(client.auth.signOut({ scope: 'local' }));
+      }
     } finally {
       clearStoredAuthTokens();
       broadcastAuthEvent('SIGNED_OUT');
@@ -4654,7 +4756,7 @@
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
-    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls,
+    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, setNotificationPreference,
     get profile() { return currentProfile; }
   };
 })();

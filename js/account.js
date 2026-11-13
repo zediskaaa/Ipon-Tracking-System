@@ -101,7 +101,7 @@
 
   notificationToggle.addEventListener('change', async () => {
     notificationToggle.disabled = true;
-    try { await Ipon.rpc('set_notification_preferences', { p_enabled: notificationToggle.checked }); Ipon.toast('Notification preference saved.'); }
+    try { await Ipon.setNotificationPreference(notificationToggle.checked); Ipon.toast('Notification preference saved.'); }
     catch (error) { notificationToggle.checked = !notificationToggle.checked; Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { notificationToggle.disabled = false; }
   });
