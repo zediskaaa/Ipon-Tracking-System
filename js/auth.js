@@ -428,6 +428,7 @@
         try {
           sessionStorage.setItem('ipon_active_role', profile.role);
           localStorage.setItem('ipon_active_role', profile.role);
+          sessionStorage.setItem('myipon_just_logged_in', '1');
         } catch { }
         Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
         window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(profile.role));
@@ -490,6 +491,7 @@
       try {
         sessionStorage.setItem('ipon_active_role', role);
         localStorage.setItem('ipon_active_role', role);
+        sessionStorage.setItem('myipon_just_logged_in', '1');
       } catch { }
       Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
       window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(role));
