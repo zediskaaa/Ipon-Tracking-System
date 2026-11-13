@@ -565,7 +565,7 @@ Deno.serve(async (request) => {
     const targetId = String(body.user_id || '').trim();
     if (!UUID_RE.test(targetId)) return json({ error: 'A valid target user ID is required.' }, 400);
 
-    const { data: unblockResult, error: unblockError } = await admin.rpc('super_admin_unblock_admin_request', {
+    const { data: unblockResult, error: unblockError } = await caller.rpc('super_admin_unblock_admin_request', {
       p_user_id: targetId
     });
 
@@ -573,7 +573,10 @@ Deno.serve(async (request) => {
       return json({ error: unblockError.message || 'Could not unblock administrator request.' }, 400);
     }
 
-    await admin.auth.admin.deleteUser(targetId);
+    const { error: deleteError } = await admin.auth.admin.deleteUser(targetId);
+    if (deleteError && !/not found/i.test(deleteError.message || '')) {
+      console.warn('Could not delete user from auth:', deleteError);
+    }
 
     return json({
       unblocked: true,
