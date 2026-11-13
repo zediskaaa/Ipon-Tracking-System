@@ -5585,7 +5585,17 @@ begin
 
     perform public.generate_contribution_periods(date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date);
 
-    return jsonb_build_object('is_contributor', true, 'member_id', v_member_id);
+    -- Update any unpaid contribution period for the current month so the new pledge takes effect immediately
+    update public.contribution_periods cp
+    set required_amount = v_amount
+    where cp.member_id = v_member_id
+      and cp.period_month = date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date
+      and not exists (
+        select 1 from public.contributions c
+        where c.contribution_period_id = cp.id
+      );
+
+    return jsonb_build_object('is_contributor', true, 'member_id', v_member_id, 'monthly_contribution_amount', v_amount);
   else
     if v_member_id is not null then
       update public.members
@@ -5607,6 +5617,8 @@ begin
     update public.profiles
     set member_id = null
     where id = auth.uid() and group_id = v_group_id;
+
+    return jsonb_build_object('is_contributor', false, 'member_id', null, 'monthly_contribution_amount', null);
 
     return jsonb_build_object('is_contributor', false, 'member_id', null);
   end if;
@@ -5887,6 +5899,14 @@ grant execute on function public.get_announcement_reactions(uuid) to authenticat
 
 insert into public.schema_migrations (version, name)
 values ('20261113_035', 'add announcement reactions')
+on conflict (version) do nothing;
+
+insert into public.schema_migrations (version, name)
+values ('20261113_036', 'feature request workflow and release updates')
+on conflict (version) do nothing;
+
+insert into public.schema_migrations (version, name)
+values ('20261113_037', 'admin contributor amount sync')
 on conflict (version) do nothing;
 
 commit;

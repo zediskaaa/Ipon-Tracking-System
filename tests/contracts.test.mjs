@@ -1114,3 +1114,43 @@ test('Super Admin feature requests display requester avatars and system tracks r
   assert.match(css, /\.feature-card/);
   assert.match(css, /\.table-user-cell/);
 });
+
+test('admin contributor toggle prompts for monthly contribution amount with confirmation and synchronizes to member pledge', () => {
+  const dashHtml = read('dashboard.html');
+  const dashJs = read('js/dashboard.js');
+  const setHtml = read('settings.html');
+  const setJs = read('js/settings.js');
+  const migration = read('database/migrations/20261113_037_admin_contributor_amount_sync.sql');
+  const schema = read('database/schema.sql');
+  const css = read('css/app.css');
+
+  assert.match(dashHtml, /id="admin-contributor-dialog"/);
+  assert.match(dashHtml, /id="admin-contributor-form"/);
+  assert.match(dashHtml, /id="admin-contributor-amount"/);
+  assert.match(dashHtml, /id="group-hub-contributor-details"/);
+  assert.match(dashHtml, /id="group-hub-pledge-val"/);
+  assert.match(dashHtml, /id="group-hub-edit-pledge"/);
+
+  assert.match(setHtml, /id="settings-contributor-dialog"/);
+  assert.match(setHtml, /id="settings-contributor-form"/);
+  assert.match(setHtml, /id="settings-contributor-amount"/);
+  assert.match(setHtml, /id="settings-contributor-details"/);
+  assert.match(setHtml, /id="settings-pledge-val"/);
+  assert.match(setHtml, /id="settings-edit-pledge"/);
+
+  assert.match(dashJs, /openAdminContributorDialog/);
+  assert.match(dashJs, /confirmAction\(\{[\s\S]*?Remove yourself as a contributor\?/);
+  assert.match(dashJs, /rpc\('set_admin_contributor',\s*\{\s*p_enabled:\s*true,\s*p_monthly_amount:\s*amount\s*\}\)/);
+
+  assert.match(setJs, /openSettingsContributorDialog/);
+  assert.match(setJs, /confirmAction\(\{[\s\S]*?Remove yourself as a contributor\?/);
+  assert.match(setJs, /rpc\('set_admin_contributor',\s*\{\s*p_enabled:\s*true,\s*p_monthly_amount:\s*amount\s*\}\)/);
+
+  assert.match(migration, /create or replace function public\.set_admin_contributor/i);
+  assert.match(migration, /update public\.contribution_periods cp[\s\S]*?set required_amount = v_amount/i);
+  assert.match(schema, /admin contributor amount sync/i);
+
+  assert.match(css, /\.group-hub-contributor-details/);
+  assert.match(css, /\.group-hub-pledge-value/);
+  assert.match(css, /\.settings-contributor-details/);
+});

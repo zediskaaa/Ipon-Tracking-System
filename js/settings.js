@@ -9,6 +9,13 @@
   const treasurerForm = document.getElementById('treasurer-account-form');
   const groupSelect = document.getElementById('settings-group-select');
   const adminContributorToggle = document.getElementById('settings-admin-contributor');
+  const settingsContributorDetails = document.getElementById('settings-contributor-details');
+  const settingsPledgeVal = document.getElementById('settings-pledge-val');
+  const settingsEditPledge = document.getElementById('settings-edit-pledge');
+  const settingsContributorDialog = document.getElementById('settings-contributor-dialog');
+  const settingsContributorForm = document.getElementById('settings-contributor-form');
+  const settingsContributorAmount = document.getElementById('settings-contributor-amount');
+  let currentSettingsAdminAmount = 100;
   let members = [];
   let currentGroupId = '';
   Ipon.bindPasswordStrength(treasurerForm.elements.password, () => [treasurerForm.elements.first_name.value, treasurerForm.elements.middle_name.value, treasurerForm.elements.last_name.value, treasurerForm.elements.email.value]);
@@ -35,7 +42,7 @@
   async function loadAccess() {
     const [accessRows, memberResult, myGroups] = await Promise.all([
       Ipon.rpc('get_group_access_list'),
-      Ipon.client.from('members').select('id,full_name').eq('status', 'ACTIVE').order('full_name'),
+      Ipon.client.from('members').select('id,full_name,monthly_contribution_amount').eq('status', 'ACTIVE').order('full_name'),
       Ipon.rpc('get_my_groups')
     ]);
     if (memberResult.error) throw memberResult.error;
@@ -48,8 +55,17 @@
       groupSelect.value = currentGroupId;
       groupSelect.disabled = groups.length <= 1;
     }
+    const adminMember = members.find((m) => m.id === activeGroup?.member_id || m.id === state?.profile?.member_id);
+    if (adminMember && Number(adminMember.monthly_contribution_amount) > 0) {
+      currentSettingsAdminAmount = Number(adminMember.monthly_contribution_amount);
+    }
     if (adminContributorToggle) {
-      adminContributorToggle.checked = Boolean(activeGroup?.is_contributor);
+      const isContributor = Boolean(activeGroup?.is_contributor);
+      adminContributorToggle.checked = isContributor;
+      if (settingsContributorDetails) {
+        settingsContributorDetails.hidden = !isContributor;
+        if (settingsPledgeVal) settingsPledgeVal.textContent = Ipon.money(currentSettingsAdminAmount || 100);
+      }
     }
     const profiles = (Array.isArray(accessRows) ? accessRows : []).filter((row) => ['MEMBER', 'TREASURER'].includes(row.role));
 
@@ -77,18 +93,75 @@
     }
   });
 
+  function openSettingsContributorDialog(action = 'enable') {
+    if (!settingsContributorDialog || !settingsContributorForm) return;
+    const isEdit = action === 'edit';
+    document.getElementById('settings-contributor-title').textContent = isEdit ? 'Update contributor amount' : 'Include yourself as a contributor?';
+    document.getElementById('settings-contributor-copy').textContent = isEdit
+      ? 'Adjust your monthly contribution amount for this group.'
+      : 'Set your monthly contribution amount to participate in this group.';
+    document.getElementById('save-settings-contributor').textContent = isEdit ? 'Save amount' : 'Confirm & join';
+    settingsContributorAmount.value = String(currentSettingsAdminAmount || 100);
+    settingsContributorDialog.showModal();
+    settingsContributorAmount.focus();
+    settingsContributorAmount.select();
+  }
+
   adminContributorToggle?.addEventListener('change', async () => {
-    const enabled = adminContributorToggle.checked;
-    adminContributorToggle.disabled = true;
+    const wantEnable = adminContributorToggle.checked;
+    if (wantEnable) {
+      adminContributorToggle.checked = false;
+      openSettingsContributorDialog('enable');
+    } else {
+      adminContributorToggle.checked = true;
+      const confirmed = await Ipon.confirmAction({
+        title: 'Remove yourself as a contributor?',
+        message: 'Are you sure you want to remove yourself as a contributor? You will no longer be included in monthly contribution periods or active rosters for this group.',
+        acceptLabel: 'Remove contributor'
+      });
+      if (!confirmed) return;
+      adminContributorToggle.checked = false;
+      adminContributorToggle.disabled = true;
+      try {
+        await Ipon.rpc('set_admin_contributor', { p_enabled: false });
+        Ipon.toast('You have been removed from active contributors.');
+        await loadAccess();
+      } catch (error) {
+        adminContributorToggle.checked = true;
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      } finally {
+        adminContributorToggle.disabled = false;
+      }
+    }
+  });
+
+  settingsEditPledge?.addEventListener('click', () => {
+    openSettingsContributorDialog('edit');
+  });
+
+  document.getElementById('close-settings-contributor-dialog')?.addEventListener('click', () => settingsContributorDialog?.close());
+  document.getElementById('cancel-settings-contributor-dialog')?.addEventListener('click', () => settingsContributorDialog?.close());
+
+  settingsContributorForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const amount = Number(settingsContributorAmount.value);
+    if (!amount || amount <= 0 || amount > 1000000) {
+      Ipon.setFieldError(settingsContributorAmount, 'Please enter a valid monthly amount between ₱1 and ₱1,000,000.');
+      settingsContributorAmount.focus();
+      return;
+    }
+    const button = document.getElementById('save-settings-contributor');
+    Ipon.setBusy(button, true, 'Saving…');
     try {
-      await Ipon.rpc('set_admin_contributor', { p_enabled: enabled });
-      Ipon.toast(enabled ? 'You are now included as a contributor.' : 'You have been removed from active contributors.');
+      await Ipon.rpc('set_admin_contributor', { p_enabled: true, p_monthly_amount: amount });
+      currentSettingsAdminAmount = amount;
+      settingsContributorDialog.close();
+      Ipon.toast(`Contributor settings saved with ${Ipon.money(amount)} monthly contribution.`);
       await loadAccess();
     } catch (error) {
-      adminContributorToggle.checked = !enabled;
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
-      adminContributorToggle.disabled = false;
+      Ipon.setBusy(button, false);
     }
   });
 

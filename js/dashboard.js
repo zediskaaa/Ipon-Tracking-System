@@ -86,6 +86,13 @@
   const groupHubSwitcherWrap = document.getElementById('group-hub-switcher-wrap');
   const groupHubSelect = document.getElementById('group-hub-select');
   const groupHubSelfToggle = document.getElementById('manage-hub-self-toggle');
+  const groupHubContributorDetails = document.getElementById('group-hub-contributor-details');
+  const groupHubPledgeVal = document.getElementById('group-hub-pledge-val');
+  const groupHubEditPledge = document.getElementById('group-hub-edit-pledge');
+  const adminContributorDialog = document.getElementById('admin-contributor-dialog');
+  const adminContributorForm = document.getElementById('admin-contributor-form');
+  const adminContributorAmount = document.getElementById('admin-contributor-amount');
+  let currentAdminMonthlyAmount = 100;
   const groupDialog = document.getElementById('group-form-dialog');
   const groupForm = document.getElementById('group-form');
   const groupDpPreview = document.getElementById('group-dp-preview');
@@ -119,7 +126,14 @@
       groupHubSelect.replaceChildren(...myGroups.map((group) => new Option(`${group.name} (${group.role})`, group.group_id)));
       groupHubSelect.value = currentGroup.group_id;
     }
-    if (groupHubSelfToggle) groupHubSelfToggle.checked = Boolean(currentGroup.is_contributor);
+    if (groupHubSelfToggle) {
+      const isContributor = Boolean(currentGroup.is_contributor);
+      groupHubSelfToggle.checked = isContributor;
+      if (groupHubContributorDetails) {
+        groupHubContributorDetails.hidden = !isContributor;
+        if (groupHubPledgeVal) groupHubPledgeVal.textContent = Ipon.money(currentAdminMonthlyAmount || 100);
+      }
+    }
   }
 
   function renderGroupHeader(groups) {
@@ -458,6 +472,11 @@
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
       activeGoalsList = allGoalsResult?.data || [];
       renderGroupHeader(groupsResult || []);
+      const adminMember = (memberResult.data || []).find((m) => m.id === currentGroup?.member_id || m.id === state?.profile?.member_id);
+      if (adminMember && Number(adminMember.monthly_contribution_amount) > 0) {
+        currentAdminMonthlyAmount = Number(adminMember.monthly_contribution_amount);
+        syncGroupHub();
+      }
       const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(summary.tracked_savings); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
       [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.amount].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
       const activeIds = new Set((memberResult.data || []).map((m) => m.id));
@@ -710,20 +729,78 @@
     groupHubDialog?.close();
     openGroupDialog('create');
   });
+  function openAdminContributorDialog(action = 'enable') {
+    if (!adminContributorDialog || !adminContributorForm) return;
+    const isEdit = action === 'edit';
+    document.getElementById('admin-contributor-title').textContent = isEdit ? 'Update contributor amount' : 'Include yourself as a contributor?';
+    document.getElementById('admin-contributor-copy').textContent = isEdit
+      ? 'Adjust your monthly contribution amount for this group.'
+      : 'Set your monthly contribution amount to participate in this group.';
+    document.getElementById('save-admin-contributor').textContent = isEdit ? 'Save amount' : 'Confirm & join';
+    adminContributorAmount.value = String(currentAdminMonthlyAmount || 100);
+    adminContributorDialog.showModal();
+    adminContributorAmount.focus();
+    adminContributorAmount.select();
+  }
+
   groupHubSelfToggle?.addEventListener('change', async () => {
-    const enabled = groupHubSelfToggle.checked;
-    groupHubSelfToggle.disabled = true;
-    try {
-      await Ipon.rpc('set_admin_contributor', { p_enabled: enabled });
-      Ipon.toast(enabled ? 'You are now included as a contributor.' : 'You have been removed from active contributors.');
-      await load();
-    } catch (error) {
-      groupHubSelfToggle.checked = !enabled;
-      Ipon.toast(Ipon.friendlyError(error), 'error');
-    } finally {
-      groupHubSelfToggle.disabled = false;
+    const wantEnable = groupHubSelfToggle.checked;
+    if (wantEnable) {
+      groupHubSelfToggle.checked = false;
+      openAdminContributorDialog('enable');
+    } else {
+      groupHubSelfToggle.checked = true;
+      const confirmed = await Ipon.confirmAction({
+        title: 'Remove yourself as a contributor?',
+        message: 'Are you sure you want to remove yourself as a contributor? You will no longer be included in monthly contribution periods or active rosters for this group.',
+        acceptLabel: 'Remove contributor'
+      });
+      if (!confirmed) return;
+      groupHubSelfToggle.checked = false;
+      groupHubSelfToggle.disabled = true;
+      try {
+        await Ipon.rpc('set_admin_contributor', { p_enabled: false });
+        Ipon.toast('You have been removed from active contributors.');
+        await load();
+      } catch (error) {
+        groupHubSelfToggle.checked = true;
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      } finally {
+        groupHubSelfToggle.disabled = false;
+      }
     }
   });
+
+  groupHubEditPledge?.addEventListener('click', () => {
+    openAdminContributorDialog('edit');
+  });
+
+  document.getElementById('close-admin-contributor-dialog')?.addEventListener('click', () => adminContributorDialog?.close());
+  document.getElementById('cancel-admin-contributor-dialog')?.addEventListener('click', () => adminContributorDialog?.close());
+
+  adminContributorForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const amount = Number(adminContributorAmount.value);
+    if (!amount || amount <= 0 || amount > 1000000) {
+      Ipon.setFieldError(adminContributorAmount, 'Please enter a valid monthly amount between ₱1 and ₱1,000,000.');
+      adminContributorAmount.focus();
+      return;
+    }
+    const button = document.getElementById('save-admin-contributor');
+    Ipon.setBusy(button, true, 'Saving…');
+    try {
+      await Ipon.rpc('set_admin_contributor', { p_enabled: true, p_monthly_amount: amount });
+      currentAdminMonthlyAmount = amount;
+      adminContributorDialog.close();
+      Ipon.toast(`Contributor settings saved with ${Ipon.money(amount)} monthly contribution.`);
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(button, false);
+    }
+  });
+
   function openGroupDialog(mode) {
     if (!groupDialog || !groupForm) return;
     groupForm.reset();
@@ -739,9 +816,9 @@
     groupForm.elements.name.value = isCreate ? '' : (currentGroup?.name || '');
     const initialIncludeSelf = isCreate ? true : Boolean(currentGroup?.is_contributor);
     groupSelfToggle.checked = initialIncludeSelf;
-    groupMonthlyInput.value = '100';
-    groupMonthlyWrap.hidden = !isCreate ? (!initialIncludeSelf || Boolean(currentGroup?.is_contributor)) : !initialIncludeSelf;
-    groupMonthlyInput.required = !groupMonthlyWrap.hidden;
+    groupMonthlyInput.value = String(currentAdminMonthlyAmount || 100);
+    groupMonthlyWrap.hidden = !initialIncludeSelf;
+    groupMonthlyInput.required = initialIncludeSelf;
     groupInviteSection.hidden = !isCreate;
     groupInviteRows.replaceChildren();
     if (isCreate) appendInviteRow(groupInviteRows, { defaultAmount: 100, required: false });
@@ -750,10 +827,9 @@
     groupForm.elements.name.focus();
   }
   groupSelfToggle?.addEventListener('change', () => {
-    const isCreate = groupForm.elements.mode.value === 'create';
     const on = groupSelfToggle.checked;
-    groupMonthlyWrap.hidden = isCreate ? !on : (!on || Boolean(currentGroup?.is_contributor));
-    groupMonthlyInput.required = !groupMonthlyWrap.hidden;
+    groupMonthlyWrap.hidden = !on;
+    groupMonthlyInput.required = on;
   });
   groupDpInput?.addEventListener('change', async () => {
     const file = groupDpInput.files?.[0];
@@ -830,11 +906,23 @@
           p_avatar_url: pendingGroupAvatarUrl,
           p_clear_avatar: pendingGroupClearAvatar
         });
-        if (includeSelf !== Boolean(currentGroup?.is_contributor)) {
+        if (includeSelf !== Boolean(currentGroup?.is_contributor) || (includeSelf && monthlyAmount)) {
+          if (!includeSelf && Boolean(currentGroup?.is_contributor)) {
+            const confirmed = await Ipon.confirmAction({
+              title: 'Remove yourself as a contributor?',
+              message: 'Are you sure you want to remove yourself as a contributor from this group?',
+              acceptLabel: 'Remove contributor'
+            });
+            if (!confirmed) {
+              groupSelfToggle.checked = true;
+              return;
+            }
+          }
           await Ipon.rpc('set_admin_contributor', {
             p_enabled: includeSelf,
-            p_monthly_amount: includeSelf && !currentGroup?.is_contributor ? monthlyAmount : null
+            p_monthly_amount: includeSelf ? monthlyAmount : null
           });
+          if (includeSelf) currentAdminMonthlyAmount = monthlyAmount;
         }
         groupDialog.close();
         Ipon.toast('Group updated.');

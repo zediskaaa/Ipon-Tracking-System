@@ -5,7 +5,21 @@
     <section class="panel" data-role="ADMIN"><div class="panel-header"><div><h2>Contribution default</h2><p>Set the amount prefilled for new members. Existing members and periods are not changed.</p></div></div>
       <form id="contribution-setting-form" class="form-grid form-grid-3"><div class="field"><label for="effective-month">Effective month</label><input id="effective-month" name="effective_month" type="month" min="2000-01" max="2100-12" required></div><div class="field"><label for="default-amount">Default amount</label><input id="default-amount" name="default_amount" type="number" min="0.01" max="999999999999.99" step="0.01" required></div><div class="field"><label for="deadline-day">Monthly deadline day</label><input id="deadline-day" name="deadline_day" type="number" min="1" max="28" value="28" required><small class="field-help">Use days 1–28 so every month has this date.</small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit" data-requires-data>Save schedule</button><button class="button button-secondary" id="generate-periods" type="button" data-requires-data>Generate periods</button></div></form>
     </section>
-    <section class="panel"><div class="panel-header"><div><h2>Your access</h2><p>Your signed-in profile, active group, and contributor setting.</p></div></div><dl class="summary-list"><div><dt>Name</dt><dd id="my-name">—</dd></div><div><dt>Role</dt><dd id="my-role">—</dd></div><div><dt>Status</dt><dd id="my-status">—</dd></div><div><dt>Group</dt><dd><select id="settings-group-select" aria-label="Active savings group"></select></dd></div></dl><div class="settings-contributor-toggle" data-role="ADMIN"><label class="toggle-switch-row" for="settings-admin-contributor"><span><strong>Include me as a contributor</strong><small>Turn on to include yourself in contribution periods and contributor totals for this group.</small></span><input class="toggle-switch-input" id="settings-admin-contributor" type="checkbox" role="switch"></label></div></section>
+    <section class="panel"><div class="panel-header"><div><h2>Your access</h2><p>Your signed-in profile, active group, and contributor setting.</p></div></div><dl class="summary-list"><div><dt>Name</dt><dd id="my-name">—</dd></div><div><dt>Role</dt><dd id="my-role">—</dd></div><div><dt>Status</dt><dd id="my-status">—</dd></div><div><dt>Group</dt><dd><select id="settings-group-select" aria-label="Active savings group"></select></dd></div></dl>
+      <div class="settings-contributor-toggle" data-role="ADMIN">
+        <label class="toggle-switch-row" for="settings-admin-contributor">
+          <span><strong>Include me as a contributor</strong><small>Turn on to include yourself in contribution periods and contributor totals for this group.</small></span>
+          <input class="toggle-switch-input" id="settings-admin-contributor" type="checkbox" role="switch">
+        </label>
+        <div class="settings-contributor-details" id="settings-contributor-details" hidden>
+          <div class="settings-pledge-info">
+            <span>Your monthly contribution:</span>
+            <strong id="settings-pledge-val">₱100.00</strong>
+          </div>
+          <button class="button button-secondary button-sm" type="button" id="settings-edit-pledge">Change amount</button>
+        </div>
+      </div>
+    </section>
   </div>
   <div class="settings-grid" data-role="ADMIN">
     <section class="panel" data-role="ADMIN"><div class="panel-header"><div><h2>Account access</h2><p>Manage member and treasurer logins in your group. Administrator access is managed by the Super Admin.</p></div></div>
@@ -13,5 +27,32 @@
     </section>
     <section class="panel" data-role="ADMIN"><div class="panel-header"><div><h2>Create treasurer account</h2><p>Treasurers can record and review group activity but cannot manage members, goals, audit logs, or settings.</p></div></div><form id="treasurer-account-form" class="form-grid form-grid-3"><div class="field"><label for="treasurer-first-name">First name</label><input id="treasurer-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="treasurer-middle-name">Middle name (optional)</label><input id="treasurer-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="treasurer-last-name">Last name</label><input id="treasurer-last-name" name="last_name" maxlength="80" required></div><div class="field"><label for="treasurer-email">Email</label><input id="treasurer-email" name="email" type="email" autocomplete="email" maxlength="254" required></div><div class="field"><label for="treasurer-password">Temporary password</label><input id="treasurer-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-temp-password required><small class="field-help">Pre-filled with a recommended password, or clear it to enter a custom password.</small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Create treasurer</button></div></form></section>
   </div>
+  <dialog class="form-dialog" id="settings-contributor-dialog" aria-labelledby="settings-contributor-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="settings-contributor-title">Contributor settings</h2>
+          <p id="settings-contributor-copy">Set your monthly contribution amount to participate in this group.</p>
+        </div>
+        <button class="dialog-close" type="button" id="close-settings-contributor-dialog" aria-label="Close dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </header>
+      <form id="settings-contributor-form" class="form-grid">
+        <div class="field field-wide">
+          <p class="field-help" style="margin:0;font-size:13.5px;line-height:1.5;color:var(--ink);">
+            You will join monthly contribution periods and appear in contributor rosters and reports for this group.
+          </p>
+        </div>
+        <div class="field field-wide">
+          <label for="settings-contributor-amount">Monthly contribution amount (₱)</label>
+          <input id="settings-contributor-amount" name="amount" type="number" min="1" max="1000000" step="0.01" value="100" required placeholder="100.00">
+          <small class="field-help">This amount reflects on your member profile and will be assigned to your contribution periods.</small>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" type="button" id="cancel-settings-contributor-dialog">Cancel</button>
+          <button class="button button-primary" type="submit" id="save-settings-contributor">Confirm &amp; save</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
 </main></div><script src="js/config.js"></script><script src="js/core.js?v=20261113-3"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/settings.js?v=20261112-11"></script></body></html>
 

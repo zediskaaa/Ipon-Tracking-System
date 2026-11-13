@@ -299,14 +299,23 @@
             <svg class="group-hub-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
           </button>
         </div>
-        <label class="group-hub-switch-card" for="manage-hub-self-toggle">
-          <span class="group-hub-card-icon is-sage" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-          <span class="group-hub-card-copy">
-            <strong>Include me as a contributor</strong>
-            <small>Join monthly contribution periods and appear in contributor rosters for this group.</small>
-          </span>
-          <input class="toggle-switch-input" id="manage-hub-self-toggle" type="checkbox" role="switch">
-        </label>
+        <div class="group-hub-contributor-section">
+          <label class="group-hub-switch-card" for="manage-hub-self-toggle">
+            <span class="group-hub-card-icon is-sage" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <span class="group-hub-card-copy">
+              <strong>Include me as a contributor</strong>
+              <small>Join monthly contribution periods and appear in contributor rosters for this group.</small>
+            </span>
+            <input class="toggle-switch-input" id="manage-hub-self-toggle" type="checkbox" role="switch">
+          </label>
+          <div class="group-hub-contributor-details" id="group-hub-contributor-details" hidden>
+            <div class="group-hub-pledge-info">
+              <span class="group-hub-pledge-label">Your monthly contribution:</span>
+              <strong class="group-hub-pledge-value" id="group-hub-pledge-val">₱100.00</strong>
+            </div>
+            <button class="button button-secondary button-sm" type="button" id="group-hub-edit-pledge">Change amount</button>
+          </div>
+        </div>
         <div class="group-hub-links">
           <a class="group-hub-link" href="members.html">
             <span><strong>Member directory &amp; recycle bin</strong><small>Edit shares, reset passwords, or recover removed members</small></span>
@@ -322,6 +331,33 @@
         <button class="button button-secondary" type="button" id="group-hub-create-another">+ Add another group</button>
         <button class="button button-primary" type="button" id="done-group-hub-dialog">Done</button>
       </footer>
+    </div>
+  </dialog>
+  <dialog class="form-dialog" id="admin-contributor-dialog" aria-labelledby="admin-contributor-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="admin-contributor-title">Contributor settings</h2>
+          <p id="admin-contributor-copy">Set your monthly contribution amount to participate in this group.</p>
+        </div>
+        <button class="dialog-close" type="button" id="close-admin-contributor-dialog" aria-label="Close dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </header>
+      <form id="admin-contributor-form" class="form-grid">
+        <div class="field field-wide">
+          <p class="field-help" style="margin:0;font-size:13.5px;line-height:1.5;color:var(--ink);">
+            You will join monthly contribution periods and appear in contributor rosters and reports for this group.
+          </p>
+        </div>
+        <div class="field field-wide">
+          <label for="admin-contributor-amount">Monthly contribution amount (₱)</label>
+          <input id="admin-contributor-amount" name="amount" type="number" min="1" max="1000000" step="0.01" value="100" required placeholder="100.00">
+          <small class="field-help">This amount reflects on your member profile and will be assigned to your contribution periods.</small>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" type="button" id="cancel-admin-contributor-dialog">Cancel</button>
+          <button class="button button-primary" type="submit" id="save-admin-contributor">Confirm &amp; save</button>
+        </div>
+      </form>
     </div>
   </dialog>
   <dialog class="form-dialog group-form-dialog" id="group-form-dialog" aria-labelledby="group-form-title">
