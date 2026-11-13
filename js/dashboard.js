@@ -1222,6 +1222,120 @@
   const aiGoalMetaEl = document.getElementById('ai-insights-goal-meta');
   const aiGoalBarEl = document.getElementById('ai-insights-goal-bar');
   const aiGoalRemainingEl = document.getElementById('ai-insights-goal-remaining');
+  const aiCoachMessages = document.getElementById('ai-coach-messages');
+  const aiCoachChips = document.getElementById('ai-coach-chips');
+  const aiCoachForm = document.getElementById('ai-coach-form');
+  const aiCoachInput = document.getElementById('ai-coach-input');
+  const aiCoachSend = document.getElementById('ai-coach-send');
+  const aiCoachClear = document.getElementById('ai-coach-clear');
+  let lastCoachContext = null;
+
+  function buildCoachContext(monthlyPledge = 0) {
+    let targetGoal = null;
+    if (selectedGoalId) {
+      targetGoal = activeGoalsList.find((g) => g.id === selectedGoalId);
+    } else if (activeGoalsList.length > 0) {
+      targetGoal = activeGoalsList[0];
+    }
+    const goalTitle = targetGoal?.title || 'General Savings';
+    const targetAmt = Number(targetGoal?.target_amount || 0);
+    const tracked = Number(lastTrackedSavings || 0);
+    const targetDate = targetGoal?.target_date || '';
+    const remaining = Math.max(0, targetAmt - tracked);
+    const pct = targetAmt > 0 ? Math.min(100, Math.round((tracked / targetAmt) * 100)) : 0;
+    const today = new Date(`${Ipon.isoDate()}T00:00:00`);
+    const end = targetDate ? new Date(`${targetDate}T00:00:00`) : null;
+    const daysLeft = end && !Number.isNaN(end.getTime()) ? Math.max(0, Math.round((end - today) / 86400000)) : 0;
+    const membersCount = Math.max(1, Number(document.getElementById('dashboard-members')?.textContent) || 1);
+    return { goalTitle, targetAmt, tracked, remaining, pct, monthlyPledge, targetDate, daysLeft, membersCount };
+  }
+
+  function appendCoachMessage(role, text) {
+    if (!aiCoachMessages) return;
+    aiCoachMessages.hidden = false;
+    if (aiCoachClear) aiCoachClear.hidden = false;
+    const item = document.createElement('div');
+    item.className = `ai-coach-msg ${role === 'user' ? 'is-user' : 'is-coach'}`;
+    item.textContent = text;
+    aiCoachMessages.appendChild(item);
+    aiCoachMessages.scrollTop = aiCoachMessages.scrollHeight;
+  }
+
+  async function answerCoachQuestion(question) {
+    const ctx = lastCoachContext || buildCoachContext(0);
+    const q = String(question || '').trim();
+    if (!q) return;
+
+    const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
+    if (apiKey) {
+      try {
+        const res = await Ipon.callGemini({
+          prompt: `Savings Goal: "${ctx.goalTitle}"\nTarget: ₱${ctx.targetAmt}\nSaved: ₱${ctx.tracked} (${ctx.pct}%)\nRemaining: ₱${ctx.remaining}\nMonthly group schedule default: ₱${ctx.monthlyPledge}\nActive members: ${ctx.membersCount}\nDays until target date: ${ctx.daysLeft || 'None set'}\n\nUser question: "${q}"`,
+          systemInstruction: 'You are myIPON Savings Coach. Answer concisely in 1-3 short, practical English sentences using the exact numbers provided.',
+          jsonResponse: false
+        });
+        if (res?.text) return String(res.text).trim();
+      } catch (_) { }
+    }
+
+    if (ctx.targetAmt <= 0) {
+      return 'You have no active target selected yet. Add a shared goal in Savings Goals first so I can calculate exact timelines and splits.';
+    }
+    if (ctx.remaining <= 0) {
+      return `"${ctx.goalTitle}" is already 100% funded (${Ipon.money(ctx.tracked)} / ${Ipon.money(ctx.targetAmt)}). You can mark it completed or create your next savings milestone!`;
+    }
+
+    const lower = q.toLowerCase();
+    const numMatch = lower.match(/(\d[\d,]*(?:\.\d+)?)/);
+    const typedAmt = numMatch ? Number(numMatch[1].replace(/,/g, '')) : 0;
+
+    if ((lower.includes('if') || lower.includes('add') || lower.includes('extra') || lower.includes('+')) && typedAmt > 0) {
+      const perMonthExtra = lower.includes('day') ? typedAmt * 30.4375 : lower.includes('month') ? typedAmt : typedAmt * 4.345;
+      const baseMonth = ctx.monthlyPledge > 0 ? ctx.monthlyPledge : 0;
+      const newMonth = baseMonth + perMonthExtra;
+      const newMonths = Math.max(1, Math.ceil(ctx.remaining / newMonth));
+      const oldMonths = baseMonth > 0 ? Math.ceil(ctx.remaining / baseMonth) : null;
+      const savedText = oldMonths && oldMonths > newMonths ? ` — finishing about ${oldMonths - newMonths} month${oldMonths - newMonths === 1 ? '' : 's'} earlier` : '';
+      return `Adding ${Ipon.money(typedAmt)} ${lower.includes('day') ? 'per day' : lower.includes('month') ? 'per month' : 'per week'} brings your pace to ${Ipon.money(newMonth)}/month. You can reach "${ctx.goalTitle}" in ~${newMonths} month${newMonths === 1 ? '' : 's'}${savedText}.`;
+    }
+
+    if (lower.includes('member') || lower.includes('split') || lower.includes('each')) {
+      const perMemberRem = ctx.remaining / ctx.membersCount;
+      const perMemberWeek = ctx.daysLeft > 7 ? perMemberRem / (ctx.daysLeft / 7) : perMemberRem / 4;
+      return `Split evenly across ${ctx.membersCount} active member${ctx.membersCount === 1 ? '' : 's'}, the ${Ipon.money(ctx.remaining)} balance comes to ${Ipon.money(perMemberRem)} total per person (about ${Ipon.money(perMemberWeek)}/week each).`;
+    }
+
+    if (lower.includes('day') || lower.includes('daily') || lower.includes('pace')) {
+      if (ctx.daysLeft > 0) {
+        const perDay = ctx.remaining / ctx.daysLeft;
+        return `With ${ctx.daysLeft} days left until ${Ipon.dateLabel(ctx.targetDate)}, the group needs ${Ipon.money(perDay)}/day total — or ${Ipon.money(perDay / ctx.membersCount)}/day per member.`;
+      }
+      const perDay30 = ctx.remaining / 30;
+      return `To cover ${Ipon.money(ctx.remaining)} within 30 days, aim for ${Ipon.money(perDay30)}/day (${Ipon.money(perDay30 / ctx.membersCount)}/day per member). Set a target date on your goal for an exact deadline pace.`;
+    }
+
+    if (lower.includes('fast') || lower.includes('quick') || lower.includes('best') || lower.includes('plan')) {
+      const boostWeek = Math.max(50, Math.round(ctx.remaining / 12));
+      return `Fastest strategy for "${ctx.goalTitle}": combine your ${ctx.monthlyPledge > 0 ? Ipon.money(ctx.monthlyPledge) + '/mo schedule' : 'regular deposits'} with an extra ${Ipon.money(boostWeek)}/week group push (${Ipon.money(boostWeek / ctx.membersCount)} each) to clear the ${Ipon.money(ctx.remaining)} gap steadily.`;
+    }
+
+    const monthsAtPledge = ctx.monthlyPledge > 0 ? Math.ceil(ctx.remaining / ctx.monthlyPledge) : null;
+    return `For "${ctx.goalTitle}", ${Ipon.money(ctx.remaining)} remains (${ctx.pct}% done across ${ctx.membersCount} member${ctx.membersCount === 1 ? '' : 's'}). ${monthsAtPledge ? `At ${Ipon.money(ctx.monthlyPledge)}/month, estimated completion is ~${monthsAtPledge} month${monthsAtPledge === 1 ? '' : 's'}.` : 'Try asking "If we add ₱200 per week?" or "Split per member".'}`;
+  }
+
+  async function handleCoachAsk(question) {
+    const q = String(question || '').trim();
+    if (!q) return;
+    appendCoachMessage('user', q);
+    if (aiCoachInput) aiCoachInput.value = '';
+    if (aiCoachSend) Ipon.setBusy(aiCoachSend, true, '…');
+    try {
+      const reply = await answerCoachQuestion(q);
+      appendCoachMessage('coach', reply);
+    } finally {
+      if (aiCoachSend) Ipon.setBusy(aiCoachSend, false);
+    }
+  }
 
   function applyLocalInsightsFallback({ targetAmt, tracked, remaining, pct, monthlyPledge, targetDate, forceOverwrite = true }) {
     const monthsNeeded = monthlyPledge > 0 ? Math.ceil(remaining / monthlyPledge) : 0;
@@ -1284,18 +1398,8 @@
   }
 
   async function fetchAndRenderAiInsights(showRefreshToast = false) {
-    let targetGoal = null;
-    if (selectedGoalId) {
-      targetGoal = activeGoalsList.find((g) => g.id === selectedGoalId);
-    } else if (activeGoalsList.length > 0) {
-      targetGoal = activeGoalsList[0];
-    }
-    const goalTitle = targetGoal?.title || 'General Savings';
-    const targetAmt = Number(targetGoal?.target_amount || 0);
-    const tracked = Number(lastTrackedSavings || 0);
-    const targetDate = targetGoal?.target_date || '';
-    const remaining = Math.max(0, targetAmt - tracked);
-    const pct = targetAmt > 0 ? Math.min(100, Math.round((tracked / targetAmt) * 100)) : 0;
+    const { goalTitle, targetAmt, tracked, remaining, pct, targetDate } = buildCoachContext(0);
+    lastCoachContext = buildCoachContext(0);
 
     if (aiGoalNameEl) aiGoalNameEl.textContent = goalTitle;
     if (aiGoalMetaEl) aiGoalMetaEl.textContent = targetAmt > 0 ? `${Ipon.money(tracked)} / ${Ipon.money(targetAmt)} (${pct}%)` : Ipon.money(tracked);
@@ -1323,6 +1427,7 @@
       monthlyPledge = Number(setRow?.default_amount || 0);
     } catch (_) { }
 
+    lastCoachContext = buildCoachContext(monthlyPledge);
     applyLocalInsightsFallback({ targetAmt, tracked, remaining, pct, monthlyPledge, targetDate, forceOverwrite: false });
 
     try {
@@ -1402,6 +1507,21 @@ Return a valid JSON object with EXACTLY these three keys:
   aiInsightsRefresh?.addEventListener('click', () => {
     Ipon.setBusy(aiInsightsRefresh, true);
     fetchAndRenderAiInsights(true).finally(() => Ipon.setBusy(aiInsightsRefresh, false));
+  });
+  aiCoachChips?.addEventListener('click', (event) => {
+    const chip = event.target.closest('[data-coach-prompt]');
+    if (chip) handleCoachAsk(chip.dataset.coachPrompt);
+  });
+  aiCoachForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    handleCoachAsk(aiCoachInput?.value);
+  });
+  aiCoachClear?.addEventListener('click', () => {
+    if (aiCoachMessages) {
+      aiCoachMessages.innerHTML = '';
+      aiCoachMessages.hidden = true;
+    }
+    aiCoachClear.hidden = true;
   });
   renderCalendar([]);
   state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });

@@ -858,6 +858,23 @@
             </div>
           </button>
         </div>
+        <section class="ai-coach-chat" aria-label="Ask Savings Coach">
+          <div class="ai-coach-chat-head">
+            <strong>Ask Savings Coach</strong>
+            <button class="ai-coach-clear" id="ai-coach-clear" type="button" hidden>Clear chat</button>
+          </div>
+          <div class="ai-coach-chips" id="ai-coach-chips">
+            <button class="ai-coach-chip" type="button" data-coach-prompt="How much do we need per day?">Daily pace</button>
+            <button class="ai-coach-chip" type="button" data-coach-prompt="What if we add ₱100 per week?">If +₱100/week</button>
+            <button class="ai-coach-chip" type="button" data-coach-prompt="How much should each member contribute?">Split per member</button>
+            <button class="ai-coach-chip" type="button" data-coach-prompt="What is the fastest way to finish this goal?">Fastest plan</button>
+          </div>
+          <div class="ai-coach-messages" id="ai-coach-messages" hidden aria-live="polite"></div>
+          <form class="ai-coach-form" id="ai-coach-form">
+            <input class="ai-coach-input" id="ai-coach-input" type="text" maxlength="240" placeholder="Ask about daily pace, extra deposits, or member split…" autocomplete="off">
+            <button class="button button-primary button-sm ai-coach-send" id="ai-coach-send" type="submit">Ask</button>
+          </form>
+        </section>
       </div>
       <div class="form-actions field-wide ai-insights-footer">
         <button class="button button-secondary" id="ai-insights-refresh" type="button">
