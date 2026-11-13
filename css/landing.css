@@ -1828,7 +1828,52 @@ html {
   color: rgba(245, 234, 219, 0.82);
   font: 16.5px/1.65 Arial, sans-serif;
 }
+.l-cta-actions-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-end;
+}
 .l-cta-actions { display: flex; flex-wrap: wrap; gap: 14px; }
+.l-cta-downloads {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+.l-cta-download-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(245, 234, 219, 0.78);
+  letter-spacing: 0.02em;
+}
+.l-cta-download-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.l-btn-app {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+  backdrop-filter: blur(8px);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.l-btn-app:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  color: #fff;
+}
 
 /* Footer */
 .l-footer {
@@ -1941,8 +1986,9 @@ html {
   .l-float { display: none; }
   .l-mock-total { font-size: 34px; }
   .l-cta-card { grid-template-columns: 1fr; padding: 36px 24px; text-align: center; }
-  .l-cta-actions { justify-content: center; }
-  .l-cta-actions .l-btn { flex: 1 1 100%; }
+  .l-cta-actions-wrap, .l-cta-downloads { align-items: center; width: 100%; }
+  .l-cta-actions, .l-cta-download-buttons { justify-content: center; width: 100%; }
+  .l-cta-actions .l-btn, .l-cta-download-buttons .l-btn { flex: 1 1 100%; justify-content: center; }
   .l-footer .l-wrap { flex-direction: column; text-align: center; gap: 14px; }
   .l-back-top { bottom: 18px; right: 18px; width: 42px; height: 42px; }
 }

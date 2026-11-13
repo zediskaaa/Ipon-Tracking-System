@@ -26,5 +26,17 @@
         { "key": "Access-Control-Allow-Origin", "value": "*" }
       ]
     }
+  ],
+  "redirects": [
+    {
+      "source": "/download/android",
+      "destination": "https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk",
+      "permanent": false
+    },
+    {
+      "source": "/download/ios",
+      "destination": "https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.ipa",
+      "permanent": false
+    }
   ]
 }

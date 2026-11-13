@@ -1922,6 +1922,7 @@
       document.getElementById('mark-all-notifications').hidden = unread === 0;
       list.innerHTML = rows.length ? rows.map((item) => {
         const isInvite = item.type === 'GROUP_INVITE' && !item.read_at;
+        const isReleaseNotif = item.type === 'RELEASE' || (item.title && /release|version|app update/i.test(item.title));
         return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}">
           <span class="notification-item-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="${item.type === 'GROUP_INVITE' ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4'}"/></svg>
@@ -1934,6 +1935,12 @@
               <div class="notification-invite-actions">
                 <button class="button button-sm button-primary" type="button" data-invite-action="accept" data-notif-id="${item.id}">Accept</button>
                 <button class="button button-sm button-secondary" type="button" data-invite-action="decline" data-notif-id="${item.id}">Decline</button>
+              </div>
+            ` : ''}
+            ${isReleaseNotif ? `
+              <div class="notification-download-row" style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
+                <a class="button button-sm button-primary" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk" download="myIPON.apk" target="_blank" rel="noopener" style="padding: 3px 8px; font-size: 11px; text-decoration: none;">Download APK</a>
+                <a class="button button-sm button-secondary" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.ipa" download="myIPON.ipa" target="_blank" rel="noopener" style="padding: 3px 8px; font-size: 11px; text-decoration: none;">Download iOS</a>
               </div>
             ` : ''}
           </div>
@@ -3118,11 +3125,19 @@
       if (viewerReleaseBanner) {
         viewerReleaseBanner.innerHTML = isRelease ? `
           <div class="announcement-release-banner announcement-viewer-release">
-            <span class="announcement-release-badge">
-              <svg viewBox="0 0 24 24" aria-hidden="true" class="release-star-icon"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>
-              Release update
-            </span>
-            ${item.release_version ? `<span class="announcement-version-chip">${escapeHtml(item.release_version)}</span>` : ''}
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; width: 100%;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="announcement-release-badge">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" class="release-star-icon"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>
+                  Release update
+                </span>
+                ${item.release_version ? `<span class="announcement-version-chip">${escapeHtml(item.release_version)}</span>` : ''}
+              </div>
+              <div style="display: inline-flex; gap: 8px; flex-wrap: wrap;">
+                <a class="button button-sm button-primary" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk" download="myIPON.apk" target="_blank" rel="noopener" style="padding: 4px 10px; font-size: 12px; text-decoration: none;">Download Android (.apk)</a>
+                <a class="button button-sm button-secondary" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.ipa" download="myIPON.ipa" target="_blank" rel="noopener" style="padding: 4px 10px; font-size: 12px; text-decoration: none;">Download iOS (.ipa)</a>
+              </div>
+            </div>
           </div>` : '';
       }
       viewerMeta.innerHTML = announcementAuthorMeta(item);
