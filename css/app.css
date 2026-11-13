@@ -374,8 +374,6 @@ body.is-app .loader-sheet small { margin-top:4px; font-size:12px; }
 .account-side-stack{display:grid;min-width:0;align-content:start;gap:20px}
 .account-card{min-width:0;border:1px solid rgba(20,45,43,.13);border-radius:18px;padding:22px;background:rgba(255,255,255,.72);box-shadow:0 8px 24px rgba(27,57,48,.07)}
 .account-section-heading{display:flex;align-items:center;gap:13px;margin-bottom:20px}
-.account-section-icon{display:grid;width:42px;height:42px;flex:0 0 42px;place-items:center;border-radius:12px;background:#dcece2;color:#0a5a40}
-.account-section-icon svg{width:25px;height:25px;fill:currentColor;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .account-section-heading h3{margin:0;font:800 23px/1.1 Arial,sans-serif;letter-spacing:-.015em}
 .account-section-heading p{margin:4px 0 0;color:#61716d;font:14px/1.35 Arial,sans-serif}
 .account-profile-identity{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:22px;padding:0 4px 22px;border-bottom:1px solid var(--rule)}
