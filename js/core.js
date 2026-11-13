@@ -3165,11 +3165,20 @@
   let cachedWorkingGeminiModel = null;
 
   function getGeminiApiKey() {
-    let key = (localStorage.getItem('ipon_gemini_api_key') || '').trim() || (window.IPON_CONFIG?.geminiApiKey || '').trim();
-    if (key.startsWith('base64:')) {
-      try { key = atob(key.slice(7)).trim(); } catch (_) { }
+    let configKey = (window.IPON_CONFIG?.geminiApiKey || '').trim();
+    if (configKey.startsWith('base64:')) {
+      try { configKey = atob(configKey.slice(7)).trim(); } catch (_) { }
     }
-    return key;
+    if (configKey) {
+      try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
+      return configKey;
+    }
+
+    let storageKey = (localStorage.getItem('ipon_gemini_api_key') || '').trim();
+    if (storageKey.startsWith('base64:')) {
+      try { storageKey = atob(storageKey.slice(7)).trim(); } catch (_) { }
+    }
+    return storageKey;
   }
 
   function getGeminiModel() {
@@ -3226,8 +3235,9 @@
           const errData = await res.json().catch(() => null);
           let errMsg = errData?.error?.message || `HTTP ${res.status} (${res.statusText})`;
           const errReason = errData?.error?.details?.[0]?.reason;
-          if (errReason === 'ACCESS_TOKEN_TYPE_UNSUPPORTED') {
-            throw new Error('API key is revoked or invalid (ACCESS_TOKEN_TYPE_UNSUPPORTED). Please generate a fresh key from Google AI Studio (aistudio.google.com/app/apikey) and save it in the browser dialog.');
+          if (errReason === 'ACCESS_TOKEN_TYPE_UNSUPPORTED' || res.status === 401) {
+            try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
+            throw new Error('API key is revoked or invalid (ACCESS_TOKEN_TYPE_UNSUPPORTED). Please generate a fresh key from Google AI Studio (aistudio.google.com/app/apikey).');
           }
           if (res.status === 404 || res.status === 503 || res.status === 429) {
             lastError = new Error(`Model ${curModel} (${res.status}): ${errMsg}`);

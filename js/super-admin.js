@@ -1078,7 +1078,7 @@
   const geminiModelSelect = document.getElementById('gemini-model-select');
 
   function getStoredGeminiKey() {
-    return (localStorage.getItem('ipon_gemini_api_key') || '').trim() || (window.IPON_CONFIG?.geminiApiKey || '').trim();
+    return Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : ((window.IPON_CONFIG?.geminiApiKey || localStorage.getItem('ipon_gemini_api_key') || '').trim());
   }
 
   function getStoredGeminiModel() {
