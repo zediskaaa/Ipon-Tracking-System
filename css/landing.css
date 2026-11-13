@@ -1155,7 +1155,10 @@ html {
   font: 700 8.5px/18px Arial, sans-serif;
   text-align: center;
   display: inline-block;
-  box-shadow: 0 0 0 1px #fff;
+  box-shadow: 0 0 0 1.5px #fff;
+}
+.l-prev-day .day-avatar + .day-avatar {
+  margin-left: -5px;
 }
 .l-prev-day em {
   font-style: normal;

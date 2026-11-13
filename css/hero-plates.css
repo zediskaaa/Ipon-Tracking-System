@@ -578,7 +578,7 @@ button,a { color:inherit; font:inherit; }
 }
 
 .day-avatars { position:static; grid-column:1 / -1; grid-row:2; justify-self:start; align-self:end; display:flex; align-items:center; max-width:100%; overflow:hidden; pointer-events:none; }
-.day-avatars .day-avatar { flex:0 0 auto; width:22px; height:22px; border:1.5px solid #fffdf9; box-shadow:0 1px 3px rgba(18,43,36,.16); font-size:9px; }
+.day-avatars .day-avatar { flex:0 0 auto; width:22px; height:22px; border-radius:50%; border:1.5px solid #fff; box-shadow:0 1px 3px rgba(18,43,36,.16); font-size:9px; background:#1e5a44; color:#fff; display:inline-grid; place-items:center; }
 .day-avatars .day-avatar + .day-avatar { margin-left:-6px; }
 .day-avatars .day-avatar-more { background:#122b24; color:#f6efe2; font-size:9px; letter-spacing:.04em; }
 
@@ -965,7 +965,7 @@ button,a { color:inherit; font:inherit; }
   .day .event { width:16px; height:16px; }
   .day .event .status-icon { width:16px; height:16px; flex:0 0 16px; }
   .day .event .status-icon svg { width:10px; height:10px; }
-  .day-avatars .day-avatar { width:13px; height:13px; border-width:1px; font-size:6px; }
+  .day-avatars .day-avatar { width:14px; height:14px; border:1.5px solid #fff; font-size:6.5px; }
   .day-avatars .day-avatar + .day-avatar { margin-left:-4px; }
   .day em { display:none; }.day .more-count { min-width:14px; height:14px; padding:1px 5px; border-radius:7px; background:var(--ink); color:#fff; font:700 8px/12px Arial,sans-serif; text-align:center; }
   .day-detail-panel { right:12px; bottom:12px; left:12px!important; top:auto!important; width:auto; max-height:45vh; overflow:auto; pointer-events:auto; }
