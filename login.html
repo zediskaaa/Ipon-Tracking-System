@@ -28,8 +28,8 @@
     .login-story p{max-width:580px;margin:0;color:#a7b9b2;font:clamp(15px,1.15vw,17.5px)/1.58 Arial,sans-serif}
     .login-illustration{position:relative;display:flex;width:100%;flex:1;align-items:center;justify-content:center;margin:14px 0 6px;padding:0}
     .login-illustration svg{display:block;width:min(580px,100%);height:auto;overflow:visible}
-    .login-form-wrap{display:grid;width:100%;max-width:660px;justify-self:start;place-items:center;padding:clamp(24px,3.5vw,48px) clamp(28px,4.5vw,64px) clamp(24px,3.5vw,48px) clamp(12px,2vw,28px)}
-    .login-card{position:relative;width:min(520px,100%);padding:42px 46px 36px 56px;border:0;border-radius:0 10px 10px 0;background:radial-gradient(circle at 0 11px,#0a1b17 6.5px,#f5eee0 7px) 0 6px/100% 22px repeat-y;color:#112622;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+    .login-form-wrap{display:grid;width:100%;max-width:760px;justify-self:start;place-items:center;padding:clamp(24px,3.5vw,48px) clamp(20px,3vw,48px)}
+    .login-card{position:relative;width:min(480px,100%);padding:42px 46px 36px 56px;border:0;border-radius:0 10px 10px 0;background:radial-gradient(circle at 0 11px,#0a1b17 6.5px,#f5eee0 7px) 0 6px/100% 22px repeat-y;color:#112622;box-shadow:0 24px 60px rgba(0,0,0,.4);transition:width .28s cubic-bezier(.22,1,.36,1)}
     .login-card-close{position:absolute;top:18px;right:18px;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:1px solid rgba(20,45,43,.14);background:rgba(255,255,255,.65);color:#112622;text-decoration:none;cursor:pointer;transition:background .2s ease,border-color .2s ease,color .2s ease,transform .2s ease;z-index:10}
     .login-card-close:hover{background:#fff;border-color:rgba(20,45,43,.35);color:var(--green);transform:scale(1.08);box-shadow:0 4px 12px rgba(0,0,0,.1)}
     .login-card-close svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
@@ -41,7 +41,7 @@
     .auth-tabs button:hover{color:#112622}
     .auth-tabs button.is-active{border-bottom-color:transparent;background:transparent;color:#112622;font-weight:800}
     .auth-tab-indicator{position:absolute;bottom:-1.5px;left:0;height:3px;width:56px;border-radius:3px 3px 0 0;background:#112622;pointer-events:none;transition:transform .32s cubic-bezier(.22,1,.36,1),width .24s cubic-bezier(.22,1,.36,1);z-index:3;will-change:transform,width}
-    .login-card .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
+    .login-card .form-grid{display:grid;grid-template-columns:1fr;gap:16px}
     .login-card .field{display:grid;gap:6px;min-width:0}
     .login-card .field:not([hidden]){display:grid}
     .login-card .field[hidden]{display:none!important}
@@ -76,20 +76,21 @@
 
     /* Column spans for form layout */
     #email-field,#password-field{grid-column:1/-1}
-    body.is-request-mode #first-name-field,body.is-request-mode #last-name-field{grid-column:span 1}
-    body.is-request-mode #middle-name-field,body.is-request-mode #contact-number-field{grid-column:span 1}
-    body.is-request-mode :is(#email-field,#request-reason-field,#password-field,#password-confirmation-field){grid-column:1/-1}
+    body.is-request-mode .login-card .form-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:14px 16px}
+    body.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field){grid-column:span 2}
+    body.is-request-mode :is(#contact-number-field,#email-field,#password-field,#password-confirmation-field){grid-column:span 3}
+    body.is-request-mode #request-reason-field{grid-column:1/-1}
     body.is-request-mode .password-strength{grid-column:1/-1;display:block;margin-top:4px}
     body.is-request-mode :is(.development-notice,.login-legal){display:none}
 
-    /* Compact card sizing - SAME SIZE in both login and request/signup mode! */
+    /* Balanced card sizing: compact 480px on login, comfortable 660px on signup */
     body.is-request-mode .login-page{grid-template-columns:minmax(380px,1.1fr) minmax(380px,.9fr)}
     body.is-request-mode .login-story{display:flex}
-    body.is-request-mode .login-form-wrap{max-width:660px;padding:clamp(24px,3.5vw,48px) clamp(28px,4.5vw,64px) clamp(24px,3.5vw,48px) clamp(12px,2vw,28px)}
-    body.is-request-mode .login-card{position:relative;width:min(520px,100%);padding:42px 46px 36px 56px}
+    body.is-request-mode .login-form-wrap{max-width:760px;padding:clamp(24px,3.5vw,48px) clamp(20px,3vw,48px)}
+    body.is-request-mode .login-card{position:relative;width:min(660px,100%);padding:38px 44px 34px 52px}
     body.is-request-mode .login-card h2{margin-bottom:6px;font-size:32px}
-    body.is-request-mode .login-card>p{margin-bottom:22px}
-    body.is-request-mode .auth-tabs{margin-bottom:24px}
+    body.is-request-mode .login-card>p{margin-bottom:20px}
+    body.is-request-mode .auth-tabs{margin-bottom:22px}
 
     .policy-dialog{width:min(680px,calc(100vw - 28px));max-height:min(82dvh,760px);padding:0;border:0;border-radius:16px;background:#f5eee0;color:var(--ink);box-shadow:0 24px 70px rgba(7,35,26,.4)}
     .policy-dialog::backdrop{background:rgba(7,35,26,.68)}

@@ -570,12 +570,12 @@ test('administrator request form uses a desktop grid with a mobile fallback', ()
   assert.match(script, /signupTab\.textContent = 'Create account'/);
   assert.match(html, /body\.is-request-mode \.login-page\{grid-template-columns:minmax\(380px,1\.1fr\) minmax\(380px,\.9fr\)/);
   assert.match(html, /body\.is-request-mode \.login-story\{display:flex\}/);
-  assert.match(html, /body\.is-request-mode \.login-card\{position:relative;width:min\(520px,100%\)/);
-  assert.match(html, /\.login-card \.form-grid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\);gap:14px 16px\}/);
+  assert.match(html, /body\.is-request-mode \.login-card\{position:relative;width:min\(660px,100%\)/);
+  assert.match(html, /body\.is-request-mode \.login-card \.form-grid\{grid-template-columns:repeat\(6,minmax\(0,1fr\)\);gap:14px 16px\}/);
   assert.doesNotMatch(read('js/core.js'), /<meter\b/i);
   assert.doesNotMatch(html, /zediskaaa(?:%40|@)gmail\.com/i);
-  assert.match(html, /body\.is-request-mode #first-name-field,body\.is-request-mode #last-name-field\{grid-column:span 1\}/);
-  assert.match(html, /body\.is-request-mode #middle-name-field,body\.is-request-mode #contact-number-field\{grid-column:span 1\}/);
+  assert.match(html, /body\.is-request-mode :is\(#first-name-field,#middle-name-field,#last-name-field\)\{grid-column:span 2\}/);
+  assert.match(html, /body\.is-request-mode :is\(#contact-number-field,#email-field,#password-field,#password-confirmation-field\)\{grid-column:span 3\}/);
   assert.match(html, /@media\(max-width:780px\)[\s\S]*?\.login-card \.form-grid\{grid-template-columns:1fr/);
 });
 
