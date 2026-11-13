@@ -1331,3 +1331,52 @@ test('live password validation feedback and non-blocking authentication flow', (
   assert.match(schema, /20261113_041/);
 });
 
+test('group payment QR, receipt uploads, and savings goal calculator are wired across UI, JS, CSS, and SQL', () => {
+  const settingsHtml = read('settings.html');
+  const settingsJs = read('js/settings.js');
+  const userHtml = read('user.html');
+  const userJs = read('js/user.js');
+  const contribHtml = read('contributions.html');
+  const expensesHtml = read('expenses.html');
+  const recordsJs = read('js/records.js');
+  const savingsHtml = read('savings.html');
+  const savingsJs = read('js/savings.js');
+  const coreJs = read('js/core.js');
+  const css = read('css/app.css');
+  const migration = read('database/migrations/20261114_043_payment_qr_and_receipts.sql');
+
+  assert.match(settingsHtml, /id="payment-info-form"/);
+  assert.match(settingsHtml, /id="payment-qr-file"/);
+  assert.match(settingsJs, /get_group_payment_info/);
+  assert.match(settingsJs, /update_group_payment_info/);
+
+  assert.match(userHtml, /id="member-payment-card"/);
+  assert.match(userHtml, /id="user-receipt-input"/);
+  assert.match(userJs, /get_group_payment_info/);
+  assert.match(userJs, /p_receipt_url/);
+  assert.match(userJs, /openImageViewer/);
+
+  assert.match(contribHtml, /id="record-receipt-input"/);
+  assert.match(expensesHtml, /id="record-receipt-input"/);
+  assert.match(recordsJs, /p_receipt_url/);
+  assert.match(recordsJs, /openImageViewer/);
+
+  assert.match(savingsHtml, /id="goal-calc-title"/);
+  assert.match(savingsHtml, /id="calc-target"/);
+  assert.match(savingsHtml, /id="calc-daily"/);
+  assert.match(savingsJs, /updateCalculator/);
+  assert.match(savingsJs, /calc-create-goal/);
+
+  assert.match(coreJs, /openImageViewer/);
+  assert.match(coreJs, /prepareImageDataUrl/);
+
+  assert.match(css, /\.savings-layout/);
+  assert.match(css, /\.goal-calc-panel/);
+  assert.match(css, /\.payment-info-card/);
+  assert.match(css, /\.image-viewer-dialog/);
+
+  assert.match(migration, /payment_qr_url/);
+  assert.match(migration, /receipt_url/);
+  assert.match(migration, /20261114_043/);
+});
+

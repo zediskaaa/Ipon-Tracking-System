@@ -249,14 +249,98 @@
     }
   });
 
+  const paymentForm = document.getElementById('payment-info-form');
+  const paymentQrFile = document.getElementById('payment-qr-file');
+  const settingsQrPreview = document.getElementById('settings-qr-preview');
+  const clearPaymentQrBtn = document.getElementById('clear-payment-qr');
+  let pendingQrDataUrl = null;
+  let savedQrDataUrl = null;
+  let clearQrFlag = false;
+
+  function renderSettingsQrPreview() {
+    if (!settingsQrPreview) return;
+    const activeSrc = clearQrFlag ? null : (pendingQrDataUrl || savedQrDataUrl);
+    if (activeSrc) {
+      settingsQrPreview.innerHTML = `<img src="${activeSrc}" alt="Group payment QR code">`;
+      settingsQrPreview.classList.add('has-qr');
+      if (clearPaymentQrBtn) clearPaymentQrBtn.hidden = false;
+    } else {
+      settingsQrPreview.innerHTML = '<span class="payment-qr-placeholder">No QR uploaded</span>';
+      settingsQrPreview.classList.remove('has-qr');
+      if (clearPaymentQrBtn) clearPaymentQrBtn.hidden = true;
+    }
+  }
+
+  async function loadPaymentInfo() {
+    if (!paymentForm) return;
+    const info = await Ipon.rpc('get_group_payment_info');
+    savedQrDataUrl = info?.payment_qr_url || null;
+    pendingQrDataUrl = null;
+    clearQrFlag = false;
+    paymentForm.elements.payment_method_label.value = info?.payment_method_label || '';
+    paymentForm.elements.payment_account_name.value = info?.payment_account_name || '';
+    paymentForm.elements.payment_account_number.value = info?.payment_account_number || '';
+    paymentForm.elements.payment_instructions.value = info?.payment_instructions || '';
+    renderSettingsQrPreview();
+  }
+
+  paymentQrFile?.addEventListener('change', async () => {
+    const file = paymentQrFile.files?.[0];
+    if (!file) return;
+    try {
+      const prepared = await Ipon.prepareImageDataUrl(file, { maxEdge: 1200, skipCompressBytes: 180 * 1024, maxBytes: 440 * 1024 });
+      pendingQrDataUrl = prepared.dataUrl;
+      clearQrFlag = false;
+      renderSettingsQrPreview();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      paymentQrFile.value = '';
+    }
+  });
+
+  clearPaymentQrBtn?.addEventListener('click', () => {
+    pendingQrDataUrl = null;
+    clearQrFlag = true;
+    renderSettingsQrPreview();
+  });
+
+  settingsQrPreview?.addEventListener('click', () => {
+    const activeSrc = clearQrFlag ? null : (pendingQrDataUrl || savedQrDataUrl);
+    if (activeSrc) Ipon.openImageViewer(activeSrc, 'Group payment QR', paymentForm?.elements.payment_method_label.value || '');
+  });
+
+  paymentForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = paymentForm.querySelector('[type="submit"]');
+    const values = new FormData(paymentForm);
+    Ipon.setBusy(button, true);
+    try {
+      await Ipon.rpc('update_group_payment_info', {
+        p_payment_qr_url: pendingQrDataUrl,
+        p_clear_qr: clearQrFlag,
+        p_payment_method_label: values.get('payment_method_label') || null,
+        p_payment_account_name: values.get('payment_account_name') || null,
+        p_payment_account_number: values.get('payment_account_number') || null,
+        p_payment_instructions: values.get('payment_instructions') || null
+      });
+      Ipon.toast('Group payment details saved.');
+      await loadPaymentInfo();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(button, false);
+    }
+  });
+
   effectiveMonth.addEventListener('change', async () => {
     try { await loadContributionDefault(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
   });
 
   try {
-    await Promise.all([loadContributionDefault(), loadAccess()]);
+    await Promise.all([loadContributionDefault(), loadAccess(), loadPaymentInfo()]);
   } catch (error) {
-    Ipon.showInlineError(accessBody, error, () => Promise.all([loadContributionDefault(), loadAccess()]), 4);
+    Ipon.showInlineError(accessBody, error, () => Promise.all([loadContributionDefault(), loadAccess(), loadPaymentInfo()]), 4);
   } finally {
     Ipon.setLoading(false);
   }

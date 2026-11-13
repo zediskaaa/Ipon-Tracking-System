@@ -12,6 +12,7 @@
         <div class="field"><label for="reference">Reference (optional)</label><input id="reference" name="reference_number" maxlength="100"></div>
         <div class="field field-wide"><label for="description">Description</label><textarea id="description" name="description" maxlength="500" rows="3" required></textarea></div>
         <div class="field field-wide"><label for="notes">Notes (optional)</label><textarea id="notes" name="notes" maxlength="1000" rows="2"></textarea></div>
+        <div class="field field-wide"><label for="record-receipt-input">Receipt screenshot (optional)</label><div class="receipt-upload-box"><label class="button button-secondary button-sm file-upload-btn"><span>Attach receipt</span><input id="record-receipt-input" type="file" accept="image/*" hidden></label><div class="receipt-preview-chip" id="record-receipt-preview" hidden><img id="record-receipt-thumb" alt="Receipt preview"><span id="record-receipt-name">Receipt attached</span><button class="icon-action" id="record-receipt-clear" type="button">Remove</button></div></div></div>
         <div class="form-actions field-wide"><button class="button button-primary" type="submit" data-requires-data>Save expense</button></div>
       </form>
     </section>

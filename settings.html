@@ -21,6 +21,36 @@
       </div>
     </section>
   </div>
+  <section class="panel payment-qr-settings-panel" data-role="ADMIN" aria-labelledby="payment-qr-settings-title">
+    <div class="panel-header">
+      <div>
+        <h2 id="payment-qr-settings-title">Group payment QR &amp; details</h2>
+        <p>Upload your group’s GCash, Maya, or bank QR code so members know where to send contributions.</p>
+      </div>
+    </div>
+    <form id="payment-info-form" class="payment-qr-settings-layout">
+      <div class="payment-qr-dropzone">
+        <div class="payment-qr-preview" id="settings-qr-preview" role="button" tabindex="0" aria-label="Preview payment QR">
+          <span class="payment-qr-placeholder">No QR uploaded</span>
+        </div>
+        <div class="payment-qr-upload-actions">
+          <label class="button button-secondary button-sm file-upload-btn">
+            <span>Upload QR image</span>
+            <input id="payment-qr-file" type="file" accept="image/*" hidden>
+          </label>
+          <button class="button button-secondary button-sm" id="clear-payment-qr" type="button" hidden>Remove QR</button>
+          <small class="field-help">PNG or JPG screenshot of your QR code.</small>
+        </div>
+      </div>
+      <div class="form-grid form-grid-3 payment-qr-fields">
+        <div class="field"><label for="payment-method-label">Payment channel</label><input id="payment-method-label" name="payment_method_label" maxlength="60" placeholder="e.g. GCash, Maya, BDO"></div>
+        <div class="field"><label for="payment-account-name">Account name</label><input id="payment-account-name" name="payment_account_name" maxlength="120" placeholder="e.g. Juan Dela Cruz"></div>
+        <div class="field"><label for="payment-account-number">Account / mobile no.</label><input id="payment-account-number" name="payment_account_number" maxlength="80" placeholder="e.g. 0917 123 4567"></div>
+        <div class="field field-wide"><label for="payment-instructions">Payment instructions (optional)</label><textarea id="payment-instructions" name="payment_instructions" maxlength="500" rows="2" placeholder="e.g. Send your monthly contribution here and attach a screenshot of your receipt."></textarea></div>
+        <div class="form-actions field-wide"><button class="button button-primary" type="submit" data-requires-data>Save payment details</button></div>
+      </div>
+    </form>
+  </section>
   <div class="settings-grid" data-role="ADMIN">
     <section class="panel" data-role="ADMIN"><div class="panel-header"><div><h2>Account access</h2><p>Manage member and treasurer logins in your group. Administrator access is managed by the Super Admin.</p></div></div>
       <div class="data-table-wrap"><table class="data-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Linked member</th><th>Actions</th></tr></thead><tbody id="access-body"><tr class="loading-row"><td colspan="5">Loading accounts…</td></tr></tbody></table></div>

@@ -4053,13 +4053,50 @@
     });
   }
 
+  function openImageViewer(src, title = 'Attachment', subtitle = '') {
+    if (!src || !String(src).startsWith('data:image/')) return;
+    let dialog = document.getElementById('ipon-image-viewer');
+    if (!dialog) {
+      dialog = document.createElement('dialog');
+      dialog.id = 'ipon-image-viewer';
+      dialog.className = 'image-viewer-dialog';
+      dialog.innerHTML = `<div class="image-viewer-sheet">
+        <header class="image-viewer-header">
+          <div><h2 id="ipon-iv-title"></h2><p id="ipon-iv-subtitle"></p></div>
+          <div class="image-viewer-actions">
+            <a class="button button-secondary button-sm" id="ipon-iv-download" download="myipon-attachment.jpg">Download</a>
+            <button class="dialog-close" id="ipon-iv-close" type="button" aria-label="Close image viewer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </div>
+        </header>
+        <div class="image-viewer-stage"><img id="ipon-iv-img" alt=""></div>
+      </div>`;
+      document.body.appendChild(dialog);
+      dialog.querySelector('#ipon-iv-close').addEventListener('click', () => dialog.close());
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+    }
+    const img = dialog.querySelector('#ipon-iv-img');
+    const titleEl = dialog.querySelector('#ipon-iv-title');
+    const subEl = dialog.querySelector('#ipon-iv-subtitle');
+    const dl = dialog.querySelector('#ipon-iv-download');
+    img.src = src;
+    img.alt = title;
+    titleEl.textContent = title;
+    subEl.textContent = subtitle || '';
+    subEl.hidden = !subtitle;
+    dl.href = src;
+    dl.download = `${String(title || 'attachment').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`;
+    if (!dialog.open) dialog.showModal();
+  }
+
   if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
   prepareFormValidation();
   initAppUpdateChecker();
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
     checkForAppUpdate, showAppUpdatePrompt,
     get profile() { return currentProfile; }
   };

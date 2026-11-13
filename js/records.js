@@ -14,6 +14,35 @@
   let selectedMemberId = new URLSearchParams(window.location.search).get('member') || '';
   let selectedMemberName = '';
   let spotlightChart = null;
+  let pendingReceiptUrl = null;
+  const receiptInput = document.getElementById('record-receipt-input');
+  const receiptPreview = document.getElementById('record-receipt-preview');
+  const receiptThumb = document.getElementById('record-receipt-thumb');
+  const receiptName = document.getElementById('record-receipt-name');
+  const receiptClear = document.getElementById('record-receipt-clear');
+
+  function clearPendingReceipt() {
+    pendingReceiptUrl = null;
+    if (receiptInput) receiptInput.value = '';
+    if (receiptPreview) receiptPreview.hidden = true;
+    if (receiptThumb) receiptThumb.removeAttribute('src');
+  }
+
+  receiptInput?.addEventListener('change', async () => {
+    const file = receiptInput.files?.[0];
+    if (!file) return;
+    try {
+      const prepared = await Ipon.prepareImageDataUrl(file, { maxEdge: 1200, skipCompressBytes: 180 * 1024, maxBytes: 440 * 1024 });
+      pendingReceiptUrl = prepared.dataUrl;
+      receiptThumb.src = pendingReceiptUrl;
+      receiptName.textContent = prepared.name;
+      receiptPreview.hidden = false;
+    } catch (error) {
+      clearPendingReceipt();
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    }
+  });
+  receiptClear?.addEventListener('click', clearPendingReceipt);
 
   const state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });
   if (state.failed || state.redirecting) return;
@@ -417,7 +446,7 @@
     tbody.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}</td></tr>`).join('') : `<tr><td colspan="6" class="empty-state">${selectedMemberName ? `No contribution status found for ${Ipon.escapeHtml(selectedMemberName)} in this month.` : 'No contribution periods for this month.'}</td></tr>`;
 
     let entriesQuery = Ipon.client.from('contributions')
-      .select('id,amount,payment_date,transaction_reference,notes,approval_status,void_reason,review_note,submitted_by,contribution_periods!inner(period_month,members!inner(id,full_name))', { count: 'exact' });
+      .select('id,amount,payment_date,transaction_reference,notes,receipt_url,approval_status,void_reason,review_note,submitted_by,contribution_periods!inner(period_month,members!inner(id,full_name))', { count: 'exact' });
     if (statusFilter?.value) entriesQuery = entriesQuery.eq('approval_status', statusFilter.value);
     if (selectedMemberId) entriesQuery = entriesQuery.eq('contribution_periods.member_id', selectedMemberId);
     const { data: entries, count, error: entriesError } = await entriesQuery
@@ -433,10 +462,11 @@
   }
 
   function actionButtons(row) {
-    if (state.profile.role !== 'ADMIN') return '';
-    if (row.approval_status === 'PENDING') return `<div class="table-actions"><button class="icon-action" data-action="edit" data-id="${row.id}">Edit</button><button class="icon-action" data-action="confirm" data-id="${row.id}">Confirm</button><button class="icon-action" data-action="reject" data-id="${row.id}">Reject</button></div>`;
-    if (row.approval_status === 'CONFIRMED') return `<button class="icon-action" data-action="void" data-id="${row.id}">Void</button>`;
-    return '';
+    const receiptBtn = row.receipt_url ? `<button class="icon-action receipt-pill-btn" data-action="receipt" data-id="${row.id}">Receipt</button>` : '';
+    if (state.profile.role !== 'ADMIN') return receiptBtn;
+    if (row.approval_status === 'PENDING') return `<div class="table-actions">${receiptBtn}<button class="icon-action" data-action="edit" data-id="${row.id}">Edit</button><button class="icon-action" data-action="confirm" data-id="${row.id}">Confirm</button><button class="icon-action" data-action="reject" data-id="${row.id}">Reject</button></div>`;
+    if (row.approval_status === 'CONFIRMED') return `<div class="table-actions">${receiptBtn}<button class="icon-action" data-action="void" data-id="${row.id}">Void</button></div>`;
+    return receiptBtn;
   }
 
   async function loadTransactions() {
@@ -484,19 +514,23 @@
           p_contribution_month: `${values.get('contribution_month')}-01`,
           p_amount: amount, p_payment_date: values.get('payment_date'),
           p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null,
-          p_idempotency_key: pendingSubmissionKey
+          p_idempotency_key: pendingSubmissionKey,
+          p_receipt_url: pendingReceiptUrl
         });
       } else {
         const ownResponsible = membersList.find((member) => member.id === state.profile.member_id)?.full_name || state.profile.full_name;
-        await Ipon.rpc(page === 'withdrawals' ? 'record_withdrawal' : 'record_expense', {
+        const payload = {
           p_transaction_date: values.get('transaction_date'), p_amount: amount,
           p_category: values.get('category'), p_description: values.get('description'),
           p_person_responsible: state.profile.role === 'MEMBER' ? ownResponsible : values.get('person_responsible'),
           p_reference_number: values.get('reference_number') || null, p_notes: values.get('notes') || null,
           p_idempotency_key: pendingSubmissionKey
-        });
+        };
+        if (page === 'expenses') payload.p_receipt_url = pendingReceiptUrl;
+        await Ipon.rpc(page === 'withdrawals' ? 'record_withdrawal' : 'record_expense', payload);
       }
       pendingSubmissionKey = null;
+      clearPendingReceipt();
       Ipon.toast(state.profile.role === 'ADMIN' ? 'Confirmed record saved.' : 'Record submitted for admin review.');
       form.reset(); setDefaults(); await load();
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
@@ -509,6 +543,14 @@
     const button = event.target.closest('[data-action]');
     if (!button) return;
     const action = button.dataset.action;
+    if (action === 'receipt') {
+      const row = recordRows.find((item) => item.id === button.dataset.id);
+      if (row?.receipt_url) {
+        const who = row.contribution_periods?.members?.full_name || row.person_responsible || 'Record';
+        Ipon.openImageViewer(row.receipt_url, `${who} receipt`, `${Ipon.money(row.amount)} · ${Ipon.dateLabel(row.payment_date || row.transaction_date)}`);
+      }
+      return;
+    }
     if (action === 'edit') {
       const row = recordRows.find((item) => item.id === button.dataset.id); if (!row) return;
       populateResponsibleSelect(editForm.elements.person_responsible, row.person_responsible || '');
