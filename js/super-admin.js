@@ -824,7 +824,14 @@
     const request = featureRequests.find((item) => item.id === id);
     if (!request) return;
 
-    if (nextStatus === 'REJECTED') {
+    if (nextStatus === 'IMPLEMENTED') {
+      const confirmed = await Ipon.confirmAction({
+        title: 'Mark feature as implemented?',
+        message: `Mark "${request.title}" as implemented? It will be ready to include in the next release update.`,
+        acceptLabel: 'Mark implemented'
+      });
+      if (!confirmed) return;
+    } else if (nextStatus === 'REJECTED') {
       const confirmed = await Ipon.confirmAction({
         title: 'Reject feature request?',
         message: `Mark "${request.title}" as rejected?`,

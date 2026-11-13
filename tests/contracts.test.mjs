@@ -1065,6 +1065,9 @@ test('Super Admin can manage feature request statuses and publish release update
   assert.match(script, /data-feat-action="IMPLEMENTED"/);
   assert.match(script, /data-feat-action="REJECTED"/);
   assert.match(script, /data-feat-action="PENDING"/);
+  assert.match(script, /confirmAction\(\{[\s\S]*?title:\s*'Mark feature as implemented\?'/);
+  assert.match(script, /confirmAction\(\{[\s\S]*?title:\s*'Reject feature request\?'/);
+  assert.match(script, /confirmAction\(\{[\s\S]*?title:\s*'Reset feature request\?'/);
   assert.match(script, /review_feature_request/);
   assert.match(script, /openReleaseUpdateDialog/);
   assert.match(script, /req\.status === 'IMPLEMENTED' && !req\.release_version/);
