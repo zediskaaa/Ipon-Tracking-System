@@ -839,5 +839,5 @@
   if (state.profile?.role !== 'MEMBER') document.querySelectorAll('a[href="user.html"]').forEach((link) => link.remove());
   if (addAnnouncementButton) addAnnouncementButton.hidden = state.profile?.role !== 'ADMIN';
   try { await load(); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'announcements'], load);
+  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'announcements', 'announcement_reactions'], load);
 })();

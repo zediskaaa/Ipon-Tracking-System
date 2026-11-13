@@ -961,3 +961,38 @@ test('financial records support member filtering, DP spotlight card, activity gr
   assert.match(css, /\.member-spotlight-metrics/);
   assert.match(css, /\.split-layout \.sticky-panel \.form-grid/);
 });
+
+test('announcements support Messenger-style reaction picker, Facebook-style reaction pill summary, and who-reacted modal', () => {
+  const migration = read('database/migrations/20261113_035_add_announcement_reactions.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+  const dashboard = read('js/dashboard.js');
+  const superAdmin = read('js/super-admin.js');
+  const css = read('css/app.css');
+
+  assert.match(migration, /create table if not exists public\.announcement_reactions/i);
+  assert.match(migration, /create or replace function public\.toggle_announcement_reaction/i);
+  assert.match(migration, /create or replace function public\.get_announcement_reactions/i);
+  assert.match(migration, /alter publication supabase_realtime add table public\.announcement_reactions/i);
+
+  assert.match(schema, /create table if not exists public\.announcement_reactions/i);
+  assert.match(schema, /public\.toggle_announcement_reaction/i);
+  assert.match(schema, /public\.get_announcement_reactions/i);
+
+  assert.match(core, /announcement-reactions-dialog/);
+  assert.match(core, /announcement-reactions-pill/);
+  assert.match(core, /announcement-react-container/);
+  assert.match(core, /announcement-reaction-picker/);
+  assert.match(core, /announcement-viewer-reactions/);
+  assert.match(core, /toggle_announcement_reaction/);
+  assert.match(core, /get_announcement_reactions/);
+
+  assert.match(dashboard, /'announcement_reactions'/);
+  assert.match(superAdmin, /'announcement_reactions'/);
+
+  assert.match(css, /\.announcement-reactions-pill/);
+  assert.match(css, /\.announcement-reaction-picker/);
+  assert.match(css, /\.reaction-choice-btn/);
+  assert.match(css, /\.announcement-reactions-dialog/);
+  assert.match(css, /\.reaction-user-item/);
+});

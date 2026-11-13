@@ -1809,10 +1809,29 @@
           <div class="announcement-viewer-body">
             <p class="announcement-viewer-description" id="announcement-viewer-description"></p>
             <div class="announcement-viewer-media" id="announcement-viewer-media"></div>
+            <div class="announcement-viewer-reactions-wrap" id="announcement-viewer-reactions"></div>
           </div>
           <div class="announcement-viewer-actions">
             <button class="button button-danger" id="announcement-viewer-delete" type="button" hidden>Delete announcement</button>
             <button class="button button-secondary" id="announcement-viewer-done" type="button">Close</button>
+          </div>
+        </div>
+      </dialog>
+      <dialog class="form-dialog announcement-reactions-dialog" id="announcement-reactions-dialog" aria-labelledby="announcement-reactions-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div>
+              <h2 id="announcement-reactions-title">Reactions</h2>
+              <p id="announcement-reactions-copy">People who reacted to this announcement.</p>
+            </div>
+            <button class="dialog-close" id="announcement-reactions-close" type="button" aria-label="Close reactions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="announcement-reactions-tabs-bar" id="announcement-reactions-tabs"></div>
+          <div class="announcement-reactions-body" id="announcement-reactions-list">
+            <p class="empty-state">Loading reactions…</p>
+          </div>
+          <div class="announcement-reactions-actions">
+            <button class="button button-secondary" id="announcement-reactions-done" type="button">Close</button>
           </div>
         </div>
       </dialog>
@@ -1842,6 +1861,9 @@
       </dialog>`);
   }
 
+  const ANNOUNCEMENT_REACTIONS = ['👍', '❤️', '😆', '😮', '😢', '😡'];
+  const REACTION_LABELS = { '👍': 'Like', '❤️': 'Love', '😆': 'Haha', '😮': 'Wow', '😢': 'Sad', '😡': 'Angry' };
+
   function announcementAuthorMeta(item) {
     const isOwner = item.author_role === 'SUPER_ADMIN';
     const name = item.author_name || (isOwner ? 'Owner' : 'Administrator');
@@ -1863,19 +1885,202 @@
     const viewerDescription = document.getElementById('announcement-viewer-description');
     const viewerMedia = document.getElementById('announcement-viewer-media');
     const viewerDelete = document.getElementById('announcement-viewer-delete');
+    const viewerReactions = document.getElementById('announcement-viewer-reactions');
+    const reactionsDialog = document.getElementById('announcement-reactions-dialog');
+    const reactionsTabs = document.getElementById('announcement-reactions-tabs');
+    const reactionsList = document.getElementById('announcement-reactions-list');
+    const reactionsTitle = document.getElementById('announcement-reactions-title');
     const composeDialog = document.getElementById('announcement-compose-dialog');
     const composeForm = document.getElementById('announcement-compose-form');
     const mediaInput = document.getElementById('announcement-media-input');
     const mediaHelp = document.getElementById('announcement-media-help');
     const mediaPreviews = document.getElementById('announcement-media-previews');
     let items = [];
+    let reactions = [];
     let queuedMedia = [];
     let openItemId = null;
+    let activePickerAnnouncementId = null;
+    let currentModalAnnouncementId = null;
+    let modalReactionsData = [];
+    let activeReactionTab = 'all';
 
     const canDelete = (item) => {
       if (!item || !currentProfile) return false;
       if (currentProfile.role === 'SUPER_ADMIN') return true;
       return currentProfile.role === 'ADMIN' && item.author_role === 'ADMIN' && item.group_id === currentProfile.group_id;
+    };
+
+    const getReactionSummary = (announcementId) => {
+      const list = reactions.filter((entry) => entry.announcement_id === announcementId);
+      const count = list.length;
+      const myReaction = currentProfile ? list.find((entry) => entry.user_id === currentProfile.id)?.reaction : null;
+      const countsByEmoji = {};
+      list.forEach((entry) => {
+        countsByEmoji[entry.reaction] = (countsByEmoji[entry.reaction] || 0) + 1;
+      });
+      const topEmojis = Object.keys(countsByEmoji).sort((a, b) => {
+        const diff = countsByEmoji[b] - countsByEmoji[a];
+        if (diff !== 0) return diff;
+        return ANNOUNCEMENT_REACTIONS.indexOf(a) - ANNOUNCEMENT_REACTIONS.indexOf(b);
+      }).slice(0, 3);
+      return { count, myReaction, topEmojis };
+    };
+
+    const renderReactionsBarHtml = (announcementId) => {
+      const { count, myReaction, topEmojis } = getReactionSummary(announcementId);
+      const isPickerOpen = activePickerAnnouncementId === announcementId;
+      const pillHtml = count > 0 ? `
+        <button class="announcement-reactions-pill" type="button" data-reactions-view="${escapeHtml(announcementId)}" aria-label="View reactions (${count})" title="View reactions">
+          <span class="reactions-stack" aria-hidden="true">
+            ${topEmojis.map((emoji) => `<span class="reaction-stack-emoji">${emoji}</span>`).join('')}
+          </span>
+          <span class="reactions-count">${count}</span>
+        </button>` : '';
+
+      const triggerLabel = myReaction ? `Reacted ${REACTION_LABELS[myReaction] || myReaction}` : 'React';
+      const triggerHtml = `
+        <div class="announcement-react-container">
+          <button class="announcement-react-btn${myReaction ? ' is-active' : ''}" type="button" data-react-trigger="${escapeHtml(announcementId)}" aria-label="${escapeHtml(triggerLabel)}" aria-haspopup="dialog" aria-expanded="${isPickerOpen ? 'true' : 'false'}" title="${escapeHtml(triggerLabel)}">
+            ${myReaction
+              ? `<span class="my-reaction-emoji" aria-hidden="true">${myReaction}</span><span class="react-btn-label">${escapeHtml(REACTION_LABELS[myReaction] || myReaction)}</span>`
+              : `<svg class="react-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm-3.5-9a1.5 1.5 0 1 0-1.5-1.5A1.5 1.5 0 0 0 8.5 11zm7 0a1.5 1.5 0 1 0-1.5-1.5A1.5 1.5 0 0 0 15.5 11zm-7 3.5a4.5 4.5 0 0 0 7 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="react-btn-label">React</span>`}
+          </button>
+          ${isPickerOpen ? `
+            <div class="announcement-reaction-picker" role="menu" aria-label="Choose reaction">
+              ${ANNOUNCEMENT_REACTIONS.map((emoji) => `
+                <button class="reaction-choice-btn${emoji === myReaction ? ' is-selected' : ''}" type="button" data-react-choice="${emoji}" data-announcement-id="${escapeHtml(announcementId)}" aria-label="${escapeHtml(REACTION_LABELS[emoji] || emoji)}" title="${escapeHtml(REACTION_LABELS[emoji] || emoji)}">
+                  <span class="reaction-emoji-symbol" aria-hidden="true">${emoji}</span>
+                </button>`).join('')}
+            </div>` : ''}
+        </div>`;
+
+      return `
+        <div class="announcement-reactions-bar">
+          ${pillHtml}
+          ${triggerHtml}
+        </div>`;
+    };
+
+    const renderReactionsModalContent = () => {
+      if (!reactionsTabs || !reactionsList) return;
+      const total = modalReactionsData.length;
+      if (reactionsTitle) {
+        reactionsTitle.textContent = total ? `Reactions (${total})` : 'Reactions';
+      }
+      const counts = {};
+      modalReactionsData.forEach((entry) => {
+        counts[entry.reaction] = (counts[entry.reaction] || 0) + 1;
+      });
+
+      const availableEmojis = ANNOUNCEMENT_REACTIONS.filter((emoji) => counts[emoji] > 0);
+      if (activeReactionTab !== 'all' && !counts[activeReactionTab]) {
+        activeReactionTab = 'all';
+      }
+
+      const tabs = [
+        { id: 'all', label: `All ${total}` },
+        ...availableEmojis.map((emoji) => ({ id: emoji, label: `${emoji} ${counts[emoji]}` }))
+      ];
+
+      reactionsTabs.innerHTML = tabs.map((tab) => `
+        <button class="reaction-tab-btn${tab.id === activeReactionTab ? ' is-active' : ''}" type="button" data-reaction-tab="${escapeHtml(tab.id)}">
+          ${escapeHtml(tab.label)}
+        </button>`).join('');
+
+      const filtered = activeReactionTab === 'all'
+        ? modalReactionsData
+        : modalReactionsData.filter((entry) => entry.reaction === activeReactionTab);
+
+      if (!filtered.length) {
+        reactionsList.innerHTML = '<p class="empty-state">No reactions yet.</p>';
+        return;
+      }
+
+      reactionsList.innerHTML = filtered.map((entry) => {
+        const role = entry.role || 'MEMBER';
+        const isOwner = role === 'SUPER_ADMIN';
+        const isAdmin = role === 'ADMIN';
+        const isTreasurer = role === 'TREASURER';
+        const roleClass = isOwner ? 'is-owner' : isAdmin ? 'is-admin' : isTreasurer ? 'is-treasurer' : 'is-member';
+        const roleLabel = isOwner ? 'Owner' : isAdmin ? 'Admin' : isTreasurer ? 'Treasurer' : 'Member';
+        const name = entry.full_name || 'Member';
+        const avatarHtml = avatarMarkup(entry.avatar_url, name, 'reaction-user-avatar');
+
+        return `
+          <div class="reaction-user-item">
+            <div class="reaction-user-avatar-wrap">
+              ${avatarHtml}
+              <span class="reaction-user-emoji-badge" aria-label="${escapeHtml(REACTION_LABELS[entry.reaction] || entry.reaction)}">${entry.reaction}</span>
+            </div>
+            <div class="reaction-user-info">
+              <strong class="reaction-user-name">${escapeHtml(name)}</strong>
+              <span class="reaction-user-role-badge ${roleClass}">${roleLabel}</span>
+            </div>
+            <div class="reaction-user-emoji-display" aria-hidden="true">${entry.reaction}</div>
+          </div>`;
+      }).join('');
+      bindAvatarFallbacks(reactionsList);
+    };
+
+    const openReactionsModal = async (announcementId) => {
+      if (!reactionsDialog) return;
+      currentModalAnnouncementId = announcementId;
+      activeReactionTab = 'all';
+      if (reactionsTabs) reactionsTabs.replaceChildren();
+      if (reactionsList) reactionsList.innerHTML = '<p class="empty-state">Loading reactions…</p>';
+      reactionsDialog.showModal();
+
+      try {
+        const result = await rpc('get_announcement_reactions', { p_announcement_id: announcementId });
+        if (currentModalAnnouncementId !== announcementId || !reactionsDialog.open) return;
+        modalReactionsData = Array.isArray(result) ? result : [];
+        renderReactionsModalContent();
+      } catch (error) {
+        if (reactionsList) reactionsList.innerHTML = `<p class="empty-state">${escapeHtml(friendlyError(error))}</p>`;
+      }
+    };
+
+    const handleReactionToggle = async (announcementId, chosenEmoji) => {
+      if (!currentProfile) return;
+      activePickerAnnouncementId = null;
+      const existingIdx = reactions.findIndex(
+        (entry) => entry.announcement_id === announcementId && entry.user_id === currentProfile.id
+      );
+      const prevEmoji = existingIdx >= 0 ? reactions[existingIdx].reaction : null;
+
+      if (prevEmoji === chosenEmoji) {
+        reactions.splice(existingIdx, 1);
+      } else if (prevEmoji) {
+        reactions[existingIdx].reaction = chosenEmoji;
+      } else {
+        reactions.push({ announcement_id: announcementId, user_id: currentProfile.id, reaction: chosenEmoji });
+      }
+
+      renderList();
+      if (viewerDialog?.open && openItemId === announcementId) {
+        if (viewerReactions) viewerReactions.innerHTML = renderReactionsBarHtml(announcementId);
+      }
+      if (reactionsDialog?.open && currentModalAnnouncementId === announcementId) {
+        openReactionsModal(announcementId);
+      }
+
+      try {
+        await rpc('toggle_announcement_reaction', { p_announcement_id: announcementId, p_reaction: chosenEmoji });
+      } catch (error) {
+        if (prevEmoji === chosenEmoji) {
+          reactions.push({ announcement_id: announcementId, user_id: currentProfile.id, reaction: prevEmoji });
+        } else if (prevEmoji) {
+          reactions[existingIdx].reaction = prevEmoji;
+        } else {
+          const idx = reactions.findIndex((entry) => entry.announcement_id === announcementId && entry.user_id === currentProfile.id);
+          if (idx >= 0) reactions.splice(idx, 1);
+        }
+        renderList();
+        if (viewerDialog?.open && openItemId === announcementId) {
+          if (viewerReactions) viewerReactions.innerHTML = renderReactionsBarHtml(announcementId);
+        }
+        toast(friendlyError(error), 'error');
+      }
     };
 
     const clearQueuedMedia = () => {
@@ -1923,14 +2128,19 @@
         const isOwner = item.author_role === 'SUPER_ADMIN';
         const media = Array.isArray(item.attachments) ? item.attachments : [];
         return `
-          <button class="announcement-item${isOwner ? ' is-owner' : ''}" type="button" data-announcement-id="${escapeHtml(item.id)}">
-            <div class="announcement-item-head">
-              <strong class="announcement-item-title">${escapeHtml(item.title)}</strong>
-              ${media.length ? `<span class="announcement-media-chip">${media.length} ${media.length === 1 ? 'file' : 'files'}</span>` : ''}
+          <article class="announcement-item${isOwner ? ' is-owner' : ''}" data-announcement-id="${escapeHtml(item.id)}">
+            <div class="announcement-item-content" role="button" tabindex="0" aria-label="Open announcement ${escapeHtml(item.title)}">
+              <div class="announcement-item-head">
+                <strong class="announcement-item-title">${escapeHtml(item.title)}</strong>
+                ${media.length ? `<span class="announcement-media-chip">${media.length} ${media.length === 1 ? 'file' : 'files'}</span>` : ''}
+              </div>
+              <p class="announcement-item-snippet">${escapeHtml(item.description)}</p>
+              <div class="announcement-item-meta">${announcementAuthorMeta(item)}</div>
             </div>
-            <p class="announcement-item-snippet">${escapeHtml(item.description)}</p>
-            <div class="announcement-item-meta">${announcementAuthorMeta(item)}</div>
-          </button>`;
+            <div class="announcement-card-footer">
+              ${renderReactionsBarHtml(item.id)}
+            </div>
+          </article>`;
       }).join('');
       bindAvatarFallbacks(listElement);
     };
@@ -1947,6 +2157,7 @@
       viewerTitle.textContent = item.title;
       viewerDescription.textContent = item.description;
       viewerDelete.hidden = !canDelete(item);
+      if (viewerReactions) viewerReactions.innerHTML = renderReactionsBarHtml(item.id);
       const attachments = Array.isArray(item.attachments) ? item.attachments : [];
       if (!attachments.length) {
         viewerMedia.hidden = true;
@@ -1977,20 +2188,30 @@
 
     const load = async () => {
       const client = getClient();
-      if (!client || !currentProfile) { items = []; renderList(); return []; }
-      const { data, error } = await client
-        .from('v_announcements')
-        .select('id,group_id,author_id,author_name,author_role,author_avatar_url,title,description,attachments,created_at')
-        .order('created_at', { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      items = data || [];
+      if (!client || !currentProfile) { items = []; reactions = []; renderList(); return []; }
+      const [announcementsRes, reactionsRes] = await Promise.all([
+        client
+          .from('v_announcements')
+          .select('id,group_id,author_id,author_name,author_role,author_avatar_url,title,description,attachments,created_at')
+          .order('created_at', { ascending: false })
+          .limit(200),
+        client
+          .from('announcement_reactions')
+          .select('announcement_id,user_id,reaction')
+      ]);
+      if (announcementsRes.error) throw announcementsRes.error;
+      items = announcementsRes.data || [];
+      reactions = (!reactionsRes.error && Array.isArray(reactionsRes.data)) ? reactionsRes.data : [];
       renderList();
-      if (viewerDialog?.open && openItemId && !items.some((entry) => entry.id === openItemId)) {
-        stopViewerMedia();
-        viewerDialog.close();
-        openItemId = null;
-        toast('This announcement was removed.');
+      if (viewerDialog?.open && openItemId) {
+        if (!items.some((entry) => entry.id === openItemId)) {
+          stopViewerMedia();
+          viewerDialog.close();
+          openItemId = null;
+          toast('This announcement was removed.');
+        } else if (viewerReactions) {
+          viewerReactions.innerHTML = renderReactionsBarHtml(openItemId);
+        }
       }
       return items;
     };
@@ -1998,10 +2219,112 @@
     if (!listElement.dataset.boundAnnouncements) {
       listElement.dataset.boundAnnouncements = 'true';
       listElement.addEventListener('click', (event) => {
+        const choiceBtn = event.target.closest('[data-react-choice]');
+        if (choiceBtn) {
+          const announcementId = choiceBtn.dataset.announcementId;
+          const emoji = choiceBtn.dataset.reactChoice;
+          if (announcementId && emoji) handleReactionToggle(announcementId, emoji);
+          return;
+        }
+        const triggerBtn = event.target.closest('[data-react-trigger]');
+        if (triggerBtn) {
+          const announcementId = triggerBtn.dataset.reactTrigger;
+          activePickerAnnouncementId = activePickerAnnouncementId === announcementId ? null : announcementId;
+          renderList();
+          return;
+        }
+        const viewPill = event.target.closest('[data-reactions-view]');
+        if (viewPill) {
+          const announcementId = viewPill.dataset.reactionsView;
+          if (announcementId) openReactionsModal(announcementId);
+          return;
+        }
+        if (event.target.closest('.announcement-reactions-bar')) return;
         const trigger = event.target.closest('[data-announcement-id]');
         if (!trigger) return;
         const target = items.find((entry) => entry.id === trigger.dataset.announcementId);
         if (target) openViewer(target);
+      });
+
+      listElement.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          const content = event.target.closest('.announcement-item-content');
+          if (content) {
+            const card = content.closest('[data-announcement-id]');
+            const target = items.find((entry) => entry.id === card?.dataset.announcementId);
+            if (target) {
+              event.preventDefault();
+              openViewer(target);
+            }
+          }
+        }
+      });
+    }
+
+    if (viewerReactions && !viewerReactions.dataset.bound) {
+      viewerReactions.dataset.bound = 'true';
+      viewerReactions.addEventListener('click', (event) => {
+        const choiceBtn = event.target.closest('[data-react-choice]');
+        if (choiceBtn) {
+          const announcementId = choiceBtn.dataset.announcementId || openItemId;
+          const emoji = choiceBtn.dataset.reactChoice;
+          if (announcementId && emoji) handleReactionToggle(announcementId, emoji);
+          return;
+        }
+        const triggerBtn = event.target.closest('[data-react-trigger]');
+        if (triggerBtn) {
+          const announcementId = triggerBtn.dataset.reactTrigger || openItemId;
+          activePickerAnnouncementId = activePickerAnnouncementId === announcementId ? null : announcementId;
+          viewerReactions.innerHTML = renderReactionsBarHtml(announcementId);
+          return;
+        }
+        const viewPill = event.target.closest('[data-reactions-view]');
+        if (viewPill) {
+          const announcementId = viewPill.dataset.reactionsView || openItemId;
+          if (announcementId) openReactionsModal(announcementId);
+          return;
+        }
+      });
+    }
+
+    if (reactionsDialog && !reactionsDialog.dataset.bound) {
+      reactionsDialog.dataset.bound = 'true';
+      const closeReactions = () => {
+        reactionsDialog.close();
+        currentModalAnnouncementId = null;
+      };
+      document.getElementById('announcement-reactions-close')?.addEventListener('click', closeReactions);
+      document.getElementById('announcement-reactions-done')?.addEventListener('click', closeReactions);
+      reactionsDialog.addEventListener('click', (event) => {
+        if (event.target === reactionsDialog) closeReactions();
+      });
+      reactionsTabs?.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-reaction-tab]');
+        if (!btn) return;
+        activeReactionTab = btn.dataset.reactionTab;
+        renderReactionsModalContent();
+      });
+    }
+
+    if (!document.body.dataset.boundAnnouncementPicker) {
+      document.body.dataset.boundAnnouncementPicker = 'true';
+      document.addEventListener('click', (event) => {
+        if (activePickerAnnouncementId && !event.target.closest('.announcement-react-container')) {
+          activePickerAnnouncementId = null;
+          renderList();
+          if (viewerDialog?.open && openItemId && viewerReactions) {
+            viewerReactions.innerHTML = renderReactionsBarHtml(openItemId);
+          }
+        }
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && activePickerAnnouncementId) {
+          activePickerAnnouncementId = null;
+          renderList();
+          if (viewerDialog?.open && openItemId && viewerReactions) {
+            viewerReactions.innerHTML = renderReactionsBarHtml(openItemId);
+          }
+        }
       });
     }
 
@@ -2130,7 +2453,7 @@
 
     return {
       load,
-      clear: () => { items = []; renderList(); }
+      clear: () => { items = []; reactions = []; renderList(); }
     };
   }
 
