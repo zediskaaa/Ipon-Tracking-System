@@ -28,5 +28,14 @@ for (const dir of dirsToCopy) {
   }
 }
 
-console.log('Mobile assets successfully prepared in ./www');
+// For mobile app standalone entry, index.html points straight to login screen with app mode enabled
+const loginContent = fs.readFileSync(path.join(rootDir, 'login.html'), 'utf-8');
+const appLoginContent = loginContent.replace(
+  '<body>',
+  '<body class="is-app">'
+);
+fs.writeFileSync(path.join(targetDir, 'index.html'), appLoginContent, 'utf-8');
+fs.writeFileSync(path.join(targetDir, 'login.html'), appLoginContent, 'utf-8');
+
+console.log('Mobile assets successfully prepared in ./www (App entry points directly to login screen)');
 

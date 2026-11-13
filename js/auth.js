@@ -66,6 +66,10 @@
   const nameRule = "Use letters, spaces, hyphens, or apostrophes only.";
   let mode = 'login';
 
+  if (window.Capacitor !== undefined || window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+    document.body.classList.add('is-app');
+  }
+
   const dismissSplash = () => {
     const splash = document.getElementById('app-splash');
     if (!splash) return;
