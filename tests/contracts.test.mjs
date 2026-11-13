@@ -1493,6 +1493,7 @@ test('group switchers reuse custom avatar dropdown with DP and role badge across
   const heroCss = read('css/hero-plates.css');
 
   assert.match(core, /function populateGroupSelect\(/);
+  assert.match(core, /window\.Ipon = \{[\s\S]*?populateGroupSelect,/);
   assert.match(core, /custom-select-badge/);
   assert.match(core, /data-notification-link="/);
   assert.match(css, /\.notification-item\[data-notification-link\]/);
