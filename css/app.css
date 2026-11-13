@@ -437,8 +437,7 @@ body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame
 .announcement-avatar.is-owner{border-color:#e8b954}
 .announcement-item{display:flex;flex-direction:column;justify-content:space-between;width:100%;max-width:380px;padding:14px 16px 12px;border:1px solid rgba(20,45,43,.12);border-radius:14px;background:#ffffff;color:var(--ink);text-align:left;box-shadow:0 2px 8px rgba(20,45,43,.03);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;position:relative;overflow:hidden}
 .announcement-item:hover{border-color:rgba(20,45,43,.28);box-shadow:0 8px 22px rgba(20,45,43,.08);transform:translateY(-2px)}
-.announcement-item.is-owner{border-color:#f1cf88;background:linear-gradient(180deg,#fffcf4 0%,#ffffff 100%)}
-.announcement-item.is-owner::before{content:"";position:absolute;top:0;left:0;right:0;height:3.5px;background:linear-gradient(90deg,#ecc05c 0%,#f59e0b 100%)}
+.announcement-item.is-owner{border-color:rgba(232,185,84,.45);background:linear-gradient(180deg,#fffdf7 0%,#ffffff 100%)}
 .announcement-item-content{display:flex;flex-direction:column;gap:5px;flex:1 1 auto;cursor:pointer;outline:none;border-radius:6px}
 .announcement-item-content:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .announcement-card-action{display:flex;align-items:center;margin:4px 0 8px}
@@ -811,7 +810,7 @@ button.record-entry-action:focus-visible{outline:2px solid #fff;outline-offset:2
 .version-tag{display:inline-block;margin-top:4px;padding:2px 7px;border-radius:6px;background:#f1f5f9;color:#334155;font:700 10.5px/1.2 Arial,sans-serif;border:1px solid #cbd5e1}
 .action-implement{color:#166534!important;font-weight:700}
 .action-implement:hover{text-decoration:underline}
-.announcement-item.is-release-update{border-left:3.5px solid #16a34a;background:linear-gradient(180deg,#f0fdf4 0%,#ffffff 100%)}
+.announcement-item.is-release-update{border-color:rgba(22,163,74,.35);background:linear-gradient(180deg,#f0fdf4 0%,#ffffff 100%)}
 .announcement-release-banner{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .announcement-release-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;font:800 11px/1.2 Arial,sans-serif;letter-spacing:.03em;text-transform:uppercase}
 .announcement-release-badge .release-star-icon{width:13px;height:13px;color:#16a34a}

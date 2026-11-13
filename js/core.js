@@ -2602,7 +2602,6 @@
                 <strong class="announcement-item-title">${escapeHtml(item.title)}</strong>
                 ${media.length ? `<span class="announcement-media-chip">${media.length} ${media.length === 1 ? 'file' : 'files'}</span>` : ''}
               </div>
-              <p class="announcement-item-snippet">${escapeHtml(item.description)}</p>
               <div class="announcement-card-action">
                 <button class="announcement-view-trigger" type="button" aria-label="View full announcement details">
                   <span>View details</span>
