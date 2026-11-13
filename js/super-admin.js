@@ -31,6 +31,27 @@
   const releaseUpdateForm = document.getElementById('release-update-form');
   const releaseUpdateBtn = document.getElementById('sa-add-release-update');
   const featureStatusTabs = document.getElementById('feature-requests-status-tabs');
+  const featureCardsContainer = document.getElementById('feature-requests-cards');
+  const featureTableWrap = document.getElementById('feature-requests-table-wrap');
+  const featureViewToggle = document.getElementById('feature-requests-view-toggle');
+  let featureViewMode = localStorage.getItem('ipon_feature_view_mode') || 'cards';
+
+  function setFeatureViewMode(mode) {
+    featureViewMode = mode === 'table' ? 'table' : 'cards';
+    try { localStorage.setItem('ipon_feature_view_mode', featureViewMode); } catch (_) {}
+    featureViewToggle?.querySelectorAll('.view-mode-btn').forEach((btn) => {
+      const active = btn.dataset.viewMode === featureViewMode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if (featureCardsContainer) featureCardsContainer.hidden = featureViewMode !== 'cards';
+    if (featureTableWrap) featureTableWrap.hidden = featureViewMode !== 'table';
+  }
+  setFeatureViewMode(featureViewMode);
+  featureViewToggle?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-view-mode]');
+    if (btn) setFeatureViewMode(btn.dataset.viewMode);
+  });
   const announcements = Ipon.bindAnnouncements({
     listElement: document.getElementById('sa-announcement-list'),
     addButton: document.getElementById('sa-add-announcement')
@@ -134,13 +155,27 @@
       return matchesQuery(query, [profile.full_name, request.email, request.contact_number, request.reason, request.status]);
     });
     const visible = paginateRows('requests', filtered);
-    requestsBody.innerHTML = visible.length ? visible.map((request) => { const profile = profileById.get(request.requester_id); const pending = request.status === 'PENDING'; return `<tr>
-      <td><strong>${Ipon.escapeHtml(profile.full_name)}</strong><small class="field-help platform-id">${Ipon.escapeHtml(profile.id)}</small></td>
+    requestsBody.innerHTML = visible.length ? visible.map((request) => {
+      const profile = profileById.get(request.requester_id);
+      const pending = request.status === 'PENDING';
+      const name = profile?.full_name || 'Requester';
+      return `<tr>
+      <td>
+        <div class="table-user-cell">
+          ${Ipon.avatarMarkup(profile?.avatar_url, name, 'table-user-avatar', profile?.id)}
+          <div>
+            <strong>${Ipon.escapeHtml(name)}</strong>
+            <small class="field-help platform-id">${Ipon.escapeHtml(profile?.id || '')}</small>
+          </div>
+        </div>
+      </td>
       <td>${Ipon.escapeHtml(request.contact_number || 'Not provided')}<small class="field-help">${Ipon.escapeHtml(request.email)}</small></td>
       <td>${Ipon.escapeHtml(request.reason)}${request.status === 'REJECTED' && request.review_note ? `<small class="field-help" style="color:var(--red);display:block;margin-top:4px;">Declined reason: ${Ipon.escapeHtml(request.review_note)}</small>` : ''}</td>
       <td>${Ipon.dateLabel(request.created_at)}</td><td>${statusLabel(request.status)}</td>
       <td><div class="table-actions">${pending ? `<button class="icon-action" type="button" data-approve-request="${profile.id}">Approve</button><button class="icon-action danger-action" type="button" data-reject-request="${profile.id}">Reject</button>` : request.status === 'REJECTED' ? `<button class="icon-action" type="button" data-reopen-request="${profile.id}">Reopen</button><button class="icon-action danger-action" type="button" data-unblock-request="${profile.id}">Unblock email</button>` : ''}</div></td>
     </tr>`; }).join('') : `<tr><td colspan="6" class="empty-state">${query || status ? 'No matching administrator requests.' : 'No administrator requests.'}</td></tr>`;
+    Ipon.bindAvatarFallbacks(requestsBody);
+    Ipon.syncPresenceDots(requestsBody);
   }
 
   const ROLE_LABELS = { ADMIN: 'Administrator', TREASURER: 'Treasurer', MEMBER: 'Member' };
@@ -166,7 +201,15 @@
       const active = profile.status === 'ACTIVE';
       const actions = `<button class="icon-action" type="button" data-edit-admin="${profile.id}">Edit</button><button class="icon-action" type="button" data-set-password="${profile.id}">Change password</button><button class="icon-action" type="button" data-reset-admin="${profile.id}">Reset password</button><button class="icon-action ${active ? 'danger-action' : ''}" type="button" data-admin-status="${profile.id}" data-next-status="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Suspend' : 'Reactivate'}</button><button class="icon-action danger-action" type="button" data-archive-admin="${profile.id}">Archive</button>`;
       return `<tr>
-        <td><strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}</td>
+        <td>
+          <div class="table-user-cell">
+            ${Ipon.avatarMarkup(profile.avatar_url, profile.full_name, 'table-user-avatar', profile.id)}
+            <div>
+              <strong>${Ipon.escapeHtml(profile.full_name)}</strong>
+              ${profile.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}
+            </div>
+          </div>
+        </td>
         <td><span class="role-badge role-${profile.role.toLowerCase()}">${Ipon.escapeHtml(ROLE_LABELS[profile.role])}</span></td>
         <td>${group ? Ipon.escapeHtml(group.name) : '<span class="field-help">Unassigned</span>'}</td>
         <td>${Ipon.dateLabel(profile.created_at)}</td>
@@ -175,6 +218,8 @@
         <td><div class="table-actions">${actions}</div></td>
       </tr>`;
     }).join('') : `<tr><td colspan="7" class="empty-state">${query || role || status ? 'No matching user accounts.' : 'No user accounts.'}</td></tr>`;
+    Ipon.bindAvatarFallbacks(administratorsBody);
+    Ipon.syncPresenceDots(administratorsBody);
   }
 
   function updateFeatureCounts() {
@@ -204,8 +249,68 @@
       return matchesQuery(query, [profile?.full_name, profile?.email, profile?.role, request.title, request.details, status, request.release_version]);
     });
     const visible = paginateRows('feature-requests', filtered);
+
+    if (featureCardsContainer) {
+      featureCardsContainer.innerHTML = visible.length ? visible.map((request) => {
+        const profile = profileById.get(request.requester_id);
+        const requesterName = profile?.full_name || 'Former user';
+        const status = request.status || 'PENDING';
+        const statusPill = status === 'IMPLEMENTED'
+          ? `<span class="status-pill status-implemented">Implemented</span>${request.release_version ? `<br><small class="version-tag">${Ipon.escapeHtml(request.release_version)}</small>` : ''}`
+          : status === 'REJECTED'
+            ? '<span class="status-pill status-rejected">Rejected</span>'
+            : '<span class="status-pill status-pending">Pending</span>';
+
+        let actions = '';
+        if (status !== 'IMPLEMENTED') {
+          actions += `<button class="icon-action action-implement" type="button" data-feat-action="IMPLEMENTED" data-feat-id="${request.id}">Mark implemented</button>`;
+        }
+        if (status !== 'REJECTED') {
+          actions += `<button class="icon-action danger-action" type="button" data-feat-action="REJECTED" data-feat-id="${request.id}">Reject</button>`;
+        }
+        if (status !== 'PENDING') {
+          actions += `<button class="icon-action" type="button" data-feat-action="PENDING" data-feat-id="${request.id}">Reset to pending</button>`;
+        }
+
+        return `<article class="feature-card feature-card-${status.toLowerCase()}" data-feature-id="${request.id}">
+          <header class="feature-card-header">
+            <div class="feature-card-user">
+              ${Ipon.avatarMarkup(profile?.avatar_url, requesterName, 'feature-card-avatar', request.requester_id)}
+              <div class="feature-card-user-meta">
+                <strong class="feature-card-user-name">${Ipon.escapeHtml(requesterName)}</strong>
+                <div class="feature-card-user-sub">
+                  <span class="role-badge role-${(profile?.role || 'member').toLowerCase()}">${Ipon.escapeHtml(ROLE_LABELS[profile?.role] || profile?.role || 'Member')}</span>
+                  ${profile?.email ? `<span class="feature-card-email">${Ipon.escapeHtml(profile.email)}</span>` : ''}
+                </div>
+              </div>
+            </div>
+            <div class="feature-card-status-wrap">
+              ${statusPill}
+            </div>
+          </header>
+          <div class="feature-card-body">
+            <h3 class="feature-card-title">
+              <svg class="feature-card-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7ZM9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9v1Z"/></svg>
+              <span>${Ipon.escapeHtml(request.title)}</span>
+            </h3>
+            <p class="feature-card-details">${Ipon.escapeHtml(request.details)}</p>
+          </div>
+          <footer class="feature-card-footer">
+            <time class="feature-card-time" datetime="${request.created_at}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              <span>${Ipon.dateLabel(request.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+            </time>
+            <div class="feature-card-actions">${actions}</div>
+          </footer>
+        </article>`;
+      }).join('') : `<div class="empty-state feature-cards-empty">${query || activeFeatureStatusFilter !== 'ALL' ? 'No matching feature requests.' : 'No feature requests yet.'}</div>`;
+      Ipon.bindAvatarFallbacks(featureCardsContainer);
+      Ipon.syncPresenceDots(featureCardsContainer);
+    }
+
     featureRequestsBody.innerHTML = visible.length ? visible.map((request) => {
       const profile = profileById.get(request.requester_id);
+      const requesterName = profile?.full_name || 'Former user';
       const status = request.status || 'PENDING';
       const statusPill = status === 'IMPLEMENTED'
         ? `<span class="status-pill status-implemented">Implemented</span>${request.release_version ? `<br><small class="version-tag">${Ipon.escapeHtml(request.release_version)}</small>` : ''}`
@@ -225,7 +330,15 @@
       }
 
       return `<tr>
-        <td><strong>${Ipon.escapeHtml(profile?.full_name || 'Former user')}</strong>${profile?.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}</td>
+        <td>
+          <div class="table-user-cell">
+            ${Ipon.avatarMarkup(profile?.avatar_url, requesterName, 'table-user-avatar', request.requester_id)}
+            <div>
+              <strong>${Ipon.escapeHtml(requesterName)}</strong>
+              ${profile?.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}
+            </div>
+          </div>
+        </td>
         <td><span class="role-badge role-${(profile?.role || 'member').toLowerCase()}">${Ipon.escapeHtml(ROLE_LABELS[profile?.role] || profile?.role || 'Member')}</span></td>
         <td><strong>${Ipon.escapeHtml(request.title)}</strong></td>
         <td><span class="feature-request-details">${Ipon.escapeHtml(request.details)}</span></td>
@@ -234,6 +347,8 @@
         <td><div class="table-actions">${actions}</div></td>
       </tr>`;
     }).join('') : `<tr><td colspan="7" class="empty-state">${query || activeFeatureStatusFilter !== 'ALL' ? 'No matching feature requests.' : 'No feature requests yet.'}</td></tr>`;
+    Ipon.bindAvatarFallbacks(featureRequestsBody);
+    Ipon.syncPresenceDots(featureRequestsBody);
   }
 
   function renderBugReports() {
@@ -247,9 +362,18 @@
     const visible = paginateRows('bug-reports', filtered);
     bugReportsBody.innerHTML = visible.length ? visible.map((report) => {
       const profile = profileById.get(report.reporter_id);
+      const reporterName = profile?.full_name || 'Former user';
       const count = Number(report.image_count || 0);
       return `<tr>
-        <td><strong>${Ipon.escapeHtml(profile?.full_name || 'Former user')}</strong>${profile?.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}</td>
+        <td>
+          <div class="table-user-cell">
+            ${Ipon.avatarMarkup(profile?.avatar_url, reporterName, 'table-user-avatar', report.reporter_id)}
+            <div>
+              <strong>${Ipon.escapeHtml(reporterName)}</strong>
+              ${profile?.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}
+            </div>
+          </div>
+        </td>
         <td>${Ipon.escapeHtml(profile?.role?.replaceAll('_', ' ') || 'Unavailable')}</td>
         <td><strong>${Ipon.escapeHtml(report.title)}</strong></td>
         <td><span class="feature-request-details">${Ipon.escapeHtml(report.description)}</span></td>
@@ -257,6 +381,8 @@
         <td>${Ipon.dateLabel(report.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td>
       </tr>`;
     }).join('') : `<tr><td colspan="6" class="empty-state">${query ? 'No matching bug reports.' : 'No bug reports yet.'}</td></tr>`;
+    Ipon.bindAvatarFallbacks(bugReportsBody);
+    Ipon.syncPresenceDots(bugReportsBody);
   }
 
   function renderActivity(logs = activityLogs) {
@@ -277,7 +403,7 @@
     overviewError.hidden = true;
     overviewError.replaceChildren();
     const [profileResult, groupResult, requestResult, featureRequestResult, bugReportResult, activityResult, logResult] = await Promise.all([
-      Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,created_at').order('created_at', { ascending: false }),
+      Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at').order('created_at', { ascending: false }),
       Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false }),
       Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,review_note,created_at').order('created_at', { ascending: false }).limit(200),
       Ipon.client.from('feature_requests').select('id,requester_id,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200),
@@ -683,7 +809,7 @@
     renderFeatureRequests();
   });
 
-  featureRequestsBody?.addEventListener('click', async (event) => {
+  document.getElementById('feature-requests')?.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-feat-action]');
     if (!button) return;
     const id = button.dataset.featId;

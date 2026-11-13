@@ -528,8 +528,11 @@
             <button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><b data-notification-count hidden>0</b></button>
           </div>
           <button class="sidebar-user-card" data-account-open type="button" aria-label="Open my account">
-            <span class="sidebar-user-avatar" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
+            <span class="avatar-presence-wrap">
+              <span class="sidebar-user-avatar" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
+              </span>
+              <span class="presence-dot is-online" data-presence-id="${currentProfile?.id || ''}" aria-label="Active now" title="Active now"></span>
             </span>
             <div class="sidebar-user-info" id="sidebar-user">
               <strong>Checking session…</strong>
@@ -646,12 +649,155 @@
     return parts.length === 1 ? parts[0].slice(0, 2).toUpperCase() : `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
   }
 
-  function avatarMarkup(avatarUrl, name, className = '') {
+  const onlineUserIds = new Set();
+  const PRESENCE_STORAGE_KEY = 'iponOnlineUsers';
+  const PRESENCE_SYNC_CHANNEL = 'ipon-presence-local-sync';
+  let presenceChannel = null;
+
+  function isUserOnline(userId) {
+    if (!userId) return false;
+    return onlineUserIds.has(String(userId));
+  }
+
+  function syncPresenceDots(root = document) {
+    root.querySelectorAll('[data-presence-id]').forEach((dot) => {
+      const uid = dot.dataset.presenceId;
+      if (!uid) return;
+      const isOnline = isUserOnline(uid);
+      dot.classList.toggle('is-online', isOnline);
+      const label = isOnline ? 'Active now' : 'Offline';
+      dot.setAttribute('aria-label', label);
+      dot.title = label;
+    });
+  }
+
+  function broadcastLocalPresence() {
+    try {
+      const ids = Array.from(onlineUserIds);
+      if ('BroadcastChannel' in window) {
+        const bc = new BroadcastChannel(PRESENCE_SYNC_CHANNEL);
+        bc.postMessage({ type: 'SYNC', ids, at: Date.now() });
+        bc.close();
+      }
+      localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify({ ids, at: Date.now() }));
+    } catch (_) {}
+  }
+
+  function initPresence(profile) {
+    const client = getClient();
+    if (!client || !profile?.id) return;
+    if (presenceChannel) return;
+
+    onlineUserIds.add(String(profile.id));
+    syncPresenceDots();
+
+    try {
+      if ('BroadcastChannel' in window) {
+        const bc = new BroadcastChannel(PRESENCE_SYNC_CHANNEL);
+        bc.addEventListener('message', (event) => {
+          if (event.data?.ids && Array.isArray(event.data.ids)) {
+            event.data.ids.forEach((id) => onlineUserIds.add(String(id)));
+            syncPresenceDots();
+          }
+        });
+      }
+      window.addEventListener('storage', (event) => {
+        if (event.key === PRESENCE_STORAGE_KEY && event.newValue) {
+          try {
+            const data = JSON.parse(event.newValue);
+            if (Array.isArray(data?.ids)) {
+              data.ids.forEach((id) => onlineUserIds.add(String(id)));
+              syncPresenceDots();
+            }
+          } catch (_) {}
+        }
+      });
+    } catch (_) {}
+
+    try {
+      presenceChannel = client.channel('ipon-active-presence', {
+        config: {
+          presence: {
+            key: String(profile.id)
+          }
+        }
+      });
+
+      const handleSync = () => {
+        try {
+          const state = presenceChannel.presenceState();
+          onlineUserIds.clear();
+          onlineUserIds.add(String(profile.id));
+          Object.keys(state || {}).forEach((key) => {
+            if (key) onlineUserIds.add(String(key));
+            const presences = state[key] || [];
+            presences.forEach((entry) => {
+              if (entry?.user_id) onlineUserIds.add(String(entry.user_id));
+            });
+          });
+          syncPresenceDots();
+          broadcastLocalPresence();
+        } catch (_) {}
+      };
+
+      presenceChannel
+        .on('presence', { event: 'sync' }, handleSync)
+        .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+          if (key) onlineUserIds.add(String(key));
+          (newPresences || []).forEach((p) => { if (p?.user_id) onlineUserIds.add(String(p.user_id)); });
+          syncPresenceDots();
+          broadcastLocalPresence();
+        })
+        .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+          const state = presenceChannel.presenceState();
+          if (!state[key] && key !== String(profile.id)) {
+            onlineUserIds.delete(String(key));
+          }
+          (leftPresences || []).forEach((p) => {
+            if (p?.user_id && p.user_id !== String(profile.id) && !state[p.user_id]) {
+              onlineUserIds.delete(String(p.user_id));
+            }
+          });
+          syncPresenceDots();
+          broadcastLocalPresence();
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            try {
+              await presenceChannel.track({
+                user_id: profile.id,
+                full_name: profile.full_name,
+                role: profile.role,
+                online_at: new Date().toISOString()
+              });
+            } catch (_) {}
+          }
+        });
+
+      window.addEventListener('pagehide', () => {
+        try {
+          presenceChannel?.untrack();
+          client.removeChannel(presenceChannel);
+        } catch (_) {}
+      }, { once: true });
+    } catch (presenceErr) {
+      console.warn('Realtime presence init:', presenceErr);
+    }
+  }
+
+  function avatarMarkup(avatarUrl, name, className = '', userId = null) {
     const safeUrl = typeof avatarUrl === 'string' && avatarUrl.startsWith('data:image/') ? avatarUrl : '';
     const letters = escapeHtml(initials(name));
     const cls = escapeHtml(className);
-    if (!safeUrl) return `<span class="avatar-circle avatar-fallback ${cls}" title="${escapeHtml(name || '')}">${letters}</span>`;
-    return `<span class="avatar-circle ${cls}" title="${escapeHtml(name || '')}"><img src="${safeUrl}" alt="${escapeHtml(name || 'User picture')}" data-avatar-img><span class="avatar-fallback-inner" hidden>${letters}</span></span>`;
+    const circle = !safeUrl
+      ? `<span class="avatar-circle avatar-fallback ${cls}" title="${escapeHtml(name || '')}">${letters}</span>`
+      : `<span class="avatar-circle ${cls}" title="${escapeHtml(name || '')}"><img src="${safeUrl}" alt="${escapeHtml(name || 'User picture')}" data-avatar-img><span class="avatar-fallback-inner" hidden>${letters}</span></span>`;
+
+    if (!userId) return circle;
+    const isOnline = isUserOnline(userId);
+    const label = isOnline ? 'Active now' : 'Offline';
+    const presenceDot = `<span class="presence-dot${isOnline ? ' is-online' : ''}" data-presence-id="${escapeHtml(userId)}" aria-label="${label}" title="${label}"></span>`;
+    return `<span class="avatar-presence-wrap ${cls ? `${cls}-wrap` : ''}" data-presence-user="${escapeHtml(userId)}">${circle}${presenceDot}</span>`;
   }
 
   function bindAvatarFallbacks(root = document) {
@@ -670,6 +816,12 @@
     if (!profile) return;
     const safeUrl = typeof profile.avatar_url === 'string' && profile.avatar_url.startsWith('data:image/') ? profile.avatar_url : '';
     document.querySelectorAll('.sidebar-user-avatar').forEach((slot) => {
+      const parentWrap = slot.closest('.avatar-presence-wrap');
+      const dot = parentWrap ? parentWrap.querySelector('.presence-dot') : null;
+      if (dot) {
+        dot.dataset.presenceId = profile.id;
+        dot.classList.add('is-online');
+      }
       if (safeUrl) {
         slot.innerHTML = `<img src="${safeUrl}" alt="${escapeHtml(profile.full_name || 'Profile picture')}" data-avatar-img><svg viewBox="0 0 24 24" hidden><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>`;
         const img = slot.querySelector('img');
@@ -684,7 +836,7 @@
     });
     const quickPreview = document.getElementById('quick-avatar-preview');
     if (quickPreview) {
-      quickPreview.innerHTML = avatarMarkup(profile.avatar_url, profile.full_name, 'avatar-lg');
+      quickPreview.innerHTML = avatarMarkup(profile.avatar_url, profile.full_name, 'avatar-lg', profile.id);
       bindAvatarFallbacks(quickPreview);
     }
     const quickRemove = document.getElementById('quick-avatar-remove');
@@ -1622,6 +1774,7 @@
       });
       if (options.requireAuth !== false) watchCrossTabAuth(client, profile.id);
       initNotifications(profile).catch(() => {});
+      initPresence(profile);
       appInitialized = true;
       return { configured: true, profile, session };
     } catch (error) {
@@ -2170,7 +2323,7 @@
   function announcementAuthorMeta(item) {
     const isOwner = item.author_role === 'SUPER_ADMIN';
     const name = item.author_name || (isOwner ? 'Owner' : 'Administrator');
-    const avatarHtml = avatarMarkup(item.author_avatar_url, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`);
+    const avatarHtml = avatarMarkup(item.author_avatar_url, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`, item.author_id);
     const roleBadge = isOwner
       ? '<span class="announcement-role-badge is-owner">Owner</span>'
       : '<span class="announcement-role-badge is-admin">Admin</span>';
@@ -2308,7 +2461,7 @@
         const roleClass = isOwner ? 'is-owner' : isAdmin ? 'is-admin' : isTreasurer ? 'is-treasurer' : 'is-member';
         const roleLabel = isOwner ? 'Owner' : isAdmin ? 'Admin' : isTreasurer ? 'Treasurer' : 'Member';
         const name = entry.full_name || 'Member';
-        const avatarHtml = avatarMarkup(entry.avatar_url, name, 'reaction-user-avatar');
+        const avatarHtml = avatarMarkup(entry.avatar_url, name, 'reaction-user-avatar', entry.user_id);
 
         return `
           <div class="reaction-user-item">
@@ -2323,6 +2476,7 @@
           </div>`;
       }).join('');
       bindAvatarFallbacks(reactionsList);
+      syncPresenceDots(reactionsList);
     };
 
     const openReactionsModal = async (announcementId) => {
@@ -2455,6 +2609,7 @@
           </article>`;
       }).join('');
       bindAvatarFallbacks(listElement);
+      syncPresenceDots(listElement);
     };
 
     const stopViewerMedia = () => {
@@ -2477,6 +2632,7 @@
       }
       viewerMeta.innerHTML = announcementAuthorMeta(item);
       bindAvatarFallbacks(viewerMeta);
+      syncPresenceDots(viewerMeta);
       viewerTitle.textContent = item.title;
       viewerDescription.textContent = item.description;
       viewerDelete.hidden = !canDelete(item);
@@ -2928,7 +3084,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots,
     get profile() { return currentProfile; }
   };
 })();

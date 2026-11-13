@@ -1081,3 +1081,36 @@ test('Super Admin can manage feature request statuses and publish release update
   assert.match(css, /\.announcement-item\.is-release-update/);
   assert.match(css, /\.announcement-release-badge/);
 });
+
+test('Super Admin feature requests display requester avatars and system tracks real-time active now presence', () => {
+  const html = read('super-admin.html');
+  const dashHtml = read('dashboard.html');
+  const script = read('js/super-admin.js');
+  const core = read('js/core.js');
+  const css = read('css/app.css');
+
+  assert.match(html, /id="feature-requests-view-toggle"/);
+  assert.match(html, /id="feature-requests-cards"/);
+  assert.match(html, /id="feature-requests-table-wrap"/);
+  assert.match(script, /feature-card/);
+  assert.match(script, /feature-card-avatar/);
+  assert.match(script, /table-user-cell/);
+  assert.match(script, /table-user-avatar/);
+  assert.match(script, /select\('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at'\)/);
+
+  assert.match(core, /ipon-active-presence/);
+  assert.match(core, /isUserOnline/);
+  assert.match(core, /syncPresenceDots/);
+  assert.match(core, /avatar-presence-wrap/);
+  assert.match(core, /presence-dot/);
+  assert.match(core, /data-presence-id/);
+  assert.match(dashHtml, /avatar-presence-wrap/);
+
+  assert.match(css, /\.avatar-presence-wrap/);
+  assert.match(css, /\.presence-dot/);
+  assert.match(css, /\.presence-dot\.is-online/);
+  assert.match(css, /\.view-mode-toggle/);
+  assert.match(css, /\.feature-cards-grid/);
+  assert.match(css, /\.feature-card/);
+  assert.match(css, /\.table-user-cell/);
+});

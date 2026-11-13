@@ -83,6 +83,16 @@
           <div><h2 id="feature-requests-title">Feature requests</h2><p>Suggestions submitted by active IPON users, newest first.</p></div>
           <div class="table-filters">
             <input id="feature-requests-search" type="search" placeholder="Search feature requests" aria-label="Search feature requests">
+            <div class="view-mode-toggle" id="feature-requests-view-toggle" role="radiogroup" aria-label="Display mode">
+              <button class="view-mode-btn is-active" type="button" data-view-mode="cards" aria-label="Cards view" title="Cards view">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+                <span>Cards</span>
+              </button>
+              <button class="view-mode-btn" type="button" data-view-mode="table" aria-label="Table view" title="Table view">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <span>Table</span>
+              </button>
+            </div>
           </div>
         </div>
         <div class="feature-status-tabs-wrap">
@@ -93,7 +103,8 @@
             <button class="segmented-control-btn" type="button" data-status-filter="REJECTED">Rejected <span class="badge" id="count-feat-rejected">0</span></button>
           </div>
         </div>
-        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Requester</th><th>Role</th><th>Feature</th><th>Details</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead><tbody id="feature-requests-body"><tr class="loading-row"><td colspan="7">Loading feature requests…</td></tr></tbody></table></div>
+        <div class="feature-cards-grid" id="feature-requests-cards" aria-live="polite"></div>
+        <div class="data-table-wrap" id="feature-requests-table-wrap" hidden><table class="data-table"><thead><tr><th>Requester</th><th>Role</th><th>Feature</th><th>Details</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead><tbody id="feature-requests-body"><tr class="loading-row"><td colspan="7">Loading feature requests…</td></tr></tbody></table></div>
         <nav class="table-pager" id="feature-requests-pager" aria-label="Feature requests pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
       </section>
 

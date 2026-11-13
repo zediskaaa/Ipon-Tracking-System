@@ -223,10 +223,15 @@
       } catch (_) {}
     }
 
+    const memberUserId = profilesByMemberId.get(safeMemberId)?.id
+      || profilesByName.get(safeName.trim().toLowerCase())?.id
+      || null;
+
     const avatarEl = document.getElementById('member-spotlight-avatar');
     if (avatarEl) {
-      avatarEl.innerHTML = Ipon.avatarMarkup(avatarUrl, safeName, 'avatar-lg');
+      avatarEl.innerHTML = Ipon.avatarMarkup(avatarUrl, safeName, 'avatar-lg', memberUserId);
       Ipon.bindAvatarFallbacks(avatarEl);
+      Ipon.syncPresenceDots(avatarEl);
     }
     const nameEl = document.getElementById('member-spotlight-name');
     if (nameEl) nameEl.textContent = safeName;
