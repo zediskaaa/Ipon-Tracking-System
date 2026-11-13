@@ -38,7 +38,7 @@
 
   function setFeatureViewMode(mode) {
     featureViewMode = mode === 'table' ? 'table' : 'cards';
-    try { localStorage.setItem('ipon_feature_view_mode', featureViewMode); } catch (_) {}
+    try { localStorage.setItem('ipon_feature_view_mode', featureViewMode); } catch (_) { }
     featureViewToggle?.querySelectorAll('.view-mode-btn').forEach((btn) => {
       const active = btn.dataset.viewMode === featureViewMode;
       btn.classList.toggle('is-active', active);
@@ -173,7 +173,8 @@
       <td>${Ipon.escapeHtml(request.reason)}${request.status === 'REJECTED' && request.review_note ? `<small class="field-help" style="color:var(--red);display:block;margin-top:4px;">Declined reason: ${Ipon.escapeHtml(request.review_note)}</small>` : ''}</td>
       <td>${Ipon.dateLabel(request.created_at)}</td><td>${statusLabel(request.status)}</td>
       <td><div class="table-actions">${pending ? `<button class="icon-action" type="button" data-approve-request="${profile.id}">Approve</button><button class="icon-action danger-action" type="button" data-reject-request="${profile.id}">Reject</button>` : request.status === 'REJECTED' ? `<button class="icon-action" type="button" data-reopen-request="${profile.id}">Reopen</button><button class="icon-action danger-action" type="button" data-unblock-request="${profile.id}">Unblock email</button>` : ''}</div></td>
-    </tr>`; }).join('') : `<tr><td colspan="6" class="empty-state">${query || status ? 'No matching administrator requests.' : 'No administrator requests.'}</td></tr>`;
+    </tr>`;
+    }).join('') : `<tr><td colspan="6" class="empty-state">${query || status ? 'No matching administrator requests.' : 'No administrator requests.'}</td></tr>`;
     Ipon.bindAvatarFallbacks(requestsBody);
     Ipon.syncPresenceDots(requestsBody);
   }
@@ -1007,7 +1008,7 @@
       (data || []).forEach((row) => {
         if (row.release_version) existingVersions.add(row.release_version.trim().toLowerCase());
       });
-    } catch (_) {}
+    } catch (_) { }
 
     let nextVersion = 'Update 1.0';
     let major = 1;
@@ -1172,37 +1173,37 @@
       return `- "${req.title}": ${req.details || 'Feature improvement'}${credit}`;
     }).join('\n') || '- General performance improvements, responsive layout refinements, and stability enhancements.';
 
-    const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
-    if (!apiKey) {
-      Ipon.toast('Please add your Gemini API key in js/config.js (geminiApiKey).', 'error');
-      return;
-    }
+      const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
+      if (!apiKey) {
+        Ipon.toast('Please add your Gemini API key in js/config.js (geminiApiKey).', 'error');
+        return;
+      }
 
-    const prompt = `You are the product communications writer for IPON (Group Savings and Financial Tracker) ${ver}.
-Release Date: ${relDate}
+    const prompt = `You are the product communications writer for IPON(Group Savings and Financial Tracker) ${ ver }.
+Release Date: ${ relDate }
 
-Implemented community-requested features:
-${featuresList}
+Implemented community - requested features:
+${ featuresList }
 
 Key system updates included in this rollout:
-- Live Active Now presence indicators on member profile avatars
-- Interactive profile picture cropper, 90-degree rotation, and avatar controls
-- Messenger-style announcement reactions (Heart, Thumbs up, Haha, Sad, Angry) with who-reacted modal
-- Quick financial record entry shortcut modal on the calendar dashboard
-- Financial records member spotlight card with personal contribution graph and totals
-- Group administrator monthly pledge synchronization across member rosters and reports
+      - Live Active Now presence indicators on member profile avatars
+        - Interactive profile picture cropper, 90 - degree rotation, and avatar controls
+          - Messenger - style announcement reactions(Heart, Thumbs up, Haha, Sad, Angry) with who - reacted modal
+            - Quick financial record entry shortcut modal on the calendar dashboard
+              - Financial records member spotlight card with personal contribution graph and totals
+                - Group administrator monthly pledge synchronization across member rosters and reports
 
 Generate a JSON object with this exact structure:
-{
-  "title": "A punchy, attractive announcement title mentioning ${ver}",
-  "intro": "A 1-2 paragraph engaging, fresh intro celebrating this milestone and thanking savers",
-  "highlights": [
-    "A concise, punchy bullet point describing a key feature or community request with user credits if applicable",
-    "Another concise bullet point describing an update",
-    "Additional bullet points covering the remaining improvements"
-  ],
-  "outro": "A warm, inspiring 1-paragraph closing message encouraging saving consistency"
-}`;
+      {
+        "title": "A punchy, attractive announcement title mentioning ${ver}",
+          "intro": "A 1-2 paragraph engaging, fresh intro celebrating this milestone and thanking savers",
+            "highlights": [
+              "A concise, punchy bullet point describing a key feature or community request with user credits if applicable",
+              "Another concise bullet point describing an update",
+              "Additional bullet points covering the remaining improvements"
+            ],
+              "outro": "A warm, inspiring 1-paragraph closing message encouraging saving consistency"
+      } `;
 
     try {
       Ipon.setBusy(releaseAiBtn, true);
@@ -1223,11 +1224,11 @@ Generate a JSON object with this exact structure:
         throw new Error('Gemini did not return valid release content.');
       }
 
-      const title = String(parsed.title || `System ${ver} Released`).trim();
+      const title = String(parsed.title || `System ${ ver } Released`).trim();
       const intro = String(parsed.intro || '').trim();
       const outro = String(parsed.outro || '').trim();
       const highlights = Array.isArray(parsed.highlights)
-        ? parsed.highlights.map((h) => `• ${String(h).replace(/^[•\s*-]+/, '').trim()}`).join('\n')
+        ? parsed.highlights.map((h) => `• ${ String(h).replace(/^[•\s*-]+/, '').trim() } `).join('\n')
         : '';
 
       const details = [intro, highlights, outro].filter(Boolean).join('\n\n');
@@ -1235,10 +1236,10 @@ Generate a JSON object with this exact structure:
       if (titleInput && title) titleInput.value = title;
       if (detailsInput && details) detailsInput.value = details;
 
-      Ipon.toast(`✨ Real announcement generated by Google Gemini AI (${res.model})!`);
+      Ipon.toast(`✨ Real announcement generated by Google Gemini AI(${ res.model })!`);
     } catch (err) {
       // Real AI only - report genuine Gemini status, no silent fake substitution
-      Ipon.toast(`Gemini AI: ${err.message || 'Generation failed'}.`, 'error');
+      Ipon.toast(`Gemini AI: ${ err.message || 'Generation failed' }.`, 'error');
     } finally {
       Ipon.setBusy(releaseAiBtn, false);
       if (releaseAiStatus) releaseAiStatus.hidden = true;
@@ -1278,7 +1279,7 @@ Generate a JSON object with this exact structure:
 
     const confirmed = await Ipon.confirmAction({
       title: 'Publish release update?',
-      message: `Publish "${title}" as a system release announcement to all users?`,
+      message: `Publish "${title}" as a system release announcement to all users ? `,
       acceptLabel: 'Publish update'
     });
     if (!confirmed) return;
@@ -1326,7 +1327,7 @@ Generate a JSON object with this exact structure:
       const control = document.getElementById(id);
       control?.addEventListener(control.tagName === 'SELECT' ? 'change' : 'input', () => { pageState[key] = 0; render(); });
     });
-    document.getElementById(`${key}-pager`)?.addEventListener('click', (event) => {
+    document.getElementById(`${ key } -pager`)?.addEventListener('click', (event) => {
       const button = event.target.closest('[data-page]');
       if (!button || button.disabled) return;
       pageState[key] += button.dataset.page === 'next' ? 1 : -1;

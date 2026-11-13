@@ -1,27 +1,32 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://generativelanguage.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://generativelanguage.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>IPON — Savings calendar</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css?v=20261113-18">
   <link rel="stylesheet" href="css/hero-plates.css?v=20261113-18">
 </head>
+
 <body data-page="dashboard">
   <main class="comp-frame" aria-label="IPON savings calendar dashboard">
     <aside class="app-sidebar dashboard-sidebar" data-region="sidebar-ground">
       <a class="app-brand brand" data-region="brand" href="dashboard.html" aria-label="IPON home">
         <svg class="brand-coins" viewBox="0 0 44 40" aria-hidden="true">
-          <ellipse cx="26" cy="9" rx="11" ry="4" fill="#edd189"/>
-          <path d="M15 11v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V11c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#d1a650"/>
-          <path d="M15 17v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V17c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#e5c270"/>
-          <path d="M15 23v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V23c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#c99c44"/>
-          <ellipse cx="14" cy="23" rx="9.5" ry="3.6" fill="#f3da99"/>
-          <path d="M4.5 25v4.2c0 2 4.3 3.6 9.5 3.6s9.5-1.6 9.5-3.6V25c0 2-4.3 3.6-9.5 3.6S4.5 27 4.5 25Z" fill="#d8b05c"/>
-          <path d="M4.5 30.8v4.2c0 2 4.3 3.6 9.5 3.6s9.5-1.6 9.5-3.6v-4.2c0 2-4.3 3.6-9.5 3.6s-9.5-1.6-9.5-3.6Z" fill="#eac878"/>
+          <ellipse cx="26" cy="9" rx="11" ry="4" fill="#edd189" />
+          <path d="M15 11v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V11c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#d1a650" />
+          <path d="M15 17v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V17c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#e5c270" />
+          <path d="M15 23v4.5c0 2.2 4.9 4 11 4s11-1.8 11-4V23c0 2.2-4.9 4-11 4s-11-1.8-11-4Z" fill="#c99c44" />
+          <ellipse cx="14" cy="23" rx="9.5" ry="3.6" fill="#f3da99" />
+          <path d="M4.5 25v4.2c0 2 4.3 3.6 9.5 3.6s9.5-1.6 9.5-3.6V25c0 2-4.3 3.6-9.5 3.6S4.5 27 4.5 25Z"
+            fill="#d8b05c" />
+          <path d="M4.5 30.8v4.2c0 2 4.3 3.6 9.5 3.6s9.5-1.6 9.5-3.6v-4.2c0 2-4.3 3.6-9.5 3.6s-9.5-1.6-9.5-3.6Z"
+            fill="#eac878" />
         </svg>
         <span class="brand-text">
           <strong>IPON</strong>
@@ -29,39 +34,73 @@
         </span>
       </a>
       <nav class="app-nav sidebar-nav" data-region="sidebar-nav" aria-label="Main navigation">
-        <a class="nav-link is-active" href="dashboard.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18M7 14h2m3 0h2m3 0h1M7 18h2m3 0h2m3 0h1"/></svg><span>Calendar</span></a>
-        <a class="nav-link" href="user.html" data-role="MEMBER"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M16 12h5m-5-2a2 2 0 1 0 0 4"/></svg><span>My savings</span></a>
-        <a class="nav-link" href="contributions.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Records</span></a>
-        <a class="nav-link" href="members.html" data-role="ADMIN"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Members</span></a>
-        <a class="nav-link" href="reports.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10m6 10V4m6 16v-7m5 7H2"/></svg><span>Reports</span></a>
-        <a class="nav-link" href="audit.html" data-role="ADMIN"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg><span>Audit log</span></a>
-        <a class="nav-link" href="settings.html" data-role="ADMIN"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06 2.83-2.83.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3h4v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06 2.83 2.83-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg><span>Settings</span></a>
+        <a class="nav-link is-active" href="dashboard.html" aria-current="page"><svg viewBox="0 0 24 24"
+            aria-hidden="true">
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M8 3v4m8-4v4M3 10h18M7 14h2m3 0h2m3 0h1M7 18h2m3 0h2m3 0h1" />
+          </svg><span>Calendar</span></a>
+        <a class="nav-link" href="user.html" data-role="MEMBER"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M16 12h5m-5-2a2 2 0 1 0 0 4" />
+          </svg><span>My savings</span></a>
+        <a class="nav-link" href="contributions.html"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 6h12M9 12h12M9 18h12" />
+            <circle cx="4" cy="6" r="1" />
+            <circle cx="4" cy="12" r="1" />
+            <circle cx="4" cy="18" r="1" />
+          </svg><span>Records</span></a>
+        <a class="nav-link" href="members.html" data-role="ADMIN"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg><span>Members</span></a>
+        <a class="nav-link" href="reports.html"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 20V10m6 10V4m6 16v-7m5 7H2" />
+          </svg><span>Reports</span></a>
+        <a class="nav-link" href="audit.html" data-role="ADMIN"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+          </svg><span>Audit log</span></a>
+        <a class="nav-link" href="settings.html" data-role="ADMIN"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06 2.83-2.83.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3h4v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06 2.83 2.83-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z" />
+          </svg><span>Settings</span></a>
       </nav>
       <div class="sidebar-art" aria-hidden="true">
         <svg viewBox="0 0 180 145" fill="none">
-          <path d="M0 118c42-16 84-6 180-24v51H0v-27Z" fill="rgba(255,255,255,.04)"/>
-          <path d="M0 128c55-14 112 4 180-15v32H0v-17Z" fill="rgba(255,255,255,.06)"/>
-          <rect x="44" y="54" width="84" height="64" rx="12" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.26)" stroke-width="1.5"/>
-          <path d="M86 54V26" stroke="#62a87c" stroke-width="2.4" stroke-linecap="round"/>
-          <path d="M86 38c-2-12-15-18-24-14 2 11 12 17 24 14Z" fill="#5da377"/>
-          <path d="M86 31c3-13 16-20 26-16-2 12-13 19-26 16Z" fill="#7bc092"/>
-          <path d="M86 45c4-9 14-12 22-9-3 9-12 12-22 9Z" fill="#4b8d64"/>
-          <ellipse cx="67" cy="94" rx="14" ry="4.5" fill="#ebd089"/>
-          <path d="M53 94v6c0 2.5 6.3 4.5 14 4.5s14-2 14-4.5v-6c0 2.5-6.3 4.5-14 4.5s-14-2-14-4.5Z" fill="#c89b43"/>
-          <path d="M53 102v6c0 2.5 6.3 4.5 14 4.5s14-2 14-4.5v-6c0 2.5-6.3 4.5-14 4.5s-14-2-14-4.5Z" fill="#dfbe6f"/>
-          <ellipse cx="101" cy="78" rx="15" ry="4.8" fill="#f1d894"/>
-          <path d="M86 78v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z" fill="#cfa34b"/>
-          <path d="M86 86v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z" fill="#e5c473"/>
-          <path d="M86 94v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z" fill="#c5963e"/>
-          <path d="M86 102v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z" fill="#dfbe6f"/>
+          <path d="M0 118c42-16 84-6 180-24v51H0v-27Z" fill="rgba(255,255,255,.04)" />
+          <path d="M0 128c55-14 112 4 180-15v32H0v-17Z" fill="rgba(255,255,255,.06)" />
+          <rect x="44" y="54" width="84" height="64" rx="12" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.26)"
+            stroke-width="1.5" />
+          <path d="M86 54V26" stroke="#62a87c" stroke-width="2.4" stroke-linecap="round" />
+          <path d="M86 38c-2-12-15-18-24-14 2 11 12 17 24 14Z" fill="#5da377" />
+          <path d="M86 31c3-13 16-20 26-16-2 12-13 19-26 16Z" fill="#7bc092" />
+          <path d="M86 45c4-9 14-12 22-9-3 9-12 12-22 9Z" fill="#4b8d64" />
+          <ellipse cx="67" cy="94" rx="14" ry="4.5" fill="#ebd089" />
+          <path d="M53 94v6c0 2.5 6.3 4.5 14 4.5s14-2 14-4.5v-6c0 2.5-6.3 4.5-14 4.5s-14-2-14-4.5Z" fill="#c89b43" />
+          <path d="M53 102v6c0 2.5 6.3 4.5 14 4.5s14-2 14-4.5v-6c0 2.5-6.3 4.5-14 4.5s-14-2-14-4.5Z" fill="#dfbe6f" />
+          <ellipse cx="101" cy="78" rx="15" ry="4.8" fill="#f1d894" />
+          <path d="M86 78v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z"
+            fill="#cfa34b" />
+          <path d="M86 86v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z"
+            fill="#e5c473" />
+          <path d="M86 94v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z"
+            fill="#c5963e" />
+          <path d="M86 102v6c0 2.6 6.7 4.8 15 4.8s15-2.2 15-4.8v-6c0 2.6-6.7 4.8-15 4.8s-15-2.2-15-4.8Z"
+            fill="#dfbe6f" />
         </svg>
       </div>
       <div class="app-sidebar-footer">
-        <div class="sidebar-utilities"><button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><b data-notification-count hidden>0</b></button></div>
+        <div class="sidebar-utilities"><button class="sidebar-utility" data-notifications-open type="button"
+            aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4" />
+            </svg><b data-notification-count hidden>0</b></button></div>
         <button class="sidebar-user-card" data-account-open type="button" aria-label="Open my account">
           <span class="avatar-presence-wrap">
             <span class="sidebar-user-avatar" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
+              <svg viewBox="0 0 24 24">
+                <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
+              </svg>
             </span>
             <span class="presence-dot is-online" aria-label="Active now" title="Active now"></span>
           </span>
@@ -69,10 +108,14 @@
             <strong>Checking session…</strong>
             <small>ACCOUNT</small>
           </div>
-          <svg class="sidebar-user-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          <svg class="sidebar-user-caret" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
         </button>
         <button class="sidebar-signout text-button" id="dashboard-signout" type="button">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9" />
+          </svg>
           <span>Sign out</span>
         </button>
       </div>
@@ -95,15 +138,22 @@
           <div class="group-bar-controls">
             <label class="group-switcher-wrap" id="dashboard-group-switcher-wrap" hidden>
               <span class="sr-only">Select savings group</span>
-              <select class="group-switcher-select" id="dashboard-group-select" aria-label="Select savings group"></select>
+              <select class="group-switcher-select" id="dashboard-group-select"
+                aria-label="Select savings group"></select>
             </label>
             <div class="group-bar-actions" id="dashboard-group-actions" data-role="ADMIN" hidden>
               <button class="group-bar-btn" id="dashboard-manage-group" type="button">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.66 0-1.25.4-1.51 1Z"/></svg>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.66 0-1.25.4-1.51 1Z" />
+                </svg>
                 <span>Manage</span>
               </button>
               <button class="group-bar-btn is-primary" id="dashboard-create-group" type="button">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
                 <span>Add group</span>
               </button>
             </div>
@@ -119,12 +169,50 @@
           </div>
         </div>
         <dl class="summary-breakdown" data-region="summary-breakdown">
-          <div><dt><i class="status-icon confirmed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 12 3 3 7-7"/></svg></i>Additions <span>(confirmed)</span></dt><dd>—</dd></div>
-          <div><dt><i class="status-icon deduction"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10"/></svg></i>Deductions <span>(confirmed)</span></dt><dd>—</dd></div>
-          <div><dt><i class="status-icon expense"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></i>Expenses</dt><dd>—</dd></div>
-          <div><dt><i class="status-icon pending"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></i>Pending <span>(for review)</span></dt><dd>—</dd></div>
+          <div>
+            <dt><i class="status-icon confirmed"><svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m7 12 3 3 7-7" />
+                </svg></i>Additions <span>(confirmed)</span></dt>
+            <dd>—</dd>
+          </div>
+          <div>
+            <dt><i class="status-icon deduction"><svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7 12h10" />
+                </svg></i>Deductions <span>(confirmed)</span></dt>
+            <dd>—</dd>
+          </div>
+          <div>
+            <dt><i class="status-icon expense"><svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m6 6 12 12M18 6 6 18" />
+                </svg></i>Expenses</dt>
+            <dd>—</dd>
+          </div>
+          <div>
+            <dt><i class="status-icon pending"><svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg></i>Pending <span>(for review)</span></dt>
+            <dd>—</dd>
+          </div>
         </dl>
-        <dl class="admin-progress" aria-label="Monthly member progress"><div><dt>Members</dt><dd id="dashboard-members">—</dd></div><div><dt>Collected this month</dt><dd id="dashboard-month-collected">—</dd></div><div><dt>Paid</dt><dd id="dashboard-paid">—</dd></div><div><dt>Unpaid or partial</dt><dd id="dashboard-unpaid">—</dd></div></dl>
+        <dl class="admin-progress" aria-label="Monthly member progress">
+          <div>
+            <dt>Members</dt>
+            <dd id="dashboard-members">—</dd>
+          </div>
+          <div>
+            <dt>Collected this month</dt>
+            <dd id="dashboard-month-collected">—</dd>
+          </div>
+          <div>
+            <dt>Paid</dt>
+            <dd id="dashboard-paid">—</dd>
+          </div>
+          <div>
+            <dt>Unpaid or partial</dt>
+            <dd id="dashboard-unpaid">—</dd>
+          </div>
+        </dl>
         <div class="dashboard-goal-box" id="dashboard-goal-box" hidden>
           <div class="dashboard-goal-head">
             <span id="dashboard-goal-label">Group Target Progress</span>
@@ -135,8 +223,13 @@
           </div>
           <div class="dashboard-goal-sub">
             <span class="dashboard-goal-remaining" id="dashboard-goal-remaining">—</span>
-            <button class="button-ai-inline" id="dashboard-ai-insights-btn" type="button" title="View AI savings analysis and forecast">
-              <svg class="ai-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.5L19.4 10l-5.5 1.5L12 17l-1.9-5.5L4.6 10l5.5-1.5L12 3zM19 16l.9 2.5L22.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5zM6 16l.9 2.5L9.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5z" fill="currentColor"/></svg>
+            <button class="button-ai-inline" id="dashboard-ai-insights-btn" type="button"
+              title="View AI savings analysis and forecast">
+              <svg class="ai-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="m12 3 1.9 5.5L19.4 10l-5.5 1.5L12 17l-1.9-5.5L4.6 10l5.5-1.5L12 3zM19 16l.9 2.5L22.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5zM6 16l.9 2.5L9.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5z"
+                  fill="currentColor" />
+              </svg>
               <span>AI Coach</span>
             </button>
             <span class="dashboard-goal-pct" id="dashboard-goal-pct">—</span>
@@ -146,61 +239,118 @@
 
       <section class="calendar-card">
         <div class="calendar-header" data-region="calendar-header-ground">
-          <button class="month-button" data-region="month-previous" type="button" aria-label="Previous month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+          <button class="month-button" data-region="month-previous" type="button" aria-label="Previous month"><svg
+              viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m15 18-6-6 6-6" />
+            </svg></button>
           <div class="calendar-title-wrap">
             <div class="calendar-title-row">
               <svg class="calendar-title-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="3" y="5" width="18" height="16" rx="2.5"/>
-                <path d="M8 3v4m8-4v4M3 10h18"/>
-                <circle cx="8" cy="14" r="1" fill="currentColor" stroke="none"/>
-                <circle cx="12" cy="14" r="1" fill="currentColor" stroke="none"/>
-                <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none"/>
-                <circle cx="8" cy="17.5" r="1" fill="currentColor" stroke="none"/>
-                <circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none"/>
-                <circle cx="16" cy="17.5" r="1" fill="currentColor" stroke="none"/>
+                <rect x="3" y="5" width="18" height="16" rx="2.5" />
+                <path d="M8 3v4m8-4v4M3 10h18" />
+                <circle cx="8" cy="14" r="1" fill="currentColor" stroke="none" />
+                <circle cx="12" cy="14" r="1" fill="currentColor" stroke="none" />
+                <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none" />
+                <circle cx="8" cy="17.5" r="1" fill="currentColor" stroke="none" />
+                <circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none" />
+                <circle cx="16" cy="17.5" r="1" fill="currentColor" stroke="none" />
               </svg>
-              <div class="calendar-title-copy"><h2 class="calendar-title" data-region="calendar-title" id="calendar-month">Loading calendar…</h2></div>
-              <button class="calendar-jump-trigger" data-calendar-jump type="button" aria-haspopup="dialog" aria-controls="calendar-jump-dialog" aria-label="Jump to another month and year"><svg class="calendar-jump-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
+              <div class="calendar-title-copy">
+                <h2 class="calendar-title" data-region="calendar-title" id="calendar-month">Loading calendar…</h2>
+              </div>
+              <button class="calendar-jump-trigger" data-calendar-jump type="button" aria-haspopup="dialog"
+                aria-controls="calendar-jump-dialog" aria-label="Jump to another month and year"><svg
+                  class="calendar-jump-chevron" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m8 10 4 4 4-4" />
+                </svg></button>
             </div>
-            <label class="calendar-goal-picker" for="calendar-goal-select"><span>Tracking</span><select id="calendar-goal-select" aria-label="Calendar tracking goal"><option value="">General savings</option></select></label>
+            <label class="calendar-goal-picker" for="calendar-goal-select"><span>Tracking</span><select
+                id="calendar-goal-select" aria-label="Calendar tracking goal">
+                <option value="">General savings</option>
+              </select></label>
           </div>
-          <button class="month-button" data-region="month-next" type="button" aria-label="Next month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          <button class="month-button" data-region="month-next" type="button" aria-label="Next month"><svg
+              viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 18 6-6-6-6" />
+            </svg></button>
         </div>
-        <div class="mobile-month-bar"><button type="button" data-mobile-month="previous" aria-label="Previous month">‹</button><button class="mobile-calendar-jump" data-calendar-jump type="button" aria-haspopup="dialog" aria-controls="calendar-jump-dialog" aria-label="Jump to another month and year"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18"/></svg><span><strong id="mobile-calendar-month">Loading calendar…</strong><small>Choose month and year</small></span></button><button type="button" data-mobile-month="next" aria-label="Next month">›</button></div>
-        <label class="mobile-goal-picker" for="mobile-calendar-goal-select"><span>Tracking goal</span><select id="mobile-calendar-goal-select" aria-label="Calendar tracking goal on mobile"><option value="">General savings</option></select></label>
+        <div class="mobile-month-bar"><button type="button" data-mobile-month="previous"
+            aria-label="Previous month">‹</button><button class="mobile-calendar-jump" data-calendar-jump type="button"
+            aria-haspopup="dialog" aria-controls="calendar-jump-dialog" aria-label="Jump to another month and year"><svg
+              viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="2" />
+              <path d="M8 3v4m8-4v4M3 10h18" />
+            </svg><span><strong id="mobile-calendar-month">Loading calendar…</strong><small>Choose month and
+                year</small></span></button><button type="button" data-mobile-month="next"
+            aria-label="Next month">›</button></div>
+        <label class="mobile-goal-picker" for="mobile-calendar-goal-select"><span>Tracking goal</span><select
+            id="mobile-calendar-goal-select" aria-label="Calendar tracking goal on mobile">
+            <option value="">General savings</option>
+          </select></label>
 
         <dialog class="calendar-jump-dialog" id="calendar-jump-dialog" aria-labelledby="calendar-jump-title">
           <form id="calendar-jump-form" method="dialog">
-            <header><div><small>Calendar navigation</small><h2 id="calendar-jump-title">Jump to a month</h2></div><button class="calendar-jump-close" type="button" aria-label="Close month picker">×</button></header>
+            <header>
+              <div><small>Calendar navigation</small>
+                <h2 id="calendar-jump-title">Jump to a month</h2>
+              </div><button class="calendar-jump-close" type="button" aria-label="Close month picker">×</button>
+            </header>
             <div class="calendar-jump-fields">
-              <label><span>Month</span><select id="calendar-jump-month" required><option value="0">January</option><option value="1">February</option><option value="2">March</option><option value="3">April</option><option value="4">May</option><option value="5">June</option><option value="6">July</option><option value="7">August</option><option value="8">September</option><option value="9">October</option><option value="10">November</option><option value="11">December</option></select></label>
-              <label><span>Year</span><input id="calendar-jump-year" type="number" min="2000" max="2100" inputmode="numeric" required></label>
+              <label><span>Month</span><select id="calendar-jump-month" required>
+                  <option value="0">January</option>
+                  <option value="1">February</option>
+                  <option value="2">March</option>
+                  <option value="3">April</option>
+                  <option value="4">May</option>
+                  <option value="5">June</option>
+                  <option value="6">July</option>
+                  <option value="7">August</option>
+                  <option value="8">September</option>
+                  <option value="9">October</option>
+                  <option value="10">November</option>
+                  <option value="11">December</option>
+                </select></label>
+              <label><span>Year</span><input id="calendar-jump-year" type="number" min="2000" max="2100"
+                  inputmode="numeric" required></label>
             </div>
-            <div class="calendar-jump-actions"><button class="jump-today-button" id="calendar-jump-today" type="button">Today</button><button class="jump-confirm-button" type="submit">View month</button></div>
+            <div class="calendar-jump-actions"><button class="jump-today-button" id="calendar-jump-today"
+                type="button">Today</button><button class="jump-confirm-button" type="submit">View month</button></div>
           </form>
         </dialog>
 
         <div class="calendar-board">
-          <div class="weekday-headings" data-region="weekday-headings" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+          <div class="weekday-headings" data-region="weekday-headings" aria-hidden="true">
+            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+          </div>
           <div class="r-calendar-week-1 calendar-week" data-region="calendar-week-1"></div>
           <div class="r-calendar-week-2 calendar-week" data-region="calendar-week-2"></div>
           <div class="r-calendar-week-3 calendar-week" data-region="calendar-week-3"></div>
           <div class="r-calendar-week-4 calendar-week" data-region="calendar-week-4"></div>
           <div class="r-calendar-week-5 calendar-week" data-region="calendar-week-5"></div>
           <svg class="calendar-corner-wave" viewBox="0 0 220 70" aria-hidden="true">
-            <path d="M0 70 C70 68, 125 18, 185 16 C202 15, 212 22, 220 28 L220 70 Z" fill="rgba(143, 168, 145, 0.22)"/>
-            <path d="M35 70 C95 66, 145 34, 220 38 L220 70 Z" fill="rgba(116, 146, 120, 0.26)"/>
+            <path d="M0 70 C70 68, 125 18, 185 16 C202 15, 212 22, 220 28 L220 70 Z" fill="rgba(143, 168, 145, 0.22)" />
+            <path d="M35 70 C95 66, 145 34, 220 38 L220 70 Z" fill="rgba(116, 146, 120, 0.26)" />
           </svg>
           <section class="day-detail-panel" id="day-detail-panel" hidden aria-labelledby="day-detail-title">
-            <header><div><small>Selected day</small><h2 id="day-detail-title">Calendar activity</h2></div><button id="day-detail-close" type="button" aria-label="Close selected day details">×</button></header>
+            <header>
+              <div><small>Selected day</small>
+                <h2 id="day-detail-title">Calendar activity</h2>
+              </div><button id="day-detail-close" type="button" aria-label="Close selected day details">×</button>
+            </header>
             <div id="day-detail-list" class="day-detail-list"></div>
           </section>
         </div>
         <dialog class="form-dialog day-modal" id="day-contributors-dialog" aria-labelledby="day-modal-title">
           <div class="form-dialog-sheet">
             <header class="form-dialog-header">
-              <div><h2 id="day-modal-title">Contributors</h2><p id="day-modal-subtitle"></p></div>
-              <button class="dialog-close" id="day-modal-close" type="button" aria-label="Close day contributors"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+              <div>
+                <h2 id="day-modal-title">Contributors</h2>
+                <p id="day-modal-subtitle"></p>
+              </div>
+              <button class="dialog-close" id="day-modal-close" type="button" aria-label="Close day contributors"><svg
+                  viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m6 6 12 12M18 6 6 18" />
+                </svg></button>
             </header>
             <div class="day-modal-body" id="day-modal-body"></div>
           </div>
@@ -215,15 +365,28 @@
           <p class="review-subtitle">Awaiting confirmation</p>
         </div>
         <div class="review-list">
-          <button class="r-review-item-1 review-item is-empty-review" data-region="review-item-1" type="button" disabled><i class="status-icon pending"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></i><span><b>Loading review queue</b><small>Please wait</small></span><strong></strong></button>
-          <button class="r-review-item-2 review-item is-empty-review" data-region="review-item-2" type="button" disabled hidden><i class="status-icon pending"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></i><span><b>No pending entries</b><small>All caught up</small></span><strong></strong></button>
-          <button class="r-review-item-3 review-item is-empty-review" data-region="review-item-3" type="button" disabled hidden><i class="status-icon pending"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></i><span><b>No pending entries</b><small>All caught up</small></span><strong></strong></button>
+          <button class="r-review-item-1 review-item is-empty-review" data-region="review-item-1" type="button"
+            disabled><i class="status-icon pending"><svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg></i><span><b>Loading review queue</b><small>Please wait</small></span><strong></strong></button>
+          <button class="r-review-item-2 review-item is-empty-review" data-region="review-item-2" type="button" disabled
+            hidden><i class="status-icon pending"><svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg></i><span><b>No pending entries</b><small>All caught up</small></span><strong></strong></button>
+          <button class="r-review-item-3 review-item is-empty-review" data-region="review-item-3" type="button" disabled
+            hidden><i class="status-icon pending"><svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg></i><span><b>No pending entries</b><small>All caught up</small></span><strong></strong></button>
         </div>
-        <div class="r-review-summary review-summary" data-region="review-summary"><em>Loading…</em><strong>—</strong></div>
+        <div class="r-review-summary review-summary" data-region="review-summary"><em>Loading…</em><strong>—</strong>
+        </div>
         <svg class="review-card-leaf" viewBox="0 0 90 60" aria-hidden="true">
-          <path d="M48 58 C46 38, 30 28, 18 32 C24 46, 36 54, 48 58 Z" fill="rgba(125, 156, 126, 0.35)"/>
-          <path d="M52 58 C54 34, 70 18, 86 20 C82 38, 68 50, 52 58 Z" fill="rgba(104, 138, 108, 0.42)"/>
-          <path d="M50 58 C46 34, 48 14, 58 6 C64 20, 60 40, 50 58 Z" fill="rgba(143, 172, 142, 0.3)"/>
+          <path d="M48 58 C46 38, 30 28, 18 32 C24 46, 36 54, 48 58 Z" fill="rgba(125, 156, 126, 0.35)" />
+          <path d="M52 58 C54 34, 70 18, 86 20 C82 38, 68 50, 52 58 Z" fill="rgba(104, 138, 108, 0.42)" />
+          <path d="M50 58 C46 34, 48 14, 58 6 C64 20, 60 40, 50 58 Z" fill="rgba(143, 172, 142, 0.3)" />
         </svg>
       </div>
 
@@ -242,24 +405,32 @@
 
       <div class="workspace-corner-art" aria-hidden="true">
         <svg viewBox="0 0 240 210" fill="none">
-          <ellipse cx="125" cy="186" rx="95" ry="16" fill="rgba(180, 172, 154, 0.22)"/>
-          <path d="M148 110 V48" stroke="#5c8d63" stroke-width="3" stroke-linecap="round"/>
-          <path d="M148 82 C142 58, 116 48, 98 56 C106 76, 128 86, 148 82 Z" fill="#78a67c"/>
-          <path d="M148 64 C156 38, 184 26, 204 34 C196 58, 172 68, 148 64 Z" fill="#639669"/>
-          <path d="M148 94 C158 76, 182 70, 198 78 C188 94, 168 98, 148 94 Z" fill="#8bb58e"/>
-          <path d="M148 48 C142 30, 126 20, 112 22 C116 38, 132 46, 148 48 Z" fill="#6b9d70"/>
+          <ellipse cx="125" cy="186" rx="95" ry="16" fill="rgba(180, 172, 154, 0.22)" />
+          <path d="M148 110 V48" stroke="#5c8d63" stroke-width="3" stroke-linecap="round" />
+          <path d="M148 82 C142 58, 116 48, 98 56 C106 76, 128 86, 148 82 Z" fill="#78a67c" />
+          <path d="M148 64 C156 38, 184 26, 204 34 C196 58, 172 68, 148 64 Z" fill="#639669" />
+          <path d="M148 94 C158 76, 182 70, 198 78 C188 94, 168 98, 148 94 Z" fill="#8bb58e" />
+          <path d="M148 48 C142 30, 126 20, 112 22 C116 38, 132 46, 148 48 Z" fill="#6b9d70" />
           <!-- Tall coin stack -->
-          <ellipse cx="152" cy="112" rx="28" ry="8.5" fill="#e5e0cf" stroke="#fff" stroke-width="1"/>
-          <path d="M124 112v12c0 4.7 12.5 8.5 28 8.5s28-3.8 28-8.5v-12c0 4.7-12.5 8.5-28 8.5s-28-3.8-28-8.5Z" fill="#d2ccb8"/>
-          <path d="M124 126v12c0 4.7 12.5 8.5 28 8.5s28-3.8 28-8.5v-12c0 4.7-12.5 8.5-28 8.5s-28-3.8-28-8.5Z" fill="#dcd6c3"/>
-          <path d="M124 140v12c0 4.7 12.5 8.5 28 8.5s28-3.8 28-8.5v-12c0 4.7-12.5 8.5-28 8.5s-28-3.8-28-8.5Z" fill="#cec8b4"/>
-          <path d="M124 154v12c0 4.7 12.5 8.5 28 8.5s28-3.8 28-8.5v-12c0 4.7-12.5 8.5-28 8.5s-28-3.8-28-8.5Z" fill="#dad4c1"/>
-          <path d="M124 168v10c0 4.7 12.5 8.5 28 8.5s28-3.8 28-8.5v-10c0 4.7-12.5 8.5-28 8.5s-28-3.8-28-8.5Z" fill="#c9c3af"/>
+          <ellipse cx="152" cy="112" rx="28" ry="8.5" fill="#e5e0cf" stroke="#fff" stroke-width="1" />
+          <path d="M124 112v12c0 4.7 12.5 8.5 28 8.5s28-3.8 28-8.5v-12c0 4.7-12.5 8.5-28 8.5s-28-3.8-28-8.5Z"
+            fill="#d2ccb8" />
+          <path d="M124 126v12c0 4.7 12.5 8.5 28 8.5s28-3.8 28-8.5v-12c0 4.7-12.5 8.5-28 8.5s-28-3.8-28-8.5Z"
+            fill="#dcd6c3" />
+          <path d="M124 140v12c0 4.7 12.5 8.5 28 8.5s28-3.8 28-8.5v-12c0 4.7-12.5 8.5-28 8.5s-28-3.8-28-8.5Z"
+            fill="#cec8b4" />
+          <path d="M124 154v12c0 4.7 12.5 8.5 28 8.5s28-3.8 28-8.5v-12c0 4.7-12.5 8.5-28 8.5s-28-3.8-28-8.5Z"
+            fill="#dad4c1" />
+          <path d="M124 168v10c0 4.7 12.5 8.5 28 8.5s28-3.8 28-8.5v-10c0 4.7-12.5 8.5-28 8.5s-28-3.8-28-8.5Z"
+            fill="#c9c3af" />
           <!-- Short coin stack -->
-          <ellipse cx="96" cy="144" rx="25" ry="7.5" fill="#e8e3d3" stroke="#fff" stroke-width="1"/>
-          <path d="M71 144v11c0 4.1 11.2 7.5 25 7.5s25-3.4 25-7.5v-11c0 4.1-11.2 7.5-25 7.5s-25-3.4-25-7.5Z" fill="#d4ceba"/>
-          <path d="M71 157v11c0 4.1 11.2 7.5 25 7.5s25-3.4 25-7.5v-11c0 4.1-11.2 7.5-25 7.5s-25-3.4-25-7.5Z" fill="#ded8c6"/>
-          <path d="M71 170v10c0 4.1 11.2 7.5 25 7.5s25-3.4 25-7.5v-10c0 4.1-11.2 7.5-25 7.5s-25-3.4-25-7.5Z" fill="#ccc6b2"/>
+          <ellipse cx="96" cy="144" rx="25" ry="7.5" fill="#e8e3d3" stroke="#fff" stroke-width="1" />
+          <path d="M71 144v11c0 4.1 11.2 7.5 25 7.5s25-3.4 25-7.5v-11c0 4.1-11.2 7.5-25 7.5s-25-3.4-25-7.5Z"
+            fill="#d4ceba" />
+          <path d="M71 157v11c0 4.1 11.2 7.5 25 7.5s25-3.4 25-7.5v-11c0 4.1-11.2 7.5-25 7.5s-25-3.4-25-7.5Z"
+            fill="#ded8c6" />
+          <path d="M71 170v10c0 4.1 11.2 7.5 25 7.5s25-3.4 25-7.5v-10c0 4.1-11.2 7.5-25 7.5s-25-3.4-25-7.5Z"
+            fill="#ccc6b2" />
         </svg>
       </div>
     </aside>
@@ -278,7 +449,10 @@
             <p id="group-hub-meta">Manage members, appearance, and contributor access.</p>
           </div>
         </div>
-        <button class="dialog-close" type="button" id="close-group-hub-dialog" aria-label="Close group management"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <button class="dialog-close" type="button" id="close-group-hub-dialog" aria-label="Close group management"><svg
+            viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
       </header>
       <div class="group-hub-body">
         <div class="group-hub-switcher" id="group-hub-switcher-wrap" hidden>
@@ -287,25 +461,39 @@
         </div>
         <div class="group-hub-grid">
           <button class="group-hub-card" id="dashboard-edit-group" type="button">
-            <span class="group-hub-card-icon is-emerald" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+            <span class="group-hub-card-icon is-emerald" aria-hidden="true"><svg viewBox="0 0 24 24">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg></span>
             <span class="group-hub-card-copy">
               <strong>Edit group &amp; picture</strong>
               <small>Rename group, upload group chat DP, and update appearance.</small>
             </span>
-            <svg class="group-hub-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+            <svg class="group-hub-arrow" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
           </button>
           <button class="group-hub-card" id="dashboard-invite-member" type="button">
-            <span class="group-hub-card-icon is-gold" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>
+            <span class="group-hub-card-icon is-gold" aria-hidden="true"><svg viewBox="0 0 24 24">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M19 8v6M22 11h-6" />
+              </svg></span>
             <span class="group-hub-card-copy">
               <strong>Invite members</strong>
               <small>Send email sign-in credentials with recommended temporary passwords.</small>
             </span>
-            <svg class="group-hub-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+            <svg class="group-hub-arrow" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
           </button>
         </div>
         <div class="group-hub-contributor-section">
           <label class="group-hub-switch-card" for="manage-hub-self-toggle">
-            <span class="group-hub-card-icon is-sage" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <span class="group-hub-card-icon is-sage" aria-hidden="true"><svg viewBox="0 0 24 24">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg></span>
             <span class="group-hub-card-copy">
               <strong>Include me as a contributor</strong>
               <small>Join monthly contribution periods and appear in contributor rosters for this group.</small>
@@ -317,17 +505,24 @@
               <span class="group-hub-pledge-label">Your monthly contribution:</span>
               <strong class="group-hub-pledge-value" id="group-hub-pledge-val">₱100.00</strong>
             </div>
-            <button class="button button-secondary button-sm" type="button" id="group-hub-edit-pledge">Change amount</button>
+            <button class="button button-secondary button-sm" type="button" id="group-hub-edit-pledge">Change
+              amount</button>
           </div>
         </div>
         <div class="group-hub-links">
           <a class="group-hub-link" href="members.html">
-            <span><strong>Member directory &amp; recycle bin</strong><small>Edit shares, reset passwords, or recover removed members</small></span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+            <span><strong>Member directory &amp; recycle bin</strong><small>Edit shares, reset passwords, or recover
+                removed members</small></span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
           </a>
           <a class="group-hub-link" href="settings.html">
-            <span><strong>Contribution defaults &amp; treasurers</strong><small>Configure monthly schedules and group access</small></span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+            <span><strong>Contribution defaults &amp; treasurers</strong><small>Configure monthly schedules and group
+                access</small></span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
           </a>
         </div>
       </div>
@@ -344,7 +539,10 @@
           <h2 id="admin-contributor-title">Contributor settings</h2>
           <p id="admin-contributor-copy">Set your monthly contribution amount to participate in this group.</p>
         </div>
-        <button class="dialog-close" type="button" id="close-admin-contributor-dialog" aria-label="Close dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <button class="dialog-close" type="button" id="close-admin-contributor-dialog" aria-label="Close dialog"><svg
+            viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
       </header>
       <form id="admin-contributor-form" class="form-grid">
         <div class="field field-wide">
@@ -354,8 +552,10 @@
         </div>
         <div class="field field-wide">
           <label for="admin-contributor-amount">Monthly contribution amount (₱)</label>
-          <input id="admin-contributor-amount" name="amount" type="number" min="1" max="1000000" step="0.01" value="100" required placeholder="100.00">
-          <small class="field-help">This amount reflects on your member profile and will be assigned to your contribution periods.</small>
+          <input id="admin-contributor-amount" name="amount" type="number" min="1" max="1000000" step="0.01" value="100"
+            required placeholder="100.00">
+          <small class="field-help">This amount reflects on your member profile and will be assigned to your
+            contribution periods.</small>
         </div>
         <div class="form-actions field-wide">
           <button class="button button-secondary" type="button" id="cancel-admin-contributor-dialog">Cancel</button>
@@ -371,7 +571,10 @@
           <h2 id="group-form-title">Edit group</h2>
           <p id="group-form-copy">Update your group name, picture, and contributor settings.</p>
         </div>
-        <button class="dialog-close" type="button" id="close-group-dialog" aria-label="Close group dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <button class="dialog-close" type="button" id="close-group-dialog" aria-label="Close group dialog"><svg
+            viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
       </header>
       <form id="group-form" class="form-grid">
         <input type="hidden" name="mode" value="edit">
@@ -389,7 +592,8 @@
         </div>
         <div class="field group-name-field">
           <label for="group-name-input">Group name</label>
-          <input id="group-name-input" name="name" minlength="2" maxlength="150" placeholder="e.g., Family Savings Fund" required>
+          <input id="group-name-input" name="name" minlength="2" maxlength="150" placeholder="e.g., Family Savings Fund"
+            required>
           <small class="field-help">Displayed at the top of this workspace and in invite emails.</small>
         </div>
         <div class="field field-wide">
@@ -398,18 +602,21 @@
               <strong>Include me as a contributor</strong>
               <small>Join monthly contribution periods and appear in contributor lists for this group.</small>
             </span>
-            <input class="toggle-switch-input" id="group-self-contributor" name="include_self" type="checkbox" role="switch">
+            <input class="toggle-switch-input" id="group-self-contributor" name="include_self" type="checkbox"
+              role="switch">
           </label>
         </div>
         <div class="field field-wide" id="group-monthly-wrap">
           <label for="group-default-amount">Monthly contribution amount</label>
-          <input id="group-default-amount" name="monthly_amount" type="number" min="1" max="1000000" step="0.01" value="100" required>
+          <input id="group-default-amount" name="monthly_amount" type="number" min="1" max="1000000" step="0.01"
+            value="100" required>
         </div>
         <div class="field field-wide" id="group-invite-section">
           <div class="invite-section-head">
             <div>
               <strong>Invite members by email (optional)</strong>
-              <small class="field-help">Each member receives their sign-in email and temporary password right after creation.</small>
+              <small class="field-help">Each member receives their sign-in email and temporary password right after
+                creation.</small>
             </div>
             <button class="button button-secondary" id="group-add-invite-row" type="button">+ Add another</button>
           </div>
@@ -427,9 +634,13 @@
       <header class="form-dialog-header">
         <div>
           <h2 id="group-invite-title">Invite members</h2>
-          <p id="group-invite-copy">Add members by email with a temporary password. Invitation emails are sent automatically once created.</p>
+          <p id="group-invite-copy">Add members by email with a temporary password. Invitation emails are sent
+            automatically once created.</p>
         </div>
-        <button class="dialog-close" type="button" id="close-invite-dialog" aria-label="Close invite dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <button class="dialog-close" type="button" id="close-invite-dialog" aria-label="Close invite dialog"><svg
+            viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
       </header>
       <form id="group-invite-form" class="form-grid">
         <div class="field field-wide">
@@ -454,20 +665,34 @@
           <p id="quick-record-subtitle">Quickly log savings additions, deductions, or expenses for your group.</p>
         </div>
         <button class="dialog-close" id="quick-record-close" type="button" aria-label="Close record form">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
         </button>
       </header>
       <div class="quick-record-type-tabs" id="quick-record-type-tabs" role="tablist" aria-label="Record type">
-        <button class="quick-type-tab is-active" id="quick-tab-addition" type="button" role="tab" aria-selected="true" data-type="addition">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+        <button class="quick-type-tab is-active" id="quick-tab-addition" type="button" role="tab" aria-selected="true"
+          data-type="addition">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v8M8 12h8" />
+          </svg>
           <span>Addition</span>
         </button>
-        <button class="quick-type-tab" id="quick-tab-deduction" type="button" role="tab" aria-selected="false" data-type="deduction">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+        <button class="quick-type-tab" id="quick-tab-deduction" type="button" role="tab" aria-selected="false"
+          data-type="deduction">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M8 12h8" />
+          </svg>
           <span>Deduction</span>
         </button>
-        <button class="quick-type-tab" id="quick-tab-expense" type="button" role="tab" aria-selected="false" data-type="expense">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
+        <button class="quick-type-tab" id="quick-tab-expense" type="button" role="tab" aria-selected="false"
+          data-type="expense">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+            <path d="M8 7h8M8 11h8M8 15h5" />
+          </svg>
           <span>Expense</span>
         </button>
       </div>
@@ -482,7 +707,11 @@
         <div class="field field-wide" id="quick-member-auto" hidden>
           <label>Member</label>
           <div class="quick-member-auto-chip">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+              aria-hidden="true">
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
             <span>Recording for: <strong id="quick-member-auto-name">Member</strong></span>
           </div>
         </div>
@@ -502,7 +731,8 @@
         </div>
         <div class="field" id="quick-field-amount">
           <label for="quick-amount">Amount</label>
-          <input id="quick-amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" inputmode="decimal" placeholder="0.00" required>
+          <input id="quick-amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01"
+            inputmode="decimal" placeholder="0.00" required>
         </div>
         <div class="field" id="quick-field-category" hidden>
           <label for="quick-category">Category</label>
@@ -514,11 +744,13 @@
         </div>
         <div class="field field-wide" id="quick-field-description" hidden>
           <label for="quick-description" id="quick-desc-label">Reason / description</label>
-          <textarea id="quick-description" name="description" maxlength="500" rows="2" placeholder="Explain the purpose of this transaction"></textarea>
+          <textarea id="quick-description" name="description" maxlength="500" rows="2"
+            placeholder="Explain the purpose of this transaction"></textarea>
         </div>
         <div class="field field-wide" id="quick-field-notes">
           <label for="quick-notes">Notes (optional)</label>
-          <textarea id="quick-notes" name="notes" maxlength="1000" rows="2" placeholder="Any additional notes"></textarea>
+          <textarea id="quick-notes" name="notes" maxlength="1000" rows="2"
+            placeholder="Any additional notes"></textarea>
         </div>
         <div class="form-actions field-wide">
           <button class="button button-secondary" id="quick-record-cancel" type="button">Cancel</button>
@@ -534,14 +766,21 @@
         <div class="ai-insights-header-head">
           <div class="ai-badge-row">
             <span class="ai-chip">
-              <svg class="ai-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.5L19.4 10l-5.5 1.5L12 17l-1.9-5.5L4.6 10l5.5-1.5L12 3zM19 16l.9 2.5L22.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5zM6 16l.9 2.5L9.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5z" fill="currentColor"/></svg>
+              <svg class="ai-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="m12 3 1.9 5.5L19.4 10l-5.5 1.5L12 17l-1.9-5.5L4.6 10l5.5-1.5L12 3zM19 16l.9 2.5L22.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5zM6 16l.9 2.5L9.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5z"
+                  fill="currentColor" />
+              </svg>
               Powered by Gemini AI
             </span>
           </div>
           <h2 id="ai-insights-title">AI Savings Coach</h2>
           <p id="ai-insights-subtitle">Intelligent financial forecast and personalized habit optimization.</p>
         </div>
-        <button class="dialog-close" id="ai-insights-close" type="button" aria-label="Close AI insights dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <button class="dialog-close" id="ai-insights-close" type="button" aria-label="Close AI insights dialog"><svg
+            viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
       </header>
       <div class="ai-insights-body">
         <div class="ai-insights-goal-summary" id="ai-insights-goal-summary">
@@ -551,7 +790,10 @@
         <div class="ai-insights-cards" id="ai-insights-content">
           <div class="ai-insight-card">
             <div class="ai-insight-card-icon forecast-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
             </div>
             <div class="ai-insight-card-content">
               <h4>Timeline &amp; Pace Forecast</h4>
@@ -560,7 +802,9 @@
           </div>
           <div class="ai-insight-card">
             <div class="ai-insight-card-icon tip-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 22h4M8.5 14.5A7 7 0 1 1 15.5 14.5C14.5 15.2 14 16 14 17h-4c0-1-.5-1.8-1.5-2.5Z"/></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 18h6M10 22h4M8.5 14.5A7 7 0 1 1 15.5 14.5C14.5 15.2 14 16 14 17h-4c0-1-.5-1.8-1.5-2.5Z" />
+              </svg>
             </div>
             <div class="ai-insight-card-content">
               <h4>Smart Savings Optimization</h4>
@@ -569,7 +813,10 @@
           </div>
           <div class="ai-insight-card">
             <div class="ai-insight-card-icon motivation-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
             </div>
             <div class="ai-insight-card-content">
               <h4>Consistency &amp; Streak</h4>
@@ -580,14 +827,23 @@
       </div>
       <div class="form-actions field-wide ai-insights-footer">
         <button class="button button-secondary" id="ai-insights-refresh" type="button">
-          <svg viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px;"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true"
+            style="width:13px;height:13px;vertical-align:-1px;margin-right:4px;">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
           Refresh insights
         </button>
         <button class="button button-primary" id="ai-insights-done" type="button">Done</button>
       </div>
     </div>
   </dialog>
-  <script src="js/config.js?v=20261113-19"></script><script src="js/core.js?v=20261113-19"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/dashboard.js?v=20261113-19"></script>
+  <script src="js/config.js?v=20261113-19"></script>
+  <script src="js/core.js?v=20261113-19"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
+    integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
+    crossorigin="anonymous"></script>
+  <script src="js/dashboard.js?v=20261113-19"></script>
 </body>
-</html>
 
+</html>

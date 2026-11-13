@@ -1,14 +1,17 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://generativelanguage.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://generativelanguage.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Super Admin — IPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css?v=20261113-18">
 </head>
+
 <body data-page="super-admin" data-panel="super-admin">
   <div class="app-layout">
     <aside class="app-sidebar" id="app-sidebar"></aside>
@@ -16,35 +19,70 @@
       <header class="page-header">
         <div>
           <h1 id="platform-view-title">Platform overview</h1>
-          <p id="platform-view-description">Monitor administrator access, savings groups, and requests without exposing financial records.</p>
+          <p id="platform-view-description">Monitor administrator access, savings groups, and requests without exposing
+            financial records.</p>
         </div>
-        <button class="button button-primary" id="create-administrator" type="button" hidden>Create administrator</button>
+        <button class="button button-primary" id="create-administrator" type="button" hidden>Create
+          administrator</button>
       </header>
 
-      <section class="platform-view platform-overview" id="overview" data-platform-view="overview" aria-labelledby="overview-title">
+      <section class="platform-view platform-overview" id="overview" data-platform-view="overview"
+        aria-labelledby="overview-title">
         <div class="platform-overview-heading">
           <h2 id="overview-title">System overview</h2>
           <p id="platform-status"><span aria-hidden="true"></span>Checking platform access…</p>
         </div>
         <dl class="platform-metrics">
-          <div><dt>Administrators</dt><dd id="metric-total-admins">—</dd></div>
-          <div><dt>Active</dt><dd id="metric-active-admins">—</dd></div>
-          <div><dt>Suspended</dt><dd id="metric-suspended-admins">—</dd></div>
-          <div><dt>Pending requests</dt><dd id="metric-pending-requests">—</dd></div>
-          <div><dt>Savings groups</dt><dd id="metric-groups">—</dd></div>
+          <div>
+            <dt>Administrators</dt>
+            <dd id="metric-total-admins">—</dd>
+          </div>
+          <div>
+            <dt>Active</dt>
+            <dd id="metric-active-admins">—</dd>
+          </div>
+          <div>
+            <dt>Suspended</dt>
+            <dd id="metric-suspended-admins">—</dd>
+          </div>
+          <div>
+            <dt>Pending requests</dt>
+            <dd id="metric-pending-requests">—</dd>
+          </div>
+          <div>
+            <dt>Savings groups</dt>
+            <dd id="metric-groups">—</dd>
+          </div>
         </dl>
         <div class="platform-briefing">
           <section aria-labelledby="attention-title">
             <h3 id="attention-title">Needs attention</h3>
-            <div class="platform-attention" id="platform-attention" aria-live="polite"><p>Checking pending platform work…</p></div>
+            <div class="platform-attention" id="platform-attention" aria-live="polite">
+              <p>Checking pending platform work…</p>
+            </div>
           </section>
           <nav class="platform-shortcuts" aria-labelledby="shortcuts-title">
             <h3 id="shortcuts-title">Platform workspaces</h3>
-            <a href="super-admin.html#requests"><span><strong>Administrator requests</strong><small>Review access applications</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a href="super-admin.html#feature-requests"><span><strong>Feature requests</strong><small>Read suggestions from IPON users</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a href="super-admin.html#bug-reports"><span><strong>Bug reports</strong><small>Review reported errors and screenshots</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a href="super-admin.html#administrators"><span><strong>Users</strong><small>Manage accounts and groups</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a href="super-admin.html#activity"><span><strong>Platform activity</strong><small>Inspect recent access changes</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a href="super-admin.html#requests"><span><strong>Administrator requests</strong><small>Review access
+                  applications</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg></a>
+            <a href="super-admin.html#feature-requests"><span><strong>Feature requests</strong><small>Read suggestions
+                  from IPON users</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg></a>
+            <a href="super-admin.html#bug-reports"><span><strong>Bug reports</strong><small>Review reported errors and
+                  screenshots</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg></a>
+            <a href="super-admin.html#administrators"><span><strong>Users</strong><small>Manage accounts and
+                  groups</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg></a>
+            <a href="super-admin.html#activity"><span><strong>Platform activity</strong><small>Inspect recent access
+                  changes</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg></a>
           </nav>
         </div>
         <section class="panel super-admin-announcements" aria-labelledby="sa-announcement-heading">
@@ -56,93 +94,253 @@
             <div class="panel-header-actions">
               <button class="button button-secondary" id="sa-add-announcement" type="button">+ Add announcement</button>
               <button class="button button-primary" id="sa-add-release-update" type="button">
-                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px;margin-right:6px;vertical-align:-1px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg viewBox="0 0 24 24" aria-hidden="true"
+                  style="width:14px;height:14px;margin-right:6px;vertical-align:-1px;">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
                 + Release update
               </button>
             </div>
           </div>
-          <div class="announcement-list" id="sa-announcement-list" aria-live="polite"><p class="empty-state">Loading announcements…</p></div>
+          <div class="announcement-list" id="sa-announcement-list" aria-live="polite">
+            <p class="empty-state">Loading announcements…</p>
+          </div>
         </section>
         <div id="overview-error" hidden></div>
       </section>
 
-      <section class="platform-view panel" id="requests" data-platform-view="requests" aria-labelledby="requests-title" hidden>
+      <section class="platform-view panel" id="requests" data-platform-view="requests" aria-labelledby="requests-title"
+        hidden>
         <div class="panel-header">
-          <div><h2 id="requests-title">Administrator requests</h2><p>Approval creates a separate savings group and activates the administrator account in one database transaction.</p></div>
+          <div>
+            <h2 id="requests-title">Administrator requests</h2>
+            <p>Approval creates a separate savings group and activates the administrator account in one database
+              transaction.</p>
+          </div>
           <div class="table-filters">
-            <input id="requests-search" type="search" placeholder="Search requests" aria-label="Search administrator requests">
-            <select id="requests-status-filter" aria-label="Filter administrator requests by status"><option value="">All statuses</option><option>PENDING</option><option>APPROVED</option><option>REJECTED</option></select>
+            <input id="requests-search" type="search" placeholder="Search requests"
+              aria-label="Search administrator requests">
+            <select id="requests-status-filter" aria-label="Filter administrator requests by status">
+              <option value="">All statuses</option>
+              <option>PENDING</option>
+              <option>APPROVED</option>
+              <option>REJECTED</option>
+            </select>
           </div>
         </div>
-        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Requester</th><th>Contact</th><th>Reason</th><th>Requested</th><th>Status</th><th>Actions</th></tr></thead><tbody id="requests-body"><tr class="loading-row"><td colspan="6">Loading requests…</td></tr></tbody></table></div>
-        <nav class="table-pager" id="requests-pager" aria-label="Administrator requests pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Requester</th>
+                <th>Contact</th>
+                <th>Reason</th>
+                <th>Requested</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="requests-body">
+              <tr class="loading-row">
+                <td colspan="6">Loading requests…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <nav class="table-pager" id="requests-pager" aria-label="Administrator requests pages"><button type="button"
+            data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
+            data-page="next">Next</button></nav>
       </section>
 
-      <section class="platform-view panel" id="feature-requests" data-platform-view="feature-requests" aria-labelledby="feature-requests-title" hidden>
+      <section class="platform-view panel" id="feature-requests" data-platform-view="feature-requests"
+        aria-labelledby="feature-requests-title" hidden>
         <div class="panel-header">
-          <div><h2 id="feature-requests-title">Feature requests</h2><p>Suggestions submitted by active IPON users, newest first.</p></div>
+          <div>
+            <h2 id="feature-requests-title">Feature requests</h2>
+            <p>Suggestions submitted by active IPON users, newest first.</p>
+          </div>
           <div class="table-filters">
-            <input id="feature-requests-search" type="search" placeholder="Search feature requests" aria-label="Search feature requests">
+            <input id="feature-requests-search" type="search" placeholder="Search feature requests"
+              aria-label="Search feature requests">
             <div class="view-mode-toggle" id="feature-requests-view-toggle" role="radiogroup" aria-label="Display mode">
-              <button class="view-mode-btn is-active" type="button" data-view-mode="cards" aria-label="Cards view" title="Cards view">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+              <button class="view-mode-btn is-active" type="button" data-view-mode="cards" aria-label="Cards view"
+                title="Cards view">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                  <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                </svg>
                 <span>Cards</span>
               </button>
-              <button class="view-mode-btn" type="button" data-view-mode="table" aria-label="Table view" title="Table view">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              <button class="view-mode-btn" type="button" data-view-mode="table" aria-label="Table view"
+                title="Table view">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" />
+                </svg>
                 <span>Table</span>
               </button>
             </div>
           </div>
         </div>
         <div class="feature-status-tabs-wrap">
-          <div class="segmented-control" id="feature-requests-status-tabs" role="tablist" aria-label="Filter feature requests by status">
-            <button class="segmented-control-btn is-active" type="button" data-status-filter="ALL">All <span class="badge" id="count-feat-all">0</span></button>
-            <button class="segmented-control-btn" type="button" data-status-filter="PENDING">Pending <span class="badge" id="count-feat-pending">0</span></button>
-            <button class="segmented-control-btn" type="button" data-status-filter="IMPLEMENTED">Implemented <span class="badge" id="count-feat-implemented">0</span></button>
-            <button class="segmented-control-btn" type="button" data-status-filter="REJECTED">Rejected <span class="badge" id="count-feat-rejected">0</span></button>
+          <div class="segmented-control" id="feature-requests-status-tabs" role="tablist"
+            aria-label="Filter feature requests by status">
+            <button class="segmented-control-btn is-active" type="button" data-status-filter="ALL">All <span
+                class="badge" id="count-feat-all">0</span></button>
+            <button class="segmented-control-btn" type="button" data-status-filter="PENDING">Pending <span class="badge"
+                id="count-feat-pending">0</span></button>
+            <button class="segmented-control-btn" type="button" data-status-filter="IMPLEMENTED">Implemented <span
+                class="badge" id="count-feat-implemented">0</span></button>
+            <button class="segmented-control-btn" type="button" data-status-filter="REJECTED">Rejected <span
+                class="badge" id="count-feat-rejected">0</span></button>
           </div>
         </div>
         <div class="feature-cards-grid" id="feature-requests-cards" aria-live="polite"></div>
-        <div class="data-table-wrap" id="feature-requests-table-wrap" hidden><table class="data-table"><thead><tr><th>Requester</th><th>Role</th><th>Feature</th><th>Details</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead><tbody id="feature-requests-body"><tr class="loading-row"><td colspan="7">Loading feature requests…</td></tr></tbody></table></div>
-        <nav class="table-pager" id="feature-requests-pager" aria-label="Feature requests pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
+        <div class="data-table-wrap" id="feature-requests-table-wrap" hidden>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Requester</th>
+                <th>Role</th>
+                <th>Feature</th>
+                <th>Details</th>
+                <th>Status</th>
+                <th>Submitted</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="feature-requests-body">
+              <tr class="loading-row">
+                <td colspan="7">Loading feature requests…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <nav class="table-pager" id="feature-requests-pager" aria-label="Feature requests pages"><button type="button"
+            data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
+            data-page="next">Next</button></nav>
       </section>
 
-      <section class="platform-view panel" id="bug-reports" data-platform-view="bug-reports" aria-labelledby="bug-reports-title" hidden>
+      <section class="platform-view panel" id="bug-reports" data-platform-view="bug-reports"
+        aria-labelledby="bug-reports-title" hidden>
         <div class="panel-header">
-          <div><h2 id="bug-reports-title">Bug reports</h2><p>Errors and problems reported by active IPON users, newest first.</p></div>
+          <div>
+            <h2 id="bug-reports-title">Bug reports</h2>
+            <p>Errors and problems reported by active IPON users, newest first.</p>
+          </div>
           <div class="table-filters">
-            <input id="bug-reports-search" type="search" placeholder="Search bug reports" aria-label="Search bug reports">
+            <input id="bug-reports-search" type="search" placeholder="Search bug reports"
+              aria-label="Search bug reports">
           </div>
         </div>
-        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Reporter</th><th>Role</th><th>Title</th><th>Description</th><th>Pictures</th><th>Submitted</th></tr></thead><tbody id="bug-reports-body"><tr class="loading-row"><td colspan="6">Loading bug reports…</td></tr></tbody></table></div>
-        <nav class="table-pager" id="bug-reports-pager" aria-label="Bug reports pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Reporter</th>
+                <th>Role</th>
+                <th>Title</th>
+                <th>Description</th>
+                <th>Pictures</th>
+                <th>Submitted</th>
+              </tr>
+            </thead>
+            <tbody id="bug-reports-body">
+              <tr class="loading-row">
+                <td colspan="6">Loading bug reports…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <nav class="table-pager" id="bug-reports-pager" aria-label="Bug reports pages"><button type="button"
+            data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
+            data-page="next">Next</button></nav>
       </section>
 
       <div class="platform-view" id="administrators" data-platform-view="administrators" hidden>
         <section class="panel" aria-labelledby="users-title">
           <div class="panel-header">
-            <div><h2 id="users-title">Users</h2><p>Manage administrators, treasurers, and members across all savings groups.</p></div>
+            <div>
+              <h2 id="users-title">Users</h2>
+              <p>Manage administrators, treasurers, and members across all savings groups.</p>
+            </div>
             <div class="table-filters">
-              <input id="users-search" type="search" placeholder="Search name, email, or group" aria-label="Search users">
-              <select id="users-role-filter" aria-label="Filter users by role"><option value="">All roles</option><option value="ADMIN">Administrator</option><option value="TREASURER">Treasurer</option><option value="MEMBER">Member</option></select>
-              <select id="users-status-filter" aria-label="Filter users by status"><option value="">All statuses</option><option>ACTIVE</option><option>PENDING</option><option>DISABLED</option></select>
+              <input id="users-search" type="search" placeholder="Search name, email, or group"
+                aria-label="Search users">
+              <select id="users-role-filter" aria-label="Filter users by role">
+                <option value="">All roles</option>
+                <option value="ADMIN">Administrator</option>
+                <option value="TREASURER">Treasurer</option>
+                <option value="MEMBER">Member</option>
+              </select>
+              <select id="users-status-filter" aria-label="Filter users by status">
+                <option value="">All statuses</option>
+                <option>ACTIVE</option>
+                <option>PENDING</option>
+                <option>DISABLED</option>
+              </select>
             </div>
           </div>
-          <div class="data-table-wrap"><table class="data-table"><thead><tr><th>User</th><th>Role</th><th>Group</th><th>Registered</th><th>Last activity</th><th>Status</th><th>Actions</th></tr></thead><tbody id="administrators-body"><tr class="loading-row"><td colspan="7">Loading users…</td></tr></tbody></table></div>
-          <nav class="table-pager" id="users-pager" aria-label="Users pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Group</th>
+                  <th>Registered</th>
+                  <th>Last activity</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="administrators-body">
+                <tr class="loading-row">
+                  <td colspan="7">Loading users…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <nav class="table-pager" id="users-pager" aria-label="Users pages"><button type="button"
+              data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
+              data-page="next">Next</button></nav>
         </section>
       </div>
 
-      <section class="platform-view panel" id="activity" data-platform-view="activity" aria-labelledby="activity-title" hidden>
+      <section class="platform-view panel" id="activity" data-platform-view="activity" aria-labelledby="activity-title"
+        hidden>
         <div class="panel-header">
-          <div><h2 id="activity-title">Recent platform activity</h2><p>Administrator and group access changes recorded by the database.</p></div>
+          <div>
+            <h2 id="activity-title">Recent platform activity</h2>
+            <p>Administrator and group access changes recorded by the database.</p>
+          </div>
           <div class="table-filters">
-            <input id="activity-search" type="search" placeholder="Search activity" aria-label="Search platform activity">
+            <input id="activity-search" type="search" placeholder="Search activity"
+              aria-label="Search platform activity">
           </div>
         </div>
-        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Event</th><th>Subject</th><th>When</th></tr></thead><tbody id="activity-body"><tr class="loading-row"><td colspan="3">Loading activity…</td></tr></tbody></table></div>
-        <nav class="table-pager" id="activity-pager" aria-label="Platform activity pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Subject</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody id="activity-body">
+              <tr class="loading-row">
+                <td colspan="3">Loading activity…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <nav class="table-pager" id="activity-pager" aria-label="Platform activity pages"><button type="button"
+            data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
+            data-page="next">Next</button></nav>
       </section>
     </main>
   </div>
@@ -150,13 +348,24 @@
   <dialog class="form-dialog" id="approve-request-dialog" aria-labelledby="approve-request-title">
     <div class="form-dialog-sheet">
       <header class="form-dialog-header">
-        <div><h2 id="approve-request-title">Approve administrator</h2><p id="approve-request-copy">Create an isolated savings group for this administrator.</p></div>
-        <button class="dialog-close" id="approve-request-close" type="button" aria-label="Close approval dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <div>
+          <h2 id="approve-request-title">Approve administrator</h2>
+          <p id="approve-request-copy">Create an isolated savings group for this administrator.</p>
+        </div>
+        <button class="dialog-close" id="approve-request-close" type="button" aria-label="Close approval dialog"><svg
+            viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
       </header>
       <form id="approve-request-form">
         <input id="approve-request-id" name="user_id" type="hidden">
-        <div class="field"><label for="approve-group-name">Savings group name</label><input id="approve-group-name" name="group_name" minlength="2" maxlength="150" autocomplete="organization" required><small class="field-help">This group keeps its members and savings records separate from every other administrator.</small></div>
-        <div class="form-actions"><button class="button button-secondary" id="approve-request-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Approve and create group</button></div>
+        <div class="field"><label for="approve-group-name">Savings group name</label><input id="approve-group-name"
+            name="group_name" minlength="2" maxlength="150" autocomplete="organization" required><small
+            class="field-help">This group keeps its members and savings records separate from every other
+            administrator.</small></div>
+        <div class="form-actions"><button class="button button-secondary" id="approve-request-cancel"
+            type="button">Cancel</button><button class="button button-primary" type="submit">Approve and create
+            group</button></div>
       </form>
     </div>
   </dialog>
@@ -164,18 +373,27 @@
   <dialog class="form-dialog" id="reject-request-dialog" aria-labelledby="reject-request-title">
     <div class="form-dialog-sheet">
       <header class="form-dialog-header">
-        <div><h2 id="reject-request-title">Reject administrator request</h2><p id="reject-request-copy">Choose a reason or enter custom details for declining this request.</p></div>
-        <button class="dialog-close" id="reject-request-close" type="button" aria-label="Close rejection dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <div>
+          <h2 id="reject-request-title">Reject administrator request</h2>
+          <p id="reject-request-copy">Choose a reason or enter custom details for declining this request.</p>
+        </div>
+        <button class="dialog-close" id="reject-request-close" type="button" aria-label="Close rejection dialog"><svg
+            viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
       </header>
       <form id="reject-request-form" class="form-grid">
         <input id="reject-request-id" name="user_id" type="hidden">
         <div class="field field-wide">
           <label for="reject-reason-preset">Rejection reason</label>
           <select id="reject-reason-preset">
-            <option value="Duplicate or unverified administrator request">Duplicate or unverified administrator request</option>
-            <option value="Incomplete or unverifiable contact information">Incomplete or unverifiable contact information</option>
+            <option value="Duplicate or unverified administrator request">Duplicate or unverified administrator request
+            </option>
+            <option value="Incomplete or unverifiable contact information">Incomplete or unverifiable contact
+              information</option>
             <option value="Savings group criteria not met">Savings group criteria not met</option>
-            <option value="Application details could not be validated">Application details could not be validated</option>
+            <option value="Application details could not be validated">Application details could not be validated
+            </option>
             <option value="custom">Other (custom reason)</option>
           </select>
           <small class="field-help">Select a preset reason or choose Other to write your own explanation.</small>
@@ -186,8 +404,10 @@
         </div>
         <div class="field field-wide">
           <label for="reject-reason-text">Compose email</label>
-          <textarea id="reject-reason-text" name="review_note" minlength="5" maxlength="500" rows="5" required></textarea>
-          <small class="field-help">Once rejected, this email address cannot submit another administrator request.</small>
+          <textarea id="reject-reason-text" name="review_note" minlength="5" maxlength="500" rows="5"
+            required></textarea>
+          <small class="field-help">Once rejected, this email address cannot submit another administrator
+            request.</small>
         </div>
         <div class="form-actions field-wide">
           <button class="button button-secondary" id="reject-request-cancel" type="button">Cancel</button>
@@ -197,11 +417,82 @@
     </div>
   </dialog>
 
-  <dialog class="form-dialog" id="administrator-dialog" aria-labelledby="administrator-dialog-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="administrator-dialog-title">Create administrator</h2><p>Create a confirmed Auth account and an isolated savings group.</p></div><button class="dialog-close" id="administrator-dialog-close" type="button" aria-label="Close administrator form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="administrator-form" class="form-grid form-grid-3"><input type="hidden" name="user_id"><div class="field"><label for="administrator-first-name">First name</label><input id="administrator-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="administrator-middle-name">Middle name</label><input id="administrator-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="administrator-last-name">Last name</label><input id="administrator-last-name" name="last_name" maxlength="80" required></div><div class="field"><label for="administrator-email">Email</label><input id="administrator-email" name="email" type="email" required></div><div class="field"><label for="administrator-password">Temporary password</label><input id="administrator-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-temp-password required><small class="field-help">Pre-filled with a recommended password, or clear it to enter a custom password.</small></div><div class="field"><label for="administrator-group">Savings group</label><input id="administrator-group" name="group_name" minlength="2" maxlength="150" required></div><div class="form-actions field-wide"><button class="button button-secondary" id="administrator-dialog-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Create administrator</button></div></form></div></dialog>
+  <dialog class="form-dialog" id="administrator-dialog" aria-labelledby="administrator-dialog-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="administrator-dialog-title">Create administrator</h2>
+          <p>Create a confirmed Auth account and an isolated savings group.</p>
+        </div><button class="dialog-close" id="administrator-dialog-close" type="button"
+          aria-label="Close administrator form"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
+      </header>
+      <form id="administrator-form" class="form-grid form-grid-3"><input type="hidden" name="user_id">
+        <div class="field"><label for="administrator-first-name">First name</label><input id="administrator-first-name"
+            name="first_name" maxlength="80" required></div>
+        <div class="field"><label for="administrator-middle-name">Middle name</label><input
+            id="administrator-middle-name" name="middle_name" maxlength="80"></div>
+        <div class="field"><label for="administrator-last-name">Last name</label><input id="administrator-last-name"
+            name="last_name" maxlength="80" required></div>
+        <div class="field"><label for="administrator-email">Email</label><input id="administrator-email" name="email"
+            type="email" required></div>
+        <div class="field"><label for="administrator-password">Temporary password</label><input
+            id="administrator-password" name="password" type="password" minlength="8" maxlength="128"
+            autocomplete="new-password" data-temp-password required><small class="field-help">Pre-filled with a
+            recommended password, or clear it to enter a custom password.</small></div>
+        <div class="field"><label for="administrator-group">Savings group</label><input id="administrator-group"
+            name="group_name" minlength="2" maxlength="150" required></div>
+        <div class="form-actions field-wide"><button class="button button-secondary" id="administrator-dialog-cancel"
+            type="button">Cancel</button><button class="button button-primary" type="submit">Create
+            administrator</button></div>
+      </form>
+    </div>
+  </dialog>
 
-  <dialog class="form-dialog" id="user-password-dialog" aria-labelledby="user-password-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="user-password-title">Change account password</h2><p id="user-password-copy">Set a new password for this account.</p></div><button class="dialog-close" id="user-password-close" type="button" aria-label="Close password form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="user-password-form" class="form-grid"><input type="hidden" name="user_id"><div class="field field-wide"><label for="user-password-input">New password</label><input id="user-password-input" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><small class="field-help">Use at least 8 characters with uppercase, lowercase, a number, and a symbol.</small></div><div class="field field-wide"><label for="user-password-confirm">Confirm new password</label><input id="user-password-confirm" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></div><div class="form-actions field-wide"><button class="button button-secondary" id="user-password-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save password</button></div></form></div></dialog>
+  <dialog class="form-dialog" id="user-password-dialog" aria-labelledby="user-password-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="user-password-title">Change account password</h2>
+          <p id="user-password-copy">Set a new password for this account.</p>
+        </div><button class="dialog-close" id="user-password-close" type="button" aria-label="Close password form"><svg
+            viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
+      </header>
+      <form id="user-password-form" class="form-grid"><input type="hidden" name="user_id">
+        <div class="field field-wide"><label for="user-password-input">New password</label><input
+            id="user-password-input" name="password" type="password" minlength="8" maxlength="128"
+            autocomplete="new-password" required><small class="field-help">Use at least 8 characters with uppercase,
+            lowercase, a number, and a symbol.</small></div>
+        <div class="field field-wide"><label for="user-password-confirm">Confirm new password</label><input
+            id="user-password-confirm" name="password_confirmation" type="password" minlength="8" maxlength="128"
+            autocomplete="new-password" required></div>
+        <div class="form-actions field-wide"><button class="button button-secondary" id="user-password-cancel"
+            type="button">Cancel</button><button class="button button-primary" type="submit">Save password</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
 
-  <dialog class="form-dialog bug-viewer-dialog" id="bug-viewer-dialog" aria-labelledby="bug-viewer-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="bug-viewer-title">Bug report</h2><p id="bug-viewer-meta"></p></div><button class="dialog-close" id="bug-viewer-close" type="button" aria-label="Close bug report details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="bug-viewer-body"><p class="feature-request-details" id="bug-viewer-description"></p><div class="bug-viewer-grid" id="bug-viewer-images"></div></div></div></dialog>
+  <dialog class="form-dialog bug-viewer-dialog" id="bug-viewer-dialog" aria-labelledby="bug-viewer-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="bug-viewer-title">Bug report</h2>
+          <p id="bug-viewer-meta"></p>
+        </div><button class="dialog-close" id="bug-viewer-close" type="button"
+          aria-label="Close bug report details"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
+      </header>
+      <div class="bug-viewer-body">
+        <p class="feature-request-details" id="bug-viewer-description"></p>
+        <div class="bug-viewer-grid" id="bug-viewer-images"></div>
+      </div>
+    </div>
+  </dialog>
 
   <dialog class="form-dialog" id="release-update-dialog" aria-labelledby="release-update-title">
     <div class="form-dialog-sheet">
@@ -210,13 +501,17 @@
           <h2 id="release-update-title">Publish release update</h2>
           <p id="release-update-copy">Announce a new system version and automatically link implemented requests.</p>
         </div>
-        <button class="dialog-close" id="release-update-close" type="button" aria-label="Close release update form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <button class="dialog-close" id="release-update-close" type="button" aria-label="Close release update form"><svg
+            viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
       </header>
       <form id="release-update-form" class="form-grid">
         <div class="field">
           <label for="release-update-version">Release version</label>
           <input id="release-update-version" name="version" maxlength="50" placeholder="e.g. Update 1.0" required>
-          <small class="field-help">Unique version tag. Implemented feature requests will be tagged with this version.</small>
+          <small class="field-help">Unique version tag. Implemented feature requests will be tagged with this
+            version.</small>
         </div>
         <div class="field">
           <label for="release-update-date">Release date</label>
@@ -224,24 +519,40 @@
         </div>
         <div class="field field-wide">
           <label for="release-update-heading">Announcement title</label>
-          <input id="release-update-heading" name="title" maxlength="150" placeholder="e.g. System Update 1.0 Released" required>
+          <input id="release-update-heading" name="title" maxlength="150" placeholder="e.g. System Update 1.0 Released"
+            required>
         </div>
         <div class="field field-wide">
           <div class="field-label-row">
             <label for="release-update-details">Release notes and changes</label>
             <div class="field-actions-cluster">
-              <button class="button-ai-trigger" id="release-update-ai-btn" type="button" title="Draft release announcement with Gemini AI">
-                <svg class="ai-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.5L19.4 10l-5.5 1.5L12 17l-1.9-5.5L4.6 10l5.5-1.5L12 3zM19 16l.9 2.5L22.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5zM6 16l.9 2.5L9.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5z" fill="currentColor"/></svg>
+              <button class="button-ai-trigger" id="release-update-ai-btn" type="button"
+                title="Draft release announcement with Gemini AI">
+                <svg class="ai-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="m12 3 1.9 5.5L19.4 10l-5.5 1.5L12 17l-1.9-5.5L4.6 10l5.5-1.5L12 3zM19 16l.9 2.5L22.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5zM6 16l.9 2.5L9.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5z"
+                    fill="currentColor" />
+                </svg>
                 <span>Write with AI</span>
               </button>
-              <button class="button-link-subtle" id="release-update-key-btn" type="button" title="Configure Gemini API Key" style="display:none;" aria-hidden="true">
-                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><path d="M15 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-7 6 2-2M9 13l-4 4v3h3l1-1v-2h2v-2l-2-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                API key
-              </button>
-              <button class="button-link-subtle" id="release-update-shuffle" type="button" title="Shuffle intro and outro greeting">
-                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px;"><path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Shuffle
-              </button>
+                <button class="button-link-subtle" id="release-update-key-btn" type="button"
+                  title="Configure Gemini API Key" style="display:none;" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"
+                    style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;">
+                    <path d="M15 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-7 6 2-2M9 13l-4 4v3h3l1-1v-2h2v-2l-2-2" fill="none"
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  API key
+                </button>
+                <button class="button-link-subtle" id="release-update-shuffle" type="button"
+                  title="Shuffle intro and outro greeting">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"
+                    style="width:13px;height:13px;vertical-align:-1px;margin-right:4px;">
+                    <path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  Shuffle
+                </button>
             </div>
           </div>
           <textarea id="release-update-details" name="details" rows="8" required></textarea>
@@ -249,7 +560,8 @@
             <span class="ai-pulse-dot"></span>
             <span id="release-update-ai-status-text">Drafting with Gemini AI…</span>
           </div>
-          <small class="field-help" id="release-update-details-help">Pre-filled with implemented feature requests in English. Click Write with AI to generate unique copy.</small>
+          <small class="field-help" id="release-update-details-help">Pre-filled with implemented feature requests in
+            English. Click Write with AI to generate unique copy.</small>
         </div>
         <div class="form-actions field-wide">
           <button class="button button-secondary" id="release-update-cancel" type="button">Cancel</button>
@@ -264,22 +576,30 @@
       <header class="form-dialog-header">
         <div>
           <h2 id="gemini-key-title">Gemini AI configuration</h2>
-          <p id="gemini-key-copy">Connect Google Gemini to automatically generate fresh release notes and intelligent savings insights.</p>
+          <p id="gemini-key-copy">Connect Google Gemini to automatically generate fresh release notes and intelligent
+            savings insights.</p>
         </div>
-        <button class="dialog-close" id="gemini-key-close" type="button" aria-label="Close Gemini configuration dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <button class="dialog-close" id="gemini-key-close" type="button"
+          aria-label="Close Gemini configuration dialog"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button>
       </header>
       <form id="gemini-key-form" class="form-grid">
         <div class="field field-wide">
           <label for="gemini-api-key-input">Gemini API key</label>
-          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AQ.Ab... or AIzaSy..." autocomplete="off">
+          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AQ.Ab... or AIzaSy..."
+            autocomplete="off">
           <small class="field-help">
-            Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="color:#16a34a;font-weight:700;">Google AI Studio</a>.
-            You can save it here in your browser, define it in <code>js/config.js</code> (<code>geminiApiKey</code>), or set it in Supabase Secrets as <code>GEMINI_API_KEY</code>.
+            Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank"
+              rel="noopener noreferrer" style="color:#16a34a;font-weight:700;">Google AI Studio</a>.
+            You can save it here in your browser, define it in <code>js/config.js</code> (<code>geminiApiKey</code>), or
+            set it in Supabase Secrets as <code>GEMINI_API_KEY</code>.
           </small>
         </div>
         <div class="field field-wide">
           <label>AI Model</label>
-          <div style="font-size:0.875rem;color:var(--text-muted,#4b5563);padding:0.5rem 0.75rem;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.25);border-radius:6px;font-weight:600;display:flex;align-items:center;gap:0.5rem;">
+          <div
+            style="font-size:0.875rem;color:var(--text-muted,#4b5563);padding:0.5rem 0.75rem;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.25);border-radius:6px;font-weight:600;display:flex;align-items:center;gap:0.5rem;">
             <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;"></span>
             Automatic (Auto-selected &amp; failover-protected by Google AI)
           </div>
@@ -287,7 +607,8 @@
             <option value="auto" selected>Auto</option>
             <option value="gemini-1.5-flash">gemini-1.5-flash</option>
           </select>
-          <small class="field-help">No configuration needed. The system automatically routes requests to available, active Gemini models.</small>
+          <small class="field-help">No configuration needed. The system automatically routes requests to available,
+            active Gemini models.</small>
         </div>
         <div class="field field-wide" id="gemini-key-status-row">
           <span class="gemini-status-badge" id="gemini-key-status">No API key saved in browser</span>
@@ -301,7 +622,12 @@
     </div>
   </dialog>
 
-  <script src="js/config.js?v=20261113-19"></script><script src="js/core.js?v=20261113-19"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261113-19"></script>
+  <script src="js/config.js?v=20261113-19"></script>
+  <script src="js/core.js?v=20261113-19"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
+    integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
+    crossorigin="anonymous"></script>
+  <script src="js/super-admin.js?v=20261113-19"></script>
 </body>
-</html>
 
+</html>

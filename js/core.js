@@ -20,7 +20,7 @@
     document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#0b3428"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="IPON"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/icon-192.png">');
   }
   if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js').catch(() => { });
   }
 
   if (document.body.dataset.page) {
@@ -96,10 +96,10 @@
     'super-admin': ['SUPER_ADMIN'], account: ['SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER']
   };
   const recordTabIcons = {
-    'contributions.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8m-4-4h8"/></svg>',
-    'withdrawals.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
-    'expenses.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6m-6 4h6"/></svg>',
-    'savings.html':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 1h11l-2 4 2 4H5"/></svg>'
+    'contributions.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8m-4-4h8"/></svg>',
+    'withdrawals.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
+    'expenses.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6m-6 4h6"/></svg>',
+    'savings.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 1h11l-2 4 2 4H5"/></svg>'
   };
 
   function setLoading(visible, label = 'Opening your records…') {
@@ -493,7 +493,7 @@
     try {
       const cached = sessionStorage.getItem(ACTIVE_ROLE_KEY) || localStorage.getItem(ACTIVE_ROLE_KEY);
       if (cached && ['SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER'].includes(cached)) return cached;
-    } catch {}
+    } catch { }
     if (page === 'user') return 'MEMBER';
     if (['members', 'audit', 'settings'].includes(page)) return 'ADMIN';
     return 'ADMIN';
@@ -680,7 +680,7 @@
         bc.close();
       }
       localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify({ ids, at: Date.now() }));
-    } catch (_) {}
+    } catch (_) { }
   }
 
   function initPresence(profile) {
@@ -709,10 +709,10 @@
               data.ids.forEach((id) => onlineUserIds.add(String(id)));
               syncPresenceDots();
             }
-          } catch (_) {}
+          } catch (_) { }
         }
       });
-    } catch (_) {}
+    } catch (_) { }
 
     try {
       presenceChannel = client.channel('ipon-active-presence', {
@@ -737,7 +737,7 @@
           });
           syncPresenceDots();
           broadcastLocalPresence();
-        } catch (_) {}
+        } catch (_) { }
       };
 
       presenceChannel
@@ -770,7 +770,7 @@
                 role: profile.role,
                 online_at: new Date().toISOString()
               });
-            } catch (_) {}
+            } catch (_) { }
           }
         });
 
@@ -778,7 +778,7 @@
         try {
           presenceChannel?.untrack();
           client.removeChannel(presenceChannel);
-        } catch (_) {}
+        } catch (_) { }
       }, { once: true });
     } catch (presenceErr) {
       console.warn('Realtime presence init:', presenceErr);
@@ -1256,7 +1256,7 @@
       const onPointerDown = (e) => {
         if (e.button !== 0) return;
         isDragging = true;
-        try { viewport.setPointerCapture(e.pointerId); } catch {}
+        try { viewport.setPointerCapture(e.pointerId); } catch { }
         startPointerX = e.clientX;
         startPointerY = e.clientY;
         startOffsetX = offsetX;
@@ -1274,7 +1274,7 @@
       const onPointerUp = (e) => {
         if (!isDragging) return;
         isDragging = false;
-        try { viewport.releasePointerCapture(e.pointerId); } catch {}
+        try { viewport.releasePointerCapture(e.pointerId); } catch { }
       };
 
       const onWheel = (e) => {
@@ -1571,7 +1571,7 @@
       finally { setBusy(enrollButton, false); }
     });
     const cancelEnrollment = async () => {
-      if (factorId) await getClient().auth.mfa.unenroll({ factorId }).catch(() => {});
+      if (factorId) await getClient().auth.mfa.unenroll({ factorId }).catch(() => { });
       resetEnrollment();
     };
     root.querySelector('[data-mfa-cancel]').addEventListener('click', cancelEnrollment);
@@ -1644,7 +1644,7 @@
       });
       applyLabels();
       const body = table.tBodies[0];
-      if (body) new MutationObserver(applyLabels).observe(body, { childList:true });
+      if (body) new MutationObserver(applyLabels).observe(body, { childList: true });
     });
   }
 
@@ -1746,7 +1746,7 @@
       try {
         sessionStorage.setItem(ACTIVE_ROLE_KEY, profile.role);
         localStorage.setItem(ACTIVE_ROLE_KEY, profile.role);
-      } catch {}
+      } catch { }
       if (profile.status !== 'ACTIVE' && options.allowPending !== true) {
         await client.auth.signOut();
         window.location.replace('login.html?status=pending');
@@ -1775,7 +1775,7 @@
         element.hidden = !roles.includes(profile.role);
       });
       if (options.requireAuth !== false) watchCrossTabAuth(client, profile.id);
-      initNotifications(profile).catch(() => {});
+      initNotifications(profile).catch(() => { });
       initPresence(profile);
       appInitialized = true;
       return { configured: true, profile, session };
@@ -1797,10 +1797,10 @@
       const channel = 'BroadcastChannel' in window ? new BroadcastChannel(AUTH_CHANNEL_NAME) : null;
       channel?.postMessage(payload);
       channel?.close();
-    } catch {}
+    } catch { }
     try {
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(payload));
-    } catch {}
+    } catch { }
   }
 
   function clearStoredAuthTokens() {
@@ -1810,7 +1810,7 @@
       Object.keys(localStorage).forEach((key) => {
         if (key.startsWith('sb-') && key.endsWith('-auth-token')) localStorage.removeItem(key);
       });
-    } catch {}
+    } catch { }
   }
 
   function watchCrossTabAuth(client, expectedUserId, { loginPage = false } = {}) {
@@ -1846,7 +1846,7 @@
         }
         if (!session) return redirectTo('login.html');
         if (expectedUserId && session.user.id !== expectedUserId) window.location.reload();
-      } catch {}
+      } catch { }
     };
     client.auth.onAuthStateChange((event, nextSession) => {
       if (loginPage || event === 'INITIAL_SESSION') return;
@@ -1861,10 +1861,10 @@
         channel.addEventListener('message', (event) => handlePayload(event.data));
         window.addEventListener('pagehide', () => channel.close(), { once: true });
       }
-    } catch {}
+    } catch { }
     window.addEventListener('storage', (event) => {
       if (event.key === AUTH_STORAGE_KEY && event.newValue) {
-        try { handlePayload(JSON.parse(event.newValue)); } catch {}
+        try { handlePayload(JSON.parse(event.newValue)); } catch { }
         return;
       }
       if (event.key && event.key.startsWith('sb-') && event.key.endsWith('-auth-token')) {
@@ -1901,12 +1901,12 @@
         if (element.matches?.(':popover-open')) element.hidePopover?.();
         element.showPopover();
       }
-    } catch {}
+    } catch { }
     element.classList.add('is-visible');
     window.clearTimeout(toast.timer);
     toast.timer = window.setTimeout(() => {
       element.classList.remove('is-visible');
-      try { if (element.matches?.(':popover-open')) element.hidePopover?.(); } catch {}
+      try { if (element.matches?.(':popover-open')) element.hidePopover?.(); } catch { }
     }, 4000);
   }
 
@@ -2402,8 +2402,8 @@
         <div class="announcement-react-container">
           <button class="announcement-react-btn${myReaction ? ' is-active' : ''}" type="button" data-react-trigger="${escapeHtml(announcementId)}" aria-label="${escapeHtml(triggerLabel)}" aria-haspopup="dialog" aria-expanded="${isPickerOpen ? 'true' : 'false'}" title="${escapeHtml(triggerLabel)}">
             ${myReaction
-              ? `<span class="my-reaction-emoji" aria-hidden="true">${myReaction}</span><span class="react-btn-label">${escapeHtml(REACTION_LABELS[myReaction] || myReaction)}</span>`
-              : `<svg class="react-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm-3.5-9a1.5 1.5 0 1 0-1.5-1.5A1.5 1.5 0 0 0 8.5 11zm7 0a1.5 1.5 0 1 0-1.5-1.5A1.5 1.5 0 0 0 15.5 11zm-7 3.5a4.5 4.5 0 0 0 7 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="react-btn-label">React</span>`}
+          ? `<span class="my-reaction-emoji" aria-hidden="true">${myReaction}</span><span class="react-btn-label">${escapeHtml(REACTION_LABELS[myReaction] || myReaction)}</span>`
+          : `<svg class="react-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm-3.5-9a1.5 1.5 0 1 0-1.5-1.5A1.5 1.5 0 0 0 8.5 11zm7 0a1.5 1.5 0 1 0-1.5-1.5A1.5 1.5 0 0 0 15.5 11zm-7 3.5a4.5 4.5 0 0 0 7 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="react-btn-label">React</span>`}
           </button>
           ${isPickerOpen ? `
             <div class="announcement-reaction-picker" role="menu" aria-label="Choose reaction">
@@ -2565,8 +2565,8 @@
       mediaPreviews.innerHTML = queuedMedia.map((entry, index) => `
         <figure class="bug-image-card announcement-preview-card">
           ${entry.kind === 'video'
-            ? `<video src="${escapeHtml(entry.previewUrl)}" muted playsinline preload="metadata"></video>`
-            : `<img src="${escapeHtml(entry.previewUrl)}" alt="${escapeHtml(entry.file.name)}">`}
+          ? `<video src="${escapeHtml(entry.previewUrl)}" muted playsinline preload="metadata"></video>`
+          : `<img src="${escapeHtml(entry.previewUrl)}" alt="${escapeHtml(entry.file.name)}">`}
           <button class="bug-image-remove" type="button" data-remove-announcement-media="${index}" aria-label="Remove ${escapeHtml(entry.file.name)}">&times;</button>
         </figure>`).join('');
     };
@@ -2666,12 +2666,12 @@
               </div>
               <div class="release-features-grid">
                 ${relFeats.map((feat) => {
-                  const hasCredit = feat.allow_credit && feat.requester_name;
-                  const avatarHtml = renderAvatarCell({
-                    full_name: feat.requester_name,
-                    avatar_url: feat.requester_avatar_url
-                  });
-                  return `
+            const hasCredit = feat.allow_credit && feat.requester_name;
+            const avatarHtml = renderAvatarCell({
+              full_name: feat.requester_name,
+              avatar_url: feat.requester_avatar_url
+            });
+            return `
                     <div class="release-feature-card">
                       <div class="release-feature-head">
                         <strong class="release-feature-title">${escapeHtml(feat.title)}</strong>
@@ -2700,12 +2700,12 @@
                       </div>
                       <p class="release-feature-details">${escapeHtml(feat.details)}</p>
                     </div>`;
-                }).join('')}
+          }).join('')}
               </div>
             </section>`;
           bindAvatarFallbacks(viewerReleaseFeatures);
           syncPresenceDots(viewerReleaseFeatures);
-        } catch (_) {}
+        } catch (_) { }
       };
       loadReleaseFeatures();
       const attachments = Array.isArray(item.attachments) ? item.attachments : [];
@@ -2994,7 +2994,7 @@
         await load();
         toast('Announcement published.');
       } catch (error) {
-        if (uploadedPaths.length) invokeAccountFunction({ action: 'announcement-cleanup-media', paths: uploadedPaths }).catch(() => {});
+        if (uploadedPaths.length) invokeAccountFunction({ action: 'announcement-cleanup-media', paths: uploadedPaths }).catch(() => { });
         toast(friendlyError(error), 'error');
       } finally {
         setBusy(button, false);
@@ -3151,12 +3151,15 @@
   }
 
   const STABLE_GEMINI_MODELS = [
-    'gemini-2.5-flash',
-    'gemini-1.5-flash',
-    'gemini-flash-latest',
-    'gemini-3.5-flash',
+    'gemini-flash-lite-latest',
     'gemini-3.1-flash-lite',
-    'gemini-3.8-flash'
+    'gemini-2.5-flash-lite',
+    'gemini-3.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-3.6-flash',
+    'gemini-flash-latest',
+    'gemini-1.5-flash',
+    'gemini-2.5-flash'
   ];
 
   let cachedWorkingGeminiModel = null;
@@ -3164,7 +3167,7 @@
   function getGeminiApiKey() {
     let key = (localStorage.getItem('ipon_gemini_api_key') || '').trim() || (window.IPON_CONFIG?.geminiApiKey || '').trim();
     if (key.startsWith('base64:')) {
-      try { key = atob(key.slice(7)).trim(); } catch (_) {}
+      try { key = atob(key.slice(7)).trim(); } catch (_) { }
     }
     return key;
   }
