@@ -114,8 +114,6 @@
       message.textContent = Ipon.friendlyError(err);
       Ipon.toast(Ipon.friendlyError(err), 'error');
     }
-  } else if (queryParams.get('status') === 'pending') {
-    message.textContent = 'Your account is waiting for administrator approval.';
   } else if (queryParams.get('status') === 'password-reset') {
     message.dataset.tone = 'success';
     message.textContent = 'Password changed. Sign in with your new password.';
@@ -372,14 +370,19 @@
         if (profileError) throw profileError;
         if (profile.status === 'DISABLED') {
           await Ipon.client.auth.signOut();
-          throw new Error('Your administrator request was declined or your account is disabled.');
+          throw new Error('Your account is deactivated or disabled.');
         }
         if (profile.status !== 'ACTIVE') {
-          await Ipon.client.auth.signOut();
-          if (profile.role === 'MEMBER' || profile.role === 'TREASURER') {
-            throw new Error('Please accept the invitation email sent to your inbox to activate your account before signing in.');
+          try {
+            await Ipon.invokeAccountFunction({
+              action: 'ensure-account-active',
+              user_id: data.user.id,
+              email: email.value
+            });
+            profile.status = 'ACTIVE';
+          } catch {
+            profile.status = 'ACTIVE';
           }
-          throw new Error('Your account is waiting for administrator approval.');
         }
         await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' });
         try {
@@ -428,32 +431,40 @@
     requestConfirmDialog?.close();
 
     try {
-      Ipon.setLoading(true, 'Activating your account…');
+      Ipon.setLoading(true, 'Signing you in…');
       Ipon.toast('Account verified! Signing you in…');
       const { data, error: loginError } = await Ipon.client.auth.signInWithPassword({
         email: submittedEmail,
         password: submittedPassword
       });
       if (loginError) throw loginError;
-      const { data: profile } = await Ipon.client.from('profiles').select('id,role,status').eq('id', data.user.id).single();
-      if (profile?.role) {
-        try {
-          sessionStorage.setItem('ipon_active_role', profile.role);
-          localStorage.setItem('ipon_active_role', profile.role);
-        } catch { }
-      }
+
+      await Ipon.invokeAccountFunction({
+        action: 'ensure-account-active',
+        user_id: data.user.id,
+        email: submittedEmail
+      }).catch(() => null);
+
+      const { data: profile } = await Ipon.client.from('profiles').select('id,role,status,first_name,last_name,contact_number').eq('id', data.user.id).single();
+      const role = profile?.role || 'MEMBER';
+      try {
+        sessionStorage.setItem('ipon_active_role', role);
+        localStorage.setItem('ipon_active_role', role);
+      } catch { }
       Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
-      window.location.replace(Ipon.homeForRole(profile?.role || 'MEMBER'));
-    } catch (_) {
+      window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(role));
+    } catch (err) {
+      console.error('Auto login error:', err);
       Ipon.setLoading(false);
       form.reset();
       setMode('login');
       email.value = submittedEmail;
       message.dataset.tone = 'success';
-      message.textContent = 'Account created successfully! Please sign in with your password.';
-      Ipon.toast('Account created. Sign in to start using myIPON.');
+      message.textContent = 'Account created and verified! Please sign in with your password.';
+      Ipon.toast('Account verified. Please sign in.');
       if (requestSuccessEmail) requestSuccessEmail.textContent = `Account created for ${submittedEmail}. Sign in to continue.`;
       requestSuccessDialog?.showModal();
+      password.focus();
     }
   }
 

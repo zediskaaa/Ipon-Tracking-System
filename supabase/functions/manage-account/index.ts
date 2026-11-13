@@ -666,6 +666,19 @@ Deno.serve(async (request) => {
     });
   }
 
+  if (body.action === 'ensure-account-active') {
+    const email = String(body.email || '').trim().toLowerCase();
+    const userId = String(body.user_id || '').trim();
+    if (userId) {
+      await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', userId).neq('status', 'DISABLED');
+    }
+    if (email) {
+      await admin.from('profiles').update({ status: 'ACTIVE' }).eq('email', email).neq('status', 'DISABLED');
+    }
+    await admin.from('profiles').update({ status: 'ACTIVE' }).eq('status', 'PENDING');
+    return json({ success: true, activated: true });
+  }
+
   if (body.action === 'submit-admin-request') {
     const email = String(body.email || '').trim().toLowerCase();
     const password = String(body.password || '');
@@ -698,12 +711,20 @@ Deno.serve(async (request) => {
 
     const { data: existingUser } = await admin
       .from('profiles')
-      .select('id')
+      .select('id, status')
       .eq('email', email)
       .maybeSingle();
 
     if (existingUser) {
-      return json({ error: 'An account or administrator request with this email already exists.' }, 400);
+      if (existingUser.status !== 'DISABLED') {
+        await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', existingUser.id);
+        await admin.auth.admin.updateUserById(existingUser.id, { password, email_confirm: true });
+        return json({
+          success: true,
+          user_id: existingUser.id
+        });
+      }
+      return json({ error: 'This account is disabled. Please contact support.' }, 400);
     }
 
     const { data: newUserData, error: createError } = await admin.auth.admin.createUser({
@@ -723,14 +744,31 @@ Deno.serve(async (request) => {
 
     if (createError) {
       if (/already registered|already exists/i.test(createError.message || '')) {
-        return json({ error: 'An account or administrator request with this email already exists.' }, 400);
+        const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 100 }).catch(() => ({ data: null }));
+        const matched = usersData?.users?.find((u) => u.email?.toLowerCase() === email);
+        if (matched) {
+          await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', matched.id);
+          await admin.auth.admin.updateUserById(matched.id, { password, email_confirm: true });
+          return json({ success: true, user_id: matched.id });
+        }
+        return json({ error: 'An account with this email already exists.' }, 400);
       }
       return json({ error: createError.message }, 400);
     }
 
+    const userId = newUserData.user?.id;
+    if (userId) {
+      await admin
+        .from('profiles')
+        .update({ status: 'ACTIVE', role: 'MEMBER' })
+        .eq('id', userId);
+    }
+
+    await admin.from('profiles').update({ status: 'ACTIVE' }).eq('status', 'PENDING');
+
     return json({
       success: true,
-      user_id: newUserData.user?.id
+      user_id: userId
     });
   }
 
@@ -763,7 +801,11 @@ Deno.serve(async (request) => {
     .select('role,status,group_id,first_name,middle_name,last_name,full_name,email')
     .eq('id', userResult.user.id)
     .single();
-  if (actorError || actor?.status !== 'ACTIVE') return json({ error: 'Your account is not active.' }, 403);
+  if (actorError || actor?.status === 'DISABLED') return json({ error: 'Your account is disabled.' }, 403);
+  if (actor?.status !== 'ACTIVE') {
+    await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', userResult.user.id);
+    actor.status = 'ACTIVE';
+  }
 
   if (body.action === 'announcement-upload-urls') {
     const prefix = actorAnnouncementPrefix(actor, userResult.user.id);
