@@ -318,31 +318,23 @@
 
   async function completeAdminRequestSubmission(payload) {
     if (!payload) return;
-    const { data: signUpData, error } = await Ipon.client.auth.signUp({
+    const res = await Ipon.submitAdminRequest({
       email: payload.email,
       password: payload.password,
-      options: {
-        data: {
-          first_name: payload.first,
-          middle_name: payload.middle,
-          last_name: payload.last,
-          full_name: payload.full,
-          contact_number: payload.contact,
-          request_reason: payload.reason,
-          account_kind: 'ADMIN_REQUEST'
-        }
-      }
+      first: payload.first,
+      middle: payload.middle,
+      last: payload.last,
+      full: payload.full,
+      contact: payload.contact,
+      reason: payload.reason
     });
 
-    if (error) throw error;
-    if (signUpData?.user && Array.isArray(signUpData.user.identities) && signUpData.user.identities.length === 0) {
-      throw new Error('An account or administrator request with this email already exists.');
-    }
+    if (res?.error) throw new Error(res.error);
 
-    await Ipon.client.auth.signOut();
     const submittedEmail = payload.email;
     pendingSignupPayload = null;
     verifyDialog?.close();
+    requestConfirmDialog?.close();
     form.reset();
     setMode('login');
     email.value = submittedEmail;

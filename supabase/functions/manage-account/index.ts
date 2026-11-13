@@ -412,6 +412,74 @@ Deno.serve(async (request) => {
     });
   }
 
+  if (body.action === 'submit-admin-request') {
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = String(body.password || '');
+    const first = String(body.first || '').trim();
+    const middle = body.middle ? String(body.middle).trim() : null;
+    const last = String(body.last || '').trim();
+    const full = String(body.full || '').trim() || [first, middle, last].filter(Boolean).join(' ');
+    const contact = String(body.contact || '').trim();
+    const reason = String(body.reason || '').trim();
+
+    if (!email || !email.includes('@')) return json({ error: 'A valid email address is required.' }, 400);
+    if (!password || password.length < 8) return json({ error: 'A strong password of at least 8 characters is required.' }, 400);
+    if (!first || !last) return json({ error: 'First name and last name are required.' }, 400);
+    if (!contact) return json({ error: 'A contact number is required.' }, 400);
+    if (!reason || reason.length < 10) return json({ error: 'A reason of at least 10 characters is required.' }, 400);
+
+    const { data: verRecord } = await admin
+      .from('email_verifications')
+      .select('id, verified_at')
+      .eq('email', email)
+      .eq('purpose', 'ADMIN_REQUEST')
+      .not('verified_at', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!verRecord) {
+      return json({ error: 'Email ownership has not been verified. Please verify your email first.' }, 400);
+    }
+
+    const { data: existingUser } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingUser) {
+      return json({ error: 'An account or administrator request with this email already exists.' }, 400);
+    }
+
+    const { data: newUserData, error: createError } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        first_name: first,
+        middle_name: middle,
+        last_name: last,
+        full_name: full,
+        contact_number: contact,
+        request_reason: reason,
+        account_kind: 'ADMIN_REQUEST'
+      }
+    });
+
+    if (createError) {
+      if (/already registered|already exists/i.test(createError.message || '')) {
+        return json({ error: 'An account or administrator request with this email already exists.' }, 400);
+      }
+      return json({ error: createError.message }, 400);
+    }
+
+    return json({
+      success: true,
+      user_id: newUserData.user?.id
+    });
+  }
+
   const authorization = request.headers.get('Authorization');
   if (!authorization) return json({ error: 'Your session is invalid.' }, 401);
 
