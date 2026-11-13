@@ -581,7 +581,7 @@
         <div class="donate-sheet donate-qr-sheet"><button class="dialog-close" data-donate-qr-close type="button" aria-label="Close QR code">&times;</button><img class="donate-qr-image" src="assets/donate-qr.jpg" alt="GCash QR code"><p class="donate-qr-caption" id="donate-qr-title">Scan with GCash</p></div>
       </dialog>
       <dialog class="form-dialog feature-request-dialog" id="feature-request-dialog" aria-labelledby="feature-request-title">
-        <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="feature-request-title">Request a feature</h2><p>Describe an improvement that would make IPON more useful to you.</p></div><button class="dialog-close" data-feature-request-close type="button" aria-label="Close feature request form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="feature-request-form" class="form-grid"><div class="field field-wide"><label for="feature-request-name">Feature name</label><input id="feature-request-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="feature-request-details">How should it work?</label><textarea id="feature-request-details" name="details" minlength="10" maxlength="2000" aria-describedby="feature-request-help" required></textarea><small class="field-help" id="feature-request-help">Explain the problem and the result you want. Do not include passwords or financial account details.</small></div><p class="mfa-message field-wide" id="feature-request-message" role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" data-feature-request-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit request</button></div></form><div class="feature-request-success" id="feature-request-success" role="status" aria-live="polite" hidden><span class="feature-request-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><h3>Feature request submitted</h3><p>Your suggestion <strong id="feature-request-submitted-title"></strong> has been sent to the Super Admin for review.</p><div class="form-actions"><button class="button button-secondary" id="feature-request-another" type="button">Submit another</button><button class="button button-primary" data-feature-request-close type="button">Done</button></div></div></div>
+        <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="feature-request-title">Request a feature</h2><p>Describe an improvement that would make IPON more useful to you.</p></div><button class="dialog-close" data-feature-request-close type="button" aria-label="Close feature request form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="feature-request-form" class="form-grid"><div class="field field-wide"><label for="feature-request-name">Feature name</label><input id="feature-request-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="feature-request-details">How should it work?</label><textarea id="feature-request-details" name="details" minlength="10" maxlength="2000" aria-describedby="feature-request-help" required></textarea><small class="field-help" id="feature-request-help">Explain the problem and the result you want. Do not include passwords or financial account details.</small></div><div class="field field-wide"><label class="credit-toggle-row"><span class="credit-toggle-copy"><strong>Credit me in release updates</strong><small>Allow my name and avatar to appear when this feature is implemented and released.</small></span><input id="feature-request-credit" name="allow_credit" type="checkbox" checked aria-label="Credit me in release updates"></label></div><p class="mfa-message field-wide" id="feature-request-message" role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" data-feature-request-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit request</button></div></form><div class="feature-request-success" id="feature-request-success" role="status" aria-live="polite" hidden><span class="feature-request-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><h3>Feature request submitted</h3><p>Your suggestion <strong id="feature-request-submitted-title"></strong> has been sent to the Super Admin for review.</p><div class="form-actions"><button class="button button-secondary" id="feature-request-another" type="button">Submit another</button><button class="button button-primary" data-feature-request-close type="button">Done</button></div></div></div>
       </dialog>
       <dialog class="form-dialog feature-request-dialog bug-report-dialog" id="bug-report-dialog" aria-labelledby="bug-report-title">
         <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="bug-report-title">Report a problem</h2><p>Describe the error or bug you encountered and optionally attach screenshots.</p></div><button class="dialog-close" data-bug-report-close type="button" aria-label="Close bug report form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="bug-report-form" class="form-grid"><div class="field field-wide"><label for="bug-report-name">Title</label><input id="bug-report-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="bug-report-details">Description</label><textarea id="bug-report-details" name="description" minlength="10" maxlength="2000" aria-describedby="bug-report-help" required></textarea><small class="field-help" id="bug-report-help">Explain what happened and how to reproduce it. Do not include passwords or financial account details.</small></div><div class="field field-wide"><label for="bug-report-images">Pictures (optional, up to 5)</label><div class="bug-upload-box"><input id="bug-report-images" type="file" accept="image/*" multiple aria-describedby="bug-report-image-count"><small class="field-help" id="bug-report-image-count">0 of 5 images selected. Any picture format is accepted.</small></div><div class="bug-image-grid" id="bug-report-previews" hidden></div></div><p class="mfa-message field-wide" id="bug-report-message" role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" data-bug-report-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit report</button></div></form><div class="feature-request-success" id="bug-report-success" role="status" aria-live="polite" hidden><span class="feature-request-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><h3>Bug report submitted</h3><p>Your report <strong id="bug-report-submitted-title"></strong> has been sent to the Super Admin for review.</p><div class="form-actions"><button class="button button-secondary" id="bug-report-another" type="button">Submit another</button><button class="button button-primary" data-bug-report-close type="button">Done</button></div></div></div>
@@ -944,6 +944,7 @@
     };
     const resetFeatureDialog = () => {
       featureForm?.reset();
+      if (featureForm?.elements.allow_credit) featureForm.elements.allow_credit.checked = true;
       setFeedbackMessage(featureMessage);
       if (featureForm) featureForm.hidden = false;
       if (featureSuccess) featureSuccess.hidden = true;
@@ -1047,7 +1048,8 @@
       if (!accepted) return;
       setBusy(button, true, 'Submitting…');
       try {
-        const { error } = await getClient().from('feature_requests').insert({ requester_id: currentProfile.id, title: values.get('title').trim(), details });
+        const allowCredit = Boolean(featureForm.elements.allow_credit?.checked);
+        const { error } = await getClient().from('feature_requests').insert({ requester_id: currentProfile.id, title: values.get('title').trim(), details, allow_credit: allowCredit });
         if (error) throw error;
         if (featureSubmittedTitle) featureSubmittedTitle.textContent = `"${title}"`;
         featureForm.hidden = true;
@@ -2264,6 +2266,7 @@
           </header>
           <div class="announcement-viewer-body">
             <p class="announcement-viewer-description" id="announcement-viewer-description"></p>
+            <div class="announcement-viewer-release-features" id="announcement-viewer-release-features"></div>
             <div class="announcement-viewer-media" id="announcement-viewer-media"></div>
             <div class="announcement-viewer-reactions-wrap" id="announcement-viewer-reactions"></div>
           </div>
@@ -2601,6 +2604,12 @@
                 ${media.length ? `<span class="announcement-media-chip">${media.length} ${media.length === 1 ? 'file' : 'files'}</span>` : ''}
               </div>
               <p class="announcement-item-snippet">${escapeHtml(item.description)}</p>
+              <div class="announcement-card-action">
+                <button class="announcement-view-trigger" type="button" aria-label="View full announcement details">
+                  <span>View details</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" class="announcement-view-arrow"><path d="M5 12h14M12 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
               <div class="announcement-item-meta">${announcementAuthorMeta(item)}</div>
             </div>
             <div class="announcement-card-footer">
@@ -2637,6 +2646,70 @@
       viewerDescription.textContent = item.description;
       viewerDelete.hidden = !canDelete(item);
       if (viewerReactions) viewerReactions.innerHTML = renderReactionsBarHtml(item.id);
+      const viewerReleaseFeatures = document.getElementById('announcement-viewer-release-features');
+      if (viewerReleaseFeatures) viewerReleaseFeatures.replaceChildren();
+      const loadReleaseFeatures = async () => {
+        if (!viewerReleaseFeatures || !isRelease || !item.release_version) return;
+        try {
+          const { data: relFeats } = await getClient().rpc('get_release_features', {
+            p_release_version: item.release_version
+          });
+          if (openItemId !== item.id || !viewerDialog.open || !Array.isArray(relFeats) || !relFeats.length) return;
+          viewerReleaseFeatures.innerHTML = `
+            <section class="announcement-release-section" aria-label="Features requested by users">
+              <div class="announcement-section-heading">
+                <span class="announcement-section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>
+                </span>
+                <div>
+                  <h3 class="announcement-section-title">Features requested by users</h3>
+                  <p class="announcement-section-subtitle">Community suggestions implemented in this release</p>
+                </div>
+              </div>
+              <div class="release-features-grid">
+                ${relFeats.map((feat) => {
+                  const hasCredit = feat.allow_credit && feat.requester_name;
+                  const avatarHtml = renderAvatarCell({
+                    full_name: feat.requester_name,
+                    avatar_url: feat.requester_avatar_url
+                  });
+                  return `
+                    <div class="release-feature-card">
+                      <div class="release-feature-head">
+                        <strong class="release-feature-title">${escapeHtml(feat.title)}</strong>
+                        ${hasCredit ? `
+                          <div class="release-credit-pill" tabindex="0" role="button" aria-label="Feature requested by ${escapeHtml(feat.requester_name)}">
+                            <span class="release-credit-label">Requested by</span>
+                            <span class="presence-avatar-wrap">
+                              <span class="avatar-cell release-credit-thumb" data-user-id="${escapeHtml(feat.requester_id || '')}">${avatarHtml}</span>
+                            </span>
+                            <div class="release-credit-tooltip" role="tooltip">
+                              <div class="release-credit-tooltip-content">
+                                <span class="presence-avatar-wrap">
+                                  <span class="avatar-cell release-credit-tooltip-avatar" data-user-id="${escapeHtml(feat.requester_id || '')}">${avatarHtml}</span>
+                                </span>
+                                <div class="release-credit-tooltip-text">
+                                  <small>Feature requested by:</small>
+                                  <strong>${escapeHtml(feat.requester_name)}</strong>
+                                </div>
+                              </div>
+                            </div>
+                          </div>` : `
+                          <span class="release-credit-anonymous" title="The requester chose not to be credited">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" class="credit-anon-icon"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8Z"/><path d="M12 6a3.5 3.5 0 0 0-3.5 3.5h2A1.5 1.5 0 1 1 12 11c-.8 0-1.5.7-1.5 1.5V14h2v-1.1c1.2-.5 2-1.6 2-2.9A3.5 3.5 0 0 0 12 6Zm-1 10h2v2h-2Z"/></svg>
+                            Community suggestion
+                          </span>`}
+                      </div>
+                      <p class="release-feature-details">${escapeHtml(feat.details)}</p>
+                    </div>`;
+                }).join('')}
+              </div>
+            </section>`;
+          bindAvatarFallbacks(viewerReleaseFeatures);
+          syncPresenceDots(viewerReleaseFeatures);
+        } catch (_) {}
+      };
+      loadReleaseFeatures();
       const attachments = Array.isArray(item.attachments) ? item.attachments : [];
       if (!attachments.length) {
         viewerMedia.hidden = true;
@@ -2727,7 +2800,7 @@
 
       listElement.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
-          const content = event.target.closest('.announcement-item-content');
+          const content = event.target.closest('.announcement-item-content, .announcement-view-trigger');
           if (content) {
             const card = content.closest('[data-announcement-id]');
             const target = items.find((entry) => entry.id === card?.dataset.announcementId);

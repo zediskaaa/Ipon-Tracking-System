@@ -255,6 +255,9 @@
         const profile = profileById.get(request.requester_id);
         const requesterName = profile?.full_name || 'Former user';
         const status = request.status || 'PENDING';
+        const creditBadge = request.allow_credit !== false
+          ? '<span class="credit-consent-badge is-allowed" title="User consented to credit in release updates">Credit OK</span>'
+          : '<span class="credit-consent-badge is-denied" title="User opted out of credit attribution">No credit</span>';
         const statusPill = status === 'IMPLEMENTED'
           ? `<span class="status-pill status-implemented">Implemented</span>${request.release_version ? `<br><small class="version-tag">${Ipon.escapeHtml(request.release_version)}</small>` : ''}`
           : status === 'REJECTED'
@@ -280,6 +283,7 @@
                 <strong class="feature-card-user-name">${Ipon.escapeHtml(requesterName)}</strong>
                 <div class="feature-card-user-sub">
                   <span class="role-badge role-${(profile?.role || 'member').toLowerCase()}">${Ipon.escapeHtml(ROLE_LABELS[profile?.role] || profile?.role || 'Member')}</span>
+                  ${creditBadge}
                   ${profile?.email ? `<span class="feature-card-email">${Ipon.escapeHtml(profile.email)}</span>` : ''}
                 </div>
               </div>
@@ -312,6 +316,9 @@
       const profile = profileById.get(request.requester_id);
       const requesterName = profile?.full_name || 'Former user';
       const status = request.status || 'PENDING';
+      const creditBadge = request.allow_credit !== false
+        ? '<span class="credit-consent-badge is-allowed" title="User consented to credit in release updates">Credit OK</span>'
+        : '<span class="credit-consent-badge is-denied" title="User opted out of credit attribution">No credit</span>';
       const statusPill = status === 'IMPLEMENTED'
         ? `<span class="status-pill status-implemented">Implemented</span>${request.release_version ? `<br><small class="version-tag">${Ipon.escapeHtml(request.release_version)}</small>` : ''}`
         : status === 'REJECTED'
@@ -335,7 +342,7 @@
             ${Ipon.avatarMarkup(profile?.avatar_url, requesterName, 'table-user-avatar', request.requester_id)}
             <div>
               <strong>${Ipon.escapeHtml(requesterName)}</strong>
-              ${profile?.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}
+              <div class="table-user-sub">${creditBadge}${profile?.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}</div>
             </div>
           </div>
         </td>
@@ -918,8 +925,7 @@
     if (targetImplemented.length > 0) {
       releaseBody += `\nCommunity Feature Requests Implemented in this Release:\n`;
       targetImplemented.forEach((req) => {
-        const author = profileById.get(req.requester_id)?.full_name || 'Community Member';
-        releaseBody += `• ${req.title}: ${req.details} (Requested by ${author})\n`;
+        releaseBody += `• ${req.title}: ${req.details}\n`;
       });
     }
 

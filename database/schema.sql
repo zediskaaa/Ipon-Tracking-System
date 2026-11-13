@@ -1844,6 +1844,7 @@ create table if not exists public.feature_requests (
   title text not null check (char_length(btrim(title)) between 3 and 120),
   details text not null check (char_length(btrim(details)) between 10 and 2000),
   status text not null default 'PENDING' check (status in ('PENDING', 'IMPLEMENTED', 'REJECTED')),
+  allow_credit boolean not null default true,
   reviewed_at timestamptz,
   reviewed_by uuid references public.profiles(id) on delete set null,
   release_version text,
@@ -2335,7 +2336,11 @@ create policy admin_requests_select on public.admin_requests for select to authe
 using (requester_id = auth.uid() or public.is_super_admin());
 drop policy if exists feature_requests_select on public.feature_requests;
 create policy feature_requests_select on public.feature_requests for select to authenticated
-using (requester_id = auth.uid() or public.is_super_admin());
+using (
+  requester_id = auth.uid()
+  or public.is_super_admin()
+  or (status = 'IMPLEMENTED' and release_version is not null)
+);
 drop policy if exists feature_requests_insert on public.feature_requests;
 create policy feature_requests_insert on public.feature_requests for insert to authenticated
 with check (requester_id = auth.uid() and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER'));
@@ -3277,6 +3282,41 @@ begin
   return v_row;
 end;
 $$;
+
+create or replace function public.get_release_features(p_release_version text)
+returns table (
+  id uuid,
+  title text,
+  details text,
+  requester_id uuid,
+  requester_name text,
+  requester_avatar_url text,
+  allow_credit boolean,
+  created_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    f.id,
+    f.title,
+    f.details,
+    case when f.allow_credit then f.requester_id else null end as requester_id,
+    case when f.allow_credit then coalesce(p.full_name, 'Contributor') else 'Community Member' end as requester_name,
+    case when f.allow_credit then p.avatar_url else null end as requester_avatar_url,
+    f.allow_credit,
+    f.created_at
+  from public.feature_requests f
+  left join public.profiles p on p.id = f.requester_id
+  where f.status = 'IMPLEMENTED'
+    and f.release_version = nullif(btrim(p_release_version), '')
+  order by f.created_at asc;
+$$;
+
+revoke all on function public.get_release_features(text) from public, anon;
+grant execute on function public.get_release_features(text) to authenticated;
 
 create or replace function public.delete_announcement(p_announcement_id uuid)
 returns jsonb

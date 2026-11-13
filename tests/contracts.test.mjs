@@ -1156,3 +1156,37 @@ test('admin contributor toggle prompts for monthly contribution amount with conf
   assert.match(css, /\.group-hub-pledge-value/);
   assert.match(css, /\.settings-contributor-details/);
 });
+
+test('feature requests support credit consent toggle and release updates display interactive hover tooltips in dedicated section', () => {
+  const core = read('js/core.js');
+  const superAdminJs = read('js/super-admin.js');
+  const migration = read('database/migrations/20261113_038_feature_request_credit_and_release_sections.sql');
+  const schema = read('database/schema.sql');
+  const css = read('css/app.css');
+
+  assert.match(core, /id="feature-request-credit"[^>]*name="allow_credit"/);
+  assert.match(core, /Credit me in release updates/);
+  assert.match(core, /allow_credit:\s*allowCredit/);
+  assert.match(core, /id="announcement-viewer-release-features"/);
+  assert.match(core, /rpc\('get_release_features'/);
+  assert.match(core, /class="announcement-view-trigger"/);
+  assert.match(core, /class="announcement-release-section"/);
+  assert.match(core, /class="release-credit-tooltip"/);
+  assert.match(core, /Feature requested by:/);
+
+  assert.match(superAdminJs, /credit-consent-badge/);
+
+  assert.match(migration, /add column if not exists allow_credit boolean not null default true/i);
+  assert.match(migration, /create or replace function public\.get_release_features/i);
+  assert.match(migration, /case when f\.allow_credit then f\.requester_id else null end/i);
+
+  assert.match(schema, /allow_credit boolean not null default true/i);
+  assert.match(schema, /public\.get_release_features/i);
+
+  assert.match(css, /\.announcement-list\{display:grid;grid-template-columns:/);
+  assert.match(css, /\.announcement-view-trigger\{/);
+  assert.match(css, /\.credit-toggle-row\{/);
+  assert.match(css, /\.release-credit-tooltip\{/);
+  assert.match(css, /\.announcement-release-section\{/);
+});
+
