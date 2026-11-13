@@ -136,11 +136,6 @@
       link.classList.toggle('is-active', href === `#${currentId}`);
     });
 
-    drawerLinks.forEach((link) => {
-      const href = link.getAttribute('href');
-      link.classList.toggle('is-active', href === `#${currentId}`);
-    });
-
     mobileLinks.forEach((link) => {
       const href = link.getAttribute('href');
       const active = href === `#${currentId}`;
@@ -363,11 +358,16 @@
           observer.unobserve(entry.target);
         }
       });
-    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    }, { threshold: 0.05, rootMargin: '0px 0px 120px 0px' });
     revealItems.forEach((item) => observer.observe(item));
   } else {
     revealItems.forEach((item) => item.classList.add('is-in'));
   }
+
+  // Safety timer: ensure all sections become visible even if IntersectionObserver is throttled on low-power mobile devices
+  setTimeout(() => {
+    revealItems.forEach((item) => item.classList.add('is-in'));
+  }, 1200);
 
   // 9. Fast session check for returning users (bypasses landing page for active users)
   let hasStoredSession = false;
