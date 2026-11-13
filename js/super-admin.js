@@ -1013,6 +1013,154 @@
     Ipon.toast('Shuffled release intro and outro greeting.');
   });
 
+  const releaseAiBtn = document.getElementById('release-update-ai-btn');
+  const releaseAiStatus = document.getElementById('release-update-ai-status');
+  const releaseAiStatusText = document.getElementById('release-update-ai-status-text');
+  const geminiKeyDialog = document.getElementById('gemini-key-dialog');
+  const geminiKeyForm = document.getElementById('gemini-key-form');
+  const geminiKeyInput = document.getElementById('gemini-api-key-input');
+  const geminiKeyStatus = document.getElementById('gemini-key-status');
+  const geminiKeyClose = document.getElementById('gemini-key-close');
+  const geminiKeyClear = document.getElementById('gemini-key-clear');
+  const geminiKeyTest = document.getElementById('gemini-key-test');
+  const releaseKeyBtn = document.getElementById('release-update-key-btn');
+
+  function getStoredGeminiKey() {
+    return (localStorage.getItem('ipon_gemini_api_key') || '').trim();
+  }
+
+  function updateGeminiStatusBadge() {
+    if (!geminiKeyStatus) return;
+    const key = getStoredGeminiKey();
+    if (key) {
+      const masked = key.slice(0, 6) + '••••••••' + key.slice(-4);
+      geminiKeyStatus.textContent = `Saved in browser (${masked})`;
+      geminiKeyStatus.className = 'gemini-status-badge is-connected';
+    } else {
+      geminiKeyStatus.textContent = 'No API key saved in browser (Supabase secret will be used if set)';
+      geminiKeyStatus.className = 'gemini-status-badge';
+    }
+  }
+
+  releaseKeyBtn?.addEventListener('click', () => {
+    if (!geminiKeyDialog) return;
+    if (geminiKeyInput) geminiKeyInput.value = getStoredGeminiKey();
+    updateGeminiStatusBadge();
+    geminiKeyDialog.showModal();
+    if (geminiKeyInput) geminiKeyInput.focus();
+  });
+
+  geminiKeyClose?.addEventListener('click', () => geminiKeyDialog?.close());
+
+  geminiKeyForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const val = (geminiKeyInput?.value || '').trim();
+    if (val) {
+      localStorage.setItem('ipon_gemini_api_key', val);
+      Ipon.toast('Gemini API key saved in browser.');
+    } else {
+      localStorage.removeItem('ipon_gemini_api_key');
+      Ipon.toast('Gemini API key cleared.');
+    }
+    updateGeminiStatusBadge();
+    geminiKeyDialog?.close();
+  });
+
+  geminiKeyClear?.addEventListener('click', () => {
+    localStorage.removeItem('ipon_gemini_api_key');
+    if (geminiKeyInput) geminiKeyInput.value = '';
+    updateGeminiStatusBadge();
+    Ipon.toast('Gemini API key removed from browser.');
+  });
+
+  geminiKeyTest?.addEventListener('click', async () => {
+    const key = (geminiKeyInput?.value || '').trim() || getStoredGeminiKey();
+    if (!key) {
+      Ipon.toast('Please enter a Gemini API key first.', 'error');
+      geminiKeyInput?.focus();
+      return;
+    }
+    try {
+      Ipon.setBusy(geminiKeyTest, true);
+      const { data, error } = await Ipon.client.functions.invoke('manage-account', {
+        body: { action: 'test-gemini-key', api_key: key }
+      });
+      if (error || data?.error) {
+        throw new Error(data?.error || error?.message || 'Verification failed');
+      }
+      Ipon.toast(data?.message || 'Gemini API key verified successfully!');
+      if (geminiKeyStatus) {
+        geminiKeyStatus.textContent = 'Active & Verified with Google Gemini';
+        geminiKeyStatus.className = 'gemini-status-badge is-verified';
+      }
+    } catch (err) {
+      Ipon.toast(Ipon.friendlyError(err), 'error');
+    } finally {
+      Ipon.setBusy(geminiKeyTest, false);
+    }
+  });
+
+  releaseAiBtn?.addEventListener('click', async () => {
+    const versionInput = document.getElementById('release-update-version');
+    const dateInput = document.getElementById('release-update-date');
+    const titleInput = document.getElementById('release-update-heading');
+    const detailsInput = document.getElementById('release-update-details');
+    const ver = (versionInput?.value || 'Update 1.0').trim();
+    const relDate = (dateInput?.value || new Date().toISOString().slice(0, 10)).trim();
+
+    const targetImplemented = featureRequests.filter(
+      (req) => req.status === 'IMPLEMENTED' && !req.release_version
+    );
+    const profileById = new Map(profiles.map((p) => [p.id, p]));
+    const featuresPayload = targetImplemented.map((req) => {
+      const prof = profileById.get(req.requester_id);
+      return {
+        title: req.title,
+        details: req.details,
+        requester_name: req.allow_credit !== false ? (prof?.full_name || null) : null
+      };
+    });
+
+    try {
+      Ipon.setBusy(releaseAiBtn, true);
+      if (releaseAiStatus) {
+        releaseAiStatus.hidden = false;
+        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Drafting release announcement with Gemini AI…';
+      }
+      const apiKey = getStoredGeminiKey();
+      const { data, error } = await Ipon.client.functions.invoke('manage-account', {
+        body: {
+          action: 'ai-generate-release-notes',
+          version: ver,
+          release_date: relDate,
+          features: featuresPayload,
+          api_key: apiKey || undefined
+        }
+      });
+
+      if (error || data?.error) {
+        throw new Error(data?.error || error?.message || 'Could not generate with AI');
+      }
+
+      if (data?.title && titleInput) titleInput.value = data.title;
+      if (data?.details && detailsInput) detailsInput.value = data.details;
+
+      if (data?.ai_powered) {
+        Ipon.toast('✨ Announcement generated with Gemini AI!');
+      } else {
+        Ipon.toast(data?.note || 'Drafted with smart release composer.');
+      }
+    } catch (err) {
+      const { title, body } = composeReleaseNotes(ver, targetImplemented);
+      if (titleInput) titleInput.value = title;
+      if (detailsInput) detailsInput.value = body;
+      Ipon.toast('Generated using smart composer (Gemini offline).');
+    } finally {
+      Ipon.setBusy(releaseAiBtn, false);
+      if (releaseAiStatus) releaseAiStatus.hidden = true;
+    }
+  });
+
   releaseUpdateBtn?.addEventListener('click', openReleaseUpdateDialog);
   document.getElementById('release-update-close')?.addEventListener('click', () => releaseUpdateDialog?.close());
   document.getElementById('release-update-cancel')?.addEventListener('click', () => releaseUpdateDialog?.close());

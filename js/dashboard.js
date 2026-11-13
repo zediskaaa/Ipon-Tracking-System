@@ -1167,6 +1167,99 @@
     goalSelects.forEach((other) => { other.value = selectedGoalId; });
     updateDashboardGoalProgress();
   }));
+
+  const aiInsightsDialog = document.getElementById('ai-insights-dialog');
+  const aiInsightsBtn = document.getElementById('dashboard-ai-insights-btn');
+  const aiInsightsClose = document.getElementById('ai-insights-close');
+  const aiInsightsDone = document.getElementById('ai-insights-done');
+  const aiInsightsRefresh = document.getElementById('ai-insights-refresh');
+  const aiForecastText = document.getElementById('ai-forecast-text');
+  const aiTipText = document.getElementById('ai-tip-text');
+  const aiMotivationText = document.getElementById('ai-motivation-text');
+  const aiGoalNameEl = document.getElementById('ai-insights-goal-name');
+  const aiGoalMetaEl = document.getElementById('ai-insights-goal-meta');
+
+  async function fetchAndRenderAiInsights() {
+    let targetGoal = null;
+    if (selectedGoalId) {
+      targetGoal = activeGoalsList.find((g) => g.id === selectedGoalId);
+    } else if (activeGoalsList.length > 0) {
+      targetGoal = activeGoalsList[0];
+    }
+    const goalTitle = targetGoal?.title || 'General Savings';
+    const targetAmt = Number(targetGoal?.target_amount || 0);
+    const tracked = Number(lastTrackedSavings || 0);
+    const targetDate = targetGoal?.target_date || '';
+
+    let monthlyPledge = 0;
+    try {
+      const { data: setRow } = await Ipon.client.from('contribution_settings').select('amount').limit(1).maybeSingle();
+      monthlyPledge = Number(setRow?.amount || 0);
+    } catch (_) {}
+
+    const pct = targetAmt > 0 ? Math.min(100, Math.round((tracked / targetAmt) * 100)) : 0;
+    if (aiGoalNameEl) aiGoalNameEl.textContent = goalTitle;
+    if (aiGoalMetaEl) aiGoalMetaEl.textContent = `${Ipon.money(tracked)} / ${Ipon.money(targetAmt)} (${pct}%)`;
+
+    if (aiForecastText) aiForecastText.textContent = 'Generating intelligent forecast with Gemini AI…';
+    if (aiTipText) aiTipText.textContent = 'Analyzing savings habits and micro-optimizations…';
+    if (aiMotivationText) aiMotivationText.textContent = 'Consulting financial streak…';
+
+    try {
+      const storedKey = (localStorage.getItem('ipon_gemini_api_key') || '').trim();
+      const { data, error } = await Ipon.client.functions.invoke('manage-account', {
+        body: {
+          action: 'ai-savings-insights',
+          goal_name: goalTitle,
+          target_amount: targetAmt,
+          current_saved: tracked,
+          monthly_pledge: monthlyPledge,
+          target_date: targetDate,
+          api_key: storedKey || undefined
+        }
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'AI request failed');
+
+      if (aiForecastText) aiForecastText.textContent = data.forecast || 'Keep contributing steadily to stay on track.';
+      if (aiTipText) aiTipText.textContent = data.smart_tip || 'Regular deposits create long-term compound savings.';
+      if (aiMotivationText) aiMotivationText.textContent = data.motivation || 'Consistency beats intensity every time!';
+
+      if (data?.ai_powered) {
+        Ipon.toast('✨ AI Insights generated with Gemini!');
+      }
+    } catch (err) {
+      const remaining = Math.max(0, targetAmt - tracked);
+      const monthsNeeded = monthlyPledge > 0 ? Math.ceil(remaining / monthlyPledge) : 0;
+      if (aiForecastText) {
+        aiForecastText.textContent = monthlyPledge > 0
+          ? `At your current monthly pledge of ${Ipon.money(monthlyPledge)}, you are projected to reach your goal in ~${monthsNeeded} month${monthsNeeded === 1 ? '' : 's'}.`
+          : `Set a monthly contribution pledge to calculate your exact projected completion date.`;
+      }
+      if (aiTipText) {
+        aiTipText.textContent = remaining > 0
+          ? `Adding just ${Ipon.money(Math.max(100, Math.round(remaining / 52)))} extra each week will significantly speed up your completion.`
+          : `Congratulations on reaching 100% of your target! Time to set your next financial milestone.`;
+      }
+      if (aiMotivationText) {
+        aiMotivationText.textContent = pct >= 100
+          ? `Goal accomplished! Your financial discipline sets a wonderful example.`
+          : `You are making steady progress! Every single peso saved builds your future financial peace of mind.`;
+      }
+    }
+  }
+
+  aiInsightsBtn?.addEventListener('click', () => {
+    if (!aiInsightsDialog) return;
+    aiInsightsDialog.showModal();
+    fetchAndRenderAiInsights();
+  });
+
+  aiInsightsClose?.addEventListener('click', () => aiInsightsDialog?.close());
+  aiInsightsDone?.addEventListener('click', () => aiInsightsDialog?.close());
+  aiInsightsRefresh?.addEventListener('click', () => {
+    Ipon.setBusy(aiInsightsRefresh, true);
+    fetchAndRenderAiInsights().finally(() => Ipon.setBusy(aiInsightsRefresh, false));
+  });
   renderCalendar([]);
   state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });
   if (state.failed || state.redirecting) return;

@@ -1201,3 +1201,45 @@ test('feature requests support credit consent toggle and release updates display
   assert.match(css, /\.announcement-release-section\{/);
 });
 
+test('system integrates Gemini AI for release updates and smart savings financial insights with procedural fallbacks', () => {
+  const edge = read('supabase/functions/manage-account/index.ts');
+  const superAdminHtml = read('super-admin.html');
+  const superAdminJs = read('js/super-admin.js');
+  const dashboardHtml = read('dashboard.html');
+  const dashboardJs = read('js/dashboard.js');
+  const css = read('css/app.css');
+
+  assert.match(edge, /generateWithGemini/);
+  assert.match(edge, /generateProceduralReleaseNotes/);
+  assert.match(edge, /action === 'ai-generate-release-notes'/);
+  assert.match(edge, /action === 'ai-savings-insights'/);
+  assert.match(edge, /action === 'test-gemini-key'/);
+  assert.match(edge, /gemini-1\.5-flash/);
+
+  assert.match(superAdminHtml, /id="release-update-ai-btn"/);
+  assert.match(superAdminHtml, /id="release-update-key-btn"/);
+  assert.match(superAdminHtml, /id="release-update-ai-status"/);
+  assert.match(superAdminHtml, /id="gemini-key-dialog"/);
+  assert.match(superAdminHtml, /id="gemini-api-key-input"/);
+
+  assert.match(superAdminJs, /release-update-ai-btn/);
+  assert.match(superAdminJs, /gemini-key-dialog/);
+  assert.match(superAdminJs, /ipon_gemini_api_key/);
+  assert.match(superAdminJs, /ai-generate-release-notes/);
+
+  assert.match(dashboardHtml, /id="dashboard-ai-insights-btn"/);
+  assert.match(dashboardHtml, /id="ai-insights-dialog"/);
+  assert.match(dashboardHtml, /id="ai-forecast-text"/);
+  assert.match(dashboardHtml, /id="ai-tip-text"/);
+  assert.match(dashboardHtml, /id="ai-motivation-text"/);
+
+  assert.match(dashboardJs, /dashboard-ai-insights-btn/);
+  assert.match(dashboardJs, /ai-insights-dialog/);
+  assert.match(dashboardJs, /ai-savings-insights/);
+
+  assert.match(css, /\.button-ai-trigger/);
+  assert.match(css, /\.button-ai-inline/);
+  assert.match(css, /\.ai-insights-dialog/);
+  assert.match(css, /\.ai-insight-card/);
+});
+

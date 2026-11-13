@@ -7,8 +7,8 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>IPON — Savings calendar</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261113-12">
-  <link rel="stylesheet" href="css/hero-plates.css?v=20261113-12">
+  <link rel="stylesheet" href="css/app.css?v=20261113-13">
+  <link rel="stylesheet" href="css/hero-plates.css?v=20261113-13">
 </head>
 <body data-page="dashboard">
   <main class="comp-frame" aria-label="IPON savings calendar dashboard">
@@ -135,6 +135,10 @@
           </div>
           <div class="dashboard-goal-sub">
             <span class="dashboard-goal-remaining" id="dashboard-goal-remaining">—</span>
+            <button class="button-ai-inline" id="dashboard-ai-insights-btn" type="button" title="View AI savings analysis and forecast">
+              <svg class="ai-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.5L19.4 10l-5.5 1.5L12 17l-1.9-5.5L4.6 10l5.5-1.5L12 3zM19 16l.9 2.5L22.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5zM6 16l.9 2.5L9.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5z" fill="currentColor"/></svg>
+              <span>AI Coach</span>
+            </button>
             <span class="dashboard-goal-pct" id="dashboard-goal-pct">—</span>
           </div>
         </div>
@@ -523,7 +527,67 @@
       </form>
     </div>
   </dialog>
-  <script src="js/config.js"></script><script src="js/core.js?v=20261113-12"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/dashboard.js?v=20261113-12"></script>
+
+  <dialog class="form-dialog ai-insights-dialog" id="ai-insights-dialog" aria-labelledby="ai-insights-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div class="ai-insights-header-head">
+          <div class="ai-badge-row">
+            <span class="ai-chip">
+              <svg class="ai-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.5L19.4 10l-5.5 1.5L12 17l-1.9-5.5L4.6 10l5.5-1.5L12 3zM19 16l.9 2.5L22.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5zM6 16l.9 2.5L9.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5z" fill="currentColor"/></svg>
+              Powered by Gemini AI
+            </span>
+          </div>
+          <h2 id="ai-insights-title">AI Savings Coach</h2>
+          <p id="ai-insights-subtitle">Intelligent financial forecast and personalized habit optimization.</p>
+        </div>
+        <button class="dialog-close" id="ai-insights-close" type="button" aria-label="Close AI insights dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </header>
+      <div class="ai-insights-body">
+        <div class="ai-insights-goal-summary" id="ai-insights-goal-summary">
+          <strong id="ai-insights-goal-name">General Savings Target</strong>
+          <span id="ai-insights-goal-meta">₱0.00 / ₱0.00 (0%)</span>
+        </div>
+        <div class="ai-insights-cards" id="ai-insights-content">
+          <div class="ai-insight-card">
+            <div class="ai-insight-card-icon forecast-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="ai-insight-card-content">
+              <h4>Timeline &amp; Pace Forecast</h4>
+              <p id="ai-forecast-text">Calculating your projected timeline based on your current contributions…</p>
+            </div>
+          </div>
+          <div class="ai-insight-card">
+            <div class="ai-insight-card-icon tip-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 22h4M8.5 14.5A7 7 0 1 1 15.5 14.5C14.5 15.2 14 16 14 17h-4c0-1-.5-1.8-1.5-2.5Z"/></svg>
+            </div>
+            <div class="ai-insight-card-content">
+              <h4>Smart Savings Optimization</h4>
+              <p id="ai-tip-text">Analyzing your deposits to recommend high-impact micro-savings habits…</p>
+            </div>
+          </div>
+          <div class="ai-insight-card">
+            <div class="ai-insight-card-icon motivation-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </div>
+            <div class="ai-insight-card-content">
+              <h4>Consistency &amp; Streak</h4>
+              <p id="ai-motivation-text">Tracking your financial discipline and savings streak…</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="form-actions field-wide ai-insights-footer">
+        <button class="button button-secondary" id="ai-insights-refresh" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px;"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Refresh insights
+        </button>
+        <button class="button button-primary" id="ai-insights-done" type="button">Done</button>
+      </div>
+    </div>
+  </dialog>
+  <script src="js/config.js"></script><script src="js/core.js?v=20261113-13"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/dashboard.js?v=20261113-13"></script>
 </body>
 </html>
 

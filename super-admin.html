@@ -7,7 +7,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Super Admin — IPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261113-12">
+  <link rel="stylesheet" href="css/app.css?v=20261113-13">
 </head>
 <body data-page="super-admin" data-panel="super-admin">
   <div class="app-layout">
@@ -229,13 +229,27 @@
         <div class="field field-wide">
           <div class="field-label-row">
             <label for="release-update-details">Release notes and changes</label>
-            <button class="button-link-subtle" id="release-update-shuffle" type="button" title="Shuffle intro and outro greeting">
-              <svg viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px;"><path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Shuffle intro &amp; outro
-            </button>
+            <div class="field-actions-cluster">
+              <button class="button-ai-trigger" id="release-update-ai-btn" type="button" title="Draft release announcement with Gemini AI">
+                <svg class="ai-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.5L19.4 10l-5.5 1.5L12 17l-1.9-5.5L4.6 10l5.5-1.5L12 3zM19 16l.9 2.5L22.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5zM6 16l.9 2.5L9.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5z" fill="currentColor"/></svg>
+                <span>Write with AI</span>
+              </button>
+              <button class="button-link-subtle" id="release-update-key-btn" type="button" title="Configure Gemini API Key">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><path d="M15 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-7 6 2-2M9 13l-4 4v3h3l1-1v-2h2v-2l-2-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                API key
+              </button>
+              <button class="button-link-subtle" id="release-update-shuffle" type="button" title="Shuffle intro and outro greeting">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px;"><path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Shuffle
+              </button>
+            </div>
           </div>
           <textarea id="release-update-details" name="details" rows="8" required></textarea>
-          <small class="field-help">Pre-filled with implemented feature requests in English. You can edit or add notes anytime.</small>
+          <div class="ai-generation-status" id="release-update-ai-status" hidden>
+            <span class="ai-pulse-dot"></span>
+            <span id="release-update-ai-status-text">Drafting with Gemini AI…</span>
+          </div>
+          <small class="field-help" id="release-update-details-help">Pre-filled with implemented feature requests in English. Click Write with AI to generate unique copy.</small>
         </div>
         <div class="form-actions field-wide">
           <button class="button button-secondary" id="release-update-cancel" type="button">Cancel</button>
@@ -245,7 +259,37 @@
     </div>
   </dialog>
 
-  <script src="js/config.js"></script><script src="js/core.js?v=20261113-12"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261113-12"></script>
+  <dialog class="form-dialog" id="gemini-key-dialog" aria-labelledby="gemini-key-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="gemini-key-title">Gemini AI configuration</h2>
+          <p id="gemini-key-copy">Connect Google Gemini to automatically generate fresh release notes and intelligent savings insights.</p>
+        </div>
+        <button class="dialog-close" id="gemini-key-close" type="button" aria-label="Close Gemini configuration dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </header>
+      <form id="gemini-key-form" class="form-grid">
+        <div class="field field-wide">
+          <label for="gemini-api-key-input">Gemini API key</label>
+          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AIzaSy..." autocomplete="off">
+          <small class="field-help">
+            Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="color:#16a34a;font-weight:700;">Google AI Studio</a>.
+            You can save it here in your browser or set it in Supabase Secrets as <code>GEMINI_API_KEY</code>.
+          </small>
+        </div>
+        <div class="field field-wide" id="gemini-key-status-row">
+          <span class="gemini-status-badge" id="gemini-key-status">No API key saved in browser</span>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" id="gemini-key-clear" type="button">Clear key</button>
+          <button class="button button-secondary" id="gemini-key-test" type="button">Test connection</button>
+          <button class="button button-primary" type="submit">Save API key</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="js/config.js"></script><script src="js/core.js?v=20261113-13"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261113-13"></script>
 </body>
 </html>
 

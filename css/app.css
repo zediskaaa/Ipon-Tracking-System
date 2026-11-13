@@ -873,3 +873,39 @@ button.record-entry-action:focus-visible{outline:2px solid #fff;outline-offset:2
 .settings-pledge-info{display:flex;flex-direction:column;gap:2px;font-size:12px}
 .settings-pledge-info span{color:var(--muted);font-weight:600}
 .settings-pledge-info strong{font-size:15px;color:var(--ink);font-weight:800}
+
+.field-actions-cluster{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.button-ai-trigger{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;border:1px solid #10b981;background:linear-gradient(135deg,#ecfdf5 0%,#d1fae5 100%)}
+.button-ai-trigger{color:#047857;font:700 12px/1.2 Arial,sans-serif;cursor:pointer;transition:all .18s ease;user-select:none;box-shadow:0 1px 4px rgba(16,185,129,.15)}
+.button-ai-trigger:hover{background:linear-gradient(135deg,#d1fae5 0%,#a7f3d0 100%);border-color:#059669;color:#065f46;transform:translateY(-1px);box-shadow:0 3px 8px rgba(16,185,129,.22)}
+.ai-sparkle-icon{width:14px;height:14px;flex-shrink:0;color:#059669}
+.ai-generation-status{display:flex;align-items:center;gap:8px;padding:6px 12px;margin:6px 0;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font:700 12px/1.3 Arial,sans-serif}
+.ai-pulse-dot{width:8px;height:8px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 0 rgba(22,163,74,.7);animation:aiPulse 1.4s infinite}
+@keyframes aiPulse{0%{transform:scale(.95);box-shadow:0 0 0 0 rgba(22,163,74,.7)}70%{transform:scale(1);box-shadow:0 0 0 7px rgba(22,163,74,0)}100%{transform:scale(.95);box-shadow:0 0 0 0 rgba(22,163,74,0)}}
+.gemini-status-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font:700 11.5px/1.2 Arial,sans-serif;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1}
+.gemini-status-badge.is-connected{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+.gemini-status-badge.is-verified{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
+
+.button-ai-inline{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;border:1px solid #a7f3d0;background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);color:#15803d;font:800 11px/1.2 Arial,sans-serif;cursor:pointer;transition:all .16s ease;user-select:none;margin:0 4px}
+.button-ai-inline:hover{background:#bbf7d0;border-color:#16a34a;color:#14532d;transform:translateY(-1px);box-shadow:0 2px 6px rgba(22,163,74,.18)}
+
+.ai-insights-dialog{width:min(580px,calc(100vw - 28px))}
+.ai-insights-header-head{display:grid;gap:6px}
+.ai-badge-row{display:flex;align-items:center;margin-bottom:2px}
+.ai-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:#e0f2fe;border:1px solid #bae6fd;color:#0284c7;font:800 11px/1 Arial,sans-serif;letter-spacing:.02em;text-transform:uppercase}
+.ai-insights-body{display:grid;gap:14px;padding:18px 22px;max-height:60dvh;overflow-y:auto}
+.ai-insights-goal-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-radius:10px;background:#fdfbf7;border:1px solid rgba(20,45,43,.1);flex-wrap:wrap}
+.ai-insights-goal-summary strong{color:var(--ink);font-size:13.5px}
+.ai-insights-goal-summary span{color:var(--muted);font-weight:700;font-size:12.5px}
+.ai-insights-cards{display:grid;gap:12px}
+.ai-insight-card{display:flex;align-items:flex-start;gap:12px;padding:14px;border-radius:12px;background:#ffffff;border:1px solid rgba(20,45,43,.1);box-shadow:0 2px 8px rgba(20,45,43,.03);transition:transform .16s ease,border-color .16s ease}
+.ai-insight-card:hover{border-color:rgba(20,45,43,.22);transform:translateY(-1px)}
+.ai-insight-card-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;flex-shrink:0}
+.ai-insight-card-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.forecast-icon{background:#e0f2fe;color:#0369a1}
+.tip-icon{background:#fef3c7;color:#b45309}
+.motivation-icon{background:#f0fdf4;color:#15803d}
+.ai-insight-card-content{display:grid;gap:4px;min-width:0}
+.ai-insight-card-content h4{margin:0;font:800 13.5px/1.25 Arial,sans-serif;color:var(--ink)}
+.ai-insight-card-content p{margin:0;font:13px/1.5 Arial,sans-serif;color:#374151}
+.ai-insights-footer{display:flex;align-items:center;justify-content:space-between;padding:14px 22px 18px;border-top:1px solid var(--rule)}
