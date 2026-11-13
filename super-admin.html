@@ -227,7 +227,13 @@
           <input id="release-update-heading" name="title" maxlength="150" placeholder="e.g. System Update 1.0 Released" required>
         </div>
         <div class="field field-wide">
-          <label for="release-update-details">Release notes and changes</label>
+          <div class="field-label-row">
+            <label for="release-update-details">Release notes and changes</label>
+            <button class="button-link-subtle" id="release-update-shuffle" type="button" title="Shuffle intro and outro greeting">
+              <svg viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px;"><path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Shuffle intro &amp; outro
+            </button>
+          </div>
           <textarea id="release-update-details" name="details" rows="8" required></textarea>
           <small class="field-help">Pre-filled with implemented feature requests in English. You can edit or add notes anytime.</small>
         </div>

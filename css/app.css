@@ -830,6 +830,9 @@ button.record-entry-action:focus-visible{outline:2px solid #fff;outline-offset:2
 .view-mode-btn svg{width:13px;height:13px;fill:currentColor}
 .view-mode-btn:hover{color:var(--ink);background:rgba(255,255,255,.6)}
 .view-mode-btn.is-active{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(20,45,43,.1)}
+.field-label-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.button-link-subtle{display:inline-flex;align-items:center;border:none;background:transparent;color:var(--green);font:700 12px/1.2 Arial,sans-serif;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px;transition:color .15s ease}
+.button-link-subtle:hover{color:#0a4e38}
 
 .table-user-cell{display:flex;align-items:center;gap:10px}
 .table-user-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0}

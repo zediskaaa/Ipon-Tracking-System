@@ -871,6 +871,80 @@
     }
   });
 
+  const RELEASE_INTROS = [
+    (ver) => `Welcome to System ${ver}! We've packed this release with fresh features, community-requested improvements, and refined performance across IPON:`,
+    (ver) => `Big news! System ${ver} is officially live, delivering our latest upgrades, community suggestions, and smoother savings tools:`,
+    (ver) => `Introducing System ${ver}! Designed with your feedback in mind, this update rolls out powerful enhancements and brand new capabilities:`,
+    (ver) => `System ${ver} has arrived! Explore the newest features, workflow refinements, and user-requested updates built to elevate your IPON experience:`,
+    (ver) => `We are thrilled to launch System ${ver}! Check out what's new, what's improved, and the latest community-driven additions now ready for you:`,
+    (ver) => `Fresh off the press: System ${ver} is here! Discover the newest improvements, upgraded tools, and community-requested features in this release:`,
+    (ver) => `Say hello to System ${ver}! Here is a breakdown of the new capabilities, system refinements, and user requests implemented in this rollout:`,
+    (ver) => `Another step forward: System ${ver} is ready! We've listened to your feedback and brought a fresh wave of features and enhancements to IPON:`,
+    (ver) => `What a milestone! System ${ver} is here with key quality-of-life updates, community feature implementations, and system-wide polishes:`,
+    (ver) => `Here is what is new in System ${ver}! Packed with user-inspired updates, performance tweaks, and exciting new tools for your daily tracking:`
+  ];
+
+  const RELEASE_TITLES = [
+    (ver) => `System ${ver} Released`,
+    (ver) => `System ${ver} is Now Live!`,
+    (ver) => `What's New in System ${ver}`,
+    (ver) => `Introducing System ${ver}`,
+    (ver) => `System ${ver} Feature Update`
+  ];
+
+  const RELEASE_OUTROS = [
+    () => `Thank you for contributing, testing, and helping us make IPON better with every update!`,
+    () => `We're grateful for your continued support and feedback. Enjoy the new update and happy saving!`,
+    () => `Your ideas drive IPON forward! Keep submitting your suggestions, and let us know what you think of this release.`,
+    () => `Special thanks to our active community for shaping these improvements. More exciting updates are on the way!`,
+    () => `As always, thank you for being an essential part of the IPON journey. Enjoy the upgraded experience!`,
+    () => `Built with care for our savers. Thank you for your suggestions, and stay tuned for what's coming next!`,
+    () => `We couldn't do this without your feedback and support. Here's to smarter, simpler savings together!`,
+    () => `Huge thanks to everyone who shared ideas and reported issues. Together, we keep improving IPON every day!`
+  ];
+
+  let currentReleaseIntroIdx = -1;
+  let currentReleaseOutroIdx = -1;
+  let currentReleaseTitleIdx = -1;
+
+  function pickDifferentIndex(len, prev) {
+    if (len <= 1) return 0;
+    let next;
+    do {
+      next = Math.floor(Math.random() * len);
+    } while (next === prev);
+    return next;
+  }
+
+  function composeReleaseNotes(ver, targetImpl = []) {
+    currentReleaseIntroIdx = pickDifferentIndex(RELEASE_INTROS.length, currentReleaseIntroIdx);
+    currentReleaseOutroIdx = pickDifferentIndex(RELEASE_OUTROS.length, currentReleaseOutroIdx);
+    currentReleaseTitleIdx = pickDifferentIndex(RELEASE_TITLES.length, currentReleaseTitleIdx);
+
+    const title = RELEASE_TITLES[currentReleaseTitleIdx](ver);
+    const intro = RELEASE_INTROS[currentReleaseIntroIdx](ver);
+    const outro = RELEASE_OUTROS[currentReleaseOutroIdx]();
+
+    let body = `${intro}\n\n`;
+    body += `• Live Active Now Presence: See who is currently using the system in real time with live Facebook-style green indicators on profile avatars.\n`;
+    body += `• Profile Picture Editor: Interactive avatar cropper with real-time preview, 90-degree image rotation, and deletion confirmation.\n`;
+    body += `• Announcement Reactions: Messenger-style interactive emoji picker (Heart, Thumbs up, Haha, Sad, Angry) and Facebook-style reaction counter pill with a who-reacted modal list.\n`;
+    body += `• Quick Record Entry Modal: Convenient shortcut on the dashboard to record additions, deductions, and expenses without switching pages.\n`;
+    body += `• Financial Records Spotlight & Graph: Filter records by member to spotlight their profile, contribution pledge, totals, and monthly activity graph.\n`;
+    body += `• Contributor Pledge Setup: Group administrators can set and update their monthly contribution pledge directly, reflected in member rosters and reports.\n`;
+    body += `• Password Visibility Toggle: Modern SVG eye icon toggle buttons for cleaner, intuitive password inputs.\n`;
+
+    if (targetImpl.length > 0) {
+      body += `\nCommunity Feature Requests Implemented in this Release:\n`;
+      targetImpl.forEach((req) => {
+        body += `• ${req.title}: ${req.details}\n`;
+      });
+    }
+
+    body += `\n${outro}`;
+    return { title, body };
+  }
+
   async function openReleaseUpdateDialog() {
     if (!releaseUpdateDialog || !releaseUpdateForm) return;
 
@@ -903,7 +977,6 @@
       nextVersion = `Update ${major}.${minor}`;
     }
 
-    const profileById = new Map(profiles.map((p) => [p.id, p]));
     // Collect ONLY implemented feature requests that have not yet been released.
     // Once released in an update, they will never appear in subsequent update drafts.
     const targetImplemented = featureRequests.filter(
@@ -916,32 +989,29 @@
     const titleInput = document.getElementById('release-update-heading');
     const detailsInput = document.getElementById('release-update-details');
 
+    const { title, body } = composeReleaseNotes(nextVersion, targetImplemented);
+
     if (versionInput) versionInput.value = nextVersion;
     if (dateInput) dateInput.value = todayIso;
-    if (titleInput) titleInput.value = `System ${nextVersion} Released`;
-
-    let releaseBody = `We are excited to announce System ${nextVersion}! Here are the latest user features, enhancements, and requested improvements available across IPON:\n\n`;
-    releaseBody += `• Live Active Now Presence: See who is currently using the system in real time with live Facebook-style green indicators on profile avatars.\n`;
-    releaseBody += `• Profile Picture Editor: Interactive avatar cropper with real-time preview, 90-degree image rotation, and deletion confirmation.\n`;
-    releaseBody += `• Announcement Reactions: Messenger-style interactive emoji picker (Heart, Thumbs up, Haha, Sad, Angry) and Facebook-style reaction counter pill with a who-reacted modal list.\n`;
-    releaseBody += `• Quick Record Entry Modal: Convenient shortcut on the dashboard to record additions, deductions, and expenses without switching pages.\n`;
-    releaseBody += `• Financial Records Spotlight & Graph: Filter records by member to spotlight their profile, contribution pledge, totals, and monthly activity graph.\n`;
-    releaseBody += `• Contributor Pledge Setup: Group administrators can set and update their monthly contribution pledge directly, reflected in member rosters and reports.\n`;
-    releaseBody += `• Password Visibility Toggle: Modern SVG eye icon toggle buttons for cleaner, intuitive password inputs.\n`;
-
-    if (targetImplemented.length > 0) {
-      releaseBody += `\nCommunity Feature Requests Implemented in this Release:\n`;
-      targetImplemented.forEach((req) => {
-        releaseBody += `• ${req.title}: ${req.details}\n`;
-      });
-    }
-
-    releaseBody += `\nThank you for contributing and helping us make IPON better!`;
-
-    if (detailsInput) detailsInput.value = releaseBody;
+    if (titleInput) titleInput.value = title;
+    if (detailsInput) detailsInput.value = body;
     releaseUpdateDialog.showModal();
     if (versionInput) versionInput.focus();
   }
+
+  document.getElementById('release-update-shuffle')?.addEventListener('click', () => {
+    const versionInput = document.getElementById('release-update-version');
+    const titleInput = document.getElementById('release-update-heading');
+    const detailsInput = document.getElementById('release-update-details');
+    const ver = (versionInput?.value || 'Update 1.0').trim();
+    const targetImplemented = featureRequests.filter(
+      (req) => req.status === 'IMPLEMENTED' && !req.release_version
+    );
+    const { title, body } = composeReleaseNotes(ver, targetImplemented);
+    if (titleInput) titleInput.value = title;
+    if (detailsInput) detailsInput.value = body;
+    Ipon.toast('Shuffled release intro and outro greeting.');
+  });
 
   releaseUpdateBtn?.addEventListener('click', openReleaseUpdateDialog);
   document.getElementById('release-update-close')?.addEventListener('click', () => releaseUpdateDialog?.close());
