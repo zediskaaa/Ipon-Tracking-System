@@ -4,3 +4,4 @@ window.MYIPON_APP_VERSION = {
   updated_at: '2026-11-13T15:52:00.000Z',
   isApp: false
 };
+

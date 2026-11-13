@@ -1909,25 +1909,46 @@
     return root.mfaController;
   }
 
+  function isInstalledAppUser() {
+    return Boolean(window.Capacitor) ||
+      document.body.classList.contains('is-app') ||
+      Boolean(window.MYIPON_APP_VERSION?.isApp) ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      /myIPON/i.test(navigator.userAgent);
+  }
+
   async function initNotifications(profile) {
     const client = getClient();
     const list = document.getElementById('notification-list');
     if (!list || !client || !profile) return;
+    const isApp = isInstalledAppUser();
     const load = async () => {
       const { data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,read_at,created_at').order('created_at', { ascending: false }).limit(40);
       if (error) { showInlineError(list, error, load); return; }
       const rows = data || [];
-      const isReleaseRead = Boolean(localStorage.getItem('myipon_read_release_notice_v15'));
-      const releaseNotice = {
-        id: 'system-app-release-notice',
-        type: 'RELEASE',
-        title: 'myIPON Mobile App — New Version Ready',
-        message: 'Download the official mobile app for Android (.apk) or iOS (.ipa) with direct instant updates.',
-        link: 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest',
-        read_at: isReleaseRead ? 'read' : null,
-        created_at: new Date().toISOString()
-      };
-      const allRows = [releaseNotice, ...rows];
+      let allRows = rows;
+
+      if (isApp) {
+        const latestVersion = localStorage.getItem('myipon_latest_remote_version') || '1.0.15';
+        const currentBuild = Number(window.MYIPON_APP_VERSION?.build || 0);
+        const remoteBuild = Number(localStorage.getItem('myipon_latest_remote_build') || 15);
+        const hasPendingUpdate = remoteBuild > currentBuild || !window.MYIPON_APP_VERSION?.build;
+
+        if (hasPendingUpdate) {
+          const isReleaseRead = Boolean(localStorage.getItem(`myipon_read_release_notice_${remoteBuild}`));
+          const releaseNotice = {
+            id: 'system-app-release-notice',
+            type: 'RELEASE',
+            title: `Update available: Version ${latestVersion}`,
+            message: `A new version of myIPON (${latestVersion}) is ready. If you skipped updating earlier, tap Download APK below to install the latest version now.`,
+            link: 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest',
+            read_at: isReleaseRead ? 'read' : null,
+            created_at: new Date().toISOString()
+          };
+          allRows = [releaseNotice, ...rows];
+        }
+      }
+
       const unread = allRows.filter((item) => !item.read_at).length;
       document.querySelectorAll('[data-notification-count]').forEach((badge) => { badge.textContent = unread; badge.hidden = unread === 0; });
       document.getElementById('mark-all-notifications').hidden = unread === 0;
@@ -1990,7 +2011,8 @@
       const item = event.target.closest('[data-notification-id]');
       if (!item || !item.classList.contains('is-unread')) return;
       if (item.dataset.notificationId === 'system-app-release-notice') {
-        localStorage.setItem('myipon_read_release_notice_v15', 'true');
+        const remoteBuild = localStorage.getItem('myipon_latest_remote_build') || '15';
+        localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
         item.classList.remove('is-unread');
         await load();
         return;
@@ -1998,9 +2020,11 @@
       try { await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) }); item.classList.remove('is-unread'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
     };
     document.getElementById('mark-all-notifications').onclick = async () => {
-      localStorage.setItem('myipon_read_release_notice_v15', 'true');
+      const remoteBuild = localStorage.getItem('myipon_latest_remote_build') || '15';
+      localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
       try { await rpc('mark_all_notifications_read'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
     };
+    window.addEventListener('myipon_update_available', () => { load(); });
     await load();
     client.channel(`notifications:${profile.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, load).subscribe();
   }
@@ -3979,6 +4003,8 @@
         const remote = await res.json();
         remoteVersion = remote.version;
         remoteBuild = Number(remote.build || 0);
+        if (remoteVersion) localStorage.setItem('myipon_latest_remote_version', remoteVersion);
+        if (remoteBuild) localStorage.setItem('myipon_latest_remote_build', String(remoteBuild));
         if (remoteBuild > currentBuild) {
           updateFound = true;
           remoteNotes = `A new version (${remoteVersion || 'Latest'}) of myIPON is ready with the latest features. Tap Update now to download and install.`;
@@ -3998,6 +4024,8 @@
             updateFound = true;
             remoteVersion = release.tag_name || release.name || 'Latest';
             remoteBuild = release.id || Date.now();
+            if (remoteVersion) localStorage.setItem('myipon_latest_remote_version', remoteVersion);
+            if (remoteBuild) localStorage.setItem('myipon_latest_remote_build', String(remoteBuild));
             remoteNotes = release.body || 'A new update is available. Tap Update now to download and install.';
           }
         }
@@ -4005,6 +4033,7 @@
     }
 
     if (updateFound) {
+      window.dispatchEvent(new CustomEvent('myipon_update_available', { detail: { version: remoteVersion, build: remoteBuild } }));
       if (!force && remoteBuild && sessionStorage.getItem(`dismissed_update_${remoteBuild}`)) return;
       showAppUpdatePrompt({
         version: remoteVersion || 'Latest',
