@@ -1208,16 +1208,82 @@
 
   const aiInsightsDialog = document.getElementById('ai-insights-dialog');
   const aiInsightsBtn = document.getElementById('dashboard-ai-insights-btn');
+  const aiInsightsBack = document.getElementById('ai-insights-back');
   const aiInsightsClose = document.getElementById('ai-insights-close');
   const aiInsightsDone = document.getElementById('ai-insights-done');
   const aiInsightsRefresh = document.getElementById('ai-insights-refresh');
   const aiForecastText = document.getElementById('ai-forecast-text');
   const aiTipText = document.getElementById('ai-tip-text');
   const aiMotivationText = document.getElementById('ai-motivation-text');
+  const aiForecastDetail = document.getElementById('ai-forecast-detail');
+  const aiTipDetail = document.getElementById('ai-tip-detail');
+  const aiMotivationDetail = document.getElementById('ai-motivation-detail');
   const aiGoalNameEl = document.getElementById('ai-insights-goal-name');
   const aiGoalMetaEl = document.getElementById('ai-insights-goal-meta');
+  const aiGoalBarEl = document.getElementById('ai-insights-goal-bar');
+  const aiGoalRemainingEl = document.getElementById('ai-insights-goal-remaining');
 
-  async function fetchAndRenderAiInsights() {
+  function applyLocalInsightsFallback({ targetAmt, tracked, remaining, pct, monthlyPledge, targetDate, forceOverwrite = true }) {
+    const monthsNeeded = monthlyPledge > 0 ? Math.ceil(remaining / monthlyPledge) : 0;
+    const today = new Date(`${Ipon.isoDate()}T00:00:00`);
+    const end = targetDate ? new Date(`${targetDate}T00:00:00`) : null;
+    const daysLeft = end && !Number.isNaN(end.getTime()) ? Math.max(0, Math.round((end - today) / 86400000)) : 0;
+
+    if (forceOverwrite && aiForecastText) {
+      if (targetAmt <= 0) {
+        aiForecastText.textContent = 'Create a shared target goal to unlock personalized completion forecasts and timeline milestones.';
+      } else if (remaining <= 0) {
+        aiForecastText.textContent = 'Your confirmed group savings have already reached this target amount.';
+      } else if (monthlyPledge > 0) {
+        aiForecastText.textContent = `At ${Ipon.money(monthlyPledge)}/month in base schedule, you need ~${monthsNeeded} month${monthsNeeded === 1 ? '' : 's'} to close the ${Ipon.money(remaining)} balance.`;
+      } else if (daysLeft > 0) {
+        aiForecastText.textContent = `You have ${daysLeft} day${daysLeft === 1 ? '' : 's'} left (${Ipon.money(remaining / daysLeft)}/day needed) to hit your goal by ${Ipon.dateLabel(targetDate)}.`;
+      } else {
+        aiForecastText.textContent = `You need ${Ipon.money(remaining)} more to complete this savings milestone.`;
+      }
+    }
+
+    if (forceOverwrite && aiTipText) {
+      if (remaining > 0) {
+        const weeklyBoost = daysLeft > 7 ? Math.max(50, remaining / Math.max(1, daysLeft / 7)) : Math.max(100, remaining / 26);
+        aiTipText.textContent = `Setting aside roughly ${Ipon.money(weeklyBoost)} per week keeps group momentum predictable without end-of-month strain.`;
+      } else {
+        aiTipText.textContent = 'Milestone complete! Consider locking in a fresh buffer or emergency target in Savings Goals.';
+      }
+    }
+
+    if (forceOverwrite && aiMotivationText) {
+      aiMotivationText.textContent = pct >= 100
+        ? 'Goal accomplished! Your group consistency sets a strong financial standard.'
+        : pct >= 50
+          ? `Past halfway (${pct}%) — keep the streak steady to cross the finish line ahead of schedule.`
+          : 'Every confirmed deposit moves your shared target closer. Small regular contributions compound fast.';
+    }
+
+    if (aiForecastDetail) {
+      const parts = [];
+      if (daysLeft > 0 && remaining > 0) {
+        parts.push(`Daily pace needed: ${Ipon.money(remaining / daysLeft)}`);
+        parts.push(`Weekly pace: ${Ipon.money(remaining / Math.max(1, daysLeft / 7))}`);
+      } else if (remaining > 0 && monthlyPledge > 0) {
+        parts.push(`Estimated timeline: ~${monthsNeeded} month${monthsNeeded === 1 ? '' : 's'}`);
+      } else {
+        parts.push(`Tracked balance: ${Ipon.money(tracked)}`);
+      }
+      if (targetDate) parts.push(`Target date: ${Ipon.dateLabel(targetDate)}`);
+      aiForecastDetail.textContent = parts.join(' · ');
+    }
+    if (aiTipDetail) {
+      aiTipDetail.textContent = remaining > 0
+        ? `Target: ${Ipon.money(targetAmt)} · Remaining: ${Ipon.money(remaining)} · Base monthly default: ${monthlyPledge > 0 ? Ipon.money(monthlyPledge) : 'Not set'}`
+        : `Target ${Ipon.money(targetAmt)} reached with ${Ipon.money(tracked)} confirmed.`;
+    }
+    if (aiMotivationDetail) {
+      aiMotivationDetail.textContent = `Progress: ${pct}% complete · Confirmed tracked total: ${Ipon.money(tracked)}.`;
+    }
+  }
+
+  async function fetchAndRenderAiInsights(showRefreshToast = false) {
     let targetGoal = null;
     if (selectedGoalId) {
       targetGoal = activeGoalsList.find((g) => g.id === selectedGoalId);
@@ -1228,103 +1294,114 @@
     const targetAmt = Number(targetGoal?.target_amount || 0);
     const tracked = Number(lastTrackedSavings || 0);
     const targetDate = targetGoal?.target_date || '';
+    const remaining = Math.max(0, targetAmt - tracked);
+    const pct = targetAmt > 0 ? Math.min(100, Math.round((tracked / targetAmt) * 100)) : 0;
+
+    if (aiGoalNameEl) aiGoalNameEl.textContent = goalTitle;
+    if (aiGoalMetaEl) aiGoalMetaEl.textContent = targetAmt > 0 ? `${Ipon.money(tracked)} / ${Ipon.money(targetAmt)} (${pct}%)` : Ipon.money(tracked);
+    if (aiGoalBarEl) aiGoalBarEl.style.width = `${pct}%`;
+    if (aiGoalRemainingEl) {
+      aiGoalRemainingEl.textContent = targetAmt <= 0
+        ? 'Add a shared goal to track target progress'
+        : remaining <= 0
+          ? '✓ Target achieved!'
+          : `${Ipon.money(remaining)} remaining${targetDate ? ` · Due ${Ipon.dateLabel(targetDate)}` : ''}`;
+    }
+
+    if (aiForecastText) aiForecastText.textContent = 'Analyzing your pace and timeline…';
+    if (aiTipText) aiTipText.textContent = 'Preparing practical savings tips…';
+    if (aiMotivationText) aiMotivationText.textContent = 'Checking milestone progress…';
 
     let monthlyPledge = 0;
     try {
-      const { data: setRow } = await Ipon.client.from('contribution_settings').select('amount').limit(1).maybeSingle();
-      monthlyPledge = Number(setRow?.amount || 0);
-    } catch (_) {}
+      const { data: setRow } = await Ipon.client
+        .from('contribution_settings')
+        .select('default_amount')
+        .order('effective_month', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      monthlyPledge = Number(setRow?.default_amount || 0);
+    } catch (_) { }
 
-    const pct = targetAmt > 0 ? Math.min(100, Math.round((tracked / targetAmt) * 100)) : 0;
-    if (aiGoalNameEl) aiGoalNameEl.textContent = goalTitle;
-    if (aiGoalMetaEl) aiGoalMetaEl.textContent = `${Ipon.money(tracked)} / ${Ipon.money(targetAmt)} (${pct}%)`;
-
-    if (aiForecastText) aiForecastText.textContent = 'Generating intelligent forecast with Gemini AI…';
-    if (aiTipText) aiTipText.textContent = 'Analyzing savings habits and micro-optimizations…';
-    if (aiMotivationText) aiMotivationText.textContent = 'Consulting financial streak…';
+    applyLocalInsightsFallback({ targetAmt, tracked, remaining, pct, monthlyPledge, targetDate, forceOverwrite: false });
 
     try {
       const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
-      const prompt = `You are an expert, encouraging personal finance coach for myIPON (Group Savings and Financial Tracker) in the Philippines. The system is named "myIPON". Analyze this savings progress:
+      if (apiKey) {
+        const prompt = `You are an expert, encouraging personal finance coach for myIPON (Group Savings and Financial Tracker) in the Philippines. Analyze this savings progress:
 - Goal: "${goalTitle}"
 - Target Amount: ₱${targetAmt}
 - Saved So Far: ₱${tracked} (${pct}% complete)
 - Monthly Pledge: ₱${monthlyPledge}
 - Target Date: ${targetDate || 'Not specified'}
 
-Generate helpful financial guidance. Return a valid JSON object with EXACTLY these three keys:
+Return a valid JSON object with EXACTLY these three keys:
 {
   "forecast": "1-2 concise sentences on realistic timeline/completion based on monthly pledge and remaining balance",
   "smart_tip": "1 actionable, practical micro-saving or budget optimization tip tailored to this goal",
   "motivation": "1 inspiring, encouraging sentence celebrating their progress and momentum on myIPON"
 }`;
-
-      if (apiKey) {
         const res = await Ipon.callGemini({
           prompt,
-          systemInstruction: 'You are an intelligent, encouraging personal financial assistant for myIPON savers. The platform name is strictly "myIPON". Respond strictly in English and valid JSON format.',
+          systemInstruction: 'You are an intelligent, encouraging personal financial assistant for myIPON savers. Respond strictly in English and valid JSON format.',
           jsonResponse: true
         });
-
         const data = res?.parsed || {};
-        if (aiForecastText) aiForecastText.textContent = data.forecast || 'Keep contributing steadily to stay on track.';
-        if (aiTipText) aiTipText.textContent = data.smart_tip || 'Regular deposits create long-term compound savings.';
-        if (aiMotivationText) aiMotivationText.textContent = data.motivation || 'Consistency beats intensity every time!';
-
-        Ipon.toast(`✨ AI Insights generated with Gemini (${res.model})!`);
-        return;
-      }
-
-      // Action: ai-savings-insights (uses backend GEMINI_API_KEY in Supabase)
-      try {
-        const backendRes = await Ipon.invokeAccountFunction('manage-account', {
-          action: 'ai-savings-insights',
-          goal_name: goalTitle,
-          target_amount: targetAmt,
-          tracked_amount: tracked,
-          monthly_pledge: monthlyPledge,
-          target_date: targetDate
-        });
-        if (backendRes?.forecast) {
-          if (aiForecastText) aiForecastText.textContent = backendRes.forecast;
-          if (aiTipText) aiTipText.textContent = backendRes.smart_tip || 'Regular deposits create long-term compound savings.';
-          if (aiMotivationText) aiMotivationText.textContent = backendRes.motivation || 'Consistency beats intensity every time!';
-          Ipon.toast('✨ AI Insights generated with Gemini AI!');
+        if (data.forecast || data.smart_tip || data.motivation) {
+          if (aiForecastText && data.forecast) aiForecastText.textContent = data.forecast;
+          if (aiTipText && data.smart_tip) aiTipText.textContent = data.smart_tip;
+          if (aiMotivationText && data.motivation) aiMotivationText.textContent = data.motivation;
+          if (showRefreshToast) Ipon.toast('Savings insights updated.');
           return;
         }
-      } catch (_) { }
-    } catch (err) {
-      const remaining = Math.max(0, targetAmt - tracked);
-      const monthsNeeded = monthlyPledge > 0 ? Math.ceil(remaining / monthlyPledge) : 0;
-      if (aiForecastText) {
-        aiForecastText.textContent = monthlyPledge > 0
-          ? `At your current monthly pledge of ${Ipon.money(monthlyPledge)}, you are projected to reach your goal in ~${monthsNeeded} month${monthsNeeded === 1 ? '' : 's'}.`
-          : `Set a monthly contribution pledge to calculate your exact projected completion date.`;
       }
-      if (aiTipText) {
-        aiTipText.textContent = remaining > 0
-          ? `Adding just ${Ipon.money(Math.max(100, Math.round(remaining / 52)))} extra each week will significantly speed up your completion.`
-          : `Congratulations on reaching 100% of your target! Time to set your next financial milestone.`;
+
+      const backendRes = await Ipon.invokeAccountFunction({
+        action: 'ai-savings-insights',
+        goal_name: goalTitle,
+        target_amount: targetAmt,
+        current_saved: tracked,
+        monthly_pledge: monthlyPledge,
+        target_date: targetDate
+      });
+      if (backendRes?.forecast) {
+        if (aiForecastText) aiForecastText.textContent = backendRes.forecast;
+        if (aiTipText) aiTipText.textContent = backendRes.smart_tip || 'Regular deposits build steady momentum.';
+        if (aiMotivationText) aiMotivationText.textContent = backendRes.motivation || 'Consistency beats intensity every time!';
+        if (showRefreshToast) Ipon.toast('Savings insights updated.');
+        return;
       }
-      if (aiMotivationText) {
-        aiMotivationText.textContent = pct >= 100
-          ? `Goal accomplished! Your financial discipline sets a wonderful example.`
-          : `You are making steady progress! Every single peso saved builds your future financial peace of mind.`;
-      }
+    } catch (_) {
+      // Fallback below handles offline / unconfigured environments cleanly
     }
+
+    applyLocalInsightsFallback({ targetAmt, tracked, remaining, pct, monthlyPledge, targetDate, forceOverwrite: true });
+    if (showRefreshToast) Ipon.toast('Savings insights updated.');
   }
 
   aiInsightsBtn?.addEventListener('click', () => {
     if (!aiInsightsDialog) return;
     aiInsightsDialog.showModal();
-    fetchAndRenderAiInsights();
+    fetchAndRenderAiInsights(false);
   });
 
+  aiInsightsBack?.addEventListener('click', () => aiInsightsDialog?.close());
   aiInsightsClose?.addEventListener('click', () => aiInsightsDialog?.close());
   aiInsightsDone?.addEventListener('click', () => aiInsightsDialog?.close());
+  aiInsightsDialog?.addEventListener('click', (event) => {
+    if (event.target === aiInsightsDialog) aiInsightsDialog.close();
+  });
+  aiInsightsDialog?.addEventListener('click', (event) => {
+    const card = event.target.closest('.ai-insight-card[data-insight-card]');
+    if (!card) return;
+    const expanded = card.classList.toggle('is-expanded');
+    card.setAttribute('aria-expanded', String(expanded));
+    const detail = card.querySelector('.ai-insight-detail');
+    if (detail) detail.hidden = !expanded;
+  });
   aiInsightsRefresh?.addEventListener('click', () => {
     Ipon.setBusy(aiInsightsRefresh, true);
-    fetchAndRenderAiInsights().finally(() => Ipon.setBusy(aiInsightsRefresh, false));
+    fetchAndRenderAiInsights(true).finally(() => Ipon.setBusy(aiInsightsRefresh, false));
   });
   renderCalendar([]);
   state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });

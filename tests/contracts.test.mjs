@@ -1230,17 +1230,21 @@ test('system integrates Gemini AI for release updates and smart savings financia
 
   assert.match(dashboardHtml, /id="dashboard-ai-insights-btn"/);
   assert.match(dashboardHtml, /id="ai-insights-dialog"/);
+  assert.match(dashboardHtml, /id="ai-insights-back"/);
+  assert.doesNotMatch(dashboardHtml, /Powered by Gemini AI/i);
   assert.match(dashboardHtml, /id="ai-forecast-text"/);
   assert.match(dashboardHtml, /id="ai-tip-text"/);
   assert.match(dashboardHtml, /id="ai-motivation-text"/);
 
-  assert.match(dashboardJs, /dashboard-ai-insights-btn/);
   assert.match(dashboardJs, /ai-insights-dialog/);
   assert.match(dashboardJs, /ai-savings-insights/);
+  assert.match(dashboardJs, /current_saved/);
+  assert.match(dashboardJs, /applyLocalInsightsFallback/);
 
   assert.match(css, /\.button-ai-trigger/);
   assert.match(css, /\.button-ai-inline/);
   assert.match(css, /\.ai-insights-dialog/);
+  assert.match(css, /\.ai-back-btn/);
   assert.match(css, /\.ai-insight-card/);
 });
 

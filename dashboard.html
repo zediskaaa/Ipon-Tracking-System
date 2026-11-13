@@ -780,33 +780,38 @@
 
   <dialog class="form-dialog ai-insights-dialog" id="ai-insights-dialog" aria-labelledby="ai-insights-title">
     <div class="form-dialog-sheet">
-      <header class="form-dialog-header">
+      <header class="form-dialog-header ai-insights-header">
         <div class="ai-insights-header-head">
-          <div class="ai-badge-row">
-            <span class="ai-chip">
-              <svg class="ai-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="m12 3 1.9 5.5L19.4 10l-5.5 1.5L12 17l-1.9-5.5L4.6 10l5.5-1.5L12 3zM19 16l.9 2.5L22.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5zM6 16l.9 2.5L9.4 19l-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5z"
-                  fill="currentColor" />
-              </svg>
-              Powered by Gemini AI
-            </span>
+          <div class="ai-insights-topbar">
+            <button class="ai-back-btn" id="ai-insights-back" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              <span>Back</span>
+            </button>
+            <button class="dialog-close" id="ai-insights-close" type="button" aria-label="Close AI insights dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
           </div>
           <h2 id="ai-insights-title">AI Savings Coach</h2>
-          <p id="ai-insights-subtitle">Intelligent financial forecast and personalized habit optimization.</p>
+          <p id="ai-insights-subtitle">Smart financial forecast, pace breakdown, and savings recommendations.</p>
         </div>
-        <button class="dialog-close" id="ai-insights-close" type="button" aria-label="Close AI insights dialog"><svg
-            viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m6 6 12 12M18 6 6 18" />
-          </svg></button>
       </header>
       <div class="ai-insights-body">
         <div class="ai-insights-goal-summary" id="ai-insights-goal-summary">
-          <strong id="ai-insights-goal-name">General Savings Target</strong>
-          <span id="ai-insights-goal-meta">₱0.00 / ₱0.00 (0%)</span>
+          <div class="ai-goal-summary-top">
+            <div>
+              <small class="ai-goal-label">Active target</small>
+              <strong id="ai-insights-goal-name">General Savings Target</strong>
+            </div>
+            <span class="ai-goal-meta-pill" id="ai-insights-goal-meta">₱0.00 / ₱0.00 (0%)</span>
+          </div>
+          <div class="ai-goal-progress-track" aria-hidden="true">
+            <div class="ai-goal-progress-fill" id="ai-insights-goal-bar" style="width:0%"></div>
+          </div>
+          <div class="ai-goal-summary-sub">
+            <span id="ai-insights-goal-remaining">Remaining balance calculated live</span>
+            <a class="ai-goal-calc-link" href="savings.html">Open Goal Calculator →</a>
+          </div>
         </div>
         <div class="ai-insights-cards" id="ai-insights-content">
-          <div class="ai-insight-card">
+          <button class="ai-insight-card" type="button" data-insight-card="forecast" aria-expanded="false">
             <div class="ai-insight-card-icon forecast-icon">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
@@ -814,39 +819,50 @@
               </svg>
             </div>
             <div class="ai-insight-card-content">
-              <h4>Timeline &amp; Pace Forecast</h4>
-              <p id="ai-forecast-text">Calculating your projected timeline based on your current contributions…</p>
+              <div class="ai-insight-card-head">
+                <h4>Timeline &amp; Pace Forecast</h4>
+                <svg class="ai-insight-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+              </div>
+              <p id="ai-forecast-text">Calculating your projected timeline…</p>
+              <div class="ai-insight-detail" id="ai-forecast-detail" hidden></div>
             </div>
-          </div>
-          <div class="ai-insight-card">
+          </button>
+          <button class="ai-insight-card" type="button" data-insight-card="tip" aria-expanded="false">
             <div class="ai-insight-card-icon tip-icon">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M9 18h6M10 22h4M8.5 14.5A7 7 0 1 1 15.5 14.5C14.5 15.2 14 16 14 17h-4c0-1-.5-1.8-1.5-2.5Z" />
               </svg>
             </div>
             <div class="ai-insight-card-content">
-              <h4>Smart Savings Optimization</h4>
-              <p id="ai-tip-text">Analyzing your deposits to recommend high-impact micro-savings habits…</p>
+              <div class="ai-insight-card-head">
+                <h4>Smart Savings Optimization</h4>
+                <svg class="ai-insight-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+              </div>
+              <p id="ai-tip-text">Preparing actionable micro-saving habits…</p>
+              <div class="ai-insight-detail" id="ai-tip-detail" hidden></div>
             </div>
-          </div>
-          <div class="ai-insight-card">
+          </button>
+          <button class="ai-insight-card" type="button" data-insight-card="motivation" aria-expanded="false">
             <div class="ai-insight-card-icon motivation-icon">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
               </svg>
             </div>
             <div class="ai-insight-card-content">
-              <h4>Consistency &amp; Streak</h4>
-              <p id="ai-motivation-text">Tracking your financial discipline and savings streak…</p>
+              <div class="ai-insight-card-head">
+                <h4>Consistency &amp; Streak</h4>
+                <svg class="ai-insight-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+              </div>
+              <p id="ai-motivation-text">Evaluating your milestone progress…</p>
+              <div class="ai-insight-detail" id="ai-motivation-detail" hidden></div>
             </div>
-          </div>
+          </button>
         </div>
       </div>
       <div class="form-actions field-wide ai-insights-footer">
         <button class="button button-secondary" id="ai-insights-refresh" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"
-            style="width:13px;height:13px;vertical-align:-1px;margin-right:4px;">
+            style="width:14px;height:14px;vertical-align:-2px;margin-right:5px;">
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3" fill="none"
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
