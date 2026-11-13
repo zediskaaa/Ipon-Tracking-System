@@ -5,9 +5,16 @@
   const tbody = document.getElementById('records-body');
   const contributionEntriesBody = document.getElementById('contribution-entries-body');
   const statusFilter = document.getElementById('record-status-filter');
+  const memberFilter = document.getElementById('record-member-filter');
+  const spotlightCard = document.getElementById('member-spotlight');
+  const spotlightClear = document.getElementById('member-spotlight-clear');
   const pager = document.getElementById('record-pager');
   const pageSize = 25;
   let historyPage = 0;
+  let selectedMemberId = new URLSearchParams(window.location.search).get('member') || '';
+  let selectedMemberName = '';
+  let spotlightChart = null;
+
   const state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });
   if (state.failed || state.redirecting) return;
   if (!state.configured || !state.profile) {
@@ -68,6 +75,20 @@
     pager.querySelector('[data-page="next"]').disabled = historyPage >= pages - 1;
   }
 
+  function updateTabLinksWithMember() {
+    const tabs = document.querySelectorAll('.record-tabs a');
+    tabs.forEach((tab) => {
+      const href = tab.getAttribute('href');
+      if (!href) return;
+      const targetBase = href.split('?')[0];
+      tab.setAttribute('href', selectedMemberId ? `${targetBase}?member=${encodeURIComponent(selectedMemberId)}` : targetBase);
+    });
+    const currentUrl = new URL(window.location.href);
+    if (selectedMemberId) currentUrl.searchParams.set('member', selectedMemberId);
+    else currentUrl.searchParams.delete('member');
+    window.history.replaceState(null, '', currentUrl.toString());
+  }
+
   async function syncSuggestedAmount() {
     if (page !== 'contributions') return;
     const memberSelect = document.getElementById('member-id');
@@ -125,24 +146,37 @@
     const select = document.getElementById('member-id');
     const responsibleSelect = document.getElementById('responsible');
     const editResponsibleSelect = document.getElementById('edit-responsible');
-    if (!select && !responsibleSelect && !editResponsibleSelect) return;
+    if (!select && !responsibleSelect && !editResponsibleSelect && !memberFilter) return;
     const { data, error } = await Ipon.client.from('members').select('id,full_name,monthly_contribution_amount').eq('status', 'ACTIVE').order('full_name');
     if (error) throw error;
     membersList = data || [];
-    if (state.profile.role === 'ADMIN') {
-      const { data: groupProfiles } = await Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE');
-      profilesByUserId.clear();
-      profilesByMemberId.clear();
-      profilesByName.clear();
-      (groupProfiles || []).forEach((profile) => {
-        profilesByUserId.set(profile.id, profile);
-        if (profile.member_id) profilesByMemberId.set(profile.member_id, profile);
-        if (profile.full_name) profilesByName.set(profile.full_name.trim().toLowerCase(), profile);
-      });
+
+    const { data: groupProfiles } = await Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE');
+    profilesByUserId.clear();
+    profilesByMemberId.clear();
+    profilesByName.clear();
+    (groupProfiles || []).forEach((profile) => {
+      profilesByUserId.set(profile.id, profile);
+      if (profile.member_id) profilesByMemberId.set(profile.member_id, profile);
+      if (profile.full_name) profilesByName.set(profile.full_name.trim().toLowerCase(), profile);
+    });
+
+    if (memberFilter) {
+      const matched = membersList.find((m) => m.id === selectedMemberId || m.full_name === selectedMemberId);
+      if (matched) {
+        selectedMemberId = matched.id;
+        selectedMemberName = matched.full_name;
+      } else {
+        selectedMemberId = '';
+        selectedMemberName = '';
+      }
+      memberFilter.innerHTML = `<option value="">All members</option>${membersList.map((m) => `<option value="${m.id}" ${selectedMemberId === m.id ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
+      updateTabLinksWithMember();
     }
+
     if (select) {
       const currentSelection = select.value;
-      const selectedId = currentSelection || state.profile.member_id || '';
+      const selectedId = currentSelection || (selectedMemberId && membersList.some((m) => m.id === selectedMemberId) ? selectedMemberId : state.profile.member_id || '');
       select.innerHTML = membersList.length
         ? `<option value="">Select member</option>${membersList.map((member) => `<option value="${member.id}" ${selectedId === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}`
         : '<option value="">No active member profile found</option>';
@@ -153,7 +187,7 @@
     }
     if (responsibleSelect) {
       const ownMember = membersList.find((member) => member.id === state.profile.member_id);
-      const defaultResponsible = responsibleSelect.value || ownMember?.full_name || '';
+      const defaultResponsible = responsibleSelect.value || (selectedMemberName || ownMember?.full_name || '');
       populateResponsibleSelect(responsibleSelect, defaultResponsible);
       if (state.profile.role === 'MEMBER') {
         responsibleSelect.closest('.field').hidden = true;
@@ -163,6 +197,183 @@
     if (editResponsibleSelect) {
       populateResponsibleSelect(editResponsibleSelect, editResponsibleSelect.value);
     }
+  }
+
+  async function renderMemberSpotlight() {
+    if (!spotlightCard) return;
+    if (!selectedMemberId && !selectedMemberName) {
+      spotlightCard.hidden = true;
+      if (spotlightChart) {
+        spotlightChart.destroy();
+        spotlightChart = null;
+      }
+      return;
+    }
+    const member = membersList.find((m) => m.id === selectedMemberId || m.full_name === selectedMemberName) || { id: selectedMemberId, full_name: selectedMemberName };
+    const safeName = member.full_name || 'Member';
+    const safeMemberId = member.id || '';
+
+    let avatarUrl = profilesByMemberId.get(safeMemberId)?.avatar_url
+      || profilesByName.get(safeName.trim().toLowerCase())?.avatar_url
+      || '';
+    if (!avatarUrl && safeMemberId) {
+      try {
+        const { data: rpcAvatar } = await Ipon.rpc('group_member_avatar', { p_member_id: safeMemberId });
+        if (rpcAvatar) avatarUrl = rpcAvatar;
+      } catch (_) {}
+    }
+
+    const avatarEl = document.getElementById('member-spotlight-avatar');
+    if (avatarEl) {
+      avatarEl.innerHTML = Ipon.avatarMarkup(avatarUrl, safeName, 'avatar-lg');
+      Ipon.bindAvatarFallbacks(avatarEl);
+    }
+    const nameEl = document.getElementById('member-spotlight-name');
+    if (nameEl) nameEl.textContent = safeName;
+    const badgeEl = document.getElementById('member-spotlight-badge');
+    if (badgeEl) {
+      const pledge = Number(member.monthly_contribution_amount || 0);
+      badgeEl.textContent = pledge > 0 ? `Pledge: ${Ipon.money(pledge)}/mo` : 'Active member';
+    }
+
+    let totalAdditions = 0;
+    let totalDeductions = 0;
+    let totalExpenses = 0;
+    const monthlyStats = new Map();
+
+    try {
+      const [contribRes, withRes, expRes] = await Promise.all([
+        safeMemberId
+          ? Ipon.client.from('contributions')
+              .select('amount,payment_date,approval_status,contribution_periods!inner(period_month,member_id)')
+              .eq('approval_status', 'CONFIRMED')
+              .eq('contribution_periods.member_id', safeMemberId)
+          : Promise.resolve({ data: [] }),
+        Ipon.client.from('withdrawals')
+          .select('amount,transaction_date,approval_status')
+          .eq('approval_status', 'CONFIRMED')
+          .eq('person_responsible', safeName),
+        Ipon.client.from('expenses')
+          .select('amount,transaction_date,approval_status')
+          .eq('approval_status', 'CONFIRMED')
+          .eq('person_responsible', safeName)
+      ]);
+
+      (contribRes.data || []).forEach((c) => {
+        const amt = Number(c.amount || 0);
+        totalAdditions += amt;
+        const month = (c.contribution_periods?.period_month || c.payment_date || '').slice(0, 7);
+        if (month) {
+          const prev = monthlyStats.get(month) || { additions: 0, deductions: 0 };
+          prev.additions += amt;
+          monthlyStats.set(month, prev);
+        }
+      });
+
+      (withRes.data || []).forEach((w) => {
+        const amt = Number(w.amount || 0);
+        totalDeductions += amt;
+        const month = (w.transaction_date || '').slice(0, 7);
+        if (month) {
+          const prev = monthlyStats.get(month) || { additions: 0, deductions: 0 };
+          prev.deductions += amt;
+          monthlyStats.set(month, prev);
+        }
+      });
+
+      (expRes.data || []).forEach((e) => {
+        const amt = Number(e.amount || 0);
+        totalExpenses += amt;
+        const month = (e.transaction_date || '').slice(0, 7);
+        if (month) {
+          const prev = monthlyStats.get(month) || { additions: 0, deductions: 0 };
+          prev.deductions += amt;
+          monthlyStats.set(month, prev);
+        }
+      });
+    } catch (_) {}
+
+    const netStanding = totalAdditions - totalDeductions - totalExpenses;
+
+    const statAdd = document.getElementById('member-stat-contributed');
+    if (statAdd) statAdd.textContent = Ipon.money(totalAdditions);
+    const statWith = document.getElementById('member-stat-deductions');
+    if (statWith) statWith.textContent = Ipon.money(totalDeductions);
+    const statExp = document.getElementById('member-stat-expenses');
+    if (statExp) statExp.textContent = Ipon.money(totalExpenses);
+    const statNet = document.getElementById('member-stat-net');
+    if (statNet) statNet.textContent = Ipon.money(netStanding);
+
+    const canvas = document.getElementById('member-spotlight-chart');
+    const emptyBox = document.getElementById('member-spotlight-chart-empty');
+    if (spotlightChart) {
+      spotlightChart.destroy();
+      spotlightChart = null;
+    }
+
+    const months = [...monthlyStats.keys()].sort();
+    if (canvas && emptyBox) {
+      if (!months.length) {
+        canvas.hidden = true;
+        emptyBox.hidden = false;
+      } else {
+        canvas.hidden = false;
+        emptyBox.hidden = true;
+        if (window.Chart) {
+          const labels = months.map((m) => Ipon.dateLabel(`${m}-01`, { month: 'short', year: 'numeric' }));
+          const addData = months.map((m) => monthlyStats.get(m).additions);
+          const dedData = months.map((m) => monthlyStats.get(m).deductions);
+          spotlightChart = new window.Chart(canvas, {
+            type: 'bar',
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: 'Additions',
+                  data: addData,
+                  backgroundColor: '#287a4c',
+                  borderRadius: 5,
+                  maxBarThickness: 32
+                },
+                {
+                  label: 'Deductions & Expenses',
+                  data: dedData,
+                  backgroundColor: '#ae3934',
+                  borderRadius: 5,
+                  maxBarThickness: 32
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: (context) => ` ${context.dataset.label}: ${Ipon.money(context.raw)}`
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  grid: { display: false }
+                },
+                y: {
+                  beginAtZero: true,
+                  ticks: {
+                    precision: 0,
+                    callback: (val) => `₱${Number(val).toLocaleString('en-PH')}`
+                  }
+                }
+              }
+            }
+          });
+        }
+      }
+    }
+
+    spotlightCard.hidden = false;
   }
 
   async function loadContributions(preserveAmount = false) {
@@ -177,16 +388,19 @@
       month.addEventListener('change', () => load());
     }
     statusRowsByMonth.clear();
-    const { data, error } = await Ipon.client.from('v_contribution_status').select('*').eq('period_month', month.value).order('member_name');
+    let statusQuery = Ipon.client.from('v_contribution_status').select('*').eq('period_month', month.value);
+    if (selectedMemberId) statusQuery = statusQuery.eq('member_id', selectedMemberId);
+    const { data, error } = await statusQuery.order('member_name');
     if (error) throw error;
     (data || []).forEach((row) => {
       statusRowsByMonth.set(`${row.member_id}:${row.period_month}`, row);
     });
-    tbody.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No contribution periods for this month.</td></tr>';
+    tbody.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}</td></tr>`).join('') : `<tr><td colspan="6" class="empty-state">${selectedMemberName ? `No contribution status found for ${Ipon.escapeHtml(selectedMemberName)} in this month.` : 'No contribution periods for this month.'}</td></tr>`;
 
     let entriesQuery = Ipon.client.from('contributions')
       .select('id,amount,payment_date,transaction_reference,notes,approval_status,void_reason,review_note,submitted_by,contribution_periods!inner(period_month,members!inner(id,full_name))', { count: 'exact' });
     if (statusFilter?.value) entriesQuery = entriesQuery.eq('approval_status', statusFilter.value);
+    if (selectedMemberId) entriesQuery = entriesQuery.eq('contribution_periods.member_id', selectedMemberId);
     const { data: entries, count, error: entriesError } = await entriesQuery
       .order('payment_date', { ascending: false }).range(historyPage * pageSize, (historyPage + 1) * pageSize - 1);
     if (entriesError) throw entriesError;
@@ -195,7 +409,7 @@
     contributionEntriesBody.innerHTML = entries.length ? entries.map((entry) => {
       const isCancelled = entry.approval_status === 'VOIDED' || entry.approval_status === 'REJECTED';
       return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${reasonNoteHtml(entry)}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`;
-    }).join('') : '<tr><td colspan="6" class="empty-state">No additions recorded yet.</td></tr>';
+    }).join('') : `<tr><td colspan="6" class="empty-state">${selectedMemberName ? `No additions found for ${Ipon.escapeHtml(selectedMemberName)}.` : 'No additions recorded yet.'}</td></tr>`;
     if (!preserveAmount) await syncSuggestedAmount();
   }
 
@@ -209,6 +423,7 @@
   async function loadTransactions() {
     let query = Ipon.client.from(page).select('*', { count: 'exact' });
     if (statusFilter?.value) query = query.eq('approval_status', statusFilter.value);
+    if (selectedMemberName) query = query.eq('person_responsible', selectedMemberName);
     const { data, count, error } = await query.order('transaction_date', { ascending: false }).range(historyPage * pageSize, (historyPage + 1) * pageSize - 1);
     if (error) throw error;
     recordRows = data || [];
@@ -216,12 +431,13 @@
     tbody.innerHTML = data.length ? data.map((row) => {
       const isCancelled = row.approval_status === 'VOIDED' || row.approval_status === 'REJECTED';
       return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(row.transaction_date)}</td><td>${Ipon.escapeHtml(row.category)}</td><td>${Ipon.escapeHtml(row.description)}${reasonNoteHtml(row)}</td><td>${Ipon.escapeHtml(row.person_responsible)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${statusBadge(row.approval_status)}</td><td>${actionButtons(row)}</td></tr>`;
-    }).join('') : `<tr><td colspan="7" class="empty-state">No ${page} recorded yet.</td></tr>`;
+    }).join('') : `<tr><td colspan="7" class="empty-state">${selectedMemberName ? `No ${page} found for ${Ipon.escapeHtml(selectedMemberName)}.` : `No ${page} recorded yet.`}</td></tr>`;
   }
 
   async function load(preserveAmount = false) {
     try {
       await loadMembers();
+      await renderMemberSpotlight();
       if (page === 'contributions') await loadContributions(preserveAmount);
       else await loadTransactions();
     } catch (error) {
@@ -331,6 +547,24 @@
   tbody.addEventListener('click', handleRecordAction);
   contributionEntriesBody?.addEventListener('click', handleRecordAction);
   statusFilter?.addEventListener('change', () => { historyPage = 0; load(); });
+  memberFilter?.addEventListener('change', async () => {
+    selectedMemberId = memberFilter.value;
+    const selected = membersList.find((m) => m.id === selectedMemberId);
+    selectedMemberName = selected ? selected.full_name : '';
+    historyPage = 0;
+    updateTabLinksWithMember();
+    await renderMemberSpotlight();
+    await (page === 'contributions' ? loadContributions(true) : loadTransactions());
+  });
+  spotlightClear?.addEventListener('click', async () => {
+    if (memberFilter) memberFilter.value = '';
+    selectedMemberId = '';
+    selectedMemberName = '';
+    historyPage = 0;
+    updateTabLinksWithMember();
+    await renderMemberSpotlight();
+    await (page === 'contributions' ? loadContributions(true) : loadTransactions());
+  });
   pager?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-page]');
     if (!button || button.disabled) return;

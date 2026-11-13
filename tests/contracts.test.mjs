@@ -937,3 +937,27 @@ test('multi-group workspaces support editable group name/DP, admin contributor t
   assert.match(manageAccountEdge, /bccSuperAdmin/);
   assert.match(superAdminJs, /email:\s*targetEmail/);
 });
+
+test('financial records support member filtering, DP spotlight card, activity graph, and balanced form inputs across additions, deductions, and expenses', () => {
+  const records = read('js/records.js');
+  const css = read('css/app.css');
+  for (const pageName of ['contributions.html', 'withdrawals.html', 'expenses.html']) {
+    const html = read(pageName);
+    assert.match(html, /<select id="record-member-filter"/);
+    assert.match(html, /id="member-spotlight"[^>]*hidden/);
+    assert.match(html, /id="member-spotlight-avatar"/);
+    assert.match(html, /id="member-spotlight-name"/);
+    assert.match(html, /id="member-spotlight-clear"/);
+    assert.match(html, /<canvas id="member-spotlight-chart"/);
+    assert.match(html, /cdn\.jsdelivr\.net\/npm\/chart\.js/);
+  }
+  assert.match(records, /function renderMemberSpotlight/);
+  assert.match(records, /selectedMemberId/);
+  assert.match(records, /selectedMemberName/);
+  assert.match(records, /Ipon\.avatarMarkup/);
+  assert.match(records, /function updateTabLinksWithMember/);
+  assert.match(css, /\.record-member-bar/);
+  assert.match(css, /\.member-spotlight-card/);
+  assert.match(css, /\.member-spotlight-metrics/);
+  assert.match(css, /\.split-layout \.sticky-panel \.form-grid/);
+});
