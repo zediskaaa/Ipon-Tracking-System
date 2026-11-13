@@ -270,6 +270,11 @@
           throw new Error(otpOutcome.error);
         }
 
+        if (otpOutcome?.bypassed || !otpOutcome?.email_sent) {
+          await completeAdminRequestSubmission(pendingSignupPayload);
+          return;
+        }
+
         if (verifySubtitle) {
           verifySubtitle.textContent = `Enter the 6-digit verification code sent to ${submittedEmail}.`;
         }
@@ -325,6 +330,43 @@
     }
   });
 
+  async function completeAdminRequestSubmission(payload) {
+    if (!payload) return;
+    const { data: signUpData, error } = await Ipon.client.auth.signUp({
+      email: payload.email,
+      password: payload.password,
+      options: {
+        data: {
+          first_name: payload.first,
+          middle_name: payload.middle,
+          last_name: payload.last,
+          full_name: payload.full,
+          contact_number: payload.contact,
+          request_reason: payload.reason,
+          account_kind: 'ADMIN_REQUEST'
+        }
+      }
+    });
+
+    if (error) throw error;
+    if (signUpData?.user && Array.isArray(signUpData.user.identities) && signUpData.user.identities.length === 0) {
+      throw new Error('An account or administrator request with this email already exists.');
+    }
+
+    await Ipon.client.auth.signOut();
+    const submittedEmail = payload.email;
+    pendingSignupPayload = null;
+    verifyDialog?.close();
+    form.reset();
+    setMode('login');
+    email.value = submittedEmail;
+    message.dataset.tone = 'success';
+    message.textContent = 'Request submitted. Wait for an email update on your approval, then sign in once approved.';
+    Ipon.toast('Administrator request submitted. Check your email for the decision.');
+    if (requestSuccessEmail) requestSuccessEmail.textContent = `Updates will be sent to ${submittedEmail}`;
+    requestSuccessDialog?.showModal();
+  }
+
   verifyForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!pendingSignupPayload) return;
@@ -355,39 +397,7 @@
         throw new Error(verifyRes?.message || 'Invalid or expired verification code.');
       }
 
-      const { data: signUpData, error } = await Ipon.client.auth.signUp({
-        email: pendingSignupPayload.email,
-        password: pendingSignupPayload.password,
-        options: {
-          data: {
-            first_name: pendingSignupPayload.first,
-            middle_name: pendingSignupPayload.middle,
-            last_name: pendingSignupPayload.last,
-            full_name: pendingSignupPayload.full,
-            contact_number: pendingSignupPayload.contact,
-            request_reason: pendingSignupPayload.reason,
-            account_kind: 'ADMIN_REQUEST'
-          }
-        }
-      });
-
-      if (error) throw error;
-      if (signUpData?.user && Array.isArray(signUpData.user.identities) && signUpData.user.identities.length === 0) {
-        throw new Error('An account or administrator request with this email already exists.');
-      }
-
-      await Ipon.client.auth.signOut();
-      const submittedEmail = pendingSignupPayload.email;
-      pendingSignupPayload = null;
-      verifyDialog?.close();
-      form.reset();
-      setMode('login');
-      email.value = submittedEmail;
-      message.dataset.tone = 'success';
-      message.textContent = 'Request submitted. Wait for an email update on your approval, then sign in once approved.';
-      Ipon.toast('Administrator request submitted. Check your email for the decision.');
-      if (requestSuccessEmail) requestSuccessEmail.textContent = `Updates will be sent to ${submittedEmail}`;
-      requestSuccessDialog?.showModal();
+      await completeAdminRequestSubmission(pendingSignupPayload);
     } catch (err) {
       if (verifyError) {
         verifyError.hidden = false;
@@ -412,6 +422,10 @@
         full_name: pendingSignupPayload.full
       });
       if (res?.error) throw new Error(res.error);
+      if (res?.bypassed || !res?.email_sent) {
+        await completeAdminRequestSubmission(pendingSignupPayload);
+        return;
+      }
       Ipon.toast(`Verification code resent to ${pendingSignupPayload.email}.`);
       verifyCode?.focus();
     } catch (err) {
@@ -423,7 +437,6 @@
       Ipon.setBusy(verifyResend, false);
     }
   });
-
   verifyClose?.addEventListener('click', () => {
     verifyDialog?.close();
   });
