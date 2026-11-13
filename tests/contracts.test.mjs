@@ -1202,7 +1202,7 @@ test('feature requests support credit consent toggle and release updates display
   assert.match(css, /\.announcement-release-section\{/);
 });
 
-test('system integrates Gemini AI for release updates and smart savings financial insights with procedural fallbacks', () => {
+test('system integrates Gemini AI for release updates with procedural fallbacks', () => {
   const edge = read('supabase/functions/manage-account/index.ts');
   const superAdminHtml = read('super-admin.html');
   const superAdminJs = read('js/super-admin.js');
@@ -1213,7 +1213,7 @@ test('system integrates Gemini AI for release updates and smart savings financia
   assert.match(edge, /generateWithGemini/);
   assert.match(edge, /generateProceduralReleaseNotes/);
   assert.match(edge, /action === 'ai-generate-release-notes'/);
-  assert.match(edge, /action === 'ai-savings-insights'/);
+  assert.doesNotMatch(edge, /action === 'ai-savings-insights'/);
   assert.match(edge, /action === 'test-gemini-key'/);
   assert.match(edge, /gemini-1\.5-flash/);
 
@@ -1228,24 +1228,14 @@ test('system integrates Gemini AI for release updates and smart savings financia
   assert.match(superAdminJs, /ipon_gemini_api_key/);
   assert.match(superAdminJs, /ai-generate-release-notes/);
 
-  assert.match(dashboardHtml, /id="dashboard-ai-insights-btn"/);
-  assert.match(dashboardHtml, /id="ai-insights-dialog"/);
-  assert.match(dashboardHtml, /id="ai-insights-back"/);
-  assert.doesNotMatch(dashboardHtml, /Powered by Gemini AI/i);
-  assert.match(dashboardHtml, /id="ai-forecast-text"/);
-  assert.match(dashboardHtml, /id="ai-tip-text"/);
-  assert.match(dashboardHtml, /id="ai-motivation-text"/);
-
-  assert.match(dashboardJs, /ai-insights-dialog/);
-  assert.match(dashboardJs, /ai-savings-insights/);
-  assert.match(dashboardJs, /current_saved/);
-  assert.match(dashboardJs, /applyLocalInsightsFallback/);
+  assert.doesNotMatch(dashboardHtml, /id="dashboard-ai-insights-btn"/);
+  assert.doesNotMatch(dashboardHtml, /id="ai-insights-dialog"/);
+  assert.doesNotMatch(dashboardJs, /ai-insights-dialog/);
+  assert.doesNotMatch(dashboardJs, /ai-savings-insights/);
 
   assert.match(css, /\.button-ai-trigger/);
-  assert.match(css, /\.button-ai-inline/);
-  assert.match(css, /\.ai-insights-dialog/);
-  assert.match(css, /\.ai-back-btn/);
-  assert.match(css, /\.ai-insight-card/);
+  assert.doesNotMatch(css, /\.button-ai-inline/);
+  assert.doesNotMatch(css, /\.ai-insights-dialog/);
 });
 
 test('self-serve group creation, direct signup, and interactive invitation acceptance/decline', () => {
