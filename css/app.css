@@ -180,6 +180,13 @@ a { color:inherit; }
 .field-error { color:var(--red); font-family:Arial,sans-serif; font-size:12px; font-weight:700; line-height:1.4; }
 .field input:not([type="checkbox"]):not([type="radio"])[aria-invalid="true"],.field select[aria-invalid="true"],.field textarea[aria-invalid="true"],.field input:not([type="checkbox"]):not([type="radio"])[aria-invalid="true"]:focus,.field select[aria-invalid="true"]:focus,.field textarea[aria-invalid="true"]:focus,.data-table select[aria-invalid="true"] { border-color:var(--red); background:#fff8f7; box-shadow:0 0 0 3px rgba(174,57,52,.14); }
 .split-layout { display:grid; grid-template-columns:minmax(280px,.72fr) minmax(0,1.28fr); align-items:start; gap:18px; }
+.split-layout > .panel,
+.split-layout > .panel + .panel,
+.settings-grid > .panel,
+.settings-grid > .panel + .panel,
+.reports-grid > .panel,
+.reports-grid > .panel + .panel { margin-top:0; }
+.split-layout > .panel { border-radius:16px; }
 .sticky-panel { position:sticky; top:24px; }
 .split-layout .sticky-panel { background:#fffdf9; border:1px solid rgba(20,45,43,.14); border-radius:16px; box-shadow:0 4px 20px rgba(20,45,43,.05); }
 .split-layout .sticky-panel .panel-header { border-bottom:1px solid rgba(20,45,43,.08); padding-bottom:14px; margin-bottom:16px; }
