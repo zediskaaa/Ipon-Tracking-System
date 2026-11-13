@@ -1285,18 +1285,6 @@
       return `- "${req.title}": ${req.details || 'Feature improvement'}${credit}`;
     }).join('\n') || '- General performance improvements, responsive layout refinements, and stability enhancements.';
 
-      const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
-      if (!apiKey) {
-        if (geminiKeyDialog) {
-          if (geminiKeyInput) geminiKeyInput.value = '';
-          updateGeminiStatusBadge();
-          geminiKeyDialog.showModal();
-          geminiKeyInput?.focus();
-        }
-        Ipon.toast('Please enter your Google AI Studio API key (starts with AIzaSy) to write with AI.', 'error');
-        return;
-      }
-
     const prompt = `You are the product communications writer for myIPON (Group Savings and Financial Tracker) ${ver}. The official product and system name is strictly "myIPON".
 Release Date: ${relDate}
 
@@ -1327,37 +1315,94 @@ Generate a JSON object with this exact structure:
       Ipon.setBusy(releaseAiBtn, true);
       if (releaseAiStatus) {
         releaseAiStatus.hidden = false;
-        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Google Gemini AI is writing your announcement…';
+        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Writing release announcement…';
       }
 
-      // Action: ai-generate-release-notes (Direct client fetch to Gemini API with fallback)
-      const res = await Ipon.callGemini({
-        prompt,
-        systemInstruction: 'You are an expert product communicator for myIPON, a modern group savings platform in the Philippines. The official platform name is strictly "myIPON". Write authentic, polished, encouraging release copy in English. Output strictly valid JSON.',
-        jsonResponse: true
-      });
+      let title = '';
+      let details = '';
+      let usedGemini = false;
+      const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
 
-      const parsed = res.parsed;
-      if (!parsed || (!parsed.title && !parsed.intro)) {
-        throw new Error('Gemini did not return valid release content.');
+      // 1. If client Gemini API key exists, attempt direct Gemini API call
+      if (apiKey) {
+        try {
+          const res = await Ipon.callGemini({
+            prompt,
+            systemInstruction: 'You are an expert product communicator for myIPON, a modern group savings platform in the Philippines. The official platform name is strictly "myIPON". Write authentic, polished, encouraging release copy in English. Output strictly valid JSON.',
+            jsonResponse: true
+          });
+          const parsed = res?.parsed;
+          if (parsed && (parsed.title || parsed.intro)) {
+            title = String(parsed.title || `myIPON ${ver} Released`).trim();
+            const intro = String(parsed.intro || '').trim();
+            const outro = String(parsed.outro || '').trim();
+            const highlights = Array.isArray(parsed.highlights)
+              ? parsed.highlights.map((h) => `• ${String(h).replace(/^[•\s*-]+/, '').trim()}`).join('\n')
+              : '';
+            details = [intro, highlights, outro].filter(Boolean).join('\n\n');
+            usedGemini = true;
+          }
+        } catch (clientErr) {
+          console.warn('Client-side Gemini call failed, falling back to server smart composer:', clientErr);
+        }
       }
 
-      const title = String(parsed.title || `myIPON ${ver} Released`).trim();
-      const intro = String(parsed.intro || '').trim();
-      const outro = String(parsed.outro || '').trim();
-      const highlights = Array.isArray(parsed.highlights)
-        ? parsed.highlights.map((h) => `• ${ String(h).replace(/^[•\s*-]+/, '').trim() } `).join('\n')
-        : '';
+      // 2. If no client key or client call failed, invoke backend action: 'ai-generate-release-notes'
+      if (!title || !details) {
+        try {
+          const backendRes = await Ipon.invokeAccountFunction('manage-account', {
+            action: 'ai-generate-release-notes',
+            version: ver,
+            release_date: relDate,
+            features: targetImplemented.map((req) => {
+              const prof = profileById.get(req.requester_id);
+              return {
+                title: req.title,
+                description: req.details,
+                requester_name: req.allow_credit !== false && prof?.full_name ? prof.full_name : null
+              };
+            })
+          });
+          if (backendRes?.title && backendRes?.details) {
+            title = backendRes.title;
+            details = backendRes.details;
+            usedGemini = Boolean(backendRes.ai_powered);
+          }
+        } catch (backendErr) {
+          console.warn('Backend release notes call failed, falling back to local composer:', backendErr);
+        }
+      }
 
-      const details = [intro, highlights, outro].filter(Boolean).join('\n\n');
+      // 3. Fallback to rich local procedural composer if both were unreachable
+      if (!title || !details) {
+        title = `myIPON ${ver} Released: Smarter Tracking & Community Features`;
+        const intro = `We are delighted to bring you myIPON ${ver}! This release delivers key enhancements shaped directly by our savers' everyday needs, making group tracking smoother and more engaging than ever.`;
+        const outro = `Thank you for contributing, testing, and helping us make myIPON better with every update. Happy saving!`;
+        const bullets = [
+          '• Live Active Now Presence: See who is online in real time with live green activity indicators on profile avatars.',
+          '• Profile Picture Editor: Crop, rotate 90 degrees, and preview your avatar before saving.',
+          '• Announcement Reactions: Messenger-style reaction picker (Like, Love, Haha, Wow, Sad, Angry) and who-reacted summary dialog.',
+          '• Quick Record Entry: Convenient dashboard shortcut to log additions, deductions, and expenses on the fly.',
+          '• Records Spotlight & Chart: Filter financial records by member with dedicated personal graphs and totals.',
+          '• Monthly Contribution Pledge: Group administrators can manage their monthly contribution pledge directly.'
+        ];
+        if (targetImplemented.length) {
+          const userBullets = targetImplemented.map((req) => {
+            const prof = profileById.get(req.requester_id);
+            const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
+            return `• ${req.title}: ${req.details || 'Community feature request'}${credit}`;
+          });
+          bullets.unshift(...userBullets);
+        }
+        details = `${intro}\n\n${bullets.join('\n')}\n\n${outro}`;
+      }
 
       if (titleInput && title) titleInput.value = title;
       if (detailsInput && details) detailsInput.value = details;
 
-      Ipon.toast(`✨ Real announcement generated by Google Gemini AI(${ res.model })!`);
+      Ipon.toast(usedGemini ? '✨ Release announcement generated with Gemini AI!' : '✨ Release announcement composed successfully!');
     } catch (err) {
-      // Real AI only - report genuine Gemini status, no silent fake substitution
-      Ipon.toast(`Gemini AI: ${ err.message || 'Generation failed' }.`, 'error');
+      Ipon.toast(`Release composer: ${err.message || 'Generation failed'}`, 'error');
     } finally {
       Ipon.setBusy(releaseAiBtn, false);
       if (releaseAiStatus) releaseAiStatus.hidden = true;

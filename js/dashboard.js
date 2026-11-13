@@ -1211,10 +1211,6 @@
 
     try {
       const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
-      if (!apiKey) {
-        throw new Error('No Gemini API key configured. Define geminiApiKey in js/config.js or configure in Super Admin.');
-      }
-
       const prompt = `You are an expert, encouraging personal finance coach for myIPON (Group Savings and Financial Tracker) in the Philippines. The system is named "myIPON". Analyze this savings progress:
 - Goal: "${goalTitle}"
 - Target Amount: ₱${targetAmt}
@@ -1229,19 +1225,40 @@ Generate helpful financial guidance. Return a valid JSON object with EXACTLY the
   "motivation": "1 inspiring, encouraging sentence celebrating their progress and momentum on myIPON"
 }`;
 
-      // Action: ai-savings-insights (Direct client fetch to Gemini API with fallback)
-      const res = await Ipon.callGemini({
-        prompt,
-        systemInstruction: 'You are an intelligent, encouraging personal financial assistant for myIPON savers. The platform name is strictly "myIPON". Respond strictly in English and valid JSON format.',
-        jsonResponse: true
-      });
+      if (apiKey) {
+        const res = await Ipon.callGemini({
+          prompt,
+          systemInstruction: 'You are an intelligent, encouraging personal financial assistant for myIPON savers. The platform name is strictly "myIPON". Respond strictly in English and valid JSON format.',
+          jsonResponse: true
+        });
 
-      const data = res?.parsed || {};
-      if (aiForecastText) aiForecastText.textContent = data.forecast || 'Keep contributing steadily to stay on track.';
-      if (aiTipText) aiTipText.textContent = data.smart_tip || 'Regular deposits create long-term compound savings.';
-      if (aiMotivationText) aiMotivationText.textContent = data.motivation || 'Consistency beats intensity every time!';
+        const data = res?.parsed || {};
+        if (aiForecastText) aiForecastText.textContent = data.forecast || 'Keep contributing steadily to stay on track.';
+        if (aiTipText) aiTipText.textContent = data.smart_tip || 'Regular deposits create long-term compound savings.';
+        if (aiMotivationText) aiMotivationText.textContent = data.motivation || 'Consistency beats intensity every time!';
 
-      Ipon.toast(`✨ AI Insights generated with Gemini (${res.model})!`);
+        Ipon.toast(`✨ AI Insights generated with Gemini (${res.model})!`);
+        return;
+      }
+
+      // Action: ai-savings-insights (uses backend GEMINI_API_KEY in Supabase)
+      try {
+        const backendRes = await Ipon.invokeAccountFunction('manage-account', {
+          action: 'ai-savings-insights',
+          goal_name: goalTitle,
+          target_amount: targetAmt,
+          tracked_amount: tracked,
+          monthly_pledge: monthlyPledge,
+          target_date: targetDate
+        });
+        if (backendRes?.forecast) {
+          if (aiForecastText) aiForecastText.textContent = backendRes.forecast;
+          if (aiTipText) aiTipText.textContent = backendRes.smart_tip || 'Regular deposits create long-term compound savings.';
+          if (aiMotivationText) aiMotivationText.textContent = backendRes.motivation || 'Consistency beats intensity every time!';
+          Ipon.toast('✨ AI Insights generated with Gemini AI!');
+          return;
+        }
+      } catch (_) { }
     } catch (err) {
       const remaining = Math.max(0, targetAmt - tracked);
       const monthsNeeded = monthlyPledge > 0 ? Math.ceil(remaining / monthlyPledge) : 0;
