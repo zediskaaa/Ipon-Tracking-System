@@ -873,15 +873,15 @@
 
   const RELEASE_INTROS = [
     (ver) => `Welcome to System ${ver}! We've packed this release with fresh features, community-requested improvements, and refined performance across IPON:`,
-    (ver) => `Big news! System ${ver} is officially live, delivering our latest upgrades, community suggestions, and smoother savings tools:`,
-    (ver) => `Introducing System ${ver}! Designed with your feedback in mind, this update rolls out powerful enhancements and brand new capabilities:`,
-    (ver) => `System ${ver} has arrived! Explore the newest features, workflow refinements, and user-requested updates built to elevate your IPON experience:`,
-    (ver) => `We are thrilled to launch System ${ver}! Check out what's new, what's improved, and the latest community-driven additions now ready for you:`,
-    (ver) => `Fresh off the press: System ${ver} is here! Discover the newest improvements, upgraded tools, and community-requested features in this release:`,
+    (ver) => `Big news for our saving community! System ${ver} is officially live, delivering our latest upgrades, community suggestions, and smoother tracking tools:`,
+    (ver) => `Introducing System ${ver}! Designed with your feedback in mind, this update rolls out powerful enhancements, modern controls, and brand new capabilities:`,
+    (ver) => `System ${ver} has arrived! Explore the newest features, workflow refinements, and user-requested updates built to elevate your daily saving journey:`,
+    (ver) => `We are thrilled to launch System ${ver}! Check out what's new, what's improved, and the latest community-driven additions now ready across the platform:`,
+    (ver) => `Fresh off the press: System ${ver} is here! Discover the newest improvements, upgraded tools, and community-requested features in this milestone release:`,
     (ver) => `Say hello to System ${ver}! Here is a breakdown of the new capabilities, system refinements, and user requests implemented in this rollout:`,
-    (ver) => `Another step forward: System ${ver} is ready! We've listened to your feedback and brought a fresh wave of features and enhancements to IPON:`,
-    (ver) => `What a milestone! System ${ver} is here with key quality-of-life updates, community feature implementations, and system-wide polishes:`,
-    (ver) => `Here is what is new in System ${ver}! Packed with user-inspired updates, performance tweaks, and exciting new tools for your daily tracking:`
+    (ver) => `Another major step forward: System ${ver} is ready! We've listened to your feedback and brought a fresh wave of features and enhancements to IPON:`,
+    (ver) => `What an exciting release! System ${ver} brings key quality-of-life updates, community feature implementations, and system-wide performance polishes:`,
+    (ver) => `Here is what is new in System ${ver}! Packed with user-inspired updates, visual upgrades, and exciting new tools for your daily group tracking:`
   ];
 
   const RELEASE_TITLES = [
@@ -889,11 +889,14 @@
     (ver) => `System ${ver} is Now Live!`,
     (ver) => `What's New in System ${ver}`,
     (ver) => `Introducing System ${ver}`,
-    (ver) => `System ${ver} Feature Update`
+    (ver) => `System ${ver} Feature Update`,
+    (ver) => `System ${ver}: Community & Performance Rollout`,
+    (ver) => `Official Rollout: System ${ver}`,
+    (ver) => `System ${ver} Milestone Update`
   ];
 
   const RELEASE_OUTROS = [
-    () => `Thank you for contributing, testing, and helping us make IPON better with every update!`,
+    () => `Thank you for contributing, testing, and helping us make IPON better with every update! Enjoy saving together.`,
     () => `We're grateful for your continued support and feedback. Enjoy the new update and happy saving!`,
     () => `Your ideas drive IPON forward! Keep submitting your suggestions, and let us know what you think of this release.`,
     () => `Special thanks to our active community for shaping these improvements. More exciting updates are on the way!`,
@@ -902,6 +905,39 @@
     () => `We couldn't do this without your feedback and support. Here's to smarter, simpler savings together!`,
     () => `Huge thanks to everyone who shared ideas and reported issues. Together, we keep improving IPON every day!`
   ];
+
+  const FEATURE_VARIATIONS = {
+    presence: [
+      'Live Active Now Presence: See who is currently active across your savings group in real time with Facebook-style green indicators on profile avatars.',
+      'Real-Time Savers Pulse: Instantly spot online group members with subtle active-now presence dots on user avatars.',
+      'Active Member Indicators: Stay connected with your savings group through real-time online status indicators on profile pictures.'
+    ],
+    avatar: [
+      'Interactive Avatar Studio: Crop, rotate 90 degrees, and preview display pictures with an intuitive touch-friendly cropper.',
+      'Custom Profile Picture Suite: Built-in crop and rotation tools allow savers to frame their avatar before saving.',
+      'Profile Picture Editor: Fine-tune your display picture with interactive circular framing, instant rotation, and deletion confirmation.'
+    ],
+    reactions: [
+      'Messenger-Style Reactions: Express yourself on group announcements with Heart, Thumbs up, Haha, Sad, and Angry reactions, complete with a who-reacted modal list.',
+      'Interactive Post Reactions: Tap to react with expressive emojis and click the reaction pill counter to see who celebrated across your group.',
+      'Announcement Emoji Picker: Engage with admin announcements using animated reaction icons and transparent member reaction breakdown lists.'
+    ],
+    quickRecord: [
+      'Quick Record Entry Modal: Convenient calendar dashboard shortcut to record contributions, deductions, and expenses without switching pages.',
+      'One-Click Transaction Logger: Rapidly log new deposits, withdrawals, and shared expenses right from the monthly calendar view.',
+      'Instant Financial Entry: Record group transactions on the fly using the new calendar quick-entry dialog.'
+    ],
+    spotlight: [
+      'Member Financial Spotlight: Filter records by saver to highlight individual contribution graphs, monthly activity, and pledge totals.',
+      'Personal Savings Analytics: Examine individual member savings momentum and monthly deposit trends on dedicated spotlight cards.',
+      'Dynamic Record Spotlight & Charts: Isolate individual member contributions with interactive activity graphs and transparent totals.'
+    ],
+    pledge: [
+      'Admin Contribution Pledge Setup: Group administrators can configure and update their monthly savings pledge directly, synced into member rosters and reports.',
+      'Synchronized Group Pledges: Configure administrator monthly contribution targets that automatically reflect across audit reports.',
+      'Pledge Tracking Integration: Maintain transparent savings expectations with automated group-wide monthly pledge synchronization.'
+    ]
+  };
 
   let currentReleaseIntroIdx = -1;
   let currentReleaseOutroIdx = -1;
@@ -925,19 +961,33 @@
     const intro = RELEASE_INTROS[currentReleaseIntroIdx](ver);
     const outro = RELEASE_OUTROS[currentReleaseOutroIdx]();
 
+    // Pick a random variation for each core feature and shuffle the list:
+    const pickedFeatures = Object.values(FEATURE_VARIATIONS).map((pool) => {
+      return pool[Math.floor(Math.random() * pool.length)];
+    });
+    // Shuffle features for distinct presentation
+    for (let i = pickedFeatures.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pickedFeatures[i], pickedFeatures[j]] = [pickedFeatures[j], pickedFeatures[i]];
+    }
+
     let body = `${intro}\n\n`;
-    body += `• Live Active Now Presence: See who is currently using the system in real time with live Facebook-style green indicators on profile avatars.\n`;
-    body += `• Profile Picture Editor: Interactive avatar cropper with real-time preview, 90-degree image rotation, and deletion confirmation.\n`;
-    body += `• Announcement Reactions: Messenger-style interactive emoji picker (Heart, Thumbs up, Haha, Sad, Angry) and Facebook-style reaction counter pill with a who-reacted modal list.\n`;
-    body += `• Quick Record Entry Modal: Convenient shortcut on the dashboard to record additions, deductions, and expenses without switching pages.\n`;
-    body += `• Financial Records Spotlight & Graph: Filter records by member to spotlight their profile, contribution pledge, totals, and monthly activity graph.\n`;
-    body += `• Contributor Pledge Setup: Group administrators can set and update their monthly contribution pledge directly, reflected in member rosters and reports.\n`;
-    body += `• Password Visibility Toggle: Modern SVG eye icon toggle buttons for cleaner, intuitive password inputs.\n`;
+    pickedFeatures.forEach((feat) => {
+      body += `• ${feat}\n`;
+    });
 
     if (targetImpl.length > 0) {
-      body += `\nCommunity Feature Requests Implemented in this Release:\n`;
+      const profileById = new Map(profiles.map((p) => [p.id, p]));
+      const sectionHeaders = [
+        '\nCommunity Feature Requests Implemented in this Release:',
+        '\nFeatures Requested by Savers & Shipped in this Update:',
+        '\nCommunity Spotlight (Features You Asked For):'
+      ];
+      body += `${sectionHeaders[Math.floor(Math.random() * sectionHeaders.length)]}\n`;
       targetImpl.forEach((req) => {
-        body += `• ${req.title}: ${req.details}\n`;
+        const prof = profileById.get(req.requester_id);
+        const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
+        body += `• ${req.title}: ${req.details || 'Feature improvement'}${credit}\n`;
       });
     }
 
@@ -1164,13 +1214,28 @@ Return a valid JSON object with keys:
       const outro = String(parsed?.outro || '').trim();
 
       if (intro && outro) {
+        const pickedFeatures = Object.values(FEATURE_VARIATIONS).map((pool) => {
+          return pool[Math.floor(Math.random() * pool.length)];
+        });
+        for (let i = pickedFeatures.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pickedFeatures[i], pickedFeatures[j]] = [pickedFeatures[j], pickedFeatures[i]];
+        }
+
         let enhancedBody = `${intro}\n\n`;
-        enhancedBody += `• Live Active Now Presence: See who is currently using the system in real time with live Facebook-style green indicators on profile avatars.\n`;
-        enhancedBody += `• Profile Picture Editor: Interactive avatar cropper with real-time preview, 90-degree image rotation, and deletion confirmation.\n`;
-        enhancedBody += `• Announcement Reactions: Messenger-style interactive emoji picker (Heart, Thumbs up, Haha, Sad, Angry) and Facebook-style reaction counter pill with a who-reacted modal list.\n`;
-        enhancedBody += `• Quick Record Entry Modal: Convenient shortcut on the dashboard to record additions, deductions, and expenses without switching pages.\n`;
-        enhancedBody += `• Financial Records Spotlight & Graph: Filter records by member to spotlight their profile, contribution pledge, totals, and monthly activity graph.\n`;
-        enhancedBody += `• Contributor Pledge Setup: Group administrators can set and update their monthly contribution pledge directly, reflected in member rosters and reports.\n`;
+        pickedFeatures.forEach((feat) => {
+          enhancedBody += `• ${feat}\n`;
+        });
+
+        if (targetImplemented.length > 0) {
+          enhancedBody += `\nCommunity Feature Requests Implemented in this Release:\n`;
+          targetImplemented.forEach((req) => {
+            const prof = profileById.get(req.requester_id);
+            const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
+            enhancedBody += `• ${req.title}: ${req.details || 'Feature improvement'}${credit}\n`;
+          });
+        }
+
         enhancedBody += `\n${outro}`;
 
         if (titleInput && title) titleInput.value = title;
