@@ -382,7 +382,7 @@ async function sendAdminRequestOtpEmail({
   senderEmail?: string | null;
 }) {
   const safeName = String(recipientName || '').trim() || 'Saver';
-  const subject = `Your ${SYSTEM_NAME} verification code is ${code}`;
+  const subject = `myIPON - Your verification code is ${code}`;
   const plainText = [
     `Hello ${safeName},`,
     '',

@@ -471,7 +471,7 @@
         verifyCode.value = '';
       }
       if (verifyTimer) {
-        verifyTimer.textContent = 'Code expires in 10 minutes.';
+        verifyTimer.innerHTML = 'Code expires in 10 minutes. If not in inbox, please check your <strong>Spam / Junk</strong> folder.';
       }
       Ipon.toast(`Verification code resent to ${pendingSignupPayload.email}. Please check your inbox or spam folder.`);
       verifyCode?.focus();
@@ -516,7 +516,7 @@
       }
       const verifyTimer = document.getElementById('request-verify-timer');
       if (verifyTimer) {
-        verifyTimer.textContent = 'Code expires in 10 minutes.';
+        verifyTimer.innerHTML = 'Code expires in 10 minutes. If not in inbox, please check your <strong>Spam / Junk</strong> folder.';
       }
       if (verifyCode) {
         verifyCode.value = '';
