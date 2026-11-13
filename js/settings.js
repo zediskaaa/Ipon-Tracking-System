@@ -200,10 +200,16 @@
     const personal = [values.get('first_name'), values.get('middle_name'), values.get('last_name'), values.get('email')];
     const issue = Ipon.passwordIssue(password, personal);
     if (issue) { Ipon.setFieldError(treasurerForm.elements.password, issue); treasurerForm.elements.password.focus(); return; }
+    const email = String(values.get('email')).trim();
+    const confirmed = await Ipon.confirmAction({
+      title: 'Send treasurer invitation?',
+      message: `Are you sure you want to create an account and send an invitation email to ${email} as Treasurer?`,
+      acceptLabel: 'Send invitation'
+    });
+    if (!confirmed) return;
     const button = event.submitter;
     Ipon.setBusy(button, true, 'Creating…');
     try {
-      const email = String(values.get('email')).trim();
       const res = await Ipon.inviteAccount({ role: 'TREASURER', first_name: values.get('first_name'), middle_name: values.get('middle_name') || null, last_name: values.get('last_name'), email, password });
       treasurerForm.reset();
       Ipon.toast(res.email_sent ? 'Treasurer account created and invite email sent.' : 'Treasurer account created.');

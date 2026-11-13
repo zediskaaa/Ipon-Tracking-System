@@ -423,9 +423,15 @@
     const button = event.submitter; const member = members.find((item) => item.id === accountForm.elements.member_id.value); if (!member) return;
     const passwordIssue = Ipon.passwordIssue(accountForm.elements.password.value, [member.first_name, member.middle_name, member.last_name, accountForm.elements.email.value]);
     if (passwordIssue) { Ipon.setFieldError(accountForm.elements.password, passwordIssue); accountForm.elements.password.focus(); return; }
+    const email = accountForm.elements.email.value.trim();
+    const confirmed = await Ipon.confirmAction({
+      title: 'Send member invitation?',
+      message: `Are you sure you want to create an account and send an invitation email to ${email} for ${member.full_name}?`,
+      acceptLabel: 'Send invitation'
+    });
+    if (!confirmed) return;
     Ipon.setBusy(button, true);
     try {
-      const email = accountForm.elements.email.value.trim();
       const res = await Ipon.inviteAccount({ role: 'MEMBER', member_id: member.id, first_name: member.first_name, middle_name: member.middle_name || null, last_name: member.last_name, contact_number: member.contact_number || null, email, password: accountForm.elements.password.value });
       accountDialog.close();
       Ipon.toast(res.email_sent ? 'Member account created and invite email sent.' : 'Member account created.');

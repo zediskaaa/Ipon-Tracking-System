@@ -966,6 +966,18 @@
     event.preventDefault();
     const payloads = collectInvitePayloads(inviteOnlyRows, { allowEmptyRows: false });
     if (!payloads || !payloads.length) return;
+
+    const count = payloads.length;
+    const emails = payloads.map((p) => p.email).join(', ');
+    const confirmed = await Ipon.confirmAction({
+      title: count === 1 ? 'Send member invitation?' : `Send ${count} member invitations?`,
+      message: count === 1
+        ? `Are you sure you want to invite ${payloads[0].full_name ? `${payloads[0].full_name} (${payloads[0].email})` : payloads[0].email} to "${currentGroup?.name || 'this group'}"? An invitation email will be sent automatically.`
+        : `Are you sure you want to send invitations to ${count} members (${emails}) in "${currentGroup?.name || 'this group'}"? Invitation emails will be sent automatically.`,
+      acceptLabel: count === 1 ? 'Send invitation' : 'Send invitations'
+    });
+    if (!confirmed) return;
+
     const button = event.submitter;
     Ipon.setBusy(button, true, 'Sending…');
     try {

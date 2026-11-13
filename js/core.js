@@ -2299,6 +2299,12 @@
     document.getElementById('confirm-message').textContent = message;
     document.getElementById('confirm-accept').textContent = acceptLabel;
     dialog.returnValue = '';
+    if (!dialog.dataset.backdropBound) {
+      dialog.dataset.backdropBound = 'true';
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close('cancel');
+      });
+    }
     return new Promise((resolve) => {
       dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true });
       dialog.showModal();
