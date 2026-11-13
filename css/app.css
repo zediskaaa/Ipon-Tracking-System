@@ -1843,3 +1843,79 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
     padding: 28px 18px;
   }
 }
+
+/* ── Facebook / Messenger Style Mobile Pull-to-Refresh ─────────────────────── */
+.ptr-indicator {
+  --ptr-y: -64px;
+  --ptr-progress: 0;
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #fffdf9;
+  border: 1px solid rgba(20, 45, 43, 0.1);
+  box-shadow: 0 8px 24px rgba(11, 52, 40, 0.2), 0 2px 6px rgba(0, 0, 0, 0.08);
+  z-index: 950;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-50%, var(--ptr-y), 0) scale(0.84);
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease, box-shadow 0.2s ease;
+}
+.ptr-indicator.is-pulling {
+  transition: none;
+  opacity: calc(0.35 + var(--ptr-progress) * 0.65);
+  transform: translate3d(-50%, var(--ptr-y), 0) scale(calc(0.84 + var(--ptr-progress) * 0.16));
+}
+.ptr-indicator.is-ready {
+  transform: translate3d(-50%, var(--ptr-y), 0) scale(1.06);
+  box-shadow: 0 10px 26px rgba(11, 52, 40, 0.26), 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.ptr-indicator.is-refreshing {
+  opacity: 1;
+  transform: translate3d(-50%, 14px, 0) scale(1);
+}
+.ptr-spinner {
+  width: 22px;
+  height: 22px;
+  transform: rotate(calc(-90deg + var(--ptr-progress) * 260deg));
+}
+.ptr-indicator.is-pulling .ptr-spinner {
+  transition: none;
+}
+.ptr-track {
+  fill: none;
+  stroke: rgba(11, 52, 40, 0.12);
+  stroke-width: 2.6;
+}
+.ptr-arc {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-dasharray: 56.5;
+  stroke-dashoffset: calc(56.5 - var(--ptr-progress) * 40);
+}
+.ptr-indicator.is-refreshing .ptr-spinner {
+  animation: ptr-spin 0.78s linear infinite;
+}
+.ptr-indicator.is-refreshing .ptr-arc {
+  stroke-dashoffset: 18;
+  animation: ptr-dash 1.2s ease-in-out infinite;
+}
+@keyframes ptr-spin {
+  to { transform: rotate(270deg); }
+}
+@keyframes ptr-dash {
+  0% { stroke-dasharray: 12, 56.5; stroke-dashoffset: 0; }
+  50% { stroke-dasharray: 40, 56.5; stroke-dashoffset: -12; }
+  100% { stroke-dasharray: 12, 56.5; stroke-dashoffset: -48; }
+}
+@media (max-width: 960px), (pointer: coarse) {
+  html, body {
+    overscroll-behavior-y: contain;
+  }
+}

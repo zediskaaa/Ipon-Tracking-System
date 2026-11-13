@@ -128,5 +128,5 @@
   });
 
   try { await refresh(); } catch (error) { Ipon.showInlineError(body, error, refresh, 6); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions'], refresh);
+  Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions', 'groups', 'savings_goals'], refresh);
 })();

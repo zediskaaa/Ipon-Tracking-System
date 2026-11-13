@@ -1412,5 +1412,10 @@ test('group payment QR, receipt uploads, and savings goal calculator are wired a
   assert.match(settingsJs, /Remove group payment QR\?/);
   assert.match(css, /\.settings-layout/);
   assert.match(css, /\.settings-access-panel/);
+  assert.match(coreJs, /initPullToRefresh/);
+  assert.match(coreJs, /triggerManualRefresh/);
+  assert.match(coreJs, /controllerchange/);
+  assert.match(css, /\.ptr-indicator/);
+  assert.match(css, /\.ptr-spinner/);
 });
 

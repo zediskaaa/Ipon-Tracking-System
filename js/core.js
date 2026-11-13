@@ -17,12 +17,26 @@
   const STARTUP_TIMEOUT_MS = 15000;
   let loaderSafetyTimer = null;
   let navLoaderTimer = null;
+  let activeLiveRefresh = null;
 
   if (!document.querySelector('link[rel="manifest"]')) {
     document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#0b3428"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="IPON"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/icon-192.png">');
   }
   if (!window.Capacitor && 'serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
-    navigator.serviceWorker.register('/sw.js').catch(() => { });
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let swReloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || swReloading) return;
+      if (document.querySelector('dialog[open]')) return;
+      swReloading = true;
+      window.location.reload();
+    });
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      reg.update().catch(() => { });
+      const checkSw = () => reg.update().catch(() => { });
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkSw(); });
+      window.addEventListener('online', checkSw);
+    }).catch(() => { });
   }
 
   if (document.body.dataset.page) {
@@ -3640,7 +3654,11 @@
     if (!client || !tables.length) return null;
     let timer;
     let pending = Promise.resolve();
-    const run = () => { pending = pending.then(refresh).catch((error) => toast(friendlyError(error), 'error')); };
+    const run = () => {
+      pending = pending.then(refresh).catch((error) => toast(friendlyError(error), 'error'));
+      return pending;
+    };
+    activeLiveRefresh = run;
     const schedule = () => {
       clearTimeout(timer);
       timer = setTimeout(() => { if (document.visibilityState === 'visible') run(); }, 350);
@@ -3651,12 +3669,23 @@
     }));
     channel.subscribe();
     const resume = () => { if (document.visibilityState === 'visible') schedule(); };
+    const autoSyncTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible' || navigator.onLine === false) return;
+      if (document.querySelector('dialog[open]')) return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      run();
+    }, 45000);
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('focus', resume);
+    window.addEventListener('online', resume);
     window.addEventListener('pagehide', () => {
       clearTimeout(timer);
+      clearInterval(autoSyncTimer);
+      if (activeLiveRefresh === run) activeLiveRefresh = null;
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('focus', resume);
+      window.removeEventListener('online', resume);
       client.removeChannel(channel);
     }, { once: true });
     return channel;
@@ -4201,7 +4230,116 @@
     };
   }
 
+  async function triggerManualRefresh() {
+    if ('serviceWorker' in navigator && !window.Capacitor) {
+      navigator.serviceWorker.getRegistration?.().then((reg) => reg?.update().catch(() => { })).catch(() => { });
+    }
+    if (typeof activeLiveRefresh === 'function') {
+      await activeLiveRefresh();
+      return true;
+    }
+    window.location.reload();
+    return false;
+  }
+
+  function initPullToRefresh() {
+    if (document.getElementById('ptr-indicator')) return;
+    const indicator = document.createElement('div');
+    indicator.id = 'ptr-indicator';
+    indicator.className = 'ptr-indicator';
+    indicator.setAttribute('aria-hidden', 'true');
+    indicator.innerHTML = '<svg class="ptr-spinner" viewBox="0 0 24 24"><circle class="ptr-track" cx="12" cy="12" r="9"/><circle class="ptr-arc" cx="12" cy="12" r="9"/></svg>';
+    document.body.appendChild(indicator);
+
+    const THRESHOLD = 58;
+    const MAX_PULL = 94;
+    let tracking = false;
+    let refreshing = false;
+    let startX = 0;
+    let startY = 0;
+    let currentPull = 0;
+
+    function hasScrolledAncestor(node) {
+      let el = node && node.nodeType === 1 ? node : null;
+      while (el && el !== document.body && el !== document.documentElement) {
+        if (el.scrollTop > 0 && el.scrollHeight > el.clientHeight) return true;
+        el = el.parentElement;
+      }
+      return false;
+    }
+
+    function setPullState(pull) {
+      currentPull = pull;
+      const clamped = Math.max(0, Math.min(MAX_PULL, pull));
+      const progress = Math.min(1, clamped / THRESHOLD);
+      indicator.style.setProperty('--ptr-y', `${Math.round(clamped - 44)}px`);
+      indicator.style.setProperty('--ptr-progress', progress.toFixed(3));
+      indicator.classList.toggle('is-pulling', clamped > 0);
+      indicator.classList.toggle('is-ready', clamped >= THRESHOLD);
+    }
+
+    document.addEventListener('touchstart', (event) => {
+      if (refreshing || event.touches.length !== 1) return;
+      if (document.querySelector('dialog[open]')) return;
+      if ((window.scrollY || document.documentElement.scrollTop || 0) > 1) return;
+      const target = event.target;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'OPTION') return;
+      if (hasScrolledAncestor(target)) return;
+      startX = event.touches[0].clientX;
+      startY = event.touches[0].clientY;
+      tracking = true;
+      currentPull = 0;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (event) => {
+      if (!tracking || refreshing || event.touches.length !== 1) return;
+      const dx = event.touches[0].clientX - startX;
+      const dy = event.touches[0].clientY - startY;
+      if (dy <= 0 || (window.scrollY || document.documentElement.scrollTop || 0) > 1) {
+        if (currentPull > 0) setPullState(0);
+        tracking = false;
+        return;
+      }
+      if (currentPull === 0 && Math.abs(dx) > Math.abs(dy)) {
+        tracking = false;
+        return;
+      }
+      if (dy < 12) return;
+      const eased = Math.min(MAX_PULL, (dy - 12) * 0.48);
+      setPullState(eased);
+    }, { passive: true });
+
+    async function finishTouch() {
+      if (!tracking) return;
+      tracking = false;
+      const shouldRefresh = currentPull >= THRESHOLD;
+      if (!shouldRefresh) {
+        setPullState(0);
+        return;
+      }
+      refreshing = true;
+      indicator.classList.remove('is-pulling', 'is-ready');
+      indicator.classList.add('is-refreshing');
+      indicator.style.setProperty('--ptr-y', '12px');
+      try {
+        await Promise.all([
+          triggerManualRefresh().catch(() => { }),
+          new Promise((resolve) => setTimeout(resolve, 550))
+        ]);
+      } finally {
+        indicator.classList.remove('is-refreshing');
+        setPullState(0);
+        refreshing = false;
+      }
+    }
+
+    document.addEventListener('touchend', finishTouch, { passive: true });
+    document.addEventListener('touchcancel', finishTouch, { passive: true });
+  }
+
   if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
+  if (document.body.dataset.page) initPullToRefresh();
   prepareFormValidation();
   prepareNumericInputs();
   initAppUpdateChecker();
@@ -4209,7 +4347,7 @@
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
-    checkForAppUpdate, showAppUpdatePrompt,
+    checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     get profile() { return currentProfile; }
   };
 })();
