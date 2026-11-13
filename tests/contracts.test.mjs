@@ -564,8 +564,10 @@ test('administrator request form uses a desktop grid with a mobile fallback', ()
   const html = read('login.html');
   const script = read('js/auth.js');
   assert.match(script, /document\.body\.classList\.toggle\('is-request-mode', signup\)/);
-  assert.match(html, /body\.is-request-mode #show-signup\{display:none\}/);
-  assert.match(script, /loginTab\.textContent = signup \? 'Back to sign in' : 'Sign in'/);
+  assert.match(html, /auth-tab-indicator/);
+  assert.match(script, /updateTabIndicator/);
+  assert.match(script, /loginTab\.textContent = 'Sign in'/);
+  assert.match(script, /signupTab\.textContent = 'Create account'/);
   assert.match(html, /body\.is-request-mode \.login-page\{grid-template-columns:minmax\(280px,\.9fr\) minmax\(680px,1\.1fr\)/);
   assert.match(html, /body\.is-request-mode \.login-story\{display:flex\}/);
   assert.match(html, /body\.is-request-mode \.login-card\{[^}]*width:min\(840px,100%\)/);

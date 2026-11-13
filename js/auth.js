@@ -152,15 +152,32 @@
     return !firstInvalid;
   }
 
+  const loginTab = document.getElementById('show-login');
+  const signupTab = document.getElementById('show-signup');
+  const tabIndicator = document.getElementById('auth-tab-indicator');
+
+  function updateTabIndicator(activeBtn) {
+    if (!tabIndicator) return;
+    const target = activeBtn || (mode === 'signup' ? signupTab : loginTab);
+    if (!target) return;
+    const left = target.offsetLeft;
+    const width = target.offsetWidth;
+    if (width > 0) {
+      tabIndicator.style.transform = `translateX(${left}px)`;
+      tabIndicator.style.width = `${width}px`;
+    }
+  }
+
   function setMode(next) {
     mode = next;
     const signup = mode === 'signup';
     document.body.classList.toggle('is-request-mode', signup);
-    const loginTab = document.getElementById('show-login');
-    const signupTab = document.getElementById('show-signup');
     loginTab.classList.toggle('is-active', !signup);
     signupTab.classList.toggle('is-active', signup);
-    loginTab.textContent = signup ? 'Back to sign in' : 'Sign in';
+    loginTab.textContent = 'Sign in';
+    signupTab.textContent = 'Create account';
+    updateTabIndicator(signup ? signupTab : loginTab);
+    requestAnimationFrame(() => updateTabIndicator(signup ? signupTab : loginTab));
     form.setAttribute('aria-labelledby', 'auth-title');
     firstNameField.hidden = !signup;
     middleNameField.hidden = !signup;
@@ -199,9 +216,15 @@
   email.addEventListener('blur', () => { email.value = email.value.trim(); });
   passwordToggle?.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
   passwordConfirmationToggle?.addEventListener('click', () => setPasswordVisibility(passwordConfirmation.type === 'password'));
-  document.getElementById('show-login').addEventListener('click', () => setMode('login'));
-  document.getElementById('show-signup').addEventListener('click', () => setMode('signup'));
+  loginTab?.addEventListener('click', () => setMode('login'));
+  signupTab?.addEventListener('click', () => setMode('signup'));
   if (new URLSearchParams(location.search).get('mode') === 'signup') setMode('signup');
+  else updateTabIndicator(loginTab);
+  window.addEventListener('resize', () => updateTabIndicator());
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(() => updateTabIndicator());
+  }
+  requestAnimationFrame(() => updateTabIndicator());
   const resetRecoveryDialog = () => {
     recoveryRequestForm.reset();
     recoveryMessage.textContent = '';
