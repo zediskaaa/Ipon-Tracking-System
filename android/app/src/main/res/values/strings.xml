@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">myIPON</string>
+    <string name="title_activity_main">myIPON</string>
+    <string name="package_name">com.myipon.app</string>
+    <string name="custom_url_scheme">com.myipon.app</string>
+</resources>

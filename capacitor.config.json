@@ -1,0 +1,9 @@
+{
+  "appId": "com.myipon.app",
+  "appName": "myIPON",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
+
