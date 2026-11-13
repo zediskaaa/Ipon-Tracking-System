@@ -7,7 +7,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Super Admin — IPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261113-15">
+  <link rel="stylesheet" href="css/app.css?v=20261113-16">
 </head>
 <body data-page="super-admin" data-panel="super-admin">
   <div class="app-layout">
@@ -278,13 +278,16 @@
           </small>
         </div>
         <div class="field field-wide">
-          <label for="gemini-model-select">Gemini Model</label>
-          <select id="gemini-model-select" name="model">
-            <option value="gemini-1.5-flash" selected>gemini-1.5-flash (Recommended - Fast &amp; Free)</option>
-            <option value="gemini-2.0-flash">gemini-2.0-flash (Next Gen Flash)</option>
-            <option value="gemini-1.5-pro">gemini-1.5-pro (High Intelligence)</option>
+          <label>AI Model</label>
+          <div style="font-size:0.875rem;color:var(--text-muted,#4b5563);padding:0.5rem 0.75rem;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.25);border-radius:6px;font-weight:600;display:flex;align-items:center;gap:0.5rem;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;"></span>
+            Automatic (Auto-selected &amp; failover-protected by Google AI)
+          </div>
+          <select id="gemini-model-select" name="model" style="display:none;">
+            <option value="auto" selected>Auto</option>
+            <option value="gemini-1.5-flash">gemini-1.5-flash</option>
           </select>
-          <small class="field-help">Google Gemini model to use. System automatically uses fallback models if one is unavailable.</small>
+          <small class="field-help">No configuration needed. The system automatically routes requests to available, active Gemini models.</small>
         </div>
         <div class="field field-wide" id="gemini-key-status-row">
           <span class="gemini-status-badge" id="gemini-key-status">No API key saved in browser</span>
@@ -298,7 +301,7 @@
     </div>
   </dialog>
 
-  <script src="js/config.js?v=20261113-15"></script><script src="js/core.js?v=20261113-15"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261113-15"></script>
+  <script src="js/config.js?v=20261113-16"></script><script src="js/core.js?v=20261113-16"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261113-16"></script>
 </body>
 </html>
 

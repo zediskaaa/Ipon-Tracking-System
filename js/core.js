@@ -3150,6 +3150,22 @@
     dialog.showModal();
   }
 
+  const STABLE_GEMINI_MODELS = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-flash-latest',
+    'gemini-3.5-flash',
+    'gemini-3.8-flash',
+    'gemini-3.7-flash',
+    'gemini-3.6-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash-lite',
+    'gemini-1.5-pro'
+  ];
+
+  let cachedWorkingGeminiModel = null;
+
   function getGeminiApiKey() {
     const fromStorage = (localStorage.getItem('ipon_gemini_api_key') || '').trim();
     if (fromStorage) return fromStorage;
@@ -3159,8 +3175,7 @@
   }
 
   function getGeminiModel() {
-    const fromStorage = (localStorage.getItem('ipon_gemini_model') || '').trim();
-    return fromStorage || 'gemini-1.5-flash';
+    return cachedWorkingGeminiModel || 'gemini-1.5-flash';
   }
 
   async function callGemini({ prompt, systemInstruction, apiKey, model, jsonResponse = true }) {
@@ -3168,8 +3183,14 @@
     if (!key) {
       throw new Error('No Gemini API key found. Please save your API key in the configuration dialog or define geminiApiKey in js/config.js.');
     }
-    const chosenModel = model || getGeminiModel();
-    const candidateModels = [chosenModel, 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'].filter((m, i, arr) => arr.indexOf(m) === i);
+
+    // Dynamic candidate resolution with stable fallback
+    let candidateModels = STABLE_GEMINI_MODELS;
+    if (cachedWorkingGeminiModel) {
+      candidateModels = [cachedWorkingGeminiModel, ...STABLE_GEMINI_MODELS.filter((m) => m !== cachedWorkingGeminiModel)];
+    } else if (model && STABLE_GEMINI_MODELS.includes(model)) {
+      candidateModels = [model, ...STABLE_GEMINI_MODELS.filter((m) => m !== model)];
+    }
 
     let lastError = null;
     for (const curModel of candidateModels) {
@@ -3203,10 +3224,10 @@
           let errMsg = errData?.error?.message || `HTTP ${res.status} (${res.statusText})`;
           const errReason = errData?.error?.details?.[0]?.reason;
           if (errReason === 'ACCESS_TOKEN_TYPE_UNSUPPORTED') {
-            errMsg += ' (Key format unsupported: in Google Cloud Console / AI Studio, ensure key is unrestricted or set to Generative Language API, not Vertex/Enterprise Gemini).';
+            throw new Error('API key is revoked or invalid (ACCESS_TOKEN_TYPE_UNSUPPORTED). Please generate a fresh key from Google AI Studio (aistudio.google.com/app/apikey) and save it in the browser dialog.');
           }
-          if (res.status === 404) {
-            lastError = new Error(`Model ${curModel} unavailable: ${errMsg}`);
+          if (res.status === 404 || res.status === 503 || res.status === 429) {
+            lastError = new Error(`Model ${curModel} (${res.status}): ${errMsg}`);
             continue;
           }
           throw new Error(errMsg);
@@ -3214,7 +3235,10 @@
 
         const data = await res.json();
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) throw new Error('No content returned by Gemini.');
+        if (!text) {
+          lastError = new Error(`No content from ${curModel}`);
+          continue;
+        }
 
         let parsed = null;
         if (jsonResponse) {
@@ -3227,6 +3251,7 @@
           }
         }
 
+        cachedWorkingGeminiModel = curModel;
         return {
           text,
           parsed,
@@ -3238,7 +3263,10 @@
         if (/failed to fetch/i.test(err.message)) {
           throw new Error('Connection blocked (Failed to fetch). Check your internet connection or ad-blocker for generativelanguage.googleapis.com.');
         }
-        if (!/404|unavailable/i.test(err.message)) {
+        if (/revoked|ACCESS_TOKEN_TYPE_UNSUPPORTED/i.test(err.message)) {
+          throw err;
+        }
+        if (!/404|503|429|unavailable|high demand/i.test(err.message)) {
           throw err;
         }
       }

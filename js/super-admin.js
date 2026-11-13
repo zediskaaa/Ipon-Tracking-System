@@ -1037,16 +1037,14 @@
   function updateGeminiStatusBadge() {
     if (!geminiKeyStatus) return;
     const key = getStoredGeminiKey();
-    const model = getStoredGeminiModel();
     if (key) {
       const masked = key.slice(0, 6) + '••••••••' + key.slice(-4);
-      geminiKeyStatus.textContent = `Key ready (${masked}) · Model: ${model}`;
+      geminiKeyStatus.textContent = `Key ready (${masked}) · Auto model`;
       geminiKeyStatus.className = 'gemini-status-badge is-connected';
     } else {
-      geminiKeyStatus.textContent = 'No API key set (Add in js/config.js or enter above)';
+      geminiKeyStatus.textContent = 'No API key set (Enter API key above)';
       geminiKeyStatus.className = 'gemini-status-badge';
     }
-    if (geminiModelSelect) geminiModelSelect.value = model;
   }
 
   releaseKeyBtn?.addEventListener('click', () => {
@@ -1062,11 +1060,9 @@
   geminiKeyForm?.addEventListener('submit', (event) => {
     event.preventDefault();
     const val = (geminiKeyInput?.value || '').trim();
-    const model = (geminiModelSelect?.value || '').trim() || 'gemini-1.5-flash';
-    localStorage.setItem('ipon_gemini_model', model);
     if (val) {
       localStorage.setItem('ipon_gemini_api_key', val);
-      Ipon.toast(`Gemini API key and model (${model}) saved.`);
+      Ipon.toast('Gemini API key saved in browser.');
     } else {
       localStorage.removeItem('ipon_gemini_api_key');
       Ipon.toast('Gemini API key cleared from browser.');
@@ -1084,7 +1080,6 @@
 
   geminiKeyTest?.addEventListener('click', async () => {
     const key = (geminiKeyInput?.value || '').trim() || getStoredGeminiKey();
-    const model = (geminiModelSelect?.value || '').trim() || getStoredGeminiModel();
     if (!key) {
       Ipon.toast('Please enter a Gemini API key first.', 'error');
       geminiKeyInput?.focus();
@@ -1094,7 +1089,6 @@
       Ipon.setBusy(geminiKeyTest, true);
       const res = await Ipon.callGemini({
         apiKey: key,
-        model,
         prompt: 'Return a JSON object: {"status": "ok", "message": "Connection verified successfully"}',
         systemInstruction: 'Respond in JSON only.'
       });
