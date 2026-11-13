@@ -512,15 +512,19 @@
 
   const brandHtml = `
     <a class="app-brand brand" data-region="brand" href="dashboard.html" aria-label="myIPON home">
-      <svg class="brand-coins" viewBox="6 8 50 48" aria-hidden="true">
-        <path d="M34 27V14" fill="none" stroke="#78b981" stroke-width="3.5" stroke-linecap="round"/>
-        <path d="M34 18c4-7 10-9 16-7-1 7-7 11-16 11Z" fill="#78b981"/>
-        <path d="M34 22c-4-6-9-8-14-6 1 6 6 9 14 9Z" fill="#5d9c6a"/>
-        <ellipse cx="38" cy="31" rx="14" ry="5" fill="#f1d27e"/>
-        <path d="M24 31v8c0 3 6 5 14 5s14-2 14-5v-8c0 3-6 5-14 5s-14-2-14-5Z" fill="#d3a74e"/>
-        <path d="M24 39v8c0 3 6 5 14 5s14-2 14-5v-8c0 3-6 5-14 5s-14-2-14-5Z" fill="#e7bf66"/>
-        <ellipse cx="18" cy="42" rx="10" ry="4" fill="#f1d27e"/>
-        <path d="M8 42v7c0 2 4 4 10 4s10-2 10-4v-7c0 2-4 4-10 4S8 44 8 42Z" fill="#d9ad55"/>
+      <svg class="brand-coins" viewBox="8 10 52 46" aria-hidden="true">
+        <path d="M38 28V13" fill="none" stroke="#68ba3b" stroke-width="3" stroke-linecap="round"/>
+        <path d="M38 17c5-7.5 13-9.5 20-7.5-1 7.5-8.5 12-20 12Z" fill="#75c242"/>
+        <path d="M38 22c-4.5-6-11-8-17-6 1 6 7 9.5 17 9.5Z" fill="#52992d"/>
+        <ellipse cx="43" cy="32" rx="14" ry="5" fill="#f8dc84" stroke="#c99532" stroke-width="0.8"/>
+        <text x="43" y="34.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="7.5" font-weight="900" fill="#a4721c" transform="scale(1, 0.65) translate(0, 16)">₱</text>
+        <path d="M29 32v7c0 2.8 6.3 4.8 14 4.8s14-2 14-4.8v-7c0 2.8-6.3 4.8-14 4.8s-14-2-14-4.8Z" fill="#e5b44d"/>
+        <path d="M33 35v4.5M38 36v4.5M43 36.5v4.5M48 36v4.5M53 35v4.5" stroke="#c49028" stroke-width="0.8" fill="none" opacity="0.7"/>
+        <path d="M29 39v7c0 2.8 6.3 4.8 14 4.8s14-2 14-4.8v-7c0 2.8-6.3 4.8-14 4.8s-14-2-14-4.8Z" fill="#d8a33a"/>
+        <path d="M33 42v4.5M38 43v4.5M43 43.5v4.5M48 43v4.5M53 42v4.5" stroke="#b07a1c" stroke-width="0.8" fill="none" opacity="0.7"/>
+        <circle cx="20" cy="42" r="12" fill="#f8dc84" stroke="#c99532" stroke-width="1.3"/>
+        <circle cx="20" cy="42" r="9.5" fill="#f1cb65"/>
+        <text x="20" y="46.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="900" fill="#9e6c15">₱</text>
       </svg>
       <span class="brand-divider" aria-hidden="true"></span>
       <span class="brand-text">
