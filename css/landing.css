@@ -26,17 +26,7 @@ html {
   color: var(--ink);
   font-family: "IPON Serif", Georgia, serif;
   overflow-x: clip;
-  padding-top: 71px;
-}
-@media (max-width: 860px) {
-  .landing {
-    padding-top: 110px;
-  }
-}
-@media (max-width: 720px) {
-  .landing {
-    padding-top: 94px;
-  }
+  padding-top: 0;
 }
 .landing * { box-sizing: border-box; }
 .landing a { text-decoration: none; }
@@ -367,7 +357,7 @@ html {
 .l-hero {
   position: relative;
   overflow: hidden;
-  padding: 92px 0 124px;
+  padding: 162px 0 124px;
   background:
     radial-gradient(ellipse 70% 65% at 75% 35%, rgba(222, 177, 82, 0.2) 0%, transparent 60%),
     radial-gradient(ellipse 65% 75% at 15% 75%, rgba(46, 118, 86, 0.44) 0%, transparent 65%),
@@ -1954,6 +1944,7 @@ html {
   .l-menu-toggle { display: none; }
   .l-mobile-tabs { display: block; }
   .l-nav-cta .l-btn-ghost { display: none; }
+  .l-hero { padding-top: 158px; }
 }
 
 @media (max-width: 1040px) {
@@ -1976,7 +1967,7 @@ html {
   .l-brand strong { font-size: 20px; }
   .l-brand small { font-size: 6.8px; }
   .l-nav-cta .l-btn { min-height: 36px; padding: 7px 14px; font-size: 13px; }
-  .l-hero { padding: 48px 0 84px; }
+  .l-hero { padding: 140px 0 84px; }
   .l-hero-lead { font-size: 16px; }
   .l-hero-actions .l-btn { flex: 1 1 100%; }
   .l-hero-proof { gap: 18px 26px; }
