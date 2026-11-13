@@ -3150,12 +3150,98 @@
     dialog.showModal();
   }
 
+  function getGeminiApiKey() {
+    const fromStorage = (localStorage.getItem('ipon_gemini_api_key') || '').trim();
+    if (fromStorage) return fromStorage;
+    const fromConfig = (window.IPON_CONFIG?.geminiApiKey || '').trim();
+    if (fromConfig) return fromConfig;
+    return '';
+  }
+
+  function getGeminiModel() {
+    const fromStorage = (localStorage.getItem('ipon_gemini_model') || '').trim();
+    return fromStorage || 'gemini-1.5-flash';
+  }
+
+  async function callGemini({ prompt, systemInstruction, apiKey, model, jsonResponse = true }) {
+    const key = (apiKey || getGeminiApiKey()).trim();
+    if (!key) {
+      throw new Error('No Gemini API key found. Please save your API key in the configuration dialog or define geminiApiKey in js/config.js.');
+    }
+    const chosenModel = model || getGeminiModel();
+    const candidateModels = [chosenModel, 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'].filter((m, i, arr) => arr.indexOf(m) === i);
+
+    let lastError = null;
+    for (const curModel of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(curModel)}:generateContent?key=${encodeURIComponent(key)}`;
+        const body = {
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.75,
+            maxOutputTokens: 1400
+          }
+        };
+        if (jsonResponse) {
+          body.generationConfig.responseMimeType = 'application/json';
+        }
+        if (systemInstruction) {
+          body.systemInstruction = { parts: [{ text: systemInstruction }] };
+        }
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          const errMsg = errData?.error?.message || `HTTP ${res.status} (${res.statusText})`;
+          if (res.status === 404) {
+            lastError = new Error(`Model ${curModel} unavailable: ${errMsg}`);
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('No content returned by Gemini.');
+
+        let parsed = null;
+        if (jsonResponse) {
+          try {
+            parsed = JSON.parse(text);
+          } catch (_) {
+            const match = text.match(/\{[\s\S]*\}/);
+            if (match) parsed = JSON.parse(match[0]);
+            else throw new Error('Could not parse JSON from Gemini response.');
+          }
+        }
+
+        return {
+          text,
+          parsed,
+          model: curModel,
+          success: true
+        };
+      } catch (err) {
+        lastError = err;
+        if (!/404|unavailable/i.test(err.message)) {
+          throw err;
+        }
+      }
+    }
+    throw lastError || new Error('Could not connect to Google Gemini API.');
+  }
+
   if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
   prepareFormValidation();
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini,
     get profile() { return currentProfile; }
   };
 })();

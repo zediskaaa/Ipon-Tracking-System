@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://generativelanguage.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Super Admin — IPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261113-13">
+  <link rel="stylesheet" href="css/app.css?v=20261113-14">
 </head>
 <body data-page="super-admin" data-panel="super-admin">
   <div class="app-layout">
@@ -271,11 +271,20 @@
       <form id="gemini-key-form" class="form-grid">
         <div class="field field-wide">
           <label for="gemini-api-key-input">Gemini API key</label>
-          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AIzaSy..." autocomplete="off">
+          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AQ.Ab... or AIzaSy..." autocomplete="off">
           <small class="field-help">
             Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="color:#16a34a;font-weight:700;">Google AI Studio</a>.
-            You can save it here in your browser or set it in Supabase Secrets as <code>GEMINI_API_KEY</code>.
+            You can save it here in your browser, define it in <code>js/config.js</code> (<code>geminiApiKey</code>), or set it in Supabase Secrets as <code>GEMINI_API_KEY</code>.
           </small>
+        </div>
+        <div class="field field-wide">
+          <label for="gemini-model-select">Gemini Model</label>
+          <select id="gemini-model-select" name="model">
+            <option value="gemini-1.5-flash" selected>gemini-1.5-flash (Recommended - Fast &amp; Free)</option>
+            <option value="gemini-2.0-flash">gemini-2.0-flash (Next Gen Flash)</option>
+            <option value="gemini-1.5-pro">gemini-1.5-pro (High Intelligence)</option>
+          </select>
+          <small class="field-help">Google Gemini model to use. System automatically uses fallback models if one is unavailable.</small>
         </div>
         <div class="field field-wide" id="gemini-key-status-row">
           <span class="gemini-status-badge" id="gemini-key-status">No API key saved in browser</span>
@@ -289,7 +298,7 @@
     </div>
   </dialog>
 
-  <script src="js/config.js"></script><script src="js/core.js?v=20261113-13"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261113-13"></script>
+  <script src="js/config.js?v=20261113-14"></script><script src="js/core.js?v=20261113-14"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/super-admin.js?v=20261113-14"></script>
 </body>
 </html>
 

@@ -1206,27 +1206,38 @@
     if (aiMotivationText) aiMotivationText.textContent = 'Consulting financial streak…';
 
     try {
-      const storedKey = (localStorage.getItem('ipon_gemini_api_key') || '').trim();
-      const { data, error } = await Ipon.client.functions.invoke('manage-account', {
-        body: {
-          action: 'ai-savings-insights',
-          goal_name: goalTitle,
-          target_amount: targetAmt,
-          current_saved: tracked,
-          monthly_pledge: monthlyPledge,
-          target_date: targetDate,
-          api_key: storedKey || undefined
-        }
-      });
-      if (error || data?.error) throw new Error(data?.error || error?.message || 'AI request failed');
+      const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
+      if (!apiKey) {
+        throw new Error('No Gemini API key configured. Define geminiApiKey in js/config.js or configure in Super Admin.');
+      }
 
+      const prompt = `You are an expert, encouraging personal finance coach for a group savings system in the Philippines. Analyze this savings progress:
+- Goal: "${goalTitle}"
+- Target Amount: ₱${targetAmt}
+- Saved So Far: ₱${tracked} (${pct}% complete)
+- Monthly Pledge: ₱${monthlyPledge}
+- Target Date: ${targetDate || 'Not specified'}
+
+Generate helpful financial guidance. Return a valid JSON object with EXACTLY these three keys:
+{
+  "forecast": "1-2 concise sentences on realistic timeline/completion based on monthly pledge and remaining balance",
+  "smart_tip": "1 actionable, practical micro-saving or budget optimization tip tailored to this goal",
+  "motivation": "1 inspiring, encouraging sentence celebrating their progress and momentum"
+}`;
+
+      // Action: ai-savings-insights (Direct client fetch to Gemini API with fallback)
+      const res = await Ipon.callGemini({
+        prompt,
+        systemInstruction: 'You are an intelligent, encouraging personal financial assistant. Respond strictly in English and valid JSON format.',
+        jsonResponse: true
+      });
+
+      const data = res?.parsed || {};
       if (aiForecastText) aiForecastText.textContent = data.forecast || 'Keep contributing steadily to stay on track.';
       if (aiTipText) aiTipText.textContent = data.smart_tip || 'Regular deposits create long-term compound savings.';
       if (aiMotivationText) aiMotivationText.textContent = data.motivation || 'Consistency beats intensity every time!';
 
-      if (data?.ai_powered) {
-        Ipon.toast('✨ AI Insights generated with Gemini!');
-      }
+      Ipon.toast(`✨ AI Insights generated with Gemini (${res.model})!`);
     } catch (err) {
       const remaining = Math.max(0, targetAmt - tracked);
       const monthsNeeded = monthlyPledge > 0 ? Math.ceil(remaining / monthlyPledge) : 0;

@@ -1024,27 +1024,34 @@
   const geminiKeyClear = document.getElementById('gemini-key-clear');
   const geminiKeyTest = document.getElementById('gemini-key-test');
   const releaseKeyBtn = document.getElementById('release-update-key-btn');
+  const geminiModelSelect = document.getElementById('gemini-model-select');
 
   function getStoredGeminiKey() {
-    return (localStorage.getItem('ipon_gemini_api_key') || '').trim();
+    return (localStorage.getItem('ipon_gemini_api_key') || '').trim() || (window.IPON_CONFIG?.geminiApiKey || '').trim();
+  }
+
+  function getStoredGeminiModel() {
+    return (localStorage.getItem('ipon_gemini_model') || '').trim() || 'gemini-1.5-flash';
   }
 
   function updateGeminiStatusBadge() {
     if (!geminiKeyStatus) return;
     const key = getStoredGeminiKey();
+    const model = getStoredGeminiModel();
     if (key) {
       const masked = key.slice(0, 6) + '••••••••' + key.slice(-4);
-      geminiKeyStatus.textContent = `Saved in browser (${masked})`;
+      geminiKeyStatus.textContent = `Key ready (${masked}) · Model: ${model}`;
       geminiKeyStatus.className = 'gemini-status-badge is-connected';
     } else {
-      geminiKeyStatus.textContent = 'No API key saved in browser (Supabase secret will be used if set)';
+      geminiKeyStatus.textContent = 'No API key set (Add in js/config.js or enter above)';
       geminiKeyStatus.className = 'gemini-status-badge';
     }
+    if (geminiModelSelect) geminiModelSelect.value = model;
   }
 
   releaseKeyBtn?.addEventListener('click', () => {
     if (!geminiKeyDialog) return;
-    if (geminiKeyInput) geminiKeyInput.value = getStoredGeminiKey();
+    if (geminiKeyInput) geminiKeyInput.value = (localStorage.getItem('ipon_gemini_api_key') || window.IPON_CONFIG?.geminiApiKey || '').trim();
     updateGeminiStatusBadge();
     geminiKeyDialog.showModal();
     if (geminiKeyInput) geminiKeyInput.focus();
@@ -1055,12 +1062,14 @@
   geminiKeyForm?.addEventListener('submit', (event) => {
     event.preventDefault();
     const val = (geminiKeyInput?.value || '').trim();
+    const model = (geminiModelSelect?.value || '').trim() || 'gemini-1.5-flash';
+    localStorage.setItem('ipon_gemini_model', model);
     if (val) {
       localStorage.setItem('ipon_gemini_api_key', val);
-      Ipon.toast('Gemini API key saved in browser.');
+      Ipon.toast(`Gemini API key and model (${model}) saved.`);
     } else {
       localStorage.removeItem('ipon_gemini_api_key');
-      Ipon.toast('Gemini API key cleared.');
+      Ipon.toast('Gemini API key cleared from browser.');
     }
     updateGeminiStatusBadge();
     geminiKeyDialog?.close();
@@ -1075,6 +1084,7 @@
 
   geminiKeyTest?.addEventListener('click', async () => {
     const key = (geminiKeyInput?.value || '').trim() || getStoredGeminiKey();
+    const model = (geminiModelSelect?.value || '').trim() || getStoredGeminiModel();
     if (!key) {
       Ipon.toast('Please enter a Gemini API key first.', 'error');
       geminiKeyInput?.focus();
@@ -1082,19 +1092,19 @@
     }
     try {
       Ipon.setBusy(geminiKeyTest, true);
-      const { data, error } = await Ipon.client.functions.invoke('manage-account', {
-        body: { action: 'test-gemini-key', api_key: key }
+      const res = await Ipon.callGemini({
+        apiKey: key,
+        model,
+        prompt: 'Return a JSON object: {"status": "ok", "message": "Connection verified successfully"}',
+        systemInstruction: 'Respond in JSON only.'
       });
-      if (error || data?.error) {
-        throw new Error(data?.error || error?.message || 'Verification failed');
-      }
-      Ipon.toast(data?.message || 'Gemini API key verified successfully!');
+      Ipon.toast(`Connected successfully to Google Gemini (${res.model})!`);
       if (geminiKeyStatus) {
-        geminiKeyStatus.textContent = 'Active & Verified with Google Gemini';
+        geminiKeyStatus.textContent = `Connected & Active (${res.model})`;
         geminiKeyStatus.className = 'gemini-status-badge is-verified';
       }
     } catch (err) {
-      Ipon.toast(Ipon.friendlyError(err), 'error');
+      Ipon.toast(`Gemini error: ${err.message || 'Verification failed'}`, 'error');
     } finally {
       Ipon.setBusy(geminiKeyTest, false);
     }
@@ -1112,49 +1122,73 @@
       (req) => req.status === 'IMPLEMENTED' && !req.release_version
     );
     const profileById = new Map(profiles.map((p) => [p.id, p]));
-    const featuresPayload = targetImplemented.map((req) => {
+    const featuresList = targetImplemented.map((req) => {
       const prof = profileById.get(req.requester_id);
-      return {
-        title: req.title,
-        details: req.details,
-        requester_name: req.allow_credit !== false ? (prof?.full_name || null) : null
-      };
-    });
+      const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
+      return `- "${req.title}": ${req.details || 'Feature improvement'}${credit}`;
+    }).join('\n') || '- General performance improvements, responsive layout refinements, and stability enhancements.';
+
+    const prompt = `Write an official, engaging, and celebratory product release announcement for IPON (Group Savings and Financial Tracker).
+Version: ${ver}
+Release Date: ${relDate}
+
+Implemented User-Requested Features:
+${featuresList}
+
+System-wide improvements included in this release:
+- Real-time online presence indicators (active now green dot on profile avatars)
+- Interactive profile picture cropper, 90-degree rotation, and avatar controls
+- Announcement reactions (Messenger-style emoji picker: Like, Love, Haha, Wow, Sad, Angry) with who-reacted modal
+- Quick financial record entry modal on the calendar dashboard
+- Financial records member spotlight card with personal contribution graph and totals
+- Group administrator monthly pledge synchronization across member rosters and reports
+
+Generate a JSON object with this exact structure:
+{
+  "title": "A punchy, attractive announcement title mentioning ${ver}",
+  "intro": "A 1-2 paragraph fresh, engaging, non-cliché introduction celebrating this release and explaining its value to users",
+  "highlights": [
+    "A concise bullet point describing the first major feature with user credit if applicable",
+    "A concise bullet point describing the second feature",
+    "A concise bullet point describing the third feature",
+    "Additional bullet points for the remaining features"
+  ],
+  "outro": "A warm, inspiring 1-paragraph closing message thanking savers for their continuous feedback and encouraging them to keep reaching their financial goals"
+}`;
 
     try {
       Ipon.setBusy(releaseAiBtn, true);
       if (releaseAiStatus) {
         releaseAiStatus.hidden = false;
-        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Drafting release announcement with Gemini AI…';
+        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Generating unique release announcement with Gemini AI…';
       }
-      const apiKey = getStoredGeminiKey();
-      const { data, error } = await Ipon.client.functions.invoke('manage-account', {
-        body: {
-          action: 'ai-generate-release-notes',
-          version: ver,
-          release_date: relDate,
-          features: featuresPayload,
-          api_key: apiKey || undefined
-        }
+
+      // Action: ai-generate-release-notes (Direct client fetch to Gemini API with fallback)
+      const res = await Ipon.callGemini({
+        prompt,
+        systemInstruction: 'You are the head of product communications for IPON, a modern group savings platform. Write polished, engaging, inspiring release copy in English. Avoid stale corporate jargon. Output strictly valid JSON.',
+        jsonResponse: true
       });
 
-      if (error || data?.error) {
-        throw new Error(data?.error || error?.message || 'Could not generate with AI');
-      }
+      const parsed = res.parsed;
+      const title = String(parsed?.title || `System ${ver} Released`).trim();
+      const intro = String(parsed?.intro || `We are excited to roll out System ${ver}!`).trim();
+      const highlights = Array.isArray(parsed?.highlights)
+        ? parsed.highlights.map((h) => `• ${String(h).replace(/^[•\s*-]+/, '').trim()}`).join('\n')
+        : '';
+      const outro = String(parsed?.outro || 'Thank you for being part of IPON. Happy saving!').trim();
 
-      if (data?.title && titleInput) titleInput.value = data.title;
-      if (data?.details && detailsInput) detailsInput.value = data.details;
+      const details = `${intro}\n\n${highlights}\n\n${outro}`;
 
-      if (data?.ai_powered) {
-        Ipon.toast('✨ Announcement generated with Gemini AI!');
-      } else {
-        Ipon.toast(data?.note || 'Drafted with smart release composer.');
-      }
+      if (titleInput) titleInput.value = title;
+      if (detailsInput) detailsInput.value = details;
+
+      Ipon.toast(`✨ Announcement generated with Gemini AI (${res.model})!`);
     } catch (err) {
+      Ipon.toast(`Gemini: ${err.message || 'Generation failed'}. Using local composer.`, 'error');
       const { title, body } = composeReleaseNotes(ver, targetImplemented);
       if (titleInput) titleInput.value = title;
       if (detailsInput) detailsInput.value = body;
-      Ipon.toast('Generated using smart composer (Gemini offline).');
     } finally {
       Ipon.setBusy(releaseAiBtn, false);
       if (releaseAiStatus) releaseAiStatus.hidden = true;
