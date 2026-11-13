@@ -1370,33 +1370,70 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
   gap: 8px;
 }
 
-/* ── Group Payment QR & Member Payment Card ─────────────────────────────────── */
+/* ── Premium Balanced Settings Workspace ────────────────────────────────────── */
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.38fr) minmax(330px, 0.92fr);
+  gap: 20px;
+  align-items: start;
+}
+.settings-col-main,
+.settings-col-rail {
+  display: grid;
+  min-width: 0;
+  gap: 18px;
+  align-content: start;
+}
+.settings-col-main > .panel,
+.settings-col-rail > .panel {
+  margin-top: 0;
+}
+.settings-access-panel {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.92) 0%, rgba(244, 233, 221, 0.68) 100%);
+  border: 1px solid rgba(20, 45, 43, 0.14);
+}
+.settings-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+}
+.settings-form-actions-end {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
 .payment-qr-settings-panel {
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 .payment-qr-settings-layout {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: 176px minmax(0, 1fr);
+  gap: 18px;
   align-items: start;
 }
 .payment-qr-dropzone {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
 }
 .payment-qr-preview {
-  width: 180px;
-  height: 180px;
+  width: 168px;
+  height: 168px;
   border-radius: 16px;
   border: 1.5px dashed rgba(20, 45, 43, 0.24);
-  background: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.72);
   display: grid;
   place-items: center;
   overflow: hidden;
   padding: 8px;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.16s ease;
+}
+.payment-qr-preview.has-qr:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(20, 45, 43, 0.12);
 }
 .payment-qr-preview.has-qr {
   border-style: solid;
@@ -1419,10 +1456,25 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
 }
 .payment-qr-upload-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  width: 100%;
   justify-content: center;
   gap: 6px;
+}
+.payment-qr-upload-actions .button {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  justify-content: center;
   text-align: center;
+}
+.payment-qr-hint {
+  text-align: center;
+  line-height: 1.35;
+}
+.payment-qr-fields textarea {
+  min-height: 62px;
+  resize: vertical;
 }
 .file-upload-btn {
   cursor: pointer;
@@ -1719,6 +1771,12 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
   background: #fff;
 }
 
+@media (max-width: 1080px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 960px) {
   .savings-layout {
     grid-template-columns: 1fr;
@@ -1733,7 +1791,10 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
     align-items: flex-start;
   }
   .payment-qr-upload-actions {
+    width: auto;
     justify-content: flex-start;
+  }
+  .payment-qr-hint {
     text-align: left;
   }
 }
@@ -1761,7 +1822,9 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
     justify-content: flex-end;
   }
   .calc-plan-actions,
-  .calc-footer-actions {
+  .calc-footer-actions,
+  .settings-inline-actions,
+  .settings-form-actions-end {
     flex-direction: column;
     align-items: stretch;
   }
@@ -1770,34 +1833,9 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
     justify-content: stretch;
   }
   .calc-plan-actions button,
-  .calc-footer-actions button {
-    width: 100%;
-  }
-  .goal-empty-card {
-    min-height: 220px;
-    padding: 28px 18px;
-  }
-  .receipt-dropzone-empty {
-    flex-wrap: wrap;
-  }
-  .receipt-preview-chip {
-    flex-wrap: wrap;
-  }
-  .receipt-preview-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-  .calc-plan-actions,
-  .calc-footer-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .calc-plan-actions-right {
-    width: 100%;
-    justify-content: stretch;
-  }
-  .calc-plan-actions button,
-  .calc-footer-actions button {
+  .calc-footer-actions button,
+  .settings-inline-actions .button,
+  .settings-form-actions-end .button {
     width: 100%;
   }
   .goal-empty-card {

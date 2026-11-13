@@ -28,8 +28,10 @@
   }
 
   document.getElementById('my-name').textContent = state.profile.full_name;
-  document.getElementById('my-role').textContent = state.profile.role;
-  document.getElementById('my-status').textContent = state.profile.status;
+  const roleKey = String(state.profile.role || '').toLowerCase().replace(/_/g, '-');
+  const statusKey = String(state.profile.status || '').toLowerCase();
+  document.getElementById('my-role').innerHTML = `<span class="role-badge role-${Ipon.escapeHtml(roleKey)}">${Ipon.escapeHtml(state.profile.role)}</span>`;
+  document.getElementById('my-status').innerHTML = `<span class="status status-${Ipon.escapeHtml(statusKey)}">${Ipon.escapeHtml(state.profile.status)}</span>`;
   if (state.profile.role !== 'ADMIN') { Ipon.setLoading(false); return; }
 
   async function loadContributionDefault() {
@@ -305,10 +307,19 @@
     }
   });
 
-  clearPaymentQrBtn?.addEventListener('click', () => {
+  clearPaymentQrBtn?.addEventListener('click', async () => {
+    if (savedQrDataUrl && !clearQrFlag) {
+      const accepted = await Ipon.confirmAction({
+        title: 'Remove group payment QR?',
+        message: 'Clear the QR code preview? Click "Save payment details" afterwards to remove it for members.',
+        acceptLabel: 'Remove QR'
+      });
+      if (!accepted) return;
+    }
     pendingQrDataUrl = null;
     clearQrFlag = true;
     renderSettingsQrPreview();
+    Ipon.toast('QR cleared from preview. Save payment details to apply.');
   });
 
   settingsQrPreview?.addEventListener('click', () => {
