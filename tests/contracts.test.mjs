@@ -1310,6 +1310,9 @@ test('live password validation feedback and non-blocking authentication flow', (
   assert.match(core, /data-rule="number"/);
   assert.match(core, /data-rule="symbol"/);
   assert.match(core, /loaderSafetyTimer/);
+  const loaderTimerIndex = core.indexOf('let loaderSafetyTimer = null;');
+  const firstSetLoadingCall = core.indexOf('setLoading(true)');
+  assert.ok(loaderTimerIndex > -1 && loaderTimerIndex < firstSetLoadingCall, 'loaderSafetyTimer must be declared before any setLoading invocation');
   assert.match(core, /options\.requireAuth !== false/);
 
   assert.match(auth, /Ipon\.setLoading\(false\)/);

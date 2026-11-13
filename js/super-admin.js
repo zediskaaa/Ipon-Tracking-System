@@ -424,23 +424,19 @@
   async function load() {
     overviewError.hidden = true;
     overviewError.replaceChildren();
+    const safeQuery = (promise) => (Ipon.withTimeout ? Ipon.withTimeout(promise) : promise).catch((err) => ({ data: [], error: err }));
     const [profileResult, groupResult, requestResult, featureRequestResult, bugReportResult, activityResult, logResult] = await Promise.all([
-      Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at').order('created_at', { ascending: false }),
-      Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false }),
-      Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,review_note,created_at').order('created_at', { ascending: false }).limit(200),
-      Ipon.client.from('feature_requests').select('id,requester_id,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200),
-      Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,created_at').order('created_at', { ascending: false }).limit(200),
-      Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200),
-      Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200),
-      announcements ? announcements.load() : Promise.resolve()
+      safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at').order('created_at', { ascending: false })),
+      safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false })),
+      safeQuery(Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,review_note,created_at').order('created_at', { ascending: false }).limit(200)),
+      safeQuery(Ipon.client.from('feature_requests').select('id,requester_id,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
+      safeQuery(Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,created_at').order('created_at', { ascending: false }).limit(200)),
+      safeQuery(Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200)),
+      safeQuery(Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200)),
+      announcements ? safeQuery(announcements.load()) : Promise.resolve()
     ]);
     if (profileResult.error) throw profileResult.error;
     if (groupResult.error) throw groupResult.error;
-    if (requestResult.error) throw requestResult.error;
-    if (featureRequestResult.error) throw featureRequestResult.error;
-    if (bugReportResult.error) throw bugReportResult.error;
-    if (activityResult.error) throw activityResult.error;
-    if (logResult.error) throw logResult.error;
     profiles = profileResult.data || [];
     groups = groupResult.data || [];
     requests = requestResult.data || [];
