@@ -920,7 +920,7 @@ button,a { color:inherit; font:inherit; }
 @media (max-width:860px) {
   .comp-frame { display:flex; flex-direction:column; }
   .dashboard-sidebar { position:static; display:grid; width:100%; height:auto; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:0 8px; padding:12px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left)); }
-  .dashboard-sidebar .app-brand { grid-column:1; grid-row:1; align-self:center; }
+  .dashboard-sidebar .app-brand { grid-column:1; grid-row:1; align-self:center; min-height:44px; }
   .dashboard-sidebar .sidebar-nav { display:grid; width:100%; min-height:58px; grid-column:1/-1; grid-row:2; grid-template-columns:repeat(auto-fit,minmax(44px,1fr)); align-items:center; gap:4px; margin-top:12px; border-top:1px solid rgba(255,255,255,.14); overflow:visible; padding:10px 0 0; }
   .dashboard-sidebar .sidebar-nav .nav-link { display:grid; width:min(44px,100%); min-width:0; height:48px; min-height:48px; align-self:center; justify-self:center; padding:0; place-items:center; }
   .dashboard-sidebar .sidebar-nav .nav-link span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
