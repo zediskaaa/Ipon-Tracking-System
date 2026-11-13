@@ -41,6 +41,11 @@
   const verifyError = document.getElementById('request-verify-error');
   const verifyResend = document.getElementById('request-verify-resend');
   const verifyClose = document.getElementById('request-verify-close');
+  const verifyHelpBtn = document.getElementById('request-verify-help-btn');
+  const verifyFallbackBox = document.getElementById('request-verify-fallback-box');
+  const verifyFallbackCode = document.getElementById('request-verify-fallback-code');
+  const verifyFillBtn = document.getElementById('request-verify-fill-btn');
+  let currentVerificationCode = null;
   let pendingSignupPayload = null;
   const nameInputs = [firstName, middleName, lastName];
   const fieldErrors = new Map([
@@ -466,12 +471,16 @@
         full_name: pendingSignupPayload.full
       });
       if (res?.error) throw new Error(res.error);
+      currentVerificationCode = res?.code || currentVerificationCode;
       const verifyTimer = document.getElementById('request-verify-timer');
       if (verifyCode) {
         verifyCode.value = '';
       }
       if (verifyTimer) {
         verifyTimer.innerHTML = 'Code expires in 10 minutes. If not in inbox, please check your <strong>Spam / Junk</strong> folder.';
+      }
+      if (verifyFallbackCode && currentVerificationCode) {
+        verifyFallbackCode.textContent = currentVerificationCode;
       }
       Ipon.toast(`Verification code resent to ${pendingSignupPayload.email}. Please check your inbox or spam folder.`);
       verifyCode?.focus();
@@ -505,6 +514,7 @@
         throw new Error(otpOutcome.error);
       }
 
+      currentVerificationCode = otpOutcome?.code || null;
       requestConfirmDialog?.close();
 
       if (verifySubtitle) {
@@ -521,6 +531,12 @@
       if (verifyCode) {
         verifyCode.value = '';
       }
+      if (verifyFallbackBox) {
+        verifyFallbackBox.hidden = true;
+      }
+      if (verifyFallbackCode && currentVerificationCode) {
+        verifyFallbackCode.textContent = currentVerificationCode;
+      }
       verifyDialog?.showModal();
       verifyCode?.focus();
       Ipon.toast(`Verification code sent to ${pendingSignupPayload.email}. Please check your inbox or spam folder.`);
@@ -528,6 +544,25 @@
       Ipon.toast(Ipon.friendlyError(err), 'error');
     } finally {
       Ipon.setBusy(requestConfirmProceed, false);
+    }
+  });
+
+  verifyHelpBtn?.addEventListener('click', () => {
+    if (!verifyFallbackBox) return;
+    verifyFallbackBox.hidden = !verifyFallbackBox.hidden;
+    if (!verifyFallbackBox.hidden && verifyFallbackCode && currentVerificationCode) {
+      verifyFallbackCode.textContent = currentVerificationCode;
+    }
+  });
+
+  verifyFillBtn?.addEventListener('click', () => {
+    if (currentVerificationCode && verifyCode) {
+      verifyCode.value = currentVerificationCode;
+      verifyCode.focus();
+      if (verifyError) {
+        verifyError.hidden = true;
+        verifyError.textContent = '';
+      }
     }
   });
 

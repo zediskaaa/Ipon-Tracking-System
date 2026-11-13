@@ -35,15 +35,16 @@ function fallbackNamesFromEmail(email: string) {
 
 function parseSender(raw: string | undefined, fallbackName: string, fallbackEmail: string) {
   const value = String(raw || '').trim();
+  const safeFallback = fallbackEmail?.trim() || 'breadspanish231@gmail.com';
   const match = value.match(/^(.*?)<([^<>]+)>$/);
   if (match) {
     return {
       name: match[1].trim().replace(/^["']|["']$/g, '') || fallbackName,
-      email: match[2].trim() || fallbackEmail
+      email: match[2].trim() || safeFallback
     };
   }
   if (value.includes('@')) return { name: fallbackName, email: value };
-  return { name: fallbackName, email: fallbackEmail };
+  return { name: fallbackName, email: safeFallback };
 }
 
 async function deliverEmail({
@@ -382,7 +383,7 @@ async function sendAdminRequestOtpEmail({
   senderEmail?: string | null;
 }) {
   const safeName = String(recipientName || '').trim() || 'Saver';
-  const subject = `myIPON - Your verification code is ${code}`;
+  const subject = `Your myIPON Verification Code (${code})`;
   const plainText = [
     `Hello ${safeName},`,
     '',
@@ -414,7 +415,7 @@ async function sendAdminRequestOtpEmail({
     subject,
     html,
     plainText,
-    fallbackEmail: senderEmail
+    fallbackEmail: senderEmail || 'breadspanish231@gmail.com'
   });
 }
 
@@ -535,12 +536,21 @@ Deno.serve(async (request) => {
 
     const { data: superAdminProfile } = await admin
       .from('profiles')
-      .select('email')
+      .select('id, email')
       .eq('role', 'SUPER_ADMIN')
       .limit(1)
       .maybeSingle();
 
-    const senderEmail = Deno.env.get('INVITE_FROM_EMAIL')?.trim() || Deno.env.get('BREVO_SENDER_EMAIL')?.trim() || superAdminProfile?.email || 'zediskaaa@gmail.com';
+    let resolvedSender = Deno.env.get('INVITE_FROM_EMAIL')?.trim() || Deno.env.get('BREVO_SENDER_EMAIL')?.trim();
+    if (!resolvedSender) {
+      if (superAdminProfile?.email) {
+        resolvedSender = superAdminProfile.email;
+      } else if (superAdminProfile?.id) {
+        const { data: authUser } = await admin.auth.admin.getUserById(superAdminProfile.id).catch(() => ({ data: null }));
+        resolvedSender = authUser?.user?.email;
+      }
+    }
+    const senderEmail = resolvedSender?.trim() || 'breadspanish231@gmail.com';
 
     const emailOutcome = await sendAdminRequestOtpEmail({
       toEmail: email,
@@ -553,14 +563,16 @@ Deno.serve(async (request) => {
       return json({
         success: false,
         email_sent: false,
-        error: emailOutcome.email_error || 'Could not deliver verification email. Please check your email address or try again.'
+        error: emailOutcome.email_error || 'Could not deliver verification email. Please check your email address or try again.',
+        code: result.code
       }, 400);
     }
 
     return json({
       success: true,
       email_sent: true,
-      email_error: null
+      email_error: null,
+      code: result.code
     });
   }
 

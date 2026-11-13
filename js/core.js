@@ -3558,7 +3558,8 @@
 
     return {
       success: true,
-      email_sent: edgeRes?.email_sent ?? true
+      email_sent: edgeRes?.email_sent ?? true,
+      code: edgeRes?.code || null
     };
   }
 
