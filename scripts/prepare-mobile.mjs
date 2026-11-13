@@ -28,14 +28,41 @@ for (const dir of dirsToCopy) {
   }
 }
 
+// Generate version metadata
+const runNumber = parseInt(process.env.GITHUB_RUN_NUMBER || '100', 10);
+const nowIso = new Date().toISOString();
+const versionData = {
+  version: `1.0.${runNumber}`,
+  build: runNumber,
+  updated_at: nowIso
+};
+fs.writeFileSync(path.join(rootDir, 'version.json'), JSON.stringify(versionData, null, 2), 'utf-8');
+fs.writeFileSync(path.join(targetDir, 'version.json'), JSON.stringify(versionData, null, 2), 'utf-8');
+
 // For mobile app standalone entry, index.html points straight to login screen with app mode enabled
 const loginContent = fs.readFileSync(path.join(rootDir, 'login.html'), 'utf-8');
+const versionScript = `<script>window.MYIPON_APP_VERSION = ${JSON.stringify(versionData)};</script>`;
 const appLoginContent = loginContent.replace(
   '<body>',
-  '<body class="is-app">'
+  `<body class="is-app">\n  ${versionScript}`
 );
 fs.writeFileSync(path.join(targetDir, 'index.html'), appLoginContent, 'utf-8');
 fs.writeFileSync(path.join(targetDir, 'login.html'), appLoginContent, 'utf-8');
 
-console.log('Mobile assets successfully prepared in ./www (App entry points directly to login screen)');
+// Also inject versionScript into other html files in www (dashboard, etc.)
+for (const file of files) {
+  if (file.endsWith('.html') && file !== 'index.html' && file !== 'login.html') {
+    const destPath = path.join(targetDir, file);
+    if (fs.existsSync(destPath)) {
+      const htmlContent = fs.readFileSync(destPath, 'utf-8');
+      const patchedContent = htmlContent.replace(
+        '<body>',
+        `<body class="is-app">\n  ${versionScript}`
+      );
+      fs.writeFileSync(destPath, patchedContent, 'utf-8');
+    }
+  }
+}
+
+console.log(`Mobile assets successfully prepared in ./www (Version 1.0.${runNumber}, Build #${runNumber})`);
 

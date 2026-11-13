@@ -3830,12 +3830,156 @@
     throw lastError || new Error('Could not connect to Google Gemini API.');
   }
 
+  function isMobileAppContext() {
+    return Boolean(window.Capacitor) ||
+      document.body.classList.contains('is-app') ||
+      Boolean(window.MYIPON_APP_VERSION) ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      /myIPON/i.test(navigator.userAgent);
+  }
+
+  function showAppUpdatePrompt({ version, build, notes } = {}) {
+    let dialog = document.getElementById('app-update-dialog');
+    if (!dialog) {
+      dialog = document.createElement('dialog');
+      dialog.id = 'app-update-dialog';
+      dialog.className = 'form-dialog app-update-dialog';
+      dialog.setAttribute('aria-labelledby', 'app-update-title');
+      dialog.style.cssText = 'width: min(440px, calc(100vw - 32px)); border-radius: 16px; margin: auto; z-index: 999999;';
+      dialog.innerHTML = `
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header" style="align-items: center;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: rgba(31, 106, 67, 0.12); color: #1f6a43; flex-shrink: 0;">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+              </span>
+              <div>
+                <h2 id="app-update-title" style="font-size: 20px; font-weight: 800; line-height: 1.15; margin: 0;">Update available</h2>
+                <p id="app-update-subtitle" style="margin: 3px 0 0; font-size: 13px; color: var(--muted, #5c6863);">New version of myIPON is ready</p>
+              </div>
+            </div>
+            <button class="dialog-close" type="button" id="app-update-close" aria-label="Close update prompt">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+          </header>
+          <div style="padding: 20px 22px 22px; display: grid; gap: 14px;">
+            <p id="app-update-copy" style="margin: 0; font-size: 14px; line-height: 1.55; color: #354741;">
+              A new version of myIPON is available. Update now to install the latest features and updates.
+            </p>
+            <div style="background: rgba(31, 106, 67, 0.08); border: 1px solid rgba(31, 106, 67, 0.18); border-radius: 10px; padding: 10px 14px; font-size: 12.5px; color: #1f6a43; line-height: 1.45;">
+              ✓ Your existing records and account session will be kept safe.
+            </div>
+            <div class="form-actions" style="margin-top: 6px; display: flex; justify-content: flex-end; gap: 10px;">
+              <button class="button button-secondary" type="button" id="app-update-later">Later</button>
+              <a class="button button-primary" id="app-update-now" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk" download="myIPON.apk" target="_blank" rel="noopener" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+                Update now
+              </a>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(dialog);
+
+      const closeBtn = dialog.querySelector('#app-update-close');
+      const laterBtn = dialog.querySelector('#app-update-later');
+      const updateBtn = dialog.querySelector('#app-update-now');
+
+      const dismiss = () => {
+        try { dialog.close(); } catch (_) { }
+        if (build) sessionStorage.setItem(`dismissed_update_${build}`, '1');
+      };
+
+      closeBtn.addEventListener('click', dismiss);
+      laterBtn.addEventListener('click', dismiss);
+
+      updateBtn.addEventListener('click', () => {
+        const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const downloadUrl = isIos
+          ? 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.ipa'
+          : 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk';
+        updateBtn.href = downloadUrl;
+        updateBtn.setAttribute('download', isIos ? 'myIPON.ipa' : 'myIPON.apk');
+        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+          window.open(downloadUrl, '_system');
+        }
+        toast('Downloading latest update... Please open the file to install.', 'success');
+        dismiss();
+      });
+    }
+
+    if (version) {
+      const subtitle = dialog.querySelector('#app-update-subtitle');
+      if (subtitle) subtitle.textContent = `Version ${version} is ready`;
+    }
+    if (notes) {
+      const copy = dialog.querySelector('#app-update-copy');
+      if (copy) copy.textContent = notes;
+    }
+
+    try {
+      if (!dialog.open) dialog.showModal();
+    } catch (_) { }
+  }
+
+  async function checkForAppUpdate({ force = false } = {}) {
+    const isApp = isMobileAppContext();
+    if (!isApp && !force) return;
+
+    try {
+      const res = await fetch('https://my-ipon.vercel.app/version.json?_t=' + Date.now(), { cache: 'no-store' });
+      if (res.ok) {
+        const remote = await res.json();
+        const currentBuild = window.MYIPON_APP_VERSION?.build || 0;
+        if (remote.build && remote.build > currentBuild) {
+          if (!force && sessionStorage.getItem(`dismissed_update_${remote.build}`)) return;
+          showAppUpdatePrompt({
+            version: remote.version,
+            build: remote.build,
+            notes: `A new version (${remote.version}) of myIPON is ready with the latest features. Tap Update now to download and install.`
+          });
+          return;
+        }
+      }
+    } catch (_) { }
+
+    try {
+      const ghRes = await fetch('https://api.github.com/repos/zediskaaa/Ipon-Tracking-System/releases/latest', { cache: 'no-store' });
+      if (ghRes.ok) {
+        const release = await ghRes.json();
+        const publishedTime = new Date(release.published_at).getTime();
+        const localTime = window.MYIPON_APP_VERSION?.updated_at ? new Date(window.MYIPON_APP_VERSION.updated_at).getTime() : 0;
+        if (publishedTime && publishedTime > (localTime + 60000)) {
+          const releaseTag = release.tag_name || release.name || 'Latest';
+          if (!force && sessionStorage.getItem(`dismissed_update_${release.id || releaseTag}`)) return;
+          showAppUpdatePrompt({
+            version: releaseTag,
+            build: release.id,
+            notes: release.body || 'A new update is available. Tap Update now to download and install.'
+          });
+        }
+      }
+    } catch (_) { }
+  }
+
+  function initAppUpdateChecker() {
+    setTimeout(() => {
+      checkForAppUpdate();
+    }, 2500);
+  }
+
   if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
   prepareFormValidation();
+  initAppUpdateChecker();
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
+    checkForAppUpdate, showAppUpdatePrompt,
     get profile() { return currentProfile; }
   };
 })();
