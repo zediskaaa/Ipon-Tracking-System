@@ -60,3 +60,4 @@ values ('20261114_053', 'use jsonb old/new inspection in enforce_group_scope so 
 on conflict (version) do nothing;
 
 commit;
+

@@ -110,6 +110,16 @@
   const groupMonthlyInput = document.getElementById('group-default-amount');
   const groupInviteSection = document.getElementById('group-invite-section');
   const groupInviteRows = document.getElementById('group-invite-rows');
+  const groupDeleteDialog = document.getElementById('group-delete-dialog');
+  const groupDeleteForm = document.getElementById('group-delete-form');
+  const groupDeleteNameEl = document.getElementById('group-delete-group-name');
+  const groupDeleteExpectedNameEl = document.getElementById('group-delete-expected-name');
+  const groupTransferPanel = document.getElementById('group-transfer-panel');
+  const groupTransferMemberSelect = document.getElementById('group-transfer-member');
+  const groupTransferEmpty = document.getElementById('group-transfer-empty');
+  const groupDeletePanel = document.getElementById('group-delete-panel');
+  const groupDeleteConfirmInput = document.getElementById('group-delete-confirm-name');
+  const groupDeleteSubmitBtn = document.getElementById('submit-group-delete-dialog');
   const inviteDialog = document.getElementById('group-invite-dialog');
   const inviteForm = document.getElementById('group-invite-form');
   const inviteOnlyRows = document.getElementById('invite-only-rows');
@@ -768,6 +778,149 @@
   document.getElementById('group-hub-create-another')?.addEventListener('click', () => {
     groupHubDialog?.close();
     openGroupDialog('create');
+  });
+
+  function selectedGroupDeleteMode() {
+    return groupDeleteForm?.querySelector('input[name="group_delete_mode"]:checked')?.value === 'delete'
+      ? 'delete'
+      : 'transfer';
+  }
+
+  function syncGroupDeleteMode() {
+    const mode = selectedGroupDeleteMode();
+    const isDelete = mode === 'delete';
+    if (groupTransferPanel) groupTransferPanel.hidden = isDelete;
+    if (groupDeletePanel) groupDeletePanel.hidden = !isDelete;
+    if (groupTransferMemberSelect) groupTransferMemberSelect.disabled = isDelete || !groupTransferMemberSelect.options.length;
+    if (groupDeleteConfirmInput) groupDeleteConfirmInput.required = isDelete;
+    if (groupDeleteSubmitBtn) {
+      groupDeleteSubmitBtn.textContent = isDelete ? 'Delete group permanently' : 'Transfer & leave group';
+      groupDeleteSubmitBtn.classList.toggle('button-danger', isDelete);
+      groupDeleteSubmitBtn.classList.toggle('button-primary', !isDelete);
+      groupDeleteSubmitBtn.disabled = !isDelete && (!groupTransferMemberSelect || !groupTransferMemberSelect.options.length);
+    }
+    Ipon.setFieldError(groupTransferMemberSelect, '');
+    Ipon.setFieldError(groupDeleteConfirmInput, '');
+  }
+
+  async function openGroupDeleteDialog() {
+    if (!groupDeleteDialog || !groupDeleteForm || !currentGroup) return;
+    groupHubDialog?.close();
+    const safeName = currentGroup.name || 'this group';
+    if (groupDeleteNameEl) groupDeleteNameEl.textContent = safeName;
+    if (groupDeleteExpectedNameEl) groupDeleteExpectedNameEl.textContent = safeName;
+    if (groupDeleteConfirmInput) {
+      groupDeleteConfirmInput.value = '';
+      groupDeleteConfirmInput.placeholder = safeName;
+    }
+    const transferRadio = groupDeleteForm.querySelector('input[name="group_delete_mode"][value="transfer"]');
+    if (transferRadio) transferRadio.checked = true;
+    if (groupTransferMemberSelect) {
+      groupTransferMemberSelect.innerHTML = '';
+      groupTransferMemberSelect.disabled = true;
+    }
+    if (groupTransferEmpty) groupTransferEmpty.hidden = true;
+    syncGroupDeleteMode();
+    groupDeleteDialog.showModal();
+
+    try {
+      const accounts = await Ipon.rpc('get_group_access_list');
+      const candidates = (accounts || []).filter((acc) => acc.user_id !== state?.profile?.id && acc.status === 'ACTIVE');
+      if (groupTransferMemberSelect) {
+        groupTransferMemberSelect.replaceChildren();
+        candidates.forEach((acc) => {
+          const opt = document.createElement('option');
+          opt.value = acc.user_id;
+          const labelName = acc.full_name || acc.member_name || acc.email || 'Group member';
+          opt.textContent = `${labelName} · ${acc.role}${acc.email ? ` (${acc.email})` : ''}`;
+          opt.dataset.displayName = labelName;
+          groupTransferMemberSelect.append(opt);
+        });
+      }
+      if (groupTransferEmpty) groupTransferEmpty.hidden = candidates.length > 0;
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      syncGroupDeleteMode();
+    }
+  }
+
+  document.getElementById('group-hub-delete-btn')?.addEventListener('click', openGroupDeleteDialog);
+  document.getElementById('close-group-delete-dialog')?.addEventListener('click', () => groupDeleteDialog?.close());
+  document.getElementById('cancel-group-delete-dialog')?.addEventListener('click', () => groupDeleteDialog?.close());
+  groupDeleteForm?.addEventListener('change', (event) => {
+    if (event.target?.name === 'group_delete_mode') syncGroupDeleteMode();
+  });
+  groupDeleteConfirmInput?.addEventListener('input', () => Ipon.setFieldError(groupDeleteConfirmInput, ''));
+
+  groupDeleteForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!currentGroup) return;
+    const mode = selectedGroupDeleteMode();
+    const safeName = currentGroup.name || 'this group';
+    const button = groupDeleteSubmitBtn || event.submitter;
+
+    if (mode === 'transfer') {
+      const targetUserId = groupTransferMemberSelect?.value || '';
+      if (!targetUserId) {
+        Ipon.setFieldError(groupTransferMemberSelect, 'Select an active member to receive administrator ownership.');
+        groupTransferMemberSelect?.focus();
+        return;
+      }
+      const selectedOption = groupTransferMemberSelect.selectedOptions?.[0];
+      const targetName = selectedOption?.dataset?.displayName || selectedOption?.textContent || 'the selected member';
+      const confirmed = await Ipon.confirmAction({
+        title: 'Transfer admin role & leave group?',
+        message: `${targetName} will become administrator of "${safeName}", and your access to this group will be removed.`,
+        acceptLabel: 'Transfer & leave'
+      });
+      if (!confirmed) return;
+
+      Ipon.setBusy(button, true, 'Transferring…');
+      try {
+        await Ipon.rpc('admin_transfer_and_leave_group', {
+          p_group_id: currentGroup.group_id,
+          p_new_admin_user_id: targetUserId
+        });
+        groupDeleteDialog?.close();
+        Ipon.toast(`Ownership of "${safeName}" transferred to ${targetName}.`);
+        location.reload();
+      } catch (error) {
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      } finally {
+        Ipon.setBusy(button, false);
+      }
+      return;
+    }
+
+    const typedName = String(groupDeleteConfirmInput?.value || '').trim();
+    if (typedName.toLowerCase() !== safeName.trim().toLowerCase()) {
+      Ipon.setFieldError(groupDeleteConfirmInput, `Type "${safeName}" to confirm permanent deletion.`);
+      groupDeleteConfirmInput?.focus();
+      return;
+    }
+
+    const confirmed = await Ipon.confirmAction({
+      title: `Permanently delete "${safeName}"?`,
+      message: 'This will permanently erase the group along with all members, contributions, deductions, expenses, goals, and announcements. This cannot be undone.',
+      acceptLabel: 'Delete permanently'
+    });
+    if (!confirmed) return;
+
+    Ipon.setBusy(button, true, 'Deleting…');
+    try {
+      await Ipon.rpc('admin_delete_group', {
+        p_group_id: currentGroup.group_id,
+        p_confirm_name: typedName
+      });
+      groupDeleteDialog?.close();
+      Ipon.toast(`"${safeName}" has been permanently deleted.`);
+      location.reload();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(button, false);
+    }
   });
   function openAdminContributorDialog(action = 'enable') {
     if (!adminContributorDialog || !adminContributorForm) return;

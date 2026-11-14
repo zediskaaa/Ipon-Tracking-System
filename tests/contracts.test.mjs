@@ -1798,3 +1798,33 @@ test('enforce_group_scope inspects old/new via jsonb and group creation starts w
   assert.match(dashboardJs, /rows\.length \? '\+ Add another' : '\+ Add member'/);
 });
 
+test('group admins can transfer ownership and leave or permanently delete a group with confirmation', () => {
+  const migration054 = read('database/migrations/20261114_054_group_transfer_and_delete.sql');
+  const schema = read('database/schema.sql');
+  const dashboardHtml = read('dashboard.html');
+  const dashboardJs = read('js/dashboard.js');
+
+  assert.match(migration054, /create or replace function public\.admin_transfer_and_leave_group\(/i);
+  assert.match(migration054, /create or replace function public\.admin_delete_group\(/i);
+  assert.match(migration054, /delete from public\.contributions where group_id = v_actor_group/i);
+  assert.match(migration054, /delete from public\.contribution_periods where group_id = v_actor_group/i);
+  assert.match(migration054, /delete from public\.groups where id = v_actor_group/i);
+  assert.match(migration054, /20261114_054/);
+  assert.match(schema, /create or replace function public\.admin_transfer_and_leave_group\(/i);
+  assert.match(schema, /create or replace function public\.admin_delete_group\(/i);
+  assert.match(schema, /20261114_054/);
+
+  assert.match(dashboardHtml, /id="group-hub-delete-btn"/);
+  assert.match(dashboardHtml, /id="group-delete-dialog"/);
+  assert.match(dashboardHtml, /value="transfer"/);
+  assert.match(dashboardHtml, /value="delete"/);
+  assert.match(dashboardHtml, /id="group-transfer-member"/);
+  assert.match(dashboardHtml, /id="group-delete-confirm-name"/);
+
+  assert.match(dashboardJs, /Ipon\.rpc\('admin_transfer_and_leave_group'/);
+  assert.match(dashboardJs, /Ipon\.rpc\('admin_delete_group'/);
+  assert.match(dashboardJs, /Transfer admin role & leave group\?/);
+  assert.match(dashboardJs, /Permanently delete "/);
+});
+
+
