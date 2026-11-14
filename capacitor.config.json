@@ -2,7 +2,7 @@
   "appId": "com.myipon.app",
   "appName": "myIPON",
   "webDir": "www",
-  "appendUserAgent": "myIPONApp/19",
+  "appendUserAgent": "myIPONApp/20",
   "server": {
     "url": "https://my-ipon.vercel.app/login.html?app=1",
     "androidScheme": "https",

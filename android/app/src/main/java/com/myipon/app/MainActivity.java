@@ -17,6 +17,8 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         NotificationPollReceiver.ensureChannel(this);
         maybeRequestPostNotifications();
+        NotificationSyncService.ensureStarted(this);
+        NotificationSyncWorker.ensureScheduled(this);
         handleNotificationIntent(getIntent());
     }
 
@@ -29,6 +31,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onStop() {
         super.onStop();
+        NotificationSyncService.ensureStarted(this);
+        NotificationSyncWorker.ensureScheduled(this);
         NotificationPollReceiver.scheduleNext(this, 30_000L);
     }
 
@@ -49,7 +53,7 @@ public class MainActivity extends BridgeActivity {
         if (intent == null) return;
         String link = intent.getStringExtra("notification_link");
         if (link == null || link.isEmpty()) return;
-        if (!link.matches("^[a-zA-Z0-9_-]+\\.html(?:#[a-zA-Z0-9_-]+)?$")) return;
+        if (!link.matches("^[a-zA-Z0-9_-]+\\.html(?:\\?[a-zA-Z0-9_=&:.-]+)?(?:#[a-zA-Z0-9_-]+)?$")) return;
         if (bridge != null && bridge.getWebView() != null) {
             final String safePath = link;
             bridge.getWebView().post(() ->

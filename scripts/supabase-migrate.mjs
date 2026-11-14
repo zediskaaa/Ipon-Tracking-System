@@ -8,7 +8,7 @@ const migrationsDir = path.join(rootDir, 'database', 'migrations');
 const functionsDir = path.join(rootDir, 'supabase', 'functions');
 const cachePath = path.join(rootDir, 'supabase', '.temp', 'deployed-functions.json');
 const DEFAULT_PROJECT_REF = process.env.SUPABASE_PROJECT_REF || 'woslmwokhhyszkgevnli';
-const NO_VERIFY_JWT_FUNCTIONS = new Set(['manage-account']);
+const NO_VERIFY_JWT_FUNCTIONS = new Set(['manage-account', 'send-push']);
 
 const args = process.argv.slice(2);
 const syncMode = args.includes('--sync');

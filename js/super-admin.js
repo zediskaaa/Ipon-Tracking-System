@@ -935,6 +935,7 @@
   });
   administratorForm.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!Ipon.validateNameFields(administratorForm)) return;
     const button = event.submitter;
     const values = new FormData(administratorForm);
     const isEdit = Boolean(values.get('user_id'));

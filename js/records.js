@@ -107,6 +107,37 @@
     window.history.replaceState(null, '', currentUrl.toString());
   }
 
+  async function resolveMemberMonthStatus(memberId, monthValue) {
+    if (!memberId || !monthValue) return { statusRow: null, fallbackMonthlyAmount: 0 };
+    const periodMonth = `${monthValue}-01`;
+    const cacheKey = `${memberId}:${periodMonth}`;
+    let statusRow = statusRowsByMonth.get(cacheKey);
+    if (statusRow === undefined) {
+      const { data, error } = await Ipon.client
+        .from('v_contribution_status')
+        .select('member_id,period_month,required_amount,paid_amount,outstanding_amount,payment_status,is_exempt')
+        .eq('member_id', memberId)
+        .eq('period_month', periodMonth)
+        .maybeSingle();
+      statusRow = !error && data ? data : null;
+      statusRowsByMonth.set(cacheKey, statusRow);
+    }
+    const member = membersList.find((m) => m.id === memberId);
+    return { statusRow, fallbackMonthlyAmount: Number(member?.monthly_contribution_amount || 0) };
+  }
+
+  const syncExcessToggle = page === 'contributions'
+    ? Ipon.bindExcessContributionToggle({
+      amountInput: document.getElementById('amount'),
+      checkbox: document.getElementById('allocate-excess'),
+      field: document.getElementById('allocate-excess-field'),
+      getContext: () => resolveMemberMonthStatus(
+        document.getElementById('member-id')?.value,
+        document.getElementById('contribution-month')?.value
+      )
+    })
+    : async () => {};
+
   async function syncSuggestedAmount() {
     if (page !== 'contributions') return;
     const memberSelect = document.getElementById('member-id');
@@ -114,41 +145,18 @@
     const amountInput = document.getElementById('amount');
     if (!memberSelect || !monthInput || !amountInput) return;
 
-    const memberId = memberSelect.value;
-    const monthValue = monthInput.value;
-    if (!memberId || !monthValue) {
-      amountInput.value = '';
-      return;
-    }
-
-    const periodMonth = `${monthValue}-01`;
-    const cacheKey = `${memberId}:${periodMonth}`;
-    let statusRow = statusRowsByMonth.get(cacheKey);
-
-    if (statusRow === undefined) {
-      const { data, error } = await Ipon.client
-        .from('v_contribution_status')
-        .select('member_id,period_month,required_amount,paid_amount,outstanding_amount,payment_status')
-        .eq('member_id', memberId)
-        .eq('period_month', periodMonth)
-        .maybeSingle();
-      statusRow = !error && data ? data : null;
-      statusRowsByMonth.set(cacheKey, statusRow);
-    }
-
+    const { statusRow, fallbackMonthlyAmount } = await resolveMemberMonthStatus(memberSelect.value, monthInput.value);
     if (statusRow) {
       const outstanding = Number(statusRow.outstanding_amount || 0);
-      if (outstanding > 0 && statusRow.payment_status !== 'PAID' && statusRow.payment_status !== 'OVERPAID') {
-        amountInput.value = outstanding.toFixed(2);
-      } else {
-        amountInput.value = '';
-      }
-      return;
+      amountInput.value = outstanding > 0 && statusRow.payment_status !== 'PAID' && statusRow.payment_status !== 'OVERPAID'
+        ? outstanding.toFixed(2)
+        : '';
+    } else if (memberSelect.value && monthInput.value) {
+      amountInput.value = fallbackMonthlyAmount > 0 ? fallbackMonthlyAmount.toFixed(2) : '';
+    } else {
+      amountInput.value = '';
     }
-
-    const member = membersList.find((m) => m.id === memberId);
-    const fallbackAmount = Number(member?.monthly_contribution_amount || 0);
-    amountInput.value = fallbackAmount > 0 ? fallbackAmount.toFixed(2) : '';
+    await syncExcessToggle();
   }
 
   function syncResponsiblePayoutBox(syncMethod = true) {
@@ -490,6 +498,7 @@
     }).join('') : `<tr><td colspan="7" class="empty-state">${selectedMemberName ? `No additions found for ${Ipon.escapeHtml(selectedMemberName)}.` : 'No additions matching this filter yet.'}</td></tr>`;
     updateBulkSelectionUi();
     if (!preserveAmount) await syncSuggestedAmount();
+    else await syncExcessToggle();
   }
 
   function updateBulkSelectionUi() {

@@ -22,6 +22,8 @@
     clearBtn: document.getElementById('user-receipt-clear')
   });
   let groupPaymentInfo = null;
+  let ownMonthlyAmount = 0;
+  const statusRowsByMonth = new Map();
   let historyRowsById = new Map();
   let commentCounts = new Map();
   const pageSize = 25;
@@ -30,6 +32,31 @@
   const streakEl = document.getElementById('user-streak');
   const exportStatementBtn = document.getElementById('user-export-statement');
   const printStatementBtn = document.getElementById('user-print-statement');
+
+  async function resolveOwnMonthStatus(monthValue) {
+    if (!state.profile.member_id || !monthValue) return { statusRow: null, fallbackMonthlyAmount: ownMonthlyAmount };
+    const periodMonth = `${monthValue}-01`;
+    let statusRow = statusRowsByMonth.get(periodMonth);
+    if (statusRow === undefined) {
+      const { data, error } = await Ipon.client
+        .from('v_contribution_status')
+        .select('member_id,period_month,required_amount,paid_amount,outstanding_amount,payment_status,is_exempt')
+        .eq('member_id', state.profile.member_id)
+        .eq('period_month', periodMonth)
+        .maybeSingle();
+      statusRow = !error && data ? data : null;
+      statusRowsByMonth.set(periodMonth, statusRow);
+    }
+    return { statusRow, fallbackMonthlyAmount: ownMonthlyAmount };
+  }
+
+  const syncUserExcessToggle = Ipon.bindExcessContributionToggle({
+    amountInput: form?.elements.amount,
+    checkbox: document.getElementById('user-allocate-excess'),
+    field: document.getElementById('user-allocate-excess-field'),
+    getContext: () => resolveOwnMonthStatus(form?.elements.contribution_month?.value)
+  });
+  form?.elements.contribution_month?.addEventListener('change', () => { syncUserExcessToggle().catch(() => {}); });
   function badge(status) { return `<span class="status status-${String(status).toLowerCase().replaceAll(' ', '-')}">${Ipon.escapeHtml(status)}</span>`; }
 
   function updatePager(count = 0) {
@@ -89,10 +116,12 @@
       Ipon.client.rpc('get_user_dashboard'),
       (() => { let query = Ipon.client.from('contributions').select('id,amount,payment_date,transaction_reference,payment_method,notes,approval_status,review_note,void_reason,receipt_url,contribution_periods!inner(period_month,member_id)', { count: 'exact' }).eq('contribution_periods.member_id', state.profile.member_id).order('payment_date', { ascending: false }); if (statusFilter.value) query = query.eq('approval_status', statusFilter.value); return query.range(historyPage * pageSize, (historyPage + 1) * pageSize - 1); })(),
       Ipon.rpc('get_group_payment_info').catch(() => null),
-      Ipon.client.from('members').select('payout_channel,payout_account_number,payout_account_name').eq('id', state.profile.member_id).maybeSingle()
+      Ipon.client.from('members').select('monthly_contribution_amount,payout_channel,payout_account_number,payout_account_name').eq('id', state.profile.member_id).maybeSingle()
     ]);
     if (summaryResult.error) throw summaryResult.error;
     if (historyResult.error) throw historyResult.error;
+    ownMonthlyAmount = Number(ownMemberResult?.data?.monthly_contribution_amount || 0);
+    statusRowsByMonth.clear();
     renderPaymentCard(paymentInfo);
     renderOwnPayoutStrip(ownMemberResult?.data || state.profile);
     const summary = summaryResult.data || {};
@@ -148,6 +177,7 @@
     }
     form.reset(); receiptPicker.clear(); form.elements.contribution_month.value = Ipon.monthStart().slice(0, 7); form.elements.payment_date.value = Ipon.isoDate();
     Ipon.setPaymentMethod(form, Ipon.guessPaymentMethodFromLabel(groupPaymentInfo?.payment_method_label, 'CASH'));
+    syncUserExcessToggle().catch(() => {});
     dialog.showModal(); form.elements.amount.focus();
   });
   document.getElementById('close-contribution-dialog').addEventListener('click', () => dialog.close());
@@ -193,6 +223,7 @@
       form.elements.reference.value = row.transaction_reference || '';
       form.elements.notes.value = row.notes || '';
       Ipon.setPaymentMethod(form, row.payment_method || Ipon.guessPaymentMethodFromLabel(groupPaymentInfo?.payment_method_label, 'CASH'));
+      syncUserExcessToggle().catch(() => {});
       dialog.showModal();
       form.elements.amount.focus();
     }

@@ -40,12 +40,54 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch));
 }
 
+function normalizeNamePart(value: unknown) {
+  return String(value || '').normalize('NFC').trim().replace(/\s+/g, ' ');
+}
+
+const NAME_LOWERCASE_PARTICLES = new Set([
+  'de', 'del', 'dela', 'los', 'las', 'la', 'le', 'da', 'di', 'do', 'dos', 'das',
+  'van', 'von', 'den', 'der', 'ter', 'ten', 'ben', 'bin', 'binti', 'ibn', 'al'
+]);
+const NAME_ROMAN_SUFFIXES = new Set(['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']);
+
+function validFormalNamePart(value: unknown, { allowSingleInitial = false, required = true } = {}) {
+  const cleaned = normalizeNamePart(value);
+  if (!cleaned) return !required;
+  if (cleaned.length > 80) return false;
+  if (!/^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(cleaned)) return false;
+  const letterCount = cleaned.replace(/[^\p{L}]/gu, '').length;
+  if (!allowSingleInitial && letterCount < 2) return false;
+  const words = cleaned.split(' ');
+  for (let i = 0; i < words.length; i += 1) {
+    const word = words[i];
+    if (i > 0) {
+      if (NAME_LOWERCASE_PARTICLES.has(word)) {
+        if (i >= words.length - 1) return false;
+        continue;
+      }
+      if (i === words.length - 1 && NAME_ROMAN_SUFFIXES.has(word)) continue;
+    }
+    const segments = word.split(/['\u2019-]/);
+    for (const seg of segments) {
+      if (!seg) return false;
+      if (!/^\p{Lu}/u.test(seg) || /\p{Lu}{2}/u.test(seg)) return false;
+      if (seg.length === 1) {
+        if (segments.length > 1) continue;
+        if (!(allowSingleInitial && words.length === 1)) return false;
+      } else if (!/^\p{Lu}[\p{Ll}\p{M}]+(?:\p{Lu}[\p{Ll}\p{M}]+)*$/u.test(seg)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 function fallbackNamesFromEmail(email: string) {
   const local = email.split('@')[0] || 'Member';
   const words = local.replace(/[^a-zA-Z\s._-]/g, ' ').split(/[._\s-]+/).map((w) => w.trim()).filter((w) => /^[a-zA-Z]{2,}$/.test(w));
   const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
   const first = words[0] ? cap(words[0]).slice(0, 40) : 'Group';
-  const last = words[1] ? cap(words.slice(1).join(' ')).slice(0, 40) : 'Member';
+  const last = words[1] ? words.slice(1, 3).map(cap).join(' ').slice(0, 40) : 'Member';
   return { first, last };
 }
 
@@ -1035,9 +1077,17 @@ Deno.serve(async (request) => {
 
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const ANNOUNCEMENTS_BUCKET = 'announcements';
+  const RECORD_COMMENTS_BUCKET = 'record-comments';
+  const BLOCKED_DISCUSSION_EXT_RE = /\.(exe|msi|bat|cmd|com|pif|scr|vbs|vbe|js|mjs|cjs|jse|wsf|wsh|ps1|psm1|sh|bash|html|htm|xhtml|svg|php|asp|aspx|jsp|jar|dll|sys|drv|reg|hta|cpl)$/i;
+  const BLOCKED_DISCUSSION_MIMES = new Set(['text/html', 'application/javascript', 'text/javascript', 'image/svg+xml', 'application/x-msdownload', 'application/x-msdos-program']);
 
   async function ensureAnnouncementsBucket(client: ReturnType<typeof createClient>) {
     const { error } = await client.storage.createBucket(ANNOUNCEMENTS_BUCKET, { public: false, fileSizeLimit: 52428800 });
+    if (error && !/already exists/i.test(error.message || '')) throw error;
+  }
+
+  async function ensureRecordCommentsBucket(client: ReturnType<typeof createClient>) {
+    const { error } = await client.storage.createBucket(RECORD_COMMENTS_BUCKET, { public: false, fileSizeLimit: 52428800 });
     if (error && !/already exists/i.test(error.message || '')) throw error;
   }
 
@@ -1107,6 +1157,84 @@ Deno.serve(async (request) => {
     if (!allowedPaths.length) return json({ removed: 0 });
     const { error: removeError } = await admin.storage.from(ANNOUNCEMENTS_BUCKET).remove(allowedPaths);
     if (removeError) return json({ error: removeError.message || 'Unable to delete media files.' }, 400);
+    return json({ removed: allowedPaths.length });
+  }
+
+  if (body.action === 'record-comment-upload-urls') {
+    const recordType = String(body.record_type || '').trim().toLowerCase();
+    const recordId = String(body.record_id || '').trim();
+    const files = Array.isArray(body.files) ? body.files : [];
+    if (!['contribution', 'withdrawal', 'expense'].includes(recordType) || !UUID_RE.test(recordId) || !files.length || files.length > 5) {
+      return json({ error: 'Invalid discussion attachment request.' }, 400);
+    }
+    if (!actor.group_id) return json({ error: 'Join or select a savings group first.' }, 403);
+    const { data: thread, error: threadError } = await caller.rpc('get_record_comments', { p_record_type: recordType, p_record_id: recordId });
+    if (threadError || !thread?.can_reply) {
+      return json({ error: threadError?.message || 'You do not have permission to attach files to this record.' }, 403);
+    }
+    try {
+      await ensureRecordCommentsBucket(admin);
+      const uploads = [];
+      for (let i = 0; i < files.length; i += 1) {
+        const entry = (files[i] || {}) as { name?: unknown; kind?: unknown; type?: unknown; size?: unknown };
+        const rawName = String(entry.name || 'attachment').slice(0, 120);
+        const rawType = String(entry.type || '').trim().toLowerCase().slice(0, 120);
+        const rawSize = Number(entry.size || 0);
+        if (rawSize > 52428800) {
+          return json({ error: `"${rawName}" exceeds the 50 MB file size limit.` }, 400);
+        }
+        if (BLOCKED_DISCUSSION_EXT_RE.test(rawName) || BLOCKED_DISCUSSION_MIMES.has(rawType)) {
+          return json({ error: `"${rawName}" cannot be uploaded for security reasons.` }, 400);
+        }
+        const cleanName = rawName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80) || 'attachment';
+        const kind = entry.kind === 'image' ? 'image' : (entry.kind === 'video' ? 'video' : 'file');
+        const path = `${actor.group_id}/${recordType}/${recordId}/${userResult.user.id}/${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
+        const { data, error } = await admin.storage.from(RECORD_COMMENTS_BUCKET).createSignedUploadUrl(path);
+        if (error || !data) throw error || new Error('Could not prepare file upload.');
+        uploads.push({ path, token: data.token, name: rawName, kind, type: String(entry.type || '').slice(0, 120), size: Math.max(0, Math.round(rawSize)) });
+      }
+      return json({ uploads });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Unable to prepare attachment uploads.' }, 400);
+    }
+  }
+
+  if (body.action === 'record-comment-view-urls') {
+    const recordType = String(body.record_type || '').trim().toLowerCase();
+    const recordId = String(body.record_id || '').trim();
+    if (!['contribution', 'withdrawal', 'expense'].includes(recordType) || !UUID_RE.test(recordId)) {
+      return json({ error: 'Invalid record reference.' }, 400);
+    }
+    const { data: thread, error: threadError } = await caller.rpc('get_record_comments', { p_record_type: recordType, p_record_id: recordId });
+    if (threadError || !thread) return json({ error: threadError?.message || 'Discussion not found.' }, 404);
+    const comments = Array.isArray(thread.comments) ? thread.comments : [];
+    const paths = [...new Set(
+      comments.flatMap((comment: { attachments?: unknown }) =>
+        (Array.isArray(comment?.attachments) ? comment.attachments : [])
+          .map((att: { path?: unknown }) => String(att?.path || ''))
+          .filter((p: string) => p && !p.includes('..'))
+      )
+    )];
+    if (!paths.length) return json({ urls: {} });
+    const urls: Record<string, string> = {};
+    for (let i = 0; i < paths.length; i += 100) {
+      const slice = paths.slice(i, i + 100);
+      const { data: signed, error: signError } = await admin.storage.from(RECORD_COMMENTS_BUCKET).createSignedUrls(slice, 3600);
+      if (signError) return json({ error: signError.message || 'Unable to load attachment links.' }, 400);
+      (signed || []).forEach((item: { path?: string | null; signedUrl?: string | null }) => {
+        if (item.path && item.signedUrl) urls[item.path] = item.signedUrl;
+      });
+    }
+    return json({ urls });
+  }
+
+  if (body.action === 'record-comment-cleanup-media') {
+    const requested = Array.isArray(body.paths) ? body.paths.map((value) => String(value || '')).filter(Boolean) : [];
+    const ownSegment = `/${userResult.user.id}/`;
+    const allowedPaths = requested.filter((path) => !path.includes('..') && path.includes(ownSegment));
+    if (!allowedPaths.length) return json({ removed: 0 });
+    const { error: removeError } = await admin.storage.from(RECORD_COMMENTS_BUCKET).remove(allowedPaths);
+    if (removeError) return json({ error: removeError.message || 'Unable to clean up uploaded files.' }, 400);
     return json({ removed: allowedPaths.length });
   }
 
@@ -1459,15 +1587,26 @@ Please generate a JSON object with this exact structure:
 
   const email = String(body.email || '').trim().toLowerCase();
   const password = String(body.password || '');
+  const rawFirst = normalizeNamePart(body.first_name);
+  const rawMiddle = normalizeNamePart(body.middle_name);
+  const rawLast = normalizeNamePart(body.last_name);
+  const nameOptional = role !== 'ADMIN' && (Boolean(body.name_optional) || !rawFirst || !rawLast);
   const fallback = fallbackNamesFromEmail(email);
-  const firstName = String(body.first_name || '').trim() || fallback.first;
-  const middleName = String(body.middle_name || '').trim() || null;
-  const lastName = String(body.last_name || '').trim() || fallback.last;
+  const firstName = rawFirst || fallback.first;
+  const middleName = rawMiddle || null;
+  const lastName = rawLast || fallback.last;
   const contactNumber = String(body.contact_number || '').trim() || null;
 
   if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: 'A valid email address is required.' }, 400);
-  if (role === 'ADMIN' && (!String(body.first_name || '').trim() || !String(body.last_name || '').trim())) {
+  if (role === 'ADMIN' && (!rawFirst || !rawLast)) {
     return json({ error: 'Valid name and email fields are required.' }, 400);
+  }
+  if (!nameOptional) {
+    if (!validFormalNamePart(firstName) || !validFormalNamePart(lastName) || (middleName && !validFormalNamePart(middleName, { allowSingleInitial: true, required: false }))) {
+      return json({ error: 'Use formal capitalization for name fields (e.g., Juan Dela Cruz). Do not use ALL CAPS or all lowercase.' }, 400);
+    }
+  } else if ((rawFirst && !validFormalNamePart(rawFirst)) || (rawLast && !validFormalNamePart(rawLast)) || (middleName && !validFormalNamePart(middleName, { allowSingleInitial: true, required: false }))) {
+    return json({ error: 'Use formal capitalization for name fields (e.g., Juan Dela Cruz). Do not use ALL CAPS or all lowercase.' }, 400);
   }
   if (role === 'ADMIN' && String(body.group_name || '').trim().length < 2) return json({ error: 'Group name is required.' }, 400);
 
@@ -1527,7 +1666,8 @@ Please generate a JSON object with this exact structure:
         full_name: [firstName, middleName, lastName].filter(Boolean).join(' '),
         contact_number: contactNumber,
         account_kind: 'INVITED',
-        invite_token: inviteToken
+        invite_token: inviteToken,
+        name_setup_required: nameOptional
       },
       app_metadata: { must_change_password: true }
     });
@@ -1549,7 +1689,10 @@ Please generate a JSON object with this exact structure:
     if (result.error) throw result.error;
 
     if (!existingProfile) {
-      await admin.from('profiles').update({ status: 'PENDING' }).eq('id', targetUserId);
+      await admin.from('profiles').update({
+        status: 'PENDING',
+        name_setup_required: nameOptional
+      }).eq('id', targetUserId);
       await admin.from('group_memberships').update({ status: 'PENDING' }).eq('user_id', targetUserId);
     }
 

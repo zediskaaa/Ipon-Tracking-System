@@ -45,7 +45,6 @@
   const groupSwitcherWrap = document.getElementById('members-group-switcher-wrap');
   const groupSelect = document.getElementById('members-group-select');
   const contactErrorMessage = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
-  const nameErrorMessage = "Use letters, spaces, hyphens, or apostrophes only.";
   const nameFields = [
     [firstName, document.getElementById('first-name-error'), true],
     [middleName, document.getElementById('middle-name-error'), false],
@@ -173,23 +172,8 @@
     error.hidden = !message;
   }
   function validateNames() {
-    let firstInvalid = null;
-    nameFields.forEach(([input, error, required]) => {
-      const value = input.value.trim();
-      const valid = !value ? !required : Ipon.validNamePart(value);
-      const message = valid ? '' : (!value ? 'This name is required.' : nameErrorMessage);
-      setNameError(input, error, message);
-      if (!valid && !firstInvalid) firstInvalid = input;
-    });
-    if (!firstInvalid && nameFields.map(([input]) => Ipon.normalizeNamePart(input.value)).filter(Boolean).join(' ').length > 150) {
-      const error = document.getElementById('last-name-error');
-      setNameError(lastName, error, 'Combined full name must not exceed 150 characters.');
-      firstInvalid = lastName;
-    }
-    firstInvalid?.focus();
-    return !firstInvalid;
+    return Ipon.validateNameFields(form);
   }
-  nameFields.forEach(([input, error]) => input.addEventListener('input', () => setNameError(input, error, '')));
   contactInput.addEventListener('input', () => setContactError(''));
   monthlyAmount.addEventListener('input', () => {
     monthlyAmountTouched = true;

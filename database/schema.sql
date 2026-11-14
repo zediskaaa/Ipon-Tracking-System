@@ -11536,6 +11536,2320 @@ insert into public.schema_migrations (version, name)
 values ('20261114_059', 'include payment_method in v_savings_calendar')
 on conflict (version) do nothing;
 
+-- Migration 060: Replace prior record-comment notifications per thread, notify treasurers/participants, and include dedupe_key in background feed
+create or replace function public.add_record_comment(
+  p_record_type text,
+  p_record_id uuid,
+  p_body text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_type text := lower(btrim(coalesce(p_record_type, '')));
+  v_body text := nullif(btrim(coalesce(p_body, '')), '');
+  v_group uuid := public.current_group_id();
+  v_role public.app_role := public.current_user_role();
+  v_member_id uuid := public.current_member_id();
+  v_submitted_by uuid;
+  v_target_member_id uuid;
+  v_person_responsible text;
+  v_my_member_name text;
+  v_amount numeric(14,2);
+  v_subject_name text;
+  v_allowed boolean := false;
+  v_comment public.record_comments;
+  v_author_name text;
+  v_author_avatar text;
+  v_type_label text;
+  v_page text;
+  v_snippet text;
+  v_dedupe_key text;
+  v_thread_marker text;
+  v_title text;
+  v_message text;
+  v_link text;
+  v_recipient record;
+begin
+  if auth.uid() is null or v_group is null or v_role not in ('ADMIN', 'TREASURER', 'MEMBER') then
+    raise exception 'Join or select a savings group first.' using errcode = '42501';
+  end if;
+
+  if v_type not in ('contribution', 'withdrawal', 'expense') or p_record_id is null then
+    raise exception 'Invalid record reference.' using errcode = '22023';
+  end if;
+
+  if v_body is null or char_length(v_body) > 1000 then
+    raise exception 'Reply must be between 1 and 1000 characters.' using errcode = '22023';
+  end if;
+
+  if v_type = 'contribution' then
+    select c.submitted_by, cp.member_id, m.full_name, c.amount
+    into v_submitted_by, v_target_member_id, v_subject_name, v_amount
+    from public.contributions c
+    join public.contribution_periods cp on cp.id = c.contribution_period_id
+    join public.members m on m.id = cp.member_id
+    where c.id = p_record_id
+      and c.group_id = v_group;
+    v_type_label := 'contribution';
+    v_page := 'contributions.html';
+  elsif v_type = 'withdrawal' then
+    select w.submitted_by, w.person_responsible, w.person_responsible, w.amount
+    into v_submitted_by, v_person_responsible, v_subject_name, v_amount
+    from public.withdrawals w
+    where w.id = p_record_id
+      and w.group_id = v_group;
+    v_type_label := 'deduction';
+    v_page := 'withdrawals.html';
+  else
+    select e.submitted_by, e.person_responsible, e.person_responsible, e.amount
+    into v_submitted_by, v_person_responsible, v_subject_name, v_amount
+    from public.expenses e
+    where e.id = p_record_id
+      and e.group_id = v_group;
+    v_type_label := 'expense';
+    v_page := 'expenses.html';
+  end if;
+
+  if not found then
+    raise exception 'Record not found in the active savings group.' using errcode = 'P0002';
+  end if;
+
+  if v_role in ('ADMIN', 'TREASURER') then
+    v_allowed := true;
+  else
+    if v_member_id is not null then
+      select m.full_name into v_my_member_name
+      from public.members m
+      where m.id = v_member_id and m.group_id = v_group;
+    end if;
+    if v_type = 'contribution' then
+      v_allowed := (v_submitted_by = auth.uid() or (v_member_id is not null and v_target_member_id = v_member_id));
+    else
+      v_allowed := (
+        v_submitted_by = auth.uid()
+        or (v_my_member_name is not null and lower(btrim(coalesce(v_person_responsible, ''))) = lower(btrim(v_my_member_name)))
+      );
+    end if;
+  end if;
+
+  if not v_allowed then
+    raise exception 'You can only reply to records associated with your account.' using errcode = '42501';
+  end if;
+
+  insert into public.record_comments (group_id, record_type, record_id, author_id, body)
+  values (v_group, v_type, p_record_id, auth.uid(), v_body)
+  returning * into v_comment;
+
+  select coalesce(nullif(btrim(p.full_name), ''), 'Group member'), p.avatar_url
+  into v_author_name, v_author_avatar
+  from public.profiles p
+  where p.id = auth.uid();
+
+  v_snippet := case
+    when char_length(v_body) > 120 then left(v_body, 117) || '...'
+    else v_body
+  end;
+
+  v_dedupe_key := 'RECORD_COMMENT:' || v_type || ':' || p_record_id::text;
+  v_thread_marker := 'thread=' || v_type || ':' || p_record_id::text;
+  v_title := 'New reply on ' || v_type_label;
+  v_message := v_author_name || ' (' || coalesce(v_subject_name, 'Member') || ' · PHP '
+    || to_char(coalesce(v_amount, 0), 'FM999,999,990.00') || '): "' || v_snippet || '"';
+
+  for v_recipient in
+    select distinct
+      r.user_id,
+      coalesce(gm.role, p.role) as target_role
+    from (
+      select a.user_id
+      from public.group_admin_ids(v_group) a
+      union
+      select gm_t.user_id
+      from public.group_memberships gm_t
+      where gm_t.group_id = v_group
+        and gm_t.role = 'TREASURER'
+        and gm_t.status = 'ACTIVE'
+      union
+      select p_t.id
+      from public.profiles p_t
+      where p_t.group_id = v_group
+        and p_t.role = 'TREASURER'
+        and p_t.status = 'ACTIVE'
+      union
+      select v_submitted_by where v_submitted_by is not null
+      union
+      select gm_m.user_id
+      from public.group_memberships gm_m
+      where v_target_member_id is not null
+        and gm_m.group_id = v_group
+        and gm_m.member_id = v_target_member_id
+        and gm_m.status = 'ACTIVE'
+      union
+      select p_m.id
+      from public.profiles p_m
+      where v_target_member_id is not null
+        and p_m.member_id = v_target_member_id
+        and p_m.status = 'ACTIVE'
+      union
+      select gm_pr.user_id
+      from public.members m_pr
+      join public.group_memberships gm_pr
+        on gm_pr.group_id = v_group
+       and gm_pr.member_id = m_pr.id
+       and gm_pr.status = 'ACTIVE'
+      where v_type in ('withdrawal', 'expense')
+        and m_pr.group_id = v_group
+        and lower(btrim(m_pr.full_name)) = lower(btrim(coalesce(v_person_responsible, '')))
+      union
+      select p_pr.id
+      from public.members m_pr2
+      join public.profiles p_pr
+        on p_pr.member_id = m_pr2.id
+       and p_pr.status = 'ACTIVE'
+      where v_type in ('withdrawal', 'expense')
+        and m_pr2.group_id = v_group
+        and lower(btrim(m_pr2.full_name)) = lower(btrim(coalesce(v_person_responsible, '')))
+      union
+      select prev.author_id
+      from public.record_comments prev
+      where prev.group_id = v_group
+        and prev.record_type = v_type
+        and prev.record_id = p_record_id
+    ) r
+    join public.profiles p on p.id = r.user_id
+    left join public.group_memberships gm
+      on gm.group_id = v_group
+     and gm.user_id = r.user_id
+     and gm.status = 'ACTIVE'
+    where r.user_id is not null
+      and r.user_id <> auth.uid()
+      and p.status = 'ACTIVE'
+      and p.notifications_enabled
+  loop
+    v_link := (case
+      when v_type = 'contribution' and v_recipient.target_role = 'MEMBER' then 'user.html'
+      else v_page
+    end) || '?' || v_thread_marker;
+
+    delete from public.notifications n
+    where n.recipient_id = v_recipient.user_id
+      and n.type = 'RECORD_COMMENT'
+      and (
+        n.dedupe_key = v_dedupe_key
+        or (
+          n.dedupe_key is null
+          and position(v_thread_marker in coalesce(n.link, '')) > 0
+        )
+      );
+
+    insert into public.notifications (recipient_id, group_id, type, title, message, link, dedupe_key)
+    values (v_recipient.user_id, v_group, 'RECORD_COMMENT', btrim(v_title), btrim(v_message), v_link, v_dedupe_key);
+  end loop;
+
+  return jsonb_build_object(
+    'id', v_comment.id,
+    'record_type', v_comment.record_type,
+    'record_id', v_comment.record_id,
+    'author_id', v_comment.author_id,
+    'author_name', v_author_name,
+    'author_role', v_role::text,
+    'author_avatar_url', v_author_avatar,
+    'body', v_comment.body,
+    'created_at', v_comment.created_at,
+    'is_own', true
+  );
+end;
+$$;
+
+drop function if exists public.get_unread_notifications_by_token(uuid);
+create or replace function public.get_unread_notifications_by_token(p_token uuid)
+returns table (
+  id bigint,
+  type text,
+  title text,
+  message text,
+  link text,
+  dedupe_key text,
+  created_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select n.id, n.type, n.title, n.message, n.link, n.dedupe_key, n.created_at
+  from public.notification_feed_tokens t
+  join public.profiles p on p.id = t.user_id
+  join public.notifications n on n.recipient_id = p.id
+  where p_token is not null
+    and t.token = p_token
+    and p.status = 'ACTIVE'
+    and p.notifications_enabled
+    and n.read_at is null
+    and n.created_at >= now() - interval '48 hours'
+  order by n.created_at desc
+  limit 8;
+$$;
+
+revoke execute on function public.get_unread_notifications_by_token(uuid) from public;
+grant execute on function public.get_unread_notifications_by_token(uuid) to anon, authenticated;
+
+revoke execute on function public.add_record_comment(text, uuid, text) from public, anon;
+grant execute on function public.add_record_comment(text, uuid, text) to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_060', 'replace prior record comment notifications per thread and include dedupe key in feed')
+on conflict (version) do nothing;
+
+-- Migration 061: Allow lossless photo, video, and file attachments in record discussions
+alter table public.record_comments
+  add column if not exists attachments jsonb not null default '[]'::jsonb;
+
+do $$
+declare
+  v_con record;
+begin
+  for v_con in
+    select conname
+    from pg_constraint
+    where conrelid = 'public.record_comments'::regclass
+      and contype = 'c'
+      and (
+        pg_get_constraintdef(oid) ~* '\ybody\y'
+        or pg_get_constraintdef(oid) ~* '\yattachments\y'
+      )
+  loop
+    execute format('alter table public.record_comments drop constraint if exists %I', v_con.conname);
+  end loop;
+end $$;
+
+alter table public.record_comments
+  add constraint record_comments_body_length_check
+    check (char_length(btrim(coalesce(body, ''))) <= 1000),
+  add constraint record_comments_attachments_array_check
+    check (jsonb_typeof(attachments) = 'array' and jsonb_array_length(attachments) <= 5),
+  add constraint record_comments_content_present_check
+    check (char_length(btrim(coalesce(body, ''))) > 0 or jsonb_array_length(attachments) > 0);
+
+create or replace function public.get_record_comments(
+  p_record_type text,
+  p_record_id uuid
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_type text := lower(btrim(coalesce(p_record_type, '')));
+  v_group uuid := public.current_group_id();
+  v_role public.app_role := public.current_user_role();
+  v_member_id uuid := public.current_member_id();
+  v_record jsonb;
+  v_submitted_by uuid;
+  v_target_member_id uuid;
+  v_person_responsible text;
+  v_my_member_name text;
+  v_can_reply boolean := false;
+begin
+  if auth.uid() is null or v_group is null or v_role not in ('ADMIN', 'TREASURER', 'MEMBER') then
+    raise exception 'Join or select a savings group first.' using errcode = '42501';
+  end if;
+
+  if v_type not in ('contribution', 'withdrawal', 'expense') or p_record_id is null then
+    raise exception 'Invalid record reference.' using errcode = '22023';
+  end if;
+
+  if v_type = 'contribution' then
+    select
+      jsonb_build_object(
+        'id', c.id,
+        'type', 'contribution',
+        'authorName', m.full_name,
+        'amount', c.amount,
+        'date', c.payment_date,
+        'periodMonth', cp.period_month,
+        'status', c.approval_status::text,
+        'paymentMethod', c.payment_method,
+        'reference', c.transaction_reference,
+        'notes', coalesce(nullif(c.void_reason, ''), nullif(c.review_note, ''), nullif(c.notes, '')),
+        'reviewNote', coalesce(nullif(c.void_reason, ''), nullif(c.review_note, '')),
+        'receiptUrl', c.receipt_url
+      ),
+      c.submitted_by,
+      cp.member_id
+    into v_record, v_submitted_by, v_target_member_id
+    from public.contributions c
+    join public.contribution_periods cp on cp.id = c.contribution_period_id
+    join public.members m on m.id = cp.member_id
+    where c.id = p_record_id
+      and c.group_id = v_group;
+  elsif v_type = 'withdrawal' then
+    select
+      jsonb_build_object(
+        'id', w.id,
+        'type', 'withdrawal',
+        'authorName', w.person_responsible,
+        'amount', w.amount,
+        'date', w.transaction_date,
+        'category', w.category,
+        'status', w.approval_status::text,
+        'paymentMethod', w.payment_method,
+        'reference', w.reference_number,
+        'description', w.description,
+        'notes', coalesce(nullif(w.void_reason, ''), nullif(w.review_note, ''), nullif(w.notes, '')),
+        'reviewNote', coalesce(nullif(w.void_reason, ''), nullif(w.review_note, '')),
+        'receiptUrl', null
+      ),
+      w.submitted_by,
+      w.person_responsible
+    into v_record, v_submitted_by, v_person_responsible
+    from public.withdrawals w
+    where w.id = p_record_id
+      and w.group_id = v_group;
+  else
+    select
+      jsonb_build_object(
+        'id', e.id,
+        'type', 'expense',
+        'authorName', e.person_responsible,
+        'amount', e.amount,
+        'date', e.transaction_date,
+        'category', e.category,
+        'status', e.approval_status::text,
+        'paymentMethod', e.payment_method,
+        'reference', e.reference_number,
+        'description', e.description,
+        'notes', coalesce(nullif(e.void_reason, ''), nullif(e.review_note, ''), nullif(e.notes, '')),
+        'reviewNote', coalesce(nullif(e.void_reason, ''), nullif(e.review_note, '')),
+        'receiptUrl', e.receipt_url
+      ),
+      e.submitted_by,
+      e.person_responsible
+    into v_record, v_submitted_by, v_person_responsible
+    from public.expenses e
+    where e.id = p_record_id
+      and e.group_id = v_group;
+  end if;
+
+  if v_record is null then
+    raise exception 'Record not found in the active savings group.' using errcode = 'P0002';
+  end if;
+
+  if v_role in ('ADMIN', 'TREASURER') then
+    v_can_reply := true;
+  else
+    if v_member_id is not null then
+      select m.full_name into v_my_member_name
+      from public.members m
+      where m.id = v_member_id and m.group_id = v_group;
+    end if;
+    if v_type = 'contribution' then
+      v_can_reply := (v_submitted_by = auth.uid() or (v_member_id is not null and v_target_member_id = v_member_id));
+    else
+      v_can_reply := (
+        v_submitted_by = auth.uid()
+        or (v_my_member_name is not null and lower(btrim(coalesce(v_person_responsible, ''))) = lower(btrim(v_my_member_name)))
+      );
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'record', v_record,
+    'can_reply', v_can_reply,
+    'comments', coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'id', rc.id,
+            'record_type', rc.record_type,
+            'record_id', rc.record_id,
+            'author_id', rc.author_id,
+            'author_name', coalesce(nullif(btrim(p.full_name), ''), 'Group member'),
+            'author_role', coalesce(gm.role::text, p.role::text, 'MEMBER'),
+            'author_avatar_url', p.avatar_url,
+            'body', rc.body,
+            'attachments', coalesce(rc.attachments, '[]'::jsonb),
+            'created_at', rc.created_at,
+            'is_own', rc.author_id = auth.uid()
+          )
+          order by rc.created_at asc, rc.id asc
+        )
+        from public.record_comments rc
+        join public.profiles p on p.id = rc.author_id
+        left join public.group_memberships gm
+          on gm.group_id = v_group
+         and gm.user_id = rc.author_id
+         and gm.status = 'ACTIVE'
+        where rc.group_id = v_group
+          and rc.record_type = v_type
+          and rc.record_id = p_record_id
+      ),
+      '[]'::jsonb
+    )
+  );
+end;
+$$;
+
+drop function if exists public.add_record_comment(text, uuid, text);
+create or replace function public.add_record_comment(
+  p_record_type text,
+  p_record_id uuid,
+  p_body text default '',
+  p_attachments jsonb default '[]'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_type text := lower(btrim(coalesce(p_record_type, '')));
+  v_body text := btrim(coalesce(p_body, ''));
+  v_attachments jsonb := coalesce(p_attachments, '[]'::jsonb);
+  v_sanitized_attachments jsonb := '[]'::jsonb;
+  v_att jsonb;
+  v_att_path text;
+  v_att_name text;
+  v_att_kind text;
+  v_att_type text;
+  v_att_size bigint;
+  v_expected_prefix text;
+  v_att_count integer := 0;
+  v_first_att_name text := '';
+  v_group uuid := public.current_group_id();
+  v_role public.app_role := public.current_user_role();
+  v_member_id uuid := public.current_member_id();
+  v_submitted_by uuid;
+  v_target_member_id uuid;
+  v_person_responsible text;
+  v_my_member_name text;
+  v_amount numeric(14,2);
+  v_subject_name text;
+  v_allowed boolean := false;
+  v_comment public.record_comments;
+  v_author_name text;
+  v_author_avatar text;
+  v_type_label text;
+  v_page text;
+  v_snippet text;
+  v_dedupe_key text;
+  v_thread_marker text;
+  v_title text;
+  v_message text;
+  v_link text;
+  v_recipient record;
+begin
+  if auth.uid() is null or v_group is null or v_role not in ('ADMIN', 'TREASURER', 'MEMBER') then
+    raise exception 'Join or select a savings group first.' using errcode = '42501';
+  end if;
+
+  if v_type not in ('contribution', 'withdrawal', 'expense') or p_record_id is null then
+    raise exception 'Invalid record reference.' using errcode = '22023';
+  end if;
+
+  if jsonb_typeof(v_attachments) <> 'array' then
+    raise exception 'Attachments must be an array.' using errcode = '22023';
+  end if;
+
+  v_att_count := jsonb_array_length(v_attachments);
+  if v_att_count > 5 then
+    raise exception 'You can attach at most 5 files per reply.' using errcode = '22023';
+  end if;
+
+  if char_length(v_body) > 1000 or (char_length(v_body) = 0 and v_att_count = 0) then
+    raise exception 'Enter a reply or attach at least one file (max 1000 characters).' using errcode = '22023';
+  end if;
+
+  if v_type = 'contribution' then
+    select c.submitted_by, cp.member_id, m.full_name, c.amount
+    into v_submitted_by, v_target_member_id, v_subject_name, v_amount
+    from public.contributions c
+    join public.contribution_periods cp on cp.id = c.contribution_period_id
+    join public.members m on m.id = cp.member_id
+    where c.id = p_record_id
+      and c.group_id = v_group;
+    v_type_label := 'contribution';
+    v_page := 'contributions.html';
+  elsif v_type = 'withdrawal' then
+    select w.submitted_by, w.person_responsible, w.person_responsible, w.amount
+    into v_submitted_by, v_person_responsible, v_subject_name, v_amount
+    from public.withdrawals w
+    where w.id = p_record_id
+      and w.group_id = v_group;
+    v_type_label := 'deduction';
+    v_page := 'withdrawals.html';
+  else
+    select e.submitted_by, e.person_responsible, e.person_responsible, e.amount
+    into v_submitted_by, v_person_responsible, v_subject_name, v_amount
+    from public.expenses e
+    where e.id = p_record_id
+      and e.group_id = v_group;
+    v_type_label := 'expense';
+    v_page := 'expenses.html';
+  end if;
+
+  if not found then
+    raise exception 'Record not found in the active savings group.' using errcode = 'P0002';
+  end if;
+
+  if v_role in ('ADMIN', 'TREASURER') then
+    v_allowed := true;
+  else
+    if v_member_id is not null then
+      select m.full_name into v_my_member_name
+      from public.members m
+      where m.id = v_member_id and m.group_id = v_group;
+    end if;
+    if v_type = 'contribution' then
+      v_allowed := (v_submitted_by = auth.uid() or (v_member_id is not null and v_target_member_id = v_member_id));
+    else
+      v_allowed := (
+        v_submitted_by = auth.uid()
+        or (v_my_member_name is not null and lower(btrim(coalesce(v_person_responsible, ''))) = lower(btrim(v_my_member_name)))
+      );
+    end if;
+  end if;
+
+  if not v_allowed then
+    raise exception 'You can only reply to records associated with your account.' using errcode = '42501';
+  end if;
+
+  v_expected_prefix := v_group::text || '/' || v_type || '/' || p_record_id::text || '/' || auth.uid()::text || '/';
+  for v_att in select value from jsonb_array_elements(v_attachments) loop
+    v_att_path := coalesce(v_att->>'path', '');
+    if v_att_path = '' or position('..' in v_att_path) > 0 or left(v_att_path, char_length(v_expected_prefix)) <> v_expected_prefix then
+      raise exception 'Invalid discussion attachment storage path.' using errcode = '42501';
+    end if;
+    v_att_name := left(coalesce(nullif(btrim(v_att->>'name'), ''), 'attachment'), 120);
+    if v_first_att_name = '' then
+      v_first_att_name := v_att_name;
+    end if;
+    v_att_kind := case lower(coalesce(v_att->>'kind', 'file'))
+      when 'image' then 'image'
+      when 'video' then 'video'
+      else 'file'
+    end;
+    v_att_type := left(coalesce(v_att->>'type', ''), 120);
+    v_att_size := greatest(0, least(52428800, coalesce(nullif(v_att->>'size', '')::bigint, 0)));
+    v_sanitized_attachments := v_sanitized_attachments || jsonb_build_array(
+      jsonb_build_object(
+        'path', v_att_path,
+        'name', v_att_name,
+        'kind', v_att_kind,
+        'type', v_att_type,
+        'size', v_att_size
+      )
+    );
+  end loop;
+
+  insert into public.record_comments (group_id, record_type, record_id, author_id, body, attachments)
+  values (v_group, v_type, p_record_id, auth.uid(), v_body, v_sanitized_attachments)
+  returning * into v_comment;
+
+  select coalesce(nullif(btrim(p.full_name), ''), 'Group member'), p.avatar_url
+  into v_author_name, v_author_avatar
+  from public.profiles p
+  where p.id = auth.uid();
+
+  if char_length(v_body) > 0 then
+    v_snippet := case
+      when char_length(v_body) > 120 then left(v_body, 117) || '...'
+      else v_body
+    end;
+    if v_att_count > 0 then
+      v_snippet := v_snippet || ' (+' || v_att_count::text || case when v_att_count = 1 then ' attachment)' else ' attachments)' end;
+    end if;
+  elsif v_att_count = 1 then
+    v_snippet := 'Sent attachment: ' || left(v_first_att_name, 80);
+  else
+    v_snippet := 'Sent ' || v_att_count::text || ' attachments';
+  end if;
+
+  v_dedupe_key := 'RECORD_COMMENT:' || v_type || ':' || p_record_id::text;
+  v_thread_marker := 'thread=' || v_type || ':' || p_record_id::text;
+  v_title := 'New reply on ' || v_type_label;
+  v_message := v_author_name || ' (' || coalesce(v_subject_name, 'Member') || ' · PHP '
+    || to_char(coalesce(v_amount, 0), 'FM999,999,990.00') || '): "' || v_snippet || '"';
+
+  for v_recipient in
+    select distinct
+      r.user_id,
+      coalesce(gm.role, p.role) as target_role
+    from (
+      select a.user_id
+      from public.group_admin_ids(v_group) a
+      union
+      select gm_t.user_id
+      from public.group_memberships gm_t
+      where gm_t.group_id = v_group
+        and gm_t.role = 'TREASURER'
+        and gm_t.status = 'ACTIVE'
+      union
+      select p_t.id
+      from public.profiles p_t
+      where p_t.group_id = v_group
+        and p_t.role = 'TREASURER'
+        and p_t.status = 'ACTIVE'
+      union
+      select v_submitted_by where v_submitted_by is not null
+      union
+      select gm_m.user_id
+      from public.group_memberships gm_m
+      where v_target_member_id is not null
+        and gm_m.group_id = v_group
+        and gm_m.member_id = v_target_member_id
+        and gm_m.status = 'ACTIVE'
+      union
+      select p_m.id
+      from public.profiles p_m
+      where v_target_member_id is not null
+        and p_m.member_id = v_target_member_id
+        and p_m.status = 'ACTIVE'
+      union
+      select gm_pr.user_id
+      from public.members m_pr
+      join public.group_memberships gm_pr
+        on gm_pr.group_id = v_group
+       and gm_pr.member_id = m_pr.id
+       and gm_pr.status = 'ACTIVE'
+      where v_type in ('withdrawal', 'expense')
+        and m_pr.group_id = v_group
+        and lower(btrim(m_pr.full_name)) = lower(btrim(coalesce(v_person_responsible, '')))
+      union
+      select p_pr.id
+      from public.members m_pr2
+      join public.profiles p_pr
+        on p_pr.member_id = m_pr2.id
+       and p_pr.status = 'ACTIVE'
+      where v_type in ('withdrawal', 'expense')
+        and m_pr2.group_id = v_group
+        and lower(btrim(m_pr2.full_name)) = lower(btrim(coalesce(v_person_responsible, '')))
+      union
+      select prev.author_id
+      from public.record_comments prev
+      where prev.group_id = v_group
+        and prev.record_type = v_type
+        and prev.record_id = p_record_id
+    ) r
+    join public.profiles p on p.id = r.user_id
+    left join public.group_memberships gm
+      on gm.group_id = v_group
+     and gm.user_id = r.user_id
+     and gm.status = 'ACTIVE'
+    where r.user_id is not null
+      and r.user_id <> auth.uid()
+      and p.status = 'ACTIVE'
+      and p.notifications_enabled
+  loop
+    v_link := (case
+      when v_type = 'contribution' and v_recipient.target_role = 'MEMBER' then 'user.html'
+      else v_page
+    end) || '?' || v_thread_marker;
+
+    delete from public.notifications n
+    where n.recipient_id = v_recipient.user_id
+      and n.type = 'RECORD_COMMENT'
+      and (
+        n.dedupe_key = v_dedupe_key
+        or (
+          n.dedupe_key is null
+          and position(v_thread_marker in coalesce(n.link, '')) > 0
+        )
+      );
+
+    insert into public.notifications (recipient_id, group_id, type, title, message, link, dedupe_key)
+    values (v_recipient.user_id, v_group, 'RECORD_COMMENT', btrim(v_title), btrim(v_message), v_link, v_dedupe_key);
+  end loop;
+
+  return jsonb_build_object(
+    'id', v_comment.id,
+    'record_type', v_comment.record_type,
+    'record_id', v_comment.record_id,
+    'author_id', v_comment.author_id,
+    'author_name', v_author_name,
+    'author_role', v_role::text,
+    'author_avatar_url', v_author_avatar,
+    'body', v_comment.body,
+    'attachments', coalesce(v_comment.attachments, '[]'::jsonb),
+    'created_at', v_comment.created_at,
+    'is_own', true
+  );
+end;
+$$;
+
+revoke execute on function public.add_record_comment(text, uuid, text, jsonb) from public, anon;
+grant execute on function public.add_record_comment(text, uuid, text, jsonb) to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_061', 'allow lossless photo, video, and file attachments in record comments')
+on conflict (version) do nothing;
+
+commit;
+
+-- Migration 062: Track per-user read state on record discussions so unread pills clear after opening
+
+begin;
+
+create table if not exists public.record_comment_reads (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  record_type text not null check (record_type in ('contribution', 'withdrawal', 'expense')),
+  record_id uuid not null,
+  last_read_at timestamptz not null default now(),
+  primary key (user_id, record_type, record_id)
+);
+
+alter table public.record_comment_reads enable row level security;
+
+drop policy if exists "users manage own record comment reads" on public.record_comment_reads;
+create policy "users manage own record comment reads"
+  on public.record_comment_reads
+  for all
+  to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop function if exists public.get_record_comment_counts(text, uuid[]);
+create or replace function public.get_record_comment_counts(
+  p_record_type text,
+  p_record_ids uuid[]
+)
+returns table (
+  record_id uuid,
+  comment_count bigint,
+  unread_count bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    rc.record_id,
+    count(*)::bigint as comment_count,
+    count(*) filter (
+      where rc.author_id <> auth.uid()
+        and rc.created_at > coalesce(rcr.last_read_at, '-infinity'::timestamptz)
+    )::bigint as unread_count
+  from public.record_comments rc
+  left join public.record_comment_reads rcr
+    on rcr.user_id = auth.uid()
+   and rcr.record_type = rc.record_type
+   and rcr.record_id = rc.record_id
+  where rc.group_id = public.current_group_id()
+    and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
+    and rc.record_type = lower(btrim(coalesce(p_record_type, '')))
+    and rc.record_id = any(coalesce(p_record_ids, '{}'::uuid[]))
+  group by rc.record_id;
+$$;
+
+revoke execute on function public.get_record_comment_counts(text, uuid[]) from public, anon;
+grant execute on function public.get_record_comment_counts(text, uuid[]) to authenticated;
+
+create or replace function public.get_record_comments(
+  p_record_type text,
+  p_record_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_type text := lower(btrim(coalesce(p_record_type, '')));
+  v_group uuid := public.current_group_id();
+  v_role public.app_role := public.current_user_role();
+  v_member_id uuid := public.current_member_id();
+  v_record jsonb;
+  v_submitted_by uuid;
+  v_target_member_id uuid;
+  v_person_responsible text;
+  v_my_member_name text;
+  v_can_reply boolean := false;
+begin
+  if auth.uid() is null or v_group is null or v_role not in ('ADMIN', 'TREASURER', 'MEMBER') then
+    raise exception 'Join or select a savings group first.' using errcode = '42501';
+  end if;
+
+  if v_type not in ('contribution', 'withdrawal', 'expense') or p_record_id is null then
+    raise exception 'Invalid record reference.' using errcode = '22023';
+  end if;
+
+  if v_type = 'contribution' then
+    select
+      jsonb_build_object(
+        'id', c.id,
+        'type', 'contribution',
+        'authorName', m.full_name,
+        'amount', c.amount,
+        'date', c.payment_date,
+        'periodMonth', cp.period_month,
+        'status', c.approval_status::text,
+        'paymentMethod', c.payment_method,
+        'reference', c.transaction_reference,
+        'notes', coalesce(nullif(c.void_reason, ''), nullif(c.review_note, ''), nullif(c.notes, '')),
+        'reviewNote', coalesce(nullif(c.void_reason, ''), nullif(c.review_note, '')),
+        'receiptUrl', c.receipt_url
+      ),
+      c.submitted_by,
+      cp.member_id
+    into v_record, v_submitted_by, v_target_member_id
+    from public.contributions c
+    join public.contribution_periods cp on cp.id = c.contribution_period_id
+    join public.members m on m.id = cp.member_id
+    where c.id = p_record_id
+      and c.group_id = v_group;
+  elsif v_type = 'withdrawal' then
+    select
+      jsonb_build_object(
+        'id', w.id,
+        'type', 'withdrawal',
+        'authorName', w.person_responsible,
+        'amount', w.amount,
+        'date', w.transaction_date,
+        'category', w.category,
+        'status', w.approval_status::text,
+        'paymentMethod', w.payment_method,
+        'reference', w.reference_number,
+        'description', w.description,
+        'notes', coalesce(nullif(w.void_reason, ''), nullif(w.review_note, ''), nullif(w.notes, '')),
+        'reviewNote', coalesce(nullif(w.void_reason, ''), nullif(w.review_note, '')),
+        'receiptUrl', null
+      ),
+      w.submitted_by,
+      w.person_responsible
+    into v_record, v_submitted_by, v_person_responsible
+    from public.withdrawals w
+    where w.id = p_record_id
+      and w.group_id = v_group;
+  else
+    select
+      jsonb_build_object(
+        'id', e.id,
+        'type', 'expense',
+        'authorName', e.person_responsible,
+        'amount', e.amount,
+        'date', e.transaction_date,
+        'category', e.category,
+        'status', e.approval_status::text,
+        'paymentMethod', e.payment_method,
+        'reference', e.reference_number,
+        'description', e.description,
+        'notes', coalesce(nullif(e.void_reason, ''), nullif(e.review_note, ''), nullif(e.notes, '')),
+        'reviewNote', coalesce(nullif(e.void_reason, ''), nullif(e.review_note, '')),
+        'receiptUrl', e.receipt_url
+      ),
+      e.submitted_by,
+      e.person_responsible
+    into v_record, v_submitted_by, v_person_responsible
+    from public.expenses e
+    where e.id = p_record_id
+      and e.group_id = v_group;
+  end if;
+
+  if v_record is null then
+    raise exception 'Record not found in the active savings group.' using errcode = 'P0002';
+  end if;
+
+  insert into public.record_comment_reads (user_id, record_type, record_id, last_read_at)
+  values (auth.uid(), v_type, p_record_id, clock_timestamp())
+  on conflict (user_id, record_type, record_id)
+  do update set last_read_at = greatest(public.record_comment_reads.last_read_at, excluded.last_read_at);
+
+  if v_role in ('ADMIN', 'TREASURER') then
+    v_can_reply := true;
+  else
+    if v_member_id is not null then
+      select m.full_name into v_my_member_name
+      from public.members m
+      where m.id = v_member_id and m.group_id = v_group;
+    end if;
+    if v_type = 'contribution' then
+      v_can_reply := (v_submitted_by = auth.uid() or (v_member_id is not null and v_target_member_id = v_member_id));
+    else
+      v_can_reply := (
+        v_submitted_by = auth.uid()
+        or (v_my_member_name is not null and lower(btrim(coalesce(v_person_responsible, ''))) = lower(btrim(v_my_member_name)))
+      );
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'record', v_record,
+    'can_reply', v_can_reply,
+    'comments', coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'id', rc.id,
+            'record_type', rc.record_type,
+            'record_id', rc.record_id,
+            'author_id', rc.author_id,
+            'author_name', coalesce(nullif(btrim(p.full_name), ''), 'Group member'),
+            'author_role', coalesce(gm.role::text, p.role::text, 'MEMBER'),
+            'author_avatar_url', p.avatar_url,
+            'body', rc.body,
+            'attachments', coalesce(rc.attachments, '[]'::jsonb),
+            'created_at', rc.created_at,
+            'is_own', rc.author_id = auth.uid()
+          )
+          order by rc.created_at asc, rc.id asc
+        )
+        from public.record_comments rc
+        join public.profiles p on p.id = rc.author_id
+        left join public.group_memberships gm
+          on gm.group_id = v_group
+         and gm.user_id = rc.author_id
+         and gm.status = 'ACTIVE'
+        where rc.group_id = v_group
+          and rc.record_type = v_type
+          and rc.record_id = p_record_id
+      ),
+      '[]'::jsonb
+    )
+  );
+end;
+$$;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_062', 'track per-user record comment read state so unread count clears on open')
+on conflict (version) do nothing;
+
+-- Migration 063: Web Push (VAPID) subscriptions and instant background notification dispatch
+create extension if not exists pg_net;
+
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  endpoint text not null unique check (char_length(btrim(endpoint)) between 24 and 2048 and endpoint ~* '^https://'),
+  p256dh text not null check (char_length(btrim(p256dh)) between 16 and 512),
+  auth text not null check (char_length(btrim(auth)) between 8 and 256),
+  platform text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  last_success_at timestamptz
+);
+
+create index if not exists push_subscriptions_user_idx
+  on public.push_subscriptions (user_id, updated_at desc);
+
+alter table public.push_subscriptions enable row level security;
+revoke all on public.push_subscriptions from public, anon, authenticated;
+
+create table if not exists public.internal_webhook_config (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.internal_webhook_config enable row level security;
+revoke all on public.internal_webhook_config from public, anon, authenticated;
+
+create or replace function public.upsert_push_subscription(
+  p_endpoint text,
+  p_p256dh text,
+  p_auth text,
+  p_platform text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_endpoint text := btrim(coalesce(p_endpoint, ''));
+  v_p256dh text := btrim(coalesce(p_p256dh, ''));
+  v_auth text := btrim(coalesce(p_auth, ''));
+  v_platform text := nullif(left(btrim(coalesce(p_platform, '')), 64), '');
+begin
+  if v_uid is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles
+    where id = v_uid and status = 'ACTIVE'
+  ) then
+    raise exception 'Active account required.' using errcode = '42501';
+  end if;
+
+  if v_endpoint !~* '^https://' or char_length(v_endpoint) < 24 or char_length(v_endpoint) > 2048 then
+    raise exception 'Invalid push subscription endpoint.';
+  end if;
+
+  if char_length(v_p256dh) < 16 or char_length(v_auth) < 8 then
+    raise exception 'Invalid push subscription encryption keys.';
+  end if;
+
+  insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, platform, updated_at)
+  values (v_uid, v_endpoint, v_p256dh, v_auth, v_platform, now())
+  on conflict (endpoint) do update
+  set user_id = excluded.user_id,
+      p256dh = excluded.p256dh,
+      auth = excluded.auth,
+      platform = coalesce(excluded.platform, public.push_subscriptions.platform),
+      updated_at = now();
+end;
+$$;
+
+revoke execute on function public.upsert_push_subscription(text, text, text, text) from public, anon;
+grant execute on function public.upsert_push_subscription(text, text, text, text) to authenticated;
+
+create or replace function public.delete_push_subscription(
+  p_endpoint text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_endpoint text := nullif(btrim(coalesce(p_endpoint, '')), '');
+begin
+  if v_uid is null then
+    return;
+  end if;
+
+  if v_endpoint is not null then
+    delete from public.push_subscriptions
+    where user_id = v_uid and endpoint = v_endpoint;
+  else
+    delete from public.push_subscriptions
+    where user_id = v_uid;
+  end if;
+end;
+$$;
+
+revoke execute on function public.delete_push_subscription(text) from public, anon;
+grant execute on function public.delete_push_subscription(text) to authenticated;
+
+create or replace function public.enqueue_notification_push()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, net, extensions
+as $$
+declare
+  v_secret text;
+  v_endpoint text;
+  v_enabled boolean;
+begin
+  if new.read_at is not null then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if old.read_at is null
+       and new.title is not distinct from old.title
+       and new.message is not distinct from old.message
+       and new.link is not distinct from old.link then
+      return new;
+    end if;
+  end if;
+
+  select p.notifications_enabled into v_enabled
+  from public.profiles p
+  where p.id = new.recipient_id and p.status = 'ACTIVE';
+
+  if coalesce(v_enabled, false) is not true then
+    return new;
+  end if;
+
+  select value into v_secret
+  from public.internal_webhook_config
+  where key = 'push_webhook_secret';
+
+  if v_secret is null or v_secret = '' then
+    return new;
+  end if;
+
+  select coalesce(
+    (select nullif(value, '') from public.internal_webhook_config where key = 'send_push_url'),
+    'https://woslmwokhhyszkgevnli.supabase.co/functions/v1/send-push'
+  ) into v_endpoint;
+
+  begin
+    perform net.http_post(
+      url := v_endpoint,
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'x-push-webhook-secret', v_secret
+      ),
+      body := jsonb_build_object(
+        'notification_id', new.id,
+        'recipient_id', new.recipient_id
+      ),
+      timeout_milliseconds := 5000
+    );
+  exception when others then
+    null;
+  end;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notifications_push_dispatch on public.notifications;
+create trigger notifications_push_dispatch
+after insert or update of title, message, link, read_at on public.notifications
+for each row execute function public.enqueue_notification_push();
+
+insert into public.schema_migrations (version, name)
+values ('20261114_063', 'web push subscriptions and instant background notification dispatch')
+on conflict (version) do nothing;
+
+alter table public.profiles
+  add column if not exists name_setup_required boolean not null default false;
+
+create or replace function public.validated_name_part(
+  p_value text,
+  p_label text,
+  p_required boolean default true
+)
+returns text
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  v_value text := regexp_replace(btrim(coalesce(p_value, '')), '[[:space:]]+', ' ', 'g');
+  v_words text[];
+  v_word text;
+  v_segments text[];
+  v_seg text;
+  v_idx integer;
+  v_word_count integer;
+  v_letter_count integer;
+  v_particles constant text[] := array[
+    'de', 'del', 'dela', 'los', 'las', 'la', 'le', 'da', 'di', 'do', 'dos', 'das',
+    'van', 'von', 'den', 'der', 'ter', 'ten', 'ben', 'bin', 'binti', 'ibn', 'al'
+  ];
+begin
+  if v_value = '' then
+    if p_required then
+      raise exception '% is required.', p_label using errcode = '22023';
+    end if;
+    return null;
+  end if;
+  if char_length(v_value) > 80 then
+    raise exception '% must not exceed 80 characters.', p_label using errcode = '22023';
+  end if;
+  if v_value !~ '^[[:alpha:]]+([ ''’-][[:alpha:]]+)*$' then
+    raise exception '% may contain only letters, spaces, hyphens, and apostrophes.', p_label using errcode = '22023';
+  end if;
+
+  v_letter_count := char_length(regexp_replace(v_value, '[^[:alpha:]]', '', 'g'));
+  if p_required and v_letter_count < 2 then
+    raise exception '% must contain at least 2 letters using formal capitalization.', p_label using errcode = '22023';
+  end if;
+
+  if not p_required and v_letter_count = 1 then
+    if v_value !~ '^[[:upper:]]$' then
+      raise exception '% initial must be capitalized.', p_label using errcode = '22023';
+    end if;
+    return v_value;
+  end if;
+
+  v_words := string_to_array(v_value, ' ');
+  v_word_count := coalesce(array_length(v_words, 1), 0);
+
+  for v_idx in 1..v_word_count loop
+    v_word := v_words[v_idx];
+
+    if v_idx > 1 and v_idx < v_word_count and v_word = any(v_particles) then
+      continue;
+    end if;
+
+    if v_idx > 1 and v_idx = v_word_count and v_word ~ '^(II|III|IV|V|VI|VII|VIII|IX|X)$' then
+      continue;
+    end if;
+
+    v_segments := regexp_split_to_array(v_word, '[''’-]');
+    foreach v_seg in array v_segments loop
+      if v_seg = '' then
+        raise exception '% may contain only letters, spaces, hyphens, and apostrophes.', p_label using errcode = '22023';
+      end if;
+
+      if char_length(v_seg) = 1 then
+        if array_length(v_segments, 1) > 1 and v_seg ~ '^[[:upper:]]$' then
+          continue;
+        end if;
+        raise exception '% must use formal capitalization (e.g., Juan Dela Cruz). Do not use ALL CAPS or all lowercase.', p_label using errcode = '22023';
+      end if;
+
+      if v_seg !~ '^[[:upper:]][[:lower:]]+([[:upper:]][[:lower:]]+)*$' then
+        raise exception '% must use formal capitalization (e.g., Juan Dela Cruz). Do not use ALL CAPS or all lowercase.', p_label using errcode = '22023';
+      end if;
+    end loop;
+  end loop;
+
+  return v_value;
+end;
+$$;
+
+create or replace function public.enforce_data_quality()
+returns trigger
+language plpgsql
+set search_path = public
+set timezone = 'Asia/Manila'
+as $$
+begin
+  if tg_table_name = 'profiles' then
+    if (tg_op = 'INSERT'
+        or new.first_name is distinct from old.first_name
+        or new.middle_name is distinct from old.middle_name
+        or new.last_name is distinct from old.last_name)
+       and (new.first_name is not null or new.middle_name is not null or new.last_name is not null) then
+      new.first_name := public.validated_name_part(new.first_name, 'First name');
+      new.middle_name := public.validated_name_part(new.middle_name, 'Middle name', false);
+      new.last_name := public.validated_name_part(new.last_name, 'Last name');
+      new.full_name := concat_ws(' ', new.first_name, new.middle_name, new.last_name);
+      if char_length(new.full_name) > 150 then raise exception 'Full name must not exceed 150 characters.' using errcode = '22023'; end if;
+    end if;
+  elsif tg_table_name = 'members' then
+    if (tg_op = 'INSERT'
+        or new.first_name is distinct from old.first_name
+        or new.middle_name is distinct from old.middle_name
+        or new.last_name is distinct from old.last_name)
+       and (new.first_name is not null or new.middle_name is not null or new.last_name is not null) then
+      new.first_name := public.validated_name_part(new.first_name, 'First name');
+      new.middle_name := public.validated_name_part(new.middle_name, 'Middle name', false);
+      new.last_name := public.validated_name_part(new.last_name, 'Last name');
+      new.full_name := concat_ws(' ', new.first_name, new.middle_name, new.last_name);
+    end if;
+    if nullif(btrim(new.full_name), '') is null then raise exception 'Full name is required.' using errcode = '22023'; end if;
+    if char_length(new.full_name) > 150 then raise exception 'Full name must not exceed 150 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if new.date_registered < date '2000-01-01' or new.date_registered > current_date then raise exception 'Date registered must be between 2000-01-01 and today.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'contribution_settings' then
+    if new.effective_month < date '2000-01-01' or new.effective_month > date '2100-12-01' then raise exception 'Effective month must be between January 2000 and December 2100.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'contribution_periods' then
+    if new.period_month < date '2000-01-01' or new.period_month > date '2100-12-01' then raise exception 'Contribution month must be between January 2000 and December 2100.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'contributions' then
+    if new.payment_date < date '2000-01-01' or new.payment_date > current_date then raise exception 'Date added must be between 2000-01-01 and today.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.transaction_reference, '')) > 100 then raise exception 'Reference must not exceed 100 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.review_note, '')) > 500 then raise exception 'Review note must not exceed 500 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.void_reason, '')) > 500 then raise exception 'Void reason must not exceed 500 characters.' using errcode = '22023'; end if;
+  elsif tg_table_name in ('expenses', 'withdrawals') then
+    if new.transaction_date < date '2000-01-01' or new.transaction_date > current_date then raise exception 'Transaction date must be between 2000-01-01 and today.' using errcode = '22023'; end if;
+    if nullif(btrim(new.category), '') is null then raise exception 'Category is required.' using errcode = '22023'; end if;
+    if nullif(btrim(new.description), '') is null then raise exception 'Description is required.' using errcode = '22023'; end if;
+    if nullif(btrim(new.person_responsible), '') is null then raise exception 'Person responsible is required.' using errcode = '22023'; end if;
+    if char_length(new.category) > 80 then raise exception 'Category must not exceed 80 characters.' using errcode = '22023'; end if;
+    if char_length(new.description) > 500 then raise exception 'Description must not exceed 500 characters.' using errcode = '22023'; end if;
+    if char_length(new.person_responsible) > 150 then raise exception 'Person responsible must not exceed 150 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.reference_number, '')) > 100 then raise exception 'Reference must not exceed 100 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.review_note, '')) > 500 then raise exception 'Review note must not exceed 500 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.void_reason, '')) > 500 then raise exception 'Void reason must not exceed 500 characters.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'savings_goals' then
+    if nullif(btrim(new.title), '') is null then raise exception 'Goal title is required.' using errcode = '22023'; end if;
+    if char_length(new.title) > 150 then raise exception 'Goal title must not exceed 150 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if new.target_date is not null and (new.target_date < date '2000-01-01' or new.target_date > date '2100-12-31') then raise exception 'Target date must be between 2000-01-01 and 2100-12-31.' using errcode = '22023'; end if;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_first_name text;
+  v_middle_name text;
+  v_last_name text;
+  v_full_name text;
+  v_contact text;
+  v_reason text;
+  v_account_kind text := coalesce(new.raw_user_meta_data ->> 'account_kind', 'DIRECT_SIGNUP');
+  v_name_setup_required boolean := coalesce((new.raw_user_meta_data ->> 'name_setup_required')::boolean, false);
+  v_super_admin record;
+  v_status public.account_status := 'ACTIVE';
+begin
+  if nullif(btrim(new.raw_user_meta_data ->> 'first_name'), '') is not null
+     and nullif(btrim(new.raw_user_meta_data ->> 'last_name'), '') is not null then
+    v_first_name := public.validated_name_part(new.raw_user_meta_data ->> 'first_name', 'First name');
+    v_middle_name := public.validated_name_part(new.raw_user_meta_data ->> 'middle_name', 'Middle name', false);
+    v_last_name := public.validated_name_part(new.raw_user_meta_data ->> 'last_name', 'Last name');
+    v_full_name := concat_ws(' ', v_first_name, v_middle_name, v_last_name);
+  else
+    v_full_name := case
+      when char_length(btrim(coalesce(new.raw_user_meta_data ->> 'full_name', ''))) >= 2 then btrim(new.raw_user_meta_data ->> 'full_name')
+      when char_length(btrim(split_part(coalesce(new.email, ''), '@', 1))) >= 2 then btrim(split_part(new.email, '@', 1))
+      else 'New User'
+    end;
+    v_name_setup_required := true;
+  end if;
+
+  v_contact := public.normalize_ph_mobile(new.raw_user_meta_data ->> 'contact_number');
+  v_reason := nullif(btrim(new.raw_user_meta_data ->> 'request_reason'), '');
+
+  if v_account_kind = 'DISABLED' then
+    v_status := 'DISABLED';
+  elsif v_account_kind = 'ADMIN_REQUEST' then
+    if exists (
+      select 1 from public.admin_requests ar
+      where lower(ar.email) = lower(new.email)
+        and ar.status = 'REJECTED'
+    ) or exists (
+      select 1 from public.profiles p
+      where lower(p.email) = lower(new.email)
+        and p.status = 'DISABLED'
+        and p.role = 'MEMBER'
+    ) then
+      raise exception 'This email address was declined for administrator access and cannot request again.' using errcode = '22023';
+    end if;
+
+    if v_contact is null or v_reason is null or char_length(v_reason) < 10 then
+      raise exception 'Administrator requests require a contact number and a reason of at least 10 characters.' using errcode = '22023';
+    end if;
+
+    if not exists (
+      select 1 from public.email_verifications ev
+      where lower(ev.email) = lower(new.email)
+        and ev.purpose = 'ADMIN_REQUEST'
+        and ev.verified_at is not null
+        and ev.verified_at >= now() - interval '30 minutes'
+    ) then
+      raise exception 'Email ownership has not been verified. Please verify your email before submitting.' using errcode = '22023';
+    end if;
+    v_status := 'PENDING';
+  elsif v_account_kind in ('INVITED', 'MANAGED') then
+    v_status := 'PENDING';
+  else
+    v_status := 'ACTIVE';
+  end if;
+
+  insert into public.profiles (id, full_name, first_name, middle_name, last_name, email, contact_number, role, status, name_setup_required)
+  values (new.id, v_full_name, v_first_name, v_middle_name, v_last_name, lower(new.email), v_contact, 'MEMBER', v_status, v_name_setup_required)
+  on conflict (id) do update set
+    status = case when v_account_kind in ('INVITED', 'MANAGED') then 'PENDING' when public.profiles.status = 'PENDING' then 'ACTIVE' else public.profiles.status end,
+    full_name = coalesce(public.profiles.full_name, excluded.full_name),
+    first_name = coalesce(public.profiles.first_name, excluded.first_name),
+    last_name = coalesce(public.profiles.last_name, excluded.last_name),
+    contact_number = coalesce(public.profiles.contact_number, excluded.contact_number),
+    name_setup_required = public.profiles.name_setup_required or excluded.name_setup_required;
+
+  if v_account_kind = 'ADMIN_REQUEST' then
+    insert into public.admin_requests (requester_id, email, contact_number, reason)
+    values (new.id, lower(new.email), v_contact, v_reason);
+
+    for v_super_admin in select id from public.profiles where role = 'SUPER_ADMIN' and status = 'ACTIVE' loop
+      perform public.push_notification(v_super_admin.id, 'ADMIN_REQUEST', 'New administrator request', v_full_name || ' requested administrator access.', 'super-admin.html#requests');
+    end loop;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.activate_own_pending_account()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_profile public.profiles;
+  v_auth record;
+  v_first text;
+  v_middle text;
+  v_last text;
+  v_full text;
+  v_contact text;
+  v_membership record;
+  v_name_setup_required boolean := false;
+begin
+  if v_uid is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+
+  select * into v_profile
+  from public.profiles
+  where id = v_uid;
+
+  if not found then
+    select id, email, raw_user_meta_data
+    into v_auth
+    from auth.users
+    where id = v_uid;
+
+    if not found then
+      raise exception 'User account not found.' using errcode = 'P0002';
+    end if;
+
+    v_name_setup_required := coalesce((v_auth.raw_user_meta_data ->> 'name_setup_required')::boolean, false);
+
+    begin
+      if nullif(btrim(v_auth.raw_user_meta_data ->> 'first_name'), '') is not null
+         and nullif(btrim(v_auth.raw_user_meta_data ->> 'last_name'), '') is not null then
+        v_first := public.validated_name_part(v_auth.raw_user_meta_data ->> 'first_name', 'First name');
+        v_middle := public.validated_name_part(v_auth.raw_user_meta_data ->> 'middle_name', 'Middle name', false);
+        v_last := public.validated_name_part(v_auth.raw_user_meta_data ->> 'last_name', 'Last name');
+        v_full := concat_ws(' ', v_first, v_middle, v_last);
+      end if;
+    exception when others then
+      v_first := null;
+      v_middle := null;
+      v_last := null;
+      v_name_setup_required := true;
+    end;
+
+    if v_full is null then
+      v_full := coalesce(
+        nullif(btrim(v_auth.raw_user_meta_data ->> 'full_name'), ''),
+        nullif(btrim(split_part(coalesce(v_auth.email, ''), '@', 1)), ''),
+        'New User'
+      );
+      v_name_setup_required := true;
+    end if;
+
+    v_contact := public.normalize_ph_mobile(v_auth.raw_user_meta_data ->> 'contact_number');
+
+    insert into public.profiles (id, full_name, first_name, middle_name, last_name, email, contact_number, role, status, name_setup_required)
+    values (v_uid, v_full, v_first, v_middle, v_last, lower(v_auth.email), v_contact, 'MEMBER', 'ACTIVE', v_name_setup_required)
+    on conflict (id) do nothing;
+
+    select * into v_profile
+    from public.profiles
+    where id = v_uid;
+  end if;
+
+  if v_profile.status = 'DISABLED' then
+    raise exception 'Your account is deactivated or disabled.' using errcode = '42501';
+  end if;
+
+  update public.group_memberships
+  set status = 'ACTIVE'
+  where user_id = v_uid
+    and status = 'PENDING';
+
+  select gm.group_id, gm.role, gm.member_id
+  into v_membership
+  from public.group_memberships gm
+  where gm.user_id = v_uid
+    and gm.status = 'ACTIVE'
+  order by gm.created_at desc
+  limit 1;
+
+  if v_profile.status <> 'ACTIVE' or (v_profile.group_id is null and v_membership.group_id is not null) then
+    update public.profiles
+    set status = 'ACTIVE',
+        group_id = coalesce(group_id, v_membership.group_id),
+        role = case when group_id is null and v_membership.group_id is not null then coalesce(v_membership.role, role) else role end,
+        member_id = coalesce(member_id, case when group_id is null then v_membership.member_id else null end)
+    where id = v_uid
+      and status <> 'DISABLED'
+    returning * into v_profile;
+  end if;
+
+  return jsonb_build_object(
+    'id', v_profile.id,
+    'role', v_profile.role,
+    'status', v_profile.status,
+    'group_id', v_profile.group_id,
+    'member_id', v_profile.member_id,
+    'first_name', v_profile.first_name,
+    'middle_name', v_profile.middle_name,
+    'last_name', v_profile.last_name,
+    'contact_number', v_profile.contact_number,
+    'name_setup_required', coalesce(v_profile.name_setup_required, false)
+  );
+end;
+$$;
+
+create or replace function public.update_own_profile(
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_contact_number text,
+  p_payout_channel text default '__KEEP__',
+  p_payout_account_number text default '__KEEP__',
+  p_payout_account_name text default '__KEEP__'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_first text := public.validated_name_part(p_first_name, 'First name');
+  v_middle text := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last text := public.validated_name_part(p_last_name, 'Last name');
+  v_full text := concat_ws(' ', v_first, v_middle, v_last);
+  v_contact text := public.normalize_ph_mobile(p_contact_number);
+  v_member_id uuid;
+  v_active_group uuid := public.current_group_id();
+  v_update_payout boolean := (
+    coalesce(p_payout_channel, '') <> '__KEEP__'
+    or coalesce(p_payout_account_number, '') <> '__KEEP__'
+    or coalesce(p_payout_account_name, '') <> '__KEEP__'
+  );
+  v_payout_channel text;
+  v_payout_number text;
+  v_payout_name text;
+begin
+  if v_contact is null then
+    raise exception 'Mobile number is required.' using errcode = '22023';
+  end if;
+
+  if v_update_payout then
+    select vp.out_channel, vp.out_account_number, vp.out_account_name
+    into v_payout_channel, v_payout_number, v_payout_name
+    from public.validated_payout_account(
+      case when p_payout_channel = '__KEEP__' then null else p_payout_channel end,
+      case when p_payout_account_number = '__KEEP__' then null else p_payout_account_number end,
+      case when p_payout_account_name = '__KEEP__' then null else p_payout_account_name end
+    ) vp;
+  end if;
+
+  update public.profiles
+  set first_name = v_first,
+      middle_name = v_middle,
+      last_name = v_last,
+      full_name = v_full,
+      contact_number = v_contact,
+      name_setup_required = false,
+      payout_channel = case when v_update_payout then v_payout_channel else payout_channel end,
+      payout_account_number = case when v_update_payout then v_payout_number else payout_account_number end,
+      payout_account_name = case when v_update_payout then v_payout_name else payout_account_name end
+  where id = auth.uid() and status = 'ACTIVE'
+  returning member_id into v_member_id;
+
+  if not found then
+    raise exception 'Active profile not found.' using errcode = 'P0002';
+  end if;
+
+  update public.members m
+  set first_name = v_first,
+      middle_name = v_middle,
+      last_name = v_last,
+      full_name = v_full,
+      contact_number = case when m.contact_number = '09000000000' then v_contact else m.contact_number end,
+      updated_by = auth.uid()
+  where m.deleted_at is null
+    and (
+      m.id = v_member_id
+      or m.id in (
+        select gm.member_id
+        from public.group_memberships gm
+        where gm.user_id = auth.uid()
+          and gm.member_id is not null
+      )
+    );
+
+  if v_update_payout and v_active_group is not null then
+    update public.members m
+    set payout_channel = v_payout_channel,
+        payout_account_number = v_payout_number,
+        payout_account_name = v_payout_name,
+        updated_by = auth.uid()
+    where m.group_id = v_active_group
+      and m.deleted_at is null
+      and (
+        m.id = v_member_id
+        or m.id in (
+          select gm.member_id
+          from public.group_memberships gm
+          where gm.user_id = auth.uid()
+            and gm.group_id = v_active_group
+            and gm.member_id is not null
+        )
+      );
+  end if;
+
+  insert into public.account_activity (user_id, event)
+  values (auth.uid(), 'PROFILE_UPDATE');
+end;
+$$;
+
+revoke execute on function public.activate_own_pending_account() from public, anon;
+grant execute on function public.activate_own_pending_account() to authenticated;
+
+revoke execute on function public.update_own_profile(text, text, text, text, text, text, text) from public, anon;
+grant execute on function public.update_own_profile(text, text, text, text, text, text, text) to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_064', 'formal names and invite onboarding')
+on conflict (version) do nothing;
+
+-- Migration 063: Web Push (VAPID) subscriptions and instant background notification dispatch
+create extension if not exists pg_net;
+
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  endpoint text not null unique check (char_length(btrim(endpoint)) between 24 and 2048 and endpoint ~* '^https://'),
+  p256dh text not null check (char_length(btrim(p256dh)) between 16 and 512),
+  auth text not null check (char_length(btrim(auth)) between 8 and 256),
+  platform text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  last_success_at timestamptz
+);
+
+create index if not exists push_subscriptions_user_idx
+  on public.push_subscriptions (user_id, updated_at desc);
+
+alter table public.push_subscriptions enable row level security;
+revoke all on public.push_subscriptions from public, anon, authenticated;
+
+create table if not exists public.internal_webhook_config (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.internal_webhook_config enable row level security;
+revoke all on public.internal_webhook_config from public, anon, authenticated;
+
+create or replace function public.upsert_push_subscription(
+  p_endpoint text,
+  p_p256dh text,
+  p_auth text,
+  p_platform text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_endpoint text := btrim(coalesce(p_endpoint, ''));
+  v_p256dh text := btrim(coalesce(p_p256dh, ''));
+  v_auth text := btrim(coalesce(p_auth, ''));
+  v_platform text := nullif(left(btrim(coalesce(p_platform, '')), 64), '');
+begin
+  if v_uid is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles
+    where id = v_uid and status = 'ACTIVE'
+  ) then
+    raise exception 'Active account required.' using errcode = '42501';
+  end if;
+
+  if v_endpoint !~* '^https://' or char_length(v_endpoint) < 24 or char_length(v_endpoint) > 2048 then
+    raise exception 'Invalid push subscription endpoint.';
+  end if;
+
+  if char_length(v_p256dh) < 16 or char_length(v_auth) < 8 then
+    raise exception 'Invalid push subscription encryption keys.';
+  end if;
+
+  insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, platform, updated_at)
+  values (v_uid, v_endpoint, v_p256dh, v_auth, v_platform, now())
+  on conflict (endpoint) do update
+  set user_id = excluded.user_id,
+      p256dh = excluded.p256dh,
+      auth = excluded.auth,
+      platform = coalesce(excluded.platform, public.push_subscriptions.platform),
+      updated_at = now();
+end;
+$$;
+
+revoke execute on function public.upsert_push_subscription(text, text, text, text) from public, anon;
+grant execute on function public.upsert_push_subscription(text, text, text, text) to authenticated;
+
+create or replace function public.delete_push_subscription(
+  p_endpoint text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_endpoint text := nullif(btrim(coalesce(p_endpoint, '')), '');
+begin
+  if v_uid is null then
+    return;
+  end if;
+
+  if v_endpoint is not null then
+    delete from public.push_subscriptions
+    where user_id = v_uid and endpoint = v_endpoint;
+  else
+    delete from public.push_subscriptions
+    where user_id = v_uid;
+  end if;
+end;
+$$;
+
+revoke execute on function public.delete_push_subscription(text) from public, anon;
+grant execute on function public.delete_push_subscription(text) to authenticated;
+
+create or replace function public.enqueue_notification_push()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, net, extensions
+as $$
+declare
+  v_secret text;
+  v_endpoint text;
+  v_enabled boolean;
+begin
+  if new.read_at is not null then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if old.read_at is null
+       and new.title is not distinct from old.title
+       and new.message is not distinct from old.message
+       and new.link is not distinct from old.link then
+      return new;
+    end if;
+  end if;
+
+  select p.notifications_enabled into v_enabled
+  from public.profiles p
+  where p.id = new.recipient_id and p.status = 'ACTIVE';
+
+  if coalesce(v_enabled, false) is not true then
+    return new;
+  end if;
+
+  select value into v_secret
+  from public.internal_webhook_config
+  where key = 'push_webhook_secret';
+
+  if v_secret is null or v_secret = '' then
+    return new;
+  end if;
+
+  select coalesce(
+    (select nullif(value, '') from public.internal_webhook_config where key = 'send_push_url'),
+    'https://woslmwokhhyszkgevnli.supabase.co/functions/v1/send-push'
+  ) into v_endpoint;
+
+  begin
+    perform net.http_post(
+      url := v_endpoint,
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'x-push-webhook-secret', v_secret
+      ),
+      body := jsonb_build_object(
+        'notification_id', new.id,
+        'recipient_id', new.recipient_id
+      ),
+      timeout_milliseconds := 5000
+    );
+  exception when others then
+    null;
+  end;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notifications_push_dispatch on public.notifications;
+create trigger notifications_push_dispatch
+after insert or update of title, message, link, read_at on public.notifications
+for each row execute function public.enqueue_notification_push();
+
+insert into public.schema_migrations (version, name)
+values ('20261114_063', 'web push subscriptions and instant background notification dispatch')
+on conflict (version) do nothing;
+
+alter table public.profiles
+  add column if not exists name_setup_required boolean not null default false;
+
+create or replace function public.validated_name_part(
+  p_value text,
+  p_label text,
+  p_required boolean default true
+)
+returns text
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  v_value text := regexp_replace(btrim(coalesce(p_value, '')), '[[:space:]]+', ' ', 'g');
+  v_words text[];
+  v_word text;
+  v_segments text[];
+  v_seg text;
+  v_idx integer;
+  v_word_count integer;
+  v_letter_count integer;
+  v_particles constant text[] := array[
+    'de', 'del', 'dela', 'los', 'las', 'la', 'le', 'da', 'di', 'do', 'dos', 'das',
+    'van', 'von', 'den', 'der', 'ter', 'ten', 'ben', 'bin', 'binti', 'ibn', 'al'
+  ];
+begin
+  if v_value = '' then
+    if p_required then
+      raise exception '% is required.', p_label using errcode = '22023';
+    end if;
+    return null;
+  end if;
+  if char_length(v_value) > 80 then
+    raise exception '% must not exceed 80 characters.', p_label using errcode = '22023';
+  end if;
+  if v_value !~ '^[[:alpha:]]+([ ''’-][[:alpha:]]+)*$' then
+    raise exception '% may contain only letters, spaces, hyphens, and apostrophes.', p_label using errcode = '22023';
+  end if;
+
+  v_letter_count := char_length(regexp_replace(v_value, '[^[:alpha:]]', '', 'g'));
+  if p_required and v_letter_count < 2 then
+    raise exception '% must contain at least 2 letters using formal capitalization.', p_label using errcode = '22023';
+  end if;
+
+  if not p_required and v_letter_count = 1 then
+    if v_value !~ '^[[:upper:]]$' then
+      raise exception '% initial must be capitalized.', p_label using errcode = '22023';
+    end if;
+    return v_value;
+  end if;
+
+  v_words := string_to_array(v_value, ' ');
+  v_word_count := coalesce(array_length(v_words, 1), 0);
+
+  for v_idx in 1..v_word_count loop
+    v_word := v_words[v_idx];
+
+    if v_idx > 1 and v_idx < v_word_count and v_word = any(v_particles) then
+      continue;
+    end if;
+
+    if v_idx > 1 and v_idx = v_word_count and v_word ~ '^(II|III|IV|V|VI|VII|VIII|IX|X)$' then
+      continue;
+    end if;
+
+    v_segments := regexp_split_to_array(v_word, '[''’-]');
+    foreach v_seg in array v_segments loop
+      if v_seg = '' then
+        raise exception '% may contain only letters, spaces, hyphens, and apostrophes.', p_label using errcode = '22023';
+      end if;
+
+      if char_length(v_seg) = 1 then
+        if array_length(v_segments, 1) > 1 and v_seg ~ '^[[:upper:]]$' then
+          continue;
+        end if;
+        raise exception '% must use formal capitalization (e.g., Juan Dela Cruz). Do not use ALL CAPS or all lowercase.', p_label using errcode = '22023';
+      end if;
+
+      if v_seg !~ '^[[:upper:]][[:lower:]]+([[:upper:]][[:lower:]]+)*$' then
+        raise exception '% must use formal capitalization (e.g., Juan Dela Cruz). Do not use ALL CAPS or all lowercase.', p_label using errcode = '22023';
+      end if;
+    end loop;
+  end loop;
+
+  return v_value;
+end;
+$$;
+
+create or replace function public.enforce_data_quality()
+returns trigger
+language plpgsql
+set search_path = public
+set timezone = 'Asia/Manila'
+as $$
+begin
+  if tg_table_name = 'profiles' then
+    if (tg_op = 'INSERT'
+        or new.first_name is distinct from old.first_name
+        or new.middle_name is distinct from old.middle_name
+        or new.last_name is distinct from old.last_name)
+       and (new.first_name is not null or new.middle_name is not null or new.last_name is not null) then
+      new.first_name := public.validated_name_part(new.first_name, 'First name');
+      new.middle_name := public.validated_name_part(new.middle_name, 'Middle name', false);
+      new.last_name := public.validated_name_part(new.last_name, 'Last name');
+      new.full_name := concat_ws(' ', new.first_name, new.middle_name, new.last_name);
+      if char_length(new.full_name) > 150 then raise exception 'Full name must not exceed 150 characters.' using errcode = '22023'; end if;
+    end if;
+  elsif tg_table_name = 'members' then
+    if (tg_op = 'INSERT'
+        or new.first_name is distinct from old.first_name
+        or new.middle_name is distinct from old.middle_name
+        or new.last_name is distinct from old.last_name)
+       and (new.first_name is not null or new.middle_name is not null or new.last_name is not null) then
+      new.first_name := public.validated_name_part(new.first_name, 'First name');
+      new.middle_name := public.validated_name_part(new.middle_name, 'Middle name', false);
+      new.last_name := public.validated_name_part(new.last_name, 'Last name');
+      new.full_name := concat_ws(' ', new.first_name, new.middle_name, new.last_name);
+    end if;
+    if nullif(btrim(new.full_name), '') is null then raise exception 'Full name is required.' using errcode = '22023'; end if;
+    if char_length(new.full_name) > 150 then raise exception 'Full name must not exceed 150 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if new.date_registered < date '2000-01-01' or new.date_registered > current_date then raise exception 'Date registered must be between 2000-01-01 and today.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'contribution_settings' then
+    if new.effective_month < date '2000-01-01' or new.effective_month > date '2100-12-01' then raise exception 'Effective month must be between January 2000 and December 2100.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'contribution_periods' then
+    if new.period_month < date '2000-01-01' or new.period_month > date '2100-12-01' then raise exception 'Contribution month must be between January 2000 and December 2100.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'contributions' then
+    if new.payment_date < date '2000-01-01' or new.payment_date > current_date then raise exception 'Date added must be between 2000-01-01 and today.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.transaction_reference, '')) > 100 then raise exception 'Reference must not exceed 100 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.review_note, '')) > 500 then raise exception 'Review note must not exceed 500 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.void_reason, '')) > 500 then raise exception 'Void reason must not exceed 500 characters.' using errcode = '22023'; end if;
+  elsif tg_table_name in ('expenses', 'withdrawals') then
+    if new.transaction_date < date '2000-01-01' or new.transaction_date > current_date then raise exception 'Transaction date must be between 2000-01-01 and today.' using errcode = '22023'; end if;
+    if nullif(btrim(new.category), '') is null then raise exception 'Category is required.' using errcode = '22023'; end if;
+    if nullif(btrim(new.description), '') is null then raise exception 'Description is required.' using errcode = '22023'; end if;
+    if nullif(btrim(new.person_responsible), '') is null then raise exception 'Person responsible is required.' using errcode = '22023'; end if;
+    if char_length(new.category) > 80 then raise exception 'Category must not exceed 80 characters.' using errcode = '22023'; end if;
+    if char_length(new.description) > 500 then raise exception 'Description must not exceed 500 characters.' using errcode = '22023'; end if;
+    if char_length(new.person_responsible) > 150 then raise exception 'Person responsible must not exceed 150 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.reference_number, '')) > 100 then raise exception 'Reference must not exceed 100 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.review_note, '')) > 500 then raise exception 'Review note must not exceed 500 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.void_reason, '')) > 500 then raise exception 'Void reason must not exceed 500 characters.' using errcode = '22023'; end if;
+  elsif tg_table_name = 'savings_goals' then
+    if nullif(btrim(new.title), '') is null then raise exception 'Goal title is required.' using errcode = '22023'; end if;
+    if char_length(new.title) > 150 then raise exception 'Goal title must not exceed 150 characters.' using errcode = '22023'; end if;
+    if char_length(coalesce(new.notes, '')) > 1000 then raise exception 'Notes must not exceed 1000 characters.' using errcode = '22023'; end if;
+    if new.target_date is not null and (new.target_date < date '2000-01-01' or new.target_date > date '2100-12-31') then raise exception 'Target date must be between 2000-01-01 and 2100-12-31.' using errcode = '22023'; end if;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_first_name text;
+  v_middle_name text;
+  v_last_name text;
+  v_full_name text;
+  v_contact text;
+  v_reason text;
+  v_account_kind text := coalesce(new.raw_user_meta_data ->> 'account_kind', 'DIRECT_SIGNUP');
+  v_name_setup_required boolean := coalesce((new.raw_user_meta_data ->> 'name_setup_required')::boolean, false);
+  v_super_admin record;
+  v_status public.account_status := 'ACTIVE';
+begin
+  if nullif(btrim(new.raw_user_meta_data ->> 'first_name'), '') is not null
+     and nullif(btrim(new.raw_user_meta_data ->> 'last_name'), '') is not null then
+    v_first_name := public.validated_name_part(new.raw_user_meta_data ->> 'first_name', 'First name');
+    v_middle_name := public.validated_name_part(new.raw_user_meta_data ->> 'middle_name', 'Middle name', false);
+    v_last_name := public.validated_name_part(new.raw_user_meta_data ->> 'last_name', 'Last name');
+    v_full_name := concat_ws(' ', v_first_name, v_middle_name, v_last_name);
+  else
+    v_full_name := case
+      when char_length(btrim(coalesce(new.raw_user_meta_data ->> 'full_name', ''))) >= 2 then btrim(new.raw_user_meta_data ->> 'full_name')
+      when char_length(btrim(split_part(coalesce(new.email, ''), '@', 1))) >= 2 then btrim(split_part(new.email, '@', 1))
+      else 'New User'
+    end;
+    v_name_setup_required := true;
+  end if;
+
+  v_contact := public.normalize_ph_mobile(new.raw_user_meta_data ->> 'contact_number');
+  v_reason := nullif(btrim(new.raw_user_meta_data ->> 'request_reason'), '');
+
+  if v_account_kind = 'DISABLED' then
+    v_status := 'DISABLED';
+  elsif v_account_kind = 'ADMIN_REQUEST' then
+    if exists (
+      select 1 from public.admin_requests ar
+      where lower(ar.email) = lower(new.email)
+        and ar.status = 'REJECTED'
+    ) or exists (
+      select 1 from public.profiles p
+      where lower(p.email) = lower(new.email)
+        and p.status = 'DISABLED'
+        and p.role = 'MEMBER'
+    ) then
+      raise exception 'This email address was declined for administrator access and cannot request again.' using errcode = '22023';
+    end if;
+
+    if v_contact is null or v_reason is null or char_length(v_reason) < 10 then
+      raise exception 'Administrator requests require a contact number and a reason of at least 10 characters.' using errcode = '22023';
+    end if;
+
+    if not exists (
+      select 1 from public.email_verifications ev
+      where lower(ev.email) = lower(new.email)
+        and ev.purpose = 'ADMIN_REQUEST'
+        and ev.verified_at is not null
+        and ev.verified_at >= now() - interval '30 minutes'
+    ) then
+      raise exception 'Email ownership has not been verified. Please verify your email before submitting.' using errcode = '22023';
+    end if;
+    v_status := 'PENDING';
+  elsif v_account_kind in ('INVITED', 'MANAGED') then
+    v_status := 'PENDING';
+  else
+    v_status := 'ACTIVE';
+  end if;
+
+  insert into public.profiles (id, full_name, first_name, middle_name, last_name, email, contact_number, role, status, name_setup_required)
+  values (new.id, v_full_name, v_first_name, v_middle_name, v_last_name, lower(new.email), v_contact, 'MEMBER', v_status, v_name_setup_required)
+  on conflict (id) do update set
+    status = case when v_account_kind in ('INVITED', 'MANAGED') then 'PENDING' when public.profiles.status = 'PENDING' then 'ACTIVE' else public.profiles.status end,
+    full_name = coalesce(public.profiles.full_name, excluded.full_name),
+    first_name = coalesce(public.profiles.first_name, excluded.first_name),
+    last_name = coalesce(public.profiles.last_name, excluded.last_name),
+    contact_number = coalesce(public.profiles.contact_number, excluded.contact_number),
+    name_setup_required = public.profiles.name_setup_required or excluded.name_setup_required;
+
+  if v_account_kind = 'ADMIN_REQUEST' then
+    insert into public.admin_requests (requester_id, email, contact_number, reason)
+    values (new.id, lower(new.email), v_contact, v_reason);
+
+    for v_super_admin in select id from public.profiles where role = 'SUPER_ADMIN' and status = 'ACTIVE' loop
+      perform public.push_notification(v_super_admin.id, 'ADMIN_REQUEST', 'New administrator request', v_full_name || ' requested administrator access.', 'super-admin.html#requests');
+    end loop;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.activate_own_pending_account()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_profile public.profiles;
+  v_auth record;
+  v_first text;
+  v_middle text;
+  v_last text;
+  v_full text;
+  v_contact text;
+  v_membership record;
+  v_name_setup_required boolean := false;
+begin
+  if v_uid is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+
+  select * into v_profile
+  from public.profiles
+  where id = v_uid;
+
+  if not found then
+    select id, email, raw_user_meta_data
+    into v_auth
+    from auth.users
+    where id = v_uid;
+
+    if not found then
+      raise exception 'User account not found.' using errcode = 'P0002';
+    end if;
+
+    v_name_setup_required := coalesce((v_auth.raw_user_meta_data ->> 'name_setup_required')::boolean, false);
+
+    begin
+      if nullif(btrim(v_auth.raw_user_meta_data ->> 'first_name'), '') is not null
+         and nullif(btrim(v_auth.raw_user_meta_data ->> 'last_name'), '') is not null then
+        v_first := public.validated_name_part(v_auth.raw_user_meta_data ->> 'first_name', 'First name');
+        v_middle := public.validated_name_part(v_auth.raw_user_meta_data ->> 'middle_name', 'Middle name', false);
+        v_last := public.validated_name_part(v_auth.raw_user_meta_data ->> 'last_name', 'Last name');
+        v_full := concat_ws(' ', v_first, v_middle, v_last);
+      end if;
+    exception when others then
+      v_first := null;
+      v_middle := null;
+      v_last := null;
+      v_name_setup_required := true;
+    end;
+
+    if v_full is null then
+      v_full := coalesce(
+        nullif(btrim(v_auth.raw_user_meta_data ->> 'full_name'), ''),
+        nullif(btrim(split_part(coalesce(v_auth.email, ''), '@', 1)), ''),
+        'New User'
+      );
+      v_name_setup_required := true;
+    end if;
+
+    v_contact := public.normalize_ph_mobile(v_auth.raw_user_meta_data ->> 'contact_number');
+
+    insert into public.profiles (id, full_name, first_name, middle_name, last_name, email, contact_number, role, status, name_setup_required)
+    values (v_uid, v_full, v_first, v_middle, v_last, lower(v_auth.email), v_contact, 'MEMBER', 'ACTIVE', v_name_setup_required)
+    on conflict (id) do nothing;
+
+    select * into v_profile
+    from public.profiles
+    where id = v_uid;
+  end if;
+
+  if v_profile.status = 'DISABLED' then
+    raise exception 'Your account is deactivated or disabled.' using errcode = '42501';
+  end if;
+
+  update public.group_memberships
+  set status = 'ACTIVE'
+  where user_id = v_uid
+    and status = 'PENDING';
+
+  select gm.group_id, gm.role, gm.member_id
+  into v_membership
+  from public.group_memberships gm
+  where gm.user_id = v_uid
+    and gm.status = 'ACTIVE'
+  order by gm.created_at desc
+  limit 1;
+
+  if v_profile.status <> 'ACTIVE' or (v_profile.group_id is null and v_membership.group_id is not null) then
+    update public.profiles
+    set status = 'ACTIVE',
+        group_id = coalesce(group_id, v_membership.group_id),
+        role = case when group_id is null and v_membership.group_id is not null then coalesce(v_membership.role, role) else role end,
+        member_id = coalesce(member_id, case when group_id is null then v_membership.member_id else null end)
+    where id = v_uid
+      and status <> 'DISABLED'
+    returning * into v_profile;
+  end if;
+
+  return jsonb_build_object(
+    'id', v_profile.id,
+    'role', v_profile.role,
+    'status', v_profile.status,
+    'group_id', v_profile.group_id,
+    'member_id', v_profile.member_id,
+    'first_name', v_profile.first_name,
+    'middle_name', v_profile.middle_name,
+    'last_name', v_profile.last_name,
+    'contact_number', v_profile.contact_number,
+    'name_setup_required', coalesce(v_profile.name_setup_required, false)
+  );
+end;
+$$;
+
+create or replace function public.update_own_profile(
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_contact_number text,
+  p_payout_channel text default '__KEEP__',
+  p_payout_account_number text default '__KEEP__',
+  p_payout_account_name text default '__KEEP__'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_first text := public.validated_name_part(p_first_name, 'First name');
+  v_middle text := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last text := public.validated_name_part(p_last_name, 'Last name');
+  v_full text := concat_ws(' ', v_first, v_middle, v_last);
+  v_contact text := public.normalize_ph_mobile(p_contact_number);
+  v_member_id uuid;
+  v_active_group uuid := public.current_group_id();
+  v_update_payout boolean := (
+    coalesce(p_payout_channel, '') <> '__KEEP__'
+    or coalesce(p_payout_account_number, '') <> '__KEEP__'
+    or coalesce(p_payout_account_name, '') <> '__KEEP__'
+  );
+  v_payout_channel text;
+  v_payout_number text;
+  v_payout_name text;
+begin
+  if v_contact is null then
+    raise exception 'Mobile number is required.' using errcode = '22023';
+  end if;
+
+  if v_update_payout then
+    select vp.out_channel, vp.out_account_number, vp.out_account_name
+    into v_payout_channel, v_payout_number, v_payout_name
+    from public.validated_payout_account(
+      case when p_payout_channel = '__KEEP__' then null else p_payout_channel end,
+      case when p_payout_account_number = '__KEEP__' then null else p_payout_account_number end,
+      case when p_payout_account_name = '__KEEP__' then null else p_payout_account_name end
+    ) vp;
+  end if;
+
+  update public.profiles
+  set first_name = v_first,
+      middle_name = v_middle,
+      last_name = v_last,
+      full_name = v_full,
+      contact_number = v_contact,
+      name_setup_required = false,
+      payout_channel = case when v_update_payout then v_payout_channel else payout_channel end,
+      payout_account_number = case when v_update_payout then v_payout_number else payout_account_number end,
+      payout_account_name = case when v_update_payout then v_payout_name else payout_account_name end
+  where id = auth.uid() and status = 'ACTIVE'
+  returning member_id into v_member_id;
+
+  if not found then
+    raise exception 'Active profile not found.' using errcode = 'P0002';
+  end if;
+
+  update public.members m
+  set first_name = v_first,
+      middle_name = v_middle,
+      last_name = v_last,
+      full_name = v_full,
+      contact_number = case when m.contact_number = '09000000000' then v_contact else m.contact_number end,
+      updated_by = auth.uid()
+  where m.deleted_at is null
+    and (
+      m.id = v_member_id
+      or m.id in (
+        select gm.member_id
+        from public.group_memberships gm
+        where gm.user_id = auth.uid()
+          and gm.member_id is not null
+      )
+    );
+
+  if v_update_payout and v_active_group is not null then
+    update public.members m
+    set payout_channel = v_payout_channel,
+        payout_account_number = v_payout_number,
+        payout_account_name = v_payout_name,
+        updated_by = auth.uid()
+    where m.group_id = v_active_group
+      and m.deleted_at is null
+      and (
+        m.id = v_member_id
+        or m.id in (
+          select gm.member_id
+          from public.group_memberships gm
+          where gm.user_id = auth.uid()
+            and gm.group_id = v_active_group
+            and gm.member_id is not null
+        )
+      );
+  end if;
+
+  insert into public.account_activity (user_id, event)
+  values (auth.uid(), 'PROFILE_UPDATE');
+end;
+$$;
+
+revoke execute on function public.activate_own_pending_account() from public, anon;
+grant execute on function public.activate_own_pending_account() to authenticated;
+
+revoke execute on function public.update_own_profile(text, text, text, text, text, text, text) from public, anon;
+grant execute on function public.update_own_profile(text, text, text, text, text, text, text) to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_064', 'formal names and invite onboarding')
+on conflict (version) do nothing;
+
 commit;
 
 -- BOOTSTRAP THE FIRST SUPER ADMIN

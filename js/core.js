@@ -37,6 +37,22 @@
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkSw(); });
       window.addEventListener('online', checkSw);
     }).catch(() => { });
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const msg = event?.data;
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'MYIPON_PUSH_SHOWN' && currentProfile?.id && msg.id != null) {
+        const key = notifShownKey({
+          id: msg.id,
+          dedupe_key: msg.dedupe_key,
+          created_at: msg.timestamp ? new Date(msg.timestamp).toISOString() : '',
+          message: msg.message || ''
+        }) || String(msg.id);
+        markDeviceNotificationShown(currentProfile.id, key);
+        if (!msg.dedupe_key) markDeviceNotificationShown(currentProfile.id, String(msg.id));
+      } else if (msg.type === 'MYIPON_PUSH_SUBSCRIPTION_CHANGED' && currentProfile?.id) {
+        syncWebPushSubscription({ force: true }).catch(() => { });
+      }
+    });
   }
 
   if (document.body.dataset.page) {
@@ -189,7 +205,7 @@
   }
 
   function normalizeNamePart(value) {
-    return String(value || '').trim().replace(/\s+/g, ' ');
+    return String(value || '').normalize('NFC').trim().replace(/\s+/g, ' ');
   }
 
   const PASSWORD_RULE = 'Use at least 8 characters with uppercase, lowercase, a number, and a symbol.';
@@ -339,11 +355,90 @@
     if (!input.value) autofillTemporaryPassword(input);
   }
 
-  function validNamePart(value) {
-    return /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(normalizeNamePart(value));
+  const NAME_LOWERCASE_PARTICLES = new Set([
+    'de', 'del', 'dela', 'los', 'las', 'la', 'le', 'da', 'di', 'do', 'dos', 'das',
+    'van', 'von', 'den', 'der', 'ter', 'ten', 'ben', 'bin', 'binti', 'ibn', 'al'
+  ]);
+  const NAME_PARTICLE_LIST = [...NAME_LOWERCASE_PARTICLES];
+  const NAME_ROMAN_SUFFIXES = new Set(['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']);
+  const NAME_ROMAN_LIST = [...NAME_ROMAN_SUFFIXES];
+  const NAME_CHAR_RULE = 'Use letters, spaces, hyphens, or apostrophes only.';
+  const NAME_RULE = 'Use formal capitalization (e.g., Juan Dela Cruz). Do not use ALL CAPS or all lowercase.';
+
+  function nameWordError(word, index, totalWords, { live = false, allowSingleInitial = false } = {}) {
+    if (!word) return NAME_RULE;
+    if (index > 0) {
+      if (NAME_LOWERCASE_PARTICLES.has(word)) {
+        if (!live && index >= totalWords - 1) return NAME_RULE;
+        return '';
+      }
+      if (live && index === totalWords - 1 && /^\p{Ll}+$/u.test(word) && NAME_PARTICLE_LIST.some((p) => p.startsWith(word))) {
+        return '';
+      }
+      if (index === totalWords - 1 && NAME_ROMAN_SUFFIXES.has(word)) return '';
+      if (live && index === totalWords - 1 && /^\p{Lu}+$/u.test(word) && NAME_ROMAN_LIST.some((r) => r.startsWith(word))) {
+        return '';
+      }
+    }
+    const segments = word.split(/['\u2019-]/);
+    for (const seg of segments) {
+      if (!seg) return NAME_CHAR_RULE;
+      if (!/^\p{Lu}/u.test(seg) || /\p{Lu}{2}/u.test(seg)) return NAME_RULE;
+      if (seg.length === 1) {
+        if (segments.length > 1 || (live && totalWords === 1)) continue;
+        if (!(allowSingleInitial && (totalWords === 1 || (index > 0 && index < totalWords - 1)))) return NAME_RULE;
+      } else {
+        const segPattern = live
+          ? /^\p{Lu}[\p{Ll}\p{M}]*(?:\p{Lu}[\p{Ll}\p{M}]*)*$/u
+          : /^\p{Lu}[\p{Ll}\p{M}]+(?:\p{Lu}[\p{Ll}\p{M}]+)*$/u;
+        if (!segPattern.test(seg)) return NAME_RULE;
+      }
+    }
+    return '';
   }
 
-  const NAME_RULE = 'Use letters, spaces, hyphens, or apostrophes only.';
+  function nameValidationError(value, { allowSingleInitial = false, required = false, live = false } = {}) {
+    const raw = String(value || '').normalize('NFC');
+    const trimmedTrailingSep = live ? normalizeNamePart(raw.replace(/['\u2019-]\s*$/, '')) : normalizeNamePart(raw);
+    const cleaned = normalizeNamePart(raw);
+    if (!cleaned) return required && !live ? 'Enter this name.' : '';
+    const checkValue = live && !/['\u2019-]{2}/.test(raw.trim()) ? trimmedTrailingSep : cleaned;
+    if (!checkValue) return NAME_CHAR_RULE;
+    if (cleaned.length > 80) return 'Use 80 characters or fewer.';
+    if (!/^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(checkValue)) return NAME_CHAR_RULE;
+    const letterCount = checkValue.replace(/[^\p{L}]/gu, '').length;
+    if (!live && !allowSingleInitial && letterCount < 2) return 'Enter at least 2 letters using formal capitalization.';
+    const words = checkValue.split(' ');
+    for (let i = 0; i < words.length; i += 1) {
+      const err = nameWordError(words[i], i, words.length, { live, allowSingleInitial });
+      if (err) return err;
+    }
+    return '';
+  }
+
+  function validNamePart(value, options = {}) {
+    const cleaned = normalizeNamePart(value);
+    return Boolean(cleaned) && !nameValidationError(cleaned, { ...options, required: true, live: false });
+  }
+
+  function fullNameValidationError(value, { required = false, live = false } = {}) {
+    const cleaned = normalizeNamePart(value);
+    if (!cleaned) return required && !live ? 'Enter a full name.' : '';
+    if (cleaned.length > 120) return 'Use 120 characters or fewer.';
+    const basicErr = nameValidationError(value, { allowSingleInitial: true, required, live });
+    if (basicErr) return basicErr;
+    const words = cleaned.split(' ');
+    if (!live && words.length < 2) return 'Enter first and last name (e.g., Juan Dela Cruz) or leave blank.';
+    if (!live && words[words.length - 1].replace(/[^\p{L}]/gu, '').length < 2 && !NAME_ROMAN_SUFFIXES.has(words[words.length - 1])) {
+      return 'Last name must have at least 2 letters using formal capitalization.';
+    }
+    return '';
+  }
+
+  function validFullName(value) {
+    const cleaned = normalizeNamePart(value);
+    return Boolean(cleaned) && !fullNameValidationError(cleaned, { required: true, live: false });
+  }
 
   function getFieldErrorElement(control, create = false) {
     let error = (control.getAttribute('aria-describedby') || '').split(/\s+/).map((id) => document.getElementById(id)).find((element) => element?.classList.contains('field-error'));
@@ -394,12 +489,57 @@
     return control.validationMessage || `Enter a valid ${lowerLabel}.`;
   }
 
-  function validateNameInput(input) {
-    const value = normalizeNamePart(input.value);
-    const message = !value && input.required ? 'Enter this name.' : value && !validNamePart(value) ? NAME_RULE : '';
+  function validateNameInput(input, { live = false } = {}) {
+    const message = nameValidationError(input.value, {
+      allowSingleInitial: input.name === 'middle_name',
+      required: input.required,
+      live
+    });
     input.setCustomValidity(message);
     setFieldError(input, message);
     return !message;
+  }
+
+  function validateNameFields(form) {
+    if (!form) return true;
+    const fields = ['first_name', 'middle_name', 'last_name']
+      .map((name) => form.elements?.[name])
+      .filter((control) => control && !control.disabled);
+    let firstInvalid = null;
+    for (const control of fields) {
+      if (!validateNameInput(control) && !firstInvalid) firstInvalid = control;
+    }
+    const combinedLength = fields
+      .map((control) => normalizeNamePart(control.value))
+      .filter(Boolean)
+      .join(' ').length;
+    const lastField = form.elements?.last_name || firstInvalid;
+    if (!firstInvalid && combinedLength > 150 && lastField) {
+      const msg = 'Combined full name must not exceed 150 characters.';
+      lastField.setCustomValidity(msg);
+      setFieldError(lastField, msg);
+      firstInvalid = lastField;
+    }
+    firstInvalid?.focus();
+    return !firstInvalid;
+  }
+
+  function prepareInviteNameInput(input) {
+    if (!input || input.dataset.inviteNameBound) return;
+    input.dataset.inviteNameBound = 'true';
+    input.title = NAME_RULE;
+    const check = ({ live = false } = {}) => {
+      const message = fullNameValidationError(input.value, { required: false, live });
+      input.setCustomValidity(message);
+      setFieldError(input, message);
+      return !message;
+    };
+    input.addEventListener('input', () => {
+      input.value = input.value.replace(/[^\p{L}\p{M} '\u2019-]/gu, '');
+      if (normalizeNamePart(input.value) || input.hasAttribute('aria-invalid')) check({ live: true });
+    });
+    input.addEventListener('blur', () => check({ live: false }));
+    input.addEventListener('invalid', () => check({ live: false }));
   }
 
   function prepareNameInputs() {
@@ -409,11 +549,12 @@
       input.title = NAME_RULE;
       input.addEventListener('input', () => {
         input.value = input.value.replace(/[^\p{L}\p{M} '\u2019-]/gu, '');
-        if (input.hasAttribute('aria-invalid')) validateNameInput(input);
+        if (normalizeNamePart(input.value) || input.hasAttribute('aria-invalid')) validateNameInput(input, { live: true });
       });
       input.addEventListener('blur', () => validateNameInput(input));
       input.addEventListener('invalid', () => validateNameInput(input));
     });
+    document.querySelectorAll('input[name="invite_name"]').forEach(prepareInviteNameInput);
   }
 
   const PHONE_RULE = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
@@ -703,7 +844,16 @@
   }
 
   function profileNeedsSetup(profile) {
-    return !profile?.first_name?.trim() || !profile?.last_name?.trim() || (profile?.contact_number ? !validPhoneNumber(profile.contact_number) : false);
+    const first = normalizeNamePart(profile?.first_name);
+    const middle = normalizeNamePart(profile?.middle_name);
+    const last = normalizeNamePart(profile?.last_name);
+    return Boolean(profile?.name_setup_required)
+      || !first
+      || !last
+      || !validNamePart(first)
+      || (middle ? !validNamePart(middle, { allowSingleInitial: true }) : false)
+      || !validNamePart(last)
+      || (profile?.contact_number ? !validPhoneNumber(profile.contact_number) : false);
   }
 
   function accountSetupUrl(profile, user) {
@@ -880,9 +1030,17 @@
             <div class="record-thread-messages" id="record-thread-messages" role="log" aria-live="polite"><p class="empty-state">Loading discussion…</p></div>
             <form class="record-thread-composer" id="record-thread-form" hidden>
               <label class="sr-only" for="record-thread-input">Reply message</label>
-              <textarea id="record-thread-input" name="body" rows="2" maxlength="1000" placeholder="Ask about the receipt, clarify details, or reply…" required></textarea>
+              <textarea id="record-thread-input" name="body" rows="2" maxlength="1000" placeholder="Write a reply, paste a screenshot, or attach photos, videos, or files…"></textarea>
+              <div class="record-thread-queued" id="record-thread-queued" hidden></div>
+              <input id="record-thread-files" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.odt,.ods,.ppt,.pptx,.zip,.rar,.7z" hidden>
               <div class="record-thread-composer-bar">
-                <small class="field-help">Press Ctrl+Enter or click Send reply.</small>
+                <div class="record-thread-composer-left">
+                  <button class="record-thread-attach-btn" id="record-thread-attach-btn" type="button" title="Attach photos, videos, or files (max 5 files, 50 MB each)">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    <span>Attach</span>
+                  </button>
+                  <small class="field-help">Ctrl+Enter to send · Photos, videos &amp; files up to 50 MB</small>
+                </div>
                 <button class="button button-primary button-sm" type="submit">Send reply</button>
               </div>
             </form>
@@ -911,7 +1069,7 @@
           <div class="account-dialog-content">
             <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
-            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label><div class="preference-row preference-device-row" data-device-notif-row><span><strong>Phone &amp; drawer alerts</strong><small data-device-notif-status>Checking device permission…</small></span><button class="button button-secondary button-sm" type="button" data-device-notif-btn>Enable alerts</button></div></section></div>
+            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label><div class="preference-row preference-device-row" data-device-notif-row><span><strong>Phone &amp; drawer alerts</strong><small data-device-notif-status>Checking device permission…</small></span><button class="button button-secondary button-sm" type="button" data-device-notif-btn disabled>Checking…</button></div></section></div>
           </div>
         </div>
       </dialog>
@@ -1695,7 +1853,7 @@
     const emailForm = document.getElementById('quick-email-form');
     dialog.setAttribute('aria-busy', 'true');
     try {
-      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name').eq('id', currentProfile.id).single();
+      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required').eq('id', currentProfile.id).single();
       if (error) throw error;
       let payoutSource = data;
       if (!data.payout_channel && (data.member_id || currentProfile.member_id)) {
@@ -1712,7 +1870,7 @@
       emailForm.elements.email.value = data.email || '';
       document.getElementById('quick-notifications-enabled').checked = data.notifications_enabled !== false;
       document.getElementById('quick-account-name').textContent = data.full_name;
-      document.getElementById('quick-account-role').textContent = currentProfile.role.replaceAll('_', ' ');
+      document.getElementById('quick-account-role').textContent = currentProfile.role === 'SUPER_ADMIN' ? 'Owner' : (data.email || 'My account');
       syncProfileAvatars({ ...currentProfile, ...data });
       const support = dialog.querySelector('.account-support');
       if (support) support.hidden = currentProfile.role === 'SUPER_ADMIN';
@@ -2045,6 +2203,7 @@
     });
     profileForm.addEventListener('submit', async (event) => {
       event.preventDefault();
+      if (!validateNameFields(profileForm)) return;
       if (!validatePhoneInput(profileForm.elements.contact_number)) return profileForm.elements.contact_number.focus();
       if (!validatePayoutFields(profileForm)) return;
       const button = event.submitter;
@@ -2060,6 +2219,10 @@
           ...payoutPayload
         });
         Object.assign(currentProfile, {
+          first_name: normalizeNamePart(values.get('first_name')),
+          middle_name: normalizeNamePart(values.get('middle_name')) || null,
+          last_name: normalizeNamePart(values.get('last_name')),
+          name_setup_required: false,
           payout_channel: payoutPayload.p_payout_channel,
           payout_account_number: payoutPayload.p_payout_account_number,
           payout_account_name: payoutPayload.p_payout_account_name
@@ -2249,6 +2412,7 @@
   let androidChannelReady = false;
   let nativeNotifListenerAttached = false;
   let lastBgPollSyncAt = 0;
+  let lastWebPushSyncAt = 0;
 
   function getLocalNotificationsPlugin() {
     return window.Capacitor?.Plugins?.LocalNotifications || null;
@@ -2260,6 +2424,185 @@
 
   function hasNativeNotificationBridge() {
     return Boolean(getLocalNotificationsPlugin() || getBackgroundNotificationsPlugin());
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    const clean = String(base64String || '').trim();
+    const padding = '='.repeat((4 - (clean.length % 4)) % 4);
+    const base64 = (clean + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    const output = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; i += 1) {
+      output[i] = rawData.charCodeAt(i);
+    }
+    return output;
+  }
+
+  function uint8ArraysEqual(a, b) {
+    if (!a || !b || a.byteLength !== b.byteLength) return false;
+    const va = new Uint8Array(a);
+    const vb = new Uint8Array(b);
+    for (let i = 0; i < va.length; i += 1) {
+      if (va[i] !== vb[i]) return false;
+    }
+    return true;
+  }
+
+  function detectPushPlatform() {
+    const ua = navigator.userAgent || '';
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+    if (/iphone|ipad|ipod/i.test(ua)) return standalone ? 'iOS PWA' : 'iOS Safari';
+    if (/android/i.test(ua)) return standalone ? 'Android PWA' : 'Android Web';
+    return standalone ? 'Desktop PWA' : 'Desktop Web';
+  }
+
+  async function getWebPushRegistration() {
+    if (isInstalledAppUser() || !('serviceWorker' in navigator)) return null;
+    try {
+      const existing = await navigator.serviceWorker.getRegistration('/sw.js').catch(() => null)
+        || await navigator.serviceWorker.getRegistration().catch(() => null);
+      if (existing?.active) return existing;
+      if (existing) {
+        return await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((resolve) => setTimeout(() => resolve(existing), 2500))
+        ]);
+      }
+      return await Promise.race([
+        navigator.serviceWorker.register('/sw.js'),
+        new Promise((resolve) => setTimeout(() => resolve(null), 2500))
+      ]);
+    } catch {
+      return null;
+    }
+  }
+
+  async function getWebPushState() {
+    const supported = !isInstalledAppUser()
+      && Boolean(config.vapidPublicKey)
+      && 'serviceWorker' in navigator
+      && 'PushManager' in window
+      && 'Notification' in window;
+    if (!supported) {
+      return { supported: false, subscribed: false, endpoint: '' };
+    }
+    try {
+      const reg = await getWebPushRegistration();
+      const sub = await reg?.pushManager?.getSubscription();
+      return {
+        supported: true,
+        subscribed: Boolean(sub?.endpoint),
+        endpoint: sub?.endpoint || ''
+      };
+    } catch {
+      return { supported: true, subscribed: false, endpoint: '' };
+    }
+  }
+
+  async function syncWebPushSubscription({ force = false } = {}) {
+    if (isInstalledAppUser() || !configured || !currentProfile?.id) return false;
+    if (!config.vapidPublicKey || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      return false;
+    }
+    if (currentProfile.notifications_enabled === false || (await getDeviceNotificationPermission()) !== 'granted') {
+      return false;
+    }
+    const now = Date.now();
+    const syncMarkerKey = `myipon_webpush_synced_${currentProfile.id}`;
+    if (!force && now - lastWebPushSyncAt < 60_000 && localStorage.getItem(syncMarkerKey)) {
+      return true;
+    }
+    lastWebPushSyncAt = now;
+    try {
+      const reg = await getWebPushRegistration();
+      if (!reg?.pushManager) return false;
+      const appServerKey = urlBase64ToUint8Array(config.vapidPublicKey);
+      let sub = await reg.pushManager.getSubscription();
+      if (sub && sub.options?.applicationServerKey && !uint8ArraysEqual(sub.options.applicationServerKey, appServerKey)) {
+        await sub.unsubscribe().catch(() => { });
+        sub = null;
+      }
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: appServerKey
+        });
+      }
+      const subJson = sub?.toJSON?.();
+      const endpoint = subJson?.endpoint || sub?.endpoint || '';
+      const p256dh = subJson?.keys?.p256dh || '';
+      const auth = subJson?.keys?.auth || '';
+      if (!endpoint || !p256dh || !auth) return false;
+
+      if (force || localStorage.getItem(syncMarkerKey) !== endpoint) {
+        await rpc('upsert_push_subscription', {
+          p_endpoint: endpoint,
+          p_p256dh: p256dh,
+          p_auth: auth,
+          p_platform: detectPushPlatform()
+        });
+        try {
+          localStorage.setItem(syncMarkerKey, endpoint);
+          localStorage.setItem('myipon_webpush_endpoint', endpoint);
+        } catch { /* ignore storage errors */ }
+      }
+      return true;
+    } catch {
+      lastWebPushSyncAt = 0;
+      return false;
+    }
+  }
+
+  async function removeWebPushSubscription() {
+    if (isInstalledAppUser() || !configured) return;
+    let endpoint = '';
+    try {
+      const reg = await getWebPushRegistration();
+      const sub = await reg?.pushManager?.getSubscription();
+      endpoint = sub?.endpoint || localStorage.getItem('myipon_webpush_endpoint') || '';
+      if (sub) await sub.unsubscribe().catch(() => { });
+    } catch {
+      endpoint = localStorage.getItem('myipon_webpush_endpoint') || '';
+    }
+    try {
+      await rpc('delete_push_subscription', { p_endpoint: endpoint || null });
+    } catch { /* ignore */ }
+    if (currentProfile?.id) {
+      try { localStorage.removeItem(`myipon_webpush_synced_${currentProfile.id}`); } catch { /* ignore */ }
+    }
+    try { localStorage.removeItem('myipon_webpush_endpoint'); } catch { /* ignore */ }
+    lastWebPushSyncAt = 0;
+  }
+
+  async function sendBackgroundTestNotification() {
+    const client = getClient();
+    if (!client || !config.supabaseUrl) {
+      throw new Error('Notification service is not configured.');
+    }
+    if (!isInstalledAppUser()) {
+      await syncWebPushSubscription({ force: true });
+    } else {
+      lastBgPollSyncAt = 0;
+      await syncBackgroundNotificationPolling(currentProfile);
+    }
+    const { data: { session } } = await client.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('Please sign in again to test alerts.');
+    }
+    const res = await fetch(`${config.supabaseUrl}/functions/v1/send-push`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: config.supabaseAnonKey,
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ action: 'test', delay_ms: 0 })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error || 'Could not send background test alert.');
+    }
+    return data;
   }
 
   async function ensureAndroidNotificationChannel() {
@@ -2280,6 +2623,9 @@
     }
   }
 
+  let browserPermissionObserverBound = false;
+  let didAutoSyncPushInSession = false;
+
   function normalizeNotificationPermission(value) {
     if (value === 'granted') return 'granted';
     if (value === 'denied') return 'denied';
@@ -2287,50 +2633,165 @@
     return 'unsupported';
   }
 
-  async function getDeviceNotificationPermission() {
-    const plugin = getLocalNotificationsPlugin();
-    if (plugin?.checkPermissions) {
-      try {
-        const res = await plugin.checkPermissions();
-        return normalizeNotificationPermission(res?.display);
-      } catch {
-        return 'unsupported';
+  function bindBrowserPermissionObserver(permStatus) {
+    if (!permStatus || browserPermissionObserverBound) return;
+    browserPermissionObserverBound = true;
+    const onChange = () => {
+      const next = normalizeNotificationPermission(permStatus.state);
+      if (next === 'granted' && currentProfile?.notifications_enabled !== false) {
+        syncWebPushSubscription({ force: true })
+          .catch(() => { })
+          .finally(() => syncDevicePermissionUI().catch(() => { }));
+      } else {
+        syncDevicePermissionUI().catch(() => { });
       }
+    };
+    if (typeof permStatus.addEventListener === 'function') {
+      permStatus.addEventListener('change', onChange);
+    } else {
+      permStatus.onchange = onChange;
     }
-    if ('Notification' in window) return normalizeNotificationPermission(Notification.permission);
-    return 'unsupported';
+  }
+
+  async function getDeviceNotificationPermission() {
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    const plugin = getLocalNotificationsPlugin();
+    if (plugin?.checkPermissions || bgPlugin?.getBackgroundStatus) {
+      const [capRes, bgRes] = await Promise.all([
+        plugin?.checkPermissions ? plugin.checkPermissions().catch(() => null) : null,
+        bgPlugin?.getBackgroundStatus ? bgPlugin.getBackgroundStatus().catch(() => null) : null
+      ]);
+      if (bgRes?.hasPermission === true) return 'granted';
+      const capStatus = normalizeNotificationPermission(capRes?.display);
+      if (bgRes && bgRes.hasPermission === false && capStatus === 'granted') return 'denied';
+      if (capStatus !== 'unsupported') return capStatus;
+      return bgRes?.hasPermission === false ? 'default' : 'unsupported';
+    }
+    const notifStatus = 'Notification' in window ? normalizeNotificationPermission(Notification.permission) : 'unsupported';
+    let permApiStatus = 'unsupported';
+    if (navigator.permissions?.query) {
+      try {
+        const permStatus = await navigator.permissions.query({ name: 'notifications' });
+        bindBrowserPermissionObserver(permStatus);
+        permApiStatus = normalizeNotificationPermission(permStatus?.state);
+      } catch { /* ignore */ }
+    }
+    if (notifStatus === 'denied' || permApiStatus === 'denied') return 'denied';
+    if (notifStatus === 'granted' || permApiStatus === 'granted') return 'granted';
+    return notifStatus !== 'unsupported' ? notifStatus : permApiStatus;
   }
 
   async function syncDevicePermissionUI() {
     const status = await getDeviceNotificationPermission();
     const isApp = isInstalledAppUser();
     const needsApkUpdate = isApp && !hasNativeNotificationBridge();
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    let nativeBgStatus = null;
+    if (isApp && bgPlugin?.getBackgroundStatus) {
+      nativeBgStatus = await bgPlugin.getBackgroundStatus().catch(() => null);
+    }
+    let pushState = !isApp && status === 'granted'
+      ? await getWebPushState()
+      : { supported: !isApp && Boolean(config.vapidPublicKey) && 'PushManager' in window, subscribed: false };
+
+    if (!isApp && status === 'granted' && pushState.supported && !pushState.subscribed
+      && currentProfile?.notifications_enabled !== false && !didAutoSyncPushInSession) {
+      didAutoSyncPushInSession = true;
+      const synced = await syncWebPushSubscription({ force: false }).catch(() => false);
+      if (synced) {
+        pushState = await getWebPushState();
+      }
+    }
+
+    const isIosBrowser = !isApp && /iphone|ipad|ipod/i.test(navigator.userAgent || '')
+      && !(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true);
 
     const rows = document.querySelectorAll('[data-device-notif-row]');
     rows.forEach((row) => {
       const label = row.querySelector('[data-device-notif-status]');
       const button = row.querySelector('[data-device-notif-btn]');
       if (!label || !button) return;
+
+      let actionsWrap = row.querySelector('.preference-device-actions');
+      if (!actionsWrap) {
+        actionsWrap = document.createElement('div');
+        actionsWrap.className = 'preference-device-actions';
+        button.parentNode.insertBefore(actionsWrap, button);
+        actionsWrap.appendChild(button);
+      }
+      actionsWrap.querySelectorAll('[data-device-extra-btn]').forEach((el) => el.remove());
+
       if (needsApkUpdate) {
-        label.textContent = 'Update to the latest myIPON APK to enable phone notification permissions and background alerts.';
+        label.textContent = 'Update to the latest myIPON APK to enable closed-app background alerts.';
         button.textContent = 'Update APK';
         button.disabled = false;
         button.hidden = false;
       } else if (status === 'granted') {
-        label.textContent = 'Enabled — alerts appear in your phone notification drawer even when outside the app.';
-        button.textContent = 'Enabled';
-        button.disabled = true;
-        button.hidden = false;
+        if (isApp && nativeBgStatus && nativeBgStatus.batteryOptimizationIgnored === false) {
+          label.textContent = 'Notification permission: On — turn off battery restriction so alerts arrive when myIPON is closed.';
+          button.textContent = 'Allow always-on';
+          button.dataset.actionMode = 'battery';
+          button.disabled = false;
+          button.hidden = false;
+        } else if (isApp) {
+          label.textContent = 'Notification permission: On — instant background alerts stay active even when myIPON is closed.';
+          button.textContent = 'On';
+          delete button.dataset.actionMode;
+          button.disabled = true;
+          button.hidden = false;
+        } else if (pushState.subscribed) {
+          label.textContent = 'Notification permission: On — background push active even when this tab or browser is closed.';
+          button.textContent = 'On';
+          delete button.dataset.actionMode;
+          button.disabled = true;
+          button.hidden = false;
+        } else if (pushState.supported) {
+          label.textContent = 'Notification permission: On — tap Finish setup to sync background push for closed tabs.';
+          button.textContent = 'Finish setup';
+          button.dataset.actionMode = 'sync-push';
+          button.disabled = false;
+          button.hidden = false;
+        } else {
+          label.textContent = 'Notification permission: On — active while open. Open in Chrome, Edge, or installed PWA for closed-app push.';
+          button.textContent = 'On';
+          delete button.dataset.actionMode;
+          button.disabled = true;
+          button.hidden = false;
+        }
+        if ((isApp || pushState.subscribed) && currentProfile?.notifications_enabled !== false) {
+          const testBtn = document.createElement('button');
+          testBtn.type = 'button';
+          testBtn.className = 'button button-secondary button-sm';
+          testBtn.textContent = 'Test alert';
+          testBtn.setAttribute('data-device-test-btn', '');
+          testBtn.setAttribute('data-device-extra-btn', '');
+          actionsWrap.appendChild(testBtn);
+        }
       } else if (status === 'denied') {
-        label.textContent = 'Blocked in device or browser settings. Allow notifications to see drawer alerts.';
-        button.textContent = 'Blocked';
-        button.disabled = true;
-        button.hidden = false;
-      } else if (status === 'default') {
-        label.textContent = 'Permission needed so alerts appear in your phone notification drawer.';
-        button.textContent = 'Allow notifications';
+        const canOpenNativeSettings = isApp && Boolean(bgPlugin?.openNotificationSettings);
+        label.textContent = canOpenNativeSettings
+          ? 'Device permission: Blocked in Android settings — open settings, turn on Notifications, then tap Recheck.'
+          : 'Device permission: Blocked in browser settings — allow notifications for this site, then tap Recheck.';
+        button.textContent = canOpenNativeSettings ? 'Open settings' : 'How to unblock';
+        button.dataset.actionMode = canOpenNativeSettings ? 'open-settings' : 'unblock-help';
         button.disabled = false;
         button.hidden = false;
+        const recheckBtn = document.createElement('button');
+        recheckBtn.type = 'button';
+        recheckBtn.className = 'button button-secondary button-sm';
+        recheckBtn.textContent = 'Recheck';
+        recheckBtn.setAttribute('data-device-recheck-btn', '');
+        recheckBtn.setAttribute('data-device-extra-btn', '');
+        actionsWrap.appendChild(recheckBtn);
+      } else if (status === 'default') {
+        label.textContent = 'Device permission: Off — tap Turn on so alerts arrive on your phone or desktop even when myIPON is closed.';
+        button.textContent = 'Turn on';
+        delete button.dataset.actionMode;
+        button.disabled = false;
+        button.hidden = false;
+      } else if (isIosBrowser) {
+        label.textContent = 'On iPhone/iPad, tap Share -> Add to Home Screen, then open myIPON to enable background alerts.';
+        button.hidden = true;
       } else {
         label.textContent = 'Device notification drawer alerts are unavailable on this browser.';
         button.hidden = true;
@@ -2341,13 +2802,22 @@
     if (bar) {
       if (needsApkUpdate) {
         bar.hidden = false;
-        bar.innerHTML = '<span>Update your installed APK to enable notification permission and background alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Update APK</button>';
+        bar.innerHTML = '<span>Update your installed APK to enable closed-app background alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Update APK</button>';
       } else if (status === 'default') {
         bar.hidden = false;
-        bar.innerHTML = '<span>Allow device alerts so you still receive updates outside the app.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Allow notifications</button>';
-      } else if (status === 'denied') {
+        bar.innerHTML = '<span>Device notifications are off. Tap Turn on so alerts arrive even when myIPON is closed.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Turn on</button>';
+      } else if (status === 'granted' && isApp && nativeBgStatus && nativeBgStatus.batteryOptimizationIgnored === false) {
         bar.hidden = false;
-        bar.innerHTML = '<span>Device notifications are blocked. Enable notifications for myIPON in your phone settings.</span>';
+        bar.innerHTML = '<span>Notification permission is On — allow unrestricted battery so alerts stay active after closing myIPON.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="battery">Allow always-on</button>';
+      } else if (status === 'denied') {
+        const canOpenNativeSettings = isApp && Boolean(bgPlugin?.openNotificationSettings);
+        bar.hidden = false;
+        bar.innerHTML = canOpenNativeSettings
+          ? '<span>Device notifications are turned off in Android settings.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="open-settings">Open settings</button>'
+          : '<span>Device notifications are blocked by your browser. Allow notifications in site settings to receive alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="unblock-help">How to unblock</button>';
+      } else if (isIosBrowser) {
+        bar.hidden = false;
+        bar.innerHTML = '<span>Add myIPON to your Home Screen from Safari Share to receive alerts while the app is closed.</span>';
       } else {
         bar.hidden = true;
         bar.textContent = '';
@@ -2383,10 +2853,52 @@
     } else if (status === 'granted' && plugin) {
       await ensureAndroidNotificationChannel();
     }
-    await syncDevicePermissionUI();
     if (status === 'granted' && currentProfile?.notifications_enabled !== false) {
       lastBgPollSyncAt = 0;
-      syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+      await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+      await syncWebPushSubscription({ force: true }).catch(() => { });
+    }
+    await syncDevicePermissionUI();
+    return status;
+  }
+
+  function openNotificationUnblockGuide() {
+    let dialog = document.getElementById('notification-unblock-dialog');
+    if (!dialog) {
+      dialog = document.createElement('dialog');
+      dialog.id = 'notification-unblock-dialog';
+      dialog.className = 'confirm-dialog';
+      dialog.setAttribute('aria-labelledby', 'notif-unblock-title');
+      dialog.innerHTML = `
+        <form method="dialog">
+          <h2 id="notif-unblock-title">Allow blocked notifications</h2>
+          <p>Once blocked in browser or phone settings, only you can re-enable permission for security reasons. Follow the steps for your device, then tap <strong>Recheck permission</strong>:</p>
+          <ul style="margin:0 0 22px;padding-left:18px;display:grid;gap:8px;font:13.5px/1.45 Arial,sans-serif;color:#324841">
+            <li><strong>Chrome / Edge (PC or Laptop):</strong> Click the tune / site-info icon beside the website address bar &rarr; change <strong>Notifications</strong> to <strong>Allow</strong>.</li>
+            <li><strong>Chrome (Android browser):</strong> Tap the tune icon beside the address bar &rarr; <strong>Permissions</strong> &rarr; turn <strong>Notifications</strong> ON (or check Phone Settings &rarr; Apps &rarr; Chrome &rarr; Notifications).</li>
+            <li><strong>myIPON Android App:</strong> Open Phone <strong>Settings &rarr; Apps &rarr; myIPON &rarr; Notifications</strong> &rarr; toggle <strong>Allow notifications</strong> ON.</li>
+            <li><strong>Safari (Mac / iPhone):</strong> Open <strong>Safari Settings &rarr; Websites &rarr; Notifications</strong> (or iPhone Settings &rarr; myIPON) &rarr; set to <strong>Allow</strong>.</li>
+          </ul>
+          <div class="dialog-actions">
+            <button class="button button-secondary" type="submit">Close</button>
+            <button class="button button-primary" type="button" data-device-recheck-btn>Recheck permission</button>
+          </div>
+        </form>
+      `;
+      document.body.append(dialog);
+    }
+    if (!dialog.open) dialog.showModal();
+  }
+
+  async function recheckDeviceNotificationPermission() {
+    const status = await requestDeviceNotificationPermission({ userInitiated: true });
+    if (status === 'granted') {
+      document.getElementById('notification-unblock-dialog')?.close?.();
+      toast('Background notification alerts enabled.');
+    } else if (status === 'denied') {
+      toast('Still blocked. Allow notifications for myIPON in device or browser settings, then tap Recheck.', 'error');
+    } else {
+      document.getElementById('notification-unblock-dialog')?.close?.();
     }
     return status;
   }
@@ -2394,16 +2906,82 @@
   function bindDeviceNotificationControls() {
     if (!document.body.dataset.boundDeviceNotifDelegation) {
       document.body.dataset.boundDeviceNotifDelegation = 'true';
+      const resyncOnReturn = async () => {
+        if (document.visibilityState === 'hidden') return;
+        const wasNotGranted = Boolean(document.querySelector(
+          '[data-action-mode="unblock-help"],[data-action-mode="open-settings"],[data-device-notif-row] [data-device-notif-btn]:not([data-action-mode]):not([disabled])'
+        ));
+        const status = await getDeviceNotificationPermission().catch(() => 'unsupported');
+        if (wasNotGranted && status === 'granted') {
+          await requestDeviceNotificationPermission({ userInitiated: false }).catch(() => { });
+          document.getElementById('notification-unblock-dialog')?.close?.();
+          toast('Background notification alerts enabled.');
+        } else {
+          await syncDevicePermissionUI().catch(() => { });
+        }
+      };
+      document.addEventListener('visibilitychange', resyncOnReturn);
+      window.addEventListener('focus', resyncOnReturn);
       document.body.addEventListener('click', async (event) => {
+        const recheckBtn = event.target.closest('[data-device-recheck-btn]');
+        if (recheckBtn) {
+          recheckBtn.disabled = true;
+          try { await recheckDeviceNotificationPermission(); }
+          finally { recheckBtn.disabled = false; }
+          return;
+        }
+        const testBtn = event.target.closest('[data-device-test-btn]');
+        if (testBtn) {
+          testBtn.disabled = true;
+          try {
+            const result = await sendBackgroundTestNotification();
+            if (isInstalledAppUser()) {
+              toast(result?.native_ping_sent
+                ? 'Test alert sent to your Android notification drawer.'
+                : 'Test alert requested. Check your notification drawer.');
+            } else if (result?.web_sent > 0) {
+              toast('Background push test sent. Alerts now work even when myIPON is closed.');
+            } else {
+              toast('Background push registered. Retry test if the banner did not appear.', 'error');
+            }
+          } catch (error) {
+            toast(friendlyError(error), 'error');
+          } finally {
+            testBtn.disabled = false;
+          }
+          return;
+        }
         const button = event.target.closest('[data-device-notif-btn]');
         if (!button) return;
         if (isInstalledAppUser() && !hasNativeNotificationBridge()) {
           window.open(APK_LATEST_DOWNLOAD_URL, '_blank', 'noopener');
           return;
         }
+        if (button.dataset.actionMode === 'open-settings') {
+          const outcome = await getBackgroundNotificationsPlugin()?.openNotificationSettings?.().catch?.(() => null);
+          if (!outcome?.launched) openNotificationUnblockGuide();
+          return;
+        }
+        if (button.dataset.actionMode === 'unblock-help') {
+          openNotificationUnblockGuide();
+          return;
+        }
+        if (button.dataset.actionMode === 'battery') {
+          await getBackgroundNotificationsPlugin()?.requestIgnoreBatteryOptimizations?.().catch?.(() => { });
+          setTimeout(() => { syncDevicePermissionUI().catch(() => { }); }, 800);
+          return;
+        }
+        if (button.dataset.actionMode === 'sync-push') {
+          button.disabled = true;
+          const ok = await syncWebPushSubscription({ force: true });
+          await syncDevicePermissionUI();
+          if (ok) toast('Background push notifications enabled for closed tabs.');
+          else toast('Could not register background push on this browser.', 'error');
+          return;
+        }
         button.disabled = true;
         const result = await requestDeviceNotificationPermission({ userInitiated: true });
-        if (result === 'granted') toast('Phone notification alerts enabled.');
+        if (result === 'granted') toast('Background notification alerts enabled.');
         else if (result === 'denied') toast('Notifications are blocked in your device or browser settings.', 'error');
       });
     }
@@ -2450,6 +3028,11 @@
     }
   }
 
+  function notifShownKey(item) {
+    if (!item || item.id == null) return '';
+    return item.dedupe_key ? `${item.id}:${item.created_at || item.message || ''}` : String(item.id);
+  }
+
   function markDeviceNotificationShown(userId, id) {
     const key = String(id);
     const list = readShownNotificationIds(userId).filter((item) => item !== key);
@@ -2475,7 +3058,11 @@
       if (!feedToken) return;
       const shownIds = new Set(readShownNotificationIds(profile.id));
       rows.forEach((item) => {
-        if (item?.id != null) shownIds.add(String(item.id));
+        if (item?.id != null) {
+          shownIds.add(String(item.id));
+          const key = notifShownKey(item);
+          if (key) shownIds.add(key);
+        }
       });
       await bgPlugin.configure({
         supabaseUrl: config.supabaseUrl,
@@ -2492,17 +3079,21 @@
     await rpc('set_notification_preferences', { p_enabled: Boolean(enabled) });
     if (currentProfile) currentProfile.notifications_enabled = Boolean(enabled);
     lastBgPollSyncAt = 0;
+    lastWebPushSyncAt = 0;
     if (enabled) {
       await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+      await syncWebPushSubscription({ force: true }).catch(() => { });
     } else {
       await rpc('revoke_notification_feed_token').catch(() => { });
       await getBackgroundNotificationsPlugin()?.clear?.().catch?.(() => { });
+      await removeWebPushSubscription().catch(() => { });
     }
+    await syncDevicePermissionUI().catch(() => { });
   }
 
   async function dispatchDeviceNotification(item, userId) {
     if (!item || item.read_at || currentProfile?.notifications_enabled === false) return;
-    const notifKey = String(item.id);
+    const notifKey = notifShownKey(item) || String(item.id);
     const trayKey = item.dedupe_key ? String(item.dedupe_key) : notifKey;
     if (readShownNotificationIds(userId).includes(notifKey)) return;
     const permission = await getDeviceNotificationPermission();
@@ -2537,6 +3128,8 @@
             icon: '/assets/icon-192.png',
             badge: '/assets/icon-192.png',
             tag: `myipon-${trayKey}`,
+            renotify: Boolean(item.dedupe_key),
+            vibrate: [180, 70, 180],
             data: { url: target }
           });
           return;
@@ -2636,11 +3229,16 @@
         try { localStorage.setItem(lastSeenKey, String(lastSeenMs)); } catch { /* ignore */ }
       }
       syncBackgroundNotificationPolling(profile, rows).catch(() => { });
+      if (!isApp && profile.notifications_enabled !== false && 'Notification' in window && Notification.permission === 'granted') {
+        syncWebPushSubscription().then((synced) => {
+          if (synced) syncDevicePermissionUI().catch(() => { });
+        }).catch(() => { });
+      }
 
       const safeNotificationTarget = (link) => {
         const raw = String(link || '').trim();
         if (!raw) return '';
-        if (/^(?:[a-zA-Z0-9_-]+\.html(?:#[a-zA-Z0-9_-]+)?|#[a-zA-Z0-9_-]+)$/.test(raw)) return raw;
+        if (/^(?:[a-zA-Z0-9_-]+\.html(?:\?[a-zA-Z0-9_=&:.-]+)?(?:#[a-zA-Z0-9_-]+)?|#[a-zA-Z0-9_-]+)$/.test(raw)) return raw;
         try {
           const url = new URL(raw, location.href);
           if (url.protocol === 'https:' || url.protocol === 'http:') return url.href;
@@ -2649,9 +3247,9 @@
       };
 
       if (isApp) {
-        const latestVersion = localStorage.getItem('myipon_latest_remote_version') || window.MYIPON_APP_VERSION?.version || '1.0.19';
+        const latestVersion = localStorage.getItem('myipon_latest_remote_version') || window.MYIPON_APP_VERSION?.version || '1.0.20';
         const installedNativeBuild = getInstalledNativeBuild();
-        const remoteNativeBuild = Number(localStorage.getItem('myipon_latest_native_build') || window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 19);
+        const remoteNativeBuild = Number(localStorage.getItem('myipon_latest_native_build') || window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 20);
         const hasPendingUpdate = remoteNativeBuild > installedNativeBuild;
 
         if (hasPendingUpdate) {
@@ -2735,7 +3333,7 @@
       if (target) event.preventDefault();
       if (item.classList.contains('is-unread')) {
         if (item.dataset.notificationId === 'system-app-release-notice') {
-          const remoteBuild = localStorage.getItem('myipon_latest_native_build') || String(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 19);
+          const remoteBuild = localStorage.getItem('myipon_latest_native_build') || String(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 20);
           localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
           item.classList.remove('is-unread');
           if (!target) await load();
@@ -2756,7 +3354,7 @@
       }
     };
     document.getElementById('mark-all-notifications').onclick = async () => {
-      const remoteBuild = localStorage.getItem('myipon_latest_native_build') || String(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 19);
+      const remoteBuild = localStorage.getItem('myipon_latest_native_build') || String(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 20);
       localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
       try { await rpc('mark_all_notifications_read'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
     };
@@ -2890,7 +3488,7 @@
       }
 
       const { data: profile, error } = await withTimeout(client.from('profiles')
-        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required')
         .eq('id', session.user.id)
         .single());
       if (error) throw error;
@@ -2932,7 +3530,7 @@
       mountShell(profile.role);
       document.querySelector('.app-brand')?.setAttribute('href', homeForRole(profile.role));
       const sidebarUser = document.getElementById('sidebar-user');
-      if (sidebarUser) sidebarUser.innerHTML = `<strong>${escapeHtml(profile.full_name)}</strong><small>${escapeHtml(profile.role)}</small>`;
+      if (sidebarUser) sidebarUser.innerHTML = `<strong>${escapeHtml(profile.full_name)}</strong><small>${escapeHtml(profile.role === 'SUPER_ADMIN' ? 'Owner' : 'My account')}</small>`;
       syncProfileAvatars(profile);
       document.querySelectorAll('[data-role]').forEach((element) => {
         const roles = element.dataset.role.split(',');
@@ -3004,7 +3602,7 @@
         const { data: { session } } = await client.auth.getSession();
         if (loginPage) {
           if (session?.user?.id) {
-            const { data: profile } = await client.from('profiles').select('role,status,first_name,last_name,contact_number').eq('id', session.user.id).maybeSingle();
+            const { data: profile } = await client.from('profiles').select('role,status,first_name,middle_name,last_name,contact_number,name_setup_required').eq('id', session.user.id).maybeSingle();
             if (profile?.status === 'ACTIVE') redirectTo(accountSetupUrl(profile, session.user) || homeForRole(profile.role));
           }
           return;
@@ -3049,6 +3647,7 @@
     try {
       const client = getClient();
       if (client) {
+        await withTimeout(removeWebPushSubscription()).catch(() => { });
         await withTimeout(rpc('revoke_notification_feed_token')).catch(() => { });
         await getBackgroundNotificationsPlugin()?.clear?.().catch?.(() => { });
         await withTimeout(client.auth.signOut({ scope: 'local' }));
@@ -3234,12 +3833,18 @@
     if (showDiscussAction && entry.id && entry.type) {
       const discussBtn = summaryBox.querySelector('#record-review-discuss-btn');
       if (discussBtn) {
+        discussBtn.dataset.recordId = entry.id;
         discussBtn.addEventListener('click', () => openRecordDiscussion(entry.type, entry.id));
         getRecordCommentCounts(entry.type, [entry.id]).then((counts) => {
-          const n = counts.get(entry.id) || 0;
-          if (n > 0) {
+          const info = counts.get(entry.id);
+          const unread = typeof info === 'object' ? Number(info?.unread || 0) : Number(info || 0);
+          const total = typeof info === 'object' ? Number(info?.total || 0) : unread;
+          if (unread > 0) {
             discussBtn.classList.add('has-comments');
-            discussBtn.innerHTML = `Discussion <span class="comment-count-pill">${n}</span>`;
+            discussBtn.innerHTML = `Discussion <span class="comment-count-pill">${unread}</span>`;
+          } else if (total > 0) {
+            discussBtn.classList.remove('has-comments');
+            discussBtn.textContent = 'Discussion';
           }
         }).catch(() => {});
       }
@@ -3936,12 +4541,7 @@
       }
 
       reactionsList.innerHTML = filtered.map((entry) => {
-        const role = entry.role || 'MEMBER';
-        const isOwner = role === 'SUPER_ADMIN';
-        const isAdmin = role === 'ADMIN';
-        const isTreasurer = role === 'TREASURER';
-        const roleClass = isOwner ? 'is-owner' : isAdmin ? 'is-admin' : isTreasurer ? 'is-treasurer' : 'is-member';
-        const roleLabel = isOwner ? 'Owner' : isAdmin ? 'Admin' : isTreasurer ? 'Treasurer' : 'Member';
+        const isOwner = entry.role === 'SUPER_ADMIN';
         const name = entry.full_name || 'Member';
         const avatarHtml = avatarMarkup(entry.avatar_url, name, 'reaction-user-avatar');
 
@@ -3953,7 +4553,7 @@
             </div>
             <div class="reaction-user-info">
               <strong class="reaction-user-name">${escapeHtml(name)}</strong>
-              <span class="reaction-user-role-badge ${roleClass}">${roleLabel}</span>
+              ${isOwner ? '<span class="reaction-user-role-badge is-owner">Owner</span>' : ''}
             </div>
           </div>`;
       }).join('');
@@ -5006,8 +5606,10 @@
     });
   }
 
-  function openImageViewer(src, title = 'Attachment', subtitle = '') {
-    if (!src || !String(src).startsWith('data:image/')) return;
+  function openImageViewer(src, title = 'Attachment', subtitle = '', downloadName = '') {
+    const raw = String(src || '').trim();
+    const isSafeUrl = raw.startsWith('data:image/') || raw.startsWith('blob:') || /^https?:\/\//i.test(raw);
+    if (!raw || !isSafeUrl) return;
     let dialog = document.getElementById('ipon-image-viewer');
     if (!dialog) {
       dialog = document.createElement('dialog');
@@ -5017,7 +5619,7 @@
         <header class="image-viewer-header">
           <div><h2 id="ipon-iv-title"></h2><p id="ipon-iv-subtitle"></p></div>
           <div class="image-viewer-actions">
-            <a class="button button-secondary button-sm" id="ipon-iv-download" download="myipon-attachment.jpg">Download</a>
+            <a class="button button-secondary button-sm" id="ipon-iv-download" download="myipon-attachment.jpg" target="_blank" rel="noopener">Download</a>
             <button class="dialog-close" id="ipon-iv-close" type="button" aria-label="Close image viewer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </div>
         </header>
@@ -5033,13 +5635,14 @@
     const titleEl = dialog.querySelector('#ipon-iv-title');
     const subEl = dialog.querySelector('#ipon-iv-subtitle');
     const dl = dialog.querySelector('#ipon-iv-download');
-    img.src = src;
+    img.src = raw;
     img.alt = title;
     titleEl.textContent = title;
     subEl.textContent = subtitle || '';
     subEl.hidden = !subtitle;
-    dl.href = src;
-    dl.download = `${String(title || 'attachment').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`;
+    dl.href = raw;
+    const cleanDl = String(downloadName || '').trim();
+    dl.download = cleanDl || `${String(title || 'attachment').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`;
     if (!dialog.open) dialog.showModal();
   }
 
@@ -5786,7 +6389,12 @@
     try {
       const rows = await rpc('get_record_comment_counts', { p_record_type: recordType, p_record_ids: ids });
       (Array.isArray(rows) ? rows : []).forEach((row) => {
-        if (row?.record_id) map.set(row.record_id, Number(row.comment_count || 0));
+        if (row?.record_id) {
+          map.set(row.record_id, {
+            total: Number(row.comment_count || 0),
+            unread: Number(row.unread_count ?? row.comment_count ?? 0)
+          });
+        }
       });
     } catch { /* fallback quietly to zero counts */ }
     return map;
@@ -5794,10 +6402,68 @@
 
   function recordDiscussionButtonHtml(row, count = 0) {
     if (!row?.id) return '';
-    const num = Number(count || 0);
-    const showDefault = ['PENDING', 'REJECTED'].includes(String(row.approval_status || '').toUpperCase());
-    if (!showDefault && num <= 0) return '';
-    return `<button class="icon-action record-discuss-btn${num > 0 ? ' has-comments' : ''}" type="button" data-action="discuss" data-id="${escapeHtml(row.id)}">${num > 0 ? `Discuss <span class="comment-count-pill">${num}</span>` : 'Discuss'}</button>`;
+    const info = count && typeof count === 'object' ? count : { total: Number(count || 0), unread: Number(count || 0) };
+    const unread = Number(info.unread || 0);
+    return `<button class="icon-action record-discuss-btn${unread > 0 ? ' has-comments' : ''}" type="button" data-action="discuss" data-id="${escapeHtml(row.id)}">${unread > 0 ? `Discuss <span class="comment-count-pill">${unread}</span>` : 'Discuss'}</button>`;
+  }
+
+  function clearDiscussionUnreadBadge(recordId) {
+    if (!recordId) return;
+    const escapedId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+      ? CSS.escape(recordId)
+      : String(recordId).replace(/"/g, '\\"');
+    document.querySelectorAll?.(`[data-action="discuss"][data-id="${escapedId}"]`)?.forEach((btn) => {
+      btn.classList?.remove('has-comments');
+      btn.textContent = 'Discuss';
+    });
+    const reviewBtn = document.getElementById('record-review-discuss-btn');
+    if (reviewBtn && reviewBtn.dataset?.recordId === recordId) {
+      reviewBtn.classList?.remove('has-comments');
+      reviewBtn.textContent = 'Discussion';
+    }
+  }
+
+  const BLOCKED_DISCUSSION_EXT_RE = /\.(exe|msi|bat|cmd|com|pif|scr|vbs|vbe|js|mjs|cjs|jse|wsf|wsh|ps1|psm1|sh|bash|html|htm|xhtml|svg|php|asp|aspx|jsp|jar|dll|sys|drv|reg|hta|cpl)$/i;
+  const BLOCKED_DISCUSSION_MIMES = new Set(['text/html', 'application/javascript', 'text/javascript', 'image/svg+xml', 'application/x-msdownload', 'application/x-msdos-program']);
+  const MAX_DISCUSSION_FILES = 5;
+  const MAX_DISCUSSION_FILE_BYTES = 50 * 1024 * 1024;
+
+  function classifyDiscussionFile(file) {
+    const name = String(file?.name || 'attachment').trim() || 'attachment';
+    const type = String(file?.type || '').trim().toLowerCase();
+    if (BLOCKED_DISCUSSION_EXT_RE.test(name) || BLOCKED_DISCUSSION_MIMES.has(type)) {
+      throw new Error(`"${name}" cannot be attached for security reasons.`);
+    }
+    if (Number(file?.size || 0) > MAX_DISCUSSION_FILE_BYTES) {
+      throw new Error(`"${name}" exceeds the 50 MB size limit.`);
+    }
+    const isVideo = type.startsWith('video/') || VIDEO_FILE_RE.test(name);
+    const isImage = type.startsWith('image/') || PICTURE_FILE_RE.test(name);
+    return {
+      name: name.slice(0, 120),
+      type: type.slice(0, 120),
+      size: Math.max(0, Math.round(Number(file?.size || 0))),
+      kind: isVideo ? 'video' : (isImage ? 'image' : 'file')
+    };
+  }
+
+  function formatAttachmentBytes(bytes) {
+    const size = Number(bytes || 0);
+    if (!Number.isFinite(size) || size <= 0) return '';
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10 * 1024 ? 1 : 0)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function discussionFileBadge(name, mimeType) {
+    const match = /\.([a-z0-9]{1,6})$/i.exec(String(name || '').trim());
+    if (match) return match[1].toUpperCase();
+    const mime = String(mimeType || '').toLowerCase();
+    if (mime.includes('pdf')) return 'PDF';
+    if (mime.startsWith('audio/')) return 'AUDIO';
+    if (mime.startsWith('video/')) return 'VIDEO';
+    if (mime.startsWith('image/')) return 'IMG';
+    return 'FILE';
   }
 
   let activeThreadCleanup = null;
@@ -5810,38 +6476,142 @@
     const messagesEl = document.getElementById('record-thread-messages');
     const form = document.getElementById('record-thread-form');
     const input = document.getElementById('record-thread-input');
+    const queuedEl = document.getElementById('record-thread-queued');
+    const fileInput = document.getElementById('record-thread-files');
+    const attachBtn = document.getElementById('record-thread-attach-btn');
     const readonlyEl = document.getElementById('record-thread-readonly');
     const titleEl = document.getElementById('record-thread-title');
     const subtitleEl = document.getElementById('record-thread-subtitle');
 
     const typeMeta = recordReviewMeta.types[recordType] || { label: 'Record' };
     if (titleEl) titleEl.textContent = `${typeMeta.label} discussion`;
-    if (subtitleEl) subtitleEl.textContent = 'Questions, receipt clarifications, and replies stay attached to this record.';
+    if (subtitleEl) subtitleEl.textContent = 'Questions, photos, videos, files, and replies stay attached to this record.';
     if (summaryBox) { summaryBox.innerHTML = ''; summaryBox.hidden = true; }
     if (messagesEl) messagesEl.innerHTML = '<p class="empty-state">Loading discussion…</p>';
-    if (form) { form.hidden = true; form.reset(); }
+    if (form) { form.hidden = true; form.reset(); form.classList?.remove('is-dragover'); }
+    if (queuedEl) { queuedEl.innerHTML = ''; queuedEl.hidden = true; }
+    if (fileInput) fileInput.value = '';
     if (readonlyEl) readonlyEl.hidden = true;
 
+    let isCancelled = false;
+    let markedReadOnOpen = false;
+    let didNotifyUpdate = false;
     let currentComments = [];
+    const queuedFiles = [];
+    const previewUrlsToRevoke = [];
+    const signedUrlCache = new Map();
+
+    function renderQueuedFiles() {
+      if (!queuedEl) return;
+      if (!queuedFiles.length) {
+        queuedEl.innerHTML = '';
+        queuedEl.hidden = true;
+        return;
+      }
+      queuedEl.hidden = false;
+      queuedEl.innerHTML = queuedFiles.map((entry, idx) => {
+        const sizeLabel = formatAttachmentBytes(entry.size);
+        const badge = discussionFileBadge(entry.name, entry.type);
+        const thumbHtml = entry.kind === 'image' && entry.previewUrl
+          ? `<img class="record-thread-queued-thumb" src="${escapeHtml(entry.previewUrl)}" alt="" onerror="this.hidden=true">`
+          : entry.kind === 'video'
+            ? '<span class="record-thread-queued-icon" aria-hidden="true">VIDEO</span>'
+            : `<span class="record-thread-queued-icon" aria-hidden="true">${escapeHtml(badge)}</span>`;
+        return `<div class="record-thread-queued-item">
+          ${thumbHtml}
+          <div class="record-thread-queued-meta">
+            <strong title="${escapeHtml(entry.name)}">${escapeHtml(entry.name)}</strong>
+            ${sizeLabel ? `<small>${escapeHtml(sizeLabel)}</small>` : ''}
+          </div>
+          <button type="button" class="record-thread-queued-remove" data-remove-thread-file="${idx}" aria-label="Remove ${escapeHtml(entry.name)}">×</button>
+        </div>`;
+      }).join('');
+    }
+
+    function queuePickedFiles(fileList) {
+      const incoming = [...(fileList || [])];
+      if (!incoming.length) return;
+      let addedCount = 0;
+      for (const file of incoming) {
+        if (queuedFiles.length >= MAX_DISCUSSION_FILES) {
+          toast(`You can attach up to ${MAX_DISCUSSION_FILES} files per reply.`, 'error');
+          break;
+        }
+        try {
+          const meta = classifyDiscussionFile(file);
+          const duplicate = queuedFiles.some((item) => item.name === meta.name && item.size === meta.size);
+          if (duplicate) continue;
+          const previewUrl = typeof URL?.createObjectURL === 'function' ? URL.createObjectURL(file) : '';
+          if (previewUrl) previewUrlsToRevoke.push(previewUrl);
+          queuedFiles.push({ file, previewUrl, ...meta });
+          addedCount += 1;
+        } catch (err) {
+          toast(friendlyError(err), 'error');
+        }
+      }
+      if (fileInput) fileInput.value = '';
+      if (addedCount > 0) renderQueuedFiles();
+    }
+
+    function renderAttachmentMarkup(att, authorName, whenLabel) {
+      const safeName = escapeHtml(att?.name || 'Attachment');
+      const safeUrl = att?.path ? (signedUrlCache.get(att.path) || '') : '';
+      const sizeLabel = formatAttachmentBytes(att?.size);
+      const badge = escapeHtml(discussionFileBadge(att?.name, att?.type));
+      if (!safeUrl) {
+        return `<div class="record-thread-att-file is-loading">
+          <span class="record-thread-att-badge">${badge}</span>
+          <div class="record-thread-att-file-meta"><strong>${safeName}</strong><small>${sizeLabel ? `${escapeHtml(sizeLabel)} · ` : ''}Loading…</small></div>
+        </div>`;
+      }
+      if (att.kind === 'image') {
+        const sub = `${authorName || 'Member'}${whenLabel ? ` · ${whenLabel}` : ''}${sizeLabel ? ` · ${sizeLabel}` : ''}`;
+        return `<figure class="record-thread-att-photo">
+          <button type="button" class="record-thread-att-photo-btn" data-thread-image-url="${escapeHtml(safeUrl)}" data-thread-image-title="${safeName}" data-thread-image-subtitle="${escapeHtml(sub)}" aria-label="View ${safeName} full size">
+            <img src="${escapeHtml(safeUrl)}" alt="${safeName}" loading="lazy" onerror="this.closest('.record-thread-att-photo').classList.add('is-fallback');this.hidden=true;">
+            <span class="record-thread-att-file is-inline-fallback">
+              <span class="record-thread-att-badge">${badge}</span>
+              <span class="record-thread-att-file-meta"><strong>${safeName}</strong><small>${escapeHtml(sizeLabel || 'Image file')} · Tap Download</small></span>
+            </span>
+          </button>
+          <figcaption><span>${safeName}</span><a href="${escapeHtml(safeUrl)}" download="${safeName}" target="_blank" rel="noopener">Download</a></figcaption>
+        </figure>`;
+      }
+      if (att.kind === 'video') {
+        return `<figure class="record-thread-att-video">
+          <video controls playsinline preload="metadata" src="${escapeHtml(safeUrl)}"></video>
+          <figcaption><span>${safeName}${sizeLabel ? ` · ${escapeHtml(sizeLabel)}` : ''}</span><a href="${escapeHtml(safeUrl)}" download="${safeName}" target="_blank" rel="noopener">Open</a></figcaption>
+        </figure>`;
+      }
+      return `<a class="record-thread-att-file" href="${escapeHtml(safeUrl)}" download="${safeName}" target="_blank" rel="noopener">
+        <span class="record-thread-att-badge">${badge}</span>
+        <span class="record-thread-att-file-meta"><strong>${safeName}</strong><small>${escapeHtml(sizeLabel || 'File attachment')} · Open / Download</small></span>
+      </a>`;
+    }
+
     function renderMessages() {
       if (!messagesEl) return;
       if (!currentComments.length) {
-        messagesEl.innerHTML = '<div class="record-thread-empty"><strong>No replies yet</strong><small>Start a thread here to ask about a blurry receipt, clarify a reference number, or follow up.</small></div>';
+        messagesEl.innerHTML = '<div class="record-thread-empty"><strong>No replies yet</strong><small>Start a thread here to ask about a blurry receipt, share original photos, videos, or documents, or clarify a reference number.</small></div>';
         return;
       }
       messagesEl.innerHTML = currentComments.map((c) => {
         const own = Boolean(c.is_own || (currentProfile?.id && c.author_id === currentProfile.id));
+        const authorName = c.author_name || 'Member';
         const roleLabel = String(c.author_role || 'MEMBER').toLowerCase().replace(/^./, (ch) => ch.toUpperCase());
         const when = dateLabel(c.created_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const bodyText = String(c.body || '').trim();
+        const atts = Array.isArray(c.attachments) ? c.attachments : [];
         return `<article class="record-thread-msg${own ? ' is-own' : ''}">
-          <div class="record-thread-msg-avatar">${avatarMarkup(c.author_avatar_url || '', c.author_name || 'Member', 'avatar-sm')}</div>
+          <div class="record-thread-msg-avatar">${avatarMarkup(c.author_avatar_url || '', authorName, 'avatar-sm')}</div>
           <div class="record-thread-msg-bubble">
             <header class="record-thread-msg-meta">
-              <strong>${escapeHtml(own ? `${c.author_name || 'You'} (You)` : (c.author_name || 'Member'))}</strong>
+              <strong>${escapeHtml(own ? `${c.author_name || 'You'} (You)` : authorName)}</strong>
               <span class="record-thread-role role-${escapeHtml(String(c.author_role || 'MEMBER').toLowerCase())}">${escapeHtml(roleLabel)}</span>
               <time datetime="${escapeHtml(c.created_at || '')}">${escapeHtml(when)}</time>
             </header>
-            <p class="record-thread-msg-body">${escapeHtml(c.body || '')}</p>
+            ${bodyText ? `<p class="record-thread-msg-body">${escapeHtml(bodyText)}</p>` : ''}
+            ${atts.length ? `<div class="record-thread-msg-attachments">${atts.map((att) => renderAttachmentMarkup(att, authorName, when)).join('')}</div>` : ''}
           </div>
         </article>`;
       }).join('');
@@ -5849,13 +6619,36 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    async function resolveAttachmentUrls() {
+      const missing = currentComments.some((c) =>
+        Array.isArray(c.attachments) && c.attachments.some((att) => att?.path && !signedUrlCache.has(att.path))
+      );
+      if (!missing) return;
+      try {
+        const { urls = {} } = await invokeAccountFunction({
+          action: 'record-comment-view-urls',
+          record_type: recordType,
+          record_id: recordId
+        });
+        if (isCancelled) return;
+        Object.entries(urls).forEach(([path, url]) => {
+          if (path && url) signedUrlCache.set(path, url);
+        });
+        renderMessages();
+      } catch { /* leave loading state unobtrusive if transient */ }
+    }
+
     async function loadThread() {
       const payload = await rpc('get_record_comments', { p_record_type: recordType, p_record_id: recordId });
+      if (isCancelled) return;
       if (payload?.record) {
         renderRecordSummaryInto(summaryBox, payload.record, { showDiscussAction: false });
       }
       currentComments = Array.isArray(payload?.comments) ? payload.comments : [];
       renderMessages();
+      clearDiscussionUnreadBadge(recordId);
+      if (currentComments.length) markedReadOnOpen = true;
+      resolveAttachmentUrls().catch(() => {});
       const canReply = Boolean(payload?.can_reply);
       if (form) form.hidden = !canReply;
       if (readonlyEl) readonlyEl.hidden = canReply;
@@ -5871,7 +6664,12 @@
           table: 'record_comments',
           filter: `record_id=eq.${recordId}`
         }, () => {
-          loadThread().then(() => { if (typeof onUpdated === 'function') onUpdated(); }).catch(() => {});
+          loadThread().then(() => {
+            if (typeof onUpdated === 'function') {
+              didNotifyUpdate = true;
+              onUpdated();
+            }
+          }).catch(() => {});
         })
         .subscribe()
       : null;
@@ -5881,6 +6679,60 @@
     closeBtnList.forEach((btn) => btn.addEventListener('click', onCloseClick));
     const onBackdropClick = (event) => { if (event.target === dialog) dialog.close(); };
     dialog.addEventListener('click', onBackdropClick);
+
+    const onMessagesClick = (event) => {
+      const photoBtn = event.target.closest?.('[data-thread-image-url]');
+      if (!photoBtn) return;
+      const src = photoBtn.getAttribute('data-thread-image-url') || '';
+      const img = photoBtn.querySelector?.('img');
+      if (img?.hidden) return;
+      const title = photoBtn.getAttribute('data-thread-image-title') || 'Attachment';
+      const subtitle = photoBtn.getAttribute('data-thread-image-subtitle') || '';
+      openImageViewer(src, title, subtitle, title);
+    };
+    messagesEl?.addEventListener('click', onMessagesClick);
+
+    const onAttachClick = () => fileInput?.click();
+    attachBtn?.addEventListener('click', onAttachClick);
+    const onFileChange = () => queuePickedFiles(fileInput?.files);
+    fileInput?.addEventListener('change', onFileChange);
+
+    const onQueuedClick = (event) => {
+      const btn = event.target.closest?.('[data-remove-thread-file]');
+      if (!btn) return;
+      const idx = Number(btn.getAttribute('data-remove-thread-file'));
+      if (Number.isInteger(idx) && idx >= 0 && idx < queuedFiles.length) {
+        queuedFiles.splice(idx, 1);
+        renderQueuedFiles();
+      }
+    };
+    queuedEl?.addEventListener('click', onQueuedClick);
+
+    const onPaste = (event) => {
+      const files = [...(event.clipboardData?.files || [])];
+      if (files.length) {
+        event.preventDefault();
+        queuePickedFiles(files);
+      }
+    };
+    input?.addEventListener('paste', onPaste);
+
+    const onDragOver = (event) => {
+      if (!event.dataTransfer?.types?.includes?.('Files')) return;
+      event.preventDefault();
+      form?.classList?.add('is-dragover');
+    };
+    const onDragLeave = () => form?.classList?.remove('is-dragover');
+    const onDrop = (event) => {
+      form?.classList?.remove('is-dragover');
+      if (event.dataTransfer?.files?.length) {
+        event.preventDefault();
+        queuePickedFiles(event.dataTransfer.files);
+      }
+    };
+    form?.addEventListener('dragover', onDragOver);
+    form?.addEventListener('dragleave', onDragLeave);
+    form?.addEventListener('drop', onDrop);
 
     const onKeyDown = (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && form && !form.hidden) {
@@ -5893,24 +6745,57 @@
     const onSubmit = async (event) => {
       event.preventDefault();
       const body = String(input?.value || '').trim();
-      if (!body) { input?.focus(); return; }
+      if (!body && !queuedFiles.length) { input?.focus(); return; }
       const submitBtn = form.querySelector('[type="submit"]');
-      setBusy(submitBtn, true, 'Sending…');
+      const pendingUploads = [...queuedFiles];
+      const uploadedPaths = [];
+      setBusy(submitBtn, true, pendingUploads.length ? 'Uploading…' : 'Sending…');
       try {
+        const attachments = [];
+        if (pendingUploads.length) {
+          const { uploads = [] } = await invokeAccountFunction({
+            action: 'record-comment-upload-urls',
+            record_type: recordType,
+            record_id: recordId,
+            files: pendingUploads.map((entry) => ({ name: entry.name, kind: entry.kind, type: entry.type, size: entry.size }))
+          });
+          for (let i = 0; i < pendingUploads.length; i += 1) {
+            const entry = pendingUploads[i];
+            const upload = uploads[i];
+            if (!upload?.path || !upload?.token) throw new Error('Upload authorization missing.');
+            const { error: uploadError } = await client.storage
+              .from('record-comments')
+              .uploadToSignedUrl(upload.path, upload.token, entry.file, { contentType: entry.file.type || undefined });
+            if (uploadError) throw uploadError;
+            uploadedPaths.push(upload.path);
+            if (entry.previewUrl) signedUrlCache.set(upload.path, entry.previewUrl);
+            attachments.push({ path: upload.path, name: upload.name, kind: entry.kind, type: upload.type || entry.file.type || '', size: entry.size });
+          }
+        }
         const added = await rpc('add_record_comment', {
           p_record_type: recordType,
           p_record_id: recordId,
-          p_body: body
+          p_body: body,
+          p_attachments: attachments
         });
         if (input) input.value = '';
+        queuedFiles.length = 0;
+        renderQueuedFiles();
         if (added && !currentComments.some((c) => c.id === added.id)) {
           currentComments.push(added);
           renderMessages();
         } else {
           await loadThread();
         }
-        if (typeof onUpdated === 'function') onUpdated(currentComments.length);
+        if (attachments.length) resolveAttachmentUrls().catch(() => {});
+        if (typeof onUpdated === 'function') {
+          didNotifyUpdate = true;
+          onUpdated(currentComments.length);
+        }
       } catch (error) {
+        if (uploadedPaths.length) {
+          invokeAccountFunction({ action: 'record-comment-cleanup-media', paths: uploadedPaths }).catch(() => {});
+        }
         toast(friendlyError(error), 'error');
       } finally {
         setBusy(submitBtn, false);
@@ -5920,12 +6805,27 @@
     if (form) form.onsubmit = onSubmit;
 
     const cleanup = () => {
+      isCancelled = true;
       closeBtnList.forEach((btn) => btn.removeEventListener('click', onCloseClick));
       dialog.removeEventListener('click', onBackdropClick);
+      messagesEl?.removeEventListener('click', onMessagesClick);
+      attachBtn?.removeEventListener('click', onAttachClick);
+      fileInput?.removeEventListener('change', onFileChange);
+      queuedEl?.removeEventListener('click', onQueuedClick);
+      input?.removeEventListener('paste', onPaste);
+      form?.removeEventListener('dragover', onDragOver);
+      form?.removeEventListener('dragleave', onDragLeave);
+      form?.removeEventListener('drop', onDrop);
       input?.removeEventListener('keydown', onKeyDown);
       if (form) form.onsubmit = null;
+      messagesEl?.querySelectorAll?.('video')?.forEach((video) => video.pause?.());
+      previewUrlsToRevoke.forEach((url) => { try { URL.revokeObjectURL(url); } catch {} });
       if (channel && client) client.removeChannel(channel).catch?.(() => {});
       activeThreadCleanup = null;
+      if (markedReadOnOpen && !didNotifyUpdate && typeof onUpdated === 'function') {
+        didNotifyUpdate = true;
+        onUpdated(currentComments.length);
+      }
     };
     activeThreadCleanup = cleanup;
     dialog.addEventListener('close', cleanup, { once: true });
@@ -5934,7 +6834,9 @@
     try {
       await loadThread();
     } catch (error) {
-      if (messagesEl) messagesEl.innerHTML = `<p class="empty-state">${escapeHtml(friendlyError(error))}</p>`;
+      if (!isCancelled && messagesEl) {
+        messagesEl.innerHTML = `<p class="empty-state">${escapeHtml(friendlyError(error))}</p>`;
+      }
     }
   }
 
@@ -6179,6 +7081,79 @@
     }
   }
 
+  function computeContributionExcess({ amount = 0, statusRow = null, fallbackMonthlyAmount = 0 } = {}) {
+    const cleanAmount = Math.round(Number(amount || 0) * 100);
+    if (!(cleanAmount > 0)) return { show: false, excess: 0, remainingDue: 0 };
+    if (statusRow) {
+      const due = Math.round(Math.max(Number(statusRow.outstanding_amount || 0), 0) * 100);
+      const req = Math.round(Math.max(Number(statusRow.required_amount || 0), 0) * 100);
+      if (due > 0) {
+        return cleanAmount > due
+          ? { show: true, excess: (cleanAmount - due) / 100, remainingDue: due / 100 }
+          : { show: false, excess: 0, remainingDue: due / 100 };
+      }
+      if (due === 0 && (req > 0 || Boolean(statusRow.is_exempt))) {
+        return { show: true, excess: cleanAmount / 100, remainingDue: 0 };
+      }
+      return { show: false, excess: 0, remainingDue: 0 };
+    }
+    const pledge = Math.round(Math.max(Number(fallbackMonthlyAmount || 0), 0) * 100);
+    if (pledge > 0 && cleanAmount > pledge) {
+      return { show: true, excess: (cleanAmount - pledge) / 100, remainingDue: pledge / 100 };
+    }
+    return { show: false, excess: 0, remainingDue: pledge / 100 };
+  }
+
+  function bindExcessContributionToggle({ amountInput, checkbox, field = null, getContext, onSync = null } = {}) {
+    const wrapper = field || checkbox?.closest?.('.field');
+    if (!amountInput || !checkbox || !wrapper) return async () => ({ show: false, excess: 0, remainingDue: 0 });
+    wrapper.classList?.add('excess-carryover-field');
+    const labelSpan = checkbox.closest?.('label')?.querySelector?.('span') || checkbox.closest?.('label');
+    let hintEl = wrapper.querySelector?.('.excess-carryover-meta');
+    if (!hintEl && labelSpan?.appendChild) {
+      hintEl = document.createElement('small');
+      hintEl.className = 'excess-carryover-meta';
+      hintEl.hidden = true;
+      labelSpan.appendChild(hintEl);
+    }
+    let syncToken = 0;
+    const sync = async () => {
+      const token = ++syncToken;
+      let ctx = {};
+      try {
+        ctx = typeof getContext === 'function' ? (await getContext()) || {} : {};
+      } catch {
+        ctx = {};
+      }
+      if (token !== syncToken) return { show: false, excess: 0, remainingDue: 0 };
+      const state = computeContributionExcess({
+        amount: amountInput.value,
+        statusRow: ctx.statusRow || null,
+        fallbackMonthlyAmount: ctx.fallbackMonthlyAmount || 0
+      });
+      wrapper.hidden = !state.show;
+      wrapper.classList?.toggle?.('is-visible', state.show);
+      if (!state.show) {
+        checkbox.checked = false;
+        if (hintEl) {
+          hintEl.hidden = true;
+          hintEl.textContent = '';
+        }
+      } else if (hintEl) {
+        hintEl.hidden = false;
+        hintEl.textContent = state.remainingDue > 0
+          ? `${money(state.excess)} excess above ${money(state.remainingDue)} due`
+          : `${money(state.excess)} excess (month already covered)`;
+      }
+      if (typeof onSync === 'function') onSync(state);
+      return state;
+    };
+    amountInput.addEventListener('input', () => { sync().catch(() => {}); });
+    amountInput.addEventListener('change', () => { sync().catch(() => {}); });
+    wrapper.hidden = true;
+    return sync;
+  }
+
   document.addEventListener('click', async (event) => {
     const copyBtn = event.target.closest?.('[data-copy-text]');
     if (!copyBtn) return;
@@ -6200,12 +7175,11 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
     PAYMENT_METHODS, normalizePaymentMethod, guessPaymentMethodFromLabel, paymentMethodMeta, paymentMethodIconHtml, paymentMethodBadge, paymentMethodPickerHtml, mountPaymentMethodPickers, setPaymentMethod, paymentMethodOptionsHtml,
     CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
     payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,
-    getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
-    payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,
+    computeContributionExcess, bindExcessContributionToggle,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, setNotificationPreference,

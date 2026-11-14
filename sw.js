@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v7';
+const CACHE_NAME = 'ipon-shell-v8';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
   'assets/favicon.svg',
@@ -43,6 +43,13 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+function normalizeNotificationPath(rawTarget) {
+  const value = String(rawTarget || '').trim();
+  if (!value) return '/dashboard.html';
+  if (/^https?:\/\//i.test(value) || value.startsWith('/')) return value;
+  return `/${value}`;
+}
+
 self.addEventListener('push', (event) => {
   let payload = {};
   try {
@@ -52,25 +59,47 @@ self.addEventListener('push', (event) => {
     payload = text ? { body: text } : {};
   }
   const title = payload.title || 'myIPON';
+  const body = payload.body || payload.message || 'You have a new notification.';
+  const tag = payload.tag || (payload.dedupe_key ? `myipon-${payload.dedupe_key}` : (payload.id != null ? `myipon-${payload.id}` : `myipon-${Date.now()}`));
+  const targetUrl = normalizeNotificationPath(payload.url || payload.link || '/dashboard.html');
+
   const options = {
-    body: payload.body || payload.message || 'You have a new notification.',
+    body,
     icon: '/assets/icon-192.png',
     badge: '/assets/icon-192.png',
-    tag: payload.tag || `myipon-${Date.now()}`,
-    data: { url: payload.url || payload.link || '/dashboard.html' }
+    tag,
+    renotify: Boolean(payload.renotify ?? (payload.tag || payload.dedupe_key)),
+    vibrate: [180, 70, 180],
+    timestamp: Number(payload.timestamp) || Date.now(),
+    data: { url: targetUrl, id: payload.id ?? null }
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+      try {
+        client.postMessage({
+          type: 'MYIPON_PUSH_SHOWN',
+          id: payload.id ?? null,
+          dedupe_key: payload.dedupe_key ?? null,
+          timestamp: options.timestamp,
+          message: body
+        });
+      } catch { /* ignore */ }
+    }
+    await self.registration.showNotification(title, options);
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const rawTarget = event.notification.data?.url || '/dashboard.html';
+  const rawTarget = normalizeNotificationPath(event.notification.data?.url || '/dashboard.html');
   const targetUrl = new URL(rawTarget, self.location.origin).href;
   event.waitUntil((async () => {
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of clients) {
       if (client.url.startsWith(self.location.origin)) {
-        await client.focus();
+        await client.focus().catch(() => {});
         if ('navigate' in client && client.url !== targetUrl) {
           await client.navigate(targetUrl).catch(() => {});
         }
@@ -81,3 +110,17 @@ self.addEventListener('notificationclick', (event) => {
   })());
 });
 
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil((async () => {
+    try {
+      const options = event.oldSubscription?.options;
+      if (!options?.applicationServerKey) return;
+      const renewed = await self.registration.pushManager.subscribe(options);
+      const subJson = renewed?.toJSON?.() || null;
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of clients) {
+        client.postMessage({ type: 'MYIPON_PUSH_SUBSCRIPTION_CHANGED', subscription: subJson });
+      }
+    } catch { /* ignore */ }
+  })());
+});

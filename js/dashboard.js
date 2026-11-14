@@ -231,6 +231,7 @@
       </div>
     `;
     Ipon.prepareTemporaryPassword(row.querySelector('[name="invite_password"]'));
+    Ipon.prepareInviteNameInput(row.querySelector('[name="invite_name"]'));
     Ipon.preparePesoInputs(row);
     row.querySelector('.invite-row-remove').addEventListener('click', () => {
       if (required && container.querySelectorAll('.invite-row-card').length <= 1) return;
@@ -273,11 +274,18 @@
       const password = passEl.value;
       const monthlyAmount = Number(amountEl.value) > 0 ? Number(amountEl.value) : 100;
       Ipon.setFieldError(emailEl, '');
+      Ipon.setFieldError(nameEl, '');
       Ipon.setFieldError(passEl, '');
       if (allowEmptyRows && !email && !name) continue;
       if (!/^\S+@\S+\.\S+$/.test(email)) {
         Ipon.setFieldError(emailEl, 'Enter a valid email address.');
         emailEl.focus();
+        return null;
+      }
+      const nameIssue = Ipon.fullNameValidationError(name, { required: false, live: false });
+      if (nameIssue) {
+        Ipon.setFieldError(nameEl, nameIssue);
+        nameEl.focus();
         return null;
       }
       const pwIssue = Ipon.passwordIssue(password, [name, email.split('@')[0]]);
@@ -286,10 +294,15 @@
         passEl.focus();
         return null;
       }
-      const parsed = parseFullNameParts(name, email);
+      const normalizedInviteName = Ipon.normalizeNamePart(name);
+      const nameOptional = !normalizedInviteName;
+      const parsed = nameOptional
+        ? { first_name: null, middle_name: null, last_name: null }
+        : parseFullNameParts(normalizedInviteName, email);
       entries.push({
         role: 'MEMBER',
         create_member: true,
+        name_optional: nameOptional,
         ...parsed,
         email,
         password,
@@ -466,8 +479,6 @@
     summaryValues.forEach((node) => { node.textContent = Ipon.money(0); });
     ['dashboard-members', 'dashboard-paid', 'dashboard-unpaid'].forEach((id) => { document.getElementById(id).textContent = '0'; });
     document.getElementById('dashboard-month-collected').textContent = Ipon.money(0);
-    const monthFill = document.getElementById('dashboard-month-progress-fill');
-    if (monthFill) monthFill.style.width = '0%';
     activeGoalsList = [];
     updateDashboardGoalProgress(0);
     renderGoalOptions([]);
@@ -569,11 +580,7 @@
       const progress = (progressResult.data || []).filter((item) => activeIds.has(item.member_id) || Number(item.paid_amount || 0) > 0);
       const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
       const monthCollected = progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0);
-      const monthExpected = (memberResult.data || []).reduce((sum, item) => sum + Math.max(0, Number(item.monthly_contribution_amount || 0)), 0);
-      const monthPct = monthExpected > 0 ? Math.min(100, Math.max(0, (monthCollected / monthExpected) * 100)) : 0;
       document.getElementById('dashboard-members').textContent = memberResult.count ?? (memberResult.data?.length || 0); document.getElementById('dashboard-month-collected').textContent = Ipon.money(monthCollected); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid;
-      const monthFill = document.getElementById('dashboard-month-progress-fill');
-      if (monthFill) monthFill.style.width = `${monthPct}%`;
       renderGoalOptions(goalResult.data || []);
       if (remindUnpaidBtn) remindUnpaidBtn.hidden = !(unpaid > 0 && ['ADMIN', 'TREASURER'].includes(state.profile?.role));
       populateQuickRecordMembers(memberResult.data || []);

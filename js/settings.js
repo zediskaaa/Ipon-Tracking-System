@@ -200,6 +200,7 @@
 
   treasurerForm.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!Ipon.validateNameFields(treasurerForm)) return;
     const values = new FormData(treasurerForm);
     const password = String(values.get('password'));
     const personal = [values.get('first_name'), values.get('middle_name'), values.get('last_name'), values.get('email')];

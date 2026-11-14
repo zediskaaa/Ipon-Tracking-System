@@ -39,7 +39,7 @@
 
   async function load() {
     const [profileResult, activityResult] = await Promise.all([
-      Ipon.client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,member_id,payout_channel,payout_account_number,payout_account_name').eq('id', state.profile.id).single(),
+      Ipon.client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required').eq('id', state.profile.id).single(),
       Ipon.client.from('account_activity').select('id,event,created_at').order('created_at', { ascending: false }).limit(20)
     ]);
     if (profileResult.error) throw profileResult.error;
@@ -50,23 +50,47 @@
       const { data: memberRow } = await Ipon.client.from('members').select('payout_channel,payout_account_number,payout_account_name').eq('id', profile.member_id || state.profile.member_id).maybeSingle();
       if (memberRow?.payout_channel) payoutSource = memberRow;
     }
-    profileForm.elements.first_name.value = profile.first_name || profile.full_name?.split(' ')[0] || '';
-    profileForm.elements.middle_name.value = profile.middle_name || '';
-    profileForm.elements.last_name.value = profile.last_name || profile.full_name?.split(' ').slice(1).join(' ') || '';
+    const mustCompleteName = Boolean(profile.name_setup_required);
+    profileForm.elements.first_name.value = mustCompleteName ? '' : (profile.first_name || '');
+    profileForm.elements.middle_name.value = mustCompleteName ? '' : (profile.middle_name || '');
+    profileForm.elements.last_name.value = mustCompleteName ? '' : (profile.last_name || '');
     profileForm.elements.contact_number.value = profile.contact_number || '';
     Ipon.setPayoutFields(profileForm, payoutSource);
+    const hasInvalidExistingName = !mustCompleteName && (
+      (profile.first_name && !Ipon.validNamePart(profile.first_name))
+      || (profile.middle_name && !Ipon.validNamePart(profile.middle_name, { allowSingleInitial: true }))
+      || (profile.last_name && !Ipon.validNamePart(profile.last_name))
+    );
+    if (hasInvalidExistingName) {
+      Ipon.validateNameInput(profileForm.elements.first_name);
+      Ipon.validateNameInput(profileForm.elements.middle_name);
+      Ipon.validateNameInput(profileForm.elements.last_name);
+    }
     profileComplete = !Ipon.profileNeedsSetup(profile);
-    if (!profileComplete) onboarding = true;
-    else if (!passwordChangeRequired) onboarding = false;
+    if (!profileComplete || passwordChangeRequired) onboarding = true;
+    else if (params.get('force_password') !== '1' && params.get('complete_profile') !== '1') onboarding = false;
     updateDialogMode();
-    document.getElementById('profile-setup-notice').hidden = profileComplete;
+    const setupNotice = document.getElementById('profile-setup-notice');
+    setupNotice.hidden = profileComplete;
+    const setupNoticeCopy = setupNotice.querySelector('span');
+    if (setupNoticeCopy) {
+      setupNoticeCopy.textContent = mustCompleteName
+        ? 'Enter your real formal first name, last name, and mobile number before continuing to your panel.'
+        : hasInvalidExistingName
+          ? 'Please update your name using formal capitalization (no ALL CAPS or all lowercase) before continuing to your panel.'
+          : 'Add your first name, last name, and mobile number before continuing to your panel.';
+    }
     emailForm.elements.email.value = profile.email || state.session.user.email || '';
     notificationToggle.checked = profile.notifications_enabled !== false;
     const activities = activityResult.data || [];
     activityBody.innerHTML = activities.length ? activities.map((row) => `<tr><td>${Ipon.escapeHtml(row.event.replaceAll('_', ' ').toLowerCase().replace(/^./, (character) => character.toUpperCase()))}</td><td>${Ipon.dateLabel(row.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">No account activity recorded yet.</td></tr>';
     if (onboarding) {
       const nextField = !profileComplete
-        ? (!profile.first_name ? profileForm.elements.first_name : !profile.last_name ? profileForm.elements.last_name : profileForm.elements.contact_number)
+        ? (!Ipon.validNamePart(profileForm.elements.first_name.value)
+            ? profileForm.elements.first_name
+            : (profileForm.elements.middle_name.value && !Ipon.validNamePart(profileForm.elements.middle_name.value, { allowSingleInitial: true })
+                ? profileForm.elements.middle_name
+                : (!Ipon.validNamePart(profileForm.elements.last_name.value) ? profileForm.elements.last_name : profileForm.elements.contact_number)))
         : (passwordChangeRequired ? (passwordForm.elements.current_password || passwordForm.elements.password) : null);
       nextField?.focus();
     }
@@ -74,13 +98,14 @@
 
   profileForm.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!Ipon.validateNameFields(profileForm)) return;
     if (!Ipon.validatePhoneInput(profileForm.elements.contact_number)) return profileForm.elements.contact_number.focus();
     if (!Ipon.validatePayoutFields(profileForm)) return;
     const button = event.submitter;
     const values = new FormData(profileForm);
     const payoutPayload = Ipon.readPayoutPayload(profileForm);
     Ipon.setBusy(button, true);
-    try { await Ipon.rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number'), ...payoutPayload }); Ipon.toast('Profile updated.'); await load(); finishSetupIfReady(); }
+    try { const wasOnboarding = onboarding; await Ipon.rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number'), ...payoutPayload }); Ipon.toast('Profile updated.'); await load(); if (wasOnboarding) onboarding = true; finishSetupIfReady(); }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });

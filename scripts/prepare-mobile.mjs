@@ -11,8 +11,8 @@ if (fs.existsSync(targetDir)) {
 fs.mkdirSync(targetDir, { recursive: true });
 
 // Read existing version.json if available
-let baseBuild = 19;
-let nativeBuild = 19;
+let baseBuild = 20;
+let nativeBuild = 20;
 if (fs.existsSync(path.join(rootDir, 'version.json'))) {
   try {
     const existing = JSON.parse(fs.readFileSync(path.join(rootDir, 'version.json'), 'utf-8'));

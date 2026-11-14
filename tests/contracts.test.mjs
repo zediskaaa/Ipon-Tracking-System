@@ -409,7 +409,7 @@ test('compact dashboard header keeps notifications, profile, and logout in one o
   const appCss = read('css/app.css');
   assert.match(appCss, /\.app-sidebar-footer\s*\{[^}]*grid-template-columns:repeat\(2/);
   assert.match(appCss, /\.sidebar-user-card\s*\{[^}]*grid-column:1\/-1;[^}]*grid-row:1/);
-  assert.match(appCss, /\.sidebar-signout\s*\{[^}]*grid-column:2;[^}]*grid-row:2/);
+  assert.match(appCss, /\.sidebar-signout\s*\{[^}]*grid-column:1\/-1;[^}]*grid-row:2/);
   assert.match(dashboardCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar \.app-sidebar-footer\s*\{[^}]*grid-row:1/);
   assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-signout\s*\{[^}]*order:3/);
   assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-user-card\s*\{[^}]*order:2/);
@@ -1478,8 +1478,8 @@ test('background notification feed, permission banner, and native poll receiver 
   assert.match(migration047, /20261114_047/);
   assert.match(schema, /20261114_047/);
 
-  assert.equal(versionJson.nativeBuild, 19);
-  assert.match(capConfig.appendUserAgent, /myIPONApp\/19/);
+  assert.equal(versionJson.nativeBuild, 20);
+  assert.match(capConfig.appendUserAgent, /myIPONApp\/20/);
   assert.match(manifest, /com\.myipon\.app\.NotificationPollReceiver/);
   assert.match(mainActivity, /registerPlugin\(BackgroundNotificationsPlugin\.class\)/);
   assert.match(bgPlugin, /@CapacitorPlugin\(name = "BackgroundNotifications"\)/);
@@ -1611,7 +1611,7 @@ test('workflow enhancements migration 049, schema sync, and all UI integrations 
   }
 
   // Service worker offline shell + connectivity banner
-  assert.match(sw, /ipon-shell-v7/);
+  assert.match(sw, /ipon-shell-v8/);
   assert.match(sw, /ignoreSearch:\s*true/);
   assert.match(core, /function initConnectivityBanner\(/);
   assert.match(core, /function initInfoTips\(/);
@@ -2009,7 +2009,8 @@ test('in-record comments and review discussion thread are wired across database,
   const dashHtml = read('dashboard.html');
   const heroCss = read('css/hero-plates.css');
   assert.match(dashHtml, /class="dashboard-wallet-pills"/);
-  assert.match(dashHtml, /id="dashboard-month-progress-fill"/);
+  assert.doesNotMatch(dashHtml, /id="dashboard-month-progress-fill"|class="month-progress-track"/);
+  assert.doesNotMatch(heroCss, /\.month-progress-track/);
   assert.match(heroCss, /\.summary-card \.admin-progress/);
 });
 
@@ -2379,3 +2380,1038 @@ test('calendar view and dashboard show payment methods in hover/click details an
   assert.match(appCss, /\.day-detail-list article > span\s*\{/);
   assert.match(heroCss, /\.day \.day-events\s*\{/);
 });
+
+test('record discussion dialog layout CSS is single-sourced, responsive, and openRecordDiscussion renders replies cleanly', async () => {
+  const appCss = read('css/app.css');
+  assert.equal((appCss.match(/In-Record Comments & Review Discussion Thread/g) || []).length, 1);
+  assert.match(appCss, /\.record-thread-dialog\s*\{\s*width:\s*min\(640px,/);
+  assert.match(appCss, /\.record-thread-dialog \.form-dialog-sheet\s*\{[\s\S]*?width:\s*100%;/);
+  assert.match(appCss, /\.record-thread-body\s*\{[\s\S]*?padding:\s*16px 22px 20px;/);
+  assert.match(appCss, /\.record-thread-messages\s*\{[\s\S]*?height:\s*clamp\(/);
+  assert.match(appCss, /\.record-thread-msg\s*\{[\s\S]*?flex-shrink:\s*0;/);
+  assert.match(appCss, /\.record-thread-empty\s*\{[\s\S]*?flex-direction:\s*column;/);
+  assert.match(appCss, /\.record-thread-dialog form\.record-thread-composer\s*\{\s*padding:\s*0;/);
+  assert.match(appCss, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.record-thread-dialog\s*\{[\s\S]*?width:\s*calc\(100vw - 16px\);/);
+
+  const core = read('js/core.js');
+  const makeNode = (id) => ({
+    id,
+    hidden: false,
+    disabled: false,
+    dataset: {},
+    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    innerHTML: '',
+    value: '',
+    textContent: '',
+    scrollTop: 0,
+    scrollHeight: 120,
+    listeners: new Map(),
+    setAttribute() {},
+    getAttribute: () => '',
+    removeAttribute() {},
+    addEventListener(type, fn) { this.listeners.set(type, fn); },
+    removeEventListener(type) { this.listeners.delete(type); },
+    querySelector(sel) { return sel === '[type="submit"]' ? submitBtn : null; },
+    querySelectorAll() { return []; },
+    closest() { return null; },
+    reset() { input.value = ''; },
+    focus() {},
+    showModal() { this.open = true; },
+    close() { this.open = false; this.listeners.get('close')?.(); },
+    requestSubmit() { this.onsubmit?.({ preventDefault() {} }); }
+  });
+  const submitBtn = makeNode('submit');
+  const dialog = makeNode('record-thread-dialog');
+  const summaryBox = makeNode('record-thread-summary');
+  const messagesEl = makeNode('record-thread-messages');
+  const form = makeNode('record-thread-form');
+  const input = makeNode('record-thread-input');
+  const readonlyEl = makeNode('record-thread-readonly');
+  const titleEl = makeNode('record-thread-title');
+  const subtitleEl = makeNode('record-thread-subtitle');
+  const els = {
+    'app-loader': makeNode('app-loader'),
+    'record-thread-dialog': dialog,
+    'record-thread-summary': summaryBox,
+    'record-thread-messages': messagesEl,
+    'record-thread-form': form,
+    'record-thread-input': input,
+    'record-thread-readonly': readonlyEl,
+    'record-thread-title': titleEl,
+    'record-thread-subtitle': subtitleEl
+  };
+
+  let rpcCalls = [];
+  const doc = {
+    body: {
+      dataset: { page: 'contributions' },
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      querySelectorAll: () => [],
+      insertAdjacentHTML() {},
+      appendChild() {},
+      addEventListener() {}
+    },
+    head: { appendChild() {}, insertAdjacentHTML() {} },
+    documentElement: { dataset: {} },
+    readyState: 'complete',
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: (id) => els[id] || null,
+    createElement: () => makeNode('tmp'),
+    addEventListener: () => {}
+  };
+  const ctx = {
+    window: null,
+    document: doc,
+    HTMLInputElement: class {},
+    HTMLFormElement: class {},
+    HTMLElement: class {},
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    supabase: {
+      createClient: () => ({
+        auth: {
+          getSession: async () => ({ data: { session: null } }),
+          onAuthStateChange: () => {}
+        },
+        rpc: async (fn, args) => {
+          rpcCalls.push([fn, args]);
+          if (fn === 'get_record_comments') {
+            return {
+              data: {
+                record: { id: 'r1', type: 'contribution', author_name: 'Zedrick', amount: 100, status: 'CONFIRMED' },
+                comments: [],
+                can_reply: true
+              },
+              error: null
+            };
+          }
+          if (fn === 'add_record_comment') {
+            return {
+              data: { id: 'm1', author_id: 'u1', author_name: 'Zedrick', author_role: 'ADMIN', body: args.p_body, created_at: '2026-11-14T09:00:00Z' },
+              error: null
+            };
+          }
+          return { data: null, error: null };
+        },
+        channel: () => ({ on() { return this; }, subscribe() { return this; } }),
+        removeChannel: async () => {}
+      })
+    },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
+
+  await ctx.window.Ipon.openRecordDiscussion('contribution', 'r1');
+  assert.equal(titleEl.textContent, 'Savings Addition discussion');
+  assert.match(messagesEl.innerHTML, /class="record-thread-empty"/);
+  assert.equal(form.hidden, false);
+  assert.equal(readonlyEl.hidden, true);
+
+  input.value = 'Checked GCash receipt';
+  await form.onsubmit({ preventDefault() {} });
+  assert.match(messagesEl.innerHTML, /Checked GCash receipt/);
+  assert.equal(input.value, '');
+  assert.ok(rpcCalls.some(([fn]) => fn === 'add_record_comment'));
+  dialog.close();
+});
+
+test('discussion DP circle styling and replaceable phone/panel record-comment notifications are wired end to end', async () => {
+  const appCss = read('css/app.css');
+  const coreJs = read('js/core.js');
+  const migration060 = read('database/migrations/20261114_060_record_comment_notifications.sql');
+  const schema = read('database/schema.sql');
+  const pollJava = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
+  const mainJava = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+
+  assert.match(appCss, /\.avatar-circle\.avatar-sm\s*\{\s*width:\s*30px;\s*height:\s*30px;/);
+  assert.match(appCss, /\.record-thread-msg-avatar\s*\{\s*flex-shrink:\s*0;\s*line-height:\s*0;\s*\}/);
+  assert.match(appCss, /\.record-thread-msg-avatar \.avatar-circle\s*\{[\s\S]*?width:\s*30px;\s*height:\s*30px;/);
+
+  for (const sql of [migration060, schema]) {
+    assert.match(sql, /v_dedupe_key := 'RECORD_COMMENT:' \|\| v_type \|\| ':' \|\| p_record_id::text;/);
+    assert.match(sql, /delete from public\.notifications n[\s\S]*?n\.type = 'RECORD_COMMENT'[\s\S]*?insert into public\.notifications/i);
+    assert.match(sql, /create or replace function public\.get_unread_notifications_by_token\(p_token uuid\)[\s\S]*?dedupe_key text/i);
+  }
+  assert.match(pollJava, /String dedupeKey = row\.optString\("dedupe_key", ""\);/);
+  assert.match(mainJava, /\\\.html\(\?:\\\\\?/);
+  assert.match(coreJs, /function notifShownKey\(item\)/);
+  assert.match(coreJs, /if \(\/\^\(\?:\\?\[a-zA-Z0-9_-\]\+\\\.html\(\?:\\\?\[a-zA-Z0-9_=&:\.-\]\+\)\?/);
+});
+
+test('record discussion supports photo, video, and document attachments with lossless signed upload/view URLs', async () => {
+  const migration061 = read('database/migrations/20261114_061_record_comment_attachments.sql');
+  const schema = read('database/schema.sql');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+  const appCss = read('css/app.css');
+  const coreJs = read('js/core.js');
+
+  for (const sql of [migration061, schema]) {
+    assert.match(sql, /attachments\s+jsonb\s+not null\s+default '\[\]'::jsonb/i);
+    assert.match(sql, /add_record_comment\(\s*p_record_type text,\s*p_record_id uuid,\s*p_body text default '',\s*p_attachments jsonb default '\[\]'::jsonb\s*\)/i);
+    assert.match(sql, /'attachments',\s*coalesce\(rc\.attachments,\s*'\[\]'::jsonb\)/i);
+  }
+
+  assert.match(edgeFn, /const RECORD_COMMENTS_BUCKET = 'record-comments';/);
+  assert.match(edgeFn, /action === 'record-comment-upload-urls'/);
+  assert.match(edgeFn, /action === 'record-comment-view-urls'/);
+  assert.match(edgeFn, /action === 'record-comment-cleanup-media'/);
+  assert.match(edgeFn, /BLOCKED_DISCUSSION_EXT_RE/);
+
+  assert.match(appCss, /\.record-thread-attach-btn\b/);
+  assert.match(appCss, /\.record-thread-queued\b/);
+  assert.match(appCss, /\.record-thread-att-photo\b/);
+  assert.match(appCss, /\.record-thread-att-video\b/);
+  assert.match(appCss, /\.record-thread-att-file\b/);
+  assert.match(coreJs, /const isSafeUrl = raw\.startsWith\('data:image\/'\) \|\| raw\.startsWith\('blob:'\) \|\| \/\^https\?:\\\/\\\/\/i\.test\(raw\);/);
+
+  const core = coreJs;
+  const makeNode = (id = '') => ({
+    id,
+    value: '',
+    textContent: '',
+    innerHTML: '',
+    hidden: false,
+    disabled: false,
+    files: [],
+    dataset: {},
+    style: {},
+    scrollHeight: 120,
+    scrollTop: 0,
+    listeners: new Map(),
+    setAttribute() {},
+    getAttribute: () => '',
+    removeAttribute() {},
+    classList: {
+      set: new Set(),
+      add(...c) { c.forEach((x) => this.set.add(x)); },
+      remove(...c) { c.forEach((x) => this.set.delete(x)); },
+      toggle(c, f) { if (f === undefined) { this.set.has(c) ? this.set.delete(c) : this.set.add(c); } else if (f) { this.set.add(c); } else { this.set.delete(c); } },
+      contains(c) { return this.set.has(c); }
+    },
+    focus() {},
+    click() {},
+    reset() { input.value = ''; },
+    showModal() { this.open = true; },
+    close() { this.open = false; if (typeof this.onclose === 'function') this.onclose(); this.listeners.get('close')?.(); },
+    closest: () => null,
+    addEventListener(evt, fn) { this[`on${evt}`] = fn; this.listeners.set(evt, fn); },
+    removeEventListener(evt) { this[`on${evt}`] = null; this.listeners.delete(evt); },
+    querySelector: () => null,
+    querySelectorAll: () => []
+  });
+
+  const dialog = makeNode('record-thread-dialog');
+  const form = makeNode('record-thread-form');
+  const input = makeNode('record-thread-input');
+  const filesInput = makeNode('record-thread-files');
+  const attachBtn = makeNode('record-thread-attach-btn');
+  const queuedEl = makeNode('record-thread-queued');
+  const messagesEl = makeNode('record-thread-messages');
+  const sendBtn = makeNode('record-thread-send');
+  const readonlyEl = makeNode('record-thread-readonly');
+  const summaryEl = makeNode('record-thread-summary');
+  const closeBtn = makeNode('record-thread-close');
+  const titleEl = makeNode('record-thread-title');
+  const subtitleEl = makeNode('record-thread-subtitle');
+  const els = {
+    'app-loader': makeNode('app-loader'),
+    'record-thread-dialog': dialog,
+    'record-thread-form': form,
+    'record-thread-input': input,
+    'record-thread-files': filesInput,
+    'record-thread-attach-btn': attachBtn,
+    'record-thread-queued': queuedEl,
+    'record-thread-messages': messagesEl,
+    'record-thread-send': sendBtn,
+    'record-thread-readonly': readonlyEl,
+    'record-thread-summary': summaryEl,
+    'record-thread-close': closeBtn,
+    'record-thread-title': titleEl,
+    'record-thread-subtitle': subtitleEl
+  };
+  form.querySelector = () => sendBtn;
+
+  let rpcCalls = [];
+  let fnActions = [];
+  let uploadedPayloads = [];
+  let revokedUrls = [];
+  const storageBucket = 'record-comments';
+
+  const FakeURL = class extends URL {};
+  FakeURL.createObjectURL = (f) => `blob:mock/${f.name}`;
+  FakeURL.revokeObjectURL = (u) => revokedUrls.push(u);
+
+  const doc = {
+    body: {
+      dataset: { page: 'contributions' },
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      querySelectorAll: () => [],
+      insertAdjacentHTML() {},
+      appendChild() {},
+      addEventListener() {}
+    },
+    head: { appendChild() {}, insertAdjacentHTML() {} },
+    documentElement: { dataset: {} },
+    readyState: 'complete',
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: (id) => els[id] || null,
+    createElement: () => makeNode('tmp'),
+    addEventListener: () => {}
+  };
+
+  const ctx = {
+    window: null,
+    document: doc,
+    HTMLInputElement: class {},
+    HTMLFormElement: class {},
+    HTMLElement: class {},
+    Blob,
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    fetch: async (url, init) => {
+      if (String(url).includes('/functions/v1/manage-account')) {
+        const body = JSON.parse(init.body || '{}');
+        fnActions.push(body);
+        if (body.action === 'record-comment-upload-urls') {
+          return {
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({
+              ok: true,
+              uploads: (body.files || []).map((f, idx) => ({
+                path: `contribution/r1/att-${idx}-${f.name}`,
+                token: `tok-${idx}`,
+                signedUrl: `https://storage.example/upload/${idx}`
+              }))
+            })
+          };
+        }
+        if (body.action === 'record-comment-view-urls') {
+          return {
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({
+              ok: true,
+              urls: {
+                'contribution/r1/att-0-receipt.png': 'https://storage.example/view/receipt.png',
+                'contribution/r1/att-1-clip.mp4': 'https://storage.example/view/clip.mp4',
+                'contribution/r1/att-2-proof.pdf': 'https://storage.example/view/proof.pdf'
+              }
+            })
+          };
+        }
+      }
+      return { ok: true, status: 200, text: async () => '{}' };
+    },
+    supabase: {
+      createClient: () => ({
+        auth: {
+          getSession: async () => ({ data: { session: { access_token: 'jwt-1' } } }),
+          onAuthStateChange: () => {}
+        },
+        functions: {
+          invoke: async (name, { body } = {}) => {
+            assert.equal(name, 'manage-account');
+            fnActions.push(body);
+            if (body?.action === 'record-comment-upload-urls') {
+              return {
+                data: {
+                  ok: true,
+                  uploads: (body.files || []).map((f, idx) => ({
+                    path: `contribution/r1/att-${idx}-${f.name}`,
+                    token: `tok-${idx}`,
+                    signedUrl: `https://storage.example/upload/${idx}`,
+                    name: f.name,
+                    type: f.type,
+                    kind: f.kind,
+                    size: f.size
+                  }))
+                },
+                error: null
+              };
+            }
+            if (body?.action === 'record-comment-view-urls') {
+              return {
+                data: {
+                  ok: true,
+                  urls: {
+                    'contribution/r1/att-0-receipt.png': 'https://storage.example/view/receipt.png',
+                    'contribution/r1/att-1-clip.mp4': 'https://storage.example/view/clip.mp4',
+                    'contribution/r1/att-2-proof.pdf': 'https://storage.example/view/proof.pdf'
+                  }
+                },
+                error: null
+              };
+            }
+            return { data: { ok: true }, error: null };
+          }
+        },
+        storage: {
+          from: (bucket) => {
+            assert.equal(bucket, storageBucket);
+            return {
+              uploadToSignedUrl: async (path, token, file) => {
+                uploadedPayloads.push({ path, token, file });
+                return { data: { path }, error: null };
+              }
+            };
+          }
+        },
+        rpc: async (fn, args) => {
+          rpcCalls.push([fn, args]);
+          if (fn === 'get_record_comments') {
+            return {
+              data: {
+                record: { id: 'r1', type: 'contribution', author_name: 'Zedrick', amount: 100, status: 'CONFIRMED' },
+                comments: [],
+                can_reply: true
+              },
+              error: null
+            };
+          }
+          if (fn === 'add_record_comment') {
+            return {
+              data: {
+                id: 'm1',
+                author_id: 'u1',
+                author_name: 'Zedrick',
+                author_role: 'ADMIN',
+                body: args.p_body,
+                attachments: args.p_attachments,
+                created_at: '2026-11-14T09:00:00Z'
+              },
+              error: null
+            };
+          }
+          return { data: null, error: null };
+        },
+        channel: () => ({ on() { return this; }, subscribe() { return this; } }),
+        removeChannel: async () => {}
+      })
+    },
+    Intl, URL: FakeURL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
+
+  await ctx.window.Ipon.openRecordDiscussion('contribution', 'r1');
+
+  const photoFile = { name: 'receipt.png', type: 'image/png', size: 2048 };
+  const videoFile = { name: 'clip.mp4', type: 'video/mp4', size: 4096 };
+  const docFile = { name: 'proof.pdf', type: 'application/pdf', size: 1024 };
+  const dangerousFile = { name: 'payload.exe', type: 'application/x-msdownload', size: 512 };
+
+  filesInput.files = [photoFile, videoFile, docFile, dangerousFile];
+  await filesInput.listeners.get('change')?.({ target: filesInput });
+  assert.match(queuedEl.innerHTML, /receipt\.png/);
+  assert.match(queuedEl.innerHTML, /clip\.mp4/);
+  assert.match(queuedEl.innerHTML, /proof\.pdf/);
+  assert.doesNotMatch(queuedEl.innerHTML, /payload\.exe/);
+
+  input.value = '';
+  await form.onsubmit({ preventDefault() {} });
+
+  assert.equal(uploadedPayloads.length, 3);
+  assert.equal(uploadedPayloads[0].file, photoFile);
+  assert.equal(uploadedPayloads[1].file, videoFile);
+  assert.equal(uploadedPayloads[2].file, docFile);
+  const addCall = rpcCalls.find(([fn]) => fn === 'add_record_comment');
+  assert.ok(addCall);
+  assert.equal(addCall[1].p_attachments.length, 3);
+  assert.match(messagesEl.innerHTML, /class="record-thread-att-photo"/);
+  assert.match(messagesEl.innerHTML, /<video controls playsinline preload="metadata"/);
+  assert.match(messagesEl.innerHTML, /class="record-thread-att-file"/);
+
+  dialog.close();
+  assert.ok(revokedUrls.length >= 2);
+});
+
+test('discussion unread count pill disappears once messages are opened and read', async () => {
+  const migration062 = read('database/migrations/20261114_062_record_comment_read_state.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+
+  for (const sql of [migration062, schema]) {
+    assert.match(sql, /create table if not exists public\.record_comment_reads/i);
+    assert.match(sql, /unread_count bigint/i);
+    assert.match(sql, /where rc\.author_id <> auth\.uid\(\)[\s\S]*?rc\.created_at > coalesce\(rcr\.last_read_at/i);
+    assert.match(sql, /insert into public\.record_comment_reads \(user_id, record_type, record_id, last_read_at\)/i);
+  }
+
+  const makeNode = (id = '') => ({
+    id,
+    value: '',
+    textContent: '',
+    innerHTML: '',
+    hidden: false,
+    disabled: false,
+    dataset: {},
+    style: {},
+    scrollHeight: 120,
+    scrollTop: 0,
+    listeners: new Map(),
+    setAttribute() {},
+    getAttribute: () => '',
+    removeAttribute() {},
+    classList: {
+      set: new Set(['has-comments']),
+      add(...c) { c.forEach((x) => this.set.add(x)); },
+      remove(...c) { c.forEach((x) => this.set.delete(x)); },
+      toggle(c, f) { if (f === undefined) { this.set.has(c) ? this.set.delete(c) : this.set.add(c); } else if (f) { this.set.add(c); } else { this.set.delete(c); } },
+      contains(c) { return this.set.has(c); }
+    },
+    focus() {},
+    click() {},
+    reset() {},
+    showModal() { this.open = true; },
+    close() { this.open = false; this.listeners.get('close')?.(); },
+    closest: () => null,
+    addEventListener(evt, fn) { this[`on${evt}`] = fn; this.listeners.set(evt, fn); },
+    removeEventListener(evt) { this[`on${evt}`] = null; this.listeners.delete(evt); },
+    querySelector: () => null,
+    querySelectorAll: () => []
+  });
+
+  const discussBtn = makeNode('table-discuss-btn');
+  discussBtn.textContent = 'Discuss 4';
+  const reviewBtn = makeNode('record-review-discuss-btn');
+  reviewBtn.dataset.recordId = 'r1';
+  reviewBtn.textContent = 'Discussion 4';
+
+  const dialog = makeNode('record-thread-dialog');
+  const form = makeNode('record-thread-form');
+  const input = makeNode('record-thread-input');
+  const messagesEl = makeNode('record-thread-messages');
+  const readonlyEl = makeNode('record-thread-readonly');
+  const summaryEl = makeNode('record-thread-summary');
+  const titleEl = makeNode('record-thread-title');
+  const subtitleEl = makeNode('record-thread-subtitle');
+
+  const els = {
+    'app-loader': makeNode('app-loader'),
+    'record-thread-dialog': dialog,
+    'record-thread-form': form,
+    'record-thread-input': input,
+    'record-thread-messages': messagesEl,
+    'record-thread-readonly': readonlyEl,
+    'record-thread-summary': summaryEl,
+    'record-thread-title': titleEl,
+    'record-thread-subtitle': subtitleEl,
+    'record-review-discuss-btn': reviewBtn
+  };
+
+  let isRead = false;
+  let updatedCalls = 0;
+  const doc = {
+    body: {
+      dataset: { page: 'contributions' },
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      querySelectorAll: () => [],
+      insertAdjacentHTML() {},
+      appendChild() {},
+      addEventListener() {}
+    },
+    head: { appendChild() {}, insertAdjacentHTML() {} },
+    documentElement: { dataset: {} },
+    readyState: 'complete',
+    querySelector: () => null,
+    querySelectorAll: (sel) => (sel === '[data-action="discuss"][data-id="r1"]' ? [discussBtn] : []),
+    getElementById: (id) => els[id] || null,
+    createElement: () => makeNode('tmp'),
+    addEventListener: () => {}
+  };
+
+  const ctx = {
+    window: null,
+    document: doc,
+    HTMLInputElement: class {},
+    HTMLFormElement: class {},
+    HTMLElement: class {},
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    supabase: {
+      createClient: () => ({
+        auth: {
+          getSession: async () => ({ data: { session: null } }),
+          onAuthStateChange: () => {}
+        },
+        rpc: async (fn) => {
+          if (fn === 'get_record_comment_counts') {
+            return { data: [{ record_id: 'r1', comment_count: 4, unread_count: isRead ? 0 : 4 }], error: null };
+          }
+          if (fn === 'get_record_comments') {
+            isRead = true;
+            return {
+              data: {
+                record: { id: 'r1', type: 'contribution', author_name: 'Zedrick', amount: 100, status: 'CONFIRMED' },
+                comments: [{ id: 'm1', author_id: 'u2', author_name: 'Other', author_role: 'MEMBER', body: 'Sent!', created_at: '2026-11-14T09:00:00Z' }],
+                can_reply: true
+              },
+              error: null
+            };
+          }
+          return { data: null, error: null };
+        },
+        channel: () => ({ on() { return this; }, subscribe() { return this; } }),
+        removeChannel: async () => {}
+      })
+    },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
+
+  const beforeCounts = await ctx.window.Ipon.getRecordCommentCounts('contribution', ['r1']);
+  const beforeHtml = ctx.window.Ipon.recordDiscussionButtonHtml({ id: 'r1', approval_status: 'CONFIRMED' }, beforeCounts.get('r1'));
+  assert.match(beforeHtml, /class="icon-action record-discuss-btn has-comments"/);
+  assert.match(beforeHtml, /<span class="comment-count-pill">4<\/span>/);
+
+  await ctx.window.Ipon.openRecordDiscussion('contribution', 'r1', { onUpdated: () => { updatedCalls += 1; } });
+
+  assert.equal(discussBtn.classList.contains('has-comments'), false);
+  assert.equal(discussBtn.textContent, 'Discuss');
+  assert.equal(reviewBtn.classList.contains('has-comments'), false);
+  assert.equal(reviewBtn.textContent, 'Discussion');
+
+  dialog.close();
+  assert.equal(updatedCalls, 1);
+
+  const afterCounts = await ctx.window.Ipon.getRecordCommentCounts('contribution', ['r1']);
+  const afterHtml = ctx.window.Ipon.recordDiscussionButtonHtml({ id: 'r1', approval_status: 'CONFIRMED' }, afterCounts.get('r1'));
+  assert.doesNotMatch(afterHtml, /comment-count-pill/);
+  assert.match(afterHtml, />Discuss<\/button>/);
+
+  for (const status of ['PENDING', 'CONFIRMED', 'REJECTED', 'VOIDED']) {
+    const emptyThreadBtn = ctx.window.Ipon.recordDiscussionButtonHtml({ id: `r-${status}`, approval_status: status }, 0);
+    assert.match(emptyThreadBtn, />Discuss<\/button>/);
+  }
+  const appCss = read('css/app.css');
+  assert.match(appCss, /\.icon-action \{[^}]*justify-content:center;/);
+  assert.match(appCss, /\.record-discuss-btn \{[\s\S]*?justify-content:\s*center;/);
+});
+
+test('excess carry-over toggle stays hidden unless entered amount exceeds monthly due', async () => {
+  const contribHtml = read('contributions.html');
+  const userHtml = read('user.html');
+  const recordsJs = read('js/records.js');
+  const userJs = read('js/user.js');
+  const appCss = read('css/app.css');
+  const core = read('js/core.js');
+
+  assert.match(contribHtml, /<div class="field field-wide" id="allocate-excess-field" hidden>/);
+  assert.match(userHtml, /<div class="field field-wide" id="user-allocate-excess-field" hidden>/);
+  assert.match(recordsJs, /bindExcessContributionToggle/);
+  assert.match(userJs, /bindExcessContributionToggle/);
+  assert.match(appCss, /\.excess-carryover-field/);
+  assert.match(appCss, /\.excess-carryover-meta/);
+
+  const makeNode = (id = '') => {
+    const classSet = new Set();
+    return {
+      id,
+      value: '',
+      checked: false,
+      hidden: false,
+      textContent: '',
+      innerHTML: '',
+      dataset: {},
+      style: {},
+      children: [],
+      listeners: new Map(),
+      classList: {
+        add(...c) { c.forEach((x) => classSet.add(x)); },
+        remove(...c) { c.forEach((x) => classSet.delete(x)); },
+        toggle(c, f) { if (f === undefined) { classSet.has(c) ? classSet.delete(c) : classSet.add(c); } else if (f) { classSet.add(c); } else { classSet.delete(c); } },
+        contains: (c) => classSet.has(c)
+      },
+      appendChild(child) { this.children.push(child); return child; },
+      setAttribute() {},
+      closest() { return null; },
+      querySelector() { return null; },
+      querySelectorAll() { return []; },
+      addEventListener(evt, fn) { this.listeners.set(evt, fn); }
+    };
+  };
+
+  const hintSpan = makeNode('label-span');
+  const labelNode = makeNode('label');
+  labelNode.querySelector = (s) => (s === 'span' ? hintSpan : null);
+  const fieldNode = makeNode('allocate-excess-field');
+  const checkboxNode = makeNode('allocate-excess');
+  checkboxNode.closest = (s) => (s === '.field' ? fieldNode : s === 'label' ? labelNode : null);
+  const amountInput = makeNode('amount');
+
+  const els = { 'app-loader': makeNode('app-loader') };
+  const doc = {
+    body: { dataset: { page: 'contributions' }, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, querySelectorAll: () => [], insertAdjacentHTML() {}, appendChild() {}, addEventListener() {} },
+    head: { appendChild() {}, insertAdjacentHTML() {} },
+    documentElement: { dataset: {} },
+    readyState: 'complete',
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: (id) => els[id] || null,
+    createElement: (tag) => makeNode(tag),
+    addEventListener: () => {}
+  };
+  const ctx = {
+    window: null, document: doc, HTMLInputElement: class {}, HTMLFormElement: class {}, HTMLElement: class {},
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} },
+    IPON_CONFIG: { supabaseUrl: '', supabaseAnonKey: '' },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
+
+  const { computeContributionExcess, bindExcessContributionToggle } = ctx.window.Ipon;
+  assert.deepEqual({ ...computeContributionExcess({ amount: 0, fallbackMonthlyAmount: 500 }) }, { show: false, excess: 0, remainingDue: 0 });
+  assert.deepEqual({ ...computeContributionExcess({ amount: 300, statusRow: { required_amount: 500, outstanding_amount: 500 } }) }, { show: false, excess: 0, remainingDue: 500 });
+  assert.deepEqual({ ...computeContributionExcess({ amount: 500, statusRow: { required_amount: 500, outstanding_amount: 500 } }) }, { show: false, excess: 0, remainingDue: 500 });
+  assert.deepEqual({ ...computeContributionExcess({ amount: 750, statusRow: { required_amount: 500, outstanding_amount: 500 } }) }, { show: true, excess: 250, remainingDue: 500 });
+  assert.deepEqual({ ...computeContributionExcess({ amount: 150, statusRow: { required_amount: 500, outstanding_amount: 0 } }) }, { show: true, excess: 150, remainingDue: 0 });
+
+  const sync = bindExcessContributionToggle({
+    amountInput,
+    checkbox: checkboxNode,
+    field: fieldNode,
+    getContext: async () => ({ statusRow: { required_amount: 500, outstanding_amount: 500 }, fallbackMonthlyAmount: 500 })
+  });
+  assert.equal(fieldNode.hidden, true);
+
+  amountInput.value = '500';
+  await sync();
+  assert.equal(fieldNode.hidden, true);
+
+  amountInput.value = '750';
+  await sync();
+  assert.equal(fieldNode.hidden, false);
+  assert.equal(hintSpan.children[0].hidden, false);
+  assert.match(hintSpan.children[0].textContent, /250\.00 excess/);
+
+  checkboxNode.checked = true;
+  amountInput.value = '400';
+  await sync();
+  assert.equal(fieldNode.hidden, true);
+  assert.equal(checkboxNode.checked, false);
+});
+
+test('sidebar profile card, account modal, and announcement reactions omit group ADMIN badge outside group contexts', () => {
+  const coreJs = read('js/core.js');
+  const settingsJs = read('js/settings.js');
+
+  assert.match(coreJs, /sidebarUser\.innerHTML = `<strong>\$\{escapeHtml\(profile\.full_name\)\}<\/strong><small>\$\{escapeHtml\(profile\.role === 'SUPER_ADMIN' \? 'Owner' : 'My account'\)\}<\/small>`/);
+  assert.match(coreJs, /getElementById\('quick-account-role'\)\.textContent = currentProfile\.role === 'SUPER_ADMIN' \? 'Owner' : \(data\.email \|\| 'My account'\)/);
+  assert.match(coreJs, /\$\{isOwner \? '<span class="reaction-user-role-badge is-owner">Owner<\/span>' : ''\}/);
+  assert.doesNotMatch(coreJs, /reaction-user-role-badge \$\{roleClass\}/);
+  assert.match(settingsJs, /class="role-badge/);
+});
+
+test('closed-app Web Push (VAPID), Edge dispatch, and Android instant background sync are wired end to end', () => {
+  const migration063 = read('database/migrations/20261114_063_push_notifications.sql');
+  const schema = read('database/schema.sql');
+  const sendPushFn = read('supabase/functions/send-push/index.ts');
+  const migrateScript = read('scripts/supabase-migrate.mjs');
+  const configJs = read('js/config.js');
+  const sw = read('sw.js');
+  const coreJs = read('js/core.js');
+  const css = read('css/app.css');
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
+  const gradle = read('android/app/build.gradle');
+  const syncService = read('android/app/src/main/java/com/myipon/app/NotificationSyncService.java');
+  const syncWorker = read('android/app/src/main/java/com/myipon/app/NotificationSyncWorker.java');
+  const pollReceiver = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
+  const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
+  const mainActivity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+
+  for (const symbol of [
+    'push_subscriptions',
+    'upsert_push_subscription',
+    'delete_push_subscription',
+    'enqueue_notification_push',
+    'notifications_push_dispatch',
+    '20261114_063'
+  ]) {
+    assert.ok(migration063.includes(symbol), `migration 063 missing ${symbol}`);
+    assert.ok(schema.includes(symbol), `schema.sql missing ${symbol}`);
+  }
+
+  assert.match(sendPushFn, /webpush\.sendNotification/);
+  assert.match(sendPushFn, /notif-wake:/);
+  assert.match(sendPushFn, /push_subscriptions/);
+  assert.match(migrateScript, /'send-push'/);
+  assert.match(configJs, /vapidPublicKey:\s*'[A-Za-z0-9_-]{40,}'/);
+
+  assert.match(sw, /renotify:/);
+  assert.match(sw, /pushsubscriptionchange/);
+  assert.match(sw, /MYIPON_PUSH_SHOWN/);
+
+  assert.match(coreJs, /function syncWebPushSubscription/);
+  assert.match(coreJs, /function removeWebPushSubscription/);
+  assert.match(coreJs, /function sendBackgroundTestNotification/);
+  assert.match(coreJs, /data-device-test-btn/);
+  assert.match(css, /\.preference-device-actions/);
+
+  assert.match(manifest, /RECEIVE_BOOT_COMPLETED/);
+  assert.match(manifest, /FOREGROUND_SERVICE_REMOTE_MESSAGING/);
+  assert.match(manifest, /REQUEST_IGNORE_BATTERY_OPTIMIZATIONS/);
+  assert.match(manifest, /com\.myipon\.app\.NotificationSyncService/);
+  assert.match(gradle, /androidx\.work:work-runtime/);
+  assert.match(gradle, /com\.squareup\.okhttp3:okhttp/);
+  assert.match(syncService, /realtime:notif-wake:/);
+  assert.match(syncService, /START_STICKY/);
+  assert.match(syncWorker, /PeriodicWorkRequest/);
+  assert.match(pollReceiver, /NotificationSyncService\.ensureStarted/);
+  assert.match(bgPlugin, /requestIgnoreBatteryOptimizations/);
+  assert.match(bgPlugin, /openNotificationSettings/);
+  assert.match(bgPlugin, /getBackgroundStatus/);
+  assert.match(coreJs, /openNotificationUnblockGuide/);
+  assert.match(coreJs, /recheckDeviceNotificationPermission/);
+  assert.match(mainActivity, /NotificationSyncService\.ensureStarted/);
+});
+
+test('formal name validation rejects ALL CAPS and all-lowercase names live and requires setup for optional-name invites', () => {
+  const coreJs = read('js/core.js');
+  const authJs = read('js/auth.js');
+  const accountJs = read('js/account.js');
+  const membersJs = read('js/members.js');
+  const settingsJs = read('js/settings.js');
+  const superAdminJs = read('js/super-admin.js');
+  const dashboardJs = read('js/dashboard.js');
+  const manageAccountTs = read('supabase/functions/manage-account/index.ts');
+  const migration064 = read('database/migrations/20261114_064_formal_names_and_invite_onboarding.sql');
+  const schema = read('database/schema.sql');
+  const appCss = read('css/app.css');
+
+  const makeMockInput = (name, { required = true } = {}) => {
+    const attrs = new Map();
+    const errEl = { classList: { contains: (c) => c === 'field-error' }, textContent: '', hidden: true, setAttribute() {} };
+    const container = { querySelector: () => errEl, append() {} };
+    return {
+      name,
+      value: '',
+      required,
+      customValidity: '',
+      listeners: new Map(),
+      dataset: {},
+      setCustomValidity(msg) { this.customValidity = String(msg || ''); },
+      toggleAttribute(k, force) {
+        if (force) attrs.set(k, 'true'); else attrs.delete(k);
+      },
+      hasAttribute(k) { return attrs.has(k); },
+      getAttribute() { return ''; },
+      closest() { return container; },
+      addEventListener(type, fn) {
+        if (!this.listeners.has(type)) this.listeners.set(type, []);
+        this.listeners.get(type).push(fn);
+      },
+      _errEl: errEl
+    };
+  };
+
+  const firstInput = makeMockInput('first_name', { required: true });
+  const middleInput = makeMockInput('middle_name', { required: false });
+  const lastInput = makeMockInput('last_name', { required: true });
+
+  const makeNode = (tag) => ({
+    tagName: String(tag).toUpperCase(),
+    className: '',
+    hidden: false,
+    textContent: '',
+    innerHTML: '',
+    style: {},
+    dataset: {},
+    classList: { add() {}, toggle() {}, remove() {}, contains: () => false },
+    setAttribute() {},
+    appendChild() {},
+    append() {},
+    remove() {},
+    addEventListener() {},
+    querySelectorAll: () => [],
+    querySelector: () => null
+  });
+  const loaderNode = makeNode('div');
+  const doc = {
+    body: {
+      dataset: { page: 'account' },
+      classList: { add() {}, toggle() {}, contains: () => false },
+      insertAdjacentHTML() {},
+      appendChild() {},
+      append() {},
+      addEventListener() {},
+      querySelector: () => null
+    },
+    head: { appendChild() {}, insertAdjacentHTML() {} },
+    documentElement: { dataset: {} },
+    readyState: 'complete',
+    querySelector: () => null,
+    querySelectorAll: (sel) => sel.includes('first_name') ? [firstInput, middleInput, lastInput] : [],
+    getElementById: (id) => (id === 'app-loader' ? loaderNode : null),
+    createElement: (tag) => makeNode(tag),
+    addEventListener: () => {}
+  };
+  const ctx = {
+    window: null, document: doc, HTMLInputElement: class {}, HTMLFormElement: class {}, HTMLElement: class {},
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/account.html', pathname: '/account.html', origin: 'http://localhost', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} },
+    IPON_CONFIG: { supabaseUrl: '', supabaseAnonKey: '' },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  const {
+    validNamePart,
+    validFullName,
+    validateNameInput,
+    prepareNameInputs,
+    profileNeedsSetup,
+    accountSetupUrl
+  } = ctx.window.Ipon;
+
+  // Formal names accepted
+  for (const ok of ['Juan', 'Dela Cruz', 'De La Cruz', 'De Monteverde', 'Anna-Maria', "O'Connor", 'McDonald', 'Maria de Jesus', 'Santos III']) {
+    assert.equal(validNamePart(ok), true, `expected formal name part to pass: ${ok}`);
+  }
+  assert.equal(validNamePart('A', { allowSingleInitial: true }), true);
+  assert.equal(validNamePart('A', { allowSingleInitial: false }), false);
+
+  // Informal casing (all lowercase, ALL CAPS, mixed gibberish) rejected
+  for (const bad of ['dwadaw', 'DAWDSA', 'juan', 'JUAN', 'dela cruz', 'DELA CRUZ', 'jUAN', 'DwadAW', 'Juan 123', 'a']) {
+    assert.equal(validNamePart(bad), false, `expected malformed name to be rejected: ${bad}`);
+  }
+  assert.equal(validNamePart('a', { allowSingleInitial: true }), false);
+
+  // Full name invite field validator
+  assert.equal(validFullName('Juan Dela Cruz'), true);
+  assert.equal(validFullName('Juan A Dela Cruz'), true);
+  assert.equal(validFullName('dwadaw A DAWDSA'), false);
+  assert.equal(validFullName('JUAN DELA CRUZ'), false);
+  assert.equal(validFullName('juan dela cruz'), false);
+  assert.equal(validFullName('Juan'), false);
+
+  // Live typing triggers error immediately on lowercase / ALL CAPS without false positives while typing valid Title Case
+  prepareNameInputs();
+  const triggerInput = (inp, val) => {
+    inp.value = val;
+    for (const fn of inp.listeners.get('input') || []) fn();
+  };
+  triggerInput(firstInput, 'd');
+  assert.equal(firstInput.hasAttribute('aria-invalid'), true);
+  assert.match(firstInput.customValidity, /formal capitalization/i);
+
+  triggerInput(firstInput, 'DA');
+  assert.equal(firstInput.hasAttribute('aria-invalid'), true);
+  assert.match(firstInput.customValidity, /formal capitalization/i);
+
+  triggerInput(firstInput, 'McD');
+  assert.equal(firstInput.hasAttribute('aria-invalid'), false);
+
+  triggerInput(firstInput, 'McDonald');
+  assert.equal(validateNameInput(firstInput), true);
+  assert.equal(firstInput.hasAttribute('aria-invalid'), false);
+
+  // Mandatory onboarding right after login for optional-name invites and existing malformed profiles
+  assert.equal(profileNeedsSetup({
+    first_name: 'Group',
+    last_name: 'Member',
+    contact_number: '09171234567',
+    name_setup_required: true
+  }), true);
+  assert.match(accountSetupUrl({
+    first_name: 'Group',
+    last_name: 'Member',
+    contact_number: '09171234567',
+    name_setup_required: true
+  }, { app_metadata: {} }), /complete_profile=1/);
+
+  assert.equal(profileNeedsSetup({
+    first_name: 'dwadaw',
+    middle_name: 'A',
+    last_name: 'DAWDSA',
+    contact_number: '09171234567'
+  }), true);
+
+  assert.equal(profileNeedsSetup({
+    first_name: 'Juan',
+    middle_name: 'A',
+    last_name: 'Dela Cruz',
+    contact_number: '09171234567',
+    name_setup_required: false
+  }), false);
+
+  // Form wiring + sidebar layout + Edge + SQL migration parity
+  assert.match(appCss, /\.sidebar-utilities\{display:contents/);
+  assert.match(accountJs, /validateNameFields\(profileForm\)/);
+  assert.match(accountJs, /mustCompleteName/);
+  assert.match(authJs, /name_setup_required/);
+  assert.match(membersJs, /Ipon\.validateNameFields\(form\)/);
+  assert.match(settingsJs, /Ipon\.validateNameFields\(treasurerForm\)/);
+  assert.match(superAdminJs, /Ipon\.validateNameFields\(administratorForm\)/);
+  assert.match(dashboardJs, /prepareInviteNameInput/);
+  assert.match(dashboardJs, /name_optional:/);
+  assert.match(manageAccountTs, /function validFormalNamePart/);
+  assert.match(manageAccountTs, /name_setup_required:\s*nameOptional/);
+  for (const token of ['name_setup_required', 'validated_name_part', 'update_own_profile', 'enforce_data_quality', '20261114_064']) {
+    assert.ok(migration064.includes(token), `migration 064 missing ${token}`);
+    assert.ok(schema.includes(token), `schema.sql missing ${token}`);
+  }
+});
+
+test('phone and drawer alerts accurately detect OS/browser ON state and show clear status labels', () => {
+  const core = read('js/core.js');
+  const accountHtml = read('account.html');
+  const pollReceiver = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
+
+  assert.match(core, /navigator\.permissions\.query\(\{\s*name:\s*'notifications'\s*\}\)/);
+  assert.match(core, /bindBrowserPermissionObserver/);
+  assert.match(core, /bgRes\?\.hasPermission === true/);
+  assert.match(core, /Notification permission: On/);
+  assert.match(core, /Device permission: Off/);
+  assert.match(core, /Device permission: Blocked/);
+  assert.match(core, /button\.textContent = 'Turn on'/);
+  assert.match(core, /button\.textContent = 'On'/);
+  assert.match(accountHtml, /data-device-notif-btn disabled>Checking…<\/button>/);
+  assert.match(pollReceiver, /NotificationManagerCompat\.from\(context\)\.areNotificationsEnabled\(\)/);
+});
+
+
+
+
+
+

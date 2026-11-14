@@ -63,7 +63,7 @@
     [passwordConfirmation, document.getElementById('password-confirmation-error')]
   ]);
   const passwordRule = 'Use at least 8 characters with uppercase, lowercase, a number, and a symbol.';
-  const nameRule = "Use letters, spaces, hyphens, or apostrophes only.";
+  const nameRule = Ipon.NAME_RULE || 'Use formal capitalization (e.g., Juan Dela Cruz). Do not use ALL CAPS or all lowercase.';
   let mode = 'login';
 
   if (window.Capacitor !== undefined || window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
@@ -87,7 +87,7 @@
   const initPromise = Ipon.init({ requireAuth: false, allowPending: true }).catch((error) => ({ failed: true, configured: false, error }));
 
   async function resolveActiveProfile(user, fallbackEmail) {
-    const profileCols = 'id,first_name,last_name,contact_number,role,status';
+    const profileCols = 'id,first_name,middle_name,last_name,contact_number,role,status,name_setup_required';
     const loadProfile = () => Ipon.client.from('profiles').select(profileCols).eq('id', user.id).maybeSingle();
     let { data: profile, error: profileError } = await loadProfile();
     if (profileError) throw profileError;
@@ -274,11 +274,18 @@
     email.value = email.value.trim();
 
     if (signup) {
-      if (!firstName.value.trim()) setFieldError(firstName, 'Enter your first name.');
-      else if (!Ipon.validNamePart(firstName.value)) setFieldError(firstName, nameRule);
-      if (middleName.value.trim() && !Ipon.validNamePart(middleName.value)) setFieldError(middleName, nameRule);
-      if (!lastName.value.trim()) setFieldError(lastName, 'Enter your last name or surname.');
-      else if (!Ipon.validNamePart(lastName.value)) setFieldError(lastName, nameRule);
+      const firstErr = !firstName.value.trim()
+        ? 'Enter your first name.'
+        : Ipon.nameValidationError(firstName.value, { required: true });
+      if (firstErr) setFieldError(firstName, firstErr);
+      const middleErr = middleName.value.trim()
+        ? Ipon.nameValidationError(middleName.value, { allowSingleInitial: true, required: false })
+        : '';
+      if (middleErr) setFieldError(middleName, middleErr);
+      const lastErr = !lastName.value.trim()
+        ? 'Enter your last name or surname.'
+        : Ipon.nameValidationError(lastName.value, { required: true });
+      if (lastErr) setFieldError(lastName, lastErr);
       if (nameInputs.map((input) => Ipon.normalizeNamePart(input.value)).filter(Boolean).join(' ').length > 150) {
         setFieldError(lastName, 'Combined full name must not exceed 150 characters.');
       }
