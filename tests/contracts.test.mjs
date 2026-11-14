@@ -1696,10 +1696,15 @@ test('account creation, login activation, and mobile submit responsiveness contr
   const pkg = JSON.parse(read('package.json'));
   const migrateScript = read('scripts/supabase-migrate.mjs');
   const deployWorkflow = read('.github/workflows/deploy-database.yml');
+  const vsTasks = JSON.parse(read('.vscode/tasks.json'));
   assert.match(pkg.scripts['db:status'] || '', /supabase-migrate\.mjs --status/);
   assert.match(pkg.scripts['db:migrate'] || '', /supabase-migrate\.mjs --apply/);
   assert.match(pkg.scripts['supabase:deploy'] || '', /supabase-migrate\.mjs --apply --deploy-functions/);
+  assert.match(pkg.scripts['supabase:sync'] || '', /supabase-migrate\.mjs --sync/);
+  assert.match(pkg.scripts['supabase:watch'] || '', /supabase-migrate\.mjs --sync --watch/);
   assert.match(migrateScript, /--no-verify-jwt/);
+  assert.match(migrateScript, /deployed-functions\.json/);
   assert.match(deployWorkflow, /SUPABASE_ACCESS_TOKEN/);
+  assert.ok(vsTasks.tasks.some((t) => t.runOptions?.runOn === 'folderOpen' && t.command === 'npm run supabase:sync'));
 });
 
