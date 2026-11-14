@@ -4867,9 +4867,106 @@
     syncState();
   }
 
+  function initInfoTips() {
+    if (window.__iponInfoTipsBound) return;
+    window.__iponInfoTipsBound = true;
+    const popover = document.createElement('div');
+    popover.id = 'ipon-info-popover';
+    popover.className = 'info-tip-popover';
+    popover.setAttribute('role', 'tooltip');
+    popover.hidden = true;
+    let activeTrigger = null;
+    let hoverTimer = null;
+
+    const closeTip = () => {
+      clearTimeout(hoverTimer);
+      if (activeTrigger) activeTrigger.setAttribute('aria-expanded', 'false');
+      activeTrigger = null;
+      popover.hidden = true;
+    };
+
+    const openTip = (trigger) => {
+      clearTimeout(hoverTimer);
+      const message = trigger?.getAttribute('data-info-tip')?.trim();
+      if (!message) return;
+      if (activeTrigger && activeTrigger !== trigger) activeTrigger.setAttribute('aria-expanded', 'false');
+      activeTrigger = trigger;
+      trigger.setAttribute('aria-expanded', 'true');
+      const host = trigger.closest('dialog[open]') || document.body;
+      if (popover.parentElement !== host) host.appendChild(popover);
+      popover.textContent = message;
+      popover.hidden = false;
+
+      const rect = trigger.getBoundingClientRect();
+      const popRect = popover.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const margin = 12;
+      const gap = 8;
+
+      let left = rect.left + (rect.width / 2) - (popRect.width / 2);
+      left = Math.max(margin, Math.min(left, vw - popRect.width - margin));
+
+      let top = rect.bottom + gap;
+      if (top + popRect.height > vh - margin && rect.top - gap - popRect.height >= margin) {
+        top = rect.top - popRect.height - gap;
+      } else {
+        top = Math.max(margin, Math.min(top, vh - popRect.height - margin));
+      }
+
+      popover.style.left = `${Math.round(left)}px`;
+      popover.style.top = `${Math.round(top)}px`;
+    };
+
+    document.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-info-tip]');
+      if (btn) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (activeTrigger === btn && !popover.hidden) closeTip();
+        else openTip(btn);
+        return;
+      }
+      if (!event.target.closest('#ipon-info-popover')) closeTip();
+    });
+
+    document.addEventListener('pointerenter', (event) => {
+      if (event.pointerType === 'touch' || !(event.target instanceof Element)) return;
+      const btn = event.target.closest('[data-info-tip]');
+      if (btn) openTip(btn);
+    }, true);
+
+    document.addEventListener('pointerleave', (event) => {
+      if (event.pointerType === 'touch' || !(event.target instanceof Element)) return;
+      const btn = event.target.closest('[data-info-tip]');
+      if (btn && activeTrigger === btn) {
+        hoverTimer = setTimeout(closeTip, 180);
+      }
+    }, true);
+
+    document.addEventListener('focusin', (event) => {
+      if (!(event.target instanceof Element)) return;
+      const btn = event.target.closest('[data-info-tip]');
+      if (btn) openTip(btn);
+    });
+
+    document.addEventListener('focusout', (event) => {
+      if (event.target instanceof Element && event.target.closest('[data-info-tip]')) {
+        hoverTimer = setTimeout(closeTip, 120);
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !popover.hidden) closeTip();
+    });
+    window.addEventListener('scroll', () => { if (!popover.hidden) closeTip(); }, { passive: true, capture: true });
+    window.addEventListener('resize', () => { if (!popover.hidden) closeTip(); }, { passive: true });
+  }
+
   if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
   if (document.body.dataset.page) initPullToRefresh();
   initConnectivityBanner();
+  initInfoTips();
   prepareFormValidation();
   prepareNumericInputs();
   initAppUpdateChecker();

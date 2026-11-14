@@ -1605,8 +1605,11 @@ test('workflow enhancements migration 049, schema sync, and all UI integrations 
   assert.match(sw, /ipon-shell-v7/);
   assert.match(sw, /ignoreSearch:\s*true/);
   assert.match(core, /function initConnectivityBanner\(/);
+  assert.match(core, /function initInfoTips\(/);
   assert.match(core, /function remindUnpaidMembers\(/);
   assert.match(css, /\.offline-status-banner/);
+  assert.match(css, /\.info-tip-btn/);
+  assert.match(css, /\.info-tip-popover/);
 
   // Feature wiring across pages
   assert.match(savingsJs, /from\('savings_calculator_plans'\)/);
