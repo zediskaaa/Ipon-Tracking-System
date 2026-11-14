@@ -250,22 +250,6 @@
     });
   }
 
-  // 6. Interactive Dark / Light Theme Preview Switch in Feature Showcase
-  const demoThemeBtn = document.getElementById('demo-theme-toggle');
-  function syncDemoThemeButton() {
-    if (!demoThemeBtn || !window.Ipon?.isDarkTheme) return;
-    const isDark = Ipon.isDarkTheme();
-    demoThemeBtn.setAttribute('aria-pressed', String(isDark));
-    demoThemeBtn.textContent = isDark ? '☀ Switch back to Warm Light' : '☾ Preview Forest Dark Mode';
-  }
-  if (demoThemeBtn) {
-    syncDemoThemeButton();
-    demoThemeBtn.addEventListener('click', () => {
-      if (window.Ipon?.toggleTheme) Ipon.toggleTheme();
-      syncDemoThemeButton();
-    });
-    window.addEventListener('ipon:themechange', syncDemoThemeButton);
-  }
 
   // 7. Subtle 3D tilt on hero card (desktop only)
   const mockContainer = document.querySelector('.l-mock');

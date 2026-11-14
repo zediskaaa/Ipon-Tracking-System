@@ -90,6 +90,7 @@
   const groupMetaEl = document.getElementById('dashboard-group-meta');
   const groupSelect = document.getElementById('dashboard-group-select');
   const groupSwitcherWrap = document.getElementById('dashboard-group-switcher-wrap');
+  const groupIdentityEl = document.querySelector('#dashboard-group-bar .group-bar-identity');
   const groupActionsEl = document.getElementById('dashboard-group-actions');
   const groupHubDialog = document.getElementById('group-manage-hub-dialog');
   const groupHubAvatar = document.getElementById('group-hub-avatar');
@@ -172,6 +173,7 @@
       if (groupRoleEl) groupRoleEl.textContent = state?.profile?.role || '—';
       if (groupMetaEl) groupMetaEl.textContent = 'Create or join a savings group';
       if (groupSwitcherWrap) groupSwitcherWrap.hidden = true;
+      groupIdentityEl?.classList.remove('is-switchable');
       return;
     }
     const safeName = currentGroup.name || 'Savings Group';
@@ -185,8 +187,10 @@
     const metaParts = [`${contributorCount} contributor${contributorCount === 1 ? '' : 's'}`];
     if (currentGroup.role === 'ADMIN') metaParts.push(currentGroup.is_contributor ? 'Included as contributor' : 'Manager only');
     if (groupMetaEl) groupMetaEl.textContent = metaParts.join(' · ');
+    const canSwitchGroup = myGroups.length > 1;
+    groupIdentityEl?.classList.toggle('is-switchable', canSwitchGroup);
     if (groupSelect && groupSwitcherWrap) {
-      groupSwitcherWrap.hidden = myGroups.length <= 1;
+      groupSwitcherWrap.hidden = !canSwitchGroup;
       Ipon.populateGroupSelect(groupSelect, myGroups, currentGroup.group_id);
     }
     if (groupActionsEl) groupActionsEl.hidden = false;
@@ -828,6 +832,15 @@
     }
   }
   groupSelect?.addEventListener('change', () => handleGroupSwitch(groupSelect));
+  groupIdentityEl?.addEventListener('click', (e) => {
+    if (!groupIdentityEl.classList.contains('is-switchable') || !groupSwitcherWrap || groupSwitcherWrap.hidden) return;
+    if (e.target.closest('#dashboard-group-switcher-wrap')) return;
+    const trigger = groupSwitcherWrap.querySelector('.custom-select-trigger');
+    if (!trigger) return;
+    e.preventDefault();
+    e.stopPropagation();
+    trigger.click();
+  });
   groupHubSelect?.addEventListener('change', () => handleGroupSwitch(groupHubSelect));
   document.getElementById('dashboard-manage-group')?.addEventListener('click', () => {
     syncGroupHub();

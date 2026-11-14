@@ -74,9 +74,9 @@
     strip.hidden = false;
     const chipHtml = Ipon.payoutSummaryChip(record, { compact: true, showCopy: false });
     if (chipHtml) {
-      strip.innerHTML = `<span class="user-payout-label">Cashout account</span>${chipHtml}<button type="button" class="link-action" data-open-payout-profile>Edit</button>`;
+      strip.innerHTML = `<span class="user-payout-label">Cashout account</span><div class="user-payout-row">${chipHtml}<button type="button" class="link-action user-payout-action" data-open-payout-profile>Edit</button></div>`;
     } else {
-      strip.innerHTML = `<span class="user-payout-label">Cashout account</span><span class="field-help">Not set</span><button type="button" class="link-action" data-open-payout-profile>Add GCash, Maya, or bank</button>`;
+      strip.innerHTML = '<span class="user-payout-label">Cashout account</span><div class="user-payout-row"><span class="user-payout-empty">Not set</span><button type="button" class="link-action user-payout-action" data-open-payout-profile>Add GCash, Maya, or bank</button></div>';
     }
   }
 
@@ -106,7 +106,7 @@
   async function load() {
     if (!state.profile.member_id) {
       document.getElementById('submit-contribution').disabled = true;
-      document.getElementById('current-payment-status').textContent = 'ACCOUNT NOT LINKED';
+      document.getElementById('current-payment-status').innerHTML = badge('ACCOUNT NOT LINKED');
       document.getElementById('current-payment-detail').textContent = 'Ask your group administrator to link this login to your member profile.';
       ['user-total', 'user-paid-months', 'user-unpaid-months', 'user-pending'].forEach((id, index) => { document.getElementById(id).textContent = index === 0 ? Ipon.money(0) : '0'; });
       body.innerHTML = '<tr><td colspan="7" class="empty-state">No member profile is linked to this account.</td></tr>';
@@ -143,11 +143,16 @@
     }
     const period = summary.current_period;
     document.getElementById('current-payment-status').innerHTML = period ? badge(period.payment_status) : badge('NOT SCHEDULED');
-    document.getElementById('current-payment-detail').textContent = period
-      ? (period.is_exempt
-        ? `This month is marked exempt${period.exempt_reason ? `: ${period.exempt_reason}` : '.'}`
-        : `${Ipon.money(period.paid_amount)} of ${Ipon.money(period.required_amount)} confirmed. Due ${Ipon.dateLabel(period.due_date)}.`)
-      : 'Your administrator has not generated this month’s period yet.';
+    const detailEl = document.getElementById('current-payment-detail');
+    if (period) {
+      if (period.is_exempt) {
+        detailEl.textContent = `This month is marked exempt${period.exempt_reason ? `: ${period.exempt_reason}` : '.'}`;
+      } else {
+        detailEl.innerHTML = `<strong>${Ipon.escapeHtml(Ipon.money(period.paid_amount))}</strong> of ${Ipon.escapeHtml(Ipon.money(period.required_amount))} confirmed. Due ${Ipon.escapeHtml(Ipon.dateLabel(period.due_date))}.`;
+      }
+    } else {
+      detailEl.textContent = 'Your administrator has not generated this month’s period yet.';
+    }
     const rows = historyResult.data || [];
     updatePager(historyResult.count || 0);
     historyRowsById = new Map(rows.map((row) => [row.id, row]));

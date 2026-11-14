@@ -72,9 +72,7 @@ html {
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  transition: transform 0.2s ease;
 }
-.l-btn:hover svg { transform: translateX(3px); }
 
 .l-btn-gold {
   background: linear-gradient(135deg, #f8e4a4 0%, #deb152 48%, #c58f28 100%);
@@ -2016,24 +2014,94 @@ html {
 
 /* Footer */
 .l-footer {
-  padding: 38px 0 44px;
+  padding: 36px 0 42px;
   border-top: 1px solid var(--rule);
 }
 .l-footer .l-wrap {
+  display: grid;
+  gap: 18px;
+  color: var(--muted);
+  font: 13.5px/1.55 Arial, sans-serif;
+}
+.l-footer-main {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  color: var(--muted);
-  font: 13.5px/1.55 Arial, sans-serif;
+  gap: 16px 24px;
 }
 .l-footer .l-brand { color: var(--ink); }
 .l-footer .l-brand .brand-divider { background: rgba(14, 43, 33, 0.22); }
 .l-footer .l-brand strong { color: var(--ink); }
 .l-footer .l-brand small { color: var(--muted); }
-.l-footer nav { display: flex; flex-wrap: wrap; gap: 20px; }
+.l-footer nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px 20px; }
 .l-footer nav a:hover { color: var(--ink); }
+.l-footer-social {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.l-footer-social-label {
+  font: 700 11px/1 Arial, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.l-footer-social-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.l-social-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 1px solid var(--rule);
+  background: var(--card);
+  color: var(--ink);
+  transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+.l-social-link:hover {
+  transform: translateY(-2px);
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(14, 43, 33, 0.16);
+}
+.l-social-link:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+.l-social-link svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+.l-footer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+}
+.l-footer-meta a {
+  color: var(--green);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.l-footer-meta a:hover {
+  color: var(--ink);
+}
 
 /* Floating Back-to-Top Button */
 .l-back-top {
@@ -2130,7 +2198,8 @@ html {
   .l-cta-actions-wrap, .l-cta-downloads { align-items: center; width: 100%; }
   .l-cta-actions, .l-cta-download-buttons { justify-content: center; width: 100%; }
   .l-cta-actions .l-btn, .l-cta-download-buttons .l-btn { flex: 1 1 100%; justify-content: center; }
-  .l-footer .l-wrap { flex-direction: column; text-align: center; gap: 14px; }
+  .l-footer-main, .l-footer-meta { flex-direction: column; text-align: center; gap: 14px; }
+  .l-footer-social { flex-direction: column; gap: 8px; }
   .l-back-top { bottom: 18px; right: 18px; width: 42px; height: 42px; }
 }
 
@@ -2159,6 +2228,12 @@ html {
   width: 100%;
   justify-content: center;
 }
+.l-btn[data-theme-toggle]:hover,
+.l-btn[data-theme-toggle]:active,
+.l-btn[data-theme-toggle]:hover svg,
+.l-btn[data-theme-toggle]:active svg {
+  transform: none;
+}
 
 html[data-theme="dark"] .landing {
   --card: #13231f;
@@ -2186,6 +2261,22 @@ html[data-theme="dark"] .l-prev-day em,
 html[data-theme="dark"] .l-footer .l-brand,
 html[data-theme="dark"] .l-footer .l-brand strong,
 html[data-theme="dark"] .l-footer nav a:hover {
+  color: #ffffff;
+}
+html[data-theme="dark"] .l-social-link {
+  border-color: rgba(218, 236, 227, 0.2);
+  background: #13231f;
+  color: #e6efe9;
+}
+html[data-theme="dark"] .l-social-link:hover {
+  border-color: rgba(114, 218, 165, 0.55);
+  background: #1e6249;
+  color: #ffffff;
+}
+html[data-theme="dark"] .l-footer-meta a {
+  color: #8ee8b5;
+}
+html[data-theme="dark"] .l-footer-meta a:hover {
   color: #ffffff;
 }
 html[data-theme="dark"] .l-mock-badge,

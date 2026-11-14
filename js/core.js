@@ -586,7 +586,7 @@
     return '';
   }
 
-  function nameValidationError(value, { allowSingleInitial = false, required = false, live = false, fieldName = '' } = {}) {
+  function nameValidationError(value, { allowSingleInitial = false, required = false, live = false, fieldName = '', formal = true } = {}) {
     const fieldRule = nameRuleForField(fieldName);
     const raw = String(value || '').normalize('NFC');
     const trimmedTrailingSep = live ? normalizeNamePart(raw.replace(/['\u2019-]\s*$/, '')) : normalizeNamePart(raw);
@@ -598,10 +598,13 @@
     if (!/^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(checkValue)) return NAME_CHAR_RULE;
     const letterCount = checkValue.replace(/[^\p{L}]/gu, '').length;
     if (!live && !allowSingleInitial && letterCount < 2) {
-      return fieldName
-        ? `Enter at least 2 letters for this ${fieldRule.label} using formal capitalization (e.g., ${fieldRule.example}).`
-        : 'Enter at least 2 letters using formal capitalization.';
+      return !formal
+        ? `Enter at least 2 letters for this ${fieldRule.label}.`
+        : (fieldName
+          ? `Enter at least 2 letters for this ${fieldRule.label} using formal capitalization (e.g., ${fieldRule.example}).`
+          : 'Enter at least 2 letters using formal capitalization.');
     }
+    if (!formal) return '';
     const words = checkValue.split(' ');
     for (let i = 0; i < words.length; i += 1) {
       const err = nameWordError(words[i], i, words.length, { live, allowSingleInitial, ruleMsg: fieldRule.ruleMsg });
@@ -684,11 +687,13 @@
   }
 
   function validateNameInput(input, { live = false } = {}) {
+    const relaxed = input?.form?.dataset?.relaxedNames === 'true';
     const message = nameValidationError(input.value, {
       allowSingleInitial: input.name === 'middle_name',
-      required: input.required,
+      required: relaxed && input.name === 'last_name' ? false : input.required,
       live,
-      fieldName: input.name || ''
+      fieldName: input.name || '',
+      formal: !relaxed
     });
     input.setCustomValidity(message);
     setFieldError(input, message);
@@ -742,7 +747,7 @@
       if (input.dataset.nameBound) return;
       input.dataset.nameBound = 'true';
       const fieldMeta = nameRuleForField(input.name);
-      input.title = fieldMeta.ruleMsg;
+      input.title = input.form?.dataset?.relaxedNames === 'true' ? NAME_CHAR_RULE : fieldMeta.ruleMsg;
       if (!input.placeholder && fieldMeta.placeholder) input.placeholder = fieldMeta.placeholder;
       input.addEventListener('input', () => {
         input.value = input.value.replace(/[^\p{L}\p{M} '\u2019-]/gu, '');
@@ -754,18 +759,54 @@
     document.querySelectorAll('input[name="invite_name"]').forEach(prepareInviteNameInput);
   }
 
+  function syncProfileNameMode(form, allowRelaxed = false) {
+    if (!form) return;
+    form.dataset.relaxedNames = allowRelaxed ? 'true' : '';
+    const lastInput = form.elements?.last_name;
+    if (lastInput) {
+      lastInput.required = !allowRelaxed;
+      const label = lastInput.labels?.[0] || lastInput.closest?.('.field')?.querySelector?.('label');
+      if (label) label.textContent = allowRelaxed ? 'Last name (optional)' : 'Last name';
+    }
+    ['first_name', 'middle_name', 'last_name'].forEach((name) => {
+      const control = form.elements?.[name];
+      if (!control) return;
+      control.title = allowRelaxed ? NAME_CHAR_RULE : nameRuleForField(name).ruleMsg;
+      if (control.hasAttribute?.('aria-invalid')) validateNameInput(control);
+    });
+  }
+
   const PHONE_RULE = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
+  const PHONE_PARTIAL_PREFIX = /^(?:0(?:9\d{0,9})?|\+(?:6(?:3(?:9\d{0,9})?)?)?)$/;
 
   function validPhoneNumber(value) {
     return /^(?:09\d{9}|\+639\d{9})$/.test(String(value || '').trim());
   }
 
-  function validatePhoneInput(input) {
+  function sanitizePhoneInput(input) {
+    const startsWithPlus = input.value.trimStart().startsWith('+');
+    const digits = input.value.replace(/\D/g, '').slice(0, startsWithPlus ? 12 : 11);
+    input.value = startsWithPlus ? `+${digits}` : digits;
+    return input.value;
+  }
+
+  function validateMobileField(input, { required = input?.required, requiredMessage = 'Enter your mobile number.', live = false } = {}) {
     const value = input.value.trim();
-    const message = !value && input.required ? 'Enter your mobile number.' : value && !validPhoneNumber(value) ? PHONE_RULE : '';
+    let message = '';
+    if (!value) {
+      if (required && !live) message = requiredMessage;
+    } else if (live && !input.hasAttribute('aria-invalid')) {
+      if (!PHONE_PARTIAL_PREFIX.test(value)) message = PHONE_RULE;
+    } else if (!validPhoneNumber(value)) {
+      message = PHONE_RULE;
+    }
     input.setCustomValidity(message);
     setFieldError(input, message);
     return !message;
+  }
+
+  function validatePhoneInput(input) {
+    return validateMobileField(input);
   }
 
   function preparePhoneInputs() {
@@ -776,10 +817,8 @@
       input.maxLength = 13;
       input.title = PHONE_RULE;
       input.addEventListener('input', () => {
-        const startsWithPlus = input.value.trimStart().startsWith('+');
-        const digits = input.value.replace(/\D/g, '').slice(0, startsWithPlus ? 12 : 11);
-        input.value = startsWithPlus ? `+${digits}` : digits;
-        if (input.hasAttribute('aria-invalid')) validatePhoneInput(input);
+        sanitizePhoneInput(input);
+        validateMobileField(input, { live: true });
       });
       input.addEventListener('blur', () => validatePhoneInput(input));
       input.addEventListener('invalid', () => validatePhoneInput(input));
@@ -1133,15 +1172,16 @@
   }
 
   function profileNeedsSetup(profile) {
+    const isSuperAdmin = profile?.role === 'SUPER_ADMIN';
     const first = normalizeNamePart(profile?.first_name);
     const middle = normalizeNamePart(profile?.middle_name);
     const last = normalizeNamePart(profile?.last_name);
     return Boolean(profile?.name_setup_required)
       || !first
-      || !last
-      || !validNamePart(first)
-      || (middle ? !validNamePart(middle, { allowSingleInitial: true }) : false)
-      || !validNamePart(last)
+      || (!isSuperAdmin && !last)
+      || !validNamePart(first, { formal: !isSuperAdmin })
+      || (middle ? !validNamePart(middle, { allowSingleInitial: true, formal: !isSuperAdmin }) : false)
+      || (last ? !validNamePart(last, { formal: !isSuperAdmin }) : false)
       || (profile?.contact_number ? !validPhoneNumber(profile.contact_number) : false);
   }
 
@@ -1400,6 +1440,7 @@
     bindUtilityDialogs();
     bindAccountDialog();
     prepareNameInputs();
+    syncProfileNameMode(document.getElementById('quick-profile-form'), role === 'SUPER_ADMIN');
     preparePhoneInputs();
     mountThemeControls(document);
   }
@@ -2205,9 +2246,11 @@
         if (memberRow?.payout_channel) payoutSource = memberRow;
       }
       currentProfile.avatar_url = data.avatar_url || null;
-      profileForm.elements.first_name.value = data.first_name || data.full_name?.split(' ')[0] || '';
+      syncProfileNameMode(profileForm, currentProfile.role === 'SUPER_ADMIN');
+      const splitLegacy = !data.first_name && !data.last_name ? String(data.full_name || '').trim().split(/\s+/).filter(Boolean) : [];
+      profileForm.elements.first_name.value = data.first_name || splitLegacy[0] || '';
       profileForm.elements.middle_name.value = data.middle_name || '';
-      profileForm.elements.last_name.value = data.last_name || data.full_name?.split(' ').slice(1).join(' ') || '';
+      profileForm.elements.last_name.value = data.last_name || (splitLegacy.length > 1 ? splitLegacy.slice(1).join(' ') : '');
       profileForm.elements.contact_number.value = data.contact_number || '';
       setPayoutFields(profileForm, payoutSource);
       emailForm.elements.email.value = data.email || '';
@@ -2488,6 +2531,7 @@
     const profileForm = document.getElementById('quick-profile-form');
     if (!profileForm || profileForm.dataset.bound) return;
     profileForm.dataset.bound = 'true';
+    syncProfileNameMode(profileForm, currentProfile?.role === 'SUPER_ADMIN');
     const emailForm = document.getElementById('quick-email-form');
     const passwordForm = document.getElementById('quick-password-form');
     const notificationToggle = document.getElementById('quick-notifications-enabled');
@@ -2557,14 +2601,14 @@
         await rpc('update_own_profile', {
           p_first_name: values.get('first_name'),
           p_middle_name: values.get('middle_name') || null,
-          p_last_name: values.get('last_name'),
+          p_last_name: values.get('last_name') || null,
           p_contact_number: values.get('contact_number') || null,
           ...payoutPayload
         });
         Object.assign(currentProfile, {
           first_name: normalizeNamePart(values.get('first_name')),
           middle_name: normalizeNamePart(values.get('middle_name')) || null,
-          last_name: normalizeNamePart(values.get('last_name')),
+          last_name: normalizeNamePart(values.get('last_name')) || null,
           name_setup_required: false,
           payout_channel: payoutPayload.p_payout_channel,
           payout_account_number: payoutPayload.p_payout_account_number,
@@ -7163,6 +7207,13 @@
     </div>`;
   }
 
+  const PAYOUT_NUMBER_REQUIRED_MSG = 'Enter an account or mobile number for this payout channel.';
+
+  function isMobileWalletChannel(channel) {
+    const normalized = normalizePaymentMethod(channel) || '';
+    return normalized === 'GCASH' || normalized === 'MAYA';
+  }
+
   function syncPayoutFieldUi(container) {
     if (!container) return;
     const channelSel = container.querySelector('select[name="payout_channel"]');
@@ -7181,15 +7232,22 @@
     const form = container.closest('form');
     const contactInput = form?.elements?.contact_number;
     const hasContact = Boolean(String(contactInput?.value || '').trim());
-    const isMobileWallet = channel === 'GCASH' || channel === 'MAYA';
+    const isMobileWallet = isMobileWalletChannel(channel);
 
     if (useMobileBtn) {
       useMobileBtn.hidden = !isMobileWallet || !hasContact;
     }
 
-    if (channel === 'GCASH' || channel === 'MAYA') {
+    if (numInput) {
+      numInput.inputMode = isMobileWallet ? 'tel' : 'text';
+      numInput.maxLength = isMobileWallet ? 13 : 80;
+      numInput.title = isMobileWallet ? PHONE_RULE : '';
+      if (!isMobileWallet) numInput.setCustomValidity('');
+    }
+
+    if (isMobileWallet) {
       if (numLabel) numLabel.textContent = `${channel === 'GCASH' ? 'GCash' : 'Maya'} mobile number`;
-      if (numInput) numInput.placeholder = '0917 123 4567';
+      if (numInput) numInput.placeholder = '09171234567';
       if (nameLabel) nameLabel.textContent = 'Registered account name';
       if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
     } else if (channel === 'BANK_TRANSFER') {
@@ -7209,7 +7267,10 @@
       if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
     }
 
-    if (numInput && !hasChannel) setFieldError(numInput, '');
+    if (numInput && !hasChannel) {
+      numInput.setCustomValidity('');
+      setFieldError(numInput, '');
+    }
     if (nameInput && !hasChannel) setFieldError(nameInput, '');
   }
 
@@ -7230,12 +7291,39 @@
         const contactInput = form?.elements?.contact_number;
 
         channelSel?.addEventListener('change', () => {
-          if (numInput) setFieldError(numInput, '');
+          if (numInput) {
+            numInput.setCustomValidity('');
+            setFieldError(numInput, '');
+            if (isMobileWalletChannel(channelSel.value) && /^[+\d\s().-]+$/.test(numInput.value.trim())) {
+              sanitizePhoneInput(numInput);
+            }
+          }
           syncPayoutFieldUi(container);
+          if (numInput && isMobileWalletChannel(channelSel.value) && numInput.value.trim()) {
+            validateMobileField(numInput, { required: true, requiredMessage: PAYOUT_NUMBER_REQUIRED_MSG, live: true });
+          }
           if (channelSel.value && numInput && !numInput.value.trim()) numInput.focus();
         });
         enhancePaymentSelect(channelSel);
-        numInput?.addEventListener('input', () => setFieldError(numInput, ''));
+        numInput?.addEventListener('input', () => {
+          if (isMobileWalletChannel(channelSel?.value)) {
+            sanitizePhoneInput(numInput);
+            validateMobileField(numInput, { required: true, requiredMessage: PAYOUT_NUMBER_REQUIRED_MSG, live: true });
+          } else {
+            numInput.setCustomValidity('');
+            setFieldError(numInput, '');
+          }
+        });
+        numInput?.addEventListener('blur', () => {
+          if (isMobileWalletChannel(channelSel?.value)) {
+            validateMobileField(numInput, { required: false, requiredMessage: PAYOUT_NUMBER_REQUIRED_MSG });
+          }
+        });
+        numInput?.addEventListener('invalid', () => {
+          if (isMobileWalletChannel(channelSel?.value)) {
+            validateMobileField(numInput, { required: true, requiredMessage: PAYOUT_NUMBER_REQUIRED_MSG });
+          }
+        });
         nameInput?.addEventListener('input', () => setFieldError(nameInput, ''));
         contactInput?.addEventListener('input', () => syncPayoutFieldUi(container));
         useMobileBtn?.addEventListener('click', () => {
@@ -7243,7 +7331,13 @@
           const mobile = String(contactInput.value || '').trim();
           if (!mobile) return;
           numInput.value = mobile;
-          setFieldError(numInput, '');
+          sanitizePhoneInput(numInput);
+          if (isMobileWalletChannel(channelSel?.value)) {
+            validateMobileField(numInput, { required: true, requiredMessage: PAYOUT_NUMBER_REQUIRED_MSG });
+          } else {
+            numInput.setCustomValidity('');
+            setFieldError(numInput, '');
+          }
           numInput.focus();
         });
       }
@@ -7270,6 +7364,7 @@
     }
     if (numInput) {
       numInput.value = record?.payout_account_number || '';
+      numInput.setCustomValidity('');
       setFieldError(numInput, '');
     }
     if (nameInput) {
@@ -7289,12 +7384,22 @@
     if (!channelSel || !numInput) return true;
     const channel = normalizePaymentMethod(channelSel.value) || '';
     const number = String(numInput.value || '').trim();
-    if (['GCASH', 'MAYA', 'BANK_TRANSFER'].includes(channel) && !number) {
+    if (isMobileWalletChannel(channel)) {
       syncPayoutFieldUi(container);
-      setFieldError(numInput, 'Enter an account or mobile number for this payout channel.');
+      if (!validateMobileField(numInput, { required: true, requiredMessage: PAYOUT_NUMBER_REQUIRED_MSG })) {
+        numInput.focus();
+        return false;
+      }
+      return true;
+    }
+    if (channel === 'BANK_TRANSFER' && !number) {
+      syncPayoutFieldUi(container);
+      numInput.setCustomValidity(PAYOUT_NUMBER_REQUIRED_MSG);
+      setFieldError(numInput, PAYOUT_NUMBER_REQUIRED_MSG);
       numInput.focus();
       return false;
     }
+    numInput.setCustomValidity('');
     setFieldError(numInput, '');
     return true;
   }
@@ -7458,7 +7563,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     PAYMENT_METHODS, normalizePaymentMethod, guessPaymentMethodFromLabel, paymentMethodMeta, paymentMethodIconHtml, paymentMethodBadge, paymentMethodPickerHtml, mountPaymentMethodPickers, setPaymentMethod, paymentMethodOptionsHtml,
     CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,

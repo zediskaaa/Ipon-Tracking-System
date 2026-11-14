@@ -1,5 +1,9 @@
 [
   {
+    "date": "2026-11-14T23:29:09+08:00",
+    "message": "Upgrade server-side AI release notes, server Gemini key setup, landing showcase, and dark-mode contrast\n\n- Replace client/procedural release-note fallbacks with authentic server-side Gemini AI generation in `supabase/functions/manage-account/index.ts`, categorizing changes into non-empty New Features, Fixes, Improvements, Features Requested by Users, Security Updates, and Other Changes.\n- Add `coerceReleaseBulletText` and `coerceReleaseBulletList` across the Edge Function and `js/super-admin.js` (plus `[object Object]` sanitization) so nested AI JSON objects always render as detailed readable bullets.\n- Add Super-Admin-only `gemini-key-status`, `save-gemini-key`, and `test-gemini-key` actions backed by `public.internal_webhook_config`, update endpoint routing to prioritize `generativelanguage.googleapis.com` for free-tier `AQ.`/`AIza...` keys, fail fast on `401`/`403`/`BILLING_DISABLED`, and wire inline **Configure API key** recovery in `super-admin.html`, `js/super-admin.js`, and `js/core.js`.\n- Auto-generate `js/release-commits.json` during `scripts/supabase-migrate.mjs` sync and add explicit change detection plus empty-state dialog handling when no new updates have landed.\n- Fix `.toast` and `.inline-error` text wrapping plus dark-mode arrow/contrast styling in `css/app.css`, update the interactive showcase/theme preview in `index.html`, `css/landing.css`, and `js/index.js`, align policy modal deep-linking in `login.html` and `js/auth.js`, and expand contract verification in `tests/contracts.test.mjs`."
+  },
+  {
     "date": "2026-11-14T21:00:49+08:00",
     "message": "Add settings theme switcher, payment channel icons, live announcement names, and AI release notes polish\n\n- Add Light/Dark mode switcher inside Settings with readable contrast across dashboards, hero plates, and landing views\n- Upgrade payout and payment dropdowns with GCash, Maya, Bank, and Cash icons and refine per-field formal name validation\n- Keep announcement author display names synchronized live when users update their profile name\n- Upgrade Write with AI release notes to rewrite fresh, user-focused updates and filter out internal developer details\n- Remove square avatar container borders, enforce circular close/remove button geometry, and fix startup initialization stability"
   },
@@ -174,9 +178,5 @@
   {
     "date": "2026-11-14T02:14:37+08:00",
     "message": "Remove Ask Savings Coach Q&A chat and Vertex AI additions"
-  },
-  {
-    "date": "2026-11-14T02:11:38+08:00",
-    "message": "Support Vertex AI Express (AQ.) keys alongside Gemini AI Studio keys"
   }
 ]

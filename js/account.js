@@ -39,12 +39,14 @@
 
   async function load() {
     const [profileResult, activityResult] = await Promise.all([
-      Ipon.client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required').eq('id', state.profile.id).single(),
+      Ipon.client.from('profiles').select('role,first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required').eq('id', state.profile.id).single(),
       Ipon.client.from('account_activity').select('id,event,created_at').order('created_at', { ascending: false }).limit(20)
     ]);
     if (profileResult.error) throw profileResult.error;
     if (activityResult.error) throw activityResult.error;
     const profile = profileResult.data;
+    const isSuperAdmin = (profile.role || state.profile?.role) === 'SUPER_ADMIN';
+    Ipon.syncProfileNameMode?.(profileForm, isSuperAdmin);
     let payoutSource = profile;
     if (!profile.payout_channel && (profile.member_id || state.profile.member_id)) {
       const { data: memberRow } = await Ipon.client.from('members').select('payout_channel,payout_account_number,payout_account_name').eq('id', profile.member_id || state.profile.member_id).maybeSingle();
@@ -57,16 +59,16 @@
     profileForm.elements.contact_number.value = profile.contact_number || '';
     Ipon.setPayoutFields(profileForm, payoutSource);
     const hasInvalidExistingName = !mustCompleteName && (
-      (profile.first_name && !Ipon.validNamePart(profile.first_name))
-      || (profile.middle_name && !Ipon.validNamePart(profile.middle_name, { allowSingleInitial: true }))
-      || (profile.last_name && !Ipon.validNamePart(profile.last_name))
+      (profile.first_name && !Ipon.validNamePart(profile.first_name, { formal: !isSuperAdmin }))
+      || (profile.middle_name && !Ipon.validNamePart(profile.middle_name, { allowSingleInitial: true, formal: !isSuperAdmin }))
+      || (profile.last_name && !Ipon.validNamePart(profile.last_name, { formal: !isSuperAdmin }))
     );
     if (hasInvalidExistingName) {
       Ipon.validateNameInput(profileForm.elements.first_name);
       Ipon.validateNameInput(profileForm.elements.middle_name);
       Ipon.validateNameInput(profileForm.elements.last_name);
     }
-    profileComplete = !Ipon.profileNeedsSetup(profile);
+    profileComplete = !Ipon.profileNeedsSetup({ role: state.profile?.role, ...profile });
     if (!profileComplete || passwordChangeRequired) onboarding = true;
     else if (params.get('force_password') !== '1' && params.get('complete_profile') !== '1') onboarding = false;
     updateDialogMode();
@@ -75,10 +77,16 @@
     const setupNoticeCopy = setupNotice.querySelector('span');
     if (setupNoticeCopy) {
       setupNoticeCopy.textContent = mustCompleteName
-        ? 'Enter your real formal first name, last name, and mobile number before continuing to your panel.'
+        ? (isSuperAdmin
+          ? 'Enter your first name and mobile number before continuing to your panel.'
+          : 'Enter your real formal first name, last name, and mobile number before continuing to your panel.')
         : hasInvalidExistingName
-          ? 'Please update your name using formal capitalization (no ALL CAPS or all lowercase) before continuing to your panel.'
-          : 'Add your first name, last name, and mobile number before continuing to your panel.';
+          ? (isSuperAdmin
+            ? 'Please enter a valid name using letters before continuing to your panel.'
+            : 'Please update your name using formal capitalization (no ALL CAPS or all lowercase) before continuing to your panel.')
+          : (isSuperAdmin
+            ? 'Add your first name and mobile number before continuing to your panel.'
+            : 'Add your first name, last name, and mobile number before continuing to your panel.');
     }
     emailForm.elements.email.value = profile.email || state.session.user.email || '';
     notificationToggle.checked = profile.notifications_enabled !== false;
@@ -86,11 +94,13 @@
     activityBody.innerHTML = activities.length ? activities.map((row) => `<tr><td>${Ipon.escapeHtml(row.event.replaceAll('_', ' ').toLowerCase().replace(/^./, (character) => character.toUpperCase()))}</td><td>${Ipon.dateLabel(row.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">No account activity recorded yet.</td></tr>';
     if (onboarding) {
       const nextField = !profileComplete
-        ? (!Ipon.validNamePart(profileForm.elements.first_name.value)
+        ? (!Ipon.validNamePart(profileForm.elements.first_name.value, { formal: !isSuperAdmin })
             ? profileForm.elements.first_name
-            : (profileForm.elements.middle_name.value && !Ipon.validNamePart(profileForm.elements.middle_name.value, { allowSingleInitial: true })
+            : (profileForm.elements.middle_name.value && !Ipon.validNamePart(profileForm.elements.middle_name.value, { allowSingleInitial: true, formal: !isSuperAdmin })
                 ? profileForm.elements.middle_name
-                : (!Ipon.validNamePart(profileForm.elements.last_name.value) ? profileForm.elements.last_name : profileForm.elements.contact_number)))
+                : (((!isSuperAdmin && !profileForm.elements.last_name.value) || (profileForm.elements.last_name.value && !Ipon.validNamePart(profileForm.elements.last_name.value, { formal: !isSuperAdmin })))
+                    ? profileForm.elements.last_name
+                    : profileForm.elements.contact_number)))
         : (passwordChangeRequired ? (passwordForm.elements.current_password || passwordForm.elements.password) : null);
       nextField?.focus();
     }
@@ -107,10 +117,10 @@
     Ipon.setBusy(button, true);
     try {
       const wasOnboarding = onboarding;
-      await Ipon.rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number'), ...payoutPayload });
+      await Ipon.rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name') || null, p_contact_number: values.get('contact_number'), ...payoutPayload });
       const first = Ipon.normalizeNamePart(values.get('first_name'));
       const middle = Ipon.normalizeNamePart(values.get('middle_name')) || null;
-      const last = Ipon.normalizeNamePart(values.get('last_name'));
+      const last = Ipon.normalizeNamePart(values.get('last_name')) || null;
       const computedFull = [first, middle, last].filter(Boolean).join(' ');
       if (state.profile) {
         Object.assign(state.profile, { first_name: first, middle_name: middle, last_name: last, ...(computedFull ? { full_name: computedFull } : {}), name_setup_required: false });

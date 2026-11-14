@@ -322,7 +322,7 @@ test('login provides development, terms, and privacy disclosures', () => {
   assert.match(html, /wallet reconciliation balances/i);
   assert.match(html, /30-day soft-delete member recovery bin/i);
   assert.match(html, /Web Push subscription tokens/i);
-  assert.match(html, /contact your assigned administrator/);
+  assert.match(html, /email <a href="https:\/\/mail\.google\.com\/mail\/\?view=cm&amp;fs=1&amp;to=zedrickdemonteverde1@gmail\.com[^"]*"|email <a href="https:\/\/mail\.google\.com\/mail\/\?view=cm&fs=1&to=zedrickdemonteverde1@gmail\.com[^"]*"/);
   assert.match(auth, /policyDialog\.showModal\(\)/);
   assert.match(auth, /new URLSearchParams\(location\.search\)\.get\('policy'\)/);
 
@@ -330,9 +330,15 @@ test('login provides development, terms, and privacy disclosures', () => {
   assert.doesNotMatch(indexHtml, /Once approved, name your group/i);
   assert.match(indexHtml, /href="login\.html\?policy=terms"/);
   assert.match(indexHtml, /href="login\.html\?policy=privacy"/);
-  assert.match(indexHtml, /Wallets &amp; payout channels/);
+  assert.doesNotMatch(indexHtml, /Live announcements/);
+  assert.doesNotMatch(indexHtml, /Wallets &amp; payout channels/);
+  assert.doesNotMatch(indexHtml, /Push alerts &amp; dark mode/);
+  assert.doesNotMatch(indexHtml, /id="demo-theme-toggle"/);
+  assert.doesNotMatch(indexHtml, /Can I switch themes or turn on phone notifications\?/);
   assert.match(indexHtml, /Record discussions &amp; proofs/);
-  assert.match(indexHtml, /id="demo-theme-toggle"/);
+  assert.match(indexHtml, /<div class="l-nav-cta">[\s\S]*Sign in[\s\S]*Sign up[\s\S]*<\/div>/);
+  assert.doesNotMatch(indexHtml, /class="l-btn[^"]*"[^>]*>[\s\S]*?M5 12h14m-6-6 6 6-6 6/);
+  assert.match(indexHtml, /<section class="l-trust"[^>]*>[\s\S]*E-wallet · Bank · Cash[\s\S]*<\/section>/);
 });
 
 test('temporary password state is server-owned and cleared by the Edge workflow', () => {
@@ -2155,6 +2161,7 @@ test('payment method tagging and wallet reconciliation stay wired end to end', (
   assert.match(css, /\.pm-badge/);
   assert.match(css, /\.dashboard-wallet-strip/);
   assert.match(css, /\.wallet-summary-cards/);
+  assert.match(read('css/hero-plates.css'), /\.summary-card\s+\.dashboard-wallet-strip\s*\{[^}]*flex-wrap:nowrap;/);
 });
 
 test('member payout account info is integrated across database, profiles, members, deductions, and reports', () => {
@@ -2189,7 +2196,12 @@ test('member payout account info is integrated across database, profiles, member
   assert.match(read('members.html'), /<th>Payout account<\/th>/);
   assert.match(read('withdrawals.html'), /id="record-payout-destination"/);
   assert.match(read('dashboard.html'), /id="quick-payout-destination"/);
+  assert.match(read('user.html'), /class="member-status-top"/);
+  assert.match(read('user.html'), /class="member-status-heading"/);
   assert.match(read('user.html'), /id="user-payout-strip"/);
+  assert.match(css, /\.member-status-top\s*\{/);
+  assert.match(css, /\.user-payout-strip/);
+  assert.match(css, /\.member-metrics #user-total\s*\{/);
 
   assert.match(accountJs, /setPayoutFields/);
   assert.match(accountJs, /readPayoutPayload/);
@@ -3867,6 +3879,8 @@ test('dark and light theme toggle persists across tabs, updates charts, preserve
   assert.match(appCss, /html\[data-theme="dark"\]\s+\.announcement-avatar\.is-owner\s*\{[^}]*border-color:/);
   assert.match(appCss, /html\[data-theme="dark"\]\s+\.reaction-stack-emoji,\s*html\[data-theme="dark"\]\s+\.reaction-user-emoji-badge\s*\{[^}]*box-shadow:\s*0 0 0 1\.5px var\(--surface\)/);
   assert.match(landingCss, /html\[data-theme="dark"\]\s+\.landing/);
+  assert.doesNotMatch(landingCss, /\.l-btn:hover\s+svg\s*\{[^}]*translateX/);
+  assert.match(landingCss, /\.l-btn\[data-theme-toggle\]:hover,[\s\S]*?\.l-btn\[data-theme-toggle\]:hover svg,[\s\S]*?transform:\s*none;/);
   assert.match(loginHtml, /html\[data-theme="dark"\]\s+\.login-card/);
   assert.doesNotMatch(coreJs, /color:#324841/);
   assert.doesNotMatch(coreJs, /color: #354741/);
@@ -4210,6 +4224,352 @@ test('announcement author_name stays live with profile full_name changes across 
   assert.match(core, /ipon:profile-updated/);
   assert.match(core, /isOwnPost && currentProfile\.full_name/);
 });
+
+test('dashboard wallet pills stay compact sans-serif and group switcher lives inside left group identity', () => {
+  const dashboardHtml = read('dashboard.html');
+  const dashboardJs = read('js/dashboard.js');
+  const heroCss = read('css/hero-plates.css');
+
+  const identityBlock = dashboardHtml.match(/<div class="group-bar-identity">[\s\S]*?<div class="group-bar-controls">/)?.[0] || '';
+  assert.match(identityBlock, /id="dashboard-group-switcher-wrap"/);
+  assert.match(identityBlock, /id="dashboard-group-select"/);
+  const controlsBlock = dashboardHtml.match(/<div class="group-bar-controls">[\s\S]*?<section class="no-group-card"/)?.[0] || '';
+  assert.doesNotMatch(controlsBlock, /dashboard-group-switcher-wrap|dashboard-group-select/);
+
+  assert.match(dashboardJs, /groupIdentityEl\?\.classList\.toggle\('is-switchable',\s*canSwitchGroup\)/);
+  assert.match(dashboardJs, /groupIdentityEl\?\.addEventListener\('click',/);
+
+  assert.match(heroCss, /#dashboard-group-bar \.group-switcher-wrap \.custom-select-selection\s*\{\s*display:none;/);
+  assert.match(heroCss, /\.summary-card \.dashboard-wallet-pill\s*\{[^}]*height:auto;\s*min-height:0;[^}]*border-radius:11px;/);
+  assert.match(heroCss, /\.summary-card \.dashboard-wallet-pill strong\s*\{[^}]*"IPON Serif",serif;/);
+  assert.match(heroCss, /\.summary-card \.dashboard-wallet-link\s*\{[^}]*border-radius:11px;/);
+  assert.match(heroCss, /\.summary-breakdown dt span\s*\{[^}]*display:block;/);
+});
+
+test('member status mobile flex-basis reset and payout PH mobile live validation hold', () => {
+  const appCss = read('css/app.css');
+  const core = read('js/core.js');
+  const migration066 = read('database/migrations/20261115_066_payout_mobile_validation.sql');
+
+  const mobileStatusBlock = appCss.match(/@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.member-metrics\s*\{/)?.[0] || '';
+  assert.match(mobileStatusBlock, /\.member-status-summary\s*\{[^}]*flex:\s*0 0 auto;\s*width:\s*100%;/);
+  assert.match(appCss, /\.field-label-row \.link-action\s*\{[^}]*white-space:\s*nowrap;\s*flex-shrink:\s*0;/);
+  assert.match(migration066, /if v_channel in \('GCASH', 'MAYA'\) then\s+v_number := public\.normalize_ph_mobile\(v_number\);/i);
+
+  class FakeEl {
+    constructor(tag = 'div', attrs = {}) {
+      this.tagName = tag.toUpperCase();
+      this.attributes = new Map();
+      this.classList = {
+        _set: new Set(),
+        add: (...c) => c.forEach((x) => this.classList._set.add(x)),
+        remove: (...c) => c.forEach((x) => this.classList._set.delete(x)),
+        toggle: (x, f) => (f === undefined ? (this.classList._set.has(x) ? this.classList._set.delete(x) : this.classList._set.add(x)) : (f ? this.classList._set.add(x) : this.classList._set.delete(x))),
+        contains: (x) => this.classList._set.has(x)
+      };
+      this.children = [];
+      this.listeners = new Map();
+      this.dataset = {};
+      this.style = {};
+      this.value = '';
+      this.hidden = false;
+      this.customValidity = '';
+      this.parentNode = null;
+      this.fieldContainer = null;
+      Object.entries(attrs).forEach(([k, v]) => this.setAttribute(k, v));
+    }
+    setAttribute(k, v) {
+      this.attributes.set(k, String(v));
+      if (k === 'id') this.id = String(v);
+      if (k === 'name') this.name = String(v);
+      if (k === 'class') String(v).split(/\s+/).filter(Boolean).forEach((c) => this.classList._set.add(c));
+    }
+    getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; }
+    hasAttribute(k) { return this.attributes.has(k); }
+    removeAttribute(k) { this.attributes.delete(k); }
+    toggleAttribute(k, force) {
+      const on = force === undefined ? !this.hasAttribute(k) : Boolean(force);
+      if (on) this.setAttribute(k, '');
+      else this.removeAttribute(k);
+      return on;
+    }
+    appendChild(child) { child.parentNode = this; this.children.push(child); return child; }
+    insertAdjacentHTML() {}
+    addEventListener(type, fn) {
+      if (!this.listeners.has(type)) this.listeners.set(type, []);
+      this.listeners.get(type).push(fn);
+    }
+    dispatchEvent(type) { (this.listeners.get(type) || []).forEach((fn) => fn({ target: this, preventDefault() {} })); }
+    setCustomValidity(msg) { this.customValidity = String(msg || ''); }
+    focus() { this.focused = true; }
+    closest(sel) {
+      if (sel.includes('.field')) return this.fieldContainer || null;
+      if (sel === 'form') return this.formRef || null;
+      return null;
+    }
+    matches(sel) { return sel === '[data-payout-fields]'; }
+  }
+
+  const channelSel = new FakeEl('select', { name: 'payout_channel' });
+  const numInput = new FakeEl('input', { name: 'payout_account_number' });
+  const nameInput = new FakeEl('input', { name: 'payout_account_name' });
+  const numError = new FakeEl('small', { class: 'field-error' });
+  const useMobileBtn = new FakeEl('button');
+  const detailField = new FakeEl('div', { class: 'field payout-detail-field' });
+  numInput.fieldContainer = { querySelector: (sel) => (sel === '.field-error' ? numError : null) };
+  const container = new FakeEl('div');
+  container.dataset.mounted = 'true';
+  container.querySelector = (sel) => ({
+    'select[name="payout_channel"]': channelSel,
+    'input[name="payout_account_number"]': numInput,
+    'input[name="payout_account_name"]': nameInput,
+    '[data-payout-use-mobile]': useMobileBtn
+  }[sel] || null);
+  container.querySelectorAll = (sel) => (sel === '.payout-detail-field' ? [detailField] : []);
+
+  const loader = new FakeEl('div', { id: 'app-loader' });
+  const body = new FakeEl('body');
+  body.dataset = { page: 'user' };
+  const doc = {
+    documentElement: new FakeEl('html'),
+    body,
+    head: new FakeEl('head'),
+    getElementById: (id) => (id === 'app-loader' ? loader : null),
+    querySelector: () => null,
+    querySelectorAll: (sel) => (sel === '[data-payout-fields]' ? [container] : []),
+    createElement: (t) => new FakeEl(t),
+    addEventListener() {},
+    readyState: 'complete'
+  };
+  const ctx = {
+    window: null, document: doc,
+    HTMLInputElement: FakeEl, HTMLFormElement: FakeEl, HTMLElement: FakeEl,
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/user.html', pathname: '/user.html', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
+
+  ctx.window.Ipon.setPayoutFields(container, { payout_channel: 'GCASH', payout_account_number: '' });
+  assert.equal(numInput.maxLength, 13);
+  assert.equal(numInput.inputMode, 'tel');
+
+  numInput.value = '098472134132313131';
+  numInput.dispatchEvent('input');
+  assert.equal(numInput.value, '09847213413');
+  assert.equal(ctx.window.Ipon.validatePayoutFields(container), true);
+  assert.equal(numError.hidden, true);
+
+  numInput.value = '123';
+  numInput.dispatchEvent('input');
+  assert.match(numError.textContent, /11 digits starting with 09/);
+  assert.equal(numError.hidden, false);
+
+  numInput.value = '09123';
+  numInput.removeAttribute('aria-invalid');
+  numInput.dispatchEvent('input');
+  assert.equal(numError.hidden, true);
+  numInput.dispatchEvent('blur');
+  assert.equal(numError.hidden, false);
+  assert.equal(ctx.window.Ipon.validatePayoutFields(container), false);
+
+  numInput.value = '+639171234567';
+  numInput.dispatchEvent('input');
+  assert.equal(numError.hidden, true);
+  assert.equal(ctx.window.Ipon.validatePayoutFields(container), true);
+
+  channelSel.value = 'BANK_TRANSFER';
+  channelSel.dispatchEvent('change');
+  assert.equal(numInput.maxLength, 80);
+  assert.equal(numInput.inputMode, 'text');
+  numInput.value = 'BPI · 1234-5678-90';
+  assert.equal(ctx.window.Ipon.validatePayoutFields(container), true);
+});
+
+test('questions email contact and landing footer social links render with icons and valid hrefs', () => {
+  const loginHtml = read('login.html');
+  const indexHtml = read('index.html');
+  const landingCss = read('css/landing.css');
+
+  assert.match(loginHtml, /<h3>Questions<\/h3>\s*<p>For privacy, payout-info visibility, or account concerns, email <a href="https:\/\/mail\.google\.com\/mail\/\?view=cm&fs=1&to=zedrickdemonteverde1@gmail\.com[^"]*" target="_blank" rel="noopener noreferrer">zedrickdemonteverde1@gmail\.com<\/a>\.<\/p>/);
+  assert.match(indexHtml, /href="https:\/\/mail\.google\.com\/mail\/\?view=cm&fs=1&to=zedrickdemonteverde1@gmail\.com[^"]*" target="_blank" rel="noopener noreferrer"/);
+
+  for (const url of [
+    'https://www.facebook.com/zediskaaa/',
+    'https://x.com/zediskaaa/',
+    'https://www.instagram.com/zediskaaa/',
+    'https://discord.com/channels/@765791188745322516'
+  ]) {
+    const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(indexHtml, new RegExp(`<a class="l-social-link"[^>]*href="${escaped}"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*>\\s*<svg[\\s\\S]*?<\\/svg>\\s*<\\/a>`));
+  }
+  assert.match(landingCss, /\.l-social-link\s*\{[^}]*aspect-ratio:\s*1 \/ 1;\s*border-radius:\s*50%;/);
+});
+
+test('Super Admin can edit own name in all lowercase and with first name only across UI and SQL while other roles keep formal rules', () => {
+  const coreJs = read('js/core.js');
+  const accountJs = read('js/account.js');
+  const superAdminJs = read('js/super-admin.js');
+  const migration067 = read('database/migrations/20261115_067_super_admin_flexible_name.sql');
+  const schema = read('database/schema.sql');
+
+  const makeNode = (tag) => ({
+    tagName: String(tag).toUpperCase(),
+    className: '',
+    hidden: false,
+    textContent: '',
+    innerHTML: '',
+    style: {},
+    dataset: {},
+    classList: { add() {}, toggle() {}, remove() {}, contains: () => false },
+    setAttribute() {},
+    appendChild() {},
+    append() {},
+    remove() {},
+    addEventListener() {},
+    querySelectorAll: () => [],
+    querySelector: () => null
+  });
+  const doc = {
+    body: { dataset: { page: 'super-admin' }, classList: { add() {}, toggle() {}, contains: () => false }, insertAdjacentHTML() {}, appendChild() {}, append() {}, addEventListener() {}, querySelector: () => null },
+    head: { appendChild() {}, insertAdjacentHTML() {} },
+    documentElement: { dataset: {} },
+    readyState: 'complete',
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: (id) => (id === 'app-loader' ? makeNode('div') : null),
+    createElement: (tag) => makeNode(tag),
+    addEventListener() {}
+  };
+  const ctx = {
+    window: null, document: doc, HTMLInputElement: class {}, HTMLFormElement: class {}, HTMLElement: class {},
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/super-admin.html', pathname: '/super-admin.html', origin: 'http://localhost', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    IPON_CONFIG: { supabaseUrl: '', supabaseAnonKey: '' },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval: () => 0,
+    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  const { validNamePart, validateNameFields, syncProfileNameMode, profileNeedsSetup } = ctx.window.Ipon;
+
+  // Validator behavior
+  assert.equal(validNamePart('zedrick'), false);
+  assert.equal(validNamePart('zedrick', { formal: false }), true);
+  assert.equal(validNamePart('zedrick dela cruz', { formal: false }), true);
+  assert.equal(validNamePart('zedrick123', { formal: false }), false);
+  assert.equal(validNamePart('z', { formal: false }), false);
+
+  // Mock form with first/middle/last inputs
+  const makeField = (form, name, labelText, required = true) => {
+    const errEl = { classList: { contains: (c) => c === 'field-error' }, textContent: '', hidden: true, setAttribute() {} };
+    const labelEl = { textContent: labelText };
+    const container = {
+      querySelector: (sel) => (sel === 'label' ? labelEl : errEl),
+      append() {}
+    };
+    const attrs = new Map();
+    const input = {
+      form,
+      name,
+      value: '',
+      required,
+      disabled: false,
+      title: '',
+      labels: [labelEl],
+      customValidity: '',
+      setCustomValidity(msg) { this.customValidity = String(msg || ''); },
+      toggleAttribute(k, force) { if (force) attrs.set(k, 'true'); else attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      getAttribute() { return ''; },
+      closest() { return container; },
+      focus() {},
+      _labelEl: labelEl,
+      _errEl: errEl
+    };
+    return input;
+  };
+  const form = { dataset: {}, elements: {} };
+  form.elements.first_name = makeField(form, 'first_name', 'First name', true);
+  form.elements.middle_name = makeField(form, 'middle_name', 'Middle name (optional)', false);
+  form.elements.last_name = makeField(form, 'last_name', 'Last name', true);
+
+  // Relaxed mode for Super Admin accepts all lowercase & blank last name
+  syncProfileNameMode(form, true);
+  assert.equal(form.dataset.relaxedNames, 'true');
+  assert.equal(form.elements.last_name.required, false);
+  assert.equal(form.elements.last_name._labelEl.textContent, 'Last name (optional)');
+  form.elements.first_name.value = 'zedrick';
+  form.elements.last_name.value = '';
+  assert.equal(validateNameFields(form), true);
+  assert.equal(form.elements.first_name.customValidity, '');
+  assert.equal(form.elements.last_name.customValidity, '');
+
+  // Digits still rejected for Super Admin
+  form.elements.first_name.value = 'zedrick 2';
+  assert.equal(validateNameFields(form), false);
+
+  // Strict mode (regular roles) rejects all lowercase & blank last name
+  syncProfileNameMode(form, false);
+  assert.equal(form.elements.last_name.required, true);
+  assert.equal(form.elements.last_name._labelEl.textContent, 'Last name');
+  form.elements.first_name.value = 'zedrick';
+  form.elements.last_name.value = '';
+  assert.equal(validateNameFields(form), false);
+
+  // Onboarding gate skips last name requirement & formal casing for SUPER_ADMIN only
+  assert.equal(profileNeedsSetup({
+    role: 'SUPER_ADMIN',
+    first_name: 'zedrick',
+    middle_name: null,
+    last_name: null,
+    contact_number: '09171234567'
+  }), false);
+  assert.equal(profileNeedsSetup({
+    role: 'ADMIN',
+    first_name: 'zedrick',
+    middle_name: null,
+    last_name: null,
+    contact_number: '09171234567'
+  }), true);
+  assert.equal(profileNeedsSetup({
+    role: 'MEMBER',
+    first_name: 'zedrick',
+    middle_name: null,
+    last_name: 'cruz',
+    contact_number: '09171234567'
+  }), true);
+
+  // Wiring & SQL migration parity
+  assert.match(coreJs, /syncProfileNameMode\(document\.getElementById\('quick-profile-form'\),\s*role === 'SUPER_ADMIN'\)/);
+  assert.match(coreJs, /p_last_name:\s*values\.get\('last_name'\)\s*\|\|\s*null/);
+  assert.match(accountJs, /syncProfileNameMode\?\.\(profileForm,\s*isSuperAdmin\)/);
+  assert.match(superAdminJs, /Ipon\.validateNameFields\(administratorForm\)/);
+  assert.doesNotMatch(superAdminJs, /relaxedNames|syncProfileNameMode/);
+  for (const token of [
+    'last_name is not null or role = \'SUPER_ADMIN\'',
+    'validated_name_part_mode',
+    'v_is_super_admin := (new.role = \'SUPER_ADMIN\')',
+    'v_is_super_admin := (v_role = \'SUPER_ADMIN\')',
+    '20261115_067'
+  ]) {
+    assert.ok(migration067.includes(token), `migration 067 missing ${token}`);
+    assert.ok(schema.includes(token), `schema.sql missing ${token}`);
+  }
+});
+
+
 
 
 

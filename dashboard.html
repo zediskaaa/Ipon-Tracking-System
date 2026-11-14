@@ -16,8 +16,8 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261114-60">
-  <link rel="stylesheet" href="css/hero-plates.css?v=20261114-47">
+  <link rel="stylesheet" href="css/app.css?v=20261115-69">
+  <link rel="stylesheet" href="css/hero-plates.css?v=20261115-72">
 </head>
 
 <body data-page="dashboard">
@@ -138,17 +138,24 @@
               <div class="group-bar-title-row">
                 <strong class="group-bar-name" id="dashboard-group-name">Loading group…</strong>
                 <span class="group-bar-badge" id="dashboard-group-role">—</span>
+                <div class="group-switcher-wrap" id="dashboard-group-switcher-wrap" hidden>
+                  <span class="sr-only">Select savings group</span>
+                  <select class="group-switcher-select" id="dashboard-group-select"
+                    aria-label="Select savings group"></select>
+                </div>
               </div>
               <small class="group-bar-meta" id="dashboard-group-meta">Active workspace</small>
             </div>
           </div>
           <div class="group-bar-controls">
-            <label class="group-switcher-wrap" id="dashboard-group-switcher-wrap" hidden>
-              <span class="sr-only">Select savings group</span>
-              <select class="group-switcher-select" id="dashboard-group-select"
-                aria-label="Select savings group"></select>
-            </label>
             <div class="group-bar-actions" id="dashboard-group-actions">
+              <button class="group-bar-btn group-bar-notify-btn" data-notifications-open type="button"
+                aria-label="Open notifications" title="Notifications">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4" />
+                </svg>
+                <b data-notification-count hidden>0</b>
+              </button>
               <button class="group-bar-btn" id="dashboard-manage-group" type="button" hidden>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="3" />
@@ -205,7 +212,7 @@
                 <strong id="dashboard-wallet-untagged">₱0.00</strong>
               </div>
             </div>
-            <a class="dashboard-wallet-link" href="reports.html#wallet-reconciliation">Reconcile →</a>
+            <a class="dashboard-wallet-link" href="reports.html#wallet-reconciliation">Reconcile</a>
           </div>
         </div>
         <dl class="summary-breakdown" data-region="summary-breakdown">
@@ -916,7 +923,7 @@
     </div>
   </dialog>
   <script src="js/config.js?v=20261114-47"></script>
-  <script src="js/core.js?v=20261114-60"></script>
+  <script src="js/core.js?v=20261115-70"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
