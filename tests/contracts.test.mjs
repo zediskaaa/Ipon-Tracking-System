@@ -1490,7 +1490,7 @@ test('announcement reactions notify Super Admin and authors for in-app and mobil
   assert.match(migration048, /create or replace function public\.notify_announcement_reaction/i);
   assert.match(migration048, /create trigger announcement_reactions_notifications[\s\S]*after insert or update on public\.announcement_reactions/i);
   assert.match(migration048, /'ANNOUNCEMENT_REACTION'/);
-  assert.match(migration048, /'super-admin\.html#overview'/);
+  assert.match(migration048, /'super-admin\.html#announcements'/);
   assert.match(migration048, /20261114_048/);
   assert.match(schema, /create trigger announcement_reactions_notifications/i);
   assert.match(schema, /20261114_048/);
@@ -1499,5 +1499,64 @@ test('announcement reactions notify Super Admin and authors for in-app and mobil
 test('stacked mobile form action buttons reset flex basis instead of stretching vertically', () => {
   const css = read('css/app.css');
   assert.match(css, /\.settings-inline-actions \.button,\s*\.settings-form-actions-end \.button\s*\{\s*flex:\s*0 0 auto;/);
+});
+
+test('every Ipon helper called across scripts is exported by js/core.js', () => {
+  const core = read('js/core.js');
+  const exportBlockMatch = core.match(/window\.Ipon\s*=\s*\{([\s\S]*?)\};/);
+  assert.ok(exportBlockMatch, 'window.Ipon export object must exist in js/core.js');
+
+  const rawBody = exportBlockMatch[1]
+    .replace(/\bget\s+([A-Za-z_$][\w$]*)\s*\(\)\s*\{[^}]*\}/g, '$1')
+    .replace(/\b([A-Za-z_$][\w$]*)\s*:/g, '$1');
+  const exported = new Set(
+    rawBody
+      .split(',')
+      .map((part) => part.trim())
+      .filter((token) => /^[A-Za-z_$][\w$]*$/.test(token))
+  );
+
+  const jsFiles = readdirSync(new URL('js', root)).filter((file) => file.endsWith('.js'));
+  for (const file of jsFiles) {
+    const src = read(`js/${file}`);
+    for (const match of src.matchAll(/\bIpon\.([A-Za-z_$][\w$]*)\s*\(/g)) {
+      const fnName = match[1];
+      assert.ok(exported.has(fnName), `${file} calls Ipon.${fnName}() which is missing from window.Ipon`);
+    }
+  }
+});
+
+test('mobile UI polish, custom group switchers, clickable notifications, version sync, and Super Admin deep-links are wired', () => {
+  const css = read('css/app.css');
+  const core = read('js/core.js');
+  const dashboard = read('js/dashboard.js');
+  const members = read('js/members.js');
+  const settings = read('js/settings.js');
+  const superAdmin = read('js/super-admin.js');
+  const versionJson = JSON.parse(read('version.json'));
+  const versionJs = read('js/version.js');
+  const prepareMobile = read('scripts/prepare-mobile.mjs');
+
+  assert.match(css, /@media\(max-width:620px\)\{[^}]*\.account-dialog\{[^}]*max-width:none/);
+  assert.doesNotMatch(core, /account-section-icon/);
+  assert.doesNotMatch(css, /\.account-section-icon\b/);
+  assert.equal((css.match(/select:not\(\.custom-select-native\)\{/g) || []).length, 1, 'select custom-select CSS should not be duplicated');
+
+  assert.match(core, /data-nav-target="\$\{escapeHtml\(safeTarget\)\}"/);
+  assert.match(css, /\.notification-item\[data-nav-target\],\.notification-item\.is-unread\{cursor:pointer\}/);
+
+  assert.match(core, /function populateGroupSelect\(/);
+  assert.match(dashboard, /Ipon\.populateGroupSelect\(groupHubSelect/);
+  assert.match(dashboard, /Ipon\.populateGroupSelect\(groupSelect/);
+  assert.match(members, /Ipon\.populateGroupSelect\(groupSelect/);
+  assert.match(settings, /Ipon\.populateGroupSelect\(groupSelect/);
+
+  assert.match(versionJs, new RegExp(`version:\\s*'${versionJson.version.replace('.', '\\.')}'`));
+  assert.match(versionJs, new RegExp(`nativeBuild:\\s*${versionJson.nativeBuild}`));
+  assert.match(versionJs, /isApp:\s*false/);
+  assert.match(prepareMobile, /fs\.writeFileSync\(path\.join\(rootDir,\s*'js',\s*'version\.js'\),\s*webVersionJsContent/);
+
+  assert.match(superAdmin, /getElementById\(`\$\{key\}-pager`\)/);
+  assert.match(superAdmin, /requestedView === 'announcements'/);
 });
 

@@ -106,8 +106,7 @@
     if (groupNameEl) groupNameEl.textContent = safeName;
     if (groupSwitcherWrap && groupSelect) {
       groupSwitcherWrap.hidden = list.length <= 1;
-      groupSelect.replaceChildren(...list.map((item) => new Option(`${item.name} (${item.role})`, item.group_id)));
-      if (current?.group_id) groupSelect.value = current.group_id;
+      Ipon.populateGroupSelect(groupSelect, list, current?.group_id);
     }
   }
 

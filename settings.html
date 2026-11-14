@@ -1,18 +1,18 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Settings — myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261114-48"></head>
+﻿<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Settings â€” myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261114-49"></head>
 <body data-page="settings"><div class="app-layout"><aside class="app-sidebar" id="app-sidebar"></aside><main class="workspace">
 <header class="page-header"><div><span class="calc-eyebrow">Group workspace</span><h1>Settings</h1><p>Manage monthly contribution defaults, payment channels, and team access. Financial records remain protected by role-based database policies.</p></div></header>
   <div class="settings-layout">
     <div class="settings-col-main">
       <section class="panel settings-panel-schedule" data-role="ADMIN">
         <div class="panel-header"><div><span class="calc-eyebrow">Monthly schedule</span><h2>Contribution default</h2><p>Set the amount prefilled for new members. Existing members and periods are not changed.</p></div></div>
-        <form id="contribution-setting-form" class="form-grid form-grid-3"><div class="field"><label for="effective-month">Effective month</label><input id="effective-month" name="effective_month" type="month" min="2000-01" max="2100-12" required></div><div class="field"><label for="default-amount">Default amount</label><input id="default-amount" name="default_amount" type="number" min="0.01" max="999999999999.99" step="0.01" required></div><div class="field"><label for="deadline-day">Monthly deadline day</label><input id="deadline-day" name="deadline_day" type="number" min="1" max="28" value="28" required><small class="field-help">Use days 1–28 so every month has this date.</small></div><div class="form-actions field-wide settings-inline-actions"><button class="button button-primary" type="submit" data-requires-data>Save schedule</button><button class="button button-secondary" id="generate-periods" type="button" data-requires-data>Generate periods</button></div></form>
+        <form id="contribution-setting-form" class="form-grid form-grid-3"><div class="field"><label for="effective-month">Effective month</label><input id="effective-month" name="effective_month" type="month" min="2000-01" max="2100-12" required></div><div class="field"><label for="default-amount">Default amount</label><input id="default-amount" name="default_amount" type="number" min="0.01" max="999999999999.99" step="0.01" required></div><div class="field"><label for="deadline-day">Monthly deadline day</label><input id="deadline-day" name="deadline_day" type="number" min="1" max="28" value="28" required><small class="field-help">Use days 1â€“28 so every month has this date.</small></div><div class="form-actions field-wide settings-inline-actions"><button class="button button-primary" type="submit" data-requires-data>Save schedule</button><button class="button button-secondary" id="generate-periods" type="button" data-requires-data>Generate periods</button></div></form>
       </section>
       <section class="panel payment-qr-settings-panel" data-role="ADMIN" aria-labelledby="payment-qr-settings-title">
         <div class="panel-header">
           <div>
             <span class="calc-eyebrow">Group payments</span>
             <h2 id="payment-qr-settings-title">Group payment QR &amp; details</h2>
-            <p>Upload your group’s GCash, Maya, or bank QR code so members know where to send contributions.</p>
+            <p>Upload your groupâ€™s GCash, Maya, or bank QR code so members know where to send contributions.</p>
           </div>
         </div>
         <form id="payment-info-form" class="payment-qr-settings-layout">
@@ -39,11 +39,11 @@
         </form>
       </section>
       <section class="panel settings-panel-access" data-role="ADMIN"><div class="panel-header"><div><span class="calc-eyebrow">Member logins</span><h2>Account access</h2><p>Manage member and treasurer logins in your group. Administrator access is managed by the Super Admin.</p></div></div>
-        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Linked member</th><th>Actions</th></tr></thead><tbody id="access-body"><tr class="loading-row"><td colspan="5">Loading accounts…</td></tr></tbody></table></div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Linked member</th><th>Actions</th></tr></thead><tbody id="access-body"><tr class="loading-row"><td colspan="5">Loading accountsâ€¦</td></tr></tbody></table></div>
       </section>
     </div>
     <div class="settings-col-rail">
-      <section class="panel settings-access-panel"><div class="panel-header"><div><span class="calc-eyebrow">Profile &amp; pledge</span><h2>Your access</h2><p>Your signed-in profile, active group, and contributor setting.</p></div></div><dl class="summary-list"><div><dt>Name</dt><dd id="my-name">—</dd></div><div><dt>Role</dt><dd id="my-role">—</dd></div><div><dt>Status</dt><dd id="my-status">—</dd></div><div><dt>Group</dt><dd><select id="settings-group-select" aria-label="Active savings group"></select></dd></div></dl>
+      <section class="panel settings-access-panel"><div class="panel-header"><div><span class="calc-eyebrow">Profile &amp; pledge</span><h2>Your access</h2><p>Your signed-in profile, active group, and contributor setting.</p></div></div><dl class="summary-list"><div><dt>Name</dt><dd id="my-name">â€”</dd></div><div><dt>Role</dt><dd id="my-role">â€”</dd></div><div><dt>Status</dt><dd id="my-status">â€”</dd></div><div><dt>Group</dt><dd><select id="settings-group-select" aria-label="Active savings group"></select></dd></div></dl>
         <div class="settings-contributor-toggle" data-role="ADMIN">
           <label class="toggle-switch-row" for="settings-admin-contributor">
             <span><strong>Include me as a contributor</strong><small>Turn on to include yourself in contribution periods and contributor totals for this group.</small></span>
@@ -52,7 +52,7 @@
           <div class="settings-contributor-details" id="settings-contributor-details" hidden>
             <div class="settings-pledge-info">
               <span>Your monthly contribution:</span>
-              <strong id="settings-pledge-val">₱100.00</strong>
+              <strong id="settings-pledge-val">â‚±100.00</strong>
             </div>
             <button class="button button-secondary button-sm" type="button" id="settings-edit-pledge">Change amount</button>
           </div>
@@ -77,7 +77,7 @@
           </p>
         </div>
         <div class="field field-wide">
-          <label for="settings-contributor-amount">Monthly contribution amount (₱)</label>
+          <label for="settings-contributor-amount">Monthly contribution amount (â‚±)</label>
           <input id="settings-contributor-amount" name="amount" type="number" min="1" max="1000000" step="0.01" value="100" required placeholder="100.00">
           <small class="field-help">This amount reflects on your member profile and will be assigned to your contribution periods.</small>
         </div>
@@ -88,5 +88,5 @@
       </form>
     </div>
   </dialog>
-</main></div><script src="js/config.js?v=20261113-48"></script><script src="js/core.js?v=20261114-47"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/settings.js?v=20261113-48"></script></body></html>
+</main></div><script src="js/config.js?v=20261113-48"></script><script src="js/core.js?v=20261114-49"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/settings.js?v=20261114-49"></script></body></html>
 

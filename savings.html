@@ -1,10 +1,10 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Savings Goals — myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261114-48"></head>
+﻿<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Savings Goals â€” myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261114-49"></head>
 <body data-page="savings"><div class="app-layout"><aside class="app-sidebar" id="app-sidebar"></aside><main class="workspace">
   <header class="page-header"><div><h1>Savings goals</h1><p>Set shared targets against the confirmed tracked-savings total. Goals guide the group; they do not reserve or move money.</p></div></header>
   <nav class="record-tabs" aria-label="Record types"><a href="contributions.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg><span>Additions</span></a><a href="withdrawals.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg><span>Deductions</span></a><a href="expenses.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg><span>Expenses</span></a><a class="is-active" href="savings.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg><span>Goals</span></a></nav>
-  <section class="stats-grid"><article class="stat-card"><span>Tracked savings</span><strong id="tracked-savings">—</strong></article><article class="stat-card"><span>Active goals</span><strong id="active-goals">—</strong></article><article class="stat-card"><span>Combined targets</span><strong id="goal-targets">—</strong></article><article class="stat-card"><span>Nearest target date</span><strong id="nearest-date">—</strong></article></section>
+  <section class="stats-grid"><article class="stat-card"><span>Tracked savings</span><strong id="tracked-savings">â€”</strong></article><article class="stat-card"><span>Active goals</span><strong id="active-goals">â€”</strong></article><article class="stat-card"><span>Combined targets</span><strong id="goal-targets">â€”</strong></article><article class="stat-card"><span>Nearest target date</span><strong id="nearest-date">â€”</strong></article></section>
   <div class="savings-layout">
-    <section class="panel savings-goals-panel"><div class="panel-header"><div><h2>Shared targets</h2><p>Progress uses the same confirmed tracked total for transparency.</p></div><button class="button button-primary" id="add-goal" type="button" data-role="ADMIN">+ Add goal</button></div><div class="goal-list" id="goal-list"><div class="empty-state">Loading goals…</div></div></section>
+    <section class="panel savings-goals-panel"><div class="panel-header"><div><h2>Shared targets</h2><p>Progress uses the same confirmed tracked total for transparency.</p></div><button class="button button-primary" id="add-goal" type="button" data-role="ADMIN">+ Add goal</button></div><div class="goal-list" id="goal-list"><div class="empty-state">Loading goalsâ€¦</div></div></section>
     <section class="panel goal-calc-panel" aria-labelledby="goal-calc-title">
       <div class="panel-header">
         <div>
@@ -24,11 +24,11 @@
           <input id="calc-plan-name" type="text" maxlength="150" placeholder="e.g. Emergency Fund or Outing Budget">
         </div>
         <div class="field">
-          <label for="calc-target">Target amount (₱)</label>
+          <label for="calc-target">Target amount (â‚±)</label>
           <input id="calc-target" type="number" min="1" step="0.01" inputmode="decimal" value="50000">
         </div>
         <div class="field">
-          <label for="calc-current">Current savings (₱)</label>
+          <label for="calc-current">Current savings (â‚±)</label>
           <div class="calc-input-with-btn">
             <input id="calc-current" type="number" min="0" step="0.01" inputmode="decimal" value="0">
             <button class="button button-secondary button-sm" id="calc-sync-balance" type="button" title="Use group tracked savings">Sync</button>
@@ -52,10 +52,10 @@
       </div>
       <div class="calc-summary-banner" id="calc-timeline-note">Adjust the fields above to simulate your savings pace.</div>
       <div class="calc-results-grid" aria-live="polite">
-        <article class="calc-kpi"><span>Remaining needed</span><strong id="calc-remaining">—</strong><small id="calc-remaining-sub">To reach target</small></article>
-        <article class="calc-kpi is-accent"><span>Per day</span><strong id="calc-daily">—</strong><small id="calc-daily-sub">Group pace</small></article>
-        <article class="calc-kpi"><span>Per week</span><strong id="calc-weekly">—</strong><small id="calc-weekly-sub">Group pace</small></article>
-        <article class="calc-kpi"><span>Per month</span><strong id="calc-monthly">—</strong><small id="calc-monthly-sub">Group pace</small></article>
+        <article class="calc-kpi"><span>Remaining needed</span><strong id="calc-remaining">â€”</strong><small id="calc-remaining-sub">To reach target</small></article>
+        <article class="calc-kpi is-accent"><span>Per day</span><strong id="calc-daily">â€”</strong><small id="calc-daily-sub">Group pace</small></article>
+        <article class="calc-kpi"><span>Per week</span><strong id="calc-weekly">â€”</strong><small id="calc-weekly-sub">Group pace</small></article>
+        <article class="calc-kpi"><span>Per month</span><strong id="calc-monthly">â€”</strong><small id="calc-monthly-sub">Group pace</small></article>
       </div>
       <div class="calc-footer-actions" data-role="ADMIN">
         <button class="button button-secondary" id="calc-update-goal" type="button" hidden>Update shared goal</button>
@@ -76,5 +76,5 @@
       </form>
     </div>
   </dialog>
-</main></div><script src="js/config.js?v=20261113-32"></script><script src="js/core.js?v=20261114-47"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/savings.js?v=20261113-32"></script></body></html>
+</main></div><script src="js/config.js?v=20261113-32"></script><script src="js/core.js?v=20261114-49"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/savings.js?v=20261113-32"></script></body></html>
 

@@ -53,9 +53,11 @@ for (const dir of dirsToCopy) {
 fs.writeFileSync(path.join(rootDir, 'version.json'), JSON.stringify(versionData, null, 2), 'utf-8');
 fs.writeFileSync(path.join(targetDir, 'version.json'), JSON.stringify(versionData, null, 2), 'utf-8');
 
-// Write js/version.js
-const versionJsContent = `window.MYIPON_APP_VERSION = ${JSON.stringify(versionData, null, 2)};\n`;
-fs.writeFileSync(path.join(targetDir, 'js', 'version.js'), versionJsContent, 'utf-8');
+// Write js/version.js (web root keeps isApp: false; mobile www bundle keeps isApp: true)
+const webVersionJsContent = `window.MYIPON_APP_VERSION = ${JSON.stringify({ ...versionData, isApp: false }, null, 2)};\n`;
+const mobileVersionJsContent = `window.MYIPON_APP_VERSION = ${JSON.stringify(versionData, null, 2)};\n`;
+fs.writeFileSync(path.join(rootDir, 'js', 'version.js'), webVersionJsContent, 'utf-8');
+fs.writeFileSync(path.join(targetDir, 'js', 'version.js'), mobileVersionJsContent, 'utf-8');
 
 function patchHtmlForMobileApp(html) {
   let patched = html;

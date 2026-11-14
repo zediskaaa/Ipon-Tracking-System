@@ -1,11 +1,11 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Records — myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261114-47"></head>
+﻿<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Records â€” myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261114-49"></head>
 <body data-page="contributions"><div class="app-layout"><aside class="app-sidebar" id="app-sidebar"></aside><main class="workspace">
   <header class="page-header"><div><h1>Additions</h1><p>Record money added to the real-world savings fund. Non-admin entries stay pending until an administrator confirms them.</p></div></header>
   <nav class="record-tabs" aria-label="Record types"><a class="is-active" href="contributions.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg><span>Additions</span></a><a href="withdrawals.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg><span>Deductions</span></a><a href="expenses.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg><span>Expenses</span></a><a href="savings.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg><span>Goals</span></a></nav>
   <div class="split-layout">
     <section class="panel sticky-panel"><div class="panel-header"><div><h2>Record addition</h2><p>This tracks a deposit; it does not move money.</p></div></div>
       <form id="record-form" class="form-grid">
-        <div class="field field-wide"><label for="member-id">Member</label><select id="member-id" name="member_id" required><option value="">Loading members…</option></select></div>
+        <div class="field field-wide"><label for="member-id">Member</label><select id="member-id" name="member_id" required><option value="">Loading membersâ€¦</option></select></div>
         <div class="field"><label for="contribution-month">For month</label><input id="contribution-month" name="contribution_month" type="month" min="2000-01" data-max-current-month required></div>
         <div class="field"><label for="payment-date">Date added</label><input id="payment-date" name="payment_date" type="date" min="2000-01-01" data-max-today required></div>
         <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" inputmode="decimal" required></div>
@@ -44,10 +44,10 @@
           <button type="button" class="member-spotlight-clear" id="member-spotlight-clear">View all members</button>
         </div>
         <div class="member-spotlight-metrics">
-          <div class="member-metric-card is-addition"><small>Total additions</small><strong id="member-stat-contributed">₱0.00</strong></div>
-          <div class="member-metric-card is-deduction"><small>Total deductions</small><strong id="member-stat-deductions">₱0.00</strong></div>
-          <div class="member-metric-card is-expense"><small>Total expenses</small><strong id="member-stat-expenses">₱0.00</strong></div>
-          <div class="member-metric-card is-net"><small>Net standing</small><strong id="member-stat-net">₱0.00</strong></div>
+          <div class="member-metric-card is-addition"><small>Total additions</small><strong id="member-stat-contributed">â‚±0.00</strong></div>
+          <div class="member-metric-card is-deduction"><small>Total deductions</small><strong id="member-stat-deductions">â‚±0.00</strong></div>
+          <div class="member-metric-card is-expense"><small>Total expenses</small><strong id="member-stat-expenses">â‚±0.00</strong></div>
+          <div class="member-metric-card is-net"><small>Net standing</small><strong id="member-stat-net">â‚±0.00</strong></div>
         </div>
         <div class="member-spotlight-chart-box">
           <div class="member-spotlight-chart-header">
@@ -64,12 +64,12 @@
         </div>
       </div>
       <div class="panel-header"><div><h2>Contribution status</h2><p>Required, paid, and outstanding amounts by month.</p></div><select id="status-month" aria-label="Filter by month"></select></div>
-      <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Member</th><th>Month</th><th>Required</th><th>Paid</th><th>Outstanding</th><th>Status</th></tr></thead><tbody id="records-body"><tr class="loading-row"><td colspan="6">Loading records…</td></tr></tbody></table></div>
+      <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Member</th><th>Month</th><th>Required</th><th>Paid</th><th>Outstanding</th><th>Status</th></tr></thead><tbody id="records-body"><tr class="loading-row"><td colspan="6">Loading recordsâ€¦</td></tr></tbody></table></div>
       <div class="panel-subsection"><div class="panel-header"><div><h2>Addition history</h2><p>Every submission and review state. Administrators can review or void records here.</p></div><select id="record-status-filter" aria-label="Filter additions by status"><option value="">All statuses</option><option>PENDING</option><option>CONFIRMED</option><option>REJECTED</option><option>VOIDED</option></select></div>
-        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Member</th><th>Month</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody id="contribution-entries-body"><tr class="loading-row"><td colspan="6">Loading additions…</td></tr></tbody></table></div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Member</th><th>Month</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody id="contribution-entries-body"><tr class="loading-row"><td colspan="6">Loading additionsâ€¦</td></tr></tbody></table></div>
         <nav class="table-pager" id="record-pager" aria-label="Addition history pages"><button type="button" data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button" data-page="next">Next</button></nav>
       </div>
     </section>
   </div>
-</main></div><script src="js/config.js?v=20261113-37"></script><script src="js/core.js?v=20261114-47"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js" integrity="sha384-Emf5ZVIUiarAdhkgtqK+5/Z5qIvM6QoVrS+qAVtfyZVuD5lIHrac0me485+Antp0" crossorigin="anonymous"></script><script src="js/records.js?v=20261113-37"></script></body></html>
+</main></div><script src="js/config.js?v=20261113-37"></script><script src="js/core.js?v=20261114-49"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js" integrity="sha384-Emf5ZVIUiarAdhkgtqK+5/Z5qIvM6QoVrS+qAVtfyZVuD5lIHrac0me485+Antp0" crossorigin="anonymous"></script><script src="js/records.js?v=20261113-37"></script></body></html>
 

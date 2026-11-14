@@ -53,9 +53,8 @@
     const activeGroup = groups.find((g) => g.is_current) || groups[0] || null;
     currentGroupId = activeGroup?.group_id || '';
     if (groupSelect) {
-      groupSelect.replaceChildren(...groups.map((g) => new Option(`${g.name} (${g.role})`, g.group_id)));
-      groupSelect.value = currentGroupId;
       groupSelect.disabled = groups.length <= 1;
+      Ipon.populateGroupSelect(groupSelect, groups, currentGroupId);
     }
     const adminMember = members.find((m) => m.id === activeGroup?.member_id || m.id === state?.profile?.member_id);
     if (adminMember && Number(adminMember.monthly_contribution_amount) > 0) {

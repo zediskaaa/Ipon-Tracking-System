@@ -61,7 +61,7 @@ begin
       'ANNOUNCEMENT_REACTION',
       left(v_reactor_name, 95) || ' reacted ' || new.reaction,
       'Reacted ' || v_reaction_label || ' (' || new.reaction || ') to "' || left(coalesce(nullif(btrim(v_announcement.title), ''), 'your announcement'), 120) || '".',
-      case when v_recipient.role = 'SUPER_ADMIN' then 'super-admin.html#overview' else 'dashboard.html' end,
+      case when v_recipient.role = 'SUPER_ADMIN' then 'super-admin.html#announcements' else 'dashboard.html' end,
       v_announcement.group_id
     );
   end loop;
@@ -82,3 +82,4 @@ values ('20261114_048', 'notify super admin and announcement authors when users 
 on conflict (version) do nothing;
 
 commit;
+

@@ -713,8 +713,8 @@
           <header class="account-dialog-header"><div class="account-dialog-title"><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
             <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
-            <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.1 7.5 9.5 4.3-1.4 7.5-4.7 7.5-9.5V6L12 3Z"/><path d="M9.5 12.2 11.3 14l3.5-4"/></svg></span><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
-            <section class="account-card account-preferences"><header class="account-section-heading"><span class="account-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg></span><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label><div class="preference-row preference-device-row" data-device-notif-row><span><strong>Phone &amp; drawer alerts</strong><small data-device-notif-status>Checking device permission…</small></span><button class="button button-secondary button-sm" type="button" data-device-notif-btn>Enable alerts</button></div></section></div>
+            <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
+            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label><div class="preference-row preference-device-row" data-device-notif-row><span><strong>Phone &amp; drawer alerts</strong><small data-device-notif-status>Checking device permission…</small></span><button class="button button-secondary button-sm" type="button" data-device-notif-btn>Enable alerts</button></div></section></div>
           </div>
         </div>
       </dialog>
@@ -1014,6 +1014,7 @@
       <div class="custom-select-selection">
         <span class="custom-select-trigger-avatar"></span>
         <span class="custom-select-trigger-label">Select member</span>
+        <span class="custom-select-badge" hidden></span>
       </div>
       <svg class="custom-select-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1030,6 +1031,7 @@
 
     const triggerAvatar = trigger.querySelector('.custom-select-trigger-avatar');
     const triggerLabel = trigger.querySelector('.custom-select-trigger-label');
+    const triggerBadge = trigger.querySelector('.custom-select-badge');
 
     let isOpen = false;
 
@@ -1055,14 +1057,20 @@
     wrap._customSelectClose = closeMenu;
 
     function syncTrigger() {
+      trigger.disabled = Boolean(selectEl.disabled);
       const selectedIndex = selectEl.selectedIndex;
       const opt = selectedIndex >= 0 ? selectEl.options[selectedIndex] : null;
       const val = opt ? opt.value : '';
       const text = opt ? opt.textContent.trim() : 'Select member';
+      const badge = opt?.dataset?.badge || '';
       const isPlaceholder = !val || (opt && opt.disabled);
 
       triggerLabel.textContent = text;
       triggerLabel.classList.toggle('is-placeholder', isPlaceholder);
+      if (triggerBadge) {
+        triggerBadge.textContent = badge;
+        triggerBadge.hidden = !badge || isPlaceholder;
+      }
 
       if (isPlaceholder) {
         triggerAvatar.innerHTML = `<span class="custom-avatar-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg></span>`;
@@ -1082,6 +1090,7 @@
       Array.from(selectEl.options).forEach((opt) => {
         const val = opt.value;
         const text = opt.textContent.trim();
+        const badge = opt.dataset.badge || '';
         const isPlaceholder = !val;
         const isSelected = opt.selected;
 
@@ -1100,6 +1109,7 @@
           <div class="custom-select-option-main">
             <span class="custom-select-avatar-slot">${avatarHtml}</span>
             <span class="custom-select-option-name">${escapeHtml(text)}</span>
+            ${badge && !isPlaceholder ? `<span class="custom-select-badge">${escapeHtml(badge)}</span>` : ''}
           </div>
           ${isSelected && !isPlaceholder ? `
             <span class="custom-select-check" aria-hidden="true">
@@ -1192,6 +1202,20 @@
 
     selectEl._customSelect = api;
     return api;
+  }
+
+  /** Populate a group switcher `<select>` and enhance it with avatar and role badges. */
+  function populateGroupSelect(selectEl, groups = [], selectedGroupId = '') {
+    if (!selectEl) return null;
+    const rows = Array.isArray(groups) ? groups : [];
+    selectEl.replaceChildren(...rows.map((group) => {
+      const opt = new Option(group.name || 'Savings Group', group.group_id);
+      opt.dataset.avatar = group.avatar_url || '';
+      opt.dataset.badge = group.role || '';
+      return opt;
+    }));
+    if (selectedGroupId) selectEl.value = selectedGroupId;
+    return enhanceMemberSelect(selectEl);
   }
 
   function readFileAsDataUrl(file) {
@@ -2393,10 +2417,21 @@
       }
       syncBackgroundNotificationPolling(profile, rows).catch(() => { });
 
+      const safeNotificationTarget = (link) => {
+        const raw = String(link || '').trim();
+        if (!raw) return '';
+        if (/^(?:[a-zA-Z0-9_-]+\.html(?:#[a-zA-Z0-9_-]+)?|#[a-zA-Z0-9_-]+)$/.test(raw)) return raw;
+        try {
+          const url = new URL(raw, location.href);
+          if (url.protocol === 'https:' || url.protocol === 'http:') return url.href;
+        } catch { }
+        return '';
+      };
+
       if (isApp) {
-        const latestVersion = localStorage.getItem('myipon_latest_remote_version') || '1.0.18';
+        const latestVersion = localStorage.getItem('myipon_latest_remote_version') || window.MYIPON_APP_VERSION?.version || '1.0.19';
         const installedNativeBuild = getInstalledNativeBuild();
-        const remoteNativeBuild = Number(localStorage.getItem('myipon_latest_native_build') || 18);
+        const remoteNativeBuild = Number(localStorage.getItem('myipon_latest_native_build') || window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 19);
         const hasPendingUpdate = remoteNativeBuild > installedNativeBuild;
 
         if (hasPendingUpdate) {
@@ -2420,7 +2455,8 @@
       list.innerHTML = allRows.length ? allRows.map((item) => {
         const isInvite = item.type === 'GROUP_INVITE' && !item.read_at;
         const isReleaseNotif = item.type === 'RELEASE' || (item.title && /release|version|app update/i.test(item.title));
-        return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}">
+        const safeTarget = isInvite ? '' : safeNotificationTarget(item.link);
+        return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"${safeTarget ? ` data-nav-target="${escapeHtml(safeTarget)}"` : ''}>
           <span class="notification-item-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="${item.type === 'GROUP_INVITE' ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4'}"/></svg>
           </span>
@@ -2440,7 +2476,7 @@
               </div>
             ` : ''}
           </div>
-          ${item.link && !isInvite ? `<a class="notification-item-open" href="${escapeHtml(item.link)}" aria-label="Open ${escapeHtml(item.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>` : ''}
+          ${safeTarget ? `<a class="notification-item-open" href="${escapeHtml(safeTarget)}" aria-label="Open ${escapeHtml(item.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>` : ''}
           ${item.read_at ? '' : '<i class="notification-unread" aria-label="Unread"></i>'}
         </article>`;
       }).join('') : '<p class="empty-state">You have no notifications yet.</p>';
@@ -2472,19 +2508,35 @@
         }
         return;
       }
+      if (event.target.closest('.notification-download-row a')) return;
       const item = event.target.closest('[data-notification-id]');
-      if (!item || !item.classList.contains('is-unread')) return;
-      if (item.dataset.notificationId === 'system-app-release-notice') {
-        const remoteBuild = localStorage.getItem('myipon_latest_native_build') || '18';
-        localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
-        item.classList.remove('is-unread');
-        await load();
-        return;
+      if (!item) return;
+      const target = safeNotificationTarget(item.dataset.navTarget);
+      if (target) event.preventDefault();
+      if (item.classList.contains('is-unread')) {
+        if (item.dataset.notificationId === 'system-app-release-notice') {
+          const remoteBuild = localStorage.getItem('myipon_latest_native_build') || String(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 19);
+          localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
+          item.classList.remove('is-unread');
+          if (!target) await load();
+        } else {
+          try {
+            await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) });
+            item.classList.remove('is-unread');
+            if (!target) await load();
+          } catch (error) {
+            toast(friendlyError(error), 'error');
+          }
+        }
       }
-      try { await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) }); item.classList.remove('is-unread'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
+      if (target) {
+        document.getElementById('notifications-dialog')?.close();
+        if (/^https?:\/\//i.test(target)) window.open(target, '_blank', 'noopener');
+        else location.href = target;
+      }
     };
     document.getElementById('mark-all-notifications').onclick = async () => {
-      const remoteBuild = localStorage.getItem('myipon_latest_native_build') || '18';
+      const remoteBuild = localStorage.getItem('myipon_latest_native_build') || String(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 19);
       localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
       try { await rpc('mark_all_notifications_read'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
     };
@@ -4754,7 +4806,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, setNotificationPreference,
     get profile() { return currentProfile; }

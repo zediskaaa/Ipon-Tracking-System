@@ -96,8 +96,10 @@
 
   function showView(focusHeading = false) {
     const requestedView = location.hash.slice(1);
-    const activeView = views[requestedView] ? requestedView : 'overview';
-    if (!views[requestedView]) history.replaceState(null, '', '#overview');
+    const isAnnouncementsAnchor = requestedView === 'announcements';
+    const targetView = isAnnouncementsAnchor ? 'overview' : requestedView;
+    const activeView = views[targetView] ? targetView : 'overview';
+    if (!views[targetView] && !isAnnouncementsAnchor) history.replaceState(null, '', '#overview');
     document.querySelectorAll('[data-platform-view]').forEach((section) => { section.hidden = section.dataset.platformView !== activeView; });
     document.getElementById('platform-view-title').textContent = views[activeView][0];
     document.getElementById('platform-view-description').textContent = views[activeView][1];
@@ -107,7 +109,16 @@
       link.classList.toggle('is-active', current);
       if (current) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
     });
-    if (focusHeading) {
+    const announcementsEl = document.querySelector('.super-admin-announcements');
+    if (isAnnouncementsAnchor && announcementsEl) {
+      requestAnimationFrame(() => {
+        announcementsEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        announcementsEl.classList.remove('is-highlight-focus');
+        void announcementsEl.offsetWidth;
+        announcementsEl.classList.add('is-highlight-focus');
+        setTimeout(() => announcementsEl.classList.remove('is-highlight-focus'), 2200);
+      });
+    } else if (focusHeading) {
       const heading = document.getElementById('platform-view-title');
       heading.tabIndex = -1;
       heading.focus({ preventScroll: true });
@@ -1493,7 +1504,7 @@ Generate a JSON object with this exact structure:
       const control = document.getElementById(id);
       control?.addEventListener(control.tagName === 'SELECT' ? 'change' : 'input', () => { pageState[key] = 0; render(); });
     });
-    document.getElementById(`${ key } -pager`)?.addEventListener('click', (event) => {
+    document.getElementById(`${key}-pager`)?.addEventListener('click', (event) => {
       const button = event.target.closest('[data-page]');
       if (!button || button.disabled) return;
       pageState[key] += button.dataset.page === 'next' ? 1 : -1;
