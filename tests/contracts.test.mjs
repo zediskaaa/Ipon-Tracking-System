@@ -1483,3 +1483,16 @@ test('background notification feed, permission banner, and native poll receiver 
   assert.match(css, /\.notification-permission-bar/);
 });
 
+test('announcement reactions notify Super Admin and authors for in-app and mobile alerts', () => {
+  const migration048 = read('database/migrations/20261114_048_announcement_reaction_notifications.sql');
+  const schema = read('database/schema.sql');
+
+  assert.match(migration048, /create or replace function public\.notify_announcement_reaction/i);
+  assert.match(migration048, /create trigger announcement_reactions_notifications[\s\S]*after insert or update on public\.announcement_reactions/i);
+  assert.match(migration048, /'ANNOUNCEMENT_REACTION'/);
+  assert.match(migration048, /'super-admin\.html#overview'/);
+  assert.match(migration048, /20261114_048/);
+  assert.match(schema, /create trigger announcement_reactions_notifications/i);
+  assert.match(schema, /20261114_048/);
+});
+
