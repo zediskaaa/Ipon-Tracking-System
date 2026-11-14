@@ -105,7 +105,23 @@
     const values = new FormData(profileForm);
     const payoutPayload = Ipon.readPayoutPayload(profileForm);
     Ipon.setBusy(button, true);
-    try { const wasOnboarding = onboarding; await Ipon.rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number'), ...payoutPayload }); Ipon.toast('Profile updated.'); await load(); if (wasOnboarding) onboarding = true; finishSetupIfReady(); }
+    try {
+      const wasOnboarding = onboarding;
+      await Ipon.rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number'), ...payoutPayload });
+      const first = Ipon.normalizeNamePart(values.get('first_name'));
+      const middle = Ipon.normalizeNamePart(values.get('middle_name')) || null;
+      const last = Ipon.normalizeNamePart(values.get('last_name'));
+      const computedFull = [first, middle, last].filter(Boolean).join(' ');
+      if (state.profile) {
+        Object.assign(state.profile, { first_name: first, middle_name: middle, last_name: last, ...(computedFull ? { full_name: computedFull } : {}), name_setup_required: false });
+        if (computedFull) document.querySelector('#sidebar-user strong')?.replaceChildren(computedFull);
+        window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: state.profile }));
+      }
+      Ipon.toast('Profile updated.');
+      await load();
+      if (wasOnboarding) onboarding = true;
+      finishSetupIfReady();
+    }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });

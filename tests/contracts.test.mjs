@@ -1773,6 +1773,50 @@ test('release composer reads live recent commits and prior releases instead of f
   assert.match(edgeTs, /fetchRecentSystemUpdates/);
   assert.match(edgeTs, /previous_releases/);
   assert.doesNotMatch(edgeTs, /Profile Picture Editor: Crop, rotate 90 degrees/);
+
+  assert.match(superAdminJs, /TECH_COMMIT_RE/);
+  assert.match(superAdminJs, /CODE_TOKEN_RE/);
+  assert.match(superAdminJs, /Completely EXCLUDE developer, infrastructure, or code-level work/);
+  assert.match(edgeTs, /cleanCommitSummary/);
+  assert.match(edgeTs, /Completely EXCLUDE developer, infrastructure, or code-level work/);
+
+  const techMatch = superAdminJs.match(/const TECH_COMMIT_RE = (\/.*\/[a-z]*);/);
+  const codeMatch = superAdminJs.match(/const CODE_TOKEN_RE = (\/.*\/[a-z]*);/);
+  const fnMatch = superAdminJs.match(/function cleanCommitSummary\(rawMessage\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(techMatch && codeMatch && fnMatch, 'cleanCommitSummary must exist in js/super-admin.js');
+  const cleanFn = new Function(`const TECH_COMMIT_RE = ${techMatch[1]}; const CODE_TOKEN_RE = ${codeMatch[1]}; ${fnMatch[0]}; return cleanCommitSummary;`)();
+
+  assert.equal(cleanFn('Add group ownership transfer and permanent deletion flow'), 'Add group ownership transfer and permanent deletion flow');
+  assert.equal(cleanFn('Start group creation without pre-opened invite row and fix enforce_group_scope old.amount'), '');
+  assert.equal(cleanFn('Keep Add group action visible to members, align HTML CSP, and sync Edge Function cache'), 'Keep Add group action visible to members');
+  assert.equal(cleanFn('Make release AI and composer read live repo commits and prior releases'), '');
+  assert.equal(cleanFn('Render release feature credits with requester avatar and name pill'), '');
+  assert.equal(cleanFn('Auto-sync Supabase migrations and Edge Functions on IDE open and changes'), '');
+  assert.equal(cleanFn('Automate Supabase CLI migrations and Edge Function deployment'), '');
+
+  const sanMatch = superAdminJs.match(/function sanitizeReleaseDetails\(rawDetails\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(sanMatch, 'sanitizeReleaseDetails must exist in js/super-admin.js');
+  const sanitizeFn = new Function(`const TECH_COMMIT_RE = ${techMatch[1]}; const CODE_TOKEN_RE = ${codeMatch[1]}; ${sanMatch[0]}; return sanitizeReleaseDetails;`)();
+  const cleaned = sanitizeFn([
+    'Welcome to myIPON Update 1.4!',
+    'New Features\n• Add group ownership transfer and permanent deletion flow\n• Start group creation without pre-opened invite row and fix enforce_group_scope old.amount\n• Automate Supabase CLI migrations and Edge Function deployment',
+    'Thank you for saving with myIPON!'
+  ].join('\n\n'));
+  assert.equal(cleaned.bulletCount, 1);
+  assert.equal(cleaned.strippedCount, 2);
+  assert.match(cleaned.text, /Add group ownership transfer and permanent deletion flow/);
+  assert.doesNotMatch(cleaned.text, /enforce_group_scope|old\.amount|Edge Function|invite row|CLI|migrations/i);
+
+  const humMatch = superAdminJs.match(/function humanizeReleaseUpdate\(raw, variant = 0\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(humMatch, 'humanizeReleaseUpdate must exist in js/super-admin.js');
+  const humFn = new Function(`const TECH_COMMIT_RE = ${techMatch[1]}; const CODE_TOKEN_RE = ${codeMatch[1]}; ${humMatch[0]}; return humanizeReleaseUpdate;`)();
+  const h0 = humFn('Add group ownership transfer and permanent deletion flow', 0);
+  const h1 = humFn('Add group ownership transfer and permanent deletion flow', 1);
+  assert.notEqual(h0, h1);
+  assert.match(h0, /Group Ownership & Deletion:/);
+  assert.equal(humFn('Automate Supabase CLI migrations and Edge Function deployment', 0), '');
+  assert.match(edgeTs, /gemini-2\.5-flash/);
+  assert.match(edgeTs, /current_draft/);
 });
 
 test('self-serve admin_create_group allows any non-super-admin active user without requiring prior admin role', () => {
@@ -3344,10 +3388,22 @@ test('formal name validation rejects ALL CAPS and all-lowercase names live and r
   triggerInput(firstInput, 'd');
   assert.equal(firstInput.hasAttribute('aria-invalid'), true);
   assert.match(firstInput.customValidity, /formal capitalization/i);
+  assert.match(firstInput.customValidity, /e\.g\., Juan\)/);
+  assert.doesNotMatch(firstInput.customValidity, /Juan Dela Cruz/);
 
   triggerInput(firstInput, 'DA');
   assert.equal(firstInput.hasAttribute('aria-invalid'), true);
   assert.match(firstInput.customValidity, /formal capitalization/i);
+  assert.match(firstInput.customValidity, /e\.g\., Juan\)/);
+
+  triggerInput(middleInput, 's');
+  assert.equal(middleInput.hasAttribute('aria-invalid'), true);
+  assert.match(middleInput.customValidity, /e\.g\., Santos or A\)/);
+
+  triggerInput(lastInput, 'delacruz');
+  assert.equal(lastInput.hasAttribute('aria-invalid'), true);
+  assert.match(lastInput.customValidity, /e\.g\., Dela Cruz\)/);
+  assert.doesNotMatch(lastInput.customValidity, /Juan Dela Cruz/);
 
   triggerInput(firstInput, 'McD');
   assert.equal(firstInput.hasAttribute('aria-invalid'), false);
@@ -3355,6 +3411,16 @@ test('formal name validation rejects ALL CAPS and all-lowercase names live and r
   triggerInput(firstInput, 'McDonald');
   assert.equal(validateNameInput(firstInput), true);
   assert.equal(firstInput.hasAttribute('aria-invalid'), false);
+
+  // Payout channel & payment dropdown icon picker enhancement
+  assert.equal(typeof ctx.window.Ipon.enhancePaymentSelect, 'function');
+  assert.match(coreJs, /enhancePaymentSelect\(channelSel\)/);
+  assert.match(read('js/records.js'), /Ipon\.enhancePaymentSelect\?\.\(methodFilter,\s*\{\s*compact:\s*true\s*\}\)/);
+  assert.match(read('js/records.js'), /Ipon\.enhancePaymentSelect\?\.\(editForm\?\.elements\?\.payment_method\)/);
+  assert.match(read('js/auth.js'), /fieldName:\s*'first_name'/);
+  assert.match(read('js/auth.js'), /fieldName:\s*'last_name'/);
+  assert.match(appCss, /\.custom-payment-select-wrap\b/);
+  assert.match(appCss, /\.custom-select-icon-slot\b/);
 
   // Mandatory onboarding right after login for optional-name invites and existing malformed profiles
   assert.equal(profileNeedsSetup({
@@ -3491,6 +3557,465 @@ test('wallet reconciliation and peso inputs validate bounds, block overflow prec
   assert.match(css, /table-layout:\s*fixed/);
   assert.match(css, /\.wallet-variance-pill\.is-invalid/);
 });
+
+test('dark and light theme toggle persists across tabs, updates charts, preserves print paper, and meets WCAG contrast', () => {
+  const coreJs = read('js/core.js');
+  const recordsJs = read('js/records.js');
+  const reportsJs = read('js/reports.js');
+  const appCss = read('css/app.css');
+  const heroCss = read('css/hero-plates.css');
+  const landingCss = read('css/landing.css');
+  const loginHtml = read('login.html');
+
+  const store = new Map([['myipon_theme', 'dark']]);
+  const listeners = new Map();
+  const rootEl = { dataset: {}, style: {} };
+  const metaTheme = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+  const dispatched = [];
+  const docStub = {
+    body: { dataset: {}, classList: { contains: () => false, toggle() {}, add() {}, remove() {} }, insertAdjacentHTML() {}, append() {} },
+    head: { insertAdjacentHTML() {} },
+    documentElement: rootEl,
+    createElement: () => ({ style: {}, dataset: {}, classList: { contains: () => false, add() {}, toggle() {}, remove() {} }, setAttribute() {}, querySelector: () => null, appendChild() {}, append() {}, prepend() {}, remove() {}, addEventListener() {} }),
+    querySelector(sel) {
+      if (sel === 'meta[name="theme-color"]') return metaTheme;
+      return sel === 'link[rel="manifest"]' ? {} : null;
+    },
+    querySelectorAll: () => [],
+    getElementById: () => null,
+    addEventListener(type, fn) { listeners.set(type, [...(listeners.get(type) || []), fn]); }
+  };
+  const winListeners = new Map();
+  const ctx = {
+    URLSearchParams,
+    CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
+    window: null,
+    document: docStub,
+    navigator: {},
+    location: { protocol: 'https:', hostname: 'myipon.example', search: '' },
+    localStorage: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => { store.set(k, String(v)); },
+      removeItem: (k) => { store.delete(k); }
+    },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    IPON_CONFIG: {},
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (fn) => fn(),
+    addEventListener(type, fn) { winListeners.set(type, [...(winListeners.get(type) || []), fn]); },
+    dispatchEvent(evt) { dispatched.push(evt); },
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  const { getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions } = ctx.window.Ipon;
+  assert.equal(getTheme(), 'dark');
+  assert.equal(isDarkTheme(), true);
+  assert.equal(rootEl.dataset.theme, 'dark');
+  assert.equal(rootEl.style.colorScheme, 'dark');
+  assert.equal(metaTheme.attrs.content, '#081310');
+  assert.equal(chartThemeOptions().isDark, true);
+  assert.equal(chartThemeOptions().textColor, '#d2e0d9');
+
+  assert.equal(toggleTheme(), 'light');
+  assert.equal(getTheme(), 'light');
+  assert.equal(isDarkTheme(), false);
+  assert.equal(store.get('myipon_theme'), 'light');
+  assert.equal(rootEl.style.colorScheme, 'light');
+  assert.equal(metaTheme.attrs.content, '#0b3428');
+  assert.equal(chartThemeOptions().isDark, false);
+  assert.ok(dispatched.some((e) => e.type === 'ipon:themechange' && e.detail?.theme === 'light'));
+
+  // Cross-tab storage sync updates live without rewriting storage
+  (winListeners.get('storage') || []).forEach((fn) => fn({ key: 'myipon_theme', newValue: 'dark' }));
+  assert.equal(rootEl.dataset.theme, 'dark');
+  assert.equal(setTheme('invalid-value'), 'light');
+
+  // Dark mode switcher lives in Settings / Account Preferences instead of reserving sidebar-utilities (reserved for chat)
+  const sidebarUtilityStub = {
+    prepended: [],
+    querySelector: () => null,
+    prepend(el) { this.prepended.push(el); }
+  };
+  const prevDocQuery = docStub.querySelector;
+  docStub.querySelector = (sel) => (sel === '.sidebar-utilities' ? sidebarUtilityStub : prevDocQuery(sel));
+  ctx.window.Ipon.mountThemeControls(docStub);
+  assert.equal(sidebarUtilityStub.prepended.length, 0);
+
+  const settingsHtml = read('settings.html');
+  const accountHtml = read('account.html');
+  assert.match(settingsHtml, /id="settings-theme-dark"[^>]*data-theme-checkbox/);
+  assert.match(accountHtml, /id="account-theme-dark"[^>]*data-theme-checkbox/);
+  assert.match(coreJs, /id="quick-theme-dark"[^>]*data-theme-checkbox/);
+  assert.doesNotMatch(coreJs, /sidebar-theme-toggle/);
+
+  // Stylesheets cover app shell, dashboard hero plates, landing, and login + print light reset
+  assert.match(appCss, /html\[data-theme="dark"\]\s*\{[^}]*color-scheme:\s*dark/);
+  assert.match(appCss, /@media print\s*\{[\s\S]*?html\[data-theme="dark"\][\s\S]*?background:\s*#ffffff\s*!important/);
+  assert.match(heroCss, /html\[data-theme="dark"\]\s*\{[^}]*color-scheme:\s*dark/);
+  assert.match(heroCss, /html\[data-theme="dark"\]\s+\.tracked-total\s*\{\s*color:#ffffff;/);
+  assert.match(heroCss, /html\[data-theme="dark"\]\s+\.tracked-label\s*\{\s*color:#8fd2ae;/);
+  assert.match(heroCss, /\.month-button\s+svg\s*\{[^}]*stroke:currentColor;/);
+  assert.match(heroCss, /html\[data-theme="dark"\]\s+\.month-button\s*\{[^}]*color:#ecf3ef;/);
+  assert.match(heroCss, /html\[data-theme="dark"\]\s+\.month-button\s+svg\s*\{\s*stroke:currentColor;\s*\}/);
+  assert.match(heroCss, /html\[data-theme="dark"\]\s+\.calendar-jump-chevron\s*\{\s*stroke:#cad9d2;\s*\}/);
+  assert.match(heroCss, /html\[data-theme="dark"\]\s+\.calendar-title-icon\s*\{\s*stroke:#7ee0ab;\s*\}/);
+  assert.equal((appCss.match(/^html\[data-theme="dark"\]\s*\{/gm) || []).length, 1);
+  assert.match(appCss, /html\[data-theme="dark"\]\s+\.bug-viewer-item/);
+  assert.match(appCss, /html\[data-theme="dark"\]\s+\.announcement-media-item/);
+  assert.match(appCss, /html\[data-theme="dark"\]\s+\.release-credit-anonymous/);
+  assert.match(appCss, /html\[data-theme="dark"\]\s+\.invite-row-badge/);
+  assert.match(appCss, /\.avatar-circle\s+img\s*\{[^}]*border-radius:50%/);
+  assert.match(appCss, /html\[data-theme="dark"\]\s+\.presence-dot\s*\{[^}]*border-color:\s*var\(--surface\)/);
+  assert.match(appCss, /html\[data-theme="dark"\]\s+\.announcement-avatar\.is-owner\s*\{[^}]*border-color:/);
+  assert.match(appCss, /html\[data-theme="dark"\]\s+\.reaction-stack-emoji,\s*html\[data-theme="dark"\]\s+\.reaction-user-emoji-badge\s*\{[^}]*box-shadow:\s*0 0 0 1\.5px var\(--surface\)/);
+  assert.match(landingCss, /html\[data-theme="dark"\]\s+\.landing/);
+  assert.match(loginHtml, /html\[data-theme="dark"\]\s+\.login-card/);
+  assert.doesNotMatch(coreJs, /color:#324841/);
+  assert.doesNotMatch(coreJs, /color: #354741/);
+  assert.match(recordsJs, /ipon:themechange/);
+  assert.match(reportsJs, /ipon:themechange/);
+  assert.match(recordsJs, /Ipon\.chartThemeOptions/);
+  assert.match(reportsJs, /Ipon\.chartThemeOptions/);
+
+  // Programmatic WCAG AA (>= 4.5:1) verification on dark mode token pairs
+  const luminance = (hex) => {
+    const [r, g, b] = hex.replace('#', '').match(/../g).map((h) => {
+      const c = parseInt(h, 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a, b) => {
+    const [l1, l2] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (l1 + 0.05) / (l2 + 0.05);
+  };
+  assert.ok(contrast('#ecf3ef', '#0b1613') >= 12, 'dark paper ink contrast');
+  assert.ok(contrast('#ecf3ef', '#13231f') >= 10, 'dark surface ink contrast');
+  assert.ok(contrast('#9eb3aa', '#13231f') >= 6.5, 'dark muted contrast >= AA');
+  assert.ok(contrast('#cad9d2', '#192f29') >= 7, 'dark subtle surface soft ink contrast');
+  assert.ok(contrast('#ffffff', '#1e6249') >= 6.5, 'dark primary button white text contrast');
+});
+
+test('enhancePaymentSelect upgrades payout channel and payment selects with GCash, Maya, Bank, and Cash icons', () => {
+  const core = read('js/core.js');
+  class Node {
+    constructor(tag = 'div') {
+      this.tagName = tag.toUpperCase();
+      this.children = [];
+      this.dataset = {};
+      this.style = {};
+      this.attributes = new Map();
+      this.listeners = new Map();
+      this.parentNode = null;
+      this.hidden = false;
+      this.disabled = false;
+      this.textContent = '';
+      this._innerHTML = '';
+      this.classList = {
+        set: new Set(),
+        add: (...c) => c.forEach((x) => this.classList.set.add(x)),
+        remove: (...c) => c.forEach((x) => this.classList.set.delete(x)),
+        toggle: (x, f) => (f ? this.classList.set.add(x) : this.classList.set.delete(x)),
+        contains: (x) => this.classList.set.has(x)
+      };
+    }
+    set className(v) { this.classList.set = new Set(String(v).split(/\s+/).filter(Boolean)); }
+    get className() { return [...this.classList.set].join(' '); }
+    set innerHTML(v) { this._innerHTML = String(v); }
+    get innerHTML() { return this._innerHTML; }
+    setAttribute(k, v) { this.attributes.set(k, String(v)); }
+    getAttribute(k) { return this.attributes.get(k) ?? null; }
+    addEventListener(t, fn) { if (!this.listeners.has(t)) this.listeners.set(t, []); this.listeners.get(t).push(fn); }
+    dispatchEvent(e) { (this.listeners.get(e.type) || []).forEach((fn) => fn(e)); return true; }
+    appendChild(n) { n.parentNode = this; this.children.push(n); return n; }
+    insertBefore(n, ref) {
+      const idx = this.children.indexOf(ref);
+      n.parentNode = this;
+      if (idx >= 0) this.children.splice(idx, 0, n); else this.children.push(n);
+    }
+    replaceChildren(...nodes) { this.children = []; nodes.forEach((n) => this.appendChild(n)); }
+    insertAdjacentHTML() {}
+    focus() {}
+    querySelector(sel) {
+      if (sel === '.custom-select-trigger-icon') {
+        if (!this._triggerIcon) this._triggerIcon = new Node('span');
+        return this._triggerIcon;
+      }
+      if (sel === '.custom-select-trigger-label') {
+        if (!this._triggerLabel) this._triggerLabel = new Node('span');
+        return this._triggerLabel;
+      }
+      if (sel === '.custom-select-badge') {
+        if (!this._triggerBadge) this._triggerBadge = new Node('span');
+        return this._triggerBadge;
+      }
+      return null;
+    }
+    querySelectorAll() { return []; }
+  }
+
+  const fieldWrap = new Node('div');
+  const select = new Node('select');
+  select.id = 'account-payout-channel';
+  select.name = 'payout_channel';
+  select.options = [
+    { value: '', textContent: 'Not set', selected: true, disabled: false },
+    { value: 'GCASH', textContent: 'GCash', selected: false, disabled: false },
+    { value: 'MAYA', textContent: 'Maya', selected: false, disabled: false },
+    { value: 'BANK_TRANSFER', textContent: 'Bank Transfer', selected: false, disabled: false },
+    { value: 'CASH', textContent: 'Cash pickup', selected: false, disabled: false },
+    { value: 'OTHER', textContent: 'Other e-wallet / bank', selected: false, disabled: false }
+  ];
+  let _val = '';
+  Object.defineProperty(select, 'value', {
+    get: () => _val,
+    set: (v) => {
+      _val = String(v);
+      select.options.forEach((o) => { o.selected = o.value === _val; });
+    }
+  });
+  Object.defineProperty(select, 'selectedIndex', {
+    get: () => Math.max(0, select.options.findIndex((o) => o.value === _val))
+  });
+  fieldWrap.appendChild(select);
+
+  const loaderNode = new Node('div');
+  const doc = {
+    body: new Node('body'),
+    head: new Node('head'),
+    documentElement: { dataset: {} },
+    readyState: 'complete',
+    createElement: (tag) => new Node(tag),
+    getElementById: (id) => (id === 'app-loader' ? loaderNode : null),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener: () => {}
+  };
+  doc.body.dataset = { page: 'account' };
+
+  const ctx = {
+    window: null, document: doc,
+    Event: class { constructor(type) { this.type = type; } },
+    CSS: { escape: (v) => v },
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/account.html', pathname: '/account.html', origin: 'http://localhost', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} disconnect() {} },
+    IPON_CONFIG: { supabaseUrl: '', supabaseAnonKey: '' },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
+
+  const api = ctx.window.Ipon.enhancePaymentSelect(select);
+  assert.ok(api.wrap.classList.contains('custom-payment-select-wrap'));
+  assert.ok(select.classList.contains('custom-select-native'));
+
+  const [, trigger, menu] = api.wrap.children;
+  assert.equal(trigger.querySelector('.custom-select-trigger-label').textContent, 'Not set');
+  assert.match(trigger.querySelector('.custom-select-trigger-icon').innerHTML, /is-untagged/);
+
+  const options = menu.children[0].children;
+  assert.equal(options.length, 6);
+  assert.match(options[1].innerHTML, /is-gcash/);
+  assert.match(options[2].innerHTML, /is-maya/);
+  assert.match(options[3].innerHTML, /is-bank/);
+  assert.match(options[4].innerHTML, /is-cash/);
+  assert.match(options[5].innerHTML, /is-other/);
+
+  let changes = 0;
+  select.addEventListener('change', () => { changes += 1; });
+  (options[1].listeners.get('click') || []).forEach((fn) => fn({ stopPropagation() {} }));
+
+  assert.equal(select.value, 'GCASH');
+  assert.equal(changes, 1);
+  assert.equal(trigger.querySelector('.custom-select-trigger-label').textContent, 'GCash');
+  assert.match(trigger.querySelector('.custom-select-trigger-icon').innerHTML, /is-gcash/);
+});
+
+test('startup initialization auto-recovers transient errors, JWT expiry, and Web Lock contention without false startup-error overlay', async () => {
+  const core = read('js/core.js');
+  const injectedHtml = [];
+  const winListeners = new Map();
+  const makeNode = (tag = 'div') => ({
+    tagName: tag.toUpperCase(),
+    dataset: {},
+    style: { removeProperty() {} },
+    classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+    setAttribute() {}, removeAttribute() {}, getAttribute: () => null, hasAttribute: () => false,
+    addEventListener() {}, removeEventListener() {},
+    querySelector: () => null, querySelectorAll: () => [],
+    insertAdjacentHTML(_pos, html) { injectedHtml.push(String(html)); },
+    append() {}, appendChild() {}, prepend() {}, remove() {}, closest: () => null, focus() {},
+    innerHTML: '', textContent: '', hidden: false
+  });
+  const loaderStub = makeNode('div');
+  const sidebarStub = makeNode('aside');
+  const doc = {
+    body: Object.assign(makeNode('body'), { dataset: { page: 'dashboard' } }),
+    head: makeNode('head'),
+    documentElement: makeNode('html'),
+    createElement: (t) => makeNode(t),
+    querySelector: (sel) => (sel === 'link[rel="manifest"]' ? {} : null),
+    querySelectorAll: () => [],
+    getElementById: (id) => (id === 'app-loader' ? loaderStub : id === 'app-sidebar' ? sidebarStub : null),
+    addEventListener() {}
+  };
+
+  let sessionCalls = 0;
+  let profileCalls = 0;
+  let refreshCalls = 0;
+  const ctx = {
+    URLSearchParams, URL, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i?.detail; } },
+    Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    navigator: { onLine: true },
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/dashboard.html', pathname: '/dashboard.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    supabase: {
+      createClient: () => {
+        return {
+          auth: {
+            getSession: async () => {
+              sessionCalls += 1;
+              if (sessionCalls === 1) throw new Error('Failed to fetch');
+              return { data: { session: { user: { id: 'u1', app_metadata: {}, user_metadata: {} } } }, error: null };
+            },
+            refreshSession: async () => {
+              refreshCalls += 1;
+              return { data: { session: { user: { id: 'u1' } } }, error: null };
+            },
+            onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+            mfa: { getAuthenticatorAssuranceLevel: async () => ({ data: { currentLevel: 'aal1', nextLevel: 'aal1' }, error: null }) }
+          },
+          from: () => ({
+            select: () => ({
+              eq: () => ({
+                single: async () => {
+                  profileCalls += 1;
+                  if (profileCalls === 1) return { data: null, error: { status: 401, message: 'JWT expired' } };
+                  return {
+                    data: {
+                      id: 'u1', full_name: 'Juan Dela Cruz', first_name: 'Juan', last_name: 'Dela Cruz',
+                      contact_number: '09171234567', role: 'ADMIN', status: 'ACTIVE', group_id: 'g1', name_setup_required: false
+                    },
+                    error: null
+                  };
+                },
+                order: () => ({ limit: async () => ({ data: [], error: null }) })
+              })
+            })
+          }),
+          channel: () => ({ on() { return this; }, subscribe() { return this; }, track: async () => {} }),
+          removeChannel() {}
+        };
+      }
+    },
+    setTimeout: (fn) => { fn(); return 0; },
+    clearTimeout() {},
+    setInterval: () => 0,
+    clearInterval() {},
+    requestAnimationFrame: (fn) => fn(),
+    addEventListener(type, fn) { winListeners.set(type, [...(winListeners.get(type) || []), fn]); },
+    dispatchEvent() {},
+    document: doc,
+    window: null,
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
+
+  const res = await ctx.window.Ipon.init({ allowedRoles: ['ADMIN'] });
+  assert.equal(typeof ctx.window.Ipon.mountPayoutFieldsets, 'function');
+  // Startup mounts happen after all payment-method constants are initialized (no TDZ ReferenceError)
+  assert.doesNotMatch(core, /if \(document\.body\.dataset\.page && !document\.body\.classList\.contains\('security-page'\)\) mountShell\(\);[\s\S]*const PAYMENT_METHOD_MAP/);
+
+  assert.equal(res.failed, undefined);
+  assert.equal(res.profile?.id, 'u1');
+  assert.equal(sessionCalls, 2);
+  assert.equal(refreshCalls, 1);
+  assert.equal(profileCalls, 2);
+  assert.ok(!injectedHtml.some((html) => html.includes('id="startup-error"')));
+
+  // Background unhandledrejection with NavigatorLockAcquireTimeoutError never renders #startup-error
+  (winListeners.get('unhandledrejection') || []).forEach((fn) => fn({
+    preventDefault() {},
+    reason: new Error('Acquiring an exclusive Navigator LockManager lock "lock:sb-auth-token" timed out')
+  }));
+  assert.ok(!injectedHtml.some((html) => html.includes('id="startup-error"')));
+});
+
+test('SVG eye-open path uses valid cubic commands across auth and shell templates', () => {
+  for (const file of ['js/core.js', 'js/auth.js', 'login.html']) {
+    assert.doesNotMatch(read(file), /M2 12s3\.5-7 10-7 10 7 10 7-3\.5 7-10 7-10-7Z/, `${file} must not contain invalid 2-arg trailing s curve`);
+  }
+});
+
+test('avatarMarkup suffixes every wrapper class token so multi-class avatars never gain a square outer border', () => {
+  const core = read('js/core.js');
+  const stub = () => ({ dataset: {}, classList: { contains: () => false, add() {}, remove() {}, toggle() {} }, setAttribute() {}, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], style: { removeProperty() {} }, append() {}, insertAdjacentHTML() {}, remove() {} });
+  const ctx = {
+    URLSearchParams, URL, CustomEvent: class {}, Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    navigator: { onLine: true },
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/', pathname: '/', search: '', hostname: 'myipon.example', protocol: 'https:', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {}, requestAnimationFrame: () => {},
+    addEventListener() {}, dispatchEvent() {},
+    document: { body: stub(), head: stub(), documentElement: stub(), createElement: stub, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, addEventListener() {} },
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
+
+  const html = ctx.window.Ipon.avatarMarkup('data:image/png;base64,iVBORw0KGgo=', 'Juan Dela Cruz', 'announcement-avatar is-owner', 'user-1');
+  assert.match(html, /class="avatar-presence-wrap announcement-avatar-wrap is-owner-wrap"/);
+  assert.match(html, /class="avatar-circle announcement-avatar is-owner"/);
+});
+
+test('all close and remove X buttons enforce circular aspect-ratio: 1 / 1 geometry (never oblong)', () => {
+  const appCss = read('css/app.css');
+  const heroCss = read('css/hero-plates.css');
+  const loginHtml = read('login.html');
+
+  assert.match(appCss, /\.dialog-close\s*\{[^}]*width:\s*40px;\s*height:\s*40px;\s*flex:\s*0 0 40px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(appCss, /\.notification-sheet \.dialog-close\s*\{[^}]*width:\s*36px;\s*height:\s*36px;\s*flex:\s*0 0 36px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(appCss, /\.account-dialog-header \.dialog-close\s*\{[^}]*width:\s*44px;\s*height:\s*44px;\s*flex:\s*0 0 44px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(appCss, /\.announcement-modal-close\s*\{[^}]*width:\s*36px;\s*height:\s*36px;\s*flex:\s*0 0 36px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(appCss, /\.group-hub-hero \.dialog-close\s*\{[^}]*flex:\s*0 0 42px;\s*width:\s*42px;\s*height:\s*42px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(appCss, /\.account-avatar-remove\s*\{[^}]*width:\s*22px;\s*height:\s*22px;\s*flex:\s*0 0 22px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(appCss, /\.bug-image-remove\s*\{[^}]*width:\s*22px;\s*height:\s*22px;\s*flex:\s*0 0 22px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(appCss, /\.invite-row-remove\s*\{[^}]*width:\s*28px;\s*height:\s*28px;\s*flex:\s*0 0 28px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(appCss, /\.calc-plan-remove\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;[^}]*flex:\s*0 0 28px;[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(appCss, /\.record-thread-queued-remove\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*flex:\s*0 0 24px;[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(heroCss, /\.calendar-jump-close\s*\{[^}]*width:\s*40px;\s*height:\s*40px;\s*flex:\s*0 0 40px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(heroCss, /\.day-detail-panel header button\s*\{[^}]*width:\s*40px;\s*height:\s*40px;\s*flex:\s*0 0 40px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+  assert.match(loginHtml, /\.login-card-close\s*\{[^}]*width:\s*36px;\s*height:\s*36px;\s*flex:\s*0 0 36px;\s*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/);
+});
+
+test('announcement author_name stays live with profile full_name changes across DB view, trigger, and UI', () => {
+  const migration065 = read('database/migrations/20261114_065_live_announcement_author_name.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+
+  assert.match(migration065, /create or replace function public\.announcement_author_name\(p_author_id uuid, p_fallback text default null\)/i);
+  assert.match(migration065, /public\.announcement_author_name\(a\.author_id, a\.author_name\) as author_name/i);
+  assert.match(migration065, /trg_profiles_sync_announcement_author_name/i);
+  assert.match(migration065, /update public\.announcements a/i);
+  assert.match(schema, /public\.announcement_author_name\(a\.author_id, a\.author_name\) as author_name/i);
+  assert.match(core, /ipon:profile-updated/);
+  assert.match(core, /isOwnPost && currentProfile\.full_name/);
+});
+
+
 
 
 

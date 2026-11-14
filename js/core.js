@@ -12,6 +12,18 @@
     }
     return clientInstance;
   }
+  async function ensureClient(maxWaitMs = 2500) {
+    const existing = getClient();
+    if (existing) return existing;
+    if (!configured) return null;
+    const deadline = Date.now() + maxWaitMs;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      const ready = getClient();
+      if (ready) return ready;
+    }
+    throw new Error('Unable to initialize database client.');
+  }
   let currentProfile = null;
   let quickMfaController = null;
   const STARTUP_TIMEOUT_MS = 15000;
@@ -19,9 +31,154 @@
   let navLoaderTimer = null;
   let activeLiveRefresh = null;
 
+  const THEME_STORAGE_KEY = 'myipon_theme';
+  const THEME_SUN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32 1.41-1.41"/></svg>';
+  const THEME_MOON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79Z"/></svg>';
+
+  function normalizeTheme(value) {
+    return String(value || '').trim().toLowerCase() === 'dark' ? 'dark' : 'light';
+  }
+
+  function readStoredTheme() {
+    try {
+      const stored = localStorage.getItem(THEME_STORAGE_KEY);
+      if (stored === 'dark' || stored === 'light') return stored;
+    } catch { }
+    return 'light';
+  }
+
+  function getTheme() {
+    return normalizeTheme(document?.documentElement?.dataset?.theme || readStoredTheme());
+  }
+
+  function isDarkTheme() {
+    return getTheme() === 'dark';
+  }
+
+  function chartThemeOptions() {
+    const dark = isDarkTheme();
+    return {
+      isDark: dark,
+      textColor: dark ? '#d2e0d9' : '#324841',
+      mutedColor: dark ? '#9bb0a7' : '#5f655f',
+      gridColor: dark ? 'rgba(218, 236, 227, 0.12)' : 'rgba(20, 45, 43, 0.1)',
+      tooltipBg: dark ? '#0b1b16' : '#142d2b',
+      tooltipBorder: dark ? 'rgba(222, 177, 82, 0.35)' : 'rgba(255, 255, 255, 0.14)',
+      tooltipTitleColor: '#f5eadb',
+      tooltipBodyColor: '#e5efe9',
+      additionColor: dark ? '#3ea46c' : '#287a4c',
+      deductionColor: dark ? '#df625b' : '#ae3934'
+    };
+  }
+
+  function syncThemeControls(root = document) {
+    const dark = isDarkTheme();
+    const nextAction = dark ? 'Switch to light mode' : 'Switch to dark mode';
+    const buttonLabel = dark ? 'Light mode' : 'Dark mode';
+    root?.querySelectorAll?.('[data-theme-toggle]')?.forEach((button) => {
+      button.setAttribute?.('aria-pressed', String(dark));
+      button.setAttribute?.('aria-label', nextAction);
+      button.setAttribute?.('title', nextAction);
+      if (button.dataset) button.dataset.themeState = dark ? 'dark' : 'light';
+      const iconHost = button.querySelector?.('[data-theme-icon]');
+      const labelHost = button.querySelector?.('[data-theme-label]');
+      if (iconHost) iconHost.innerHTML = dark ? THEME_SUN_SVG : THEME_MOON_SVG;
+      else button.innerHTML = `${dark ? THEME_SUN_SVG : THEME_MOON_SVG}${button.classList?.contains?.('auth-theme-toggle') || button.classList?.contains?.('l-theme-drawer-toggle') ? `<span data-theme-label>${buttonLabel}</span>` : ''}`;
+      if (labelHost) labelHost.textContent = buttonLabel;
+    });
+    root?.querySelectorAll?.('[data-theme-checkbox]')?.forEach((checkbox) => {
+      checkbox.checked = dark;
+      checkbox.setAttribute?.('aria-checked', String(dark));
+    });
+  }
+
+  function mountThemeControls(root = document) {
+    if (typeof document?.createElement !== 'function') return;
+    const landingNavCta = root?.querySelector?.('.l-nav-cta');
+    if (landingNavCta && !landingNavCta.querySelector?.('[data-theme-toggle]')) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'l-btn l-btn-ghost l-theme-toggle';
+      btn.setAttribute?.('data-theme-toggle', '');
+      btn.innerHTML = `<span class="theme-toggle-icon" data-theme-icon aria-hidden="true">${THEME_MOON_SVG}</span>`;
+      landingNavCta.prepend?.(btn);
+    }
+
+    const landingDrawerActions = root?.querySelector?.('.l-drawer-actions');
+    if (landingDrawerActions && !landingDrawerActions.querySelector?.('[data-theme-toggle]')) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'l-btn l-btn-ghost l-theme-drawer-toggle';
+      btn.setAttribute?.('data-theme-toggle', '');
+      btn.innerHTML = `<span class="theme-toggle-icon" data-theme-icon aria-hidden="true">${THEME_MOON_SVG}</span><span data-theme-label>Dark mode</span>`;
+      landingDrawerActions.append?.(btn);
+    }
+
+    const authContainer = root?.querySelector?.('.login-page, body.security-page');
+    if (authContainer && !document.querySelector?.('.auth-theme-toggle')) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'auth-theme-toggle';
+      btn.setAttribute?.('data-theme-toggle', '');
+      btn.innerHTML = `<span class="theme-toggle-icon" data-theme-icon aria-hidden="true">${THEME_MOON_SVG}</span><span data-theme-label>Dark mode</span>`;
+      authContainer.append?.(btn);
+    }
+
+    root?.querySelectorAll?.('#quick-notifications-enabled, #notifications-enabled')?.forEach((notifCheckbox) => {
+      const notifRow = notifCheckbox.closest?.('.preference-row');
+      const card = notifRow?.parentElement;
+      if (!card || card.querySelector?.('.preference-theme-row') || card.querySelector?.('[data-theme-checkbox]')) return;
+      const row = document.createElement('label');
+      row.className = 'preference-row preference-theme-row';
+      row.innerHTML = `<span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input class="toggle-switch-input" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode">`;
+      card.insertBefore?.(row, notifRow);
+    });
+
+    syncThemeControls(root);
+  }
+
+  function setTheme(theme, { persist = true, notify = true } = {}) {
+    const next = normalizeTheme(theme);
+    const rootEl = document?.documentElement;
+    if (rootEl) {
+      if (rootEl.dataset) rootEl.dataset.theme = next;
+      if (rootEl.style) rootEl.style.colorScheme = next;
+    }
+    const metaTheme = document?.querySelector?.('meta[name="theme-color"]');
+    metaTheme?.setAttribute?.('content', next === 'dark' ? '#081310' : '#0b3428');
+    if (persist) {
+      try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch { }
+    }
+    syncThemeControls(document);
+    if (notify && typeof window?.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('ipon:themechange', { detail: { theme: next } }));
+    }
+    return next;
+  }
+
+  function toggleTheme() {
+    return setTheme(isDarkTheme() ? 'light' : 'dark');
+  }
+
   if (!document.querySelector('link[rel="manifest"]')) {
     document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#0b3428"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="IPON"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/icon-192.png">');
   }
+  setTheme(readStoredTheme(), { persist: false, notify: false });
+  document.addEventListener('click', (event) => {
+    const toggleBtn = event.target.closest?.('[data-theme-toggle]');
+    if (!toggleBtn) return;
+    toggleTheme();
+  });
+  document.addEventListener('change', (event) => {
+    const themeCheck = event.target.closest?.('[data-theme-checkbox]');
+    if (!themeCheck) return;
+    setTheme(themeCheck.checked ? 'dark' : 'light');
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key === THEME_STORAGE_KEY) {
+      setTheme(event.newValue || 'light', { persist: false });
+    }
+  });
   if (!window.Capacitor && 'serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
     const hadController = Boolean(navigator.serviceWorker.controller);
     let swReloading = false;
@@ -93,12 +250,12 @@
     });
   }
 
-  function withTimeout(request) {
+  function withTimeout(request, timeoutMs = STARTUP_TIMEOUT_MS) {
     let timer;
     return Promise.race([
       request,
       new Promise((_, reject) => {
-        timer = window.setTimeout(() => reject(new Error('The connection timed out.')), STARTUP_TIMEOUT_MS);
+        timer = window.setTimeout(() => reject(new Error('The connection timed out.')), timeoutMs);
       })
     ]).finally(() => window.clearTimeout(timer));
   }
@@ -364,12 +521,44 @@
   const NAME_ROMAN_LIST = [...NAME_ROMAN_SUFFIXES];
   const NAME_CHAR_RULE = 'Use letters, spaces, hyphens, or apostrophes only.';
   const NAME_RULE = 'Use formal capitalization (e.g., Juan Dela Cruz). Do not use ALL CAPS or all lowercase.';
+  const NAME_FIELD_META = Object.freeze({
+    first_name: Object.freeze({
+      label: 'first name',
+      example: 'Juan',
+      placeholder: 'e.g., Juan',
+      requiredMsg: 'Enter a first name.'
+    }),
+    middle_name: Object.freeze({
+      label: 'middle name',
+      example: 'Santos or A',
+      placeholder: 'e.g., Santos or A',
+      requiredMsg: 'Enter a middle name.'
+    }),
+    last_name: Object.freeze({
+      label: 'last name',
+      example: 'Dela Cruz',
+      placeholder: 'e.g., Dela Cruz',
+      requiredMsg: 'Enter a last name.'
+    })
+  });
 
-  function nameWordError(word, index, totalWords, { live = false, allowSingleInitial = false } = {}) {
-    if (!word) return NAME_RULE;
+  function nameRuleForField(fieldName = '') {
+    const meta = NAME_FIELD_META[String(fieldName || '').trim()];
+    if (!meta) return { label: 'name', example: 'Juan Dela Cruz', placeholder: 'e.g., Juan Dela Cruz', requiredMsg: 'Enter this name.', ruleMsg: NAME_RULE };
+    return {
+      label: meta.label,
+      example: meta.example,
+      placeholder: meta.placeholder,
+      requiredMsg: meta.requiredMsg,
+      ruleMsg: `Use formal capitalization (e.g., ${meta.example}). Do not use ALL CAPS or all lowercase.`
+    };
+  }
+
+  function nameWordError(word, index, totalWords, { live = false, allowSingleInitial = false, ruleMsg = NAME_RULE } = {}) {
+    if (!word) return ruleMsg;
     if (index > 0) {
       if (NAME_LOWERCASE_PARTICLES.has(word)) {
-        if (!live && index >= totalWords - 1) return NAME_RULE;
+        if (!live && index >= totalWords - 1) return ruleMsg;
         return '';
       }
       if (live && index === totalWords - 1 && /^\p{Ll}+$/u.test(word) && NAME_PARTICLE_LIST.some((p) => p.startsWith(word))) {
@@ -383,34 +572,39 @@
     const segments = word.split(/['\u2019-]/);
     for (const seg of segments) {
       if (!seg) return NAME_CHAR_RULE;
-      if (!/^\p{Lu}/u.test(seg) || /\p{Lu}{2}/u.test(seg)) return NAME_RULE;
+      if (!/^\p{Lu}/u.test(seg) || /\p{Lu}{2}/u.test(seg)) return ruleMsg;
       if (seg.length === 1) {
         if (segments.length > 1 || (live && totalWords === 1)) continue;
-        if (!(allowSingleInitial && (totalWords === 1 || (index > 0 && index < totalWords - 1)))) return NAME_RULE;
+        if (!(allowSingleInitial && (totalWords === 1 || (index > 0 && index < totalWords - 1)))) return ruleMsg;
       } else {
         const segPattern = live
           ? /^\p{Lu}[\p{Ll}\p{M}]*(?:\p{Lu}[\p{Ll}\p{M}]*)*$/u
           : /^\p{Lu}[\p{Ll}\p{M}]+(?:\p{Lu}[\p{Ll}\p{M}]+)*$/u;
-        if (!segPattern.test(seg)) return NAME_RULE;
+        if (!segPattern.test(seg)) return ruleMsg;
       }
     }
     return '';
   }
 
-  function nameValidationError(value, { allowSingleInitial = false, required = false, live = false } = {}) {
+  function nameValidationError(value, { allowSingleInitial = false, required = false, live = false, fieldName = '' } = {}) {
+    const fieldRule = nameRuleForField(fieldName);
     const raw = String(value || '').normalize('NFC');
     const trimmedTrailingSep = live ? normalizeNamePart(raw.replace(/['\u2019-]\s*$/, '')) : normalizeNamePart(raw);
     const cleaned = normalizeNamePart(raw);
-    if (!cleaned) return required && !live ? 'Enter this name.' : '';
+    if (!cleaned) return required && !live ? fieldRule.requiredMsg : '';
     const checkValue = live && !/['\u2019-]{2}/.test(raw.trim()) ? trimmedTrailingSep : cleaned;
     if (!checkValue) return NAME_CHAR_RULE;
     if (cleaned.length > 80) return 'Use 80 characters or fewer.';
     if (!/^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(checkValue)) return NAME_CHAR_RULE;
     const letterCount = checkValue.replace(/[^\p{L}]/gu, '').length;
-    if (!live && !allowSingleInitial && letterCount < 2) return 'Enter at least 2 letters using formal capitalization.';
+    if (!live && !allowSingleInitial && letterCount < 2) {
+      return fieldName
+        ? `Enter at least 2 letters for this ${fieldRule.label} using formal capitalization (e.g., ${fieldRule.example}).`
+        : 'Enter at least 2 letters using formal capitalization.';
+    }
     const words = checkValue.split(' ');
     for (let i = 0; i < words.length; i += 1) {
-      const err = nameWordError(words[i], i, words.length, { live, allowSingleInitial });
+      const err = nameWordError(words[i], i, words.length, { live, allowSingleInitial, ruleMsg: fieldRule.ruleMsg });
       if (err) return err;
     }
     return '';
@@ -493,7 +687,8 @@
     const message = nameValidationError(input.value, {
       allowSingleInitial: input.name === 'middle_name',
       required: input.required,
-      live
+      live,
+      fieldName: input.name || ''
     });
     input.setCustomValidity(message);
     setFieldError(input, message);
@@ -546,7 +741,9 @@
     document.querySelectorAll('input[name="first_name"],input[name="middle_name"],input[name="last_name"]').forEach((input) => {
       if (input.dataset.nameBound) return;
       input.dataset.nameBound = 'true';
-      input.title = NAME_RULE;
+      const fieldMeta = nameRuleForField(input.name);
+      input.title = fieldMeta.ruleMsg;
+      if (!input.placeholder && fieldMeta.placeholder) input.placeholder = fieldMeta.placeholder;
       input.addEventListener('input', () => {
         input.value = input.value.replace(/[^\p{L}\p{M} '\u2019-]/gu, '');
         if (normalizeNamePart(input.value) || input.hasAttribute('aria-invalid')) validateNameInput(input, { live: true });
@@ -1160,8 +1357,8 @@
           <header class="account-dialog-header"><div class="account-dialog-title"><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
             <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
-            <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
-            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label><div class="preference-row preference-device-row" data-device-notif-row hidden><span><strong>Phone &amp; drawer alerts</strong><small data-device-notif-status>Checking device permission…</small></span><button class="button button-secondary button-sm" type="button" data-device-notif-btn disabled>Checking…</button></div></section></div>
+            <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
+            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-device-row" data-device-notif-row hidden><span><strong>Phone &amp; drawer alerts</strong><small data-device-notif-status>Checking device permission…</small></span><button class="button button-secondary button-sm" type="button" data-device-notif-btn disabled>Checking…</button></div></section></div>
           </div>
         </div>
       </dialog>
@@ -1204,13 +1401,14 @@
     bindAccountDialog();
     prepareNameInputs();
     preparePhoneInputs();
+    mountThemeControls(document);
   }
 
   const MAX_BUG_IMAGES = 5;
   const MAX_BUG_IMAGE_BYTES = 2 * 1024 * 1024;
   const MAX_AVATAR_BYTES = 450 * 1024;
   const PICTURE_FILE_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif|ico|tiff?|jfif|apng)$/i;
-  const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+  const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
   const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   function initials(name) {
@@ -1366,8 +1564,14 @@
     if (!userId) return circle;
     const isOnline = isUserOnline(userId);
     const label = isOnline ? 'Active now' : 'Offline';
+    const wrapCls = String(className || '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((token) => `${escapeHtml(token)}-wrap`)
+      .join(' ');
     const presenceDot = `<span class="presence-dot${isOnline ? ' is-online' : ''}" data-presence-id="${escapeHtml(userId)}" aria-label="${label}" title="${label}"></span>`;
-    return `<span class="avatar-presence-wrap ${cls ? `${cls}-wrap` : ''}" data-presence-user="${escapeHtml(userId)}">${circle}${presenceDot}</span>`;
+    return `<span class="avatar-presence-wrap${wrapCls ? ` ${wrapCls}` : ''}" data-presence-user="${escapeHtml(userId)}">${circle}${presenceDot}</span>`;
   }
 
   function bindAvatarFallbacks(root = document) {
@@ -1434,19 +1638,37 @@
     return memberAvatarStore.get(raw) || memberAvatarStore.get(key) || null;
   }
 
-  function enhanceMemberSelect(selectEl) {
+  function allMethodsIconHtml() {
+    return '<span class="pm-icon is-all" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><rect x="2.5" y="2.5" width="6" height="6" rx="1.6" fill="#e8f3ec" stroke="#17543a" stroke-width="1.5"/><rect x="11.5" y="2.5" width="6" height="6" rx="1.6" fill="#e8f3ec" stroke="#17543a" stroke-width="1.5"/><rect x="2.5" y="11.5" width="6" height="6" rx="1.6" fill="#e8f3ec" stroke="#17543a" stroke-width="1.5"/><rect x="11.5" y="11.5" width="6" height="6" rx="1.6" fill="#e8f3ec" stroke="#17543a" stroke-width="1.5"/></svg></span>';
+  }
+
+  function paymentSelectIconHtml(value, labelText = '') {
+    const val = String(value || '').trim();
+    if (!val && /^all\b/i.test(String(labelText || '').trim())) return allMethodsIconHtml();
+    if (val === 'UNTAGGED') return paymentMethodIconHtml('');
+    return paymentMethodIconHtml(val);
+  }
+
+  function mountCustomSelect(selectEl, {
+    wrapClass = '',
+    fallbackLabel = 'Select option',
+    slotClass = 'custom-select-avatar-slot',
+    triggerGraphicClass = 'custom-select-trigger-avatar',
+    renderGraphic,
+    afterRenderMenu = null
+  } = {}) {
     if (!selectEl || selectEl.dataset.customEnhanced === 'true') {
       selectEl?._customSelect?.sync();
       return selectEl?._customSelect || null;
     }
 
     const parent = selectEl.parentNode;
-    if (!parent) return null;
+    if (!parent || typeof document?.createElement !== 'function') return null;
 
     selectEl.dataset.customEnhanced = 'true';
 
     const wrap = document.createElement('div');
-    wrap.className = 'custom-member-select-wrap';
+    wrap.className = ['custom-member-select-wrap', wrapClass].filter(Boolean).join(' ');
 
     parent.insertBefore(wrap, selectEl);
     wrap.appendChild(selectEl);
@@ -1460,8 +1682,8 @@
 
     trigger.innerHTML = `
       <div class="custom-select-selection">
-        <span class="custom-select-trigger-avatar"></span>
-        <span class="custom-select-trigger-label">Select member</span>
+        <span class="${escapeHtml(triggerGraphicClass)}"></span>
+        <span class="custom-select-trigger-label">${escapeHtml(fallbackLabel)}</span>
         <span class="custom-select-badge" hidden></span>
       </div>
       <svg class="custom-select-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -1477,7 +1699,7 @@
     wrap.appendChild(trigger);
     wrap.appendChild(menu);
 
-    const triggerAvatar = trigger.querySelector('.custom-select-trigger-avatar');
+    const triggerGraphic = trigger.querySelector(`.${triggerGraphicClass}`);
     const triggerLabel = trigger.querySelector('.custom-select-trigger-label');
     const triggerBadge = trigger.querySelector('.custom-select-badge');
 
@@ -1509,7 +1731,7 @@
       const selectedIndex = selectEl.selectedIndex;
       const opt = selectedIndex >= 0 ? selectEl.options[selectedIndex] : null;
       const val = opt ? opt.value : '';
-      const text = opt ? opt.textContent.trim() : 'Select member';
+      const text = opt ? opt.textContent.trim() : fallbackLabel;
       const badge = opt?.dataset?.badge || '';
       const isPlaceholder = !val || (opt && opt.disabled);
 
@@ -1519,14 +1741,9 @@
         triggerBadge.textContent = badge;
         triggerBadge.hidden = !badge || isPlaceholder;
       }
-
-      if (isPlaceholder) {
-        triggerAvatar.innerHTML = `<span class="custom-avatar-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg></span>`;
-      } else {
-        const avatarUrl = opt.dataset.avatar || getMemberAvatar(val) || getMemberAvatar(text) || null;
-        triggerAvatar.innerHTML = avatarMarkup(avatarUrl, text, 'custom-select-avatar');
-        bindAvatarFallbacks(triggerAvatar);
-        syncPresenceDots(triggerAvatar);
+      if (triggerGraphic) {
+        triggerGraphic.innerHTML = renderGraphic({ opt, val, text, isPlaceholder, inTrigger: true });
+        afterRenderMenu?.(triggerGraphic);
       }
     }
 
@@ -1538,7 +1755,7 @@
       Array.from(selectEl.options).forEach((opt) => {
         const val = opt.value;
         const text = opt.textContent.trim();
-        const badge = opt.dataset.badge || '';
+        const badge = opt.dataset?.badge || '';
         const isPlaceholder = !val;
         const isSelected = opt.selected;
 
@@ -1548,14 +1765,11 @@
         optEl.setAttribute('aria-selected', isSelected ? 'true' : 'false');
         optEl.dataset.value = val;
 
-        const avatarUrl = opt.dataset.avatar || getMemberAvatar(val) || getMemberAvatar(text) || null;
-        const avatarHtml = isPlaceholder
-          ? `<span class="custom-avatar-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg></span>`
-          : avatarMarkup(avatarUrl, text, 'custom-select-avatar');
+        const graphicHtml = renderGraphic({ opt, val, text, isPlaceholder, inTrigger: false });
 
         optEl.innerHTML = `
           <div class="custom-select-option-main">
-            <span class="custom-select-avatar-slot">${avatarHtml}</span>
+            <span class="${escapeHtml(slotClass)}">${graphicHtml}</span>
             <span class="custom-select-option-name">${escapeHtml(text)}</span>
             ${badge && !isPlaceholder ? `<span class="custom-select-badge">${escapeHtml(badge)}</span>` : ''}
           </div>
@@ -1568,20 +1782,20 @@
         optEl.addEventListener('click', (e) => {
           e.stopPropagation();
           selectEl.value = val;
+          closeMenu();
           selectEl.dispatchEvent(new Event('change', { bubbles: true }));
           selectEl.dispatchEvent(new Event('input', { bubbles: true }));
           syncTrigger();
           rebuildOptions();
-          closeMenu();
-          trigger.focus();
+          const active = document.activeElement;
+          if (!active || active === document.body || wrap.contains(active)) trigger.focus();
         });
 
         optionsContainer.appendChild(optEl);
       });
 
       menu.appendChild(optionsContainer);
-      bindAvatarFallbacks(menu);
-      syncPresenceDots(menu);
+      afterRenderMenu?.(menu);
       syncTrigger();
     }
 
@@ -1596,6 +1810,15 @@
         e.preventDefault();
         openMenu();
       }
+    });
+
+    const boundLabel = selectEl.id && typeof document?.querySelector === 'function'
+      ? document.querySelector(`label[for="${CSS?.escape ? CSS.escape(selectEl.id) : selectEl.id}"]`)
+      : null;
+    boundLabel?.addEventListener('click', (e) => {
+      e.preventDefault();
+      trigger.focus();
+      openMenu();
     });
 
     document.addEventListener('click', (e) => {
@@ -1627,10 +1850,10 @@
       }, 0);
     });
 
-    const observer = new MutationObserver(() => {
-      rebuildOptions();
-    });
-    observer.observe(selectEl, { childList: true, subtree: true });
+    const observer = typeof MutationObserver === 'function'
+      ? new MutationObserver(() => { rebuildOptions(); })
+      : null;
+    observer?.observe(selectEl, { childList: true, subtree: true });
 
     rebuildOptions();
 
@@ -1640,7 +1863,7 @@
         rebuildOptions();
       },
       destroy: () => {
-        observer.disconnect();
+        observer?.disconnect();
         wrap.replaceWith(selectEl);
         selectEl.classList.remove('custom-select-native');
         delete selectEl.dataset.customEnhanced;
@@ -1650,6 +1873,34 @@
 
     selectEl._customSelect = api;
     return api;
+  }
+
+  function enhanceMemberSelect(selectEl) {
+    const placeholderSvg = '<span class="custom-avatar-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg></span>';
+    return mountCustomSelect(selectEl, {
+      fallbackLabel: 'Select member',
+      slotClass: 'custom-select-avatar-slot',
+      triggerGraphicClass: 'custom-select-trigger-avatar',
+      renderGraphic: ({ opt, val, text, isPlaceholder }) => {
+        if (isPlaceholder) return placeholderSvg;
+        const avatarUrl = opt?.dataset?.avatar || getMemberAvatar(val) || getMemberAvatar(text) || null;
+        return avatarMarkup(avatarUrl, text, 'custom-select-avatar');
+      },
+      afterRenderMenu: (root) => {
+        bindAvatarFallbacks(root);
+        syncPresenceDots(root);
+      }
+    });
+  }
+
+  function enhancePaymentSelect(selectEl, { compact = false } = {}) {
+    return mountCustomSelect(selectEl, {
+      wrapClass: compact ? 'custom-payment-select-wrap is-compact' : 'custom-payment-select-wrap',
+      fallbackLabel: 'Not set',
+      slotClass: 'custom-select-icon-slot',
+      triggerGraphicClass: 'custom-select-trigger-icon',
+      renderGraphic: ({ val, text }) => paymentSelectIconHtml(val, text)
+    });
   }
 
   /** Populate a group switcher `<select>` and enhance it with avatar and role badges. */
@@ -2320,9 +2571,12 @@
           payout_account_name: payoutPayload.p_payout_account_name
         });
         await loadAccountDialog();
-        const name = document.getElementById('quick-account-name').textContent;
-        currentProfile.full_name = name;
-        document.querySelector('#sidebar-user strong')?.replaceChildren(name);
+        const computedName = [currentProfile.first_name, currentProfile.middle_name, currentProfile.last_name].filter(Boolean).join(' ');
+        const name = (document.getElementById('quick-account-name')?.textContent || '').trim() || computedName;
+        if (name) {
+          currentProfile.full_name = name;
+          document.querySelector('#sidebar-user strong')?.replaceChildren(name);
+        }
         window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
         toast('Profile updated.');
       } catch (error) { toast(friendlyError(error), 'error'); }
@@ -3001,7 +3255,7 @@
         <form method="dialog">
           <h2 id="notif-unblock-title">Allow blocked notifications</h2>
           <p id="notif-unblock-desc"></p>
-          <ul style="margin:0 0 22px;padding-left:18px;display:grid;gap:8px;font:13.5px/1.45 Arial,sans-serif;color:#324841">
+          <ul style="margin:0 0 22px;padding-left:18px;display:grid;gap:8px;font:13.5px/1.45 Arial,sans-serif;color:var(--ink-soft, #324841)">
             <li><strong>Chrome / Edge (PC or Laptop):</strong> Click the tune / site-info or bell icon beside the website address bar &rarr; change <strong>Notifications</strong> to <strong>Allow</strong>.</li>
             <li><strong>Chrome (Android browser):</strong> Tap the tune icon beside the address bar &rarr; <strong>Permissions</strong> &rarr; turn <strong>Notifications</strong> ON (or check Phone Settings &rarr; Apps &rarr; Chrome &rarr; Notifications).</li>
             <li><strong>myIPON Android App:</strong> Open Phone <strong>Settings &rarr; Apps &rarr; myIPON &rarr; Notifications</strong> &rarr; toggle <strong>Allow notifications</strong> ON.</li>
@@ -3561,6 +3815,37 @@
   }
 
   let appInitialized = false;
+  let startupInProgress = false;
+
+  function isHarmlessLockOrAbortError(error) {
+    const text = `${error?.name || ''} ${error?.message || error || ''}`;
+    return /NavigatorLock|LockManager|lock:sb-|AbortError|The user aborted a request/i.test(text);
+  }
+
+  function isTransientConnectionError(error) {
+    if (navigator.onLine === false) return false;
+    const text = `${error?.name || ''} ${error?.message || error?.code || error || ''}`;
+    return /timed out|timeout|Failed to fetch|Load failed|NetworkError|fetch|502|503|504|temporarily|ECONN|NavigatorLock|LockManager/i.test(text);
+  }
+
+  function isJwtExpiredError(error) {
+    const text = `${error?.status || ''} ${error?.code || ''} ${error?.message || error || ''}`;
+    return /jwt|token.*expired|401|pgrst301|invalid.*token/i.test(text);
+  }
+
+  async function runWithStartupRetry(fn, { attempts = 3, timeoutMs = 10000, delayMs = 350 } = {}) {
+    let lastError;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await withTimeout(fn(), timeoutMs);
+      } catch (err) {
+        lastError = err;
+        if (i === attempts - 1 || !isTransientConnectionError(err)) throw err;
+        await new Promise((resolve) => setTimeout(resolve, delayMs * (i + 1)));
+      }
+    }
+    throw lastError;
+  }
 
   function dismissStartupFailure() {
     document.getElementById('startup-error')?.remove();
@@ -3569,6 +3854,7 @@
 
   function showStartupFailure(error) {
     if (appInitialized || currentProfile || document.getElementById('startup-error')) return;
+    console.warn('Startup initialization failed:', error);
     const offline = navigator.onLine === false;
     const sessionProblem = /auth|jwt|refresh token|session/i.test(error?.message || '');
     const message = offline
@@ -3604,6 +3890,7 @@
   }
 
   async function init(options = {}) {
+    startupInProgress = true;
     mountShell();
     prepareFormValidation();
     prepareNameInputs();
@@ -3622,8 +3909,8 @@
         return { configured: false, profile: null, session: null };
       }
 
-      const client = getClient();
-      const { data: { session }, error: sessionError } = await withTimeout(client.auth.getSession());
+      const client = await ensureClient();
+      const { data: { session }, error: sessionError } = await runWithStartupRetry(() => client.auth.getSession());
       if (sessionError) throw sessionError;
       if (!session && options.requireAuth !== false) {
         window.location.replace('login.html');
@@ -3636,15 +3923,30 @@
         return { configured: true, profile: null, session: null };
       }
 
-      if (document.body.dataset.page !== 'mfa' && await requiresMfaChallenge()) {
-        window.location.replace('mfa.html');
-        return { configured: true, profile: null, session, redirecting: true };
+      if (document.body.dataset.page !== 'mfa') {
+        const needsMfa = await runWithStartupRetry(() => requiresMfaChallenge(), { attempts: 2, timeoutMs: 8000 }).catch((mfaErr) => {
+          if (isTransientConnectionError(mfaErr) || isHarmlessLockOrAbortError(mfaErr)) return false;
+          throw mfaErr;
+        });
+        if (needsMfa) {
+          window.location.replace('mfa.html');
+          return { configured: true, profile: null, session, redirecting: true };
+        }
       }
 
-      const { data: profile, error } = await withTimeout(client.from('profiles')
+      const fetchProfile = () => client.from('profiles')
         .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required')
         .eq('id', session.user.id)
-        .single());
+        .single();
+      let { data: profile, error } = await runWithStartupRetry(fetchProfile);
+      if (error && isJwtExpiredError(error)) {
+        const refreshed = await withTimeout(client.auth.refreshSession(), 8000).catch(() => null);
+        if (refreshed?.error && options.requireAuth !== false && !isTransientConnectionError(refreshed.error)) {
+          window.location.replace('login.html');
+          return { configured: true, profile: null, session: null, redirecting: true };
+        }
+        ({ data: profile, error } = await runWithStartupRetry(fetchProfile));
+      }
       if (error) throw error;
       if (!profile.group_id && profile.role !== 'SUPER_ADMIN' && profile.status === 'ACTIVE') {
         try {
@@ -3694,6 +3996,7 @@
       initNotifications(profile).catch(() => { });
       initPresence(profile);
       appInitialized = true;
+      dismissStartupFailure();
       if (options.requireAuth === false) setLoading(false);
       return { configured: true, profile, session };
     } catch (error) {
@@ -3702,6 +4005,8 @@
         showStartupFailure(error);
       }
       return { configured, profile: null, session: null, failed: true, error };
+    } finally {
+      startupInProgress = false;
     }
   }
 
@@ -4300,8 +4605,10 @@
 
   function announcementAuthorMeta(item) {
     const isOwner = item.author_role === 'SUPER_ADMIN';
-    const name = item.author_name || (isOwner ? 'Owner' : 'Administrator');
-    const avatarHtml = avatarMarkup(item.author_avatar_url, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`, item.author_id);
+    const isOwnPost = currentProfile?.id && item?.author_id === currentProfile.id;
+    const name = (isOwnPost && currentProfile.full_name) || item.author_name || (isOwner ? 'Owner' : 'Administrator');
+    const avatarUrl = (isOwnPost && currentProfile.avatar_url !== undefined) ? currentProfile.avatar_url : item.author_avatar_url;
+    const avatarHtml = avatarMarkup(avatarUrl, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`, item.author_id);
     const roleBadge = isOwner
       ? '<span class="announcement-role-badge is-owner">Owner</span>'
       : '<span class="announcement-role-badge is-admin">Admin</span>';
@@ -5262,6 +5569,29 @@
       }
     };
 
+    if (!listElement.dataset.profileSyncBound) {
+      listElement.dataset.profileSyncBound = 'true';
+      window.addEventListener('ipon:profile-updated', (event) => {
+        const updated = event?.detail;
+        if (!updated?.id) return;
+        let changed = false;
+        items.forEach((entry) => {
+          if (entry.author_id === updated.id) {
+            if (updated.full_name) entry.author_name = updated.full_name;
+            if (updated.avatar_url !== undefined) entry.author_avatar_url = updated.avatar_url;
+            changed = true;
+          }
+        });
+        if (changed) {
+          renderList();
+          if (viewerDialog?.open && openItemId && viewerMeta) {
+            const activeEntry = items.find((entry) => entry.id === openItemId);
+            if (activeEntry) viewerMeta.innerHTML = announcementAuthorMeta(activeEntry);
+          }
+        }
+      });
+    }
+
     return {
       load,
       clear: () => { items = []; reactions = []; renderList(); }
@@ -5312,8 +5642,10 @@
 
   window.addEventListener('unhandledrejection', (event) => {
     event.preventDefault();
-    setLoading(false);
     console.warn('Unhandled rejection:', event.reason);
+    if (isHarmlessLockOrAbortError(event.reason)) return;
+    if (startupInProgress) return;
+    setLoading(false);
     if (appInitialized || currentProfile || !document.body.dataset.page) {
       if (currentProfile) {
         toast(friendlyError(event.reason), 'error');
@@ -5618,7 +5950,7 @@
         <div class="form-dialog-sheet">
           <header class="form-dialog-header" style="align-items: center;">
             <div style="display: flex; align-items: center; gap: 12px;">
-              <span style="display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: rgba(31, 106, 67, 0.12); color: #1f6a43; flex-shrink: 0;">
+              <span style="display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: rgba(40, 122, 76, 0.14); color: var(--green, #1f6a43); flex-shrink: 0;">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
                 </svg>
@@ -5633,10 +5965,10 @@
             </button>
           </header>
           <div style="padding: 20px 22px 22px; display: grid; gap: 14px;">
-            <p id="app-update-copy" style="margin: 0; font-size: 14px; line-height: 1.55; color: #354741;">
+            <p id="app-update-copy" style="margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink-soft, #354741);">
               A new version of myIPON is available. Update now to install the latest features and updates.
             </p>
-            <div style="background: rgba(31, 106, 67, 0.08); border: 1px solid rgba(31, 106, 67, 0.18); border-radius: 10px; padding: 10px 14px; font-size: 12.5px; color: #1f6a43; line-height: 1.45;">
+            <div style="background: rgba(40, 122, 76, 0.1); border: 1px solid rgba(40, 122, 76, 0.24); border-radius: 10px; padding: 10px 14px; font-size: 12.5px; color: var(--green, #1f6a43); line-height: 1.45;">
               ✓ Your existing records and account session will be kept safe.
             </div>
             <div class="form-actions" style="margin-top: 6px; display: flex; justify-content: flex-end; gap: 10px;">
@@ -6125,12 +6457,6 @@
     window.addEventListener('resize', () => { if (!popover.hidden) closeTip(); }, { passive: true });
   }
 
-  if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
-  if (document.body.dataset.page) initPullToRefresh();
-  initConnectivityBanner();
-  initInfoTips();
-  prepareFormValidation();
-  prepareNumericInputs();
   function groupRequiredContent({ hasGroup = false } = {}) {
     const title = hasGroup ? 'Member profile link required' : 'Join or create a savings group';
     const message = hasGroup
@@ -6306,234 +6632,6 @@
       ...PAYMENT_METHODS.map((item) => `<option value="${item.value}">${escapeHtml(item.label)}</option>`),
       includeUntagged ? '<option value="UNTAGGED">Untagged (legacy)</option>' : ''
     ].filter(Boolean).join('');
-  }
-
-  function payoutChannelOptionsHtml() {
-    return [
-      '<option value="">Not set</option>',
-      '<option value="GCASH">GCash</option>',
-      '<option value="MAYA">Maya</option>',
-      '<option value="BANK_TRANSFER">Bank Transfer</option>',
-      '<option value="CASH">Cash pickup</option>',
-      '<option value="OTHER">Other e-wallet / bank</option>'
-    ].join('');
-  }
-
-  function payoutFieldsetMarkup(prefix = 'payout') {
-    const safePrefix = escapeHtml(String(prefix || 'payout').replace(/[^a-z0-9_-]/gi, ''));
-    return `<div class="payout-fieldset">
-      <div class="payout-fieldset-head">
-        <strong>Payout / cashout account (optional)</strong>
-        <small>Where this member receives cashouts, deductions, or rotation payouts.</small>
-      </div>
-      <div class="payout-fieldset-grid">
-        <div class="field">
-          <label for="${safePrefix}-payout-channel">Payout channel</label>
-          <select id="${safePrefix}-payout-channel" name="payout_channel">${payoutChannelOptionsHtml()}</select>
-        </div>
-        <div class="field payout-detail-field" hidden>
-          <div class="field-label-row">
-            <label for="${safePrefix}-payout-number" data-payout-num-label>Account / mobile number</label>
-            <button type="button" class="link-action payout-use-mobile-btn" data-payout-use-mobile hidden>Use mobile #</button>
-          </div>
-          <input id="${safePrefix}-payout-number" name="payout_account_number" maxlength="80" autocomplete="off" placeholder="0917 123 4567">
-          <small class="field-error" id="${safePrefix}-payout-number-error" role="alert" hidden></small>
-        </div>
-        <div class="field payout-detail-field" hidden>
-          <label for="${safePrefix}-payout-name" data-payout-name-label>Account name / bank</label>
-          <input id="${safePrefix}-payout-name" name="payout_account_name" maxlength="120" autocomplete="off" placeholder="Registered account name">
-          <small class="field-error" id="${safePrefix}-payout-name-error" role="alert" hidden></small>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  function syncPayoutFieldUi(container) {
-    if (!container) return;
-    const channelSel = container.querySelector('select[name="payout_channel"]');
-    const numInput = container.querySelector('input[name="payout_account_number"]');
-    const nameInput = container.querySelector('input[name="payout_account_name"]');
-    const numLabel = container.querySelector('[data-payout-num-label]');
-    const nameLabel = container.querySelector('[data-payout-name-label]');
-    const useMobileBtn = container.querySelector('[data-payout-use-mobile]');
-    const detailFields = container.querySelectorAll('.payout-detail-field');
-    if (!channelSel) return;
-
-    const channel = normalizePaymentMethod(channelSel.value) || '';
-    const hasChannel = Boolean(channel);
-    detailFields.forEach((field) => { field.hidden = !hasChannel; });
-
-    const form = container.closest('form');
-    const contactInput = form?.elements?.contact_number;
-    const hasContact = Boolean(String(contactInput?.value || '').trim());
-    const isMobileWallet = channel === 'GCASH' || channel === 'MAYA';
-
-    if (useMobileBtn) {
-      useMobileBtn.hidden = !isMobileWallet || !hasContact;
-    }
-
-    if (channel === 'GCASH' || channel === 'MAYA') {
-      if (numLabel) numLabel.textContent = `${channel === 'GCASH' ? 'GCash' : 'Maya'} mobile number`;
-      if (numInput) numInput.placeholder = '0917 123 4567';
-      if (nameLabel) nameLabel.textContent = 'Registered account name';
-      if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
-    } else if (channel === 'BANK_TRANSFER') {
-      if (numLabel) numLabel.textContent = 'Bank & account number';
-      if (numInput) numInput.placeholder = 'e.g. BPI · 1234-5678-90';
-      if (nameLabel) nameLabel.textContent = 'Account holder name';
-      if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
-    } else if (channel === 'CASH') {
-      if (numLabel) numLabel.textContent = 'Pickup note (optional)';
-      if (numInput) numInput.placeholder = 'e.g. Cash pickup in person';
-      if (nameLabel) nameLabel.textContent = 'Recipient note (optional)';
-      if (nameInput) nameInput.placeholder = 'Optional instructions';
-    } else if (channel === 'OTHER') {
-      if (numLabel) numLabel.textContent = 'Account / wallet details';
-      if (numInput) numInput.placeholder = 'e.g. SeaBank 1234-5678-901';
-      if (nameLabel) nameLabel.textContent = 'Account holder name';
-      if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
-    }
-
-    if (numInput && !hasChannel) setFieldError(numInput, '');
-    if (nameInput && !hasChannel) setFieldError(nameInput, '');
-  }
-
-  function mountPayoutFieldsets(root = document) {
-    if (!root?.querySelectorAll) return;
-    root.querySelectorAll('[data-payout-fields]').forEach((container) => {
-      if (!container.dataset.mounted) {
-        container.dataset.mounted = 'true';
-        container.innerHTML = payoutFieldsetMarkup(container.dataset.prefix || 'payout');
-      }
-      if (!container.dataset.bound) {
-        container.dataset.bound = 'true';
-        const channelSel = container.querySelector('select[name="payout_channel"]');
-        const numInput = container.querySelector('input[name="payout_account_number"]');
-        const nameInput = container.querySelector('input[name="payout_account_name"]');
-        const useMobileBtn = container.querySelector('[data-payout-use-mobile]');
-        const form = container.closest('form');
-        const contactInput = form?.elements?.contact_number;
-
-        channelSel?.addEventListener('change', () => {
-          if (numInput) setFieldError(numInput, '');
-          syncPayoutFieldUi(container);
-          if (channelSel.value && numInput && !numInput.value.trim()) numInput.focus();
-        });
-        numInput?.addEventListener('input', () => setFieldError(numInput, ''));
-        nameInput?.addEventListener('input', () => setFieldError(nameInput, ''));
-        contactInput?.addEventListener('input', () => syncPayoutFieldUi(container));
-        useMobileBtn?.addEventListener('click', () => {
-          if (!numInput || !contactInput) return;
-          const mobile = String(contactInput.value || '').trim();
-          if (!mobile) return;
-          numInput.value = mobile;
-          setFieldError(numInput, '');
-          numInput.focus();
-        });
-      }
-      syncPayoutFieldUi(container);
-    });
-  }
-
-  function setPayoutFields(formOrContainer, record = null) {
-    if (!formOrContainer) return;
-    const container = formOrContainer.matches?.('[data-payout-fields]')
-      ? formOrContainer
-      : formOrContainer.querySelector('[data-payout-fields]');
-    if (!container) return;
-    if (!container.dataset.mounted) mountPayoutFieldsets(container.parentElement || document);
-    const channelSel = container.querySelector('select[name="payout_channel"]');
-    const numInput = container.querySelector('input[name="payout_account_number"]');
-    const nameInput = container.querySelector('input[name="payout_account_name"]');
-    const normalizedChannel = normalizePaymentMethod(record?.payout_channel) || '';
-    if (channelSel) channelSel.value = normalizedChannel;
-    if (numInput) {
-      numInput.value = record?.payout_account_number || '';
-      setFieldError(numInput, '');
-    }
-    if (nameInput) {
-      nameInput.value = record?.payout_account_name || '';
-      setFieldError(nameInput, '');
-    }
-    syncPayoutFieldUi(container);
-  }
-
-  function validatePayoutFields(formOrContainer) {
-    const container = formOrContainer?.matches?.('[data-payout-fields]')
-      ? formOrContainer
-      : formOrContainer?.querySelector('[data-payout-fields]');
-    if (!container) return true;
-    const channelSel = container.querySelector('select[name="payout_channel"]');
-    const numInput = container.querySelector('input[name="payout_account_number"]');
-    if (!channelSel || !numInput) return true;
-    const channel = normalizePaymentMethod(channelSel.value) || '';
-    const number = String(numInput.value || '').trim();
-    if (['GCASH', 'MAYA', 'BANK_TRANSFER'].includes(channel) && !number) {
-      syncPayoutFieldUi(container);
-      setFieldError(numInput, 'Enter an account or mobile number for this payout channel.');
-      numInput.focus();
-      return false;
-    }
-    setFieldError(numInput, '');
-    return true;
-  }
-
-  function readPayoutPayload(formOrContainer) {
-    const container = formOrContainer?.matches?.('[data-payout-fields]')
-      ? formOrContainer
-      : formOrContainer?.querySelector('[data-payout-fields]');
-    if (!container) {
-      return { p_payout_channel: null, p_payout_account_number: null, p_payout_account_name: null };
-    }
-    const channel = normalizePaymentMethod(container.querySelector('select[name="payout_channel"]')?.value) || null;
-    if (!channel) {
-      return { p_payout_channel: null, p_payout_account_number: null, p_payout_account_name: null };
-    }
-    const number = String(container.querySelector('input[name="payout_account_number"]')?.value || '').trim() || null;
-    const name = String(container.querySelector('input[name="payout_account_name"]')?.value || '').trim() || null;
-    return {
-      p_payout_channel: channel,
-      p_payout_account_number: number,
-      p_payout_account_name: name
-    };
-  }
-
-  function payoutSummaryChip(record, { compact = false, showCopy = true, emptyText = '' } = {}) {
-    const channel = normalizePaymentMethod(record?.payout_channel);
-    const number = String(record?.payout_account_number || '').trim();
-    const accountName = String(record?.payout_account_name || '').trim();
-    if (!channel && !number && !accountName) {
-      return emptyText ? `<span class="field-help">${escapeHtml(emptyText)}</span>` : '';
-    }
-    const meta = paymentMethodMeta(channel || 'OTHER');
-    const copyValue = number || accountName;
-    const detailParts = [];
-    if (number) detailParts.push(`<strong class="payout-chip-number">${escapeHtml(number)}</strong>`);
-    if (accountName) detailParts.push(`<small class="payout-chip-name">${escapeHtml(accountName)}</small>`);
-    if (!detailParts.length) detailParts.push(`<small class="payout-chip-name">${escapeHtml(channel === 'CASH' ? 'Cash pickup' : meta.label)}</small>`);
-    const copyBtn = showCopy && copyValue
-      ? `<button type="button" class="icon-action payout-copy-btn" data-copy-text="${escapeHtml(copyValue)}" aria-label="Copy payout account number" title="Copy ${escapeHtml(copyValue)}">Copy</button>`
-      : '';
-    return `<div class="payout-chip${compact ? ' is-compact' : ''}">${paymentMethodBadge(meta.value)}<span class="payout-chip-detail">${detailParts.join('')}</span>${copyBtn}</div>`;
-  }
-
-  function renderPayoutDestinationBox(container, member, { autoSyncMethodForm = null } = {}) {
-    if (!container) return;
-    if (!member) {
-      container.hidden = true;
-      container.innerHTML = '';
-      return;
-    }
-    const channel = normalizePaymentMethod(member.payout_channel);
-    const hasInfo = Boolean(channel || member.payout_account_number || member.payout_account_name);
-    container.hidden = false;
-    container.classList.toggle('is-empty', !hasInfo);
-    if (hasInfo) {
-      container.innerHTML = `<div class="payout-dest-head"><span class="payout-dest-eyebrow">Send cashout to</span><small>${escapeHtml(member.full_name || 'Member')}</small></div>${payoutSummaryChip(member, { showCopy: true })}`;
-      if (autoSyncMethodForm && channel) setPaymentMethod(autoSyncMethodForm, channel);
-    } else {
-      container.innerHTML = `<div class="payout-dest-empty"><strong>No saved payout account for ${escapeHtml(member.full_name || 'this member')}</strong><small>They can add GCash, Maya, or bank details in My Account (or select Cash pickup).</small></div>`;
-    }
   }
 
   async function getRecordCommentCounts(recordType, recordIds) {
@@ -7118,6 +7216,7 @@
           syncPayoutFieldUi(container);
           if (channelSel.value && numInput && !numInput.value.trim()) numInput.focus();
         });
+        enhancePaymentSelect(channelSel);
         numInput?.addEventListener('input', () => setFieldError(numInput, ''));
         nameInput?.addEventListener('input', () => setFieldError(nameInput, ''));
         contactInput?.addEventListener('input', () => syncPayoutFieldUi(container));
@@ -7130,6 +7229,8 @@
           numInput.focus();
         });
       }
+      const channelSel = container.querySelector('select[name="payout_channel"]');
+      if (channelSel && !channelSel.dataset.customEnhanced) enhancePaymentSelect(channelSel);
       syncPayoutFieldUi(container);
     });
   }
@@ -7145,7 +7246,10 @@
     const numInput = container.querySelector('input[name="payout_account_number"]');
     const nameInput = container.querySelector('input[name="payout_account_name"]');
     const normalizedChannel = normalizePaymentMethod(record?.payout_channel) || '';
-    if (channelSel) channelSel.value = normalizedChannel;
+    if (channelSel) {
+      channelSel.value = normalizedChannel;
+      channelSel._customSelect?.sync();
+    }
     if (numInput) {
       numInput.value = record?.payout_account_number || '';
       setFieldError(numInput, '');
@@ -7321,15 +7425,23 @@
     }
   });
 
+  if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
+  if (document.body.dataset.page) initPullToRefresh();
+  initConnectivityBanner();
+  initInfoTips();
+  prepareFormValidation();
+  prepareNumericInputs();
   mountPaymentMethodPickers(document);
   mountPayoutFieldsets(document);
   mountCategoryControls(document);
   preparePesoInputs(document);
+  mountThemeControls(document);
   initAppUpdateChecker();
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
+    getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     PAYMENT_METHODS, normalizePaymentMethod, guessPaymentMethodFromLabel, paymentMethodMeta, paymentMethodIconHtml, paymentMethodBadge, paymentMethodPickerHtml, mountPaymentMethodPickers, setPaymentMethod, paymentMethodOptionsHtml,
     CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
     payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,

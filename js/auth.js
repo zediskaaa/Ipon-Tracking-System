@@ -63,7 +63,12 @@
     [passwordConfirmation, document.getElementById('password-confirmation-error')]
   ]);
   const passwordRule = 'Use at least 8 characters with uppercase, lowercase, a number, and a symbol.';
-  const nameRule = Ipon.NAME_RULE || 'Use formal capitalization (e.g., Juan Dela Cruz). Do not use ALL CAPS or all lowercase.';
+  [firstName, middleName, lastName].forEach((input) => {
+    if (!input || !Ipon.nameRuleForField) return;
+    const meta = Ipon.nameRuleForField(input.name);
+    input.title = meta.ruleMsg;
+    if (!input.placeholder && meta.placeholder) input.placeholder = meta.placeholder;
+  });
   let mode = 'login';
 
   if (window.Capacitor !== undefined || window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
@@ -245,7 +250,7 @@
     fieldErrors.forEach((_, input) => clearFieldError(input));
   }
 
-  const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+  const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
   const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   function setPasswordVisibility(visible) {
@@ -276,15 +281,15 @@
     if (signup) {
       const firstErr = !firstName.value.trim()
         ? 'Enter your first name.'
-        : Ipon.nameValidationError(firstName.value, { required: true });
+        : Ipon.nameValidationError(firstName.value, { required: true, fieldName: 'first_name' });
       if (firstErr) setFieldError(firstName, firstErr);
       const middleErr = middleName.value.trim()
-        ? Ipon.nameValidationError(middleName.value, { allowSingleInitial: true, required: false })
+        ? Ipon.nameValidationError(middleName.value, { allowSingleInitial: true, required: false, fieldName: 'middle_name' })
         : '';
       if (middleErr) setFieldError(middleName, middleErr);
       const lastErr = !lastName.value.trim()
         ? 'Enter your last name or surname.'
-        : Ipon.nameValidationError(lastName.value, { required: true });
+        : Ipon.nameValidationError(lastName.value, { required: true, fieldName: 'last_name' });
       if (lastErr) setFieldError(lastName, lastErr);
       if (nameInputs.map((input) => Ipon.normalizeNamePart(input.value)).filter(Boolean).join(' ').length > 150) {
         setFieldError(lastName, 'Combined full name must not exceed 150 characters.');

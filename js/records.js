@@ -15,6 +15,28 @@
   let selectedMemberId = new URLSearchParams(window.location.search).get('member') || '';
   let selectedMemberName = '';
   let spotlightChart = null;
+  window.addEventListener('ipon:themechange', () => {
+    if (!spotlightChart) return;
+    const themeOpts = Ipon.chartThemeOptions?.();
+    if (!themeOpts) return;
+    if (spotlightChart.data?.datasets?.[0]) spotlightChart.data.datasets[0].backgroundColor = themeOpts.additionColor;
+    if (spotlightChart.data?.datasets?.[1]) spotlightChart.data.datasets[1].backgroundColor = themeOpts.deductionColor;
+    if (spotlightChart.options?.scales?.x?.ticks) spotlightChart.options.scales.x.ticks.color = themeOpts.textColor;
+    if (spotlightChart.options?.scales?.y) {
+      spotlightChart.options.scales.y.grid.color = themeOpts.gridColor;
+      spotlightChart.options.scales.y.border.color = themeOpts.gridColor;
+      spotlightChart.options.scales.y.ticks.color = themeOpts.textColor;
+    }
+    if (spotlightChart.options?.plugins?.tooltip) {
+      Object.assign(spotlightChart.options.plugins.tooltip, {
+        backgroundColor: themeOpts.tooltipBg,
+        borderColor: themeOpts.tooltipBorder,
+        titleColor: themeOpts.tooltipTitleColor,
+        bodyColor: themeOpts.tooltipBodyColor
+      });
+    }
+    spotlightChart.update('none');
+  });
   let commentCounts = new Map();
   const receiptPicker = Ipon.bindReceiptPicker({
     input: document.getElementById('record-receipt-input'),
@@ -60,10 +82,12 @@
 
   if (methodFilter) {
     methodFilter.innerHTML = Ipon.paymentMethodOptionsHtml({ includeAll: true, includeUntagged: true });
+    Ipon.enhancePaymentSelect?.(methodFilter, { compact: true });
   }
   document.body.insertAdjacentHTML('beforeend', `<dialog class="form-dialog" id="record-edit-dialog" aria-labelledby="record-edit-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-edit-title">Edit pending record</h2><p>Only pending records can be corrected. Confirmed records must be voided and replaced.</p></div><button class="dialog-close" id="record-edit-close" type="button" aria-label="Close edit form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="record-edit-form" class="form-grid"><input type="hidden" name="record_id"><div class="field"><label for="edit-date">Date</label><input id="edit-date" name="date" type="date" min="2000-01-01" data-max-today required></div><div class="field"><label for="edit-amount">Amount</label><input id="edit-amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" required></div><div class="field transaction-edit-field"><label for="edit-category">Category</label><input id="edit-category" name="category" maxlength="80" data-category-presets="${page === 'withdrawals' ? 'deduction' : 'expense'}"></div><div class="field transaction-edit-field"><label for="edit-responsible">Person responsible</label><select id="edit-responsible" name="person_responsible"><option value="">Select member</option></select></div><div class="field field-wide transaction-edit-field"><label for="edit-description">Description</label><textarea id="edit-description" name="description" maxlength="500"></textarea></div><div class="field"><label for="edit-payment-method">${page === 'contributions' ? 'Payment method' : 'Paid from wallet'}</label><select id="edit-payment-method" name="payment_method"><option value="">Untagged (legacy)</option>${Ipon.paymentMethodOptionsHtml()}</select></div><div class="field"><label for="edit-reference">Reference</label><input id="edit-reference" name="reference" maxlength="100"></div><div class="field field-wide"><label for="edit-notes">Notes</label><textarea id="edit-notes" name="notes" maxlength="1000"></textarea></div><div class="form-actions field-wide"><button class="button button-secondary" id="record-edit-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save correction</button></div></form></div></dialog>`);
   const editDialog = document.getElementById('record-edit-dialog');
   const editForm = document.getElementById('record-edit-form');
+  Ipon.enhancePaymentSelect?.(editForm?.elements?.payment_method);
   Ipon.prepareNumericInputs();
   editDialog.querySelectorAll('.transaction-edit-field').forEach((field) => { field.hidden = page === 'contributions'; field.querySelector('input,select,textarea').required = page !== 'contributions'; });
   Ipon.setCategoryPresetGroup(editForm.elements.category, page === 'withdrawals' ? 'deduction' : 'expense', { required: page !== 'contributions' });
@@ -391,6 +415,16 @@
           const labels = months.map((m) => Ipon.dateLabel(`${m}-01`, { month: 'short', year: 'numeric' }));
           const addData = months.map((m) => monthlyStats.get(m).additions);
           const dedData = months.map((m) => monthlyStats.get(m).deductions);
+          const themeOpts = Ipon.chartThemeOptions?.() || {
+            additionColor: '#287a4c',
+            deductionColor: '#ae3934',
+            textColor: '#324841',
+            gridColor: 'rgba(20, 45, 43, 0.1)',
+            tooltipBg: '#142d2b',
+            tooltipBorder: 'rgba(255, 255, 255, 0.14)',
+            tooltipTitleColor: '#f5eadb',
+            tooltipBodyColor: '#e5efe9'
+          };
           spotlightChart = new window.Chart(canvas, {
             type: 'bar',
             data: {
@@ -399,14 +433,14 @@
                 {
                   label: 'Additions',
                   data: addData,
-                  backgroundColor: '#287a4c',
+                  backgroundColor: themeOpts.additionColor,
                   borderRadius: 5,
                   maxBarThickness: 32
                 },
                 {
                   label: 'Deductions & Expenses',
                   data: dedData,
-                  backgroundColor: '#ae3934',
+                  backgroundColor: themeOpts.deductionColor,
                   borderRadius: 5,
                   maxBarThickness: 32
                 }
@@ -418,6 +452,11 @@
               plugins: {
                 legend: { display: false },
                 tooltip: {
+                  backgroundColor: themeOpts.tooltipBg,
+                  borderColor: themeOpts.tooltipBorder,
+                  borderWidth: 1,
+                  titleColor: themeOpts.tooltipTitleColor,
+                  bodyColor: themeOpts.tooltipBodyColor,
                   callbacks: {
                     label: (context) => ` ${context.dataset.label}: ${Ipon.money(context.raw)}`
                   }
@@ -425,11 +464,15 @@
               },
               scales: {
                 x: {
-                  grid: { display: false }
+                  grid: { display: false },
+                  ticks: { color: themeOpts.textColor }
                 },
                 y: {
                   beginAtZero: true,
+                  grid: { color: themeOpts.gridColor },
+                  border: { color: themeOpts.gridColor },
                   ticks: {
+                    color: themeOpts.textColor,
                     precision: 0,
                     callback: (val) => `₱${Number(val).toLocaleString('en-PH')}`
                   }
@@ -643,7 +686,7 @@
     if (action === 'edit') {
       const row = recordRows.find((item) => item.id === button.dataset.id); if (!row) return;
       populateResponsibleSelect(editForm.elements.person_responsible, row.person_responsible || '');
-      editForm.elements.record_id.value = row.id; editForm.elements.date.value = row.payment_date || row.transaction_date; editForm.elements.amount.value = row.amount; Ipon.syncCategoryControl(editForm.elements.category, row.category || ''); editForm.elements.description.value = row.description || ''; editForm.elements.person_responsible.value = row.person_responsible || ''; editForm.elements.payment_method.value = row.payment_method || ''; editForm.elements.reference.value = row.transaction_reference || row.reference_number || ''; editForm.elements.notes.value = row.notes || '';
+      editForm.elements.record_id.value = row.id; editForm.elements.date.value = row.payment_date || row.transaction_date; editForm.elements.amount.value = row.amount; Ipon.syncCategoryControl(editForm.elements.category, row.category || ''); editForm.elements.description.value = row.description || ''; editForm.elements.person_responsible.value = row.person_responsible || ''; editForm.elements.payment_method.value = row.payment_method || ''; editForm.elements.payment_method._customSelect?.sync(); editForm.elements.reference.value = row.transaction_reference || row.reference_number || ''; editForm.elements.notes.value = row.notes || '';
       editDialog.showModal(); editForm.elements.amount.focus(); return;
     }
     const row = recordRows.find((item) => item.id === button.dataset.id);

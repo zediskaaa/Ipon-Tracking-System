@@ -1103,7 +1103,8 @@
   ];
 
   const RELEASE_FALLBACK_UPDATES = [
-    'System Reliability & Performance: Smoother navigation, responsive refinements, and stability fixes across web and mobile.'
+    'System Reliability & Performance: Smoother navigation, responsive refinements, and stability improvements across web and mobile.',
+    'Notifications & Clarity: Cleaner alerts and more consistent updates across announcements and dashboard activity.'
   ];
   const REPO_COMMITS_URL = 'https://api.github.com/repos/zediskaaa/Ipon-Tracking-System/commits';
   const releaseCommitCache = new Map();
@@ -1122,11 +1123,28 @@
     return next;
   }
 
+  const TECH_COMMIT_RE = /\b(?:supabase|migrations?|edge\s+functions?|deno|postgres(?:ql)?|postgrest?|rls|sql|triggers?|foreign\s+keys?|jsonb|rpc|cli|ide|vscode|antigravity|github|git|repo(?:sitory)?|commits?|contracts?\.test|unit\s+tests?|test\s+suite|lint(?:ing)?|eslint|prettier|package\.json|lockfile|node_modules|csp|headers|deployment|deploy(?:ed|ing)?|auto-?sync|automate|release\s+ai|ai\s+and\s+composer|composer\s+formatting|smart\s+composer|procedural\s+composer|prior\s+releases|invite\s+rows?|database\s+rows?|name\s+pills?|ui\/ux\s+skills?|skills?|audit_logs|enforce_group_scope|admin_create_group|old\.amount|group_id|member_id|requester_id|variables?|functions?|codebase|refactor(?:ing)?|tdz|iife|vm\.run|playwright|puppeteer|cdp|cache|api\s+endpoints?|endpoints?|webhooks?)\b/i;
+  const CODE_TOKEN_RE = /(?:\.[a-z_][a-z0-9_]*\b|_[a-z]|[a-z0-9]+\/[a-z0-9]+|`|\(\)|[A-Z][a-z]+Error\b)/;
+
   function cleanCommitSummary(rawMessage) {
-    const firstLine = String(rawMessage || '').split(/\r?\n/)[0].trim();
-    if (!firstLine) return '';
-    if (/^(?:merge\b|wip\b|bump\s+version\b|prepare\s+mobile\b|revert\s+")/i.test(firstLine)) return '';
-    return firstLine.charAt(0).toUpperCase() + firstLine.slice(1);
+    let line = String(rawMessage || '').split(/\r?\n/)[0].trim();
+    if (!line) return '';
+    if (/^(?:merge\b|wip\b|bump\s+version\b|prepare\s+mobile\b|revert\s+"|(?:chore|ci|build|test|docs|style|refactor)(?:\([^)]*\))?:)/i.test(line)) return '';
+    if (TECH_COMMIT_RE.test(line) || CODE_TOKEN_RE.test(line)) {
+      const clauses = line.split(/(?:\s*[,;]\s*|\s+(?:and|plus)\s+)/i).map((part) => part.trim()).filter(Boolean);
+      const userClauses = clauses.filter((part) => (
+        part.length >= 16
+        && !TECH_COMMIT_RE.test(part)
+        && !CODE_TOKEN_RE.test(part)
+        && !/\b(?:without|with|for|and|or|to|on|in)$/i.test(part)
+        && /^(?:add|fix|keep|allow|show|support|enable|improve|make|update|block|prevent|deduplicate|streamline|polish)\b/i.test(part)
+      ));
+      if (!userClauses.length) return '';
+      line = userClauses.join(', ');
+    }
+    if (!line || line.length < 12) return '';
+    if (TECH_COMMIT_RE.test(line) || CODE_TOKEN_RE.test(line)) return '';
+    return line.charAt(0).toUpperCase() + line.slice(1);
   }
 
   async function fetchRecentSystemUpdates(sinceIso = null) {
@@ -1225,10 +1243,10 @@
     const improvements = [];
     items.forEach((raw) => {
       const clean = String(raw || '').replace(/^[•\-*]\s*/, '').trim();
-      if (!clean) return;
+      if (!clean || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) return;
       if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|constraint|foreign\s+key|bug)\b/i.test(clean)) {
         fixes.push(clean);
-      } else if (/^(?:improv|polish|clean|compact|sync|update|refactor|streamline|keep|align)\b|\b(?:faster|cleaner|compact|reliable|visibility)\b/i.test(clean)) {
+      } else if (/^(?:improv|polish|clean|compact|sync|update|refactor|streamline|keep|align|refine|enhance|make\b.*\b(?:compact|clean|responsive|faster|clearer|visible))\b|\b(?:faster|cleaner|compact|reliable|visibility|clarity)\b/i.test(clean)) {
         improvements.push(clean);
       } else {
         newFeatures.push(clean);
@@ -1237,18 +1255,53 @@
     return { newFeatures, fixes, improvements };
   }
 
+  function sanitizeReleaseDetails(rawDetails) {
+    const text = String(rawDetails || '').trim();
+    if (!text) return { text: '', bulletCount: 0, strippedCount: 0 };
+    let bulletCount = 0;
+    let strippedCount = 0;
+    const cleanedBlocks = text.split(/\n{2,}/).map((block) => {
+      const lines = block.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      if (!lines.length) return '';
+      const hasBullets = lines.some((line) => /^[•\-*]\s+/.test(line));
+      if (!hasBullets) {
+        return TECH_COMMIT_RE.test(block) || CODE_TOKEN_RE.test(block) ? '' : block.trim();
+      }
+      const header = !/^[•\-*]\s+/.test(lines[0]) ? lines[0] : '';
+      const bullets = (header ? lines.slice(1) : lines).filter((line) => {
+        const clean = line.replace(/^[•\-*]\s+/, '').trim();
+        if (!clean || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) {
+          strippedCount += 1;
+          return false;
+        }
+        bulletCount += 1;
+        return true;
+      });
+      if (!bullets.length) return '';
+      return header ? `${header}\n${bullets.join('\n')}` : bullets.join('\n');
+    }).filter(Boolean);
+    return { text: cleanedBlocks.join('\n\n'), bulletCount, strippedCount };
+  }
+
   function formatSectionedReleaseBody({ intro, newFeatures = [], fixes = [], improvements = [], requestedFeatures = [], highlights = [], outro }) {
+    const keepUserLine = (v) => {
+      const clean = String(v || '').replace(/^[•\s*-]+/, '').trim();
+      if (clean.length <= 2 || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) return '';
+      return `• ${clean}`;
+    };
     const parts = [];
     if (intro) parts.push(intro.trim());
     const pushSection = (heading, items) => {
-      const list = (items || []).map((v) => `• ${String(v).replace(/^[•\s*-]+/, '').trim()}`).filter((v) => v.length > 2);
+      const list = (items || []).map(keepUserLine).filter(Boolean);
       if (list.length) parts.push(`${heading}\n${list.join('\n')}`);
     };
-    const hasCategorized = newFeatures.length || fixes.length || improvements.length;
-    if (hasCategorized) {
-      pushSection('New Features', newFeatures);
-      pushSection('Fixes', fixes);
-      pushSection('Improvements', improvements);
+    const nf = newFeatures.filter((v) => keepUserLine(v));
+    const fx = fixes.filter((v) => keepUserLine(v));
+    const im = improvements.filter((v) => keepUserLine(v));
+    if (nf.length || fx.length || im.length) {
+      pushSection('New Features', nf);
+      pushSection('Fixes', fx);
+      pushSection('Improvements', im);
     } else if (highlights.length) {
       const buckets = bucketizeReleaseUpdates(highlights);
       pushSection('New Features', buckets.newFeatures);
@@ -1262,19 +1315,91 @@
     return parts.filter(Boolean).join('\n\n');
   }
 
+  const RELEASE_FALLBACK_POOLS = [
+    [
+      'Dashboard & Group Navigation: Smoother switching between savings groups and clearer layouts across desktop and mobile.',
+      'Notifications & Alerts: Cleaner, timely updates for announcements, reviews, and group activity.'
+    ],
+    [
+      'Savings & Record Tracking: Faster contribution logging, clearer review details, and reliable validation.',
+      'Account & Profile Controls: Consistent display name, photo, and payout details across every page.'
+    ],
+    [
+      'Calendar & Summaries: Clearer daily progress indicators and easier contribution monitoring for admins and members.',
+      'System Reliability: Smoother everyday performance and responsive polish across web and mobile.'
+    ]
+  ];
+  const RELEASE_STYLE_ANGLES = [
+    'Clear, warm, everyday saver-benefit focus with crisp bullet headings',
+    'Upbeat, concise product highlights focusing on ease of use and group transparency',
+    'Friendly community-milestone tone highlighting smoother daily tracking workflows'
+  ];
+  let currentReleaseBulletVariant = 0;
+
+  function humanizeReleaseUpdate(raw, variant = 0) {
+    const clean = String(raw || '').replace(/^[•\-*]\s*/, '').trim();
+    if (!clean || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) return '';
+    if (clean.includes(':')) return clean;
+    const v = Math.abs(Number(variant) || 0) % 3;
+    const lower = clean.toLowerCase();
+    if (lower.includes('ownership transfer') || lower.includes('permanent deletion')) {
+      return [
+        'Group Ownership & Deletion: Admins can now transfer group ownership to another admin or permanently delete unused groups with confirmation.',
+        'Flexible Group Control: Easily pass group ownership to a co-admin or safely remove closed savings groups from group settings.',
+        'Admin Group Lifecycle: Added ownership transfer and safe permanent group deletion options for group administrators.'
+      ][v];
+    }
+    if (lower.includes('add group action visible')) {
+      return [
+        'Group Switching Access: Members can now see the Add Group option directly in their group switcher to start a new savings group.',
+        'Easier Group Creation: Kept the Add Group action visible in the group menu so savers can organize additional savings groups anytime.',
+        'Streamlined Group Navigation: Members now have direct access to Add Group controls right from the workspace header.'
+      ][v];
+    }
+    const verbMatch = clean.match(/^(Add|Fix|Resolve|Prevent|Restore|Deduplicate|Keep|Make|Improve|Block|Allow|Show|Enable|Update)\s+(.+)$/i);
+    if (!verbMatch) return clean;
+    const verb = verbMatch[1].toLowerCase();
+    const rest = verbMatch[2].replace(/\.$/, '').trim();
+    const titled = rest.charAt(0).toUpperCase() + rest.slice(1);
+    if (/^(?:fix|resolve|prevent|restore|deduplicate|block)$/.test(verb)) {
+      return [
+        `Reliability Fix: Resolved issues with ${rest} for a smoother experience.`,
+        `${titled}: Corrected unexpected behavior so daily workflows work reliably.`,
+        `Stability Update: Prevented edge-case errors involving ${rest}.`
+      ][v];
+    }
+    if (/^(?:keep|make|improve|update)$/.test(verb)) {
+      return [
+        `Experience Polish: Refined ${rest} across desktop and mobile views.`,
+        `${titled}: Updated layout and responsiveness for clearer everyday tracking.`,
+        `Usability Improvement: Made ${rest} cleaner and easier to use.`
+      ][v];
+    }
+    return [
+      `${titled}: Now available across myIPON for your savings group.`,
+      `New Capability: Added ${rest} to make group saving more convenient.`,
+      `Feature Highlight: Savers and admins can now use ${rest} directly in myIPON.`
+    ][v];
+  }
+
   function composeReleaseNotes(ver, targetImpl = [], systemUpdates = []) {
     currentReleaseIntroIdx = pickDifferentIndex(RELEASE_INTROS.length, currentReleaseIntroIdx);
     currentReleaseOutroIdx = pickDifferentIndex(RELEASE_OUTROS.length, currentReleaseOutroIdx);
     currentReleaseTitleIdx = pickDifferentIndex(RELEASE_TITLES.length, currentReleaseTitleIdx);
+    currentReleaseBulletVariant = (currentReleaseBulletVariant + 1) % 3;
 
     const title = RELEASE_TITLES[currentReleaseTitleIdx](ver);
     const intro = RELEASE_INTROS[currentReleaseIntroIdx](ver);
     const outro = RELEASE_OUTROS[currentReleaseOutroIdx]();
 
-    const rawUpdates = Array.isArray(systemUpdates) && systemUpdates.length
-      ? systemUpdates
-      : (!targetImpl.length ? RELEASE_FALLBACK_UPDATES : []);
-    const { newFeatures, fixes, improvements } = bucketizeReleaseUpdates(rawUpdates);
+    const cleanedSource = (Array.isArray(systemUpdates) ? systemUpdates : [])
+      .map((item) => cleanCommitSummary(item))
+      .filter(Boolean);
+    const sourceUpdates = cleanedSource.length
+      ? cleanedSource
+      : (!targetImpl.length ? RELEASE_FALLBACK_POOLS[currentReleaseBulletVariant % RELEASE_FALLBACK_POOLS.length] : []);
+    const { newFeatures, fixes, improvements } = bucketizeReleaseUpdates(sourceUpdates);
+    const formatBucket = (arr, offset = 0) => arr.map((item, idx) => humanizeReleaseUpdate(item, currentReleaseBulletVariant + offset + idx)).filter(Boolean);
 
     const profileById = new Map(profiles.map((p) => [p.id, p]));
     const requestedFeatures = targetImpl.map((req) => {
@@ -1283,14 +1408,14 @@
       return `${req.title}: ${req.details || 'Feature improvement'}${credit}`;
     });
 
-    const body = formatSectionedReleaseBody({
+    const body = sanitizeReleaseDetails(formatSectionedReleaseBody({
       intro,
-      newFeatures,
-      fixes,
-      improvements,
+      newFeatures: formatBucket(newFeatures, 0),
+      fixes: formatBucket(fixes, 1),
+      improvements: formatBucket(improvements, 2),
       requestedFeatures,
       outro
-    });
+    })).text;
     return { title, body };
   }
 
@@ -1439,6 +1564,12 @@
     const systemUpdates = context.systemUpdates;
     const previousReleases = context.previousReleases;
 
+    const prevTitle = titleInput?.value?.trim() || '';
+    const prevDetails = detailsInput?.value?.trim() || '';
+    const currentDraft = sanitizeReleaseDetails(prevDetails).text;
+    const styleAngle = RELEASE_STYLE_ANGLES[currentReleaseBulletVariant % RELEASE_STYLE_ANGLES.length];
+    const nextSeed = (currentReleaseBulletVariant + 1) % 6;
+
     const profileById = new Map(profiles.map((p) => [p.id, p]));
     const featuresList = targetImplemented.map((req) => {
       const prof = profileById.get(req.requester_id);
@@ -1446,14 +1577,15 @@
       return `- "${req.title}": ${req.details || 'Feature improvement'}${credit}`;
     }).join('\n') || '- No pending community feature requests in this build.';
     const systemUpdatesList = systemUpdates.length
-      ? systemUpdates.map((item) => `- ${item}`).join('\n')
-      : '- General reliability improvements, UI refinements, and bug fixes across web and mobile.';
+      ? systemUpdates.map((item) => `- ${humanizeReleaseUpdate(item, nextSeed) || item}`).join('\n')
+      : '- General reliability improvements, UI refinements, and smoother workflows across web and mobile.';
     const previousReleasesList = previousReleases.length
       ? previousReleases.map((item) => `- ${item}`).join('\n')
       : '- None (initial release).';
 
     const prompt = `You are the product communications writer for myIPON (Group Savings and Financial Tracker) ${ver}. The official product and system name is strictly "myIPON".
 Release Date: ${relDate}
+Writing Angle: ${styleAngle}
 
 Already shipped in earlier releases (DO NOT repeat these older features as new in ${ver}):
 ${previousReleasesList}
@@ -1463,8 +1595,13 @@ ${featuresList}
 
 Recent system updates and fixes landed since the previous release:
 ${systemUpdatesList}
+${currentDraft ? `\nCurrent draft in editor (rewrite with fresh phrasing, clearer user benefits, and varied wording—DO NOT copy these exact sentences verbatim):\n${currentDraft}` : ''}
 
-Instructions: Summarize ONLY the newly implemented community requests and recent system updates above into clear, saver-facing sectioned changelog entries ("New Features", "Fixes", "Improvements", and "Features Requested by Users") using "Feature Name: concise description" format per item. Do not repeat already-shipped updates.
+Instructions: Summarize ONLY the newly implemented community requests and user-facing product updates above into clear, plain-language changelog entries ("New Features", "Fixes", "Improvements", and "Features Requested by Users") using "Feature Name: concise description" format per item.
+Strict Audience Rules:
+- Write strictly for everyday myIPON users (savers, treasurers, and group admins) focusing ONLY on visible screens, buttons, workflows, and benefits they actually see and use.
+- Completely EXCLUDE developer, infrastructure, or code-level work (never mention code files, variable/function/database/trigger/RPC names like old.amount or enforce_group_scope, migrations, Supabase, Edge Functions, CLI commands, IDE setups, git commits, tests, or internal AI/composer tooling). If an item is purely technical or internal, omit it completely.
+- Do not repeat already-shipped updates or repeat the previous draft verbatim.
 
 Generate a JSON object with this exact structure:
 {
@@ -1494,13 +1631,13 @@ Generate a JSON object with this exact structure:
         try {
           const res = await Ipon.callGemini({
             prompt,
-            systemInstruction: 'You are an expert product communicator for myIPON, a modern group savings platform in the Philippines. The official platform name is strictly "myIPON". Write authentic, polished, encouraging release copy in English. Output strictly valid JSON.',
+            systemInstruction: 'You are an expert product communicator for myIPON, a modern group savings platform in the Philippines. The official platform name is strictly "myIPON". Write authentic, plain-language release notes for end users—focusing strictly on user-visible features, UI improvements, and bug fixes without any code, database, CLI, IDE, or developer jargon. Output strictly valid JSON.',
             jsonResponse: true
           });
           const parsed = res?.parsed;
           if (parsed && (parsed.title || parsed.intro)) {
             title = String(parsed.title || `myIPON ${ver} Released`).trim();
-            details = formatSectionedReleaseBody({
+            const rawDetails = formatSectionedReleaseBody({
               intro: String(parsed.intro || '').trim(),
               newFeatures: Array.isArray(parsed.new_features) ? parsed.new_features : [],
               fixes: Array.isArray(parsed.fixes) ? parsed.fixes : [],
@@ -1509,7 +1646,9 @@ Generate a JSON object with this exact structure:
               highlights: Array.isArray(parsed.highlights) ? parsed.highlights : [],
               outro: String(parsed.outro || '').trim()
             });
-            usedGemini = true;
+            const sanitized = sanitizeReleaseDetails(rawDetails);
+            details = sanitized.bulletCount > 0 ? sanitized.text : '';
+            usedGemini = Boolean(details);
           }
         } catch (clientErr) {
           console.warn('Client-side Gemini call failed, falling back to server smart composer:', clientErr);
@@ -1524,7 +1663,10 @@ Generate a JSON object with this exact structure:
             version: ver,
             release_date: relDate,
             previous_releases: previousReleases,
-            system_updates: systemUpdates,
+            current_draft: currentDraft,
+            style_angle: styleAngle,
+            variation_seed: nextSeed,
+            system_updates: systemUpdates.length ? systemUpdates : RELEASE_FALLBACK_UPDATES,
             features: targetImplemented.map((req) => {
               const prof = profileById.get(req.requester_id);
               return {
@@ -1535,22 +1677,24 @@ Generate a JSON object with this exact structure:
             })
           });
           if (backendRes?.title && backendRes?.details) {
-            title = backendRes.title;
-            details = backendRes.details;
-            usedGemini = Boolean(backendRes.ai_powered);
+            const sanitized = sanitizeReleaseDetails(backendRes.details);
+            if (sanitized.bulletCount > 0 && sanitized.strippedCount <= sanitized.bulletCount && sanitized.text.trim() !== prevDetails) {
+              title = backendRes.title;
+              details = sanitized.text;
+              usedGemini = Boolean(backendRes.ai_powered);
+            }
           }
         } catch (backendErr) {
           console.warn('Backend release notes call failed, falling back to local composer:', backendErr);
         }
       }
 
-      // 3. Fallback to dynamic procedural composer if AI wasn't used or matched existing text
-      const prevTitle = titleInput?.value?.trim() || '';
-      const prevDetails = detailsInput?.value?.trim() || '';
-      if (!title || !details || (!usedGemini && title.trim() === prevTitle && details.trim() === prevDetails)) {
+      // 3. Fallback to dynamic smart variation composer if AI wasn't used or returned identical text
+      if (!title || !details || details.trim() === prevDetails) {
         const composed = composeReleaseNotes(ver, targetImplemented, systemUpdates);
         title = composed.title;
         details = composed.body;
+        usedGemini = false;
       }
 
       if (titleInput && title) titleInput.value = title;

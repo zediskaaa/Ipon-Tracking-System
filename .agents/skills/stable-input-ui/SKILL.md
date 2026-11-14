@@ -29,6 +29,7 @@ Follow every standard below when building or modifying any UI surface so compone
 ## 3. Clean, Premium Visual Language
 - Match the myIPON warm paper & forest emerald system (`#fffdf9`, `#0b3428`, subtle `rgba(20, 45, 43, .12)` borders, balanced spacing, pill badges, accessible contrast). Avoid clutter, redundant decorative bars, or jarring native browser popups.
 - Keep **all user-facing copy English-only**, concise, and unambiguous (`contracts.test.mjs` enforces this).
+- **Circular `X` close & remove buttons (fixed standard):** Every close/remove `X` icon button (`.dialog-close`, `.announcement-modal-close`, `.notification-sheet .dialog-close`, `.calendar-jump-close`, `.login-card-close`, `.account-avatar-remove`, `.bug-image-remove`, `.invite-row-remove`, `.record-thread-queued-remove`, `.calc-plan-remove`, `.day-detail-panel header button`) MUST be a true circle (`border-radius: 50%`, `aspect-ratio: 1 / 1`, `padding: 0`) with equal `width`, `height`, and `flex: 0 0 <size>` so it never stretches or squishes into an oblong oval.
 - Scope contextual pills accurately (e.g., show group `ADMIN` badges strictly inside group contexts, never on global profile cards or reaction lists).
 - Keep uploaded photos, receipts, avatars, and videos crisp and lossless with clean aspect-ratio previews and full-size viewer support.
 
