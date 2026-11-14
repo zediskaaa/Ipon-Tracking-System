@@ -3750,21 +3750,19 @@
       if (viewerReleaseFeatures) viewerReleaseFeatures.replaceChildren();
       const loadReleaseFeatures = async () => {
         if (!viewerReleaseFeatures || !isRelease || !item.release_version) return;
-        const descHasRequested = /(?:features\s+requested|community\s+feature|community\s+spotlight)/i.test(item.description || '');
-        if (descHasRequested) return;
         try {
           const { data: relFeats } = await getClient().rpc('get_release_features', {
             p_release_version: item.release_version
           });
           if (openItemId !== item.id || !viewerDialog.open || !Array.isArray(relFeats) || !relFeats.length) return;
-          viewerReleaseFeatures.innerHTML = `
+          const releaseMarkup = `
             <section class="announcement-release-section" aria-label="Features requested by users">
               <div class="announcement-section-heading">
                 <span class="announcement-section-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>
                 </span>
                 <div>
-                  <h3 class="announcement-section-title">Features requested by users</h3>
+                  <h3 class="announcement-section-title">Features Requested by Savers &amp; Shipped in this Update</h3>
                   <p class="announcement-section-subtitle">Community suggestions implemented in this release</p>
                 </div>
               </div>
@@ -3781,10 +3779,11 @@
                         <strong class="release-feature-title">${escapeHtml(feat.title)}</strong>
                         ${hasCredit ? `
                           <div class="release-credit-pill" tabindex="0" role="button" aria-label="Feature requested by ${escapeHtml(feat.requester_name)}">
-                            <span class="release-credit-label">Requested by</span>
                             <span class="presence-avatar-wrap">
                               <span class="avatar-cell release-credit-thumb" data-user-id="${escapeHtml(feat.requester_id || '')}">${avatarHtml}</span>
                             </span>
+                            <span class="release-credit-label">Requested by</span>
+                            <strong class="release-credit-name">${escapeHtml(feat.requester_name)}</strong>
                             <div class="release-credit-tooltip" role="tooltip">
                               <div class="release-credit-tooltip-content">
                                 <span class="presence-avatar-wrap">
@@ -3802,13 +3801,28 @@
                             Community suggestion
                           </span>`}
                       </div>
-                      <p class="release-feature-details">${escapeHtml(feat.details)}</p>
+                      ${feat.details ? `<p class="release-feature-details">${escapeHtml(feat.details)}</p>` : ''}
                     </div>`;
           }).join('')}
               </div>
             </section>`;
-          bindAvatarFallbacks(viewerReleaseFeatures);
-          syncPresenceDots(viewerReleaseFeatures);
+          // Replace the inline plain-text box when present so avatar cards sit in natural flow without duplication
+          const inlineRequested = Array.from(viewerDescription?.querySelectorAll('.announcement-requested-card') || []);
+          let host = viewerReleaseFeatures;
+          if (inlineRequested.length > 0) {
+            const temp = document.createElement('div');
+            temp.innerHTML = releaseMarkup;
+            const sectionNode = temp.firstElementChild;
+            if (sectionNode) {
+              inlineRequested[0].replaceWith(sectionNode);
+              inlineRequested.slice(1).forEach((dup) => dup.remove());
+              host = viewerDescription;
+            }
+          } else {
+            viewerReleaseFeatures.innerHTML = releaseMarkup;
+          }
+          bindAvatarFallbacks(host);
+          syncPresenceDots(host);
         } catch (_) { }
       };
       loadReleaseFeatures();

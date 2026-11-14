@@ -1183,6 +1183,9 @@ test('feature requests support credit consent toggle and release updates display
   assert.match(core, /rpc\('get_release_features'/);
   assert.match(core, /class="announcement-view-trigger"/);
   assert.match(core, /class="announcement-release-section"/);
+  assert.match(core, /class="release-credit-name"/);
+  assert.doesNotMatch(core, /if\s*\(descHasRequested\)\s*return;/);
+  assert.match(core, /inlineRequested\[0\]\.replaceWith/);
   assert.match(core, /class="release-credit-tooltip"/);
   assert.match(core, /Feature requested by:/);
 

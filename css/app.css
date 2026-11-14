@@ -587,22 +587,23 @@ body.is-app .loader-sheet small { margin-top:4px; font-size:12px; }
 .announcement-viewer-head{display:grid;gap:8px;min-width:0}
 .announcement-viewer-head h2{word-break:break-word}
 .announcement-viewer-body{display:grid;gap:16px;max-height:58dvh;overflow-y:auto;padding:18px 22px}
-.announcement-release-section{margin-top:14px;padding-top:16px;border-top:1px dashed rgba(20,45,43,.2);display:grid;gap:12px}
+.announcement-release-section{margin:14px 0 4px;padding:14px;border-radius:14px;background:linear-gradient(135deg,#f1f8f4 0%,#f9fcfa 100%);border:1px solid #d5e8dc;border-left:4px solid #15803d;display:grid;gap:12px}
 .announcement-section-heading{display:flex;align-items:center;gap:10px}
-.announcement-section-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:#e1f5e8;color:#15803d;flex:0 0 auto}
+.announcement-section-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:#dcf2e5;color:#15803d;flex:0 0 auto}
 .announcement-section-icon svg{width:16px;height:16px}
-.announcement-section-title{margin:0;font:800 14px/1.25 Arial,sans-serif;color:var(--ink)}
-.announcement-section-subtitle{margin:2px 0 0;font:12px/1.35 Arial,sans-serif;color:var(--muted)}
+.announcement-section-title{margin:0;font:800 14px/1.25 Arial,sans-serif;color:#0b3428}
+.announcement-section-subtitle{margin:2px 0 0;font:12px/1.35 Arial,sans-serif;color:#4a655a}
 .release-features-grid{display:grid;grid-template-columns:1fr;gap:10px}
-.release-feature-card{padding:12px 14px;border:1px solid rgba(20,45,43,.1);border-radius:12px;background:#fdfbf7;display:grid;gap:6px;transition:border-color .16s ease,box-shadow .16s ease}
-.release-feature-card:hover{border-color:rgba(20,45,43,.22);box-shadow:0 3px 10px rgba(20,45,43,.05)}
-.release-feature-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.release-feature-title{font:800 13.5px/1.3 Arial,sans-serif;color:#143d32}
-.release-feature-details{margin:0;font:12.5px/1.45 Arial,sans-serif;color:#495e55}
-.release-credit-pill{position:relative;display:inline-flex;align-items:center;gap:6px;padding:2px 8px 2px 9px;border-radius:999px;background:#ffffff;border:1px solid #c7decb;color:#145e43;font:700 11.5px/1.2 Arial,sans-serif;cursor:pointer;user-select:none;transition:all .16s ease}
-.release-credit-pill:hover,.release-credit-pill:focus-visible{border-color:#15803d;background:#edf7f1;box-shadow:0 2px 8px rgba(21,128,61,.12)}
-.release-credit-label{color:#2a6b52;font-size:11px}
-.release-credit-thumb{width:22px;height:22px;border-radius:50%;font-size:8.5px}
+.release-feature-card{padding:12px 14px;border:1px solid rgba(20,65,48,.11);border-radius:12px;background:#ffffff;display:grid;gap:8px;box-shadow:0 2px 6px rgba(13,74,54,.04);transition:border-color .16s ease,box-shadow .16s ease}
+.release-feature-card:hover{border-color:rgba(21,128,61,.28);box-shadow:0 4px 12px rgba(13,74,54,.08)}
+.release-feature-head{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap}
+.release-feature-title{font:800 13.5px/1.35 Arial,sans-serif;color:#11382d;flex:1 1 180px}
+.release-feature-details{margin:0;font:12.5px/1.5 Arial,sans-serif;color:#475d54}
+.release-credit-pill{position:relative;display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 4px;border-radius:999px;background:#f4faf6;border:1px solid #c5e1cf;color:#14533c;font:600 11.5px/1.2 Arial,sans-serif;cursor:pointer;user-select:none;max-width:100%;transition:all .16s ease}
+.release-credit-pill:hover,.release-credit-pill:focus-visible{border-color:#15803d;background:#e8f6ee;box-shadow:0 2px 8px rgba(21,128,61,.12)}
+.release-credit-label{color:#3c6e58;font-size:11px;font-weight:600}
+.release-credit-name{color:#0c3b2b;font-size:11.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.release-credit-thumb{width:22px;height:22px;border-radius:50%;font-size:8.5px;border:1.5px solid #ffffff;box-shadow:0 0 0 1px rgba(21,128,61,.2)}
 .release-credit-anonymous{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:#f1f5f9;color:#64748b;font:700 11px/1.2 Arial,sans-serif;border:1px solid #cbd5e1}
 .credit-anon-icon{width:12px;height:12px}
 .release-credit-tooltip{position:absolute;bottom:calc(100% + 9px);right:0;z-index:50;display:none;pointer-events:none;filter:drop-shadow(0 8px 18px rgba(10,37,31,.16));animation:tooltipFadeIn .16s ease}
