@@ -543,6 +543,107 @@ function generateProceduralReleaseNotes(
   return { title, details: body };
 }
 
+type AdminClient = ReturnType<typeof createClient>;
+
+async function findAuthUserByEmail(admin: AdminClient, email: string) {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  for (let page = 1; page <= 25; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 }).catch(() => ({ data: null, error: true }));
+    if (error || !data?.users?.length) break;
+    const match = data.users.find((u) => u.email?.toLowerCase() === normalized);
+    if (match) return match;
+    if (data.users.length < 200) break;
+  }
+  return null;
+}
+
+async function activateUserAndMembership(
+  admin: AdminClient,
+  userId: string,
+  fill: { first_name?: string | null; middle_name?: string | null; last_name?: string | null; full_name?: string | null; contact_number?: string | null; email?: string | null } = {}
+) {
+  if (!userId) return { profile: null, disabled: false };
+
+  let { data: prof } = await admin
+    .from('profiles')
+    .select('id, status, group_id, role, member_id, first_name, middle_name, last_name, full_name, contact_number, email')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (!prof) {
+    const { data: authRes } = await admin.auth.admin.getUserById(userId).catch(() => ({ data: null }));
+    const authUser = authRes?.user;
+    if (authUser) {
+      const meta = (authUser.user_metadata || {}) as Record<string, unknown>;
+      const derived = fallbackNamesFromEmail(String(authUser.email || fill.email || 'member@example.com'));
+      const first = String(fill.first_name || meta.first_name || derived.first || '').trim() || null;
+      const middle = String(fill.middle_name || meta.middle_name || '').trim() || null;
+      const last = String(fill.last_name || meta.last_name || derived.last || '').trim() || null;
+      const full = String(fill.full_name || meta.full_name || '').trim() || [first, middle, last].filter(Boolean).join(' ') || derived.full;
+      const contact = String(fill.contact_number || meta.contact_number || '').trim() || null;
+      await admin.from('profiles').insert({
+        id: userId,
+        email: String(authUser.email || fill.email || '').trim().toLowerCase(),
+        first_name: first,
+        middle_name: middle,
+        last_name: last,
+        full_name: full,
+        contact_number: contact,
+        role: 'MEMBER',
+        status: 'ACTIVE'
+      }).select('id').maybeSingle();
+      const reloaded = await admin
+        .from('profiles')
+        .select('id, status, group_id, role, member_id, first_name, middle_name, last_name, full_name, contact_number, email')
+        .eq('id', userId)
+        .maybeSingle();
+      prof = reloaded.data;
+    }
+  }
+
+  if (!prof) return { profile: null, disabled: false };
+  if (prof.status === 'DISABLED') return { profile: prof, disabled: true };
+
+  // Keep group memberships aligned so dashboard/RPC membership checks pass after activation
+  await admin
+    .from('group_memberships')
+    .update({ status: 'ACTIVE' })
+    .eq('user_id', userId)
+    .eq('status', 'PENDING');
+
+  const { data: membership } = await admin
+    .from('group_memberships')
+    .select('group_id, role, member_id')
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const patch: Record<string, unknown> = { status: 'ACTIVE' };
+  if (!prof.group_id && membership?.group_id) {
+    patch.group_id = membership.group_id;
+    patch.role = membership.role || prof.role || 'MEMBER';
+    patch.member_id = membership.member_id || prof.member_id;
+  }
+  if (!prof.first_name && fill.first_name) patch.first_name = fill.first_name;
+  if (!prof.middle_name && fill.middle_name) patch.middle_name = fill.middle_name;
+  if (!prof.last_name && fill.last_name) patch.last_name = fill.last_name;
+  if (!prof.full_name && fill.full_name) patch.full_name = fill.full_name;
+  if (!prof.contact_number && fill.contact_number) patch.contact_number = fill.contact_number;
+
+  const { data: updated } = await admin
+    .from('profiles')
+    .update(patch)
+    .eq('id', userId)
+    .neq('status', 'DISABLED')
+    .select('id, status, group_id, role, member_id, first_name, last_name, contact_number')
+    .maybeSingle();
+
+  return { profile: updated || prof, disabled: false };
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -567,7 +668,7 @@ Deno.serve(async (request) => {
     const { data: profile } = await admin
       .from('profiles')
       .select('id, status, role, group_id, member_id')
-      .eq('email', email)
+      .ilike('email', email)
       .maybeSingle();
 
     let targetUserId = profile?.id;
@@ -579,8 +680,7 @@ Deno.serve(async (request) => {
     }
 
     if (!authUser) {
-      const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 100 }).catch(() => ({ data: null }));
-      authUser = usersData?.users?.find((u) => u.email?.toLowerCase() === email) || null;
+      authUser = await findAuthUserByEmail(admin, email);
       if (authUser) targetUserId = authUser.id;
     }
 
@@ -723,30 +823,18 @@ Deno.serve(async (request) => {
 
   if (body.action === 'ensure-account-active') {
     const email = String(body.email || '').trim().toLowerCase();
-    const userId = String(body.user_id || '').trim();
-    if (userId) {
-      const { data: prof } = await admin.from('profiles').select('group_id, role, member_id').eq('id', userId).maybeSingle();
-      if (prof && !prof.group_id) {
-        const { data: mem } = await admin.from('group_memberships').select('group_id, role, member_id').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle();
-        if (mem?.group_id) {
-          await admin.from('profiles').update({
-            status: 'ACTIVE',
-            group_id: mem.group_id,
-            role: mem.role || prof.role || 'MEMBER',
-            member_id: mem.member_id || prof.member_id
-          }).eq('id', userId);
-        } else {
-          await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', userId).neq('status', 'DISABLED');
-        }
-      } else {
-        await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', userId).neq('status', 'DISABLED');
-      }
+    let userId = String(body.user_id || '').trim();
+
+    if (!userId && email) {
+      const { data: byEmail } = await admin.from('profiles').select('id').ilike('email', email).maybeSingle();
+      userId = byEmail?.id || (await findAuthUserByEmail(admin, email))?.id || '';
     }
-    if (email) {
-      await admin.from('profiles').update({ status: 'ACTIVE' }).eq('email', email).neq('status', 'DISABLED');
-    }
-    await admin.from('profiles').update({ status: 'ACTIVE' }).eq('status', 'PENDING');
-    return json({ success: true, activated: true });
+    if (!userId) return json({ error: 'Account could not be resolved.' }, 404);
+
+    const { profile, disabled } = await activateUserAndMembership(admin, userId, { email });
+    if (disabled) return json({ error: 'This account is disabled. Please contact your administrator.' }, 403);
+    if (!profile) return json({ error: 'Account profile could not be activated.' }, 404);
+    return json({ success: true, activated: true, profile });
   }
 
   if (body.action === 'submit-admin-request') {
@@ -779,22 +867,46 @@ Deno.serve(async (request) => {
       return json({ error: 'Email ownership has not been verified. Please verify your email first.' }, 400);
     }
 
-    const { data: existingUser } = await admin
+    const fillProfile = {
+      first_name: first,
+      middle_name: middle,
+      last_name: last,
+      full_name: full,
+      contact_number: contact,
+      email
+    };
+    const syncExistingAccount = async (targetId: string) => {
+      const { profile: existingProf, disabled } = await activateUserAndMembership(admin, targetId, fillProfile);
+      if (disabled) return json({ error: 'This account is disabled. Please contact support.' }, 400);
+      if (!existingProf) return json({ error: 'Existing account could not be initialized.' }, 500);
+      const { error: updError } = await admin.auth.admin.updateUserById(targetId, {
+        password,
+        email_confirm: true,
+        user_metadata: {
+          first_name: first,
+          middle_name: middle,
+          last_name: last,
+          full_name: full,
+          contact_number: contact
+        }
+      });
+      if (updError) return json({ error: updError.message || 'Could not update account credentials.' }, 400);
+      return json({ success: true, user_id: targetId });
+    };
+
+    const { data: existingProfile } = await admin
       .from('profiles')
       .select('id, status')
-      .eq('email', email)
+      .ilike('email', email)
       .maybeSingle();
 
-    if (existingUser) {
-      if (existingUser.status !== 'DISABLED') {
-        await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', existingUser.id);
-        await admin.auth.admin.updateUserById(existingUser.id, { password, email_confirm: true });
-        return json({
-          success: true,
-          user_id: existingUser.id
-        });
-      }
-      return json({ error: 'This account is disabled. Please contact support.' }, 400);
+    if (existingProfile) {
+      return await syncExistingAccount(existingProfile.id);
+    }
+
+    const existingAuthUser = await findAuthUserByEmail(admin, email);
+    if (existingAuthUser) {
+      return await syncExistingAccount(existingAuthUser.id);
     }
 
     const { data: newUserData, error: createError } = await admin.auth.admin.createUser({
@@ -814,27 +926,17 @@ Deno.serve(async (request) => {
 
     if (createError) {
       if (/already registered|already exists/i.test(createError.message || '')) {
-        const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 100 }).catch(() => ({ data: null }));
-        const matched = usersData?.users?.find((u) => u.email?.toLowerCase() === email);
-        if (matched) {
-          await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', matched.id);
-          await admin.auth.admin.updateUserById(matched.id, { password, email_confirm: true });
-          return json({ success: true, user_id: matched.id });
-        }
+        const matched = await findAuthUserByEmail(admin, email);
+        if (matched) return await syncExistingAccount(matched.id);
         return json({ error: 'An account with this email already exists.' }, 400);
       }
       return json({ error: createError.message }, 400);
     }
 
     const userId = newUserData.user?.id;
-    if (userId) {
-      await admin
-        .from('profiles')
-        .update({ status: 'ACTIVE', role: 'MEMBER' })
-        .eq('id', userId);
+    if (userId && body.direct_signup !== false) {
+      await activateUserAndMembership(admin, userId, fillProfile);
     }
-
-    await admin.from('profiles').update({ status: 'ACTIVE' }).eq('status', 'PENDING');
 
     return json({
       success: true,
@@ -958,8 +1060,15 @@ Deno.serve(async (request) => {
     const issue = passwordError(password, [target.first_name, target.middle_name, target.last_name, String(target.email || '').split('@')[0]]);
     if (issue) return json({ error: issue }, 400);
     const { data: targetAuth } = await admin.auth.admin.getUserById(target.id);
-    const { error } = await admin.auth.admin.updateUserById(target.id, { password, app_metadata: { ...(targetAuth?.user?.app_metadata || {}), must_change_password: false } });
-    return error ? json({ error: 'Password could not be updated.' }, 400) : json({ updated: true });
+    const { error } = await admin.auth.admin.updateUserById(target.id, {
+      password,
+      email_confirm: true,
+      app_metadata: { ...(targetAuth?.user?.app_metadata || {}), must_change_password: false }
+    });
+    if (error) return json({ error: 'Password could not be updated.' }, 400);
+    // Ensure a previously invited/pending member whose password was reset by an admin can immediately sign in
+    await activateUserAndMembership(admin, target.id);
+    return json({ updated: true });
   }
 
   if (body.action === 'admin-request-decision-email') {

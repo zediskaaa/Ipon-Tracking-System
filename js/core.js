@@ -527,7 +527,7 @@
   }
 
   function profileNeedsSetup(profile) {
-    return !profile?.first_name?.trim() || !profile?.last_name?.trim() || (profile?.contact_number ? !/^09\d{9}$/.test(profile.contact_number) : false);
+    return !profile?.first_name?.trim() || !profile?.last_name?.trim() || (profile?.contact_number ? !validPhoneNumber(profile.contact_number) : false);
   }
 
   function accountSetupUrl(profile, user) {
@@ -2782,8 +2782,8 @@
         const { data: { session } } = await client.auth.getSession();
         if (loginPage) {
           if (session?.user?.id) {
-            const { data: profile } = await client.from('profiles').select('role,status').eq('id', session.user.id).maybeSingle();
-            if (profile?.status === 'ACTIVE') redirectTo(homeForRole(profile.role));
+            const { data: profile } = await client.from('profiles').select('role,status,first_name,last_name,contact_number').eq('id', session.user.id).maybeSingle();
+            if (profile?.status === 'ACTIVE') redirectTo(accountSetupUrl(profile, session.user) || homeForRole(profile.role));
           }
           return;
         }

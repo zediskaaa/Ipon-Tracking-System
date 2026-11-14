@@ -1654,3 +1654,42 @@ test('HTML files have valid UTF-8 characters and intact stylesheet/script asset 
   }
 });
 
+test('account creation, login activation, and mobile submit responsiveness contracts', () => {
+  const migration050 = read('database/migrations/20261114_050_fix_account_creation_and_login_activation.sql');
+  const schema = read('database/schema.sql');
+  const authJs = read('js/auth.js');
+  const coreJs = read('js/core.js');
+  const manageAccountTs = read('supabase/functions/manage-account/index.ts');
+
+  // Migration 050 + schema parity
+  assert.match(migration050, /function public\.activate_own_pending_account\(\)/);
+  assert.match(migration050, /'20261114_050'/);
+  assert.match(schema, /function public\.activate_own_pending_account\(\)/);
+  assert.match(schema, /'20261114_050'/);
+
+  // Auth page must attach submit handler synchronously without top-level await blocking taps
+  assert.doesNotMatch(authJs, /^\s*\(async function\s*\(\)/);
+  assert.match(authJs, /const initPromise = Ipon\.init\(/);
+  const initIdx = authJs.indexOf('const initPromise = Ipon.init(');
+  const submitIdx = authJs.indexOf("form.addEventListener('submit'");
+  assert.ok(initIdx >= 0 && submitIdx > initIdx, 'submit listener must register synchronously after initPromise starts');
+
+  // Auth login + auto-login verify real DB activation instead of faking ACTIVE in memory
+  assert.match(authJs, /async function resolveActiveProfile\(/);
+  assert.match(authJs, /Ipon\.rpc\('activate_own_pending_account'\)/);
+  assert.doesNotMatch(authJs, /profile\.status\s*=\s*'ACTIVE'/);
+  assert.match(authJs, /statusParam === 'pending'/);
+  assert.match(authJs, /statusParam === 'disabled'/);
+
+  // Core phone setup + active session redirect consistency
+  assert.match(coreJs, /function profileNeedsSetup\(profile\)\s*\{[\s\S]*?validPhoneNumber\(profile\.contact_number\)/);
+  assert.match(coreJs, /accountSetupUrl\(profile, session\.user\) \|\| homeForRole\(profile\.role\)/);
+
+  // Manage-account Edge Function: paginated auth lookup, membership activation, email_confirm on password reset, no unscoped global PENDING activation
+  assert.match(manageAccountTs, /async function findAuthUserByEmail\(/);
+  assert.match(manageAccountTs, /async function activateUserAndMembership\(/);
+  assert.match(manageAccountTs, /if \(body\.action === 'admin-set-password'\)[\s\S]*?email_confirm:\s*true/);
+  assert.match(manageAccountTs, /if \(body\.action === 'admin-set-password'\)[\s\S]*?activateUserAndMembership\(admin, target\.id\)/);
+  assert.doesNotMatch(manageAccountTs, /\.from\('profiles'\)\.update\(\{ status: 'ACTIVE' \}\)\.eq\('status', 'PENDING'\)/);
+});
+

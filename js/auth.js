@@ -1,4 +1,4 @@
-(async function () {
+(function () {
   'use strict';
   const form = document.getElementById('auth-form');
   const message = document.getElementById('auth-message');
@@ -78,81 +78,152 @@
   };
   setTimeout(dismissSplash, 2000);
 
-  const state = await Ipon.init({ requireAuth: false, allowPending: true });
-  Ipon.setLoading(false);
-  if (state.failed) {
-    dismissSplash();
-    return;
-  }
-  if (state.session && state.profile?.status === 'ACTIVE') {
-    Ipon.setLoading(true, 'Opening your records…');
-    window.location.replace(Ipon.homeForRole(state.profile.role));
-    return;
-  }
-  setTimeout(dismissSplash, 600);
-  if (!state.configured) {
-    message.textContent = 'Add your Supabase URL and anon key in js/config.js before signing in.';
-    submit.disabled = true;
-    forgotButton.disabled = true;
-  }
   const queryParams = new URLSearchParams(location.search);
   const acceptInviteToken = queryParams.get('accept_invite');
   const acceptInviteEmail = (queryParams.get('email') || '').trim();
+  const statusParam = queryParams.get('status');
 
-  if (acceptInviteToken && acceptInviteEmail) {
-    try {
-      history.replaceState({}, '', location.pathname);
-    } catch { }
-    setMode('login');
-    email.value = acceptInviteEmail;
-    Ipon.setLoading(true, 'Activating your invitation…');
-    message.dataset.tone = 'loading';
-    message.textContent = 'Activating your account…';
+  // Start init immediately without delaying synchronous form/tab listener attachment
+  const initPromise = Ipon.init({ requireAuth: false, allowPending: true }).catch((error) => ({ failed: true, configured: false, error }));
 
-    try {
-      const res = await Ipon.invokeAccountFunction({
-        action: 'accept-email-invite',
-        email: acceptInviteEmail,
-        token: acceptInviteToken
-      });
-      Ipon.setLoading(false);
-      if (res?.error) {
-        message.removeAttribute('data-tone');
-        message.textContent = res.error;
-        Ipon.toast(res.error, 'error');
-      } else {
-        message.dataset.tone = 'success';
-        message.textContent = res.already_active
-          ? 'Your account is already active. Please sign in with your credentials.'
-          : 'Account activation successful! Log in to your account using the provided credentials.';
-        Ipon.toast('Account activated! Please sign in.', 'success');
+  async function resolveActiveProfile(user, fallbackEmail) {
+    const profileCols = 'id,first_name,last_name,contact_number,role,status';
+    const loadProfile = () => Ipon.client.from('profiles').select(profileCols).eq('id', user.id).maybeSingle();
+    let { data: profile, error: profileError } = await loadProfile();
+    if (profileError) throw profileError;
 
-        if (inviteSuccessDialog) {
-          if (inviteSuccessEmail) inviteSuccessEmail.textContent = acceptInviteEmail;
-          if (inviteSuccessMessage) {
-            inviteSuccessMessage.textContent = res.group_name
-              ? `Account activation successful! Log in to your account using the provided credentials to access "${res.group_name}".`
-              : 'Account activation successful! Log in to your account using the provided credentials.';
-          }
-          if (inviteSuccessGroupHint) {
-            inviteSuccessGroupHint.textContent = res.group_name
-              ? `Your savings group workspace "${res.group_name}" is ready and linked to your account.`
-              : 'Your savings group workspace has been linked and will open automatically after sign in.';
-          }
-          inviteSuccessDialog.showModal();
-        }
-        password.focus();
-      }
-    } catch (err) {
-      Ipon.setLoading(false);
-      message.removeAttribute('data-tone');
-      message.textContent = Ipon.friendlyError(err);
-      Ipon.toast(Ipon.friendlyError(err), 'error');
+    if (profile?.status === 'DISABLED') {
+      await Ipon.client.auth.signOut().catch(() => null);
+      throw new Error('Your account is deactivated or disabled.');
     }
-  } else if (queryParams.get('status') === 'password-reset') {
-    message.dataset.tone = 'success';
-    message.textContent = 'Password changed. Sign in with your new password.';
+
+    if (!profile || profile.status !== 'ACTIVE') {
+      // Try direct DB RPC first (no Edge Function cold start or deployment skew dependency), then Edge Function fallback
+      await Ipon.rpc('activate_own_pending_account').catch(() => null);
+      ({ data: profile, error: profileError } = await loadProfile());
+      if (profileError) throw profileError;
+
+      if (!profile || profile.status !== 'ACTIVE') {
+        await Ipon.invokeAccountFunction({
+          action: 'ensure-account-active',
+          user_id: user.id,
+          email: fallbackEmail || user.email || ''
+        }).catch(() => null);
+        ({ data: profile, error: profileError } = await loadProfile());
+        if (profileError) throw profileError;
+      }
+    }
+
+    if (profile?.status === 'DISABLED') {
+      await Ipon.client.auth.signOut().catch(() => null);
+      throw new Error('Your account is deactivated or disabled.');
+    }
+    if (!profile || profile.status !== 'ACTIVE') {
+      await Ipon.client.auth.signOut().catch(() => null);
+      throw new Error('Your account is still pending activation. Please try signing in again or ask your administrator to check your account status.');
+    }
+    return profile;
   }
+
+  function completeLoginSession(data, profile) {
+    const role = profile?.role || 'MEMBER';
+    try {
+      sessionStorage.setItem('ipon_active_role', role);
+      localStorage.setItem('ipon_active_role', role);
+      sessionStorage.setItem('myipon_just_logged_in', '1');
+    } catch { }
+    Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
+    window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(role));
+  }
+
+  async function ensureInitReady() {
+    const state = await initPromise;
+    if (state?.failed) throw state.error || new Error('Connection failed. Please reload and try again.');
+    if (!state?.configured || !Ipon.client) throw new Error('Account service is not configured yet.');
+    return state;
+  }
+
+  void (async () => {
+    const state = await initPromise;
+    Ipon.setLoading(false);
+    if (state.failed) {
+      dismissSplash();
+      return;
+    }
+    if (state.session && state.profile?.status === 'ACTIVE') {
+      Ipon.setLoading(true, 'Opening your records…');
+      window.location.replace(Ipon.accountSetupUrl(state.profile, state.session.user) || Ipon.homeForRole(state.profile.role));
+      return;
+    }
+    setTimeout(dismissSplash, 600);
+    if (!state.configured) {
+      message.textContent = 'Add your Supabase URL and anon key in js/config.js before signing in.';
+      submit.disabled = true;
+      forgotButton.disabled = true;
+      return;
+    }
+
+    if (acceptInviteToken && acceptInviteEmail) {
+      try {
+        history.replaceState({}, '', location.pathname);
+      } catch { }
+      setMode('login');
+      email.value = acceptInviteEmail;
+      Ipon.setLoading(true, 'Activating your invitation…');
+      message.dataset.tone = 'loading';
+      message.textContent = 'Activating your account…';
+
+      try {
+        const res = await Ipon.invokeAccountFunction({
+          action: 'accept-email-invite',
+          email: acceptInviteEmail,
+          token: acceptInviteToken
+        });
+        Ipon.setLoading(false);
+        if (res?.error) {
+          message.removeAttribute('data-tone');
+          message.textContent = res.error;
+          Ipon.toast(res.error, 'error');
+        } else {
+          message.dataset.tone = 'success';
+          message.textContent = res.already_active
+            ? 'Your account is already active. Please sign in with your credentials.'
+            : 'Account activation successful! Log in to your account using the provided credentials.';
+          Ipon.toast('Account activated! Please sign in.', 'success');
+
+          if (inviteSuccessDialog) {
+            if (inviteSuccessEmail) inviteSuccessEmail.textContent = acceptInviteEmail;
+            if (inviteSuccessMessage) {
+              inviteSuccessMessage.textContent = res.group_name
+                ? `Account activation successful! Log in to your account using the provided credentials to access "${res.group_name}".`
+                : 'Account activation successful! Log in to your account using the provided credentials.';
+            }
+            if (inviteSuccessGroupHint) {
+              inviteSuccessGroupHint.textContent = res.group_name
+                ? `Your savings group workspace "${res.group_name}" is ready and linked to your account.`
+                : 'Your savings group workspace has been linked and will open automatically after sign in.';
+            }
+            inviteSuccessDialog.showModal();
+          }
+          password.focus();
+        }
+      } catch (err) {
+        Ipon.setLoading(false);
+        message.removeAttribute('data-tone');
+        message.textContent = Ipon.friendlyError(err);
+        Ipon.toast(Ipon.friendlyError(err), 'error');
+      }
+    } else if (statusParam === 'password-reset') {
+      message.dataset.tone = 'success';
+      message.textContent = 'Password changed. Sign in with your new password.';
+    } else if (statusParam === 'pending') {
+      message.dataset.tone = 'error';
+      message.textContent = 'Your account activation was still pending. Please sign in again to finish activating your access, or contact your administrator.';
+    } else if (statusParam === 'disabled') {
+      message.dataset.tone = 'error';
+      message.textContent = 'Your account is deactivated or disabled. Please contact your administrator.';
+    }
+  })();
 
   function setFieldError(input, errorMessage) {
     const error = fieldErrors.get(input);
@@ -314,6 +385,7 @@
     Ipon.setBusy(button, true, 'Sending…');
     recoveryMessage.textContent = '';
     try {
+      await ensureInitReady();
       const redirectTo = new URL('reset-password.html', window.location.href).href;
       const { error } = await Ipon.client.auth.resetPasswordForEmail(recoveryEmail, { redirectTo });
       if (error) throw error;
@@ -352,6 +424,7 @@
   email.addEventListener('blur', async () => {
     if (mode !== 'signup' || !email.value || !email.validity.valid) return;
     try {
+      await ensureInitReady();
       const eligibility = await Ipon.rpc('check_admin_request_eligibility', { p_email: email.value.trim().toLowerCase() });
       if (eligibility?.reason === 'rejected') {
         setFieldError(email, 'This email was declined and cannot register again.');
@@ -367,6 +440,7 @@
 
     Ipon.setBusy(submit, true, mode === 'signup' ? 'Creating account…' : 'Signing in...');
     try {
+      await ensureInitReady();
       if (mode === 'signup') {
         const first = Ipon.normalizeNamePart(firstName.value);
         const middle = middleName.value.trim() ? Ipon.normalizeNamePart(middleName.value) : null;
@@ -400,44 +474,27 @@
         requestConfirmDialog?.showModal();
         return;
       } else {
-        const { data, error } = await Ipon.client.auth.signInWithPassword({ email: email.value, password: password.value });
+        const submittedEmail = email.value.trim().toLowerCase();
+        email.value = submittedEmail;
+        const { data, error } = await Ipon.client.auth.signInWithPassword({ email: submittedEmail, password: password.value });
         if (error) throw error;
         if (await Ipon.requiresMfaChallenge()) {
           window.location.replace('mfa.html');
           return;
         }
-        const { data: profile, error: profileError } = await Ipon.client.from('profiles').select('first_name,last_name,contact_number,role,status').eq('id', data.user.id).single();
-        if (profileError) throw profileError;
-        if (profile.status === 'DISABLED') {
-          await Ipon.client.auth.signOut();
-          throw new Error('Your account is deactivated or disabled.');
-        }
-        if (profile.status !== 'ACTIVE') {
-          try {
-            await Ipon.invokeAccountFunction({
-              action: 'ensure-account-active',
-              user_id: data.user.id,
-              email: email.value
-            });
-            profile.status = 'ACTIVE';
-          } catch {
-            profile.status = 'ACTIVE';
-          }
-        }
-        await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' });
-        try {
-          sessionStorage.setItem('ipon_active_role', profile.role);
-          localStorage.setItem('ipon_active_role', profile.role);
-          sessionStorage.setItem('myipon_just_logged_in', '1');
-        } catch { }
-        Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
-        window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(profile.role));
+        const profile = await resolveActiveProfile(data.user, submittedEmail);
+        await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
+        completeLoginSession(data, profile);
       }
     } catch (error) {
+      message.dataset.tone = 'error';
       if (mode === 'login' && (error?.code === 'invalid_credentials' || /invalid login credentials/i.test(error?.message || ''))) {
         [email, password].forEach((input) => input.setAttribute('aria-invalid', 'true'));
         message.textContent = 'Incorrect email or password.';
         password.focus();
+      } else if (mode === 'login' && (error?.code === 'email_not_confirmed' || /email not confirmed/i.test(error?.message || ''))) {
+        message.textContent = 'Your email address is not confirmed yet. Please open your activation email or ask your administrator to update your password.';
+        email.focus();
       } else if (mode === 'signup' && (error?.code === 'weak_password' || /weak password/i.test(error?.message || ''))) {
         setFieldError(password, passwordRule);
         password.focus();
@@ -451,6 +508,7 @@
 
   async function completeAdminRequestSubmission(payload) {
     if (!payload) return;
+    await ensureInitReady();
     const res = await Ipon.submitAdminRequest({
       email: payload.email,
       password: payload.password,
@@ -465,7 +523,7 @@
 
     if (res?.error) throw new Error(res.error);
 
-    const submittedEmail = payload.email;
+    const submittedEmail = String(payload.email || '').trim().toLowerCase();
     const submittedPassword = payload.password;
     pendingSignupPayload = null;
     verifyDialog?.close();
@@ -479,22 +537,9 @@
         password: submittedPassword
       });
       if (loginError) throw loginError;
-
-      await Ipon.invokeAccountFunction({
-        action: 'ensure-account-active',
-        user_id: data.user.id,
-        email: submittedEmail
-      }).catch(() => null);
-
-      const { data: profile } = await Ipon.client.from('profiles').select('id,role,status,first_name,last_name,contact_number').eq('id', data.user.id).single();
-      const role = profile?.role || 'MEMBER';
-      try {
-        sessionStorage.setItem('ipon_active_role', role);
-        localStorage.setItem('ipon_active_role', role);
-        sessionStorage.setItem('myipon_just_logged_in', '1');
-      } catch { }
-      Ipon.broadcastAuthEvent('SIGNED_IN', data.user.id);
-      window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(role));
+      const profile = await resolveActiveProfile(data.user, submittedEmail);
+      await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
+      completeLoginSession(data, profile);
     } catch (err) {
       console.error('Auto login error:', err);
       Ipon.setLoading(false);
