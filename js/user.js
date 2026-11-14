@@ -23,6 +23,7 @@
   });
   let groupPaymentInfo = null;
   let historyRowsById = new Map();
+  let commentCounts = new Map();
   const pageSize = 25;
   let historyPage = 0;
   const pager = document.getElementById('user-history-pager');
@@ -38,6 +39,18 @@
     pager.querySelector('span').textContent = `Page ${historyPage + 1} of ${pages} · ${count} record${count === 1 ? '' : 's'}`;
     pager.querySelector('[data-page="previous"]').disabled = historyPage === 0;
     pager.querySelector('[data-page="next"]').disabled = historyPage >= pages - 1;
+  }
+
+  function renderOwnPayoutStrip(record) {
+    const strip = document.getElementById('user-payout-strip');
+    if (!strip) return;
+    strip.hidden = false;
+    const chipHtml = Ipon.payoutSummaryChip(record, { compact: true, showCopy: false });
+    if (chipHtml) {
+      strip.innerHTML = `<span class="user-payout-label">Cashout account</span>${chipHtml}<button type="button" class="link-action" data-open-payout-profile>Edit</button>`;
+    } else {
+      strip.innerHTML = `<span class="user-payout-label">Cashout account</span><span class="field-help">Not set</span><button type="button" class="link-action" data-open-payout-profile>Add GCash, Maya, or bank</button>`;
+    }
   }
 
   function renderPaymentCard(info) {
@@ -69,17 +82,19 @@
       document.getElementById('current-payment-status').textContent = 'ACCOUNT NOT LINKED';
       document.getElementById('current-payment-detail').textContent = 'Ask your group administrator to link this login to your member profile.';
       ['user-total', 'user-paid-months', 'user-unpaid-months', 'user-pending'].forEach((id, index) => { document.getElementById(id).textContent = index === 0 ? Ipon.money(0) : '0'; });
-      body.innerHTML = '<tr><td colspan="6" class="empty-state">No member profile is linked to this account.</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" class="empty-state">No member profile is linked to this account.</td></tr>';
       return;
     }
-    const [summaryResult, historyResult, paymentInfo] = await Promise.all([
+    const [summaryResult, historyResult, paymentInfo, ownMemberResult] = await Promise.all([
       Ipon.client.rpc('get_user_dashboard'),
-      (() => { let query = Ipon.client.from('contributions').select('id,amount,payment_date,transaction_reference,notes,approval_status,review_note,void_reason,receipt_url,contribution_periods!inner(period_month,member_id)', { count: 'exact' }).eq('contribution_periods.member_id', state.profile.member_id).order('payment_date', { ascending: false }); if (statusFilter.value) query = query.eq('approval_status', statusFilter.value); return query.range(historyPage * pageSize, (historyPage + 1) * pageSize - 1); })(),
-      Ipon.rpc('get_group_payment_info').catch(() => null)
+      (() => { let query = Ipon.client.from('contributions').select('id,amount,payment_date,transaction_reference,payment_method,notes,approval_status,review_note,void_reason,receipt_url,contribution_periods!inner(period_month,member_id)', { count: 'exact' }).eq('contribution_periods.member_id', state.profile.member_id).order('payment_date', { ascending: false }); if (statusFilter.value) query = query.eq('approval_status', statusFilter.value); return query.range(historyPage * pageSize, (historyPage + 1) * pageSize - 1); })(),
+      Ipon.rpc('get_group_payment_info').catch(() => null),
+      Ipon.client.from('members').select('payout_channel,payout_account_number,payout_account_name').eq('id', state.profile.member_id).maybeSingle()
     ]);
     if (summaryResult.error) throw summaryResult.error;
     if (historyResult.error) throw historyResult.error;
     renderPaymentCard(paymentInfo);
+    renderOwnPayoutStrip(ownMemberResult?.data || state.profile);
     const summary = summaryResult.data || {};
     document.getElementById('user-total').textContent = Ipon.money(summary.total_contributed);
     document.getElementById('user-paid-months').textContent = summary.months_paid || 0;
@@ -107,13 +122,15 @@
     const rows = historyResult.data || [];
     updatePager(historyResult.count || 0);
     historyRowsById = new Map(rows.map((row) => [row.id, row]));
+    commentCounts = await Ipon.getRecordCommentCounts('contribution', rows.map((row) => row.id));
     body.innerHTML = rows.length ? rows.map((row) => {
       const noteText = row.review_note || row.void_reason || '—';
+      const discussBtn = Ipon.recordDiscussionButtonHtml(row, commentCounts.get(row.id) || 0);
       const resubmitBtn = row.approval_status === 'REJECTED'
         ? ` <button class="icon-action" type="button" data-resubmit="${row.id}">Resubmit</button>`
         : '';
-      return `<tr><td>${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.dateLabel(row.payment_date)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${badge(row.approval_status)}</td><td>${row.receipt_url ? `<button class="icon-action receipt-pill-btn" type="button" data-view-receipt="${row.id}">View receipt</button>` : '<span class="field-help">—</span>'}</td><td>${Ipon.escapeHtml(noteText)}${resubmitBtn}</td></tr>`;
-    }).join('') : '<tr><td colspan="6" class="empty-state">No contribution records match this filter.</td></tr>';
+      return `<tr><td>${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.dateLabel(row.payment_date)}</td><td>${Ipon.paymentMethodBadge(row.payment_method)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${badge(row.approval_status)}</td><td>${row.receipt_url ? `<button class="icon-action receipt-pill-btn" type="button" data-view-receipt="${row.id}">View receipt</button>` : '<span class="field-help">—</span>'}</td><td><div class="user-note-actions"><span>${Ipon.escapeHtml(noteText)}</span>${discussBtn ? ` ${discussBtn}` : ''}${resubmitBtn}</div></td></tr>`;
+    }).join('') : '<tr><td colspan="7" class="empty-state">No contribution records match this filter.</td></tr>';
   }
 
   async function refresh() {
@@ -129,10 +146,20 @@
       Ipon.showGroupRequiredDialog({ hasGroup: Boolean(state.profile.group_id) });
       return;
     }
-    form.reset(); receiptPicker.clear(); form.elements.contribution_month.value = Ipon.monthStart().slice(0, 7); form.elements.payment_date.value = Ipon.isoDate(); dialog.showModal(); form.elements.amount.focus();
+    form.reset(); receiptPicker.clear(); form.elements.contribution_month.value = Ipon.monthStart().slice(0, 7); form.elements.payment_date.value = Ipon.isoDate();
+    Ipon.setPaymentMethod(form, Ipon.guessPaymentMethodFromLabel(groupPaymentInfo?.payment_method_label, 'CASH'));
+    dialog.showModal(); form.elements.amount.focus();
   });
   document.getElementById('close-contribution-dialog').addEventListener('click', () => dialog.close());
   document.getElementById('cancel-contribution').addEventListener('click', () => dialog.close());
+  document.getElementById('user-payout-strip')?.addEventListener('click', (event) => {
+    if (event.target.closest('[data-open-payout-profile]')) {
+      Ipon.openAccountDialog();
+    }
+  });
+  window.addEventListener('ipon:profile-updated', (event) => {
+    renderOwnPayoutStrip(event.detail || state.profile);
+  });
   paymentQrBtn?.addEventListener('click', () => {
     if (groupPaymentInfo?.payment_qr_url) Ipon.openImageViewer(groupPaymentInfo.payment_qr_url, groupPaymentInfo.payment_method_label || 'Group payment QR', groupPaymentInfo.payment_account_name || '');
   });
@@ -143,6 +170,11 @@
     catch { Ipon.toast('Unable to copy automatically.', 'error'); }
   });
   body.addEventListener('click', (event) => {
+    const discussBtn = event.target.closest('[data-action="discuss"]');
+    if (discussBtn) {
+      Ipon.openRecordDiscussion('contribution', discussBtn.dataset.id, { onUpdated: () => load() });
+      return;
+    }
     const receiptBtn = event.target.closest('[data-view-receipt]');
     if (receiptBtn) {
       const row = historyRowsById.get(receiptBtn.dataset.viewReceipt);
@@ -160,16 +192,17 @@
       form.elements.amount.value = Number(row.amount || 0).toFixed(2);
       form.elements.reference.value = row.transaction_reference || '';
       form.elements.notes.value = row.notes || '';
+      Ipon.setPaymentMethod(form, row.payment_method || Ipon.guessPaymentMethodFromLabel(groupPaymentInfo?.payment_method_label, 'CASH'));
       dialog.showModal();
       form.elements.amount.focus();
     }
   });
-  statusFilter.addEventListener('change', () => { historyPage = 0; load().catch((error) => Ipon.showInlineError(body, error, load, 6)); });
+  statusFilter.addEventListener('change', () => { historyPage = 0; load().catch((error) => Ipon.showInlineError(body, error, load, 7)); });
   pager?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-page]');
     if (!button || button.disabled) return;
     historyPage += button.dataset.page === 'next' ? 1 : -1;
-    load().catch((error) => Ipon.showInlineError(body, error, load, 6));
+    load().catch((error) => Ipon.showInlineError(body, error, load, 7));
   });
   printStatementBtn?.addEventListener('click', () => window.print());
   exportStatementBtn?.addEventListener('click', async () => {
@@ -177,7 +210,7 @@
     Ipon.setBusy(exportStatementBtn, true, 'Exporting…');
     try {
       let query = Ipon.client.from('contributions')
-        .select('payment_date,amount,transaction_reference,notes,approval_status,review_note,void_reason,contribution_periods!inner(period_month,member_id)')
+        .select('payment_date,amount,transaction_reference,payment_method,notes,approval_status,review_note,void_reason,contribution_periods!inner(period_month,member_id)')
         .eq('contribution_periods.member_id', state.profile.member_id)
         .order('payment_date', { ascending: false });
       if (statusFilter.value) query = query.eq('approval_status', statusFilter.value);
@@ -186,13 +219,14 @@
       const csvRows = (data || []).map((row) => [
         String(row.contribution_periods?.period_month || '').slice(0, 7),
         row.payment_date,
+        Ipon.paymentMethodMeta(row.payment_method).label,
         row.amount,
         row.approval_status,
         row.transaction_reference || '',
         row.notes || '',
         row.review_note || row.void_reason || ''
       ]);
-      const csv = [['For month', 'Date contributed', 'Amount', 'Status', 'Reference', 'Notes', 'Review / void note'], ...csvRows]
+      const csv = [['For month', 'Date contributed', 'Payment method', 'Amount', 'Status', 'Reference', 'Notes', 'Review / void note'], ...csvRows]
         .map((line) => line.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(','))
         .join('\n');
       const link = document.createElement('a');
@@ -241,6 +275,7 @@
         p_notes: values.get('notes') || null,
         p_idempotency_key: crypto.randomUUID(),
         p_receipt_url: receiptPicker.get(),
+        p_payment_method: values.get('payment_method') || 'CASH',
         ...(allocateExcess ? { p_allocate_excess: true } : {})
       });
       receiptPicker.clear();
@@ -253,6 +288,17 @@
     finally { Ipon.setBusy(button, false); }
   });
 
-  try { await refresh(); } catch (error) { Ipon.showInlineError(body, error, refresh, 6); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions', 'groups', 'savings_goals'], refresh);
+  function openRequestedThreadFromUrl() {
+    const raw = new URLSearchParams(window.location.search).get('thread') || '';
+    const [type, id] = raw.split(':');
+    if (type && id && ['contribution', 'withdrawal', 'expense'].includes(type)) {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('thread');
+      window.history.replaceState(null, '', cleanUrl.toString());
+      Ipon.openRecordDiscussion(type, id, { onUpdated: () => load() });
+    }
+  }
+
+  try { await refresh(); openRequestedThreadFromUrl(); } catch (error) { Ipon.showInlineError(body, error, refresh, 7); } finally { Ipon.setLoading(false); }
+  Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions', 'groups', 'savings_goals', 'record_comments'], refresh);
 })();

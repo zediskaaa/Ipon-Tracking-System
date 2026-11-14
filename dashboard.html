@@ -190,32 +190,61 @@
             </div>
             <button class="record-entry-action" id="dashboard-record-entry" type="button">+ Record entry</button>
           </div>
+          <div class="dashboard-wallet-strip" id="dashboard-wallet-strip" hidden>
+            <div class="dashboard-wallet-pills">
+              <div class="dashboard-wallet-pill is-cash">
+                <span class="pm-badge pm-cash"><i class="pm-dot" aria-hidden="true"></i>Cash on hand</span>
+                <strong id="dashboard-wallet-cash">₱0.00</strong>
+              </div>
+              <div class="dashboard-wallet-pill is-digital">
+                <span class="pm-badge pm-gcash"><i class="pm-dot" aria-hidden="true"></i>E-wallets &amp; bank</span>
+                <strong id="dashboard-wallet-digital">₱0.00</strong>
+              </div>
+              <div class="dashboard-wallet-pill is-untagged" id="dashboard-wallet-untagged-wrap" hidden>
+                <span class="pm-badge pm-untagged"><i class="pm-dot" aria-hidden="true"></i>Other / untagged</span>
+                <strong id="dashboard-wallet-untagged">₱0.00</strong>
+              </div>
+            </div>
+            <a class="dashboard-wallet-link" href="reports.html#wallet-reconciliation">Reconcile →</a>
+          </div>
         </div>
         <dl class="summary-breakdown" data-region="summary-breakdown">
-          <div>
-            <dt><i class="status-icon confirmed"><svg viewBox="0 0 24 24" aria-hidden="true">
+          <div class="breakdown-tile">
+            <i class="status-icon confirmed" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="m7 12 3 3 7-7" />
-                </svg></i>Additions <span>(confirmed)</span></dt>
-            <dd>—</dd>
+                </svg></i>
+            <div class="breakdown-tile-copy">
+              <dt>Additions <span>(confirmed)</span></dt>
+              <dd>—</dd>
+            </div>
           </div>
-          <div>
-            <dt><i class="status-icon deduction"><svg viewBox="0 0 24 24" aria-hidden="true">
+          <div class="breakdown-tile">
+            <i class="status-icon deduction" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M7 12h10" />
-                </svg></i>Deductions <span>(confirmed)</span></dt>
-            <dd>—</dd>
+                </svg></i>
+            <div class="breakdown-tile-copy">
+              <dt>Deductions <span>(confirmed)</span></dt>
+              <dd>—</dd>
+            </div>
           </div>
-          <div>
-            <dt><i class="status-icon expense"><svg viewBox="0 0 24 24" aria-hidden="true">
+          <div class="breakdown-tile">
+            <i class="status-icon expense" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="m6 6 12 12M18 6 6 18" />
-                </svg></i>Expenses</dt>
-            <dd>—</dd>
+                </svg></i>
+            <div class="breakdown-tile-copy">
+              <dt>Expenses</dt>
+              <dd>—</dd>
+            </div>
           </div>
-          <div>
-            <dt><i class="status-icon pending"><svg viewBox="0 0 24 24" aria-hidden="true">
+          <div class="breakdown-tile">
+            <i class="status-icon pending" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="M12 7v5l3 2" />
-                </svg></i>Pending <span>(for review)</span></dt>
-            <dd>—</dd>
+                </svg></i>
+            <div class="breakdown-tile-copy">
+              <dt>Pending <span>(for review)</span></dt>
+              <dd>—</dd>
+            </div>
           </div>
         </dl>
         <dl class="admin-progress" aria-label="Monthly member progress">
@@ -226,15 +255,20 @@
           <div>
             <dt>Collected this month</dt>
             <dd id="dashboard-month-collected">—</dd>
+            <div class="month-progress-track" aria-hidden="true">
+              <span id="dashboard-month-progress-fill" style="width:0%"></span>
+            </div>
           </div>
           <div>
             <dt>Paid</dt>
             <dd id="dashboard-paid">—</dd>
           </div>
-          <div>
+          <div class="unpaid-metric-cell">
             <dt>Unpaid or partial</dt>
-            <dd id="dashboard-unpaid">—</dd>
-            <button class="icon-action" id="dashboard-remind-unpaid-btn" type="button" hidden data-role="ADMIN,TREASURER" data-requires-data>Remind unpaid</button>
+            <div class="unpaid-metric-row">
+              <dd id="dashboard-unpaid">—</dd>
+              <button class="icon-action" id="dashboard-remind-unpaid-btn" type="button" hidden data-role="ADMIN,TREASURER" data-requires-data>Remind unpaid</button>
+            </div>
           </div>
         </dl>
         <div class="dashboard-goal-box" id="dashboard-goal-box" hidden>
@@ -810,6 +844,7 @@
             <option value="">Select member</option>
           </select>
         </div>
+        <div class="payout-dest-box field field-wide" id="quick-payout-destination" hidden></div>
         <div class="field" id="quick-field-month">
           <label for="quick-month">For month</label>
           <input id="quick-month" name="contribution_month" type="month" min="2000-01" data-max-current-month required>
@@ -825,11 +860,15 @@
         </div>
         <div class="field" id="quick-field-category" hidden>
           <label for="quick-category">Category</label>
-          <input id="quick-category" name="category" maxlength="80" placeholder="e.g. Emergency use">
+          <input id="quick-category" name="category" maxlength="80" data-category-presets="deduction" placeholder="e.g. Emergency use">
         </div>
         <div class="field" id="quick-field-reference">
           <label for="quick-reference">Reference (optional)</label>
           <input id="quick-reference" name="reference" maxlength="100" inputmode="numeric" placeholder="e.g. 1234567890">
+        </div>
+        <div class="field field-wide" id="quick-field-payment-method">
+          <span class="field-label" id="quick-payment-method-label">Payment method</span>
+          <div data-pm-picker data-name="payment_method" data-default="CASH"></div>
         </div>
         <div class="field field-wide" id="quick-field-description" hidden>
           <label for="quick-description" id="quick-desc-label">Reason / description</label>

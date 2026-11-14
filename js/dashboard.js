@@ -48,6 +48,7 @@
   const quickCategoryInput = document.getElementById('quick-category');
   const quickFieldReference = document.getElementById('quick-field-reference');
   const quickReferenceInput = document.getElementById('quick-reference');
+  const quickPaymentMethodLabel = document.getElementById('quick-payment-method-label');
   const quickFieldDescription = document.getElementById('quick-field-description');
   const quickDescLabel = document.getElementById('quick-desc-label');
   const quickDescriptionInput = document.getElementById('quick-description');
@@ -62,6 +63,11 @@
   const bulkConfirmList = document.getElementById('bulk-confirm-list');
   const bulkConfirmSelectAll = document.getElementById('bulk-confirm-select-all');
   const bulkConfirmSubmit = document.getElementById('bulk-confirm-submit');
+  const walletStrip = document.getElementById('dashboard-wallet-strip');
+  const walletCashEl = document.getElementById('dashboard-wallet-cash');
+  const walletDigitalEl = document.getElementById('dashboard-wallet-digital');
+  const walletUntaggedWrap = document.getElementById('dashboard-wallet-untagged-wrap');
+  const walletUntaggedEl = document.getElementById('dashboard-wallet-untagged');
 
   let cachedMembers = [];
   let currentQuickType = 'addition';
@@ -225,6 +231,7 @@
       </div>
     `;
     Ipon.prepareTemporaryPassword(row.querySelector('[name="invite_password"]'));
+    Ipon.preparePesoInputs(row);
     row.querySelector('.invite-row-remove').addEventListener('click', () => {
       if (required && container.querySelectorAll('.invite-row-card').length <= 1) return;
       row.remove();
@@ -444,12 +451,30 @@
     summaryValues.forEach((node) => { node.textContent = Ipon.money(0); });
     ['dashboard-members', 'dashboard-paid', 'dashboard-unpaid'].forEach((id) => { document.getElementById(id).textContent = '0'; });
     document.getElementById('dashboard-month-collected').textContent = Ipon.money(0);
+    const monthFill = document.getElementById('dashboard-month-progress-fill');
+    if (monthFill) monthFill.style.width = '0%';
     activeGoalsList = [];
     updateDashboardGoalProgress(0);
     renderGoalOptions([]);
     renderCalendar([]);
     renderPending([]);
+    if (walletStrip) walletStrip.hidden = true;
     announcements?.clear();
+  }
+  function renderWalletStrip(wallet) {
+    if (!walletStrip) return;
+    if (!wallet || !currentGroup || !state.profile?.group_id) {
+      walletStrip.hidden = true;
+      return;
+    }
+    walletStrip.hidden = false;
+    if (walletCashEl) walletCashEl.textContent = Ipon.money(wallet.physical_cash_balance || 0);
+    if (walletDigitalEl) walletDigitalEl.textContent = Ipon.money(wallet.digital_wallet_balance || 0);
+    const otherAndUntagged = Number(wallet.other_balance || 0) + Number(wallet.untagged_balance || 0);
+    if (walletUntaggedWrap && walletUntaggedEl) {
+      walletUntaggedWrap.hidden = !wallet.has_untagged && otherAndUntagged === 0;
+      walletUntaggedEl.textContent = Ipon.money(otherAndUntagged);
+    }
   }
   function updateDashboardGoalProgress(trackedSavings) {
     const box = document.getElementById('dashboard-goal-box');
@@ -486,16 +511,17 @@
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { renderEmptySnapshot(); return; }
     try {
-      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult, groupsResult, groupProfilesResult, allGoalsResult] = await Promise.all([
+      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult, groupsResult, groupProfilesResult, allGoalsResult, walletResult] = await Promise.all([
         Ipon.client.rpc('get_savings_summary'),
         Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'),
         getPending(),
-        Ipon.client.from('members').select('id,full_name,monthly_contribution_amount', { count: 'exact' }).eq('status', 'ACTIVE').order('full_name'),
+        Ipon.client.from('members').select('id,full_name,monthly_contribution_amount,payout_channel,payout_account_number,payout_account_name', { count: 'exact' }).eq('status', 'ACTIVE').order('full_name'),
         Ipon.client.from('v_contribution_status').select('member_id,payment_status,paid_amount').eq('period_month', start),
         Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.rpc('get_my_groups'),
         Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE'),
         Ipon.client.from('savings_goals').select('id,title,target_amount,target_date').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
+        Ipon.client.rpc('get_wallet_reconciliation'),
         announcements ? announcements.load().catch((err) => console.warn('Announcement load error:', err)) : Promise.resolve()
       ]);
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
@@ -527,10 +553,17 @@
       const activeIds = new Set((memberResult.data || []).map((m) => m.id));
       const progress = (progressResult.data || []).filter((item) => activeIds.has(item.member_id) || Number(item.paid_amount || 0) > 0);
       const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
-      document.getElementById('dashboard-members').textContent = memberResult.count ?? (memberResult.data?.length || 0); document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; renderGoalOptions(goalResult.data || []);
+      const monthCollected = progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0);
+      const monthExpected = (memberResult.data || []).reduce((sum, item) => sum + Math.max(0, Number(item.monthly_contribution_amount || 0)), 0);
+      const monthPct = monthExpected > 0 ? Math.min(100, Math.max(0, (monthCollected / monthExpected) * 100)) : 0;
+      document.getElementById('dashboard-members').textContent = memberResult.count ?? (memberResult.data?.length || 0); document.getElementById('dashboard-month-collected').textContent = Ipon.money(monthCollected); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid;
+      const monthFill = document.getElementById('dashboard-month-progress-fill');
+      if (monthFill) monthFill.style.width = `${monthPct}%`;
+      renderGoalOptions(goalResult.data || []);
       if (remindUnpaidBtn) remindUnpaidBtn.hidden = !(unpaid > 0 && ['ADMIN', 'TREASURER'].includes(state.profile?.role));
       populateQuickRecordMembers(memberResult.data || []);
       updateDashboardGoalProgress(summary.tracked_savings);
+      renderWalletStrip(walletResult?.error ? null : walletResult?.data);
       renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
       hasSnapshot = true; dataStatus.hidden = true;
     } catch (error) {
@@ -588,6 +621,7 @@
     const prefix = button.dataset.type;
     const typeLabel = prefix === 'contribution' ? 'Savings Addition' : prefix === 'withdrawal' ? 'Deduction' : 'Expense';
     const entry = item ? {
+      id: item.id,
       type: item.type,
       typeLabel: item.entry_label || typeLabel,
       authorName: item.member_name || 'Group member',
@@ -597,6 +631,7 @@
       date: item.date,
       periodMonth: item.period_month || '',
       category: item.category || '',
+      paymentMethod: item.payment_method || '',
       reference: item.reference || '',
       notes: item.notes || '',
       description: item.description || '',
@@ -1188,7 +1223,21 @@
       const ownName = cachedMembers.find((m) => m.id === state.profile?.member_id)?.full_name || state.profile?.full_name || '';
       quickResponsibleSelect.innerHTML = `<option value="">Select member</option>${cachedMembers.map((m) => `<option value="${Ipon.escapeHtml(m.full_name)}" data-avatar="${Ipon.escapeHtml(m.avatar_url || '')}" ${(cur || ownName) === m.full_name ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
       Ipon.enhanceMemberSelect(quickResponsibleSelect);
+      syncQuickPayoutDestination(false);
     }
+  }
+
+  function syncQuickPayoutDestination(syncMethod = true) {
+    const box = document.getElementById('quick-payout-destination');
+    if (!box) return;
+    if (currentQuickType !== 'deduction') {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    const chosenName = quickResponsibleSelect?.value || '';
+    const chosen = chosenName ? cachedMembers.find((m) => m.full_name === chosenName) : null;
+    Ipon.renderPayoutDestinationBox(box, chosen, { autoSyncMethodForm: syncMethod ? quickRecordForm : null });
   }
 
   function setQuickRecordType(type) {
@@ -1212,20 +1261,21 @@
       if (quickSubtitle) quickSubtitle.textContent = 'Record money added to the group savings fund.';
       if (quickSubmitBtn) quickSubmitBtn.textContent = 'Save addition';
       if (quickDateLabel) quickDateLabel.textContent = 'Date added';
+      if (quickPaymentMethodLabel) quickPaymentMethodLabel.textContent = 'Payment method';
     } else if (isDeduction) {
       if (quickTitle) quickTitle.textContent = 'Record deduction';
       if (quickSubtitle) quickSubtitle.textContent = 'Track money deducted or withdrawn from the savings fund.';
       if (quickSubmitBtn) quickSubmitBtn.textContent = 'Save deduction';
       if (quickDateLabel) quickDateLabel.textContent = 'Date deducted';
+      if (quickPaymentMethodLabel) quickPaymentMethodLabel.textContent = 'Paid from wallet';
       if (quickDescLabel) quickDescLabel.textContent = 'Reason / description';
-      if (quickCategoryInput) quickCategoryInput.placeholder = 'e.g. Emergency use, Loan repayment';
     } else {
       if (quickTitle) quickTitle.textContent = 'Record expense';
       if (quickSubtitle) quickSubtitle.textContent = 'Track group expenses separately from deductions.';
       if (quickSubmitBtn) quickSubmitBtn.textContent = 'Save expense';
       if (quickDateLabel) quickDateLabel.textContent = 'Date incurred';
+      if (quickPaymentMethodLabel) quickPaymentMethodLabel.textContent = 'Paid from wallet';
       if (quickDescLabel) quickDescLabel.textContent = 'Description';
-      if (quickCategoryInput) quickCategoryInput.placeholder = 'e.g. Supplies, Office, Operations';
     }
 
     if (quickFieldMember) quickFieldMember.hidden = !isAddition || isMemberRole;
@@ -1243,10 +1293,13 @@
     if (quickMonthInput) quickMonthInput.required = isAddition;
 
     if (quickFieldCategory) quickFieldCategory.hidden = isAddition;
-    if (quickCategoryInput) quickCategoryInput.required = !isAddition;
+    if (quickCategoryInput) {
+      Ipon.setCategoryPresetGroup(quickCategoryInput, isDeduction ? 'deduction' : 'expense', { required: !isAddition });
+    }
 
     if (quickFieldDescription) quickFieldDescription.hidden = isAddition;
     if (quickDescriptionInput) quickDescriptionInput.required = !isAddition;
+    syncQuickPayoutDestination(false);
   }
 
   function openQuickRecordDialog(presetDate = null, presetType = 'addition') {
@@ -1258,6 +1311,8 @@
     }
     quickPendingKey = null;
     quickRecordForm.reset();
+    Ipon.syncCategoryControl(quickCategoryInput, '');
+    Ipon.setPaymentMethod(quickRecordForm, 'CASH');
 
     const today = Ipon.isoDate();
     const dateVal = presetDate || today;
@@ -1306,6 +1361,7 @@
       quickAmountInput.value = chosen.monthly_contribution_amount;
     }
   });
+  quickResponsibleSelect?.addEventListener('change', () => syncQuickPayoutDestination(true));
 
   document.getElementById('quick-record-close')?.addEventListener('click', () => quickRecordDialog?.close());
   document.getElementById('quick-record-cancel')?.addEventListener('click', () => quickRecordDialog?.close());
@@ -1364,7 +1420,8 @@
           p_payment_date: values.get('date'),
           p_transaction_reference: values.get('reference') || null,
           p_notes: values.get('notes') || null,
-          p_idempotency_key: quickPendingKey
+          p_idempotency_key: quickPendingKey,
+          p_payment_method: values.get('payment_method') || 'CASH'
         });
       } else {
         const ownResponsible = cachedMembers.find((m) => m.id === state.profile?.member_id)?.full_name || state.profile?.full_name;
@@ -1376,7 +1433,8 @@
           p_person_responsible: isMemberRole ? ownResponsible : values.get('person_responsible'),
           p_reference_number: values.get('reference') || null,
           p_notes: values.get('notes') || null,
-          p_idempotency_key: quickPendingKey
+          p_idempotency_key: quickPendingKey,
+          p_payment_method: values.get('payment_method') || 'CASH'
         });
       }
 

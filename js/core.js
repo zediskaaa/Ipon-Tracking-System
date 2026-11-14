@@ -462,8 +462,181 @@
     return !message;
   }
 
-  function prepareNumericInputs() {
-    document.querySelectorAll('input[name="reference"], input[name="reference_number"], input[name="payment_account_number"], input[data-numeric-only]').forEach((input) => {
+  const CATEGORY_PRESETS = Object.freeze({
+    deduction: [
+      'Member payout / cash-out',
+      'Emergency use',
+      'Loan / cash advance',
+      'Savings distribution',
+      'Bank / transfer fee',
+      'Refund / adjustment'
+    ],
+    expense: [
+      'Supplies & materials',
+      'Food & refreshments',
+      'Venue & events',
+      'Printing & receipts',
+      'Delivery & transport',
+      'Bank / service fee',
+      'Operations'
+    ]
+  });
+
+  function renderCategorySelectOptions(select, groupKey) {
+    if (!select) return;
+    const list = CATEGORY_PRESETS[groupKey] || CATEGORY_PRESETS.deduction;
+    select.innerHTML = [
+      '<option value="">Select category</option>',
+      ...list.map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`),
+      '<option value="__CUSTOM__">Custom (specify)…</option>'
+    ].join('');
+  }
+
+  function syncCategoryControl(input, value = input?.value) {
+    if (!(input instanceof HTMLInputElement)) return;
+    const controlWrap = input.closest('.category-control');
+    const select = controlWrap?.querySelector('.category-preset-select');
+    const isRequired = input.dataset.categoryRequired !== undefined
+      ? input.dataset.categoryRequired === '1'
+      : input.required;
+    const groupKey = input.dataset.categoryPresets === 'expense' ? 'expense' : 'deduction';
+    const presets = CATEGORY_PRESETS[groupKey] || CATEGORY_PRESETS.deduction;
+    const trimmed = String(value ?? '').trim();
+
+    if (!select) {
+      input.value = trimmed;
+      return;
+    }
+
+    if (!trimmed) {
+      select.value = '';
+      input.value = '';
+      input.hidden = true;
+      input.required = false;
+      select.required = isRequired;
+    } else {
+      const matched = presets.find((item) => item.toLowerCase() === trimmed.toLowerCase());
+      if (matched) {
+        select.value = matched;
+        input.value = matched;
+        input.hidden = true;
+        input.required = false;
+        select.required = isRequired;
+      } else {
+        select.value = '__CUSTOM__';
+        input.value = trimmed;
+        input.hidden = false;
+        input.required = isRequired;
+        select.required = isRequired;
+      }
+    }
+    select.setCustomValidity('');
+    input.setCustomValidity('');
+    setFieldError(select, '');
+    setFieldError(input, '');
+  }
+
+  function setCategoryPresetGroup(input, groupKey, { required } = {}) {
+    if (!(input instanceof HTMLInputElement)) return;
+    const normalizedGroup = groupKey === 'expense' ? 'expense' : 'deduction';
+    input.dataset.categoryPresets = normalizedGroup;
+    if (typeof required === 'boolean') {
+      input.dataset.categoryRequired = required ? '1' : '0';
+    }
+    const wrap = input.closest('.category-control');
+    const select = wrap?.querySelector('.category-preset-select');
+    if (select) renderCategorySelectOptions(select, normalizedGroup);
+    syncCategoryControl(input, input.value);
+  }
+
+  function mountCategoryControls(root = document) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll('input[data-category-presets]').forEach((input) => {
+      if (!(input instanceof HTMLInputElement) || input.closest('.category-control')) return;
+      const groupKey = input.dataset.categoryPresets === 'expense' ? 'expense' : 'deduction';
+      input.dataset.categoryRequired = input.required ? '1' : '0';
+      const wrap = document.createElement('div');
+      wrap.className = 'category-control';
+      const select = document.createElement('select');
+      select.className = 'category-preset-select';
+      select.setAttribute('aria-label', 'Category');
+      renderCategorySelectOptions(select, groupKey);
+
+      input.classList.add('category-custom-input');
+      input.placeholder = 'Enter custom category';
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(select);
+      wrap.appendChild(input);
+
+      const fieldLabel = wrap.closest('.field')?.querySelector('label[for]');
+      if (fieldLabel && fieldLabel.getAttribute('for') === input.id) {
+        fieldLabel.addEventListener('click', (event) => {
+          if (input.hidden) {
+            event.preventDefault();
+            select.focus();
+          }
+        });
+      }
+
+      select.addEventListener('change', () => {
+        const isReq = input.dataset.categoryRequired === '1';
+        if (select.value === '__CUSTOM__') {
+          input.hidden = false;
+          input.required = isReq;
+          const currentMatchesPreset = Object.values(CATEGORY_PRESETS).some((arr) => arr.includes(input.value));
+          if (currentMatchesPreset) input.value = '';
+          input.focus();
+        } else {
+          input.value = select.value;
+          input.hidden = true;
+          input.required = false;
+        }
+        select.required = isReq;
+        select.setCustomValidity('');
+        input.setCustomValidity('');
+        setFieldError(select, '');
+        setFieldError(input, '');
+      });
+
+      input.addEventListener('input', () => {
+        const msg = input.required && !input.value.trim() ? 'Category is required.' : '';
+        input.setCustomValidity(msg);
+        setFieldError(input, '');
+      });
+
+      syncCategoryControl(input, input.value);
+    });
+  }
+
+  const PESO_INPUT_SELECTOR = [
+    '.field input[type="number"][name="amount"]',
+    '.field input[type="number"][name="default_amount"]',
+    '.field input[type="number"][name="monthly_amount"]',
+    '.field input[type="number"][name="monthly_contribution_amount"]',
+    '.field input[type="number"][name="target_amount"]',
+    '.field input[type="number"][name="invite_amount"]',
+    '#calc-target',
+    '#calc-current'
+  ].join(', ');
+
+  function preparePesoInputs(root = document) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll(PESO_INPUT_SELECTOR).forEach((input) => {
+      if (!(input instanceof HTMLInputElement) || !input.parentNode || input.closest('.peso-input-wrap')) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'peso-input-wrap';
+      const prefix = document.createElement('span');
+      prefix.className = 'peso-prefix';
+      prefix.setAttribute('aria-hidden', 'true');
+      prefix.textContent = '₱';
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(prefix);
+      wrap.appendChild(input);
+    });
+  }
+
+  function prepareNumericInputs(root = document) {
+    root.querySelectorAll('input[name="reference"], input[name="reference_number"], input[name="payment_account_number"], input[data-numeric-only]').forEach((input) => {
       if (input.dataset.numericBound) return;
       input.dataset.numericBound = 'true';
       input.inputMode = 'numeric';
@@ -476,6 +649,8 @@
       input.addEventListener('blur', () => validateNumericInput(input));
       input.addEventListener('invalid', () => validateNumericInput(input));
     });
+    preparePesoInputs(root);
+    mountCategoryControls(root);
   }
 
   function prepareFormValidation() {
@@ -521,6 +696,7 @@
           setFieldError(control, '');
         });
         form.querySelectorAll('[data-temp-password]').forEach((control) => autofillTemporaryPassword(control));
+        form.querySelectorAll('input[data-category-presets]').forEach((control) => syncCategoryControl(control, ''));
       });
     });
     document.querySelectorAll('[data-temp-password]').forEach(prepareTemporaryPassword);
@@ -693,6 +869,27 @@
       <dialog class="form-dialog record-review-dialog" id="record-action-dialog" aria-labelledby="record-action-title">
         <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-action-title">Review record</h2><p id="record-action-subtitle">Verify the contributor, type, and amount before saving.</p></div><button class="dialog-close" type="button" data-record-action-close aria-label="Close review dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="record-review-body"><section class="record-review-summary" id="record-action-summary" hidden></section><form id="record-action-form" class="form-grid"><div class="record-review-step field-wide" id="record-action-step-edit"><fieldset class="decision-options field-wide"><legend>Decision</legend><div id="record-action-options"></div></fieldset><div class="field field-wide"><label id="record-action-reason-label" for="record-action-reason">Review note (optional)</label><textarea id="record-action-reason" name="reason" maxlength="500" aria-describedby="record-action-help"></textarea><small class="field-help" id="record-action-help">Optional note when confirming; required when rejecting or voiding.</small></div><div class="form-actions field-wide"><button class="button button-secondary" type="button" data-record-action-close>Cancel</button><button class="button button-primary" id="record-action-next" type="submit">Continue</button></div></div><div class="record-review-step record-review-confirm field-wide" id="record-action-step-confirm" hidden><div class="record-review-confirm-box" id="record-action-confirm-box"><strong id="record-action-confirm-heading">Confirm this decision?</strong><p id="record-action-confirm-text"></p><p class="record-review-note-preview" id="record-action-confirm-note" hidden></p></div><p class="mfa-message field-wide" id="record-action-error" role="alert" hidden></p><div class="form-actions field-wide"><button class="button button-secondary" id="record-action-back" type="button">Back</button><button class="button button-primary" id="record-action-submit" type="button">Confirm entry</button></div></div></form></div></div>
       </dialog>
+      <dialog class="form-dialog record-thread-dialog" id="record-thread-dialog" aria-labelledby="record-thread-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div><h2 id="record-thread-title">Record discussion</h2><p id="record-thread-subtitle">Questions, receipt clarifications, and review replies.</p></div>
+            <button class="dialog-close" type="button" data-record-thread-close aria-label="Close discussion"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="record-thread-body">
+            <section class="record-review-summary" id="record-thread-summary" hidden></section>
+            <div class="record-thread-messages" id="record-thread-messages" role="log" aria-live="polite"><p class="empty-state">Loading discussion…</p></div>
+            <form class="record-thread-composer" id="record-thread-form" hidden>
+              <label class="sr-only" for="record-thread-input">Reply message</label>
+              <textarea id="record-thread-input" name="body" rows="2" maxlength="1000" placeholder="Ask about the receipt, clarify details, or reply…" required></textarea>
+              <div class="record-thread-composer-bar">
+                <small class="field-help">Press Ctrl+Enter or click Send reply.</small>
+                <button class="button button-primary button-sm" type="submit">Send reply</button>
+              </div>
+            </form>
+            <p class="field-help" id="record-thread-readonly" hidden>Only administrators, treasurers, and the contributor for this record can post replies.</p>
+          </div>
+        </div>
+      </dialog>
       <dialog class="notification-dialog" id="notification-dialog" aria-labelledby="notification-title">
         <div class="notification-sheet"><header><div class="notification-heading"><h2 id="notification-title">Notifications</h2><span>Recent activity</span></div><div class="notification-header-actions"><button class="notification-mark-read" id="mark-all-notifications" type="button">Mark all read</button><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header><div class="notification-permission-bar" id="notification-permission-bar" hidden></div><div class="notification-list" id="notification-list" role="feed"><p class="empty-state">Loading notifications…</p></div></div>
       </dialog>
@@ -712,7 +909,7 @@
         <div class="account-dialog-sheet">
           <header class="account-dialog-header"><div class="account-dialog-title"><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
+            <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label><div class="preference-row preference-device-row" data-device-notif-row><span><strong>Phone &amp; drawer alerts</strong><small data-device-notif-status>Checking device permission…</small></span><button class="button button-secondary button-sm" type="button" data-device-notif-btn>Enable alerts</button></div></section></div>
           </div>
@@ -752,6 +949,7 @@
       </dialog>`);
     const securityCard = document.querySelector('#account-dialog .account-security-card');
     if (securityCard && !securityCard.querySelector('[data-mfa-settings]')) securityCard.insertAdjacentHTML('beforeend', mfaSettingsMarkup());
+    mountPayoutFieldsets(document.getElementById('account-dialog'));
     bindUtilityDialogs();
     bindAccountDialog();
     prepareNameInputs();
@@ -1497,13 +1695,20 @@
     const emailForm = document.getElementById('quick-email-form');
     dialog.setAttribute('aria-busy', 'true');
     try {
-      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url').eq('id', currentProfile.id).single();
+      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name').eq('id', currentProfile.id).single();
       if (error) throw error;
+      let payoutSource = data;
+      if (!data.payout_channel && (data.member_id || currentProfile.member_id)) {
+        const linkedMemberId = data.member_id || currentProfile.member_id;
+        const { data: memberRow } = await client.from('members').select('payout_channel,payout_account_number,payout_account_name').eq('id', linkedMemberId).maybeSingle();
+        if (memberRow?.payout_channel) payoutSource = memberRow;
+      }
       currentProfile.avatar_url = data.avatar_url || null;
       profileForm.elements.first_name.value = data.first_name || data.full_name?.split(' ')[0] || '';
       profileForm.elements.middle_name.value = data.middle_name || '';
       profileForm.elements.last_name.value = data.last_name || data.full_name?.split(' ').slice(1).join(' ') || '';
       profileForm.elements.contact_number.value = data.contact_number || '';
+      setPayoutFields(profileForm, payoutSource);
       emailForm.elements.email.value = data.email || '';
       document.getElementById('quick-notifications-enabled').checked = data.notifications_enabled !== false;
       document.getElementById('quick-account-name').textContent = data.full_name;
@@ -1841,15 +2046,29 @@
     profileForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!validatePhoneInput(profileForm.elements.contact_number)) return profileForm.elements.contact_number.focus();
+      if (!validatePayoutFields(profileForm)) return;
       const button = event.submitter;
       const values = new FormData(profileForm);
+      const payoutPayload = readPayoutPayload(profileForm);
       setBusy(button, true);
       try {
-        await rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number') || null });
+        await rpc('update_own_profile', {
+          p_first_name: values.get('first_name'),
+          p_middle_name: values.get('middle_name') || null,
+          p_last_name: values.get('last_name'),
+          p_contact_number: values.get('contact_number') || null,
+          ...payoutPayload
+        });
+        Object.assign(currentProfile, {
+          payout_channel: payoutPayload.p_payout_channel,
+          payout_account_number: payoutPayload.p_payout_account_number,
+          payout_account_name: payoutPayload.p_payout_account_name
+        });
         await loadAccountDialog();
         const name = document.getElementById('quick-account-name').textContent;
         currentProfile.full_name = name;
         document.querySelector('#sidebar-user strong')?.replaceChildren(name);
+        window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
         toast('Profile updated.');
       } catch (error) { toast(friendlyError(error), 'error'); }
       finally { setBusy(button, false); }
@@ -2195,7 +2414,7 @@
     if (!link || typeof link !== 'string') return '';
     if (/^https:\/\//i.test(link)) return link;
     const clean = link.replace(/^\/+/, '');
-    return /^[a-z0-9_-]+\.html(?:#[a-z0-9_-]+)?$/i.test(clean) ? clean : '';
+    return /^[a-z0-9_-]+\.html(?:\?[a-z0-9_=&:%.-]+)?(?:#[a-z0-9_-]+)?$/i.test(clean) ? clean : '';
   }
 
   function attachNativeNotificationTapListener() {
@@ -2950,6 +3169,76 @@
     }
   };
 
+  function renderRecordSummaryInto(summaryBox, entry, { showDiscussAction = false } = {}) {
+    if (!summaryBox) return;
+    if (!entry) {
+      summaryBox.innerHTML = '';
+      summaryBox.hidden = true;
+      return;
+    }
+    const entryType = recordReviewMeta.types[entry.type] || { label: entry.typeLabel || 'Financial Record', klass: 'is-addition' };
+    const personName = entry.authorName || entry.memberName || 'Group member';
+    const submitterName = entry.submittedByName && entry.submittedByName !== personName ? entry.submittedByName : '';
+    const amountText = entry.amount !== undefined && entry.amount !== null ? money(entry.amount) : '';
+    const metaChips = [
+      entry.date ? `Date: ${dateLabel(entry.date)}` : '',
+      entry.periodMonth ? `For ${dateLabel(entry.periodMonth, { month: 'short', year: 'numeric' })}` : '',
+      entry.category ? `Category: ${entry.category}` : '',
+      entry.reference ? `Ref: ${entry.reference}` : ''
+    ].filter(Boolean);
+    const detailText = entry.reviewNote || entry.notes || entry.description || '';
+    const discussBar = showDiscussAction && entry.id && entry.type
+      ? `<div class="record-review-discuss-bar"><span>Need clarification before deciding?</span><button type="button" class="icon-action record-discuss-btn" id="record-review-discuss-btn">Open discussion</button></div>`
+      : '';
+    summaryBox.innerHTML = `
+      <div class="record-review-summary-top">
+        <div class="record-review-summary-pills">
+          <span class="record-type-pill ${entryType.klass}">${escapeHtml(entryType.label)}</span>
+          ${entry.paymentMethod ? paymentMethodBadge(entry.paymentMethod) : ''}
+        </div>
+        ${entry.status ? `<span class="status status-${escapeHtml(String(entry.status).toLowerCase().replace(/[^a-z0-9]+/g, '-'))}">${escapeHtml(entry.status)}</span>` : '<span class="status status-pending">PENDING</span>'}
+      </div>
+      <div class="record-review-summary-main">
+        <div class="record-review-author">
+          ${avatarMarkup(entry.avatarUrl || '', personName, 'avatar-md')}
+          <div>
+            <strong>${escapeHtml(personName)}</strong>
+            ${submitterName ? `<small>Added by ${escapeHtml(submitterName)}</small>` : `<small>${escapeHtml(entryType.label)} contributor</small>`}
+          </div>
+        </div>
+        <div class="record-review-amount">
+          <small>Amount</small>
+          <strong>${escapeHtml(amountText)}</strong>
+        </div>
+      </div>
+      ${metaChips.length ? `<div class="record-review-meta">${metaChips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join('')}</div>` : ''}
+      ${detailText ? `<p class="record-review-detail-note">${escapeHtml(detailText)}</p>` : ''}
+      ${entry.receiptUrl && String(entry.receiptUrl).startsWith('data:image/') ? `
+        <button class="record-review-receipt record-review-receipt-btn" type="button" data-summary-receipt-btn>
+          <img src="${entry.receiptUrl}" alt="Attached payment receipt">
+          <span><strong>Attached payment receipt</strong><small>Tap to view full screenshot</small></span>
+        </button>` : ''}
+      ${discussBar}`;
+    bindAvatarFallbacks(summaryBox);
+    summaryBox.querySelector('[data-summary-receipt-btn]')?.addEventListener('click', () => {
+      openImageViewer(entry.receiptUrl, `${personName} receipt`, `${amountText}${entry.date ? ` · ${dateLabel(entry.date)}` : ''}`);
+    });
+    if (showDiscussAction && entry.id && entry.type) {
+      const discussBtn = summaryBox.querySelector('#record-review-discuss-btn');
+      if (discussBtn) {
+        discussBtn.addEventListener('click', () => openRecordDiscussion(entry.type, entry.id));
+        getRecordCommentCounts(entry.type, [entry.id]).then((counts) => {
+          const n = counts.get(entry.id) || 0;
+          if (n > 0) {
+            discussBtn.classList.add('has-comments');
+            discussBtn.innerHTML = `Discussion <span class="comment-count-pill">${n}</span>`;
+          }
+        }).catch(() => {});
+      }
+    }
+    summaryBox.hidden = false;
+  }
+
   function requestRecordAction({ title = 'Review record', actions = ['CONFIRM', 'REJECT'], entry = null, onSubmit = null } = {}) {
     const dialog = document.getElementById('record-action-dialog');
     if (!dialog || typeof dialog.showModal !== 'function') return Promise.resolve(null);
@@ -2972,56 +3261,7 @@
 
     dialog.returnValue = '';
     document.getElementById('record-action-title').textContent = title;
-
-    const entryType = recordReviewMeta.types[entry?.type] || { label: entry?.typeLabel || 'Financial Record', klass: 'is-addition' };
-    const personName = entry?.authorName || entry?.memberName || 'Group member';
-    const submitterName = entry?.submittedByName && entry.submittedByName !== personName ? entry.submittedByName : '';
-    const amountText = entry && entry.amount !== undefined && entry.amount !== null ? money(entry.amount) : '';
-
-    if (summaryBox) {
-      if (entry) {
-        const metaChips = [
-          entry.date ? `Date: ${dateLabel(entry.date)}` : '',
-          entry.periodMonth ? `For ${dateLabel(entry.periodMonth, { month: 'short', year: 'numeric' })}` : '',
-          entry.category ? `Category: ${entry.category}` : '',
-          entry.reference ? `Ref: ${entry.reference}` : ''
-        ].filter(Boolean);
-        const detailText = entry.notes || entry.description || '';
-        summaryBox.innerHTML = `
-          <div class="record-review-summary-top">
-            <span class="record-type-pill ${entryType.klass}">${escapeHtml(entryType.label)}</span>
-            ${entry.status ? `<span class="status status-${escapeHtml(String(entry.status).toLowerCase().replace(/[^a-z0-9]+/g, '-'))}">${escapeHtml(entry.status)}</span>` : '<span class="status status-pending">PENDING</span>'}
-          </div>
-          <div class="record-review-summary-main">
-            <div class="record-review-author">
-              ${avatarMarkup(entry.avatarUrl || '', personName, 'avatar-md')}
-              <div>
-                <strong>${escapeHtml(personName)}</strong>
-                ${submitterName ? `<small>Added by ${escapeHtml(submitterName)}</small>` : `<small>${escapeHtml(entryType.label)} contributor</small>`}
-              </div>
-            </div>
-            <div class="record-review-amount">
-              <small>Amount</small>
-              <strong>${escapeHtml(amountText)}</strong>
-            </div>
-          </div>
-          ${metaChips.length ? `<div class="record-review-meta">${metaChips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join('')}</div>` : ''}
-          ${detailText ? `<p class="record-review-detail-note">${escapeHtml(detailText)}</p>` : ''}
-          ${entry.receiptUrl && String(entry.receiptUrl).startsWith('data:image/') ? `
-            <button class="record-review-receipt" type="button" id="record-review-receipt-btn">
-              <img src="${entry.receiptUrl}" alt="Attached payment receipt">
-              <span><strong>Attached payment receipt</strong><small>Tap to view full screenshot</small></span>
-            </button>` : ''}`;
-        bindAvatarFallbacks(summaryBox);
-        summaryBox.querySelector('#record-review-receipt-btn')?.addEventListener('click', () => {
-          openImageViewer(entry.receiptUrl, `${personName} receipt`, `${amountText}${entry.date ? ` · ${dateLabel(entry.date)}` : ''}`);
-        });
-        summaryBox.hidden = false;
-      } else {
-        summaryBox.innerHTML = '';
-        summaryBox.hidden = true;
-      }
-    }
+    renderRecordSummaryInto(summaryBox, entry, { showDiscussAction: true });
 
     options.innerHTML = actions.map((action, index) => {
       const meta = recordReviewMeta.actions[action] || {
@@ -5197,11 +5437,767 @@
     wireGroupRequiredActions(container, options);
   }
 
+  const PAYMENT_METHODS = Object.freeze([
+    Object.freeze({ value: 'CASH', label: 'Cash', shortLabel: 'Cash', cssClass: 'pm-cash', group: 'physical' }),
+    Object.freeze({ value: 'GCASH', label: 'GCash', shortLabel: 'GCash', cssClass: 'pm-gcash', group: 'digital' }),
+    Object.freeze({ value: 'MAYA', label: 'Maya', shortLabel: 'Maya', cssClass: 'pm-maya', group: 'digital' }),
+    Object.freeze({ value: 'BANK_TRANSFER', label: 'Bank transfer', shortLabel: 'Bank', cssClass: 'pm-bank', group: 'digital' }),
+    Object.freeze({ value: 'OTHER', label: 'Other', shortLabel: 'Other', cssClass: 'pm-other', group: 'other' })
+  ]);
+  const PAYMENT_METHOD_MAP = new Map(PAYMENT_METHODS.map((item) => [item.value, item]));
+
+  function normalizePaymentMethod(raw) {
+    const clean = String(raw ?? '').trim().toUpperCase().replace(/\s+/g, '_');
+    if (!clean) return '';
+    if (clean === 'BANK' || clean === 'INSTAPAY' || clean === 'PESONET') return 'BANK_TRANSFER';
+    return PAYMENT_METHOD_MAP.has(clean) ? clean : '';
+  }
+
+  function guessPaymentMethodFromLabel(label, fallback = 'CASH') {
+    const text = String(label || '').trim().toLowerCase();
+    if (!text) return fallback;
+    if (text.includes('gcash')) return 'GCASH';
+    if (text.includes('maya')) return 'MAYA';
+    if (text.includes('cash')) return 'CASH';
+    if (/(bank|bpi|bdo|metrobank|unionbank|landbank|rcbc|chinabank|pnb|instapay|pesonet|seabank|gotyme|cimb)/.test(text)) {
+      return 'BANK_TRANSFER';
+    }
+    return fallback;
+  }
+
+  function paymentMethodMeta(value) {
+    const key = normalizePaymentMethod(value);
+    return PAYMENT_METHOD_MAP.get(key) || {
+      value: '',
+      label: 'Untagged',
+      shortLabel: 'Untagged',
+      cssClass: 'pm-untagged',
+      group: 'untagged'
+    };
+  }
+
+  function paymentMethodIconHtml(value) {
+    const key = normalizePaymentMethod(value);
+    if (key === 'GCASH') {
+      return '<span class="pm-icon is-gcash" aria-hidden="true"><svg viewBox="0 0 20 20"><rect x="1" y="1" width="18" height="18" rx="5" fill="#007DFE"/><path d="M12.7 7.3a4 4 0 1 0 1.1 3.5H10.2v-1.7h5.2v.6A5.5 5.5 0 1 1 14 5.9l-1.3 1.4Z" fill="#fff"/></svg></span>';
+    }
+    if (key === 'MAYA') {
+      return '<span class="pm-icon is-maya" aria-hidden="true"><svg viewBox="0 0 20 20"><rect x="1" y="1" width="18" height="18" rx="5" fill="#01B468"/><path d="M4.6 13.5V8.6c0-1.4 1-2.3 2.3-2.3.8 0 1.5.4 1.9 1 .4-.6 1.1-1 1.9-1 1.3 0 2.3.9 2.3 2.3v4.9h-1.8V8.8c0-.6-.4-1-1-1s-1 .4-1 1v4.7H7.4V8.8c0-.6-.4-1-1-1s-1 .4-1 1v4.7H4.6Z" fill="#fff"/></svg></span>';
+    }
+    if (key === 'CASH') {
+      return '<span class="pm-icon is-cash" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><rect x="1.5" y="4.5" width="17" height="11" rx="2.2" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/><circle cx="10" cy="10" r="2.3" stroke="#15803d" stroke-width="1.5"/><path d="M4.3 7.5v5m11.4-5v5" stroke="#15803d" stroke-width="1.4" stroke-linecap="round"/></svg></span>';
+    }
+    if (key === 'BANK_TRANSFER') {
+      return '<span class="pm-icon is-bank" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><path d="M2.5 7.5L10 3l7.5 4.5H2.5Z" fill="#dbeafe" stroke="#2f4b8f" stroke-width="1.4" stroke-linejoin="round"/><path d="M5 9.5v5M10 9.5v5M15 9.5v5M3 16.5h14" stroke="#2f4b8f" stroke-width="1.5" stroke-linecap="round"/></svg></span>';
+    }
+    if (key === 'OTHER') {
+      return '<span class="pm-icon is-other" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><rect x="2" y="4.5" width="16" height="11" rx="2.2" fill="#fef3c7" stroke="#b27214" stroke-width="1.4"/><path d="M2.5 8.5h15M5.5 12h4" stroke="#b27214" stroke-width="1.4" stroke-linecap="round"/></svg></span>';
+    }
+    return '<span class="pm-icon is-untagged" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="#64748b" stroke-width="1.5"/><path d="M7 10h6" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/></svg></span>';
+  }
+
+  function paymentMethodBadge(value) {
+    const meta = paymentMethodMeta(value);
+    return `<span class="pm-badge ${meta.cssClass}">${paymentMethodIconHtml(meta.value)}${escapeHtml(meta.label)}</span>`;
+  }
+
+  function paymentMethodPickerHtml(name = 'payment_method', selected = 'CASH') {
+    const target = normalizePaymentMethod(selected) || 'CASH';
+    return PAYMENT_METHODS.map((item) => {
+      const checked = item.value === target ? ' checked' : '';
+      return `<label class="pm-pill ${item.cssClass}"><input type="radio" name="${escapeHtml(name)}" value="${item.value}"${checked}><span>${paymentMethodIconHtml(item.value)}${escapeHtml(item.label)}</span></label>`;
+    }).join('');
+  }
+
+  function mountPaymentMethodPickers(root = document) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll('[data-pm-picker]').forEach((el) => {
+      const name = el.dataset.name || 'payment_method';
+      const def = normalizePaymentMethod(el.dataset.default) || 'CASH';
+      el.classList.add('pm-picker');
+      if (!el.getAttribute('role')) el.setAttribute('role', 'radiogroup');
+      if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', 'Payment method');
+      el.innerHTML = paymentMethodPickerHtml(name, def);
+    });
+  }
+
+  function setPaymentMethod(containerOrForm, value) {
+    if (!containerOrForm) return;
+    const normalized = normalizePaymentMethod(value);
+    const radios = [...containerOrForm.querySelectorAll('input[type="radio"][name="payment_method"]')];
+    if (radios.length) {
+      const target = normalized || 'CASH';
+      radios.forEach((input) => { input.checked = input.value === target; });
+      return;
+    }
+    const select = containerOrForm.elements?.payment_method || containerOrForm.querySelector('select[name="payment_method"]');
+    if (select) select.value = normalized;
+  }
+
+  function paymentMethodOptionsHtml({ includeAll = false, includeUntagged = false } = {}) {
+    return [
+      includeAll ? '<option value="">All methods</option>' : '',
+      ...PAYMENT_METHODS.map((item) => `<option value="${item.value}">${escapeHtml(item.label)}</option>`),
+      includeUntagged ? '<option value="UNTAGGED">Untagged (legacy)</option>' : ''
+    ].filter(Boolean).join('');
+  }
+
+  function payoutChannelOptionsHtml() {
+    return [
+      '<option value="">Not set</option>',
+      '<option value="GCASH">GCash</option>',
+      '<option value="MAYA">Maya</option>',
+      '<option value="BANK_TRANSFER">Bank Transfer</option>',
+      '<option value="CASH">Cash pickup</option>',
+      '<option value="OTHER">Other e-wallet / bank</option>'
+    ].join('');
+  }
+
+  function payoutFieldsetMarkup(prefix = 'payout') {
+    const safePrefix = escapeHtml(String(prefix || 'payout').replace(/[^a-z0-9_-]/gi, ''));
+    return `<div class="payout-fieldset">
+      <div class="payout-fieldset-head">
+        <strong>Payout / cashout account (optional)</strong>
+        <small>Where this member receives cashouts, deductions, or rotation payouts.</small>
+      </div>
+      <div class="payout-fieldset-grid">
+        <div class="field">
+          <label for="${safePrefix}-payout-channel">Payout channel</label>
+          <select id="${safePrefix}-payout-channel" name="payout_channel">${payoutChannelOptionsHtml()}</select>
+        </div>
+        <div class="field payout-detail-field" hidden>
+          <div class="field-label-row">
+            <label for="${safePrefix}-payout-number" data-payout-num-label>Account / mobile number</label>
+            <button type="button" class="link-action payout-use-mobile-btn" data-payout-use-mobile hidden>Use mobile #</button>
+          </div>
+          <input id="${safePrefix}-payout-number" name="payout_account_number" maxlength="80" autocomplete="off" placeholder="0917 123 4567">
+          <small class="field-error" id="${safePrefix}-payout-number-error" role="alert" hidden></small>
+        </div>
+        <div class="field payout-detail-field" hidden>
+          <label for="${safePrefix}-payout-name" data-payout-name-label>Account name / bank</label>
+          <input id="${safePrefix}-payout-name" name="payout_account_name" maxlength="120" autocomplete="off" placeholder="Registered account name">
+          <small class="field-error" id="${safePrefix}-payout-name-error" role="alert" hidden></small>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function syncPayoutFieldUi(container) {
+    if (!container) return;
+    const channelSel = container.querySelector('select[name="payout_channel"]');
+    const numInput = container.querySelector('input[name="payout_account_number"]');
+    const nameInput = container.querySelector('input[name="payout_account_name"]');
+    const numLabel = container.querySelector('[data-payout-num-label]');
+    const nameLabel = container.querySelector('[data-payout-name-label]');
+    const useMobileBtn = container.querySelector('[data-payout-use-mobile]');
+    const detailFields = container.querySelectorAll('.payout-detail-field');
+    if (!channelSel) return;
+
+    const channel = normalizePaymentMethod(channelSel.value) || '';
+    const hasChannel = Boolean(channel);
+    detailFields.forEach((field) => { field.hidden = !hasChannel; });
+
+    const form = container.closest('form');
+    const contactInput = form?.elements?.contact_number;
+    const hasContact = Boolean(String(contactInput?.value || '').trim());
+    const isMobileWallet = channel === 'GCASH' || channel === 'MAYA';
+
+    if (useMobileBtn) {
+      useMobileBtn.hidden = !isMobileWallet || !hasContact;
+    }
+
+    if (channel === 'GCASH' || channel === 'MAYA') {
+      if (numLabel) numLabel.textContent = `${channel === 'GCASH' ? 'GCash' : 'Maya'} mobile number`;
+      if (numInput) numInput.placeholder = '0917 123 4567';
+      if (nameLabel) nameLabel.textContent = 'Registered account name';
+      if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
+    } else if (channel === 'BANK_TRANSFER') {
+      if (numLabel) numLabel.textContent = 'Bank & account number';
+      if (numInput) numInput.placeholder = 'e.g. BPI · 1234-5678-90';
+      if (nameLabel) nameLabel.textContent = 'Account holder name';
+      if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
+    } else if (channel === 'CASH') {
+      if (numLabel) numLabel.textContent = 'Pickup note (optional)';
+      if (numInput) numInput.placeholder = 'e.g. Cash pickup in person';
+      if (nameLabel) nameLabel.textContent = 'Recipient note (optional)';
+      if (nameInput) nameInput.placeholder = 'Optional instructions';
+    } else if (channel === 'OTHER') {
+      if (numLabel) numLabel.textContent = 'Account / wallet details';
+      if (numInput) numInput.placeholder = 'e.g. SeaBank 1234-5678-901';
+      if (nameLabel) nameLabel.textContent = 'Account holder name';
+      if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
+    }
+
+    if (numInput && !hasChannel) setFieldError(numInput, '');
+    if (nameInput && !hasChannel) setFieldError(nameInput, '');
+  }
+
+  function mountPayoutFieldsets(root = document) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll('[data-payout-fields]').forEach((container) => {
+      if (!container.dataset.mounted) {
+        container.dataset.mounted = 'true';
+        container.innerHTML = payoutFieldsetMarkup(container.dataset.prefix || 'payout');
+      }
+      if (!container.dataset.bound) {
+        container.dataset.bound = 'true';
+        const channelSel = container.querySelector('select[name="payout_channel"]');
+        const numInput = container.querySelector('input[name="payout_account_number"]');
+        const nameInput = container.querySelector('input[name="payout_account_name"]');
+        const useMobileBtn = container.querySelector('[data-payout-use-mobile]');
+        const form = container.closest('form');
+        const contactInput = form?.elements?.contact_number;
+
+        channelSel?.addEventListener('change', () => {
+          if (numInput) setFieldError(numInput, '');
+          syncPayoutFieldUi(container);
+          if (channelSel.value && numInput && !numInput.value.trim()) numInput.focus();
+        });
+        numInput?.addEventListener('input', () => setFieldError(numInput, ''));
+        nameInput?.addEventListener('input', () => setFieldError(nameInput, ''));
+        contactInput?.addEventListener('input', () => syncPayoutFieldUi(container));
+        useMobileBtn?.addEventListener('click', () => {
+          if (!numInput || !contactInput) return;
+          const mobile = String(contactInput.value || '').trim();
+          if (!mobile) return;
+          numInput.value = mobile;
+          setFieldError(numInput, '');
+          numInput.focus();
+        });
+      }
+      syncPayoutFieldUi(container);
+    });
+  }
+
+  function setPayoutFields(formOrContainer, record = null) {
+    if (!formOrContainer) return;
+    const container = formOrContainer.matches?.('[data-payout-fields]')
+      ? formOrContainer
+      : formOrContainer.querySelector('[data-payout-fields]');
+    if (!container) return;
+    if (!container.dataset.mounted) mountPayoutFieldsets(container.parentElement || document);
+    const channelSel = container.querySelector('select[name="payout_channel"]');
+    const numInput = container.querySelector('input[name="payout_account_number"]');
+    const nameInput = container.querySelector('input[name="payout_account_name"]');
+    const normalizedChannel = normalizePaymentMethod(record?.payout_channel) || '';
+    if (channelSel) channelSel.value = normalizedChannel;
+    if (numInput) {
+      numInput.value = record?.payout_account_number || '';
+      setFieldError(numInput, '');
+    }
+    if (nameInput) {
+      nameInput.value = record?.payout_account_name || '';
+      setFieldError(nameInput, '');
+    }
+    syncPayoutFieldUi(container);
+  }
+
+  function validatePayoutFields(formOrContainer) {
+    const container = formOrContainer?.matches?.('[data-payout-fields]')
+      ? formOrContainer
+      : formOrContainer?.querySelector('[data-payout-fields]');
+    if (!container) return true;
+    const channelSel = container.querySelector('select[name="payout_channel"]');
+    const numInput = container.querySelector('input[name="payout_account_number"]');
+    if (!channelSel || !numInput) return true;
+    const channel = normalizePaymentMethod(channelSel.value) || '';
+    const number = String(numInput.value || '').trim();
+    if (['GCASH', 'MAYA', 'BANK_TRANSFER'].includes(channel) && !number) {
+      syncPayoutFieldUi(container);
+      setFieldError(numInput, 'Enter an account or mobile number for this payout channel.');
+      numInput.focus();
+      return false;
+    }
+    setFieldError(numInput, '');
+    return true;
+  }
+
+  function readPayoutPayload(formOrContainer) {
+    const container = formOrContainer?.matches?.('[data-payout-fields]')
+      ? formOrContainer
+      : formOrContainer?.querySelector('[data-payout-fields]');
+    if (!container) {
+      return { p_payout_channel: null, p_payout_account_number: null, p_payout_account_name: null };
+    }
+    const channel = normalizePaymentMethod(container.querySelector('select[name="payout_channel"]')?.value) || null;
+    if (!channel) {
+      return { p_payout_channel: null, p_payout_account_number: null, p_payout_account_name: null };
+    }
+    const number = String(container.querySelector('input[name="payout_account_number"]')?.value || '').trim() || null;
+    const name = String(container.querySelector('input[name="payout_account_name"]')?.value || '').trim() || null;
+    return {
+      p_payout_channel: channel,
+      p_payout_account_number: number,
+      p_payout_account_name: name
+    };
+  }
+
+  function payoutSummaryChip(record, { compact = false, showCopy = true, emptyText = '' } = {}) {
+    const channel = normalizePaymentMethod(record?.payout_channel);
+    const number = String(record?.payout_account_number || '').trim();
+    const accountName = String(record?.payout_account_name || '').trim();
+    if (!channel && !number && !accountName) {
+      return emptyText ? `<span class="field-help">${escapeHtml(emptyText)}</span>` : '';
+    }
+    const meta = paymentMethodMeta(channel || 'OTHER');
+    const copyValue = number || accountName;
+    const detailParts = [];
+    if (number) detailParts.push(`<strong class="payout-chip-number">${escapeHtml(number)}</strong>`);
+    if (accountName) detailParts.push(`<small class="payout-chip-name">${escapeHtml(accountName)}</small>`);
+    if (!detailParts.length) detailParts.push(`<small class="payout-chip-name">${escapeHtml(channel === 'CASH' ? 'Cash pickup' : meta.label)}</small>`);
+    const copyBtn = showCopy && copyValue
+      ? `<button type="button" class="icon-action payout-copy-btn" data-copy-text="${escapeHtml(copyValue)}" aria-label="Copy payout account number" title="Copy ${escapeHtml(copyValue)}">Copy</button>`
+      : '';
+    return `<div class="payout-chip${compact ? ' is-compact' : ''}">${paymentMethodBadge(meta.value)}<span class="payout-chip-detail">${detailParts.join('')}</span>${copyBtn}</div>`;
+  }
+
+  function renderPayoutDestinationBox(container, member, { autoSyncMethodForm = null } = {}) {
+    if (!container) return;
+    if (!member) {
+      container.hidden = true;
+      container.innerHTML = '';
+      return;
+    }
+    const channel = normalizePaymentMethod(member.payout_channel);
+    const hasInfo = Boolean(channel || member.payout_account_number || member.payout_account_name);
+    container.hidden = false;
+    container.classList.toggle('is-empty', !hasInfo);
+    if (hasInfo) {
+      container.innerHTML = `<div class="payout-dest-head"><span class="payout-dest-eyebrow">Send cashout to</span><small>${escapeHtml(member.full_name || 'Member')}</small></div>${payoutSummaryChip(member, { showCopy: true })}`;
+      if (autoSyncMethodForm && channel) setPaymentMethod(autoSyncMethodForm, channel);
+    } else {
+      container.innerHTML = `<div class="payout-dest-empty"><strong>No saved payout account for ${escapeHtml(member.full_name || 'this member')}</strong><small>They can add GCash, Maya, or bank details in My Account (or select Cash pickup).</small></div>`;
+    }
+  }
+
+  async function getRecordCommentCounts(recordType, recordIds) {
+    const ids = [...new Set((Array.isArray(recordIds) ? recordIds : []).filter(Boolean))];
+    const map = new Map();
+    if (!ids.length) return map;
+    try {
+      const rows = await rpc('get_record_comment_counts', { p_record_type: recordType, p_record_ids: ids });
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        if (row?.record_id) map.set(row.record_id, Number(row.comment_count || 0));
+      });
+    } catch { /* fallback quietly to zero counts */ }
+    return map;
+  }
+
+  function recordDiscussionButtonHtml(row, count = 0) {
+    if (!row?.id) return '';
+    const num = Number(count || 0);
+    const showDefault = ['PENDING', 'REJECTED'].includes(String(row.approval_status || '').toUpperCase());
+    if (!showDefault && num <= 0) return '';
+    return `<button class="icon-action record-discuss-btn${num > 0 ? ' has-comments' : ''}" type="button" data-action="discuss" data-id="${escapeHtml(row.id)}">${num > 0 ? `Discuss <span class="comment-count-pill">${num}</span>` : 'Discuss'}</button>`;
+  }
+
+  let activeThreadCleanup = null;
+  async function openRecordDiscussion(recordType, recordId, { onUpdated = null } = {}) {
+    const dialog = document.getElementById('record-thread-dialog');
+    if (!dialog || !recordType || !recordId) return;
+    if (typeof activeThreadCleanup === 'function') activeThreadCleanup();
+
+    const summaryBox = document.getElementById('record-thread-summary');
+    const messagesEl = document.getElementById('record-thread-messages');
+    const form = document.getElementById('record-thread-form');
+    const input = document.getElementById('record-thread-input');
+    const readonlyEl = document.getElementById('record-thread-readonly');
+    const titleEl = document.getElementById('record-thread-title');
+    const subtitleEl = document.getElementById('record-thread-subtitle');
+
+    const typeMeta = recordReviewMeta.types[recordType] || { label: 'Record' };
+    if (titleEl) titleEl.textContent = `${typeMeta.label} discussion`;
+    if (subtitleEl) subtitleEl.textContent = 'Questions, receipt clarifications, and replies stay attached to this record.';
+    if (summaryBox) { summaryBox.innerHTML = ''; summaryBox.hidden = true; }
+    if (messagesEl) messagesEl.innerHTML = '<p class="empty-state">Loading discussion…</p>';
+    if (form) { form.hidden = true; form.reset(); }
+    if (readonlyEl) readonlyEl.hidden = true;
+
+    let currentComments = [];
+    function renderMessages() {
+      if (!messagesEl) return;
+      if (!currentComments.length) {
+        messagesEl.innerHTML = '<div class="record-thread-empty"><strong>No replies yet</strong><small>Start a thread here to ask about a blurry receipt, clarify a reference number, or follow up.</small></div>';
+        return;
+      }
+      messagesEl.innerHTML = currentComments.map((c) => {
+        const own = Boolean(c.is_own || (currentProfile?.id && c.author_id === currentProfile.id));
+        const roleLabel = String(c.author_role || 'MEMBER').toLowerCase().replace(/^./, (ch) => ch.toUpperCase());
+        const when = dateLabel(c.created_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        return `<article class="record-thread-msg${own ? ' is-own' : ''}">
+          <div class="record-thread-msg-avatar">${avatarMarkup(c.author_avatar_url || '', c.author_name || 'Member', 'avatar-sm')}</div>
+          <div class="record-thread-msg-bubble">
+            <header class="record-thread-msg-meta">
+              <strong>${escapeHtml(own ? `${c.author_name || 'You'} (You)` : (c.author_name || 'Member'))}</strong>
+              <span class="record-thread-role role-${escapeHtml(String(c.author_role || 'MEMBER').toLowerCase())}">${escapeHtml(roleLabel)}</span>
+              <time datetime="${escapeHtml(c.created_at || '')}">${escapeHtml(when)}</time>
+            </header>
+            <p class="record-thread-msg-body">${escapeHtml(c.body || '')}</p>
+          </div>
+        </article>`;
+      }).join('');
+      bindAvatarFallbacks(messagesEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function loadThread() {
+      const payload = await rpc('get_record_comments', { p_record_type: recordType, p_record_id: recordId });
+      if (payload?.record) {
+        renderRecordSummaryInto(summaryBox, payload.record, { showDiscussAction: false });
+      }
+      currentComments = Array.isArray(payload?.comments) ? payload.comments : [];
+      renderMessages();
+      const canReply = Boolean(payload?.can_reply);
+      if (form) form.hidden = !canReply;
+      if (readonlyEl) readonlyEl.hidden = canReply;
+      if (canReply && input) input.focus();
+    }
+
+    const client = getClient();
+    const channel = client
+      ? client.channel(`record-thread-${recordType}-${recordId}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'record_comments',
+          filter: `record_id=eq.${recordId}`
+        }, () => {
+          loadThread().then(() => { if (typeof onUpdated === 'function') onUpdated(); }).catch(() => {});
+        })
+        .subscribe()
+      : null;
+
+    const closeBtnList = [...dialog.querySelectorAll('[data-record-thread-close]')];
+    const onCloseClick = () => dialog.close();
+    closeBtnList.forEach((btn) => btn.addEventListener('click', onCloseClick));
+    const onBackdropClick = (event) => { if (event.target === dialog) dialog.close(); };
+    dialog.addEventListener('click', onBackdropClick);
+
+    const onKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && form && !form.hidden) {
+        event.preventDefault();
+        form.requestSubmit();
+      }
+    };
+    input?.addEventListener('keydown', onKeyDown);
+
+    const onSubmit = async (event) => {
+      event.preventDefault();
+      const body = String(input?.value || '').trim();
+      if (!body) { input?.focus(); return; }
+      const submitBtn = form.querySelector('[type="submit"]');
+      setBusy(submitBtn, true, 'Sending…');
+      try {
+        const added = await rpc('add_record_comment', {
+          p_record_type: recordType,
+          p_record_id: recordId,
+          p_body: body
+        });
+        if (input) input.value = '';
+        if (added && !currentComments.some((c) => c.id === added.id)) {
+          currentComments.push(added);
+          renderMessages();
+        } else {
+          await loadThread();
+        }
+        if (typeof onUpdated === 'function') onUpdated(currentComments.length);
+      } catch (error) {
+        toast(friendlyError(error), 'error');
+      } finally {
+        setBusy(submitBtn, false);
+        input?.focus();
+      }
+    };
+    if (form) form.onsubmit = onSubmit;
+
+    const cleanup = () => {
+      closeBtnList.forEach((btn) => btn.removeEventListener('click', onCloseClick));
+      dialog.removeEventListener('click', onBackdropClick);
+      input?.removeEventListener('keydown', onKeyDown);
+      if (form) form.onsubmit = null;
+      if (channel && client) client.removeChannel(channel).catch?.(() => {});
+      activeThreadCleanup = null;
+    };
+    activeThreadCleanup = cleanup;
+    dialog.addEventListener('close', cleanup, { once: true });
+
+    dialog.showModal();
+    try {
+      await loadThread();
+    } catch (error) {
+      if (messagesEl) messagesEl.innerHTML = `<p class="empty-state">${escapeHtml(friendlyError(error))}</p>`;
+    }
+  }
+
+  document.addEventListener('click', async (event) => {
+    const copyBtn = event.target.closest?.('[data-copy-text]');
+    if (!copyBtn) return;
+    const text = copyBtn.getAttribute('data-copy-text');
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(`Copied: ${text}`);
+    } catch {
+      toast('Unable to copy automatically. Select and copy the account details.', 'error');
+    }
+  });
+
+  function payoutChannelOptionsHtml() {
+    return [
+      '<option value="">Not set</option>',
+      '<option value="GCASH">GCash</option>',
+      '<option value="MAYA">Maya</option>',
+      '<option value="BANK_TRANSFER">Bank Transfer</option>',
+      '<option value="CASH">Cash pickup</option>',
+      '<option value="OTHER">Other e-wallet / bank</option>'
+    ].join('');
+  }
+
+  function payoutFieldsetMarkup(prefix = 'payout') {
+    const safePrefix = escapeHtml(String(prefix || 'payout').replace(/[^a-z0-9_-]/gi, ''));
+    return `<div class="payout-fieldset">
+      <div class="payout-fieldset-head">
+        <strong>Payout / cashout account (optional)</strong>
+        <small>Where this member receives cashouts, deductions, or rotation payouts.</small>
+      </div>
+      <div class="payout-fieldset-grid">
+        <div class="field">
+          <label for="${safePrefix}-payout-channel">Payout channel</label>
+          <select id="${safePrefix}-payout-channel" name="payout_channel">${payoutChannelOptionsHtml()}</select>
+        </div>
+        <div class="field payout-detail-field" hidden>
+          <div class="field-label-row">
+            <label for="${safePrefix}-payout-number" data-payout-num-label>Account / mobile number</label>
+            <button type="button" class="link-action payout-use-mobile-btn" data-payout-use-mobile hidden>Use mobile #</button>
+          </div>
+          <input id="${safePrefix}-payout-number" name="payout_account_number" maxlength="80" autocomplete="off" placeholder="0917 123 4567">
+          <small class="field-error" id="${safePrefix}-payout-number-error" role="alert" hidden></small>
+        </div>
+        <div class="field payout-detail-field" hidden>
+          <label for="${safePrefix}-payout-name" data-payout-name-label>Account name / bank</label>
+          <input id="${safePrefix}-payout-name" name="payout_account_name" maxlength="120" autocomplete="off" placeholder="Registered account name">
+          <small class="field-error" id="${safePrefix}-payout-name-error" role="alert" hidden></small>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function syncPayoutFieldUi(container) {
+    if (!container) return;
+    const channelSel = container.querySelector('select[name="payout_channel"]');
+    const numInput = container.querySelector('input[name="payout_account_number"]');
+    const nameInput = container.querySelector('input[name="payout_account_name"]');
+    const numLabel = container.querySelector('[data-payout-num-label]');
+    const nameLabel = container.querySelector('[data-payout-name-label]');
+    const useMobileBtn = container.querySelector('[data-payout-use-mobile]');
+    const detailFields = container.querySelectorAll('.payout-detail-field');
+    if (!channelSel) return;
+
+    const channel = normalizePaymentMethod(channelSel.value) || '';
+    const hasChannel = Boolean(channel);
+    detailFields.forEach((field) => { field.hidden = !hasChannel; });
+
+    const form = container.closest('form');
+    const contactInput = form?.elements?.contact_number;
+    const hasContact = Boolean(String(contactInput?.value || '').trim());
+    const isMobileWallet = channel === 'GCASH' || channel === 'MAYA';
+
+    if (useMobileBtn) {
+      useMobileBtn.hidden = !isMobileWallet || !hasContact;
+    }
+
+    if (channel === 'GCASH' || channel === 'MAYA') {
+      if (numLabel) numLabel.textContent = `${channel === 'GCASH' ? 'GCash' : 'Maya'} mobile number`;
+      if (numInput) numInput.placeholder = '0917 123 4567';
+      if (nameLabel) nameLabel.textContent = 'Registered account name';
+      if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
+    } else if (channel === 'BANK_TRANSFER') {
+      if (numLabel) numLabel.textContent = 'Bank & account number';
+      if (numInput) numInput.placeholder = 'e.g. BPI · 1234-5678-90';
+      if (nameLabel) nameLabel.textContent = 'Account holder name';
+      if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
+    } else if (channel === 'CASH') {
+      if (numLabel) numLabel.textContent = 'Pickup note (optional)';
+      if (numInput) numInput.placeholder = 'e.g. Cash pickup in person';
+      if (nameLabel) nameLabel.textContent = 'Recipient note (optional)';
+      if (nameInput) nameInput.placeholder = 'Optional instructions';
+    } else if (channel === 'OTHER') {
+      if (numLabel) numLabel.textContent = 'Account / wallet details';
+      if (numInput) numInput.placeholder = 'e.g. SeaBank 1234-5678-901';
+      if (nameLabel) nameLabel.textContent = 'Account holder name';
+      if (nameInput) nameInput.placeholder = 'e.g. Juan Dela Cruz';
+    }
+
+    if (numInput && !hasChannel) setFieldError(numInput, '');
+    if (nameInput && !hasChannel) setFieldError(nameInput, '');
+  }
+
+  function mountPayoutFieldsets(root = document) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll('[data-payout-fields]').forEach((container) => {
+      if (!container.dataset.mounted) {
+        container.dataset.mounted = 'true';
+        container.innerHTML = payoutFieldsetMarkup(container.dataset.prefix || 'payout');
+      }
+      if (!container.dataset.bound) {
+        container.dataset.bound = 'true';
+        const channelSel = container.querySelector('select[name="payout_channel"]');
+        const numInput = container.querySelector('input[name="payout_account_number"]');
+        const nameInput = container.querySelector('input[name="payout_account_name"]');
+        const useMobileBtn = container.querySelector('[data-payout-use-mobile]');
+        const form = container.closest('form');
+        const contactInput = form?.elements?.contact_number;
+
+        channelSel?.addEventListener('change', () => {
+          if (numInput) setFieldError(numInput, '');
+          syncPayoutFieldUi(container);
+          if (channelSel.value && numInput && !numInput.value.trim()) numInput.focus();
+        });
+        numInput?.addEventListener('input', () => setFieldError(numInput, ''));
+        nameInput?.addEventListener('input', () => setFieldError(nameInput, ''));
+        contactInput?.addEventListener('input', () => syncPayoutFieldUi(container));
+        useMobileBtn?.addEventListener('click', () => {
+          if (!numInput || !contactInput) return;
+          const mobile = String(contactInput.value || '').trim();
+          if (!mobile) return;
+          numInput.value = mobile;
+          setFieldError(numInput, '');
+          numInput.focus();
+        });
+      }
+      syncPayoutFieldUi(container);
+    });
+  }
+
+  function setPayoutFields(formOrContainer, record = null) {
+    if (!formOrContainer) return;
+    const container = formOrContainer.matches?.('[data-payout-fields]')
+      ? formOrContainer
+      : formOrContainer.querySelector('[data-payout-fields]');
+    if (!container) return;
+    if (!container.dataset.mounted) mountPayoutFieldsets(container.parentElement || document);
+    const channelSel = container.querySelector('select[name="payout_channel"]');
+    const numInput = container.querySelector('input[name="payout_account_number"]');
+    const nameInput = container.querySelector('input[name="payout_account_name"]');
+    const normalizedChannel = normalizePaymentMethod(record?.payout_channel) || '';
+    if (channelSel) channelSel.value = normalizedChannel;
+    if (numInput) {
+      numInput.value = record?.payout_account_number || '';
+      setFieldError(numInput, '');
+    }
+    if (nameInput) {
+      nameInput.value = record?.payout_account_name || '';
+      setFieldError(nameInput, '');
+    }
+    syncPayoutFieldUi(container);
+  }
+
+  function validatePayoutFields(formOrContainer) {
+    const container = formOrContainer?.matches?.('[data-payout-fields]')
+      ? formOrContainer
+      : formOrContainer?.querySelector('[data-payout-fields]');
+    if (!container) return true;
+    const channelSel = container.querySelector('select[name="payout_channel"]');
+    const numInput = container.querySelector('input[name="payout_account_number"]');
+    if (!channelSel || !numInput) return true;
+    const channel = normalizePaymentMethod(channelSel.value) || '';
+    const number = String(numInput.value || '').trim();
+    if (['GCASH', 'MAYA', 'BANK_TRANSFER'].includes(channel) && !number) {
+      syncPayoutFieldUi(container);
+      setFieldError(numInput, 'Enter an account or mobile number for this payout channel.');
+      numInput.focus();
+      return false;
+    }
+    setFieldError(numInput, '');
+    return true;
+  }
+
+  function readPayoutPayload(formOrContainer) {
+    const container = formOrContainer?.matches?.('[data-payout-fields]')
+      ? formOrContainer
+      : formOrContainer?.querySelector('[data-payout-fields]');
+    if (!container) {
+      return { p_payout_channel: null, p_payout_account_number: null, p_payout_account_name: null };
+    }
+    const channel = normalizePaymentMethod(container.querySelector('select[name="payout_channel"]')?.value) || null;
+    if (!channel) {
+      return { p_payout_channel: null, p_payout_account_number: null, p_payout_account_name: null };
+    }
+    const number = String(container.querySelector('input[name="payout_account_number"]')?.value || '').trim() || null;
+    const name = String(container.querySelector('input[name="payout_account_name"]')?.value || '').trim() || null;
+    return {
+      p_payout_channel: channel,
+      p_payout_account_number: number,
+      p_payout_account_name: name
+    };
+  }
+
+  function payoutSummaryChip(record, { compact = false, showCopy = true, emptyText = '' } = {}) {
+    const channel = normalizePaymentMethod(record?.payout_channel);
+    const number = String(record?.payout_account_number || '').trim();
+    const accountName = String(record?.payout_account_name || '').trim();
+    if (!channel && !number && !accountName) {
+      return emptyText ? `<span class="field-help">${escapeHtml(emptyText)}</span>` : '';
+    }
+    const meta = paymentMethodMeta(channel || 'OTHER');
+    const copyValue = number || accountName;
+    const detailParts = [];
+    if (number) detailParts.push(`<strong class="payout-chip-number">${escapeHtml(number)}</strong>`);
+    if (accountName) detailParts.push(`<small class="payout-chip-name">${escapeHtml(accountName)}</small>`);
+    if (!detailParts.length) detailParts.push(`<small class="payout-chip-name">${escapeHtml(channel === 'CASH' ? 'Cash pickup' : meta.label)}</small>`);
+    const copyBtn = showCopy && copyValue
+      ? `<button type="button" class="icon-action payout-copy-btn" data-copy-text="${escapeHtml(copyValue)}" aria-label="Copy payout account number" title="Copy ${escapeHtml(copyValue)}">Copy</button>`
+      : '';
+    return `<div class="payout-chip${compact ? ' is-compact' : ''}">${paymentMethodBadge(meta.value)}<span class="payout-chip-detail">${detailParts.join('')}</span>${copyBtn}</div>`;
+  }
+
+  function renderPayoutDestinationBox(container, member, { autoSyncMethodForm = null } = {}) {
+    if (!container) return;
+    if (!member) {
+      container.hidden = true;
+      container.innerHTML = '';
+      return;
+    }
+    const channel = normalizePaymentMethod(member.payout_channel);
+    const hasInfo = Boolean(channel || member.payout_account_number || member.payout_account_name);
+    container.hidden = false;
+    container.classList.toggle('is-empty', !hasInfo);
+    if (hasInfo) {
+      container.innerHTML = `<div class="payout-dest-head"><span class="payout-dest-eyebrow">Send cashout to</span><small>${escapeHtml(member.full_name || 'Member')}</small></div>${payoutSummaryChip(member, { showCopy: true })}`;
+      if (autoSyncMethodForm && channel) setPaymentMethod(autoSyncMethodForm, channel);
+    } else {
+      container.innerHTML = `<div class="payout-dest-empty"><strong>No saved payout account for ${escapeHtml(member.full_name || 'this member')}</strong><small>They can add GCash, Maya, or bank details in My Account (or select Cash pickup).</small></div>`;
+    }
+  }
+
+  document.addEventListener('click', async (event) => {
+    const copyBtn = event.target.closest?.('[data-copy-text]');
+    if (!copyBtn) return;
+    const text = copyBtn.getAttribute('data-copy-text');
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(`Copied: ${text}`);
+    } catch {
+      toast('Unable to copy automatically. Select and copy the account details.', 'error');
+    }
+  });
+
+  mountPaymentMethodPickers(document);
+  mountPayoutFieldsets(document);
+  mountCategoryControls(document);
+  preparePesoInputs(document);
   initAppUpdateChecker();
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
+    PAYMENT_METHODS, normalizePaymentMethod, guessPaymentMethodFromLabel, paymentMethodMeta, paymentMethodBadge, paymentMethodPickerHtml, mountPaymentMethodPickers, setPaymentMethod, paymentMethodOptionsHtml,
+    CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
+    payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,
+    getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
+    payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,
+    getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, setNotificationPreference,
     get profile() { return currentProfile; }

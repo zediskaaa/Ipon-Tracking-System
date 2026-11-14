@@ -68,7 +68,7 @@
     return [member?.first_name, member?.middle_name, member?.last_name, accountForm.elements.email.value];
   });
   dateRegistered.value = Ipon.isoDate();
-  if (!state.configured || !state.profile) { tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Connect Supabase to load members.</td></tr>'; Ipon.setLoading(false); return; }
+  if (!state.configured || !state.profile) { tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Connect Supabase to load members.</td></tr>'; Ipon.setLoading(false); return; }
 
   function findApplicableContributionDefault(settings, registrationDate) {
     const registrationMonth = `${registrationDate.slice(0, 7)}-01`;
@@ -107,10 +107,10 @@
 
   function render() {
     tbody.innerHTML = members.length ? members.map((member) => { const account = accountsByMember.get(member.id); const canDelete = !membersWithContributions.has(member.id); return `<tr>
-      <td><strong>${Ipon.escapeHtml(member.full_name)}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
+      <td><strong>${Ipon.escapeHtml(member.full_name)}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.payoutSummaryChip(member, { compact: true, emptyText: 'Not set' })}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
       <td>${Ipon.money(member.monthly_contribution_amount)}</td><td><span class="status status-${member.status.toLowerCase()}">${member.status}</span></td>
       <td>${account ? `<span class="status status-${account.status.toLowerCase()}">${account.status}</span><small class="field-help">${Ipon.escapeHtml(account.email || '')}</small>` : '<span class="field-help">No sign-in</span>'}</td>
-      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>${canDelete ? `<button class="icon-action icon-action-danger" data-action="delete" data-id="${member.id}">Delete</button>` : ''}</div></td></tr>`; }).join('') : '<tr><td colspan="7" class="empty-state">No matching members.</td></tr>';
+      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>${canDelete ? `<button class="icon-action icon-action-danger" data-action="delete" data-id="${member.id}">Delete</button>` : ''}</div></td></tr>`; }).join('') : '<tr><td colspan="8" class="empty-state">No matching members.</td></tr>';
   }
   async function load() {
     let query = Ipon.client.from('members').select('*', { count: 'exact' });
@@ -140,7 +140,7 @@
     render();
   }
   async function refresh() {
-    try { await load(); } catch (error) { Ipon.showInlineError(tbody, error, refresh, 7); }
+    try { await load(); } catch (error) { Ipon.showInlineError(tbody, error, refresh, 8); }
   }
   function resetForm() {
     form.reset(); form.elements.member_id.value = ''; dateRegistered.value = Ipon.isoDate(); monthlyAmountTouched = false; applyContributionDefault();
@@ -150,6 +150,7 @@
     nameMigrationHelp.hidden = true; nameMigrationHelp.textContent = '';
     nameFields.forEach(([input, error]) => setNameError(input, error, ''));
     setContactError('');
+    Ipon.setPayoutFields(form, null);
     document.getElementById('member-form-title').textContent = 'Add member';
     document.getElementById('member-form-copy').textContent = 'Create a tracking profile and sign-in account for a contributor.';
   }
@@ -205,7 +206,9 @@
     event.preventDefault(); const button = form.querySelector('[type="submit"]'); const values = new FormData(form); const contactNumber = normalizeContactNumber(values.get('contact_number'));
     if (!validateNames()) return;
     if (contactNumber === null) { setContactError(contactErrorMessage); contactInput.focus(); return; }
+    if (!Ipon.validatePayoutFields(form)) return;
     const creatingAccount = !emailField.hidden;
+    const payoutPayload = Ipon.readPayoutPayload(form);
     const name = { p_first_name: Ipon.normalizeNamePart(values.get('first_name')), p_middle_name: values.get('middle_name').trim() ? Ipon.normalizeNamePart(values.get('middle_name')) : null, p_last_name: Ipon.normalizeNamePart(values.get('last_name')) };
     if (creatingAccount) {
       if (!emailInput.checkValidity()) { Ipon.setFieldError(emailInput, Ipon.getValidationMessage(emailInput)); emailInput.focus(); return; }
@@ -227,9 +230,9 @@
     Ipon.setBusy(button, true);
     try {
       let memberId = values.get('member_id');
-      if (memberId) await Ipon.rpc('update_member', { p_member_id: memberId, ...name, p_contact_number: contactNumber, p_monthly_contribution_amount: Number(values.get('monthly_contribution_amount')), p_notes: values.get('notes') || null });
+      if (memberId) await Ipon.rpc('update_member', { p_member_id: memberId, ...name, p_contact_number: contactNumber, p_monthly_contribution_amount: Number(values.get('monthly_contribution_amount')), p_notes: values.get('notes') || null, ...payoutPayload });
       else {
-        memberId = await Ipon.rpc('create_member', { ...name, p_contact_number: contactNumber, p_date_registered: values.get('date_registered'), p_monthly_contribution_amount: Number(values.get('monthly_contribution_amount')), p_notes: values.get('notes') || null });
+        memberId = await Ipon.rpc('create_member', { ...name, p_contact_number: contactNumber, p_date_registered: values.get('date_registered'), p_monthly_contribution_amount: Number(values.get('monthly_contribution_amount')), p_notes: values.get('notes') || null, ...payoutPayload });
         form.elements.member_id.value = memberId;
       }
       if (creatingAccount) {
@@ -255,6 +258,7 @@
       nameMigrationHelp.textContent = nameMigrationHelp.hidden ? '' : `Legacy name kept as “${member.full_name}”. Enter its structured name parts before saving.`;
       setContactError('');
       form.elements.date_registered.value = member.date_registered; form.elements.monthly_contribution_amount.value = member.monthly_contribution_amount; form.elements.notes.value = member.notes || '';
+      Ipon.setPayoutFields(form, member);
       dateRegistered.disabled = true; dateRegisteredHelp.hidden = false;
       monthlyAmountTouched = true; monthlyAmountHelp.textContent = 'This member\'s saved amount is used when generating new periods.';
       document.getElementById('member-form-title').textContent = 'Edit member'; document.getElementById('member-form-copy').textContent = `Update ${member.full_name}'s profile.`; dialog.showModal(); firstName.focus();
@@ -471,6 +475,6 @@
     memberPage += button.dataset.page === 'next' ? 1 : -1;
     refresh();
   });
-  try { await Promise.all([loadContributionSettings(), load()]); } catch (error) { Ipon.showInlineError(tbody, error, () => Promise.all([loadContributionSettings(), load()]), 7); } finally { Ipon.setLoading(false); }
+  try { await Promise.all([loadContributionSettings(), load()]); } catch (error) { Ipon.showInlineError(tbody, error, () => Promise.all([loadContributionSettings(), load()]), 8); } finally { Ipon.setLoading(false); }
   Ipon.subscribeToChanges('members', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_settings', 'contributions', 'announcements'], () => Promise.all([loadContributionSettings(), refresh(), ...(binDialog.open ? [loadBin()] : [])]));
 })();

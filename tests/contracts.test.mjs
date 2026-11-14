@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
@@ -595,6 +596,7 @@ test('mobile navigation and data tables do not require horizontal scrolling', ()
   assert.match(core, /cell\.dataset\.label/);
   assert.match(css, /html\s*\{[^}]*overflow-x:clip/);
   assert.match(css, /body\s*\{[^}]*overflow-x:clip/);
+  assert.doesNotMatch(css, /\.data-table-wrap\s*\{[^}]*overflow-x:\s*auto/i);
   assert.doesNotMatch(css.match(/@media \(max-width:720px\)[\s\S]*?(?=@media \(prefers-reduced-motion)/)?.[0] || '', /overflow-x:auto/i);
   assert.doesNotMatch(dashboardCss.match(/@media \(max-width:860px\)[\s\S]*?(?=@media \(prefers-reduced-motion)/)?.[0] || '', /overflow-x:auto/i);
 });
@@ -1032,6 +1034,8 @@ test('dashboard provides modal shortcut for recording additions, deductions, and
   assert.match(css, /\.quick-record-type-tabs/);
   assert.match(css, /\.quick-type-tab/);
   assert.match(css, /\.quick-member-auto-chip/);
+  assert.match(css, /\.pm-pill > span\s*\{/);
+  assert.doesNotMatch(css, /\.pm-pill\s+span\s*\{/);
 });
 
 test('Super Admin can manage feature request statuses and publish release updates', () => {
@@ -1860,4 +1864,396 @@ test('release announcements render and generate sectioned New Features, Fixes, I
   assert.match(edgeTs, /pushSection\('Improvements'/);
 });
 
+test('payment method tagging and wallet reconciliation stay wired end to end', () => {
+  const migration = read('database/migrations/20261114_056_payment_methods_and_wallet_reconciliation.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+  const recordsJs = read('js/records.js');
+  const userJs = read('js/user.js');
+  const dashboardJs = read('js/dashboard.js');
+  const reportsJs = read('js/reports.js');
+  const css = read('css/app.css');
 
+  for (const sqlText of [migration, schema]) {
+    assert.match(sqlText, /create or replace function public\.normalized_payment_method\(p_method text\)/i);
+    assert.match(sqlText, /create or replace function public\.get_wallet_reconciliation\(\)/i);
+    assert.match(sqlText, /p_payment_method text default null/i);
+    assert.match(sqlText, /p_payment_method text default '__KEEP__'/i);
+  }
+
+  assert.match(core, /const PAYMENT_METHODS = Object\.freeze\(/);
+  assert.match(core, /function normalizePaymentMethod\(/);
+  assert.match(core, /function guessPaymentMethodFromLabel\(/);
+  assert.match(core, /function paymentMethodBadge\(/);
+  assert.match(core, /function mountPaymentMethodPickers\(/);
+  assert.match(core, /function paymentMethodOptionsHtml\(/);
+
+  for (const htmlFile of ['contributions.html', 'withdrawals.html', 'expenses.html']) {
+    const html = read(htmlFile);
+    assert.match(html, /data-pm-picker/);
+    assert.match(html, /id="record-method-filter"/);
+    assert.match(html, /<th>Method<\/th>/);
+  }
+
+  assert.match(read('user.html'), /data-pm-picker/);
+  assert.match(read('user.html'), /<th>Method<\/th>/);
+  assert.match(read('dashboard.html'), /id="dashboard-wallet-strip"/);
+  assert.match(read('dashboard.html'), /id="quick-field-payment-method"/);
+  assert.match(read('reports.html'), /id="wallet-reconciliation"/);
+  assert.match(read('reports.html'), /id="wallet-reconciliation-body"/);
+
+  assert.match(recordsJs, /paymentMethodBadge/);
+  assert.match(recordsJs, /p_payment_method/);
+  assert.match(userJs, /paymentMethodBadge/);
+  assert.match(userJs, /p_payment_method/);
+  assert.match(dashboardJs, /get_wallet_reconciliation/);
+  assert.match(dashboardJs, /renderWalletStrip/);
+  assert.match(reportsJs, /get_wallet_reconciliation/);
+  assert.match(reportsJs, /renderWalletReconciliation/);
+
+  assert.match(css, /\.pm-picker/);
+  assert.match(css, /\.pm-badge/);
+  assert.match(css, /\.dashboard-wallet-strip/);
+  assert.match(css, /\.wallet-summary-cards/);
+});
+
+test('member payout account info is integrated across database, profiles, members, deductions, and reports', () => {
+  const migration = read('database/migrations/20261114_057_member_payout_accounts.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+  const accountJs = read('js/account.js');
+  const membersJs = read('js/members.js');
+  const recordsJs = read('js/records.js');
+  const dashboardJs = read('js/dashboard.js');
+  const reportsJs = read('js/reports.js');
+  const userJs = read('js/user.js');
+  const css = read('css/app.css');
+
+  for (const sqlText of [migration, schema]) {
+    assert.match(sqlText, /create or replace function public\.validated_payout_account\(/i);
+    assert.match(sqlText, /p_payout_channel text default null/i);
+    assert.match(sqlText, /p_payout_channel text default '__KEEP__'/i);
+  }
+
+  assert.match(core, /function payoutFieldsetMarkup\(/);
+  assert.match(core, /function mountPayoutFieldsets\(/);
+  assert.match(core, /function setPayoutFields\(/);
+  assert.match(core, /function validatePayoutFields\(/);
+  assert.match(core, /function readPayoutPayload\(/);
+  assert.match(core, /function payoutSummaryChip\(/);
+  assert.match(core, /function renderPayoutDestinationBox\(/);
+  assert.match(core, /data-payout-fields data-prefix="quick"/);
+
+  assert.match(read('account.html'), /data-payout-fields data-prefix="account"/);
+  assert.match(read('members.html'), /data-payout-fields data-prefix="member"/);
+  assert.match(read('members.html'), /<th>Payout account<\/th>/);
+  assert.match(read('withdrawals.html'), /id="record-payout-destination"/);
+  assert.match(read('dashboard.html'), /id="quick-payout-destination"/);
+  assert.match(read('user.html'), /id="user-payout-strip"/);
+
+  assert.match(accountJs, /setPayoutFields/);
+  assert.match(accountJs, /readPayoutPayload/);
+  assert.match(membersJs, /payoutSummaryChip/);
+  assert.match(membersJs, /readPayoutPayload/);
+  assert.match(recordsJs, /renderPayoutDestinationBox/);
+  assert.match(dashboardJs, /renderPayoutDestinationBox/);
+  assert.match(reportsJs, /payoutSummaryChip/);
+  assert.match(userJs, /renderOwnPayoutStrip/);
+
+  assert.match(css, /\.payout-fieldset/);
+  assert.match(css, /\.payout-chip/);
+  assert.match(css, /\.payout-dest-box/);
+  assert.match(css, /\.user-payout-strip/);
+});
+
+test('in-record comments and review discussion thread are wired across database, review modal, records, and notifications', () => {
+  const migration = read('database/migrations/20261114_058_record_comments.sql');
+  const schema = read('database/schema.sql');
+  const coreJs = read('js/core.js');
+  const recordsJs = read('js/records.js');
+  const userJs = read('js/user.js');
+  const dashboardJs = read('js/dashboard.js');
+  const css = read('css/app.css');
+
+  for (const sql of [migration, schema]) {
+    assert.match(sql, /create table if not exists public\.record_comments/i);
+    assert.match(sql, /get_record_comments\(\s*p_record_type text,\s*p_record_id uuid\s*\)/i);
+    assert.match(sql, /get_record_comment_counts\(\s*p_record_type text,\s*p_record_ids uuid\[\]\s*\)/i);
+    assert.match(sql, /add_record_comment\(\s*p_record_type text,\s*p_record_id uuid,\s*p_body text\s*\)/i);
+    assert.match(sql, /'RECORD_COMMENT'/);
+  }
+
+  assert.match(coreJs, /id="record-thread-dialog"/);
+  assert.match(coreJs, /getRecordCommentCounts/);
+  assert.match(coreJs, /recordDiscussionButtonHtml/);
+  assert.match(coreJs, /openRecordDiscussion/);
+  assert.match(coreJs, /\(\?:\\\?\[a-z0-9_=&:%\.-\]\+\)\?/);
+
+  assert.match(recordsJs, /getRecordCommentCounts/);
+  assert.match(recordsJs, /recordDiscussionButtonHtml/);
+  assert.match(recordsJs, /openRequestedThreadFromUrl/);
+  assert.match(recordsJs, /subscribeToChanges\([^)]*'record_comments'/);
+
+  assert.match(userJs, /getRecordCommentCounts/);
+  assert.match(userJs, /recordDiscussionButtonHtml/);
+  assert.match(userJs, /openRequestedThreadFromUrl/);
+  assert.match(userJs, /subscribeToChanges\([^)]*'record_comments'/);
+
+  assert.match(dashboardJs, /id:\s*item\.id/);
+
+  assert.match(css, /#record-thread-dialog/);
+  assert.match(css, /\.record-thread-messages/);
+  assert.match(css, /\.record-thread-msg\.is-own/);
+  assert.match(css, /\.record-discuss-btn/);
+
+  const dashHtml = read('dashboard.html');
+  const heroCss = read('css/hero-plates.css');
+  assert.match(dashHtml, /class="dashboard-wallet-pills"/);
+  assert.match(dashHtml, /id="dashboard-month-progress-fill"/);
+  assert.match(heroCss, /\.summary-card \.admin-progress/);
+});
+
+test('reports script renders wallet reconciliation and member reports without runtime ReferenceError and keeps responsive wrapping', async () => {
+  const reportsCss = read('css/app.css');
+  assert.match(reportsCss, /\.report-panel \.table-filters\s*\{[^}]*flex-wrap:wrap/);
+  assert.match(reportsCss, /@media \(max-width:1380px\)[\s\S]*?\.reports-grid\s*\{[^}]*grid-template-columns:1fr/);
+
+  const reportsJs = read('js/reports.js');
+  const elements = new Map();
+  const makeEl = (id = '') => {
+    const el = {
+      id,
+      value: '',
+      innerHTML: '',
+      textContent: '',
+      hidden: false,
+      dataset: {},
+      options: [{ text: 'All statuses' }],
+      selectedIndex: 0,
+      attributes: new Map(),
+      addEventListener() {},
+      closest() { return makeEl('closest'); },
+      setAttribute(k, v) { this.attributes.set(k, v); },
+      getAttribute(k) { return this.attributes.get(k) ?? null; },
+      querySelectorAll() { return []; },
+      querySelector() { return null; }
+    };
+    return el;
+  };
+  const getEl = (id) => {
+    if (!elements.has(id)) elements.set(id, makeEl(id));
+    return elements.get(id);
+  };
+  const queryChain = (data = []) => ({
+    select() { return this; },
+    eq() { return this; },
+    order() { return Promise.resolve({ data, error: null }); },
+    then(cb) { return Promise.resolve({ data, error: null }).then(cb); }
+  });
+  const fakeWindow = {
+    location: { href: 'http://localhost/reports.html', pathname: '/reports.html', search: '', hash: '' },
+    addEventListener() {},
+    Chart: null
+  };
+  const fakeIpon = {
+    init: async () => ({ configured: true, failed: false, profile: { role: 'ADMIN', group_id: 'g1' } }),
+    money: (v) => `₱${Number(v || 0).toFixed(2)}`,
+    dateLabel: (v) => String(v || ''),
+    monthStart: () => '2026-11-01',
+    isoDate: () => '2026-11-14',
+    escapeHtml: (v) => String(v ?? ''),
+    paymentMethodMeta: (m) => ({ value: m || '', label: m || 'Untagged' }),
+    paymentMethodBadge: (m) => `<span>${m || 'Untagged'}</span>`,
+    payoutSummaryChip: () => '',
+    setLoading() {},
+    showInlineError(_b, err) { throw err; },
+    subscribeToChanges() {},
+    client: {
+      rpc: async (name) => name === 'get_wallet_reconciliation'
+        ? {
+            data: {
+              tracked_savings: 100,
+              physical_cash_balance: 100,
+              digital_wallet_balance: 0,
+              other_balance: 0,
+              untagged_balance: 0,
+              channels: [{ method: 'CASH', additions: 100, deductions: 0, expenses: 0, net_balance: 100, entry_count: 1 }]
+            },
+            error: null
+          }
+        : { data: { total_additions: 100, total_deductions: 0, total_expenses: 0, tracked_savings: 100 }, error: null },
+      from: (table) => table === 'v_contribution_status'
+        ? queryChain([{ member_id: 'm1', member_name: 'Tester', required_amount: 100, paid_amount: 0, outstanding_amount: 100, payment_status: 'UNPAID' }])
+        : table === 'members'
+          ? queryChain([{ id: 'm1', payout_channel: null }])
+          : queryChain([{ month: '2026-11-01', total_additions: 100, total_deductions: 0, total_expenses: 0, net_change: 100 }])
+    }
+  };
+  const context = {
+    window: fakeWindow,
+    Ipon: fakeIpon,
+    document: { getElementById: getEl, createElement: () => makeEl('created'), body: makeEl('body') },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    URL: { createObjectURL: () => '', revokeObjectURL() {} },
+    Blob: class {},
+    Promise, Map, Set, Number, String, Array, Math, Date, JSON, Boolean, setTimeout
+  };
+  await vm.runInNewContext(reportsJs, context, { filename: 'js/reports.js' });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.match(getEl('wallet-reconciliation-body').innerHTML, /wallet-total-row/);
+  assert.match(getEl('wallet-reconciliation-body').innerHTML, /₱100\.00/);
+  assert.match(getEl('member-report-body').innerHTML, /Tester/);
+});
+
+test('category dropdowns with custom input and peso amount prefixes are wired cleanly across forms', () => {
+  const core = read('js/core.js');
+  const css = read('css/app.css');
+  const dashboardJs = read('js/dashboard.js');
+  const recordsJs = read('js/records.js');
+
+  assert.match(core, /const PESO_INPUT_SELECTOR = \[/);
+  assert.match(core, /function preparePesoInputs\(/);
+  assert.match(core, /const CATEGORY_PRESETS = Object\.freeze\(/);
+  assert.match(core, /function mountCategoryControls\(/);
+  assert.match(core, /function syncCategoryControl\(/);
+  assert.match(core, /function setCategoryPresetGroup\(/);
+
+  assert.match(read('withdrawals.html'), /data-category-presets="deduction"/);
+  assert.match(read('withdrawals.html'), /Paid from wallet/);
+  assert.match(read('expenses.html'), /data-category-presets="expense"/);
+  assert.match(read('expenses.html'), /Paid from wallet/);
+  assert.match(read('dashboard.html'), /id="quick-category"[^>]*data-category-presets="deduction"/);
+
+  assert.match(dashboardJs, /Ipon\.preparePesoInputs\(row\)/);
+  assert.match(dashboardJs, /Ipon\.setCategoryPresetGroup\(quickCategoryInput,/);
+  assert.match(dashboardJs, /Ipon\.syncCategoryControl\(quickCategoryInput,\s*''\)/);
+  assert.match(recordsJs, /data-category-presets="/);
+  assert.match(recordsJs, /Ipon\.syncCategoryControl\(editForm\.elements\.category/);
+
+  assert.match(css, /\.peso-input-wrap\s*\{/);
+  assert.match(css, /\.peso-prefix\s*\{/);
+  assert.match(css, /\.category-control\s*\{/);
+});
+
+test('core script initializes without TDZ ReferenceError and mounts peso inputs plus category dropdowns', () => {
+  const core = read('js/core.js');
+  class FakeEl {
+    constructor(tag = 'div', attrs = {}) {
+      this.tagName = tag.toUpperCase();
+      this.children = [];
+      this.dataset = {};
+      this.style = {};
+      this.attributes = new Map();
+      this.parentNode = null;
+      this.type = attrs.type || '';
+      this.name = attrs.name || '';
+      this.id = attrs.id || '';
+      this.value = attrs.value || '';
+      this.required = Boolean(attrs.required);
+      this.hidden = Boolean(attrs.hidden);
+      if (attrs['data-category-presets']) this.dataset.categoryPresets = attrs['data-category-presets'];
+      this.classList = {
+        set: new Set((attrs.class || '').split(/\s+/).filter(Boolean)),
+        add: (...c) => c.forEach((x) => this.classList.set.add(x)),
+        remove: (...c) => c.forEach((x) => this.classList.set.delete(x)),
+        toggle: (x, f) => (f ? this.classList.set.add(x) : this.classList.set.delete(x)),
+        contains: (x) => this.classList.set.has(x)
+      };
+    }
+    set className(v) { this.classList.set = new Set(String(v).split(/\s+/).filter(Boolean)); }
+    get className() { return [...this.classList.set].join(' '); }
+    setAttribute(k, v) { this.attributes.set(k, String(v)); }
+    getAttribute(k) { return this.attributes.get(k) ?? null; }
+    removeAttribute(k) { this.attributes.delete(k); }
+    toggleAttribute(k, f) { if (f === false) this.attributes.delete(k); else this.attributes.set(k, ''); }
+    addEventListener() {}
+    setCustomValidity() {}
+    checkValidity() { return true; }
+    focus() {}
+    closest(sel) {
+      let cur = this;
+      const cls = sel.startsWith('.') ? sel.slice(1) : '';
+      while (cur) {
+        if (cls && cur.classList?.contains(cls)) return cur;
+        cur = cur.parentNode;
+      }
+      return null;
+    }
+    insertBefore(node, ref) {
+      const idx = this.children.indexOf(ref);
+      node.parentNode = this;
+      if (idx >= 0) this.children.splice(idx, 0, node); else this.children.push(node);
+    }
+    appendChild(node) { node.parentNode = this; this.children.push(node); return node; }
+    append(...nodes) { nodes.forEach((n) => typeof n === 'object' && this.appendChild(n)); }
+    querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
+    querySelectorAll(sel) {
+      const out = [];
+      const walk = (n) => {
+        for (const c of n.children || []) {
+          if (sel.includes('data-category-presets') && c.tagName === 'INPUT' && c.dataset?.categoryPresets) out.push(c);
+          else if (sel.includes('input[type="number"]') && c.tagName === 'INPUT' && c.type === 'number') out.push(c);
+          else if (sel === '.category-preset-select' && c.classList?.contains('category-preset-select')) out.push(c);
+          walk(c);
+        }
+      };
+      walk(this);
+      return out;
+    }
+    insertAdjacentHTML() {}
+  }
+  class FakeInput extends FakeEl {}
+  const body = new FakeEl('body');
+  body.dataset = { page: 'dashboard' };
+  const loader = new FakeEl('div', { id: 'app-loader' });
+  const amountField = new FakeEl('div', { class: 'field' });
+  const amountInput = new FakeInput('input', { type: 'number', name: 'amount', id: 'quick-amount' });
+  amountField.appendChild(amountInput);
+  const categoryField = new FakeEl('div', { class: 'field' });
+  const categoryInput = new FakeInput('input', { type: 'text', name: 'category', id: 'quick-category', 'data-category-presets': 'deduction', required: true });
+  categoryField.appendChild(categoryInput);
+  body.appendChild(amountField);
+  body.appendChild(categoryField);
+
+  const doc = {
+    documentElement: new FakeEl('html'),
+    body,
+    head: new FakeEl('head'),
+    getElementById: (id) => (id === 'quick-amount' ? amountInput : id === 'quick-category' ? categoryInput : id === 'app-loader' ? loader : null),
+    querySelector: (s) => body.querySelector(s),
+    querySelectorAll: (s) => body.querySelectorAll(s),
+    createElement: (t) => (t === 'input' ? new FakeInput(t) : new FakeEl(t)),
+    addEventListener() {},
+    readyState: 'complete'
+  };
+  const ctx = {
+    window: null,
+    document: doc,
+    HTMLInputElement: FakeInput,
+    HTMLFormElement: FakeEl,
+    HTMLElement: FakeEl,
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/dashboard.html', pathname: '/dashboard.html', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0,
+    clearTimeout() {},
+    setInterval: () => 0,
+    clearInterval() {},
+    requestAnimationFrame: (fn) => fn(),
+    addEventListener() {},
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
+  assert.equal(amountInput.parentNode.className, 'peso-input-wrap');
+  assert.equal(categoryInput.parentNode.className, 'category-control');
+  ctx.window.Ipon.setCategoryPresetGroup(categoryInput, 'expense', { required: true });
+  ctx.window.Ipon.syncCategoryControl(categoryInput, 'Custom team lunch');
+  assert.equal(categoryInput.hidden, false);
+  assert.equal(categoryInput.value, 'Custom team lunch');
+  assert.equal(categoryInput.parentNode.querySelector('.category-preset-select').value, '__CUSTOM__');
+});

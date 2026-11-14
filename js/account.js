@@ -39,16 +39,22 @@
 
   async function load() {
     const [profileResult, activityResult] = await Promise.all([
-      Ipon.client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled').eq('id', state.profile.id).single(),
+      Ipon.client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,member_id,payout_channel,payout_account_number,payout_account_name').eq('id', state.profile.id).single(),
       Ipon.client.from('account_activity').select('id,event,created_at').order('created_at', { ascending: false }).limit(20)
     ]);
     if (profileResult.error) throw profileResult.error;
     if (activityResult.error) throw activityResult.error;
     const profile = profileResult.data;
+    let payoutSource = profile;
+    if (!profile.payout_channel && (profile.member_id || state.profile.member_id)) {
+      const { data: memberRow } = await Ipon.client.from('members').select('payout_channel,payout_account_number,payout_account_name').eq('id', profile.member_id || state.profile.member_id).maybeSingle();
+      if (memberRow?.payout_channel) payoutSource = memberRow;
+    }
     profileForm.elements.first_name.value = profile.first_name || profile.full_name?.split(' ')[0] || '';
     profileForm.elements.middle_name.value = profile.middle_name || '';
     profileForm.elements.last_name.value = profile.last_name || profile.full_name?.split(' ').slice(1).join(' ') || '';
     profileForm.elements.contact_number.value = profile.contact_number || '';
+    Ipon.setPayoutFields(profileForm, payoutSource);
     profileComplete = !Ipon.profileNeedsSetup(profile);
     if (!profileComplete) onboarding = true;
     else if (!passwordChangeRequired) onboarding = false;
@@ -69,10 +75,12 @@
   profileForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!Ipon.validatePhoneInput(profileForm.elements.contact_number)) return profileForm.elements.contact_number.focus();
+    if (!Ipon.validatePayoutFields(profileForm)) return;
     const button = event.submitter;
     const values = new FormData(profileForm);
+    const payoutPayload = Ipon.readPayoutPayload(profileForm);
     Ipon.setBusy(button, true);
-    try { await Ipon.rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number') }); Ipon.toast('Profile updated.'); await load(); finishSetupIfReady(); }
+    try { await Ipon.rpc('update_own_profile', { p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_contact_number: values.get('contact_number'), ...payoutPayload }); Ipon.toast('Profile updated.'); await load(); finishSetupIfReady(); }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });

@@ -9160,6 +9160,2341 @@ insert into public.schema_migrations (version, name)
 values ('20261114_055', 'guard write_audit_log against deleted group_id and detach profiles before deleting groups')
 on conflict (version) do nothing;
 
+-- Migration 056: Payment Method Tagging & Wallet Reconciliation
+alter table public.contributions
+  add column if not exists payment_method text;
+
+alter table public.withdrawals
+  add column if not exists payment_method text;
+
+alter table public.expenses
+  add column if not exists payment_method text;
+
+alter table public.contributions
+  drop constraint if exists contributions_payment_method_check;
+alter table public.contributions
+  add constraint contributions_payment_method_check
+  check (payment_method is null or payment_method in ('CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER', 'OTHER'));
+
+alter table public.withdrawals
+  drop constraint if exists withdrawals_payment_method_check;
+alter table public.withdrawals
+  add constraint withdrawals_payment_method_check
+  check (payment_method is null or payment_method in ('CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER', 'OTHER'));
+
+alter table public.expenses
+  drop constraint if exists expenses_payment_method_check;
+alter table public.expenses
+  add constraint expenses_payment_method_check
+  check (payment_method is null or payment_method in ('CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER', 'OTHER'));
+
+create index if not exists contributions_group_payment_method_idx
+  on public.contributions (group_id, payment_method);
+
+create index if not exists withdrawals_group_payment_method_idx
+  on public.withdrawals (group_id, payment_method);
+
+create index if not exists expenses_group_payment_method_idx
+  on public.expenses (group_id, payment_method);
+
+create or replace function public.normalized_payment_method(p_method text)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  v_norm text := nullif(upper(regexp_replace(btrim(coalesce(p_method, '')), '\s+', '_', 'g')), '');
+begin
+  if v_norm is null then
+    return null;
+  end if;
+  if v_norm in ('BANK', 'BANK_TRANSFER', 'INSTAPAY', 'PESONET') then
+    return 'BANK_TRANSFER';
+  end if;
+  if v_norm in ('CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER', 'OTHER') then
+    return v_norm;
+  end if;
+  raise exception 'Invalid payment method. Choose Cash, GCash, Maya, Bank Transfer, or Other.' using errcode = '22023';
+end;
+$$;
+
+drop function if exists public.record_contribution(uuid, date, numeric, date, text, text, uuid, text);
+
+create or replace function public.record_contribution(
+  p_member_id uuid,
+  p_contribution_month date,
+  p_amount numeric,
+  p_payment_date date,
+  p_transaction_reference text default null,
+  p_notes text default null,
+  p_idempotency_key uuid default gen_random_uuid(),
+  p_receipt_url text default null,
+  p_payment_method text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+set timezone = 'Asia/Manila'
+as $$
+declare
+  v_role public.app_role := public.current_user_role();
+  v_group_id uuid := public.current_group_id();
+  v_period_id uuid;
+  v_required numeric(14,2);
+  v_id uuid;
+  v_status public.approval_status;
+  v_month date := date_trunc('month', p_contribution_month)::date;
+  v_receipt text := nullif(btrim(coalesce(p_receipt_url, '')), '');
+  v_method text := public.normalized_payment_method(p_payment_method);
+begin
+  if v_role is null or v_group_id is null then
+    raise exception 'Your account is not active.' using errcode = '42501';
+  end if;
+  if v_month is null or v_month < date '2000-01-01' or v_month > date_trunc('month', current_date)::date then
+    raise exception 'Contribution month must be between January 2000 and the current month.' using errcode = '22023';
+  end if;
+  if v_receipt is not null and (v_receipt !~ '^data:image/' or char_length(v_receipt) > 600000) then
+    raise exception 'Receipt must be a valid image under 450 KB.' using errcode = '22023';
+  end if;
+
+  if v_role = 'MEMBER' and public.current_member_id() is distinct from p_member_id then
+    raise exception 'Members can only submit their own savings entries.' using errcode = '42501';
+  end if;
+
+  select monthly_contribution_amount into v_required
+  from public.members
+  where id = p_member_id
+    and group_id = v_group_id
+    and status = 'ACTIVE'
+    and deleted_at is null
+    and date_registered <= (v_month + interval '1 month - 1 day')::date;
+
+  if v_required is null then
+    raise exception 'Active member not found.' using errcode = 'P0002';
+  end if;
+
+  insert into public.contribution_periods (member_id, period_month, required_amount, due_date)
+  values (
+    p_member_id,
+    v_month,
+    v_required,
+    public.contribution_period_due_date(v_group_id, v_month)
+  )
+  on conflict (member_id, period_month) do nothing;
+
+  select id into v_period_id
+  from public.contribution_periods
+  where member_id = p_member_id and period_month = v_month;
+
+  v_status := case when v_role = 'ADMIN' then 'CONFIRMED' else 'PENDING' end;
+
+  insert into public.contributions (
+    contribution_period_id, amount, payment_date, transaction_reference,
+    idempotency_key, notes, receipt_url, payment_method, approval_status, submitted_by,
+    reviewed_by, reviewed_at
+  ) values (
+    v_period_id, public.validated_money(p_amount, 'Contribution amount'), p_payment_date,
+    nullif(btrim(p_transaction_reference), ''), p_idempotency_key,
+    nullif(btrim(p_notes), ''), v_receipt, v_method, v_status, auth.uid(),
+    case when v_status = 'CONFIRMED' then auth.uid() end,
+    case when v_status = 'CONFIRMED' then now() end
+  ) returning id into v_id;
+
+  return v_id;
+end;
+$$;
+
+drop function if exists public.record_contribution_with_carryover(uuid, date, numeric, date, text, text, uuid, text, boolean);
+
+create or replace function public.record_contribution_with_carryover(
+  p_member_id uuid,
+  p_contribution_month date,
+  p_amount numeric,
+  p_payment_date date,
+  p_transaction_reference text default null,
+  p_notes text default null,
+  p_idempotency_key uuid default gen_random_uuid(),
+  p_receipt_url text default null,
+  p_allocate_excess boolean default false,
+  p_payment_method text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+set timezone = 'Asia/Manila'
+as $$
+declare
+  v_role public.app_role := public.current_user_role();
+  v_group_id uuid := public.current_group_id();
+  v_month date := date_trunc('month', p_contribution_month)::date;
+  v_amount numeric(14,2) := public.validated_money(p_amount, 'Contribution amount');
+  v_receipt text := nullif(btrim(coalesce(p_receipt_url, '')), '');
+  v_notes text := nullif(btrim(coalesce(p_notes, '')), '');
+  v_method text := public.normalized_payment_method(p_payment_method);
+  v_required numeric(14,2);
+  v_status public.approval_status;
+  v_remaining numeric(14,2);
+  v_cursor_month date;
+  v_period record;
+  v_covered numeric(14,2);
+  v_needed numeric(14,2);
+  v_slice numeric(14,2);
+  v_first_id uuid;
+  v_ids uuid[] := array[]::uuid[];
+  v_id uuid;
+  v_i integer := 0;
+  v_use_receipt text;
+  v_slice_notes text;
+  v_slice_key uuid;
+begin
+  if not coalesce(p_allocate_excess, false) then
+    v_id := public.record_contribution(
+      p_member_id,
+      p_contribution_month,
+      v_amount,
+      p_payment_date,
+      p_transaction_reference,
+      p_notes,
+      p_idempotency_key,
+      p_receipt_url,
+      v_method
+    );
+    return jsonb_build_object('ids', array[v_id], 'months_covered', 1);
+  end if;
+
+  if v_role is null or v_group_id is null then
+    raise exception 'Your account is not active.' using errcode = '42501';
+  end if;
+  if v_month is null or v_month < date '2000-01-01' or v_month > date_trunc('month', current_date)::date then
+    raise exception 'Contribution month must be between January 2000 and the current month.' using errcode = '22023';
+  end if;
+  if v_receipt is not null and (v_receipt !~ '^data:image/' or char_length(v_receipt) > 600000) then
+    raise exception 'Receipt must be a valid image under 450 KB.' using errcode = '22023';
+  end if;
+  if v_role = 'MEMBER' and public.current_member_id() is distinct from p_member_id then
+    raise exception 'Members can only submit their own savings entries.' using errcode = '42501';
+  end if;
+
+  select id into v_first_id
+  from public.contributions
+  where idempotency_key = p_idempotency_key;
+
+  if v_first_id is not null then
+    return jsonb_build_object('ids', array[v_first_id], 'months_covered', 1);
+  end if;
+
+  select monthly_contribution_amount into v_required
+  from public.members
+  where id = p_member_id
+    and group_id = v_group_id
+    and status = 'ACTIVE'
+    and deleted_at is null
+    and date_registered <= (v_month + interval '1 month - 1 day')::date;
+
+  if v_required is null then
+    raise exception 'Active member not found.' using errcode = 'P0002';
+  end if;
+
+  v_status := case when v_role = 'ADMIN' then 'CONFIRMED' else 'PENDING' end;
+  v_remaining := v_amount;
+  v_cursor_month := v_month;
+
+  while v_remaining > 0 and v_i < 24 loop
+    insert into public.contribution_periods (member_id, period_month, required_amount, due_date)
+    values (
+      p_member_id,
+      v_cursor_month,
+      v_required,
+      public.contribution_period_due_date(v_group_id, v_cursor_month)
+    )
+    on conflict (member_id, period_month) do nothing;
+
+    select id, required_amount, is_exempt into v_period
+    from public.contribution_periods
+    where member_id = p_member_id and period_month = v_cursor_month;
+
+    if not coalesce(v_period.is_exempt, false) then
+      select coalesce(sum(amount) filter (where approval_status in ('CONFIRMED', 'PENDING')), 0)::numeric(14,2)
+      into v_covered
+      from public.contributions
+      where contribution_period_id = v_period.id;
+
+      v_needed := greatest(v_period.required_amount - coalesce(v_covered, 0), 0);
+      if v_needed > 0 then
+        v_slice := least(v_remaining, v_needed);
+        v_use_receipt := case when coalesce(array_length(v_ids, 1), 0) = 0 then v_receipt else null end;
+        v_slice_key := case when coalesce(array_length(v_ids, 1), 0) = 0 then p_idempotency_key else gen_random_uuid() end;
+        v_slice_notes := case
+          when coalesce(array_length(v_ids, 1), 0) = 0 then v_notes
+          else left(trim(both ' ' from concat_ws(' · ', 'Advance carry-over from ' || to_char(v_month, 'Mon YYYY'), v_notes)), 1000)
+        end;
+
+        insert into public.contributions (
+          contribution_period_id, amount, payment_date, transaction_reference,
+          idempotency_key, notes, receipt_url, payment_method, approval_status, submitted_by,
+          reviewed_by, reviewed_at
+        ) values (
+          v_period.id, v_slice, p_payment_date,
+          nullif(btrim(p_transaction_reference), ''), v_slice_key,
+          v_slice_notes, v_use_receipt, v_method, v_status, auth.uid(),
+          case when v_status = 'CONFIRMED' then auth.uid() end,
+          case when v_status = 'CONFIRMED' then now() end
+        ) returning id into v_id;
+
+        v_ids := array_append(v_ids, v_id);
+        v_remaining := v_remaining - v_slice;
+      end if;
+    end if;
+
+    v_cursor_month := (v_cursor_month + interval '1 month')::date;
+    v_i := v_i + 1;
+  end loop;
+
+  if v_remaining > 0 then
+    select id into v_period
+    from public.contribution_periods
+    where member_id = p_member_id and period_month = v_month;
+
+    v_use_receipt := case when coalesce(array_length(v_ids, 1), 0) = 0 then v_receipt else null end;
+    v_slice_key := case when coalesce(array_length(v_ids, 1), 0) = 0 then p_idempotency_key else gen_random_uuid() end;
+
+    insert into public.contributions (
+      contribution_period_id, amount, payment_date, transaction_reference,
+      idempotency_key, notes, receipt_url, payment_method, approval_status, submitted_by,
+      reviewed_by, reviewed_at
+    ) values (
+      v_period.id, v_remaining, p_payment_date,
+      nullif(btrim(p_transaction_reference), ''), v_slice_key,
+      left(trim(both ' ' from concat_ws(' · ', v_notes, 'Excess beyond 24 months')), 1000),
+      v_use_receipt, v_method, v_status, auth.uid(),
+      case when v_status = 'CONFIRMED' then auth.uid() end,
+      case when v_status = 'CONFIRMED' then now() end
+    ) returning id into v_id;
+
+    v_ids := array_append(v_ids, v_id);
+  end if;
+
+  return jsonb_build_object('ids', v_ids, 'months_covered', coalesce(array_length(v_ids, 1), 0));
+end;
+$$;
+
+drop function if exists public.update_contribution(uuid, numeric, date, text, text);
+
+create or replace function public.update_contribution(
+  p_contribution_id uuid,
+  p_amount numeric,
+  p_payment_date date,
+  p_transaction_reference text,
+  p_notes text,
+  p_payment_method text default '__KEEP__'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_entry public.contributions;
+  v_role public.app_role := public.current_user_role();
+  v_group_id uuid := public.current_group_id();
+  v_next_method text;
+begin
+  select * into v_entry
+  from public.contributions
+  where id = p_contribution_id and group_id = v_group_id;
+  if not found then raise exception 'Contribution not found.' using errcode = 'P0002'; end if;
+  if v_role is null then raise exception 'Your account is not active.' using errcode = '42501'; end if;
+  if v_entry.approval_status <> 'PENDING' then
+    raise exception 'Only pending contributions can be edited. Void a confirmed entry and create a replacement.' using errcode = '22023';
+  end if;
+  if v_role <> 'ADMIN' and not (
+    v_entry.submitted_by = auth.uid() or v_role = 'TREASURER'
+  ) then
+    raise exception 'You are not allowed to edit this entry.' using errcode = '42501';
+  end if;
+
+  v_next_method := case
+    when p_payment_method = '__KEEP__' then v_entry.payment_method
+    else public.normalized_payment_method(p_payment_method)
+  end;
+
+  update public.contributions
+  set amount = public.validated_money(p_amount, 'Contribution amount'),
+      payment_date = p_payment_date,
+      transaction_reference = nullif(btrim(p_transaction_reference), ''),
+      notes = nullif(btrim(p_notes), ''),
+      payment_method = v_next_method
+  where id = p_contribution_id and approval_status = 'PENDING';
+
+  if not found then raise exception 'Pending contribution not found.' using errcode = 'P0002'; end if;
+end;
+$$;
+
+drop function if exists public.record_withdrawal(date, numeric, text, text, text, text, text, uuid);
+
+create or replace function public.record_withdrawal(
+  p_transaction_date date,
+  p_amount numeric,
+  p_category text,
+  p_description text,
+  p_person_responsible text,
+  p_reference_number text default null,
+  p_notes text default null,
+  p_idempotency_key uuid default gen_random_uuid(),
+  p_payment_method text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_role public.app_role := public.current_user_role();
+  v_status public.approval_status;
+  v_id uuid;
+  v_method text := public.normalized_payment_method(p_payment_method);
+begin
+  if v_role is null then raise exception 'Your account is not active.' using errcode = '42501'; end if;
+  if v_role not in ('ADMIN', 'TREASURER') then raise exception 'Only administrators and treasurers can record withdrawals.' using errcode = '42501'; end if;
+  v_status := case when v_role = 'ADMIN' then 'CONFIRMED' else 'PENDING' end;
+
+  insert into public.withdrawals (
+    transaction_date, amount, category, description, person_responsible,
+    reference_number, idempotency_key, notes, payment_method, approval_status, submitted_by,
+    reviewed_by, reviewed_at
+  ) values (
+    p_transaction_date, public.validated_money(p_amount, 'Withdrawal amount'), btrim(p_category), btrim(p_description),
+    btrim(p_person_responsible), nullif(btrim(p_reference_number), ''),
+    p_idempotency_key, nullif(btrim(p_notes), ''), v_method, v_status, auth.uid(),
+    case when v_status = 'CONFIRMED' then auth.uid() end,
+    case when v_status = 'CONFIRMED' then now() end
+  ) returning id into v_id;
+  return v_id;
+end;
+$$;
+
+drop function if exists public.update_withdrawal(uuid, date, numeric, text, text, text, text, text);
+
+create or replace function public.update_withdrawal(
+  p_withdrawal_id uuid,
+  p_transaction_date date,
+  p_amount numeric,
+  p_category text,
+  p_description text,
+  p_person_responsible text,
+  p_reference_number text,
+  p_notes text,
+  p_payment_method text default '__KEEP__'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_entry public.withdrawals;
+  v_role public.app_role := public.current_user_role();
+  v_group_id uuid := public.current_group_id();
+  v_next_method text;
+begin
+  select * into v_entry
+  from public.withdrawals
+  where id = p_withdrawal_id and group_id = v_group_id;
+  if not found then raise exception 'Withdrawal not found.' using errcode = 'P0002'; end if;
+  if v_role is null then raise exception 'Your account is not active.' using errcode = '42501'; end if;
+  if v_entry.approval_status <> 'PENDING' then raise exception 'Only pending withdrawals can be edited. Void a confirmed entry and create a replacement.' using errcode = '22023'; end if;
+  if v_role not in ('ADMIN', 'TREASURER') then raise exception 'You are not allowed to edit this entry.' using errcode = '42501'; end if;
+
+  v_next_method := case
+    when p_payment_method = '__KEEP__' then v_entry.payment_method
+    else public.normalized_payment_method(p_payment_method)
+  end;
+
+  update public.withdrawals set
+    transaction_date = p_transaction_date,
+    amount = public.validated_money(p_amount, 'Withdrawal amount'),
+    category = btrim(p_category),
+    description = btrim(p_description),
+    person_responsible = btrim(p_person_responsible),
+    reference_number = nullif(btrim(p_reference_number), ''),
+    notes = nullif(btrim(p_notes), ''),
+    payment_method = v_next_method
+  where id = p_withdrawal_id and approval_status = 'PENDING';
+
+  if not found then raise exception 'Pending withdrawal not found.' using errcode = 'P0002'; end if;
+end;
+$$;
+
+drop function if exists public.record_expense(date, numeric, text, text, text, text, text, uuid, text);
+
+create or replace function public.record_expense(
+  p_transaction_date date,
+  p_amount numeric,
+  p_category text,
+  p_description text,
+  p_person_responsible text,
+  p_reference_number text default null,
+  p_notes text default null,
+  p_idempotency_key uuid default gen_random_uuid(),
+  p_receipt_url text default null,
+  p_payment_method text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_role public.app_role := public.current_user_role();
+  v_status public.approval_status;
+  v_id uuid;
+  v_receipt text := nullif(btrim(coalesce(p_receipt_url, '')), '');
+  v_method text := public.normalized_payment_method(p_payment_method);
+begin
+  if v_role is null or v_role not in ('ADMIN', 'TREASURER') then
+    raise exception 'You are not allowed to record expenses.' using errcode = '42501';
+  end if;
+  if v_receipt is not null and (v_receipt !~ '^data:image/' or char_length(v_receipt) > 600000) then
+    raise exception 'Receipt must be a valid image under 450 KB.' using errcode = '22023';
+  end if;
+
+  v_status := case when v_role = 'ADMIN' then 'CONFIRMED' else 'PENDING' end;
+
+  insert into public.expenses (
+    transaction_date, amount, category, description, person_responsible,
+    reference_number, idempotency_key, notes, receipt_url, payment_method, approval_status, submitted_by,
+    reviewed_by, reviewed_at
+  ) values (
+    p_transaction_date, public.validated_money(p_amount, 'Expense amount'), btrim(p_category), btrim(p_description),
+    btrim(p_person_responsible), nullif(btrim(p_reference_number), ''),
+    p_idempotency_key, nullif(btrim(p_notes), ''), v_receipt, v_method, v_status, auth.uid(),
+    case when v_status = 'CONFIRMED' then auth.uid() end,
+    case when v_status = 'CONFIRMED' then now() end
+  ) returning id into v_id;
+  return v_id;
+end;
+$$;
+
+drop function if exists public.update_expense(uuid, date, numeric, text, text, text, text, text);
+
+create or replace function public.update_expense(
+  p_expense_id uuid,
+  p_transaction_date date,
+  p_amount numeric,
+  p_category text,
+  p_description text,
+  p_person_responsible text,
+  p_reference_number text,
+  p_notes text,
+  p_payment_method text default '__KEEP__'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_entry public.expenses;
+  v_role public.app_role := public.current_user_role();
+  v_group_id uuid := public.current_group_id();
+  v_next_method text;
+begin
+  select * into v_entry
+  from public.expenses
+  where id = p_expense_id and group_id = v_group_id;
+  if not found then raise exception 'Expense not found.' using errcode = 'P0002'; end if;
+  if v_role is null then raise exception 'Your account is not active.' using errcode = '42501'; end if;
+  if v_entry.approval_status <> 'PENDING' then raise exception 'Only pending expenses can be edited. Void a confirmed entry and create a replacement.' using errcode = '22023'; end if;
+  if v_role <> 'ADMIN' and v_role <> 'TREASURER' then
+    raise exception 'You are not allowed to edit this expense.' using errcode = '42501';
+  end if;
+
+  v_next_method := case
+    when p_payment_method = '__KEEP__' then v_entry.payment_method
+    else public.normalized_payment_method(p_payment_method)
+  end;
+
+  update public.expenses set
+    transaction_date = p_transaction_date,
+    amount = public.validated_money(p_amount, 'Expense amount'),
+    category = btrim(p_category),
+    description = btrim(p_description),
+    person_responsible = btrim(p_person_responsible),
+    reference_number = nullif(btrim(p_reference_number), ''),
+    notes = nullif(btrim(p_notes), ''),
+    payment_method = v_next_method
+  where id = p_expense_id and approval_status = 'PENDING';
+
+  if not found then raise exception 'Pending expense not found.' using errcode = 'P0002'; end if;
+end;
+$$;
+
+create or replace function public.get_pending_review_summary()
+returns jsonb language sql stable security definer set search_path = public as $$
+  with gid as (
+    select public.current_group_id() as group_id
+  ),
+  entries as (
+    select
+      c.id,
+      c.amount,
+      c.payment_date as activity_date,
+      c.created_at,
+      'contribution'::text as entry_type,
+      'Savings Addition'::text as entry_label,
+      m.full_name as member_name,
+      coalesce(sp.full_name, m.full_name) as submitted_by_name,
+      coalesce(
+        public.group_member_avatar(m.id),
+        case when sp.status = 'ACTIVE' then sp.avatar_url end
+      ) as avatar_url,
+      cp.period_month,
+      null::text as category,
+      c.transaction_reference as reference,
+      c.notes,
+      null::text as description,
+      c.receipt_url,
+      c.payment_method
+    from public.contributions c
+    join gid on c.group_id = gid.group_id
+    join public.contribution_periods cp on cp.id = c.contribution_period_id
+    join public.members m on m.id = cp.member_id
+    left join public.profiles sp
+      on sp.id = c.submitted_by
+     and sp.group_id = c.group_id
+    where c.approval_status = 'PENDING'
+
+    union all
+
+    select
+      w.id,
+      w.amount,
+      w.transaction_date as activity_date,
+      w.created_at,
+      'withdrawal'::text as entry_type,
+      'Deduction'::text as entry_label,
+      w.person_responsible as member_name,
+      coalesce(sp.full_name, w.person_responsible) as submitted_by_name,
+      case when sp.status = 'ACTIVE' then sp.avatar_url end as avatar_url,
+      null::date as period_month,
+      w.category,
+      w.reference_number as reference,
+      w.notes,
+      w.description,
+      null::text as receipt_url,
+      w.payment_method
+    from public.withdrawals w
+    join gid on w.group_id = gid.group_id
+    left join public.profiles sp
+      on sp.id = w.submitted_by
+     and sp.group_id = w.group_id
+    where w.approval_status = 'PENDING'
+
+    union all
+
+    select
+      e.id,
+      e.amount,
+      e.transaction_date as activity_date,
+      e.created_at,
+      'expense'::text as entry_type,
+      'Expense'::text as entry_label,
+      e.person_responsible as member_name,
+      coalesce(sp.full_name, e.person_responsible) as submitted_by_name,
+      case when sp.status = 'ACTIVE' then sp.avatar_url end as avatar_url,
+      null::date as period_month,
+      e.category,
+      e.reference_number as reference,
+      e.notes,
+      e.description,
+      e.receipt_url,
+      e.payment_method
+    from public.expenses e
+    join gid on e.group_id = gid.group_id
+    left join public.profiles sp
+      on sp.id = e.submitted_by
+     and sp.group_id = e.group_id
+    where e.approval_status = 'PENDING'
+  ),
+  recent as (
+    select * from entries order by created_at desc limit 3
+  )
+  select case
+    when public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
+      and public.current_group_id() is not null
+    then jsonb_build_object(
+      'count', (select count(*) from entries),
+      'amount', (select coalesce(sum(amount), 0) from entries),
+      'items', coalesce(
+        (
+          select jsonb_agg(
+            jsonb_build_object(
+              'id', id,
+              'amount', amount,
+              'date', activity_date,
+              'type', entry_type,
+              'entry_label', entry_label,
+              'member_name', member_name,
+              'submitted_by_name', submitted_by_name,
+              'avatar_url', avatar_url,
+              'period_month', period_month,
+              'category', category,
+              'reference', reference,
+              'notes', notes,
+              'description', description,
+              'receipt_url', receipt_url,
+              'payment_method', payment_method
+            )
+            order by created_at desc
+          )
+          from recent
+        ),
+        '[]'::jsonb
+      )
+    )
+    else jsonb_build_object('count', 0, 'amount', 0, 'items', '[]'::jsonb)
+  end;
+$$;
+
+create or replace function public.get_wallet_reconciliation()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with ctx as (
+    select
+      public.current_user_role() as role_name,
+      public.current_group_id() as group_id
+  ),
+  grp as (
+    select g.id, g.cycle_start_date
+    from public.groups g
+    join ctx on ctx.group_id = g.id
+  ),
+  methods(method_key, sort_order) as (
+    values
+      ('CASH', 1),
+      ('GCASH', 2),
+      ('MAYA', 3),
+      ('BANK_TRANSFER', 4),
+      ('OTHER', 5),
+      ('UNTAGGED', 6)
+  ),
+  raw_entries as (
+    select
+      coalesce(c.payment_method, 'UNTAGGED') as method_key,
+      c.approval_status,
+      c.amount as addition_amount,
+      0::numeric(14,2) as deduction_amount,
+      0::numeric(14,2) as expense_amount
+    from public.contributions c
+    join grp on c.group_id = grp.id
+    where c.approval_status in ('CONFIRMED', 'PENDING')
+      and (
+        c.approval_status = 'PENDING'
+        or grp.cycle_start_date is null
+        or c.payment_date >= grp.cycle_start_date
+      )
+
+    union all
+
+    select
+      coalesce(w.payment_method, 'UNTAGGED') as method_key,
+      w.approval_status,
+      0::numeric(14,2) as addition_amount,
+      w.amount as deduction_amount,
+      0::numeric(14,2) as expense_amount
+    from public.withdrawals w
+    join grp on w.group_id = grp.id
+    where w.approval_status in ('CONFIRMED', 'PENDING')
+      and (
+        w.approval_status = 'PENDING'
+        or grp.cycle_start_date is null
+        or w.transaction_date >= grp.cycle_start_date
+      )
+
+    union all
+
+    select
+      coalesce(e.payment_method, 'UNTAGGED') as method_key,
+      e.approval_status,
+      0::numeric(14,2) as addition_amount,
+      0::numeric(14,2) as deduction_amount,
+      e.amount as expense_amount
+    from public.expenses e
+    join grp on e.group_id = grp.id
+    where e.approval_status in ('CONFIRMED', 'PENDING')
+      and (
+        e.approval_status = 'PENDING'
+        or grp.cycle_start_date is null
+        or e.transaction_date >= grp.cycle_start_date
+      )
+  ),
+  agg as (
+    select
+      m.method_key,
+      m.sort_order,
+      coalesce(sum(r.addition_amount) filter (where r.approval_status = 'CONFIRMED'), 0)::numeric(14,2) as additions,
+      coalesce(sum(r.deduction_amount) filter (where r.approval_status = 'CONFIRMED'), 0)::numeric(14,2) as deductions,
+      coalesce(sum(r.expense_amount) filter (where r.approval_status = 'CONFIRMED'), 0)::numeric(14,2) as expenses,
+      coalesce(sum(r.addition_amount) filter (where r.approval_status = 'PENDING'), 0)::numeric(14,2) as pending_inflow,
+      coalesce(sum(r.deduction_amount + r.expense_amount) filter (where r.approval_status = 'PENDING'), 0)::numeric(14,2) as pending_outflow,
+      count(*) filter (where r.approval_status = 'CONFIRMED') as entry_count,
+      count(*) filter (where r.approval_status = 'PENDING') as pending_count
+    from methods m
+    left join raw_entries r on r.method_key = m.method_key
+    group by m.method_key, m.sort_order
+  ),
+  channel_rows as (
+    select
+      method_key,
+      sort_order,
+      additions,
+      deductions,
+      expenses,
+      (additions - deductions - expenses)::numeric(14,2) as net_balance,
+      pending_inflow,
+      pending_outflow,
+      entry_count,
+      pending_count
+    from agg
+    where method_key <> 'UNTAGGED' or entry_count > 0 or pending_count > 0
+  )
+  select case
+    when ctx.role_name not in ('ADMIN', 'TREASURER', 'MEMBER') or ctx.group_id is null then null
+    else jsonb_build_object(
+      'cycle_start_date', (select cycle_start_date from grp limit 1),
+      'tracked_savings', coalesce((select sum(net_balance) from channel_rows), 0),
+      'physical_cash_balance', coalesce((select net_balance from channel_rows where method_key = 'CASH'), 0),
+      'digital_wallet_balance', coalesce((select sum(net_balance) from channel_rows where method_key in ('GCASH', 'MAYA', 'BANK_TRANSFER')), 0),
+      'other_balance', coalesce((select net_balance from channel_rows where method_key = 'OTHER'), 0),
+      'untagged_balance', coalesce((select net_balance from channel_rows where method_key = 'UNTAGGED'), 0),
+      'has_untagged', exists (select 1 from channel_rows where method_key = 'UNTAGGED'),
+      'channels', coalesce(
+        (
+          select jsonb_agg(
+            jsonb_build_object(
+              'method', cr.method_key,
+              'additions', cr.additions,
+              'deductions', cr.deductions,
+              'expenses', cr.expenses,
+              'net_balance', cr.net_balance,
+              'pending_inflow', cr.pending_inflow,
+              'pending_outflow', cr.pending_outflow,
+              'entry_count', cr.entry_count,
+              'pending_count', cr.pending_count
+            )
+            order by cr.sort_order
+          )
+          from channel_rows cr
+        ),
+        '[]'::jsonb
+      )
+    )
+  end
+  from ctx;
+$$;
+
+revoke execute on function public.normalized_payment_method(text) from public, anon;
+revoke execute on function public.record_contribution(uuid, date, numeric, date, text, text, uuid, text, text) from public, anon;
+revoke execute on function public.record_contribution_with_carryover(uuid, date, numeric, date, text, text, uuid, text, boolean, text) from public, anon;
+revoke execute on function public.update_contribution(uuid, numeric, date, text, text, text) from public, anon;
+revoke execute on function public.record_withdrawal(date, numeric, text, text, text, text, text, uuid, text) from public, anon;
+revoke execute on function public.update_withdrawal(uuid, date, numeric, text, text, text, text, text, text) from public, anon;
+revoke execute on function public.record_expense(date, numeric, text, text, text, text, text, uuid, text, text) from public, anon;
+revoke execute on function public.update_expense(uuid, date, numeric, text, text, text, text, text, text) from public, anon;
+revoke execute on function public.get_pending_review_summary() from public, anon;
+revoke execute on function public.get_wallet_reconciliation() from public, anon;
+
+grant execute on function public.normalized_payment_method(text) to authenticated;
+grant execute on function public.record_contribution(uuid, date, numeric, date, text, text, uuid, text, text) to authenticated;
+grant execute on function public.record_contribution_with_carryover(uuid, date, numeric, date, text, text, uuid, text, boolean, text) to authenticated;
+grant execute on function public.update_contribution(uuid, numeric, date, text, text, text) to authenticated;
+grant execute on function public.record_withdrawal(date, numeric, text, text, text, text, text, uuid, text) to authenticated;
+grant execute on function public.update_withdrawal(uuid, date, numeric, text, text, text, text, text, text) to authenticated;
+grant execute on function public.record_expense(date, numeric, text, text, text, text, text, uuid, text, text) to authenticated;
+grant execute on function public.update_expense(uuid, date, numeric, text, text, text, text, text, text) to authenticated;
+grant execute on function public.get_pending_review_summary() to authenticated;
+grant execute on function public.get_wallet_reconciliation() to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_056', 'add payment method tagging and wallet reconciliation')
+on conflict (version) do nothing;
+
+alter table public.profiles
+  add column if not exists payout_channel text,
+  add column if not exists payout_account_number text,
+  add column if not exists payout_account_name text;
+
+alter table public.profiles
+  drop constraint if exists profiles_payout_channel_check;
+alter table public.profiles
+  add constraint profiles_payout_channel_check
+  check (payout_channel is null or payout_channel in ('CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER', 'OTHER'));
+
+alter table public.profiles
+  drop constraint if exists profiles_payout_account_number_len;
+alter table public.profiles
+  add constraint profiles_payout_account_number_len
+  check (payout_account_number is null or char_length(btrim(payout_account_number)) <= 80);
+
+alter table public.profiles
+  drop constraint if exists profiles_payout_account_name_len;
+alter table public.profiles
+  add constraint profiles_payout_account_name_len
+  check (payout_account_name is null or char_length(btrim(payout_account_name)) <= 120);
+
+alter table public.members
+  add column if not exists payout_channel text,
+  add column if not exists payout_account_number text,
+  add column if not exists payout_account_name text;
+
+alter table public.members
+  drop constraint if exists members_payout_channel_check;
+alter table public.members
+  add constraint members_payout_channel_check
+  check (payout_channel is null or payout_channel in ('CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER', 'OTHER'));
+
+alter table public.members
+  drop constraint if exists members_payout_account_number_len;
+alter table public.members
+  add constraint members_payout_account_number_len
+  check (payout_account_number is null or char_length(btrim(payout_account_number)) <= 80);
+
+alter table public.members
+  drop constraint if exists members_payout_account_name_len;
+alter table public.members
+  add constraint members_payout_account_name_len
+  check (payout_account_name is null or char_length(btrim(payout_account_name)) <= 120);
+
+create or replace function public.validated_payout_account(
+  p_channel text,
+  p_account_number text,
+  p_account_name text
+)
+returns table (
+  out_channel text,
+  out_account_number text,
+  out_account_name text
+)
+language plpgsql
+immutable
+as $$
+declare
+  v_channel text := public.normalized_payment_method(p_channel);
+  v_number text := nullif(btrim(coalesce(p_account_number, '')), '');
+  v_name text := nullif(btrim(coalesce(p_account_name, '')), '');
+begin
+  if v_number is not null and char_length(v_number) > 80 then
+    raise exception 'Payout account number must not exceed 80 characters.' using errcode = '22023';
+  end if;
+  if v_name is not null and char_length(v_name) > 120 then
+    raise exception 'Payout account name must not exceed 120 characters.' using errcode = '22023';
+  end if;
+  if v_channel is null and (v_number is not null or v_name is not null) then
+    raise exception 'Select a payout channel before saving account details.' using errcode = '22023';
+  end if;
+  if v_channel in ('GCASH', 'MAYA', 'BANK_TRANSFER') and v_number is null then
+    raise exception 'Enter an account or mobile number for % payouts.',
+      replace(initcap(replace(v_channel, '_', ' ')), 'Gcash', 'GCash')
+      using errcode = '22023';
+  end if;
+
+  out_channel := v_channel;
+  out_account_number := v_number;
+  out_account_name := v_name;
+  return next;
+end;
+$$;
+
+drop function if exists public.create_member(text, text, text, text, date, numeric, text);
+drop function if exists public.create_member(text, text, text, text, date, numeric, text, text, text, text);
+
+create or replace function public.create_member(
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_contact_number text,
+  p_date_registered date,
+  p_monthly_contribution_amount numeric,
+  p_notes text default null,
+  p_payout_channel text default null,
+  p_payout_account_number text default null,
+  p_payout_account_name text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_first_name text;
+  v_middle_name text;
+  v_last_name text;
+  v_payout_channel text;
+  v_payout_number text;
+  v_payout_name text;
+begin
+  if not public.is_admin() then
+    raise exception 'Only an administrator can create members.' using errcode = '42501';
+  end if;
+
+  v_first_name := public.validated_name_part(p_first_name, 'First name');
+  v_middle_name := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last_name := public.validated_name_part(p_last_name, 'Last name');
+
+  select vp.out_channel, vp.out_account_number, vp.out_account_name
+  into v_payout_channel, v_payout_number, v_payout_name
+  from public.validated_payout_account(p_payout_channel, p_payout_account_number, p_payout_account_name) vp;
+
+  insert into public.members (
+    full_name, first_name, middle_name, last_name, contact_number, date_registered,
+    monthly_contribution_amount, notes,
+    payout_channel, payout_account_number, payout_account_name,
+    created_by, updated_by
+  ) values (
+    concat_ws(' ', v_first_name, v_middle_name, v_last_name), v_first_name, v_middle_name, v_last_name,
+    public.normalize_ph_mobile(p_contact_number), p_date_registered,
+    public.validated_money(p_monthly_contribution_amount, 'Monthly contribution amount'),
+    nullif(btrim(p_notes), ''),
+    v_payout_channel, v_payout_number, v_payout_name,
+    auth.uid(), auth.uid()
+  ) returning id into v_id;
+
+  return v_id;
+end;
+$$;
+
+drop function if exists public.update_member(uuid, text, text, text, text, numeric, text);
+drop function if exists public.update_member(uuid, text, text, text, text, numeric, text, text, text, text);
+
+create or replace function public.update_member(
+  p_member_id uuid,
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_contact_number text,
+  p_monthly_contribution_amount numeric,
+  p_notes text,
+  p_payout_channel text default '__KEEP__',
+  p_payout_account_number text default '__KEEP__',
+  p_payout_account_name text default '__KEEP__'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_first_name text;
+  v_middle_name text;
+  v_last_name text;
+  v_update_payout boolean := (
+    coalesce(p_payout_channel, '') <> '__KEEP__'
+    or coalesce(p_payout_account_number, '') <> '__KEEP__'
+    or coalesce(p_payout_account_name, '') <> '__KEEP__'
+  );
+  v_payout_channel text;
+  v_payout_number text;
+  v_payout_name text;
+begin
+  if not public.is_admin() then
+    raise exception 'Only an administrator can update members.' using errcode = '42501';
+  end if;
+
+  v_first_name := public.validated_name_part(p_first_name, 'First name');
+  v_middle_name := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last_name := public.validated_name_part(p_last_name, 'Last name');
+
+  if v_update_payout then
+    select vp.out_channel, vp.out_account_number, vp.out_account_name
+    into v_payout_channel, v_payout_number, v_payout_name
+    from public.validated_payout_account(
+      case when p_payout_channel = '__KEEP__' then null else p_payout_channel end,
+      case when p_payout_account_number = '__KEEP__' then null else p_payout_account_number end,
+      case when p_payout_account_name = '__KEEP__' then null else p_payout_account_name end
+    ) vp;
+  end if;
+
+  update public.members
+  set full_name = concat_ws(' ', v_first_name, v_middle_name, v_last_name),
+      first_name = v_first_name,
+      middle_name = v_middle_name,
+      last_name = v_last_name,
+      contact_number = public.normalize_ph_mobile(p_contact_number),
+      monthly_contribution_amount = public.validated_money(p_monthly_contribution_amount, 'Monthly contribution amount'),
+      notes = nullif(btrim(p_notes), ''),
+      payout_channel = case when v_update_payout then v_payout_channel else payout_channel end,
+      payout_account_number = case when v_update_payout then v_payout_number else payout_account_number end,
+      payout_account_name = case when v_update_payout then v_payout_name else payout_account_name end,
+      updated_by = auth.uid()
+  where id = p_member_id
+    and group_id = public.current_group_id()
+    and deleted_at is null;
+
+  if not found then
+    raise exception 'Member not found.' using errcode = 'P0002';
+  end if;
+
+  if v_update_payout then
+    update public.profiles
+    set payout_channel = v_payout_channel,
+        payout_account_number = v_payout_number,
+        payout_account_name = v_payout_name
+    where member_id = p_member_id;
+  end if;
+end;
+$$;
+
+drop function if exists public.update_own_profile(text, text, text, text);
+drop function if exists public.update_own_profile(text, text, text, text, text, text, text);
+
+create or replace function public.update_own_profile(
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_contact_number text,
+  p_payout_channel text default '__KEEP__',
+  p_payout_account_number text default '__KEEP__',
+  p_payout_account_name text default '__KEEP__'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_first text := public.validated_name_part(p_first_name, 'First name');
+  v_middle text := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last text := public.validated_name_part(p_last_name, 'Last name');
+  v_contact text := public.normalize_ph_mobile(p_contact_number);
+  v_member_id uuid;
+  v_active_group uuid := public.current_group_id();
+  v_update_payout boolean := (
+    coalesce(p_payout_channel, '') <> '__KEEP__'
+    or coalesce(p_payout_account_number, '') <> '__KEEP__'
+    or coalesce(p_payout_account_name, '') <> '__KEEP__'
+  );
+  v_payout_channel text;
+  v_payout_number text;
+  v_payout_name text;
+begin
+  if v_contact is null then
+    raise exception 'Mobile number is required.' using errcode = '22023';
+  end if;
+
+  if v_update_payout then
+    select vp.out_channel, vp.out_account_number, vp.out_account_name
+    into v_payout_channel, v_payout_number, v_payout_name
+    from public.validated_payout_account(
+      case when p_payout_channel = '__KEEP__' then null else p_payout_channel end,
+      case when p_payout_account_number = '__KEEP__' then null else p_payout_account_number end,
+      case when p_payout_account_name = '__KEEP__' then null else p_payout_account_name end
+    ) vp;
+  end if;
+
+  update public.profiles
+  set first_name = v_first,
+      middle_name = v_middle,
+      last_name = v_last,
+      full_name = concat_ws(' ', v_first, v_middle, v_last),
+      contact_number = v_contact,
+      payout_channel = case when v_update_payout then v_payout_channel else payout_channel end,
+      payout_account_number = case when v_update_payout then v_payout_number else payout_account_number end,
+      payout_account_name = case when v_update_payout then v_payout_name else payout_account_name end
+  where id = auth.uid() and status = 'ACTIVE'
+  returning member_id into v_member_id;
+
+  if not found then
+    raise exception 'Active profile not found.' using errcode = 'P0002';
+  end if;
+
+  if v_update_payout and v_active_group is not null then
+    update public.members m
+    set payout_channel = v_payout_channel,
+        payout_account_number = v_payout_number,
+        payout_account_name = v_payout_name,
+        updated_by = auth.uid()
+    where m.group_id = v_active_group
+      and m.deleted_at is null
+      and (
+        m.id = v_member_id
+        or m.id in (
+          select gm.member_id
+          from public.group_memberships gm
+          where gm.user_id = auth.uid()
+            and gm.group_id = v_active_group
+            and gm.member_id is not null
+        )
+      );
+  end if;
+
+  insert into public.account_activity (user_id, event)
+  values (auth.uid(), 'PROFILE_UPDATE');
+end;
+$$;
+
+revoke execute on function public.validated_payout_account(text, text, text) from public, anon;
+revoke execute on function public.create_member(text, text, text, text, date, numeric, text, text, text, text) from public, anon;
+revoke execute on function public.update_member(uuid, text, text, text, text, numeric, text, text, text, text) from public, anon;
+revoke execute on function public.update_own_profile(text, text, text, text, text, text, text) from public, anon;
+
+grant execute on function public.validated_payout_account(text, text, text) to authenticated;
+grant execute on function public.create_member(text, text, text, text, date, numeric, text, text, text, text) to authenticated;
+grant execute on function public.update_member(uuid, text, text, text, text, numeric, text, text, text, text) to authenticated;
+grant execute on function public.update_own_profile(text, text, text, text, text, text, text) to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_057', 'add optional member and profile payout account fields')
+on conflict (version) do nothing;
+
+create table if not exists public.record_comments (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references public.groups(id) on delete cascade,
+  record_type text not null check (record_type in ('contribution', 'withdrawal', 'expense')),
+  record_id uuid not null,
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null check (char_length(btrim(body)) between 1 and 1000),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists record_comments_lookup_idx
+  on public.record_comments (group_id, record_type, record_id, created_at asc);
+
+alter table public.record_comments enable row level security;
+alter table public.record_comments force row level security;
+
+drop policy if exists mfa_verified_for_opted_in on public.record_comments;
+create policy mfa_verified_for_opted_in on public.record_comments
+as restrictive for all to authenticated
+using (public.mfa_access_allowed());
+
+drop policy if exists record_comments_select on public.record_comments;
+create policy record_comments_select on public.record_comments for select to authenticated
+using (
+  group_id = public.current_group_id()
+  and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
+);
+
+do $$
+begin
+  alter publication supabase_realtime add table public.record_comments;
+exception when duplicate_object then null;
+end $$;
+
+create or replace function public.get_record_comments(
+  p_record_type text,
+  p_record_id uuid
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_type text := lower(btrim(coalesce(p_record_type, '')));
+  v_group uuid := public.current_group_id();
+  v_role public.app_role := public.current_user_role();
+  v_member_id uuid := public.current_member_id();
+  v_record jsonb;
+  v_submitted_by uuid;
+  v_target_member_id uuid;
+  v_person_responsible text;
+  v_my_member_name text;
+  v_can_reply boolean := false;
+begin
+  if auth.uid() is null or v_group is null or v_role not in ('ADMIN', 'TREASURER', 'MEMBER') then
+    raise exception 'Join or select a savings group first.' using errcode = '42501';
+  end if;
+
+  if v_type not in ('contribution', 'withdrawal', 'expense') or p_record_id is null then
+    raise exception 'Invalid record reference.' using errcode = '22023';
+  end if;
+
+  if v_type = 'contribution' then
+    select
+      jsonb_build_object(
+        'id', c.id,
+        'type', 'contribution',
+        'authorName', m.full_name,
+        'amount', c.amount,
+        'date', c.payment_date,
+        'periodMonth', cp.period_month,
+        'status', c.approval_status::text,
+        'paymentMethod', c.payment_method,
+        'reference', c.transaction_reference,
+        'notes', coalesce(nullif(c.void_reason, ''), nullif(c.review_note, ''), nullif(c.notes, '')),
+        'reviewNote', coalesce(nullif(c.void_reason, ''), nullif(c.review_note, '')),
+        'receiptUrl', c.receipt_url
+      ),
+      c.submitted_by,
+      cp.member_id
+    into v_record, v_submitted_by, v_target_member_id
+    from public.contributions c
+    join public.contribution_periods cp on cp.id = c.contribution_period_id
+    join public.members m on m.id = cp.member_id
+    where c.id = p_record_id
+      and c.group_id = v_group;
+  elsif v_type = 'withdrawal' then
+    select
+      jsonb_build_object(
+        'id', w.id,
+        'type', 'withdrawal',
+        'authorName', w.person_responsible,
+        'amount', w.amount,
+        'date', w.transaction_date,
+        'category', w.category,
+        'status', w.approval_status::text,
+        'paymentMethod', w.payment_method,
+        'reference', w.reference_number,
+        'description', w.description,
+        'notes', coalesce(nullif(w.void_reason, ''), nullif(w.review_note, ''), nullif(w.notes, '')),
+        'reviewNote', coalesce(nullif(w.void_reason, ''), nullif(w.review_note, '')),
+        'receiptUrl', null
+      ),
+      w.submitted_by,
+      w.person_responsible
+    into v_record, v_submitted_by, v_person_responsible
+    from public.withdrawals w
+    where w.id = p_record_id
+      and w.group_id = v_group;
+  else
+    select
+      jsonb_build_object(
+        'id', e.id,
+        'type', 'expense',
+        'authorName', e.person_responsible,
+        'amount', e.amount,
+        'date', e.transaction_date,
+        'category', e.category,
+        'status', e.approval_status::text,
+        'paymentMethod', e.payment_method,
+        'reference', e.reference_number,
+        'description', e.description,
+        'notes', coalesce(nullif(e.void_reason, ''), nullif(e.review_note, ''), nullif(e.notes, '')),
+        'reviewNote', coalesce(nullif(e.void_reason, ''), nullif(e.review_note, '')),
+        'receiptUrl', e.receipt_url
+      ),
+      e.submitted_by,
+      e.person_responsible
+    into v_record, v_submitted_by, v_person_responsible
+    from public.expenses e
+    where e.id = p_record_id
+      and e.group_id = v_group;
+  end if;
+
+  if v_record is null then
+    raise exception 'Record not found in the active savings group.' using errcode = 'P0002';
+  end if;
+
+  if v_role in ('ADMIN', 'TREASURER') then
+    v_can_reply := true;
+  else
+    if v_member_id is not null then
+      select m.full_name into v_my_member_name
+      from public.members m
+      where m.id = v_member_id and m.group_id = v_group;
+    end if;
+    if v_type = 'contribution' then
+      v_can_reply := (v_submitted_by = auth.uid() or (v_member_id is not null and v_target_member_id = v_member_id));
+    else
+      v_can_reply := (
+        v_submitted_by = auth.uid()
+        or (v_my_member_name is not null and lower(btrim(coalesce(v_person_responsible, ''))) = lower(btrim(v_my_member_name)))
+      );
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'record', v_record,
+    'can_reply', v_can_reply,
+    'comments', coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'id', rc.id,
+            'record_type', rc.record_type,
+            'record_id', rc.record_id,
+            'author_id', rc.author_id,
+            'author_name', coalesce(nullif(btrim(p.full_name), ''), 'Group member'),
+            'author_role', coalesce(gm.role::text, p.role::text, 'MEMBER'),
+            'author_avatar_url', p.avatar_url,
+            'body', rc.body,
+            'created_at', rc.created_at,
+            'is_own', rc.author_id = auth.uid()
+          )
+          order by rc.created_at asc, rc.id asc
+        )
+        from public.record_comments rc
+        join public.profiles p on p.id = rc.author_id
+        left join public.group_memberships gm
+          on gm.group_id = v_group
+         and gm.user_id = rc.author_id
+         and gm.status = 'ACTIVE'
+        where rc.group_id = v_group
+          and rc.record_type = v_type
+          and rc.record_id = p_record_id
+      ),
+      '[]'::jsonb
+    )
+  );
+end;
+$$;
+
+create or replace function public.get_record_comment_counts(
+  p_record_type text,
+  p_record_ids uuid[]
+)
+returns table (
+  record_id uuid,
+  comment_count bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select rc.record_id, count(*)::bigint as comment_count
+  from public.record_comments rc
+  where rc.group_id = public.current_group_id()
+    and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
+    and rc.record_type = lower(btrim(coalesce(p_record_type, '')))
+    and rc.record_id = any(coalesce(p_record_ids, '{}'::uuid[]))
+  group by rc.record_id;
+$$;
+
+create or replace function public.add_record_comment(
+  p_record_type text,
+  p_record_id uuid,
+  p_body text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_type text := lower(btrim(coalesce(p_record_type, '')));
+  v_body text := nullif(btrim(coalesce(p_body, '')), '');
+  v_group uuid := public.current_group_id();
+  v_role public.app_role := public.current_user_role();
+  v_member_id uuid := public.current_member_id();
+  v_submitted_by uuid;
+  v_target_member_id uuid;
+  v_person_responsible text;
+  v_my_member_name text;
+  v_amount numeric(14,2);
+  v_subject_name text;
+  v_allowed boolean := false;
+  v_comment public.record_comments;
+  v_author_name text;
+  v_author_avatar text;
+  v_type_label text;
+  v_page text;
+  v_snippet text;
+  v_recipient record;
+begin
+  if auth.uid() is null or v_group is null or v_role not in ('ADMIN', 'TREASURER', 'MEMBER') then
+    raise exception 'Join or select a savings group first.' using errcode = '42501';
+  end if;
+
+  if v_type not in ('contribution', 'withdrawal', 'expense') or p_record_id is null then
+    raise exception 'Invalid record reference.' using errcode = '22023';
+  end if;
+
+  if v_body is null or char_length(v_body) > 1000 then
+    raise exception 'Reply must be between 1 and 1000 characters.' using errcode = '22023';
+  end if;
+
+  if v_type = 'contribution' then
+    select c.submitted_by, cp.member_id, m.full_name, c.amount
+    into v_submitted_by, v_target_member_id, v_subject_name, v_amount
+    from public.contributions c
+    join public.contribution_periods cp on cp.id = c.contribution_period_id
+    join public.members m on m.id = cp.member_id
+    where c.id = p_record_id
+      and c.group_id = v_group;
+    v_type_label := 'contribution';
+    v_page := 'contributions.html';
+  elsif v_type = 'withdrawal' then
+    select w.submitted_by, w.person_responsible, w.person_responsible, w.amount
+    into v_submitted_by, v_person_responsible, v_subject_name, v_amount
+    from public.withdrawals w
+    where w.id = p_record_id
+      and w.group_id = v_group;
+    v_type_label := 'deduction';
+    v_page := 'withdrawals.html';
+  else
+    select e.submitted_by, e.person_responsible, e.person_responsible, e.amount
+    into v_submitted_by, v_person_responsible, v_subject_name, v_amount
+    from public.expenses e
+    where e.id = p_record_id
+      and e.group_id = v_group;
+    v_type_label := 'expense';
+    v_page := 'expenses.html';
+  end if;
+
+  if not found then
+    raise exception 'Record not found in the active savings group.' using errcode = 'P0002';
+  end if;
+
+  if v_role in ('ADMIN', 'TREASURER') then
+    v_allowed := true;
+  else
+    if v_member_id is not null then
+      select m.full_name into v_my_member_name
+      from public.members m
+      where m.id = v_member_id and m.group_id = v_group;
+    end if;
+    if v_type = 'contribution' then
+      v_allowed := (v_submitted_by = auth.uid() or (v_member_id is not null and v_target_member_id = v_member_id));
+    else
+      v_allowed := (
+        v_submitted_by = auth.uid()
+        or (v_my_member_name is not null and lower(btrim(coalesce(v_person_responsible, ''))) = lower(btrim(v_my_member_name)))
+      );
+    end if;
+  end if;
+
+  if not v_allowed then
+    raise exception 'You can only reply to records associated with your account.' using errcode = '42501';
+  end if;
+
+  insert into public.record_comments (group_id, record_type, record_id, author_id, body)
+  values (v_group, v_type, p_record_id, auth.uid(), v_body)
+  returning * into v_comment;
+
+  select coalesce(nullif(btrim(p.full_name), ''), 'Group member'), p.avatar_url
+  into v_author_name, v_author_avatar
+  from public.profiles p
+  where p.id = auth.uid();
+
+  v_snippet := case
+    when char_length(v_body) > 120 then left(v_body, 117) || '...'
+    else v_body
+  end;
+
+  for v_recipient in
+    select distinct
+      r.user_id,
+      coalesce(gm.role, p.role) as target_role
+    from (
+      select a.user_id
+      from public.group_admin_ids(v_group) a
+      union
+      select v_submitted_by where v_submitted_by is not null
+      union
+      select gm_m.user_id
+      from public.group_memberships gm_m
+      where v_target_member_id is not null
+        and gm_m.group_id = v_group
+        and gm_m.member_id = v_target_member_id
+        and gm_m.status = 'ACTIVE'
+      union
+      select p_m.id
+      from public.profiles p_m
+      where v_target_member_id is not null
+        and p_m.member_id = v_target_member_id
+        and p_m.status = 'ACTIVE'
+      union
+      select prev.author_id
+      from public.record_comments prev
+      where prev.group_id = v_group
+        and prev.record_type = v_type
+        and prev.record_id = p_record_id
+    ) r
+    join public.profiles p on p.id = r.user_id
+    left join public.group_memberships gm
+      on gm.group_id = v_group
+     and gm.user_id = r.user_id
+     and gm.status = 'ACTIVE'
+    where r.user_id is not null
+      and r.user_id <> auth.uid()
+      and p.status = 'ACTIVE'
+      and p.notifications_enabled
+  loop
+    perform public.push_notification(
+      v_recipient.user_id,
+      'RECORD_COMMENT',
+      'New reply on ' || v_type_label,
+      v_author_name || ' (' || coalesce(v_subject_name, 'Member') || ' · PHP '
+        || to_char(coalesce(v_amount, 0), 'FM999,999,990.00') || '): "' || v_snippet || '"',
+      (case
+        when v_type = 'contribution' and v_recipient.target_role = 'MEMBER' then 'user.html'
+        else v_page
+      end) || '?thread=' || v_type || ':' || p_record_id::text,
+      v_group
+    );
+  end loop;
+
+  return jsonb_build_object(
+    'id', v_comment.id,
+    'record_type', v_comment.record_type,
+    'record_id', v_comment.record_id,
+    'author_id', v_comment.author_id,
+    'author_name', v_author_name,
+    'author_role', v_role::text,
+    'author_avatar_url', v_author_avatar,
+    'body', v_comment.body,
+    'created_at', v_comment.created_at,
+    'is_own', true
+  );
+end;
+$$;
+
+revoke execute on function public.get_record_comments(text, uuid) from public, anon;
+revoke execute on function public.get_record_comment_counts(text, uuid[]) from public, anon;
+revoke execute on function public.add_record_comment(text, uuid, text) from public, anon;
+
+grant execute on function public.get_record_comments(text, uuid) to authenticated;
+grant execute on function public.get_record_comment_counts(text, uuid[]) to authenticated;
+grant execute on function public.add_record_comment(text, uuid, text) to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_058', 'add in-record discussion comments and review replies')
+on conflict (version) do nothing;
+
+alter table public.profiles
+  add column if not exists payout_channel text,
+  add column if not exists payout_account_number text,
+  add column if not exists payout_account_name text;
+
+alter table public.profiles
+  drop constraint if exists profiles_payout_channel_check;
+alter table public.profiles
+  add constraint profiles_payout_channel_check
+  check (payout_channel is null or payout_channel in ('CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER', 'OTHER'));
+
+alter table public.profiles
+  drop constraint if exists profiles_payout_account_number_len;
+alter table public.profiles
+  add constraint profiles_payout_account_number_len
+  check (payout_account_number is null or char_length(btrim(payout_account_number)) <= 80);
+
+alter table public.profiles
+  drop constraint if exists profiles_payout_account_name_len;
+alter table public.profiles
+  add constraint profiles_payout_account_name_len
+  check (payout_account_name is null or char_length(btrim(payout_account_name)) <= 120);
+
+alter table public.members
+  add column if not exists payout_channel text,
+  add column if not exists payout_account_number text,
+  add column if not exists payout_account_name text;
+
+alter table public.members
+  drop constraint if exists members_payout_channel_check;
+alter table public.members
+  add constraint members_payout_channel_check
+  check (payout_channel is null or payout_channel in ('CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER', 'OTHER'));
+
+alter table public.members
+  drop constraint if exists members_payout_account_number_len;
+alter table public.members
+  add constraint members_payout_account_number_len
+  check (payout_account_number is null or char_length(btrim(payout_account_number)) <= 80);
+
+alter table public.members
+  drop constraint if exists members_payout_account_name_len;
+alter table public.members
+  add constraint members_payout_account_name_len
+  check (payout_account_name is null or char_length(btrim(payout_account_name)) <= 120);
+
+create or replace function public.validated_payout_account(
+  p_channel text,
+  p_account_number text,
+  p_account_name text
+)
+returns table (
+  out_channel text,
+  out_account_number text,
+  out_account_name text
+)
+language plpgsql
+immutable
+as $$
+declare
+  v_channel text := public.normalized_payment_method(p_channel);
+  v_number text := nullif(btrim(coalesce(p_account_number, '')), '');
+  v_name text := nullif(btrim(coalesce(p_account_name, '')), '');
+begin
+  if v_number is not null and char_length(v_number) > 80 then
+    raise exception 'Payout account number must not exceed 80 characters.' using errcode = '22023';
+  end if;
+  if v_name is not null and char_length(v_name) > 120 then
+    raise exception 'Payout account name must not exceed 120 characters.' using errcode = '22023';
+  end if;
+  if v_channel is null and (v_number is not null or v_name is not null) then
+    raise exception 'Select a payout channel before saving account details.' using errcode = '22023';
+  end if;
+  if v_channel in ('GCASH', 'MAYA', 'BANK_TRANSFER') and v_number is null then
+    raise exception 'Enter an account or mobile number for % payouts.',
+      replace(initcap(replace(v_channel, '_', ' ')), 'Gcash', 'GCash')
+      using errcode = '22023';
+  end if;
+
+  out_channel := v_channel;
+  out_account_number := v_number;
+  out_account_name := v_name;
+  return next;
+end;
+$$;
+
+drop function if exists public.create_member(text, text, text, text, date, numeric, text);
+drop function if exists public.create_member(text, text, text, text, date, numeric, text, text, text, text);
+
+create or replace function public.create_member(
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_contact_number text,
+  p_date_registered date,
+  p_monthly_contribution_amount numeric,
+  p_notes text default null,
+  p_payout_channel text default null,
+  p_payout_account_number text default null,
+  p_payout_account_name text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_first_name text;
+  v_middle_name text;
+  v_last_name text;
+  v_payout_channel text;
+  v_payout_number text;
+  v_payout_name text;
+begin
+  if not public.is_admin() then
+    raise exception 'Only an administrator can create members.' using errcode = '42501';
+  end if;
+
+  v_first_name := public.validated_name_part(p_first_name, 'First name');
+  v_middle_name := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last_name := public.validated_name_part(p_last_name, 'Last name');
+
+  select vp.out_channel, vp.out_account_number, vp.out_account_name
+  into v_payout_channel, v_payout_number, v_payout_name
+  from public.validated_payout_account(p_payout_channel, p_payout_account_number, p_payout_account_name) vp;
+
+  insert into public.members (
+    full_name, first_name, middle_name, last_name, contact_number, date_registered,
+    monthly_contribution_amount, notes,
+    payout_channel, payout_account_number, payout_account_name,
+    created_by, updated_by
+  ) values (
+    concat_ws(' ', v_first_name, v_middle_name, v_last_name), v_first_name, v_middle_name, v_last_name,
+    public.normalize_ph_mobile(p_contact_number), p_date_registered,
+    public.validated_money(p_monthly_contribution_amount, 'Monthly contribution amount'),
+    nullif(btrim(p_notes), ''),
+    v_payout_channel, v_payout_number, v_payout_name,
+    auth.uid(), auth.uid()
+  ) returning id into v_id;
+
+  return v_id;
+end;
+$$;
+
+drop function if exists public.update_member(uuid, text, text, text, text, numeric, text);
+drop function if exists public.update_member(uuid, text, text, text, text, numeric, text, text, text, text);
+
+create or replace function public.update_member(
+  p_member_id uuid,
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_contact_number text,
+  p_monthly_contribution_amount numeric,
+  p_notes text,
+  p_payout_channel text default '__KEEP__',
+  p_payout_account_number text default '__KEEP__',
+  p_payout_account_name text default '__KEEP__'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_first_name text;
+  v_middle_name text;
+  v_last_name text;
+  v_update_payout boolean := (
+    coalesce(p_payout_channel, '') <> '__KEEP__'
+    or coalesce(p_payout_account_number, '') <> '__KEEP__'
+    or coalesce(p_payout_account_name, '') <> '__KEEP__'
+  );
+  v_payout_channel text;
+  v_payout_number text;
+  v_payout_name text;
+begin
+  if not public.is_admin() then
+    raise exception 'Only an administrator can update members.' using errcode = '42501';
+  end if;
+
+  v_first_name := public.validated_name_part(p_first_name, 'First name');
+  v_middle_name := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last_name := public.validated_name_part(p_last_name, 'Last name');
+
+  if v_update_payout then
+    select vp.out_channel, vp.out_account_number, vp.out_account_name
+    into v_payout_channel, v_payout_number, v_payout_name
+    from public.validated_payout_account(
+      case when p_payout_channel = '__KEEP__' then null else p_payout_channel end,
+      case when p_payout_account_number = '__KEEP__' then null else p_payout_account_number end,
+      case when p_payout_account_name = '__KEEP__' then null else p_payout_account_name end
+    ) vp;
+  end if;
+
+  update public.members
+  set full_name = concat_ws(' ', v_first_name, v_middle_name, v_last_name),
+      first_name = v_first_name,
+      middle_name = v_middle_name,
+      last_name = v_last_name,
+      contact_number = public.normalize_ph_mobile(p_contact_number),
+      monthly_contribution_amount = public.validated_money(p_monthly_contribution_amount, 'Monthly contribution amount'),
+      notes = nullif(btrim(p_notes), ''),
+      payout_channel = case when v_update_payout then v_payout_channel else payout_channel end,
+      payout_account_number = case when v_update_payout then v_payout_number else payout_account_number end,
+      payout_account_name = case when v_update_payout then v_payout_name else payout_account_name end,
+      updated_by = auth.uid()
+  where id = p_member_id
+    and group_id = public.current_group_id()
+    and deleted_at is null;
+
+  if not found then
+    raise exception 'Member not found.' using errcode = 'P0002';
+  end if;
+
+  if v_update_payout then
+    update public.profiles
+    set payout_channel = v_payout_channel,
+        payout_account_number = v_payout_number,
+        payout_account_name = v_payout_name
+    where member_id = p_member_id;
+  end if;
+end;
+$$;
+
+drop function if exists public.update_own_profile(text, text, text, text);
+drop function if exists public.update_own_profile(text, text, text, text, text, text, text);
+
+create or replace function public.update_own_profile(
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_contact_number text,
+  p_payout_channel text default '__KEEP__',
+  p_payout_account_number text default '__KEEP__',
+  p_payout_account_name text default '__KEEP__'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_first text := public.validated_name_part(p_first_name, 'First name');
+  v_middle text := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last text := public.validated_name_part(p_last_name, 'Last name');
+  v_contact text := public.normalize_ph_mobile(p_contact_number);
+  v_member_id uuid;
+  v_active_group uuid := public.current_group_id();
+  v_update_payout boolean := (
+    coalesce(p_payout_channel, '') <> '__KEEP__'
+    or coalesce(p_payout_account_number, '') <> '__KEEP__'
+    or coalesce(p_payout_account_name, '') <> '__KEEP__'
+  );
+  v_payout_channel text;
+  v_payout_number text;
+  v_payout_name text;
+begin
+  if v_contact is null then
+    raise exception 'Mobile number is required.' using errcode = '22023';
+  end if;
+
+  if v_update_payout then
+    select vp.out_channel, vp.out_account_number, vp.out_account_name
+    into v_payout_channel, v_payout_number, v_payout_name
+    from public.validated_payout_account(
+      case when p_payout_channel = '__KEEP__' then null else p_payout_channel end,
+      case when p_payout_account_number = '__KEEP__' then null else p_payout_account_number end,
+      case when p_payout_account_name = '__KEEP__' then null else p_payout_account_name end
+    ) vp;
+  end if;
+
+  update public.profiles
+  set first_name = v_first,
+      middle_name = v_middle,
+      last_name = v_last,
+      full_name = concat_ws(' ', v_first, v_middle, v_last),
+      contact_number = v_contact,
+      payout_channel = case when v_update_payout then v_payout_channel else payout_channel end,
+      payout_account_number = case when v_update_payout then v_payout_number else payout_account_number end,
+      payout_account_name = case when v_update_payout then v_payout_name else payout_account_name end
+  where id = auth.uid() and status = 'ACTIVE'
+  returning member_id into v_member_id;
+
+  if not found then
+    raise exception 'Active profile not found.' using errcode = 'P0002';
+  end if;
+
+  if v_update_payout and v_active_group is not null then
+    update public.members m
+    set payout_channel = v_payout_channel,
+        payout_account_number = v_payout_number,
+        payout_account_name = v_payout_name,
+        updated_by = auth.uid()
+    where m.group_id = v_active_group
+      and m.deleted_at is null
+      and (
+        m.id = v_member_id
+        or m.id in (
+          select gm.member_id
+          from public.group_memberships gm
+          where gm.user_id = auth.uid()
+            and gm.group_id = v_active_group
+            and gm.member_id is not null
+        )
+      );
+  end if;
+
+  insert into public.account_activity (user_id, event)
+  values (auth.uid(), 'PROFILE_UPDATE');
+end;
+$$;
+
+revoke execute on function public.validated_payout_account(text, text, text) from public, anon;
+revoke execute on function public.create_member(text, text, text, text, date, numeric, text, text, text, text) from public, anon;
+revoke execute on function public.update_member(uuid, text, text, text, text, numeric, text, text, text, text) from public, anon;
+revoke execute on function public.update_own_profile(text, text, text, text, text, text, text) from public, anon;
+
+grant execute on function public.validated_payout_account(text, text, text) to authenticated;
+grant execute on function public.create_member(text, text, text, text, date, numeric, text, text, text, text) to authenticated;
+grant execute on function public.update_member(uuid, text, text, text, text, numeric, text, text, text, text) to authenticated;
+grant execute on function public.update_own_profile(text, text, text, text, text, text, text) to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_057', 'add optional member and profile payout account fields')
+on conflict (version) do nothing;
+
+create table if not exists public.record_comments (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references public.groups(id) on delete cascade,
+  record_type text not null check (record_type in ('contribution', 'withdrawal', 'expense')),
+  record_id uuid not null,
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null check (char_length(btrim(body)) between 1 and 1000),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists record_comments_lookup_idx
+  on public.record_comments (group_id, record_type, record_id, created_at asc);
+
+alter table public.record_comments enable row level security;
+alter table public.record_comments force row level security;
+
+drop policy if exists mfa_verified_for_opted_in on public.record_comments;
+create policy mfa_verified_for_opted_in on public.record_comments
+as restrictive for all to authenticated
+using (public.mfa_access_allowed());
+
+drop policy if exists record_comments_select on public.record_comments;
+create policy record_comments_select on public.record_comments for select to authenticated
+using (
+  group_id = public.current_group_id()
+  and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
+);
+
+do $$
+begin
+  alter publication supabase_realtime add table public.record_comments;
+exception when duplicate_object then null;
+end $$;
+
+create or replace function public.get_record_comments(
+  p_record_type text,
+  p_record_id uuid
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_type text := lower(btrim(coalesce(p_record_type, '')));
+  v_group uuid := public.current_group_id();
+  v_role public.app_role := public.current_user_role();
+  v_member_id uuid := public.current_member_id();
+  v_record jsonb;
+  v_submitted_by uuid;
+  v_target_member_id uuid;
+  v_person_responsible text;
+  v_my_member_name text;
+  v_can_reply boolean := false;
+begin
+  if auth.uid() is null or v_group is null or v_role not in ('ADMIN', 'TREASURER', 'MEMBER') then
+    raise exception 'Join or select a savings group first.' using errcode = '42501';
+  end if;
+
+  if v_type not in ('contribution', 'withdrawal', 'expense') or p_record_id is null then
+    raise exception 'Invalid record reference.' using errcode = '22023';
+  end if;
+
+  if v_type = 'contribution' then
+    select
+      jsonb_build_object(
+        'id', c.id,
+        'type', 'contribution',
+        'authorName', m.full_name,
+        'amount', c.amount,
+        'date', c.payment_date,
+        'periodMonth', cp.period_month,
+        'status', c.approval_status::text,
+        'paymentMethod', c.payment_method,
+        'reference', c.transaction_reference,
+        'notes', coalesce(nullif(c.void_reason, ''), nullif(c.review_note, ''), nullif(c.notes, '')),
+        'reviewNote', coalesce(nullif(c.void_reason, ''), nullif(c.review_note, '')),
+        'receiptUrl', c.receipt_url
+      ),
+      c.submitted_by,
+      cp.member_id
+    into v_record, v_submitted_by, v_target_member_id
+    from public.contributions c
+    join public.contribution_periods cp on cp.id = c.contribution_period_id
+    join public.members m on m.id = cp.member_id
+    where c.id = p_record_id
+      and c.group_id = v_group;
+  elsif v_type = 'withdrawal' then
+    select
+      jsonb_build_object(
+        'id', w.id,
+        'type', 'withdrawal',
+        'authorName', w.person_responsible,
+        'amount', w.amount,
+        'date', w.transaction_date,
+        'category', w.category,
+        'status', w.approval_status::text,
+        'paymentMethod', w.payment_method,
+        'reference', w.reference_number,
+        'description', w.description,
+        'notes', coalesce(nullif(w.void_reason, ''), nullif(w.review_note, ''), nullif(w.notes, '')),
+        'reviewNote', coalesce(nullif(w.void_reason, ''), nullif(w.review_note, '')),
+        'receiptUrl', null
+      ),
+      w.submitted_by,
+      w.person_responsible
+    into v_record, v_submitted_by, v_person_responsible
+    from public.withdrawals w
+    where w.id = p_record_id
+      and w.group_id = v_group;
+  else
+    select
+      jsonb_build_object(
+        'id', e.id,
+        'type', 'expense',
+        'authorName', e.person_responsible,
+        'amount', e.amount,
+        'date', e.transaction_date,
+        'category', e.category,
+        'status', e.approval_status::text,
+        'paymentMethod', e.payment_method,
+        'reference', e.reference_number,
+        'description', e.description,
+        'notes', coalesce(nullif(e.void_reason, ''), nullif(e.review_note, ''), nullif(e.notes, '')),
+        'reviewNote', coalesce(nullif(e.void_reason, ''), nullif(e.review_note, '')),
+        'receiptUrl', e.receipt_url
+      ),
+      e.submitted_by,
+      e.person_responsible
+    into v_record, v_submitted_by, v_person_responsible
+    from public.expenses e
+    where e.id = p_record_id
+      and e.group_id = v_group;
+  end if;
+
+  if v_record is null then
+    raise exception 'Record not found in the active savings group.' using errcode = 'P0002';
+  end if;
+
+  if v_role in ('ADMIN', 'TREASURER') then
+    v_can_reply := true;
+  else
+    if v_member_id is not null then
+      select m.full_name into v_my_member_name
+      from public.members m
+      where m.id = v_member_id and m.group_id = v_group;
+    end if;
+    if v_type = 'contribution' then
+      v_can_reply := (v_submitted_by = auth.uid() or (v_member_id is not null and v_target_member_id = v_member_id));
+    else
+      v_can_reply := (
+        v_submitted_by = auth.uid()
+        or (v_my_member_name is not null and lower(btrim(coalesce(v_person_responsible, ''))) = lower(btrim(v_my_member_name)))
+      );
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'record', v_record,
+    'can_reply', v_can_reply,
+    'comments', coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'id', rc.id,
+            'record_type', rc.record_type,
+            'record_id', rc.record_id,
+            'author_id', rc.author_id,
+            'author_name', coalesce(nullif(btrim(p.full_name), ''), 'Group member'),
+            'author_role', coalesce(gm.role::text, p.role::text, 'MEMBER'),
+            'author_avatar_url', p.avatar_url,
+            'body', rc.body,
+            'created_at', rc.created_at,
+            'is_own', rc.author_id = auth.uid()
+          )
+          order by rc.created_at asc, rc.id asc
+        )
+        from public.record_comments rc
+        join public.profiles p on p.id = rc.author_id
+        left join public.group_memberships gm
+          on gm.group_id = v_group
+         and gm.user_id = rc.author_id
+         and gm.status = 'ACTIVE'
+        where rc.group_id = v_group
+          and rc.record_type = v_type
+          and rc.record_id = p_record_id
+      ),
+      '[]'::jsonb
+    )
+  );
+end;
+$$;
+
+create or replace function public.get_record_comment_counts(
+  p_record_type text,
+  p_record_ids uuid[]
+)
+returns table (
+  record_id uuid,
+  comment_count bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select rc.record_id, count(*)::bigint as comment_count
+  from public.record_comments rc
+  where rc.group_id = public.current_group_id()
+    and public.current_user_role() in ('ADMIN', 'TREASURER', 'MEMBER')
+    and rc.record_type = lower(btrim(coalesce(p_record_type, '')))
+    and rc.record_id = any(coalesce(p_record_ids, '{}'::uuid[]))
+  group by rc.record_id;
+$$;
+
+create or replace function public.add_record_comment(
+  p_record_type text,
+  p_record_id uuid,
+  p_body text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_type text := lower(btrim(coalesce(p_record_type, '')));
+  v_body text := nullif(btrim(coalesce(p_body, '')), '');
+  v_group uuid := public.current_group_id();
+  v_role public.app_role := public.current_user_role();
+  v_member_id uuid := public.current_member_id();
+  v_submitted_by uuid;
+  v_target_member_id uuid;
+  v_person_responsible text;
+  v_my_member_name text;
+  v_amount numeric(14,2);
+  v_subject_name text;
+  v_allowed boolean := false;
+  v_comment public.record_comments;
+  v_author_name text;
+  v_author_avatar text;
+  v_type_label text;
+  v_page text;
+  v_snippet text;
+  v_recipient record;
+begin
+  if auth.uid() is null or v_group is null or v_role not in ('ADMIN', 'TREASURER', 'MEMBER') then
+    raise exception 'Join or select a savings group first.' using errcode = '42501';
+  end if;
+
+  if v_type not in ('contribution', 'withdrawal', 'expense') or p_record_id is null then
+    raise exception 'Invalid record reference.' using errcode = '22023';
+  end if;
+
+  if v_body is null or char_length(v_body) > 1000 then
+    raise exception 'Reply must be between 1 and 1000 characters.' using errcode = '22023';
+  end if;
+
+  if v_type = 'contribution' then
+    select c.submitted_by, cp.member_id, m.full_name, c.amount
+    into v_submitted_by, v_target_member_id, v_subject_name, v_amount
+    from public.contributions c
+    join public.contribution_periods cp on cp.id = c.contribution_period_id
+    join public.members m on m.id = cp.member_id
+    where c.id = p_record_id
+      and c.group_id = v_group;
+    v_type_label := 'contribution';
+    v_page := 'contributions.html';
+  elsif v_type = 'withdrawal' then
+    select w.submitted_by, w.person_responsible, w.person_responsible, w.amount
+    into v_submitted_by, v_person_responsible, v_subject_name, v_amount
+    from public.withdrawals w
+    where w.id = p_record_id
+      and w.group_id = v_group;
+    v_type_label := 'deduction';
+    v_page := 'withdrawals.html';
+  else
+    select e.submitted_by, e.person_responsible, e.person_responsible, e.amount
+    into v_submitted_by, v_person_responsible, v_subject_name, v_amount
+    from public.expenses e
+    where e.id = p_record_id
+      and e.group_id = v_group;
+    v_type_label := 'expense';
+    v_page := 'expenses.html';
+  end if;
+
+  if not found then
+    raise exception 'Record not found in the active savings group.' using errcode = 'P0002';
+  end if;
+
+  if v_role in ('ADMIN', 'TREASURER') then
+    v_allowed := true;
+  else
+    if v_member_id is not null then
+      select m.full_name into v_my_member_name
+      from public.members m
+      where m.id = v_member_id and m.group_id = v_group;
+    end if;
+    if v_type = 'contribution' then
+      v_allowed := (v_submitted_by = auth.uid() or (v_member_id is not null and v_target_member_id = v_member_id));
+    else
+      v_allowed := (
+        v_submitted_by = auth.uid()
+        or (v_my_member_name is not null and lower(btrim(coalesce(v_person_responsible, ''))) = lower(btrim(v_my_member_name)))
+      );
+    end if;
+  end if;
+
+  if not v_allowed then
+    raise exception 'You can only reply to records associated with your account.' using errcode = '42501';
+  end if;
+
+  insert into public.record_comments (group_id, record_type, record_id, author_id, body)
+  values (v_group, v_type, p_record_id, auth.uid(), v_body)
+  returning * into v_comment;
+
+  select coalesce(nullif(btrim(p.full_name), ''), 'Group member'), p.avatar_url
+  into v_author_name, v_author_avatar
+  from public.profiles p
+  where p.id = auth.uid();
+
+  v_snippet := case
+    when char_length(v_body) > 120 then left(v_body, 117) || '...'
+    else v_body
+  end;
+
+  for v_recipient in
+    select distinct
+      r.user_id,
+      coalesce(gm.role, p.role) as target_role
+    from (
+      select a.user_id
+      from public.group_admin_ids(v_group) a
+      union
+      select v_submitted_by where v_submitted_by is not null
+      union
+      select gm_m.user_id
+      from public.group_memberships gm_m
+      where v_target_member_id is not null
+        and gm_m.group_id = v_group
+        and gm_m.member_id = v_target_member_id
+        and gm_m.status = 'ACTIVE'
+      union
+      select p_m.id
+      from public.profiles p_m
+      where v_target_member_id is not null
+        and p_m.member_id = v_target_member_id
+        and p_m.status = 'ACTIVE'
+      union
+      select prev.author_id
+      from public.record_comments prev
+      where prev.group_id = v_group
+        and prev.record_type = v_type
+        and prev.record_id = p_record_id
+    ) r
+    join public.profiles p on p.id = r.user_id
+    left join public.group_memberships gm
+      on gm.group_id = v_group
+     and gm.user_id = r.user_id
+     and gm.status = 'ACTIVE'
+    where r.user_id is not null
+      and r.user_id <> auth.uid()
+      and p.status = 'ACTIVE'
+      and p.notifications_enabled
+  loop
+    perform public.push_notification(
+      v_recipient.user_id,
+      'RECORD_COMMENT',
+      'New reply on ' || v_type_label,
+      v_author_name || ' (' || coalesce(v_subject_name, 'Member') || ' · PHP '
+        || to_char(coalesce(v_amount, 0), 'FM999,999,990.00') || '): "' || v_snippet || '"',
+      (case
+        when v_type = 'contribution' and v_recipient.target_role = 'MEMBER' then 'user.html'
+        else v_page
+      end) || '?thread=' || v_type || ':' || p_record_id::text,
+      v_group
+    );
+  end loop;
+
+  return jsonb_build_object(
+    'id', v_comment.id,
+    'record_type', v_comment.record_type,
+    'record_id', v_comment.record_id,
+    'author_id', v_comment.author_id,
+    'author_name', v_author_name,
+    'author_role', v_role::text,
+    'author_avatar_url', v_author_avatar,
+    'body', v_comment.body,
+    'created_at', v_comment.created_at,
+    'is_own', true
+  );
+end;
+$$;
+
+revoke execute on function public.get_record_comments(text, uuid) from public, anon;
+revoke execute on function public.get_record_comment_counts(text, uuid[]) from public, anon;
+revoke execute on function public.add_record_comment(text, uuid, text) from public, anon;
+
+grant execute on function public.get_record_comments(text, uuid) to authenticated;
+grant execute on function public.get_record_comment_counts(text, uuid[]) to authenticated;
+grant execute on function public.add_record_comment(text, uuid, text) to authenticated;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_058', 'add in-record discussion comments and review replies')
+on conflict (version) do nothing;
+
 commit;
 
 -- BOOTSTRAP THE FIRST SUPER ADMIN
