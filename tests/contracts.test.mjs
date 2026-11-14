@@ -1684,6 +1684,13 @@ test('account creation, login activation, and mobile submit responsiveness contr
   // Core phone setup + active session redirect consistency
   assert.match(coreJs, /function profileNeedsSetup\(profile\)\s*\{[\s\S]*?validPhoneNumber\(profile\.contact_number\)/);
   assert.match(coreJs, /accountSetupUrl\(profile, session\.user\) \|\| homeForRole\(profile\.role\)/);
+  for (const scriptFile of readdirSync(new URL('js', root)).filter((f) => f.endsWith('.js'))) {
+    assert.doesNotMatch(
+      read(`js/${scriptFile}`),
+      /client\.(?:rpc|from)\([^\n]*\.catch\(/,
+      `${scriptFile} must not call .catch() directly on a Supabase Postgrest builder`
+    );
+  }
 
   // Manage-account Edge Function: paginated auth lookup, membership activation, email_confirm on password reset, no unscoped global PENDING activation
   assert.match(manageAccountTs, /async function findAuthUserByEmail\(/);
