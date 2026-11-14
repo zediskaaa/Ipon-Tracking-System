@@ -496,7 +496,7 @@ test('pages keep baseline security and accessible table headings', () => {
     assert.match(html, /<link rel="icon" href="assets\/favicon\.svg" type="image\/svg\+xml">/i, `${file} must use the IPON favicon`);
     assert.doesNotMatch(html, /<th>\s*<\/th>/i, `${file} has an unlabeled table column`);
   }
-  assert.match(read('login.html'), /<div class="login-brand"><img class="login-brand-logo" src="assets\/favicon\.svg" alt=""><span>IPON<\/span><\/div>/);
+  assert.match(read('login.html'), /<a class="login-brand" href="index\.html"[^>]*><img class="login-brand-logo" src="assets\/favicon\.svg" alt=""><span>IPON<\/span><\/a>/);
   assert.match(read('login.html'), /class="auth-tabs"[^>]*aria-label="Account access"/);
   assert.doesNotMatch(read('login.html'), /role="tab(?:list|panel)?"/);
   assert.match(read('manifest.webmanifest'), /"display":\s*"standalone"/);
