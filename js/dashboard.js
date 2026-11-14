@@ -183,7 +183,7 @@
       groupSwitcherWrap.hidden = myGroups.length <= 1;
       Ipon.populateGroupSelect(groupSelect, myGroups, currentGroup.group_id);
     }
-    if (groupActionsEl) groupActionsEl.hidden = state?.profile?.role !== 'ADMIN';
+    if (groupActionsEl) groupActionsEl.hidden = false;
     syncGroupHub();
   }
 
