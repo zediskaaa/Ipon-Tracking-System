@@ -4798,15 +4798,85 @@
     document.addEventListener('touchcancel', finishTouch, { passive: true });
   }
 
+  /** Send batch payment reminders to unpaid/partial members for a month with shared confirmation and summary toast. */
+  async function remindUnpaidMembers(monthIsoValue, button = null) {
+    const targetMonth = String(monthIsoValue || monthStart()).slice(0, 7) + '-01';
+    const monthText = dateLabel(targetMonth, { month: 'long', year: 'numeric' });
+    const confirmed = await confirmAction({
+      title: 'Remind unpaid members?',
+      message: `Send in-app and mobile notifications to active members with unpaid or partial balances for ${monthText}? Recent reminders within 6 hours will be skipped automatically.`,
+      acceptLabel: 'Send reminders'
+    });
+    if (!confirmed) return null;
+    if (button) setBusy(button, true, 'Sending…');
+    try {
+      const res = await rpc('remind_unpaid_members', { p_period_month: targetMonth });
+      const sent = Number(res?.sent || 0);
+      const skipped = Number(res?.skipped_recent || 0);
+      const unlinked = Number(res?.unlinked || 0);
+      const unpaidTotal = Number(res?.unpaid_total || 0);
+      if (unpaidTotal === 0) toast(`No unpaid members found for ${monthText}.`);
+      else if (sent > 0) {
+        const notes = [];
+        if (skipped) notes.push(`${skipped} recently reminded`);
+        if (unlinked) notes.push(`${unlinked} without linked login`);
+        toast(`Sent ${sent} reminder${sent === 1 ? '' : 's'} for ${monthText}${notes.length ? ` (${notes.join(', ')})` : ''}.`);
+      } else {
+        toast(`0 reminders sent (${skipped} recently notified, ${unlinked} without linked login).`);
+      }
+      return res;
+    } catch (error) {
+      toast(friendlyError(error), 'error');
+      return null;
+    } finally {
+      if (button) setBusy(button, false);
+    }
+  }
+
+  function initConnectivityBanner() {
+    if (window.__iponConnectivityBound) return;
+    window.__iponConnectivityBound = true;
+    const syncState = () => {
+      const offline = navigator.onLine === false;
+      document.body.classList.toggle('is-offline', offline);
+      let banner = document.getElementById('offline-status-banner');
+      if (offline && !banner) {
+        banner = document.createElement('div');
+        banner.id = 'offline-status-banner';
+        banner.className = 'offline-status-banner';
+        banner.setAttribute('role', 'status');
+        banner.textContent = 'Offline mode — showing cached view. Reconnect to save or submit updates.';
+        document.body.prepend(banner);
+      }
+      if (banner) banner.hidden = !offline;
+      document.querySelectorAll('[data-requires-data]').forEach((el) => {
+        if (offline) {
+          el.dataset.wasDisabledOffline = el.disabled ? '1' : '0';
+          el.disabled = true;
+        } else if (el.dataset.wasDisabledOffline === '0') {
+          el.disabled = false;
+          delete el.dataset.wasDisabledOffline;
+        }
+      });
+    };
+    window.addEventListener('offline', syncState);
+    window.addEventListener('online', () => {
+      syncState();
+      toast('Back online.');
+    });
+    syncState();
+  }
+
   if (document.body.dataset.page && !document.body.classList.contains('security-page')) mountShell();
   if (document.body.dataset.page) initPullToRefresh();
+  initConnectivityBanner();
   prepareFormValidation();
   prepareNumericInputs();
   initAppUpdateChecker();
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, setNotificationPreference,
     get profile() { return currentProfile; }

@@ -1,11 +1,14 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v6';
+const CACHE_NAME = 'ipon-shell-v7';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
   'assets/favicon.svg',
   'assets/icon-192.png',
-  'assets/icon-512.png'
+  'assets/icon-512.png',
+  'css/app.css',
+  'js/config.js',
+  'js/core.js'
 ];
 
 self.addEventListener('install', (event) => {
@@ -28,7 +31,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   event.respondWith(
-    fetch(request).catch(() => caches.match(request))
+    fetch(request)
+      .then((response) => {
+        if (response && response.ok && (response.type === 'basic' || response.type === 'cors')) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then((hit) => hit || caches.match(request, { ignoreSearch: true })))
   );
 });
 

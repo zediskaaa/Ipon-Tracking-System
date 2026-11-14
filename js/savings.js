@@ -34,7 +34,21 @@
   }
 
   const plansStorageKey = `ipon:calc-plans:${state.profile.group_id || 'group'}:${state.profile.id}`;
+  const plansMigratedKey = `${plansStorageKey}:cloud-migrated`;
   const isAdmin = state.profile.role === 'ADMIN';
+  let cloudPlansAvailable = Boolean(state.profile.group_id);
+
+  function mapPlanRow(row) {
+    return {
+      id: row.id,
+      title: row.title,
+      targetAmount: Number(row.target_amount),
+      currentSavings: Number(row.current_amount || 0),
+      targetDate: row.target_date || '',
+      members: Math.max(1, Number(row.split_members || 1)),
+      updatedAt: row.updated_at || new Date().toISOString()
+    };
+  }
 
   function readSavedPlans() {
     try {
@@ -52,6 +66,47 @@
     } catch {
       // Ignore storage quota errors gracefully
     }
+  }
+
+  async function syncSavedPlansFromCloud() {
+    if (!state.profile.group_id) return readSavedPlans();
+    const { data, error } = await Ipon.client
+      .from('savings_calculator_plans')
+      .select('id, title, target_amount, current_amount, target_date, split_members, updated_at')
+      .order('updated_at', { ascending: false })
+      .limit(20);
+    if (error) {
+      cloudPlansAvailable = false;
+      return readSavedPlans();
+    }
+    cloudPlansAvailable = true;
+    let rows = data || [];
+    const localLegacy = readSavedPlans();
+    const alreadyMigrated = localStorage.getItem(plansMigratedKey) === '1';
+    if (!alreadyMigrated && localLegacy.length && !rows.length) {
+      const inserts = localLegacy.slice(0, 20).map((p) => ({
+        group_id: state.profile.group_id,
+        user_id: state.profile.id,
+        title: String(p.title || 'Saved plan').slice(0, 150),
+        target_amount: Math.max(1, Number(p.targetAmount) || 1),
+        current_amount: Math.max(0, Number(p.currentSavings) || 0),
+        target_date: p.targetDate || null,
+        split_members: Math.min(500, Math.max(1, Math.floor(Number(p.members) || 1)))
+      }));
+      const { data: migrated } = await Ipon.client
+        .from('savings_calculator_plans')
+        .insert(inserts)
+        .select('id, title, target_amount, current_amount, target_date, split_members, updated_at');
+      if (migrated?.length) {
+        rows = migrated;
+        localStorage.setItem(plansMigratedKey, '1');
+      }
+    } else if (rows.length) {
+      localStorage.setItem(plansMigratedKey, '1');
+    }
+    const mapped = rows.map(mapPlanRow);
+    writeSavedPlans(mapped);
+    return mapped;
   }
 
   let savedPlans = readSavedPlans();
@@ -244,6 +299,13 @@
       acceptLabel: 'Delete plan'
     });
     if (!accepted) return;
+    if (cloudPlansAvailable && !planId.startsWith('plan-')) {
+      const { error } = await Ipon.client.from('savings_calculator_plans').delete().eq('id', planId);
+      if (error) {
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+        return;
+      }
+    }
     savedPlans = savedPlans.filter((p) => p.id !== planId);
     writeSavedPlans(savedPlans);
     if (selectedPlanId === planId) {
@@ -330,15 +392,17 @@
   }
 
   async function load() {
-    const [{ data: summary, error: summaryError }, { data, error }, { count: memberCount }] = await Promise.all([
+    const [{ data: summary, error: summaryError }, { data, error }, { count: memberCount }, syncedPlans] = await Promise.all([
       Ipon.client.rpc('get_savings_summary'),
       Ipon.client.from('savings_goals').select('*').order('created_at', { ascending: false }),
-      Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE').is('deleted_at', null)
+      Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE').is('deleted_at', null),
+      syncSavedPlansFromCloud()
     ]);
     if (summaryError) throw summaryError;
     if (error) throw error;
     tracked = Number(summary?.tracked_savings || 0);
     goals = data || [];
+    savedPlans = syncedPlans;
     activeMemberCount = Math.max(1, Number(memberCount || 1));
     render();
   }
@@ -532,27 +596,65 @@
     });
     if (!accepted) return;
 
-    const payload = {
-      id: existing ? existing.id : (crypto?.randomUUID ? crypto.randomUUID() : `plan-${Date.now()}`),
-      title,
-      targetAmount,
-      currentSavings,
-      targetDate: calcDate.value || '',
-      members,
-      updatedAt: new Date().toISOString()
-    };
-    if (existing) {
-      savedPlans = savedPlans.map((p) => (p.id === existing.id ? payload : p));
-    } else {
-      savedPlans = [payload, ...savedPlans].slice(0, 20);
-      selectedPlanId = payload.id;
-      selectedGoalId = '';
+    Ipon.setBusy(calcSavePlanBtn, true);
+    try {
+      let payload;
+      if (cloudPlansAvailable && state.profile.group_id) {
+        const dbRow = {
+          title: title.slice(0, 150),
+          target_amount: targetAmount,
+          current_amount: currentSavings,
+          target_date: calcDate.value || null,
+          split_members: Math.min(500, members)
+        };
+        if (existing && !existing.id.startsWith('plan-')) {
+          const { data, error } = await Ipon.client
+            .from('savings_calculator_plans')
+            .update(dbRow)
+            .eq('id', existing.id)
+            .select('id, title, target_amount, current_amount, target_date, split_members, updated_at')
+            .single();
+          if (error) throw error;
+          payload = mapPlanRow(data);
+        } else {
+          const { data, error } = await Ipon.client
+            .from('savings_calculator_plans')
+            .insert({ ...dbRow, group_id: state.profile.group_id, user_id: state.profile.id })
+            .select('id, title, target_amount, current_amount, target_date, split_members, updated_at')
+            .single();
+          if (error) throw error;
+          payload = mapPlanRow(data);
+        }
+      } else {
+        payload = {
+          id: existing ? existing.id : (crypto?.randomUUID ? crypto.randomUUID() : `plan-${Date.now()}`),
+          title,
+          targetAmount,
+          currentSavings,
+          targetDate: calcDate.value || '',
+          members,
+          updatedAt: new Date().toISOString()
+        };
+      }
+
+      if (existing) {
+        savedPlans = savedPlans.map((p) => (p.id === existing.id ? payload : p));
+        selectedPlanId = payload.id;
+      } else {
+        savedPlans = [payload, ...savedPlans].slice(0, 20);
+        selectedPlanId = payload.id;
+        selectedGoalId = '';
+      }
+      if (calcPlanName) calcPlanName.value = payload.title;
+      writeSavedPlans(savedPlans);
+      populateCalcPresets();
+      updateCalculator();
+      Ipon.toast(existing ? 'Saved plan updated.' : 'Custom plan saved.');
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(calcSavePlanBtn, false);
     }
-    if (calcPlanName) calcPlanName.value = title;
-    writeSavedPlans(savedPlans);
-    populateCalcPresets();
-    updateCalculator();
-    Ipon.toast(existing ? 'Saved plan updated.' : 'Custom plan saved.');
   });
 
   calcDeletePlanBtn?.addEventListener('click', () => {
@@ -584,5 +686,5 @@
   } finally {
     Ipon.setLoading(false);
   }
-  Ipon.subscribeToChanges('savings', ['savings_goals', 'contributions', 'withdrawals', 'expenses'], load);
+  Ipon.subscribeToChanges('savings', ['savings_goals', 'savings_calculator_plans', 'contributions', 'withdrawals', 'expenses'], load);
 })();

@@ -7,11 +7,13 @@
   const yearFilter = document.getElementById('report-year');
   const monthFilter = document.getElementById('member-report-month');
   const statusFilter = document.getElementById('member-report-status');
+  const remindBtn = document.getElementById('remind-unpaid-btn');
   let monthlyRows = [], memberRows = [], chart;
 
   function renderMonthly() {
-    yearFilter.closest('.panel-header')?.setAttribute('data-print-meta', `Year: ${yearFilter.value}`);
-    const rows = monthlyRows.filter((row) => row.month.startsWith(yearFilter.value));
+    const selectedYear = yearFilter.value;
+    yearFilter.closest('.panel-header')?.setAttribute('data-print-meta', selectedYear === 'ALL' ? 'All years' : `Year: ${selectedYear}`);
+    const rows = selectedYear === 'ALL' ? monthlyRows : monthlyRows.filter((row) => row.month.startsWith(selectedYear));
     monthlyBody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${Ipon.dateLabel(row.month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.total_additions)}</td><td>${Ipon.money(row.total_deductions)}</td><td>${Ipon.money(row.total_expenses)}</td><td>${Ipon.money(row.net_change)}</td></tr>`).join('') : '<tr><td colspan="5" class="empty-state">No confirmed activity for this year.</td></tr>';
     chart?.destroy();
     const chartCanvas = document.getElementById('monthly-chart');
@@ -19,7 +21,7 @@
     if (chartCanvas) chartCanvas.hidden = !rows.length;
     if (chartEmpty) chartEmpty.hidden = Boolean(rows.length);
     const baselineMax = Math.max(1000, memberRows.reduce((sum, row) => sum + (Number(row.required_amount) || 0), 0));
-    if (rows.length && window.Chart) chart = new Chart(chartCanvas, { type: 'bar', data: { labels: rows.map((row) => Ipon.dateLabel(row.month, { month: 'short' })), datasets: [{ label: 'Additions', data: rows.map((row) => row.total_additions), backgroundColor: '#287a4c', maxBarThickness: 42 }, { label: 'Deductions + expenses', data: rows.map((row) => Number(row.total_deductions) + Number(row.total_expenses)), backgroundColor: '#ae3934', maxBarThickness: 42 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, suggestedMax: baselineMax, ticks: { maxTicksLimit: 6, precision: 0, callback: (value) => `₱${Number(value).toLocaleString('en-PH')}` } } } } });
+    if (rows.length && window.Chart) chart = new Chart(chartCanvas, { type: 'bar', data: { labels: rows.map((row) => Ipon.dateLabel(row.month, selectedYear === 'ALL' ? { month: 'short', year: '2-digit' } : { month: 'short' })), datasets: [{ label: 'Additions', data: rows.map((row) => row.total_additions), backgroundColor: '#287a4c', maxBarThickness: 42 }, { label: 'Deductions + expenses', data: rows.map((row) => Number(row.total_deductions) + Number(row.total_expenses)), backgroundColor: '#ae3934', maxBarThickness: 42 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, suggestedMax: baselineMax, ticks: { maxTicksLimit: 6, precision: 0, callback: (value) => `₱${Number(value).toLocaleString('en-PH')}` } } } } });
   }
 
   async function loadMembers() {
@@ -46,31 +48,35 @@
     ['additions', 'deductions', 'expenses'].forEach((key) => { document.getElementById(`report-${key}`).textContent = Ipon.money(summary?.[`total_${key}`]); });
     document.getElementById('report-tracked').textContent = Ipon.money(summary?.tracked_savings); monthlyRows = data || [];
     const years = [...new Set([String(new Date().getFullYear()), ...monthlyRows.map((row) => row.month.slice(0, 4))])].sort().reverse();
-    yearFilter.innerHTML = years.map((year) => `<option>${year}</option>`).join('');
-    yearFilter.value = years.includes(selectedYear) ? selectedYear : years[0];
+    yearFilter.innerHTML = [...years.map((year) => `<option value="${year}">${year}</option>`), '<option value="ALL">All years</option>'].join('');
+    yearFilter.value = selectedYear === 'ALL' || years.includes(selectedYear) ? selectedYear : years[0];
     monthFilter.value = selectedMonth || Ipon.monthStart().slice(0, 7);
     await loadMembers(); renderMonthly();
   }
 
   yearFilter.addEventListener('change', renderMonthly);
   [monthFilter, statusFilter].forEach((filter) => filter.addEventListener('change', () => loadMembers().catch((error) => Ipon.showInlineError(memberBody, error, loadMembers, 5))));
+  remindBtn?.addEventListener('click', () => Ipon.remindUnpaidMembers(monthFilter.value, remindBtn));
   window.addEventListener('beforeprint', () => chart?.resize(720, 120));
   window.addEventListener('afterprint', () => chart?.resize());
   document.getElementById('print-report').addEventListener('click', () => { chart?.resize(720, 120); window.print(); setTimeout(() => chart?.resize(), 300); });
   document.getElementById('export-csv').addEventListener('click', () => {
-    const monthly = monthlyRows.filter((row) => row.month.startsWith(yearFilter.value)).map((row) => ['Monthly', row.month, row.total_additions, row.total_deductions, row.total_expenses, row.net_change]);
+    const selectedYear = yearFilter.value;
+    const monthly = (selectedYear === 'ALL' ? monthlyRows : monthlyRows.filter((row) => row.month.startsWith(selectedYear))).map((row) => ['Monthly', row.month, row.total_additions, row.total_deductions, row.total_expenses, row.net_change]);
     const members = memberRows.map((row) => ['Member', row.member_name, row.required_amount, row.paid_amount, row.outstanding_amount, row.payment_status]);
     const csv = [['Report type', 'Subject', 'Required/Additions', 'Confirmed/Deductions', 'Outstanding/Expenses', 'Status/Net'], ...monthly, ...members].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
-    const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-report-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
+    const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-report-${selectedYear === 'ALL' ? 'all' : selectedYear}-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
   });
   document.getElementById('export-transactions').addEventListener('click', async (event) => {
     const button = event.currentTarget;
     Ipon.setBusy(button, true, 'Exporting…');
     try {
+      const selectedYear = yearFilter.value;
+      const filterByYear = (query, col) => (/^\d{4}$/.test(selectedYear) ? query.gte(col, `${selectedYear}-01-01`).lte(col, `${selectedYear}-12-31`) : query);
       const [contributions, withdrawals, expenses] = await Promise.all([
-        Ipon.client.from('contributions').select('payment_date,amount,transaction_reference,approval_status,review_note,void_reason,created_at,contribution_periods!inner(period_month,members!inner(full_name))').order('payment_date'),
-        Ipon.client.from('withdrawals').select('transaction_date,amount,category,description,person_responsible,reference_number,approval_status,review_note,void_reason,created_at').order('transaction_date'),
-        Ipon.client.from('expenses').select('transaction_date,amount,category,description,person_responsible,reference_number,approval_status,review_note,void_reason,created_at').order('transaction_date')
+        filterByYear(Ipon.client.from('contributions').select('payment_date,amount,transaction_reference,approval_status,review_note,void_reason,created_at,contribution_periods!inner(period_month,members!inner(full_name))').order('payment_date'), 'payment_date'),
+        filterByYear(Ipon.client.from('withdrawals').select('transaction_date,amount,category,description,person_responsible,reference_number,approval_status,review_note,void_reason,created_at').order('transaction_date'), 'transaction_date'),
+        filterByYear(Ipon.client.from('expenses').select('transaction_date,amount,category,description,person_responsible,reference_number,approval_status,review_note,void_reason,created_at').order('transaction_date'), 'transaction_date')
       ]);
       for (const result of [contributions, withdrawals, expenses]) if (result.error) throw result.error;
       const rows = [
@@ -79,7 +85,7 @@
         ...expenses.data.map((row) => ['Expense', row.transaction_date, row.person_responsible, row.amount, row.category, row.description, row.reference_number, row.approval_status, row.review_note || row.void_reason || '', row.created_at])
       ].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
       const csv = [['Type', 'Activity date', 'Member or responsible person', 'Amount', 'Category', 'Description', 'Reference', 'Status', 'Review or void reason', 'Recorded at'], ...rows].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
-      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-transactions-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
+      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-transactions-${selectedYear === 'ALL' ? 'all' : selectedYear}-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
   });

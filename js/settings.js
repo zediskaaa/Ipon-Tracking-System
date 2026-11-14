@@ -15,6 +15,10 @@
   const settingsContributorDialog = document.getElementById('settings-contributor-dialog');
   const settingsContributorForm = document.getElementById('settings-contributor-form');
   const settingsContributorAmount = document.getElementById('settings-contributor-amount');
+  const cycleStartMonth = document.getElementById('cycle-start-month');
+  const cycleStatusCopy = document.getElementById('cycle-status-copy');
+  const cycleSaveBtn = document.getElementById('cycle-save-btn');
+  const cycleResetBtn = document.getElementById('cycle-reset-btn');
   let currentSettingsAdminAmount = 100;
   let members = [];
   let currentGroupId = '';
@@ -363,10 +367,56 @@
     try { await loadContributionDefault(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
   });
 
+  async function loadCycleSetting() {
+    if (!state.profile?.group_id || !cycleStartMonth) return;
+    const { data, error } = await Ipon.client.from('groups').select('cycle_start_date').eq('id', state.profile.group_id).maybeSingle();
+    if (error) return;
+    const iso = data?.cycle_start_date || '';
+    cycleStartMonth.value = iso ? iso.slice(0, 7) : '';
+    if (cycleStatusCopy) {
+      cycleStatusCopy.textContent = iso
+        ? `Dashboard & goals track active cycle from ${Ipon.dateLabel(iso, { month: 'long', year: 'numeric' })} onward.`
+        : 'Showing all-time confirmed savings across every year.';
+    }
+  }
+
+  async function saveCycleSetting(nextMonth, btn) {
+    const label = nextMonth ? Ipon.dateLabel(`${nextMonth}-01`, { month: 'long', year: 'numeric' }) : 'all-time';
+    const accepted = await Ipon.confirmAction({
+      title: nextMonth ? 'Set savings cycle start?' : 'Reset savings cycle to all-time?',
+      message: nextMonth
+        ? `Dashboard and goal totals will focus on activity starting ${label}. All older history stays preserved in Reports.`
+        : 'Dashboard and goal totals will return to counting all confirmed history across every year.',
+      acceptLabel: nextMonth ? 'Save cycle start' : 'Use all-time'
+    });
+    if (!accepted) return;
+    Ipon.setBusy(btn, true, 'Saving…');
+    try {
+      await Ipon.rpc('set_group_cycle_start', { p_cycle_start_date: nextMonth ? `${nextMonth}-01` : null });
+      Ipon.toast(nextMonth ? `Savings cycle set from ${label}.` : 'Savings cycle reset to all-time.');
+      await loadCycleSetting();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(btn, false);
+    }
+  }
+
+  cycleSaveBtn?.addEventListener('click', () => {
+    const val = cycleStartMonth?.value || '';
+    if (!val) {
+      Ipon.toast('Pick a start month first, or click All-time to reset.', 'error');
+      cycleStartMonth?.focus();
+      return;
+    }
+    saveCycleSetting(val, cycleSaveBtn);
+  });
+  cycleResetBtn?.addEventListener('click', () => saveCycleSetting('', cycleResetBtn));
+
   try {
-    await Promise.all([loadContributionDefault(), loadAccess(), loadPaymentInfo()]);
+    await Promise.all([loadContributionDefault(), loadAccess(), loadPaymentInfo(), loadCycleSetting()]);
   } catch (error) {
-    Ipon.showInlineError(accessBody, error, () => Promise.all([loadContributionDefault(), loadAccess(), loadPaymentInfo()]), 4);
+    Ipon.showInlineError(accessBody, error, () => Promise.all([loadContributionDefault(), loadAccess(), loadPaymentInfo(), loadCycleSetting()]), 4);
   } finally {
     Ipon.setLoading(false);
   }
@@ -375,6 +425,7 @@
     if (document.activeElement !== defaultAmount && document.activeElement !== deadlineDay && document.activeElement !== effectiveMonth) tasks.push(loadContributionDefault());
     if (!document.activeElement?.closest('#access-body')) tasks.push(loadAccess());
     if (!document.activeElement?.closest('#payment-info-form')) tasks.push(loadPaymentInfo());
+    if (document.activeElement !== cycleStartMonth) tasks.push(loadCycleSetting());
     await Promise.all(tasks);
   });
 })();

@@ -55,6 +55,13 @@
   const quickNotesInput = document.getElementById('quick-notes');
   const quickSubmitBtn = document.getElementById('quick-record-submit');
   const dashboardRecordEntryBtn = document.getElementById('dashboard-record-entry');
+  const cycleBadge = document.getElementById('dashboard-cycle-badge');
+  const remindUnpaidBtn = document.getElementById('dashboard-remind-unpaid-btn');
+  const bulkConfirmBtn = document.getElementById('dashboard-bulk-confirm-btn');
+  const bulkConfirmDialog = document.getElementById('bulk-confirm-dialog');
+  const bulkConfirmList = document.getElementById('bulk-confirm-list');
+  const bulkConfirmSelectAll = document.getElementById('bulk-confirm-select-all');
+  const bulkConfirmSubmit = document.getElementById('bulk-confirm-submit');
 
   let cachedMembers = [];
   let currentQuickType = 'addition';
@@ -404,6 +411,10 @@
       button.querySelector('strong').textContent = Ipon.money(item.amount);
     });
     const summary = document.querySelector('.review-summary'); summary.querySelector('em').textContent = `${count} item${count === 1 ? '' : 's'} for review`; summary.querySelector('strong').textContent = Ipon.money(total);
+    if (bulkConfirmBtn) {
+      const canBulk = state?.profile?.role === 'ADMIN' && ((items || []).some((item) => item.type === 'contribution') || count > (items || []).length);
+      bulkConfirmBtn.hidden = !canBulk;
+    }
   }
   async function getPending() {
     const { data, error } = await Ipon.client.rpc('get_pending_review_summary');
@@ -490,11 +501,18 @@
         syncGroupHub();
       }
       const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(summary.tracked_savings); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
+      if (cycleBadge) {
+        cycleBadge.hidden = !summary.cycle_start_date;
+        if (summary.cycle_start_date) {
+          cycleBadge.textContent = `Active cycle since ${Ipon.dateLabel(summary.cycle_start_date, { month: 'short', year: 'numeric' })}`;
+        }
+      }
       [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.amount].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
       const activeIds = new Set((memberResult.data || []).map((m) => m.id));
       const progress = (progressResult.data || []).filter((item) => activeIds.has(item.member_id) || Number(item.paid_amount || 0) > 0);
       const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
       document.getElementById('dashboard-members').textContent = memberResult.count ?? (memberResult.data?.length || 0); document.getElementById('dashboard-month-collected').textContent = Ipon.money(progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid; renderGoalOptions(goalResult.data || []);
+      if (remindUnpaidBtn) remindUnpaidBtn.hidden = !(unpaid > 0 && ['ADMIN', 'TREASURER'].includes(state.profile?.role));
       populateQuickRecordMembers(memberResult.data || []);
       updateDashboardGoalProgress(summary.tracked_savings);
       renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
@@ -1203,6 +1221,75 @@
     goalSelects.forEach((other) => { other.value = selectedGoalId; });
     updateDashboardGoalProgress();
   }));
+
+  remindUnpaidBtn?.addEventListener('click', () => {
+    Ipon.remindUnpaidMembers(monthIso(cursor).slice(0, 7), remindUnpaidBtn);
+  });
+
+  function syncBulkConfirmDialogState() {
+    if (!bulkConfirmList || !bulkConfirmSubmit) return;
+    const boxes = [...bulkConfirmList.querySelectorAll('.bulk-dialog-check')];
+    const checked = boxes.filter((b) => b.checked);
+    bulkConfirmSubmit.disabled = checked.length === 0;
+    bulkConfirmSubmit.textContent = checked.length ? `Confirm selected (${checked.length})` : 'Confirm selected';
+    if (bulkConfirmSelectAll) bulkConfirmSelectAll.checked = boxes.length > 0 && checked.length === boxes.length;
+  }
+
+  bulkConfirmBtn?.addEventListener('click', async () => {
+    if (!bulkConfirmDialog || !bulkConfirmList) return;
+    bulkConfirmList.innerHTML = '<p class="empty-state">Loading pending additions…</p>';
+    bulkConfirmSubmit.disabled = true;
+    bulkConfirmDialog.showModal();
+    try {
+      const { data, error } = await Ipon.client
+        .from('contributions')
+        .select('id, amount, payment_date, contribution_periods!inner(period_month, members!inner(full_name))')
+        .eq('approval_status', 'PENDING')
+        .order('payment_date', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      const rows = data || [];
+      if (!rows.length) {
+        bulkConfirmList.innerHTML = '<p class="empty-state">No pending member additions to confirm.</p>';
+        return;
+      }
+      bulkConfirmList.innerHTML = rows.map((row) => `
+        <label class="bulk-review-row">
+          <input type="checkbox" class="bulk-dialog-check" value="${row.id}" checked>
+          <span><strong>${Ipon.escapeHtml(row.contribution_periods.members.full_name)}</strong><small>${Ipon.dateLabel(row.payment_date)} · ${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</small></span>
+          <strong>${Ipon.money(row.amount)}</strong>
+        </label>
+      `).join('');
+      syncBulkConfirmDialogState();
+    } catch (error) {
+      bulkConfirmList.innerHTML = `<p class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</p>`;
+    }
+  });
+  bulkConfirmList?.addEventListener('change', (event) => {
+    if (event.target.classList.contains('bulk-dialog-check')) syncBulkConfirmDialogState();
+  });
+  bulkConfirmSelectAll?.addEventListener('change', () => {
+    const checked = bulkConfirmSelectAll.checked;
+    bulkConfirmList?.querySelectorAll('.bulk-dialog-check').forEach((box) => { box.checked = checked; });
+    syncBulkConfirmDialogState();
+  });
+  document.getElementById('close-bulk-confirm-dialog')?.addEventListener('click', () => bulkConfirmDialog?.close());
+  document.getElementById('bulk-confirm-cancel')?.addEventListener('click', () => bulkConfirmDialog?.close());
+  bulkConfirmSubmit?.addEventListener('click', async () => {
+    const ids = [...(bulkConfirmList?.querySelectorAll('.bulk-dialog-check:checked') || [])].map((box) => box.value);
+    if (!ids.length) return;
+    Ipon.setBusy(bulkConfirmSubmit, true, 'Confirming…');
+    try {
+      const result = await Ipon.rpc('bulk_confirm_contributions', { p_contribution_ids: ids });
+      bulkConfirmDialog.close();
+      Ipon.toast(`Confirmed ${Number(result?.confirmed_count || ids.length)} addition(s).`);
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(bulkConfirmSubmit, false);
+    }
+  });
   renderCalendar([]);
   state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });
   if (state.failed || state.redirecting) return;

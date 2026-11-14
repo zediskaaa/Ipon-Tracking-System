@@ -43,6 +43,39 @@
   const accountActionError = document.getElementById('account-action-error');
   const accountActionSubmit = document.getElementById('account-action-submit');
   const accountActionClose = document.getElementById('account-action-close');
+  const storageGrid = document.getElementById('sa-storage-grid');
+  const cleanupReceiptsBtn = document.getElementById('sa-cleanup-receipts-btn');
+  let storageOverview = null;
+
+  function formatBytes(bytes) {
+    const n = Number(bytes || 0);
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  function renderStorageOverview() {
+    if (!storageGrid) return;
+    const s = storageOverview;
+    if (!s) {
+      storageGrid.innerHTML = '<div class="super-admin-storage-stat"><span>Storage telemetry</span><strong>Unavailable</strong><small>Run latest database migration</small></div>';
+      if (cleanupReceiptsBtn) cleanupReceiptsBtn.disabled = true;
+      return;
+    }
+    const reclaimCount = Number(s.reclaimable_rejected_count || 0);
+    const reclaimBytes = Number(s.reclaimable_rejected_bytes || 0);
+    const annBytes = Number(s.announcements_media_bytes || 0) + Number(s.bug_reports_media_bytes || 0);
+    storageGrid.innerHTML = [
+      `<div class="super-admin-storage-stat"><span>Contribution receipts</span><strong>${formatBytes(s.contribution_receipts_bytes)}</strong><small>${Number(s.contribution_receipts_count || 0)} files attached</small></div>`,
+      `<div class="super-admin-storage-stat"><span>Expense receipts</span><strong>${formatBytes(s.expense_receipts_bytes)}</strong><small>${Number(s.expense_receipts_count || 0)} files attached</small></div>`,
+      `<div class="super-admin-storage-stat"><span>Announcements &amp; bug media</span><strong>${formatBytes(annBytes)}</strong><small>Announcements ${formatBytes(s.announcements_media_bytes)} · Bugs ${formatBytes(s.bug_reports_media_bytes)}</small></div>`,
+      `<div class="super-admin-storage-stat"><span>Avatars, QR &amp; reclaimable</span><strong>${formatBytes(s.avatars_and_qr_bytes)}</strong><small>${reclaimCount} old rejected/voided (${formatBytes(reclaimBytes)})</small></div>`
+    ].join('');
+    if (cleanupReceiptsBtn) {
+      cleanupReceiptsBtn.disabled = reclaimCount === 0;
+      cleanupReceiptsBtn.textContent = reclaimCount > 0 ? `Clean ${reclaimCount} old receipt${reclaimCount === 1 ? '' : 's'}` : 'No old receipts to clean';
+    }
+  }
   const accountActionCancel = document.getElementById('account-action-cancel');
   const featureStatusTabs = document.getElementById('feature-requests-status-tabs');
   const featureCardsContainer = document.getElementById('feature-requests-cards');
@@ -436,7 +469,7 @@
     overviewError.hidden = true;
     overviewError.replaceChildren();
     const safeQuery = (query) => (Ipon.withTimeout ? Ipon.withTimeout(query) : Promise.resolve(query)).catch((err) => ({ data: [], error: err }));
-    const [profileResult, groupResult, requestResult, featureRequestResult, bugReportResult, activityResult, logResult] = await Promise.all([
+    const [profileResult, groupResult, requestResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult] = await Promise.all([
       safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,review_note,created_at').order('created_at', { ascending: false }).limit(200)),
@@ -444,6 +477,7 @@
       safeQuery(Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200)),
+      safeQuery(Ipon.client.rpc('super_admin_storage_overview')),
       announcements ? safeQuery(announcements.load()) : Promise.resolve()
     ]);
     if (profileResult.error) throw profileResult.error;
@@ -455,13 +489,36 @@
     bugReports = bugReportResult.data || [];
     accountActivities = activityResult.data || [];
     activityLogs = logResult.data || [];
+    storageOverview = storageResult?.error ? null : (storageResult?.data || null);
     renderOverview();
+    renderStorageOverview();
     renderRequests();
     renderFeatureRequests();
     renderBugReports();
     renderUsers();
     renderActivity();
   }
+
+  cleanupReceiptsBtn?.addEventListener('click', async () => {
+    const count = Number(storageOverview?.reclaimable_rejected_count || 0);
+    if (!count) return;
+    const accepted = await Ipon.confirmAction({
+      title: `Purge ${count} old rejected/voided receipt${count === 1 ? '' : 's'}?`,
+      message: `This removes receipt image attachments from rejected or voided records older than 90 days (${formatBytes(storageOverview?.reclaimable_rejected_bytes)}). Financial amounts, notes, and audit logs remain intact.`,
+      acceptLabel: 'Purge old receipts'
+    });
+    if (!accepted) return;
+    Ipon.setBusy(cleanupReceiptsBtn, true, 'Cleaning…');
+    try {
+      const cleaned = await Ipon.rpc('super_admin_cleanup_rejected_receipts', { p_older_than_days: 90 });
+      Ipon.toast(`Removed ${Number(cleaned || 0)} archived receipt image(s).`);
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(cleanupReceiptsBtn, false);
+    }
+  });
 
   function closeApprovalDialog() {
     approvalDialog.close();

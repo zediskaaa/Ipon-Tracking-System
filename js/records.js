@@ -424,7 +424,13 @@
     (data || []).forEach((row) => {
       statusRowsByMonth.set(`${row.member_id}:${row.period_month}`, row);
     });
-    tbody.innerHTML = data.length ? data.map((row) => `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}</td></tr>`).join('') : `<tr><td colspan="6" class="empty-state">${selectedMemberName ? `No contribution status found for ${Ipon.escapeHtml(selectedMemberName)} in this month.` : 'No contribution periods for this month.'}</td></tr>`;
+    tbody.innerHTML = data.length ? data.map((row) => {
+      const canToggleExempt = state.profile.role === 'ADMIN' && ['UNPAID', 'PARTIALLY PAID', 'EXEMPT'].includes(row.payment_status);
+      const exemptBtn = canToggleExempt
+        ? ` <button class="icon-action" type="button" data-exempt-member="${row.member_id}" data-exempt-month="${row.period_month}" data-exempt-state="${row.is_exempt ? '1' : '0'}" title="${Ipon.escapeHtml(row.exempt_reason || 'Toggle exemption for this month')}">${row.is_exempt ? 'Remove exempt' : 'Exempt'}</button>`
+        : '';
+      return `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}${exemptBtn}</td></tr>`;
+    }).join('') : `<tr><td colspan="6" class="empty-state">${selectedMemberName ? `No contribution status found for ${Ipon.escapeHtml(selectedMemberName)} in this month.` : 'No contribution periods for this month.'}</td></tr>`;
 
     let entriesQuery = Ipon.client.from('contributions')
       .select('id,amount,payment_date,transaction_reference,notes,receipt_url,approval_status,void_reason,review_note,submitted_by,contribution_periods!inner(period_month,members!inner(id,full_name))', { count: 'exact' });
@@ -435,11 +441,32 @@
     if (entriesError) throw entriesError;
     recordRows = entries || [];
     updatePager(count);
+    const isAdmin = state.profile.role === 'ADMIN';
+    const hasPending = isAdmin && entries.some((entry) => entry.approval_status === 'PENDING');
+    const bulkBar = document.getElementById('bulk-confirm-bar');
+    const bulkSelectAll = document.getElementById('bulk-select-all');
+    if (bulkBar) bulkBar.hidden = !hasPending;
+    if (bulkSelectAll) bulkSelectAll.checked = false;
     contributionEntriesBody.innerHTML = entries.length ? entries.map((entry) => {
       const isCancelled = entry.approval_status === 'VOIDED' || entry.approval_status === 'REJECTED';
-      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${reasonNoteHtml(entry)}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`;
+      const bulkBox = isAdmin && entry.approval_status === 'PENDING'
+        ? `<input type="checkbox" class="bulk-entry-check" value="${entry.id}" aria-label="Select pending addition"> `
+        : '';
+      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${bulkBox}${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${reasonNoteHtml(entry)}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`;
     }).join('') : `<tr><td colspan="6" class="empty-state">${selectedMemberName ? `No additions found for ${Ipon.escapeHtml(selectedMemberName)}.` : 'No additions recorded yet.'}</td></tr>`;
+    updateBulkSelectionUi();
     if (!preserveAmount) await syncSuggestedAmount();
+  }
+
+  function updateBulkSelectionUi() {
+    const checkboxes = [...(contributionEntriesBody?.querySelectorAll('.bulk-entry-check') || [])];
+    const selected = checkboxes.filter((box) => box.checked);
+    const countEl = document.getElementById('bulk-selected-count');
+    const confirmBtn = document.getElementById('bulk-confirm-selected');
+    const selectAll = document.getElementById('bulk-select-all');
+    if (countEl) countEl.textContent = String(selected.length);
+    if (confirmBtn) confirmBtn.disabled = selected.length === 0;
+    if (selectAll) selectAll.checked = checkboxes.length > 0 && selected.length === checkboxes.length;
   }
 
   function actionButtons(row) {
@@ -498,14 +525,29 @@
     Ipon.setBusy(button, true);
     try {
       if (page === 'contributions') {
-        await Ipon.rpc('record_contribution', {
+        const allocateExcess = Boolean(form.elements.allocate_excess?.checked);
+        const rpcName = allocateExcess ? 'record_contribution_with_carryover' : 'record_contribution';
+        const rpcPayload = {
           p_member_id: state.profile.role === 'MEMBER' ? state.profile.member_id : values.get('member_id'),
           p_contribution_month: `${values.get('contribution_month')}-01`,
           p_amount: amount, p_payment_date: values.get('payment_date'),
           p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null,
           p_idempotency_key: pendingSubmissionKey,
           p_receipt_url: receiptPicker.get()
-        });
+        };
+        if (allocateExcess) rpcPayload.p_allocate_excess = true;
+        const result = await Ipon.rpc(rpcName, rpcPayload);
+        pendingSubmissionKey = null;
+        receiptPicker.clear();
+        if (allocateExcess && Number(result?.allocated_months || 0) > 1) {
+          Ipon.toast(state.profile.role === 'ADMIN'
+            ? `Confirmed and allocated across ${result.allocated_months} months.`
+            : `Submitted across ${result.allocated_months} months for admin review.`);
+        } else {
+          Ipon.toast(state.profile.role === 'ADMIN' ? 'Confirmed record saved.' : 'Record submitted for admin review.');
+        }
+        form.reset(); setDefaults(); await load();
+        return;
       } else {
         const ownResponsible = membersList.find((member) => member.id === state.profile.member_id)?.full_name || state.profile.full_name;
         const payload = {
@@ -604,8 +646,67 @@
   });
   document.getElementById('member-id')?.addEventListener('change', syncSuggestedAmount);
   document.getElementById('contribution-month')?.addEventListener('change', syncSuggestedAmount);
-  tbody.addEventListener('click', handleRecordAction);
+  tbody.addEventListener('click', async (event) => {
+    const exemptBtn = event.target.closest('[data-exempt-member]');
+    if (exemptBtn) {
+      const currentlyExempt = exemptBtn.dataset.exemptState === '1';
+      const accepted = await Ipon.confirmAction({
+        title: currentlyExempt ? 'Remove period exemption?' : 'Exempt member for this month?',
+        message: currentlyExempt
+          ? 'Restore regular required tracking for this member and month?'
+          : 'Mark this month as exempt so the member is not counted as unpaid?',
+        acceptLabel: currentlyExempt ? 'Remove exemption' : 'Mark exempt'
+      });
+      if (!accepted) return;
+      Ipon.setBusy(exemptBtn, true);
+      try {
+        await Ipon.rpc('set_period_exemption', {
+          p_member_id: exemptBtn.dataset.exemptMember,
+          p_period_month: exemptBtn.dataset.exemptMonth,
+          p_exempt: !currentlyExempt,
+          p_reason: currentlyExempt ? null : 'Marked exempt by admin'
+        });
+        Ipon.toast(currentlyExempt ? 'Period exemption removed.' : 'Member marked exempt for this month.');
+        await load(true);
+      } catch (error) {
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      } finally {
+        Ipon.setBusy(exemptBtn, false);
+      }
+      return;
+    }
+    handleRecordAction(event);
+  });
   contributionEntriesBody?.addEventListener('click', handleRecordAction);
+  contributionEntriesBody?.addEventListener('change', (event) => {
+    if (event.target.classList.contains('bulk-entry-check')) updateBulkSelectionUi();
+  });
+  document.getElementById('bulk-select-all')?.addEventListener('change', (event) => {
+    const checked = event.target.checked;
+    contributionEntriesBody?.querySelectorAll('.bulk-entry-check').forEach((box) => { box.checked = checked; });
+    updateBulkSelectionUi();
+  });
+  document.getElementById('bulk-confirm-selected')?.addEventListener('click', async (event) => {
+    const btn = event.currentTarget;
+    const ids = [...(contributionEntriesBody?.querySelectorAll('.bulk-entry-check:checked') || [])].map((box) => box.value);
+    if (!ids.length) return;
+    const accepted = await Ipon.confirmAction({
+      title: `Confirm ${ids.length} pending addition${ids.length === 1 ? '' : 's'}?`,
+      message: 'All selected pending additions will be confirmed and included in tracked savings.',
+      acceptLabel: 'Confirm selected'
+    });
+    if (!accepted) return;
+    Ipon.setBusy(btn, true, 'Confirming…');
+    try {
+      const result = await Ipon.rpc('bulk_confirm_contributions', { p_contribution_ids: ids });
+      Ipon.toast(`Confirmed ${Number(result?.confirmed_count || ids.length)} addition(s).`);
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(btn, false);
+    }
+  });
   statusFilter?.addEventListener('change', () => { historyPage = 0; load(); });
   memberFilter?.addEventListener('change', async () => {
     selectedMemberId = memberFilter.value;

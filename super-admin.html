@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 
 <head>
@@ -7,7 +7,7 @@
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://generativelanguage.googleapis.com https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>Super Admin â€” myIPON</title>
+  <title>Super Admin — myIPON</title>
   <meta name="theme-color" content="#0b3428">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261114-49">
+  <link rel="stylesheet" href="css/app.css?v=20261114-50">
 </head>
 
 <body data-page="super-admin" data-panel="super-admin">
@@ -37,35 +37,35 @@
         aria-labelledby="overview-title">
         <div class="platform-overview-heading">
           <h2 id="overview-title">System overview</h2>
-          <p id="platform-status"><span aria-hidden="true"></span>Checking platform accessâ€¦</p>
+          <p id="platform-status"><span aria-hidden="true"></span>Checking platform access…</p>
         </div>
         <dl class="platform-metrics">
           <div>
             <dt>Administrators</dt>
-            <dd id="metric-total-admins">â€”</dd>
+            <dd id="metric-total-admins">—</dd>
           </div>
           <div>
             <dt>Active</dt>
-            <dd id="metric-active-admins">â€”</dd>
+            <dd id="metric-active-admins">—</dd>
           </div>
           <div>
             <dt>Suspended</dt>
-            <dd id="metric-suspended-admins">â€”</dd>
+            <dd id="metric-suspended-admins">—</dd>
           </div>
           <div>
             <dt>Pending requests</dt>
-            <dd id="metric-pending-requests">â€”</dd>
+            <dd id="metric-pending-requests">—</dd>
           </div>
           <div>
             <dt>Savings groups</dt>
-            <dd id="metric-groups">â€”</dd>
+            <dd id="metric-groups">—</dd>
           </div>
         </dl>
         <div class="platform-briefing">
           <section aria-labelledby="attention-title">
             <h3 id="attention-title">Needs attention</h3>
             <div class="platform-attention" id="platform-attention" aria-live="polite">
-              <p>Checking pending platform workâ€¦</p>
+              <p>Checking pending platform work…</p>
             </div>
           </section>
           <nav class="platform-shortcuts" aria-labelledby="shortcuts-title">
@@ -92,6 +92,21 @@
               </svg></a>
           </nav>
         </div>
+        <section class="panel super-admin-storage" aria-labelledby="sa-storage-title">
+          <div class="panel-header">
+            <div>
+              <h3 id="sa-storage-title">Media storage &amp; receipt hygiene</h3>
+              <p>Monitor database inline media usage and clear old receipt images from rejected or voided records (90+ days old).</p>
+            </div>
+            <button class="button button-secondary button-sm" id="sa-cleanup-receipts-btn" type="button" data-requires-data disabled>Clean old rejected receipts</button>
+          </div>
+          <div class="super-admin-storage-grid" id="sa-storage-grid">
+            <div class="super-admin-storage-stat"><span>Contribution receipts</span><strong>Loading…</strong><small>—</small></div>
+            <div class="super-admin-storage-stat"><span>Expense receipts</span><strong>—</strong><small>—</small></div>
+            <div class="super-admin-storage-stat"><span>Announcements &amp; bug media</span><strong>—</strong><small>—</small></div>
+            <div class="super-admin-storage-stat"><span>Avatars, QR &amp; reclaimable</span><strong>—</strong><small>—</small></div>
+          </div>
+        </section>
         <section class="panel super-admin-announcements" aria-labelledby="sa-announcement-heading">
           <div class="panel-header">
             <div>
@@ -111,7 +126,7 @@
             </div>
           </div>
           <div class="announcement-list" id="sa-announcement-list" aria-live="polite">
-            <p class="empty-state">Loading announcementsâ€¦</p>
+            <p class="empty-state">Loading announcements…</p>
           </div>
         </section>
         <div id="overview-error" hidden></div>
@@ -150,7 +165,7 @@
             </thead>
             <tbody id="requests-body">
               <tr class="loading-row">
-                <td colspan="6">Loading requestsâ€¦</td>
+                <td colspan="6">Loading requests…</td>
               </tr>
             </tbody>
           </table>
@@ -221,7 +236,7 @@
             </thead>
             <tbody id="feature-requests-body">
               <tr class="loading-row">
-                <td colspan="7">Loading feature requestsâ€¦</td>
+                <td colspan="7">Loading feature requests…</td>
               </tr>
             </tbody>
           </table>
@@ -257,7 +272,7 @@
             </thead>
             <tbody id="bug-reports-body">
               <tr class="loading-row">
-                <td colspan="6">Loading bug reportsâ€¦</td>
+                <td colspan="6">Loading bug reports…</td>
               </tr>
             </tbody>
           </table>
@@ -306,7 +321,7 @@
               </thead>
               <tbody id="administrators-body">
                 <tr class="loading-row">
-                  <td colspan="7">Loading usersâ€¦</td>
+                  <td colspan="7">Loading users…</td>
                 </tr>
               </tbody>
             </table>
@@ -340,7 +355,7 @@
             </thead>
             <tbody id="activity-body">
               <tr class="loading-row">
-                <td colspan="3">Loading activityâ€¦</td>
+                <td colspan="3">Loading activity…</td>
               </tr>
             </tbody>
           </table>
@@ -599,7 +614,7 @@
           <textarea id="release-update-details" name="details" rows="8" required></textarea>
           <div class="ai-generation-status" id="release-update-ai-status" hidden>
             <span class="ai-pulse-dot"></span>
-            <span id="release-update-ai-status-text">Drafting with Gemini AIâ€¦</span>
+            <span id="release-update-ai-status-text">Drafting with Gemini AI…</span>
           </div>
           <small class="field-help" id="release-update-details-help">Pre-filled with implemented feature requests in
             English. Click Write with AI to generate unique copy.</small>
@@ -628,12 +643,12 @@
       <form id="gemini-key-form" class="form-grid">
         <div class="field field-wide">
           <label for="gemini-api-key-input">Gemini API key</label>
-          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AIzaSyâ€¦"
+          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AIzaSy…"
             autocomplete="off">
           <small class="field-help">
             Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank"
               rel="noopener noreferrer" style="color:#16a34a;font-weight:700;">Google AI Studio</a>.
-            Standard Gemini API keys start with <code>AIzaSyâ€¦</code>.
+            Standard Gemini API keys start with <code>AIzaSy…</code>.
           </small>
         </div>
         <div class="field field-wide">
@@ -663,11 +678,11 @@
   </dialog>
 
   <script src="js/config.js?v=20261113-43"></script>
-  <script src="js/core.js?v=20261114-49"></script>
+  <script src="js/core.js?v=20261114-50"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261114-49"></script>
+  <script src="js/super-admin.js?v=20261114-50"></script>
 </body>
 
 </html>

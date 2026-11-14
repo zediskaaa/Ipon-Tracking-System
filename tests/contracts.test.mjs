@@ -1560,3 +1560,92 @@ test('mobile UI polish, custom group switchers, clickable notifications, version
   assert.match(superAdmin, /requestedView === 'announcements'/);
 });
 
+test('workflow enhancements migration 049, schema sync, and all UI integrations are wired cleanly', () => {
+  const migration049 = read('database/migrations/20261114_049_workflow_and_planning_enhancements.sql');
+  const schema = read('database/schema.sql');
+  const sw = read('sw.js');
+  const core = read('js/core.js');
+  const css = read('css/app.css');
+  const savingsJs = read('js/savings.js');
+  const recordsJs = read('js/records.js');
+  const reportsJs = read('js/reports.js');
+  const reportsHtml = read('reports.html');
+  const dashboardJs = read('js/dashboard.js');
+  const dashboardHtml = read('dashboard.html');
+  const auditJs = read('js/audit.js');
+  const auditHtml = read('audit.html');
+  const settingsJs = read('js/settings.js');
+  const settingsHtml = read('settings.html');
+  const userJs = read('js/user.js');
+  const userHtml = read('user.html');
+  const superAdminJs = read('js/super-admin.js');
+  const superAdminHtml = read('super-admin.html');
+  const contributionsHtml = read('contributions.html');
+
+  // Database migration & schema sync
+  for (const symbol of [
+    'cycle_start_date',
+    'set_group_cycle_start',
+    'set_period_exemption',
+    'record_contribution_with_carryover',
+    'bulk_confirm_contributions',
+    'remind_unpaid_members',
+    'payment_streak',
+    'on_time_streak',
+    'savings_calculator_plans',
+    'super_admin_storage_overview',
+    'super_admin_cleanup_rejected_receipts',
+    '20261114_049'
+  ]) {
+    assert.ok(migration049.includes(symbol), `migration 049 missing ${symbol}`);
+    assert.ok(schema.includes(symbol), `schema.sql missing ${symbol}`);
+  }
+
+  // Service worker offline shell + connectivity banner
+  assert.match(sw, /ipon-shell-v7/);
+  assert.match(sw, /ignoreSearch:\s*true/);
+  assert.match(core, /function initConnectivityBanner\(/);
+  assert.match(core, /function remindUnpaidMembers\(/);
+  assert.match(css, /\.offline-status-banner/);
+
+  // Feature wiring across pages
+  assert.match(savingsJs, /from\('savings_calculator_plans'\)/);
+  assert.match(contributionsHtml, /id="allocate-excess"/);
+  assert.match(contributionsHtml, /id="bulk-confirm-bar"/);
+  assert.match(recordsJs, /set_period_exemption/);
+  assert.match(recordsJs, /record_contribution_with_carryover/);
+  assert.match(recordsJs, /bulk_confirm_contributions/);
+  assert.match(reportsHtml, /id="remind-unpaid-btn"/);
+  assert.match(reportsHtml, /<option>EXEMPT<\/option>/);
+  assert.match(reportsJs, /Ipon\.remindUnpaidMembers/);
+  assert.match(reportsJs, /<option value="ALL">All years<\/option>/);
+  assert.match(dashboardHtml, /id="dashboard-cycle-badge"/);
+  assert.match(dashboardHtml, /id="dashboard-bulk-confirm-btn"/);
+  assert.match(dashboardHtml, /id="bulk-confirm-dialog"/);
+  assert.match(dashboardJs, /bulk_confirm_contributions/);
+  assert.match(dashboardJs, /Ipon\.remindUnpaidMembers/);
+  assert.match(auditHtml, /id="audit-search"/);
+  assert.match(auditHtml, /id="audit-date-from"/);
+  assert.match(auditJs, /audit-search/);
+  assert.match(settingsHtml, /id="cycle-start-month"/);
+  assert.match(settingsJs, /set_group_cycle_start/);
+  assert.match(userHtml, /id="user-streak"/);
+  assert.match(userHtml, /id="user-history-pager"/);
+  assert.match(userJs, /data-resubmit/);
+  assert.match(userJs, /record_contribution_with_carryover/);
+  assert.match(superAdminHtml, /id="sa-storage-grid"/);
+  assert.match(superAdminJs, /super_admin_storage_overview/);
+  assert.match(superAdminJs, /super_admin_cleanup_rejected_receipts/);
+});
+
+test('HTML files have valid UTF-8 characters and intact stylesheet/script asset URLs', () => {
+  const htmlFiles = readdirSync(root).filter((file) => file.endsWith('.html'));
+  for (const file of htmlFiles) {
+    const html = read(file);
+    assert.doesNotMatch(html, /\uFFFD|\u00E2\u20AC|\u00E2\u201A/, `${file} must not contain replacement characters or mojibake`);
+    assert.doesNotMatch(html, /(?:href|src)="=2026/, `${file} must not have corrupted asset URL`);
+    assert.match(html, /href="css\/app\.css\?v=/, `${file} must link css/app.css`);
+    assert.match(html, /src="js\/core\.js\?v=/, `${file} must load js/core.js`);
+  }
+});
+
