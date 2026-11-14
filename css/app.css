@@ -125,7 +125,7 @@ a { color:inherit; }
 .panel-subsection { margin-top:2rem; padding-top:1.5rem; border-top:1px solid var(--rule); }
 .day-detail-list { display:grid; gap:.65rem; margin-top:1rem; }
 .day-detail-list article { display:grid; grid-template-columns:1fr auto; gap:.25rem 1rem; padding:.8rem 0; border-bottom:1px solid var(--rule); }
-.day-detail-list article span { display:grid; gap:.2rem; }
+.day-detail-list article > span { display:grid; gap:.2rem; }
 .day-detail-list article small { color:var(--muted); font-size:.72rem; letter-spacing:.08em; }
 .day-detail-list article strong { font-variant-numeric:tabular-nums; }
 .day-detail-list article p { grid-column:1 / -1; margin:0; color:var(--muted); }

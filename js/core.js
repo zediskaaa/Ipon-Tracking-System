@@ -3169,17 +3169,25 @@
     }
   };
 
-  function renderRecordSummaryInto(summaryBox, entry, { showDiscussAction = false } = {}) {
-    if (!summaryBox) return;
-    if (!entry) {
-      summaryBox.innerHTML = '';
-      summaryBox.hidden = true;
-      return;
-    }
+  /** Derive normalized summary metadata for a financial record dialog entry. */
+  function describeRecordEntry(entry) {
+    if (!entry) return null;
     const entryType = recordReviewMeta.types[entry.type] || { label: entry.typeLabel || 'Financial Record', klass: 'is-addition' };
     const personName = entry.authorName || entry.memberName || 'Group member';
     const submitterName = entry.submittedByName && entry.submittedByName !== personName ? entry.submittedByName : '';
     const amountText = entry.amount !== undefined && entry.amount !== null ? money(entry.amount) : '';
+    return { entryType, personName, submitterName, amountText };
+  }
+
+  function renderRecordSummaryInto(summaryBox, entry, { showDiscussAction = false } = {}) {
+    if (!summaryBox) return null;
+    const entryMeta = describeRecordEntry(entry);
+    if (!entryMeta) {
+      summaryBox.innerHTML = '';
+      summaryBox.hidden = true;
+      return null;
+    }
+    const { entryType, personName, submitterName, amountText } = entryMeta;
     const metaChips = [
       entry.date ? `Date: ${dateLabel(entry.date)}` : '',
       entry.periodMonth ? `For ${dateLabel(entry.periodMonth, { month: 'short', year: 'numeric' })}` : '',
@@ -3261,6 +3269,7 @@
 
     dialog.returnValue = '';
     document.getElementById('record-action-title').textContent = title;
+    const entryMeta = describeRecordEntry(entry);
     renderRecordSummaryInto(summaryBox, entry, { showDiscussAction: true });
 
     options.innerHTML = actions.map((action, index) => {
@@ -3330,8 +3339,8 @@
         if (confirmBox) confirmBox.dataset.tone = meta.tone;
         if (confirmHeading) confirmHeading.textContent = meta.confirmTitle;
         if (confirmText) {
-          const targetDesc = entry
-            ? `${amountText ? `${amountText} ` : ''}(${entryType.label}) for ${personName}`
+          const targetDesc = entryMeta
+            ? `${entryMeta.amountText ? `${entryMeta.amountText} ` : ''}(${entryMeta.entryType.label}) for ${entryMeta.personName}`
             : 'this record';
           confirmText.textContent = `You are about to ${meta.verb} ${targetDesc}. Every decision is recorded in the audit trail.`;
         }
@@ -3341,7 +3350,7 @@
         }
         if (submitButton) {
           submitButton.className = `button ${meta.tone === 'danger' ? 'button-danger' : 'button-primary'}`;
-          submitButton.textContent = decision === 'CONFIRM' && amountText ? `Yes, confirm ${amountText}` : meta.submitLabel;
+          submitButton.textContent = decision === 'CONFIRM' && entryMeta?.amountText ? `Yes, confirm ${entryMeta.amountText}` : meta.submitLabel;
         }
         setStep('confirm');
         submitButton?.focus();
@@ -6192,7 +6201,7 @@
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
-    PAYMENT_METHODS, normalizePaymentMethod, guessPaymentMethodFromLabel, paymentMethodMeta, paymentMethodBadge, paymentMethodPickerHtml, mountPaymentMethodPickers, setPaymentMethod, paymentMethodOptionsHtml,
+    PAYMENT_METHODS, normalizePaymentMethod, guessPaymentMethodFromLabel, paymentMethodMeta, paymentMethodIconHtml, paymentMethodBadge, paymentMethodPickerHtml, mountPaymentMethodPickers, setPaymentMethod, paymentMethodOptionsHtml,
     CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
     payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,

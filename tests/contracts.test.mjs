@@ -2257,3 +2257,125 @@ test('core script initializes without TDZ ReferenceError and mounts peso inputs 
   assert.equal(categoryInput.value, 'Custom team lunch');
   assert.equal(categoryInput.parentNode.querySelector('.category-preset-select').value, '__CUSTOM__');
 });
+
+test('requestRecordAction completes VOID review confirmation flow in VM without ReferenceError', async () => {
+  const core = read('js/core.js');
+  const ids = new Map();
+  const makeNode = (id, extra = {}) => {
+    const node = {
+      id,
+      hidden: false,
+      disabled: false,
+      required: false,
+      value: '',
+      textContent: '',
+      innerHTML: '',
+      className: '',
+      dataset: {},
+      style: {},
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      setAttribute() {},
+      removeAttribute() {},
+      addEventListener() {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      focus() {},
+      ...extra
+    };
+    if (id) ids.set(id, node);
+    return node;
+  };
+  const dialog = makeNode('record-action-dialog', { returnValue: '', showModal() {}, close(v) { this.returnValue = v; } });
+  const decisionRadio = { value: 'VOID' };
+  const form = makeNode('record-action-form', { reportValidity: () => true, elements: { decision: decisionRadio } });
+  const editStep = makeNode('record-action-step-edit');
+  const confirmStep = makeNode('record-action-step-confirm', { hidden: true });
+  makeNode('record-action-title');
+  makeNode('record-action-summary');
+  makeNode('record-action-options');
+  makeNode('record-action-reason-label');
+  makeNode('record-action-help');
+  const reason = makeNode('record-action-reason');
+  const nextButton = makeNode('record-action-next');
+  makeNode('record-action-back');
+  const submitButton = makeNode('record-action-submit');
+  const confirmBox = makeNode('record-action-confirm-box');
+  makeNode('record-action-confirm-heading');
+  const confirmText = makeNode('record-action-confirm-text');
+  const confirmNote = makeNode('record-action-confirm-note');
+  makeNode('record-action-error');
+  makeNode('app-loader');
+  const body = { dataset: { page: 'contributions' }, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, querySelectorAll: () => [], insertAdjacentHTML() {}, appendChild() {}, addEventListener() {} };
+  const ctx = {
+    window: null,
+    document: {
+      documentElement: { dataset: {} },
+      body,
+      head: { appendChild() {}, insertAdjacentHTML() {} },
+      getElementById: (id) => ids.get(id) || null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      createElement: () => makeNode(''),
+      addEventListener() {},
+      readyState: 'complete'
+    },
+    HTMLInputElement: class {},
+    HTMLFormElement: class {},
+    HTMLElement: class {},
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
+
+  let submittedPayload = null;
+  const promise = ctx.window.Ipon.requestRecordAction({
+    title: 'Void record',
+    actions: ['VOID'],
+    entry: { id: 'c1', type: 'contribution', authorName: 'Juan Dela Cruz', amount: 300, status: 'CONFIRMED' },
+    onSubmit: async (payload) => { submittedPayload = payload; }
+  });
+  reason.value = 'Re-tagging payment method';
+  form.onsubmit({ preventDefault() {} });
+  assert.equal(editStep.hidden, true);
+  assert.equal(confirmStep.hidden, false);
+  assert.equal(confirmBox.dataset.tone, 'danger');
+  assert.match(confirmText.textContent, /300\.00 \(Savings Addition\) for Juan Dela Cruz/);
+  assert.equal(confirmNote.textContent, 'Note: "Re-tagging payment method"');
+  assert.equal(nextButton.disabled, false);
+
+  await submitButton.onclick();
+  const res = await promise;
+  assert.equal(res?.decision, 'VOID');
+  assert.equal(res?.note, 'Re-tagging payment method');
+  assert.equal(submittedPayload?.decision, 'VOID');
+  assert.equal(submittedPayload?.note, 'Re-tagging payment method');
+});
+
+test('calendar view and dashboard show payment methods in hover/click details and render side-by-side status icons per day', () => {
+  const schema = read('database/schema.sql');
+  const migration = read('database/migrations/20261114_059_calendar_payment_method.sql');
+  const core = read('js/core.js');
+  const dashboard = read('js/dashboard.js');
+  const appCss = read('css/app.css');
+  const heroCss = read('css/hero-plates.css');
+  for (const sql of [schema, migration]) {
+    assert.match(sql, /create or replace view public\.v_savings_calendar[\s\S]*?c\.payment_method[\s\S]*?w\.payment_method[\s\S]*?e\.payment_method/);
+  }
+  assert.match(core, /paymentMethodIconHtml,/);
+  assert.match(dashboard, /function dayEventStatuses\(/);
+  assert.match(dashboard, /<span class="day-events">/);
+  assert.doesNotMatch(dashboard, /dayPaymentMethodsHtml/);
+  assert.match(dashboard, /paymentMethods:\s*new Set\(\)/);
+  assert.match(dashboard, /<div class="day-detail-badges">/);
+  assert.match(dashboard, /<div class="day-contributor-badges">/);
+  assert.match(appCss, /\.day-detail-list article > span\s*\{/);
+  assert.match(heroCss, /\.day \.day-events\s*\{/);
+});

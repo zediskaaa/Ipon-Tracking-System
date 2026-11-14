@@ -337,6 +337,17 @@
     const [iconClass, paths] = meta[klass] || meta.addition;
     return `<i class="status-icon ${iconClass}"><svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg></i>`;
   }
+  /** Collect unique status icons per day in consistent order so additions, deductions, expenses, and pending items appear side by side. */
+  function dayEventStatuses(activities) {
+    if (!activities.length) return [];
+    const byClass = new Map();
+    activities.forEach((activity) => {
+      const [klass, label] = statusClass(activity);
+      if (!byClass.has(klass)) byClass.set(klass, label);
+    });
+    const order = ['addition', 'deduction-event', 'expense-event', 'pending-event'];
+    return order.filter((klass) => byClass.has(klass)).map((klass) => [klass, byClass.get(klass)]);
+  }
   function calendarCells(activities) {
     const year = cursor.getFullYear(), month = cursor.getMonth();
     const firstDay = new Date(year, month, 1).getDay(); const days = new Date(year, month + 1, 0).getDate();
@@ -365,6 +376,7 @@
           totalAmount: 0,
           count: 0,
           statuses: new Set(),
+          paymentMethods: new Set(),
           notes: [],
           reviewNotes: []
         });
@@ -374,6 +386,7 @@
       entry.totalAmount += Number(activity.amount || 0);
       entry.count += 1;
       if (activity.approval_status) entry.statuses.add(activity.approval_status);
+      entry.paymentMethods.add(Ipon.normalizePaymentMethod(activity.payment_method));
       if (activity.notes) entry.notes.push(activity.notes);
       if (activity.review_note) entry.reviewNotes.push(activity.review_note);
     });
@@ -403,13 +416,15 @@
           avatarsHtml = `<span class="day-avatars" aria-hidden="true">${shown}${overflow}</span>`;
         }
         let activityHtml = '';
+        const dayEvents = activity ? dayEventStatuses(cell.activities) : [];
         if (activity) {
-          const [klass, label] = statusClass(activity);
+          const eventsMarkup = dayEvents.map(([klass, label]) => `<span class="event ${klass}" title="${Ipon.escapeHtml(label)}" aria-label="${Ipon.escapeHtml(label)}">${eventIconMarkup(klass)}</span>`).join('');
           const dayAmount = contributors.length ? contributors.reduce((sum, person) => sum + person.totalAmount, 0) : Number(activity.amount);
           const moreCount = !contributors.length && cell.activities.length > 1 ? `<small class="more-count">+${cell.activities.length - 1}</small>` : '';
-          activityHtml = `<span class="event ${klass}" title="${Ipon.escapeHtml(label)}" aria-label="${Ipon.escapeHtml(label)}">${eventIconMarkup(klass)}</span><em>${Ipon.money(dayAmount)}</em>${avatarsHtml}${moreCount}`;
+          activityHtml = `<span class="day-events">${eventsMarkup}</span><em>${Ipon.money(dayAmount)}</em>${avatarsHtml}${moreCount}`;
         }
-        const activityLabel = cell.activities.length ? `, ${cell.activities.length} recorded ${cell.activities.length === 1 ? 'activity' : 'activities'}` : ', no recorded activity';
+        const statusSummary = dayEvents.length ? `: ${dayEvents.map(([, label]) => label).join(', ')}` : '';
+        const activityLabel = cell.activities.length ? `, ${cell.activities.length} recorded ${cell.activities.length === 1 ? 'activity' : 'activities'}${statusSummary}` : ', no recorded activity';
         const isToday = cell.day === today.getDate() && cursor.getMonth() === today.getMonth() && cursor.getFullYear() === today.getFullYear();
         return `<button class="day ${column === 0 ? 'sunday' : ''}${isToday ? ' is-today' : ''}${contributors.length ? ' has-avatars' : ''}" type="button" data-date="${cell.date}"${isToday ? ' aria-current="date"' : ''} aria-label="${monthName} ${cell.day}${isToday ? ', today' : ''}${activityLabel}"><b>${cell.day}</b>${activityHtml}</button>`;
       }).join('');
@@ -671,7 +686,7 @@
       const items = currentActivities.filter((activity) => activity.activity_date === date);
       document.getElementById('day-detail-title').textContent = Ipon.dateLabel(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       document.getElementById('day-detail-list').innerHTML = items.length
-        ? items.map((activity) => { const [, label] = statusClass(activity); const detailText = [activity.notes, activity.review_note ? `Review note: ${activity.review_note}` : ''].filter(Boolean).join(' · '); return `<article><span><b>${Ipon.escapeHtml(label)}</b><small>${Ipon.escapeHtml([activity.subject_name, activity.approval_status].filter(Boolean).join(' · '))}</small></span><strong>${Ipon.money(activity.amount)}</strong>${detailText ? `<p>${Ipon.escapeHtml(detailText)}</p>` : ''}</article>`; }).join('')
+        ? items.map((activity) => { const [, label] = statusClass(activity); const detailText = [activity.notes, activity.review_note ? `Review note: ${activity.review_note}` : ''].filter(Boolean).join(' · '); return `<article><span><b>${Ipon.escapeHtml(label)}</b><small>${Ipon.escapeHtml([activity.subject_name, activity.approval_status].filter(Boolean).join(' · '))}</small><div class="day-detail-badges">${Ipon.paymentMethodBadge(activity.payment_method)}</div></span><strong>${Ipon.money(activity.amount)}</strong>${detailText ? `<p>${Ipon.escapeHtml(detailText)}</p>` : ''}</article>`; }).join('')
         : '<p class="empty-state">No recorded activity for this day.</p>';
     }
     detailPanel.hidden = false;
@@ -705,6 +720,7 @@
         <div class="day-contributor-list">
           ${contributors.map((person) => {
             const statuses = [...person.statuses].map((s) => s.charAt(0) + s.slice(1).toLowerCase()).join(', ');
+            const methodBadges = [...person.paymentMethods].map((pm) => Ipon.paymentMethodBadge(pm)).join('');
             const notes = person.notes.length ? `<p class="day-contributor-notes">${Ipon.escapeHtml(person.notes.join(' · '))}</p>` : '';
             const reviewNotes = person.reviewNotes.length ? `<small class="record-reason-note is-confirmed">Review note: ${Ipon.escapeHtml(person.reviewNotes.join(' · '))}</small>` : '';
             return `<article class="day-contributor-row">
@@ -712,6 +728,7 @@
               <div class="day-contributor-info">
                 <strong>${Ipon.escapeHtml(person.name)}</strong>
                 <small>${person.count} contribution${person.count === 1 ? '' : 's'} · ${Ipon.escapeHtml(statuses)}</small>
+                <div class="day-contributor-badges">${methodBadges}</div>
                 ${notes}
                 ${reviewNotes}
               </div>
@@ -731,6 +748,7 @@
               <div class="day-contributor-info">
                 <strong>${Ipon.escapeHtml(activity.subject_name || label)}</strong>
                 <small>${Ipon.escapeHtml([label, activity.approval_status].filter(Boolean).join(' · '))}</small>
+                <div class="day-contributor-badges">${Ipon.paymentMethodBadge(activity.payment_method)}</div>
                 ${activity.notes ? `<p class="day-contributor-notes">${Ipon.escapeHtml(activity.notes)}</p>` : ''}
                 ${activity.review_note ? `<small class="record-reason-note is-confirmed">Review note: ${Ipon.escapeHtml(activity.review_note)}</small>` : ''}
               </div>
