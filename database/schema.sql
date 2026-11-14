@@ -8487,18 +8487,23 @@ as $$
 declare
   v_actor_group uuid := public.current_group_id();
   v_row_group uuid;
+  v_old jsonb;
+  v_new jsonb;
 begin
   if current_setting('ipon.maintenance_receipt_cleanup', true) = 'on'
      and pg_trigger_depth() <= 1
      and public.is_super_admin()
      and tg_op = 'UPDATE'
-     and tg_table_name in ('contributions', 'expenses')
-     and old.group_id = new.group_id
-     and old.amount = new.amount
-     and old.approval_status = new.approval_status
-     and old.approval_status in ('REJECTED', 'VOIDED')
-     and new.receipt_url is null then
-    return new;
+     and tg_table_name in ('contributions', 'expenses') then
+    v_old := to_jsonb(old);
+    v_new := to_jsonb(new);
+    if (v_old ->> 'group_id') is not distinct from (v_new ->> 'group_id')
+       and (v_old ->> 'amount') is not distinct from (v_new ->> 'amount')
+       and (v_old ->> 'approval_status') is not distinct from (v_new ->> 'approval_status')
+       and (v_old ->> 'approval_status') in ('REJECTED', 'VOIDED')
+       and nullif(v_new ->> 'receipt_url', '') is null then
+      return new;
+    end if;
   end if;
 
   if tg_op = 'DELETE' then
@@ -8839,6 +8844,10 @@ on conflict (version) do nothing;
 
 insert into public.schema_migrations (version, name)
 values ('20261114_052', 'restore self-serve admin_create_group and admin contributor pledge sync')
+on conflict (version) do nothing;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_053', 'use jsonb old/new inspection in enforce_group_scope so tables without amount do not fail')
 on conflict (version) do nothing;
 
 commit;

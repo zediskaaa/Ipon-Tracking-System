@@ -1783,3 +1783,18 @@ test('self-serve admin_create_group allows any non-super-admin active user witho
   assert.match(schema, /20261114_052/);
 });
 
+test('enforce_group_scope inspects old/new via jsonb and group creation starts without a pre-opened invite row', () => {
+  const migration053 = read('database/migrations/20261114_053_fix_enforce_group_scope_old_record.sql');
+  const schema = read('database/schema.sql');
+  const dashboardJs = read('js/dashboard.js');
+
+  assert.match(migration053, /to_jsonb\(old\)/i);
+  assert.doesNotMatch(migration053, /old\.amount/i);
+  assert.match(migration053, /20261114_053/);
+  assert.doesNotMatch(schema, /old\.amount\s*=\s*new\.amount/i);
+  assert.match(schema, /20261114_053/);
+
+  assert.doesNotMatch(dashboardJs, /groupInviteRows\.replaceChildren\(\);\s*if \(isCreate\) appendInviteRow/);
+  assert.match(dashboardJs, /rows\.length \? '\+ Add another' : '\+ Add member'/);
+});
+

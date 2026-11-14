@@ -217,3 +217,4 @@ values ('20261114_052', 'restore self-serve admin_create_group and admin contrib
 on conflict (version) do nothing;
 
 commit;
+

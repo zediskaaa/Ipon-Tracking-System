@@ -192,6 +192,10 @@
       const btn = item.querySelector('.invite-row-remove');
       if (btn) btn.hidden = hideOnlyRow;
     });
+    if (container === groupInviteRows) {
+      const addBtn = document.getElementById('group-add-invite-row');
+      if (addBtn) addBtn.textContent = rows.length ? '+ Add another' : '+ Add member';
+    }
   }
 
   function appendInviteRow(container, { defaultAmount = 100, required = false } = {}) {
@@ -857,7 +861,7 @@
     groupMonthlyInput.required = initialIncludeSelf;
     groupInviteSection.hidden = !isCreate;
     groupInviteRows.replaceChildren();
-    if (isCreate) appendInviteRow(groupInviteRows, { defaultAmount: 100, required: false });
+    if (isCreate) syncInviteRemoveButtons(groupInviteRows, false);
     renderGroupDpPreview(pendingGroupAvatarUrl, groupForm.elements.name.value || (isCreate ? 'New Group' : currentGroup?.name));
     groupDialog.showModal();
     groupForm.elements.name.focus();
