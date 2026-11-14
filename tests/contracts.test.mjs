@@ -1610,6 +1610,8 @@ test('workflow enhancements migration 049, schema sync, and all UI integrations 
   assert.match(css, /\.offline-status-banner/);
   assert.match(css, /\.info-tip-btn/);
   assert.match(css, /\.info-tip-popover/);
+  assert.match(css, /\.summary-list\s*>\s*div/);
+  assert.doesNotMatch(css, /\.summary-list\s+div\s*\{/);
 
   // Feature wiring across pages
   assert.match(savingsJs, /from\('savings_calculator_plans'\)/);
