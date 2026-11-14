@@ -1164,6 +1164,19 @@ async function activateUserAndMembership(
   return { profile: updated || prof, disabled: false };
 }
 
+function extractClientIp(request: Request): string {
+  const candidates = [
+    request.headers.get('cf-connecting-ip'),
+    request.headers.get('x-real-ip'),
+    request.headers.get('x-forwarded-for')?.split(',')[0]
+  ];
+  for (const raw of candidates) {
+    const clean = String(raw || '').trim();
+    if (/^[0-9a-fA-F:.]{3,64}$/.test(clean)) return clean;
+  }
+  return '';
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -1178,6 +1191,101 @@ Deno.serve(async (request) => {
   let body: Record<string, unknown>;
   try { body = await request.json(); }
   catch { return json({ error: 'A valid JSON request body is required.' }, 400); }
+
+  if (body.action === 'login-throttle-status') {
+    const email = String(body.email || '').trim().toLowerCase();
+    const clientIp = extractClientIp(request) || null;
+    if ((!email || !email.includes('@')) && !clientIp) {
+      return json({ ok: true, locked: false, retry_after_seconds: 0, threshold: 5 });
+    }
+    const { data: throttle, error: throttleError } = await admin.rpc('check_login_throttle', {
+      p_email: email || '',
+      p_ip: clientIp
+    });
+    if (throttleError || !throttle) {
+      return json({ ok: true, locked: false, retry_after_seconds: 0, threshold: 5 });
+    }
+    const locked = Boolean(throttle.locked);
+    return json({
+      ok: true,
+      locked,
+      scope: locked ? throttle.scope || null : null,
+      retry_after_seconds: locked ? Number(throttle.retry_after_seconds || 0) : 0,
+      lock_duration_seconds: locked ? Number(throttle.lock_duration_seconds || 0) : 0,
+      next_lock_duration_seconds: Number(throttle.next_lock_duration_seconds || 180),
+      locked_until: locked ? throttle.locked_until || null : null,
+      threshold: Number(throttle.threshold || 5)
+    });
+  }
+
+  if (body.action === 'login-attempt') {
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = typeof body.password === 'string' ? body.password : '';
+    if (!email || !email.includes('@') || email.length > 254 || !password || password.length > 1000) {
+      return json({
+        ok: false,
+        locked: false,
+        error: { code: 'invalid_credentials', message: 'Incorrect email or password.' }
+      });
+    }
+
+    const clientIp = extractClientIp(request) || null;
+    const { data: preThrottle } = await admin.rpc('check_login_throttle', {
+      p_email: email,
+      p_ip: clientIp
+    });
+    if (preThrottle?.locked && Number(preThrottle.retry_after_seconds || 0) > 0) {
+      return json({
+        ok: false,
+        locked: true,
+        error: { code: 'login_locked', message: 'Too many incorrect sign-in attempts. Please wait before trying again.' },
+        throttle: preThrottle
+      });
+    }
+
+    const anonClient = createClient(url, anon, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
+    const { data: authData, error: authError } = await anonClient.auth.signInWithPassword({ email, password });
+    if (authError) {
+      if (authError.code === 'email_not_confirmed' || /email not confirmed/i.test(authError.message || '')) {
+        return json({
+          ok: false,
+          locked: false,
+          error: { code: 'email_not_confirmed', message: authError.message || 'Email not confirmed.' }
+        });
+      }
+      const { data: postThrottle } = await admin.rpc('record_failed_login_attempt', {
+        p_email: email,
+        p_ip: clientIp
+      });
+      return json({
+        ok: false,
+        locked: Boolean(postThrottle?.locked),
+        error: { code: 'invalid_credentials', message: 'Incorrect email or password.' },
+        throttle: postThrottle || null
+      });
+    }
+
+    if (!authData?.session?.access_token || !authData?.session?.refresh_token) {
+      return json({
+        ok: false,
+        locked: false,
+        error: { code: 'invalid_credentials', message: 'Incorrect email or password.' }
+      });
+    }
+
+    await admin.rpc('clear_login_throttle', { p_email: email, p_ip: clientIp }).catch(() => null);
+    return json({
+      ok: true,
+      locked: false,
+      session: {
+        access_token: authData.session.access_token,
+        refresh_token: authData.session.refresh_token
+      },
+      user: authData.user
+    });
+  }
 
   if (body.action === 'accept-email-invite') {
     const email = String(body.email || '').trim().toLowerCase();

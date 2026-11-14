@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-11-15T01:49:28+08:00",
+    "message": "Smooth emerald splash intro, disable auto update popup, and preserve nav shell state during loading\n\n- Eliminate Android cold-start white screen with #0b3428 splash theme, layout/WebView background, and Capacitor backgroundColor\n\n- Replace login splash img with inline SVG myIPON emblem and smooth scale pulse animation while keeping splash active during signed-in redirect\n\n- Stop automatic app update modal popups on startup and visibility change unless explicitly forced\n\n- Pre-apply theme/role in head via config.js + hero-plates.css and persist role nav tabs, unread notification badge count, user DP, and name across loading transitions\n\n- Add contract and VM runtime tests covering splash, disabled auto update popup, and zero-flicker shell state; bump asset cache versions to 20261115-75"
+  },
+  {
+    "date": "2026-11-15T01:19:22+08:00",
+    "message": "Refine dashboard and landing UI, add social/Gmail contact links, payout mobile validation, and flexible Super Admin names\n\n- Allow only `SUPER_ADMIN` accounts to save non-formal/lowercase names and optional last names in `js/core.js`, `js/account.js`, `database/migrations/20261115_067_super_admin_flexible_name.sql`, and `database/schema.sql`, while keeping strict formal capitalization rules for all other roles.\n- Enforce live PH mobile validation (`09XXXXXXXXX` / `+639XXXXXXXXX`) on GCash and Maya payout inputs in `js/core.js` alongside backend validation in `database/migrations/20261115_066_payout_mobile_validation.sql`.\n- Refine the dashboard hero, group bar, and member status layouts (`dashboard.html`, `user.html`, `css/hero-plates.css`, `css/app.css`, `js/dashboard.js`, `js/user.js`) to embed the group switcher inside the group identity card, size wallet cards cleanly, and remove excess mobile spacing.\n- Update the landing page (`index.html`, `css/landing.css`, `js/index.js`, `login.html`) with `E-wallet · Bank · Cash` highlights, direct Gmail compose links (`zedrickdemonteverde1@gmail.com`), footer social links with icons (Facebook, X, Instagram, Discord), and stable non-shifting hover icons.\n- Bump asset cache-bust versions across HTML pages and expand contract coverage in `tests/contracts.test.mjs`."
+  },
+  {
     "date": "2026-11-14T23:29:09+08:00",
     "message": "Upgrade server-side AI release notes, server Gemini key setup, landing showcase, and dark-mode contrast\n\n- Replace client/procedural release-note fallbacks with authentic server-side Gemini AI generation in `supabase/functions/manage-account/index.ts`, categorizing changes into non-empty New Features, Fixes, Improvements, Features Requested by Users, Security Updates, and Other Changes.\n- Add `coerceReleaseBulletText` and `coerceReleaseBulletList` across the Edge Function and `js/super-admin.js` (plus `[object Object]` sanitization) so nested AI JSON objects always render as detailed readable bullets.\n- Add Super-Admin-only `gemini-key-status`, `save-gemini-key`, and `test-gemini-key` actions backed by `public.internal_webhook_config`, update endpoint routing to prioritize `generativelanguage.googleapis.com` for free-tier `AQ.`/`AIza...` keys, fail fast on `401`/`403`/`BILLING_DISABLED`, and wire inline **Configure API key** recovery in `super-admin.html`, `js/super-admin.js`, and `js/core.js`.\n- Auto-generate `js/release-commits.json` during `scripts/supabase-migrate.mjs` sync and add explicit change detection plus empty-state dialog handling when no new updates have landed.\n- Fix `.toast` and `.inline-error` text wrapping plus dark-mode arrow/contrast styling in `css/app.css`, update the interactive showcase/theme preview in `index.html`, `css/landing.css`, and `js/index.js`, align policy modal deep-linking in `login.html` and `js/auth.js`, and expand contract verification in `tests/contracts.test.mjs`."
   },
@@ -170,13 +178,5 @@
   {
     "date": "2026-11-14T02:20:46+08:00",
     "message": "Match mobile active nav button size on Dashboard to all other tabs"
-  },
-  {
-    "date": "2026-11-14T02:17:36+08:00",
-    "message": "Fix Write with AI invokeAccountFunction signature and dynamic fallback"
-  },
-  {
-    "date": "2026-11-14T02:14:37+08:00",
-    "message": "Remove Ask Savings Coach Q&A chat and Vertex AI additions"
   }
 ]

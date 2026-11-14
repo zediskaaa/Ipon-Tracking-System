@@ -1482,7 +1482,8 @@ test('role-based notifications and device drawer alerts are wired across SQL, SW
   assert.match(core, /scheduleNativeDueReminders/);
   assert.match(core, /bindDeviceNotificationControls/);
   assert.match(core, /sync_my_due_reminders/);
-  assert.match(accountHtml, /data-device-notif-row/);
+  assert.doesNotMatch(accountHtml, /Phone &amp; drawer alerts|data-device-notif-row/);
+  assert.doesNotMatch(core, /Phone &amp; drawer alerts|<[^>]+data-device-notif-row/);
   assert.match(accountJs, /bindDeviceNotificationControls/);
 });
 
@@ -2542,6 +2543,8 @@ test('requestRecordAction completes VOID review confirmation flow in VM without 
       addEventListener() {},
       querySelector: () => null,
       querySelectorAll: () => [],
+      after() {},
+      before() {},
       focus() {},
       ...extra
     };
@@ -3390,9 +3393,12 @@ test('excess carry-over toggle stays hidden unless entered amount exceeds monthl
 test('sidebar profile card, account modal, and announcement reactions omit group ADMIN badge outside group contexts', () => {
   const coreJs = read('js/core.js');
   const settingsJs = read('js/settings.js');
+  const appCss = read('css/app.css');
 
   assert.match(coreJs, /sidebarUser\.innerHTML = `<strong>\$\{escapeHtml\(profile\.full_name\)\}<\/strong><small>\$\{escapeHtml\(profile\.role === 'SUPER_ADMIN' \? 'Owner' : 'My account'\)\}<\/small>`/);
   assert.match(coreJs, /getElementById\('quick-account-role'\)\.textContent = currentProfile\.role === 'SUPER_ADMIN' \? 'Owner' : \(data\.email \|\| 'My account'\)/);
+  assert.match(appCss, /\.account-profile-identity\s+small\s*\{[^}]*color\s*:\s*var\(--muted\)/);
+  assert.doesNotMatch(appCss, /\.account-profile-identity\s+small\s*\{[^}]*(?:border-radius|background|border\s*:)/);
   assert.match(coreJs, /\$\{isOwner \? '<span class="reaction-user-role-badge is-owner">Owner<\/span>' : ''\}/);
   assert.doesNotMatch(coreJs, /reaction-user-role-badge \$\{roleClass\}/);
   assert.match(settingsJs, /class="role-badge/);
@@ -3694,8 +3700,8 @@ test('phone and drawer alerts accurately detect OS/browser ON state and show cle
   assert.match(core, /Device permission: Blocked/);
   assert.match(core, /button\.textContent = 'Turn on'/);
   assert.match(core, /button\.textContent = 'On'/);
-  assert.match(accountHtml, /data-device-notif-row hidden/);
-  assert.match(accountHtml, /data-device-notif-btn disabled>Checking…<\/button>/);
+  assert.doesNotMatch(accountHtml, /Phone &amp; drawer alerts|data-device-notif-row/);
+  assert.doesNotMatch(core, /Phone &amp; drawer alerts|<[^>]+data-device-notif-row/);
   assert.match(pollReceiver, /NotificationManagerCompat\.from\(context\)\.areNotificationsEnabled\(\)/);
 });
 
@@ -4784,6 +4790,288 @@ test('navigation shell preserves active role tabs, notification count, and user 
   assert.match(hostEl.innerHTML, /Juan Dela Cruz/);
   assert.match(userAvatarSlot.innerHTML, /data:image\/png;base64,AAA/);
 });
+
+test('Android v31 splash screen and progressive anti-bruteforce login protection work end-to-end', async () => {
+  const stylesV31 = read('android/app/src/main/res/values-v31/styles.xml');
+  const stylesBase = read('android/app/src/main/res/values/styles.xml');
+  const mainActivity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const loginHtml = read('login.html');
+  const authJs = read('js/auth.js');
+  const migration = read('database/migrations/20261115_068_login_bruteforce_protection.sql');
+  const schema = read('database/schema.sql');
+  const edge = read('supabase/functions/manage-account/index.ts');
+
+  // Native Android 12+ starting window & MainActivity splash continuity (zero white flash)
+  assert.match(stylesBase, /<style name="AppTheme"[^>]*>[\s\S]*?@color\/ic_launcher_background/);
+  assert.match(stylesV31, /android:windowSplashScreenBackground">@color\/ic_launcher_background/);
+  assert.match(stylesV31, /android:windowSplashScreenAnimatedIcon">@mipmap\/ic_launcher_foreground/);
+  assert.match(stylesV31, /android:forceDarkAllowed">false/);
+  assert.match(mainActivity, /SplashScreen\.installSplashScreen\(this\);[\s\S]*?super\.onCreate\(savedInstanceState\);/);
+  assert.match(mainActivity, /splashScreen\.setKeepOnScreenCondition/);
+  assert.match(loginHtml, /html,body\{background:#0b3428\}/);
+  assert.match(loginHtml, /id="auth-security-notice"[\s\S]*?id="auth-security-timer"[\s\S]*?id="auth-security-bar"/);
+
+  // SQL & Edge progressive lockout schedule: 5 -> 3m (180s), 6 -> 10m (600s), 7 -> 30m (1800s), 8 -> 60m (3600s)
+  for (const sqlText of [migration, schema]) {
+    assert.match(sqlText, /create table if not exists public\.auth_login_throttles/);
+    assert.match(sqlText, /when p_failed_attempts = p_threshold then 180/);
+    assert.match(sqlText, /when p_failed_attempts = p_threshold \+ 1 then 600/);
+    assert.match(sqlText, /when p_failed_attempts = p_threshold \+ 2 then 1800/);
+    assert.match(sqlText, /when p_failed_attempts = p_threshold \+ 3 then 3600/);
+    assert.match(sqlText, /revoke all on table public\.auth_login_throttles from public, anon, authenticated/);
+    assert.match(sqlText, /grant execute on function public\.record_failed_login_attempt\(text, text\) to service_role/);
+  }
+  assert.match(edge, /body\.action === 'login-throttle-status'/);
+  assert.match(edge, /body\.action === 'login-attempt'/);
+  assert.match(edge, /check_login_throttle/);
+  assert.match(edge, /record_failed_login_attempt/);
+  assert.match(edge, /clear_login_throttle/);
+
+  // Runtime VM verification of progressive escalation (1..4 -> warn, 5 -> 3m, 6 -> 10m, 7 -> 30m, 8 -> 1h, success clears)
+  const makeEl = (id) => {
+    const listeners = {};
+    return {
+      id,
+      value: '',
+      name: id.replace(/-/g, '_'),
+      type: id === 'password' ? 'password' : 'text',
+      hidden: false,
+      disabled: false,
+      textContent: '',
+      innerHTML: '',
+      required: false,
+      autocomplete: '',
+      dataset: {},
+      style: { width: '' },
+      attrs: {},
+      validity: { valid: true },
+      classList: {
+        _set: new Set(),
+        add(c) { this._set.add(c); },
+        remove(c) { this._set.delete(c); },
+        toggle(c, force) { if (force === undefined) { if (this._set.has(c)) this._set.delete(c); else this._set.add(c); } else if (force) this._set.add(c); else this._set.delete(c); },
+        contains(c) { return this._set.has(c); }
+      },
+      elements: {},
+      checkValidity() { return Boolean(this.value); },
+      reportValidity() { return true; },
+      setCustomValidity() {},
+      setAttribute(k, v) { this.attrs[k] = String(v); },
+      removeAttribute(k) { delete this.attrs[k]; },
+      addEventListener(evt, fn) { (listeners[evt] ||= []).push(fn); },
+      dispatch(evt, payload = {}) {
+        for (const fn of listeners[evt] || []) {
+          return fn({ preventDefault() {}, ...payload });
+        }
+      },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      after() {},
+      before() {},
+      focus() {},
+      close() {},
+      showModal() {},
+      reset() { this.value = ''; },
+      offsetLeft: 0,
+      offsetWidth: 80
+    };
+  };
+
+  const els = new Map([
+    'auth-form', 'auth-message', 'auth-submit',
+    'auth-security-notice', 'auth-security-title', 'auth-security-detail',
+    'auth-security-timer', 'auth-security-bar-wrap', 'auth-security-bar',
+    'first-name-field', 'middle-name-field', 'last-name-field',
+    'first-name', 'middle-name', 'last-name', 'email',
+    'contact-number-field', 'contact-number', 'request-reason-field', 'request-reason',
+    'password', 'password-confirmation-field', 'password-confirmation',
+    'password-toggle', 'password-confirmation-toggle', 'forgot-password-open',
+    'recovery-dialog', 'recovery-request-form', 'recovery-message',
+    'show-login', 'show-signup', 'auth-tab-indicator', 'auth-title', 'auth-copy'
+  ].map((id) => [id, makeEl(id)]));
+  els.get('recovery-request-form').elements = { email: makeEl('recovery-email') };
+  els.get('auth-submit').textContent = 'Sign in';
+
+  const storage = new Map();
+  let fakeNow = 1_794_700_000_000;
+  let invokeCalls = 0;
+  let simulatedFails = 0;
+  let nextAllowedPassword = 'CorrectPassword!1';
+
+  const FakeDate = class extends Date {
+    constructor(...args) { super(args.length ? args[0] : fakeNow); }
+    static now() { return fakeNow; }
+  };
+
+  const doc = {
+    body: makeEl('body'),
+    getElementById: (id) => els.get(id) || makeEl(id),
+    querySelectorAll: () => [],
+    addEventListener() {}
+  };
+  const IponMock = {
+    init: async () => ({ configured: true, session: null, profile: null }),
+    setLoading() {},
+    setBusy(btn, busy, text) {
+      if (!btn) return;
+      btn.disabled = Boolean(busy);
+      btn.classList.toggle('is-busy', Boolean(busy));
+      if (busy && text) btn.textContent = text;
+    },
+    bindPasswordStrength: () => ({ element: makeEl('pw-strength'), update() {} }),
+    nameRuleForField: () => ({ ruleMsg: '', placeholder: '' }),
+    friendlyError: (e) => String(e?.message || e || 'Error'),
+    broadcastAuthEvent() {},
+    requiresMfaChallenge: async () => false,
+    rpc: async () => null,
+    homeForRole: () => 'dashboard.html',
+    accountSetupUrl: () => null,
+    invokeAccountFunction: async (body) => {
+      if (body.action === 'login-throttle-status') return { ok: true, locked: false, retry_after_seconds: 0 };
+      if (body.action !== 'login-attempt') return {};
+      invokeCalls += 1;
+      if (body.password === nextAllowedPassword) {
+        simulatedFails = 0;
+        return {
+          ok: true,
+          locked: false,
+          session: { access_token: 'tok', refresh_token: 'ref' },
+          user: { id: 'u1', email: body.email }
+        };
+      }
+      simulatedFails += 1;
+      const durations = { 5: 180, 6: 600, 7: 1800, 8: 3600 };
+      const lockSec = durations[simulatedFails] || (simulatedFails >= 9 ? 7200 : 0);
+      const nextSec = durations[simulatedFails + 1] || 7200;
+      return {
+        ok: false,
+        locked: lockSec > 0,
+        error: { code: 'invalid_credentials', message: 'Incorrect email or password.' },
+        throttle: {
+          locked: lockSec > 0,
+          scope: 'EMAIL',
+          failed_attempts: simulatedFails,
+          threshold: 5,
+          remaining_attempts: Math.max(0, 5 - simulatedFails),
+          retry_after_seconds: lockSec,
+          lock_duration_seconds: lockSec,
+          next_lock_duration_seconds: nextSec
+        }
+      };
+    },
+    client: {
+      auth: {
+        setSession: async () => ({ data: { user: { id: 'u1', email: 'user@example.com' }, session: {} }, error: null }),
+        signOut: async () => ({})
+      },
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: { id: 'u1', role: 'MEMBER', status: 'ACTIVE', contact_number: '09171234567' }, error: null })
+          })
+        })
+      })
+    }
+  };
+
+  let replacedTo = null;
+  const ctx = {
+    document: doc,
+    Ipon: IponMock,
+    navigator: { onLine: true, standalone: false },
+    location: { search: '', href: 'https://my-ipon.vercel.app/login.html', pathname: '/login.html', replace(u) { replacedTo = u; } },
+    history: { replaceState() {} },
+    localStorage: {
+      getItem: (k) => (storage.has(k) ? storage.get(k) : null),
+      setItem: (k, v) => storage.set(k, String(v)),
+      removeItem: (k) => storage.delete(k)
+    },
+    sessionStorage: {
+      _m: new Map(),
+      getItem(k) { return this._m.get(k) || null; },
+      setItem(k, v) { this._m.set(k, String(v)); }
+    },
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, JSON, Error, RegExp, Promise,
+    Date: FakeDate,
+    setTimeout,
+    clearTimeout,
+    setInterval: () => 1,
+    clearInterval() {},
+    requestAnimationFrame: (fn) => fn(),
+    matchMedia: () => ({ matches: false }),
+    addEventListener() {},
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(authJs, ctx, { filename: 'js/auth.js' });
+  await new Promise((r) => setTimeout(r, 10));
+
+  const emailEl = els.get('email');
+  const passEl = els.get('password');
+  const submitBtn = els.get('auth-submit');
+  const noticeEl = els.get('auth-security-notice');
+  const detailEl = els.get('auth-security-detail');
+  const timerEl = els.get('auth-security-timer');
+  const msgEl = els.get('auth-message');
+
+  emailEl.value = 'tester@example.com';
+  passEl.value = 'WrongPass1!';
+
+  // Fail 1 & 2: error message shown, no security notice yet
+  await els.get('auth-form').dispatch('submit');
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(msgEl.textContent, 'Incorrect email or password.');
+  assert.equal(noticeEl.hidden, true);
+
+  // Fail 3 & 4: amber warning with exact remaining attempts
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(noticeEl.hidden, false);
+  assert.equal(noticeEl.dataset.state, 'warn');
+  assert.match(detailEl.textContent, /2 attempts left/);
+
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(noticeEl.dataset.state, 'warn');
+  assert.match(detailEl.textContent, /1 attempt left/);
+
+  // Fail 5: locked for 3 minutes (03:00), submit disabled
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(noticeEl.dataset.state, 'locked');
+  assert.equal(timerEl.textContent, '03:00');
+  assert.equal(submitBtn.disabled, true);
+  assert.equal(invokeCalls, 5);
+
+  // Submitting again while still inside 3m cooldown is blocked client-side before backend
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(invokeCalls, 5);
+
+  // Wait 3 minutes -> fail 6th attempt -> escalates to 10 minutes (10:00)
+  fakeNow += 181_000;
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(invokeCalls, 6);
+  assert.equal(noticeEl.dataset.state, 'locked');
+  assert.equal(timerEl.textContent, '10:00');
+
+  // Wait 10 minutes -> fail 7th attempt -> escalates to 30 minutes (30:00)
+  fakeNow += 601_000;
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(invokeCalls, 7);
+  assert.equal(timerEl.textContent, '30:00');
+
+  // Wait 30 minutes -> fail 8th attempt -> escalates to 1 hour (1:00:00)
+  fakeNow += 1_801_000;
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(invokeCalls, 8);
+  assert.equal(timerEl.textContent, '1:00:00');
+
+  // Wait 1 hour -> correct password succeeds & resets lockout
+  fakeNow += 3_601_000;
+  passEl.value = nextAllowedPassword;
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(replacedTo, 'dashboard.html');
+  assert.equal(noticeEl.hidden, true);
+  assert.equal(submitBtn.disabled, false);
+});
+
 
 
 

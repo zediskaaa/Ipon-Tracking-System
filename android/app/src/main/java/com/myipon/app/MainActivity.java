@@ -5,20 +5,40 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
+import android.view.View;
+import android.webkit.WebView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        final long splashStartMs = SystemClock.uptimeMillis();
+        final SplashScreen splashScreen = SplashScreen.installSplashScreen(this);
+        final int emeraldBg = Color.parseColor("#0b3428");
         registerPlugin(BackgroundNotificationsPlugin.class);
         super.onCreate(savedInstanceState);
-        if (getBridge() != null && getBridge().getWebView() != null) {
-            getBridge().getWebView().setBackgroundColor(Color.parseColor("#0b3428"));
+        getWindow().setBackgroundDrawable(new ColorDrawable(emeraldBg));
+        getWindow().getDecorView().setBackgroundColor(emeraldBg);
+        final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        if (webView != null) {
+            webView.setBackgroundColor(Color.parseColor("#0b3428"));
+            if (webView.getParent() instanceof View) {
+                ((View) webView.getParent()).setBackgroundColor(emeraldBg);
+            }
         }
+        splashScreen.setKeepOnScreenCondition(() -> {
+            final long elapsed = SystemClock.uptimeMillis() - splashStartMs;
+            if (elapsed >= 900L) return false;
+            if (webView == null) return elapsed < 300L;
+            return elapsed < 250L || webView.getProgress() < 80;
+        });
         NotificationPollReceiver.ensureChannel(this);
         maybeRequestPostNotifications();
         NotificationSyncService.ensureStarted(this);

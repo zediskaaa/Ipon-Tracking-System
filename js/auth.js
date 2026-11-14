@@ -3,6 +3,12 @@
   const form = document.getElementById('auth-form');
   const message = document.getElementById('auth-message');
   const submit = document.getElementById('auth-submit');
+  const securityNotice = document.getElementById('auth-security-notice');
+  const securityTitle = document.getElementById('auth-security-title');
+  const securityDetail = document.getElementById('auth-security-detail');
+  const securityTimer = document.getElementById('auth-security-timer');
+  const securityBarWrap = document.getElementById('auth-security-bar-wrap');
+  const securityBar = document.getElementById('auth-security-bar');
   const firstNameField = document.getElementById('first-name-field');
   const middleNameField = document.getElementById('middle-name-field');
   const lastNameField = document.getElementById('last-name-field');
@@ -70,6 +76,322 @@
     if (!input.placeholder && meta.placeholder) input.placeholder = meta.placeholder;
   });
   let mode = 'login';
+  const LOGIN_THROTTLE_STORAGE_KEY = 'myipon_login_throttle_v1';
+  const LOGIN_MAX_ATTEMPTS = 5;
+  const LOGIN_STALE_WINDOW_MS = 24 * 60 * 60 * 1000;
+  let lockCountdownTimer = null;
+
+  function computeLockoutSeconds(failedAttempts) {
+    if (failedAttempts < LOGIN_MAX_ATTEMPTS) return 0;
+    const step = failedAttempts - LOGIN_MAX_ATTEMPTS;
+    if (step === 0) return 180;
+    if (step === 1) return 600;
+    if (step === 2) return 1800;
+    if (step === 3) return 3600;
+    return Math.min(86400, 3600 * Math.pow(2, Math.min(5, step - 3)));
+  }
+
+  function formatLockCountdown(totalSeconds) {
+    const secs = Math.max(0, Math.ceil(Number(totalSeconds) || 0));
+    const hrs = Math.floor(secs / 3600);
+    const mins = Math.floor((secs % 3600) / 60);
+    const rem = secs % 60;
+    if (hrs > 0) return `${hrs}:${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+    return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+  }
+
+  function formatLockDurationText(seconds) {
+    const secs = Math.max(1, Math.round(Number(seconds) || 0));
+    if (secs < 60) return `${secs} second${secs === 1 ? '' : 's'}`;
+    if (secs % 3600 === 0) {
+      const hrs = secs / 3600;
+      return `${hrs} hour${hrs === 1 ? '' : 's'}`;
+    }
+    const mins = Math.ceil(secs / 60);
+    return `${mins} minute${mins === 1 ? '' : 's'}`;
+  }
+
+  function readThrottleMap() {
+    try {
+      const raw = localStorage.getItem(LOGIN_THROTTLE_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function writeThrottleMap(map) {
+    try {
+      const entries = Object.entries(map || {});
+      if (!entries.length) localStorage.removeItem(LOGIN_THROTTLE_STORAGE_KEY);
+      else localStorage.setItem(LOGIN_THROTTLE_STORAGE_KEY, JSON.stringify(map));
+    } catch { }
+  }
+
+  function normalizeThrottleEmail(rawEmail) {
+    return String(rawEmail || '').trim().toLowerCase();
+  }
+
+  function pruneThrottleEntry(entry, nowMs) {
+    if (!entry || typeof entry !== 'object') return null;
+    const lockedUntilMs = Number(entry.lockedUntilMs || 0);
+    const lastFailedAt = Number(entry.lastFailedAt || 0);
+    const isLocked = lockedUntilMs > nowMs;
+    if (!isLocked && lastFailedAt > 0 && nowMs - lastFailedAt > LOGIN_STALE_WINDOW_MS) {
+      return null;
+    }
+    return {
+      failedAttempts: Math.max(0, Number(entry.failedAttempts || 0)),
+      lockedUntilMs,
+      lockDurationSeconds: Math.max(0, Number(entry.lockDurationSeconds || 0)),
+      nextLockDurationSeconds: Math.max(180, Number(entry.nextLockDurationSeconds || 180)),
+      lastFailedAt,
+      scope: entry.scope || 'EMAIL',
+      cooldownCompletedShown: Boolean(entry.cooldownCompletedShown)
+    };
+  }
+
+  function getActiveThrottleState(rawEmail) {
+    const nowMs = Date.now();
+    const map = readThrottleMap();
+    let changed = false;
+    const clean = {};
+    for (const [key, value] of Object.entries(map)) {
+      const pruned = pruneThrottleEntry(value, nowMs);
+      if (pruned) clean[key] = pruned;
+      else changed = true;
+    }
+    if (changed) writeThrottleMap(clean);
+
+    const normEmail = normalizeThrottleEmail(rawEmail);
+    const emailEntry = normEmail ? clean[`email:${normEmail}`] || null : null;
+    const ipEntry = clean['__ip__'] || null;
+    const emailRem = emailEntry && emailEntry.lockedUntilMs > nowMs ? emailEntry.lockedUntilMs - nowMs : 0;
+    const ipRem = ipEntry && ipEntry.lockedUntilMs > nowMs ? ipEntry.lockedUntilMs - nowMs : 0;
+
+    if (ipRem > emailRem && ipRem > 0) return { key: '__ip__', entry: ipEntry };
+    if (emailRem > 0) return { key: `email:${normEmail}`, entry: emailEntry };
+    if (emailEntry) return { key: `email:${normEmail}`, entry: emailEntry };
+    if (ipEntry && ipEntry.lockedUntilMs > nowMs) return { key: '__ip__', entry: ipEntry };
+    return { key: normEmail ? `email:${normEmail}` : '', entry: null };
+  }
+
+  function syncThrottleFromServer(rawEmail, throttle) {
+    if (!throttle || typeof throttle !== 'object') return;
+    const nowMs = Date.now();
+    const normEmail = normalizeThrottleEmail(rawEmail);
+    const map = readThrottleMap();
+    const retrySec = Math.max(0, Number(throttle.retry_after_seconds || 0));
+    const failedAttempts = Math.max(0, Number(throttle.failed_attempts || 0));
+    const locked = Boolean(throttle.locked) && retrySec > 0;
+    const key = throttle.scope === 'IP' ? '__ip__' : (normEmail ? `email:${normEmail}` : '');
+    if (!key) return;
+
+    if (!locked && failedAttempts === 0) {
+      delete map[key];
+      writeThrottleMap(map);
+      return;
+    }
+
+    const lockDur = Math.max(
+      retrySec,
+      Number(throttle.lock_duration_seconds || computeLockoutSeconds(failedAttempts) || (locked ? 180 : 0))
+    );
+    const nextDur = Math.max(
+      180,
+      Number(throttle.next_lock_duration_seconds || computeLockoutSeconds(Math.max(LOGIN_MAX_ATTEMPTS, failedAttempts + 1)))
+    );
+
+    map[key] = {
+      failedAttempts,
+      lockedUntilMs: locked ? nowMs + retrySec * 1000 : 0,
+      lockDurationSeconds: lockDur,
+      nextLockDurationSeconds: nextDur,
+      lastFailedAt: nowMs,
+      scope: throttle.scope === 'IP' ? 'IP' : 'EMAIL',
+      cooldownCompletedShown: false
+    };
+    writeThrottleMap(map);
+  }
+
+  function recordLocalFailedAttempt(rawEmail) {
+    const normEmail = normalizeThrottleEmail(rawEmail);
+    if (!normEmail) return;
+    const nowMs = Date.now();
+    const map = readThrottleMap();
+    const key = `email:${normEmail}`;
+    const existing = pruneThrottleEntry(map[key], nowMs);
+    if (existing && existing.lockedUntilMs > nowMs) return;
+
+    const failedAttempts = (existing?.failedAttempts || 0) + 1;
+    const lockDurationSeconds = computeLockoutSeconds(failedAttempts);
+    const nextLockDurationSeconds = computeLockoutSeconds(Math.max(LOGIN_MAX_ATTEMPTS, failedAttempts + 1));
+    map[key] = {
+      failedAttempts,
+      lockedUntilMs: lockDurationSeconds > 0 ? nowMs + lockDurationSeconds * 1000 : 0,
+      lockDurationSeconds,
+      nextLockDurationSeconds,
+      lastFailedAt: nowMs,
+      scope: 'EMAIL',
+      cooldownCompletedShown: false
+    };
+    writeThrottleMap(map);
+  }
+
+  function clearLocalThrottle(rawEmail) {
+    const normEmail = normalizeThrottleEmail(rawEmail);
+    const map = readThrottleMap();
+    let changed = false;
+    if (normEmail && map[`email:${normEmail}`]) {
+      delete map[`email:${normEmail}`];
+      changed = true;
+    }
+    if (map['__ip__'] && Number(map['__ip__'].lockedUntilMs || 0) <= Date.now()) {
+      delete map['__ip__'];
+      changed = true;
+    }
+    if (changed) writeThrottleMap(map);
+  }
+
+  function refreshSubmitLockState() {
+    if (!submit) return false;
+    if (mode !== 'login') {
+      submit.classList.remove('is-locked');
+      if (!submit.classList.contains('is-busy')) {
+        submit.disabled = false;
+        submit.textContent = 'Create account';
+      }
+      return false;
+    }
+    const { entry } = getActiveThrottleState(email?.value);
+    const nowMs = Date.now();
+    if (entry && entry.lockedUntilMs > nowMs) {
+      const remSec = Math.max(1, Math.ceil((entry.lockedUntilMs - nowMs) / 1000));
+      submit.disabled = true;
+      submit.classList.add('is-locked');
+      submit.textContent = `Wait ${formatLockCountdown(remSec)}`;
+      return true;
+    }
+    submit.classList.remove('is-locked');
+    if (!submit.classList.contains('is-busy')) {
+      submit.disabled = false;
+      submit.textContent = 'Sign in';
+    }
+    return false;
+  }
+
+  function renderSecurityNotice() {
+    if (!securityNotice) return;
+    if (lockCountdownTimer) {
+      clearInterval(lockCountdownTimer);
+      lockCountdownTimer = null;
+    }
+    if (mode !== 'login') {
+      securityNotice.hidden = true;
+      delete securityNotice.dataset.state;
+      if (securityTimer) securityTimer.hidden = true;
+      if (securityBarWrap) securityBarWrap.hidden = true;
+      refreshSubmitLockState();
+      return;
+    }
+
+    const active = getActiveThrottleState(email?.value);
+    const entry = active.entry;
+    const nowMs = Date.now();
+
+    if (entry && entry.lockedUntilMs > nowMs) {
+      const updateTick = () => {
+        const currentNow = Date.now();
+        const remMs = entry.lockedUntilMs - currentNow;
+        if (remMs <= 0) {
+          if (lockCountdownTimer) {
+            clearInterval(lockCountdownTimer);
+            lockCountdownTimer = null;
+          }
+          const map = readThrottleMap();
+          if (active.key && map[active.key]) {
+            map[active.key].lockedUntilMs = 0;
+            map[active.key].cooldownCompletedShown = true;
+            writeThrottleMap(map);
+          }
+          securityNotice.hidden = false;
+          securityNotice.dataset.state = 'ready';
+          if (securityTitle) securityTitle.textContent = 'Cooldown complete';
+          if (securityDetail) securityDetail.textContent = 'You can try signing in again now. Forgot your password? Reset it below.';
+          if (securityTimer) securityTimer.hidden = true;
+          if (securityBarWrap) securityBarWrap.hidden = true;
+          refreshSubmitLockState();
+          return;
+        }
+        const remSec = Math.max(1, Math.ceil(remMs / 1000));
+        const totalSec = Math.max(remSec, entry.lockDurationSeconds || 180);
+        const pct = Math.max(2, Math.min(100, Math.round((remSec / totalSec) * 100)));
+        const nextText = formatLockDurationText(entry.nextLockDurationSeconds || 600);
+        securityNotice.hidden = false;
+        securityNotice.dataset.state = 'locked';
+        if (securityTitle) securityTitle.textContent = 'Too many failed sign-in attempts';
+        if (securityDetail) securityDetail.textContent = `For security, wait before retrying. Another wrong password raises the wait to ${nextText}.`;
+        if (securityTimer) {
+          securityTimer.hidden = false;
+          securityTimer.textContent = formatLockCountdown(remSec);
+        }
+        if (securityBarWrap) securityBarWrap.hidden = false;
+        if (securityBar) securityBar.style.width = `${pct}%`;
+        refreshSubmitLockState();
+      };
+      updateTick();
+      lockCountdownTimer = setInterval(updateTick, 1000);
+      return;
+    }
+
+    if (entry && entry.failedAttempts >= 3 && entry.failedAttempts < LOGIN_MAX_ATTEMPTS) {
+      const left = LOGIN_MAX_ATTEMPTS - entry.failedAttempts;
+      securityNotice.hidden = false;
+      securityNotice.dataset.state = 'warn';
+      if (securityTitle) securityTitle.textContent = 'Security notice';
+      if (securityDetail) securityDetail.textContent = `${left} attempt${left === 1 ? '' : 's'} left before a 3-minute sign-in cooldown.`;
+      if (securityTimer) securityTimer.hidden = true;
+      if (securityBarWrap) securityBarWrap.hidden = true;
+      refreshSubmitLockState();
+      return;
+    }
+
+    if (entry && entry.cooldownCompletedShown) {
+      securityNotice.hidden = false;
+      securityNotice.dataset.state = 'ready';
+      if (securityTitle) securityTitle.textContent = 'Cooldown complete';
+      if (securityDetail) securityDetail.textContent = 'You can try signing in again now. Forgot your password? Reset it below.';
+      if (securityTimer) securityTimer.hidden = true;
+      if (securityBarWrap) securityBarWrap.hidden = true;
+      refreshSubmitLockState();
+      return;
+    }
+
+    securityNotice.hidden = true;
+    delete securityNotice.dataset.state;
+    if (securityTimer) securityTimer.hidden = true;
+    if (securityBarWrap) securityBarWrap.hidden = true;
+    refreshSubmitLockState();
+  }
+
+  async function syncServerThrottleStatus(rawEmail) {
+    if (mode !== 'login') return;
+    const normEmail = normalizeThrottleEmail(rawEmail);
+    if (!normEmail || !normEmail.includes('@')) return;
+    try {
+      await ensureInitReady();
+      const res = await Ipon.invokeAccountFunction({
+        action: 'login-throttle-status',
+        email: normEmail
+      });
+      if (res?.ok && res.locked && Number(res.retry_after_seconds || 0) > 0) {
+        syncThrottleFromServer(normEmail, res);
+        if (normalizeThrottleEmail(email?.value) === normEmail) renderSecurityNotice();
+      }
+    } catch { }
+  }
 
   if (window.Capacitor !== undefined || window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
     document.body.classList.add('is-app');
@@ -175,6 +497,8 @@
       forgotButton.disabled = true;
       return;
     }
+    renderSecurityNotice();
+    if (email?.value) syncServerThrottleStatus(email.value);
 
     if (acceptInviteToken && acceptInviteEmail) {
       try {
@@ -371,6 +695,7 @@
     setPasswordVisibility(false);
     delete message.dataset.tone;
     message.textContent = '';
+    renderSecurityNotice();
   }
 
   fieldErrors.forEach((_, input) => input.addEventListener('input', () => clearFieldError(input)));
@@ -379,9 +704,18 @@
     [email, password].forEach((input) => input.removeAttribute('aria-invalid'));
     message.textContent = '';
   };
-  email.addEventListener('input', clearCredentialError);
+  email.addEventListener('input', () => {
+    clearCredentialError();
+    if (mode === 'login') renderSecurityNotice();
+  });
   password.addEventListener('input', clearCredentialError);
-  email.addEventListener('blur', () => { email.value = email.value.trim(); });
+  email.addEventListener('blur', () => {
+    email.value = email.value.trim();
+    if (mode === 'login') {
+      renderSecurityNotice();
+      syncServerThrottleStatus(email.value);
+    }
+  });
   passwordToggle?.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
   passwordConfirmationToggle?.addEventListener('click', () => setPasswordVisibility(passwordConfirmation.type === 'password'));
   loginTab?.addEventListener('click', () => setMode('login'));
@@ -507,8 +841,63 @@
       } else {
         const submittedEmail = email.value.trim().toLowerCase();
         email.value = submittedEmail;
-        const { data, error } = await Ipon.client.auth.signInWithPassword({ email: submittedEmail, password: password.value });
-        if (error) throw error;
+        const activeLock = getActiveThrottleState(submittedEmail).entry;
+        if (activeLock && activeLock.lockedUntilMs > Date.now()) {
+          renderSecurityNotice();
+          message.dataset.tone = 'error';
+          message.textContent = 'Too many incorrect sign-in attempts. Please wait for the countdown to finish.';
+          return;
+        }
+        let edgeRes = null;
+        let edgeFallback = false;
+        try {
+          edgeRes = await Ipon.invokeAccountFunction({
+            action: 'login-attempt',
+            email: submittedEmail,
+            password: password.value
+          });
+        } catch (edgeError) {
+          const edgeMsg = String(edgeError?.message || '');
+          if (navigator.onLine === false || /failed to fetch|network|timeout|aborted|load failed/i.test(edgeMsg)) {
+            throw edgeError;
+          }
+          edgeFallback = true;
+        }
+
+        let data;
+        if (!edgeFallback && edgeRes && typeof edgeRes === 'object' && ('ok' in edgeRes || 'locked' in edgeRes || 'error' in edgeRes)) {
+          if (edgeRes.ok && edgeRes.session?.access_token && edgeRes.session?.refresh_token) {
+            const { data: sessionData, error: sessionError } = await Ipon.client.auth.setSession({
+              access_token: edgeRes.session.access_token,
+              refresh_token: edgeRes.session.refresh_token
+            });
+            if (sessionError) throw sessionError;
+            clearLocalThrottle(submittedEmail);
+            renderSecurityNotice();
+            data = sessionData?.user ? sessionData : { user: edgeRes.user, session: edgeRes.session };
+          } else if (edgeRes.error?.code === 'login_locked') {
+            if (edgeRes.throttle) syncThrottleFromServer(submittedEmail, edgeRes.throttle);
+            throw Object.assign(new Error(edgeRes.error.message || 'Too many incorrect sign-in attempts. Please wait before trying again.'), {
+              code: 'login_locked',
+              throttle: edgeRes.throttle || null
+            });
+          } else if (edgeRes.error?.code === 'email_not_confirmed') {
+            throw Object.assign(new Error(edgeRes.error.message || 'Email not confirmed.'), { code: 'email_not_confirmed' });
+          } else {
+            if (edgeRes.throttle) syncThrottleFromServer(submittedEmail, edgeRes.throttle);
+            throw Object.assign(new Error(edgeRes.error?.message || 'Incorrect email or password.'), {
+              code: edgeRes.error?.code || 'invalid_credentials',
+              throttle: edgeRes.throttle || null
+            });
+          }
+        } else {
+          const signInRes = await Ipon.client.auth.signInWithPassword({ email: submittedEmail, password: password.value });
+          if (signInRes.error) throw signInRes.error;
+          clearLocalThrottle(submittedEmail);
+          renderSecurityNotice();
+          data = signInRes.data;
+        }
+
         if (await Ipon.requiresMfaChallenge()) {
           window.location.replace('mfa.html');
           return;
@@ -519,10 +908,19 @@
       }
     } catch (error) {
       message.dataset.tone = 'error';
-      if (mode === 'login' && (error?.code === 'invalid_credentials' || /invalid login credentials/i.test(error?.message || ''))) {
+      if (mode === 'login' && error?.code === 'login_locked') {
+        if (error?.throttle) syncThrottleFromServer(email.value.trim().toLowerCase(), error.throttle);
+        renderSecurityNotice();
+        message.textContent = 'Too many incorrect sign-in attempts. Please wait for the countdown to finish.';
+      } else if (mode === 'login' && (error?.code === 'invalid_credentials' || /invalid login credentials/i.test(error?.message || ''))) {
+        const failedEmail = email.value.trim().toLowerCase();
         [email, password].forEach((input) => input.setAttribute('aria-invalid', 'true'));
         message.textContent = 'Incorrect email or password.';
-        password.focus();
+        if (error?.throttle) syncThrottleFromServer(failedEmail, error.throttle);
+        else recordLocalFailedAttempt(failedEmail);
+        renderSecurityNotice();
+        const lockEntry = getActiveThrottleState(failedEmail).entry;
+        if (!lockEntry || lockEntry.lockedUntilMs <= Date.now()) password.focus();
       } else if (mode === 'login' && (error?.code === 'email_not_confirmed' || /email not confirmed/i.test(error?.message || ''))) {
         message.textContent = 'Your email address is not confirmed yet. Please open your activation email or ask your administrator to update your password.';
         email.focus();
@@ -534,6 +932,7 @@
       }
     } finally {
       Ipon.setBusy(submit, false);
+      refreshSubmitLockState();
     }
   });
 

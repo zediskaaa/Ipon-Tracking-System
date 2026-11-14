@@ -455,9 +455,9 @@ body.is-app .loader-sheet small { margin-top:4px; font-size:12px; }
 .account-avatar-remove:hover{background:#fdecec}
 .account-avatar-remove[hidden]{display:none!important}
 .account-avatar-remove svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
-.account-profile-identity>span:last-child{display:grid;min-width:0;flex:1;gap:8px}
+.account-profile-identity>span:last-child{display:grid;min-width:0;flex:1;gap:4px}
 .account-profile-identity strong{overflow:hidden;font:800 24px/1.1 Arial,sans-serif;text-overflow:ellipsis;white-space:nowrap}
-.account-profile-identity small{justify-self:start;border:1px solid #b8dec7;border-radius:999px;padding:6px 12px;background:#e1f2e8;color:#145e43;font:800 11px/1 Arial,sans-serif;letter-spacing:.08em}
+.account-profile-identity small{color:var(--muted);font:500 13.5px/1.35 Arial,sans-serif;letter-spacing:normal;overflow-wrap:anywhere}
 .account-profile-card{display:flex;flex-direction:column}
 .account-profile-card .form-grid{gap:14px}
 .account-support{display:grid;margin-top:auto;padding:22px 4px 0;border-top:1px solid var(--rule)}body[data-panel="super-admin"] .account-support{display:none}
@@ -3466,11 +3466,6 @@ html[data-theme="dark"] .mfa-enrollment > p {
 html[data-theme="dark"] .account-password-disclosure summary > span {
   background: rgba(70, 195, 130, .18);
   color: #8ee8b5;
-}
-html[data-theme="dark"] .account-profile-identity small {
-  border-color: rgba(70, 195, 130, .35);
-  background: rgba(40, 122, 76, .24);
-  color: #9beeb9;
 }
 html[data-theme="dark"] .account-avatar-cam {
   border-color: var(--surface);
