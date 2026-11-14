@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v8';
+const CACHE_NAME = 'ipon-shell-v9';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
   'assets/favicon.svg',
@@ -71,7 +71,7 @@ self.addEventListener('push', (event) => {
     renotify: Boolean(payload.renotify ?? (payload.tag || payload.dedupe_key)),
     vibrate: [180, 70, 180],
     timestamp: Number(payload.timestamp) || Date.now(),
-    data: { url: targetUrl, id: payload.id ?? null }
+    data: { url: targetUrl, id: payload.id ?? null, group_id: payload.group_id ?? null }
   };
 
   event.waitUntil((async () => {
@@ -94,12 +94,27 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const rawTarget = normalizeNotificationPath(event.notification.data?.url || '/dashboard.html');
-  const targetUrl = new URL(rawTarget, self.location.origin).href;
+  const parsedTarget = new URL(rawTarget, self.location.origin);
+  const targetUrl = parsedTarget.href;
   event.waitUntil((async () => {
+    if (parsedTarget.origin !== self.location.origin) {
+      await self.clients.openWindow(targetUrl);
+      return;
+    }
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of clients) {
       if (client.url.startsWith(self.location.origin)) {
         await client.focus().catch(() => {});
+        const samePage = new URL(client.url).pathname === parsedTarget.pathname;
+        if (samePage && 'postMessage' in client) {
+          client.postMessage({
+            type: 'MYIPON_NOTIFICATION_CLICK',
+            url: `${parsedTarget.pathname.replace(/^\//, '')}${parsedTarget.search}${parsedTarget.hash}`,
+            id: event.notification.data?.id ?? null,
+            group_id: event.notification.data?.group_id ?? null
+          });
+          return;
+        }
         if ('navigate' in client && client.url !== targetUrl) {
           await client.navigate(targetUrl).catch(() => {});
         }

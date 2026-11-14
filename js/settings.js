@@ -421,6 +421,24 @@
   } finally {
     Ipon.setLoading(false);
   }
+  Ipon.consumeDeepLink(async (params, hash) => {
+    const accessUserId = params.get('access_user') || '';
+    if (accessUserId && accessBody) {
+      const safeId = CSS.escape ? CSS.escape(accessUserId) : accessUserId;
+      const rowEl = accessBody.querySelector(`[data-save-access="${safeId}"]`)?.closest('tr') || null;
+      if (rowEl) {
+        Ipon.highlightFocus(rowEl);
+        return true;
+      }
+      Ipon.highlightFocus(accessBody.closest('.panel') || accessBody);
+      return !params.has('notice');
+    }
+    if (hash === '#access' && accessBody) {
+      Ipon.highlightFocus(accessBody.closest('.panel') || accessBody);
+      return !params.has('notice');
+    }
+    return false;
+  });
   Ipon.subscribeToChanges('settings', ['profiles', 'members', 'contribution_settings', 'groups'], async () => {
     const tasks = [];
     if (document.activeElement !== defaultAmount && document.activeElement !== deadlineDay && document.activeElement !== effectiveMonth) tasks.push(loadContributionDefault());

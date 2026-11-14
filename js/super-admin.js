@@ -4,23 +4,10 @@
   const state = await Ipon.init({ allowedRoles: ['SUPER_ADMIN'] });
   if (state.failed || !state.configured || !state.profile) return;
 
-  const requestsBody = document.getElementById('requests-body');
   const featureRequestsBody = document.getElementById('feature-requests-body');
   const bugReportsBody = document.getElementById('bug-reports-body');
   const administratorsBody = document.getElementById('administrators-body');
   const activityBody = document.getElementById('activity-body');
-  const approvalDialog = document.getElementById('approve-request-dialog');
-  const approvalForm = document.getElementById('approve-request-form');
-  const approvalId = document.getElementById('approve-request-id');
-  const groupName = document.getElementById('approve-group-name');
-  const approvalCopy = document.getElementById('approve-request-copy');
-  const rejectDialog = document.getElementById('reject-request-dialog');
-  const rejectForm = document.getElementById('reject-request-form');
-  const rejectId = document.getElementById('reject-request-id');
-  const rejectPreset = document.getElementById('reject-reason-preset');
-  const rejectSubject = document.getElementById('reject-email-subject');
-  const rejectText = document.getElementById('reject-reason-text');
-  const rejectCopy = document.getElementById('reject-request-copy');
   const administratorDialog = document.getElementById('administrator-dialog');
   const administratorForm = document.getElementById('administrator-form');
   const userPasswordDialog = document.getElementById('user-password-dialog');
@@ -105,22 +92,20 @@
   });
   let profiles = [];
   let groups = [];
-  let requests = [];
   let featureRequests = [];
   let bugReports = [];
   let accountActivities = [];
   let activityLogs = [];
   let activeFeatureStatusFilter = 'ALL';
   const PAGE_SIZE = 10;
-  const pageState = { requests: 0, 'feature-requests': 0, 'bug-reports': 0, users: 0, activity: 0 };
+  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, activity: 0 };
   Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
   Ipon.bindPasswordStrength(userPasswordForm.elements.password, () => {
     const target = profiles.find((item) => item.id === userPasswordForm.elements.user_id.value);
     return target ? [target.first_name, target.middle_name, target.last_name, target.email] : [];
   });
   const views = {
-    overview: ['Platform overview', 'Monitor administrator access, savings groups, and requests without exposing financial records.'],
-    requests: ['Administrator requests', 'Review pending applications and create an isolated savings group when access is approved.'],
+    overview: ['Platform overview', 'Monitor administrator accounts, savings groups, and user feedback without exposing financial records.'],
     'feature-requests': ['Feature requests', 'Review improvements suggested by active IPON users.'],
     'bug-reports': ['Bug reports', 'Review reported problems, error details, and attached screenshots from IPON users.'],
     administrators: ['Users', 'Manage administrators, group users, passwords, and assigned savings groups.'],
@@ -164,19 +149,15 @@
 
   function renderOverview() {
     const admins = profiles.filter((profile) => profile.role === 'ADMIN');
-    const pending = profiles.filter((profile) => profile.role === 'MEMBER' && profile.status === 'PENDING' && !profile.group_id);
     document.getElementById('metric-total-admins').textContent = admins.length;
     document.getElementById('metric-active-admins').textContent = admins.filter((profile) => profile.status === 'ACTIVE').length;
     document.getElementById('metric-suspended-admins').textContent = admins.filter((profile) => profile.status === 'DISABLED').length;
-    document.getElementById('metric-pending-requests').textContent = pending.length;
     document.getElementById('metric-groups').textContent = groups.length;
     document.getElementById('platform-status').innerHTML = '<span aria-hidden="true"></span>Database access verified';
     const suspended = admins.filter((profile) => profile.status === 'DISABLED');
     const attention = [];
-    const pendingRequests = requests.filter((request) => request.status === 'PENDING');
-    if (pendingRequests.length) attention.push(`<a href="super-admin.html#requests"><strong>${pendingRequests.length} administrator request${pendingRequests.length === 1 ? '' : 's'} awaiting review</strong><span>Approve or reject access before an account can manage a savings group.</span></a>`);
     if (suspended.length) attention.push(`<a href="super-admin.html#administrators"><strong>${suspended.length} suspended administrator${suspended.length === 1 ? '' : 's'}</strong><span>Review disabled accounts and reactivate them only when access should be restored.</span></a>`);
-    document.getElementById('platform-attention').innerHTML = attention.length ? attention.join('') : '<div class="platform-clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span><strong>No urgent platform work</strong><small>Administrator access and requests are currently up to date.</small></span></div>';
+    document.getElementById('platform-attention').innerHTML = attention.length ? attention.join('') : '<div class="platform-clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span><strong>No urgent platform work</strong><small>Administrator accounts, groups, and feedback queues are currently up to date.</small></span></div>';
   }
 
   function filterValue(id) {
@@ -202,41 +183,6 @@
     return items.slice(start, start + PAGE_SIZE);
   }
 
-  function renderRequests() {
-    const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
-    const query = filterValue('requests-search');
-    const status = filterValue('requests-status-filter');
-    const filtered = requests.filter((request) => {
-      const profile = profileById.get(request.requester_id);
-      if (!profile) return false;
-      if (status && request.status !== status) return false;
-      return matchesQuery(query, [profile.full_name, request.email, request.contact_number, request.reason, request.status]);
-    });
-    const visible = paginateRows('requests', filtered);
-    requestsBody.innerHTML = visible.length ? visible.map((request) => {
-      const profile = profileById.get(request.requester_id);
-      const pending = request.status === 'PENDING';
-      const name = profile?.full_name || 'Requester';
-      return `<tr>
-      <td>
-        <div class="table-user-cell">
-          ${Ipon.avatarMarkup(profile?.avatar_url, name, 'table-user-avatar', profile?.id)}
-          <div>
-            <strong>${Ipon.escapeHtml(name)}</strong>
-            <small class="field-help platform-id">${Ipon.escapeHtml(profile?.id || '')}</small>
-          </div>
-        </div>
-      </td>
-      <td>${Ipon.escapeHtml(request.contact_number || 'Not provided')}<small class="field-help">${Ipon.escapeHtml(request.email)}</small></td>
-      <td>${Ipon.escapeHtml(request.reason)}${request.status === 'REJECTED' && request.review_note ? `<small class="field-help" style="color:var(--red);display:block;margin-top:4px;">Declined reason: ${Ipon.escapeHtml(request.review_note)}</small>` : ''}</td>
-      <td>${Ipon.dateLabel(request.created_at)}</td><td>${statusLabel(request.status)}</td>
-      <td><div class="table-actions">${pending ? `<button class="icon-action" type="button" data-approve-request="${profile.id}">Approve</button><button class="icon-action danger-action" type="button" data-reject-request="${profile.id}">Reject</button>` : request.status === 'REJECTED' ? `<button class="icon-action" type="button" data-reopen-request="${profile.id}">Reopen</button><button class="icon-action danger-action" type="button" data-unblock-request="${profile.id}">Unblock email</button>` : ''}</div></td>
-    </tr>`;
-    }).join('') : `<tr><td colspan="6" class="empty-state">${query || status ? 'No matching administrator requests.' : 'No administrator requests.'}</td></tr>`;
-    Ipon.bindAvatarFallbacks(requestsBody);
-    Ipon.syncPresenceDots(requestsBody);
-  }
-
   const ROLE_LABELS = { ADMIN: 'Administrator', TREASURER: 'Treasurer', MEMBER: 'Member' };
 
   function renderUsers() {
@@ -259,7 +205,7 @@
       const group = (profile.group_id ? groupById.get(profile.group_id) : null) || groupByOwner.get(profile.id);
       const active = profile.status === 'ACTIVE';
       const actions = `<button class="icon-action" type="button" data-edit-admin="${profile.id}">Edit</button><button class="icon-action" type="button" data-set-password="${profile.id}">Change password</button><button class="icon-action" type="button" data-reset-admin="${profile.id}">Reset password</button><button class="icon-action ${active ? 'danger-action' : ''}" type="button" data-admin-status="${profile.id}" data-next-status="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Deactivate' : 'Reactivate'}</button><button class="icon-action danger-action" type="button" data-delete-user="${profile.id}" data-archive-admin="${profile.id}">Delete</button>`;
-      return `<tr>
+      return `<tr data-user-id="${profile.id}">
         <td>
           <div class="table-user-cell">
             ${Ipon.avatarMarkup(profile.avatar_url, profile.full_name, 'table-user-avatar', profile.id)}
@@ -395,7 +341,7 @@
         actions += `<button class="icon-action" type="button" data-feat-action="PENDING" data-feat-id="${request.id}">Reset to pending</button>`;
       }
 
-      return `<tr>
+      return `<tr data-feature-id="${request.id}">
         <td>
           <div class="table-user-cell">
             ${Ipon.avatarMarkup(profile?.avatar_url, requesterName, 'table-user-avatar', request.requester_id)}
@@ -430,7 +376,7 @@
       const profile = profileById.get(report.reporter_id);
       const reporterName = profile?.full_name || 'Former user';
       const count = Number(report.image_count || 0);
-      return `<tr>
+      return `<tr data-bug-id="${report.id}">
         <td>
           <div class="table-user-cell">
             ${Ipon.avatarMarkup(profile?.avatar_url, reporterName, 'table-user-avatar', report.reporter_id)}
@@ -456,7 +402,7 @@
     const groupById = new Map(groups.map((group) => [group.id, group]));
     const query = filterValue('activity-search');
     const mapped = logs.map((log) => ({
-      event: `${log.action.charAt(0)}${log.action.slice(1).toLowerCase()} ${log.table_name === 'groups' ? 'group' : 'account'}`,
+      event: `${Ipon.auditActionLabel ? Ipon.auditActionLabel(log.action) : `${log.action.charAt(0)}${log.action.slice(1).toLowerCase()}`} ${log.table_name === 'groups' ? 'group' : 'account'}`,
       target: (log.table_name === 'groups' ? groupById.get(log.record_id)?.name : profileById.get(log.record_id)?.full_name) || 'Platform record',
       changedAt: log.changed_at
     }));
@@ -469,10 +415,9 @@
     overviewError.hidden = true;
     overviewError.replaceChildren();
     const safeQuery = (query) => (Ipon.withTimeout ? Ipon.withTimeout(query) : Promise.resolve(query)).catch((err) => ({ data: [], error: err }));
-    const [profileResult, groupResult, requestResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult] = await Promise.all([
+    const [profileResult, groupResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult] = await Promise.all([
       safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false })),
-      safeQuery(Ipon.client.from('admin_requests').select('id,requester_id,email,contact_number,reason,status,review_note,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('feature_requests').select('id,requester_id,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200)),
@@ -484,7 +429,6 @@
     if (groupResult.error) throw groupResult.error;
     profiles = profileResult.data || [];
     groups = groupResult.data || [];
-    requests = requestResult.data || [];
     featureRequests = featureRequestResult.data || [];
     bugReports = bugReportResult.data || [];
     accountActivities = activityResult.data || [];
@@ -492,7 +436,6 @@
     storageOverview = storageResult?.error ? null : (storageResult?.data || null);
     renderOverview();
     renderStorageOverview();
-    renderRequests();
     renderFeatureRequests();
     renderBugReports();
     renderUsers();
@@ -517,183 +460,6 @@
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
       Ipon.setBusy(cleanupReceiptsBtn, false);
-    }
-  });
-
-  function closeApprovalDialog() {
-    approvalDialog.close();
-    approvalForm.reset();
-  }
-
-  function closeRejectDialog() {
-    rejectDialog?.close();
-    rejectForm?.reset();
-  }
-
-  rejectPreset?.addEventListener('change', () => {
-    if (rejectPreset.value === 'custom') {
-      rejectText.value = '';
-      rejectText.placeholder = 'Compose email explaining why this request is declined…';
-      rejectText.focus();
-    } else {
-      rejectText.value = rejectPreset.value;
-    }
-  });
-
-  rejectText?.addEventListener('input', () => {
-    const matched = [...rejectPreset.options].some((option) => option.value !== 'custom' && option.value === rejectText.value);
-    if (!matched && rejectPreset.value !== 'custom') rejectPreset.value = 'custom';
-  });
-
-  async function sendDecisionNotice(payload, baseSuccess) {
-    try {
-      const result = await Ipon.notifyAdminRequestDecision(payload);
-      if (result?.email_sent) {
-        Ipon.toast(`${baseSuccess} Email update sent.`);
-      } else {
-        Ipon.toast(`${baseSuccess}${result?.email_error ? ` (Email not sent: ${result.email_error})` : ''}`, 'warning');
-      }
-    } catch (emailErr) {
-      Ipon.toast(`${baseSuccess} (Email failed: ${Ipon.friendlyError(emailErr)})`, 'warning');
-    }
-  }
-
-  requestsBody.addEventListener('click', async (event) => {
-    const approve = event.target.closest('[data-approve-request]');
-    const reject = event.target.closest('[data-reject-request]');
-    const reopen = event.target.closest('[data-reopen-request]');
-    const unblock = event.target.closest('[data-unblock-request]');
-    if (unblock) {
-      const profile = profiles.find((item) => item.id === unblock.dataset.unblockRequest);
-      const req = requests.find((item) => item.requester_id === unblock.dataset.unblockRequest);
-      if (!profile) return;
-      const targetEmail = req?.email || profile.email;
-      const accepted = await Ipon.confirmAction({
-        title: 'Unblock email address?',
-        message: `Clear rejected status and purge bogus record for ${profile.full_name} (${targetEmail})? This frees up the email so the legitimate applicant can submit a fresh request.`,
-        acceptLabel: 'Unblock email'
-      });
-      if (!accepted) return;
-      Ipon.setBusy(unblock, true, 'Unblocking…');
-      try {
-        await Ipon.unblockAdminRequest({ user_id: profile.id });
-        Ipon.toast(`Email ${targetEmail} unblocked. The legitimate owner can now apply.`);
-        await load();
-      } catch (error) {
-        Ipon.toast(Ipon.friendlyError(error), 'error');
-      } finally {
-        Ipon.setBusy(unblock, false);
-      }
-      return;
-    }
-    if (reopen) {
-      const profile = profiles.find((item) => item.id === reopen.dataset.reopenRequest);
-      if (!profile) return;
-      const accepted = await Ipon.confirmAction({ title: 'Reopen administrator request?', message: `${profile.full_name} can be reviewed again.`, acceptLabel: 'Reopen request' });
-      if (!accepted) return;
-      Ipon.setBusy(reopen, true, 'Reopening…');
-      try { await Ipon.rpc('super_admin_reopen_request', { p_user_id: profile.id }); Ipon.toast('Administrator request reopened.'); await load(); }
-      catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
-      finally { Ipon.setBusy(reopen, false); }
-      return;
-    }
-    if (approve) {
-      const profile = profiles.find((item) => item.id === approve.dataset.approveRequest);
-      if (!profile) return;
-      approvalId.value = profile.id;
-      groupName.value = `${profile.full_name} Savings Group`.slice(0, 150);
-      approvalCopy.textContent = `Approve ${profile.full_name} and create an isolated savings group.`;
-      approvalDialog.showModal();
-      groupName.focus();
-      groupName.select();
-      return;
-    }
-    if (!reject) return;
-    const profile = profiles.find((item) => item.id === reject.dataset.rejectRequest);
-    if (!profile) return;
-    rejectId.value = profile.id;
-    rejectCopy.textContent = profile.email
-      ? `Decline administrator request for ${profile.full_name} (${profile.email}).`
-      : `Decline administrator request for ${profile.full_name}.`;
-    if (rejectSubject) rejectSubject.value = "We're sorry, your administrator request on IPON was declined";
-    rejectPreset.value = 'Duplicate or unverified administrator request';
-    rejectText.value = 'Duplicate or unverified administrator request';
-    rejectDialog.showModal();
-    rejectText.focus();
-  });
-
-  rejectForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const targetUserId = rejectId.value;
-    const profile = profiles.find((item) => item.id === targetUserId);
-    const req = requests.find((item) => item.requester_id === targetUserId);
-    const targetEmail = req?.email || profile?.email || '';
-    const note = rejectText.value.trim();
-    const subject = rejectSubject?.value.trim() || "We're sorry, your administrator request on IPON was declined";
-    if (!profile || note.length < 5) {
-      Ipon.setFieldError(rejectText, 'Enter at least 5 characters explaining why the request is rejected.');
-      rejectText.focus();
-      return;
-    }
-    const confirmed = await Ipon.confirmAction({
-      title: 'Reject administrator request?',
-      message: `Decline ${profile.full_name}'s administrator request? Once rejected, this email cannot submit another request.`,
-      acceptLabel: 'Reject request'
-    });
-    if (!confirmed) return;
-
-    const button = rejectForm.querySelector('[type="submit"]');
-    Ipon.setBusy(button, true, 'Rejecting…');
-    try {
-      await Ipon.rpc('super_admin_reject_request', { p_user_id: targetUserId, p_review_note: note });
-      closeRejectDialog();
-      await sendDecisionNotice({
-        user_id: targetUserId,
-        email: targetEmail,
-        decision: 'REJECTED',
-        review_note: note,
-        subject
-      }, 'Administrator request rejected.');
-      await load();
-    } catch (error) {
-      Ipon.toast(Ipon.friendlyError(error), 'error');
-    } finally {
-      Ipon.setBusy(button, false);
-    }
-  });
-
-  approvalForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const targetUserId = approvalId.value;
-    const profile = profiles.find((item) => item.id === targetUserId);
-    const req = requests.find((item) => item.requester_id === targetUserId);
-    const targetEmail = req?.email || profile?.email || '';
-    const approvedGroupName = groupName.value.trim();
-    if (!approvedGroupName) return;
-
-    const confirmed = await Ipon.confirmAction({
-      title: 'Approve administrator request?',
-      message: `Approve ${profile?.full_name || 'this applicant'} as an administrator and create savings group "${approvedGroupName}"?`,
-      acceptLabel: 'Approve and create group'
-    });
-    if (!confirmed) return;
-
-    const button = approvalForm.querySelector('[type="submit"]');
-    Ipon.setBusy(button, true, 'Approving…');
-    try {
-      await Ipon.rpc('super_admin_approve_request', { p_user_id: targetUserId, p_group_name: approvedGroupName });
-      closeApprovalDialog();
-      await sendDecisionNotice({
-        user_id: targetUserId,
-        email: targetEmail,
-        decision: 'APPROVED',
-        group_name: approvedGroupName
-      }, 'Administrator approved and group created.');
-      await load();
-    } catch (error) {
-      Ipon.toast(Ipon.friendlyError(error), 'error');
-    } finally {
-      Ipon.setBusy(button, false);
     }
   });
 
@@ -965,10 +731,6 @@
     finally { Ipon.setBusy(button, false); }
   });
 
-  document.getElementById('approve-request-close').addEventListener('click', closeApprovalDialog);
-  document.getElementById('approve-request-cancel').addEventListener('click', closeApprovalDialog);
-  document.getElementById('reject-request-close')?.addEventListener('click', closeRejectDialog);
-  document.getElementById('reject-request-cancel')?.addEventListener('click', closeRejectDialog);
   document.getElementById('bug-viewer-close')?.addEventListener('click', () => bugViewerDialog?.close());
   bugReportsBody?.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-view-bug]');
@@ -1912,7 +1674,6 @@
   });
 
   [
-    ['requests', ['requests-search', 'requests-status-filter'], renderRequests],
     ['feature-requests', ['feature-requests-search'], renderFeatureRequests],
     ['bug-reports', ['bug-reports-search'], renderBugReports],
     ['users', ['users-search', 'users-role-filter', 'users-status-filter'], renderUsers],
@@ -1944,7 +1705,6 @@
       document.getElementById('platform-attention').innerHTML = '<p>Resolve the loading error below, then retry to restore the platform summary.</p>';
       overviewError.hidden = false;
       Ipon.showInlineError(overviewError, error, refresh);
-      Ipon.showInlineError(requestsBody, error, refresh, 5);
       Ipon.showInlineError(featureRequestsBody, error, refresh, 5);
       if (bugReportsBody) Ipon.showInlineError(bugReportsBody, error, refresh, 6);
       Ipon.showInlineError(administratorsBody, error, refresh, 7);
@@ -1952,6 +1712,110 @@
     }
   }
 
+  const switchPlatformView = (targetHash) => {
+    if (targetHash && location.hash !== targetHash) {
+      try { history.replaceState(null, '', `${location.pathname}${location.search}${targetHash}`); } catch { location.hash = targetHash; }
+    }
+    showView(false);
+  };
   try { await refresh(); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
+  Ipon.consumeDeepLink(async (params, hash) => {
+    const annId = params.get('announcement') || '';
+    const releaseVer = params.get('release') || '';
+    const annTitle = params.get('announcement_title') || '';
+    if (annId || releaseVer || annTitle) {
+      switchPlatformView('#announcements');
+      if (announcements?.openMatching) {
+        const opened = await announcements.openMatching({ id: annId, releaseVersion: releaseVer, title: annTitle });
+        if (opened) return true;
+      }
+      return !params.has('notice');
+    }
+
+    const frId = params.get('feature_request') || '';
+    if (frId) {
+      const frSearch = document.getElementById('feature-requests-search');
+      if (frSearch) frSearch.value = '';
+      activeFeatureStatusFilter = 'ALL';
+      featureStatusTabs?.querySelectorAll('[data-status-filter]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.statusFilter === 'ALL');
+      });
+      const idx = featureRequests.findIndex((item) => String(item.id) === String(frId));
+      if (idx >= 0) pageState['feature-requests'] = Math.floor(idx / PAGE_SIZE);
+      renderFeatureRequests();
+      switchPlatformView('#feature-requests');
+      const safeId = CSS.escape ? CSS.escape(frId) : frId;
+      const cardEl = featureCardsContainer?.querySelector(`[data-feature-id="${safeId}"]`) || null;
+      const rowEl = idx >= 0 ? (featureRequestsBody?.querySelectorAll('tr')[idx % PAGE_SIZE] || null) : null;
+      if (cardEl) Ipon.highlightFocus(cardEl);
+      else if (rowEl) Ipon.highlightFocus(rowEl);
+      await Ipon.openFeatureRequestDetails(frId);
+      return true;
+    }
+
+    const bugId = params.get('bug_report') || '';
+    if (bugId) {
+      const bugSearch = document.getElementById('bug-reports-search');
+      if (bugSearch) bugSearch.value = '';
+      const idx = bugReports.findIndex((item) => String(item.id) === String(bugId));
+      if (idx >= 0) pageState['bug-reports'] = Math.floor(idx / PAGE_SIZE);
+      renderBugReports();
+      switchPlatformView('#bug-reports');
+      const rowEl = idx >= 0 ? (bugReportsBody?.querySelectorAll('tr')[idx % PAGE_SIZE] || null) : null;
+      if (rowEl) Ipon.highlightFocus(rowEl);
+      const safeId = CSS.escape ? CSS.escape(bugId) : bugId;
+      const viewBtn = bugReportsBody?.querySelector(`[data-view-bug="${safeId}"]`);
+      if (viewBtn) {
+        viewBtn.click();
+        return true;
+      }
+      const report = idx >= 0 ? bugReports[idx] : null;
+      if (report && bugViewerDialog) {
+        const submitter = profiles.find((p) => String(p.id) === String(report.reporter_id));
+        const titleEl = document.getElementById('bug-viewer-title');
+        const metaEl = document.getElementById('bug-viewer-meta');
+        const descEl = document.getElementById('bug-viewer-description');
+        const imagesEl = document.getElementById('bug-viewer-images');
+        if (titleEl) titleEl.textContent = report.title || 'Bug report';
+        if (metaEl) metaEl.textContent = `${submitter?.full_name || 'Former user'} · ${Ipon.dateLabel(report.created_at)}`;
+        if (descEl) descEl.textContent = report.description || '';
+        if (imagesEl) imagesEl.innerHTML = '<p class="empty-state">No screenshots attached.</p>';
+        if (!bugViewerDialog.open) bugViewerDialog.showModal();
+        return true;
+      }
+      return !params.has('notice');
+    }
+
+    const userId = params.get('admin_user') || '';
+    if (userId) {
+      const userSearch = document.getElementById('users-search');
+      const roleFilter = document.getElementById('users-role-filter');
+      const statusFilter = document.getElementById('users-status-filter');
+      if (userSearch) userSearch.value = '';
+      if (roleFilter) roleFilter.value = '';
+      if (statusFilter) statusFilter.value = '';
+      const safeId = CSS.escape ? CSS.escape(userId) : userId;
+      const totalPages = Math.max(1, Math.ceil(profiles.length / PAGE_SIZE));
+      let rowEl = null;
+      for (let p = 0; p < totalPages; p += 1) {
+        pageState.users = p;
+        renderUsers();
+        rowEl = administratorsBody?.querySelector(`tr[data-user-id="${safeId}"]`) || null;
+        if (rowEl) break;
+      }
+      switchPlatformView('#administrators');
+      if (rowEl) {
+        Ipon.highlightFocus(rowEl);
+        return true;
+      }
+      return !params.has('notice');
+    }
+
+    if (hash) {
+      switchPlatformView(hash);
+      return !params.has('notice');
+    }
+    return false;
+  });
+  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
 })();

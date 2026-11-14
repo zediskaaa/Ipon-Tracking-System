@@ -12,30 +12,111 @@
   const actionFilter = document.getElementById('audit-action-filter');
   const pager = document.getElementById('audit-pager');
   const detailDialog = document.getElementById('audit-detail-dialog');
+  const detailEyebrow = document.getElementById('audit-detail-eyebrow');
   const detailTitle = document.getElementById('audit-detail-title');
   const detailMeta = document.getElementById('audit-detail-meta');
+  const detailActor = document.getElementById('audit-detail-actor');
+  const detailSubject = document.getElementById('audit-detail-subject');
   const detailRecord = document.getElementById('audit-detail-record');
-  const detailBefore = document.getElementById('audit-detail-before');
-  const detailAfter = document.getElementById('audit-detail-after');
+  const detailChanges = document.getElementById('audit-detail-changes');
   const pageSize = 50;
   let page = 0;
   let actors = new Map();
+  let lookups = {
+    profiles: actors,
+    actors,
+    members: new Map(),
+    groups: new Map(),
+    periods: new Map()
+  };
   let rows = [];
+  let previewImages = [];
 
-  function summary(row) {
-    if (row.action === 'INSERT') return 'Record created';
-    if (row.action === 'DELETE') return 'Record deleted';
-    const ignored = new Set(['updated_at', 'reviewed_at', 'voided_at']);
-    const before = row.old_data || {};
-    const after = row.new_data || {};
-    const fields = Object.keys(after).filter((key) => !ignored.has(key) && JSON.stringify(before[key]) !== JSON.stringify(after[key]));
-    return fields.length ? `Changed: ${fields.slice(0, 4).join(', ')}${fields.length > 4 ? '…' : ''}` : 'Record updated';
+  function renderAuditValueHtml(descriptor, sideLabel) {
+    if (!descriptor || descriptor.kind === 'empty') {
+      return `<span class="audit-diff-muted">${Ipon.escapeHtml(descriptor?.text || 'None')}</span>`;
+    }
+    if (descriptor.kind === 'image' && descriptor.src) {
+      const idx = previewImages.push({ src: descriptor.src, label: descriptor.caption || sideLabel || 'Attachment' }) - 1;
+      return `<button type="button" class="audit-diff-media" data-audit-image-idx="${idx}"><img src="${Ipon.escapeHtml(descriptor.src)}" alt="${Ipon.escapeHtml(descriptor.caption || sideLabel || 'Attachment')}"><span><strong>${Ipon.escapeHtml(descriptor.caption || 'View image')}</strong><small>Click to enlarge</small></span></button>`;
+    }
+    const titleAttr = descriptor.title ? ` title="${Ipon.escapeHtml(descriptor.title)}"` : '';
+    return `<span${titleAttr}>${Ipon.escapeHtml(descriptor.text || '—')}</span>`;
   }
 
-  async function loadActors() {
-    const { data: profiles, error } = await Ipon.client.from('profiles').select('id,full_name');
-    if (error) throw error;
-    actors = new Map(profiles.map((profile) => [profile.id, profile.full_name]));
+  function renderAuditComparison(entry) {
+    previewImages = [];
+    if (!entry.changes.length) {
+      detailChanges.innerHTML = '<div class="audit-diff-empty">No user-visible fields changed in this update.</div>';
+      return;
+    }
+    if (entry.mode === 'create' || entry.mode === 'delete') {
+      const bannerClass = entry.mode === 'delete' ? 'audit-snapshot-banner is-delete' : 'audit-snapshot-banner';
+      const bannerText = entry.mode === 'delete'
+        ? 'Record removed — details stored before deletion:'
+        : 'New record created with these details:';
+      const cards = entry.changes.map((change) => {
+        const valueDesc = entry.mode === 'delete' ? change.before : change.after;
+        return `<article class="audit-snapshot-item"><span class="audit-snapshot-label">${Ipon.escapeHtml(change.label)}</span><div class="audit-diff-val${valueDesc.muted ? ' is-muted' : ''}">${renderAuditValueHtml(valueDesc, change.label)}</div></article>`;
+      }).join('');
+      detailChanges.innerHTML = `<div class="${bannerClass}">${Ipon.escapeHtml(bannerText)}</div><div class="audit-snapshot-grid">${cards}</div>`;
+      return;
+    }
+
+    detailChanges.innerHTML = entry.changes.map((change) => {
+      if (change.display === 'detail') {
+        const valueDesc = change.detailValue || change.after;
+        const toneClass = change.detailTone ? ` is-${change.detailTone}` : ' is-neutral';
+        const tag = change.detailTag || 'Recorded';
+        return `
+      <article class="audit-diff-card is-detail">
+        <div class="audit-diff-field">${Ipon.escapeHtml(change.label)}</div>
+        <div class="audit-diff-detail${toneClass}">
+          <span class="audit-diff-tag">${Ipon.escapeHtml(tag)}</span>
+          <div class="audit-diff-val${valueDesc?.muted ? ' is-muted' : ''}">${renderAuditValueHtml(valueDesc, `${tag} — ${change.label}`)}</div>
+        </div>
+      </article>`;
+      }
+      return `
+      <article class="audit-diff-card">
+        <div class="audit-diff-field">${Ipon.escapeHtml(change.label)}</div>
+        <div class="audit-diff-pair">
+          <div class="audit-diff-side is-before">
+            <span class="audit-diff-tag">Before</span>
+            <div class="audit-diff-val${change.before.muted ? ' is-muted' : ''}">${renderAuditValueHtml(change.before, `Before — ${change.label}`)}</div>
+          </div>
+          <div class="audit-diff-arrow" aria-hidden="true">→</div>
+          <div class="audit-diff-side is-after">
+            <span class="audit-diff-tag">After</span>
+            <div class="audit-diff-val${change.after.muted ? ' is-muted' : ''}">${renderAuditValueHtml(change.after, `After — ${change.label}`)}</div>
+          </div>
+        </div>
+      </article>`;
+    }).join('');
+  }
+
+  async function loadLookups() {
+    const [profileRes, memberRes, groupRes, periodRes] = await Promise.allSettled([
+      Ipon.client.from('profiles').select('id,full_name'),
+      Ipon.client.from('members').select('id,full_name'),
+      Ipon.client.from('groups').select('id,name'),
+      Ipon.client.from('contribution_periods').select('id,member_id,period_month')
+    ]);
+    if (profileRes.status === 'rejected') throw profileRes.reason;
+    if (profileRes.value.error) throw profileRes.value.error;
+
+    actors = new Map((profileRes.value.data || []).map((profile) => [profile.id, profile.full_name]));
+    const members = memberRes.status === 'fulfilled' && !memberRes.value.error
+      ? new Map((memberRes.value.data || []).map((member) => [member.id, member.full_name]))
+      : new Map();
+    const groups = groupRes.status === 'fulfilled' && !groupRes.value.error
+      ? new Map((groupRes.value.data || []).map((group) => [group.id, group.name]))
+      : new Map();
+    const periods = periodRes.status === 'fulfilled' && !periodRes.value.error
+      ? new Map((periodRes.value.data || []).map((period) => [period.id, { member_id: period.member_id, period_month: period.period_month }]))
+      : new Map();
+
+    lookups = { profiles: actors, actors, members, groups, periods };
   }
 
   async function load() {
@@ -70,13 +151,20 @@
     const { data, count, error } = await query.order('changed_at', { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1);
     if (error) throw error;
     rows = data || [];
+    const effectiveLookups = Ipon.collectAuditLookupsFromRows(rows, lookups);
+    lookups = effectiveLookups;
+
     const total = Number(count || 0);
     const pages = Math.max(1, Math.ceil(total / pageSize));
     document.getElementById('audit-count').textContent = `${total} recorded event${total === 1 ? '' : 's'}`;
     pager.querySelector('span').textContent = `Page ${page + 1} of ${pages}`;
     pager.querySelector('[data-page="previous"]').disabled = page === 0;
     pager.querySelector('[data-page="next"]').disabled = page >= pages - 1;
-    body.innerHTML = rows.length ? rows.map((row) => `<tr><td>${Ipon.dateLabel(row.changed_at, { dateStyle: 'medium', timeStyle: 'short' })}</td><td>${Ipon.escapeHtml(actors.get(row.changed_by) || 'System')}</td><td>${Ipon.escapeHtml(row.table_name.replaceAll('_', ' '))}</td><td><span class="status status-${row.action.toLowerCase()}">${Ipon.escapeHtml(row.action)}</span></td><td><span class="audit-record-id" title="${Ipon.escapeHtml(row.record_id || '')}">${Ipon.escapeHtml(row.record_id || '—')}</span></td><td><button class="audit-detail-trigger" type="button" data-audit-open="${Ipon.escapeHtml(row.id)}">${Ipon.escapeHtml(summary(row))}</button></td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No matching audit activity.</td></tr>';
+
+    body.innerHTML = rows.length ? rows.map((row) => {
+      const entry = Ipon.formatAuditEntry(row, effectiveLookups);
+      return `<tr><td data-label="Date and time">${Ipon.dateLabel(row.changed_at, { dateStyle: 'medium', timeStyle: 'short' })}</td><td data-label="Actor">${Ipon.escapeHtml(entry.actor)}</td><td data-label="Record type">${Ipon.escapeHtml(entry.tableLabel)}</td><td data-label="Action"><span class="status status-${row.action.toLowerCase()}">${Ipon.escapeHtml(entry.actionLabel)}</span></td><td data-label="Record ID"><span class="audit-record-id" title="${Ipon.escapeHtml(row.record_id || '')}">${Ipon.escapeHtml(row.record_id || '—')}</span></td><td data-label="Summary"><button class="audit-detail-trigger" type="button" data-audit-open="${Ipon.escapeHtml(row.id)}">${Ipon.escapeHtml(entry.summary)}</button></td></tr>`;
+    }).join('') : '<tr><td colspan="6" class="empty-state">No matching audit activity.</td></tr>';
   }
 
   body.addEventListener('click', (event) => {
@@ -84,22 +172,32 @@
     if (!trigger) return;
     const row = rows.find((item) => String(item.id) === trigger.dataset.auditOpen);
     if (!row) return;
-    detailTitle.textContent = summary(row);
-    detailMeta.textContent = `${actors.get(row.changed_by) || 'System'} · ${row.table_name.replaceAll('_', ' ')} (${row.action}) · ${Ipon.dateLabel(row.changed_at, { dateStyle: 'medium', timeStyle: 'short' })}`;
+    const entry = Ipon.formatAuditEntry(row, lookups);
+    if (detailEyebrow) detailEyebrow.textContent = `Audit details · ${entry.tableLabel}`;
+    detailTitle.textContent = entry.summary;
+    detailMeta.textContent = `${entry.actionLabel} · ${Ipon.dateLabel(row.changed_at, { dateStyle: 'medium', timeStyle: 'short' })}`;
+    if (detailActor) detailActor.textContent = entry.actor;
+    if (detailSubject) detailSubject.textContent = entry.subject;
     detailRecord.textContent = row.record_id || '—';
-    detailBefore.textContent = row.old_data ? JSON.stringify(row.old_data, null, 2) : '—';
-    detailAfter.textContent = row.new_data ? JSON.stringify(row.new_data, null, 2) : '—';
+    renderAuditComparison(entry);
     detailDialog.showModal();
+  });
+  detailChanges?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-audit-image-idx]');
+    if (!btn) return;
+    const item = previewImages[Number(btn.dataset.auditImageIdx)];
+    if (!item?.src) return;
+    Ipon.openImageViewer?.(item.src, item.label || 'Audit media', detailTitle?.textContent || '');
   });
   document.getElementById('close-audit-dialog').addEventListener('click', () => detailDialog.close());
   detailDialog.addEventListener('click', (event) => { if (event.target === detailDialog) detailDialog.close(); });
 
   try {
-    await loadActors();
+    await loadLookups();
     await load();
   } catch (error) { Ipon.showInlineError(body, error, load, 6); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('audit', ['audit_logs', 'profiles'], async () => {
-    await loadActors();
+  Ipon.subscribeToChanges('audit', ['audit_logs', 'profiles', 'members', 'groups'], async () => {
+    await loadLookups();
     await load();
   });
 

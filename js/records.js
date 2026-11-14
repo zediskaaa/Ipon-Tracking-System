@@ -849,6 +849,81 @@
     }
   }
 
-  try { await load(); openRequestedThreadFromUrl(); } finally { Ipon.setLoading(false); }
+  const parseTypedRef = (val) => {
+    const raw = String(val || '').trim();
+    const idx = raw.indexOf(':');
+    return idx > 0 ? { type: raw.slice(0, idx), id: raw.slice(idx + 1) } : null;
+  };
+  const focusRecordRow = async (recordId) => {
+    const safeId = CSS.escape ? CSS.escape(recordId) : recordId;
+    const findRow = () => tbody?.querySelector(`[data-id="${safeId}"]`)?.closest('tr')
+      || contributionEntriesBody?.querySelector(`[data-id="${safeId}"]`)?.closest('tr')
+      || null;
+    let rowEl = findRow();
+    if (!rowEl && ((statusFilter && statusFilter.value) || (methodFilter && methodFilter.value) || (page === 'contributions' && memberFilter && memberFilter.value))) {
+      if (statusFilter) statusFilter.value = '';
+      if (methodFilter) methodFilter.value = '';
+      if (page === 'contributions' && memberFilter && memberFilter.value) {
+        selectedMemberId = '';
+        memberFilter.value = '';
+        updateTabLinksWithMember();
+      }
+      historyPage = 0;
+      await load(true);
+      rowEl = findRow();
+    }
+    if (rowEl) Ipon.highlightFocus(rowEl);
+    return rowEl;
+  };
+  try { await load(); } finally { Ipon.setLoading(false); }
+  Ipon.consumeDeepLink(async (params) => {
+    const threadRef = parseTypedRef(params.get('thread'));
+    if (threadRef) {
+      await focusRecordRow(threadRef.id);
+      Ipon.openRecordDiscussion(threadRef.type, threadRef.id, { onUpdated: () => load(true) });
+      return true;
+    }
+    const recordRef = parseTypedRef(params.get('record'));
+    if (recordRef) {
+      await focusRecordRow(recordRef.id);
+      await Ipon.openRecordDetails(recordRef.type, recordRef.id, {
+        allowReview: state.profile?.role === 'ADMIN',
+        onUpdated: () => load(true)
+      });
+      return true;
+    }
+    const reviewRef = parseTypedRef(params.get('review'));
+    if (reviewRef) {
+      await focusRecordRow(reviewRef.id);
+      await Ipon.openRecordDetails(reviewRef.type, reviewRef.id, {
+        allowReview: state.profile?.role === 'ADMIN',
+        autoOpenReview: state.profile?.role === 'ADMIN',
+        onUpdated: () => load(true)
+      });
+      return true;
+    }
+    const reminderMonth = params.get('reminder') || '';
+    const exemptionMonth = params.get('exemption') || '';
+    if (reminderMonth || exemptionMonth) {
+      const monthInput = document.getElementById('contribution-month');
+      const amountInput = document.getElementById('amount');
+      await Ipon.openPeriodNoticeModal({
+        mode: exemptionMonth ? 'exemption' : 'reminder',
+        month: exemptionMonth || reminderMonth,
+        memberId: selectedMemberId || state.profile?.member_id || null,
+        onSubmitPayment: page === 'contributions' && monthInput ? ({ monthStart, outstanding }) => {
+          monthInput.value = monthStart.slice(0, 7);
+          monthInput.dispatchEvent(new Event('change', { bubbles: true }));
+          if (amountInput && outstanding > 0) {
+            amountInput.value = Number(outstanding).toFixed(2);
+            amountInput.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          amountInput?.focus();
+        } : null
+      });
+      return true;
+    }
+    return false;
+  });
   Ipon.subscribeToChanges(page, ['members', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'record_comments'], () => load(true));
 })();

@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261115-70">
+  <link rel="stylesheet" href="css/app.css?v=20261115-80">
   <script src="js/config.js?v=20261115-75"></script>
 </head>
 
@@ -27,8 +27,8 @@
       <header class="page-header">
         <div>
           <h1 id="platform-view-title">Platform overview</h1>
-          <p id="platform-view-description">Monitor administrator access, savings groups, and requests without exposing
-            financial records.</p>
+          <p id="platform-view-description">Monitor administrator accounts, savings groups, and user feedback without
+            exposing financial records.</p>
         </div>
         <button class="button button-primary" id="create-administrator" type="button" hidden>Create
           administrator</button>
@@ -54,10 +54,6 @@
             <dd id="metric-suspended-admins">—</dd>
           </div>
           <div>
-            <dt>Pending requests</dt>
-            <dd id="metric-pending-requests">—</dd>
-          </div>
-          <div>
             <dt>Savings groups</dt>
             <dd id="metric-groups">—</dd>
           </div>
@@ -71,10 +67,6 @@
           </section>
           <nav class="platform-shortcuts" aria-labelledby="shortcuts-title">
             <h3 id="shortcuts-title">Platform workspaces</h3>
-            <a href="super-admin.html#requests"><span><strong>Administrator requests</strong><small>Review access
-                  applications</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m9 18 6-6-6-6" />
-              </svg></a>
             <a href="super-admin.html#feature-requests"><span><strong>Feature requests</strong><small>Read suggestions
                   from IPON users</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m9 18 6-6-6-6" />
@@ -131,49 +123,6 @@
           </div>
         </section>
         <div id="overview-error" hidden></div>
-      </section>
-
-      <section class="platform-view panel" id="requests" data-platform-view="requests" aria-labelledby="requests-title"
-        hidden>
-        <div class="panel-header">
-          <div>
-            <h2 id="requests-title">Administrator requests</h2>
-            <p>Approval creates a separate savings group and activates the administrator account in one database
-              transaction.</p>
-          </div>
-          <div class="table-filters">
-            <input id="requests-search" type="search" placeholder="Search requests"
-              aria-label="Search administrator requests">
-            <select id="requests-status-filter" aria-label="Filter administrator requests by status">
-              <option value="">All statuses</option>
-              <option>PENDING</option>
-              <option>APPROVED</option>
-              <option>REJECTED</option>
-            </select>
-          </div>
-        </div>
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Requester</th>
-                <th>Contact</th>
-                <th>Reason</th>
-                <th>Requested</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="requests-body">
-              <tr class="loading-row">
-                <td colspan="6">Loading requests…</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <nav class="table-pager" id="requests-pager" aria-label="Administrator requests pages"><button type="button"
-            data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
-            data-page="next">Next</button></nav>
       </section>
 
       <section class="platform-view panel" id="feature-requests" data-platform-view="feature-requests"
@@ -367,78 +316,6 @@
       </section>
     </main>
   </div>
-
-  <dialog class="form-dialog" id="approve-request-dialog" aria-labelledby="approve-request-title">
-    <div class="form-dialog-sheet">
-      <header class="form-dialog-header">
-        <div>
-          <h2 id="approve-request-title">Approve administrator</h2>
-          <p id="approve-request-copy">Create an isolated savings group for this administrator.</p>
-        </div>
-        <button class="dialog-close" id="approve-request-close" type="button" aria-label="Close approval dialog"><svg
-            viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m6 6 12 12M18 6 6 18" />
-          </svg></button>
-      </header>
-      <form id="approve-request-form">
-        <input id="approve-request-id" name="user_id" type="hidden">
-        <div class="field"><label for="approve-group-name">Savings group name</label><input id="approve-group-name"
-            name="group_name" minlength="2" maxlength="150" autocomplete="organization" required><small
-            class="field-help">This group keeps its members and savings records separate from every other
-            administrator.</small></div>
-        <div class="form-actions"><button class="button button-secondary" id="approve-request-cancel"
-            type="button">Cancel</button><button class="button button-primary" type="submit">Approve and create
-            group</button></div>
-      </form>
-    </div>
-  </dialog>
-
-  <dialog class="form-dialog" id="reject-request-dialog" aria-labelledby="reject-request-title">
-    <div class="form-dialog-sheet">
-      <header class="form-dialog-header">
-        <div>
-          <h2 id="reject-request-title">Reject administrator request</h2>
-          <p id="reject-request-copy">Choose a reason or enter custom details for declining this request.</p>
-        </div>
-        <button class="dialog-close" id="reject-request-close" type="button" aria-label="Close rejection dialog"><svg
-            viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m6 6 12 12M18 6 6 18" />
-          </svg></button>
-      </header>
-      <form id="reject-request-form" class="form-grid">
-        <input id="reject-request-id" name="user_id" type="hidden">
-        <div class="field field-wide">
-          <label for="reject-reason-preset">Rejection reason</label>
-          <select id="reject-reason-preset">
-            <option value="Duplicate or unverified administrator request">Duplicate or unverified administrator request
-            </option>
-            <option value="Incomplete or unverifiable contact information">Incomplete or unverifiable contact
-              information</option>
-            <option value="Savings group criteria not met">Savings group criteria not met</option>
-            <option value="Application details could not be validated">Application details could not be validated
-            </option>
-            <option value="custom">Other (custom reason)</option>
-          </select>
-          <small class="field-help">Select a preset reason or choose Other to write your own explanation.</small>
-        </div>
-        <div class="field field-wide">
-          <label for="reject-email-subject">Subject</label>
-          <input id="reject-email-subject" name="email_subject" maxlength="150" required>
-        </div>
-        <div class="field field-wide">
-          <label for="reject-reason-text">Compose email</label>
-          <textarea id="reject-reason-text" name="review_note" minlength="5" maxlength="500" rows="5"
-            required></textarea>
-          <small class="field-help">Once rejected, this email address cannot submit another administrator
-            request.</small>
-        </div>
-        <div class="form-actions field-wide">
-          <button class="button button-secondary" id="reject-request-cancel" type="button">Cancel</button>
-          <button class="button button-danger" type="submit">Reject request</button>
-        </div>
-      </form>
-    </div>
-  </dialog>
 
   <dialog class="form-dialog" id="administrator-dialog" aria-labelledby="administrator-dialog-title">
     <div class="form-dialog-sheet">
@@ -679,11 +556,11 @@
       </form>
     </div>
   </dialog>
-  <script src="js/core.js?v=20261115-76"></script>
+  <script src="js/core.js?v=20261115-80"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261114-68"></script>
+  <script src="js/super-admin.js?v=20261115-79"></script>
 </body>
 
 </html>

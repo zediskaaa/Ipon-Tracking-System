@@ -460,5 +460,32 @@
     refresh();
   });
   try { await Promise.all([loadContributionSettings(), load()]); } catch (error) { Ipon.showInlineError(tbody, error, () => Promise.all([loadContributionSettings(), load()]), 8); } finally { Ipon.setLoading(false); }
+  Ipon.consumeDeepLink(async (params) => {
+    const memberId = params.get('member') || '';
+    if (!memberId) return false;
+    const safeId = CSS.escape ? CSS.escape(memberId) : memberId;
+    let rowEl = tbody.querySelector(`[data-id="${safeId}"]`)?.closest('tr') || null;
+    if (!rowEl && (search.value || statusFilter.value)) {
+      search.value = '';
+      statusFilter.value = '';
+      memberPage = 0;
+      await load();
+      rowEl = tbody.querySelector(`[data-id="${safeId}"]`)?.closest('tr') || null;
+    }
+    if (!rowEl) {
+      const { data: ordered } = await Ipon.client.from('members').select('id').order('full_name');
+      const idx = (ordered || []).findIndex((m) => String(m.id) === String(memberId));
+      if (idx >= 0) {
+        memberPage = Math.floor(idx / pageSize);
+        await load();
+        rowEl = tbody.querySelector(`[data-id="${safeId}"]`)?.closest('tr') || null;
+      }
+    }
+    if (rowEl) {
+      Ipon.highlightFocus(rowEl);
+      return true;
+    }
+    return false;
+  });
   Ipon.subscribeToChanges('members', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_settings', 'contributions', 'announcements'], () => Promise.all([loadContributionSettings(), refresh(), ...(binDialog.open ? [loadBin()] : [])]));
 })();

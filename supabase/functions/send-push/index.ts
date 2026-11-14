@@ -61,6 +61,7 @@ Deno.serve(async (req) => {
 
   let recipientId = '';
   let notifId: number | string | null = null;
+  let notifGroupId: string | null = null;
   let title = 'myIPON';
   let message = '';
   let link = 'dashboard.html';
@@ -75,7 +76,7 @@ Deno.serve(async (req) => {
     }
     const { data: notif, error: notifErr } = await admin
       .from('notifications')
-      .select('id, recipient_id, type, title, message, link, dedupe_key, read_at, created_at')
+      .select('id, recipient_id, group_id, type, title, message, link, dedupe_key, read_at, created_at')
       .eq('id', rawId)
       .maybeSingle();
 
@@ -95,10 +96,15 @@ Deno.serve(async (req) => {
     }
 
     notifId = notif.id;
+    notifGroupId = notif.group_id ? String(notif.group_id) : null;
     recipientId = String(notif.recipient_id);
     title = String(notif.title || 'myIPON');
     message = String(notif.message || 'You have a new notification.');
     link = String(notif.link || 'dashboard.html');
+    if (notif.type === 'RELEASE' && /^https?:/i.test(link)) {
+      const m = `${title} ${message} ${link}`.match(/v?(\d+\.\d+\.\d+)/i);
+      link = `dashboard.html?release=${encodeURIComponent(m ? m[1] : 'latest')}`;
+    }
     dedupeKey = notif.dedupe_key ? String(notif.dedupe_key) : null;
     createdAt = String(notif.created_at || createdAt);
   } else {
@@ -148,6 +154,7 @@ Deno.serve(async (req) => {
       const topic = await buildPushTopic(dedupeKey);
       const payload = JSON.stringify({
         id: notifId,
+        group_id: notifGroupId,
         title,
         body: message,
         message,

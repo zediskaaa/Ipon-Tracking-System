@@ -163,7 +163,7 @@
       const resubmitBtn = row.approval_status === 'REJECTED'
         ? ` <button class="icon-action" type="button" data-resubmit="${row.id}">Resubmit</button>`
         : '';
-      return `<tr><td>${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.dateLabel(row.payment_date)}</td><td>${Ipon.paymentMethodBadge(row.payment_method)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${badge(row.approval_status)}</td><td>${row.receipt_url ? `<button class="icon-action receipt-pill-btn" type="button" data-view-receipt="${row.id}">View receipt</button>` : '<span class="field-help">—</span>'}</td><td><div class="user-note-actions"><span>${Ipon.escapeHtml(noteText)}</span>${discussBtn ? ` ${discussBtn}` : ''}${resubmitBtn}</div></td></tr>`;
+      return `<tr data-row-id="${row.id}"><td>${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.dateLabel(row.payment_date)}</td><td>${Ipon.paymentMethodBadge(row.payment_method)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${badge(row.approval_status)}</td><td>${row.receipt_url ? `<button class="icon-action receipt-pill-btn" type="button" data-view-receipt="${row.id}">View receipt</button>` : '<span class="field-help">—</span>'}</td><td><div class="user-note-actions"><span>${Ipon.escapeHtml(noteText)}</span>${discussBtn ? ` ${discussBtn}` : ''}${resubmitBtn}</div></td></tr>`;
     }).join('') : '<tr><td colspan="7" class="empty-state">No contribution records match this filter.</td></tr>';
   }
 
@@ -335,6 +335,76 @@
     }
   }
 
-  try { await refresh(); openRequestedThreadFromUrl(); } catch (error) { Ipon.showInlineError(body, error, refresh, 7); } finally { Ipon.setLoading(false); }
+  const parseTypedRef = (val) => {
+    const raw = String(val || '').trim();
+    const idx = raw.indexOf(':');
+    return idx > 0 ? { type: raw.slice(0, idx), id: raw.slice(idx + 1) } : null;
+  };
+  const focusUserRow = async (recordId) => {
+    const safeId = CSS.escape ? CSS.escape(recordId) : recordId;
+    let rowEl = body.querySelector(`tr[data-row-id="${safeId}"]`);
+    if (!rowEl && statusFilter.value) {
+      statusFilter.value = '';
+      historyPage = 0;
+      await load();
+      rowEl = body.querySelector(`tr[data-row-id="${safeId}"]`);
+    }
+    if (rowEl) Ipon.highlightFocus(rowEl);
+    return rowEl;
+  };
+  const openResubmitModal = (entry) => {
+    if (!entry) return;
+    form.reset();
+    receiptPicker.clear();
+    form.elements.contribution_month.value = String(entry.periodMonth || entry.contribution_periods?.period_month || Ipon.monthStart()).slice(0, 7);
+    form.elements.payment_date.value = Ipon.isoDate();
+    form.elements.amount.value = Number(entry.amount || 0).toFixed(2);
+    form.elements.reference.value = entry.reference || entry.transaction_reference || '';
+    form.elements.notes.value = entry.notes || '';
+    Ipon.setPaymentMethod(form, entry.paymentMethod || entry.payment_method || Ipon.guessPaymentMethodFromLabel(groupPaymentInfo?.payment_method_label, 'CASH'));
+    syncUserExcessToggle().catch(() => {});
+    dialog.showModal();
+    form.elements.amount.focus();
+  };
+  try { await refresh(); } catch (error) { Ipon.showInlineError(body, error, refresh, 7); } finally { Ipon.setLoading(false); }
+  Ipon.consumeDeepLink(async (params) => {
+    const threadRef = parseTypedRef(params.get('thread'));
+    if (threadRef) {
+      await focusUserRow(threadRef.id);
+      Ipon.openRecordDiscussion(threadRef.type, threadRef.id, { onUpdated: refresh });
+      return true;
+    }
+    const recordRef = parseTypedRef(params.get('record'));
+    if (recordRef) {
+      await focusUserRow(recordRef.id);
+      await Ipon.openRecordDetails(recordRef.type, recordRef.id, {
+        onResubmit: recordRef.type === 'contribution' ? openResubmitModal : null,
+        onUpdated: refresh
+      });
+      return true;
+    }
+    const reminderMonth = params.get('reminder') || '';
+    const exemptionMonth = params.get('exemption') || '';
+    if (reminderMonth || exemptionMonth) {
+      await Ipon.openPeriodNoticeModal({
+        mode: exemptionMonth ? 'exemption' : 'reminder',
+        month: exemptionMonth || reminderMonth,
+        memberId: state.profile?.member_id || null,
+        onSubmitPayment: ({ monthStart, outstanding }) => {
+          form.reset();
+          receiptPicker.clear();
+          form.elements.contribution_month.value = monthStart.slice(0, 7);
+          form.elements.payment_date.value = Ipon.isoDate();
+          if (outstanding > 0) form.elements.amount.value = Number(outstanding).toFixed(2);
+          Ipon.setPaymentMethod(form, Ipon.guessPaymentMethodFromLabel(groupPaymentInfo?.payment_method_label, 'CASH'));
+          syncUserExcessToggle().catch(() => {});
+          dialog.showModal();
+          form.elements.amount.focus();
+        }
+      });
+      return true;
+    }
+    return false;
+  });
   Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions', 'groups', 'savings_goals', 'record_comments'], refresh);
 })();

@@ -208,6 +208,8 @@
         if (!msg.dedupe_key) markDeviceNotificationShown(currentProfile.id, String(msg.id));
       } else if (msg.type === 'MYIPON_PUSH_SUBSCRIPTION_CHANGED' && currentProfile?.id) {
         syncWebPushSubscription({ force: true }).catch(() => { });
+      } else if (msg.type === 'MYIPON_NOTIFICATION_CLICK' && currentProfile?.id && msg.url) {
+        navigateNotificationTarget({ id: msg.id, group_id: msg.group_id, link: msg.url }).catch(() => { });
       }
     });
   }
@@ -270,7 +272,6 @@
   ];
   const superAdminNavItems = [
     ['overview', 'super-admin.html#overview', 'Overview', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>'],
-    ['requests', 'super-admin.html#requests', 'Requests', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8m-8 4h5"/></svg>'],
     ['feature-requests', 'super-admin.html#feature-requests', 'Feature requests', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 22h4M8.5 14.5A7 7 0 1 1 15.5 14.5C14.5 15.2 14 16 14 17h-4c0-1-.5-1.8-1.5-2.5Z"/></svg>'],
     ['bug-reports', 'super-admin.html#bug-reports', 'Bug reports', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6V5a4 4 0 0 1 8 0v1m-9 4h10a2 2 0 0 1 2 2v3a7 7 0 0 1-14 0v-3a2 2 0 0 1 2-2Zm-3 3H3m18 0h-1M6 9 4 7m14 2 2-2M6 17l-2 2m14-2 2 2"/></svg>'],
     ['administrators', 'super-admin.html#administrators', 'Users', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-1 2 2 4-4"/></svg>'],
@@ -1485,6 +1486,27 @@
           </div>
         </div>
       </dialog>
+      <dialog class="form-dialog record-review-dialog" id="record-detail-dialog" aria-labelledby="record-detail-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div><h2 id="record-detail-title">Record details</h2><p id="record-detail-subtitle">Review full transaction details, status, and discussion.</p></div>
+            <button class="dialog-close" type="button" data-record-detail-close aria-label="Close record details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="record-review-body">
+            <section class="record-review-summary" id="record-detail-summary"></section>
+            <div class="record-detail-actions" id="record-detail-actions"></div>
+          </div>
+        </div>
+      </dialog>
+      <dialog class="form-dialog notice-detail-dialog" id="notice-detail-dialog" aria-labelledby="notice-detail-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div><h2 id="notice-detail-title">Notification details</h2><p id="notice-detail-subtitle">Review alert details and take action.</p></div>
+            <button class="dialog-close" type="button" data-notice-detail-close aria-label="Close notification details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="notice-detail-body" id="notice-detail-body"></div>
+        </div>
+      </dialog>
       <dialog class="notification-dialog" id="notification-dialog" aria-labelledby="notification-title">
         <div class="notification-sheet"><header><div class="notification-heading"><h2 id="notification-title">Notifications</h2><span>Recent activity</span></div><div class="notification-header-actions"><button class="notification-mark-read" id="mark-all-notifications" type="button">Mark all read</button><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header><div class="notification-permission-bar" id="notification-permission-bar" hidden></div><div class="notification-list" id="notification-list" role="feed"><p class="empty-state">Loading notifications…</p></div></div>
       </dialog>
@@ -2219,6 +2241,8 @@
       notifications.show();
     });
     document.querySelectorAll('[data-notifications-close]').forEach((button) => button.onclick = () => notifications?.close());
+    document.querySelectorAll('[data-record-detail-close]').forEach((button) => button.onclick = () => document.getElementById('record-detail-dialog')?.close());
+    document.querySelectorAll('[data-notice-detail-close]').forEach((button) => button.onclick = () => document.getElementById('notice-detail-dialog')?.close());
     const donateQr = document.getElementById('donate-qr-dialog');
     document.querySelectorAll('[data-donate-open]').forEach((button) => button.onclick = () => donate?.showModal());
     document.querySelectorAll('[data-donate-close]').forEach((button) => button.onclick = () => donate?.close());
@@ -3572,13 +3596,9 @@
     if (!plugin?.addListener || nativeNotifListenerAttached) return;
     nativeNotifListenerAttached = true;
     plugin.addListener('localNotificationActionPerformed', (event) => {
-      const target = safeNotificationTarget(event?.notification?.extra?.link);
+      const target = normalizeRolePageTarget(event?.notification?.extra?.link);
       if (!target) return;
-      if (/^https:\/\//i.test(target)) {
-        window.open(target, '_blank', 'noopener');
-      } else {
-        window.location.href = target;
-      }
+      navigateNotificationTarget(target, { closeDialog: false });
     }).catch?.(() => { });
   }
 
@@ -3674,7 +3694,7 @@
 
     const title = item.title || 'myIPON';
     const body = item.message || '';
-    const target = safeNotificationTarget(item.link) || 'dashboard.html';
+    const target = resolveNotificationTarget(item) || safeNotificationTarget(item.link) || 'dashboard.html';
     const plugin = getLocalNotificationsPlugin();
     if (plugin?.schedule) {
       await ensureAndroidNotificationChannel();
@@ -3716,6 +3736,720 @@
     }
   }
 
+  const notificationItemsById = new Map();
+  let activeAnnouncementsController = null;
+  const MONTH_NAMES_LOOKUP = {
+    january: '01', february: '02', march: '03', april: '04', may: '05', june: '06',
+    july: '07', august: '08', september: '09', october: '10', november: '11', december: '12'
+  };
+
+  function encodeQueryValue(value) {
+    return encodeURIComponent(String(value ?? '')).replace(/[!'()*~]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+  }
+
+  function extractMonthIsoFromText(text) {
+    const match = String(text || '').match(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(20\d{2})\b/i);
+    if (!match) return '';
+    const mm = MONTH_NAMES_LOOKUP[match[1].toLowerCase()];
+    return mm ? `${match[2]}-${mm}` : '';
+  }
+
+  function normalizeRolePageTarget(rawTarget, role = currentProfile?.role || 'MEMBER') {
+    const target = safeNotificationTarget(rawTarget);
+    if (!target || /^https?:\/\//i.test(target)) return target;
+    let parsed;
+    try {
+      parsed = new URL(target, 'https://ipon.local');
+    } catch {
+      return target;
+    }
+    let page = parsed.pathname.replace(/^\/+/, '');
+    const params = parsed.searchParams;
+    let hash = parsed.hash || '';
+
+    if (role === 'SUPER_ADMIN') {
+      if (params.has('announcement') || params.has('release') || params.has('announcement_title')) {
+        page = 'super-admin.html';
+        if (!hash) hash = '#announcements';
+      } else if (page === 'user.html' || page === 'contributions.html' || page === 'withdrawals.html' || page === 'expenses.html' || page === 'members.html' || page === 'settings.html') {
+        page = 'super-admin.html';
+      }
+    } else if (role !== 'MEMBER' && page === 'user.html') {
+      if (params.has('record') || params.has('thread') || params.has('reminder') || params.has('exemption')) {
+        page = 'contributions.html';
+      } else {
+        page = 'dashboard.html';
+      }
+    } else if (role === 'MEMBER') {
+      if (page === 'contributions.html' && (params.has('record') || params.has('thread') || params.has('reminder') || params.has('exemption'))) {
+        const ref = params.get('record') || params.get('thread') || '';
+        if (!ref || ref.startsWith('contribution:')) page = 'user.html';
+      }
+      if ((page === 'dashboard.html' || page === 'contributions.html') && (params.has('reminder') || params.has('exemption'))) {
+        page = 'user.html';
+      }
+    }
+
+    const search = params.toString();
+    return `${page}${search ? `?${search}` : ''}${hash}`;
+  }
+
+  function resolveNotificationTarget(item, role = currentProfile?.role || 'MEMBER') {
+    if (!item || typeof item !== 'object') return safeNotificationTarget(item);
+    const annPage = role === 'SUPER_ADMIN' ? 'super-admin.html' : 'dashboard.html';
+    const annHash = role === 'SUPER_ADMIN' ? '#announcements' : '';
+    const type = String(item.type || '').toUpperCase();
+    const title = String(item.title || '');
+    const message = String(item.message || '');
+    const rawLink = typeof item.link === 'string' ? item.link.trim() : '';
+
+    if (item.id === 'system-app-release-notice' || type === 'RELEASE' || /github\.com\/[^/]+\/Ipon-Tracking-System\/releases/i.test(rawLink)) {
+      const normalized = normalizeRolePageTarget(rawLink, role);
+      if (normalized && !/^https?:\/\//i.test(normalized) && (normalized.includes('announcement=') || normalized.includes('release='))) {
+        return normalized;
+      }
+      const verMatch = `${title} ${message}`.match(/\b(?:version|update)\s+(v?\d+(?:\.\d+)+)/i) || title.match(/\b(v?\d+(?:\.\d+)+)\b/i);
+      const ver = verMatch ? verMatch[1].replace(/^v/i, '') : 'latest';
+      return `${annPage}?release=${encodeQueryValue(ver)}${annHash}`;
+    }
+
+    const safe = safeNotificationTarget(rawLink);
+    if (safe && !/^https?:\/\//i.test(safe) && safe.includes('?')) {
+      return normalizeRolePageTarget(safe, role);
+    }
+
+    const dedupe = String(item.dedupe_key || '');
+    if (type === 'ANNOUNCEMENT_REACTION') {
+      const match = dedupe.match(/^ANNOUNCEMENT_REACTION:([0-9a-f-]+):/i);
+      if (match) return `${annPage}?announcement=${encodeQueryValue(match[1])}${annHash}`;
+      const quoted = message.match(/to\s+"([^"]+)"\s*\.?$/i);
+      if (quoted) return `${annPage}?announcement_title=${encodeQueryValue(quoted[1])}${annHash}`;
+      return `${annPage}?notice=${encodeQueryValue(item.id || 'announcement-reaction')}${annHash}`;
+    }
+
+    if (type === 'ANNOUNCEMENT' || type === 'PLATFORM_ANNOUNCEMENT') {
+      const stripped = title.replace(/^(?:Announcement|Platform update):\s*/i, '').trim();
+      if (stripped) return `${annPage}?announcement_title=${encodeQueryValue(stripped)}${annHash}`;
+      return `${annPage}${annHash}`;
+    }
+
+    if (type === 'RECORD_COMMENT') {
+      const match = dedupe.match(/^RECORD_COMMENT:(contribution|withdrawal|expense):([0-9a-f-]+)$/i);
+      if (match) {
+        const page = match[1] === 'contribution'
+          ? (role === 'MEMBER' ? 'user.html' : 'contributions.html')
+          : `${match[1]}s.html`;
+        return `${page}?thread=${encodeQueryValue(`${match[1]}:${match[2]}`)}`;
+      }
+    }
+
+    if (type === 'CONTRIBUTION_REMINDER' || type === 'PERIOD_EXEMPTION') {
+      const monthIso = extractMonthIsoFromText(`${title} ${message}`);
+      const page = role === 'MEMBER' ? 'user.html' : 'contributions.html';
+      const param = type === 'PERIOD_EXEMPTION' ? 'exemption' : 'reminder';
+      if (monthIso) return `${page}?${param}=${encodeQueryValue(monthIso)}`;
+      return `${page}?notice=${encodeQueryValue(item.id || param)}`;
+    }
+
+    if (type === 'FEATURE_REQUEST') {
+      return `super-admin.html?notice=${encodeQueryValue(item.id || 'feature-request')}#feature-requests`;
+    }
+
+    if (type === 'BUG_REPORT') {
+      return `super-admin.html?notice=${encodeQueryValue(item.id || 'bug-report')}#bug-reports`;
+    }
+
+    if (type === 'ADMIN_REQUEST') {
+      return `super-admin.html?notice=${encodeQueryValue(item.id || 'admin-request')}#administrators`;
+    }
+
+    if (type === 'GROUP_INVITE') {
+      return `dashboard.html?notice=${encodeQueryValue(item.id || 'group-invite')}`;
+    }
+
+    if (type === 'REVIEW_REQUIRED' || type === 'RECORD_UPDATED') {
+      return `dashboard.html?review_notice=${encodeQueryValue(item.id || '')}`;
+    }
+
+    const baseTarget = safe && !/^https?:\/\//i.test(safe)
+      ? normalizeRolePageTarget(safe, role)
+      : (item.id ? `${location.pathname.split('/').pop() || homeForRole(role)}?notice=${encodeQueryValue(item.id)}` : '');
+
+    if (!baseTarget) return '';
+    if (baseTarget.includes('?')) return baseTarget;
+    const [pathPart, hashPart = ''] = baseTarget.split('#');
+    return item.id
+      ? `${pathPart}?notice=${encodeQueryValue(item.id)}${hashPart ? `#${hashPart}` : ''}`
+      : baseTarget;
+  }
+
+  function highlightFocus(targetOrSelector, { block = 'center' } = {}) {
+    const el = typeof targetOrSelector === 'string'
+      ? document.querySelector(targetOrSelector)
+      : targetOrSelector;
+    if (!el) return null;
+    try { el.scrollIntoView({ behavior: 'smooth', block }); } catch { /* ignore */ }
+    el.classList?.remove('is-highlight-focus');
+    void el.offsetWidth;
+    el.classList?.add('is-highlight-focus');
+    window.setTimeout(() => el.classList?.remove('is-highlight-focus'), 4500);
+    return el;
+  }
+
+  async function fetchSingleRecordEntry(recordType, recordId) {
+    const client = getClient();
+    if (!client) throw new Error('Supabase is not connected.');
+    const type = String(recordType || '').toLowerCase();
+    if (!recordId || !['contribution', 'withdrawal', 'expense'].includes(type)) return null;
+    const formatReviewNote = (row) => {
+      const notes = [];
+      if (row.review_note) notes.push(`Review note: ${row.review_note}`);
+      if (row.void_reason) notes.push(`Void reason: ${row.void_reason}`);
+      return notes.join(' · ');
+    };
+    if (type === 'contribution') {
+      const { data, error } = await client
+        .from('contributions')
+        .select('id,amount,payment_date,transaction_reference,payment_method,notes,receipt_url,approval_status,void_reason,review_note,submitted_by,contribution_periods(period_month,members(id,full_name))')
+        .eq('id', recordId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const memberName = data.contribution_periods?.members?.full_name || 'Member contribution';
+      return {
+        type: 'contribution',
+        typeLabel: 'Savings Addition',
+        id: data.id,
+        title: memberName,
+        authorName: memberName,
+        memberName,
+        amount: data.amount,
+        date: data.payment_date,
+        periodMonth: data.contribution_periods?.period_month || null,
+        period_month: data.contribution_periods?.period_month || null,
+        reference: data.transaction_reference,
+        paymentMethod: data.payment_method || '',
+        payment_method: data.payment_method,
+        notes: data.notes,
+        receiptUrl: data.receipt_url || '',
+        receipt_url: data.receipt_url,
+        status: data.approval_status || 'PENDING',
+        approval_status: data.approval_status,
+        reviewNote: formatReviewNote(data),
+        review_note: data.review_note,
+        void_reason: data.void_reason,
+        submitted_by: data.submitted_by
+      };
+    }
+    if (type === 'withdrawal') {
+      const { data, error } = await client
+        .from('withdrawals')
+        .select('id,amount,transaction_date,transaction_reference,payment_method,reason,person_responsible,notes,receipt_url,approval_status,void_reason,review_note,submitted_by')
+        .eq('id', recordId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const authorName = data.person_responsible || 'Group treasurer';
+      return {
+        type: 'withdrawal',
+        typeLabel: 'Deduction',
+        id: data.id,
+        title: data.reason || 'Savings deduction',
+        authorName,
+        person_responsible: data.person_responsible,
+        description: data.reason,
+        amount: data.amount,
+        date: data.transaction_date,
+        reference: data.transaction_reference,
+        paymentMethod: data.payment_method || '',
+        payment_method: data.payment_method,
+        notes: data.notes || data.reason,
+        receiptUrl: data.receipt_url || '',
+        receipt_url: data.receipt_url,
+        status: data.approval_status || 'PENDING',
+        approval_status: data.approval_status,
+        reviewNote: formatReviewNote(data),
+        review_note: data.review_note,
+        void_reason: data.void_reason,
+        submitted_by: data.submitted_by
+      };
+    }
+    const { data, error } = await client
+      .from('expenses')
+      .select('id,amount,expense_date,category,description,person_responsible,reference_number,payment_method,notes,receipt_url,approval_status,void_reason,review_note,submitted_by')
+      .eq('id', recordId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const authorName = data.person_responsible || 'Group treasurer';
+    return {
+      type: 'expense',
+      typeLabel: 'Expense',
+      id: data.id,
+      title: data.category || data.description || 'Expense',
+      authorName,
+      category: data.category,
+      description: data.description,
+      amount: data.amount,
+      date: data.expense_date,
+      person_responsible: data.person_responsible,
+      reference: data.reference_number,
+      paymentMethod: data.payment_method || '',
+      payment_method: data.payment_method,
+      notes: data.notes,
+      receiptUrl: data.receipt_url || '',
+      receipt_url: data.receipt_url,
+      status: data.approval_status || 'PENDING',
+      approval_status: data.approval_status,
+      reviewNote: formatReviewNote(data),
+      review_note: data.review_note,
+      void_reason: data.void_reason,
+      submitted_by: data.submitted_by
+    };
+  }
+
+  function renderNoticeModalContent({
+    title = 'Notification details',
+    subtitle = '',
+    statusLabel = '',
+    statusClass = 'status-confirmed',
+    message = '',
+    meta = [],
+    actions = []
+  } = {}) {
+    const dialog = document.getElementById('notice-detail-dialog');
+    if (!dialog) return null;
+    const titleEl = document.getElementById('notice-detail-title');
+    const subtitleEl = document.getElementById('notice-detail-subtitle');
+    const bodyEl = document.getElementById('notice-detail-body');
+    if (titleEl) titleEl.textContent = title;
+    if (subtitleEl) subtitleEl.textContent = subtitle || 'Alert summary';
+    if (!bodyEl) return null;
+
+    const pillHtml = statusLabel
+      ? `<span class="status ${escapeHtml(statusClass)}">${escapeHtml(statusLabel)}</span>`
+      : '';
+    const metaHtml = meta.filter(Boolean).map((entry) => `<span>${escapeHtml(entry)}</span>`).join('');
+    bodyEl.innerHTML = `
+      <div class="notice-detail-card">
+        ${pillHtml ? `<div class="notice-detail-top">${pillHtml}</div>` : ''}
+        <p class="notice-detail-message">${escapeHtml(message || '')}</p>
+        ${metaHtml ? `<div class="notice-detail-meta">${metaHtml}</div>` : ''}
+      </div>
+      <div class="notice-detail-actions" id="notice-detail-actions"></div>
+    `;
+    const actionsEl = document.getElementById('notice-detail-actions');
+    const finalActions = [...actions, { label: 'Close', variant: 'secondary', onClick: () => dialog.close() }];
+    finalActions.forEach((act) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `button ${act.variant === 'primary' ? 'button-primary' : act.variant === 'danger' ? 'button-danger' : 'button-secondary'}`;
+      btn.textContent = act.label;
+      btn.addEventListener('click', () => act.onClick?.(dialog, btn));
+      actionsEl.appendChild(btn);
+    });
+    if (!dialog.open) dialog.showModal();
+    return dialog;
+  }
+
+  async function openRecordDetails(recordType, recordId, { onResubmit = null, onUpdated = null, allowReview = false, autoOpenReview = false } = {}) {
+    const dialog = document.getElementById('record-detail-dialog');
+    const titleEl = document.getElementById('record-detail-title');
+    const subtitleEl = document.getElementById('record-detail-subtitle');
+    const summaryEl = document.getElementById('record-detail-summary');
+    const actionsEl = document.getElementById('record-detail-actions');
+    if (!dialog || !summaryEl || !actionsEl) return null;
+
+    const launchReview = (entry) => {
+      dialog.close();
+      requestRecordAction({
+        title: 'Review pending entry',
+        actions: ['CONFIRM', 'REJECT'],
+        entry,
+        onSubmit: async ({ decision, note }) => {
+          await rpc(`review_${entry.type}`, {
+            [`p_${entry.type}_id`]: entry.id,
+            p_decision: decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED',
+            p_review_note: note || null
+          });
+          toast(decision === 'CONFIRM' ? 'Entry confirmed.' : 'Entry rejected.');
+          await onUpdated?.();
+        }
+      });
+    };
+
+    const typeMeta = recordReviewMeta.types[recordType] || { label: 'Record' };
+    if (titleEl) titleEl.textContent = `${typeMeta.label} details`;
+    if (subtitleEl) subtitleEl.textContent = 'Transaction details, review status, and attached discussion.';
+    summaryEl.innerHTML = '<p class="empty-state">Loading record details…</p>';
+    summaryEl.hidden = false;
+    actionsEl.innerHTML = '';
+    if (!dialog.open) dialog.showModal();
+
+    try {
+      const entry = await fetchSingleRecordEntry(recordType, recordId);
+      if (!entry) {
+        summaryEl.innerHTML = '<p class="empty-state">This record is no longer available in the active savings group.</p>';
+        actionsEl.innerHTML = '<div class="record-detail-actions-right"><button type="button" class="button button-secondary" data-close-record-detail>Close</button></div>';
+        actionsEl.querySelector('[data-close-record-detail]')?.addEventListener('click', () => dialog.close());
+        return null;
+      }
+
+      if (autoOpenReview && allowReview && entry.approval_status === 'PENDING' && currentProfile?.role === 'ADMIN') {
+        launchReview(entry);
+        return entry;
+      }
+
+      renderRecordSummaryInto(summaryEl, entry, { showDiscussAction: false });
+      const leftGroup = document.createElement('div');
+      const discussBtn = document.createElement('button');
+      discussBtn.type = 'button';
+      discussBtn.className = 'button button-secondary';
+      discussBtn.textContent = 'Open discussion';
+      discussBtn.addEventListener('click', () => {
+        dialog.close();
+        openRecordDiscussion(entry.type, entry.id, { onUpdated });
+      });
+      leftGroup.appendChild(discussBtn);
+      actionsEl.appendChild(leftGroup);
+
+      const rightGroup = document.createElement('div');
+      rightGroup.className = 'record-detail-actions-right';
+      if (allowReview && entry.approval_status === 'PENDING' && currentProfile?.role === 'ADMIN') {
+        const reviewBtn = document.createElement('button');
+        reviewBtn.type = 'button';
+        reviewBtn.className = 'button button-primary';
+        reviewBtn.textContent = 'Review entry';
+        reviewBtn.addEventListener('click', () => launchReview(entry));
+        rightGroup.appendChild(reviewBtn);
+      } else if (entry.approval_status === 'REJECTED' && typeof onResubmit === 'function') {
+        const resubmitBtn = document.createElement('button');
+        resubmitBtn.type = 'button';
+        resubmitBtn.className = 'button button-primary';
+        resubmitBtn.textContent = 'Edit & resubmit';
+        resubmitBtn.addEventListener('click', () => {
+          dialog.close();
+          onResubmit(entry);
+        });
+        rightGroup.appendChild(resubmitBtn);
+      }
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'button button-secondary';
+      closeBtn.textContent = 'Close';
+      closeBtn.addEventListener('click', () => dialog.close());
+      rightGroup.appendChild(closeBtn);
+      actionsEl.appendChild(rightGroup);
+      return entry;
+    } catch (error) {
+      summaryEl.innerHTML = `<p class="empty-state">${escapeHtml(friendlyError(error))}</p>`;
+      return null;
+    }
+  }
+
+  async function openFeatureRequestDetails(requestId) {
+    const client = getClient();
+    if (!requestId || !client) return null;
+    try {
+      const { data, error } = await client
+        .from('feature_requests')
+        .select('id,title,details,status,release_version,created_at,reviewed_at')
+        .eq('id', requestId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        renderNoticeModalContent({
+          title: 'Feature request',
+          subtitle: 'Request update',
+          message: 'This feature request could not be found.'
+        });
+        return null;
+      }
+      const status = String(data.status || 'PENDING').toUpperCase();
+      const statusClass = status === 'IMPLEMENTED' ? 'status-confirmed' : status === 'REJECTED' ? 'status-rejected' : 'status-pending';
+      const meta = [
+        data.created_at ? `Submitted ${dateLabel(data.created_at)}` : '',
+        data.reviewed_at ? `Reviewed ${dateLabel(data.reviewed_at)}` : '',
+        data.release_version ? `Release ${data.release_version}` : ''
+      ];
+      const actions = [];
+      if (data.release_version) {
+        actions.push({
+          label: 'View release notes',
+          variant: 'primary',
+          onClick: async (dlg) => {
+            dlg.close();
+            if (activeAnnouncementsController?.openMatching) {
+              await activeAnnouncementsController.openMatching({ releaseVersion: data.release_version });
+            } else {
+              const targetPage = currentProfile?.role === 'SUPER_ADMIN' ? 'super-admin.html' : 'dashboard.html';
+              location.href = `${targetPage}?release=${encodeURIComponent(data.release_version)}`;
+            }
+          }
+        });
+      }
+      renderNoticeModalContent({
+        title: data.title || 'Feature request update',
+        subtitle: status === 'IMPLEMENTED' ? 'Implemented feature request' : 'Feature request status',
+        statusLabel: status,
+        statusClass,
+        message: data.details || 'Your feature suggestion has been reviewed by the Super Admin.',
+        meta,
+        actions
+      });
+      return data;
+    } catch (error) {
+      toast(friendlyError(error), 'error');
+      return null;
+    }
+  }
+
+  async function openPeriodNoticeModal({ mode = 'reminder', month = '', memberId = null, onSubmitPayment = null } = {}) {
+    const client = getClient();
+    const monthStr = /^\d{4}-\d{2}$/.test(String(month || '')) ? String(month) : isoDate().slice(0, 7);
+    const periodDate = `${monthStr}-01`;
+    const isExemptMode = mode === 'exemption';
+    const targetMemberId = memberId || currentProfile?.member_id;
+    let statusRow = null;
+    let periodRow = null;
+
+    if (targetMemberId && client) {
+      const [{ data: statusData }, { data: periodData }] = await Promise.all([
+        client.from('v_contribution_status').select('*').eq('member_id', targetMemberId).eq('period_month', periodDate).maybeSingle(),
+        client.from('contribution_periods').select('id,due_date,is_exempt,exempt_reason,required_amount').eq('member_id', targetMemberId).eq('period_month', periodDate).maybeSingle()
+      ]);
+      statusRow = statusData || null;
+      periodRow = periodData || null;
+    }
+
+    const monthTitle = dateLabel(periodDate, { month: 'long', year: 'numeric' });
+    const status = statusRow?.payment_status || (periodRow?.is_exempt ? 'EXEMPT' : 'UNPAID');
+    const statusClass = status === 'PAID' ? 'status-confirmed' : status === 'EXEMPT' ? 'status-voided' : status === 'PARTIALLY PAID' ? 'status-pending' : 'status-unpaid';
+    const outstanding = Number(statusRow?.outstanding_amount ?? periodRow?.required_amount ?? 0);
+    const paid = Number(statusRow?.paid_amount ?? 0);
+    const required = Number(statusRow?.required_amount ?? periodRow?.required_amount ?? 0);
+    const dueDate = periodRow?.due_date || statusRow?.due_date || '';
+    const message = isExemptMode
+      ? (periodRow?.is_exempt
+        ? `${monthTitle} is marked as exempt from regular contributions.${periodRow.exempt_reason ? `\nReason: ${periodRow.exempt_reason}` : ''}`
+        : `${monthTitle} is active for regular contribution tracking.${dueDate ? ` Due on ${dateLabel(dueDate)}.` : ''}`)
+      : (outstanding > 0 && !periodRow?.is_exempt
+        ? `Your ${monthTitle} contribution has a remaining balance of ${money(outstanding)}${dueDate ? ` due on ${dateLabel(dueDate)}` : ''}.`
+        : `${monthTitle} contribution status is ${status.toLowerCase()}.`);
+
+    const meta = [
+      `Month: ${monthTitle}`,
+      required > 0 ? `Target: ${money(required)}` : '',
+      paid > 0 ? `Paid: ${money(paid)}` : '',
+      outstanding > 0 && !periodRow?.is_exempt ? `Balance: ${money(outstanding)}` : '',
+      dueDate ? `Due: ${dateLabel(dueDate)}` : ''
+    ];
+    const actions = [];
+    if (!periodRow?.is_exempt && outstanding > 0 && typeof onSubmitPayment === 'function') {
+      actions.push({
+        label: 'Submit contribution',
+        variant: 'primary',
+        onClick: (dlg) => {
+          dlg.close();
+          onSubmitPayment({ monthStart: periodDate, outstanding });
+        }
+      });
+    }
+    renderNoticeModalContent({
+      title: isExemptMode ? `Period exemption — ${monthTitle}` : `Contribution reminder — ${monthTitle}`,
+      subtitle: isExemptMode ? 'Contribution schedule exemption' : 'Contribution schedule & balance',
+      statusLabel: status,
+      statusClass,
+      message,
+      meta,
+      actions
+    });
+  }
+
+  async function openNoticeDetailModal(noticeOrId, opts = {}) {
+    let item = typeof noticeOrId === 'object' && noticeOrId ? noticeOrId : null;
+    const noticeId = item?.id || (noticeOrId ? String(noticeOrId) : '');
+    if (!item && noticeId) {
+      item = notificationItemsById.get(noticeId) || null;
+    }
+    if (!item && noticeId) {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem('myipon_active_notice') || 'null');
+        if (cached && String(cached.id) === noticeId) item = cached;
+      } catch { /* ignore */ }
+    }
+    if (!item && noticeId && currentProfile?.id && /^\d+$/.test(noticeId)) {
+      const client = getClient();
+      if (client) {
+        const { data } = await client
+          .from('notifications')
+          .select('id,group_id,type,title,message,link,read_at,created_at,dedupe_key')
+          .eq('id', Number(noticeId))
+          .eq('recipient_id', currentProfile.id)
+          .maybeSingle();
+        if (data) item = data;
+      }
+    }
+    if (!item && !opts.title && !opts.message) return null;
+
+    const actions = Array.isArray(opts.actions) ? [...opts.actions] : [];
+    const type = String(item?.type || '').toUpperCase();
+    if (type === 'RELEASE' || item?.id === 'system-app-release-notice') {
+      if (isInstalledAppUser()) {
+        actions.push({
+          label: 'Download APK',
+          variant: 'primary',
+          onClick: () => openExternalDownloadUrl(APK_LATEST_DOWNLOAD_URL)
+        });
+      }
+    } else if (type === 'GROUP_INVITE' && item?.id) {
+      actions.push({
+        label: 'Decline',
+        variant: 'secondary',
+        onClick: async (dlg, btn) => {
+          setBusy(btn, true, 'Declining…');
+          try {
+            await rpc('decline_group_invitation', { p_notification_id: Number(item.id) });
+            toast('Invitation declined.');
+            dlg.close();
+          } catch (error) {
+            toast(friendlyError(error), 'error');
+          } finally {
+            setBusy(btn, false);
+          }
+        }
+      });
+      actions.push({
+        label: 'Accept invitation',
+        variant: 'primary',
+        onClick: async (dlg, btn) => {
+          setBusy(btn, true, 'Accepting…');
+          try {
+            const res = await rpc('accept_group_invitation', { p_notification_id: Number(item.id) });
+            toast(`Joined "${res?.group_name || 'savings group'}"!`);
+            dlg.close();
+            if (res?.group_id) await switchActiveGroup(res.group_id);
+            location.href = homeForRole(res?.role || currentProfile?.role);
+          } catch (error) {
+            toast(friendlyError(error), 'error');
+          } finally {
+            setBusy(btn, false);
+          }
+        }
+      });
+    } else if (opts.actionLabel && typeof opts.onAction === 'function') {
+      actions.push({
+        label: opts.actionLabel,
+        variant: 'primary',
+        onClick: opts.onAction
+      });
+    }
+
+    const meta = [
+      ...(Array.isArray(opts.meta) ? opts.meta : []),
+      item?.created_at ? dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' }) : ''
+    ];
+
+    return renderNoticeModalContent({
+      title: opts.title || item?.title || 'Notification details',
+      subtitle: opts.subtitle || (type ? type.replaceAll('_', ' ') : 'Alert'),
+      statusLabel: opts.statusLabel || '',
+      statusClass: opts.statusClass || 'status-confirmed',
+      message: opts.message || item?.message || 'Review the latest update on your account.',
+      meta,
+      actions
+    });
+  }
+
+  async function navigateNotificationTarget(itemOrTarget, { closeDialog = true } = {}) {
+    if (closeDialog) document.getElementById('notification-dialog')?.close();
+    const rawItem = itemOrTarget && typeof itemOrTarget === 'object' ? itemOrTarget : null;
+    if (rawItem) {
+      try {
+        sessionStorage.setItem('myipon_active_notice', JSON.stringify(rawItem));
+      } catch { /* ignore */ }
+    }
+
+    let didSwitchGroup = false;
+    if (
+      rawItem?.group_id
+      && currentProfile?.group_id
+      && rawItem.group_id !== currentProfile.group_id
+      && currentProfile?.role !== 'SUPER_ADMIN'
+      && rawItem.type !== 'GROUP_INVITE'
+      && rawItem.type !== 'GROUP_DELETED'
+    ) {
+      try {
+        await switchActiveGroup(rawItem.group_id);
+        didSwitchGroup = true;
+      } catch {
+        return openNoticeDetailModal(rawItem);
+      }
+    }
+
+    const target = rawItem
+      ? resolveNotificationTarget(rawItem, currentProfile?.role || 'MEMBER')
+      : normalizeRolePageTarget(itemOrTarget, currentProfile?.role || 'MEMBER');
+
+    if (!target) {
+      if (rawItem) return openNoticeDetailModal(rawItem);
+      return null;
+    }
+
+    if (/^https?:\/\//i.test(target)) {
+      window.open(target, '_blank', 'noopener');
+      return null;
+    }
+
+    const currentFile = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    let parsedTarget;
+    try {
+      parsedTarget = new URL(target, location.href);
+    } catch {
+      location.href = target;
+      return null;
+    }
+    const targetFile = (parsedTarget.pathname.split('/').pop() || 'index.html').toLowerCase();
+
+    if (currentFile === targetFile && !didSwitchGroup) {
+      history.replaceState(null, '', target);
+      window.dispatchEvent(new CustomEvent('ipon:deep-link', { detail: { url: target, item: rawItem } }));
+      return target;
+    }
+
+    location.href = target;
+    return target;
+  }
+
+  let deepLinkHandlerRegistered = false;
+  function consumeDeepLink(handler) {
+    if (typeof handler !== 'function') return;
+    deepLinkHandlerRegistered = true;
+    const run = async (urlLike = null) => {
+      try {
+        const parsed = urlLike ? new URL(urlLike, location.href) : new URL(location.href);
+        const handled = await handler(parsed.searchParams, parsed.hash, parsed);
+        if (!handled && parsed.searchParams.has('notice')) {
+          await openNoticeDetailModal(parsed.searchParams.get('notice'));
+        }
+      } catch (error) {
+        console.warn('Deep-link handling error:', error);
+      }
+    };
+    run();
+    window.addEventListener('ipon:deep-link', (event) => run(event?.detail?.url || location.href));
+  }
+
+  window.addEventListener('ipon:deep-link', (event) => {
+    if (deepLinkHandlerRegistered) return;
+    try {
+      const parsed = new URL(event?.detail?.url || location.href, location.href);
+      if (parsed.searchParams.has('notice')) {
+        openNoticeDetailModal(event?.detail?.item || parsed.searchParams.get('notice'));
+      }
+    } catch { /* ignore */ }
+  });
+
   async function scheduleNativeDueReminders(scheduleRows) {
     const plugin = getLocalNotificationsPlugin();
     if (!plugin?.schedule || currentProfile?.notifications_enabled === false) return;
@@ -3736,6 +4470,8 @@
       if (Number.isNaN(dueDay.getTime())) continue;
       const threeDaysBefore = new Date(dueDay.getTime() - (3 * 86400000));
       const amountCopy = row.outstanding_amount ? ` (PHP ${Number(row.outstanding_amount).toFixed(2)} remaining)` : '';
+      const monthIso = row.period_month ? String(row.period_month).slice(0, 7) : '';
+      const link = monthIso ? `user.html?reminder=${encodeURIComponent(monthIso)}` : 'user.html';
       for (const triggerAt of [threeDaysBefore, dueDay]) {
         if (triggerAt.getTime() > nowMs + 60000 && nextId < 900040) {
           notifications.push({
@@ -3744,7 +4480,7 @@
             body: `Your ${row.period_label || 'savings'} contribution for ${row.group_name || 'your group'} is due on ${row.due_date}${amountCopy}.`,
             channelId: 'myipon_alerts',
             schedule: { at: triggerAt, allowWhileIdle: true },
-            extra: { link: 'user.html' }
+            extra: { link }
           });
         }
       }
@@ -3807,16 +4543,7 @@
         }).catch(() => { });
       }
 
-      const safeNotificationTarget = (link) => {
-        const raw = String(link || '').trim();
-        if (!raw) return '';
-        if (/^(?:[a-zA-Z0-9_-]+\.html(?:\?[a-zA-Z0-9_=&:.-]+)?(?:#[a-zA-Z0-9_-]+)?|#[a-zA-Z0-9_-]+)$/.test(raw)) return raw;
-        try {
-          const url = new URL(raw, location.href);
-          if (url.protocol === 'https:' || url.protocol === 'http:') return url.href;
-        } catch { }
-        return '';
-      };
+      notificationItemsById.clear();
 
       if (isApp) {
         const latestVersion = localStorage.getItem('myipon_latest_remote_version') || window.MYIPON_APP_VERSION?.version || '1.0.20';
@@ -3826,12 +4553,14 @@
 
         if (hasPendingUpdate) {
           const isReleaseRead = Boolean(localStorage.getItem(`myipon_read_release_notice_${remoteNativeBuild}`));
+          const annPage = currentProfile?.role === 'SUPER_ADMIN' ? 'super-admin.html' : 'dashboard.html';
+          const releaseTarget = `${annPage}?release=${encodeQueryValue(latestVersion)}${currentProfile?.role === 'SUPER_ADMIN' ? '#announcements' : ''}`;
           const releaseNotice = {
             id: 'system-app-release-notice',
             type: 'RELEASE',
             title: `Update available: Version ${latestVersion}`,
-            message: `A new version of myIPON (${latestVersion}) is ready with instant live updates. Tap Download APK below to install.`,
-            link: 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest',
+            message: `A new version of myIPON (${latestVersion}) is ready with instant live updates. Tap to read release notes or use Download APK below.`,
+            link: releaseTarget,
             read_at: isReleaseRead ? 'read' : null,
             created_at: new Date().toISOString()
           };
@@ -3845,7 +4574,8 @@
       list.innerHTML = allRows.length ? allRows.map((item) => {
         const isInvite = item.type === 'GROUP_INVITE' && !item.read_at;
         const isReleaseNotif = item.type === 'RELEASE' || (item.title && /release|version|app update/i.test(item.title));
-        const safeTarget = isInvite ? '' : safeNotificationTarget(item.link);
+        notificationItemsById.set(String(item.id), item);
+      const safeTarget = isInvite ? '' : resolveNotificationTarget(item);
         return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"${safeTarget ? ` data-nav-target="${escapeHtml(safeTarget)}"` : ''}>
           <span class="notification-item-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="${item.type === 'GROUP_INVITE' ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4'}"/></svg>
@@ -3901,8 +4631,9 @@
       if (event.target.closest('.notification-download-row a')) return;
       const item = event.target.closest('[data-notification-id]');
       if (!item) return;
-      const target = safeNotificationTarget(item.dataset.navTarget);
-      if (target) event.preventDefault();
+      const rawItem = notificationItemsById.get(String(item?.dataset?.notificationId || '')) || null;
+      const target = normalizeRolePageTarget(item.dataset.navTarget) || safeNotificationTarget(item.dataset.navTarget);
+      if (target || rawItem) event.preventDefault();
       if (item.classList.contains('is-unread')) {
         if (item.dataset.notificationId === 'system-app-release-notice') {
           const remoteBuild = localStorage.getItem('myipon_latest_native_build') || String(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 20);
@@ -3921,10 +4652,8 @@
           }
         }
       }
-      if (target) {
-        document.getElementById('notifications-dialog')?.close();
-        if (/^https?:\/\//i.test(target)) window.open(target, '_blank', 'noopener');
-        else location.href = target;
+      if (target || rawItem) {
+        await navigateNotificationTarget(rawItem || target, { closeDialog: true });
       }
     };
     document.getElementById('mark-all-notifications').onclick = async () => {
@@ -5785,10 +6514,81 @@
       });
     }
 
-    return {
+    const normReleaseVer = (v) => String(v || '').trim().replace(/^v/i, '').toLowerCase();
+    const openMatching = async ({ id = '', releaseVersion = '', title = '' } = {}) => {
+      const client = getClient();
+      if (!items.length) await load();
+      let found = null;
+      if (id) {
+        found = items.find((entry) => String(entry.id) === String(id)) || null;
+        if (!found && client) {
+          const { data } = await client.from('v_announcements').select('*').eq('id', id).maybeSingle();
+          if (data) {
+            found = data;
+            items = [data, ...items];
+            renderList();
+          }
+        }
+      } else if (releaseVersion) {
+        const want = normReleaseVer(releaseVersion);
+        const matchRelease = (list) => {
+          if (!list.length) return null;
+          if (!want || want === 'latest') {
+            return list.find((entry) => entry.announcement_type === 'RELEASE') || null;
+          }
+          return list.find((entry) =>
+            entry.announcement_type === 'RELEASE'
+            && (
+              normReleaseVer(entry.release_version) === want
+              || normReleaseVer(entry.title).startsWith(want)
+              || String(entry.title || '').toLowerCase().includes(want)
+            )
+          ) || list.find((entry) => entry.announcement_type === 'RELEASE') || null;
+        };
+        found = matchRelease(items);
+        if (!found && client) {
+          const { data } = await client
+            .from('v_announcements')
+            .select('*')
+            .eq('announcement_type', 'RELEASE')
+            .order('created_at', { ascending: false })
+            .limit(25);
+          found = matchRelease(data || []);
+          if (found && !items.some((entry) => entry.id === found.id)) {
+            items = [found, ...items];
+            renderList();
+          }
+        }
+      } else if (title) {
+        const q = String(title || '').trim().toLowerCase();
+        found = items.find((entry) => String(entry.title || '').trim().toLowerCase() === q)
+          || items.find((entry) => String(entry.title || '').trim().toLowerCase().includes(q))
+          || null;
+      }
+
+      if (found) {
+        await openViewer(found);
+        return true;
+      }
+      if (releaseVersion) {
+        await openNoticeDetailModal({
+          id: 'system-app-release-notice',
+          type: 'RELEASE',
+          title: releaseVersion === 'latest' ? 'App update available' : `Update available: Version ${releaseVersion}`,
+          message: `Version ${releaseVersion === 'latest' ? 'latest' : releaseVersion} includes the newest improvements and fixes. Tap Download APK below if you are using the Android app, or check back shortly for full release notes.`
+        });
+        return true;
+      }
+      return false;
+    };
+
+    const controller = {
       load,
+      openMatching,
       clear: () => { items = []; reactions = []; renderList(); }
     };
+    activeAnnouncementsController = controller;
+    return controller;
   }
 
   function subscribeToChanges(name, tables, refresh) {
@@ -7692,6 +8492,615 @@
     }
   });
 
+  const AUDIT_TABLE_LABELS = {
+    profiles: 'Account',
+    groups: 'Savings group',
+    members: 'Member',
+    contribution_settings: 'Contribution schedule',
+    contribution_periods: 'Contribution period',
+    contributions: 'Addition',
+    withdrawals: 'Deduction',
+    expenses: 'Expense',
+    savings_goals: 'Savings goal'
+  };
+
+  const AUDIT_ACTION_LABELS = {
+    INSERT: 'Created',
+    UPDATE: 'Updated',
+    DELETE: 'Deleted',
+    CONFIRM: 'Confirmed',
+    REJECT: 'Rejected',
+    VOID: 'Voided'
+  };
+
+  const AUDIT_SKIP_FIELDS = new Set([
+    'id',
+    'idempotency_key',
+    'created_at',
+    'updated_at',
+    'name_setup_required',
+    'previous_account_status'
+  ]);
+
+  const AUDIT_TRANSITION_TIMESTAMPS = new Set(['reviewed_at', 'voided_at', 'deactivated_at', 'deleted_at']);
+  const AUDIT_IMAGE_FIELDS = new Set(['avatar_url', 'receipt_url', 'payment_qr_url']);
+  const AUDIT_MONEY_FIELDS = new Set(['amount', 'default_amount', 'required_amount', 'monthly_contribution_amount', 'target_amount']);
+  const AUDIT_MONTH_FIELDS = new Set(['effective_month', 'period_month']);
+  const AUDIT_DATE_FIELDS = new Set(['payment_date', 'transaction_date', 'date_registered', 'due_date', 'target_date', 'cycle_start_date']);
+  const AUDIT_DATETIME_FIELDS = new Set(['reviewed_at', 'voided_at', 'deleted_at', 'deactivated_at']);
+  const AUDIT_ACTOR_REF_FIELDS = new Set(['owner_id', 'submitted_by', 'reviewed_by', 'voided_by', 'deleted_by', 'created_by', 'updated_by']);
+  const AUDIT_REASON_FIELDS = new Set(['review_note', 'void_reason', 'delete_reason', 'exempt_reason', 'reason']);
+  const AUDIT_ACTION_CONTEXT_FIELDS = new Set([
+    ...AUDIT_REASON_FIELDS,
+    'reviewed_by', 'voided_by', 'deleted_by', 'submitted_by', 'created_by', 'updated_by',
+    ...AUDIT_DATETIME_FIELDS
+  ]);
+
+  const AUDIT_ENUM_VALUE_LABELS = {
+    ADMIN: 'Admin',
+    TREASURER: 'Treasurer',
+    MEMBER: 'Member',
+    SUPER_ADMIN: 'Owner',
+    ACTIVE: 'Active',
+    INACTIVE: 'Inactive',
+    PENDING: 'Pending review',
+    DISABLED: 'Disabled',
+    SUSPENDED: 'Suspended',
+    CONFIRMED: 'Confirmed',
+    REJECTED: 'Rejected',
+    VOIDED: 'Voided',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled'
+  };
+
+  const AUDIT_FIELD_LABELS = {
+    full_name: 'Full name',
+    first_name: 'First name',
+    middle_name: 'Middle name',
+    last_name: 'Last name',
+    name: 'Group name',
+    email: 'Email address',
+    contact_number: 'Contact number',
+    avatar_url: 'Profile photo',
+    role: 'Account role',
+    status: 'Status',
+    approval_status: 'Approval status',
+    notifications_enabled: 'Notifications',
+    group_id: 'Savings group',
+    member_id: 'Member',
+    owner_id: 'Group owner',
+    contribution_period_id: 'Billing period',
+    amount: 'Amount',
+    default_amount: 'Default monthly contribution',
+    required_amount: 'Required monthly amount',
+    monthly_contribution_amount: 'Monthly contribution',
+    allow_credit: 'Credit excess to future months',
+    deadline_day: 'Monthly due day',
+    effective_month: 'Effective month',
+    period_month: 'Billing month',
+    due_date: 'Due date',
+    payment_date: 'Payment date',
+    transaction_date: 'Transaction date',
+    date_registered: 'Date registered',
+    cycle_start_date: 'Cycle start date',
+    category: 'Category',
+    description: 'Description',
+    person_responsible: 'Person responsible',
+    transaction_reference: 'Transaction reference',
+    reference_number: 'Reference number',
+    payment_method: 'Payment method',
+    payment_method_label: 'Group payment channel',
+    payment_account_name: 'Payment account name',
+    payment_account_number: 'Payment account number',
+    payment_instructions: 'Payment instructions',
+    payment_qr_url: 'Payment QR code',
+    payout_channel: 'Payout channel',
+    payout_account_number: 'Payout account number',
+    payout_account_name: 'Payout account name',
+    receipt_url: 'Receipt image',
+    is_exempt: 'Month exemption',
+    exempt_reason: 'Exemption reason',
+    review_note: 'Review note',
+    reviewed_by: 'Reviewed by',
+    reviewed_at: 'Reviewed at',
+    submitted_by: 'Submitted by',
+    void_reason: 'Void reason',
+    voided_by: 'Voided by',
+    voided_at: 'Voided at',
+    delete_reason: 'Removal reason',
+    deleted_by: 'Removed by',
+    deleted_at: 'Removed on',
+    deactivated_at: 'Deactivated on',
+    notes: 'Notes',
+    title: 'Goal title',
+    target_amount: 'Target amount',
+    target_date: 'Target date',
+    created_by: 'Created by',
+    updated_by: 'Updated by'
+  };
+
+  const AUDIT_FIELD_ORDER = [
+    'full_name', 'first_name', 'middle_name', 'last_name', 'name', 'title',
+    'group_id', 'member_id', 'contribution_period_id',
+    'amount', 'default_amount', 'required_amount', 'monthly_contribution_amount', 'target_amount',
+    'approval_status', 'status', 'role',
+    'category', 'description', 'person_responsible',
+    'payment_method', 'payment_method_label', 'payment_account_name', 'payment_account_number',
+    'payout_channel', 'payout_account_name', 'payout_account_number',
+    'transaction_reference', 'reference_number',
+    'effective_month', 'period_month', 'payment_date', 'transaction_date', 'due_date', 'target_date',
+    'deadline_day', 'cycle_start_date', 'date_registered',
+    'is_exempt', 'exempt_reason', 'allow_credit', 'notifications_enabled',
+    'email', 'contact_number', 'payment_instructions', 'notes',
+    'review_note', 'reviewed_by', 'void_reason', 'voided_by', 'delete_reason', 'deleted_by',
+    'submitted_by', 'owner_id', 'avatar_url', 'receipt_url', 'payment_qr_url'
+  ];
+
+  function auditTableLabel(tableName) {
+    const key = String(tableName || '').trim();
+    if (AUDIT_TABLE_LABELS[key]) return AUDIT_TABLE_LABELS[key];
+    return key ? key.replaceAll('_', ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()) : 'Record';
+  }
+
+  function auditActionLabel(action) {
+    const key = String(action || '').trim().toUpperCase();
+    if (AUDIT_ACTION_LABELS[key]) return AUDIT_ACTION_LABELS[key];
+    return key ? `${key.charAt(0)}${key.slice(1).toLowerCase()}` : 'Updated';
+  }
+
+  function auditFieldLabel(key, tableName) {
+    if (key === 'status') {
+      if (tableName === 'profiles') return 'Account status';
+      if (tableName === 'members') return 'Member status';
+      if (tableName === 'groups') return 'Group status';
+      if (tableName === 'savings_goals') return 'Goal status';
+    }
+    if (key === 'group_id' && tableName === 'profiles') return 'Active savings group';
+    if (key === 'member_id' && tableName === 'profiles') return 'Linked member';
+    if (AUDIT_FIELD_LABELS[key]) return AUDIT_FIELD_LABELS[key];
+    return String(key || '').replaceAll('_', ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }
+
+  function isSafeAuditImageUrl(value) {
+    const str = String(value || '').trim();
+    return /^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/i.test(str)
+      || /^https:\/\/\S+$/i.test(str);
+  }
+
+  function auditValuesEqual(key, a, b) {
+    const aEmpty = a == null || a === '';
+    const bEmpty = b == null || b === '';
+    if (aEmpty && bEmpty) return true;
+    if (aEmpty !== bEmpty) return false;
+    if (AUDIT_MONEY_FIELDS.has(key)) {
+      const nA = Number(a);
+      const nB = Number(b);
+      if (Number.isFinite(nA) && Number.isFinite(nB)) return nA === nB;
+    }
+    try {
+      return JSON.stringify(a) === JSON.stringify(b);
+    } catch {
+      return String(a) === String(b);
+    }
+  }
+
+  function auditRefFallback(prefix, rawId) {
+    const shortId = String(rawId || '').trim().slice(0, 8);
+    return shortId ? `${prefix} (${shortId})` : prefix;
+  }
+
+  function formatAuditValue(key, rawValue, row = {}, lookups = {}) {
+    const isEmpty = rawValue == null || rawValue === '';
+    if (AUDIT_IMAGE_FIELDS.has(key) || (typeof rawValue === 'string' && /^data:/i.test(rawValue.trim()))) {
+      if (isEmpty) {
+        const emptyText = key === 'avatar_url'
+          ? 'No profile photo'
+          : (key === 'payment_qr_url' ? 'No QR code uploaded' : 'No receipt attached');
+        return { kind: 'empty', text: emptyText, muted: true };
+      }
+      const str = String(rawValue).trim();
+      if (isSafeAuditImageUrl(str)) {
+        const text = key === 'avatar_url'
+          ? 'Profile photo'
+          : (key === 'payment_qr_url' ? 'Payment QR code' : 'Receipt image');
+        return { kind: 'image', src: str, text, caption: text };
+      }
+      return { kind: 'text', text: 'Uploaded media file', muted: false };
+    }
+
+    if (isEmpty) {
+      if (key === 'group_id') return { kind: 'empty', text: 'No group assigned', muted: true };
+      if (key === 'member_id') return { kind: 'empty', text: 'Not linked', muted: true };
+      if (AUDIT_ACTOR_REF_FIELDS.has(key)) return { kind: 'empty', text: 'Not assigned', muted: true };
+      return { kind: 'empty', text: 'None', muted: true };
+    }
+
+    if (key === 'notifications_enabled') return { kind: 'text', text: rawValue ? 'Enabled' : 'Disabled' };
+    if (key === 'allow_credit') return { kind: 'text', text: rawValue ? 'Allowed for future months' : 'Disabled' };
+    if (key === 'is_exempt') return { kind: 'text', text: rawValue ? 'Exempted for this month' : 'Required' };
+    if (typeof rawValue === 'boolean') return { kind: 'text', text: rawValue ? 'Yes' : 'No' };
+
+    if (AUDIT_MONEY_FIELDS.has(key) && Number.isFinite(Number(rawValue))) {
+      return { kind: 'text', text: money(Number(rawValue)) };
+    }
+    if (key === 'deadline_day' && Number.isFinite(Number(rawValue))) {
+      return { kind: 'text', text: `Day ${Number(rawValue)} of each month` };
+    }
+    if (AUDIT_MONTH_FIELDS.has(key)) {
+      return { kind: 'text', text: dateLabel(String(rawValue), { month: 'long', year: 'numeric' }) };
+    }
+    if (AUDIT_DATE_FIELDS.has(key)) {
+      return { kind: 'text', text: dateLabel(String(rawValue), { month: 'short', day: 'numeric', year: 'numeric' }) };
+    }
+    if (AUDIT_DATETIME_FIELDS.has(key)) {
+      return { kind: 'text', text: dateLabel(String(rawValue), { dateStyle: 'medium', timeStyle: 'short' }) };
+    }
+
+    if (key === 'payment_method' || key === 'payout_channel') {
+      const normalized = normalizePaymentMethod(rawValue);
+      return { kind: 'text', text: normalized ? paymentMethodMeta(normalized).label : String(rawValue) };
+    }
+    if (key === 'role' || key === 'status' || key === 'approval_status') {
+      const mapped = AUDIT_ENUM_VALUE_LABELS[String(rawValue).trim().toUpperCase()];
+      return { kind: 'text', text: mapped || String(rawValue) };
+    }
+
+    const id = String(rawValue).trim();
+    if (key === 'group_id') {
+      const resolved = lookups.groups?.get(id);
+      return { kind: 'text', text: resolved || auditRefFallback('Savings group', id), title: id };
+    }
+    if (key === 'member_id') {
+      const resolved = lookups.members?.get(id);
+      return { kind: 'text', text: resolved || auditRefFallback('Member', id), title: id };
+    }
+    if (key === 'contribution_period_id') {
+      const period = lookups.periods?.get(id);
+      if (period) {
+        const monthText = dateLabel(period.period_month, { month: 'long', year: 'numeric' });
+        const memberName = period.member_id ? lookups.members?.get(period.member_id) : '';
+        return { kind: 'text', text: memberName ? `${monthText} — ${memberName}` : monthText, title: id };
+      }
+      return { kind: 'text', text: auditRefFallback('Billing period', id), title: id };
+    }
+    if (AUDIT_ACTOR_REF_FIELDS.has(key)) {
+      const resolved = lookups.profiles?.get(id) || lookups.actors?.get(id);
+      return { kind: 'text', text: resolved || auditRefFallback('Account', id), title: id };
+    }
+
+    return { kind: 'text', text: String(rawValue) };
+  }
+
+  function collectAuditLookupsFromRows(auditRows, baseLookups = {}) {
+    const groups = new Map(baseLookups.groups || []);
+    const members = new Map(baseLookups.members || []);
+    const profiles = new Map(baseLookups.profiles || baseLookups.actors || []);
+    const periods = new Map(baseLookups.periods || []);
+
+    for (const row of auditRows || []) {
+      const snaps = [row?.old_data, row?.new_data].filter((item) => item && typeof item === 'object');
+      for (const snap of snaps) {
+        if (row.table_name === 'groups' && snap.id && snap.name && !groups.has(snap.id)) {
+          groups.set(snap.id, snap.name);
+        }
+        if (row.table_name === 'members' && snap.id && snap.full_name && !members.has(snap.id)) {
+          members.set(snap.id, snap.full_name);
+        }
+        if (row.table_name === 'profiles' && snap.id && snap.full_name && !profiles.has(snap.id)) {
+          profiles.set(snap.id, snap.full_name);
+        }
+        if (row.table_name === 'contribution_periods' && snap.id && snap.period_month && !periods.has(snap.id)) {
+          periods.set(snap.id, { period_month: snap.period_month, member_id: snap.member_id });
+        }
+      }
+    }
+    return { groups, members, profiles, actors: profiles, periods };
+  }
+
+  function auditFieldRank(key) {
+    const idx = AUDIT_FIELD_ORDER.indexOf(key);
+    return idx === -1 ? 999 : idx;
+  }
+
+  function auditSubjectLabel(row, lookups) {
+    const table = row?.table_name || '';
+    const before = row?.old_data || {};
+    const after = row?.new_data || {};
+    const snap = Object.keys(after).length ? after : before;
+
+    if (table === 'profiles') return snap.full_name || lookups.profiles?.get(row.record_id) || snap.email || 'Account';
+    if (table === 'members') return snap.full_name || lookups.members?.get(row.record_id) || 'Member';
+    if (table === 'groups') return snap.name || lookups.groups?.get(row.record_id) || 'Savings group';
+    if (table === 'savings_goals') return snap.title || 'Savings goal';
+    if (table === 'contribution_settings') {
+      return snap.effective_month ? `${dateLabel(snap.effective_month, { month: 'long', year: 'numeric' })} schedule` : 'Monthly schedule';
+    }
+    if (table === 'contribution_periods') {
+      const month = snap.period_month ? dateLabel(snap.period_month, { month: 'short', year: 'numeric' }) : 'Period';
+      const memberName = snap.member_id ? lookups.members?.get(snap.member_id) : '';
+      return memberName ? `${month} — ${memberName}` : month;
+    }
+    if (table === 'contributions') {
+      const period = snap.contribution_period_id ? lookups.periods?.get(snap.contribution_period_id) : null;
+      const memberName = period?.member_id ? lookups.members?.get(period.member_id) : '';
+      const amountText = snap.amount != null ? `${money(snap.amount)} addition` : 'Addition';
+      return memberName ? `${amountText} — ${memberName}` : amountText;
+    }
+    if (table === 'withdrawals') {
+      const amountText = snap.amount != null ? `${money(snap.amount)} deduction` : 'Deduction';
+      return snap.category ? `${amountText} (${snap.category})` : amountText;
+    }
+    if (table === 'expenses') {
+      const amountText = snap.amount != null ? `${money(snap.amount)} expense` : 'Expense';
+      return snap.category ? `${amountText} (${snap.category})` : amountText;
+    }
+    return auditTableLabel(table);
+  }
+
+  function buildAuditSummary(row, changes, subject, lookups) {
+    const action = String(row?.action || 'UPDATE').toUpperCase();
+    const table = String(row?.table_name || '');
+    const before = row?.old_data || {};
+    const after = row?.new_data || {};
+    const snap = Object.keys(after).length ? after : before;
+    const period = snap.contribution_period_id ? lookups.periods?.get(snap.contribution_period_id) : null;
+    const periodMember = period?.member_id ? lookups.members?.get(period.member_id) : '';
+
+    if (action === 'INSERT') {
+      if (table === 'profiles') return `Created account for ${snap.full_name || subject}`;
+      if (table === 'members') return `Added member ${snap.full_name || subject}`;
+      if (table === 'groups') return `Created savings group "${snap.name || subject}"`;
+      if (table === 'contribution_settings') return `Set monthly contribution to ${money(snap.default_amount)}`;
+      if (table === 'contribution_periods') return `Created ${subject}`;
+      if (table === 'contributions') return `Recorded ${money(snap.amount)} addition${periodMember ? ` for ${periodMember}` : ''}`;
+      if (table === 'withdrawals') return `Recorded ${money(snap.amount)} deduction${snap.category ? ` (${snap.category})` : ''}`;
+      if (table === 'expenses') return `Recorded ${money(snap.amount)} expense${snap.category ? ` (${snap.category})` : ''}`;
+      if (table === 'savings_goals') return `Created goal "${snap.title || 'Savings goal'}"`;
+      return `Created ${auditTableLabel(table).toLowerCase()}`;
+    }
+
+    if (action === 'DELETE') {
+      if (table === 'profiles') return `Removed account for ${before.full_name || subject}`;
+      if (table === 'members') return `Deleted member ${before.full_name || subject}`;
+      if (table === 'groups') return `Deleted savings group "${before.name || subject}"`;
+      if (table === 'contributions') return `Deleted ${money(before.amount)} addition`;
+      if (table === 'withdrawals') return `Deleted ${money(before.amount)} deduction`;
+      if (table === 'expenses') return `Deleted ${money(before.amount)} expense`;
+      if (table === 'savings_goals') return `Deleted goal "${before.title || 'Savings goal'}"`;
+      return `Deleted ${auditTableLabel(table).toLowerCase()}`;
+    }
+
+    if (action === 'CONFIRM' || action === 'REJECT' || action === 'VOID') {
+      const verb = auditActionLabel(action);
+      const kind = table === 'contributions' ? 'addition' : (table === 'withdrawals' ? 'deduction' : (table === 'expenses' ? 'expense' : auditTableLabel(table).toLowerCase()));
+      const amount = snap.amount != null ? `${money(snap.amount)} ` : '';
+      const tail = periodMember ? ` for ${periodMember}` : (snap.category ? ` (${snap.category})` : '');
+      return `${verb} ${amount}${kind}${tail}`;
+    }
+
+    const keys = new Set(changes.map((c) => c.key));
+    if (!before.deleted_at && after.deleted_at) return `Moved ${subject} to recovery bin`;
+    if (before.deleted_at && !after.deleted_at) return `Restored ${subject} from recovery bin`;
+
+    if (table === 'profiles' && keys.has('full_name') && keys.size === 1 && before.full_name && after.full_name) {
+      return `Renamed account from "${before.full_name}" to "${after.full_name}"`;
+    }
+    if (table === 'members' && keys.has('full_name') && keys.size === 1 && before.full_name && after.full_name) {
+      return `Renamed member from "${before.full_name}" to "${after.full_name}"`;
+    }
+    if (table === 'groups' && keys.has('name') && keys.size === 1 && before.name && after.name) {
+      return `Renamed group from "${before.name}" to "${after.name}"`;
+    }
+    if (table === 'savings_goals' && keys.has('title') && keys.size === 1 && before.title && after.title) {
+      return `Renamed goal from "${before.title}" to "${after.title}"`;
+    }
+
+    if (table === 'profiles') {
+      if (keys.has('group_id') && [...keys].every((k) => k === 'group_id' || k === 'member_id')) {
+        const nextGroupName = after.group_id ? lookups.groups?.get(after.group_id) : '';
+        if (!before.group_id && after.group_id) return nextGroupName ? `Joined "${nextGroupName}"` : 'Joined savings group';
+        if (before.group_id && !after.group_id) return 'Left active savings group';
+        return nextGroupName ? `Switched active group to "${nextGroupName}"` : 'Switched active savings group';
+      }
+      if (keys.size === 1 && keys.has('member_id')) {
+        const mName = after.member_id ? lookups.members?.get(after.member_id) : '';
+        return after.member_id ? (mName ? `Linked account to ${mName}` : 'Linked account to member') : 'Unlinked account from member';
+      }
+      if (keys.size === 1 && keys.has('avatar_url')) return after.avatar_url ? 'Updated profile photo' : 'Removed profile photo';
+      if (keys.size === 1 && keys.has('role')) return `Changed role to ${formatAuditValue('role', after.role, row, lookups).text}`;
+      if (keys.size === 1 && keys.has('status')) {
+        if (after.status === 'ACTIVE' && before.status === 'PENDING') return `Activated account for ${subject}`;
+        return `Set account status to ${formatAuditValue('status', after.status, row, lookups).text}`;
+      }
+      if (keys.size === 1 && keys.has('notifications_enabled')) {
+        return after.notifications_enabled ? 'Enabled notifications' : 'Paused notifications';
+      }
+    }
+
+    if (table === 'members') {
+      if (keys.size === 1 && keys.has('status')) {
+        return after.status === 'INACTIVE' ? `Deactivated member ${subject}` : `Reactivated member ${subject}`;
+      }
+      if (keys.size === 1 && keys.has('monthly_contribution_amount')) {
+        return `Updated ${subject} monthly contribution to ${money(after.monthly_contribution_amount)}`;
+      }
+    }
+
+    if (table === 'contribution_periods') {
+      if (keys.has('is_exempt')) return after.is_exempt ? `Exempted ${subject}` : `Removed exemption for ${subject}`;
+      if (keys.size === 1 && keys.has('required_amount')) return `Updated required contribution to ${money(after.required_amount)}`;
+    }
+
+    if (table === 'savings_goals') {
+      if (keys.size === 1 && keys.has('status')) {
+        if (after.status === 'COMPLETED') return `Completed goal "${subject}"`;
+        if (after.status === 'CANCELLED') return `Cancelled goal "${subject}"`;
+      }
+      if (keys.size === 1 && keys.has('target_amount')) return `Updated goal target to ${money(after.target_amount)}`;
+    }
+
+    if (table === 'groups') {
+      const paymentKeys = ['payment_qr_url', 'payment_method_label', 'payment_account_name', 'payment_account_number', 'payment_instructions'];
+      if (changes.length && changes.every((c) => paymentKeys.includes(c.key))) {
+        return keys.size === 1 && keys.has('payment_qr_url') ? 'Updated group payment QR code' : 'Updated group payment details';
+      }
+      if (keys.size === 1 && keys.has('deadline_day')) return `Set monthly due day to Day ${after.deadline_day}`;
+      if (keys.size === 1 && keys.has('allow_credit')) return after.allow_credit ? 'Enabled excess contribution credit' : 'Disabled excess contribution credit';
+    }
+
+    if (changes.length === 1) {
+      const item = changes[0];
+      if (item.key === 'receipt_url') return after.receipt_url ? 'Updated receipt image' : 'Removed receipt image';
+      if (AUDIT_MONEY_FIELDS.has(item.key)) return `Updated ${item.label.toLowerCase()} from ${item.before.text} to ${item.after.text}`;
+      return `Updated ${item.label.toLowerCase()}`;
+    }
+
+    if (changes.length > 1) {
+      const shown = changes.slice(0, 2).map((c) => c.label.toLowerCase());
+      const extra = changes.length - shown.length;
+      return `Updated ${shown.join(' and ')}${extra > 0 ? ` (+${extra} more)` : ''}`;
+    }
+
+    return 'Synced record metadata';
+  }
+
+  function buildAuditDiffChange(key, rawBefore, rawAfter, row, lookups) {
+    const label = auditFieldLabel(key, row?.table_name);
+    const before = formatAuditValue(key, rawBefore, row, lookups);
+    const after = formatAuditValue(key, rawAfter, row, lookups);
+    const beforeEmpty = rawBefore == null || rawBefore === '';
+    const afterEmpty = rawAfter == null || rawAfter === '';
+
+    if (AUDIT_ACTION_CONTEXT_FIELDS.has(key) && (beforeEmpty || afterEmpty)) {
+      const isCleared = !beforeEmpty && afterEmpty;
+      let detailTag = 'Recorded';
+      let detailTone = 'neutral';
+      if (isCleared) {
+        detailTag = 'Previously recorded';
+        detailTone = 'cleared';
+      } else if (key === 'review_note') {
+        detailTag = 'Review note';
+        detailTone = 'reason';
+      } else if (AUDIT_REASON_FIELDS.has(key)) {
+        detailTag = 'Reason';
+        detailTone = 'reason';
+      } else if (AUDIT_ACTOR_REF_FIELDS.has(key)) {
+        detailTag = 'Recorded by';
+      } else if (AUDIT_DATETIME_FIELDS.has(key)) {
+        detailTag = 'Recorded on';
+      }
+      return {
+        key,
+        label,
+        display: 'detail',
+        detailTag,
+        detailTone,
+        detailValue: isCleared ? before : after,
+        before,
+        after
+      };
+    }
+
+    return {
+      key,
+      label,
+      display: 'diff',
+      before,
+      after
+    };
+  }
+
+  function formatAuditEntry(row, rawLookups = {}) {
+    const lookups = rawLookups.groups instanceof Map ? rawLookups : collectAuditLookupsFromRows([], rawLookups);
+    const action = String(row?.action || 'UPDATE').toUpperCase();
+    const table = String(row?.table_name || '');
+    const tableLabel = auditTableLabel(table);
+    const actionLabel = auditActionLabel(action);
+    const subject = auditSubjectLabel(row, lookups);
+    const beforeObj = row?.old_data && typeof row.old_data === 'object' ? row.old_data : null;
+    const afterObj = row?.new_data && typeof row.new_data === 'object' ? row.new_data : null;
+
+    let mode = 'diff';
+    let changes = [];
+
+    if (action === 'INSERT') {
+      mode = 'create';
+      const source = afterObj || {};
+      const hasFullName = Boolean(source.full_name);
+      const keys = Object.keys(source).filter((key) => {
+        if (AUDIT_SKIP_FIELDS.has(key)) return false;
+        if (table !== 'profiles' && key === 'group_id') return false;
+        if (hasFullName && (key === 'first_name' || key === 'middle_name' || key === 'last_name')) return false;
+        if (source.approval_status === 'PENDING' && (key === 'reviewed_by' || key === 'reviewed_at' || key === 'review_note')) return false;
+        if (source.approval_status !== 'VOIDED' && (key === 'voided_by' || key === 'voided_at' || key === 'void_reason')) return false;
+        return source[key] != null && source[key] !== '';
+      });
+      keys.sort((a, b) => auditFieldRank(a) - auditFieldRank(b));
+      changes = keys.map((key) => ({
+        key,
+        label: auditFieldLabel(key, table),
+        before: { kind: 'empty', text: 'Not created yet', muted: true },
+        after: formatAuditValue(key, source[key], row, lookups)
+      }));
+    } else if (action === 'DELETE') {
+      mode = 'delete';
+      const source = beforeObj || {};
+      const hasFullName = Boolean(source.full_name);
+      const keys = Object.keys(source).filter((key) => {
+        if (AUDIT_SKIP_FIELDS.has(key)) return false;
+        if (table !== 'profiles' && key === 'group_id') return false;
+        if (hasFullName && (key === 'first_name' || key === 'middle_name' || key === 'last_name')) return false;
+        return source[key] != null && source[key] !== '';
+      });
+      keys.sort((a, b) => auditFieldRank(a) - auditFieldRank(b));
+      changes = keys.map((key) => ({
+        key,
+        label: auditFieldLabel(key, table),
+        before: formatAuditValue(key, source[key], row, lookups),
+        after: { kind: 'empty', text: 'Removed', muted: true }
+      }));
+    } else {
+      mode = 'diff';
+      const before = beforeObj || {};
+      const after = afterObj || {};
+      const allKeys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+      let changedKeys = allKeys.filter((key) => {
+        if (AUDIT_SKIP_FIELDS.has(key)) return false;
+        if (key === 'updated_by' && row?.changed_by && String(after[key] || '') === String(row.changed_by)) return false;
+        return !auditValuesEqual(key, before[key], after[key]);
+      });
+
+      const changedSet = new Set(changedKeys);
+      if (changedSet.has('full_name')) {
+        changedKeys = changedKeys.filter((k) => k !== 'first_name' && k !== 'middle_name' && k !== 'last_name');
+      }
+      const hasStateTransition = changedSet.has('approval_status') || changedSet.has('status') || changedSet.has('deleted_by') || changedSet.has('deleted_at') || changedSet.has('voided_by');
+      if (hasStateTransition && changedKeys.some((k) => !AUDIT_TRANSITION_TIMESTAMPS.has(k))) {
+        changedKeys = changedKeys.filter((k) => !AUDIT_TRANSITION_TIMESTAMPS.has(k));
+      }
+
+      changes = changedKeys.map((key) => buildAuditDiffChange(key, before[key], after[key], row, lookups));
+      changes.sort((a, b) => {
+        const aGroup = a.display === 'detail' ? 1 : 0;
+        const bGroup = b.display === 'detail' ? 1 : 0;
+        if (aGroup !== bGroup) return aGroup - bGroup;
+        return auditFieldRank(a.key) - auditFieldRank(b.key);
+      });
+    }
+
+    const summary = buildAuditSummary(row, changes, subject, lookups);
+    const actor = lookups.profiles?.get(row?.changed_by) || lookups.actors?.get(row?.changed_by) || 'System';
+    return {
+      mode,
+      tableLabel,
+      actionLabel,
+      actor,
+      subject,
+      summary,
+      changes
+    };
+  }
+
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
@@ -7700,9 +9109,11 @@
     CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
     payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,
     computeContributionExcess, bindExcessContributionToggle,
+    resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, setNotificationPreference,
+    auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry,
     get profile() { return currentProfile; }
   };
 })();

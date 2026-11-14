@@ -1568,9 +1568,72 @@
   if (state.profile?.role !== 'MEMBER') document.querySelectorAll('a[href="user.html"]').forEach((link) => link.remove());
   if (addAnnouncementButton) addAnnouncementButton.hidden = state.profile?.role !== 'ADMIN';
   try { await load(); } finally { Ipon.setLoading(false); }
-  if (new URLSearchParams(location.search).get('create_group') === '1') {
-    try { history.replaceState({}, '', location.pathname); } catch { }
-    openGroupDialog('create');
-  }
+  const parseTypedRef = (val) => {
+    const raw = String(val || '').trim();
+    const idx = raw.indexOf(':');
+    return idx > 0 ? { type: raw.slice(0, idx), id: raw.slice(idx + 1) } : null;
+  };
+  Ipon.consumeDeepLink(async (params, hash) => {
+    if (params.get('create_group') === '1') {
+      try { history.replaceState({}, '', location.pathname); } catch { }
+      openGroupDialog('create');
+      return true;
+    }
+    const annId = params.get('announcement') || '';
+    const releaseVer = params.get('release') || '';
+    const annTitle = params.get('announcement_title') || '';
+    if (annId || releaseVer || annTitle) {
+      if (announcements?.openMatching) {
+        const opened = await announcements.openMatching({ id: annId, releaseVersion: releaseVer, title: annTitle });
+        if (opened) return true;
+      }
+    }
+    const reviewRef = parseTypedRef(params.get('review'));
+    if (reviewRef) {
+      Ipon.highlightFocus('[data-region="review-ground"]');
+      await Ipon.openRecordDetails(reviewRef.type, reviewRef.id, {
+        allowReview: state.profile?.role === 'ADMIN',
+        autoOpenReview: state.profile?.role === 'ADMIN',
+        onUpdated: load
+      });
+      return true;
+    }
+    if (params.has('review_notice')) {
+      Ipon.highlightFocus('[data-region="review-ground"]');
+      return !params.has('notice');
+    }
+    const recordRef = parseTypedRef(params.get('record'));
+    if (recordRef) {
+      await Ipon.openRecordDetails(recordRef.type, recordRef.id, {
+        allowReview: state.profile?.role === 'ADMIN',
+        onUpdated: load
+      });
+      return true;
+    }
+    const threadRef = parseTypedRef(params.get('thread'));
+    if (threadRef) {
+      await Ipon.openRecordDiscussion(threadRef.type, threadRef.id, { onUpdated: load });
+      return true;
+    }
+    const featureId = params.get('feature_request') || '';
+    if (featureId) {
+      await Ipon.openFeatureRequestDetails(featureId);
+      return true;
+    }
+    const reminderMonth = params.get('reminder') || '';
+    const exemptionMonth = params.get('exemption') || '';
+    if (reminderMonth || exemptionMonth) {
+      await Ipon.openPeriodNoticeModal({
+        mode: exemptionMonth ? 'exemption' : 'reminder',
+        month: exemptionMonth || reminderMonth
+      });
+      return true;
+    }
+    if (hash === '#announcements' || hash === '#announcement-heading') {
+      Ipon.highlightFocus('#announcement-heading');
+      return true;
+    }
+    return false;
+  });
   Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'announcements', 'announcement_reactions'], load);
 })();

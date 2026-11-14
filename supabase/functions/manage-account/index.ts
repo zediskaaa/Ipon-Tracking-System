@@ -2388,7 +2388,7 @@ Output strictly valid JSON with only these flat arrays of plain strings (no nest
         type: 'GROUP_INVITE',
         title: `Invitation: ${groupName}`,
         message: `${inviterName} invited you to join "${groupName}" as a ${role.toLowerCase()}.`,
-        link: 'dashboard.html'
+        link: `dashboard.html?invite=${encodeURIComponent(actor.group_id)}`
       }).then(() => null, () => null);
     }
 

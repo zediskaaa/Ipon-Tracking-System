@@ -1,5 +1,9 @@
 [
   {
+    "date": "2026-11-15T02:16:01+08:00",
+    "message": "Eliminate Android white startup flash, add progressive login brute-force lockout, and polish account profile UI\n\n- Fix Android 12+ cold-start splash blank white screen with #0b3428 windowSplashScreenBackground, dark system bars, and MainActivity window background matching the pulsing emerald splash\n- Implement progressive anti-brute-force login protection across migration 068, schema.sql, manage-account Edge Function, login.html, and js/auth.js\n- Remove Phone & drawer alerts preference card from account.html and js/core.js\n- Style .account-profile-identity small as plain muted text instead of a pill badge in light and dark themes\n- Bump HTML cache versions, sync js/release-commits.json, and expand tests/contracts.test.mjs"
+  },
+  {
     "date": "2026-11-15T01:49:28+08:00",
     "message": "Smooth emerald splash intro, disable auto update popup, and preserve nav shell state during loading\n\n- Eliminate Android cold-start white screen with #0b3428 splash theme, layout/WebView background, and Capacitor backgroundColor\n\n- Replace login splash img with inline SVG myIPON emblem and smooth scale pulse animation while keeping splash active during signed-in redirect\n\n- Stop automatic app update modal popups on startup and visibility change unless explicitly forced\n\n- Pre-apply theme/role in head via config.js + hero-plates.css and persist role nav tabs, unread notification badge count, user DP, and name across loading transitions\n\n- Add contract and VM runtime tests covering splash, disabled auto update popup, and zero-flicker shell state; bump asset cache versions to 20261115-75"
   },
@@ -174,9 +178,5 @@
   {
     "date": "2026-11-14T02:21:39+08:00",
     "message": "Center myIPON brand vertically with mobile top action buttons across all pages"
-  },
-  {
-    "date": "2026-11-14T02:20:46+08:00",
-    "message": "Match mobile active nav button size on Dashboard to all other tabs"
   }
 ]

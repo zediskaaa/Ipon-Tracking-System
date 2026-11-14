@@ -66,21 +66,23 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   const script = read('js/super-admin.js');
   const core = read('js/core.js');
   assert.match(html, /data-panel="super-admin"/);
-  assert.match(html, /id="requests-body"/);
   assert.match(html, /id="feature-requests-body"/);
+  assert.match(html, /id="bug-reports-body"/);
   assert.match(html, /id="administrators-body"/);
   assert.match(html, /id="users-role-filter"/);
   assert.match(html, /id="user-password-dialog"/);
-  for (const view of ['overview', 'requests', 'feature-requests', 'administrators', 'activity']) {
+  for (const view of ['overview', 'feature-requests', 'bug-reports', 'administrators', 'activity']) {
     assert.match(html, new RegExp(`data-platform-view="${view}"`));
     assert.match(core, new RegExp(`super-admin\\.html#${view}`));
   }
+  assert.doesNotMatch(html, /id="(?:requests|requests-body|metric-pending-requests|approve-request-dialog|reject-request-dialog)"/);
+  assert.doesNotMatch(html, /super-admin\.html#requests/);
+  assert.doesNotMatch(core, /super-admin\.html#requests/);
+  assert.doesNotMatch(script, /super_admin_(?:approve|reject|reopen)_request|renderRequests|requestsBody/);
   assert.match(script, /addEventListener\('hashchange'/);
   assert.match(html, /id="platform-attention"/);
   assert.match(html, /id="overview-error"/);
   assert.match(script, /Ipon\.init\(\{ allowedRoles: \['SUPER_ADMIN'\] \}\)/);
-  assert.match(script, /super_admin_approve_request/);
-  assert.match(script, /super_admin_reject_request/);
   assert.match(script, /super_admin_set_administrator_status/);
   assert.match(script, /admin-set-password/);
   assert.match(script, /subscribeToChanges\('super-admin'/);
@@ -598,6 +600,7 @@ test('administrator request form uses a desktop grid with a mobile fallback', ()
   assert.match(html, /body\.is-request-mode :is\(#first-name-field,#middle-name-field,#last-name-field\)\{grid-column:span 2\}/);
   assert.match(html, /body\.is-request-mode :is\(#contact-number-field,#email-field,#password-field,#password-confirmation-field\)\{grid-column:span 3\}/);
   assert.match(html, /@media\(max-width:780px\)[\s\S]*?\.login-card \.form-grid\{grid-template-columns:1fr/);
+  assert.doesNotMatch(html, /#auth-submit[^}]*(\\2192|→)/);
 });
 
 test('mobile navigation and data tables do not require horizontal scrolling', () => {
@@ -921,8 +924,6 @@ test('multi-group workspaces support editable group name/DP, admin contributor t
   assert.match(manageAccountEdge, /We're sorry, your administrator request/);
   assert.match(manageAccountEdge, /Reason for decline:/);
   assert.match(core, /function notifyAdminRequestDecision\(/);
-  const superAdminJs = read('js/super-admin.js');
-  assert.match(superAdminJs, /notifyAdminRequestDecision\(/);
   assert.match(read('login.html'), /id="request-success-dialog"/);
   const authJs = read('js/auth.js');
   assert.match(authJs, /setMode\('login'\)[\s\S]*requestSuccessDialog\?\.showModal\(\)/);
@@ -930,9 +931,6 @@ test('multi-group workspaces support editable group name/DP, admin contributor t
   assert.match(migration031, /create or replace function public\.check_admin_request_eligibility/);
   assert.match(migration031, /create or replace function public\.super_admin_reject_request/);
   assert.match(schema, /create or replace function public\.check_admin_request_eligibility/);
-  assert.match(read('super-admin.html'), /id="reject-request-dialog"[\s\S]*id="reject-reason-preset"[\s\S]*id="reject-reason-text"/);
-  assert.match(superAdminJs, /rejectForm\?\.addEventListener\('submit'[\s\S]*Ipon\.confirmAction\(\{[\s\S]*title: 'Reject administrator request\?'/);
-  assert.match(superAdminJs, /approvalForm\.addEventListener\('submit'[\s\S]*Ipon\.confirmAction\(\{[\s\S]*title: 'Approve administrator request\?'/);
   assert.match(authJs, /check_admin_request_eligibility/);
   assert.match(core, /function resolveActiveRole\(/);
   assert.match(core, /host\.dataset\.renderedRole === effectiveRole/);
@@ -950,8 +948,6 @@ test('multi-group workspaces support editable group name/DP, admin contributor t
   assert.match(core, /sendAdminRequestVerificationCode/);
   assert.match(core, /verifyAdminRequestVerificationCode/);
   assert.match(core, /unblockAdminRequest/);
-  assert.match(superAdminJs, /data-unblock-request/);
-  assert.match(superAdminJs, /unblockAdminRequest/);
   assert.match(authJs, /sendAdminRequestVerificationCode/);
   assert.match(authJs, /verifyAdminRequestVerificationCode/);
   assert.match(dashboardJs, /activeIds\.has\(item\.member_id\)/);
@@ -965,7 +961,6 @@ test('multi-group workspaces support editable group name/DP, admin contributor t
   assert.match(schema, /insert into public\.schema_migrations[\s\S]*20261113_034/);
   assert.match(manageAccountEdge, /from\('admin_requests'\)\s*\.select\('email'\)/);
   assert.match(manageAccountEdge, /bccSuperAdmin/);
-  assert.match(superAdminJs, /email:\s*targetEmail/);
 });
 
 test('financial records support member filtering, DP spotlight card, activity graph, and balanced form inputs across additions, deductions, and expenses', () => {
@@ -1588,9 +1583,9 @@ test('mobile UI polish, custom group switchers, clickable notifications, version
   assert.match(members, /Ipon\.populateGroupSelect\(groupSelect/);
   assert.match(settings, /Ipon\.populateGroupSelect\(groupSelect/);
 
-  assert.match(versionJs, new RegExp(`version:\\s*'${versionJson.version.replace('.', '\\.')}'`));
-  assert.match(versionJs, new RegExp(`nativeBuild:\\s*${versionJson.nativeBuild}`));
-  assert.match(versionJs, /isApp:\s*false/);
+  assert.match(versionJs, new RegExp(`["']?version["']?:\\s*['"]${versionJson.version.replaceAll('.', '\\.')}['"]`));
+  assert.match(versionJs, new RegExp(`["']?nativeBuild["']?:\\s*${versionJson.nativeBuild}`));
+  assert.match(versionJs, /["']?isApp["']?:\s*false/);
   assert.match(prepareMobile, /fs\.writeFileSync\(path\.join\(rootDir,\s*'js',\s*'version\.js'\),\s*webVersionJsContent/);
 
   assert.match(superAdmin, /getElementById\(`\$\{key\}-pager`\)/);
@@ -1639,7 +1634,7 @@ test('workflow enhancements migration 049, schema sync, and all UI integrations 
   }
 
   // Service worker offline shell + connectivity banner
-  assert.match(sw, /ipon-shell-v8/);
+  assert.match(sw, /ipon-shell-v9/);
   assert.match(sw, /ignoreSearch:\s*true/);
   assert.match(core, /function initConnectivityBanner\(/);
   assert.match(core, /function initInfoTips\(/);
@@ -2808,8 +2803,11 @@ test('discussion DP circle styling and replaceable phone/panel record-comment no
   }
   assert.match(pollJava, /String dedupeKey = row\.optString\("dedupe_key", ""\);/);
   assert.match(mainJava, /\\\.html\(\?:\\\\\?/);
+  assert.match(mainJava, /\[a-zA-Z0-9_=&:%\.-]\+/);
   assert.match(coreJs, /function notifShownKey\(item\)/);
-  assert.match(coreJs, /if \(\/\^\(\?:\\?\[a-zA-Z0-9_-\]\+\\\.html\(\?:\\\?\[a-zA-Z0-9_=&:\.-\]\+\)\?/);
+  assert.match(coreJs, /function safeNotificationTarget\(link\)/);
+  assert.match(coreJs, /\^\[a-z0-9_-\]\+\\\.html\(\?:\\\?\[a-z0-9_=&:%\.-\]\+\)\?/);
+  assert.match(coreJs, /normalizeRolePageTarget\(event\?\.notification\?\.extra\?\.link\)/);
 });
 
 test('record discussion supports photo, video, and document attachments with lossless signed upload/view URLs', async () => {
@@ -5070,6 +5068,729 @@ test('Android v31 splash screen and progressive anti-bruteforce login protection
   assert.equal(replacedTo, 'dashboard.html');
   assert.equal(noticeEl.hidden, true);
   assert.equal(submitBtn.disabled, false);
+});
+
+test('all notification types route to exact destination modals or highlighted targets across SQL, Edge, SW, Android, and all role pages', () => {
+  const migration069 = read('database/migrations/20261115_069_notification_deep_links.sql');
+  const schema = read('database/schema.sql');
+  const coreJs = read('js/core.js');
+  const dashboardJs = read('js/dashboard.js');
+  const recordsJs = read('js/records.js');
+  const userJs = read('js/user.js');
+  const membersJs = read('js/members.js');
+  const settingsJs = read('js/settings.js');
+  const superAdminJs = read('js/super-admin.js');
+  const manageAccount = read('supabase/functions/manage-account/index.ts');
+  const sendPush = read('supabase/functions/send-push/index.ts');
+  const sw = read('sw.js');
+  const mainJava = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const css = read('css/app.css');
+
+  // 1. SQL migration 069 & schema emit specific deep links for every notification type
+  for (const sql of [migration069, schema]) {
+    assert.match(sql, /\?review=/);
+    assert.match(sql, /\?record=/);
+    assert.match(sql, /\?member=/);
+    assert.match(sql, /\?notice=/);
+    assert.match(sql, /\?access_user=/);
+    assert.match(sql, /\?feature_request=/);
+    assert.match(sql, /\?bug_report=/);
+    assert.match(sql, /\?announcement=/);
+    assert.match(sql, /\?reminder=/);
+    assert.match(sql, /\?exemption=/);
+    assert.match(sql, /\?admin_request=/);
+    assert.match(sql, /\?admin_user=/);
+    assert.match(sql, /'dashboard\.html\?announcement=' \|\| new\.id::text/);
+    assert.match(sql, /'super-admin\.html\?announcement=' \|\| v_announcement_id::text \|\| '#announcements'/);
+  }
+
+  // 2. Edge functions & service worker & Android MainActivity preserve deep links & group context
+  assert.match(manageAccount, /link:\s*`dashboard\.html\?invite=\$\{encodeURIComponent\(actor\.group_id\)\}`/);
+  assert.match(sendPush, /select\('id, recipient_id, group_id, type, title, message, link, dedupe_key, read_at, created_at'\)/);
+  assert.match(sendPush, /notif\.type === 'RELEASE' && \/\^https\?:/);
+  assert.match(sw, /const CACHE_NAME = 'ipon-shell-v9'/);
+  assert.match(sw, /group_id:\s*payload\.group_id \?\? null/);
+  assert.match(sw, /type:\s*'MYIPON_NOTIFICATION_CLICK'/);
+  assert.match(mainJava, /\[a-zA-Z0-9_=&:%\.-]\+/);
+
+  // 3. core.js fixes dialog ID bug, exports deep-link helpers, keeps APK link separate inside release row, and opens announcement modal on card click
+  assert.match(coreJs, /id="record-detail-dialog"/);
+  assert.match(coreJs, /id="notice-detail-dialog"/);
+  assert.doesNotMatch(coreJs, /#notifications-dialog/);
+  assert.match(coreJs, /document\.getElementById\('notification-dialog'\)\?\.close\(\)/);
+  assert.match(coreJs, /if \(event\.target\.closest\('\.notification-download-row a'\)\) return;/);
+  assert.match(coreJs, /\?release=\$\{encodeQueryValue\(latestVersion\)\}/);
+  assert.match(coreJs, /review_\$\{entry\.type\}/);
+  assert.match(coreJs, /resolveNotificationTarget,\s*navigateNotificationTarget,\s*openRecordDetails,\s*openFeatureRequestDetails,\s*openPeriodNoticeModal,\s*openNoticeDetailModal,\s*highlightFocus,\s*consumeDeepLink/);
+
+  // 4. All 6 authenticated pages register Ipon.consumeDeepLink handlers + user row attribute + focus styles
+  for (const script of [dashboardJs, recordsJs, userJs, membersJs, settingsJs, superAdminJs]) {
+    assert.match(script, /Ipon\.consumeDeepLink\(/);
+  }
+  assert.match(userJs, /<tr data-row-id="\$\{row\.id\}">/);
+  assert.match(superAdminJs, /<tr data-user-id="\$\{profile\.id\}">/);
+  assert.match(css, /\.is-highlight-focus\b/);
+  assert.match(css, /\.notice-detail-dialog\b/);
+});
+
+test('notification deep-link runtime routes updates, reviews, reminders, and fallback notices without page reload on same view', async () => {
+  const vm = await import('node:vm');
+  const coreJs = read('js/core.js');
+
+  const ids = new Map();
+  const makeEl = (id, extra = {}) => {
+    const node = {
+      id,
+      open: false,
+      hidden: false,
+      disabled: false,
+      value: '',
+      textContent: '',
+      innerHTML: '',
+      className: '',
+      dataset: {},
+      style: { setProperty() {}, removeProperty() {} },
+      children: [],
+      listeners: {},
+      classList: {
+        _set: new Set(),
+        add(...cls) { cls.forEach((c) => this._set.add(c)); },
+        remove(...cls) { cls.forEach((c) => this._set.delete(c)); },
+        toggle(c, force) { if (force === undefined ? !this._set.has(c) : force) this._set.add(c); else this._set.delete(c); },
+        contains(c) { return this._set.has(c); }
+      },
+      showModal() { this.open = true; },
+      show() { this.open = true; },
+      close() { this.open = false; },
+      focus() {},
+      scrollIntoView() {},
+      removeAttribute(k) { delete this[k]; },
+      setAttribute(k, v) { this[k] = v; },
+      appendChild(child) { this.children.push(child); return child; },
+      replaceChildren(...nodes) { this.children = [...nodes]; },
+      addEventListener(type, fn) {
+        if (!this.listeners[type]) this.listeners[type] = [];
+        this.listeners[type].push(fn);
+      },
+      dispatch(type, ev = {}) {
+        const event = { target: this, preventDefault() {}, ...ev };
+        if (type === 'click' && typeof this.onclick === 'function') this.onclick(event);
+        for (const fn of this.listeners[type] || []) fn(event);
+      },
+      click() { this.dispatch('click'); },
+      querySelector(sel) {
+        if (sel.startsWith('#')) return ids.get(sel.slice(1)) || null;
+        return this.children.find((c) => c.className?.includes(sel.replace('.', ''))) || null;
+      },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.children || []) {
+            if (sel === 'button' && c.tagName === 'BUTTON') out.push(c);
+            walk(c);
+          }
+        };
+        walk(this);
+        return out;
+      },
+      closest() { return null; },
+      ...extra
+    };
+    if (id) ids.set(id, node);
+    return node;
+  };
+
+  makeEl('app-loader');
+  const notifDialog = makeEl('notification-dialog', { open: true });
+  makeEl('record-detail-dialog');
+  makeEl('record-detail-title');
+  makeEl('record-detail-subtitle');
+  const recordSummary = makeEl('record-detail-summary');
+  const recordActions = makeEl('record-detail-actions');
+  const noticeDialog = makeEl('notice-detail-dialog');
+  const noticeTitle = makeEl('notice-detail-title');
+  makeEl('notice-detail-subtitle');
+  const noticeBody = makeEl('notice-detail-body');
+  const noticeActions = makeEl('notice-detail-actions');
+  makeEl('record-action-dialog');
+  const decisionRadio = { value: 'CONFIRM' };
+  const actionForm = makeEl('record-action-form', { reportValidity: () => true, elements: { decision: decisionRadio } });
+  makeEl('record-action-step-edit');
+  makeEl('record-action-step-confirm', { hidden: true });
+  makeEl('record-action-title');
+  makeEl('record-action-summary');
+  makeEl('record-action-options');
+  makeEl('record-action-reason-label');
+  makeEl('record-action-help');
+  const actionReason = makeEl('record-action-reason');
+  makeEl('record-action-next');
+  makeEl('record-action-back');
+  const actionSubmit = makeEl('record-action-submit');
+  makeEl('record-action-confirm-box');
+  makeEl('record-action-confirm-heading');
+  makeEl('record-action-confirm-text');
+  makeEl('record-action-confirm-note');
+  makeEl('record-action-error');
+  const viewerDialog = makeEl('announcement-viewer-dialog');
+  const viewerTitle = makeEl('announcement-viewer-title');
+  makeEl('announcement-viewer-release-banner');
+  makeEl('announcement-viewer-meta');
+  makeEl('announcement-viewer-description');
+  makeEl('announcement-viewer-release-features');
+  makeEl('announcement-viewer-media');
+  makeEl('announcement-viewer-delete');
+  makeEl('announcement-viewer-reactions');
+  makeEl('announcement-viewer-done');
+  makeEl('announcement-viewer-close');
+  makeEl('announcement-reactions-dialog');
+  makeEl('announcement-reactions-tabs');
+  makeEl('announcement-reactions-list');
+  makeEl('announcement-reactions-title');
+  makeEl('announcement-reactions-close');
+  makeEl('announcement-compose-dialog');
+  makeEl('announcement-compose-form');
+  makeEl('announcement-compose-close');
+  makeEl('announcement-compose-cancel');
+  makeEl('announcement-media-input');
+  makeEl('announcement-media-help');
+  makeEl('announcement-media-previews');
+  makeEl('announcement-submit');
+  const announcementList = makeEl('announcement-list');
+
+  const historyUpdates = [];
+  const windowListeners = new Map();
+  let hrefValue = 'https://my-ipon.vercel.app/dashboard.html';
+  const locationObj = {
+    get href() { return hrefValue; },
+    set href(v) { hrefValue = v; },
+    origin: 'https://my-ipon.vercel.app',
+    protocol: 'https:',
+    hostname: 'my-ipon.vercel.app',
+    pathname: '/dashboard.html',
+    search: '',
+    hash: '',
+    replace(v) { hrefValue = v; }
+  };
+
+  const rpcCalls = [];
+  const sampleRelease = {
+    id: 'ann-rel-240',
+    announcement_type: 'RELEASE',
+    release_version: '2.4.0',
+    title: 'Version 2.4.0 is live',
+    description: 'Added specific deep linking for every notification.',
+    media_urls: [],
+    created_at: '2026-11-15T00:00:00Z'
+  };
+  const makeQueryChain = (table) => {
+    const state = { filters: [] };
+    const chain = {
+      select() { return chain; },
+      eq(col, val) { state.filters.push([col, val]); return chain; },
+      order() { return chain; },
+      limit() { return chain; },
+      async maybeSingle() {
+        if (table === 'contributions') {
+          return {
+            data: {
+              id: 'rec-c1',
+              amount: 500,
+              payment_date: '2026-11-15',
+              transaction_reference: '123456',
+              payment_method: 'GCASH',
+              notes: 'Nov payment',
+              receipt_url: '',
+              approval_status: 'PENDING',
+              review_note: '',
+              contribution_periods: {
+                period_month: '2026-11-01',
+                members: { full_name: 'Juan Dela Cruz', user_id: 'u-mem' }
+              }
+            },
+            error: null
+          };
+        }
+        if (table === 'v_announcements') {
+          return { data: sampleRelease, error: null };
+        }
+        if (table === 'v_contribution_status') {
+          return { data: { payment_status: 'UNPAID', paid_amount: 0, required_amount: 500, outstanding_amount: 500, due_date: '2026-11-30' }, error: null };
+        }
+        if (table === 'contribution_periods') {
+          return { data: { id: 'p-1', due_date: '2026-11-30', is_exempt: false, exempt_reason: '', required_amount: 500 }, error: null };
+        }
+        if (table === 'notifications') {
+          return { data: { id: 91, type: 'GENERAL', title: 'Group settings updated', message: 'Your group rules were updated.', link: 'dashboard.html', created_at: '2026-11-15T00:00:00Z' }, error: null };
+        }
+        return { data: null, error: null };
+      },
+      then(resolve) {
+        if (table === 'v_announcements') return Promise.resolve({ data: [sampleRelease], error: null }).then(resolve);
+        return Promise.resolve({ data: [], error: null }).then(resolve);
+      }
+    };
+    return chain;
+  };
+
+  const doc = {
+    documentElement: { dataset: {} },
+    body: {
+      dataset: { page: 'dashboard' },
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      querySelectorAll: () => [],
+      insertAdjacentHTML() {},
+      appendChild() {},
+      addEventListener() {}
+    },
+    head: { appendChild() {}, insertAdjacentHTML() {} },
+    readyState: 'complete',
+    getElementById: (id) => ids.get(id) || null,
+    querySelector: (sel) => (sel.startsWith('#') ? ids.get(sel.slice(1)) || null : null),
+    querySelectorAll: () => [],
+    createElement: (tag) => makeEl('', { tagName: String(tag || 'div').toUpperCase() }),
+    addEventListener() {}
+  };
+
+  class CustomEventPolyfill {
+    constructor(type, init = {}) { this.type = type; this.detail = init.detail; }
+  }
+  const sessionStore = new Map([
+    ['myipon_active_notice', JSON.stringify({
+      id: 91,
+      type: 'GENERAL',
+      title: 'Group settings updated',
+      message: 'Your group rules were updated.',
+      link: 'dashboard.html',
+      created_at: '2026-11-15T00:00:00Z'
+    })]
+  ]);
+  const swListeners = new Map();
+  const ctx = {
+    window: null,
+    document: doc,
+    CustomEvent: CustomEventPolyfill,
+    Event: CustomEventPolyfill,
+    HTMLInputElement: class {},
+    HTMLFormElement: class {},
+    HTMLElement: class {},
+    navigator: {
+      onLine: true,
+      userAgent: 'Mozilla/5.0',
+      serviceWorker: {
+        controller: null,
+        register: async () => ({ update: async () => {} }),
+        addEventListener(type, fn) { swListeners.set(type, fn); }
+      }
+    },
+    location: locationObj,
+    history: {
+      replaceState(_state, _title, nextUrl) {
+        historyUpdates.push(nextUrl);
+        const parsed = new URL(nextUrl, locationObj.origin);
+        locationObj.pathname = parsed.pathname;
+        locationObj.search = parsed.search;
+        locationObj.hash = parsed.hash;
+      }
+    },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: {
+      getItem: (k) => sessionStore.get(k) ?? null,
+      setItem: (k, v) => sessionStore.set(k, String(v)),
+      removeItem: (k) => sessionStore.delete(k)
+    },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} },
+    CSS: { escape: (v) => String(v) },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    supabase: {
+      createClient: () => ({
+        auth: {
+          getSession: async () => ({ data: { session: null } }),
+          onAuthStateChange: () => {}
+        },
+        from: (table) => makeQueryChain(table),
+        rpc: async (fn, args) => {
+          rpcCalls.push([fn, args]);
+          return { data: null, error: null };
+        },
+        channel: () => ({ on() { return this; }, subscribe() { return this; } }),
+        removeChannel: async () => {}
+      })
+    },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval: () => 0,
+    requestAnimationFrame: (fn) => fn(),
+    addEventListener(type, fn) {
+      if (!windowListeners.has(type)) windowListeners.set(type, []);
+      windowListeners.get(type).push(fn);
+    },
+    dispatchEvent(ev) {
+      for (const fn of windowListeners.get(ev.type) || []) fn(ev);
+      return true;
+    },
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  const {
+    resolveNotificationTarget,
+    navigateNotificationTarget,
+    consumeDeepLink,
+    openRecordDetails,
+    openPeriodNoticeModal,
+    openNoticeDetailModal,
+    bindAnnouncements
+  } = ctx.window.Ipon;
+
+  // A. Legacy external GitHub release link NEVER leaks to card tap target; routes inside app to specific release announcement
+  assert.equal(
+    resolveNotificationTarget({
+      id: 'system-app-release-notice',
+      type: 'RELEASE',
+      title: 'Update available: v2.4.0',
+      link: 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest'
+    }, 'MEMBER'),
+    'dashboard.html?release=2.4.0'
+  );
+  assert.equal(
+    resolveNotificationTarget({
+      id: 101,
+      type: 'RELEASE',
+      title: 'myIPON v2.4.0',
+      link: 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk'
+    }, 'SUPER_ADMIN'),
+    'super-admin.html?release=2.4.0#announcements'
+  );
+
+  // B. Announcements controller + consumeDeepLink handles same-page release notification click without full reload
+  const annController = bindAnnouncements({ listElement: announcementList });
+  await annController.load();
+  consumeDeepLink(async (params) => {
+    const release = params.get('release') || '';
+    if (release) return annController.openMatching({ releaseVersion: release });
+    return false;
+  });
+
+  await navigateNotificationTarget({
+    id: 'system-app-release-notice',
+    type: 'RELEASE',
+    title: 'Update available: v2.4.0',
+    link: 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest'
+  });
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  assert.equal(notifDialog.open, false);
+  assert.equal(hrefValue, 'https://my-ipon.vercel.app/dashboard.html');
+  assert.equal(historyUpdates.at(-1), 'dashboard.html?release=2.4.0');
+  assert.equal(viewerDialog.open, true);
+  assert.match(viewerTitle.innerHTML, /Version 2\.4\.0 is live/);
+
+  // C. Payment reminder deep link opens #notice-detail-dialog with balance & "Submit contribution" CTA
+  let submittedPaymentCtx = null;
+  await openPeriodNoticeModal({
+    mode: 'reminder',
+    month: '2026-11',
+    memberId: 'mem-1',
+    onSubmitPayment: (payload) => { submittedPaymentCtx = payload; }
+  });
+  assert.equal(noticeDialog.open, true);
+  assert.match(noticeTitle.textContent, /Contribution reminder/);
+  assert.match(noticeBody.innerHTML, /500\.00/);
+  const ctaButtons = noticeActions.querySelectorAll('button');
+  assert.ok(ctaButtons.some((btn) => btn.textContent === 'Submit contribution'));
+  ctaButtons.find((btn) => btn.textContent === 'Submit contribution').click();
+  assert.deepEqual({ ...submittedPaymentCtx }, { monthStart: '2026-11-01', outstanding: 500 });
+
+  // D. Record detail deep link renders record summary & actions, and openNoticeDetailModal restores cached notice
+  await openRecordDetails('contribution', 'rec-c1', {
+    allowReview: true,
+    onUpdated: async () => {}
+  });
+  assert.match(recordSummary.innerHTML, /Juan Dela Cruz/);
+  assert.match(recordSummary.innerHTML, /GCash/);
+  assert.match(recordSummary.innerHTML, /For Nov 2026/);
+  assert.match(recordSummary.innerHTML, /500\.00/);
+  assert.match(recordSummary.innerHTML, /PENDING/);
+  const recordBtns = recordActions.querySelectorAll('button');
+  assert.ok(recordBtns.some((b) => b.textContent === 'Open discussion'));
+  assert.ok(recordBtns.some((b) => b.textContent === 'Close'));
+
+  // E. Notice detail modal restores cross-page notification copy & close works
+  sessionStore.set('myipon_active_notice', JSON.stringify({
+    id: 91,
+    type: 'GENERAL',
+    title: 'Group settings updated',
+    message: 'Your group rules were updated.',
+    link: 'dashboard.html',
+    created_at: '2026-11-15T00:00:00Z'
+  }));
+  noticeDialog.open = false;
+  const noticeResult = await openNoticeDetailModal(91);
+  assert.equal(noticeDialog.open, true);
+  assert.equal(noticeResult?.id, 'notice-detail-dialog');
+  assert.equal(noticeTitle.textContent, 'Group settings updated');
+  assert.match(noticeBody.innerHTML, /Your group rules were updated\./);
+  assert.equal(typeof swListeners.get('message'), 'function');
+  assert.equal(rpcCalls.length, 1);
+  assert.equal(rpcCalls[0][0], 'get_release_features');
+  assert.equal(rpcCalls[0][1]?.p_release_version, '2.4.0');
+});
+
+test('audit log renders plain-language summaries and clean field-level Before/After diffs without raw column names or base64 dumps', () => {
+  const auditHtml = read('audit.html');
+  const auditJs = read('js/audit.js');
+  const superAdminJs = read('js/super-admin.js');
+  const css = read('css/app.css');
+
+  assert.match(auditHtml, /id="audit-detail-changes"/);
+  assert.doesNotMatch(auditHtml, /<pre\s+id="audit-detail-before"/);
+  assert.match(auditJs, /Ipon\.formatAuditEntry\(/);
+  assert.match(auditJs, /Ipon\.collectAuditLookupsFromRows\(/);
+  assert.match(auditJs, /data-label="Summary"/);
+  assert.doesNotMatch(auditJs, /Changed: \$\{/);
+  assert.doesNotMatch(auditJs, /JSON\.stringify\(row\.old_data/);
+  assert.match(superAdminJs, /Ipon\.auditActionLabel/);
+  assert.match(css, /\.audit-diff-card/);
+  assert.match(css, /\.audit-diff-detail\.is-reason/);
+  assert.match(css, /\.audit-diff-media/);
+  assert.match(css, /html\[data-theme="dark"\]\s+\.audit-diff-card/);
+  assert.match(css, /html\[data-theme="dark"\]\s+\.audit-diff-detail\.is-reason/);
+  assert.match(auditJs, /change\.display === 'detail'/);
+  assert.match(auditJs, /class="audit-diff-detail/);
+
+  const coreSrc = read('js/core.js');
+  const makeNode = (id) => ({
+    id,
+    innerHTML: '',
+    textContent: '',
+    hidden: false,
+    dataset: {},
+    className: '',
+    children: [],
+    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    style: { setProperty() {}, removeProperty() {} },
+    setAttribute() {},
+    removeAttribute() {},
+    getAttribute: () => '',
+    appendChild() {},
+    append() {},
+    prepend() {},
+    insertAdjacentHTML() {},
+    addEventListener() {},
+    querySelector: () => null,
+    querySelectorAll: () => []
+  });
+  const doc = {
+    documentElement: { setAttribute() {}, removeAttribute() {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} }, style: { setProperty() {}, removeProperty() {} } },
+    body: { dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, appendChild() {}, append() {}, insertAdjacentHTML() {}, addEventListener() {}, querySelector: () => null },
+    head: { appendChild() {}, insertAdjacentHTML() {}, querySelector: () => null },
+    createElement: (tag) => makeNode(tag),
+    getElementById: () => null,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener() {}
+  };
+  const ctx = vm.createContext({
+    console,
+    Date,
+    Math,
+    Intl,
+    JSON,
+    Map,
+    Set,
+    Array,
+    Object,
+    String,
+    Number,
+    Boolean,
+    Promise,
+    Error,
+    URL,
+    RegExp,
+    setTimeout,
+    clearTimeout,
+    document: doc,
+    window: {
+      location: { pathname: '/audit.html', search: '', hash: '' },
+      IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon' },
+      addEventListener() {},
+      dispatchEvent() {},
+      CustomEvent: class CustomEvent {},
+      matchMedia: () => ({ matches: false, addEventListener() {} })
+    },
+    navigator: { onLine: true, serviceWorker: null },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { pathname: '/audit.html', search: '', hash: '', replace() {} },
+    history: { replaceState() {} },
+    supabase: { createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }), onAuthStateChange() {} } }) }
+  });
+  ctx.globalThis = ctx;
+  ctx.self = ctx.window;
+  vm.runInContext(coreSrc, ctx, { filename: 'js/core.js' });
+  const Ipon = ctx.window.Ipon;
+
+  const baseLookups = {
+    profiles: new Map([['u-admin', 'Zedrick De Monteverde']]),
+    members: new Map([['m-1', 'Juan'], ['m-old', 'Juan Dela Cruz']]),
+    groups: new Map([['g-new', 'Ipon Barkada']]),
+    periods: new Map([['p-1', { period_month: '2026-11-01', member_id: 'm-1' }]])
+  };
+
+  // 1. Name rename ("Juan" -> "Jumoi") shows exact Before/After names with zero raw keys
+  const renameEntry = Ipon.formatAuditEntry({
+    id: 101,
+    table_name: 'members',
+    record_id: 'm-1',
+    action: 'UPDATE',
+    changed_by: 'u-admin',
+    changed_at: '2026-11-15T02:39:00Z',
+    old_data: { id: 'm-1', full_name: 'Juan', first_name: 'Juan', last_name: 'Santos', status: 'ACTIVE', updated_at: '2026-11-14T10:00:00Z' },
+    new_data: { id: 'm-1', full_name: 'Jumoi', first_name: 'Jumoi', last_name: 'Santos', status: 'ACTIVE', updated_at: '2026-11-15T02:39:00Z' }
+  }, baseLookups);
+  assert.equal(renameEntry.tableLabel, 'Member');
+  assert.equal(renameEntry.actionLabel, 'Updated');
+  assert.equal(renameEntry.summary, 'Renamed member from "Juan" to "Jumoi"');
+  assert.equal(renameEntry.changes.length, 1);
+  assert.equal(renameEntry.changes[0].label, 'Full name');
+  assert.equal(renameEntry.changes[0].before.text, 'Juan');
+  assert.equal(renameEntry.changes[0].after.text, 'Jumoi');
+
+  // 2. Group/member switch on profile suppresses unchanged huge base64 avatar and avoids group_id/member_id strings
+  const longAvatar = `data:image/jpeg;base64,${'A'.repeat(400)}`;
+  const profileSwitchEntry = Ipon.formatAuditEntry({
+    id: 102,
+    table_name: 'profiles',
+    record_id: 'u-admin',
+    action: 'UPDATE',
+    changed_by: 'u-admin',
+    changed_at: '2026-11-15T02:39:00Z',
+    old_data: { id: 'u-admin', full_name: 'Zedrick De Monteverde', role: 'ADMIN', group_id: '10865ab8-e651-4af1-82b8-6b2d4fd5fcd2', member_id: 'm-old', avatar_url: longAvatar, updated_at: 't1' },
+    new_data: { id: 'u-admin', full_name: 'Zedrick De Monteverde', role: 'ADMIN', group_id: 'g-new', member_id: null, avatar_url: longAvatar, updated_at: 't2' }
+  }, baseLookups);
+  assert.equal(profileSwitchEntry.tableLabel, 'Account');
+  assert.equal(profileSwitchEntry.summary, 'Switched active group to "Ipon Barkada"');
+  assert.doesNotMatch(profileSwitchEntry.summary, /group_id|member_id|profiles|UPDATE/i);
+  assert.equal(profileSwitchEntry.changes.length, 2);
+  assert.equal(profileSwitchEntry.changes[0].label, 'Active savings group');
+  assert.equal(profileSwitchEntry.changes[0].before.text, 'Savings group (10865ab8)');
+  assert.equal(profileSwitchEntry.changes[0].after.text, 'Ipon Barkada');
+  assert.equal(profileSwitchEntry.changes[1].label, 'Linked member');
+  assert.equal(profileSwitchEntry.changes[1].before.text, 'Juan Dela Cruz');
+  assert.equal(profileSwitchEntry.changes[1].after.text, 'Not linked');
+
+  // 3. Avatar change renders safe image preview metadata instead of base64 text
+  const avatarChangedEntry = Ipon.formatAuditEntry({
+    id: 103,
+    table_name: 'profiles',
+    record_id: 'u-admin',
+    action: 'UPDATE',
+    changed_by: 'u-admin',
+    changed_at: '2026-11-15T03:00:00Z',
+    old_data: { id: 'u-admin', full_name: 'Zedrick De Monteverde', avatar_url: null },
+    new_data: { id: 'u-admin', full_name: 'Zedrick De Monteverde', avatar_url: longAvatar }
+  }, baseLookups);
+  assert.equal(avatarChangedEntry.summary, 'Updated profile photo');
+  assert.equal(avatarChangedEntry.changes[0].label, 'Profile photo');
+  assert.equal(avatarChangedEntry.changes[0].before.kind, 'empty');
+  assert.equal(avatarChangedEntry.changes[0].after.kind, 'image');
+  assert.equal(avatarChangedEntry.changes[0].after.src, longAvatar);
+
+  // 4. Contribution confirmation formats currency, enum labels, and action attribution without Before/After clutter
+  const confirmEntry = Ipon.formatAuditEntry({
+    id: 104,
+    table_name: 'contributions',
+    record_id: 'c-1',
+    action: 'CONFIRM',
+    changed_by: 'u-admin',
+    changed_at: '2026-11-15T03:05:00Z',
+    old_data: { id: 'c-1', contribution_period_id: 'p-1', amount: 500, approval_status: 'PENDING', reviewed_by: null },
+    new_data: { id: 'c-1', contribution_period_id: 'p-1', amount: 500, approval_status: 'CONFIRMED', reviewed_by: 'u-admin', reviewed_at: '2026-11-15T03:05:00Z' }
+  }, baseLookups);
+  assert.equal(confirmEntry.actionLabel, 'Confirmed');
+  assert.match(confirmEntry.summary, /Confirmed ₱500\.00 addition for Juan/);
+  assert.equal(confirmEntry.changes[0].label, 'Approval status');
+  assert.equal(confirmEntry.changes[0].display, 'diff');
+  assert.equal(confirmEntry.changes[0].before.text, 'Pending review');
+  assert.equal(confirmEntry.changes[0].after.text, 'Confirmed');
+  assert.equal(confirmEntry.changes[1].label, 'Reviewed by');
+  assert.equal(confirmEntry.changes[1].display, 'detail');
+  assert.equal(confirmEntry.changes[1].detailTag, 'Recorded by');
+  assert.equal(confirmEntry.changes[1].detailValue.text, 'Zedrick De Monteverde');
+  assert.equal(confirmEntry.changes[1].after.text, 'Zedrick De Monteverde');
+
+  // 5. Soft-delete / move to recovery bin shows Removal reason & Removed by as single detail cards (no Before/After) and skips redundant updated_by
+  const deleteBinEntry = Ipon.formatAuditEntry({
+    id: 105,
+    table_name: 'members',
+    record_id: 'm-1',
+    action: 'UPDATE',
+    changed_by: 'u-admin',
+    changed_at: '2026-11-15T03:10:00Z',
+    old_data: { id: 'm-1', full_name: 'Juan', status: 'ACTIVE', deleted_at: null, deleted_by: null, delete_reason: null, updated_by: 'u-prev' },
+    new_data: { id: 'm-1', full_name: 'Juan', status: 'ACTIVE', deleted_at: '2026-11-15T03:10:00Z', deleted_by: 'u-admin', delete_reason: 'Duplicate member entry', updated_by: 'u-admin' }
+  }, baseLookups);
+  assert.equal(deleteBinEntry.summary, 'Moved Juan to recovery bin');
+  assert.equal(deleteBinEntry.changes.length, 2);
+  assert.equal(deleteBinEntry.changes[0].label, 'Removal reason');
+  assert.equal(deleteBinEntry.changes[0].display, 'detail');
+  assert.equal(deleteBinEntry.changes[0].detailTag, 'Reason');
+  assert.equal(deleteBinEntry.changes[0].detailTone, 'reason');
+  assert.equal(deleteBinEntry.changes[0].detailValue.text, 'Duplicate member entry');
+  assert.equal(deleteBinEntry.changes[1].label, 'Removed by');
+  assert.equal(deleteBinEntry.changes[1].display, 'detail');
+  assert.equal(deleteBinEntry.changes[1].detailTag, 'Recorded by');
+  assert.equal(deleteBinEntry.changes[1].detailValue.text, 'Zedrick De Monteverde');
+
+  // 6. Voiding a confirmed entry uses Before/After on Approval status, and single detail cards for Void reason & Voided by
+  const voidEntry = Ipon.formatAuditEntry({
+    id: 106,
+    table_name: 'contributions',
+    record_id: 'c-1',
+    action: 'VOID',
+    changed_by: 'u-admin',
+    changed_at: '2026-11-15T03:11:00Z',
+    old_data: { id: 'c-1', contribution_period_id: 'p-1', amount: 500, approval_status: 'CONFIRMED', voided_by: null, voided_at: null, void_reason: null },
+    new_data: { id: 'c-1', contribution_period_id: 'p-1', amount: 500, approval_status: 'VOIDED', voided_by: 'u-admin', voided_at: '2026-11-15T03:11:00Z', void_reason: 'Encoded twice' }
+  }, baseLookups);
+  assert.equal(voidEntry.changes[0].label, 'Approval status');
+  assert.equal(voidEntry.changes[0].display, 'diff');
+  assert.equal(voidEntry.changes[1].label, 'Void reason');
+  assert.equal(voidEntry.changes[1].display, 'detail');
+  assert.equal(voidEntry.changes[1].detailValue.text, 'Encoded twice');
+  assert.equal(voidEntry.changes[2].label, 'Voided by');
+  assert.equal(voidEntry.changes[2].display, 'detail');
+
+  // 7. Restoring from bin shows cleared prior values without a fake "After: None" diff, while editing an existing note still shows Before/After
+  const restoreEntry = Ipon.formatAuditEntry({
+    id: 107,
+    table_name: 'members',
+    record_id: 'm-1',
+    action: 'UPDATE',
+    changed_by: 'u-admin',
+    changed_at: '2026-11-15T03:12:00Z',
+    old_data: { id: 'm-1', full_name: 'Juan', deleted_at: '2026-11-15T03:10:00Z', deleted_by: 'u-admin', delete_reason: 'Duplicate member entry' },
+    new_data: { id: 'm-1', full_name: 'Juan', deleted_at: null, deleted_by: null, delete_reason: null }
+  }, baseLookups);
+  assert.equal(restoreEntry.summary, 'Restored Juan from recovery bin');
+  assert.equal(restoreEntry.changes[0].display, 'detail');
+  assert.equal(restoreEntry.changes[0].detailTag, 'Previously recorded');
+  assert.equal(restoreEntry.changes[0].detailTone, 'cleared');
+  assert.equal(restoreEntry.changes[0].detailValue.text, 'Duplicate member entry');
+
+  const editedNoteEntry = Ipon.formatAuditEntry({
+    id: 108,
+    table_name: 'contributions',
+    record_id: 'c-1',
+    action: 'UPDATE',
+    changed_by: 'u-admin',
+    changed_at: '2026-11-15T03:13:00Z',
+    old_data: { id: 'c-1', review_note: 'Blurry screenshot' },
+    new_data: { id: 'c-1', review_note: 'Verified clearer receipt' }
+  }, baseLookups);
+  assert.equal(editedNoteEntry.changes[0].display, 'diff');
+  assert.equal(editedNoteEntry.changes[0].before.text, 'Blurry screenshot');
+  assert.equal(editedNoteEntry.changes[0].after.text, 'Verified clearer receipt');
 });
 
 
