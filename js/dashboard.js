@@ -690,9 +690,12 @@
           }).join('')}
         </div>
       </section>` : '';
+    const hasActiveGroup = Boolean(currentGroup && state?.profile?.group_id);
     dayModalBody.innerHTML = items.length
       ? `${contributorsHtml}${othersHtml}`
-      : '<div class="day-modal-empty"><p>No contributions or activity recorded for this day.</p><button class="button button-primary" type="button" data-action="quick-record-day">+ Record entry</button></div>';
+      : hasActiveGroup
+        ? '<div class="day-modal-empty"><p>No contributions or activity recorded for this day.</p><button class="button button-primary" type="button" data-action="quick-record-day">+ Record entry</button></div>'
+        : '<div class="day-modal-empty"><p>Join or create a savings group before recording entries for this day.</p><button class="button button-primary" type="button" data-action="create-group-from-day">+ Create savings group</button></div>';
     Ipon.bindAvatarFallbacks(dayModalBody);
     dayModal.showModal();
   }
@@ -1091,6 +1094,11 @@
 
   function openQuickRecordDialog(presetDate = null, presetType = 'addition') {
     if (!quickRecordDialog) return;
+    const hasGroup = Boolean(currentGroup && state.profile?.group_id);
+    if (!hasGroup || (state.profile?.role === 'MEMBER' && !state.profile?.member_id)) {
+      Ipon.showGroupRequiredDialog({ hasGroup, onCreateGroup: () => openGroupDialog('create') });
+      return;
+    }
     quickPendingKey = null;
     quickRecordForm.reset();
 
@@ -1118,6 +1126,12 @@
   });
 
   dayModalBody?.addEventListener('click', (event) => {
+    const createGroupBtn = event.target.closest('[data-action="create-group-from-day"]');
+    if (createGroupBtn) {
+      dayModal.close();
+      openGroupDialog('create');
+      return;
+    }
     const quickBtn = event.target.closest('[data-action="quick-record-day"]');
     if (quickBtn) {
       dayModal.close();
@@ -1159,8 +1173,10 @@
     const isDeduction = type === 'deduction';
     const isMemberRole = state.profile?.role === 'MEMBER';
 
-    if (isAddition && isMemberRole && !state.profile.member_id) {
-      Ipon.toast('Your account is not linked to a member profile. Ask your group administrator to link your account.', 'error');
+    const hasGroup = Boolean(currentGroup && state.profile?.group_id);
+    if (!hasGroup || (isAddition && isMemberRole && !state.profile.member_id)) {
+      quickRecordDialog.close();
+      Ipon.showGroupRequiredDialog({ hasGroup, onCreateGroup: () => openGroupDialog('create') });
       return;
     }
 
@@ -1299,5 +1315,9 @@
   if (state.profile?.role !== 'MEMBER') document.querySelectorAll('a[href="user.html"]').forEach((link) => link.remove());
   if (addAnnouncementButton) addAnnouncementButton.hidden = state.profile?.role !== 'ADMIN';
   try { await load(); } finally { Ipon.setLoading(false); }
+  if (new URLSearchParams(location.search).get('create_group') === '1') {
+    try { history.replaceState({}, '', location.pathname); } catch { }
+    openGroupDialog('create');
+  }
   Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'announcements', 'announcement_reactions'], load);
 })();

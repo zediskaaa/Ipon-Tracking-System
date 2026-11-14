@@ -1720,3 +1720,19 @@ test('account creation, login activation, and mobile submit responsiveness contr
   assert.ok(vsTasks.tasks.some((t) => t.runOptions?.runOn === 'folderOpen' && t.command === 'npm run supabase:sync'));
 });
 
+test('group-required prompts block recording flows before form submission when user has no active group', () => {
+  const coreJs = read('js/core.js');
+  const dashboardJs = read('js/dashboard.js');
+  const recordsJs = read('js/records.js');
+  const userJs = read('js/user.js');
+
+  assert.match(coreJs, /function showGroupRequiredDialog\(/);
+  assert.match(coreJs, /function renderGroupRequiredCard\(/);
+  assert.match(coreJs, /dashboard\.html\?create_group=1/);
+  assert.match(dashboardJs, /function openQuickRecordDialog\([\s\S]*?Ipon\.showGroupRequiredDialog\(/);
+  assert.match(dashboardJs, /create_group'\) === '1'/);
+  assert.match(recordsJs, /if \(!state\.profile\.group_id\)\s*\{\s*Ipon\.renderGroupRequiredCard\(/);
+  assert.match(userJs, /if \(!state\.profile\.group_id \|\| !state\.profile\.member_id\)\s*\{\s*Ipon\.showGroupRequiredDialog\(/);
+  assert.doesNotMatch(userJs, /submit-contribution'\)\.disabled\s*=\s*!data\.member_id/);
+});
+

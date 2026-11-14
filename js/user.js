@@ -117,14 +117,20 @@
   }
 
   async function refresh() {
-    const { data, error } = await Ipon.client.from('profiles').select('member_id').eq('id', state.profile.id).single();
+    const { data, error } = await Ipon.client.from('profiles').select('group_id,member_id').eq('id', state.profile.id).single();
     if (error) throw error;
+    state.profile.group_id = data.group_id;
     state.profile.member_id = data.member_id;
-    document.getElementById('submit-contribution').disabled = !data.member_id;
     await load();
   }
 
-  document.getElementById('submit-contribution').addEventListener('click', () => { form.reset(); receiptPicker.clear(); form.elements.contribution_month.value = Ipon.monthStart().slice(0, 7); form.elements.payment_date.value = Ipon.isoDate(); dialog.showModal(); form.elements.amount.focus(); });
+  document.getElementById('submit-contribution').addEventListener('click', () => {
+    if (!state.profile.group_id || !state.profile.member_id) {
+      Ipon.showGroupRequiredDialog({ hasGroup: Boolean(state.profile.group_id) });
+      return;
+    }
+    form.reset(); receiptPicker.clear(); form.elements.contribution_month.value = Ipon.monthStart().slice(0, 7); form.elements.payment_date.value = Ipon.isoDate(); dialog.showModal(); form.elements.amount.focus();
+  });
   document.getElementById('close-contribution-dialog').addEventListener('click', () => dialog.close());
   document.getElementById('cancel-contribution').addEventListener('click', () => dialog.close());
   paymentQrBtn?.addEventListener('click', () => {
@@ -202,6 +208,11 @@
   });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!state.profile.group_id || !state.profile.member_id) {
+      dialog.close();
+      Ipon.showGroupRequiredDialog({ hasGroup: Boolean(state.profile.group_id) });
+      return;
+    }
     if (form.elements.reference && !Ipon.validateNumericInput(form.elements.reference)) {
       form.elements.reference.focus();
       return;

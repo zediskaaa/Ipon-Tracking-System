@@ -32,10 +32,12 @@
     Ipon.setLoading(false);
     return;
   }
-  if ((page === 'expenses' || page === 'withdrawals') && state.profile.role === 'MEMBER') {
+  if (!state.profile.group_id) {
+    Ipon.renderGroupRequiredCard(form.closest('.panel'), { hasGroup: false });
+  } else if ((page === 'expenses' || page === 'withdrawals') && state.profile.role === 'MEMBER') {
     form.closest('.panel').innerHTML = `<div class="empty-state">Only administrators and treasurers can record ${page === 'expenses' ? 'expenses' : 'deductions'}. You can review the group history here.</div>`;
   } else if (page === 'contributions' && state.profile.role === 'MEMBER' && !state.profile.member_id) {
-    form.closest('.panel').innerHTML = '<div class="empty-state">Ask your group administrator to link this login to your member profile before submitting additions.</div>';
+    Ipon.renderGroupRequiredCard(form.closest('.panel'), { hasGroup: true });
   }
   setDefaults();
 

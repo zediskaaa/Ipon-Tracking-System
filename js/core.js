@@ -4985,11 +4985,83 @@
   initInfoTips();
   prepareFormValidation();
   prepareNumericInputs();
+  function groupRequiredContent({ hasGroup = false } = {}) {
+    const title = hasGroup ? 'Member profile link required' : 'Join or create a savings group';
+    const message = hasGroup
+      ? 'Your account belongs to a group, but your member slot is not linked yet. Check your notifications or ask your group administrator to link your account.'
+      : 'You need to belong to an active savings group before you can record entries. Create your own group now or accept a group invitation from your notifications.';
+    const createButton = hasGroup
+      ? ''
+      : '<button class="button button-primary" type="button" data-group-required-create>+ Create savings group</button>';
+    return `
+      <div class="group-required-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <div class="group-required-copy">
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(message)}</p>
+      </div>
+      <div class="group-required-actions">
+        ${createButton}
+        <button class="button button-secondary" type="button" data-group-required-invites>Check invitations</button>
+      </div>`;
+  }
+
+  function wireGroupRequiredActions(root, { onCreateGroup = null, onClose = null } = {}) {
+    root?.querySelector('[data-group-required-create]')?.addEventListener('click', () => {
+      onClose?.();
+      if (typeof onCreateGroup === 'function') onCreateGroup();
+      else window.location.href = 'dashboard.html?create_group=1';
+    });
+    root?.querySelector('[data-group-required-invites]')?.addEventListener('click', () => {
+      onClose?.();
+      const notifTrigger = document.getElementById('open-notifications') || document.getElementById('mobile-open-notifications');
+      if (notifTrigger) notifTrigger.click();
+      else window.location.href = 'dashboard.html';
+    });
+  }
+
+  function showGroupRequiredDialog({ hasGroup = false, onCreateGroup = null } = {}) {
+    let dialog = document.getElementById('ipon-group-required-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog group-required-dialog" id="ipon-group-required-dialog" aria-labelledby="ipon-group-required-title">
+          <div class="form-dialog-sheet group-required-sheet">
+            <header class="form-dialog-header">
+              <div>
+                <h2 id="ipon-group-required-title">Group access needed</h2>
+                <p>Savings records are saved inside an active group workspace.</p>
+              </div>
+              <button class="dialog-close" type="button" data-group-required-close aria-label="Close">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div class="group-required-body" id="ipon-group-required-body"></div>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('ipon-group-required-dialog');
+      dialog?.querySelector('[data-group-required-close]')?.addEventListener('click', () => dialog.close());
+      dialog?.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+    }
+    const bodyEl = dialog.querySelector('#ipon-group-required-body');
+    if (bodyEl) {
+      bodyEl.innerHTML = groupRequiredContent({ hasGroup });
+      wireGroupRequiredActions(bodyEl, { onCreateGroup, onClose: () => dialog.close() });
+    }
+    if (!dialog.open) dialog.showModal();
+  }
+
+  function renderGroupRequiredCard(container, options = {}) {
+    if (!container) return;
+    container.innerHTML = `<div class="group-required-card">${groupRequiredContent(options)}</div>`;
+    wireGroupRequiredActions(container, options);
+  }
+
   initAppUpdateChecker();
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, normalizeNamePart, validNamePart, validateNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, setNotificationPreference,
     get profile() { return currentProfile; }
