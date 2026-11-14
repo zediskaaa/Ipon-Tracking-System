@@ -702,6 +702,10 @@ begin
   v_record_id := coalesce((v_new ->> 'id')::uuid, (v_old ->> 'id')::uuid);
   v_group_id := coalesce((v_new ->> 'group_id')::uuid, (v_old ->> 'group_id')::uuid);
 
+  if v_group_id is not null and not exists (select 1 from public.groups g where g.id = v_group_id) then
+    v_group_id := null;
+  end if;
+
   if tg_op = 'UPDATE' and v_old ->> 'approval_status' is distinct from v_new ->> 'approval_status' then
     v_action := case v_new ->> 'approval_status'
       when 'CONFIRMED' then 'CONFIRM'
@@ -8921,9 +8925,16 @@ begin
     and user_id = p_new_admin_user_id;
 
   update public.profiles
-  set role = 'ADMIN'
+  set role = 'ADMIN',
+      group_id = case when group_id is null then v_actor_group else group_id end,
+      member_id = case
+        when (group_id is null or group_id = v_actor_group) and v_target_gm.member_id is not null
+          then (select m.id from public.members m where m.id = v_target_gm.member_id and m.group_id = v_actor_group and m.status = 'ACTIVE' and m.deleted_at is null)
+        when group_id is null or group_id = v_actor_group then null
+        else member_id
+      end
   where id = p_new_admin_user_id
-    and group_id = v_actor_group;
+    and (group_id = v_actor_group or group_id is null);
 
   delete from public.group_memberships
   where group_id = v_actor_group
@@ -9072,14 +9083,13 @@ begin
 
   delete from public.members where group_id = v_actor_group;
 
-  delete from public.groups where id = v_actor_group;
-
   foreach v_uid in array v_affected_users loop
-    if exists (select 1 from public.profiles p where p.id = v_uid and p.group_id is null) then
+    if exists (select 1 from public.profiles p where p.id = v_uid and p.group_id = v_actor_group) then
       select gm.* into v_next_gm
       from public.group_memberships gm
       join public.groups g on g.id = gm.group_id
       where gm.user_id = v_uid
+        and gm.group_id <> v_actor_group
         and gm.status = 'ACTIVE'
         and g.status = 'ACTIVE'
       order by gm.created_at asc
@@ -9126,6 +9136,8 @@ begin
     end if;
   end loop;
 
+  delete from public.groups where id = v_actor_group;
+
   return jsonb_build_object(
     'deleted_group_id', v_actor_group,
     'deleted_group_name', v_group.name,
@@ -9142,6 +9154,10 @@ grant execute on function public.admin_delete_group(uuid, text) to authenticated
 
 insert into public.schema_migrations (version, name)
 values ('20261114_054', 'allow group admins to transfer ownership and leave or permanently delete a group')
+on conflict (version) do nothing;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_055', 'guard write_audit_log against deleted group_id and detach profiles before deleting groups')
 on conflict (version) do nothing;
 
 commit;

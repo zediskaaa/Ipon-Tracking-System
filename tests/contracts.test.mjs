@@ -1825,6 +1825,13 @@ test('group admins can transfer ownership and leave or permanently delete a grou
   assert.match(dashboardJs, /Ipon\.rpc\('admin_delete_group'/);
   assert.match(dashboardJs, /Transfer admin role & leave group\?/);
   assert.match(dashboardJs, /Permanently delete "/);
+
+  const migration055 = read('database/migrations/20261114_055_fix_audit_logs_fk_on_group_delete.sql');
+  assert.match(migration055, /not exists \(select 1 from public\.groups g where g\.id = v_group_id\)/i);
+  assert.match(migration055, /group_id <> v_actor_group/i);
+  assert.match(migration055, /20261114_055/);
+  assert.match(schema, /not exists \(select 1 from public\.groups g where g\.id = v_group_id\)/i);
+  assert.match(schema, /20261114_055/);
 });
 
 
