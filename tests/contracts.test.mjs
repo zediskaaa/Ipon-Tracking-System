@@ -1496,3 +1496,8 @@ test('announcement reactions notify Super Admin and authors for in-app and mobil
   assert.match(schema, /20261114_048/);
 });
 
+test('stacked mobile form action buttons reset flex basis instead of stretching vertically', () => {
+  const css = read('css/app.css');
+  assert.match(css, /\.settings-inline-actions \.button,\s*\.settings-form-actions-end \.button\s*\{\s*flex:\s*0 0 auto;/);
+});
+

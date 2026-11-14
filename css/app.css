@@ -1816,7 +1816,9 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
   .calc-footer-actions button,
   .settings-inline-actions .button,
   .settings-form-actions-end .button {
+    flex: 0 0 auto;
     width: 100%;
+    height: auto;
   }
   .goal-empty-card {
     min-height: 220px;
