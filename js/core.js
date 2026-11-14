@@ -749,6 +749,92 @@
     });
   }
 
+  const MAX_MONEY_AMOUNT = 999999999999.99;
+
+  function formatPlainPesoLimit(amount) {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+      minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  }
+
+  function parseMoneyAmount(rawValue, { min = 0, max = MAX_MONEY_AMOUNT, required = false, label = 'Amount', badInput = false } = {}) {
+    if (badInput) {
+      return { valid: false, value: null, error: 'Enter a valid amount (numbers and up to 2 decimal places).' };
+    }
+    const raw = String(rawValue ?? '').trim();
+    if (!raw) {
+      return required
+        ? { valid: false, value: null, error: `Enter a ${label.toLowerCase()}.` }
+        : { valid: true, value: null, error: '' };
+    }
+    if (raw.startsWith('-') && min >= 0) {
+      return { valid: false, value: null, error: `${label} cannot be negative.` };
+    }
+    if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(raw)) {
+      return { valid: false, value: null, error: 'Use numbers only with up to 2 decimal places.' };
+    }
+    const [wholePart = ''] = raw.split('.');
+    const maxWholeDigits = String(Math.floor(max)).length;
+    if (wholePart.length > maxWholeDigits) {
+      return { valid: false, value: null, error: `${label} must not exceed ${formatPlainPesoLimit(max)}.` };
+    }
+    const num = Number(raw);
+    if (!Number.isFinite(num) || num > max) {
+      return { valid: false, value: null, error: `${label} must not exceed ${formatPlainPesoLimit(max)}.` };
+    }
+    if (num < min) {
+      return {
+        valid: false,
+        value: null,
+        error: min > 0 ? `${label} must be at least ${formatPlainPesoLimit(min)}.` : `${label} cannot be negative.`
+      };
+    }
+    return { valid: true, value: Math.round(num * 100) / 100, error: '' };
+  }
+
+  function validateMoneyInput(input, options = {}) {
+    if (!(input instanceof HTMLInputElement)) return true;
+    const min = options.min ?? (input.min !== '' && Number.isFinite(Number(input.min)) ? Number(input.min) : 0);
+    const max = options.max ?? (input.max !== '' && Number.isFinite(Number(input.max)) ? Number(input.max) : MAX_MONEY_AMOUNT);
+    const required = options.required ?? input.required;
+    const res = parseMoneyAmount(input.value, {
+      min,
+      max,
+      required,
+      label: options.label || 'Amount',
+      badInput: Boolean(input.validity?.badInput)
+    });
+    input.setCustomValidity(res.error);
+    setFieldError(input, res.error);
+    return res.valid;
+  }
+
+  function guardMoneyInput(input, options = {}) {
+    if (!(input instanceof HTMLInputElement) || input.dataset.moneyGuardBound) return;
+    input.dataset.moneyGuardBound = 'true';
+    input.inputMode = 'decimal';
+    if (input.min === '' && (options.min ?? 0) >= 0) input.min = String(options.min ?? 0);
+    if (input.max === '') input.max = String(options.max ?? MAX_MONEY_AMOUNT);
+    if (input.step === '') input.step = '0.01';
+    input.addEventListener('keydown', (event) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (['e', 'E', '+', '-'].includes(event.key)) {
+        event.preventDefault();
+      }
+    });
+    if (!options.customDisplay) {
+      const check = () => validateMoneyInput(input, options);
+      input.addEventListener('input', () => {
+        if (input.value || input.validity?.badInput || input.hasAttribute('aria-invalid')) check();
+      });
+      input.addEventListener('blur', check);
+      input.addEventListener('invalid', check);
+    }
+  }
+
   const PESO_INPUT_SELECTOR = [
     '.field input[type="number"][name="amount"]',
     '.field input[type="number"][name="default_amount"]',
@@ -763,7 +849,9 @@
   function preparePesoInputs(root = document) {
     if (!root?.querySelectorAll) return;
     root.querySelectorAll(PESO_INPUT_SELECTOR).forEach((input) => {
-      if (!(input instanceof HTMLInputElement) || !input.parentNode || input.closest('.peso-input-wrap')) return;
+      if (!(input instanceof HTMLInputElement)) return;
+      guardMoneyInput(input);
+      if (!input.parentNode || input.closest('.peso-input-wrap')) return;
       const wrap = document.createElement('div');
       wrap.className = 'peso-input-wrap';
       const prefix = document.createElement('span');
@@ -809,6 +897,10 @@
       }
       if (control.matches('input[name="reference"],input[name="reference_number"],input[name="payment_account_number"],input[data-numeric-only]')) {
         validateNumericInput(control);
+        return;
+      }
+      if (control.matches(PESO_INPUT_SELECTOR)) {
+        validateMoneyInput(control);
         return;
       }
       setFieldError(control, control.checkValidity() ? '' : getValidationMessage(control));
@@ -1069,7 +1161,7 @@
           <div class="account-dialog-content">
             <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
-            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label><div class="preference-row preference-device-row" data-device-notif-row><span><strong>Phone &amp; drawer alerts</strong><small data-device-notif-status>Checking device permission…</small></span><button class="button button-secondary button-sm" type="button" data-device-notif-btn disabled>Checking…</button></div></section></div>
+            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Notifications</h3><p>Manage your notification preferences.</p></div></header><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" aria-label="Enable in-app notifications"></label><div class="preference-row preference-device-row" data-device-notif-row hidden><span><strong>Phone &amp; drawer alerts</strong><small data-device-notif-status>Checking device permission…</small></span><button class="button button-secondary button-sm" type="button" data-device-notif-btn disabled>Checking…</button></div></section></div>
           </div>
         </div>
       </dialog>
@@ -2408,6 +2500,12 @@
       sessionStorage.getItem('myipon_is_app') === '1';
   }
 
+  function isMobileDeviceNotifClient() {
+    return isInstalledAppUser()
+      || /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || '')
+      || Boolean(window.matchMedia?.('(pointer: coarse)')?.matches);
+  }
+
   const APK_LATEST_DOWNLOAD_URL = 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk';
   let androidChannelReady = false;
   let nativeNotifListenerAttached = false;
@@ -2500,7 +2598,7 @@
   }
 
   async function syncWebPushSubscription({ force = false } = {}) {
-    if (isInstalledAppUser() || !configured || !currentProfile?.id) return false;
+    if (!isMobileDeviceNotifClient() || isInstalledAppUser() || !configured || !currentProfile?.id) return false;
     if (!config.vapidPublicKey || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
       return false;
     }
@@ -2667,6 +2765,7 @@
       if (capStatus !== 'unsupported') return capStatus;
       return bgRes?.hasPermission === false ? 'default' : 'unsupported';
     }
+    if (window.isSecureContext === false) return 'insecure';
     const notifStatus = 'Notification' in window ? normalizeNotificationPermission(Notification.permission) : 'unsupported';
     let permApiStatus = 'unsupported';
     if (navigator.permissions?.query) {
@@ -2676,12 +2775,30 @@
         permApiStatus = normalizeNotificationPermission(permStatus?.state);
       } catch { /* ignore */ }
     }
-    if (notifStatus === 'denied' || permApiStatus === 'denied') return 'denied';
-    if (notifStatus === 'granted' || permApiStatus === 'granted') return 'granted';
-    return notifStatus !== 'unsupported' ? notifStatus : permApiStatus;
+    let pushPermStatus = 'unsupported';
+    if (notifStatus !== 'granted' && permApiStatus !== 'granted' && navigator.serviceWorker?.getRegistration) {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const state = await reg?.pushManager?.permissionState?.({ userVisibleOnly: true });
+        pushPermStatus = normalizeNotificationPermission(state);
+      } catch { /* ignore */ }
+    }
+    if (notifStatus === 'denied' || permApiStatus === 'denied' || pushPermStatus === 'denied') return 'denied';
+    if (notifStatus === 'granted' || permApiStatus === 'granted' || pushPermStatus === 'granted') return 'granted';
+    return notifStatus !== 'unsupported' ? notifStatus : (permApiStatus !== 'unsupported' ? permApiStatus : pushPermStatus);
   }
 
   async function syncDevicePermissionUI() {
+    const rows = document.querySelectorAll('[data-device-notif-row]');
+    const bar = document.getElementById('notification-permission-bar');
+    if (!isMobileDeviceNotifClient()) {
+      rows.forEach((row) => { row.hidden = true; });
+      if (bar) {
+        bar.hidden = true;
+        bar.textContent = '';
+      }
+      return;
+    }
     const status = await getDeviceNotificationPermission();
     const isApp = isInstalledAppUser();
     const needsApkUpdate = isApp && !hasNativeNotificationBridge();
@@ -2706,8 +2823,8 @@
     const isIosBrowser = !isApp && /iphone|ipad|ipod/i.test(navigator.userAgent || '')
       && !(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true);
 
-    const rows = document.querySelectorAll('[data-device-notif-row]');
     rows.forEach((row) => {
+      row.hidden = false;
       const label = row.querySelector('[data-device-notif-status]');
       const button = row.querySelector('[data-device-notif-btn]');
       if (!label || !button) return;
@@ -2784,11 +2901,16 @@
         recheckBtn.setAttribute('data-device-extra-btn', '');
         actionsWrap.appendChild(recheckBtn);
       } else if (status === 'default') {
-        label.textContent = 'Device permission: Off — tap Turn on so alerts arrive on your phone or desktop even when myIPON is closed.';
+        label.textContent = isApp
+          ? 'Device permission: Off — tap Turn on so alerts arrive on your phone even when myIPON is closed.'
+          : 'Browser site permission: Off — click Turn on and choose Allow (PC settings alone keep this site Off).';
         button.textContent = 'Turn on';
         delete button.dataset.actionMode;
         button.disabled = false;
         button.hidden = false;
+      } else if (status === 'insecure') {
+        label.textContent = 'Site notifications require HTTPS or localhost (unavailable on plain HTTP LAN URLs).';
+        button.hidden = true;
       } else if (isIosBrowser) {
         label.textContent = 'On iPhone/iPad, tap Share -> Add to Home Screen, then open myIPON to enable background alerts.';
         button.hidden = true;
@@ -2798,14 +2920,15 @@
       }
     });
 
-    const bar = document.getElementById('notification-permission-bar');
     if (bar) {
       if (needsApkUpdate) {
         bar.hidden = false;
         bar.innerHTML = '<span>Update your installed APK to enable closed-app background alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Update APK</button>';
       } else if (status === 'default') {
         bar.hidden = false;
-        bar.innerHTML = '<span>Device notifications are off. Tap Turn on so alerts arrive even when myIPON is closed.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Turn on</button>';
+        bar.innerHTML = isApp
+          ? '<span>Device notifications are off. Tap Turn on so alerts arrive even when myIPON is closed.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Turn on</button>'
+          : '<span>Browser notifications for this site are off. Click Turn on, then allow notifications for this site.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Turn on</button>';
       } else if (status === 'granted' && isApp && nativeBgStatus && nativeBgStatus.batteryOptimizationIgnored === false) {
         bar.hidden = false;
         bar.innerHTML = '<span>Notification permission is On — allow unrestricted battery so alerts stay active after closing myIPON.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="battery">Allow always-on</button>';
@@ -2825,9 +2948,14 @@
     }
   }
 
-  async function requestDeviceNotificationPermission({ userInitiated = false } = {}) {
+  async function requestDeviceNotificationPermission({ userInitiated = false, nativePromptPromise = null } = {}) {
     const plugin = getLocalNotificationsPlugin();
     const bgPlugin = getBackgroundNotificationsPlugin();
+    if (nativePromptPromise) {
+      try {
+        await nativePromptPromise;
+      } catch { /* ignore */ }
+    }
     let status = await getDeviceNotificationPermission();
     if (status === 'default') {
       if (plugin?.requestPermissions) {
@@ -2844,7 +2972,7 @@
           status = await getDeviceNotificationPermission();
         } catch { /* ignore */ }
       }
-      if (status === 'default' && 'Notification' in window && userInitiated) {
+      if (!nativePromptPromise && status === 'default' && 'Notification' in window && userInitiated) {
         try {
           const res = await Notification.requestPermission();
           status = normalizeNotificationPermission(res);
@@ -2862,7 +2990,7 @@
     return status;
   }
 
-  function openNotificationUnblockGuide() {
+  function openNotificationUnblockGuide({ suppressedPrompt = false } = {}) {
     let dialog = document.getElementById('notification-unblock-dialog');
     if (!dialog) {
       dialog = document.createElement('dialog');
@@ -2872,9 +3000,9 @@
       dialog.innerHTML = `
         <form method="dialog">
           <h2 id="notif-unblock-title">Allow blocked notifications</h2>
-          <p>Once blocked in browser or phone settings, only you can re-enable permission for security reasons. Follow the steps for your device, then tap <strong>Recheck permission</strong>:</p>
+          <p id="notif-unblock-desc"></p>
           <ul style="margin:0 0 22px;padding-left:18px;display:grid;gap:8px;font:13.5px/1.45 Arial,sans-serif;color:#324841">
-            <li><strong>Chrome / Edge (PC or Laptop):</strong> Click the tune / site-info icon beside the website address bar &rarr; change <strong>Notifications</strong> to <strong>Allow</strong>.</li>
+            <li><strong>Chrome / Edge (PC or Laptop):</strong> Click the tune / site-info or bell icon beside the website address bar &rarr; change <strong>Notifications</strong> to <strong>Allow</strong>.</li>
             <li><strong>Chrome (Android browser):</strong> Tap the tune icon beside the address bar &rarr; <strong>Permissions</strong> &rarr; turn <strong>Notifications</strong> ON (or check Phone Settings &rarr; Apps &rarr; Chrome &rarr; Notifications).</li>
             <li><strong>myIPON Android App:</strong> Open Phone <strong>Settings &rarr; Apps &rarr; myIPON &rarr; Notifications</strong> &rarr; toggle <strong>Allow notifications</strong> ON.</li>
             <li><strong>Safari (Mac / iPhone):</strong> Open <strong>Safari Settings &rarr; Websites &rarr; Notifications</strong> (or iPhone Settings &rarr; myIPON) &rarr; set to <strong>Allow</strong>.</li>
@@ -2886,6 +3014,18 @@
         </form>
       `;
       document.body.append(dialog);
+    }
+    const titleEl = dialog.querySelector('#notif-unblock-title');
+    const descEl = dialog.querySelector('#notif-unblock-desc');
+    if (titleEl) {
+      titleEl.textContent = suppressedPrompt
+        ? 'Allow notifications for this site'
+        : 'Allow blocked notifications';
+    }
+    if (descEl) {
+      descEl.textContent = suppressedPrompt
+        ? 'Even when PC system notifications are On, your browser still needs site-level approval (or hid the popup quietly). Follow the steps below, then tap Recheck permission:'
+        : 'Once blocked in browser or phone settings, only you can re-enable permission for security reasons. Follow the steps for your device, then tap Recheck permission:';
     }
     if (!dialog.open) dialog.showModal();
   }
@@ -2979,10 +3119,24 @@
           else toast('Could not register background push on this browser.', 'error');
           return;
         }
+        const startMs = Date.now();
+        const nativePromptPromise = (!hasNativeNotificationBridge() && window.isSecureContext !== false
+          && 'Notification' in window && Notification.permission === 'default')
+          ? Promise.resolve(Notification.requestPermission()).catch(() => Notification.permission)
+          : null;
         button.disabled = true;
-        const result = await requestDeviceNotificationPermission({ userInitiated: true });
-        if (result === 'granted') toast('Background notification alerts enabled.');
-        else if (result === 'denied') toast('Notifications are blocked in your device or browser settings.', 'error');
+        const result = await requestDeviceNotificationPermission({ userInitiated: true, nativePromptPromise });
+        if (result === 'granted') {
+          toast('Background notification alerts enabled.');
+        } else if (result === 'denied') {
+          toast('Notifications are blocked in your device or browser settings.', 'error');
+        } else if (result === 'default') {
+          if (!hasNativeNotificationBridge() && Date.now() - startMs < 250) {
+            openNotificationUnblockGuide({ suppressedPrompt: true });
+          } else {
+            toast('Click Turn on and choose Allow when your browser asks for notifications.', 'error');
+          }
+        }
       });
     }
     syncDevicePermissionUI().catch(() => { });
@@ -3092,7 +3246,7 @@
   }
 
   async function dispatchDeviceNotification(item, userId) {
-    if (!item || item.read_at || currentProfile?.notifications_enabled === false) return;
+    if (!isMobileDeviceNotifClient() || !item || item.read_at || currentProfile?.notifications_enabled === false) return;
     const notifKey = notifShownKey(item) || String(item.id);
     const trayKey = item.dedupe_key ? String(item.dedupe_key) : notifKey;
     if (readShownNotificationIds(userId).includes(notifKey)) return;
@@ -3229,8 +3383,8 @@
         try { localStorage.setItem(lastSeenKey, String(lastSeenMs)); } catch { /* ignore */ }
       }
       syncBackgroundNotificationPolling(profile, rows).catch(() => { });
-      if (!isApp && profile.notifications_enabled !== false && 'Notification' in window && Notification.permission === 'granted') {
-        syncWebPushSubscription().then((synced) => {
+      if (!isApp && isMobileDeviceNotifClient() && profile.notifications_enabled !== false) {
+        getDeviceNotificationPermission().then((perm) => (perm === 'granted' ? syncWebPushSubscription() : false)).then((synced) => {
           if (synced) syncDevicePermissionUI().catch(() => { });
         }).catch(() => { });
       }
@@ -7175,7 +7329,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, populateGroupSelect,
     PAYMENT_METHODS, normalizePaymentMethod, guessPaymentMethodFromLabel, paymentMethodMeta, paymentMethodIconHtml, paymentMethodBadge, paymentMethodPickerHtml, mountPaymentMethodPickers, setPaymentMethod, paymentMethodOptionsHtml,
     CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
     payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,

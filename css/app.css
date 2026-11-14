@@ -225,6 +225,25 @@ a { color:inherit; }
 .report-panel .data-table th,.report-panel .data-table td { padding:9px 7px; font-size:13.5px; }
 .report-panel .data-table th { font-size:10.5px; letter-spacing:.04em; }
 .wallet-reconciliation-table th,.wallet-reconciliation-table td { padding:9px 7px; }
+@media (min-width: 961px) {
+  .wallet-reconciliation-table { table-layout: fixed; width: 100%; }
+  .wallet-reconciliation-table th:nth-child(1),
+  .wallet-reconciliation-table td:nth-child(1) { width: 17%; }
+  .wallet-reconciliation-table th:nth-child(2),
+  .wallet-reconciliation-table td:nth-child(2) { width: 11%; }
+  .wallet-reconciliation-table th:nth-child(3),
+  .wallet-reconciliation-table td:nth-child(3) { width: 11%; }
+  .wallet-reconciliation-table th:nth-child(4),
+  .wallet-reconciliation-table td:nth-child(4) { width: 12%; }
+  .wallet-reconciliation-table th:nth-child(5),
+  .wallet-reconciliation-table td:nth-child(5) { width: 11%; }
+  .wallet-reconciliation-table th:nth-child(6),
+  .wallet-reconciliation-table td:nth-child(6) { width: 19%; }
+  .wallet-reconciliation-table th:nth-child(7),
+  .wallet-reconciliation-table td:nth-child(7) { width: 19%; }
+  .wallet-reconciliation-table tbody td { vertical-align: top; }
+  .wallet-reconciliation-table .wallet-total-row td { vertical-align: middle; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+}
 .form-dialog { width:min(880px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:hidden; border:0; border-radius:16px; padding:0; background:var(--paper); color:var(--ink); box-shadow:0 24px 70px rgba(7,35,26,.3); }
 .form-dialog::backdrop { background:rgba(7,35,26,.64); }
 .form-dialog-sheet { min-width:0; max-height:calc(100dvh - 32px); overflow-x:hidden; overflow-y:auto; }
@@ -2424,11 +2443,19 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
   color: var(--ink);
 }
 
+.wallet-count-cell {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  max-width: 164px;
+  justify-items: stretch;
+}
+
 .wallet-count-input {
   width: 100%;
-  max-width: 108px;
-  min-width: 64px;
+  min-width: 0;
   min-height: 36px;
+  box-sizing: border-box;
   padding: 6px 8px;
   border: 1.5px solid rgba(20, 45, 43, .2);
   border-radius: 8px;
@@ -2444,19 +2471,47 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
   box-shadow: 0 0 0 3px rgba(40, 122, 76, .14);
 }
 
+.wallet-count-input.is-invalid,
+.wallet-count-input[aria-invalid="true"] {
+  border-color: #ae3934;
+  background: #fff7f6;
+  box-shadow: 0 0 0 3px rgba(174, 57, 52, .12);
+}
+
+.wallet-count-error {
+  display: block;
+  min-height: 14px;
+  max-width: 100%;
+  color: #9f2d28;
+  font: 600 10.5px/14px Arial, sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  visibility: hidden;
+}
+
+.wallet-count-error.is-visible {
+  visibility: visible;
+}
+
 .wallet-variance-pill {
   display: inline-flex;
   align-items: center;
+  max-width: 100%;
   padding: 4px 10px;
   border-radius: 999px;
   font: 700 11.5px/1.1 Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .wallet-variance-pill.is-empty { color: var(--muted); background: transparent; padding-inline: 0; }
 .wallet-variance-pill.is-matched { background: #dceade; color: #155837; }
 .wallet-variance-pill.is-over { background: #f2dfb4; color: #805410; }
 .wallet-variance-pill.is-short { background: #efd7d3; color: #91332e; }
+.wallet-variance-pill.is-invalid { background: #f8d8d6; color: #8e231e; }
 
 .wallet-pending-in {
   color: #1f6a43;
@@ -2477,14 +2532,20 @@ select:not(.custom-select-native):focus{border-color:#287a4c!important;box-shado
 }
 
 @media (max-width: 960px) {
+  .wallet-count-cell { width: 100%; max-width: none; justify-items: end; }
   .wallet-count-input { width: 100%; max-width: none; min-width: 0; text-align: right; }
+  .wallet-count-error { max-width: none; min-height: 0; text-align: right; }
+  .wallet-count-error:not(.is-visible) { display: none; }
 }
 
 @media (max-width: 720px) {
   .wallet-summary-cards { gap: 10px; margin-bottom: 12px; }
   .dashboard-wallet-strip { padding: 12px 16px; }
   .dashboard-wallet-link { margin-left: 0; }
+  .wallet-count-cell { width: 100%; max-width: none; justify-items: end; }
   .wallet-count-input { width: 100%; max-width: none; min-width: 0; text-align: right; }
+  .wallet-count-error { max-width: none; min-height: 0; text-align: right; }
+  .wallet-count-error:not(.is-visible) { display: none; }
 }
 
 @media print {

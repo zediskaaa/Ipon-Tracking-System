@@ -25,12 +25,12 @@
         </div>
         <div class="field">
           <label for="calc-target">Target amount (₱)</label>
-          <input id="calc-target" type="number" min="1" step="0.01" inputmode="decimal" value="50000">
+          <input id="calc-target" type="number" min="1" max="999999999999.99" step="0.01" inputmode="decimal" value="50000">
         </div>
         <div class="field">
           <label for="calc-current">Current savings (₱)</label>
           <div class="calc-input-with-btn">
-            <input id="calc-current" type="number" min="0" step="0.01" inputmode="decimal" value="0">
+            <input id="calc-current" type="number" min="0" max="999999999999.99" step="0.01" inputmode="decimal" value="0">
             <button class="button button-secondary button-sm" id="calc-sync-balance" type="button" title="Use group tracked savings">Sync</button>
           </div>
         </div>

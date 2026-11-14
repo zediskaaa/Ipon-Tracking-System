@@ -2066,6 +2066,16 @@ test('reports script renders wallet reconciliation and member reports without ru
     paymentMethodMeta: (m) => ({ value: m || '', label: m || 'Untagged' }),
     paymentMethodBadge: (m) => `<span>${m || 'Untagged'}</span>`,
     payoutSummaryChip: () => '',
+    MAX_MONEY_AMOUNT: 999999999999.99,
+    guardMoneyInput() {},
+    parseMoneyAmount: (raw) => {
+      const s = String(raw ?? '').trim();
+      if (!s) return { valid: true, value: null, error: '' };
+      const n = Number(s);
+      return Number.isFinite(n) && n >= 0 && n <= 999999999999.99
+        ? { valid: true, value: Math.round(n * 100) / 100, error: '' }
+        : { valid: false, value: null, error: 'Invalid' };
+    },
     setLoading() {},
     showInlineError(_b, err) { throw err; },
     subscribeToChanges() {},
@@ -3398,16 +3408,88 @@ test('phone and drawer alerts accurately detect OS/browser ON state and show cle
   const accountHtml = read('account.html');
   const pollReceiver = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
 
+  assert.match(core, /function isMobileDeviceNotifClient/);
   assert.match(core, /navigator\.permissions\.query\(\{\s*name:\s*'notifications'\s*\}\)/);
+  assert.match(core, /pushManager\?\.permissionState/);
+  assert.match(core, /nativePromptPromise/);
   assert.match(core, /bindBrowserPermissionObserver/);
   assert.match(core, /bgRes\?\.hasPermission === true/);
   assert.match(core, /Notification permission: On/);
   assert.match(core, /Device permission: Off/);
+  assert.match(core, /Browser site permission: Off/);
   assert.match(core, /Device permission: Blocked/);
   assert.match(core, /button\.textContent = 'Turn on'/);
   assert.match(core, /button\.textContent = 'On'/);
+  assert.match(accountHtml, /data-device-notif-row hidden/);
   assert.match(accountHtml, /data-device-notif-btn disabled>Checking…<\/button>/);
   assert.match(pollReceiver, /NotificationManagerCompat\.from\(context\)\.areNotificationsEnabled\(\)/);
+});
+
+test('wallet reconciliation and peso inputs validate bounds, block overflow precision loss, and show inline errors', () => {
+  const coreJs = read('js/core.js');
+  const reportsJs = read('js/reports.js');
+  const recordsJs = read('js/records.js');
+  const savingsHtml = read('savings.html');
+  const css = read('css/app.css');
+
+  const doc = {
+    documentElement: { dataset: {} },
+    head: { insertAdjacentHTML() {}, querySelector: () => null },
+    body: { dataset: {}, classList: { toggle() {}, add() {}, remove() {}, contains: () => false }, insertAdjacentHTML() {}, append() {} },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: () => null,
+    createElement: () => ({ setAttribute() {}, appendChild() {}, classList: { add() {}, toggle() {} }, dataset: {}, style: {} }),
+    addEventListener() {}
+  };
+  const ctx = {
+    window: null, document: doc, HTMLInputElement: class {}, HTMLFormElement: class {}, HTMLElement: class {},
+    navigator: { onLine: true, serviceWorker: null },
+    location: { href: 'http://localhost/reports.html', pathname: '/reports.html', origin: 'http://localhost', search: '', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Notification: { permission: 'default' },
+    MutationObserver: class { observe() {} },
+    IPON_CONFIG: { supabaseUrl: '', supabaseAnonKey: '' },
+    Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  const { parseMoneyAmount, MAX_MONEY_AMOUNT } = ctx.window.Ipon;
+  assert.equal(MAX_MONEY_AMOUNT, 999999999999.99);
+
+  // Reject oversized 34-digit overflow, negatives, scientific notation, badInput, and >2 decimals
+  assert.equal(parseMoneyAmount('1233131123131231312313131231312313').valid, false);
+  assert.equal(parseMoneyAmount('1000000000000').valid, false);
+  assert.equal(parseMoneyAmount('-50').valid, false);
+  assert.equal(parseMoneyAmount('1e20').valid, false);
+  assert.equal(parseMoneyAmount('10.123').valid, false);
+  assert.equal(parseMoneyAmount('', { badInput: true }).valid, false);
+  assert.equal(parseMoneyAmount('', { required: true }).valid, false);
+
+  // Accept clean empty (optional) and bounded currency values
+  const emptyParsed = parseMoneyAmount('', { required: false });
+  assert.equal(emptyParsed.valid, true);
+  assert.equal(emptyParsed.value, null);
+  assert.equal(parseMoneyAmount('0').value, 0);
+  assert.equal(parseMoneyAmount('100.50').value, 100.5);
+  assert.equal(parseMoneyAmount('.5').value, 0.5);
+  assert.equal(parseMoneyAmount('999999999999.99').valid, true);
+
+  assert.match(reportsJs, /Ipon\.parseMoneyAmount/);
+  assert.match(reportsJs, /Ipon\.guardMoneyInput/);
+  assert.match(reportsJs, /data-wallet-error/);
+  assert.match(reportsJs, /wallet-variance-pill is-invalid/);
+  assert.match(reportsJs, /Fix invalid count/);
+  assert.match(recordsJs, /id="edit-amount"[^>]*max="999999999999\.99"/);
+  assert.match(savingsHtml, /id="calc-target"[^>]*max="999999999999\.99"/);
+  assert.match(savingsHtml, /id="calc-current"[^>]*max="999999999999\.99"/);
+  assert.match(css, /\.wallet-count-error/);
+  assert.match(css, /table-layout:\s*fixed/);
+  assert.match(css, /\.wallet-variance-pill\.is-invalid/);
 });
 
 

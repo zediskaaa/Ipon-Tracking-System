@@ -25,13 +25,17 @@
     return counts;
   }
 
-  function varianceHtml(expected, rawActual) {
-    if (rawActual === '' || rawActual === null || rawActual === undefined) {
-      return '<span class="wallet-variance-pill is-empty">—</span>';
-    }
-    const actual = Number(rawActual);
-    if (!Number.isFinite(actual)) return '<span class="wallet-variance-pill is-empty">—</span>';
-    const diff = Math.round((actual - Number(expected || 0)) * 100) / 100;
+  function varianceHtml(expected, rawActual, badInput = false) {
+    const parsed = Ipon.parseMoneyAmount(rawActual, {
+      min: 0,
+      max: Ipon.MAX_MONEY_AMOUNT,
+      required: false,
+      label: 'Actual count',
+      badInput
+    });
+    if (!parsed.valid) return '<span class="wallet-variance-pill is-invalid">Invalid amount</span>';
+    if (parsed.value === null) return '<span class="wallet-variance-pill is-empty">—</span>';
+    const diff = Math.round((parsed.value - Number(expected || 0)) * 100) / 100;
     if (Math.abs(diff) < 0.005) {
       return '<span class="wallet-variance-pill is-matched">Matched ✓</span>';
     }
@@ -48,12 +52,37 @@
     let totalActual = 0;
     let totalExpectedCounted = 0;
     let countedRows = 0;
+    let hasInvalid = false;
     channels.forEach((ch) => {
-      const raw = counts[ch.method];
+      const input = walletBody.querySelector(`[data-wallet-count="${ch.method}"]`);
+      const errorEl = walletBody.querySelector(`[data-wallet-error="${ch.method}"]`);
+      const raw = input ? input.value : counts[ch.method];
+      const badInput = Boolean(input?.validity?.badInput);
+      const parsed = Ipon.parseMoneyAmount(raw, {
+        min: 0,
+        max: Ipon.MAX_MONEY_AMOUNT,
+        required: false,
+        label: 'Actual count',
+        badInput
+      });
+      if (input) {
+        input.classList.toggle('is-invalid', !parsed.valid);
+        if (!parsed.valid) input.setAttribute('aria-invalid', 'true');
+        else input.removeAttribute('aria-invalid');
+        input.setCustomValidity(parsed.error);
+      }
+      if (errorEl) {
+        errorEl.textContent = parsed.error;
+        errorEl.title = parsed.error;
+        errorEl.classList.toggle('is-visible', !parsed.valid);
+        errorEl.setAttribute('aria-hidden', parsed.valid ? 'true' : 'false');
+      }
       const cell = walletBody.querySelector(`[data-wallet-variance="${ch.method}"]`);
-      if (cell) cell.innerHTML = varianceHtml(ch.net_balance, raw);
-      if (raw !== undefined && raw !== '' && Number.isFinite(Number(raw))) {
-        totalActual += Number(raw);
+      if (cell) cell.innerHTML = varianceHtml(ch.net_balance, raw, badInput);
+      if (!parsed.valid) {
+        hasInvalid = true;
+      } else if (parsed.value !== null) {
+        totalActual += parsed.value;
         totalExpectedCounted += Number(ch.net_balance || 0);
         countedRows += 1;
       }
@@ -62,9 +91,13 @@
     const totalVarianceCell = walletBody.querySelector('[data-wallet-total-variance]');
     if (totalActualCell) totalActualCell.textContent = countedRows > 0 ? Ipon.money(totalActual) : '—';
     if (totalVarianceCell) {
-      totalVarianceCell.innerHTML = countedRows > 0 ? varianceHtml(totalExpectedCounted, totalActual) : '<span class="wallet-variance-pill is-empty">—</span>';
+      totalVarianceCell.innerHTML = hasInvalid
+        ? '<span class="wallet-variance-pill is-invalid">Fix invalid count</span>'
+        : countedRows > 0
+          ? varianceHtml(totalExpectedCounted, totalActual)
+          : '<span class="wallet-variance-pill is-empty">—</span>';
     }
-    if (walletClearBtn) walletClearBtn.disabled = countedRows === 0;
+    if (walletClearBtn) walletClearBtn.disabled = countedRows === 0 && !hasInvalid;
   }
 
   function renderWalletReconciliation(wallet) {
@@ -142,14 +175,16 @@
       if (pOut > 0) pendingParts.push(`<span class="wallet-pending-out">-${Ipon.money(pOut)}</span>`);
       const pendingText = pendingParts.length ? pendingParts.join(' · ') : '<span class="field-help">—</span>';
       const meta = Ipon.paymentMethodMeta(ch.method === 'UNTAGGED' ? '' : ch.method);
-      const savedVal = savedCounts[ch.method] ?? '';
+      const rawSaved = savedCounts[ch.method] ?? '';
+      const savedParsed = Ipon.parseMoneyAmount(rawSaved, { min: 0, max: Ipon.MAX_MONEY_AMOUNT, required: false, label: 'Actual count' });
+      const savedVal = savedParsed.valid ? rawSaved : '';
       return `<tr>
         <td>${Ipon.paymentMethodBadge(ch.method === 'UNTAGGED' ? '' : ch.method)}<small class="field-help">${Number(ch.entry_count || 0)} confirmed</small></td>
         <td>${Ipon.money(inflows)}</td>
         <td>${Ipon.money(outflows)}</td>
         <td class="amount-cell"><strong>${Ipon.money(net)}</strong></td>
         <td>${pendingText}</td>
-        <td><input class="wallet-count-input" type="number" step="0.01" inputmode="decimal" data-wallet-count="${Ipon.escapeHtml(ch.method)}" value="${Ipon.escapeHtml(savedVal)}" placeholder="0.00" aria-label="Actual count for ${Ipon.escapeHtml(meta.label)}"></td>
+        <td><div class="wallet-count-cell"><input class="wallet-count-input" type="number" min="0" max="${Ipon.MAX_MONEY_AMOUNT}" step="0.01" inputmode="decimal" data-wallet-count="${Ipon.escapeHtml(ch.method)}" value="${Ipon.escapeHtml(savedVal)}" placeholder="0.00" aria-label="Actual count for ${Ipon.escapeHtml(meta.label)}"><small class="wallet-count-error" data-wallet-error="${Ipon.escapeHtml(ch.method)}" role="alert" aria-hidden="true"></small></div></td>
         <td data-wallet-variance="${Ipon.escapeHtml(ch.method)}">${varianceHtml(net, savedVal)}</td>
       </tr>`;
     }).join('');
@@ -171,6 +206,9 @@
         </tr>`
       : '<tr><td colspan="7" class="empty-state">No wallet activity recorded yet.</td></tr>';
 
+    walletBody.querySelectorAll('[data-wallet-count]').forEach((input) => {
+      Ipon.guardMoneyInput(input, { customDisplay: true, min: 0, max: Ipon.MAX_MONEY_AMOUNT, label: 'Actual count' });
+    });
     syncWalletTotals();
   }
 
@@ -232,7 +270,14 @@
   walletBody?.addEventListener('input', (event) => {
     const input = event.target.closest('[data-wallet-count]');
     if (!input) return;
-    saveCount(input.dataset.walletCount, input.value.trim());
+    const parsed = Ipon.parseMoneyAmount(input.value, {
+      min: 0,
+      max: Ipon.MAX_MONEY_AMOUNT,
+      required: false,
+      label: 'Actual count',
+      badInput: Boolean(input.validity?.badInput)
+    });
+    saveCount(input.dataset.walletCount, parsed.valid ? input.value.trim() : '');
     syncWalletTotals();
   });
   walletClearBtn?.addEventListener('click', () => {
