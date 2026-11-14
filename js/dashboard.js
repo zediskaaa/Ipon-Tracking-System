@@ -147,6 +147,8 @@
     currentGroup = myGroups.find((group) => group.is_current) || myGroups[0] || null;
     const noGroupCard = document.getElementById('dashboard-no-group-card');
     if (noGroupCard) noGroupCard.hidden = Boolean(currentGroup);
+    const summaryCard = document.querySelector('.summary-card');
+    if (summaryCard) summaryCard.classList.toggle('is-empty-group', !currentGroup);
     const manageBtn = document.getElementById('dashboard-manage-group');
     if (manageBtn) manageBtn.hidden = !(currentGroup && currentGroup.role === 'ADMIN');
     if (!currentGroup) {

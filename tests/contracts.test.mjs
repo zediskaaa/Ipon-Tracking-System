@@ -1266,12 +1266,14 @@ test('self-serve group creation, direct signup, and interactive invitation accep
   assert.match(dashHtml, /id="dashboard-no-group-card"/);
   assert.match(dashHtml, /id="no-group-create-btn"/);
   assert.match(dashJs, /dashboard-no-group-card/);
+  assert.match(dashJs, /is-empty-group/);
   assert.match(core, /data-invite-action="accept"/);
   assert.match(core, /data-invite-action="decline"/);
   assert.match(core, /accept_group_invitation/);
   assert.match(core, /decline_group_invitation/);
   assert.match(css, /\.notification-invite-actions/);
   assert.match(css, /\.no-group-card/);
+  assert.match(css, /\.summary-card\.is-empty-group/);
 });
 
 test('Super Admin can deactivate and delete user accounts with required reasons and email delivery', () => {
