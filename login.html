@@ -151,10 +151,12 @@
     body.is-app.is-request-mode .login-card{width:min(620px,100%)}
     body.is-app.is-request-mode .login-card .form-grid{grid-template-columns:1fr;gap:14px}
     body.is-app.is-request-mode :is(#first-name-field,#middle-name-field,#last-name-field,#contact-number-field,#email-field,#request-reason-field,#password-field,#password-confirmation-field){grid-column:auto}
+    html:has(#app-splash),html:has(#app-splash) body{background:#0b3428}
     .app-splash{position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;background:#0b3428;opacity:1;visibility:visible;transition:opacity .42s cubic-bezier(.22,1,.36,1),visibility .42s ease}
     .app-splash.is-hidden{opacity:0;visibility:hidden;pointer-events:none}
-    .app-splash-logo{width:84px;height:84px;flex:0 0 auto;border-radius:20px;box-shadow:0 12px 36px rgba(0,0,0,.45);animation:splashPop .45s cubic-bezier(.22,1,.36,1) forwards}
-    @keyframes splashPop{0%{transform:scale(.86);opacity:.4}100%{transform:scale(1);opacity:1}}
+    .app-splash-logo{width:88px;height:88px;display:block;flex:0 0 auto;border-radius:20px;box-shadow:0 14px 40px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.08);transform-origin:center;animation:splashPulse 1.8s cubic-bezier(.45,0,.55,1) infinite;will-change:transform}
+    @keyframes splashPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+    @media (prefers-reduced-motion:reduce){.app-splash-logo{animation:none}}
     html[data-theme="dark"] .login-card{background:radial-gradient(circle at 0 11px,#081714 6.5px,#13231f 7px) 0 6px/100% 22px repeat-y;color:#ecf3ef;box-shadow:0 24px 60px rgba(0,0,0,.62)}
     html[data-theme="dark"] body.is-app .login-card{background:radial-gradient(circle at 0 11px,#081714 6.5px,#13231f 7px) 0 6px/100% 22px repeat-y;color:#ecf3ef}
     html[data-theme="dark"] .login-card::before,html[data-theme="dark"] body.is-app .login-card::before{border-left-color:rgba(218,236,227,.16)}
@@ -182,11 +184,26 @@
     html[data-theme="dark"] .request-success-badge{background:rgba(40,122,76,.26);color:#8ee8b5}
     @media(max-width:780px){html[data-theme="dark"] .login-card{background:#13231f;box-shadow:0 18px 50px rgba(0,0,0,.6)}}
   </style>
+  <script src="js/config.js?v=20261115-75"></script>
 </head>
 <body>
   <div id="app-splash" class="app-splash" aria-hidden="true">
     <div class="app-splash-content">
-      <img src="assets/icon-192.png" alt="myIPON" class="app-splash-logo" width="84" height="84">
+      <svg class="app-splash-logo" viewBox="0 0 64 64" width="88" height="88" aria-hidden="true">
+        <rect width="64" height="64" rx="14" fill="#043224"/>
+        <path d="M38 28V13" fill="none" stroke="#68ba3b" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M38 17c5-7.5 13-9.5 20-7.5-1 7.5-8.5 12-20 12Z" fill="#75c242"/>
+        <path d="M38 22c-4.5-6-11-8-17-6 1 6 7 9.5 17 9.5Z" fill="#52992d"/>
+        <ellipse cx="43" cy="32" rx="14" ry="5" fill="#f8dc84" stroke="#c99532" stroke-width="0.8"/>
+        <text x="43" y="34.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="7.5" font-weight="900" fill="#a4721c" transform="scale(1, 0.65) translate(0, 16)">₱</text>
+        <path d="M29 32v7c0 2.8 6.3 4.8 14 4.8s14-2 14-4.8v-7c0 2.8-6.3 4.8-14 4.8s-14-2-14-4.8Z" fill="#e5b44d"/>
+        <path d="M33 35v4.5M38 36v4.5M43 36.5v4.5M48 36v4.5M53 35v4.5" stroke="#c49028" stroke-width="0.8" fill="none" opacity="0.7"/>
+        <path d="M29 39v7c0 2.8 6.3 4.8 14 4.8s14-2 14-4.8v-7c0 2.8-6.3 4.8-14 4.8s-14-2-14-4.8Z" fill="#d8a33a"/>
+        <path d="M33 42v4.5M38 43v4.5M43 43.5v4.5M48 43v4.5M53 42v4.5" stroke="#b07a1c" stroke-width="0.8" fill="none" opacity="0.7"/>
+        <circle cx="20" cy="42" r="12" fill="#f8dc84" stroke="#c99532" stroke-width="1.3"/>
+        <circle cx="20" cy="42" r="9.5" fill="#f1cb65"/>
+        <text x="20" y="46.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="900" fill="#9e6c15">₱</text>
+      </svg>
     </div>
   </div>
   <main class="login-page">
@@ -362,7 +379,6 @@
     </div>
   </dialog>
   <dialog class="form-dialog request-success-dialog" id="request-success-dialog" aria-labelledby="request-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="request-success-title">Account created successfully</h2><p>Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-request-success-close aria-label="Close request confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p>Your account has been created and verified. You can now sign in to start tracking savings.</p><div class="request-success-email" id="request-success-email"></div><p>Use your registered email and password on the Sign in tab.</p><div class="request-success-actions"><button class="button button-primary" id="request-success-ok" type="button" data-request-success-close>Continue to sign in</button></div></div></div></dialog>
-  <dialog class="form-dialog invite-success-dialog" id="invite-success-dialog" aria-labelledby="invite-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="invite-success-title">Account activated successfully</h2><p id="invite-success-subtitle">Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-invite-success-close aria-label="Close activation confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p id="invite-success-message">Account activation successful! Log in to your account using the provided credentials.</p><div class="request-success-email" id="invite-success-email"></div><p id="invite-success-group-hint">Your savings group workspace has been linked and will open automatically after sign in.</p><div class="request-success-actions"><button class="button button-primary" id="invite-success-ok" type="button" data-invite-success-close>Continue to sign in</button></div></div></div></dialog>
-  <script src="js/config.js?v=20261113-50"></script><script src="js/core.js?v=20261115-70"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/auth.js?v=20261114-54"></script>
+  <dialog class="form-dialog invite-success-dialog" id="invite-success-dialog" aria-labelledby="invite-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="invite-success-title">Account activated successfully</h2><p id="invite-success-subtitle">Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-invite-success-close aria-label="Close activation confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p id="invite-success-message">Account activation successful! Log in to your account using the provided credentials.</p><div class="request-success-email" id="invite-success-email"></div><p id="invite-success-group-hint">Your savings group workspace has been linked and will open automatically after sign in.</p><div class="request-success-actions"><button class="button button-primary" id="invite-success-ok" type="button" data-invite-success-close>Continue to sign in</button></div></div></div></dialog><script src="js/core.js?v=20261115-75"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/auth.js?v=20261115-75"></script>
 </body>
 </html>

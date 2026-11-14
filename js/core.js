@@ -1262,6 +1262,98 @@
     </div>`;
 
   const ACTIVE_ROLE_KEY = 'ipon_active_role';
+  const SHELL_SNAPSHOT_KEY = 'ipon_shell_snapshot';
+  const SHELL_AVATAR_KEY = 'ipon_shell_avatar';
+  const VALID_SHELL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER'];
+  const DEFAULT_SIDEBAR_AVATAR_SVG = '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>';
+
+  function readShellSnapshot() {
+    try {
+      const raw = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SHELL_SNAPSHOT_KEY) : null)
+        || (typeof localStorage !== 'undefined' ? localStorage.getItem(SHELL_SNAPSHOT_KEY) : null);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeShellSnapshot(patch = {}) {
+    if (!patch || typeof patch !== 'object') return;
+    try {
+      const current = readShellSnapshot() || {};
+      const nextUserId = patch.userId ? String(patch.userId) : (current.userId || '');
+      const switchedUser = Boolean(patch.userId && current.userId && String(patch.userId) !== String(current.userId));
+      const base = switchedUser ? {} : current;
+      const next = {
+        userId: nextUserId,
+        role: VALID_SHELL_ROLES.includes(patch.role) ? patch.role : (base.role || ''),
+        fullName: typeof patch.fullName === 'string' && patch.fullName.trim() ? patch.fullName.trim() : (base.fullName || ''),
+        unreadCount: patch.unreadCount !== undefined && Number.isFinite(Number(patch.unreadCount))
+          ? Math.max(0, Math.floor(Number(patch.unreadCount)))
+          : (Number.isFinite(Number(base.unreadCount)) ? Math.max(0, Math.floor(Number(base.unreadCount))) : 0)
+      };
+      const serialized = JSON.stringify(next);
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(SHELL_SNAPSHOT_KEY, serialized);
+      if (typeof localStorage !== 'undefined') localStorage.setItem(SHELL_SNAPSHOT_KEY, serialized);
+    } catch { }
+  }
+
+  function readShellAvatar(expectedUserId = '') {
+    try {
+      const raw = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SHELL_AVATAR_KEY) : null)
+        || (typeof localStorage !== 'undefined' ? localStorage.getItem(SHELL_AVATAR_KEY) : null);
+      if (!raw) return '';
+      const parsed = JSON.parse(raw);
+      const url = typeof parsed?.avatarUrl === 'string' ? parsed.avatarUrl : '';
+      if (!url.startsWith('data:image/')) return '';
+      if (expectedUserId && parsed?.userId && String(parsed.userId) !== String(expectedUserId)) return '';
+      return url;
+    } catch {
+      return '';
+    }
+  }
+
+  function writeShellAvatar(userId, avatarUrl) {
+    try {
+      if (!avatarUrl || typeof avatarUrl !== 'string' || !avatarUrl.startsWith('data:image/')) {
+        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(SHELL_AVATAR_KEY);
+        if (typeof localStorage !== 'undefined') localStorage.removeItem(SHELL_AVATAR_KEY);
+        return;
+      }
+      const serialized = JSON.stringify({ userId: userId ? String(userId) : '', avatarUrl });
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(SHELL_AVATAR_KEY, serialized);
+      if (typeof localStorage !== 'undefined') localStorage.setItem(SHELL_AVATAR_KEY, serialized);
+    } catch { }
+  }
+
+  function syncSidebarUserInfo(fullName, role) {
+    const sidebarUser = document.getElementById('sidebar-user');
+    if (!sidebarUser) return;
+    const label = role && VALID_SHELL_ROLES.includes(role) ? (role === 'SUPER_ADMIN' ? 'Owner' : 'My account') : 'ACCOUNT';
+    const safeName = typeof fullName === 'string' && fullName.trim() ? fullName.trim() : 'Checking session…';
+    sidebarUser.innerHTML = `<strong>${escapeHtml(safeName)}</strong><small>${escapeHtml(label)}</small>`;
+  }
+
+  function syncNotificationBadges(unread, { persist = true } = {}) {
+    const count = Math.max(0, Math.floor(Number(unread) || 0));
+    document.querySelectorAll('[data-notification-count]').forEach((badge) => {
+      badge.textContent = String(count);
+      badge.hidden = count === 0;
+    });
+    if (persist) writeShellSnapshot({ unreadCount: count });
+  }
+
+  function syncShellRoleVisibility(effectiveRole) {
+    if (document?.documentElement?.dataset && VALID_SHELL_ROLES.includes(effectiveRole)) {
+      document.documentElement.dataset.shellRole = effectiveRole;
+    }
+    document.querySelectorAll('[data-role]').forEach((element) => {
+      const roles = String(element.dataset?.role || '').split(',');
+      element.hidden = !roles.includes(effectiveRole);
+    });
+  }
 
   function resolveActiveRole(passedRole) {
     if (passedRole) return passedRole;
@@ -1269,8 +1361,9 @@
     const page = document.body.dataset.page;
     if (document.body.dataset.panel === 'super-admin' || page === 'super-admin') return 'SUPER_ADMIN';
     try {
-      const cached = sessionStorage.getItem(ACTIVE_ROLE_KEY) || localStorage.getItem(ACTIVE_ROLE_KEY);
-      if (cached && ['SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER'].includes(cached)) return cached;
+      const cached = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(ACTIVE_ROLE_KEY))
+        || (typeof localStorage !== 'undefined' && localStorage.getItem(ACTIVE_ROLE_KEY));
+      if (cached && VALID_SHELL_ROLES.includes(cached)) return cached;
     } catch { }
     if (page === 'user') return 'MEMBER';
     if (['members', 'audit', 'settings'].includes(page)) return 'ADMIN';
@@ -1280,6 +1373,15 @@
   function mountShell(role = currentProfile?.role) {
     const host = document.getElementById('app-sidebar');
     const effectiveRole = resolveActiveRole(role);
+    const snapshot = readShellSnapshot();
+    const cachedName = currentProfile?.full_name || snapshot?.fullName || '';
+    const cachedRole = currentProfile?.role || snapshot?.role || effectiveRole;
+    const cachedUserId = currentProfile?.id || snapshot?.userId || '';
+    const cachedUnread = Number.isFinite(Number(snapshot?.unreadCount)) ? Math.max(0, Math.floor(Number(snapshot.unreadCount))) : 0;
+    const cachedAvatar = currentProfile?.avatar_url || readShellAvatar(cachedUserId);
+    const roleLabel = cachedRole && VALID_SHELL_ROLES.includes(cachedRole)
+      ? (cachedRole === 'SUPER_ADMIN' ? 'Owner' : 'My account')
+      : 'ACCOUNT';
     if (host) {
       const page = document.body.dataset.page;
       const superAdminPanel = document.body.dataset.panel === 'super-admin';
@@ -1303,18 +1405,18 @@
         ${sidebarArtHtml}
         <div class="app-sidebar-footer">
           <div class="sidebar-utilities">
-            <button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><b data-notification-count hidden>0</b></button>
+            <button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><b data-notification-count${cachedUnread > 0 ? '' : ' hidden'}>${cachedUnread}</b></button>
           </div>
           <button class="sidebar-user-card" data-account-open type="button" aria-label="Open my account">
             <span class="avatar-presence-wrap">
               <span class="sidebar-user-avatar" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
+                ${DEFAULT_SIDEBAR_AVATAR_SVG}
               </span>
-              <span class="presence-dot is-online" data-presence-id="${currentProfile?.id || ''}" aria-label="Active now" title="Active now"></span>
+              <span class="presence-dot is-online" data-presence-id="${escapeHtml(cachedUserId)}" aria-label="Active now" title="Active now"></span>
             </span>
             <div class="sidebar-user-info" id="sidebar-user">
-              <strong>Checking session…</strong>
-              <small>ACCOUNT</small>
+              <strong>${escapeHtml(cachedName || 'Checking session…')}</strong>
+              <small>${escapeHtml(cachedName ? roleLabel : 'ACCOUNT')}</small>
             </div>
           </button>
           <button class="sidebar-signout text-button" id="sign-out" type="button">
@@ -1324,6 +1426,12 @@
         </div>`;
         document.getElementById('sign-out')?.addEventListener('click', signOut);
       }
+    }
+    syncShellRoleVisibility(effectiveRole);
+    syncNotificationBadges(cachedUnread, { persist: false });
+    if (cachedName) syncSidebarUserInfo(cachedName, cachedRole);
+    if (cachedAvatar) {
+      syncProfileAvatars({ id: cachedUserId, full_name: cachedName, role: cachedRole, avatar_url: cachedAvatar }, { persist: false });
     }
     document.querySelectorAll('.record-tabs a').forEach((link) => {
       if (effectiveRole === 'TREASURER' && link.getAttribute('href') === 'savings.html') return link.remove();
@@ -1627,17 +1735,29 @@
     });
   }
 
-  function syncProfileAvatars(profile = currentProfile) {
+  function syncProfileAvatars(profile = currentProfile, { persist = true } = {}) {
     if (!profile) return;
     const safeUrl = typeof profile.avatar_url === 'string' && profile.avatar_url.startsWith('data:image/') ? profile.avatar_url : '';
+    if (persist && profile.id) {
+      writeShellAvatar(profile.id, safeUrl);
+      writeShellSnapshot({
+        userId: profile.id,
+        role: profile.role,
+        fullName: profile.full_name
+      });
+    }
     document.querySelectorAll('.sidebar-user-avatar').forEach((slot) => {
       const parentWrap = slot.closest('.avatar-presence-wrap');
       const dot = parentWrap ? parentWrap.querySelector('.presence-dot') : null;
-      if (dot) {
+      if (dot && profile.id) {
         dot.dataset.presenceId = profile.id;
         dot.classList.add('is-online');
       }
+      const existingImg = slot.querySelector('img[data-avatar-img]');
       if (safeUrl) {
+        if (existingImg && existingImg.getAttribute('src') === safeUrl && !existingImg.hidden) {
+          return;
+        }
         slot.innerHTML = `<img src="${safeUrl}" alt="${escapeHtml(profile.full_name || 'Profile picture')}" data-avatar-img><svg viewBox="0 0 24 24" hidden><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>`;
         const img = slot.querySelector('img');
         img?.addEventListener('error', () => {
@@ -1645,8 +1765,8 @@
           const svg = img.nextElementSibling;
           if (svg) svg.removeAttribute('hidden');
         });
-      } else {
-        slot.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>';
+      } else if (existingImg || !slot.querySelector('svg')) {
+        slot.innerHTML = DEFAULT_SIDEBAR_AVATAR_SVG;
       }
     });
     const quickPreview = document.getElementById('quick-avatar-preview');
@@ -3720,7 +3840,7 @@
       }
 
       const unread = allRows.filter((item) => !item.read_at).length;
-      document.querySelectorAll('[data-notification-count]').forEach((badge) => { badge.textContent = unread; badge.hidden = unread === 0; });
+      syncNotificationBadges(unread);
       document.getElementById('mark-all-notifications').hidden = unread === 0;
       list.innerHTML = allRows.length ? allRows.map((item) => {
         const isInvite = item.type === 'GROUP_INVITE' && !item.read_at;
@@ -3788,11 +3908,13 @@
           const remoteBuild = localStorage.getItem('myipon_latest_native_build') || String(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 20);
           localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
           item.classList.remove('is-unread');
+          syncNotificationBadges(Math.max(0, (Number(readShellSnapshot()?.unreadCount) || 1) - 1));
           if (!target) await load();
         } else {
           try {
             await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) });
             item.classList.remove('is-unread');
+            syncNotificationBadges(Math.max(0, (Number(readShellSnapshot()?.unreadCount) || 1) - 1));
             if (!target) await load();
           } catch (error) {
             toast(friendlyError(error), 'error');
@@ -4009,6 +4131,11 @@
         sessionStorage.setItem(ACTIVE_ROLE_KEY, profile.role);
         localStorage.setItem(ACTIVE_ROLE_KEY, profile.role);
       } catch { }
+      writeShellSnapshot({
+        userId: profile.id,
+        role: profile.role,
+        fullName: profile.full_name
+      });
       if (profile.status !== 'ACTIVE' && options.allowPending !== true) {
         await client.auth.signOut();
         window.location.replace('login.html?status=pending');
@@ -4032,10 +4159,7 @@
       const sidebarUser = document.getElementById('sidebar-user');
       if (sidebarUser) sidebarUser.innerHTML = `<strong>${escapeHtml(profile.full_name)}</strong><small>${escapeHtml(profile.role === 'SUPER_ADMIN' ? 'Owner' : 'My account')}</small>`;
       syncProfileAvatars(profile);
-      document.querySelectorAll('[data-role]').forEach((element) => {
-        const roles = element.dataset.role.split(',');
-        element.hidden = !roles.includes(profile.role);
-      });
+      syncShellRoleVisibility(profile.role);
       if (options.requireAuth !== false) watchCrossTabAuth(client, profile.id);
       initNotifications(profile).catch(() => { });
       initPresence(profile);
@@ -4073,6 +4197,11 @@
     try {
       sessionStorage.removeItem(ACTIVE_ROLE_KEY);
       localStorage.removeItem(ACTIVE_ROLE_KEY);
+      sessionStorage.removeItem(SHELL_SNAPSHOT_KEY);
+      localStorage.removeItem(SHELL_SNAPSHOT_KEY);
+      sessionStorage.removeItem(SHELL_AVATAR_KEY);
+      localStorage.removeItem(SHELL_AVATAR_KEY);
+      if (document?.documentElement?.dataset) delete document.documentElement.dataset.shellRole;
       Object.keys(localStorage).forEach((key) => {
         if (key.startsWith('sb-') && key.endsWith('-auth-token')) localStorage.removeItem(key);
       });
@@ -6089,15 +6218,14 @@
 
   async function checkForAppUpdate({ force = false } = {}) {
     if (isIosDevice()) return;
+    try {
+      if (sessionStorage.getItem('myipon_just_logged_in')) sessionStorage.removeItem('myipon_just_logged_in');
+    } catch { }
+    if (!force) return;
     const isNativeApp = isInstalledAppUser();
     const isMobile = isNativeApp || isMobileAppContext();
 
-    const justLoggedIn = sessionStorage.getItem('myipon_just_logged_in');
-    if (justLoggedIn) {
-      sessionStorage.removeItem('myipon_just_logged_in');
-    }
-
-    if (!isMobile && !force && !justLoggedIn) return;
+    if (!isMobile && !force) return;
 
     const installedNativeBuild = getInstalledNativeBuild();
 
@@ -6106,7 +6234,7 @@
     let remoteNotes = '';
     let updateFound = false;
 
-    // Check raw github version.json; only prompt APK reinstall when nativeBuild increases
+    // Check raw github version.json only when explicitly forced
     try {
       const res = await fetch('https://raw.githubusercontent.com/zediskaaa/Ipon-Tracking-System/main/version.json?_t=' + Date.now(), { cache: 'no-store' });
       if (res.ok) {
@@ -6130,15 +6258,12 @@
         build: remoteBuild,
         notes: remoteNotes
       });
-    } else if (!isNativeApp && (justLoggedIn || force)) {
-      // Mobile user who just signed in on mobile browser: prompt to install the native app
-      if (!sessionStorage.getItem('dismissed_mobile_app_prompt')) {
-        showAppUpdatePrompt({
-          version: 'Mobile App',
-          build: 'mobile_app_prompt',
-          notes: 'Download the official myIPON Android app (.apk) for the fastest, full-screen savings experience.'
-        });
-      }
+    } else if (!isNativeApp && force) {
+      showAppUpdatePrompt({
+        version: 'Mobile App',
+        build: 'mobile_app_prompt',
+        notes: 'Download the official myIPON Android app (.apk) for the fastest, full-screen savings experience.'
+      });
     }
   }
 
@@ -6146,12 +6271,6 @@
     if (isInstalledAppUser()) {
       document.body.classList.add('is-app');
     }
-    setTimeout(() => {
-      checkForAppUpdate();
-    }, 200);
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) checkForAppUpdate();
-    });
   }
 
   function openImageViewer(src, title = 'Attachment', subtitle = '', downloadName = '') {
@@ -7560,6 +7679,18 @@
   preparePesoInputs(document);
   mountThemeControls(document);
   initAppUpdateChecker();
+  window?.addEventListener?.('ipon:profile-updated', (event) => {
+    const updated = event?.detail;
+    if (!updated || typeof updated !== 'object') return;
+    writeShellSnapshot({
+      userId: updated.id,
+      role: updated.role,
+      fullName: updated.full_name
+    });
+    if (updated.id && 'avatar_url' in updated) {
+      writeShellAvatar(updated.id, updated.avatar_url || '');
+    }
+  });
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,

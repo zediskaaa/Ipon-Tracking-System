@@ -4569,6 +4569,222 @@ test('Super Admin can edit own name in all lowercase and with first name only ac
   }
 });
 
+test('Android cold-start splash uses emerald #0b3428 with inline pulsing logo and no auto update popup', async () => {
+  const stylesXml = read('android/app/src/main/res/values/styles.xml');
+  const activityMainXml = read('android/app/src/main/res/layout/activity_main.xml');
+  const mainActivity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const capConfig = JSON.parse(read('capacitor.config.json'));
+  const androidCapConfig = JSON.parse(read('android/app/src/main/assets/capacitor.config.json'));
+  const loginHtml = read('login.html');
+  const authJs = read('js/auth.js');
+  const coreJs = read('js/core.js');
+
+  // Native splash & window backgrounds avoid white flash on cold start
+  assert.match(stylesXml, /<style name="AppTheme\.NoActionBar"[\s\S]*?<item name="android:background">@null<\/item>[\s\S]*?<item name="android:windowBackground">@color\/ic_launcher_background<\/item>/);
+  assert.match(stylesXml, /<style name="AppTheme\.NoActionBarLaunch"[\s\S]*?windowSplashScreenBackground[\s\S]*?windowSplashScreenAnimatedIcon[\s\S]*?postSplashScreenTheme/);
+  assert.match(activityMainXml, /android:background="#0b3428"[\s\S]*?<WebView[\s\S]*?android:background="#0b3428"/);
+  assert.match(mainActivity, /setBackgroundColor\(Color\.parseColor\("#0b3428"\)\)/);
+  assert.equal(capConfig.backgroundColor, '#0b3428');
+  assert.equal(androidCapConfig.backgroundColor, '#0b3428');
+  assert.equal(androidCapConfig.appendUserAgent, 'myIPONApp/20');
+
+  // Login splash uses inline SVG logo + gentle smooth pulse animation & honors reduced motion
+  assert.match(loginHtml, /html:has\(#app-splash\),html:has\(#app-splash\) body\{background:#0b3428\}/);
+  assert.match(loginHtml, /@keyframes splashPulse\{0%,100%\{transform:scale\(1\)\}50%\{transform:scale\(1\.06\)\}\}/);
+  assert.match(loginHtml, /@media \(prefers-reduced-motion:reduce\)\{\.app-splash-logo\{animation:none\}\}/);
+  assert.match(loginHtml, /id="app-splash"[\s\S]*?<svg class="app-splash-logo"[\s\S]*?<\/svg>[\s\S]*?<main/);
+  assert.doesNotMatch(loginHtml.match(/<div id="app-splash"[\s\S]*?<main/)?.[0] || '', /icon-192\.png/);
+  assert.match(authJs, /state\.session && state\.profile\?\.status === 'ACTIVE'[\s\S]*?clearTimeout\(splashSafetyTimer\)/);
+
+  // Automatic app update dialog popup is disabled unless explicitly forced
+  let fetchCount = 0;
+  let dialogShown = false;
+  const stubEl = () => ({
+    dataset: {},
+    style: { removeProperty() {} },
+    classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+    setAttribute() {},
+    removeAttribute() {},
+    addEventListener() {},
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    insertAdjacentHTML() {},
+    prepend() {},
+    append() {},
+    appendChild() {},
+    showModal() { dialogShown = true; },
+    remove() {}
+  });
+  const loaderStub = { hidden: false, querySelector: () => ({ textContent: '' }), setAttribute() {}, removeAttribute() {} };
+  const doc = {
+    body: { ...stubEl(), dataset: { page: 'user' } },
+    head: stubEl(),
+    documentElement: { ...stubEl(), style: { setProperty() {}, removeProperty() {} } },
+    createElement: () => stubEl(),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: (id) => (id === 'app-loader' ? loaderStub : null),
+    addEventListener() {}
+  };
+  const ctx = {
+    URL, URLSearchParams, CustomEvent: class {}, Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout() { return 1; },
+    clearTimeout() {},
+    fetch: async () => { fetchCount += 1; return { ok: true, json: async () => ({ version: '1.0.99', nativeBuild: 99 }) }; },
+    navigator: { userAgent: 'Mozilla/5.0 myIPONApp/19', onLine: true },
+    location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', href: 'https://my-ipon.vercel.app/user.html', pathname: '/user.html', search: '' },
+    matchMedia: () => ({ matches: false, addEventListener() {} }),
+    addEventListener() {},
+    document: doc,
+    window: null,
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+  await ctx.window.Ipon.checkForAppUpdate();
+  assert.equal(fetchCount, 0);
+  assert.equal(dialogShown, false);
+});
+
+test('navigation shell preserves active role tabs, notification count, and user DP from pixel zero while loading', () => {
+  const dashboardHtml = read('dashboard.html');
+  const configJs = read('js/config.js');
+  const heroPlatesCss = read('css/hero-plates.css');
+  const coreJs = read('js/core.js');
+
+  // config.js loads in <head> on dashboard.html and stamps dataset.shellRole pre-paint
+  assert.match(dashboardHtml, /<head>[\s\S]*?<script src="js\/config\.js\?v=[^"]+"><\/script>[\s\S]*?<\/head>/);
+  assert.doesNotMatch(dashboardHtml, /<\/dialog>[\s\S]*?js\/config\.js/);
+  assert.match(configJs, /dataset\.shellRole\s*=\s*activeRole/);
+  assert.match(heroPlatesCss, /html\[data-shell-role="MEMBER"\]\s+\.dashboard-sidebar\s+\.nav-link\[data-role="ADMIN"\][^{]*\{[^}]*display:none!important/);
+
+  const makeStorage = (initial = {}) => {
+    const store = new Map(Object.entries(initial));
+    return {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => { store.set(k, String(v)); },
+      removeItem: (k) => { store.delete(k); }
+    };
+  };
+
+  // Case 1: dashboard.html static sidebar pre-hydrates MEMBER role, unread badge, and cached DP synchronously
+  const adminLink = { dataset: { role: 'ADMIN' }, hidden: false };
+  const memberLink = { dataset: { role: 'MEMBER' }, hidden: false };
+  const badgeA = { textContent: '0', hidden: true };
+  const badgeB = { textContent: '0', hidden: true };
+  const presenceDot = { dataset: {}, classList: { add() {} } };
+  const avatarSlot = {
+    innerHTML: '<svg></svg>',
+    closest: () => ({ querySelector: () => presenceDot }),
+    querySelector: () => null
+  };
+  const sidebarUser = { innerHTML: '<strong>Checking session…</strong><small>ACCOUNT</small>' };
+  const rootEl = { dataset: {}, style: { setProperty() {}, removeProperty() {} } };
+  const storageDash = makeStorage({
+    ipon_active_role: 'MEMBER',
+    ipon_shell_snapshot: JSON.stringify({ userId: 'u1', role: 'MEMBER', fullName: 'Juan Dela Cruz', unreadCount: 3 }),
+    ipon_shell_avatar: JSON.stringify({ userId: 'u1', avatarUrl: 'data:image/png;base64,AAA' })
+  });
+  const dashLoader = { hidden: false, querySelector: () => ({ textContent: '' }), setAttribute() {}, removeAttribute() {} };
+  const stubNode = () => ({ dataset: {}, classList: { contains: () => false, add() {}, remove() {}, toggle() {} }, setAttribute() {}, removeAttribute() {}, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], prepend() {}, append() {}, appendChild() {}, style: { removeProperty() {} }, textContent: '' });
+  const dashDoc = {
+    body: {
+      dataset: { page: 'dashboard' },
+      classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+      insertAdjacentHTML() {},
+      prepend() {},
+      append() {},
+      appendChild() {}
+    },
+    head: { insertAdjacentHTML() {}, append() {} },
+    documentElement: rootEl,
+    createElement: () => stubNode(),
+    querySelector: (sel) => (sel === 'link[rel="manifest"]' ? {} : null),
+    querySelectorAll: (sel) => {
+      if (sel === '[data-role]') return [adminLink, memberLink];
+      if (sel === '[data-notification-count]') return [badgeA, badgeB];
+      if (sel === '.sidebar-user-avatar') return [avatarSlot];
+      return [];
+    },
+    getElementById: (id) => (id === 'sidebar-user' ? sidebarUser : id === 'app-loader' ? dashLoader : null),
+    addEventListener() {}
+  };
+  const dashCtx = {
+    URL, URLSearchParams, CustomEvent: class {}, Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    sessionStorage: storageDash,
+    localStorage: storageDash,
+    navigator: { userAgent: 'Mozilla/5.0', onLine: true },
+    setTimeout: () => 1,
+    clearTimeout() {},
+    location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', href: 'https://my-ipon.vercel.app/dashboard.html', pathname: '/dashboard.html', search: '', hash: '' },
+    matchMedia: () => ({ matches: false, addEventListener() {} }),
+    addEventListener() {},
+    document: dashDoc,
+    window: null,
+    console
+  };
+  dashCtx.window = dashCtx;
+  vm.runInNewContext(coreJs, dashCtx, { filename: 'js/core.js' });
+
+  assert.equal(rootEl.dataset.shellRole, 'MEMBER');
+  assert.equal(adminLink.hidden, true);
+  assert.equal(memberLink.hidden, false);
+  assert.equal(badgeA.textContent, '3');
+  assert.equal(badgeA.hidden, false);
+  assert.equal(badgeB.hidden, false);
+  assert.match(sidebarUser.innerHTML, /Juan Dela Cruz/);
+  assert.match(sidebarUser.innerHTML, /My account/);
+  assert.match(avatarSlot.innerHTML, /data:image\/png;base64,AAA/);
+
+  // Case 2: #app-sidebar pages render cached badge, name, and avatar directly in mountShell() before requireAuth resolves
+  const hostEl = {
+    dataset: {},
+    innerHTML: '',
+    querySelectorAll: () => []
+  };
+  const userAvatarSlot = {
+    innerHTML: '',
+    closest: () => ({ querySelector: () => presenceDot }),
+    querySelector: () => null
+  };
+  const userSidebarInfo = { innerHTML: '' };
+  const userDoc = {
+    body: {
+      dataset: { page: 'user' },
+      classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+      insertAdjacentHTML() {},
+      prepend() {},
+      append() {},
+      appendChild() {}
+    },
+    head: { insertAdjacentHTML() {}, append() {}, appendChild() {} },
+    documentElement: { dataset: {}, style: { setProperty() {}, removeProperty() {} } },
+    createElement: () => stubNode(),
+    querySelector: (sel) => (sel === 'link[rel="manifest"]' ? {} : null),
+    querySelectorAll: (sel) => (sel === '.sidebar-user-avatar' ? [userAvatarSlot] : []),
+    getElementById: (id) => {
+      if (id === 'app-sidebar') return hostEl;
+      if (id === 'sidebar-user') return userSidebarInfo;
+      if (id === 'app-loader') return dashLoader;
+      return null;
+    },
+    addEventListener() {}
+  };
+  const userCtx = {
+    ...dashCtx,
+    document: userDoc,
+    location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', href: 'https://my-ipon.vercel.app/user.html', pathname: '/user.html', search: '', hash: '' },
+    window: null
+  };
+  userCtx.window = userCtx;
+  vm.runInNewContext(coreJs, userCtx, { filename: 'js/core.js' });
+
+  assert.match(hostEl.innerHTML, /data-notification-count>3<\/b>/);
+  assert.doesNotMatch(hostEl.innerHTML, /href="members\.html"/);
+  assert.match(hostEl.innerHTML, /Juan Dela Cruz/);
+  assert.match(userAvatarSlot.innerHTML, /data:image\/png;base64,AAA/);
+});
+
 
 
 

@@ -2,6 +2,7 @@
   "appId": "com.myipon.app",
   "appName": "myIPON",
   "webDir": "www",
+  "backgroundColor": "#0b3428",
   "appendUserAgent": "myIPONApp/20",
   "server": {
     "url": "https://my-ipon.vercel.app/login.html?app=1",
@@ -15,7 +16,8 @@
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 1400,
+      "launchShowDuration": 250,
+      "launchFadeOutDuration": 200,
       "launchAutoHide": true,
       "backgroundColor": "#0b3428",
       "androidSplashResourceName": "splash",

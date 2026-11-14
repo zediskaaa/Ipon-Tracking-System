@@ -75,18 +75,21 @@
     document.body.classList.add('is-app');
   }
 
+  const queryParams = new URLSearchParams(location.search);
+  const acceptInviteToken = queryParams.get('accept_invite');
+  const acceptInviteEmail = (queryParams.get('email') || '').trim();
+  const statusParam = queryParams.get('status');
+  const isAppLaunch = document.body.classList.contains('is-app') || queryParams.has('app');
+  const splashStartedAt = Date.now();
+  const splashMinUntil = splashStartedAt + (isAppLaunch ? 950 : 450);
+
   const dismissSplash = () => {
     const splash = document.getElementById('app-splash');
     if (!splash) return;
     splash.classList.add('is-hidden');
     setTimeout(() => { try { splash.remove(); } catch (_) { } }, 450);
   };
-  setTimeout(dismissSplash, 2000);
-
-  const queryParams = new URLSearchParams(location.search);
-  const acceptInviteToken = queryParams.get('accept_invite');
-  const acceptInviteEmail = (queryParams.get('email') || '').trim();
-  const statusParam = queryParams.get('status');
+  const splashSafetyTimer = setTimeout(dismissSplash, 5000);
 
   // Start init immediately without delaying synchronous form/tab listener attachment
   const initPromise = Ipon.init({ requireAuth: false, allowPending: true }).catch((error) => ({ failed: true, configured: false, error }));
@@ -152,15 +155,20 @@
     const state = await initPromise;
     Ipon.setLoading(false);
     if (state.failed) {
+      clearTimeout(splashSafetyTimer);
       dismissSplash();
       return;
     }
     if (state.session && state.profile?.status === 'ACTIVE') {
-      Ipon.setLoading(true, 'Opening your records…');
+      clearTimeout(splashSafetyTimer);
+      const waitMs = isAppLaunch ? Math.max(0, splashMinUntil - Date.now()) : 0;
+      if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+      if (!document.getElementById('app-splash')) Ipon.setLoading(true, 'Opening your records…');
       window.location.replace(Ipon.accountSetupUrl(state.profile, state.session.user) || Ipon.homeForRole(state.profile.role));
       return;
     }
-    setTimeout(dismissSplash, 600);
+    clearTimeout(splashSafetyTimer);
+    setTimeout(dismissSplash, Math.max(350, splashMinUntil - Date.now()));
     if (!state.configured) {
       message.textContent = 'Add your Supabase URL and anon key in js/config.js before signing in.';
       submit.disabled = true;

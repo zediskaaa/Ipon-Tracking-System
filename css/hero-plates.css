@@ -36,6 +36,11 @@ button,a { color:inherit; font:inherit; }
   color:#f5eadb;
   box-shadow:2px 0 16px rgba(7,35,26,.14);
 }
+html:not([data-shell-role]) .dashboard-sidebar .nav-link[data-role],
+html[data-shell-role="MEMBER"] .dashboard-sidebar .nav-link[data-role="ADMIN"],
+html[data-shell-role="ADMIN"] .dashboard-sidebar .nav-link[data-role="MEMBER"],
+html[data-shell-role="TREASURER"] .dashboard-sidebar .nav-link[data-role],
+html[data-shell-role="SUPER_ADMIN"] .dashboard-sidebar .nav-link[data-role] { display:none!important; }
 
 .dashboard-workspace {
   display:flex;

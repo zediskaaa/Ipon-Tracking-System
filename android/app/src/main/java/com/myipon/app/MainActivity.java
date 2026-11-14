@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import androidx.core.app.ActivityCompat;
@@ -15,6 +16,9 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(BackgroundNotificationsPlugin.class);
         super.onCreate(savedInstanceState);
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().setBackgroundColor(Color.parseColor("#0b3428"));
+        }
         NotificationPollReceiver.ensureChannel(this);
         maybeRequestPostNotifications();
         NotificationSyncService.ensureStarted(this);
