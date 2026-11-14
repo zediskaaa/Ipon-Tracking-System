@@ -309,16 +309,30 @@ test('name fields reject numbers and unsupported symbols across every form', () 
 
 test('login provides development, terms, and privacy disclosures', () => {
   const html = read('login.html');
+  const indexHtml = read('index.html');
   const auth = read('js/auth.js');
   assert.match(html, /Development preview/);
   assert.match(html, /IPON is still under active development/);
   assert.match(html, /data-policy-open="terms"/);
   assert.match(html, /data-policy-open="privacy"/);
+  assert.match(html, /Last updated: November 14, 2026/);
   assert.match(html, /body\.is-request-mode :is\(\.development-notice,\.login-legal\)\{display:none\}/);
   assert.match(html, /<dialog class="policy-dialog" id="policy-dialog" aria-labelledby="policy-title">/);
   assert.match(html, /tracking system only and does not hold, transfer, receive, or safeguard money/);
+  assert.match(html, /wallet reconciliation balances/i);
+  assert.match(html, /30-day soft-delete member recovery bin/i);
+  assert.match(html, /Web Push subscription tokens/i);
   assert.match(html, /contact your assigned administrator/);
   assert.match(auth, /policyDialog\.showModal\(\)/);
+  assert.match(auth, /new URLSearchParams\(location\.search\)\.get\('policy'\)/);
+
+  // Landing page stays synced with current system features and links directly to updated legal notices
+  assert.doesNotMatch(indexHtml, /Once approved, name your group/i);
+  assert.match(indexHtml, /href="login\.html\?policy=terms"/);
+  assert.match(indexHtml, /href="login\.html\?policy=privacy"/);
+  assert.match(indexHtml, /Wallets &amp; payout channels/);
+  assert.match(indexHtml, /Record discussions &amp; proofs/);
+  assert.match(indexHtml, /id="demo-theme-toggle"/);
 });
 
 test('temporary password state is server-owned and cleared by the Edge workflow', () => {
@@ -1078,11 +1092,10 @@ test('Super Admin can manage feature request statuses and publish release update
   assert.match(script, /req\.status === 'IMPLEMENTED' && !req\.release_version/);
   assert.match(script, /confirmAction\(\{[\s\S]*?title:\s*'Publish release update\?'/);
   assert.match(script, /p_announcement_type:\s*'RELEASE'/);
-  assert.match(script, /RELEASE_INTROS/);
-  assert.match(script, /RELEASE_OUTROS/);
-  assert.match(script, /composeReleaseNotes/);
-  assert.match(script, /release-update-shuffle/);
-  assert.match(html, /id="release-update-shuffle"/);
+  assert.doesNotMatch(script, /RELEASE_INTROS|RELEASE_OUTROS|composeReleaseNotes|humanizeReleaseUpdate/);
+  assert.match(script, /release-update-ai-btn/);
+  assert.match(script, /ai-generate-release-notes/);
+  assert.match(html, /id="release-update-ai-error"/);
 
   assert.match(core, /is-release-update/);
   assert.match(core, /announcement-release-banner/);
@@ -1209,7 +1222,7 @@ test('feature requests support credit consent toggle and release updates display
   assert.match(css, /\.announcement-release-section\{/);
 });
 
-test('system integrates Gemini AI for release updates with procedural fallbacks', () => {
+test('system integrates server-side Gemini AI for release updates without procedural templates', () => {
   const edge = read('supabase/functions/manage-account/index.ts');
   const superAdminHtml = read('super-admin.html');
   const superAdminJs = read('js/super-admin.js');
@@ -1218,8 +1231,14 @@ test('system integrates Gemini AI for release updates with procedural fallbacks'
   const css = read('css/app.css');
 
   assert.match(edge, /generateWithGemini/);
-  assert.match(edge, /generateProceduralReleaseNotes/);
+  assert.doesNotMatch(edge, /generateProceduralReleaseNotes|humanizeReleaseUpdate/);
   assert.match(edge, /action === 'ai-generate-release-notes'/);
+  assert.match(edge, /action === 'gemini-key-status'/);
+  assert.match(edge, /action === 'save-gemini-key'/);
+  assert.match(edge, /resolveServerGeminiKey/);
+  assert.match(edge, /internal_webhook_config/);
+  assert.match(edge, /BILLING_DISABLED/);
+  assert.match(edge, /Deno\.env\.get\('GEMINI_API_KEY'\)/);
   assert.doesNotMatch(edge, /action === 'ai-savings-insights'/);
   assert.match(edge, /action === 'test-gemini-key'/);
   assert.match(edge, /gemini-1\.5-flash/);
@@ -1227,13 +1246,15 @@ test('system integrates Gemini AI for release updates with procedural fallbacks'
   assert.match(superAdminHtml, /id="release-update-ai-btn"/);
   assert.match(superAdminHtml, /id="release-update-key-btn"/);
   assert.match(superAdminHtml, /id="release-update-ai-status"/);
-  assert.match(superAdminHtml, /id="gemini-key-dialog"/);
-  assert.match(superAdminHtml, /id="gemini-api-key-input"/);
+  assert.match(superAdminHtml, /id="release-update-ai-error"/);
 
   assert.match(superAdminJs, /release-update-ai-btn/);
-  assert.match(superAdminJs, /gemini-key-dialog/);
-  assert.match(superAdminJs, /ipon_gemini_api_key/);
   assert.match(superAdminJs, /ai-generate-release-notes/);
+  assert.match(superAdminJs, /save-gemini-key/);
+  assert.match(superAdminJs, /Configure API key/);
+  assert.match(superAdminJs, /Ipon\.showInlineError\(\s*releaseAiError/);
+  assert.doesNotMatch(superAdminJs, /localStorage\.setItem\('ipon_gemini_api_key'/);
+  assert.doesNotMatch(superAdminJs, /RELEASE_INTROS|RELEASE_OUTROS|composeReleaseNotes|humanizeReleaseUpdate/);
 
   assert.doesNotMatch(dashboardHtml, /id="dashboard-ai-insights-btn"/);
   assert.doesNotMatch(dashboardHtml, /id="ai-insights-dialog"/);
@@ -1776,15 +1797,46 @@ test('release composer reads live recent commits and prior releases instead of f
 
   assert.match(superAdminJs, /TECH_COMMIT_RE/);
   assert.match(superAdminJs, /CODE_TOKEN_RE/);
-  assert.match(superAdminJs, /Completely EXCLUDE developer, infrastructure, or code-level work/);
   assert.match(edgeTs, /cleanCommitSummary/);
-  assert.match(edgeTs, /Completely EXCLUDE developer, infrastructure, or code-level work/);
+  assert.match(edgeTs, /findMissingReleaseItems/);
+  assert.match(edgeTs, /Missed changes/);
+
+  assert.doesNotMatch(superAdminJs, /RELEASE_FEATURE_CATALOG|RELEASE_FALLBACK_POOLS|RELEASE_FALLBACK_UPDATES|RELEASE_INTROS|RELEASE_OUTROS|humanizeReleaseUpdate|composeReleaseNotes/);
+  assert.doesNotMatch(edgeTs, /RELEASE_FEATURE_CATALOG|EDGE_FALLBACK_UPDATES|humanizeReleaseUpdate|generateProceduralReleaseNotes/);
 
   const techMatch = superAdminJs.match(/const TECH_COMMIT_RE = (\/.*\/[a-z]*);/);
   const codeMatch = superAdminJs.match(/const CODE_TOKEN_RE = (\/.*\/[a-z]*);/);
+  const noiseMatch = superAdminJs.match(/const NOISE_CLAUSE_RE = (\/.*\/[a-z]*);/);
+  const verbMatch = superAdminJs.match(/const COMMIT_VERB_RE = (\/.*\/[a-z]*);/);
+  const stopWordsMatch = superAdminJs.match(/const COMMIT_STOP_WORDS = new Set\(\[[\s\S]*?\]\);/);
+  const canonClauseMatch = superAdminJs.match(/function canonicalizeClauseForParsing\(rawLine\)\s*\{[\s\S]*?\n  \}/);
+  const extractMatch = superAdminJs.match(/function extractCommitUpdates\(rawMessage\)\s*\{[\s\S]*?\n  \}/);
   const fnMatch = superAdminJs.match(/function cleanCommitSummary\(rawMessage\)\s*\{[\s\S]*?\n  \}/);
-  assert.ok(techMatch && codeMatch && fnMatch, 'cleanCommitSummary must exist in js/super-admin.js');
-  const cleanFn = new Function(`const TECH_COMMIT_RE = ${techMatch[1]}; const CODE_TOKEN_RE = ${codeMatch[1]}; ${fnMatch[0]}; return cleanCommitSummary;`)();
+  const stemsMatch = superAdminJs.match(/function extractCommitStems\(text\)\s*\{[\s\S]*?\n  \}/);
+  const overlapMatch = superAdminJs.match(/function clausesOverlapTopic\(a, b\)\s*\{[\s\S]*?\n  \}/);
+  const canonUpdatesMatch = superAdminJs.match(/function canonicalizeCommitUpdates\(rawItems = \[\], excludedText = ''\)\s*\{[\s\S]*?\n  \}/);
+  const missingMatch = superAdminJs.match(/function findMissingReleaseItems\(buckets, expectedRawItems = \[\]\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(techMatch && codeMatch && noiseMatch && verbMatch && stopWordsMatch && canonClauseMatch && extractMatch && fnMatch && stemsMatch && overlapMatch && canonUpdatesMatch && missingMatch, 'release commit extraction and missing-item helpers must exist in js/super-admin.js');
+  const sharedCommitScope = `
+    const TECH_COMMIT_RE = ${techMatch[1]};
+    const CODE_TOKEN_RE = ${codeMatch[1]};
+    const NOISE_CLAUSE_RE = ${noiseMatch[1]};
+    const COMMIT_VERB_RE = ${verbMatch[1]};
+    ${stopWordsMatch[0]}
+    ${canonClauseMatch[0]}
+    ${extractMatch[0]}
+    ${fnMatch[0]}
+    ${stemsMatch[0]}
+    ${overlapMatch[0]}
+    ${canonUpdatesMatch[0]}
+    ${missingMatch[0]}
+  `;
+  const {
+    cleanCommitSummary: cleanFn,
+    extractCommitUpdates: extractFn,
+    canonicalizeCommitUpdates: canonFn,
+    findMissingReleaseItems: findMissingFn
+  } = new Function(`${sharedCommitScope}; return { cleanCommitSummary, extractCommitUpdates, canonicalizeCommitUpdates, findMissingReleaseItems };`)();
 
   assert.equal(cleanFn('Add group ownership transfer and permanent deletion flow'), 'Add group ownership transfer and permanent deletion flow');
   assert.equal(cleanFn('Start group creation without pre-opened invite row and fix enforce_group_scope old.amount'), '');
@@ -1794,9 +1846,30 @@ test('release composer reads live recent commits and prior releases instead of f
   assert.equal(cleanFn('Auto-sync Supabase migrations and Edge Functions on IDE open and changes'), '');
   assert.equal(cleanFn('Automate Supabase CLI migrations and Edge Function deployment'), '');
 
+  const bundledA = extractFn('Add wallet reconciliation, payout accounts, record discussion threads, and UI polish');
+  assert.ok(bundledA.includes('Add wallet reconciliation'), `Expected wallet reconciliation in ${JSON.stringify(bundledA)}`);
+  assert.ok(bundledA.includes('Add payout accounts'), `Expected payout accounts in ${JSON.stringify(bundledA)}`);
+  assert.ok(bundledA.includes('Add record discussion threads'), `Expected record discussion threads in ${JSON.stringify(bundledA)}`);
+
+  const bundledB = extractFn('Add settings theme switcher, payment channel icons, live announcement names, and AI release notes polish');
+  assert.ok(bundledB.includes('Add settings theme switcher'), `Expected theme switcher in ${JSON.stringify(bundledB)}`);
+  assert.ok(bundledB.includes('Add payment channel icons'), `Expected payment channel icons in ${JSON.stringify(bundledB)}`);
+  assert.ok(bundledB.includes('Add live announcement names'), `Expected live announcement names in ${JSON.stringify(bundledB)}`);
+
+  const bundledC = extractFn('Add money input validation, zero-layout-shift wallet table, mobile-only drawer alerts, and workspace UI/UX skills');
+  assert.ok(bundledC.includes('Add money input validation'), `Expected money input validation in ${JSON.stringify(bundledC)}`);
+  assert.ok(bundledC.includes('Add zero-layout-shift wallet table'), `Expected zero-layout-shift wallet table in ${JSON.stringify(bundledC)}`);
+  assert.ok(bundledC.includes('Add mobile-only drawer alerts'), `Expected mobile-only drawer alerts in ${JSON.stringify(bundledC)}`);
+  assert.ok(!bundledC.some(item => /skills/i.test(item)), `Unexpected dev skill item in ${JSON.stringify(bundledC)}`);
+
+  const canonicalPreferLonger = canonFn([
+    'Add settings theme switcher\n\n- Add Light/Dark mode switcher inside Settings with readable contrast across dashboards, hero plates, and landing views'
+  ]);
+  assert.ok(canonicalPreferLonger.some((item) => /Light\/Dark mode switcher inside Settings/i.test(item)), 'canonicalizeCommitUpdates must replace short subject clause with richer commit body explanation');
+
   const sanMatch = superAdminJs.match(/function sanitizeReleaseDetails\(rawDetails\)\s*\{[\s\S]*?\n  \}/);
   assert.ok(sanMatch, 'sanitizeReleaseDetails must exist in js/super-admin.js');
-  const sanitizeFn = new Function(`const TECH_COMMIT_RE = ${techMatch[1]}; const CODE_TOKEN_RE = ${codeMatch[1]}; ${sanMatch[0]}; return sanitizeReleaseDetails;`)();
+  const sanitizeFn = new Function(`${sharedCommitScope}; ${sanMatch[0]}; return sanitizeReleaseDetails;`)();
   const cleaned = sanitizeFn([
     'Welcome to myIPON Update 1.4!',
     'New Features\n• Add group ownership transfer and permanent deletion flow\n• Start group creation without pre-opened invite row and fix enforce_group_scope old.amount\n• Automate Supabase CLI migrations and Edge Function deployment',
@@ -1807,16 +1880,133 @@ test('release composer reads live recent commits and prior releases instead of f
   assert.match(cleaned.text, /Add group ownership transfer and permanent deletion flow/);
   assert.doesNotMatch(cleaned.text, /enforce_group_scope|old\.amount|Edge Function|invite row|CLI|migrations/i);
 
-  const humMatch = superAdminJs.match(/function humanizeReleaseUpdate\(raw, variant = 0\)\s*\{[\s\S]*?\n  \}/);
-  assert.ok(humMatch, 'humanizeReleaseUpdate must exist in js/super-admin.js');
-  const humFn = new Function(`const TECH_COMMIT_RE = ${techMatch[1]}; const CODE_TOKEN_RE = ${codeMatch[1]}; ${humMatch[0]}; return humanizeReleaseUpdate;`)();
-  const h0 = humFn('Add group ownership transfer and permanent deletion flow', 0);
-  const h1 = humFn('Add group ownership transfer and permanent deletion flow', 1);
-  assert.notEqual(h0, h1);
-  assert.match(h0, /Group Ownership & Deletion:/);
-  assert.equal(humFn('Automate Supabase CLI migrations and Edge Function deployment', 0), '');
+  const missingDraft = findMissingFn(
+    { newFeatures: ['Group Ownership Transfer: Group owners can transfer ownership cleanly.'], fixes: [], improvements: [], securityUpdates: [], otherChanges: [] },
+    [
+      'Add Light/Dark mode switcher inside Settings with readable contrast across dashboards, hero plates, and landing views',
+      'Add record discussion threads',
+      'Add payout accounts',
+      'Add wallet reconciliation',
+      'Fix author names on announcements when a user updates their profile name'
+    ]
+  );
+  assert.ok(missingDraft.some((b) => /Light\/Dark mode switcher/i.test(b)), 'Missing detector must flag Dark Mode when AI omits it');
+  assert.ok(missingDraft.some((b) => /record discussion threads/i.test(b)), 'Missing detector must flag Record Discussion Threads when AI omits it');
+  assert.ok(missingDraft.some((b) => /payout accounts/i.test(b)), 'Missing detector must flag Payout Accounts when AI omits it');
+  assert.ok(missingDraft.some((b) => /wallet reconciliation/i.test(b)), 'Missing detector must flag Wallet Reconciliation when AI omits it');
+  assert.ok(missingDraft.some((b) => /author names/i.test(b)), 'Missing detector must flag Author Names fix when AI omits it');
+
+  // Natural AI English bullets with examples ("e.g.,"), "headers", or "functions" must NOT be falsely stripped as code.
+  const naturalAiSanitized = sanitizeFn([
+    'Welcome to myIPON Update 1.1!',
+    'New Features\n• Payment Methods: Tag deposits with clear payment methods (e.g., GCash, Maya, or Bank) inside forms.\n• Dark Mode Polish: Improved dashboard headers, chart contrast, and core tracking functions for smoother navigation.',
+    'Thank you!'
+  ].join('\n\n'));
+  assert.equal(naturalAiSanitized.strippedCount, 0, 'Natural AI English with e.g., headers, or functions must not be falsely stripped');
+  assert.equal(naturalAiSanitized.bulletCount, 2);
+
+  // When Gemini naturally paraphrases a commit, findMissingReleaseItems should recognize it instead of re-prompting.
+  const naturalAiParaphrase = findMissingFn(
+    {
+      newFeatures: ['Appearance Modes: Switch smoothly between Warm Light and Forest Dark themes right inside Settings for comfortable viewing day or night.'],
+      fixes: [],
+      improvements: []
+    },
+    ['Add Light/Dark mode switcher inside Settings with readable contrast across dashboards, hero plates, and landing views']
+  );
+  assert.equal(naturalAiParaphrase.length, 0, 'Natural AI paraphrase of Light/Dark mode must not be flagged as missing');
+
+  // Even when another unrelated bullet shares stray words (like "group" or "notifications"), missing items must still be flagged 1-to-1.
+  const mergedDecoyDraft = findMissingFn(
+    {
+      newFeatures: ['Notifications Overview: Updated alert preferences inside Settings for everyday users.'],
+      fixes: [],
+      improvements: []
+    },
+    [
+      'Make notification cards clickable anywhere and fix mobile My Account dialog width',
+      'Upgrade group switcher dropdowns with avatar DPs and role badges'
+    ]
+  );
+  assert.ok(mergedDecoyDraft.some((b) => /notification cards clickable/i.test(b)), 'Per-bullet check must detect missing clickable notification cards item');
+  assert.ok(mergedDecoyDraft.some((b) => /group switcher dropdowns/i.test(b)), 'Per-bullet check must detect missing group switcher dropdowns item');
+
+  const coerceMatch = superAdminJs.match(/function coerceReleaseBulletText\(raw\)\s*\{[\s\S]*?\n  \}/);
+  const formatBodyMatch = superAdminJs.match(/function formatSectionedReleaseBody\([\s\S]*?\n  \}/);
+  assert.ok(coerceMatch && formatBodyMatch, 'coerceReleaseBulletText and formatSectionedReleaseBody must exist in js/super-admin.js');
+  const formatBodyFn = new Function(`${sharedCommitScope}; ${coerceMatch[0]}; ${formatBodyMatch[0]}; return formatSectionedReleaseBody;`)();
+  assert.match(edgeTs, /coerceReleaseBulletText/);
+  assert.match(edgeTs, /coerceReleaseBulletList/);
+  assert.match(edgeTs, /OBJECT_STR_RE/);
+  const objectBulletBody = formatBodyFn({
+    intro: 'Welcome to myIPON Update 1.1.',
+    newFeatures: [
+      {
+        feature: 'Dark Mode Toggle',
+        description: 'Added a theme switcher inside Settings.',
+        impact: 'Reduces eye strain at night.'
+      }
+    ],
+    fixes: ['• [object Object]', 'Calendar Icons: Restored scheduled icon spacing across mobile screens.'],
+    outro: 'Thanks for saving with myIPON!'
+  });
+  assert.doesNotMatch(objectBulletBody, /\[object Object\]/);
+  assert.match(objectBulletBody, /Dark Mode Toggle:\s*Added a theme switcher/);
+  assert.match(objectBulletBody, /Calendar Icons:\s*Restored scheduled icon spacing/);
+  const cleanedObjects = sanitizeFn('Fixes\n• [object Object]\n• Calendar Icons: Restored scheduled icon spacing across mobile screens.');
+  assert.equal(cleanedObjects.bulletCount, 1);
+  assert.equal(cleanedObjects.strippedCount, 1);
+  assert.doesNotMatch(cleanedObjects.text, /\[object Object\]/);
+
   assert.match(edgeTs, /gemini-2\.5-flash/);
   assert.match(edgeTs, /current_draft/);
+  assert.match(edgeTs, /previous_title/);
+  assert.match(edgeTs, /formatReleaseTitle/);
+  assert.match(edgeTs, /maxOutputTokens:\s*8192/);
+  assert.match(edgeTs, /security_updates/);
+  assert.match(edgeTs, /other_changes/);
+  assert.match(edgeTs, /findMissingReleaseItems/);
+  assert.match(edgeTs, /no_new_changes/);
+  assert.match(superAdminJs, /findMissingReleaseItems/);
+  assert.match(superAdminJs, /release-update-change-notice/);
+  assert.match(superAdminJs, /No new system changes yet/);
+  assert.match(superAdminJs, /js\/release-commits\.json/);
+  assert.match(read('super-admin.html'), /id="release-update-change-notice"/);
+  assert.match(read('js/core.js'), /maxOutputTokens:\s*8192/);
+  const releaseFeed = JSON.parse(read('js/release-commits.json'));
+  assert.ok(Array.isArray(releaseFeed) && releaseFeed.length > 0, 'js/release-commits.json must be a non-empty array');
+  assert.ok(typeof releaseFeed[0].date === 'string' && typeof releaseFeed[0].message === 'string', 'release-commits.json entries must have date and message');
+  const feedCanonical = canonFn(releaseFeed.map((e) => e.message));
+  assert.ok(feedCanonical.length >= 30, `Expected all 30+ recent release items without early truncation, got ${feedCanonical.length}`);
+  assert.ok(!feedCanonical.some((item) => /^Maximum limits up to 999$|^Hero plates$|validateMoneyInput|NotificationSyncWorker|\bVAPID\b/i.test(item)), `Unexpected broken fragment in ${JSON.stringify(feedCanonical)}`);
+
+  const genericTitleMatch = superAdminJs.match(/const GENERIC_RELEASE_TITLE_RE = (\/.*\/[a-z]*);/);
+  const verPrefixMatch = superAdminJs.match(/function formatReleaseVersionPrefix\(ver\)\s*\{[\s\S]*?\n  \}/);
+  const topicExtractMatch = superAdminJs.match(/function extractReleaseTopicLabels\(items = \[\]\)\s*\{[\s\S]*?\n  \}/);
+  const titleFormatMatch = superAdminJs.match(/function formatReleaseTitle\(ver, candidateTitle = '', contentItems = \[\], variant = 0\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(genericTitleMatch && verPrefixMatch && topicExtractMatch && titleFormatMatch, 'release title helpers must exist in js/super-admin.js');
+  const titleFn = new Function(`
+    const TECH_COMMIT_RE = ${techMatch[1]};
+    const CODE_TOKEN_RE = ${codeMatch[1]};
+    const GENERIC_RELEASE_TITLE_RE = ${genericTitleMatch[1]};
+    ${verPrefixMatch[0]}
+    ${topicExtractMatch[0]}
+    ${titleFormatMatch[0]}
+    return formatReleaseTitle;
+  `)();
+
+  const bodyBullets = [
+    '• Group Ownership & Deletion: Admins can now transfer group ownership cleanly.',
+    '• Dark Mode Contrast: Improved arrows and icons across every calendar view.'
+  ];
+  const fromGeneric = titleFn('Update 1.1', 'myIPON Update 1.1 Feature Update', bodyBullets, 0);
+  assert.ok(fromGeneric.startsWith('myIPON Update 1.1: '), `Expected prefix at start, got: ${fromGeneric}`);
+  assert.doesNotMatch(fromGeneric, /Feature Update/i);
+  assert.match(fromGeneric, /Group Ownership & Deletion/i);
+  assert.match(fromGeneric, /Dark Mode Contrast/i);
+
+  const fromAiReversed = titleFn('Update 1.2', 'Faster Savings & Clearer Group Transfers in myIPON Update 1.2', bodyBullets, 0);
+  assert.equal(fromAiReversed, 'myIPON Update 1.2: Faster Savings & Clearer Group Transfers');
 });
 
 test('self-serve admin_create_group allows any non-super-admin active user without requiring prior admin role', () => {
@@ -1896,16 +2086,22 @@ test('release announcements render and generate sectioned New Features, Fixes, I
   assert.match(css, /\.announcement-section-block/);
   assert.match(css, /\.announcement-section-block\.is-fixes/);
   assert.match(css, /\.announcement-section-block\.is-improvements/);
+  assert.match(css, /\.announcement-section-block\.is-security/);
+  assert.match(css, /\.announcement-section-block\.is-other/);
 
   assert.match(superAdminJs, /function formatSectionedReleaseBody\(/);
   assert.match(superAdminJs, /pushSection\('New Features'/);
   assert.match(superAdminJs, /pushSection\('Fixes'/);
   assert.match(superAdminJs, /pushSection\('Improvements'/);
+  assert.match(superAdminJs, /pushSection\('Security Updates'/);
+  assert.match(superAdminJs, /pushSection\('Other Changes'/);
 
   assert.match(edgeTs, /function formatSectionedReleaseBody\(/);
   assert.match(edgeTs, /pushSection\('New Features'/);
   assert.match(edgeTs, /pushSection\('Fixes'/);
   assert.match(edgeTs, /pushSection\('Improvements'/);
+  assert.match(edgeTs, /pushSection\('Security Updates'/);
+  assert.match(edgeTs, /pushSection\('Other Changes'/);
 });
 
 test('payment method tagging and wallet reconciliation stay wired end to end', () => {

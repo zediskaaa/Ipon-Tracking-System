@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261114-60">
+  <link rel="stylesheet" href="css/app.css?v=20261114-67">
 </head>
 
 <body data-page="super-admin" data-panel="super-admin">
@@ -563,6 +563,9 @@
           </svg></button>
       </header>
       <form id="release-update-form" class="form-grid">
+        <div class="release-change-notice field-wide" id="release-update-change-notice" hidden>
+          <span class="release-change-notice-text" id="release-update-change-notice-text"></span>
+        </div>
         <div class="field">
           <label for="release-update-version">Release version</label>
           <input id="release-update-version" name="version" maxlength="50" placeholder="e.g. Update 1.0" required>
@@ -592,7 +595,7 @@
                 <span>Write with AI</span>
               </button>
                 <button class="button-link-subtle" id="release-update-key-btn" type="button"
-                  title="Configure Gemini API Key" hidden style="display:none !important;" aria-hidden="true">
+                  title="Configure server Gemini API key">
                   <svg viewBox="0 0 24 24" aria-hidden="true"
                     style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;">
                     <path d="M15 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-7 6 2-2M9 13l-4 4v3h3l1-1v-2h2v-2l-2-2" fill="none"
@@ -611,13 +614,14 @@
                 </button>
             </div>
           </div>
-          <textarea id="release-update-details" name="details" rows="8" required></textarea>
+          <textarea id="release-update-details" name="details" rows="8" required
+            placeholder="Click Write with AI to analyze verified system changes and draft detailed release notes, or type your update announcement..."></textarea>
           <div class="ai-generation-status" id="release-update-ai-status" hidden>
             <span class="ai-pulse-dot"></span>
             <span id="release-update-ai-status-text">Drafting with Gemini AI…</span>
           </div>
-          <small class="field-help" id="release-update-details-help">Pre-filled with implemented feature requests in
-            English. Click Write with AI to generate unique copy.</small>
+          <div id="release-update-ai-error" hidden></div>
+          <small class="field-help" id="release-update-details-help">Click Write with AI to generate detailed, itemized release notes from real system changes for review and editing before publishing.</small>
         </div>
         <div class="form-actions field-wide">
           <button class="button button-secondary" id="release-update-cancel" type="button">Cancel</button>
@@ -631,9 +635,8 @@
     <div class="form-dialog-sheet">
       <header class="form-dialog-header">
         <div>
-          <h2 id="gemini-key-title">Gemini AI configuration</h2>
-          <p id="gemini-key-copy">Connect Google Gemini to automatically generate fresh release notes and intelligent
-            savings insights.</p>
+          <h2 id="gemini-key-title">Gemini AI server configuration</h2>
+          <p id="gemini-key-copy">Verify and store your Google Gemini API key securely on the server for AI-powered release announcements.</p>
         </div>
         <button class="dialog-close" id="gemini-key-close" type="button"
           aria-label="Close Gemini configuration dialog"><svg viewBox="0 0 24 24" aria-hidden="true">
@@ -643,12 +646,12 @@
       <form id="gemini-key-form" class="form-grid">
         <div class="field field-wide">
           <label for="gemini-api-key-input">Gemini API key</label>
-          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AIzaSy…"
+          <input id="gemini-api-key-input" name="api_key" type="password" placeholder="AQ.… or AIzaSy…"
             autocomplete="off">
           <small class="field-help">
-            Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank"
-              rel="noopener noreferrer" style="color:#16a34a;font-weight:700;">Google AI Studio</a>.
-            Standard Gemini API keys start with <code>AIzaSy…</code>.
+            Get a free-tier key from <a href="https://aistudio.google.com/app/apikey" target="_blank"
+              rel="noopener noreferrer" style="color:#16a34a;font-weight:700;">Google AI Studio</a>
+            (newer keys start with <code>AQ.…</code> and legacy keys with <code>AIzaSy…</code>). Keys created on standard Google Cloud Vertex projects without a free tier require Cloud billing enabled. Keys are verified and stored strictly on the server.
           </small>
         </div>
         <div class="field field-wide">
@@ -662,14 +665,13 @@
             <option value="auto" selected>Auto</option>
             <option value="gemini-1.5-flash">gemini-1.5-flash</option>
           </select>
-          <small class="field-help">No configuration needed. The system automatically routes requests to available,
-            active Gemini models.</small>
+          <small class="field-help">No model setup needed. The server automatically routes requests across active Gemini models.</small>
         </div>
         <div class="field field-wide" id="gemini-key-status-row">
-          <span class="gemini-status-badge" id="gemini-key-status">No API key saved in browser</span>
+          <span class="gemini-status-badge" id="gemini-key-status">Checking server key status…</span>
         </div>
         <div class="form-actions field-wide">
-          <button class="button button-secondary" id="gemini-key-clear" type="button">Clear key</button>
+          <button class="button button-secondary" id="gemini-key-clear" type="button">Reset custom key</button>
           <button class="button button-secondary" id="gemini-key-test" type="button">Test connection</button>
           <button class="button button-primary" type="submit">Save API key</button>
         </div>
@@ -678,11 +680,11 @@
   </dialog>
 
   <script src="js/config.js?v=20261113-43"></script>
-  <script src="js/core.js?v=20261114-60"></script>
+  <script src="js/core.js?v=20261114-68"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261114-60"></script>
+  <script src="js/super-admin.js?v=20261114-68"></script>
 </body>
 
 </html>

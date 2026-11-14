@@ -1,0 +1,182 @@
+[
+  {
+    "date": "2026-11-14T21:00:49+08:00",
+    "message": "Add settings theme switcher, payment channel icons, live announcement names, and AI release notes polish\n\n- Add Light/Dark mode switcher inside Settings with readable contrast across dashboards, hero plates, and landing views\n- Upgrade payout and payment dropdowns with GCash, Maya, Bank, and Cash icons and refine per-field formal name validation\n- Keep announcement author display names synchronized live when users update their profile name\n- Upgrade Write with AI release notes to rewrite fresh, user-focused updates and filter out internal developer details\n- Remove square avatar container borders, enforce circular close/remove button geometry, and fix startup initialization stability"
+  },
+  {
+    "date": "2026-11-14T19:31:30+08:00",
+    "message": "Add money input validation, zero-layout-shift wallet table, mobile-only drawer alerts, and workspace UI/UX skills\n\nMoney and wallet reconciliation inputs now validate numeric format, decimals, and maximum limits up to 999,999,999,999.99 via shared helpers in js/core.js (parseMoneyAmount, validateMoneyInput, and guardMoneyInput), preventing floating-point precision overflow and adding missing max attributes on record edit and savings calculator amount fields.\n\nWallet reconciliation in reports now locks desktop column widths with fixed table layout, top-aligned cells, tabular numerals, bounded variance pills, and a non-collapsing error slot in css/app.css and js/reports.js so textboxes never shift horizontally or vertically while typing or displaying inline errors.\n\nDevice and drawer notification prompts, banners, and tray dispatches in account.html and js/core.js are now scoped strictly to mobile clients so desktop PC users no longer see Phone & drawer alerts or Turn on prompts while mobile push and permission sync remain active.\n\nWorkspace AI UI/UX standards and design intelligence are added under AGENTS.md, .agents/skills/stable-input-ui, and the UI/UX Pro Max v2.5.0 skill suite under .agents/skills, with updated contract coverage in tests/contracts.test.mjs passing 104/104 on npm test."
+  },
+  {
+    "date": "2026-11-14T19:03:14+08:00",
+    "message": "Add background push notifications, formal name validation, discussion media attachments, and UI refinements\n\nRecord discussions now support lossless file, photo, and video attachments via signed upload and view URLs (migration 061), track read state so unread count badges clear once opened (migration 062), fire replaceable comment notifications (migration 060), and always expose the Discuss button on contribution records including confirmed and void entries.\nClosed-app notifications are enabled through VAPID Web Push delivery with the send-push Edge Function and push subscriptions schema (migration 063, sw.js), alongside native Android background sync via NotificationSyncService, NotificationSyncWorker, BackgroundNotificationsPlugin, and NotificationPollReceiver. Permission handling now checks both OS and browser states live, provides Android settings shortcuts and unblock instructions with recheck support, and uses clear On, Turn on, and Blocked labels.\nAccount and form workflows now enforce formal name capitalization with live validation across signup, account, member, treasurer, and administrator forms, and require optional-name link invites to complete their name immediately after sign-in (migration 064, manage-account). Additional UI refinements hide the excess carry-over toggle unless entered payments exceed the monthly due, restrict the ADMIN badge to group contexts, align the sidebar Sign out button, and remove the redundant green progress bar under Collected this month. All updates are covered by tests/contracts.test.mjs with 103/103 passing on npm test."
+  },
+  {
+    "date": "2026-11-14T17:36:19+08:00",
+    "message": "Fix void/review dialog confirmation and add calendar payment methods plus multi-status day icons"
+  },
+  {
+    "date": "2026-11-14T17:09:21+08:00",
+    "message": "Add wallet reconciliation, payout accounts, record discussion threads, and UI polish"
+  },
+  {
+    "date": "2026-11-14T14:46:05+08:00",
+    "message": "Add sectioned release announcement rendering and composer formatting"
+  },
+  {
+    "date": "2026-11-14T14:33:44+08:00",
+    "message": "Keep Add group action visible to members, align HTML CSP, and sync Edge Function cache"
+  },
+  {
+    "date": "2026-11-14T14:27:42+08:00",
+    "message": "Guard audit_logs group_id on group deletion and transfer"
+  },
+  {
+    "date": "2026-11-14T14:23:27+08:00",
+    "message": "Add group ownership transfer and permanent deletion flow"
+  },
+  {
+    "date": "2026-11-14T14:14:18+08:00",
+    "message": "Start group creation without pre-opened invite row and fix enforce_group_scope old.amount"
+  },
+  {
+    "date": "2026-11-14T14:08:55+08:00",
+    "message": "Restore self-serve admin_create_group for non-admin users"
+  },
+  {
+    "date": "2026-11-14T14:02:36+08:00",
+    "message": "Make release AI and composer read live repo commits and prior releases"
+  },
+  {
+    "date": "2026-11-14T13:56:14+08:00",
+    "message": "Deduplicate and replace announcement reaction notifications"
+  },
+  {
+    "date": "2026-11-14T13:49:11+08:00",
+    "message": "Block recording without a group and show premium join/create group prompt"
+  },
+  {
+    "date": "2026-11-14T13:35:26+08:00",
+    "message": "Make empty-group welcome banner compact, full-width, and clutter-free"
+  },
+  {
+    "date": "2026-11-14T13:31:33+08:00",
+    "message": "Render release feature credits with requester avatar and name pill"
+  },
+  {
+    "date": "2026-11-14T13:27:07+08:00",
+    "message": "Fix Postgrest builder .catch() TypeError during login and init"
+  },
+  {
+    "date": "2026-11-14T13:21:12+08:00",
+    "message": "Auto-sync Supabase migrations and Edge Functions on IDE open and changes"
+  },
+  {
+    "date": "2026-11-14T13:19:24+08:00",
+    "message": "Automate Supabase CLI migrations and Edge Function deployment"
+  },
+  {
+    "date": "2026-11-14T13:11:08+08:00",
+    "message": "Fix account creation and mobile/web sign-in activation flow"
+  },
+  {
+    "date": "2026-11-14T12:52:26+08:00",
+    "message": "Fix summary-list descendant selector leak into custom group dropdown"
+  },
+  {
+    "date": "2026-11-14T12:50:09+08:00",
+    "message": "Remove redundant group identity banner from Members header"
+  },
+  {
+    "date": "2026-11-14T12:48:51+08:00",
+    "message": "Clarify contextual info tooltip copy and extend to withdrawals, expenses, and members"
+  },
+  {
+    "date": "2026-11-14T12:45:58+08:00",
+    "message": "Add contextual info tooltips and fix bulk review row alignment"
+  },
+  {
+    "date": "2026-11-14T12:38:31+08:00",
+    "message": "Implement workflow, reporting, member UX, cycle archive, storage cleanup, and offline enhancements"
+  },
+  {
+    "date": "2026-11-14T12:17:31+08:00",
+    "message": "Polish mobile UI, group switchers, notifications, versioning, and Super Admin navigation"
+  },
+  {
+    "date": "2026-11-14T12:02:08+08:00",
+    "message": "Fix oversized stacked buttons on mobile settings and savings pages"
+  },
+  {
+    "date": "2026-11-14T11:59:46+08:00",
+    "message": "Notify Super Admin and authors on announcement reactions"
+  },
+  {
+    "date": "2026-11-14T11:53:31+08:00",
+    "message": "Make login myIPON brand link to landing page"
+  },
+  {
+    "date": "2026-11-14T11:52:13+08:00",
+    "message": "Remove tracking note from login page"
+  },
+  {
+    "date": "2026-11-14T03:19:04+08:00",
+    "message": "Revert back to 3ad6e5f where dashboard and app worked cleanly"
+  },
+  {
+    "date": "2026-11-14T02:58:28+08:00",
+    "message": "Export Ipon.populateGroupSelect on window.Ipon"
+  },
+  {
+    "date": "2026-11-14T02:56:41+08:00",
+    "message": "Make notification cards clickable anywhere and fix mobile My Account dialog width"
+  },
+  {
+    "date": "2026-11-14T02:54:16+08:00",
+    "message": "Remove section icon badges from My Account dialog"
+  },
+  {
+    "date": "2026-11-14T02:53:03+08:00",
+    "message": "Upgrade group switcher dropdowns with avatar DPs and role badges"
+  },
+  {
+    "date": "2026-11-14T02:46:14+08:00",
+    "message": "Fix Android notification permission prompt and add background polling"
+  },
+  {
+    "date": "2026-11-14T02:35:33+08:00",
+    "message": "Bump dashboard script cache version after removing AI Coach"
+  },
+  {
+    "date": "2026-11-14T02:34:41+08:00",
+    "message": "Align compact brand header across all pages and bust stale asset cache"
+  },
+  {
+    "date": "2026-11-14T02:32:16+08:00",
+    "message": "Complete role-based notifications and phone notification drawer alerts"
+  },
+  {
+    "date": "2026-11-14T02:23:33+08:00",
+    "message": "Remove AI Coach button, modal, and insight functionality from Dashboard"
+  },
+  {
+    "date": "2026-11-14T02:21:39+08:00",
+    "message": "Center myIPON brand vertically with mobile top action buttons across all pages"
+  },
+  {
+    "date": "2026-11-14T02:20:46+08:00",
+    "message": "Match mobile active nav button size on Dashboard to all other tabs"
+  },
+  {
+    "date": "2026-11-14T02:17:36+08:00",
+    "message": "Fix Write with AI invokeAccountFunction signature and dynamic fallback"
+  },
+  {
+    "date": "2026-11-14T02:14:37+08:00",
+    "message": "Remove Ask Savings Coach Q&A chat and Vertex AI additions"
+  },
+  {
+    "date": "2026-11-14T02:11:38+08:00",
+    "message": "Support Vertex AI Express (AQ.) keys alongside Gemini AI Studio keys"
+  }
+]

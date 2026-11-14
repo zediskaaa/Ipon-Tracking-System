@@ -501,12 +501,63 @@ async function sendAdminRequestOtpEmail({
 
 const GEMINI_RELEASE_MODELS = [
   'gemini-2.5-flash',
-  'gemini-flash-latest',
   'gemini-2.5-flash-lite',
-  'gemini-flash-lite-latest',
   'gemini-2.0-flash',
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
   'gemini-1.5-flash'
 ];
+
+function formatGeminiApiError(status: number, model: string, rawText: string) {
+  let msg = '';
+  let reason = '';
+  try {
+    const parsed = JSON.parse(rawText);
+    msg = String(parsed?.error?.message || '').trim();
+    const details = Array.isArray(parsed?.error?.details) ? parsed.error.details : [];
+    const info = details.find((d: any) => d?.reason);
+    reason = String(info?.reason || parsed?.error?.status || '').trim();
+  } catch {
+    msg = String(rawText || '').replace(/\s+/g, ' ').trim().slice(0, 220);
+  }
+  if (reason === 'BILLING_DISABLED' || /requires billing to be enabled/i.test(msg)) {
+    return `Google Cloud billing is disabled for this AQ. Vertex AI key (${status} on ${model}). Either enable billing on that Google Cloud project or click Configure API key to save a free-tier Google AI Studio key (created via aistudio.google.com, which also starts with AQ. or AIzaSy).`;
+  }
+  if (
+    reason === 'ACCESS_TOKEN_TYPE_UNSUPPORTED' ||
+    reason === 'API_KEY_INVALID' ||
+    /API key not valid|API key expired|PERMISSION_DENIED/i.test(msg)
+  ) {
+    return `Gemini server API key rejected (${status} on ${model}): ${msg || 'Invalid or revoked key'}. Open Configure API key to test and save a working key from Google AI Studio on the server.`;
+  }
+  return `Gemini API error (${status} on ${model}): ${msg || 'Request failed'}${reason ? ` [${reason}]` : ''}`;
+}
+
+const GEMINI_CONFIG_KEY = 'gemini_api_key';
+
+async function resolveServerGeminiKey(admin: any): Promise<{ key: string; source: 'saved' | 'env' | 'none' }> {
+  try {
+    const { data } = await admin
+      .from('internal_webhook_config')
+      .select('value')
+      .eq('key', GEMINI_CONFIG_KEY)
+      .maybeSingle();
+    const saved = String(data?.value || '').trim();
+    if (saved) return { key: saved, source: 'saved' };
+  } catch {
+    // Fall back to Edge Function secret if config table lookup fails.
+  }
+  const envKey = String(Deno.env.get('GEMINI_API_KEY') || '').trim();
+  if (envKey) return { key: envKey, source: 'env' };
+  return { key: '', source: 'none' };
+}
+
+function maskApiKey(key: string): string {
+  const clean = String(key || '').trim();
+  if (!clean) return '';
+  if (clean.length <= 10) return `${clean.slice(0, 3)}••••`;
+  return `${clean.slice(0, 6)}••••••${clean.slice(-4)}`;
+}
 
 async function generateWithGemini({
   apiKey,
@@ -517,71 +568,260 @@ async function generateWithGemini({
   prompt: string;
   systemInstruction?: string;
 }) {
+  const cleanKey = String(apiKey || '').trim();
+  const isAiStudioKey = cleanKey.startsWith('AIza');
   const body: Record<string, unknown> = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: {
-      temperature: 0.85,
+      temperature: 0.92,
       topP: 0.95,
-      maxOutputTokens: 1500,
+      maxOutputTokens: 8192,
       responseMimeType: 'application/json'
     }
   };
   if (systemInstruction) {
     body.systemInstruction = { parts: [{ text: systemInstruction }] };
   }
+
+  // Newer Google AI Studio free-tier keys also start with AQ. alongside Vertex Express AQ. keys, so try Generative Language first and Vertex second for AQ. keys.
+  const buildEndpoints = (model: string) => {
+    const glUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
+    if (isAiStudioKey) return [glUrl];
+    return [glUrl, vertexUrl];
+  };
+
   let lastErr: Error | null = null;
   for (const model of GEMINI_RELEASE_MODELS) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      lastErr = new Error(`Gemini API error (${response.status}): ${errorText}`);
-      if (response.status === 404 || response.status === 429 || response.status >= 500) continue;
+    const endpoints = buildEndpoints(model);
+    let fatalCredentialOrBilling = true;
+    for (let epIdx = 0; epIdx < endpoints.length; epIdx += 1) {
+      const url = endpoints[epIdx];
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      try {
+        const controller = new AbortController();
+        timer = setTimeout(() => controller.abort(), 22000);
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': cleanKey
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (!response.ok) {
+          const errorText = await response.text();
+          lastErr = new Error(formatGeminiApiError(response.status, model, errorText));
+          const isCredentialOrBilling =
+            response.status === 401 ||
+            response.status === 403 ||
+            /BILLING_DISABLED|PERMISSION_DENIED|API_KEY_INVALID|API key not valid|API key expired|ACCESS_TOKEN_TYPE_UNSUPPORTED/i.test(errorText);
+          if (isCredentialOrBilling) {
+            if (epIdx + 1 < endpoints.length) continue;
+            break;
+          }
+          fatalCredentialOrBilling = false;
+          if (epIdx + 1 < endpoints.length && /not[\s_]*found/i.test(errorText)) continue;
+          break;
+        }
+        fatalCredentialOrBilling = false;
+        const data = await response.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) {
+          lastErr = new Error(`No text generated by Gemini (${model}).`);
+          break;
+        }
+        const cleanJson = String(rawText).trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+        return { parsed: JSON.parse(cleanJson), model };
+      } catch (err: any) {
+        if (timer) clearTimeout(timer);
+        fatalCredentialOrBilling = false;
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        if (err instanceof SyntaxError || err?.name === 'AbortError' || /JSON|Unterminated|Unexpected token|abort/i.test(String(err?.message || ''))) {
+          break;
+        }
+        throw lastErr;
+      }
+    }
+    if (fatalCredentialOrBilling && lastErr) {
       throw lastErr;
     }
-    const data = await response.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) {
-      lastErr = new Error('No text generated by Gemini.');
-      continue;
-    }
-    const cleanJson = String(rawText).trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-    return JSON.parse(cleanJson);
   }
   throw lastErr || new Error('Unable to generate release notes with Gemini.');
 }
 
-const TECH_COMMIT_RE = /\b(?:supabase|migrations?|edge\s+functions?|deno|postgres(?:ql)?|postgrest?|rls|sql|triggers?|foreign\s+keys?|jsonb|rpc|cli|ide|vscode|antigravity|github|git|repo(?:sitory)?|commits?|contracts?\.test|unit\s+tests?|test\s+suite|lint(?:ing)?|eslint|prettier|package\.json|lockfile|node_modules|csp|headers|deployment|deploy(?:ed|ing)?|auto-?sync|automate|release\s+ai|ai\s+and\s+composer|composer\s+formatting|smart\s+composer|procedural\s+composer|prior\s+releases|invite\s+rows?|database\s+rows?|name\s+pills?|ui\/ux\s+skills?|skills?|audit_logs|enforce_group_scope|admin_create_group|old\.amount|group_id|member_id|requester_id|variables?|functions?|codebase|refactor(?:ing)?|tdz|iife|vm\.run|playwright|puppeteer|cdp|cache|api\s+endpoints?|endpoints?|webhooks?)\b/i;
-const CODE_TOKEN_RE = /(?:\.[a-z_][a-z0-9_]*\b|_[a-z]|[a-z0-9]+\/[a-z0-9]+|`|\(\)|[A-Z][a-z]+Error\b)/;
+const TECH_COMMIT_RE = /\b(?:supabase|migrations?|edge\s+functions?|rpc\s+functions?|database\s+functions?|deno|postgres(?:ql)?|postgrest?|rls|sql|triggers?|foreign\s+keys?|jsonb|cli|ide|vscode|antigravity|github|git\s+commits?|repo\s+commits?|live\s+commits?|repo(?:sitory)?|contracts?\.test|unit\s+tests?|test\s+suite|lint(?:ing)?|eslint|prettier|package\.json|lockfile|node_modules|html\s+csp|csp\s+headers?|deployment|deploy(?:ed|ing)?|auto-?sync|automate|release\s+ai|ai\s+release\s+notes|ai\s+and\s+composer|composer\s+formatting|smart\s+composer|procedural\s+composer|prior\s+releases|invite\s+rows?|database\s+rows?|name\s+pills?|ui\/ux\s+skills?|workspace\s+skills?|audit_logs|enforce_group_scope|admin_create_group|old\.amount|group_id|member_id|requester_id|codebase|refactor(?:ing)?|tdz|iife|vm\.run|playwright|puppeteer|cdp|edge\s+function\s+cache|asset\s+cache|cache\s+version|api\s+endpoints?|webhooks?|descendant\s+selector|selector\s+leak|vertex\s+ai|ai\s+studio|ai\s+coach|savings\s+coach|write\s+with\s+ai|invokeaccountfunction|window\.ipon|populategroupselect)\b/i;
+const CODE_TOKEN_RE = /(?:\b[a-z_][a-z0-9_]{1,}\.[a-z_][a-z0-9_]{1,}\b|_[a-z]|(?:\b(?:js|css|supabase|database|scripts|tests|android|\.agents)\/[a-z0-9_./-]+|[a-z0-9_-]+\/[a-z0-9_.-]+\.[a-z]{2,4}\b)|`|\(\)|[A-Z][a-z]+Error\b)/;
+const NOISE_CLAUSE_RE = /^(?:ui\s+(?:polish|refinements?|tweaks?)|minor\s+ui\s+(?:polish|tweaks?)|visual\s+polish|code\s+cleanup|polish|refinements?|fixes|all updates are covered.*)$/i;
+const COMMIT_VERB_RE = /^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend)\b/i;
+const COMMIT_STOP_WORDS = new Set(['with', 'from', 'into', 'that', 'this', 'when', 'while', 'across', 'inside', 'under', 'after', 'before', 'their', 'users', 'user', 'added', 'fixed', 'updated', 'keep', 'make', 'allow', 'show', 'support', 'enable', 'improve', 'upgrade', 'remove', 'restrict', 'align', 'enforce', 'ensure', 'resolved', 'issues', 'involving', 'smoother', 'experience', 'workflow', 'workflows', 'feature', 'features', 'system', 'myipon', 'group', 'groups', 'member', 'members', 'admin', 'admins', 'savers', 'treasurer', 'treasurers', 'also', 'plus', 'more', 'less', 'only', 'every', 'each', 'both', 'clear', 'clean', 'cleaner', 'direct', 'directly', 'immediately', 'strictly']);
+
+function canonicalizeClauseForParsing(rawLine: string) {
+  return String(rawLine || '')
+    .replace(/\([^)]*(?:migrations?|js\/|css\/|\.html|tests\/|manage-account|AGENTS\.md|parseMoneyAmount|validateMoneyInput|guardMoneyInput)[^)]*\)/gi, ' ')
+    .replace(/\bvia\s+shared\s+helpers(?:\s+in\s+[a-z0-9._/-]+)?/gi, '')
+    .replace(/\bthrough\s+VAPID\s+Web\s+Push\s+delivery[^.;]*/gi, 'for closed-app web and mobile background alerts')
+    .replace(/\b(?:in|under)\s+(?:[a-z0-9._-]+\/[a-z0-9._/-]+|AGENTS\.md|account\.html|super-admin\.html)\b(?:\s+and\s+[a-z0-9._/-]+)?/gi, '')
+    .replace(/\bAdditional\s+UI\s+refinements\s+/gi, '')
+    .replace(/\s+,/g, ',')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractCommitUpdates(rawMessage: string) {
+  const rawLines = String(rawMessage || '').split(/\r?\n/);
+  if (!rawLines.length) return [];
+  const results: string[] = [];
+  rawLines.forEach((origLine, lineIdx) => {
+    const isBulletOrSubject = lineIdx === 0 || /^[•\-*]\s+/.test(origLine.trim());
+    const line = canonicalizeClauseForParsing(origLine.trim().replace(/^[•\-*]\s*/, '').trim());
+    if (!line) return;
+    if (/^(?:merge\b|wip\b|bump\b|prepare\s+mobile\b|revert\b|export\b|(?:chore|ci|build|test|docs|style|refactor)(?:\([^)]*\))?:)/i.test(line)) {
+      return;
+    }
+
+    if (!isBulletOrSubject) {
+      const sentences = line
+        .split(/(?<=[.!?])\s+/)
+        .map((s) => s.trim().replace(/[.;]+$/, ''))
+        .filter(Boolean);
+      for (const sentence of sentences) {
+        if (sentence.length < 18 || NOISE_CLAUSE_RE.test(sentence)) continue;
+        if (TECH_COMMIT_RE.test(sentence) || CODE_TOKEN_RE.test(sentence)) continue;
+        results.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));
+      }
+      return;
+    }
+
+    const leadMatch = line.match(/^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend)\s+(.+)$/i);
+    const defaultVerb = leadMatch ? (leadMatch[1].charAt(0).toUpperCase() + leadMatch[1].slice(1).toLowerCase()) : '';
+    const remainder = leadMatch ? leadMatch[2] : line;
+    const masked = remainder
+      .replace(/(\d),(?=\d)/g, '$1\u0001')
+      .replace(/\b(with|across|including|such\s+as|among|between)\s+[^.;]+/gi, (seg) => seg.replace(/,/g, '\u0001'));
+    const candidateClauses = masked
+      .split(/(?:\s*,\s*(?:and\s+)?|\s*;\s*|\s+(?:and\s+(?=add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend)|plus)\s+)/i)
+      .map((part) => part.replace(/\u0001/g, ',').trim().replace(/[.;]+$/, ''))
+      .filter(Boolean);
+    const hasSingleWordFragment = candidateClauses.length > 1 && candidateClauses.some((part) => !/\s/.test(part));
+    const rawClauses = hasSingleWordFragment
+      ? [remainder.trim().replace(/[.;]+$/, '')]
+      : candidateClauses;
+    for (let idx = 0; idx < rawClauses.length; idx++) {
+      const rawClause = rawClauses[idx];
+      if (rawClause.length < 10) continue;
+      if (NOISE_CLAUSE_RE.test(rawClause)) continue;
+      if (TECH_COMMIT_RE.test(rawClause) || CODE_TOKEN_RE.test(rawClause)) continue;
+      if (/\b(?:without|with|for|and|or|to|on|in|from|into)$/i.test(rawClause)) continue;
+      const hasOwnVerb = idx > 0 && COMMIT_VERB_RE.test(rawClause);
+      const item = hasOwnVerb ? rawClause : (defaultVerb ? `${defaultVerb} ${rawClause}` : rawClause);
+      if (item.length < 12) continue;
+      results.push(item.charAt(0).toUpperCase() + item.slice(1));
+    }
+  });
+  return results;
+}
 
 function cleanCommitSummary(rawMessage: string) {
-  let line = String(rawMessage || '').split(/\r?\n/)[0].trim();
-  if (!line) return '';
-  if (/^(?:merge\b|wip\b|bump\s+version\b|prepare\s+mobile\b|revert\s+"|(?:chore|ci|build|test|docs|style|refactor)(?:\([^)]*\))?:)/i.test(line)) return '';
-  if (TECH_COMMIT_RE.test(line) || CODE_TOKEN_RE.test(line)) {
-    const clauses = line.split(/(?:\s*[,;]\s*|\s+(?:and|plus)\s+)/i).map((part) => part.trim()).filter(Boolean);
-    const userClauses = clauses.filter((part) => (
-      part.length >= 16
-      && !TECH_COMMIT_RE.test(part)
-      && !CODE_TOKEN_RE.test(part)
-      && !/\b(?:without|with|for|and|or|to|on|in)$/i.test(part)
-      && /^(?:add|fix|keep|allow|show|support|enable|improve|make|update|block|prevent|deduplicate|streamline|polish)\b/i.test(part)
-    ));
-    if (!userClauses.length) return '';
-    line = userClauses.join(', ');
+  return extractCommitUpdates(rawMessage).join(', ');
+}
+
+function extractCommitStems(text: string) {
+  const words = String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9/\s-]/g, ' ')
+    .split(/[\s/-]+/)
+    .filter((w) => w.length >= 4 && !COMMIT_STOP_WORDS.has(w) && !/^\d+$/.test(w));
+  const stems: string[] = [];
+  const seen = new Set<string>();
+  for (const w of words) {
+    const stem = w
+      .replace(/(?:ation|ition|ments?|ings?|ers?|ions?|ies|ed|es|s)$/, '')
+      .slice(0, 7);
+    if (stem.length < 3 || seen.has(stem)) continue;
+    seen.add(stem);
+    stems.push(stem);
   }
-  if (!line || line.length < 12) return '';
-  if (TECH_COMMIT_RE.test(line) || CODE_TOKEN_RE.test(line)) return '';
-  return line.charAt(0).toUpperCase() + line.slice(1);
+  return stems;
+}
+
+function clausesOverlapTopic(a: string, b: string) {
+  const stemsA = extractCommitStems(a);
+  const stemsB = extractCommitStems(b);
+  if (!stemsA.length || !stemsB.length) return a.toLowerCase() === b.toLowerCase();
+  const setB = new Set(stemsB);
+  const shared = stemsA.filter((s) => setB.has(s));
+  const minLen = Math.min(stemsA.length, stemsB.length);
+  if (minLen <= 2) return shared.length >= minLen;
+  return shared.length >= 2 && (shared.length / minLen) >= 0.55;
+}
+
+function canonicalizeCommitUpdates(rawItems: string[] = [], excludedText = '') {
+  const out: string[] = [];
+  const excludedStems = new Set(extractCommitStems(excludedText));
+  for (const raw of (Array.isArray(rawItems) ? rawItems : [])) {
+    for (const item of extractCommitUpdates(raw)) {
+      const stems = extractCommitStems(item);
+      if (excludedStems.size > 0 && stems.length >= 2) {
+        const hitCount = stems.filter((s) => excludedStems.has(s)).length;
+        if (hitCount / stems.length >= 0.75) continue;
+      }
+      const matchIdx = out.findIndex((existing) => clausesOverlapTopic(existing, item));
+      if (matchIdx !== -1) {
+        if (item.length > out[matchIdx].length + 12) {
+          out[matchIdx] = item;
+        }
+        continue;
+      }
+      out.push(item);
+      if (out.length >= 60) return out;
+    }
+  }
+  return out;
+}
+
+function findMissingReleaseItems(
+  buckets: {
+    newFeatures?: string[];
+    fixes?: string[];
+    improvements?: string[];
+    requestedFeatures?: string[];
+    securityUpdates?: string[];
+    otherChanges?: string[];
+  },
+  expectedRawItems: string[] = []
+): string[] {
+  const allBullets = [
+    ...(Array.isArray(buckets?.newFeatures) ? buckets.newFeatures : []),
+    ...(Array.isArray(buckets?.fixes) ? buckets.fixes : []),
+    ...(Array.isArray(buckets?.improvements) ? buckets.improvements : []),
+    ...(Array.isArray(buckets?.requestedFeatures) ? buckets.requestedFeatures : []),
+    ...(Array.isArray(buckets?.securityUpdates) ? buckets.securityUpdates : []),
+    ...(Array.isArray(buckets?.otherChanges) ? buckets.otherChanges : [])
+  ];
+  const bulletStemSets = allBullets.map((b) => new Set(extractCommitStems(b)));
+  const canonicalExpected = canonicalizeCommitUpdates(expectedRawItems);
+  const missing: string[] = [];
+  for (const raw of canonicalExpected) {
+    const stems = extractCommitStems(raw);
+    const requiredHits = stems.length <= 2 ? stems.length : Math.min(3, Math.max(2, Math.ceil(stems.length * 0.35)));
+    const alreadyCovered = stems.length > 0 && bulletStemSets.some((bSet) => {
+      let hits = 0;
+      for (const s of stems) {
+        if (bSet.has(s) || [...bSet].some((bs) => bs.slice(0, 4) === s.slice(0, 4))) hits += 1;
+      }
+      return hits >= requiredHits;
+    });
+    if (!alreadyCovered) missing.push(raw);
+  }
+  return missing;
 }
 
 async function fetchRecentSystemUpdates(sinceIso?: string | null) {
   const fetchPage = async (sinceParam?: string | null) => {
-    const qs = new URLSearchParams({ per_page: '25' });
+    const qs = new URLSearchParams({ per_page: '100' });
     if (sinceParam) qs.set('since', sinceParam);
     try {
       const response = await fetch(`https://api.github.com/repos/zediskaaa/Ipon-Tracking-System/commits?${qs.toString()}`, {
@@ -590,62 +830,119 @@ async function fetchRecentSystemUpdates(sinceIso?: string | null) {
       if (!response.ok) return [];
       const rows = await response.json();
       if (!Array.isArray(rows)) return [];
-      const seen = new Set<string>();
-      const updates: string[] = [];
-      for (const entry of rows) {
-        const normalized = cleanCommitSummary(entry?.commit?.message || '');
-        if (!normalized) continue;
-        const key = normalized.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        updates.push(normalized);
-        if (updates.length >= 12) break;
-      }
-      return updates;
+      return canonicalizeCommitUpdates(rows.map((entry: any) => String(entry?.commit?.message || '')));
     } catch {
       return [];
     }
   };
   let updates = await fetchPage(sinceIso);
-  if (!updates.length && sinceIso) updates = await fetchPage(null);
+  if (!sinceIso && updates.length < 6) updates = await fetchPage(null);
   return updates;
+}
+
+const OBJECT_STR_RE = /\[object\s+[^\]]+\]/i;
+
+function coerceReleaseBulletText(raw: unknown): string {
+  if (raw == null) return '';
+  if (typeof raw === 'string') {
+    const clean = raw.replace(/^[•\s*-]+/, '').trim();
+    return OBJECT_STR_RE.test(clean) ? '' : clean;
+  }
+  if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw);
+  if (Array.isArray(raw)) {
+    return raw.map(coerceReleaseBulletText).filter(Boolean).join(' ').trim();
+  }
+  if (typeof raw === 'object') {
+    const rec = raw as Record<string, unknown>;
+    const titleKeys = ['title', 'name', 'feature', 'feature_name', 'change_name', 'label', 'heading', 'topic', 'area'];
+    const detailKeys = [
+      'summary', 'description', 'details', 'explanation', 'what_changed', 'change',
+      'how_it_works', 'expect', 'what_to_expect', 'impact', 'benefit', 'user_impact', 'practical_impact',
+      'text', 'message'
+    ];
+    const skipKeys = new Set([...titleKeys, 'requester', 'requested_by', 'requester_name', 'credit', 'category', 'type', 'section', 'version']);
+    let head = '';
+    for (const k of titleKeys) {
+      const val = coerceReleaseBulletText(rec[k]);
+      if (val) { head = val.replace(/[:.\s]+$/, ''); break; }
+    }
+    const bodyParts: string[] = [];
+    const seen = new Set<string>(head ? [head.toLowerCase()] : []);
+    const pushPart = (val: string) => {
+      if (!val) return;
+      const key = val.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      bodyParts.push(val);
+    };
+    for (const k of detailKeys) pushPart(coerceReleaseBulletText(rec[k]));
+    for (const [k, v] of Object.entries(rec)) {
+      if (skipKeys.has(k) || detailKeys.includes(k)) continue;
+      pushPart(coerceReleaseBulletText(v));
+    }
+    const requester = coerceReleaseBulletText(rec.requester_name || rec.requested_by || rec.requester || rec.credit);
+    let combined = bodyParts.join(' ').replace(/\s{2,}/g, ' ').trim();
+    if (requester && !/requested by:/i.test(combined)) {
+      combined = combined ? `${combined} (Requested by: ${requester})` : `(Requested by: ${requester})`;
+    }
+    if (head && combined) return OBJECT_STR_RE.test(`${head}: ${combined}`) ? '' : `${head}: ${combined}`;
+    const single = head || combined;
+    return OBJECT_STR_RE.test(single) ? '' : single;
+  }
+  return '';
+}
+
+function coerceReleaseBulletList(list: unknown): string[] {
+  return (Array.isArray(list) ? list : [])
+    .map(coerceReleaseBulletText)
+    .filter((item) => item.length > 2 && !OBJECT_STR_RE.test(item));
 }
 
 function formatSectionedReleaseBody(opts: {
   intro: string;
-  newFeatures?: string[];
-  fixes?: string[];
-  improvements?: string[];
-  requestedFeatures?: string[];
-  highlights?: string[];
+  newFeatures?: unknown[];
+  fixes?: unknown[];
+  improvements?: unknown[];
+  requestedFeatures?: unknown[];
+  securityUpdates?: unknown[];
+  otherChanges?: unknown[];
+  highlights?: unknown[];
   outro: string;
 }) {
   const parts: string[] = [];
-  const keepUserLine = (v: string) => {
-    const clean = String(v || '').replace(/^[•\s*-]+/, '').trim();
-    if (clean.length <= 2 || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) return '';
+  const keepUserLine = (v: unknown) => {
+    const clean = coerceReleaseBulletText(v);
+    if (clean.length <= 2 || OBJECT_STR_RE.test(clean) || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) return '';
     return `• ${clean}`;
   };
-  if (opts.intro) parts.push(opts.intro.trim());
-  const pushSection = (heading: string, items: string[]) => {
+  const introText = coerceReleaseBulletText(opts.intro);
+  if (introText && !OBJECT_STR_RE.test(introText)) parts.push(introText);
+  const pushSection = (heading: string, items: unknown[]) => {
     const list = items.map(keepUserLine).filter(Boolean);
     if (list.length) parts.push(`${heading}\n${list.join('\n')}`);
   };
-  const nf = (opts.newFeatures || []).filter((v) => Boolean(keepUserLine(v)));
-  const fx = (opts.fixes || []).filter((v) => Boolean(keepUserLine(v)));
-  const im = (opts.improvements || []).filter((v) => Boolean(keepUserLine(v)));
-  if (nf.length || fx.length || im.length) {
+  const nf = (opts.newFeatures || []).map(coerceReleaseBulletText).filter((v) => Boolean(keepUserLine(v)));
+  const fx = (opts.fixes || []).map(coerceReleaseBulletText).filter((v) => Boolean(keepUserLine(v)));
+  const im = (opts.improvements || []).map(coerceReleaseBulletText).filter((v) => Boolean(keepUserLine(v)));
+  const su = (opts.securityUpdates || []).map(coerceReleaseBulletText).filter((v) => Boolean(keepUserLine(v)));
+  const oc = (opts.otherChanges || []).map(coerceReleaseBulletText).filter((v) => Boolean(keepUserLine(v)));
+  if (nf.length || fx.length || im.length || su.length || oc.length) {
     pushSection('New Features', nf);
     pushSection('Fixes', fx);
     pushSection('Improvements', im);
+    pushSection('Security Updates', su);
+    pushSection('Other Changes', oc);
   } else if (opts.highlights?.length) {
     const autoNf: string[] = [];
     const autoFx: string[] = [];
     const autoIm: string[] = [];
+    const autoSu: string[] = [];
     for (const raw of opts.highlights) {
-      const clean = String(raw || '').replace(/^[•\-*]\s*/, '').trim();
-      if (!clean || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) continue;
-      if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|constraint|foreign\s+key|bug)\b/i.test(clean)) {
+      const clean = coerceReleaseBulletText(raw);
+      if (!clean || OBJECT_STR_RE.test(clean) || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) continue;
+      if (/\b(?:security|vulnerabilit|rls|permission|auth(?:entication|orization)?|encrypt|csp|xss|csrf|hardening)\b/i.test(clean)) {
+        autoSu.push(clean);
+      } else if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|constraint|foreign\s+key|bug)\b/i.test(clean)) {
         autoFx.push(clean);
       } else if (/^(?:improv|polish|clean|compact|sync|update|refactor|streamline|keep|align|refine|enhance|make\b.*\b(?:compact|clean|responsive|faster|clearer|visible))\b|\b(?:faster|cleaner|compact|reliable|visibility|clarity)\b/i.test(clean)) {
         autoIm.push(clean);
@@ -656,74 +953,15 @@ function formatSectionedReleaseBody(opts: {
     pushSection('New Features', autoNf);
     pushSection('Fixes', autoFx);
     pushSection('Improvements', autoIm);
+    pushSection('Security Updates', autoSu);
   }
   if (opts.requestedFeatures?.length) {
     pushSection('Features Requested by Users:', opts.requestedFeatures);
   }
-  if (opts.outro) parts.push(opts.outro.trim());
+  const outroText = coerceReleaseBulletText(opts.outro);
+  if (outroText && !OBJECT_STR_RE.test(outroText)) parts.push(outroText);
   return parts.filter(Boolean).join('\n\n');
 }
-
-function humanizeReleaseUpdate(raw: string, variant = 0) {
-  const clean = String(raw || '').replace(/^[•\-*]\s*/, '').trim();
-  if (!clean || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) return '';
-  if (clean.includes(':')) return clean;
-  const v = Math.abs(Number(variant) || 0) % 3;
-  const lower = clean.toLowerCase();
-  if (lower.includes('ownership transfer') || lower.includes('permanent deletion')) {
-    return [
-      'Group Ownership & Deletion: Admins can now transfer group ownership to another admin or permanently delete unused groups with confirmation.',
-      'Flexible Group Control: Easily pass group ownership to a co-admin or safely remove closed savings groups from group settings.',
-      'Admin Group Lifecycle: Added one-step ownership transfer and confirmed group deletion for group administrators.'
-    ][v];
-  }
-  if (lower.includes('add group action visible')) {
-    return [
-      'Group Switching Access: Members can now see the Add Group option directly in their group switcher to create or start a new savings group.',
-      'Easier Group Creation: Kept the Add Group action accessible in the group menu so savers can organize additional savings groups anytime.',
-      'Streamlined Group Navigation: Members now have direct access to Add Group controls right from the workspace header.'
-    ][v];
-  }
-  const verbMatch = clean.match(/^(Add|Fix|Resolve|Prevent|Restore|Deduplicate|Keep|Make|Improve|Block|Allow|Show|Enable|Update)\s+(.+)$/i);
-  if (!verbMatch) return clean;
-  const verb = verbMatch[1].toLowerCase();
-  const rest = verbMatch[2].replace(/\.$/, '').trim();
-  const titled = rest.charAt(0).toUpperCase() + rest.slice(1);
-  if (/^(?:fix|resolve|prevent|restore|deduplicate|block)$/.test(verb)) {
-    return [
-      `Reliability Fix: Resolved issues with ${rest} for a smoother experience.`,
-      `${titled}: Corrected unexpected behavior so daily workflows work reliably.`,
-      `Stability Update: Prevented edge-case errors involving ${rest}.`
-    ][v];
-  }
-  if (/^(?:keep|make|improve|update)$/.test(verb)) {
-    return [
-      `Experience Polish: Refined ${rest} across desktop and mobile views.`,
-      `${titled}: Updated layout and responsiveness for clearer everyday tracking.`,
-      `Usability Improvement: Made ${rest} cleaner and easier to use.`
-    ][v];
-  }
-  return [
-    `${titled}: Now available across myIPON for your savings group.`,
-    `New Capability: Added ${rest} to make group saving more convenient.`,
-    `Feature Highlight: Savers and admins can now use ${rest} directly in myIPON.`
-  ][v];
-}
-
-const EDGE_FALLBACK_UPDATES = [
-  [
-    'Dashboard & Group Navigation: Smoother switching between savings groups and clearer mobile layouts.',
-    'Notifications & Alerts: Cleaner, timely updates for announcements, reviews, and member activity.'
-  ],
-  [
-    'Savings & Record Tracking: Faster contribution logging, clearer review feedback, and reliable validation.',
-    'Account & Profile Controls: Consistent display name, photo, and payout details across all views.'
-  ],
-  [
-    'Calendar & Reports: Clearer daily activity indicators and easier summary tracking for admins and members.',
-    'System Reliability: Stability improvements and responsive polish across web and mobile screens.'
-  ]
-];
 
 function sanitizeReleaseDetails(rawDetails: string) {
   const text = String(rawDetails || '').trim();
@@ -735,12 +973,12 @@ function sanitizeReleaseDetails(rawDetails: string) {
     if (!lines.length) return '';
     const hasBullets = lines.some((line) => /^[•\-*]\s+/.test(line));
     if (!hasBullets) {
-      return TECH_COMMIT_RE.test(block) || CODE_TOKEN_RE.test(block) ? '' : block.trim();
+      return OBJECT_STR_RE.test(block) || TECH_COMMIT_RE.test(block) || CODE_TOKEN_RE.test(block) ? '' : block.trim();
     }
     const header = !/^[•\-*]\s+/.test(lines[0]) ? lines[0] : '';
     const bullets = (header ? lines.slice(1) : lines).filter((line) => {
       const clean = line.replace(/^[•\-*]\s+/, '').trim();
-      if (!clean || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) {
+      if (!clean || OBJECT_STR_RE.test(clean) || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) {
         strippedCount += 1;
         return false;
       }
@@ -753,56 +991,76 @@ function sanitizeReleaseDetails(rawDetails: string) {
   return { text: cleanedBlocks.join('\n\n'), bulletCount, strippedCount };
 }
 
-function generateProceduralReleaseNotes(
-  version: string,
-  features: Array<{ title: string; description: string; requester_name?: string | null }>,
-  systemUpdates: string[] = [],
-  variantSeed = 0
-) {
-  const titles = [
-    `myIPON ${version} Released: Smarter Tracking & Community Features`,
-    `myIPON ${version} is Live: New Tools & Community Requests`,
-    `What's New in myIPON ${version}: Enhanced Experience for Every Saver`,
-    `Introducing myIPON ${version}: Elevating Your Daily Savings Journey`,
-    `myIPON ${version} Feature Drop: Built with Community Feedback`
-  ];
-  const intros = [
-    `We are delighted to bring you myIPON ${version}! This release delivers key enhancements shaped directly by our savers' everyday needs, making group tracking smoother and more engaging than ever.`,
-    `Say hello to myIPON ${version}! Packed with user-inspired updates, performance tweaks, and exciting new tools designed to keep your savings goals on track.`,
-    `A fresh update has landed! In myIPON ${version}, we focused on elevating transparency, personal controls, and intuitive interactions across the entire platform.`,
-    `Welcome to myIPON ${version}! Thank you for your continuous enthusiasm—this milestone incorporates your top feature requests and quality-of-life polishes.`,
-    `Big news for all savers: myIPON ${version} is now officially live! Here is everything you need to know about the newest capabilities now available across myIPON.`
-  ];
-  const outros = [
-    `Thank you for contributing, testing, and helping us make myIPON better with every update. Happy saving!`,
-    `Your ideas drive myIPON forward! Keep submitting your feedback and suggestions—more improvements are already on the horizon.`,
-    `We could not build this without our incredible community. Here is to simpler, smarter group savings together!`,
-    `Special thanks to everyone who reported ideas and suggestions. Enjoy exploring the new update!`
-  ];
+const GENERIC_RELEASE_TITLE_RE = /^(?:released|is\s+now\s+live|feature\s+update|milestone\s+update|official\s+rollout|introducing|what'?s\s+new|rollout|update|system\s+update|smarter\s+tracking\s*&\s*community\s+features|new\s+tools\s*&\s*community\s+requests|enhanced\s+experience\s+for\s+every\s+saver|elevating\s+your\s+daily\s+savings\s+journey|built\s+with\s+community\s+feedback|community\s*&\s*performance\s+rollout)!?$/i;
 
-  const seed = Math.abs(Number(variantSeed) || 0);
-  const title = titles[seed % titles.length];
-  const intro = intros[(seed + 1) % intros.length];
-  const outro = outros[(seed + 2) % outros.length];
+function formatReleaseVersionPrefix(version: string) {
+  const clean = String(version || 'Update 1.0').replace(/^(?:myipon|system)\s+/i, '').trim() || 'Update 1.0';
+  if (/^update\b/i.test(clean)) return `myIPON Update${clean.slice(6)}`;
+  if (/^\d/.test(clean)) return `myIPON Update ${clean}`;
+  return `myIPON ${clean}`;
+}
 
-  const cleanedSource = systemUpdates
-    .map((item) => cleanCommitSummary(item))
-    .filter(Boolean);
-  const rawUpdates = cleanedSource.length > 0
-    ? cleanedSource.map((item, idx) => humanizeReleaseUpdate(item, seed + idx)).filter(Boolean)
-    : (!features.length ? EDGE_FALLBACK_UPDATES[seed % EDGE_FALLBACK_UPDATES.length] : []);
-  const requestedFeatures = features.map((req) => {
-    const credit = req.requester_name ? ` (Requested by: ${req.requester_name})` : '';
-    return `${req.title}: ${req.description || 'Feature enhancement'}${credit}`;
-  });
+function extractReleaseTopicLabels(items: string[] | string = []) {
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  const list = Array.isArray(items) ? items : String(items || '').split(/\r?\n/);
+  for (const raw of list) {
+    const line = String(raw || '').replace(/^[•\-*]\s*/, '').trim();
+    if (!line || line.length < 4) continue;
+    if (/^(?:New Features|Fixes|Improvements|Security Updates|Other Changes|Features Requested by Users:?|We are delighted\b|Say hello\b|A fresh update\b|Welcome to\b|Big news\b|Thank you\b|Your ideas\b|We could not\b|Special thanks\b)/i.test(line)) {
+      continue;
+    }
+    if (TECH_COMMIT_RE.test(line) || CODE_TOKEN_RE.test(line)) continue;
+    const head = line.includes(':') ? line.split(':')[0].trim() : line.replace(/\s*\(Requested by:[^)]*\)\s*/gi, '').trim();
+    const shortHead = head.split(/\s+/).slice(0, 5).join(' ').replace(/[.,;:—–-]+$/, '').trim();
+    if (!shortHead || shortHead.length < 3 || GENERIC_RELEASE_TITLE_RE.test(shortHead)) continue;
+    const key = shortHead.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    labels.push(shortHead);
+    if (labels.length >= 4) break;
+  }
+  return labels;
+}
 
-  const details = sanitizeReleaseDetails(formatSectionedReleaseBody({
-    intro,
-    highlights: rawUpdates,
-    requestedFeatures,
-    outro
-  })).text;
-  return { title, details };
+function formatReleaseTitle(version: string, candidateTitle = '', contentItems: string[] | string = [], variant = 0) {
+  const prefix = formatReleaseVersionPrefix(version);
+  const v = Math.abs(Number(variant) || 0) % 3;
+  const raw = String(candidateTitle || '').trim();
+  let topic = raw
+    .replace(/\b(?:myipon|system)\b/gi, ' ')
+    .replace(/\bupdate\s*\d+(?:\.\d+)*(?:[a-z0-9.-]*)?/gi, ' ')
+    .replace(/\bv?\d+\.\d+(?:\.\d+)*\b/gi, ' ')
+    .replace(/\b(?:in|for|with|on|from)\s*$/i, '')
+    .replace(/^[\s:|\-–—]+|[\s:|\-–—]+$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!topic || topic.length < 4 || GENERIC_RELEASE_TITLE_RE.test(topic) || TECH_COMMIT_RE.test(topic) || CODE_TOKEN_RE.test(topic)) {
+    const labels = extractReleaseTopicLabels(contentItems);
+    if (labels.length >= 3) {
+      topic = [
+        `${labels[0]}, ${labels[1]} & ${labels[2]}`,
+        `${labels[0]}, ${labels[1]} & More`,
+        `Upgraded ${labels[0]} & ${labels[1]}`
+      ][v];
+    } else if (labels.length === 2) {
+      topic = [
+        `${labels[0]} & ${labels[1]}`,
+        `${labels[0]} + ${labels[1]} Upgrades`,
+        `Better ${labels[0]} & ${labels[1]}`
+      ][v];
+    } else if (labels.length === 1) {
+      topic = [
+        `${labels[0]} Highlights`,
+        `New ${labels[0]} Upgrades`,
+        `Smoother ${labels[0]} Experience`
+      ][v];
+    } else {
+      topic = ['Community & Tracking Upgrades', 'Smoother Saving & Group Tools', 'Fresh Group & Tracking Polish'][v];
+    }
+  }
+  const full = `${prefix}: ${topic}`;
+  return full.length > 140 ? `${full.slice(0, 137).replace(/[\s,&+-]+$/, '')}...` : full;
 }
 
 type AdminClient = ReturnType<typeof createClient>;
@@ -1599,8 +1857,60 @@ Deno.serve(async (request) => {
     });
   }
 
+  if (body.action === 'gemini-key-status') {
+    if (actor.role !== 'SUPER_ADMIN') return json({ error: 'Only the Super Admin can view Gemini AI configuration.' }, 403);
+    const resolved = await resolveServerGeminiKey(admin);
+    return json({
+      configured: Boolean(resolved.key),
+      source: resolved.source,
+      masked: maskApiKey(resolved.key)
+    });
+  }
+
+  if (body.action === 'save-gemini-key') {
+    if (actor.role !== 'SUPER_ADMIN') return json({ error: 'Only the Super Admin can configure the server Gemini API key.' }, 403);
+    const nextKey = String(body.api_key || '').trim();
+    if (!nextKey) {
+      await admin.from('internal_webhook_config').delete().eq('key', GEMINI_CONFIG_KEY);
+      const remaining = await resolveServerGeminiKey(admin);
+      return json({
+        success: true,
+        cleared: true,
+        configured: Boolean(remaining.key),
+        source: remaining.source,
+        masked: maskApiKey(remaining.key)
+      });
+    }
+    try {
+      const verify = await generateWithGemini({
+        apiKey: nextKey,
+        prompt: 'Return a JSON object: {"status": "ok"}',
+        systemInstruction: 'Respond in JSON only.'
+      });
+      const { error: upsertErr } = await admin.from('internal_webhook_config').upsert({
+        key: GEMINI_CONFIG_KEY,
+        value: nextKey,
+        updated_at: new Date().toISOString()
+      });
+      if (upsertErr) {
+        return json({ error: upsertErr.message || 'Could not save Gemini API key on server.' }, 500);
+      }
+      return json({
+        success: true,
+        model: verify.model,
+        configured: true,
+        source: 'saved',
+        masked: maskApiKey(nextKey)
+      });
+    } catch (verifyError: any) {
+      return json({ error: verifyError?.message || 'Gemini key verification failed.' }, 400);
+    }
+  }
+
   if (body.action === 'test-gemini-key') {
-    const key = String(body.api_key || '').trim() || Deno.env.get('GEMINI_API_KEY')?.trim();
+    if (actor.role !== 'SUPER_ADMIN') return json({ error: 'Only the Super Admin can test Gemini AI configuration.' }, 403);
+    const resolved = await resolveServerGeminiKey(admin);
+    const key = String(body.api_key || '').trim() || resolved.key;
     if (!key) return json({ error: 'Please enter a Gemini API key to test.' }, 400);
     try {
       const result = await generateWithGemini({
@@ -1608,9 +1918,14 @@ Deno.serve(async (request) => {
         prompt: 'Return a JSON object: {"status": "ok", "message": "Gemini connection verified"}',
         systemInstruction: 'Respond in JSON only.'
       });
-      return json({ success: true, message: 'Gemini API key is valid and working!', result });
+      return json({
+        success: true,
+        model: result.model,
+        message: `Gemini API key verified on ${result.model}.`,
+        result
+      });
     } catch (testError: any) {
-      return json({ error: `Connection test failed: ${testError?.message || 'Invalid key'}` }, 400);
+      return json({ error: testError?.message || 'Connection test failed.' }, 400);
     }
   }
 
@@ -1618,7 +1933,17 @@ Deno.serve(async (request) => {
     if (actor.role !== 'SUPER_ADMIN') return json({ error: 'Only the Super Admin can generate release updates with AI.' }, 403);
     const version = String(body.version || 'Update 1.0').trim();
     const releaseDate = String(body.release_date || new Date().toISOString().slice(0, 10)).trim();
-    const rawFeatures = Array.isArray(body.features) ? body.features : [];
+    let rawFeatures = Array.isArray(body.features) ? body.features : null;
+    if (!rawFeatures) {
+      const { data: implRows } = await admin
+        .from('feature_requests')
+        .select('title,details,requester_id')
+        .eq('status', 'IMPLEMENTED')
+        .is('release_version', null)
+        .order('reviewed_at', { ascending: false })
+        .limit(50);
+      rawFeatures = implRows || [];
+    }
     const features = rawFeatures.map((f: any) => ({
       title: String(f.title || '').trim(),
       description: String(f.details || f.description || '').trim(),
@@ -1627,12 +1952,13 @@ Deno.serve(async (request) => {
     const previousReleases = (Array.isArray(body.previous_releases) ? body.previous_releases : [])
       .map((item: any) => String(item || '').trim())
       .filter(Boolean);
+    const previousTitle = String(body.previous_title || '').trim();
     const currentDraft = sanitizeReleaseDetails(String(body.current_draft || '').trim()).text;
     const styleAngle = String(body.style_angle || 'Clear, warm, user-benefit focused release notes').trim();
     const variationSeed = Number.isFinite(Number(body.variation_seed)) ? Number(body.variation_seed) : Math.floor(Math.random() * 12);
-    let systemUpdates = (Array.isArray(body.system_updates) ? body.system_updates : [])
-      .map((item: any) => cleanCommitSummary(String(item || '')))
-      .filter(Boolean);
+    let systemUpdates = canonicalizeCommitUpdates(
+      Array.isArray(body.system_updates) ? body.system_updates.map((item: any) => String(item || '')) : []
+    );
 
     if (!Array.isArray(body.system_updates)) {
       const { data: latestRel } = await admin
@@ -1645,92 +1971,179 @@ Deno.serve(async (request) => {
       systemUpdates = await fetchRecentSystemUpdates(latestRel?.[0]?.created_at || null);
     }
 
-    const geminiKey = String(body.api_key || '').trim() || Deno.env.get('GEMINI_API_KEY')?.trim();
+    if (!features.length && !systemUpdates.length) {
+      return json({
+        success: true,
+        no_new_changes: true,
+        ai_powered: false,
+        provider: 'none',
+        message: 'No new system changes or implemented feature requests detected since the latest release.'
+      });
+    }
 
-    if (geminiKey) {
-      try {
-        const featureListText = features.length
-          ? features.map((f) => `- "${f.title}": ${f.description || 'System enhancement'}${f.requester_name ? ` (Requested by: ${f.requester_name})` : ''}`).join('\n')
-          : '- No pending community feature requests in this build.';
-        const updatesListText = systemUpdates.length
-          ? systemUpdates.map((u) => `- ${u}`).join('\n')
-          : '- General reliability improvements, UI polish, and smoother workflows across web and mobile.';
-        const prevListText = previousReleases.length
-          ? previousReleases.map((p) => `- ${p}`).join('\n')
-          : '- None (initial release).';
+    const { key: geminiKey } = await resolveServerGeminiKey(admin);
+    if (!geminiKey) {
+      return json({
+        error: 'Gemini AI is not configured on the server yet. Click Configure API key to save a Google AI Studio key on the server.'
+      }, 502);
+    }
 
-        const prompt = `Write an official, engaging, and celebratory product release announcement for myIPON (Group Savings and Financial Tracker). The system name is strictly "myIPON".
+    const featureListText = features.length
+      ? features.map((f) => `- "${f.title}": ${f.description || 'User-requested enhancement'}${f.requester_name ? ` (Requested by: ${f.requester_name})` : ''}`).join('\n')
+      : '- None in this release.';
+    const updatesListText = systemUpdates.length
+      ? systemUpdates.map((u, idx) => `${idx + 1}. ${u}`).join('\n')
+      : '- None in this release.';
+    const prevListText = previousReleases.length
+      ? previousReleases.map((p) => `- ${p}`).join('\n')
+      : '- None (initial release).';
+
+    const prompt = `Write official, professionally crafted, human-sounding software release notes for myIPON (Group Savings and Financial Tracker). The product name is strictly "myIPON".
 Version: ${version}
 Release Date: ${releaseDate}
-Writing Angle: ${styleAngle}
+Voice & Editorial Angle: ${styleAngle}
+Freshness Pass: #${variationSeed + 1}
 
 Already shipped in earlier releases (DO NOT repeat these as new updates):
 ${prevListText}
 
-Newly implemented user-requested features for ${version}:
+Verified user-requested features implemented for ${version}:
 ${featureListText}
 
-Recent system updates and fixes landed since the previous release:
+Verified system updates landed since the previous release (${systemUpdates.length} distinct items — analyze EVERY user-facing item 1-to-1 without skipping or merging unrelated items):
 ${updatesListText}
-${currentDraft ? `\nCurrent draft in editor (rewrite with fresh wording and better clarity—DO NOT repeat these exact sentences word-for-word):\n${currentDraft}` : ''}
+${previousTitle ? `\nPrevious title in editor (craft a distinct, fresh headline keeping "${formatReleaseVersionPrefix(version)}:" at the front):\n${previousTitle}` : ''}
+${currentDraft ? `\nPrevious draft in editor (generate completely fresh phrasing, intro, bullet openings, and outro—NEVER recycle wording verbatim from it):\n${currentDraft}` : ''}
 
-Instructions: Summarize ONLY the newly implemented user requests and user-facing product updates above into clear, plain-language changelog highlights ("New Features", "Fixes", "Improvements", and "Features Requested by Users") using "Title: concise saver-facing description" format per item.
-Strict Audience Rules:
-- Write strictly for everyday myIPON users (savers, treasurers, and group admins) focusing ONLY on visible screens, buttons, workflows, and benefits they actually see and use.
-- Completely EXCLUDE developer, infrastructure, or code-level work (never mention code files, variable/function/database/trigger/RPC names like old.amount or enforce_group_scope, migrations, Supabase, Edge Functions, CLI commands, IDE setups, git commits, tests, or internal AI/composer tooling). Omit purely technical items instead of summarizing them.
-- Make every sentence feel fresh, polished, and meaningfully rewritten from any raw notes.
+Categorization Rules (omit empty categories by returning [] for unused arrays):
+- "new_features": Newly added user-facing capabilities or pages.
+- "fixes": Resolved bugs, workflow errors, validation/sync glitches, or broken states.
+- "improvements": Enhancements to existing screens, layout stability, responsiveness, speed, clarity, or usability.
+- "requested_features": Features explicitly built from the implemented user requests above (preserve "(Requested by: Name)" when credited).
+- "security_updates": Access control, account protection, privacy, authentication, or security-hardening improvements (leave [] if none apply).
+- "other_changes": Relevant user-facing updates that do not cleanly fit the categories above (leave [] unless genuinely needed).
 
-Please generate a JSON object with this exact structure:
+Writing & Accuracy Standards:
+- Every bullet MUST follow "Descriptive Feature or Change Name: Detailed explanation".
+- Each explanation MUST clearly cover: (1) what was added, fixed, or improved, (2) how it works / where users find it, (3) what users can expect, and (4) the practical benefit in daily use.
+- Never write vague filler such as "Improved system performance" or repeat generic endings across bullets.
+- Never invent or embellish unverified changes. If an item is purely internal developer plumbing (tests, build scripts, raw schema/migration filenames, Edge Function plumbing, CLI scripts, git tooling), exclude it instead of rewriting code jargon.
+- Keep the tone friendly, polished, clear, natural English with consistent myIPON terminology.
+- The "title" MUST begin strictly with "${formatReleaseVersionPrefix(version)}:" followed by a specific 3-7 word headline summarizing this release's most meaningful additions and fixes.
+
+Output strictly valid JSON with this exact schema (EVERY entry inside each string array MUST be a plain JSON string, NEVER a nested object):
 {
-  "title": "A punchy, attractive announcement title mentioning myIPON ${version}",
-  "intro": "A 1-2 paragraph fresh, engaging, non-cliché introduction celebrating this milestone for myIPON and explaining its value to users",
-  "new_features": ["Feature Title: Concise description of a new feature"],
-  "fixes": ["Fixed Area: Concise explanation of a resolved bug or fix"],
-  "improvements": ["Improved Area: Concise explanation of an improvement or polish"],
-  "requested_features": ["Feature Title: Concise description (Requested by: Name when credited)"],
-  "outro": "A warm, inspiring 1-paragraph closing message thanking myIPON savers for their continuous feedback and encouraging them to keep reaching their financial goals"
+  "title": "${formatReleaseVersionPrefix(version)}: Concise 3-7 word headline",
+  "intro": "1-2 short, natural paragraphs introducing ${version} with fresh wording tailored specifically to the changes in this update.",
+  "new_features": ["Feature Name: Detailed user-focused explanation covering what changed, how it works, what users can expect, and practical impact."],
+  "fixes": ["Fix Name: Detailed explanation of the resolved issue, how workflows now behave, and the reliability impact for users."],
+  "improvements": ["Improvement Name: Detailed explanation of what was enhanced, how it behaves now, and how it improves everyday use."],
+  "requested_features": ["Requested Feature Name: Detailed explanation of the shipped feature and its impact (Requested by: Name if credited)."],
+  "security_updates": [],
+  "other_changes": [],
+  "outro": "1 concise, natural closing paragraph thanking myIPON savers for feedback and inviting continued suggestions."
 }`;
 
-        const aiResult = await generateWithGemini({
-          apiKey: geminiKey,
-          prompt,
-          systemInstruction: 'You are the head of product communications for myIPON, a modern group savings platform in the Philippines. The official name is strictly "myIPON". Write polished, plain-language release notes focused strictly on user-visible features and improvements without any code, database, CLI, IDE, or developer jargon. Output strictly valid JSON.'
-        });
+    try {
+      const { parsed: aiResult, model: aiModel } = await generateWithGemini({
+        apiKey: geminiKey,
+        prompt,
+        systemInstruction: 'You are the head of product communications for myIPON, a group savings platform. Write authentic, richly detailed, human-sounding software release notes based strictly on the verified updates provided. Never invent changes, never use static boilerplate, never leak internal filenames/DB/CLI jargon. Output strictly valid JSON with flat string arrays (never nested item objects).'
+      });
 
-        const title = String(aiResult.title || `myIPON ${version} Released`).trim();
-        const rawDetails = formatSectionedReleaseBody({
-          intro: String(aiResult.intro || `We are excited to roll out myIPON ${version}!`).trim(),
-          newFeatures: Array.isArray(aiResult.new_features) ? aiResult.new_features : [],
-          fixes: Array.isArray(aiResult.fixes) ? aiResult.fixes : [],
-          improvements: Array.isArray(aiResult.improvements) ? aiResult.improvements : [],
-          requestedFeatures: Array.isArray(aiResult.requested_features) ? aiResult.requested_features : [],
-          highlights: Array.isArray(aiResult.highlights) ? aiResult.highlights : [],
-          outro: String(aiResult.outro || 'Thank you for being part of myIPON. Happy saving!').trim()
-        });
-        const sanitized = sanitizeReleaseDetails(rawDetails);
-        if (sanitized.bulletCount > 0) {
-          return json({
-            success: true,
-            ai_powered: true,
-            provider: 'gemini',
-            title,
-            details: sanitized.text
+      const nf = coerceReleaseBulletList(aiResult.new_features);
+      const fx = coerceReleaseBulletList(aiResult.fixes);
+      const im = coerceReleaseBulletList(aiResult.improvements);
+      const rf = coerceReleaseBulletList(aiResult.requested_features);
+      const su = coerceReleaseBulletList(aiResult.security_updates);
+      const oc = coerceReleaseBulletList(aiResult.other_changes);
+      const hl = coerceReleaseBulletList(aiResult.highlights);
+
+      const missingItems = findMissingReleaseItems({
+        newFeatures: nf,
+        fixes: fx,
+        improvements: im,
+        requestedFeatures: rf,
+        securityUpdates: su,
+        otherChanges: oc
+      }, systemUpdates);
+
+      if (missingItems.length > 0 && missingItems.length <= 40) {
+        try {
+          const pass2Prompt = `The following verified user-facing system changes for myIPON ${version} were missed in the initial changelog draft. Analyze each item and classify any genuine user-facing update into its proper category, writing detailed 1-2 sentence descriptions explaining what changed, how it works, what users can expect, and its practical impact. Omit any item that is purely internal code/testing/build maintenance. Use fresh, non-repetitive phrasing.
+
+Missed changes (${missingItems.length}):
+${missingItems.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}
+
+Output strictly valid JSON with only these flat arrays of plain strings (no nested objects):
+{
+  "new_features": [],
+  "fixes": [],
+  "improvements": [],
+  "requested_features": [],
+  "security_updates": [],
+  "other_changes": []
+}`;
+          const { parsed: pass2 } = await generateWithGemini({
+            apiKey: geminiKey,
+            prompt: pass2Prompt,
+            systemInstruction: 'You write accurate, detailed, human-sounding release notes for myIPON strictly from provided changes. Output strictly valid JSON with plain string arrays.'
           });
+          nf.push(...coerceReleaseBulletList(pass2.new_features));
+          fx.push(...coerceReleaseBulletList(pass2.fixes));
+          im.push(...coerceReleaseBulletList(pass2.improvements));
+          rf.push(...coerceReleaseBulletList(pass2.requested_features));
+          su.push(...coerceReleaseBulletList(pass2.security_updates));
+          oc.push(...coerceReleaseBulletList(pass2.other_changes));
+        } catch (pass2Error: any) {
+          console.warn('Gemini completeness second pass skipped:', String(pass2Error?.message || pass2Error));
         }
-      } catch (geminiError: any) {
-        console.warn('Gemini API call failed, falling back to smart composer:', geminiError?.message);
       }
-    }
 
-    const fallback = generateProceduralReleaseNotes(version, features, systemUpdates, variationSeed);
-    return json({
-      success: true,
-      ai_powered: false,
-      provider: 'smart-composer',
-      note: 'Drafted fresh release highlights using smart variations.',
-      title: fallback.title,
-      details: fallback.details
-    });
+      const rawDetails = formatSectionedReleaseBody({
+        intro: coerceReleaseBulletText(aiResult.intro),
+        newFeatures: nf,
+        fixes: fx,
+        improvements: im,
+        requestedFeatures: rf,
+        securityUpdates: su,
+        otherChanges: oc,
+        highlights: hl,
+        outro: coerceReleaseBulletText(aiResult.outro)
+      });
+      const sanitized = sanitizeReleaseDetails(rawDetails);
+      if (sanitized.bulletCount > 0) {
+        let title = formatReleaseTitle(
+          version,
+          String(aiResult.title || ''),
+          [...rf, ...nf, ...fx, ...im, ...su, ...oc, ...hl, sanitized.text],
+          variationSeed
+        );
+        if (previousTitle && title === previousTitle) {
+          title = formatReleaseTitle(
+            version,
+            '',
+            [...rf, ...nf, ...fx, ...im, ...su, ...oc, ...hl, sanitized.text],
+            variationSeed + 1
+          );
+        }
+        return json({
+          success: true,
+          ai_powered: true,
+          provider: 'gemini',
+          model: aiModel,
+          title,
+          details: sanitized.text
+        });
+      }
+      return json({
+        error: 'Gemini returned no valid user-facing release notes after filtering internal/technical entries. Please try again.'
+      }, 502);
+    } catch (geminiError: any) {
+      const msg = String(geminiError?.message || 'Gemini AI request failed');
+      console.warn('Gemini AI release-notes error:', msg);
+      return json({ error: `Gemini AI failed to generate release notes: ${msg}` }, 502);
+    }
   }
 
   const role = body.role === 'ADMIN' ? 'ADMIN' : body.role === 'MEMBER' ? 'MEMBER' : body.role === 'TREASURER' ? 'TREASURER' : null;

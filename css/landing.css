@@ -1630,6 +1630,155 @@ html {
   font-family: Arial, sans-serif;
   font-size: 13px;
 }
+.l-role-device-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.l-role-device-head > span:first-child { font-weight: 700; color: var(--ink); }
+.l-role-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.l-role-pill.is-green { background: #e2f2e8; color: #1f6a43; }
+.l-role-pill.is-gold { background: #fbefd2; color: #8a5a0c; }
+.l-role-checklist {
+  display: grid;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* Feature Previews for Announcements Reactions, Wallets, Threads & Alerts */
+.l-prev-ann-reactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.l-prev-reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #edf4ef;
+  border: 1px solid #cce0d4;
+  color: #154e39;
+  font-size: 11px;
+  font-weight: 700;
+}
+.l-prev-release-chip {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  font-size: 9.5px;
+  font-weight: 800;
+}
+.l-prev-wallet,
+.l-prev-thread,
+.l-prev-alerts {
+  display: grid;
+  gap: 8px;
+}
+.l-prev-wallet-row,
+.l-prev-thread-msg,
+.l-prev-alert-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid rgba(20, 45, 43, 0.08);
+  font-size: 12px;
+}
+.l-prev-wallet-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 700;
+  color: var(--ink);
+}
+.l-wallet-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.l-wallet-chip.is-gcash { background: #e0f2fe; color: #0369a1; }
+.l-wallet-chip.is-maya { background: #dcfce7; color: #15803d; }
+.l-wallet-chip.is-bank { background: #f3e8ff; color: #6d28d9; }
+.l-prev-wallet-amt {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.l-prev-thread-msg {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.l-prev-thread-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+.l-prev-thread-meta strong { color: var(--ink); }
+.l-thread-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e7f4ec;
+  color: #155e43;
+  font-size: 10px;
+  font-weight: 800;
+}
+.l-prev-thread-text {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.l-prev-alert-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.l-prev-alert-title strong { font-size: 12px; color: var(--ink); }
+.l-prev-alert-title small { font-size: 11px; color: var(--muted); }
+.l-prev-theme-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid rgba(20, 45, 43, 0.16);
+  border-radius: 9px;
+  background: #144534;
+  color: #fff;
+  font: 700 12px/1 Arial, sans-serif;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.l-prev-theme-switch:hover {
+  background: #0b3428;
+  transform: translateY(-1px);
+}
 
 /* Security Matrix with Rotating 2FA Ring */
 .l-security {
@@ -1953,6 +2102,7 @@ html {
   .l-hero-lead { margin-left: auto; margin-right: auto; }
   .l-hero-actions, .l-hero-proof { justify-content: center; }
   .l-features, .l-roles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .l-features > .l-feat-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .l-sec-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .l-float-a { right: -6px; }
   .l-float-b { left: -6px; }
@@ -2170,5 +2320,37 @@ html[data-theme="dark"] .l-prev-ann-footer,
 html[data-theme="dark"] .l-faq-content p,
 html[data-theme="dark"] .l-prev-chart {
   border-color: var(--rule);
+}
+html[data-theme="dark"] .l-prev-wallet-row,
+html[data-theme="dark"] .l-prev-thread-msg,
+html[data-theme="dark"] .l-prev-alert-row {
+  background: #182c26;
+  border-color: rgba(218, 236, 227, 0.16);
+}
+html[data-theme="dark"] .l-prev-reaction-pill,
+html[data-theme="dark"] .l-prev-release-chip,
+html[data-theme="dark"] .l-thread-badge,
+html[data-theme="dark"] .l-role-pill.is-green {
+  background: rgba(40, 122, 76, 0.24);
+  border-color: rgba(70, 195, 130, 0.36);
+  color: #8ee8b5;
+}
+html[data-theme="dark"] .l-role-pill.is-gold {
+  background: rgba(185, 121, 18, 0.26);
+  color: #f8d27d;
+}
+html[data-theme="dark"] .l-wallet-chip.is-gcash { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
+html[data-theme="dark"] .l-wallet-chip.is-maya { background: rgba(70, 195, 130, 0.24); color: #8ee8b5; }
+html[data-theme="dark"] .l-wallet-chip.is-bank { background: rgba(167, 139, 250, 0.22); color: #ddd6fe; }
+html[data-theme="dark"] .l-prev-theme-switch {
+  background: #1e6249;
+  border-color: rgba(143, 210, 174, 0.36);
+  color: #ffffff;
+}
+html[data-theme="dark"] .l-prev-theme-switch:hover {
+  background: #257859;
+}
+html[data-theme="dark"] .l-role-checklist {
+  color: var(--ink-soft);
 }
 

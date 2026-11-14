@@ -151,7 +151,34 @@ function syncFunctions() {
   else if (deployedCount === 0) console.log('All Edge Functions are already up to date.');
 }
 
+function syncReleaseCommitsFeed() {
+  try {
+    const res = spawnSync('git', ['log', '-n', '45', '--format=%cI\t%B---IPON_COMMIT_END---'], {
+      cwd: rootDir,
+      encoding: 'utf8'
+    });
+    if (res.status !== 0 || !res.stdout) return;
+    const commits = res.stdout
+      .split('---IPON_COMMIT_END---')
+      .map((block) => block.trim())
+      .filter(Boolean)
+      .map((block) => {
+        const tabIdx = block.indexOf('\t');
+        if (tabIdx === -1) return null;
+        return {
+          date: block.slice(0, tabIdx).trim(),
+          message: block.slice(tabIdx + 1).trim()
+        };
+      })
+      .filter((entry) => entry && entry.date && entry.message);
+    if (commits.length) {
+      fs.writeFileSync(path.join(rootDir, 'js', 'release-commits.json'), `${JSON.stringify(commits, null, 2)}\n`, 'utf8');
+    }
+  } catch { }
+}
+
 function runOnce() {
+  syncReleaseCommitsFeed();
   if (applyMode || !deployFunctions) syncMigrations();
   if (deployFunctions) syncFunctions();
 }
@@ -165,6 +192,7 @@ if (watchMode) {
     if (running) { queued = true; return; }
     running = true;
     try {
+      syncReleaseCommitsFeed();
       syncMigrations();
       syncFunctions();
     } catch (err) {

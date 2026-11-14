@@ -416,12 +416,23 @@
   recoveryDialog.addEventListener('close', resetRecoveryDialog);
   recoveryRequestForm.addEventListener('submit', (event) => { event.preventDefault(); sendRecoveryLink(event.submitter); });
   const policyDialog = document.getElementById('policy-dialog');
-  document.querySelectorAll('[data-policy-open]').forEach((button) => button.addEventListener('click', () => {
-    const policy = button.dataset.policyOpen;
+  function openPolicyModal(policyName) {
+    const policy = policyName === 'privacy' ? 'privacy' : 'terms';
+    if (!policyDialog) return;
     document.getElementById('policy-title').textContent = policy === 'privacy' ? 'Privacy policy' : 'Terms of use';
     policyDialog.querySelectorAll('[data-policy-content]').forEach((section) => { section.hidden = section.dataset.policyContent !== policy; });
-    policyDialog.showModal();
-  }));
+    if (!policyDialog.open) policyDialog.showModal();
+  }
+  document.querySelectorAll('[data-policy-open]').forEach((button) => button.addEventListener('click', () => openPolicyModal(button.dataset.policyOpen)));
+  const requestedPolicy = new URLSearchParams(location.search).get('policy');
+  if (requestedPolicy === 'terms' || requestedPolicy === 'privacy') {
+    openPolicyModal(requestedPolicy);
+    if (history.replaceState) {
+      const cleanUrl = new URL(location.href);
+      cleanUrl.searchParams.delete('policy');
+      history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+    }
+  }
 
   document.querySelectorAll('[data-request-success-close]').forEach((btn) => btn.addEventListener('click', () => {
     requestSuccessDialog?.close();

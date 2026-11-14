@@ -1067,92 +1067,267 @@
     }
   });
 
-  const RELEASE_INTROS = [
-    (ver) => `Welcome to System ${ver}! We've packed this release with fresh features, community-requested improvements, and refined performance across myIPON:`,
-    (ver) => `Big news for our saving community! System ${ver} is officially live on myIPON, delivering our latest upgrades, community suggestions, and smoother tracking tools:`,
-    (ver) => `Introducing System ${ver}! Designed with your feedback in mind, this myIPON update rolls out powerful enhancements, modern controls, and brand new capabilities:`,
-    (ver) => `System ${ver} has arrived! Explore the newest features, workflow refinements, and user-requested updates built to elevate your daily saving journey on myIPON:`,
-    (ver) => `We are thrilled to launch System ${ver}! Check out what's new, what's improved, and the latest community-driven additions now ready across myIPON:`,
-    (ver) => `Fresh off the press: System ${ver} is here! Discover the newest improvements, upgraded tools, and community-requested features in this milestone release:`,
-    (ver) => `Say hello to System ${ver}! Here is a breakdown of the new capabilities, system refinements, and user requests implemented in this rollout:`,
-    (ver) => `Another major step forward: System ${ver} is ready! We've listened to your feedback and brought a fresh wave of features and enhancements to myIPON:`,
-    (ver) => `What an exciting release! System ${ver} brings key quality-of-life updates, community feature implementations, and system-wide performance polishes:`,
-    (ver) => `Here is what is new in System ${ver}! Packed with user-inspired updates, visual upgrades, and exciting new tools for your daily group tracking:`
-  ];
+  const GENERIC_RELEASE_TITLE_RE = /^(?:released|is\s+now\s+live|feature\s+update|milestone\s+update|official\s+rollout|introducing|what'?s\s+new|rollout|update|system\s+update|smarter\s+tracking\s*&\s*community\s+features|new\s+tools\s*&\s*community\s+requests|enhanced\s+experience\s+for\s+every\s+saver|elevating\s+your\s+daily\s+savings\s+journey|built\s+with\s+community\s+feedback|community\s*&\s*performance\s+rollout)!?$/i;
 
-  const RELEASE_TITLES = [
-    (ver) => `myIPON ${ver} Released`,
-    (ver) => `myIPON ${ver} is Now Live!`,
-    (ver) => `What's New in myIPON ${ver}`,
-    (ver) => `Introducing myIPON ${ver}`,
-    (ver) => `myIPON ${ver} Feature Update`,
-    (ver) => `myIPON ${ver}: Community & Performance Rollout`,
-    (ver) => `Official Rollout: myIPON ${ver}`,
-    (ver) => `myIPON ${ver} Milestone Update`
-  ];
+  function formatReleaseVersionPrefix(ver) {
+    const clean = String(ver || 'Update 1.0').replace(/^(?:myipon|system)\s+/i, '').trim() || 'Update 1.0';
+    if (/^update\b/i.test(clean)) return `myIPON Update${clean.slice(6)}`;
+    if (/^\d/.test(clean)) return `myIPON Update ${clean}`;
+    return `myIPON ${clean}`;
+  }
 
-  const RELEASE_OUTROS = [
-    () => `Thank you for contributing, testing, and helping us make myIPON better with every update! Enjoy saving together.`,
-    () => `We're grateful for your continued support and feedback. Enjoy the new update and happy saving!`,
-    () => `Your ideas drive IPON forward! Keep submitting your suggestions, and let us know what you think of this release.`,
-    () => `Special thanks to our active community for shaping these improvements. More exciting updates are on the way!`,
-    () => `As always, thank you for being an essential part of the IPON journey. Enjoy the upgraded experience!`,
-    () => `Built with care for our savers. Thank you for your suggestions, and stay tuned for what's coming next!`,
-    () => `We couldn't do this without your feedback and support. Here's to smarter, simpler savings together!`,
-    () => `Huge thanks to everyone who shared ideas and reported issues. Together, we keep improving IPON every day!`
-  ];
+  function extractReleaseTopicLabels(items = []) {
+    const seen = new Set();
+    const labels = [];
+    const list = Array.isArray(items) ? items : String(items || '').split(/\r?\n/);
+    for (const raw of list) {
+      const line = String(raw || '').replace(/^[•\-*]\s*/, '').trim();
+      if (!line || line.length < 4) continue;
+      if (/^(?:New Features|Fixes|Improvements|Security Updates|Other Changes|Features Requested by Users:?|Welcome to\b|Big news\b|Introducing\b|Say hello\b|Thank you\b|We(?:'re| are)\b|Your ideas\b|Special thanks\b|As always\b|Built with\b|Huge thanks\b)/i.test(line)) {
+        continue;
+      }
+      if (TECH_COMMIT_RE.test(line) || CODE_TOKEN_RE.test(line)) continue;
+      const head = line.includes(':') ? line.split(':')[0].trim() : line.replace(/\s*\(Requested by:[^)]*\)\s*/gi, '').trim();
+      const shortHead = head.split(/\s+/).slice(0, 5).join(' ').replace(/[.,;:—–-]+$/, '').trim();
+      if (!shortHead || shortHead.length < 3 || GENERIC_RELEASE_TITLE_RE.test(shortHead)) continue;
+      const key = shortHead.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      labels.push(shortHead);
+      if (labels.length >= 4) break;
+    }
+    return labels;
+  }
 
-  const RELEASE_FALLBACK_UPDATES = [
-    'System Reliability & Performance: Smoother navigation, responsive refinements, and stability improvements across web and mobile.',
-    'Notifications & Clarity: Cleaner alerts and more consistent updates across announcements and dashboard activity.'
-  ];
+  function formatReleaseTitle(ver, candidateTitle = '', contentItems = [], variant = 0) {
+    const prefix = formatReleaseVersionPrefix(ver);
+    const v = Math.abs(Number(variant) || 0) % 3;
+    const raw = String(candidateTitle || '').trim();
+    let topic = raw
+      .replace(/\b(?:myipon|system)\b/gi, ' ')
+      .replace(/\bupdate\s*\d+(?:\.\d+)*(?:[a-z0-9.-]*)?/gi, ' ')
+      .replace(/\bv?\d+\.\d+(?:\.\d+)*\b/gi, ' ')
+      .replace(/\b(?:in|for|with|on|from)\s*$/i, '')
+      .replace(/^[\s:|\-–—]+|[\s:|\-–—]+$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    if (!topic || topic.length < 4 || GENERIC_RELEASE_TITLE_RE.test(topic) || TECH_COMMIT_RE.test(topic) || CODE_TOKEN_RE.test(topic)) {
+      const labels = extractReleaseTopicLabels(contentItems);
+      if (labels.length >= 3) {
+        topic = [
+          `${labels[0]}, ${labels[1]} & ${labels[2]}`,
+          `${labels[0]}, ${labels[1]} & More`,
+          `Upgraded ${labels[0]} & ${labels[1]}`
+        ][v];
+      } else if (labels.length === 2) {
+        topic = [
+          `${labels[0]} & ${labels[1]}`,
+          `${labels[0]} + ${labels[1]} Upgrades`,
+          `Better ${labels[0]} & ${labels[1]}`
+        ][v];
+      } else if (labels.length === 1) {
+        topic = [
+          `${labels[0]} Highlights`,
+          `New ${labels[0]} Upgrades`,
+          `Smoother ${labels[0]} Experience`
+        ][v];
+      } else {
+        topic = ['Community & Tracking Upgrades', 'Smoother Saving & Group Tools', 'Fresh Group & Tracking Polish'][v];
+      }
+    }
+    const full = `${prefix}: ${topic}`;
+    return full.length > 140 ? `${full.slice(0, 137).replace(/[\s,&+-]+$/, '')}...` : full;
+  }
+
   const REPO_COMMITS_URL = 'https://api.github.com/repos/zediskaaa/Ipon-Tracking-System/commits';
   const releaseCommitCache = new Map();
-
-  let currentReleaseIntroIdx = -1;
-  let currentReleaseOutroIdx = -1;
-  let currentReleaseTitleIdx = -1;
   let latestReleaseContext = null;
 
-  function pickDifferentIndex(len, prev) {
-    if (len <= 1) return 0;
-    let next;
-    do {
-      next = Math.floor(Math.random() * len);
-    } while (next === prev);
-    return next;
+  const TECH_COMMIT_RE = /\b(?:supabase|migrations?|edge\s+functions?|rpc\s+functions?|database\s+functions?|deno|postgres(?:ql)?|postgrest?|rls|sql|triggers?|foreign\s+keys?|jsonb|cli|ide|vscode|antigravity|github|git\s+commits?|repo\s+commits?|live\s+commits?|repo(?:sitory)?|contracts?\.test|unit\s+tests?|test\s+suite|lint(?:ing)?|eslint|prettier|package\.json|lockfile|node_modules|html\s+csp|csp\s+headers?|deployment|deploy(?:ed|ing)?|auto-?sync|automate|release\s+ai|ai\s+release\s+notes|ai\s+and\s+composer|composer\s+formatting|smart\s+composer|procedural\s+composer|prior\s+releases|invite\s+rows?|database\s+rows?|name\s+pills?|ui\/ux\s+skills?|workspace\s+skills?|audit_logs|enforce_group_scope|admin_create_group|old\.amount|group_id|member_id|requester_id|codebase|refactor(?:ing)?|tdz|iife|vm\.run|playwright|puppeteer|cdp|edge\s+function\s+cache|asset\s+cache|cache\s+version|api\s+endpoints?|webhooks?|descendant\s+selector|selector\s+leak|vertex\s+ai|ai\s+studio|ai\s+coach|savings\s+coach|write\s+with\s+ai|invokeaccountfunction|window\.ipon|populategroupselect)\b/i;
+  const CODE_TOKEN_RE = /(?:\b[a-z_][a-z0-9_]{1,}\.[a-z_][a-z0-9_]{1,}\b|_[a-z]|(?:\b(?:js|css|supabase|database|scripts|tests|android|\.agents)\/[a-z0-9_./-]+|[a-z0-9_-]+\/[a-z0-9_.-]+\.[a-z]{2,4}\b)|`|\(\)|[A-Z][a-z]+Error\b)/;
+  const NOISE_CLAUSE_RE = /^(?:ui\s+(?:polish|refinements?|tweaks?)|minor\s+ui\s+(?:polish|tweaks?)|visual\s+polish|code\s+cleanup|polish|refinements?|fixes|all updates are covered.*)$/i;
+  const COMMIT_VERB_RE = /^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend)\b/i;
+  const COMMIT_STOP_WORDS = new Set(['with', 'from', 'into', 'that', 'this', 'when', 'while', 'across', 'inside', 'under', 'after', 'before', 'their', 'users', 'user', 'added', 'fixed', 'updated', 'keep', 'make', 'allow', 'show', 'support', 'enable', 'improve', 'upgrade', 'remove', 'restrict', 'align', 'enforce', 'ensure', 'resolved', 'issues', 'involving', 'smoother', 'experience', 'workflow', 'workflows', 'feature', 'features', 'system', 'myipon', 'group', 'groups', 'member', 'members', 'admin', 'admins', 'savers', 'treasurer', 'treasurers', 'also', 'plus', 'more', 'less', 'only', 'every', 'each', 'both', 'clear', 'clean', 'cleaner', 'direct', 'directly', 'immediately', 'strictly']);
+
+  function canonicalizeClauseForParsing(rawLine) {
+    return String(rawLine || '')
+      .replace(/\([^)]*(?:migrations?|js\/|css\/|\.html|tests\/|manage-account|AGENTS\.md|parseMoneyAmount|validateMoneyInput|guardMoneyInput)[^)]*\)/gi, ' ')
+      .replace(/\bvia\s+shared\s+helpers(?:\s+in\s+[a-z0-9._/-]+)?/gi, '')
+      .replace(/\bthrough\s+VAPID\s+Web\s+Push\s+delivery[^.;]*/gi, 'for closed-app web and mobile background alerts')
+      .replace(/\b(?:in|under)\s+(?:[a-z0-9._-]+\/[a-z0-9._/-]+|AGENTS\.md|account\.html|super-admin\.html)\b(?:\s+and\s+[a-z0-9._/-]+)?/gi, '')
+      .replace(/\bAdditional\s+UI\s+refinements\s+/gi, '')
+      .replace(/\s+,/g, ',')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
-  const TECH_COMMIT_RE = /\b(?:supabase|migrations?|edge\s+functions?|deno|postgres(?:ql)?|postgrest?|rls|sql|triggers?|foreign\s+keys?|jsonb|rpc|cli|ide|vscode|antigravity|github|git|repo(?:sitory)?|commits?|contracts?\.test|unit\s+tests?|test\s+suite|lint(?:ing)?|eslint|prettier|package\.json|lockfile|node_modules|csp|headers|deployment|deploy(?:ed|ing)?|auto-?sync|automate|release\s+ai|ai\s+and\s+composer|composer\s+formatting|smart\s+composer|procedural\s+composer|prior\s+releases|invite\s+rows?|database\s+rows?|name\s+pills?|ui\/ux\s+skills?|skills?|audit_logs|enforce_group_scope|admin_create_group|old\.amount|group_id|member_id|requester_id|variables?|functions?|codebase|refactor(?:ing)?|tdz|iife|vm\.run|playwright|puppeteer|cdp|cache|api\s+endpoints?|endpoints?|webhooks?)\b/i;
-  const CODE_TOKEN_RE = /(?:\.[a-z_][a-z0-9_]*\b|_[a-z]|[a-z0-9]+\/[a-z0-9]+|`|\(\)|[A-Z][a-z]+Error\b)/;
+  function extractCommitUpdates(rawMessage) {
+    const rawLines = String(rawMessage || '').split(/\r?\n/);
+    if (!rawLines.length) return [];
+    const results = [];
+    rawLines.forEach((origLine, lineIdx) => {
+      const isBulletOrSubject = lineIdx === 0 || /^[•\-*]\s+/.test(origLine.trim());
+      const line = canonicalizeClauseForParsing(origLine.trim().replace(/^[•\-*]\s*/, '').trim());
+      if (!line) return;
+      if (/^(?:merge\b|wip\b|bump\b|prepare\s+mobile\b|revert\b|export\b|(?:chore|ci|build|test|docs|style|refactor)(?:\([^)]*\))?:)/i.test(line)) {
+        return;
+      }
+
+      if (!isBulletOrSubject) {
+        const sentences = line
+          .split(/(?<=[.!?])\s+/)
+          .map((s) => s.trim().replace(/[.;]+$/, ''))
+          .filter(Boolean);
+        for (const sentence of sentences) {
+          if (sentence.length < 18 || NOISE_CLAUSE_RE.test(sentence)) continue;
+          if (TECH_COMMIT_RE.test(sentence) || CODE_TOKEN_RE.test(sentence)) continue;
+          results.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));
+        }
+        return;
+      }
+
+      const leadMatch = line.match(/^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend)\s+(.+)$/i);
+      const defaultVerb = leadMatch ? (leadMatch[1].charAt(0).toUpperCase() + leadMatch[1].slice(1).toLowerCase()) : '';
+      const remainder = leadMatch ? leadMatch[2] : line;
+      const masked = remainder
+        .replace(/(\d),(?=\d)/g, '$1\u0001')
+        .replace(/\b(with|across|including|such\s+as|among|between)\s+[^.;]+/gi, (seg) => seg.replace(/,/g, '\u0001'));
+      const candidateClauses = masked
+        .split(/(?:\s*,\s*(?:and\s+)?|\s*;\s*|\s+(?:and\s+(?=add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend)|plus)\s+)/i)
+        .map((part) => part.replace(/\u0001/g, ',').trim().replace(/[.;]+$/, ''))
+        .filter(Boolean);
+      const hasSingleWordFragment = candidateClauses.length > 1 && candidateClauses.some((part) => !/\s/.test(part));
+      const rawClauses = hasSingleWordFragment
+        ? [remainder.trim().replace(/[.;]+$/, '')]
+        : candidateClauses;
+      for (let idx = 0; idx < rawClauses.length; idx++) {
+        const rawClause = rawClauses[idx];
+        if (rawClause.length < 10) continue;
+        if (NOISE_CLAUSE_RE.test(rawClause)) continue;
+        if (TECH_COMMIT_RE.test(rawClause) || CODE_TOKEN_RE.test(rawClause)) continue;
+        if (/\b(?:without|with|for|and|or|to|on|in|from|into)$/i.test(rawClause)) continue;
+        const hasOwnVerb = idx > 0 && COMMIT_VERB_RE.test(rawClause);
+        const item = hasOwnVerb ? rawClause : (defaultVerb ? `${defaultVerb} ${rawClause}` : rawClause);
+        if (item.length < 12) continue;
+        results.push(item.charAt(0).toUpperCase() + item.slice(1));
+      }
+    });
+    return results;
+  }
 
   function cleanCommitSummary(rawMessage) {
-    let line = String(rawMessage || '').split(/\r?\n/)[0].trim();
-    if (!line) return '';
-    if (/^(?:merge\b|wip\b|bump\s+version\b|prepare\s+mobile\b|revert\s+"|(?:chore|ci|build|test|docs|style|refactor)(?:\([^)]*\))?:)/i.test(line)) return '';
-    if (TECH_COMMIT_RE.test(line) || CODE_TOKEN_RE.test(line)) {
-      const clauses = line.split(/(?:\s*[,;]\s*|\s+(?:and|plus)\s+)/i).map((part) => part.trim()).filter(Boolean);
-      const userClauses = clauses.filter((part) => (
-        part.length >= 16
-        && !TECH_COMMIT_RE.test(part)
-        && !CODE_TOKEN_RE.test(part)
-        && !/\b(?:without|with|for|and|or|to|on|in)$/i.test(part)
-        && /^(?:add|fix|keep|allow|show|support|enable|improve|make|update|block|prevent|deduplicate|streamline|polish)\b/i.test(part)
-      ));
-      if (!userClauses.length) return '';
-      line = userClauses.join(', ');
-    }
-    if (!line || line.length < 12) return '';
-    if (TECH_COMMIT_RE.test(line) || CODE_TOKEN_RE.test(line)) return '';
-    return line.charAt(0).toUpperCase() + line.slice(1);
+    return extractCommitUpdates(rawMessage).join(', ');
   }
 
-  async function fetchRecentSystemUpdates(sinceIso = null) {
-    const cacheKey = sinceIso || '__latest__';
+  function extractCommitStems(text) {
+    const words = String(text || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9/\s-]/g, ' ')
+      .split(/[\s/-]+/)
+      .filter((w) => w.length >= 4 && !COMMIT_STOP_WORDS.has(w) && !/^\d+$/.test(w));
+    const stems = [];
+    const seen = new Set();
+    for (const w of words) {
+      const stem = w
+        .replace(/(?:ation|ition|ments?|ings?|ers?|ions?|ies|ed|es|s)$/, '')
+        .slice(0, 7);
+      if (stem.length < 3 || seen.has(stem)) continue;
+      seen.add(stem);
+      stems.push(stem);
+    }
+    return stems;
+  }
+
+  function clausesOverlapTopic(a, b) {
+    const stemsA = extractCommitStems(a);
+    const stemsB = extractCommitStems(b);
+    if (!stemsA.length || !stemsB.length) return a.toLowerCase() === b.toLowerCase();
+    const setB = new Set(stemsB);
+    const shared = stemsA.filter((s) => setB.has(s));
+    const minLen = Math.min(stemsA.length, stemsB.length);
+    if (minLen <= 2) return shared.length >= minLen;
+    return shared.length >= 2 && (shared.length / minLen) >= 0.55;
+  }
+
+  function canonicalizeCommitUpdates(rawItems = [], excludedText = '') {
+    const out = [];
+    const excludedStems = new Set(extractCommitStems(excludedText));
+    for (const raw of (Array.isArray(rawItems) ? rawItems : [])) {
+      for (const item of extractCommitUpdates(raw)) {
+        const stems = extractCommitStems(item);
+        if (excludedStems.size > 0 && stems.length >= 2) {
+          const hitCount = stems.filter((s) => excludedStems.has(s)).length;
+          if (hitCount / stems.length >= 0.75) continue;
+        }
+        const matchIdx = out.findIndex((existing) => clausesOverlapTopic(existing, item));
+        if (matchIdx !== -1) {
+          if (item.length > out[matchIdx].length + 12) {
+            out[matchIdx] = item;
+          }
+          continue;
+        }
+        out.push(item);
+        if (out.length >= 60) return out;
+      }
+    }
+    return out;
+  }
+
+  function findMissingReleaseItems(buckets, expectedRawItems = []) {
+    const allBullets = [
+      ...(Array.isArray(buckets?.newFeatures) ? buckets.newFeatures : []),
+      ...(Array.isArray(buckets?.fixes) ? buckets.fixes : []),
+      ...(Array.isArray(buckets?.improvements) ? buckets.improvements : []),
+      ...(Array.isArray(buckets?.requestedFeatures) ? buckets.requestedFeatures : []),
+      ...(Array.isArray(buckets?.securityUpdates) ? buckets.securityUpdates : []),
+      ...(Array.isArray(buckets?.otherChanges) ? buckets.otherChanges : [])
+    ];
+    const bulletStemSets = allBullets.map((b) => new Set(extractCommitStems(b)));
+    const canonicalExpected = canonicalizeCommitUpdates(expectedRawItems);
+    const missing = [];
+    canonicalExpected.forEach((raw) => {
+      const stems = extractCommitStems(raw);
+      const requiredHits = stems.length <= 2 ? stems.length : Math.min(3, Math.max(2, Math.ceil(stems.length * 0.35)));
+      const alreadyCovered = stems.length > 0 && bulletStemSets.some((bSet) => {
+        let hits = 0;
+        for (const s of stems) {
+          if (bSet.has(s) || [...bSet].some((bs) => bs.slice(0, 4) === s.slice(0, 4))) hits += 1;
+        }
+        return hits >= requiredHits;
+      });
+      if (!alreadyCovered) missing.push(raw);
+    });
+    return missing;
+  }
+
+  async function fetchRecentSystemUpdates(sinceIso = null, priorText = '') {
+    const cacheKey = `${sinceIso || '__latest__'}::${priorText.slice(0, 60)}`;
     if (releaseCommitCache.has(cacheKey)) return releaseCommitCache.get(cacheKey);
 
-    const fetchPage = async (sinceParam) => {
-      const qs = new URLSearchParams({ per_page: '25' });
+    const sinceMs = sinceIso ? Date.parse(sinceIso) : NaN;
+    const collectEntries = (entries, respectSince = true, excluded = '') => {
+      const filteredMsgs = [];
+      for (const entry of (Array.isArray(entries) ? entries : [])) {
+        const msg = entry?.commit?.message ?? entry?.message ?? '';
+        const dtStr = entry?.commit?.committer?.date || entry?.commit?.author?.date || entry?.date || '';
+        const dtMs = dtStr ? Date.parse(dtStr) : NaN;
+        if (respectSince && Number.isFinite(sinceMs) && Number.isFinite(dtMs) && dtMs <= sinceMs) continue;
+        if (msg) filteredMsgs.push(msg);
+      }
+      return canonicalizeCommitUpdates(filteredMsgs, excluded);
+    };
+
+    const fetchLocalFeed = async () => {
+      try {
+        const res = await fetch(`js/release-commits.json?v=${Date.now()}`, { cache: 'no-store' });
+        return res.ok ? await res.json() : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const fetchGitHub = async (sinceParam) => {
+      const qs = new URLSearchParams({ per_page: '100' });
       if (sinceParam) qs.set('since', sinceParam);
       const controller = typeof AbortController === 'function' ? new AbortController() : null;
       const timer = controller ? setTimeout(() => controller.abort(), 4500) : null;
@@ -1162,21 +1337,7 @@
           headers: { Accept: 'application/vnd.github+json' },
           signal: controller?.signal
         });
-        if (!res.ok) return [];
-        const rows = await res.json();
-        if (!Array.isArray(rows)) return [];
-        const unique = [];
-        const seen = new Set();
-        for (const entry of rows) {
-          const summary = cleanCommitSummary(entry?.commit?.message);
-          if (!summary) continue;
-          const norm = summary.toLowerCase();
-          if (seen.has(norm)) continue;
-          seen.add(norm);
-          unique.push(summary);
-          if (unique.length >= 12) break;
-        }
-        return unique;
+        return res.ok ? await res.json() : [];
       } catch {
         return [];
       } finally {
@@ -1184,9 +1345,12 @@
       }
     };
 
-    let updates = await fetchPage(sinceIso);
-    if (!updates.length && sinceIso) {
-      updates = await fetchPage(null);
+    const [localEntries, ghEntries] = await Promise.all([fetchLocalFeed(), fetchGitHub(sinceIso)]);
+    const mergedRaw = [...(Array.isArray(localEntries) ? localEntries : []), ...(Array.isArray(ghEntries) ? ghEntries : [])];
+    let updates = collectEntries(mergedRaw, Boolean(sinceIso), priorText);
+    if (!sinceIso && updates.length < 6) {
+      const ghAll = ghEntries.length >= 20 ? ghEntries : await fetchGitHub(null);
+      updates = collectEntries([...(Array.isArray(localEntries) ? localEntries : []), ...(Array.isArray(ghAll) ? ghAll : [])], false, priorText);
     }
     releaseCommitCache.set(cacheKey, updates);
     return updates;
@@ -1196,7 +1360,7 @@
     let releaseRows = [];
     try {
       const { data } = await Ipon.client.from('announcements')
-        .select('release_version,title,created_at')
+        .select('release_version,title,details,created_at')
         .not('release_version', 'is', null)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
@@ -1223,17 +1387,23 @@
     }
 
     const latestReleaseAt = releaseRows[0]?.created_at || null;
+    const latestReleaseVersion = releaseRows[0]?.release_version || null;
     const previousReleases = releaseRows
       .slice(0, 5)
       .map((row) => [row.release_version, row.title].filter(Boolean).join(': '))
       .filter(Boolean);
+    const priorText = releaseRows
+      .slice(0, 3)
+      .map((row) => [row.title, row.details].filter(Boolean).join('\n'))
+      .join('\n');
 
     const targetImplemented = featureRequests.filter(
       (req) => req.status === 'IMPLEMENTED' && !req.release_version
     );
-    const systemUpdates = await fetchRecentSystemUpdates(latestReleaseAt);
+    const systemUpdates = await fetchRecentSystemUpdates(latestReleaseAt, priorText);
+    const hasNewChanges = systemUpdates.length > 0 || targetImplemented.length > 0;
 
-    latestReleaseContext = { nextVersion, latestReleaseAt, previousReleases, targetImplemented, systemUpdates };
+    latestReleaseContext = { nextVersion, latestReleaseAt, latestReleaseVersion, previousReleases, targetImplemented, systemUpdates, hasNewChanges };
     return latestReleaseContext;
   }
 
@@ -1241,10 +1411,13 @@
     const newFeatures = [];
     const fixes = [];
     const improvements = [];
+    const securityUpdates = [];
     items.forEach((raw) => {
       const clean = String(raw || '').replace(/^[•\-*]\s*/, '').trim();
       if (!clean || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) return;
-      if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|constraint|foreign\s+key|bug)\b/i.test(clean)) {
+      if (/\b(?:security|vulnerabilit|rls|permission|auth(?:entication|orization)?|encrypt|csp|xss|csrf|hardening)\b/i.test(clean)) {
+        securityUpdates.push(clean);
+      } else if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|constraint|foreign\s+key|bug)\b/i.test(clean)) {
         fixes.push(clean);
       } else if (/^(?:improv|polish|clean|compact|sync|update|refactor|streamline|keep|align|refine|enhance|make\b.*\b(?:compact|clean|responsive|faster|clearer|visible))\b|\b(?:faster|cleaner|compact|reliable|visibility|clarity)\b/i.test(clean)) {
         improvements.push(clean);
@@ -1252,12 +1425,13 @@
         newFeatures.push(clean);
       }
     });
-    return { newFeatures, fixes, improvements };
+    return { newFeatures, fixes, improvements, securityUpdates };
   }
 
   function sanitizeReleaseDetails(rawDetails) {
     const text = String(rawDetails || '').trim();
     if (!text) return { text: '', bulletCount: 0, strippedCount: 0 };
+    const OBJECT_STR_RE = /\[object\s+[^\]]+\]/i;
     let bulletCount = 0;
     let strippedCount = 0;
     const cleanedBlocks = text.split(/\n{2,}/).map((block) => {
@@ -1265,12 +1439,12 @@
       if (!lines.length) return '';
       const hasBullets = lines.some((line) => /^[•\-*]\s+/.test(line));
       if (!hasBullets) {
-        return TECH_COMMIT_RE.test(block) || CODE_TOKEN_RE.test(block) ? '' : block.trim();
+        return OBJECT_STR_RE.test(block) || TECH_COMMIT_RE.test(block) || CODE_TOKEN_RE.test(block) ? '' : block.trim();
       }
       const header = !/^[•\-*]\s+/.test(lines[0]) ? lines[0] : '';
       const bullets = (header ? lines.slice(1) : lines).filter((line) => {
         const clean = line.replace(/^[•\-*]\s+/, '').trim();
-        if (!clean || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) {
+        if (!clean || OBJECT_STR_RE.test(clean) || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) {
           strippedCount += 1;
           return false;
         }
@@ -1283,10 +1457,30 @@
     return { text: cleanedBlocks.join('\n\n'), bulletCount, strippedCount };
   }
 
-  function formatSectionedReleaseBody({ intro, newFeatures = [], fixes = [], improvements = [], requestedFeatures = [], highlights = [], outro }) {
+  function coerceReleaseBulletText(raw) {
+    if (raw == null) return '';
+    if (typeof raw === 'string') {
+      const clean = raw.replace(/^[•\s*-]+/, '').trim();
+      return /\[object\s+[^\]]+\]/i.test(clean) ? '' : clean;
+    }
+    if (Array.isArray(raw)) return raw.map(coerceReleaseBulletText).filter(Boolean).join(' ').trim();
+    if (typeof raw === 'object') {
+      const title = raw.title || raw.name || raw.feature || raw.feature_name || raw.change_name || raw.heading || raw.topic || '';
+      const rest = ['summary', 'description', 'details', 'explanation', 'what_changed', 'how_it_works', 'expect', 'impact', 'benefit', 'text', 'message']
+        .map((k) => coerceReleaseBulletText(raw[k]))
+        .filter(Boolean)
+        .join(' ');
+      const head = coerceReleaseBulletText(title).replace(/[:.\s]+$/, '');
+      if (head && rest) return `${head}: ${rest}`;
+      return head || rest;
+    }
+    return String(raw).trim();
+  }
+
+  function formatSectionedReleaseBody({ intro, newFeatures = [], fixes = [], improvements = [], requestedFeatures = [], securityUpdates = [], otherChanges = [], highlights = [], outro }) {
     const keepUserLine = (v) => {
-      const clean = String(v || '').replace(/^[•\s*-]+/, '').trim();
-      if (clean.length <= 2 || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) return '';
+      const clean = coerceReleaseBulletText(v);
+      if (clean.length <= 2 || /\[object\s+[^\]]+\]/i.test(clean) || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) return '';
       return `• ${clean}`;
     };
     const parts = [];
@@ -1298,15 +1492,20 @@
     const nf = newFeatures.filter((v) => keepUserLine(v));
     const fx = fixes.filter((v) => keepUserLine(v));
     const im = improvements.filter((v) => keepUserLine(v));
-    if (nf.length || fx.length || im.length) {
+    const su = securityUpdates.filter((v) => keepUserLine(v));
+    const oc = otherChanges.filter((v) => keepUserLine(v));
+    if (nf.length || fx.length || im.length || su.length || oc.length) {
       pushSection('New Features', nf);
       pushSection('Fixes', fx);
       pushSection('Improvements', im);
+      pushSection('Security Updates', su);
+      pushSection('Other Changes', oc);
     } else if (highlights.length) {
       const buckets = bucketizeReleaseUpdates(highlights);
       pushSection('New Features', buckets.newFeatures);
       pushSection('Fixes', buckets.fixes);
       pushSection('Improvements', buckets.improvements);
+      pushSection('Security Updates', buckets.securityUpdates);
     }
     if (requestedFeatures.length) {
       pushSection('Features Requested by Users:', requestedFeatures);
@@ -1315,112 +1514,46 @@
     return parts.filter(Boolean).join('\n\n');
   }
 
-  const RELEASE_FALLBACK_POOLS = [
-    [
-      'Dashboard & Group Navigation: Smoother switching between savings groups and clearer layouts across desktop and mobile.',
-      'Notifications & Alerts: Cleaner, timely updates for announcements, reviews, and group activity.'
-    ],
-    [
-      'Savings & Record Tracking: Faster contribution logging, clearer review details, and reliable validation.',
-      'Account & Profile Controls: Consistent display name, photo, and payout details across every page.'
-    ],
-    [
-      'Calendar & Summaries: Clearer daily progress indicators and easier contribution monitoring for admins and members.',
-      'System Reliability: Smoother everyday performance and responsive polish across web and mobile.'
-    ]
-  ];
   const RELEASE_STYLE_ANGLES = [
-    'Clear, warm, everyday saver-benefit focus with crisp bullet headings',
-    'Upbeat, concise product highlights focusing on ease of use and group transparency',
-    'Friendly community-milestone tone highlighting smoother daily tracking workflows'
+    'Conversational, warm, human product story highlighting everyday convenience and real-life savings moments',
+    'Crisp, high-energy changelog voice spotlighting practical benefits for group members and treasurers',
+    'Friendly community-first tone celebrating cleaner workflows, visual polish, and reliable group tracking',
+    'Clear, modern app-release voice focused on what changed on screen and why daily tracking feels faster',
+    'Upbeat, approachable product update highlighting visual clarity, safer controls, and smoother collaboration',
+    'Concise, benefit-driven release notes written like a thoughtful product manager talking directly to users'
   ];
   let currentReleaseBulletVariant = 0;
+  let hasAiDraftInEditor = false;
 
-  function humanizeReleaseUpdate(raw, variant = 0) {
-    const clean = String(raw || '').replace(/^[•\-*]\s*/, '').trim();
-    if (!clean || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) return '';
-    if (clean.includes(':')) return clean;
-    const v = Math.abs(Number(variant) || 0) % 3;
-    const lower = clean.toLowerCase();
-    if (lower.includes('ownership transfer') || lower.includes('permanent deletion')) {
-      return [
-        'Group Ownership & Deletion: Admins can now transfer group ownership to another admin or permanently delete unused groups with confirmation.',
-        'Flexible Group Control: Easily pass group ownership to a co-admin or safely remove closed savings groups from group settings.',
-        'Admin Group Lifecycle: Added ownership transfer and safe permanent group deletion options for group administrators.'
-      ][v];
+  function updateReleaseChangeNotice(context) {
+    const notice = document.getElementById('release-update-change-notice');
+    const noticeText = document.getElementById('release-update-change-notice-text');
+    if (!notice || !noticeText) return;
+    if (!context) {
+      notice.hidden = true;
+      return;
     }
-    if (lower.includes('add group action visible')) {
-      return [
-        'Group Switching Access: Members can now see the Add Group option directly in their group switcher to start a new savings group.',
-        'Easier Group Creation: Kept the Add Group action visible in the group menu so savers can organize additional savings groups anytime.',
-        'Streamlined Group Navigation: Members now have direct access to Add Group controls right from the workspace header.'
-      ][v];
+    const updateCount = Array.isArray(context.systemUpdates) ? context.systemUpdates.length : 0;
+    const reqCount = Array.isArray(context.targetImplemented) ? context.targetImplemented.length : 0;
+    const sinceLabel = context.latestReleaseVersion ? ` since ${context.latestReleaseVersion}` : '';
+    notice.hidden = false;
+    if (context.hasNewChanges) {
+      notice.classList.remove('is-empty');
+      noticeText.textContent = `Detected ${updateCount} system update(s)${reqCount ? ` and ${reqCount} implemented request(s)` : ''}${sinceLabel}. Click Write with AI to analyze and draft every item dynamically.`;
+    } else {
+      notice.classList.add('is-empty');
+      noticeText.textContent = `No new system changes or implemented feature requests detected${sinceLabel}. Wait for new updates before generating release notes, or write manually if needed.`;
     }
-    const verbMatch = clean.match(/^(Add|Fix|Resolve|Prevent|Restore|Deduplicate|Keep|Make|Improve|Block|Allow|Show|Enable|Update)\s+(.+)$/i);
-    if (!verbMatch) return clean;
-    const verb = verbMatch[1].toLowerCase();
-    const rest = verbMatch[2].replace(/\.$/, '').trim();
-    const titled = rest.charAt(0).toUpperCase() + rest.slice(1);
-    if (/^(?:fix|resolve|prevent|restore|deduplicate|block)$/.test(verb)) {
-      return [
-        `Reliability Fix: Resolved issues with ${rest} for a smoother experience.`,
-        `${titled}: Corrected unexpected behavior so daily workflows work reliably.`,
-        `Stability Update: Prevented edge-case errors involving ${rest}.`
-      ][v];
-    }
-    if (/^(?:keep|make|improve|update)$/.test(verb)) {
-      return [
-        `Experience Polish: Refined ${rest} across desktop and mobile views.`,
-        `${titled}: Updated layout and responsiveness for clearer everyday tracking.`,
-        `Usability Improvement: Made ${rest} cleaner and easier to use.`
-      ][v];
-    }
-    return [
-      `${titled}: Now available across myIPON for your savings group.`,
-      `New Capability: Added ${rest} to make group saving more convenient.`,
-      `Feature Highlight: Savers and admins can now use ${rest} directly in myIPON.`
-    ][v];
-  }
-
-  function composeReleaseNotes(ver, targetImpl = [], systemUpdates = []) {
-    currentReleaseIntroIdx = pickDifferentIndex(RELEASE_INTROS.length, currentReleaseIntroIdx);
-    currentReleaseOutroIdx = pickDifferentIndex(RELEASE_OUTROS.length, currentReleaseOutroIdx);
-    currentReleaseTitleIdx = pickDifferentIndex(RELEASE_TITLES.length, currentReleaseTitleIdx);
-    currentReleaseBulletVariant = (currentReleaseBulletVariant + 1) % 3;
-
-    const title = RELEASE_TITLES[currentReleaseTitleIdx](ver);
-    const intro = RELEASE_INTROS[currentReleaseIntroIdx](ver);
-    const outro = RELEASE_OUTROS[currentReleaseOutroIdx]();
-
-    const cleanedSource = (Array.isArray(systemUpdates) ? systemUpdates : [])
-      .map((item) => cleanCommitSummary(item))
-      .filter(Boolean);
-    const sourceUpdates = cleanedSource.length
-      ? cleanedSource
-      : (!targetImpl.length ? RELEASE_FALLBACK_POOLS[currentReleaseBulletVariant % RELEASE_FALLBACK_POOLS.length] : []);
-    const { newFeatures, fixes, improvements } = bucketizeReleaseUpdates(sourceUpdates);
-    const formatBucket = (arr, offset = 0) => arr.map((item, idx) => humanizeReleaseUpdate(item, currentReleaseBulletVariant + offset + idx)).filter(Boolean);
-
-    const profileById = new Map(profiles.map((p) => [p.id, p]));
-    const requestedFeatures = targetImpl.map((req) => {
-      const prof = profileById.get(req.requester_id);
-      const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
-      return `${req.title}: ${req.details || 'Feature improvement'}${credit}`;
-    });
-
-    const body = sanitizeReleaseDetails(formatSectionedReleaseBody({
-      intro,
-      newFeatures: formatBucket(newFeatures, 0),
-      fixes: formatBucket(fixes, 1),
-      improvements: formatBucket(improvements, 2),
-      requestedFeatures,
-      outro
-    })).text;
-    return { title, body };
   }
 
   async function openReleaseUpdateDialog() {
     if (!releaseUpdateDialog || !releaseUpdateForm) return;
+
+    const aiErrorEl = document.getElementById('release-update-ai-error');
+    if (aiErrorEl) {
+      aiErrorEl.hidden = true;
+      aiErrorEl.replaceChildren();
+    }
 
     const context = await collectReleaseContext();
     const todayIso = new Date().toISOString().slice(0, 10);
@@ -1429,35 +1562,21 @@
     const titleInput = document.getElementById('release-update-heading');
     const detailsInput = document.getElementById('release-update-details');
 
-    const { title, body } = composeReleaseNotes(
-      context.nextVersion,
-      context.targetImplemented,
-      context.systemUpdates
-    );
+    updateReleaseChangeNotice(context);
+    hasAiDraftInEditor = false;
+    if (titleInput) titleInput.value = `${formatReleaseVersionPrefix(context.nextVersion)}: `;
+    if (detailsInput) detailsInput.value = '';
 
     if (versionInput) versionInput.value = context.nextVersion;
     if (dateInput) dateInput.value = todayIso;
-    if (titleInput) titleInput.value = title;
-    if (detailsInput) detailsInput.value = body;
     releaseUpdateDialog.showModal();
     if (versionInput) versionInput.focus();
   }
 
-  document.getElementById('release-update-shuffle')?.addEventListener('click', async () => {
-    const versionInput = document.getElementById('release-update-version');
-    const titleInput = document.getElementById('release-update-heading');
-    const detailsInput = document.getElementById('release-update-details');
-    const context = latestReleaseContext || await collectReleaseContext();
-    const ver = (versionInput?.value || context.nextVersion || 'Update 1.0').trim();
-    const { title, body } = composeReleaseNotes(ver, context.targetImplemented, context.systemUpdates);
-    if (titleInput) titleInput.value = title;
-    if (detailsInput) detailsInput.value = body;
-    Ipon.toast('Shuffled release intro and outro greeting.');
-  });
-
   const releaseAiBtn = document.getElementById('release-update-ai-btn');
   const releaseAiStatus = document.getElementById('release-update-ai-status');
   const releaseAiStatusText = document.getElementById('release-update-ai-status-text');
+  const releaseAiError = document.getElementById('release-update-ai-error');
   const geminiKeyDialog = document.getElementById('gemini-key-dialog');
   const geminiKeyForm = document.getElementById('gemini-key-form');
   const geminiKeyInput = document.getElementById('gemini-api-key-input');
@@ -1466,85 +1585,131 @@
   const geminiKeyClear = document.getElementById('gemini-key-clear');
   const geminiKeyTest = document.getElementById('gemini-key-test');
   const releaseKeyBtn = document.getElementById('release-update-key-btn');
-  const geminiModelSelect = document.getElementById('gemini-model-select');
+  const geminiKeySave = geminiKeyForm?.querySelector('[type="submit"]');
 
-  function getStoredGeminiKey() {
-    return Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : ((window.IPON_CONFIG?.geminiApiKey || localStorage.getItem('ipon_gemini_api_key') || '').trim());
-  }
-
-  function getStoredGeminiModel() {
-    return (localStorage.getItem('ipon_gemini_model') || '').trim() || 'gemini-1.5-flash';
-  }
-
-  function updateGeminiStatusBadge() {
+  function renderGeminiStatusBadge(status) {
     if (!geminiKeyStatus) return;
-    const key = getStoredGeminiKey();
-    if (key) {
-      const masked = key.slice(0, 6) + '••••••••' + key.slice(-4);
-      geminiKeyStatus.textContent = `Key ready (${masked}) · Auto model`;
+    if (!status) {
+      geminiKeyStatus.textContent = 'Checking server key status…';
+      geminiKeyStatus.className = 'gemini-status-badge';
+      return;
+    }
+    if (status.error) {
+      geminiKeyStatus.textContent = status.error;
+      geminiKeyStatus.className = 'gemini-status-badge is-error';
+      return;
+    }
+    if (status.configured) {
+      const sourceLabel = status.source === 'saved' ? 'Server override active' : 'Supabase secret active';
+      geminiKeyStatus.textContent = `${sourceLabel} (${status.masked || 'configured'})`;
       geminiKeyStatus.className = 'gemini-status-badge is-connected';
     } else {
-      geminiKeyStatus.textContent = 'No API key set (Enter API key above)';
+      geminiKeyStatus.textContent = 'No Gemini API key configured on server yet';
       geminiKeyStatus.className = 'gemini-status-badge';
     }
   }
 
-  releaseKeyBtn?.addEventListener('click', () => {
+  async function refreshServerGeminiStatus() {
+    renderGeminiStatusBadge(null);
+    try {
+      const status = await Ipon.invokeAccountFunction({ action: 'gemini-key-status' });
+      renderGeminiStatusBadge(status);
+      return status;
+    } catch (err) {
+      renderGeminiStatusBadge({ error: Ipon.friendlyError ? Ipon.friendlyError(err) : (err?.message || 'Unable to load server status.') });
+      return null;
+    }
+  }
+
+  async function openGeminiKeyDialog() {
     if (!geminiKeyDialog) return;
-    if (geminiKeyInput) geminiKeyInput.value = (localStorage.getItem('ipon_gemini_api_key') || window.IPON_CONFIG?.geminiApiKey || '').trim();
-    updateGeminiStatusBadge();
+    if (geminiKeyInput) geminiKeyInput.value = '';
     geminiKeyDialog.showModal();
     if (geminiKeyInput) geminiKeyInput.focus();
-  });
+    await refreshServerGeminiStatus();
+  }
+
+  releaseKeyBtn?.addEventListener('click', openGeminiKeyDialog);
 
   geminiKeyClose?.addEventListener('click', () => geminiKeyDialog?.close());
 
-  geminiKeyForm?.addEventListener('submit', (event) => {
+  geminiKeyForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const val = (geminiKeyInput?.value || '').trim();
-    if (val) {
-      if (val.startsWith('AQ.')) {
-        Ipon.toast('Keys starting with AQ. are Google Cloud service account tokens, not Gemini API keys. Please generate a key from Google AI Studio (starts with AIzaSy).', 'error');
-        return;
-      }
-      localStorage.setItem('ipon_gemini_api_key', val);
-      Ipon.toast('Gemini API key saved in browser.');
-    } else {
-      localStorage.removeItem('ipon_gemini_api_key');
-      Ipon.toast('Gemini API key cleared from browser.');
-    }
-    updateGeminiStatusBadge();
-    geminiKeyDialog?.close();
-  });
-
-  geminiKeyClear?.addEventListener('click', () => {
-    localStorage.removeItem('ipon_gemini_api_key');
-    if (geminiKeyInput) geminiKeyInput.value = '';
-    updateGeminiStatusBadge();
-    Ipon.toast('Gemini API key removed from browser.');
-  });
-
-  geminiKeyTest?.addEventListener('click', async () => {
-    const key = (geminiKeyInput?.value || '').trim() || getStoredGeminiKey();
-    if (!key) {
-      Ipon.toast('Please enter a Gemini API key first.', 'error');
+    if (!val) {
+      Ipon.toast('Enter a Google AI Studio or billing-enabled Gemini API key to verify and save.', 'error');
       geminiKeyInput?.focus();
       return;
     }
     try {
-      Ipon.setBusy(geminiKeyTest, true);
-      const res = await Ipon.callGemini({
-        apiKey: key,
-        prompt: 'Return a JSON object: {"status": "ok", "message": "Connection verified successfully"}',
-        systemInstruction: 'Respond in JSON only.'
+      Ipon.setBusy(geminiKeySave, true, 'Verifying & saving…');
+      const res = await Ipon.invokeAccountFunction({
+        action: 'save-gemini-key',
+        api_key: val
       });
-      Ipon.toast(`Connected successfully to Google Gemini (${res.model})!`);
+      localStorage.removeItem('ipon_gemini_api_key');
+      if (geminiKeyInput) geminiKeyInput.value = '';
       if (geminiKeyStatus) {
-        geminiKeyStatus.textContent = `Connected & Active (${res.model})`;
+        geminiKeyStatus.textContent = `Verified & saved on server (${res.masked || 'ready'}${res.model ? ` · ${res.model}` : ''})`;
+        geminiKeyStatus.className = 'gemini-status-badge is-verified';
+      }
+      if (releaseAiError) {
+        releaseAiError.hidden = true;
+        releaseAiError.replaceChildren();
+      }
+      Ipon.toast(`Gemini API key verified and saved securely on server${res.model ? ` (${res.model})` : ''}.`);
+      geminiKeyDialog?.close();
+      const detailsInput = document.getElementById('release-update-details');
+      if (releaseUpdateDialog?.open && detailsInput && !detailsInput.value.trim()) {
+        releaseAiBtn?.click();
+      }
+    } catch (err) {
+      const msg = Ipon.friendlyError ? Ipon.friendlyError(err) : (err?.message || 'Verification failed.');
+      renderGeminiStatusBadge({ error: msg });
+      Ipon.toast(msg, 'error');
+    } finally {
+      Ipon.setBusy(geminiKeySave, false);
+    }
+  });
+
+  geminiKeyClear?.addEventListener('click', async () => {
+    const confirmed = await Ipon.confirmAction({
+      title: 'Reset custom server API key?',
+      message: 'Remove the saved Super Admin API key override and revert to the Supabase secret default?',
+      acceptLabel: 'Reset key'
+    });
+    if (!confirmed) return;
+    try {
+      Ipon.setBusy(geminiKeyClear, true, 'Resetting…');
+      const res = await Ipon.invokeAccountFunction({ action: 'save-gemini-key', api_key: '' });
+      localStorage.removeItem('ipon_gemini_api_key');
+      if (geminiKeyInput) geminiKeyInput.value = '';
+      renderGeminiStatusBadge(res);
+      Ipon.toast('Custom server API key cleared.');
+    } catch (err) {
+      Ipon.toast(Ipon.friendlyError ? Ipon.friendlyError(err) : (err?.message || 'Could not clear key.'), 'error');
+    } finally {
+      Ipon.setBusy(geminiKeyClear, false);
+    }
+  });
+
+  geminiKeyTest?.addEventListener('click', async () => {
+    const key = (geminiKeyInput?.value || '').trim();
+    try {
+      Ipon.setBusy(geminiKeyTest, true, 'Testing…');
+      const res = await Ipon.invokeAccountFunction({
+        action: 'test-gemini-key',
+        ...(key ? { api_key: key } : {})
+      });
+      Ipon.toast(res.message || `Connected to Google Gemini${res.model ? ` (${res.model})` : ''}!`);
+      if (geminiKeyStatus) {
+        geminiKeyStatus.textContent = `Connected & active${res.model ? ` (${res.model})` : ''}`;
         geminiKeyStatus.className = 'gemini-status-badge is-verified';
       }
     } catch (err) {
-      Ipon.toast(`Gemini error: ${err.message || 'Verification failed'}`, 'error');
+      const msg = Ipon.friendlyError ? Ipon.friendlyError(err) : (err?.message || 'Verification failed.');
+      renderGeminiStatusBadge({ error: msg });
+      Ipon.toast(msg, 'error');
     } finally {
       Ipon.setBusy(geminiKeyTest, false);
     }
@@ -1557,8 +1722,23 @@
     const detailsInput = document.getElementById('release-update-details');
     const relDate = (dateInput?.value || new Date().toISOString().slice(0, 10)).trim();
 
+    if (releaseAiError) {
+      releaseAiError.hidden = true;
+      releaseAiError.replaceChildren();
+    }
+
     releaseCommitCache.clear();
     const context = await collectReleaseContext();
+    updateReleaseChangeNotice(context);
+    if (!context.hasNewChanges) {
+      await Ipon.confirmAction({
+        title: 'No new system changes yet',
+        message: `All detected system updates and implemented feature requests were already covered in ${context.latestReleaseVersion || 'the latest release'}. Write with AI will generate itemized release notes once new changes land in the system.`,
+        acceptLabel: 'OK'
+      });
+      return;
+    }
+
     const ver = (versionInput?.value || context.nextVersion || 'Update 1.0').trim();
     const targetImplemented = context.targetImplemented;
     const systemUpdates = context.systemUpdates;
@@ -1566,143 +1746,81 @@
 
     const prevTitle = titleInput?.value?.trim() || '';
     const prevDetails = detailsInput?.value?.trim() || '';
-    const currentDraft = sanitizeReleaseDetails(prevDetails).text;
+    const currentDraft = hasAiDraftInEditor ? sanitizeReleaseDetails(prevDetails).text : '';
+    currentReleaseBulletVariant = (currentReleaseBulletVariant + 1) % 6;
     const styleAngle = RELEASE_STYLE_ANGLES[currentReleaseBulletVariant % RELEASE_STYLE_ANGLES.length];
-    const nextSeed = (currentReleaseBulletVariant + 1) % 6;
-
+    const nextSeed = currentReleaseBulletVariant;
     const profileById = new Map(profiles.map((p) => [p.id, p]));
-    const featuresList = targetImplemented.map((req) => {
-      const prof = profileById.get(req.requester_id);
-      const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
-      return `- "${req.title}": ${req.details || 'Feature improvement'}${credit}`;
-    }).join('\n') || '- No pending community feature requests in this build.';
-    const systemUpdatesList = systemUpdates.length
-      ? systemUpdates.map((item) => `- ${humanizeReleaseUpdate(item, nextSeed) || item}`).join('\n')
-      : '- General reliability improvements, UI refinements, and smoother workflows across web and mobile.';
-    const previousReleasesList = previousReleases.length
-      ? previousReleases.map((item) => `- ${item}`).join('\n')
-      : '- None (initial release).';
-
-    const prompt = `You are the product communications writer for myIPON (Group Savings and Financial Tracker) ${ver}. The official product and system name is strictly "myIPON".
-Release Date: ${relDate}
-Writing Angle: ${styleAngle}
-
-Already shipped in earlier releases (DO NOT repeat these older features as new in ${ver}):
-${previousReleasesList}
-
-Newly implemented community-requested features for ${ver}:
-${featuresList}
-
-Recent system updates and fixes landed since the previous release:
-${systemUpdatesList}
-${currentDraft ? `\nCurrent draft in editor (rewrite with fresh phrasing, clearer user benefits, and varied wording—DO NOT copy these exact sentences verbatim):\n${currentDraft}` : ''}
-
-Instructions: Summarize ONLY the newly implemented community requests and user-facing product updates above into clear, plain-language changelog entries ("New Features", "Fixes", "Improvements", and "Features Requested by Users") using "Feature Name: concise description" format per item.
-Strict Audience Rules:
-- Write strictly for everyday myIPON users (savers, treasurers, and group admins) focusing ONLY on visible screens, buttons, workflows, and benefits they actually see and use.
-- Completely EXCLUDE developer, infrastructure, or code-level work (never mention code files, variable/function/database/trigger/RPC names like old.amount or enforce_group_scope, migrations, Supabase, Edge Functions, CLI commands, IDE setups, git commits, tests, or internal AI/composer tooling). If an item is purely technical or internal, omit it completely.
-- Do not repeat already-shipped updates or repeat the previous draft verbatim.
-
-Generate a JSON object with this exact structure:
-{
-  "title": "A punchy, attractive announcement title mentioning myIPON ${ver}",
-  "intro": "A 1-2 paragraph engaging, fresh intro celebrating this milestone for myIPON, thanking savers, and highlighting platform enhancements",
-  "new_features": ["Feature Title: Concise user-facing description of a newly added feature"],
-  "fixes": ["Affected Area: Concise explanation of a resolved issue or bug fix"],
-  "improvements": ["Enhanced Area: Concise explanation of an improvement or UI/performance polish"],
-  "requested_features": ["Feature Title: Concise description (Requested by: Name when credited)"],
-  "outro": "A warm, inspiring 1-paragraph closing message encouraging myIPON saving consistency"
-}`;
 
     try {
       Ipon.setBusy(releaseAiBtn, true);
       if (releaseAiStatus) {
         releaseAiStatus.hidden = false;
-        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Writing release announcement…';
+        if (releaseAiStatusText) releaseAiStatusText.textContent = 'Analyzing system changes with Gemini AI…';
       }
 
-      let title = '';
-      let details = '';
-      let usedGemini = false;
-      const apiKey = Ipon.getGeminiApiKey ? Ipon.getGeminiApiKey() : '';
+      const backendRes = await Ipon.invokeAccountFunction({
+        action: 'ai-generate-release-notes',
+        version: ver,
+        release_date: relDate,
+        previous_releases: previousReleases,
+        previous_title: prevTitle,
+        current_draft: currentDraft,
+        style_angle: styleAngle,
+        variation_seed: nextSeed,
+        system_updates: systemUpdates,
+        features: targetImplemented.map((req) => {
+          const prof = profileById.get(req.requester_id);
+          return {
+            title: req.title,
+            description: req.details,
+            requester_name: req.allow_credit !== false && prof?.full_name ? prof.full_name : null
+          };
+        })
+      });
 
-      // 1. If client Gemini API key exists, attempt direct Gemini API call
-      if (apiKey) {
-        try {
-          const res = await Ipon.callGemini({
-            prompt,
-            systemInstruction: 'You are an expert product communicator for myIPON, a modern group savings platform in the Philippines. The official platform name is strictly "myIPON". Write authentic, plain-language release notes for end users—focusing strictly on user-visible features, UI improvements, and bug fixes without any code, database, CLI, IDE, or developer jargon. Output strictly valid JSON.',
-            jsonResponse: true
-          });
-          const parsed = res?.parsed;
-          if (parsed && (parsed.title || parsed.intro)) {
-            title = String(parsed.title || `myIPON ${ver} Released`).trim();
-            const rawDetails = formatSectionedReleaseBody({
-              intro: String(parsed.intro || '').trim(),
-              newFeatures: Array.isArray(parsed.new_features) ? parsed.new_features : [],
-              fixes: Array.isArray(parsed.fixes) ? parsed.fixes : [],
-              improvements: Array.isArray(parsed.improvements) ? parsed.improvements : [],
-              requestedFeatures: Array.isArray(parsed.requested_features) ? parsed.requested_features : [],
-              highlights: Array.isArray(parsed.highlights) ? parsed.highlights : [],
-              outro: String(parsed.outro || '').trim()
-            });
-            const sanitized = sanitizeReleaseDetails(rawDetails);
-            details = sanitized.bulletCount > 0 ? sanitized.text : '';
-            usedGemini = Boolean(details);
-          }
-        } catch (clientErr) {
-          console.warn('Client-side Gemini call failed, falling back to server smart composer:', clientErr);
-        }
+      if (backendRes?.no_new_changes) {
+        await Ipon.confirmAction({
+          title: 'No new system changes yet',
+          message: backendRes.message || `All detected system updates and implemented feature requests were already covered in ${context.latestReleaseVersion || 'the latest release'}.`,
+          acceptLabel: 'OK'
+        });
+        return;
       }
 
-      // 2. If no client key or client call failed, invoke backend action: 'ai-generate-release-notes'
-      if (!title || !details) {
-        try {
-          const backendRes = await Ipon.invokeAccountFunction({
-            action: 'ai-generate-release-notes',
-            version: ver,
-            release_date: relDate,
-            previous_releases: previousReleases,
-            current_draft: currentDraft,
-            style_angle: styleAngle,
-            variation_seed: nextSeed,
-            system_updates: systemUpdates.length ? systemUpdates : RELEASE_FALLBACK_UPDATES,
-            features: targetImplemented.map((req) => {
-              const prof = profileById.get(req.requester_id);
-              return {
-                title: req.title,
-                description: req.details,
-                requester_name: req.allow_credit !== false && prof?.full_name ? prof.full_name : null
-              };
-            })
-          });
-          if (backendRes?.title && backendRes?.details) {
-            const sanitized = sanitizeReleaseDetails(backendRes.details);
-            if (sanitized.bulletCount > 0 && sanitized.strippedCount <= sanitized.bulletCount && sanitized.text.trim() !== prevDetails) {
-              title = backendRes.title;
-              details = sanitized.text;
-              usedGemini = Boolean(backendRes.ai_powered);
-            }
-          }
-        } catch (backendErr) {
-          console.warn('Backend release notes call failed, falling back to local composer:', backendErr);
-        }
+      if (!backendRes?.ai_powered || !backendRes?.title || !backendRes?.details) {
+        throw new Error(backendRes?.gemini_error || backendRes?.error || 'Gemini AI did not return release notes. Please try again.');
       }
 
-      // 3. Fallback to dynamic smart variation composer if AI wasn't used or returned identical text
-      if (!title || !details || details.trim() === prevDetails) {
-        const composed = composeReleaseNotes(ver, targetImplemented, systemUpdates);
-        title = composed.title;
-        details = composed.body;
-        usedGemini = false;
+      const sanitized = sanitizeReleaseDetails(backendRes.details);
+      if (sanitized.bulletCount <= 0 || !sanitized.text) {
+        throw new Error('Gemini AI returned no valid user-facing release notes. Please try again.');
       }
 
-      if (titleInput && title) titleInput.value = title;
-      if (detailsInput && details) detailsInput.value = details;
+      const details = sanitized.text;
+      let title = formatReleaseTitle(ver, backendRes.title, details, nextSeed);
+      if (prevTitle && title === prevTitle) {
+        title = formatReleaseTitle(ver, '', details, nextSeed + 1);
+      }
 
-      Ipon.toast(usedGemini ? '✨ Release announcement generated with Gemini AI!' : '✨ Drafted a fresh release announcement variation!');
+      if (titleInput) titleInput.value = title;
+      if (detailsInput) detailsInput.value = details;
+      hasAiDraftInEditor = true;
+      Ipon.toast(`Release announcement generated with Gemini AI${backendRes.model ? ` (${backendRes.model})` : ''}.`);
     } catch (err) {
-      Ipon.toast(`Release composer: ${err.message || 'Generation failed'}`, 'error');
+      const msg = Ipon.friendlyError ? Ipon.friendlyError(err) : (err?.message || 'Generation failed');
+      const isKeyError = /BILLING_DISABLED|billing is disabled|API key|GEMINI_API_KEY|revoked|rejected|not configured|401|403/i.test(`${err?.message || ''} ${msg}`);
+      if (releaseAiError && Ipon.showInlineError) {
+        Ipon.showInlineError(
+          releaseAiError,
+          err,
+          () => releaseAiBtn?.click(),
+          1,
+          'Gemini AI generation failed',
+          isKeyError ? { label: 'Configure API key', onClick: openGeminiKeyDialog } : null
+        );
+      }
+      Ipon.toast(msg, 'error');
     } finally {
       Ipon.setBusy(releaseAiBtn, false);
       if (releaseAiStatus) releaseAiStatus.hidden = true;
@@ -1712,7 +1830,21 @@ Generate a JSON object with this exact structure:
   releaseUpdateBtn?.addEventListener('click', openReleaseUpdateDialog);
   document.getElementById('release-update-close')?.addEventListener('click', () => releaseUpdateDialog?.close());
   document.getElementById('release-update-cancel')?.addEventListener('click', () => releaseUpdateDialog?.close());
-  releaseUpdateDialog?.addEventListener('close', () => releaseUpdateForm?.reset());
+  releaseUpdateDialog?.addEventListener('close', () => {
+    releaseUpdateForm?.reset();
+    hasAiDraftInEditor = false;
+    const notice = document.getElementById('release-update-change-notice');
+    if (notice) notice.hidden = true;
+    if (releaseAiStatus) releaseAiStatus.hidden = true;
+    if (releaseAiError) {
+      releaseAiError.hidden = true;
+      releaseAiError.replaceChildren();
+    }
+    ['release-update-version', 'release-update-heading', 'release-update-details'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && Ipon.setFieldError) Ipon.setFieldError(el, '');
+    });
+  });
 
   releaseUpdateForm?.addEventListener('submit', async (event) => {
     event.preventDefault();

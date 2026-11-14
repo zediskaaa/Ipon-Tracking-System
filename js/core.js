@@ -4144,18 +4144,27 @@
     if (/duplicate key|unique constraint/i.test(message)) return 'That reference was already used.';
     if (/cannot remove or disable your own administrator|another active administrator/i.test(message)) return 'Assign another active administrator before changing administrator access.';
     if (/row-level security|permission denied|not allowed to|only (?:a |an )?.*administrator/i.test(message)) return 'You do not have permission for that action.';
+    if (/BILLING_DISABLED|requires billing to be enabled|billing is disabled/i.test(message)) return 'Google Cloud billing is disabled for the current Google Cloud project key. Enable Cloud billing on that project, or click Configure API key to save a free-tier key from Google AI Studio.';
+    if (/ACCESS_TOKEN_TYPE_UNSUPPORTED|API key not valid|API_KEY_INVALID|API key expired/i.test(message)) return 'The server Gemini API key was rejected or revoked by Google. Click Configure API key to test and save a fresh Google AI Studio key.';
     return message;
   }
 
-  function showInlineError(container, error, retry, colspan = 1) {
+  function showInlineError(container, error, retry, colspan = 1, heading = 'Unable to load this section', extraAction = null) {
     if (!container) return;
-    const content = `<div class="inline-error" role="alert"><strong>Unable to load this section</strong><span>${escapeHtml(friendlyError(error))}</span>${retry ? '<button class="button button-secondary" type="button">Retry</button>' : ''}</div>`;
+    if (container.tagName !== 'TBODY') container.hidden = false;
+    const hasActions = Boolean(retry || extraAction?.label);
+    const actionsHtml = hasActions
+      ? `<div class="inline-error-actions">${retry ? '<button class="button button-secondary" data-inline-action="retry" type="button">Retry</button>' : ''}${extraAction?.label ? `<button class="button button-primary" data-inline-action="extra" type="button">${escapeHtml(extraAction.label)}</button>` : ''}</div>`
+      : '';
+    const content = `<div class="inline-error" role="alert"><strong>${escapeHtml(heading)}</strong><span>${escapeHtml(friendlyError(error))}</span>${actionsHtml}</div>`;
     container.innerHTML = container.tagName === 'TBODY' ? `<tr><td colspan="${colspan}">${content}</td></tr>` : content;
-    const button = container.querySelector('button');
-    button?.addEventListener('click', async () => {
-      button.disabled = true;
-      try { await retry(); } catch (nextError) { showInlineError(container, nextError, retry, colspan); }
+    const retryBtn = container.querySelector('[data-inline-action="retry"]');
+    retryBtn?.addEventListener('click', async () => {
+      retryBtn.disabled = true;
+      try { await retry(); } catch (nextError) { showInlineError(container, nextError, retry, colspan, heading, extraAction); }
     });
+    const extraBtn = container.querySelector('[data-inline-action="extra"]');
+    extraBtn?.addEventListener('click', () => extraAction?.onClick?.());
   }
 
   function setBusy(button, busy, label = 'Saving…') {
@@ -4642,6 +4651,12 @@
       if (/^(?:improvements?|enhancements?|updates?|performance(?:\s*&\s*|\s+and\s+)polish)$/i.test(cleaned)) {
         return { kind: 'improvements', label: 'Improvements' };
       }
+      if (/^(?:security(?:\s+updates?|\s*&\s*privacy|\s+enhancements?|\s+fixes)?)$/i.test(cleaned)) {
+        return { kind: 'security', label: 'Security Updates' };
+      }
+      if (/^(?:other\s+changes?|miscellaneous|other\s+updates?)$/i.test(cleaned)) {
+        return { kind: 'other', label: 'Other Changes' };
+      }
       if (/^(?:#{1,4}\s+|(?:\*\*[^*]+\*\*)$)/.test(String(line || '').trim()) || /:\s*$/.test(String(line || '').trim())) {
         if (!/[.!?]$/.test(cleaned) && cleaned.split(/\s+/).length <= 7) {
           return { kind: 'custom', label: cleaned };
@@ -4663,7 +4678,10 @@
     };
 
     const inferReleaseBulletKind = (textVal) => {
-      if (/\b(?:fix(?:ed|es)?|bug|error|resolve[ds]?|prevent(?:ed|s)?|deduplicate|restore[ds]?|constraint|foreign\s+key|permission)\b/i.test(textVal)) {
+      if (/\b(?:security|vulnerabilit|rls|permission|auth(?:entication|orization)?|encrypt|csp|xss|csrf|hardening)\b/i.test(textVal)) {
+        return 'security';
+      }
+      if (/\b(?:fix(?:ed|es)?|bug|error|resolve[ds]?|prevent(?:ed|s)?|deduplicate|restore[ds]?|constraint|foreign\s+key)\b/i.test(textVal)) {
         return 'fixes';
       }
       if (/\b(?:improv(?:e[ds]?|ement)|polish|compact|clutter|refactor|faster|reliab|sync(?:hroniz)?|clean(?:er|ed)?|streamline)\b/i.test(textVal)) {
@@ -4762,12 +4780,14 @@
       const autoGroups = {
         features: { type: 'section', kind: 'features', label: 'New Features', items: [] },
         fixes: { type: 'section', kind: 'fixes', label: 'Fixes', items: [] },
-        improvements: { type: 'section', kind: 'improvements', label: 'Improvements', items: [] }
+        improvements: { type: 'section', kind: 'improvements', label: 'Improvements', items: [] },
+        security: { type: 'section', kind: 'security', label: 'Security Updates', items: [] },
+        other: { type: 'section', kind: 'other', label: 'Other Changes', items: [] }
       };
       let flushedAuto = false;
       const flushAutoGroups = () => {
         if (flushedAuto) return;
-        ['features', 'fixes', 'improvements'].forEach((key) => {
+        ['features', 'fixes', 'improvements', 'security', 'other'].forEach((key) => {
           if (autoGroups[key].items.length) normalizedBlocks.push(autoGroups[key]);
         });
         flushedAuto = true;
@@ -4818,7 +4838,7 @@
 
     return normalizedBlocks.map((block) => {
       if (block.type === 'section') {
-        const toneClass = block.kind === 'fixes' ? 'is-fixes' : block.kind === 'improvements' ? 'is-improvements' : block.kind === 'features' ? 'is-features' : '';
+        const toneClass = block.kind === 'fixes' ? 'is-fixes' : block.kind === 'improvements' ? 'is-improvements' : block.kind === 'security' ? 'is-security' : block.kind === 'other' ? 'is-other' : block.kind === 'features' ? 'is-features' : '';
         return `
           <section class="announcement-section-block ${toneClass}">
             <div class="announcement-section-bar">
@@ -5780,15 +5800,12 @@
   }
 
   const STABLE_GEMINI_MODELS = [
-    'gemini-flash-lite-latest',
-    'gemini-3.1-flash-lite',
     'gemini-2.5-flash-lite',
-    'gemini-3.5-flash-lite',
-    'gemini-3.5-flash',
-    'gemini-3.6-flash',
+    'gemini-2.0-flash',
+    'gemini-2.5-flash',
+    'gemini-flash-lite-latest',
     'gemini-flash-latest',
-    'gemini-1.5-flash',
-    'gemini-2.5-flash'
+    'gemini-1.5-flash'
   ];
 
   let cachedWorkingGeminiModel = null;
@@ -5840,13 +5857,14 @@
       let timer = null;
       try {
         const ctrl = new AbortController();
-        timer = setTimeout(() => ctrl.abort(), 3500);
+        timer = setTimeout(() => ctrl.abort(), 25000);
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(curModel)}:generateContent?key=${encodeURIComponent(key)}`;
         const body = {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.75,
-            maxOutputTokens: 1000
+            temperature: 0.92,
+            topP: 0.95,
+            maxOutputTokens: 8192
           }
         };
         if (jsonResponse) {
@@ -5920,7 +5938,7 @@
         if (/revoked|ACCESS_TOKEN_TYPE_UNSUPPORTED/i.test(err.message)) {
           throw err;
         }
-        if (!/404|503|429|unavailable|high demand/i.test(err.message)) {
+        if (!/404|503|429|unavailable|high demand|parse JSON|Unterminated|Unexpected token/i.test(err.message)) {
           throw err;
         }
       }
