@@ -1,5 +1,9 @@
 [
   {
+    "date": "2026-11-15T03:20:46+08:00",
+    "message": "Route notification deep links, refine audit log details, and remove obsolete Super Admin requests\n\n- Route release/announcement updates, reviews, reminders, invites, feature requests, and bug report notifications directly to their exact modals or highlighted records across SQL (migration 069), push/account Edge functions, Service Worker (sw.js), Android MainActivity, and role panels.\n- Replace raw Audit Log column/JSON/base64 dumps with plain-language summaries and inline photo previews, limiting Before -> After cards to actual changed field values while displaying action reasons and attributions (e.g. Removal reason, Removed by, Void reason, Review note) as single clean detail cards.\n- Remove the obsolete Administrator Requests navigation tab, overview metric/shortcut, table section, approval/rejection dialogs, and handlers from the Super Admin panel, and update the platform metrics grid and synced ./www, Android, and iOS assets.\n- Remove the trailing arrow from the login/create-account submit button in login.html, sync cache-busted HTML asset tags (?v=20261115-80), and update contract tests (121/121 passing)."
+  },
+  {
     "date": "2026-11-15T02:16:01+08:00",
     "message": "Eliminate Android white startup flash, add progressive login brute-force lockout, and polish account profile UI\n\n- Fix Android 12+ cold-start splash blank white screen with #0b3428 windowSplashScreenBackground, dark system bars, and MainActivity window background matching the pulsing emerald splash\n- Implement progressive anti-brute-force login protection across migration 068, schema.sql, manage-account Edge Function, login.html, and js/auth.js\n- Remove Phone & drawer alerts preference card from account.html and js/core.js\n- Style .account-profile-identity small as plain muted text instead of a pill badge in light and dark themes\n- Bump HTML cache versions, sync js/release-commits.json, and expand tests/contracts.test.mjs"
   },
@@ -174,9 +178,5 @@
   {
     "date": "2026-11-14T02:23:33+08:00",
     "message": "Remove AI Coach button, modal, and insight functionality from Dashboard"
-  },
-  {
-    "date": "2026-11-14T02:21:39+08:00",
-    "message": "Center myIPON brand vertically with mobile top action buttons across all pages"
   }
 ]

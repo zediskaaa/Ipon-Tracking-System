@@ -6476,7 +6476,9 @@
           p_id: announcementId,
           p_title: title,
           p_description: description,
-          p_attachments: attachments
+          p_attachments: attachments,
+          p_announcement_type: 'GENERAL',
+          p_release_version: null
         });
         composeDialog.close();
         composeForm.reset();

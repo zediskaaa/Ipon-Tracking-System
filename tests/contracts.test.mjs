@@ -5793,6 +5793,32 @@ test('audit log renders plain-language summaries and clean field-level Before/Af
   assert.equal(editedNoteEntry.changes[0].after.text, 'Verified clearer receipt');
 });
 
+test('migration 070 drops all stale overloaded RPC signatures and core passes explicit create_announcement arguments', () => {
+  const migration070 = read('database/migrations/20261115_070_drop_overloaded_rpc_signatures.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+  const expectedDrops = [
+    'create_announcement(uuid, text, text, jsonb)',
+    'create_member(text, text, text, text, date, numeric, text)',
+    'update_member(uuid, text, text, text, text, numeric, text)',
+    'update_contribution(uuid, numeric, date, text, text)',
+    'update_expense(uuid, date, numeric, text, text, text, text, text)',
+    'update_withdrawal(uuid, date, numeric, text, text, text, text, text)',
+    'update_own_profile(text, text, text, text)'
+  ];
+  for (const sig of expectedDrops) {
+    assert.ok(migration070.includes(`drop function if exists public.${sig};`), `missing drop in 070 for ${sig}`);
+    assert.ok(schema.includes(`drop function if exists public.${sig};`), `missing drop in schema.sql for ${sig}`);
+  }
+  assert.match(migration070, /grant execute on function public\.create_announcement\(uuid, text, text, jsonb, text, text\) to authenticated;/i);
+  assert.match(migration070, /notify pgrst, 'reload schema';/i);
+  assert.match(migration070, /'20261115_070'/);
+  assert.match(schema, /grant execute on function public\.create_announcement\(uuid, text, text, jsonb, text, text\) to authenticated;/i);
+  assert.doesNotMatch(schema, /grant execute on function public\.create_announcement\(uuid, text, text, jsonb\) to authenticated;/i);
+  assert.match(schema, /'20261115_070'/);
+  assert.match(core, /rpc\('create_announcement',\s*\{[\s\S]*p_announcement_type:\s*'GENERAL'[\s\S]*p_release_version:\s*null/);
+});
+
 
 
 

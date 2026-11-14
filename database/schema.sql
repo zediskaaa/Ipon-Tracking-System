@@ -3370,11 +3370,13 @@ begin
 end;
 $$;
 
+drop function if exists public.create_announcement(uuid, text, text, jsonb);
+
 revoke all on public.announcements from public, anon, authenticated;
 grant select on public.announcements to authenticated;
 
-revoke execute on function public.create_announcement(uuid, text, text, jsonb) from public, anon;
-grant execute on function public.create_announcement(uuid, text, text, jsonb) to authenticated;
+revoke execute on function public.create_announcement(uuid, text, text, jsonb, text, text) from public, anon;
+grant execute on function public.create_announcement(uuid, text, text, jsonb, text, text) to authenticated;
 
 revoke execute on function public.delete_announcement(uuid) from public, anon;
 grant execute on function public.delete_announcement(uuid) to authenticated;
@@ -16252,6 +16254,18 @@ grant execute on function public.admin_delete_group(uuid, text) to authenticated
 
 insert into public.schema_migrations (version, name)
 values ('20261115_069', 'deep link targets for all notifications')
+on conflict (version) do nothing;
+
+drop function if exists public.create_announcement(uuid, text, text, jsonb);
+drop function if exists public.create_member(text, text, text, text, date, numeric, text);
+drop function if exists public.update_member(uuid, text, text, text, text, numeric, text);
+drop function if exists public.update_contribution(uuid, numeric, date, text, text);
+drop function if exists public.update_expense(uuid, date, numeric, text, text, text, text, text);
+drop function if exists public.update_withdrawal(uuid, date, numeric, text, text, text, text, text);
+drop function if exists public.update_own_profile(text, text, text, text);
+
+insert into public.schema_migrations (version, name)
+values ('20261115_070', 'drop overloaded rpc signatures')
 on conflict (version) do nothing;
 
 commit;
