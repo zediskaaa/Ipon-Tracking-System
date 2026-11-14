@@ -6035,6 +6035,17 @@ begin
     raise exception 'Authentication required.' using errcode = '42501';
   end if;
 
+  if not public.mfa_access_allowed() then
+    raise exception 'Complete multi-factor authentication first.' using errcode = '42501';
+  end if;
+
+  if exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.status = 'DISABLED'
+  ) then
+    raise exception 'Your account is deactivated or disabled.' using errcode = '42501';
+  end if;
+
   if public.is_super_admin() then
     raise exception 'Super administrators manage platform access from the Super Admin console.' using errcode = '42501';
   end if;
@@ -8824,6 +8835,10 @@ alter table public.notifications replica identity full;
 
 insert into public.schema_migrations (version, name)
 values ('20261114_051', 'replace or remove prior announcement reaction notifications instead of stacking duplicates')
+on conflict (version) do nothing;
+
+insert into public.schema_migrations (version, name)
+values ('20261114_052', 'restore self-serve admin_create_group and admin contributor pledge sync')
 on conflict (version) do nothing;
 
 commit;

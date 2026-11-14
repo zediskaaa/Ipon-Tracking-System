@@ -1771,3 +1771,15 @@ test('release composer reads live recent commits and prior releases instead of f
   assert.doesNotMatch(edgeTs, /Profile Picture Editor: Crop, rotate 90 degrees/);
 });
 
+test('self-serve admin_create_group allows any non-super-admin active user without requiring prior admin role', () => {
+  const migration052 = read('database/migrations/20261114_052_restore_self_serve_admin_create_group.sql');
+  const schema = read('database/schema.sql');
+
+  assert.match(migration052, /create or replace function public\.admin_create_group\(/i);
+  assert.doesNotMatch(migration052, /if not public\.is_admin\(\) then[\s\S]*Only a group administrator can create a savings group/i);
+  assert.match(migration052, /create or replace function public\.set_admin_contributor\(/i);
+  assert.match(migration052, /20261114_052/);
+  assert.match(schema, /mfa_access_allowed[\s\S]*Your account is deactivated or disabled/);
+  assert.match(schema, /20261114_052/);
+});
+
