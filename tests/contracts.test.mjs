@@ -1736,3 +1736,23 @@ test('group-required prompts block recording flows before form submission when u
   assert.doesNotMatch(userJs, /submit-contribution'\)\.disabled\s*=\s*!data\.member_id/);
 });
 
+test('announcement reaction notifications replace or remove prior reaction entries instead of flooding', () => {
+  const migration051 = read('database/migrations/20261114_051_dedupe_announcement_reaction_notifications.sql');
+  const schema = read('database/schema.sql');
+  const coreJs = read('js/core.js');
+
+  assert.match(migration051, /add column if not exists dedupe_key text/i);
+  assert.match(migration051, /notifications_recipient_dedupe_uidx/i);
+  assert.match(migration051, /after insert or update or delete on public\.announcement_reactions/i);
+  assert.match(migration051, /if tg_op = 'DELETE' then/i);
+  assert.match(migration051, /on conflict \(recipient_id, dedupe_key\) where dedupe_key is not null\s*do update/i);
+  assert.match(migration051, /20261114_051/);
+
+  assert.match(schema, /after insert or update or delete on public\.announcement_reactions/i);
+  assert.match(schema, /20261114_051/);
+
+  assert.match(coreJs, /select\('id,group_id,type,title,message,link,dedupe_key,read_at,created_at'\)/);
+  assert.match(coreJs, /event: '\*', schema: 'public', table: 'notifications'/);
+  assert.match(coreJs, /realtimePayload\?\.eventType !== 'DELETE'/);
+});
+

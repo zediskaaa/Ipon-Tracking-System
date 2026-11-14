@@ -2284,6 +2284,7 @@
   async function dispatchDeviceNotification(item, userId) {
     if (!item || item.read_at || currentProfile?.notifications_enabled === false) return;
     const notifKey = String(item.id);
+    const trayKey = item.dedupe_key ? String(item.dedupe_key) : notifKey;
     if (readShownNotificationIds(userId).includes(notifKey)) return;
     const permission = await getDeviceNotificationPermission();
     if (permission !== 'granted') return;
@@ -2298,7 +2299,7 @@
       try {
         await plugin.schedule({
           notifications: [{
-            id: buildLocalNotificationId(item.id),
+            id: buildLocalNotificationId(trayKey),
             title,
             body,
             channelId: 'myipon_alerts',
@@ -2316,12 +2317,12 @@
             body,
             icon: '/assets/icon-192.png',
             badge: '/assets/icon-192.png',
-            tag: `myipon-${notifKey}`,
+            tag: `myipon-${trayKey}`,
             data: { url: target }
           });
           return;
         }
-        const n = new Notification(title, { body, icon: '/assets/icon-192.png', tag: `myipon-${notifKey}` });
+        const n = new Notification(title, { body, icon: '/assets/icon-192.png', tag: `myipon-${trayKey}` });
         n.onclick = () => {
           window.focus();
           if (target) window.location.href = target;
@@ -2391,12 +2392,12 @@
     let lastSeenMs = storedLastSeen ? Number(storedLastSeen) : null;
 
     const load = async (realtimePayload) => {
-      const { data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,read_at,created_at').order('created_at', { ascending: false }).limit(40);
+      const { data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,dedupe_key,read_at,created_at').order('created_at', { ascending: false }).limit(40);
       if (error) { showInlineError(list, error, load); return; }
       const rows = data || [];
       let allRows = rows;
 
-      if (realtimePayload?.new) {
+      if (realtimePayload?.eventType !== 'DELETE' && realtimePayload?.new?.id) {
         const match = rows.find((item) => String(item.id) === String(realtimePayload.new.id)) || realtimePayload.new;
         dispatchDeviceNotification(match, profile.id).catch(() => { });
       } else if (lastSeenMs === null) {
@@ -2550,7 +2551,7 @@
     window.addEventListener('online', () => { load().catch(() => { }); });
 
     await load();
-    client.channel(`notifications:${profile.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, (payload) => load(payload)).subscribe();
+    client.channel(`notifications:${profile.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, (payload) => load(payload)).subscribe();
 
     if (profile.notifications_enabled !== false) {
       const syncKey = `myipon_due_sync_${profile.id}`;
