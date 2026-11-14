@@ -527,6 +527,54 @@ async function fetchRecentSystemUpdates(sinceIso?: string | null) {
   return updates;
 }
 
+function formatSectionedReleaseBody(opts: {
+  intro: string;
+  newFeatures?: string[];
+  fixes?: string[];
+  improvements?: string[];
+  requestedFeatures?: string[];
+  highlights?: string[];
+  outro: string;
+}) {
+  const parts: string[] = [];
+  if (opts.intro) parts.push(opts.intro.trim());
+  const pushSection = (heading: string, items: string[]) => {
+    const list = items.map((v) => `• ${String(v).replace(/^[•\s*-]+/, '').trim()}`).filter((v) => v.length > 2);
+    if (list.length) parts.push(`${heading}\n${list.join('\n')}`);
+  };
+  const nf = opts.newFeatures || [];
+  const fx = opts.fixes || [];
+  const im = opts.improvements || [];
+  if (nf.length || fx.length || im.length) {
+    pushSection('New Features', nf);
+    pushSection('Fixes', fx);
+    pushSection('Improvements', im);
+  } else if (opts.highlights?.length) {
+    const autoNf: string[] = [];
+    const autoFx: string[] = [];
+    const autoIm: string[] = [];
+    for (const raw of opts.highlights) {
+      const clean = String(raw || '').replace(/^[•\-*]\s*/, '').trim();
+      if (!clean) continue;
+      if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|constraint|foreign\s+key|bug)\b/i.test(clean)) {
+        autoFx.push(clean);
+      } else if (/^(?:improv|polish|clean|compact|sync|update|refactor|streamline|keep|align)\b|\b(?:faster|cleaner|compact|reliable|visibility)\b/i.test(clean)) {
+        autoIm.push(clean);
+      } else {
+        autoNf.push(clean);
+      }
+    }
+    pushSection('New Features', autoNf);
+    pushSection('Fixes', autoFx);
+    pushSection('Improvements', autoIm);
+  }
+  if (opts.requestedFeatures?.length) {
+    pushSection('Features Requested by Users:', opts.requestedFeatures);
+  }
+  if (opts.outro) parts.push(opts.outro.trim());
+  return parts.filter(Boolean).join('\n\n');
+}
+
 function generateProceduralReleaseNotes(
   version: string,
   features: Array<{ title: string; description: string; requester_name?: string | null }>,
@@ -547,8 +595,8 @@ function generateProceduralReleaseNotes(
     `Big news for all savers: System ${version} is now officially live! Here is everything you need to know about the newest capabilities now available across IPON.`
   ];
   const outros = [
-    `Thank you for contributing, testing, and helping us make IPON better with every update. Happy saving!`,
-    `Your ideas drive IPON forward! Keep submitting your feedback and suggestions—more improvements are already on the horizon.`,
+    `Thank you for contributing, testing, and helping us make myIPON better with every update. Happy saving!`,
+    `Your ideas drive myIPON forward! Keep submitting your feedback and suggestions—more improvements are already on the horizon.`,
     `We could not build this without our incredible community. Here is to simpler, smarter group savings together!`,
     `Special thanks to everyone who reported ideas and suggestions. Enjoy exploring the new update!`
   ];
@@ -557,25 +605,21 @@ function generateProceduralReleaseNotes(
   const intro = intros[Math.floor(Math.random() * intros.length)];
   const outro = outros[Math.floor(Math.random() * outros.length)];
 
-  let body = `${intro}\n\n`;
-  if (systemUpdates.length > 0) {
-    systemUpdates.forEach((item) => {
-      body += `• ${item}\n`;
-    });
-  } else if (features.length === 0) {
-    body += `• System Reliability & Performance: UI refinements, smoother workflows, and stability fixes across web and mobile.\n`;
-  }
+  const rawUpdates = systemUpdates.length > 0
+    ? systemUpdates
+    : (features.length === 0 ? ['System Reliability & Performance: UI refinements, smoother workflows, and stability fixes across web and mobile.'] : []);
+  const requestedFeatures = features.map((req) => {
+    const credit = req.requester_name ? ` (Requested by: ${req.requester_name})` : '';
+    return `${req.title}: ${req.description || 'Feature enhancement'}${credit}`;
+  });
 
-  if (features.length > 0) {
-    body += `\nCommunity Feature Requests Implemented in this Release:\n`;
-    features.forEach((req) => {
-      const credit = req.requester_name ? ` (Suggested by: ${req.requester_name})` : '';
-      body += `• ${req.title}: ${req.description || 'Feature enhancement'}${credit}\n`;
-    });
-  }
-
-  body += `\n${outro}`;
-  return { title, details: body };
+  const details = formatSectionedReleaseBody({
+    intro,
+    highlights: rawUpdates,
+    requestedFeatures,
+    outro
+  });
+  return { title, details };
 }
 
 type AdminClient = ReturnType<typeof createClient>;
@@ -1356,17 +1400,16 @@ ${featureListText}
 Recent system updates and fixes landed since the previous release:
 ${updatesListText}
 
-Instructions: Summarize ONLY the newly implemented user requests and recent system updates above into clear, saver-friendly highlights without repeating already-shipped features.
+Instructions: Summarize ONLY the newly implemented user requests and recent system updates above into clear, sectioned changelog highlights ("New Features", "Fixes", "Improvements", and "Features Requested by Users") using "Title: concise saver-facing description" format per item, without repeating already-shipped features.
 
 Please generate a JSON object with this exact structure:
 {
   "title": "A punchy, attractive announcement title mentioning myIPON ${version}",
   "intro": "A 1-2 paragraph fresh, engaging, non-cliché introduction celebrating this milestone for myIPON and explaining its value to users",
-  "highlights": [
-    "A concise bullet point describing a major recent update or user request with user credit if applicable",
-    "Another concise bullet point describing a recent fix or improvement",
-    "Additional bullet points for the remaining updates"
-  ],
+  "new_features": ["Feature Title: Concise description of a new feature"],
+  "fixes": ["Fixed Area: Concise explanation of a resolved bug or fix"],
+  "improvements": ["Improved Area: Concise explanation of an improvement or polish"],
+  "requested_features": ["Feature Title: Concise description (Requested by: Name when credited)"],
   "outro": "A warm, inspiring 1-paragraph closing message thanking myIPON savers for their continuous feedback and encouraging them to keep reaching their financial goals"
 }`;
 
@@ -1376,12 +1419,16 @@ Please generate a JSON object with this exact structure:
           systemInstruction: 'You are the head of product communications for myIPON, a modern group savings platform in the Philippines. The official name is strictly "myIPON". Write polished, engaging, inspiring release copy in English. Output strictly valid JSON.'
         });
 
-        const title = String(aiResult.title || `System ${version} Released`).trim();
-        const intro = String(aiResult.intro || `We are excited to roll out System ${version}!`).trim();
-        const highlights = Array.isArray(aiResult.highlights) ? aiResult.highlights.map((h: string) => `• ${String(h).trim()}`).join('\n') : '';
-        const outro = String(aiResult.outro || 'Thank you for being part of IPON. Happy saving!').trim();
-
-        const details = `${intro}\n\n${highlights}\n\n${outro}`;
+        const title = String(aiResult.title || `myIPON ${version} Released`).trim();
+        const details = formatSectionedReleaseBody({
+          intro: String(aiResult.intro || `We are excited to roll out myIPON ${version}!`).trim(),
+          newFeatures: Array.isArray(aiResult.new_features) ? aiResult.new_features : [],
+          fixes: Array.isArray(aiResult.fixes) ? aiResult.fixes : [],
+          improvements: Array.isArray(aiResult.improvements) ? aiResult.improvements : [],
+          requestedFeatures: Array.isArray(aiResult.requested_features) ? aiResult.requested_features : [],
+          highlights: Array.isArray(aiResult.highlights) ? aiResult.highlights : [],
+          outro: String(aiResult.outro || 'Thank you for being part of myIPON. Happy saving!').trim()
+        });
         return json({
           success: true,
           ai_powered: true,

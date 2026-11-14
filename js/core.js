@@ -3307,98 +3307,243 @@
     const text = String(rawText).trim();
     const lines = text.split('\n');
 
-    let html = '';
+    const classifySectionHeader = (line) => {
+      const cleaned = String(line || '')
+        .trim()
+        .replace(/^#{1,4}\s+/, '')
+        .replace(/^\*{1,2}(.+?)\*{1,2}$/, '$1')
+        .replace(/:$/, '')
+        .trim();
+      if (!cleaned || cleaned.length > 72) return null;
+      if (/^(?:features?\s+requested|community\s+(?:requested|feature\s+requests?|spotlight)|requested\s+by\s+savers|user-requested\s+features)\b/i.test(cleaned)) {
+        return { kind: 'requested', label: cleaned };
+      }
+      if (/^(?:new\s+features?|features?|what['’]?s\s+new|key\s+highlights?|highlights?)$/i.test(cleaned)) {
+        return { kind: 'features', label: 'New Features' };
+      }
+      if (/^(?:fixes|bug\s*fixes?|resolved\s+issues?)$/i.test(cleaned)) {
+        return { kind: 'fixes', label: 'Fixes' };
+      }
+      if (/^(?:improvements?|enhancements?|updates?|performance(?:\s*&\s*|\s+and\s+)polish)$/i.test(cleaned)) {
+        return { kind: 'improvements', label: 'Improvements' };
+      }
+      if (/^(?:#{1,4}\s+|(?:\*\*[^*]+\*\*)$)/.test(String(line || '').trim()) || /:\s*$/.test(String(line || '').trim())) {
+        if (!/[.!?]$/.test(cleaned) && cleaned.split(/\s+/).length <= 7) {
+          return { kind: 'custom', label: cleaned };
+        }
+      }
+      return null;
+    };
+
+    const parseBulletLine = (line) => {
+      const cleanLine = String(line || '').replace(/^[•\-*]\s*/, '').trim();
+      const delimMatch = cleanLine.match(/^(.*?)(:\s+|—\s*|\s+-\s+)(.*)$/);
+      let titlePart = '';
+      let descPart = cleanLine;
+      if (delimMatch) {
+        titlePart = delimMatch[1].replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
+        descPart = delimMatch[3].trim();
+      }
+      return { titlePart, descPart, raw: cleanLine };
+    };
+
+    const inferReleaseBulletKind = (textVal) => {
+      if (/\b(?:fix(?:ed|es)?|bug|error|resolve[ds]?|prevent(?:ed|s)?|deduplicate|restore[ds]?|constraint|foreign\s+key|permission)\b/i.test(textVal)) {
+        return 'fixes';
+      }
+      if (/\b(?:improv(?:e[ds]?|ement)|polish|compact|clutter|refactor|faster|reliab|sync(?:hroniz)?|clean(?:er|ed)?|streamline)\b/i.test(textVal)) {
+        return 'improvements';
+      }
+      return 'features';
+    };
+
+    const isOutro = (l) => /(?:grateful|thank\s+you|happy\s+saving|enjoy\s+the\s+new\s+update)/i.test(l);
+
+    const blocks = [];
+    let currentSection = null;
     let inRequestedBox = false;
-    let requestedBoxItems = [];
-    let requestedBoxHeading = '';
+    let requestedHeading = '';
+    let requestedItems = [];
+    let hasExplicitSections = false;
+
+    const flushSection = () => {
+      if (currentSection && currentSection.items.length) {
+        blocks.push({ type: 'section', ...currentSection });
+      }
+      currentSection = null;
+    };
 
     const flushRequestedBox = () => {
       if (!inRequestedBox) return;
-      html += `
-        <div class="announcement-requested-card">
-          <div class="announcement-requested-accent" aria-hidden="true"></div>
-          <div class="announcement-requested-inner">
-            <strong class="announcement-requested-title">${escapeHtml(requestedBoxHeading)}</strong>
-            <div class="announcement-requested-list">
-              ${requestedBoxItems.map((item) => {
-                const creditMatch = item.match(/\((Requested by:[^)]+)\)/i);
-                let itemHtml = escapeHtml(item);
-                if (creditMatch) {
-                  const escapedCredit = escapeHtml(creditMatch[0]);
-                  itemHtml = itemHtml.replace(escapedCredit, `<em class="announcement-requester-credit">${escapedCredit}</em>`);
-                }
-                return `
-                  <div class="announcement-requested-item">
-                    <span class="announcement-bullet-dot" aria-hidden="true">•</span>
-                    <span>${itemHtml}</span>
-                  </div>`;
-              }).join('')}
-            </div>
-          </div>
-        </div>`;
+      blocks.push({ type: 'requested', heading: requestedHeading, items: requestedItems });
       inRequestedBox = false;
-      requestedBoxItems = [];
-      requestedBoxHeading = '';
-    };
-
-    const isRequestedHeader = (l) => {
-      const trimmed = (l || '').trim();
-      return /^(?:features?\s+requested|community\s+requested|requested\s+by\s+savers|community\s+spotlight|user-requested\s+features)\b/i.test(trimmed) && trimmed.endsWith(':');
-    };
-
-    const isOutro = (l) => {
-      return /(?:grateful|thank\s+you|happy\s+saving|enjoy\s+the\s+new\s+update)/i.test(l);
+      requestedHeading = '';
+      requestedItems = [];
     };
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-
       if (!line) {
-        if (inRequestedBox && i + 1 < lines.length && isOutro(lines[i + 1])) {
-          flushRequestedBox();
-        }
+        if (inRequestedBox && i + 1 < lines.length && isOutro(lines[i + 1])) flushRequestedBox();
         continue;
       }
 
-      if (isRequestedHeader(line)) {
+      const headerInfo = classifySectionHeader(line);
+      if (headerInfo) {
+        flushSection();
         flushRequestedBox();
-        inRequestedBox = true;
-        requestedBoxHeading = line;
+        if (headerInfo.kind === 'requested') {
+          inRequestedBox = true;
+          requestedHeading = headerInfo.label;
+        } else {
+          hasExplicitSections = true;
+          currentSection = { kind: headerInfo.kind, label: headerInfo.label, items: [] };
+        }
         continue;
       }
 
       if (inRequestedBox) {
         if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
-          const itemText = line.replace(/^[•\-*]\s*/, '').trim();
-          requestedBoxItems.push(itemText);
+          requestedItems.push(line.replace(/^[•\-*]\s*/, '').trim());
           continue;
-        } else if (isOutro(line)) {
+        }
+        if (isOutro(line)) {
           flushRequestedBox();
         } else {
-          requestedBoxItems.push(line);
+          requestedItems.push(line);
           continue;
         }
       }
 
       if (isOutro(line)) {
+        flushSection();
         flushRequestedBox();
         const restLines = lines.slice(i).map((l) => l.trim()).filter(Boolean);
-        html += `<div class="announcement-outro-block"><p>${restLines.map((l) => escapeHtml(l)).join('<br>')}</p></div>`;
+        blocks.push({ type: 'outro', lines: restLines });
         break;
       }
 
       if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
-        const cleanLine = line.replace(/^[•\-*]\s*/, '').trim();
-        let titlePart = '';
-        let descPart = cleanLine;
-
-        const delimMatch = cleanLine.match(/^(.*?)(:\s+|—\s*|\s+-\s+)(.*)$/);
-        if (delimMatch) {
-          titlePart = delimMatch[1].trim();
-          descPart = delimMatch[3].trim();
+        const parsed = parseBulletLine(line);
+        if (currentSection) {
+          currentSection.items.push(parsed);
+        } else {
+          blocks.push({ type: 'loose-bullet', item: parsed });
         }
+        continue;
+      }
 
-        html += `
+      flushSection();
+      blocks.push({ type: 'para', text: line });
+    }
+
+    flushSection();
+    flushRequestedBox();
+
+    // Auto-section unheaded release bullets into New Features / Fixes / Improvements so
+    // both new and earlier release updates display clean scannable sections.
+    const normalizedBlocks = [];
+    if (releaseVersion && !hasExplicitSections) {
+      const autoGroups = {
+        features: { type: 'section', kind: 'features', label: 'New Features', items: [] },
+        fixes: { type: 'section', kind: 'fixes', label: 'Fixes', items: [] },
+        improvements: { type: 'section', kind: 'improvements', label: 'Improvements', items: [] }
+      };
+      let flushedAuto = false;
+      const flushAutoGroups = () => {
+        if (flushedAuto) return;
+        ['features', 'fixes', 'improvements'].forEach((key) => {
+          if (autoGroups[key].items.length) normalizedBlocks.push(autoGroups[key]);
+        });
+        flushedAuto = true;
+      };
+      blocks.forEach((b) => {
+        if (b.type === 'loose-bullet') {
+          const kind = inferReleaseBulletKind(b.item.raw);
+          autoGroups[kind].items.push(b.item);
+        } else {
+          if (b.type === 'requested' || b.type === 'outro') flushAutoGroups();
+          normalizedBlocks.push(b);
+        }
+      });
+      flushAutoGroups();
+    } else {
+      let pendingBullets = [];
+      const flushPendingBullets = () => {
+        if (!pendingBullets.length) return;
+        normalizedBlocks.push({ type: 'loose-bullets', items: pendingBullets });
+        pendingBullets = [];
+      };
+      blocks.forEach((b) => {
+        if (b.type === 'loose-bullet') pendingBullets.push(b.item);
+        else {
+          flushPendingBullets();
+          normalizedBlocks.push(b);
+        }
+      });
+      flushPendingBullets();
+    }
+
+    const renderSectionItem = (item) => {
+      const creditMatch = (item.descPart || '').match(/\((Requested by:[^)]+)\)/i);
+      let descHtml = escapeHtml(item.descPart || '');
+      if (creditMatch) {
+        const escapedCredit = escapeHtml(creditMatch[0]);
+        descHtml = descHtml.replace(escapedCredit, `<em class="announcement-requester-credit">${escapedCredit}</em>`);
+      }
+      return `
+        <li class="announcement-section-item">
+          <span class="announcement-item-dot" aria-hidden="true"></span>
+          <div class="announcement-item-copy">
+            ${item.titlePart ? `<strong class="announcement-item-title">${escapeHtml(item.titlePart)}</strong>` : ''}
+            ${descHtml ? `<p class="announcement-item-desc">${descHtml}</p>` : ''}
+          </div>
+        </li>`;
+    };
+
+    return normalizedBlocks.map((block) => {
+      if (block.type === 'section') {
+        const toneClass = block.kind === 'fixes' ? 'is-fixes' : block.kind === 'improvements' ? 'is-improvements' : block.kind === 'features' ? 'is-features' : '';
+        return `
+          <section class="announcement-section-block ${toneClass}">
+            <div class="announcement-section-bar">
+              <h3 class="announcement-section-heading-text">${escapeHtml(block.label)}</h3>
+              <span class="announcement-section-count">${block.items.length}</span>
+            </div>
+            <ul class="announcement-section-items">
+              ${block.items.map(renderSectionItem).join('')}
+            </ul>
+          </section>`;
+      }
+      if (block.type === 'requested') {
+        return `
+          <div class="announcement-requested-card">
+            <div class="announcement-requested-accent" aria-hidden="true"></div>
+            <div class="announcement-requested-inner">
+              <strong class="announcement-requested-title">${escapeHtml(block.heading)}</strong>
+              <div class="announcement-requested-list">
+                ${block.items.map((item) => {
+                  const creditMatch = item.match(/\((Requested by:[^)]+)\)/i);
+                  let itemHtml = escapeHtml(item);
+                  if (creditMatch) {
+                    const escapedCredit = escapeHtml(creditMatch[0]);
+                    itemHtml = itemHtml.replace(escapedCredit, `<em class="announcement-requester-credit">${escapedCredit}</em>`);
+                  }
+                  return `
+                    <div class="announcement-requested-item">
+                      <span class="announcement-bullet-dot" aria-hidden="true">•</span>
+                      <span>${itemHtml}</span>
+                    </div>`;
+                }).join('')}
+              </div>
+            </div>
+          </div>`;
+      }
+      if (block.type === 'outro') {
+        return `<div class="announcement-outro-block"><p>${block.lines.map((l) => escapeHtml(l)).join('<br>')}</p></div>`;
+      }
+      if (block.type === 'loose-bullets') {
+        return block.items.map((item) => `
           <div class="announcement-feature-row">
             <span class="announcement-feature-icon" aria-hidden="true">
               <svg viewBox="0 0 20 20" fill="none" width="18" height="18">
@@ -3407,23 +3552,17 @@
               </svg>
             </span>
             <div class="announcement-feature-text">
-              ${titlePart ? `<strong class="announcement-feature-name">${escapeHtml(titlePart)} — </strong>` : ''}
-              <span class="announcement-feature-desc">${escapeHtml(descPart)}</span>
+              ${item.titlePart ? `<strong class="announcement-feature-name">${escapeHtml(item.titlePart)} — </strong>` : ''}
+              <span class="announcement-feature-desc">${escapeHtml(item.descPart)}</span>
             </div>
-          </div>`;
-        continue;
+          </div>`).join('');
       }
-
-      let paraHtml = escapeHtml(line);
-      paraHtml = paraHtml.replace(/\b(myIPON\s+Update\s+[\w\.\-]+|v\d+[\w\.\-]*)\b/gi, (match) => {
+      let paraHtml = escapeHtml(block.text || '');
+      paraHtml = paraHtml.replace(/\b(myIPON\s+Update\s+[\w.\-]+|v\d+[\w.\-]*)\b/gi, (match) => {
         return `<span class="announcement-version-highlight">${match}</span>`;
       });
-
-      html += `<p class="announcement-intro-para">${paraHtml}</p>`;
-    }
-
-    flushRequestedBox();
-    return html;
+      return `<p class="announcement-intro-para">${paraHtml}</p>`;
+    }).join('');
   }
 
   function bindAnnouncements({ listElement, addButton, emptyTitle = 'No announcements yet', emptyNote = 'Stay tuned for updates' } = {}) {

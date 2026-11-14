@@ -1218,6 +1218,49 @@
     return latestReleaseContext;
   }
 
+  function bucketizeReleaseUpdates(items = []) {
+    const newFeatures = [];
+    const fixes = [];
+    const improvements = [];
+    items.forEach((raw) => {
+      const clean = String(raw || '').replace(/^[•\-*]\s*/, '').trim();
+      if (!clean) return;
+      if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|constraint|foreign\s+key|bug)\b/i.test(clean)) {
+        fixes.push(clean);
+      } else if (/^(?:improv|polish|clean|compact|sync|update|refactor|streamline|keep|align)\b|\b(?:faster|cleaner|compact|reliable|visibility)\b/i.test(clean)) {
+        improvements.push(clean);
+      } else {
+        newFeatures.push(clean);
+      }
+    });
+    return { newFeatures, fixes, improvements };
+  }
+
+  function formatSectionedReleaseBody({ intro, newFeatures = [], fixes = [], improvements = [], requestedFeatures = [], highlights = [], outro }) {
+    const parts = [];
+    if (intro) parts.push(intro.trim());
+    const pushSection = (heading, items) => {
+      const list = (items || []).map((v) => `• ${String(v).replace(/^[•\s*-]+/, '').trim()}`).filter((v) => v.length > 2);
+      if (list.length) parts.push(`${heading}\n${list.join('\n')}`);
+    };
+    const hasCategorized = newFeatures.length || fixes.length || improvements.length;
+    if (hasCategorized) {
+      pushSection('New Features', newFeatures);
+      pushSection('Fixes', fixes);
+      pushSection('Improvements', improvements);
+    } else if (highlights.length) {
+      const buckets = bucketizeReleaseUpdates(highlights);
+      pushSection('New Features', buckets.newFeatures);
+      pushSection('Fixes', buckets.fixes);
+      pushSection('Improvements', buckets.improvements);
+    }
+    if (requestedFeatures.length) {
+      pushSection('Features Requested by Users:', requestedFeatures);
+    }
+    if (outro) parts.push(outro.trim());
+    return parts.filter(Boolean).join('\n\n');
+  }
+
   function composeReleaseNotes(ver, targetImpl = [], systemUpdates = []) {
     currentReleaseIntroIdx = pickDifferentIndex(RELEASE_INTROS.length, currentReleaseIntroIdx);
     currentReleaseOutroIdx = pickDifferentIndex(RELEASE_OUTROS.length, currentReleaseOutroIdx);
@@ -1227,31 +1270,26 @@
     const intro = RELEASE_INTROS[currentReleaseIntroIdx](ver);
     const outro = RELEASE_OUTROS[currentReleaseOutroIdx]();
 
-    const bullets = Array.isArray(systemUpdates) && systemUpdates.length
+    const rawUpdates = Array.isArray(systemUpdates) && systemUpdates.length
       ? systemUpdates
       : (!targetImpl.length ? RELEASE_FALLBACK_UPDATES : []);
+    const { newFeatures, fixes, improvements } = bucketizeReleaseUpdates(rawUpdates);
 
-    let body = `${intro}\n\n`;
-    bullets.forEach((feat) => {
-      body += `• ${feat}\n`;
+    const profileById = new Map(profiles.map((p) => [p.id, p]));
+    const requestedFeatures = targetImpl.map((req) => {
+      const prof = profileById.get(req.requester_id);
+      const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
+      return `${req.title}: ${req.details || 'Feature improvement'}${credit}`;
     });
 
-    if (targetImpl.length > 0) {
-      const profileById = new Map(profiles.map((p) => [p.id, p]));
-      const sectionHeaders = [
-        '\nCommunity Feature Requests Implemented in this Release:',
-        '\nFeatures Requested by Savers & Shipped in this Update:',
-        '\nCommunity Spotlight (Features You Asked For):'
-      ];
-      body += `${sectionHeaders[Math.floor(Math.random() * sectionHeaders.length)]}\n`;
-      targetImpl.forEach((req) => {
-        const prof = profileById.get(req.requester_id);
-        const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
-        body += `• ${req.title}: ${req.details || 'Feature improvement'}${credit}\n`;
-      });
-    }
-
-    body += `\n${outro}`;
+    const body = formatSectionedReleaseBody({
+      intro,
+      newFeatures,
+      fixes,
+      improvements,
+      requestedFeatures,
+      outro
+    });
     return { title, body };
   }
 
@@ -1425,17 +1463,16 @@ ${featuresList}
 Recent system updates and fixes landed since the previous release:
 ${systemUpdatesList}
 
-Instructions: Summarize ONLY the newly implemented community requests and recent system updates above into clean, user-friendly bullet points. Translate technical commit phrasing into clear saver-facing benefits without repeating already-shipped updates.
+Instructions: Summarize ONLY the newly implemented community requests and recent system updates above into clear, saver-facing sectioned changelog entries ("New Features", "Fixes", "Improvements", and "Features Requested by Users") using "Feature Name: concise description" format per item. Do not repeat already-shipped updates.
 
 Generate a JSON object with this exact structure:
 {
   "title": "A punchy, attractive announcement title mentioning myIPON ${ver}",
   "intro": "A 1-2 paragraph engaging, fresh intro celebrating this milestone for myIPON, thanking savers, and highlighting platform enhancements",
-  "highlights": [
-    "A concise, punchy bullet point describing a key update or community request with user credits if applicable",
-    "Another concise bullet point describing a recent fix or improvement",
-    "Additional bullet points covering the remaining updates"
-  ],
+  "new_features": ["Feature Title: Concise user-facing description of a newly added feature"],
+  "fixes": ["Affected Area: Concise explanation of a resolved issue or bug fix"],
+  "improvements": ["Enhanced Area: Concise explanation of an improvement or UI/performance polish"],
+  "requested_features": ["Feature Title: Concise description (Requested by: Name when credited)"],
   "outro": "A warm, inspiring 1-paragraph closing message encouraging myIPON saving consistency"
 }`;
 
@@ -1462,12 +1499,15 @@ Generate a JSON object with this exact structure:
           const parsed = res?.parsed;
           if (parsed && (parsed.title || parsed.intro)) {
             title = String(parsed.title || `myIPON ${ver} Released`).trim();
-            const intro = String(parsed.intro || '').trim();
-            const outro = String(parsed.outro || '').trim();
-            const highlights = Array.isArray(parsed.highlights)
-              ? parsed.highlights.map((h) => `• ${String(h).replace(/^[•\s*-]+/, '').trim()}`).join('\n')
-              : '';
-            details = [intro, highlights, outro].filter(Boolean).join('\n\n');
+            details = formatSectionedReleaseBody({
+              intro: String(parsed.intro || '').trim(),
+              newFeatures: Array.isArray(parsed.new_features) ? parsed.new_features : [],
+              fixes: Array.isArray(parsed.fixes) ? parsed.fixes : [],
+              improvements: Array.isArray(parsed.improvements) ? parsed.improvements : [],
+              requestedFeatures: Array.isArray(parsed.requested_features) ? parsed.requested_features : [],
+              highlights: Array.isArray(parsed.highlights) ? parsed.highlights : [],
+              outro: String(parsed.outro || '').trim()
+            });
             usedGemini = true;
           }
         } catch (clientErr) {

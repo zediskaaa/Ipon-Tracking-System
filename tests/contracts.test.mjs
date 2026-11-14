@@ -1834,4 +1834,30 @@ test('group admins can transfer ownership and leave or permanently delete a grou
   assert.match(schema, /20261114_055/);
 });
 
+test('release announcements render and generate sectioned New Features, Fixes, Improvements, and Requested blocks', () => {
+  const coreJs = read('js/core.js');
+  const superAdminJs = read('js/super-admin.js');
+  const edgeTs = read('supabase/functions/manage-account/index.ts');
+  const css = read('css/app.css');
+
+  assert.match(coreJs, /function renderAnnouncementDescriptionHtml\(/);
+  assert.match(coreJs, /announcement-section-block/);
+  assert.match(coreJs, /announcement-item-title/);
+  assert.match(coreJs, /inferReleaseBulletKind/);
+
+  assert.match(css, /\.announcement-section-block/);
+  assert.match(css, /\.announcement-section-block\.is-fixes/);
+  assert.match(css, /\.announcement-section-block\.is-improvements/);
+
+  assert.match(superAdminJs, /function formatSectionedReleaseBody\(/);
+  assert.match(superAdminJs, /pushSection\('New Features'/);
+  assert.match(superAdminJs, /pushSection\('Fixes'/);
+  assert.match(superAdminJs, /pushSection\('Improvements'/);
+
+  assert.match(edgeTs, /function formatSectionedReleaseBody\(/);
+  assert.match(edgeTs, /pushSection\('New Features'/);
+  assert.match(edgeTs, /pushSection\('Fixes'/);
+  assert.match(edgeTs, /pushSection\('Improvements'/);
+});
+
 
