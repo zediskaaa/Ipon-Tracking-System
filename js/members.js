@@ -41,8 +41,7 @@
   const binTypeFilter = document.getElementById('bin-type-filter');
   const binCount = document.getElementById('bin-count');
   const binList = document.getElementById('bin-list');
-  const groupAvatarEl = document.getElementById('members-group-avatar');
-  const groupNameEl = document.getElementById('members-group-name');
+  const groupBarEl = document.getElementById('members-group-bar');
   const groupSwitcherWrap = document.getElementById('members-group-switcher-wrap');
   const groupSelect = document.getElementById('members-group-select');
   const contactErrorMessage = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
@@ -98,14 +97,10 @@
     const list = Array.isArray(groups) ? groups : [];
     const current = list.find((item) => item.is_current) || list[0] || null;
     currentGroupId = current?.group_id || state.profile?.group_id || '';
-    const safeName = current?.name || 'Savings group';
-    if (groupAvatarEl) {
-      groupAvatarEl.innerHTML = Ipon.avatarMarkup(current?.avatar_url, safeName, 'avatar-md');
-      Ipon.bindAvatarFallbacks(groupAvatarEl);
-    }
-    if (groupNameEl) groupNameEl.textContent = safeName;
+    const hasMultipleGroups = list.length > 1;
+    if (groupBarEl) groupBarEl.hidden = !hasMultipleGroups;
     if (groupSwitcherWrap && groupSelect) {
-      groupSwitcherWrap.hidden = list.length <= 1;
+      groupSwitcherWrap.hidden = !hasMultipleGroups;
       Ipon.populateGroupSelect(groupSelect, list, current?.group_id);
     }
   }
