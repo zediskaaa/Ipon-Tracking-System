@@ -494,9 +494,43 @@ async function generateWithGemini({
   return JSON.parse(text);
 }
 
+async function fetchRecentSystemUpdates(sinceIso?: string | null) {
+  const fetchPage = async (sinceParam?: string | null) => {
+    const qs = new URLSearchParams({ per_page: '20' });
+    if (sinceParam) qs.set('since', sinceParam);
+    try {
+      const response = await fetch(`https://api.github.com/repos/zediskaaa/Ipon-Tracking-System/commits?${qs.toString()}`, {
+        headers: { Accept: 'application/vnd.github+json' }
+      });
+      if (!response.ok) return [];
+      const rows = await response.json();
+      if (!Array.isArray(rows)) return [];
+      const seen = new Set<string>();
+      const updates: string[] = [];
+      for (const entry of rows) {
+        const line = String(entry?.commit?.message || '').split(/\r?\n/)[0].trim();
+        if (!line || /^(?:merge\b|wip\b|bump\s+version\b|prepare\s+mobile\b|revert\s+")/i.test(line)) continue;
+        const normalized = line.charAt(0).toUpperCase() + line.slice(1);
+        const key = normalized.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        updates.push(normalized);
+        if (updates.length >= 12) break;
+      }
+      return updates;
+    } catch {
+      return [];
+    }
+  };
+  let updates = await fetchPage(sinceIso);
+  if (!updates.length && sinceIso) updates = await fetchPage(null);
+  return updates;
+}
+
 function generateProceduralReleaseNotes(
   version: string,
-  features: Array<{ title: string; description: string; requester_name?: string | null }>
+  features: Array<{ title: string; description: string; requester_name?: string | null }>,
+  systemUpdates: string[] = []
 ) {
   const titles = [
     `System ${version} Released: Smarter Tracking & Community Features`,
@@ -524,12 +558,13 @@ function generateProceduralReleaseNotes(
   const outro = outros[Math.floor(Math.random() * outros.length)];
 
   let body = `${intro}\n\n`;
-  body += `• Live Active Now Presence: See who is online in real time with live green activity indicators on profile avatars.\n`;
-  body += `• Profile Picture Editor: Crop, rotate 90 degrees, and preview your avatar before saving.\n`;
-  body += `• Announcement Reactions: Messenger-style reaction picker (Like, Love, Haha, Wow, Sad, Angry) and who-reacted summary dialog.\n`;
-  body += `• Quick Record Entry: Convenient dashboard shortcut to log additions, deductions, and expenses on the fly.\n`;
-  body += `• Records Spotlight & Chart: Filter financial records by member with dedicated personal graphs and totals.\n`;
-  body += `• Monthly Contribution Pledge: Group administrators can manage their monthly contribution pledge directly.\n`;
+  if (systemUpdates.length > 0) {
+    systemUpdates.forEach((item) => {
+      body += `• ${item}\n`;
+    });
+  } else if (features.length === 0) {
+    body += `• System Reliability & Performance: UI refinements, smoother workflows, and stability fixes across web and mobile.\n`;
+  }
 
   if (features.length > 0) {
     body += `\nCommunity Feature Requests Implemented in this Release:\n`;
@@ -1276,6 +1311,23 @@ Deno.serve(async (request) => {
       description: String(f.details || f.description || '').trim(),
       requester_name: f.requester_name ? String(f.requester_name).trim() : null
     })).filter((f) => Boolean(f.title));
+    const previousReleases = (Array.isArray(body.previous_releases) ? body.previous_releases : [])
+      .map((item: any) => String(item || '').trim())
+      .filter(Boolean);
+    let systemUpdates = (Array.isArray(body.system_updates) ? body.system_updates : [])
+      .map((item: any) => String(item || '').trim())
+      .filter(Boolean);
+
+    if (!systemUpdates.length) {
+      const { data: latestRel } = await admin
+        .from('announcements')
+        .select('created_at')
+        .not('release_version', 'is', null)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      systemUpdates = await fetchRecentSystemUpdates(latestRel?.[0]?.created_at || null);
+    }
 
     const geminiKey = String(body.api_key || '').trim() || Deno.env.get('GEMINI_API_KEY')?.trim();
 
@@ -1283,32 +1335,37 @@ Deno.serve(async (request) => {
       try {
         const featureListText = features.length
           ? features.map((f) => `- "${f.title}": ${f.description || 'System enhancement'}${f.requester_name ? ` (Requested by: ${f.requester_name})` : ''}`).join('\n')
-          : '- General performance improvements, UI refinements, and stability enhancements across IPON.';
+          : '- No pending community feature requests in this build.';
+        const updatesListText = systemUpdates.length
+          ? systemUpdates.map((u) => `- ${u}`).join('\n')
+          : '- General reliability improvements, UI polish, and bug fixes across web and mobile.';
+        const prevListText = previousReleases.length
+          ? previousReleases.map((p) => `- ${p}`).join('\n')
+          : '- None (initial release).';
 
         const prompt = `Write an official, engaging, and celebratory product release announcement for myIPON (Group Savings and Financial Tracker). The system name is strictly "myIPON".
 Version: ${version}
 Release Date: ${releaseDate}
 
-Implemented User-Requested Features and Enhancements:
+Already shipped in earlier releases (DO NOT repeat these as new updates):
+${prevListText}
+
+Newly implemented user-requested features for ${version}:
 ${featureListText}
 
-System-wide improvements included in this release:
-- Real-time online presence indicators (active now green dot on profile avatars)
-- Interactive profile picture cropper, 90-degree rotation, and avatar controls
-- Announcement reactions (Messenger-style emoji picker: Like, Love, Haha, Wow, Sad, Angry) with who-reacted modal
-- Quick financial record entry modal on the calendar dashboard
-- Financial records member spotlight card with personal contribution graph and totals
-- Group administrator monthly pledge synchronization across member rosters and reports
+Recent system updates and fixes landed since the previous release:
+${updatesListText}
+
+Instructions: Summarize ONLY the newly implemented user requests and recent system updates above into clear, saver-friendly highlights without repeating already-shipped features.
 
 Please generate a JSON object with this exact structure:
 {
   "title": "A punchy, attractive announcement title mentioning myIPON ${version}",
   "intro": "A 1-2 paragraph fresh, engaging, non-cliché introduction celebrating this milestone for myIPON and explaining its value to users",
   "highlights": [
-    "A concise bullet point describing the first major feature with user credit if applicable",
-    "A concise bullet point describing the second feature",
-    "A concise bullet point describing the third feature",
-    "Additional bullet points for the remaining features"
+    "A concise bullet point describing a major recent update or user request with user credit if applicable",
+    "Another concise bullet point describing a recent fix or improvement",
+    "Additional bullet points for the remaining updates"
   ],
   "outro": "A warm, inspiring 1-paragraph closing message thanking myIPON savers for their continuous feedback and encouraging them to keep reaching their financial goals"
 }`;
@@ -1337,7 +1394,7 @@ Please generate a JSON object with this exact structure:
       }
     }
 
-    const fallback = generateProceduralReleaseNotes(version, features);
+    const fallback = generateProceduralReleaseNotes(version, features, systemUpdates);
     return json({
       success: true,
       ai_powered: false,

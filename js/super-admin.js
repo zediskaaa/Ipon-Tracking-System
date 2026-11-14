@@ -1101,42 +1101,16 @@
     () => `Huge thanks to everyone who shared ideas and reported issues. Together, we keep improving IPON every day!`
   ];
 
-  const FEATURE_VARIATIONS = {
-    presence: [
-      'Live Active Now Presence: See who is currently active across your savings group in real time with Facebook-style green indicators on profile avatars.',
-      'Real-Time Savers Pulse: Instantly spot online group members with subtle active-now presence dots on user avatars.',
-      'Active Member Indicators: Stay connected with your savings group through real-time online status indicators on profile pictures.'
-    ],
-    avatar: [
-      'Interactive Avatar Studio: Crop, rotate 90 degrees, and preview display pictures with an intuitive touch-friendly cropper.',
-      'Custom Profile Picture Suite: Built-in crop and rotation tools allow savers to frame their avatar before saving.',
-      'Profile Picture Editor: Fine-tune your display picture with interactive circular framing, instant rotation, and deletion confirmation.'
-    ],
-    reactions: [
-      'Messenger-Style Reactions: Express yourself on group announcements with Heart, Thumbs up, Haha, Sad, and Angry reactions, complete with a who-reacted modal list.',
-      'Interactive Post Reactions: Tap to react with expressive emojis and click the reaction pill counter to see who celebrated across your group.',
-      'Announcement Emoji Picker: Engage with admin announcements using animated reaction icons and transparent member reaction breakdown lists.'
-    ],
-    quickRecord: [
-      'Quick Record Entry Modal: Convenient calendar dashboard shortcut to record contributions, deductions, and expenses without switching pages.',
-      'One-Click Transaction Logger: Rapidly log new deposits, withdrawals, and shared expenses right from the monthly calendar view.',
-      'Instant Financial Entry: Record group transactions on the fly using the new calendar quick-entry dialog.'
-    ],
-    spotlight: [
-      'Member Financial Spotlight: Filter records by saver to highlight individual contribution graphs, monthly activity, and pledge totals.',
-      'Personal Savings Analytics: Examine individual member savings momentum and monthly deposit trends on dedicated spotlight cards.',
-      'Dynamic Record Spotlight & Charts: Isolate individual member contributions with interactive activity graphs and transparent totals.'
-    ],
-    pledge: [
-      'Admin Contribution Pledge Setup: Group administrators can configure and update their monthly savings pledge directly, synced into member rosters and reports.',
-      'Synchronized Group Pledges: Configure administrator monthly contribution targets that automatically reflect across audit reports.',
-      'Pledge Tracking Integration: Maintain transparent savings expectations with automated group-wide monthly pledge synchronization.'
-    ]
-  };
+  const RELEASE_FALLBACK_UPDATES = [
+    'System Reliability & Performance: Smoother navigation, responsive refinements, and stability fixes across web and mobile.'
+  ];
+  const REPO_COMMITS_URL = 'https://api.github.com/repos/zediskaaa/Ipon-Tracking-System/commits';
+  const releaseCommitCache = new Map();
 
   let currentReleaseIntroIdx = -1;
   let currentReleaseOutroIdx = -1;
   let currentReleaseTitleIdx = -1;
+  let latestReleaseContext = null;
 
   function pickDifferentIndex(len, prev) {
     if (len <= 1) return 0;
@@ -1147,7 +1121,104 @@
     return next;
   }
 
-  function composeReleaseNotes(ver, targetImpl = []) {
+  function cleanCommitSummary(rawMessage) {
+    const firstLine = String(rawMessage || '').split(/\r?\n/)[0].trim();
+    if (!firstLine) return '';
+    if (/^(?:merge\b|wip\b|bump\s+version\b|prepare\s+mobile\b|revert\s+")/i.test(firstLine)) return '';
+    return firstLine.charAt(0).toUpperCase() + firstLine.slice(1);
+  }
+
+  async function fetchRecentSystemUpdates(sinceIso = null) {
+    const cacheKey = sinceIso || '__latest__';
+    if (releaseCommitCache.has(cacheKey)) return releaseCommitCache.get(cacheKey);
+
+    const fetchPage = async (sinceParam) => {
+      const qs = new URLSearchParams({ per_page: '25' });
+      if (sinceParam) qs.set('since', sinceParam);
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 4500) : null;
+      try {
+        const res = await fetch(`${REPO_COMMITS_URL}?${qs.toString()}`, {
+          cache: 'no-store',
+          headers: { Accept: 'application/vnd.github+json' },
+          signal: controller?.signal
+        });
+        if (!res.ok) return [];
+        const rows = await res.json();
+        if (!Array.isArray(rows)) return [];
+        const unique = [];
+        const seen = new Set();
+        for (const entry of rows) {
+          const summary = cleanCommitSummary(entry?.commit?.message);
+          if (!summary) continue;
+          const norm = summary.toLowerCase();
+          if (seen.has(norm)) continue;
+          seen.add(norm);
+          unique.push(summary);
+          if (unique.length >= 12) break;
+        }
+        return unique;
+      } catch {
+        return [];
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    };
+
+    let updates = await fetchPage(sinceIso);
+    if (!updates.length && sinceIso) {
+      updates = await fetchPage(null);
+    }
+    releaseCommitCache.set(cacheKey, updates);
+    return updates;
+  }
+
+  async function collectReleaseContext() {
+    let releaseRows = [];
+    try {
+      const { data } = await Ipon.client.from('announcements')
+        .select('release_version,title,created_at')
+        .not('release_version', 'is', null)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      releaseRows = Array.isArray(data) ? data : [];
+    } catch (_) { }
+
+    let nextVersion = 'Update 1.0';
+    let major = 1;
+    let minor = 0;
+    if (releaseRows.length > 0) {
+      releaseRows.forEach((row) => {
+        const match = String(row.release_version || '').trim().match(/(\d+)(?:\.(\d+))?/);
+        if (match) {
+          const maj = parseInt(match[1], 10);
+          const min = match[2] !== undefined ? parseInt(match[2], 10) : 0;
+          if (maj > major || (maj === major && min >= minor)) {
+            major = maj;
+            minor = min + 1;
+          }
+        }
+      });
+      nextVersion = `Update ${major}.${minor}`;
+    }
+
+    const latestReleaseAt = releaseRows[0]?.created_at || null;
+    const previousReleases = releaseRows
+      .slice(0, 5)
+      .map((row) => [row.release_version, row.title].filter(Boolean).join(': '))
+      .filter(Boolean);
+
+    const targetImplemented = featureRequests.filter(
+      (req) => req.status === 'IMPLEMENTED' && !req.release_version
+    );
+    const systemUpdates = await fetchRecentSystemUpdates(latestReleaseAt);
+
+    latestReleaseContext = { nextVersion, latestReleaseAt, previousReleases, targetImplemented, systemUpdates };
+    return latestReleaseContext;
+  }
+
+  function composeReleaseNotes(ver, targetImpl = [], systemUpdates = []) {
     currentReleaseIntroIdx = pickDifferentIndex(RELEASE_INTROS.length, currentReleaseIntroIdx);
     currentReleaseOutroIdx = pickDifferentIndex(RELEASE_OUTROS.length, currentReleaseOutroIdx);
     currentReleaseTitleIdx = pickDifferentIndex(RELEASE_TITLES.length, currentReleaseTitleIdx);
@@ -1156,18 +1227,12 @@
     const intro = RELEASE_INTROS[currentReleaseIntroIdx](ver);
     const outro = RELEASE_OUTROS[currentReleaseOutroIdx]();
 
-    // Pick a random variation for each core feature and shuffle the list:
-    const pickedFeatures = Object.values(FEATURE_VARIATIONS).map((pool) => {
-      return pool[Math.floor(Math.random() * pool.length)];
-    });
-    // Shuffle features for distinct presentation
-    for (let i = pickedFeatures.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pickedFeatures[i], pickedFeatures[j]] = [pickedFeatures[j], pickedFeatures[i]];
-    }
+    const bullets = Array.isArray(systemUpdates) && systemUpdates.length
+      ? systemUpdates
+      : (!targetImpl.length ? RELEASE_FALLBACK_UPDATES : []);
 
     let body = `${intro}\n\n`;
-    pickedFeatures.forEach((feat) => {
+    bullets.forEach((feat) => {
       body += `• ${feat}\n`;
     });
 
@@ -1193,50 +1258,20 @@
   async function openReleaseUpdateDialog() {
     if (!releaseUpdateDialog || !releaseUpdateForm) return;
 
-    let existingVersions = new Set();
-    try {
-      const { data } = await Ipon.client.from('announcements')
-        .select('release_version')
-        .not('release_version', 'is', null)
-        .is('deleted_at', null);
-      (data || []).forEach((row) => {
-        if (row.release_version) existingVersions.add(row.release_version.trim().toLowerCase());
-      });
-    } catch (_) { }
-
-    let nextVersion = 'Update 1.0';
-    let major = 1;
-    let minor = 0;
-    if (existingVersions.size > 0) {
-      existingVersions.forEach((ver) => {
-        const match = ver.match(/(\d+)(?:\.(\d+))?/);
-        if (match) {
-          const maj = parseInt(match[1], 10);
-          const min = match[2] !== undefined ? parseInt(match[2], 10) : 0;
-          if (maj > major || (maj === major && min >= minor)) {
-            major = maj;
-            minor = min + 1;
-          }
-        }
-      });
-      nextVersion = `Update ${major}.${minor}`;
-    }
-
-    // Collect ONLY implemented feature requests that have not yet been released.
-    // Once released in an update, they will never appear in subsequent update drafts.
-    const targetImplemented = featureRequests.filter(
-      (req) => req.status === 'IMPLEMENTED' && !req.release_version
-    );
-
+    const context = await collectReleaseContext();
     const todayIso = new Date().toISOString().slice(0, 10);
     const versionInput = document.getElementById('release-update-version');
     const dateInput = document.getElementById('release-update-date');
     const titleInput = document.getElementById('release-update-heading');
     const detailsInput = document.getElementById('release-update-details');
 
-    const { title, body } = composeReleaseNotes(nextVersion, targetImplemented);
+    const { title, body } = composeReleaseNotes(
+      context.nextVersion,
+      context.targetImplemented,
+      context.systemUpdates
+    );
 
-    if (versionInput) versionInput.value = nextVersion;
+    if (versionInput) versionInput.value = context.nextVersion;
     if (dateInput) dateInput.value = todayIso;
     if (titleInput) titleInput.value = title;
     if (detailsInput) detailsInput.value = body;
@@ -1244,15 +1279,13 @@
     if (versionInput) versionInput.focus();
   }
 
-  document.getElementById('release-update-shuffle')?.addEventListener('click', () => {
+  document.getElementById('release-update-shuffle')?.addEventListener('click', async () => {
     const versionInput = document.getElementById('release-update-version');
     const titleInput = document.getElementById('release-update-heading');
     const detailsInput = document.getElementById('release-update-details');
-    const ver = (versionInput?.value || 'Update 1.0').trim();
-    const targetImplemented = featureRequests.filter(
-      (req) => req.status === 'IMPLEMENTED' && !req.release_version
-    );
-    const { title, body } = composeReleaseNotes(ver, targetImplemented);
+    const context = latestReleaseContext || await collectReleaseContext();
+    const ver = (versionInput?.value || context.nextVersion || 'Update 1.0').trim();
+    const { title, body } = composeReleaseNotes(ver, context.targetImplemented, context.systemUpdates);
     if (titleInput) titleInput.value = title;
     if (detailsInput) detailsInput.value = body;
     Ipon.toast('Shuffled release intro and outro greeting.');
@@ -1358,41 +1391,50 @@
     const dateInput = document.getElementById('release-update-date');
     const titleInput = document.getElementById('release-update-heading');
     const detailsInput = document.getElementById('release-update-details');
-    const ver = (versionInput?.value || 'Update 1.0').trim();
     const relDate = (dateInput?.value || new Date().toISOString().slice(0, 10)).trim();
 
-    const targetImplemented = featureRequests.filter(
-      (req) => req.status === 'IMPLEMENTED' && !req.release_version
-    );
+    releaseCommitCache.clear();
+    const context = await collectReleaseContext();
+    const ver = (versionInput?.value || context.nextVersion || 'Update 1.0').trim();
+    const targetImplemented = context.targetImplemented;
+    const systemUpdates = context.systemUpdates;
+    const previousReleases = context.previousReleases;
+
     const profileById = new Map(profiles.map((p) => [p.id, p]));
     const featuresList = targetImplemented.map((req) => {
       const prof = profileById.get(req.requester_id);
       const credit = req.allow_credit !== false && prof?.full_name ? ` (Requested by: ${prof.full_name})` : '';
       return `- "${req.title}": ${req.details || 'Feature improvement'}${credit}`;
-    }).join('\n') || '- General performance improvements, responsive layout refinements, and stability enhancements.';
+    }).join('\n') || '- No pending community feature requests in this build.';
+    const systemUpdatesList = systemUpdates.length
+      ? systemUpdates.map((item) => `- ${item}`).join('\n')
+      : '- General reliability improvements, UI refinements, and bug fixes across web and mobile.';
+    const previousReleasesList = previousReleases.length
+      ? previousReleases.map((item) => `- ${item}`).join('\n')
+      : '- None (initial release).';
 
     const prompt = `You are the product communications writer for myIPON (Group Savings and Financial Tracker) ${ver}. The official product and system name is strictly "myIPON".
 Release Date: ${relDate}
 
-Implemented community-requested features:
+Already shipped in earlier releases (DO NOT repeat these older features as new in ${ver}):
+${previousReleasesList}
+
+Newly implemented community-requested features for ${ver}:
 ${featuresList}
 
-Key system updates included in this rollout:
-- Live Active Now presence indicators on member profile avatars
-- Interactive profile picture cropper, 90-degree rotation, and avatar controls
-- Messenger-style announcement reactions (Heart, Thumbs up, Haha, Sad, Angry) with who-reacted modal
-- Quick financial record entry shortcut modal on the calendar dashboard
-- Financial records member spotlight card with personal contribution graph and totals
-- Group administrator monthly pledge synchronization across member rosters and reports
+Recent system updates and fixes landed since the previous release:
+${systemUpdatesList}
+
+Instructions: Summarize ONLY the newly implemented community requests and recent system updates above into clean, user-friendly bullet points. Translate technical commit phrasing into clear saver-facing benefits without repeating already-shipped updates.
 
 Generate a JSON object with this exact structure:
 {
   "title": "A punchy, attractive announcement title mentioning myIPON ${ver}",
   "intro": "A 1-2 paragraph engaging, fresh intro celebrating this milestone for myIPON, thanking savers, and highlighting platform enhancements",
   "highlights": [
-    "A concise, punchy bullet point describing a key feature or community request with user credits if applicable",
-    "Another concise bullet point describing an update",
-    "Additional bullet points covering the remaining improvements"
+    "A concise, punchy bullet point describing a key update or community request with user credits if applicable",
+    "Another concise bullet point describing a recent fix or improvement",
+    "Additional bullet points covering the remaining updates"
   ],
   "outro": "A warm, inspiring 1-paragraph closing message encouraging myIPON saving consistency"
 }`;
@@ -1440,6 +1482,8 @@ Generate a JSON object with this exact structure:
             action: 'ai-generate-release-notes',
             version: ver,
             release_date: relDate,
+            previous_releases: previousReleases,
+            system_updates: systemUpdates,
             features: targetImplemented.map((req) => {
               const prof = profileById.get(req.requester_id);
               return {
@@ -1463,7 +1507,7 @@ Generate a JSON object with this exact structure:
       const prevTitle = titleInput?.value?.trim() || '';
       const prevDetails = detailsInput?.value?.trim() || '';
       if (!title || !details || (!usedGemini && title.trim() === prevTitle && details.trim() === prevDetails)) {
-        const composed = composeReleaseNotes(ver, targetImplemented);
+        const composed = composeReleaseNotes(ver, targetImplemented, systemUpdates);
         title = composed.title;
         details = composed.body;
       }

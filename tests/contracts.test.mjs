@@ -1756,3 +1756,18 @@ test('announcement reaction notifications replace or remove prior reaction entri
   assert.match(coreJs, /realtimePayload\?\.eventType !== 'DELETE'/);
 });
 
+test('release composer reads live recent commits and prior releases instead of frozen Update 1.0 bullets', () => {
+  const superAdminJs = read('js/super-admin.js');
+  const edgeTs = read('supabase/functions/manage-account/index.ts');
+
+  assert.match(superAdminJs, /fetchRecentSystemUpdates/);
+  assert.match(superAdminJs, /collectReleaseContext/);
+  assert.match(superAdminJs, /api\.github\.com\/repos\/zediskaaa\/Ipon-Tracking-System\/commits/);
+  assert.doesNotMatch(superAdminJs, /Interactive Avatar Studio/);
+  assert.doesNotMatch(superAdminJs, /Synchronized Group Pledges/);
+
+  assert.match(edgeTs, /fetchRecentSystemUpdates/);
+  assert.match(edgeTs, /previous_releases/);
+  assert.doesNotMatch(edgeTs, /Profile Picture Editor: Crop, rotate 90 degrees/);
+});
+
