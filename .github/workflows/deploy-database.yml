@@ -5,8 +5,15 @@ on:
     branches: [main]
     paths:
       - database/migrations/**
+      - supabase/functions/**
+      - scripts/supabase-migrate.mjs
       - .github/workflows/deploy-database.yml
   workflow_dispatch:
+    inputs:
+      from_version:
+        description: Optional starting migration version (e.g. 20261114_046)
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -21,42 +28,42 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
-      - name: Apply pending migrations
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Apply migrations and deploy Edge Functions via Supabase CLI
+        if: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: woslmwokhhyszkgevnli
+          FROM_VERSION: ${{ inputs.from_version }}
+        run: |
+          if [ -n "$FROM_VERSION" ]; then
+            node scripts/supabase-migrate.mjs --apply --deploy-functions --from="$FROM_VERSION"
+          else
+            node scripts/supabase-migrate.mjs --apply --deploy-functions
+          fi
+
+      - name: Fallback PostgreSQL migration via SUPABASE_DB_URL
+        if: ${{ secrets.SUPABASE_ACCESS_TOKEN == '' && secrets.SUPABASE_DB_URL != '' }}
         shell: bash
         env:
           PGSSLMODE: require
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
-          if [ -z "${SUPABASE_DB_URL:-}" ]; then
-            echo "::warning title=Missing Secret::SUPABASE_DB_URL repository secret is not set. Skipping automatic migrations."
-            exit 0
-          fi
-
-          # Auto-fix Supabase connection pooler username if missing project reference
+          sudo apt-get update && sudo apt-get install --yes postgresql-client
           PROJECT_REF="woslmwokhhyszkgevnli"
           DB_URL="$SUPABASE_DB_URL"
           if [[ "$DB_URL" == *"pooler.supabase.com"* ]] && [[ "$DB_URL" =~ ://postgres: ]]; then
-            echo "Adjusting pooler connection string with project ref ($PROJECT_REF)..."
             DB_URL="${DB_URL/:\/\/postgres:/:\/\/postgres.${PROJECT_REF}:}"
           fi
 
-          echo "Verifying database connectivity..."
-          if ! psql "$DB_URL" -v ON_ERROR_STOP=1 -Atqc "select 1;" > /dev/null 2>&1; then
-            echo "::warning title=Database Authentication Skipped::Unable to authenticate with Supabase database. Please check SUPABASE_DB_URL secret in GitHub repository settings (ensure correct database password and pooler username format postgres.$PROJECT_REF). Migrations skipped to prevent job failure."
-            exit 0
-          fi
-
-          echo "Database connected successfully. Applying migration ledger..."
           psql "$DB_URL" -v ON_ERROR_STOP=1 --file database/migrations/0000_create_migration_ledger.sql
-
           for migration in database/migrations/20*.sql; do
             filename="${migration##*/}"
             version="$(cut -d_ -f1-2 <<< "$filename")"
-            [[ "$version" =~ ^[0-9]{8}_[0-9]{3}$ ]] || { echo "Invalid migration filename: $filename" >&2; exit 1; }
-
             applied="$(psql "$DB_URL" -Atqc "select exists (select 1 from public.schema_migrations where version = '$version');")"
             if [[ "$applied" == "t" ]]; then
               echo "Skipping $filename (already applied)"
@@ -65,4 +72,8 @@ jobs:
               psql "$DB_URL" -v ON_ERROR_STOP=1 --file "$migration"
             fi
           done
-          echo "All migrations verified and applied."
+
+      - name: Warn if neither Supabase secret is configured
+        if: ${{ secrets.SUPABASE_ACCESS_TOKEN == '' && secrets.SUPABASE_DB_URL == '' }}
+        run: |
+          echo "::warning title=Missing Secret::Set SUPABASE_ACCESS_TOKEN (recommended) or SUPABASE_DB_URL in GitHub repository secrets for automatic Supabase migrations and Edge Function deploys."

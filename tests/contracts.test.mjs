@@ -1691,5 +1691,15 @@ test('account creation, login activation, and mobile submit responsiveness contr
   assert.match(manageAccountTs, /if \(body\.action === 'admin-set-password'\)[\s\S]*?email_confirm:\s*true/);
   assert.match(manageAccountTs, /if \(body\.action === 'admin-set-password'\)[\s\S]*?activateUserAndMembership\(admin, target\.id\)/);
   assert.doesNotMatch(manageAccountTs, /\.from\('profiles'\)\.update\(\{ status: 'ACTIVE' \}\)\.eq\('status', 'PENDING'\)/);
+
+  // Automatic Supabase CLI migration script & workflow wiring
+  const pkg = JSON.parse(read('package.json'));
+  const migrateScript = read('scripts/supabase-migrate.mjs');
+  const deployWorkflow = read('.github/workflows/deploy-database.yml');
+  assert.match(pkg.scripts['db:status'] || '', /supabase-migrate\.mjs --status/);
+  assert.match(pkg.scripts['db:migrate'] || '', /supabase-migrate\.mjs --apply/);
+  assert.match(pkg.scripts['supabase:deploy'] || '', /supabase-migrate\.mjs --apply --deploy-functions/);
+  assert.match(migrateScript, /--no-verify-jwt/);
+  assert.match(deployWorkflow, /SUPABASE_ACCESS_TOKEN/);
 });
 

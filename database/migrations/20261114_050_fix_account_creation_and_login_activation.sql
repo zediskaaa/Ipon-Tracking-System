@@ -220,3 +220,4 @@ values ('20261114_050', 'fix account creation and login activation')
 on conflict (version) do nothing;
 
 commit;
+

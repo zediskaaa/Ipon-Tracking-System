@@ -3,6 +3,9 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.mjs",
+    "db:status": "node scripts/supabase-migrate.mjs --status",
+    "db:migrate": "node scripts/supabase-migrate.mjs --apply",
+    "supabase:deploy": "node scripts/supabase-migrate.mjs --apply --deploy-functions",
     "mobile:prepare": "node scripts/prepare-mobile.mjs",
     "mobile:sync": "node scripts/prepare-mobile.mjs && npx cap sync"
   },
