@@ -5127,13 +5127,13 @@ test('all notification types route to exact destination modals or highlighted ta
   assert.match(sw, /type:\s*'MYIPON_NOTIFICATION_CLICK'/);
   assert.match(mainJava, /\[a-zA-Z0-9_=&:%\.-]\+/);
 
-  // 3. core.js fixes dialog ID bug, exports deep-link helpers, keeps APK link separate inside release row, and opens announcement modal on card click
+  // 3. core.js fixes dialog ID bug, exports deep-link helpers, never injects synthetic push release notices or Download APK buttons, and opens announcement modal on card click
   assert.match(coreJs, /id="record-detail-dialog"/);
   assert.match(coreJs, /id="notice-detail-dialog"/);
   assert.doesNotMatch(coreJs, /#notifications-dialog/);
   assert.match(coreJs, /document\.getElementById\('notification-dialog'\)\?\.close\(\)/);
-  assert.match(coreJs, /if \(event\.target\.closest\('\.notification-download-row a'\)\) return;/);
-  assert.match(coreJs, /\?release=\$\{encodeQueryValue\(latestVersion\)\}/);
+  assert.doesNotMatch(coreJs, /notification-download-row|Download APK|Download Android \(\.apk\)/);
+  assert.match(coreJs, /\?release=\$\{encodeQueryValue\(ver\)\}/);
   assert.match(coreJs, /review_\$\{entry\.type\}/);
   assert.match(coreJs, /resolveNotificationTarget,\s*navigateNotificationTarget,\s*openRecordDetails,\s*openFeatureRequestDetails,\s*openPeriodNoticeModal,\s*openNoticeDetailModal,\s*highlightFocus,\s*consumeDeepLink/);
 
@@ -5498,6 +5498,7 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
   assert.equal(historyUpdates.at(-1), 'dashboard.html?release=2.4.0');
   assert.equal(viewerDialog.open, true);
   assert.match(viewerTitle.innerHTML, /Version 2\.4\.0 is live/);
+  assert.doesNotMatch(ids.get('announcement-viewer-release-banner').innerHTML, /Download Android|Download APK|\.apk/i);
 
   // C. Payment reminder deep link opens #notice-detail-dialog with balance & "Submit contribution" CTA
   let submittedPaymentCtx = null;
@@ -5544,6 +5545,11 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
   assert.equal(noticeResult?.id, 'notice-detail-dialog');
   assert.equal(noticeTitle.textContent, 'Group settings updated');
   assert.match(noticeBody.innerHTML, /Your group rules were updated\./);
+  noticeDialog.open = false;
+  noticeActions.children = [];
+  await openNoticeDetailModal({ id: 92, type: 'RELEASE', title: 'Update 2.5.0: Mobile polish', message: 'Published by Super Admin.' });
+  assert.equal(noticeDialog.open, true);
+  assert.equal(noticeActions.querySelectorAll('button').some((b) => /Download APK/i.test(b.textContent)), false);
   assert.equal(typeof swListeners.get('message'), 'function');
   assert.equal(rpcCalls.length, 1);
   assert.equal(rpcCalls[0][0], 'get_release_features');
@@ -8206,4 +8212,175 @@ test('chat drawer, messaging privacy dialog, and full-column chat themes declare
   assert.match(appCss, /\.msg-drawer-action-btn\.is-danger/);
   assert.match(appCss, /\.msg-settings-save-btn:not\(\.is-busy\)::before/);
   assert.match(appCss, /\.msg-blocked-count\s*\{/);
+});
+
+test('mobile notifications never auto-inject update alerts on push and omit Download APK buttons even on admin release announcements', async () => {
+  const coreJs = read('js/core.js');
+  assert.doesNotMatch(coreJs, /system-app-release-notice[\s\S]*?allRows\s*=\s*\[releaseNotice/);
+  assert.doesNotMatch(coreJs, /notification-download-row|Download APK|Download Android \(\.apk\)/);
+
+  const ids = new Map();
+  const makeEl = (id) => {
+    const cls = new Set();
+    return {
+      id,
+      open: false,
+      hidden: false,
+      innerHTML: '',
+      textContent: '',
+      className: '',
+      dataset: {},
+      style: { setProperty() { }, removeProperty() { } },
+      children: [],
+      classList: {
+        add: (...a) => a.forEach((x) => cls.add(x)),
+        remove: (...a) => a.forEach((x) => cls.delete(x)),
+        toggle: (k, f) => { if (f === undefined ? !cls.has(k) : f) cls.add(k); else cls.delete(k); },
+        contains: (k) => cls.has(k)
+      },
+      setAttribute() { },
+      removeAttribute() { },
+      addEventListener() { },
+      appendChild(c) { this.children.push(c); return c; },
+      append(...n) { this.children.push(...n); },
+      prepend() { },
+      insertAdjacentHTML() { },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      remove() { }
+    };
+  };
+  const notifList = makeEl('notification-list');
+  const markAllBtn = makeEl('mark-all-notifications');
+  const notifBadge = makeEl('notification-badge');
+  ids.set('app-loader', makeEl('app-loader'));
+  ids.set('loader-label', makeEl('loader-label'));
+  ids.set('notification-list', notifList);
+  ids.set('mark-all-notifications', markAllBtn);
+  ids.set('notification-badge', notifBadge);
+
+  let dbNotifications = [];
+  const rpcCalls = [];
+  const localStore = new Map([
+    ['myipon_latest_remote_version', '1.0.99'],
+    ['myipon_latest_native_build', '99']
+  ]);
+
+  const doc = {
+    documentElement: makeEl('html'),
+    head: makeEl('head'),
+    body: Object.assign(makeEl('body'), { dataset: { page: 'dashboard' } }),
+    readyState: 'complete',
+    visibilityState: 'hidden',
+    getElementById: (id) => ids.get(id) || null,
+    querySelector: (sel) => (sel.startsWith('#') ? ids.get(sel.slice(1)) || null : null),
+    querySelectorAll: (sel) => (sel === '[data-notification-count]' ? [notifBadge] : []),
+    createElement: (tag) => makeEl(tag),
+    addEventListener() { }
+  };
+
+  const clientMock = {
+    auth: {
+      getSession: async () => ({ data: { session: { user: { id: 'u-mem' } } }, error: null }),
+      mfa: { getAuthenticatorAssuranceLevel: async () => ({ data: { currentLevel: 'aal1', nextLevel: 'aal1' } }) },
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() { } } } }),
+      signOut: async () => { }
+    },
+    from: (table) => {
+      const chain = {
+        select() { return chain; },
+        eq() { return chain; },
+        order() { return chain; },
+        limit() { return chain; },
+        async single() {
+          if (table === 'profiles') {
+            return {
+              data: {
+                id: 'u-mem',
+                full_name: 'Juan Dela Cruz',
+                first_name: 'Juan',
+                last_name: 'Dela Cruz',
+                contact_number: '09171234567',
+                role: 'MEMBER',
+                status: 'ACTIVE',
+                group_id: 'grp-1',
+                member_id: 'mem-1',
+                notifications_enabled: false
+              },
+              error: null
+            };
+          }
+          return { data: null, error: null };
+        },
+        then(resolve) {
+          if (table === 'notifications') return Promise.resolve({ data: dbNotifications, error: null }).then(resolve);
+          return Promise.resolve({ data: [], error: null }).then(resolve);
+        }
+      };
+      return chain;
+    },
+    rpc: async (name, params) => {
+      rpcCalls.push([name, params]);
+      if (name === 'mark_all_notifications_read') {
+        dbNotifications = dbNotifications.map((r) => ({ ...r, read_at: '2026-11-16T01:30:00Z' }));
+      }
+      return { data: null, error: null };
+    },
+    channel: () => ({ on() { return this; }, subscribe() { return this; } }),
+    removeChannel() { }
+  };
+
+  const ctx = {
+    window: null,
+    document: doc,
+    navigator: { userAgent: 'Mozilla/5.0 myIPONApp/19', onLine: true },
+    location: { origin: 'https://myipon.example', protocol: 'https:', hostname: 'myipon.example', pathname: '/dashboard.html', href: 'https://myipon.example/dashboard.html', search: '', replace() { } },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon' },
+    MYIPON_APP_VERSION: { version: '1.0.20', build: 20, nativeBuild: 20, isApp: true },
+    Capacitor: { Plugins: {} },
+    supabase: { createClient: () => clientMock },
+    localStorage: { getItem: (k) => localStore.get(k) ?? null, setItem: (k, v) => localStore.set(k, String(v)), removeItem: (k) => localStore.delete(k) },
+    sessionStorage: { getItem: (k) => (k.startsWith('ipon_member_activated:') ? '1' : null), setItem() { }, removeItem() { } },
+    Notification: { permission: 'default' },
+    CustomEvent: class { },
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
+    setTimeout: () => 0,
+    clearTimeout() { },
+    setInterval: () => 0,
+    clearInterval() { },
+    requestAnimationFrame: (fn) => fn(),
+    addEventListener() { },
+    removeEventListener() { },
+    dispatchEvent() { return true; },
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  // 1. Mobile app with newer build/version on server shows NO synthetic Update available notification when DB has none
+  const initRes = await ctx.window.Ipon.init({ allowedRoles: ['MEMBER'], skipBackgroundPrompt: true });
+  assert.equal(initRes?.redirecting, undefined);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.doesNotMatch(notifList.innerHTML, /Update available|instant live updates|Download APK/i);
+  assert.match(notifList.innerHTML, /You have no notifications yet\./);
+  assert.equal(notifBadge.textContent, '0');
+
+  // 2. When Super Admin publishes a RELEASE announcement in DB, it renders cleanly without Download APK and marks read on Clear
+  dbNotifications = [{
+    id: 501,
+    group_id: null,
+    type: 'RELEASE',
+    title: 'Update 1.0.20: Chat polish',
+    message: 'Redesigned drawer and privacy settings.',
+    link: 'dashboard.html?announcement=ann-501',
+    read_at: null,
+    created_at: '2026-11-16T01:22:00Z'
+  }];
+  await markAllBtn.onclick();
+  assert.ok(rpcCalls.some(([fn]) => fn === 'mark_all_notifications_read'));
+  assert.match(notifList.innerHTML, /Update 1\.0\.20: Chat polish/);
+  assert.doesNotMatch(notifList.innerHTML, /Download APK|notification-download-row/i);
+  assert.equal(notifBadge.textContent, '0');
 });

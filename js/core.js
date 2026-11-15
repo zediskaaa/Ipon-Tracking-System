@@ -4855,15 +4855,7 @@
 
     const actions = Array.isArray(opts.actions) ? [...opts.actions] : [];
     const type = String(item?.type || '').toUpperCase();
-    if (type === 'RELEASE' || item?.id === 'system-app-release-notice') {
-      if (isInstalledAppUser()) {
-        actions.push({
-          label: 'Download APK',
-          variant: 'primary',
-          onClick: () => openExternalDownloadUrl(APK_LATEST_DOWNLOAD_URL)
-        });
-      }
-    } else if (type === 'GROUP_INVITE' && item?.id) {
+    if (type === 'GROUP_INVITE' && item?.id) {
       actions.push({
         label: 'Decline',
         variant: 'secondary',
@@ -5084,7 +5076,6 @@
       const { data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,dedupe_key,read_at,created_at').order('created_at', { ascending: false }).limit(40);
       if (error) { showInlineError(list, error, load); return; }
       const rows = data || [];
-      let allRows = rows;
 
       if (realtimePayload?.eventType !== 'DELETE' && realtimePayload?.new?.id) {
         const match = rows.find((item) => String(item.id) === String(realtimePayload.new.id)) || realtimePayload.new;
@@ -5114,37 +5105,13 @@
 
       notificationItemsById.clear();
 
-      if (isApp) {
-        const latestVersion = localStorage.getItem('myipon_latest_remote_version') || window.MYIPON_APP_VERSION?.version || '1.0.20';
-        const installedNativeBuild = getInstalledNativeBuild();
-        const remoteNativeBuild = Number(localStorage.getItem('myipon_latest_native_build') || window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 20);
-        const hasPendingUpdate = remoteNativeBuild > installedNativeBuild;
-
-        if (hasPendingUpdate) {
-          const isReleaseRead = Boolean(localStorage.getItem(`myipon_read_release_notice_${remoteNativeBuild}`));
-          const annPage = currentProfile?.role === 'SUPER_ADMIN' ? 'super-admin.html' : 'dashboard.html';
-          const releaseTarget = `${annPage}?release=${encodeQueryValue(latestVersion)}${currentProfile?.role === 'SUPER_ADMIN' ? '#announcements' : ''}`;
-          const releaseNotice = {
-            id: 'system-app-release-notice',
-            type: 'RELEASE',
-            title: `Update available: Version ${latestVersion}`,
-            message: `A new version of myIPON (${latestVersion}) is ready with instant live updates. Tap to read release notes or use Download APK below.`,
-            link: releaseTarget,
-            read_at: isReleaseRead ? 'read' : null,
-            created_at: new Date().toISOString()
-          };
-          allRows = [releaseNotice, ...rows];
-        }
-      }
-
-      const unread = allRows.filter((item) => !item.read_at).length;
+      const unread = rows.filter((item) => !item.read_at).length;
       syncNotificationBadges(unread);
       document.getElementById('mark-all-notifications').hidden = unread === 0;
-      list.innerHTML = allRows.length ? allRows.map((item) => {
+      list.innerHTML = rows.length ? rows.map((item) => {
         const isInvite = item.type === 'GROUP_INVITE' && !item.read_at;
-        const isReleaseNotif = item.type === 'RELEASE' || (item.title && /release|version|app update/i.test(item.title));
         notificationItemsById.set(String(item.id), item);
-      const safeTarget = isInvite ? '' : resolveNotificationTarget(item);
+        const safeTarget = isInvite ? '' : resolveNotificationTarget(item);
         const iconPath = item.type === 'GROUP_INVITE' || item.type === 'SOCIAL_FRIEND_REQUEST' || item.type === 'SOCIAL_FRIEND_ACCEPTED'
           ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'
           : String(item.type || '').startsWith('SOCIAL_')
@@ -5162,11 +5129,6 @@
               <div class="notification-invite-actions">
                 <button class="button button-sm button-primary" type="button" data-invite-action="accept" data-notif-id="${item.id}">Accept</button>
                 <button class="button button-sm button-secondary" type="button" data-invite-action="decline" data-notif-id="${item.id}">Decline</button>
-              </div>
-            ` : ''}
-            ${isReleaseNotif ? `
-              <div class="notification-download-row" style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
-                <a class="button button-sm button-primary" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk" download="myIPON.apk" target="_blank" rel="noopener" style="padding: 3px 8px; font-size: 11px; text-decoration: none;">Download APK</a>
               </div>
             ` : ''}
           </div>
@@ -5202,28 +5164,19 @@
         }
         return;
       }
-      if (event.target.closest('.notification-download-row a')) return;
       const item = event.target.closest('[data-notification-id]');
       if (!item) return;
       const rawItem = notificationItemsById.get(String(item?.dataset?.notificationId || '')) || null;
       const target = normalizeRolePageTarget(item.dataset.navTarget) || safeNotificationTarget(item.dataset.navTarget);
       if (target || rawItem) event.preventDefault();
       if (item.classList.contains('is-unread')) {
-        if (item.dataset.notificationId === 'system-app-release-notice') {
-          const remoteBuild = localStorage.getItem('myipon_latest_native_build') || String(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 20);
-          localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
+        try {
+          await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) });
           item.classList.remove('is-unread');
           syncNotificationBadges(Math.max(0, (Number(readShellSnapshot()?.unreadCount) || 1) - 1));
           if (!target) await load();
-        } else {
-          try {
-            await rpc('mark_notification_read', { p_notification_id: Number(item.dataset.notificationId) });
-            item.classList.remove('is-unread');
-            syncNotificationBadges(Math.max(0, (Number(readShellSnapshot()?.unreadCount) || 1) - 1));
-            if (!target) await load();
-          } catch (error) {
-            toast(friendlyError(error), 'error');
-          }
+        } catch (error) {
+          toast(friendlyError(error), 'error');
         }
       }
       if (target || rawItem) {
@@ -5231,11 +5184,8 @@
       }
     };
     document.getElementById('mark-all-notifications').onclick = async () => {
-      const remoteBuild = localStorage.getItem('myipon_latest_native_build') || String(window.MYIPON_APP_VERSION?.nativeBuild || window.MYIPON_APP_VERSION?.build || 20);
-      localStorage.setItem(`myipon_read_release_notice_${remoteBuild}`, 'true');
       try { await rpc('mark_all_notifications_read'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
     };
-    window.addEventListener('myipon_update_available', () => { load(); });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         syncDevicePermissionUI().catch(() => { });
@@ -6700,18 +6650,11 @@
       if (viewerReleaseBanner) {
         viewerReleaseBanner.innerHTML = isRelease ? `
           <div class="announcement-release-banner announcement-viewer-release">
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; width: 100%;">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="announcement-release-badge">
-                  <svg viewBox="0 0 24 24" aria-hidden="true" class="release-star-icon"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>
-                  Release update
-                </span>
-                ${item.release_version ? `<span class="announcement-version-chip">${escapeHtml(item.release_version)}</span>` : ''}
-              </div>
-              <div style="display: inline-flex; gap: 8px; flex-wrap: wrap;">
-                <a class="button button-sm button-primary" href="https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk" download="myIPON.apk" target="_blank" rel="noopener" style="padding: 4px 10px; font-size: 12px; text-decoration: none;">Download Android (.apk)</a>
-              </div>
-            </div>
+            <span class="announcement-release-badge">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="release-star-icon"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>
+              Release update
+            </span>
+            ${item.release_version ? `<span class="announcement-version-chip">${escapeHtml(item.release_version)}</span>` : ''}
           </div>` : '';
       }
       viewerMeta.innerHTML = announcementAuthorMeta(item);
@@ -7185,7 +7128,7 @@
           id: 'system-app-release-notice',
           type: 'RELEASE',
           title: releaseVersion === 'latest' ? 'App update available' : `Update available: Version ${releaseVersion}`,
-          message: `Version ${releaseVersion === 'latest' ? 'latest' : releaseVersion} includes the newest improvements and fixes. Tap Download APK below if you are using the Android app, or check back shortly for full release notes.`
+          message: `Version ${releaseVersion === 'latest' ? 'latest' : releaseVersion} includes the newest platform improvements and fixes. Check Announcements for full release notes.`
         });
         return true;
       }
