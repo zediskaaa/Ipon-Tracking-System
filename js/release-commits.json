@@ -1,5 +1,9 @@
 [
   {
+    "date": "2026-11-16T00:01:54+08:00",
+    "message": "Add mobile background usage controls, voice mic access, pinch-zoom viewer, and offline fixes\n\n- Add background usage & device alert controls inside My account (modal and account.html) with live status pills, settings fallbacks, and an automatic onboarding prompt for new APK users so closed-app messages and alerts keep arriving.\n- Harden native Android background sync on resume and battery-optimization request fallbacks across MainActivity and BackgroundNotificationsPlugin.\n- Request microphone permissions on first install and voice-message tap across Android, iOS, and WebView with clean settings recovery guidance.\n- Upgrade the chat image viewer to edge-to-edge pinch-to-zoom and pan with working native DownloadManager/MediaStore and blob downloads.\n- Default the mobile Messages launcher to Chats, close open thread overlays when switching to Requests, map offline/fetch errors to user-friendly messages, and remove the broken offline logo image.\n- Sync mobile assets, bump HTML asset cache-busters, and expand automated checks in tests/contracts.test.mjs."
+  },
+  {
     "date": "2026-11-15T23:09:18+08:00",
     "message": "Polish messaging reactions, pinned messages, media viewer, and profile cards\n\n- Replace dark pinned banner and per-row unpin buttons with a light-green expandable pill, numbered pin list, and single active-message highlight (`renderPinnedBanner`, `syncActivePinnedHighlight`).\n- Switch reactions to press-and-hold across text bubbles, photos, and videos with smooth open/close transitions (`HOLD_EXCLUDE_SEL`, `revealFloatingMenu`) and remove redundant Reply/Copy action buttons from the emoji strip.\n- Keep message bubbles and 3-dots actions tightly aligned via `.msg-bubble-wrap`, restore `Reply` inside the 3-dots menu (`startReplyToMessage`), clean up reply quotes, and switch the unread separator badge to green.\n- Update the Chat Info drawer to drill into separate scrollable `Shared media` and `Shared files` views (`threadInfoView`), redesign `#msg-profile-popover` with an expandable shared-groups card (`renderSharedGroupsCard`), and fix reopening the same chat after Back on mobile.\n- Restyle the shared image viewer in `js/core.js` (`openImageViewer`), bump HTML asset cache-busters and mobile build metadata (`version.json`, `js/version.js`, `js/release-commits.json`), and update contract tests in `tests/contracts.test.mjs`."
   },
@@ -174,9 +178,5 @@
   {
     "date": "2026-11-14T03:19:04+08:00",
     "message": "Revert back to 3ad6e5f where dashboard and app worked cleanly"
-  },
-  {
-    "date": "2026-11-14T02:58:28+08:00",
-    "message": "Export Ipon.populateGroupSelect on window.Ipon"
   }
 ]

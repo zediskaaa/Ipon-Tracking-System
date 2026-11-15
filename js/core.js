@@ -8003,6 +8003,295 @@
     if (!dialog.open) dialog.showModal();
   }
 
+  function formatVideoTimeLabel(seconds) {
+    const s = Math.max(0, Math.floor(Number(seconds) || 0));
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}:${String(rem).padStart(2, '0')}`;
+  }
+
+  function openVideoViewer(src, title = 'Video', subtitle = '', downloadName = '', opts = {}) {
+    const raw = String(src || '').trim();
+    const isSafeUrl = raw.startsWith('data:video/') || raw.startsWith('blob:') || /^https?:\/\//i.test(raw);
+    if (!raw || !isSafeUrl) return;
+    let dialog = document.getElementById('ipon-video-viewer');
+    if (!dialog) {
+      dialog = document.createElement('dialog');
+      dialog.id = 'ipon-video-viewer';
+      dialog.className = 'image-viewer-dialog video-viewer-dialog';
+      dialog.innerHTML = `<div class="image-viewer-sheet">
+        <header class="image-viewer-header">
+          <div class="image-viewer-title-wrap">
+            <button class="dialog-close" id="ipon-vv-close" type="button" aria-label="Close video viewer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+            <div class="image-viewer-meta">
+              <h2 id="ipon-vv-title"></h2>
+              <p id="ipon-vv-subtitle" hidden></p>
+            </div>
+          </div>
+          <div class="image-viewer-actions">
+            <a class="image-viewer-dl-pill" id="ipon-vv-download" download="myipon-video.mp4" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span>Download</span></a>
+          </div>
+        </header>
+        <div class="video-viewer-stage" id="ipon-vv-stage">
+          <video class="video-viewer-el" id="ipon-vv-video" playsinline preload="auto"></video>
+          <button type="button" class="video-viewer-center-btn" id="ipon-vv-center-play" aria-label="Play video">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 20 12 7 20 7 4"/></svg>
+          </button>
+          <div class="msg-video-controls is-viewer-dock" id="ipon-vv-controls">
+            <input type="range" class="msg-video-seek" id="ipon-vv-seek" min="0" max="1000" value="0" aria-label="Seek video">
+            <div class="msg-video-bar-actions">
+              <div class="msg-video-bar-left">
+                <button type="button" class="msg-video-ctrl-btn" id="ipon-vv-play" aria-label="Play video" title="Play"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
+                <button type="button" class="msg-video-ctrl-btn" id="ipon-vv-mute" aria-label="Mute audio" title="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg></button>
+                <span class="msg-video-time" id="ipon-vv-time">0:00 / 0:00</span>
+              </div>
+              <div class="msg-video-bar-right">
+                <button type="button" class="msg-video-ctrl-btn" id="ipon-vv-exit-fs" aria-label="Exit fullscreen" title="Exit fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+      document.body.appendChild(dialog);
+
+      const stageEl = dialog.querySelector('#ipon-vv-stage');
+      const videoEl = dialog.querySelector('#ipon-vv-video');
+      const seekEl = dialog.querySelector('#ipon-vv-seek');
+      const playBtn = dialog.querySelector('#ipon-vv-play');
+      const centerBtn = dialog.querySelector('#ipon-vv-center-play');
+      const muteBtn = dialog.querySelector('#ipon-vv-mute');
+      const timeEl = dialog.querySelector('#ipon-vv-time');
+      const dlBtn = dialog.querySelector('#ipon-vv-download');
+      const exitBtn = dialog.querySelector('#ipon-vv-exit-fs');
+      const playSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+      const pauseSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+      const volOnSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg>';
+      const volOffSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+
+      let hideChromeTimer = null;
+      const scheduleChromeHide = () => {
+        clearTimeout(hideChromeTimer);
+        dialog.classList.remove('is-chrome-hidden');
+        if (!videoEl.paused && !videoEl.ended && seekEl.dataset.seeking !== '1') {
+          hideChromeTimer = setTimeout(() => {
+            if (!videoEl.paused && !videoEl.ended && seekEl.dataset.seeking !== '1') {
+              dialog.classList.add('is-chrome-hidden');
+            }
+          }, 3000);
+        }
+      };
+
+      const syncUi = () => {
+        const playing = !videoEl.paused && !videoEl.ended;
+        const muted = Boolean(videoEl.muted || videoEl.volume === 0);
+        stageEl.classList.toggle('is-playing', playing);
+        playBtn.innerHTML = playing ? pauseSvg : playSvg;
+        playBtn.setAttribute('aria-label', playing ? 'Pause video' : 'Play video');
+        playBtn.setAttribute('title', playing ? 'Pause' : 'Play');
+        centerBtn.setAttribute('aria-label', playing ? 'Pause video' : 'Play video');
+        muteBtn.innerHTML = muted ? volOffSvg : volOnSvg;
+        muteBtn.setAttribute('aria-label', muted ? 'Unmute audio' : 'Mute audio');
+        muteBtn.setAttribute('title', muted ? 'Unmute' : 'Mute');
+        const dur = Number.isFinite(videoEl.duration) && videoEl.duration > 0 ? videoEl.duration : 0;
+        const cur = Number.isFinite(videoEl.currentTime) && videoEl.currentTime > 0 ? videoEl.currentTime : 0;
+        if (seekEl.dataset.seeking !== '1') {
+          const pct = dur ? Math.min(100, Math.max(0, (cur / dur) * 100)) : 0;
+          seekEl.value = String(Math.round(pct * 10));
+          seekEl.style.setProperty('--seek-pct', `${pct}%`);
+        }
+        timeEl.textContent = `${formatVideoTimeLabel(cur)} / ${formatVideoTimeLabel(dur)}`;
+      };
+      dialog._syncUi = syncUi;
+      dialog._scheduleChromeHide = scheduleChromeHide;
+
+      const togglePlay = async () => {
+        if (videoEl.paused || videoEl.ended) {
+          try { await videoEl.play?.(); } catch { }
+        } else {
+          try { videoEl.pause?.(); } catch { }
+        }
+        syncUi();
+        scheduleChromeHide();
+      };
+
+      playBtn.addEventListener('click', (ev) => { ev.stopPropagation(); togglePlay(); });
+      centerBtn.addEventListener('click', (ev) => { ev.stopPropagation(); togglePlay(); });
+      videoEl.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (dialog.classList.contains('is-chrome-hidden')) {
+          scheduleChromeHide();
+        } else {
+          togglePlay();
+        }
+      });
+      muteBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        videoEl.muted = !videoEl.muted;
+        syncUi();
+        scheduleChromeHide();
+      });
+      seekEl.addEventListener('input', (ev) => {
+        ev.stopPropagation();
+        seekEl.dataset.seeking = '1';
+        clearTimeout(hideChromeTimer);
+        dialog.classList.remove('is-chrome-hidden');
+        const pct = Math.min(100, Math.max(0, Number(seekEl.value || 0) / 10));
+        seekEl.style.setProperty('--seek-pct', `${pct}%`);
+        if (Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
+          videoEl.currentTime = (pct / 100) * videoEl.duration;
+        }
+        syncUi();
+      });
+      seekEl.addEventListener('change', () => {
+        delete seekEl.dataset.seeking;
+        scheduleChromeHide();
+      });
+
+      for (const evt of ['play', 'pause', 'ended', 'timeupdate', 'loadedmetadata', 'volumechange']) {
+        videoEl.addEventListener(evt, () => {
+          syncUi();
+          if (evt === 'pause' || evt === 'ended') {
+            clearTimeout(hideChromeTimer);
+            dialog.classList.remove('is-chrome-hidden');
+          } else if (evt === 'play') {
+            scheduleChromeHide();
+          }
+        });
+      }
+
+      dialog.querySelector('#ipon-vv-close').addEventListener('click', () => dialog.close());
+      exitBtn.addEventListener('click', () => dialog.close());
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+      dlBtn.addEventListener('click', async (event) => {
+        event.preventDefault();
+        if (dlBtn.dataset.busy === '1') return;
+        dlBtn.dataset.busy = '1';
+        dlBtn.setAttribute('aria-busy', 'true');
+        try {
+          if (typeof dialog._onDownload === 'function') {
+            await dialog._onDownload();
+          } else {
+            await downloadFile(dialog._currentSrc || dlBtn.href, dlBtn.download || 'video.mp4');
+          }
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          dlBtn.dataset.busy = '0';
+          dlBtn.removeAttribute('aria-busy');
+        }
+      });
+      dialog.addEventListener('close', () => {
+        clearTimeout(hideChromeTimer);
+        try { videoEl.pause?.(); } catch { }
+        const onClose = dialog._onClose;
+        dialog._onClose = null;
+        if (typeof onClose === 'function') {
+          try {
+            onClose({ currentTime: Number(videoEl.currentTime || 0), muted: Boolean(videoEl.muted) });
+          } catch { }
+        }
+      });
+    }
+
+    const videoEl = dialog.querySelector('#ipon-vv-video');
+    const titleEl = dialog.querySelector('#ipon-vv-title');
+    const subEl = dialog.querySelector('#ipon-vv-subtitle');
+    const dl = dialog.querySelector('#ipon-vv-download');
+    const baseSub = String(subtitle || '').trim();
+    dialog.classList.remove('is-chrome-hidden');
+    dialog._currentSrc = raw;
+    dialog._onDownload = typeof opts?.onDownload === 'function' ? opts.onDownload : null;
+    dialog._onClose = typeof opts?.onClose === 'function' ? opts.onClose : null;
+    titleEl.textContent = title || 'Video';
+    subEl.textContent = baseSub;
+    subEl.hidden = !baseSub;
+    dl.href = raw;
+    dl.removeAttribute('target');
+    const cleanDl = String(downloadName || '').trim();
+    dl.download = cleanDl || `${String(title || 'video').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.mp4`;
+    if (opts?.poster) videoEl.poster = String(opts.poster);
+    else videoEl.removeAttribute('poster');
+    if (typeof opts?.muted === 'boolean') videoEl.muted = opts.muted;
+    videoEl.src = raw;
+    const seekTarget = Number(opts?.startTime || 0);
+    if (seekTarget > 0) {
+      const applyStart = () => {
+        try {
+          if (Number.isFinite(videoEl.duration) && seekTarget < videoEl.duration) {
+            videoEl.currentTime = seekTarget;
+          }
+        } catch { }
+        dialog._syncUi?.();
+      };
+      if (videoEl.readyState >= 1) applyStart();
+      else videoEl.addEventListener('loadedmetadata', applyStart, { once: true });
+    }
+    dialog._syncUi?.();
+    if (!dialog.open) dialog.showModal();
+    if (opts?.autoplay !== false) {
+      Promise.resolve(videoEl.play?.()).then(() => {
+        dialog._syncUi?.();
+        dialog._scheduleChromeHide?.();
+      }).catch(() => {
+        dialog._syncUi?.();
+      });
+    }
+  }
+
+  function handleNativeBack() {
+    if (window.IponMessages?.dismissTransientMenus?.()) return 'handled';
+
+    for (const id of ['ipon-video-viewer', 'ipon-image-viewer']) {
+      const viewer = document.getElementById(id);
+      if (viewer?.open) {
+        viewer.close();
+        return 'handled';
+      }
+    }
+
+    for (const id of ['confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog', 'msg-forward-dialog', 'msg-settings-dialog', 'account-dialog']) {
+      const dlg = document.getElementById(id);
+      if (dlg?.open) {
+        dlg.close(id === 'confirm-dialog' || id === 'record-action-dialog' ? 'cancel' : undefined);
+        return 'handled';
+      }
+    }
+
+    const msgDialog = document.getElementById('msg-workspace-dialog');
+    if (msgDialog?.open) {
+      if (window.IponMessages?.handleBackNavigation?.()) return 'handled';
+      msgDialog.close();
+      return 'handled';
+    }
+
+    const openDialogs = Array.from(document.querySelectorAll('dialog[open]') || []);
+    const extraDialog = openDialogs.reverse().find((d) => d?.id && d.id !== 'msg-workspace-dialog');
+    if (extraDialog) {
+      extraDialog.close();
+      return 'handled';
+    }
+
+    const pageName = String(document.body?.dataset?.page || '').toLowerCase();
+    const pathLeaf = String(window.location?.pathname || '').split('/').pop().toLowerCase();
+    const isRootPage = pageName === 'dashboard' || pageName === 'super-admin' || pageName === 'login'
+      || pageName === 'mfa' || pageName === 'reset-password'
+      || pathLeaf === '' || pathLeaf === 'index.html' || pathLeaf === 'dashboard.html'
+      || pathLeaf === 'super-admin.html' || pathLeaf === 'login.html'
+      || pathLeaf === 'mfa.html' || pathLeaf === 'reset-password.html';
+    if (!isRootPage) {
+      if (document.referrer && document.referrer.startsWith(window.location.origin) && window.history?.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = currentProfile ? homeForRole(currentProfile.role) : 'dashboard.html';
+      }
+      return 'handled';
+    }
+
+    return 'exit';
+  }
+
   function bindReceiptPicker({ input, dropzone, preview, thumb, nameEl, clearBtn, emptyBox, onChange } = {}) {
     let dataUrl = null;
     const sync = (fileName = '') => {
@@ -9997,7 +10286,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, downloadFile, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     setOnlineVisibility, syncMessagesBadges,
     updateLocalProfile(patch = {}) {

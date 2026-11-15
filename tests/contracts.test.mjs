@@ -2294,7 +2294,7 @@ test('reports script renders wallet reconciliation and member reports without ru
       options: [{ text: 'All statuses' }],
       selectedIndex: 0,
       attributes: new Map(),
-      addEventListener() {},
+      addEventListener() { },
       closest() { return makeEl('closest'); },
       setAttribute(k, v) { this.attributes.set(k, v); },
       getAttribute(k) { return this.attributes.get(k) ?? null; },
@@ -2316,7 +2316,7 @@ test('reports script renders wallet reconciliation and member reports without ru
   });
   const fakeWindow = {
     location: { href: 'http://localhost/reports.html', pathname: '/reports.html', search: '', hash: '' },
-    addEventListener() {},
+    addEventListener() { },
     Chart: null
   };
   const fakeIpon = {
@@ -2330,7 +2330,7 @@ test('reports script renders wallet reconciliation and member reports without ru
     paymentMethodBadge: (m) => `<span>${m || 'Untagged'}</span>`,
     payoutSummaryChip: () => '',
     MAX_MONEY_AMOUNT: 999999999999.99,
-    guardMoneyInput() {},
+    guardMoneyInput() { },
     parseMoneyAmount: (raw) => {
       const s = String(raw ?? '').trim();
       if (!s) return { valid: true, value: null, error: '' };
@@ -2339,22 +2339,22 @@ test('reports script renders wallet reconciliation and member reports without ru
         ? { valid: true, value: Math.round(n * 100) / 100, error: '' }
         : { valid: false, value: null, error: 'Invalid' };
     },
-    setLoading() {},
+    setLoading() { },
     showInlineError(_b, err) { throw err; },
-    subscribeToChanges() {},
+    subscribeToChanges() { },
     client: {
       rpc: async (name) => name === 'get_wallet_reconciliation'
         ? {
-            data: {
-              tracked_savings: 100,
-              physical_cash_balance: 100,
-              digital_wallet_balance: 0,
-              other_balance: 0,
-              untagged_balance: 0,
-              channels: [{ method: 'CASH', additions: 100, deductions: 0, expenses: 0, net_balance: 100, entry_count: 1 }]
-            },
-            error: null
-          }
+          data: {
+            tracked_savings: 100,
+            physical_cash_balance: 100,
+            digital_wallet_balance: 0,
+            other_balance: 0,
+            untagged_balance: 0,
+            channels: [{ method: 'CASH', additions: 100, deductions: 0, expenses: 0, net_balance: 100, entry_count: 1 }]
+          },
+          error: null
+        }
         : { data: { total_additions: 100, total_deductions: 0, total_expenses: 0, tracked_savings: 100 }, error: null },
       from: (table) => table === 'v_contribution_status'
         ? queryChain([{ member_id: 'm1', member_name: 'Tester', required_amount: 100, paid_amount: 0, outstanding_amount: 100, payment_status: 'UNPAID' }])
@@ -2367,9 +2367,9 @@ test('reports script renders wallet reconciliation and member reports without ru
     window: fakeWindow,
     Ipon: fakeIpon,
     document: { getElementById: getEl, createElement: () => makeEl('created'), body: makeEl('body') },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    URL: { createObjectURL: () => '', revokeObjectURL() {} },
-    Blob: class {},
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    URL: { createObjectURL: () => '', revokeObjectURL() { } },
+    Blob: class { },
     Promise, Map, Set, Number, String, Array, Math, Date, JSON, Boolean, setTimeout
   };
   await vm.runInNewContext(reportsJs, context, { filename: 'js/reports.js' });
@@ -2440,10 +2440,10 @@ test('core script initializes without TDZ ReferenceError and mounts peso inputs 
     getAttribute(k) { return this.attributes.get(k) ?? null; }
     removeAttribute(k) { this.attributes.delete(k); }
     toggleAttribute(k, f) { if (f === false) this.attributes.delete(k); else this.attributes.set(k, ''); }
-    addEventListener() {}
-    setCustomValidity() {}
+    addEventListener() { }
+    setCustomValidity() { }
     checkValidity() { return true; }
-    focus() {}
+    focus() { }
     closest(sel) {
       let cur = this;
       const cls = sel.startsWith('.') ? sel.slice(1) : '';
@@ -2474,9 +2474,9 @@ test('core script initializes without TDZ ReferenceError and mounts peso inputs 
       walk(this);
       return out;
     }
-    insertAdjacentHTML() {}
+    insertAdjacentHTML() { }
   }
-  class FakeInput extends FakeEl {}
+  class FakeInput extends FakeEl { }
   const body = new FakeEl('body');
   body.dataset = { page: 'dashboard' };
   const loader = new FakeEl('div', { id: 'app-loader' });
@@ -2497,7 +2497,7 @@ test('core script initializes without TDZ ReferenceError and mounts peso inputs 
     querySelector: (s) => body.querySelector(s),
     querySelectorAll: (s) => body.querySelectorAll(s),
     createElement: (t) => (t === 'input' ? new FakeInput(t) : new FakeEl(t)),
-    addEventListener() {},
+    addEventListener() { },
     readyState: 'complete'
   };
   const ctx = {
@@ -2507,18 +2507,18 @@ test('core script initializes without TDZ ReferenceError and mounts peso inputs 
     HTMLFormElement: FakeEl,
     HTMLElement: FakeEl,
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/dashboard.html', pathname: '/dashboard.html', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/dashboard.html', pathname: '/dashboard.html', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class { observe() { } },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
     setTimeout: () => 0,
-    clearTimeout() {},
+    clearTimeout() { },
     setInterval: () => 0,
-    clearInterval() {},
+    clearInterval() { },
     requestAnimationFrame: (fn) => fn(),
-    addEventListener() {},
+    addEventListener() { },
     console
   };
   ctx.window = ctx;
@@ -2547,21 +2547,21 @@ test('requestRecordAction completes VOID review confirmation flow in VM without 
       className: '',
       dataset: {},
       style: {},
-      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-      setAttribute() {},
-      removeAttribute() {},
-      addEventListener() {},
+      classList: { add() { }, remove() { }, toggle() { }, contains: () => false },
+      setAttribute() { },
+      removeAttribute() { },
+      addEventListener() { },
       querySelector: () => null,
       querySelectorAll: () => [],
-      after() {},
-      before() {},
-      focus() {},
+      after() { },
+      before() { },
+      focus() { },
       ...extra
     };
     if (id) ids.set(id, node);
     return node;
   };
-  const dialog = makeNode('record-action-dialog', { returnValue: '', showModal() {}, close(v) { this.returnValue = v; } });
+  const dialog = makeNode('record-action-dialog', { returnValue: '', showModal() { }, close(v) { this.returnValue = v; } });
   const decisionRadio = { value: 'VOID' };
   const form = makeNode('record-action-form', { reportValidity: () => true, elements: { decision: decisionRadio } });
   const editStep = makeNode('record-action-step-edit');
@@ -2581,32 +2581,32 @@ test('requestRecordAction completes VOID review confirmation flow in VM without 
   const confirmNote = makeNode('record-action-confirm-note');
   makeNode('record-action-error');
   makeNode('app-loader');
-  const body = { dataset: { page: 'contributions' }, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, querySelectorAll: () => [], insertAdjacentHTML() {}, appendChild() {}, addEventListener() {} };
+  const body = { dataset: { page: 'contributions' }, classList: { add() { }, remove() { }, toggle() { }, contains: () => false }, querySelectorAll: () => [], insertAdjacentHTML() { }, appendChild() { }, addEventListener() { } };
   const ctx = {
     window: null,
     document: {
       documentElement: { dataset: {} },
       body,
-      head: { appendChild() {}, insertAdjacentHTML() {} },
+      head: { appendChild() { }, insertAdjacentHTML() { } },
       getElementById: (id) => ids.get(id) || null,
       querySelector: () => null,
       querySelectorAll: () => [],
       createElement: () => makeNode(''),
-      addEventListener() {},
+      addEventListener() { },
       readyState: 'complete'
     },
-    HTMLInputElement: class {},
-    HTMLFormElement: class {},
-    HTMLElement: class {},
+    HTMLInputElement: class { },
+    HTMLFormElement: class { },
+    HTMLElement: class { },
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class { observe() { } },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { },
+    requestAnimationFrame: (fn) => fn(), addEventListener() { }, console
   };
   ctx.window = ctx;
   vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
@@ -2619,7 +2619,7 @@ test('requestRecordAction completes VOID review confirmation flow in VM without 
     onSubmit: async (payload) => { submittedPayload = payload; }
   });
   reason.value = 'Re-tagging payment method';
-  form.onsubmit({ preventDefault() {} });
+  form.onsubmit({ preventDefault() { } });
   assert.equal(editStep.hidden, true);
   assert.equal(confirmStep.hidden, false);
   assert.equal(confirmBox.dataset.tone, 'danger');
@@ -2674,26 +2674,26 @@ test('record discussion dialog layout CSS is single-sourced, responsive, and ope
     hidden: false,
     disabled: false,
     dataset: {},
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    classList: { add() { }, remove() { }, toggle() { }, contains: () => false },
     innerHTML: '',
     value: '',
     textContent: '',
     scrollTop: 0,
     scrollHeight: 120,
     listeners: new Map(),
-    setAttribute() {},
+    setAttribute() { },
     getAttribute: () => '',
-    removeAttribute() {},
+    removeAttribute() { },
     addEventListener(type, fn) { this.listeners.set(type, fn); },
     removeEventListener(type) { this.listeners.delete(type); },
     querySelector(sel) { return sel === '[type="submit"]' ? submitBtn : null; },
     querySelectorAll() { return []; },
     closest() { return null; },
     reset() { input.value = ''; },
-    focus() {},
+    focus() { },
     showModal() { this.open = true; },
     close() { this.open = false; this.listeners.get('close')?.(); },
-    requestSubmit() { this.onsubmit?.({ preventDefault() {} }); }
+    requestSubmit() { this.onsubmit?.({ preventDefault() { } }); }
   });
   const submitBtn = makeNode('submit');
   const dialog = makeNode('record-thread-dialog');
@@ -2720,39 +2720,39 @@ test('record discussion dialog layout CSS is single-sourced, responsive, and ope
   const doc = {
     body: {
       dataset: { page: 'contributions' },
-      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      classList: { add() { }, remove() { }, toggle() { }, contains: () => false },
       querySelectorAll: () => [],
-      insertAdjacentHTML() {},
-      appendChild() {},
-      addEventListener() {}
+      insertAdjacentHTML() { },
+      appendChild() { },
+      addEventListener() { }
     },
-    head: { appendChild() {}, insertAdjacentHTML() {} },
+    head: { appendChild() { }, insertAdjacentHTML() { } },
     documentElement: { dataset: {} },
     readyState: 'complete',
     querySelector: () => null,
     querySelectorAll: () => [],
     getElementById: (id) => els[id] || null,
     createElement: () => makeNode('tmp'),
-    addEventListener: () => {}
+    addEventListener: () => { }
   };
   const ctx = {
     window: null,
     document: doc,
-    HTMLInputElement: class {},
-    HTMLFormElement: class {},
-    HTMLElement: class {},
+    HTMLInputElement: class { },
+    HTMLFormElement: class { },
+    HTMLElement: class { },
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class { observe() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
     supabase: {
       createClient: () => ({
         auth: {
           getSession: async () => ({ data: { session: null } }),
-          onAuthStateChange: () => {}
+          onAuthStateChange: () => { }
         },
         rpc: async (fn, args) => {
           rpcCalls.push([fn, args]);
@@ -2775,12 +2775,12 @@ test('record discussion dialog layout CSS is single-sourced, responsive, and ope
           return { data: null, error: null };
         },
         channel: () => ({ on() { return this; }, subscribe() { return this; } }),
-        removeChannel: async () => {}
+        removeChannel: async () => { }
       })
     },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { },
+    requestAnimationFrame: (fn) => fn(), addEventListener() { }, console
   };
   ctx.window = ctx;
   vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
@@ -2792,7 +2792,7 @@ test('record discussion dialog layout CSS is single-sourced, responsive, and ope
   assert.equal(readonlyEl.hidden, true);
 
   input.value = 'Checked GCash receipt';
-  await form.onsubmit({ preventDefault() {} });
+  await form.onsubmit({ preventDefault() { } });
   assert.match(messagesEl.innerHTML, /Checked GCash receipt/);
   assert.equal(input.value, '');
   assert.ok(rpcCalls.some(([fn]) => fn === 'add_record_comment'));
@@ -2865,9 +2865,9 @@ test('record discussion supports photo, video, and document attachments with los
     scrollHeight: 120,
     scrollTop: 0,
     listeners: new Map(),
-    setAttribute() {},
+    setAttribute() { },
     getAttribute: () => '',
-    removeAttribute() {},
+    removeAttribute() { },
     classList: {
       set: new Set(),
       add(...c) { c.forEach((x) => this.set.add(x)); },
@@ -2875,8 +2875,8 @@ test('record discussion supports photo, video, and document attachments with los
       toggle(c, f) { if (f === undefined) { this.set.has(c) ? this.set.delete(c) : this.set.add(c); } else if (f) { this.set.add(c); } else { this.set.delete(c); } },
       contains(c) { return this.set.has(c); }
     },
-    focus() {},
-    click() {},
+    focus() { },
+    click() { },
     reset() { input.value = ''; },
     showModal() { this.open = true; },
     close() { this.open = false; if (typeof this.onclose === 'function') this.onclose(); this.listeners.get('close')?.(); },
@@ -2924,42 +2924,42 @@ test('record discussion supports photo, video, and document attachments with los
   let revokedUrls = [];
   const storageBucket = 'record-comments';
 
-  const FakeURL = class extends URL {};
+  const FakeURL = class extends URL { };
   FakeURL.createObjectURL = (f) => `blob:mock/${f.name}`;
   FakeURL.revokeObjectURL = (u) => revokedUrls.push(u);
 
   const doc = {
     body: {
       dataset: { page: 'contributions' },
-      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      classList: { add() { }, remove() { }, toggle() { }, contains: () => false },
       querySelectorAll: () => [],
-      insertAdjacentHTML() {},
-      appendChild() {},
-      addEventListener() {}
+      insertAdjacentHTML() { },
+      appendChild() { },
+      addEventListener() { }
     },
-    head: { appendChild() {}, insertAdjacentHTML() {} },
+    head: { appendChild() { }, insertAdjacentHTML() { } },
     documentElement: { dataset: {} },
     readyState: 'complete',
     querySelector: () => null,
     querySelectorAll: () => [],
     getElementById: (id) => els[id] || null,
     createElement: () => makeNode('tmp'),
-    addEventListener: () => {}
+    addEventListener: () => { }
   };
 
   const ctx = {
     window: null,
     document: doc,
-    HTMLInputElement: class {},
-    HTMLFormElement: class {},
-    HTMLElement: class {},
+    HTMLInputElement: class { },
+    HTMLFormElement: class { },
+    HTMLElement: class { },
     Blob,
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class { observe() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
     fetch: async (url, init) => {
       if (String(url).includes('/functions/v1/manage-account')) {
@@ -3000,7 +3000,7 @@ test('record discussion supports photo, video, and document attachments with los
       createClient: () => ({
         auth: {
           getSession: async () => ({ data: { session: { access_token: 'jwt-1' } } }),
-          onAuthStateChange: () => {}
+          onAuthStateChange: () => { }
         },
         functions: {
           invoke: async (name, { body } = {}) => {
@@ -3079,12 +3079,12 @@ test('record discussion supports photo, video, and document attachments with los
           return { data: null, error: null };
         },
         channel: () => ({ on() { return this; }, subscribe() { return this; } }),
-        removeChannel: async () => {}
+        removeChannel: async () => { }
       })
     },
     Intl, URL: FakeURL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { },
+    requestAnimationFrame: (fn) => fn(), addEventListener() { }, console
   };
   ctx.window = ctx;
   vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
@@ -3104,7 +3104,7 @@ test('record discussion supports photo, video, and document attachments with los
   assert.doesNotMatch(queuedEl.innerHTML, /payload\.exe/);
 
   input.value = '';
-  await form.onsubmit({ preventDefault() {} });
+  await form.onsubmit({ preventDefault() { } });
 
   assert.equal(uploadedPayloads.length, 3);
   assert.equal(uploadedPayloads[0].file, photoFile);
@@ -3145,9 +3145,9 @@ test('discussion unread count pill disappears once messages are opened and read'
     scrollHeight: 120,
     scrollTop: 0,
     listeners: new Map(),
-    setAttribute() {},
+    setAttribute() { },
     getAttribute: () => '',
-    removeAttribute() {},
+    removeAttribute() { },
     classList: {
       set: new Set(['has-comments']),
       add(...c) { c.forEach((x) => this.set.add(x)); },
@@ -3155,9 +3155,9 @@ test('discussion unread count pill disappears once messages are opened and read'
       toggle(c, f) { if (f === undefined) { this.set.has(c) ? this.set.delete(c) : this.set.add(c); } else if (f) { this.set.add(c); } else { this.set.delete(c); } },
       contains(c) { return this.set.has(c); }
     },
-    focus() {},
-    click() {},
-    reset() {},
+    focus() { },
+    click() { },
+    reset() { },
     showModal() { this.open = true; },
     close() { this.open = false; this.listeners.get('close')?.(); },
     closest: () => null,
@@ -3200,40 +3200,40 @@ test('discussion unread count pill disappears once messages are opened and read'
   const doc = {
     body: {
       dataset: { page: 'contributions' },
-      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      classList: { add() { }, remove() { }, toggle() { }, contains: () => false },
       querySelectorAll: () => [],
-      insertAdjacentHTML() {},
-      appendChild() {},
-      addEventListener() {}
+      insertAdjacentHTML() { },
+      appendChild() { },
+      addEventListener() { }
     },
-    head: { appendChild() {}, insertAdjacentHTML() {} },
+    head: { appendChild() { }, insertAdjacentHTML() { } },
     documentElement: { dataset: {} },
     readyState: 'complete',
     querySelector: () => null,
     querySelectorAll: (sel) => (sel === '[data-action="discuss"][data-id="r1"]' ? [discussBtn] : []),
     getElementById: (id) => els[id] || null,
     createElement: () => makeNode('tmp'),
-    addEventListener: () => {}
+    addEventListener: () => { }
   };
 
   const ctx = {
     window: null,
     document: doc,
-    HTMLInputElement: class {},
-    HTMLFormElement: class {},
-    HTMLElement: class {},
+    HTMLInputElement: class { },
+    HTMLFormElement: class { },
+    HTMLElement: class { },
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class { observe() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
     supabase: {
       createClient: () => ({
         auth: {
           getSession: async () => ({ data: { session: null } }),
-          onAuthStateChange: () => {}
+          onAuthStateChange: () => { }
         },
         rpc: async (fn) => {
           if (fn === 'get_record_comment_counts') {
@@ -3253,12 +3253,12 @@ test('discussion unread count pill disappears once messages are opened and read'
           return { data: null, error: null };
         },
         channel: () => ({ on() { return this; }, subscribe() { return this; } }),
-        removeChannel: async () => {}
+        removeChannel: async () => { }
       })
     },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { },
+    requestAnimationFrame: (fn) => fn(), addEventListener() { }, console
   };
   ctx.window = ctx;
   vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
@@ -3327,7 +3327,7 @@ test('excess carry-over toggle stays hidden unless entered amount exceeds monthl
         contains: (c) => classSet.has(c)
       },
       appendChild(child) { this.children.push(child); return child; },
-      setAttribute() {},
+      setAttribute() { },
       closest() { return null; },
       querySelector() { return null; },
       querySelectorAll() { return []; },
@@ -3345,28 +3345,28 @@ test('excess carry-over toggle stays hidden unless entered amount exceeds monthl
 
   const els = { 'app-loader': makeNode('app-loader') };
   const doc = {
-    body: { dataset: { page: 'contributions' }, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, querySelectorAll: () => [], insertAdjacentHTML() {}, appendChild() {}, addEventListener() {} },
-    head: { appendChild() {}, insertAdjacentHTML() {} },
+    body: { dataset: { page: 'contributions' }, classList: { add() { }, remove() { }, toggle() { }, contains: () => false }, querySelectorAll: () => [], insertAdjacentHTML() { }, appendChild() { }, addEventListener() { } },
+    head: { appendChild() { }, insertAdjacentHTML() { } },
     documentElement: { dataset: {} },
     readyState: 'complete',
     querySelector: () => null,
     querySelectorAll: () => [],
     getElementById: (id) => els[id] || null,
     createElement: (tag) => makeNode(tag),
-    addEventListener: () => {}
+    addEventListener: () => { }
   };
   const ctx = {
-    window: null, document: doc, HTMLInputElement: class {}, HTMLFormElement: class {}, HTMLElement: class {},
+    window: null, document: doc, HTMLInputElement: class { }, HTMLFormElement: class { }, HTMLElement: class { },
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/contributions.html', pathname: '/contributions.html', origin: 'http://localhost', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class { observe() { } },
     IPON_CONFIG: { supabaseUrl: '', supabaseAnonKey: '' },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { },
+    requestAnimationFrame: (fn) => fn(), addEventListener() { }, console
   };
   ctx.window = ctx;
   vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
@@ -3494,8 +3494,8 @@ test('formal name validation rejects ALL CAPS and all-lowercase names live and r
 
   const makeMockInput = (name, { required = true } = {}) => {
     const attrs = new Map();
-    const errEl = { classList: { contains: (c) => c === 'field-error' }, textContent: '', hidden: true, setAttribute() {} };
-    const container = { querySelector: () => errEl, append() {} };
+    const errEl = { classList: { contains: (c) => c === 'field-error' }, textContent: '', hidden: true, setAttribute() { } };
+    const container = { querySelector: () => errEl, append() { } };
     return {
       name,
       value: '',
@@ -3530,12 +3530,12 @@ test('formal name validation rejects ALL CAPS and all-lowercase names live and r
     innerHTML: '',
     style: {},
     dataset: {},
-    classList: { add() {}, toggle() {}, remove() {}, contains: () => false },
-    setAttribute() {},
-    appendChild() {},
-    append() {},
-    remove() {},
-    addEventListener() {},
+    classList: { add() { }, toggle() { }, remove() { }, contains: () => false },
+    setAttribute() { },
+    appendChild() { },
+    append() { },
+    remove() { },
+    addEventListener() { },
     querySelectorAll: () => [],
     querySelector: () => null
   });
@@ -3543,34 +3543,34 @@ test('formal name validation rejects ALL CAPS and all-lowercase names live and r
   const doc = {
     body: {
       dataset: { page: 'account' },
-      classList: { add() {}, toggle() {}, contains: () => false },
-      insertAdjacentHTML() {},
-      appendChild() {},
-      append() {},
-      addEventListener() {},
+      classList: { add() { }, toggle() { }, contains: () => false },
+      insertAdjacentHTML() { },
+      appendChild() { },
+      append() { },
+      addEventListener() { },
       querySelector: () => null
     },
-    head: { appendChild() {}, insertAdjacentHTML() {} },
+    head: { appendChild() { }, insertAdjacentHTML() { } },
     documentElement: { dataset: {} },
     readyState: 'complete',
     querySelector: () => null,
     querySelectorAll: (sel) => sel.includes('first_name') ? [firstInput, middleInput, lastInput] : [],
     getElementById: (id) => (id === 'app-loader' ? loaderNode : null),
     createElement: (tag) => makeNode(tag),
-    addEventListener: () => {}
+    addEventListener: () => { }
   };
   const ctx = {
-    window: null, document: doc, HTMLInputElement: class {}, HTMLFormElement: class {}, HTMLElement: class {},
+    window: null, document: doc, HTMLInputElement: class { }, HTMLFormElement: class { }, HTMLElement: class { },
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/account.html', pathname: '/account.html', origin: 'http://localhost', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/account.html', pathname: '/account.html', origin: 'http://localhost', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class { observe() { } },
     IPON_CONFIG: { supabaseUrl: '', supabaseAnonKey: '' },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { },
+    requestAnimationFrame: (fn) => fn(), addEventListener() { }, console
   };
   ctx.window = ctx;
   vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
@@ -3726,26 +3726,26 @@ test('wallet reconciliation and peso inputs validate bounds, block overflow prec
 
   const doc = {
     documentElement: { dataset: {} },
-    head: { insertAdjacentHTML() {}, querySelector: () => null },
-    body: { dataset: {}, classList: { toggle() {}, add() {}, remove() {}, contains: () => false }, insertAdjacentHTML() {}, append() {} },
+    head: { insertAdjacentHTML() { }, querySelector: () => null },
+    body: { dataset: {}, classList: { toggle() { }, add() { }, remove() { }, contains: () => false }, insertAdjacentHTML() { }, append() { } },
     querySelector: () => null,
     querySelectorAll: () => [],
     getElementById: () => null,
-    createElement: () => ({ setAttribute() {}, appendChild() {}, classList: { add() {}, toggle() {} }, dataset: {}, style: {} }),
-    addEventListener() {}
+    createElement: () => ({ setAttribute() { }, appendChild() { }, classList: { add() { }, toggle() { } }, dataset: {}, style: {} }),
+    addEventListener() { }
   };
   const ctx = {
-    window: null, document: doc, HTMLInputElement: class {}, HTMLFormElement: class {}, HTMLElement: class {},
+    window: null, document: doc, HTMLInputElement: class { }, HTMLFormElement: class { }, HTMLElement: class { },
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/reports.html', pathname: '/reports.html', origin: 'http://localhost', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/reports.html', pathname: '/reports.html', origin: 'http://localhost', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class { observe() { } },
     IPON_CONFIG: { supabaseUrl: '', supabaseAnonKey: '' },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { },
+    requestAnimationFrame: (fn) => fn(), addEventListener() { }, console
   };
   ctx.window = ctx;
   vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
@@ -3799,10 +3799,10 @@ test('dark and light theme toggle persists across tabs, updates charts, preserve
   const metaTheme = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
   const dispatched = [];
   const docStub = {
-    body: { dataset: {}, classList: { contains: () => false, toggle() {}, add() {}, remove() {} }, insertAdjacentHTML() {}, append() {} },
-    head: { insertAdjacentHTML() {} },
+    body: { dataset: {}, classList: { contains: () => false, toggle() { }, add() { }, remove() { } }, insertAdjacentHTML() { }, append() { } },
+    head: { insertAdjacentHTML() { } },
     documentElement: rootEl,
-    createElement: () => ({ style: {}, dataset: {}, classList: { contains: () => false, add() {}, toggle() {}, remove() {} }, setAttribute() {}, querySelector: () => null, appendChild() {}, append() {}, prepend() {}, remove() {}, addEventListener() {} }),
+    createElement: () => ({ style: {}, dataset: {}, classList: { contains: () => false, add() { }, toggle() { }, remove() { } }, setAttribute() { }, querySelector: () => null, appendChild() { }, append() { }, prepend() { }, remove() { }, addEventListener() { } }),
     querySelector(sel) {
       if (sel === 'meta[name="theme-color"]') return metaTheme;
       return sel === 'link[rel="manifest"]' ? {} : null;
@@ -3824,9 +3824,9 @@ test('dark and light theme toggle persists across tabs, updates charts, preserve
       setItem: (k, v) => { store.set(k, String(v)); },
       removeItem: (k) => { store.delete(k); }
     },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     IPON_CONFIG: {},
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { },
     requestAnimationFrame: (fn) => fn(),
     addEventListener(type, fn) { winListeners.set(type, [...(winListeners.get(type) || []), fn]); },
     dispatchEvent(evt) { dispatched.push(evt); },
@@ -3964,8 +3964,8 @@ test('enhancePaymentSelect upgrades payout channel and payment selects with GCas
       if (idx >= 0) this.children.splice(idx, 0, n); else this.children.push(n);
     }
     replaceChildren(...nodes) { this.children = []; nodes.forEach((n) => this.appendChild(n)); }
-    insertAdjacentHTML() {}
-    focus() {}
+    insertAdjacentHTML() { }
+    focus() { }
     querySelector(sel) {
       if (sel === '.custom-select-trigger-icon') {
         if (!this._triggerIcon) this._triggerIcon = new Node('span');
@@ -4019,7 +4019,7 @@ test('enhancePaymentSelect upgrades payout channel and payment selects with GCas
     getElementById: (id) => (id === 'app-loader' ? loaderNode : null),
     querySelector: () => null,
     querySelectorAll: () => [],
-    addEventListener: () => {}
+    addEventListener: () => { }
   };
   doc.body.dataset = { page: 'account' };
 
@@ -4028,15 +4028,15 @@ test('enhancePaymentSelect upgrades payout channel and payment selects with GCas
     Event: class { constructor(type) { this.type = type; } },
     CSS: { escape: (v) => v },
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/account.html', pathname: '/account.html', origin: 'http://localhost', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/account.html', pathname: '/account.html', origin: 'http://localhost', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} disconnect() {} },
+    MutationObserver: class { observe() { } disconnect() { } },
     IPON_CONFIG: { supabaseUrl: '', supabaseAnonKey: '' },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { },
+    requestAnimationFrame: (fn) => fn(), addEventListener() { }, console
   };
   ctx.window = ctx;
   vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
@@ -4059,7 +4059,7 @@ test('enhancePaymentSelect upgrades payout channel and payment selects with GCas
 
   let changes = 0;
   select.addEventListener('change', () => { changes += 1; });
-  (options[1].listeners.get('click') || []).forEach((fn) => fn({ stopPropagation() {} }));
+  (options[1].listeners.get('click') || []).forEach((fn) => fn({ stopPropagation() { } }));
 
   assert.equal(select.value, 'GCASH');
   assert.equal(changes, 1);
@@ -4074,13 +4074,13 @@ test('startup initialization auto-recovers transient errors, JWT expiry, and Web
   const makeNode = (tag = 'div') => ({
     tagName: tag.toUpperCase(),
     dataset: {},
-    style: { removeProperty() {} },
-    classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
-    setAttribute() {}, removeAttribute() {}, getAttribute: () => null, hasAttribute: () => false,
-    addEventListener() {}, removeEventListener() {},
+    style: { removeProperty() { } },
+    classList: { contains: () => false, add() { }, remove() { }, toggle() { } },
+    setAttribute() { }, removeAttribute() { }, getAttribute: () => null, hasAttribute: () => false,
+    addEventListener() { }, removeEventListener() { },
     querySelector: () => null, querySelectorAll: () => [],
     insertAdjacentHTML(_pos, html) { injectedHtml.push(String(html)); },
-    append() {}, appendChild() {}, prepend() {}, remove() {}, closest: () => null, focus() {},
+    append() { }, appendChild() { }, prepend() { }, remove() { }, closest: () => null, focus() { },
     innerHTML: '', textContent: '', hidden: false
   });
   const loaderStub = makeNode('div');
@@ -4093,7 +4093,7 @@ test('startup initialization auto-recovers transient errors, JWT expiry, and Web
     querySelector: (sel) => (sel === 'link[rel="manifest"]' ? {} : null),
     querySelectorAll: () => [],
     getElementById: (id) => (id === 'app-loader' ? loaderStub : id === 'app-sidebar' ? sidebarStub : null),
-    addEventListener() {}
+    addEventListener() { }
   };
 
   let sessionCalls = 0;
@@ -4103,9 +4103,9 @@ test('startup initialization auto-recovers transient errors, JWT expiry, and Web
     URLSearchParams, URL, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i?.detail; } },
     Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
     navigator: { onLine: true },
-    location: { origin: 'https://myipon.example', href: 'https://myipon.example/dashboard.html', pathname: '/dashboard.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/dashboard.html', pathname: '/dashboard.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
     supabase: {
       createClient: () => {
@@ -4120,7 +4120,7 @@ test('startup initialization auto-recovers transient errors, JWT expiry, and Web
               refreshCalls += 1;
               return { data: { session: { user: { id: 'u1' } } }, error: null };
             },
-            onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+            onAuthStateChange: () => ({ data: { subscription: { unsubscribe() { } } } }),
             mfa: { getAuthenticatorAssuranceLevel: async () => ({ data: { currentLevel: 'aal1', nextLevel: 'aal1' }, error: null }) }
           },
           from: () => ({
@@ -4141,18 +4141,18 @@ test('startup initialization auto-recovers transient errors, JWT expiry, and Web
               })
             })
           }),
-          channel: () => ({ on() { return this; }, subscribe() { return this; }, track: async () => {} }),
-          removeChannel() {}
+          channel: () => ({ on() { return this; }, subscribe() { return this; }, track: async () => { } }),
+          removeChannel() { }
         };
       }
     },
     setTimeout: (fn) => { fn(); return 0; },
-    clearTimeout() {},
+    clearTimeout() { },
     setInterval: () => 0,
-    clearInterval() {},
+    clearInterval() { },
     requestAnimationFrame: (fn) => fn(),
     addEventListener(type, fn) { winListeners.set(type, [...(winListeners.get(type) || []), fn]); },
-    dispatchEvent() {},
+    dispatchEvent() { },
     document: doc,
     window: null,
     console
@@ -4174,7 +4174,7 @@ test('startup initialization auto-recovers transient errors, JWT expiry, and Web
 
   // Background unhandledrejection with NavigatorLockAcquireTimeoutError never renders #startup-error
   (winListeners.get('unhandledrejection') || []).forEach((fn) => fn({
-    preventDefault() {},
+    preventDefault() { },
     reason: new Error('Acquiring an exclusive Navigator LockManager lock "lock:sb-auth-token" timed out')
   }));
   assert.ok(!injectedHtml.some((html) => html.includes('id="startup-error"')));
@@ -4188,17 +4188,17 @@ test('SVG eye-open path uses valid cubic commands across auth and shell template
 
 test('avatarMarkup suffixes every wrapper class token so multi-class avatars never gain a square outer border', () => {
   const core = read('js/core.js');
-  const stub = () => ({ dataset: {}, classList: { contains: () => false, add() {}, remove() {}, toggle() {} }, setAttribute() {}, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], style: { removeProperty() {} }, append() {}, insertAdjacentHTML() {}, remove() {} });
+  const stub = () => ({ dataset: {}, classList: { contains: () => false, add() { }, remove() { }, toggle() { } }, setAttribute() { }, addEventListener() { }, querySelector: () => null, querySelectorAll: () => [], style: { removeProperty() { } }, append() { }, insertAdjacentHTML() { }, remove() { } });
   const ctx = {
-    URLSearchParams, URL, CustomEvent: class {}, Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    URLSearchParams, URL, CustomEvent: class { }, Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
     navigator: { onLine: true },
-    location: { origin: 'https://myipon.example', href: 'https://myipon.example/', pathname: '/', search: '', hostname: 'myipon.example', protocol: 'https:', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/', pathname: '/', search: '', hostname: 'myipon.example', protocol: 'https:', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {}, requestAnimationFrame: () => {},
-    addEventListener() {}, dispatchEvent() {},
-    document: { body: stub(), head: stub(), documentElement: stub(), createElement: stub, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, addEventListener() {} },
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { }, requestAnimationFrame: () => { },
+    addEventListener() { }, dispatchEvent() { },
+    document: { body: stub(), head: stub(), documentElement: stub(), createElement: stub, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, addEventListener() { } },
     console
   };
   ctx.window = ctx;
@@ -4312,12 +4312,12 @@ test('member status mobile flex-basis reset and payout PH mobile live validation
       return on;
     }
     appendChild(child) { child.parentNode = this; this.children.push(child); return child; }
-    insertAdjacentHTML() {}
+    insertAdjacentHTML() { }
     addEventListener(type, fn) {
       if (!this.listeners.has(type)) this.listeners.set(type, []);
       this.listeners.get(type).push(fn);
     }
-    dispatchEvent(type) { (this.listeners.get(type) || []).forEach((fn) => fn({ target: this, preventDefault() {} })); }
+    dispatchEvent(type) { (this.listeners.get(type) || []).forEach((fn) => fn({ target: this, preventDefault() { } })); }
     setCustomValidity(msg) { this.customValidity = String(msg || ''); }
     focus() { this.focused = true; }
     closest(sel) {
@@ -4356,21 +4356,21 @@ test('member status mobile flex-basis reset and payout PH mobile live validation
     querySelector: () => null,
     querySelectorAll: (sel) => (sel === '[data-payout-fields]' ? [container] : []),
     createElement: (t) => new FakeEl(t),
-    addEventListener() {},
+    addEventListener() { },
     readyState: 'complete'
   };
   const ctx = {
     window: null, document: doc,
     HTMLInputElement: FakeEl, HTMLFormElement: FakeEl, HTMLElement: FakeEl,
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/user.html', pathname: '/user.html', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/user.html', pathname: '/user.html', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class { observe() { } },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval() { },
+    requestAnimationFrame: (fn) => fn(), addEventListener() { }, console
   };
   ctx.window = ctx;
   vm.runInNewContext(core, ctx, { filename: 'js/core.js' });
@@ -4446,36 +4446,36 @@ test('Super Admin can edit own name in all lowercase and with first name only ac
     innerHTML: '',
     style: {},
     dataset: {},
-    classList: { add() {}, toggle() {}, remove() {}, contains: () => false },
-    setAttribute() {},
-    appendChild() {},
-    append() {},
-    remove() {},
-    addEventListener() {},
+    classList: { add() { }, toggle() { }, remove() { }, contains: () => false },
+    setAttribute() { },
+    appendChild() { },
+    append() { },
+    remove() { },
+    addEventListener() { },
     querySelectorAll: () => [],
     querySelector: () => null
   });
   const doc = {
-    body: { dataset: { page: 'super-admin' }, classList: { add() {}, toggle() {}, contains: () => false }, insertAdjacentHTML() {}, appendChild() {}, append() {}, addEventListener() {}, querySelector: () => null },
-    head: { appendChild() {}, insertAdjacentHTML() {} },
+    body: { dataset: { page: 'super-admin' }, classList: { add() { }, toggle() { }, contains: () => false }, insertAdjacentHTML() { }, appendChild() { }, append() { }, addEventListener() { }, querySelector: () => null },
+    head: { appendChild() { }, insertAdjacentHTML() { } },
     documentElement: { dataset: {} },
     readyState: 'complete',
     querySelector: () => null,
     querySelectorAll: () => [],
     getElementById: (id) => (id === 'app-loader' ? makeNode('div') : null),
     createElement: (tag) => makeNode(tag),
-    addEventListener() {}
+    addEventListener() { }
   };
   const ctx = {
-    window: null, document: doc, HTMLInputElement: class {}, HTMLFormElement: class {}, HTMLElement: class {},
+    window: null, document: doc, HTMLInputElement: class { }, HTMLFormElement: class { }, HTMLElement: class { },
     navigator: { onLine: true, serviceWorker: null },
-    location: { href: 'http://localhost/super-admin.html', pathname: '/super-admin.html', origin: 'http://localhost', search: '', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { href: 'http://localhost/super-admin.html', pathname: '/super-admin.html', origin: 'http://localhost', search: '', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     IPON_CONFIG: { supabaseUrl: '', supabaseAnonKey: '' },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval: () => 0,
-    requestAnimationFrame: (fn) => fn(), addEventListener() {}, console
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval: () => 0,
+    requestAnimationFrame: (fn) => fn(), addEventListener() { }, console
   };
   ctx.window = ctx;
   vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
@@ -4491,11 +4491,11 @@ test('Super Admin can edit own name in all lowercase and with first name only ac
 
   // Mock form with first/middle/last inputs
   const makeField = (form, name, labelText, required = true) => {
-    const errEl = { classList: { contains: (c) => c === 'field-error' }, textContent: '', hidden: true, setAttribute() {} };
+    const errEl = { classList: { contains: (c) => c === 'field-error' }, textContent: '', hidden: true, setAttribute() { } };
     const labelEl = { textContent: labelText };
     const container = {
       querySelector: (sel) => (sel === 'label' ? labelEl : errEl),
-      append() {}
+      append() { }
     };
     const attrs = new Map();
     const input = {
@@ -4512,7 +4512,7 @@ test('Super Admin can edit own name in all lowercase and with first name only ac
       hasAttribute(k) { return attrs.has(k); },
       getAttribute() { return ''; },
       closest() { return container; },
-      focus() {},
+      focus() { },
       _labelEl: labelEl,
       _errEl: errEl
     };
@@ -4619,40 +4619,40 @@ test('Android cold-start splash uses emerald #0b3428 with inline pulsing logo an
   let dialogShown = false;
   const stubEl = () => ({
     dataset: {},
-    style: { removeProperty() {} },
-    classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
-    setAttribute() {},
-    removeAttribute() {},
-    addEventListener() {},
+    style: { removeProperty() { } },
+    classList: { contains: () => false, add() { }, remove() { }, toggle() { } },
+    setAttribute() { },
+    removeAttribute() { },
+    addEventListener() { },
     querySelector: () => null,
     querySelectorAll: () => [],
-    insertAdjacentHTML() {},
-    prepend() {},
-    append() {},
-    appendChild() {},
+    insertAdjacentHTML() { },
+    prepend() { },
+    append() { },
+    appendChild() { },
     showModal() { dialogShown = true; },
-    remove() {}
+    remove() { }
   });
-  const loaderStub = { hidden: false, querySelector: () => ({ textContent: '' }), setAttribute() {}, removeAttribute() {} };
+  const loaderStub = { hidden: false, querySelector: () => ({ textContent: '' }), setAttribute() { }, removeAttribute() { } };
   const doc = {
     body: { ...stubEl(), dataset: { page: 'user' } },
     head: stubEl(),
-    documentElement: { ...stubEl(), style: { setProperty() {}, removeProperty() {} } },
+    documentElement: { ...stubEl(), style: { setProperty() { }, removeProperty() { } } },
     createElement: () => stubEl(),
     querySelector: () => null,
     querySelectorAll: () => [],
     getElementById: (id) => (id === 'app-loader' ? loaderStub : null),
-    addEventListener() {}
+    addEventListener() { }
   };
   const ctx = {
-    URL, URLSearchParams, CustomEvent: class {}, Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    URL, URLSearchParams, CustomEvent: class { }, Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
     setTimeout() { return 1; },
-    clearTimeout() {},
+    clearTimeout() { },
     fetch: async () => { fetchCount += 1; return { ok: true, json: async () => ({ version: '1.0.99', nativeBuild: 99 }) }; },
     navigator: { userAgent: 'Mozilla/5.0 myIPONApp/19', onLine: true },
     location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', href: 'https://my-ipon.vercel.app/user.html', pathname: '/user.html', search: '' },
-    matchMedia: () => ({ matches: false, addEventListener() {} }),
-    addEventListener() {},
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    addEventListener() { },
     document: doc,
     window: null,
     console
@@ -4690,31 +4690,31 @@ test('navigation shell preserves active role tabs, notification count, and user 
   const memberLink = { dataset: { role: 'MEMBER' }, hidden: false };
   const badgeA = { textContent: '0', hidden: true };
   const badgeB = { textContent: '0', hidden: true };
-  const presenceDot = { dataset: {}, classList: { add() {} } };
+  const presenceDot = { dataset: {}, classList: { add() { } } };
   const avatarSlot = {
     innerHTML: '<svg></svg>',
     closest: () => ({ querySelector: () => presenceDot }),
     querySelector: () => null
   };
   const sidebarUser = { innerHTML: '<strong>Checking session…</strong><small>ACCOUNT</small>' };
-  const rootEl = { dataset: {}, style: { setProperty() {}, removeProperty() {} } };
+  const rootEl = { dataset: {}, style: { setProperty() { }, removeProperty() { } } };
   const storageDash = makeStorage({
     ipon_active_role: 'MEMBER',
     ipon_shell_snapshot: JSON.stringify({ userId: 'u1', role: 'MEMBER', fullName: 'Juan Dela Cruz', unreadCount: 3 }),
     ipon_shell_avatar: JSON.stringify({ userId: 'u1', avatarUrl: 'data:image/png;base64,AAA' })
   });
-  const dashLoader = { hidden: false, querySelector: () => ({ textContent: '' }), setAttribute() {}, removeAttribute() {} };
-  const stubNode = () => ({ dataset: {}, classList: { contains: () => false, add() {}, remove() {}, toggle() {} }, setAttribute() {}, removeAttribute() {}, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], prepend() {}, append() {}, appendChild() {}, style: { removeProperty() {} }, textContent: '' });
+  const dashLoader = { hidden: false, querySelector: () => ({ textContent: '' }), setAttribute() { }, removeAttribute() { } };
+  const stubNode = () => ({ dataset: {}, classList: { contains: () => false, add() { }, remove() { }, toggle() { } }, setAttribute() { }, removeAttribute() { }, addEventListener() { }, querySelector: () => null, querySelectorAll: () => [], prepend() { }, append() { }, appendChild() { }, style: { removeProperty() { } }, textContent: '' });
   const dashDoc = {
     body: {
       dataset: { page: 'dashboard' },
-      classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
-      insertAdjacentHTML() {},
-      prepend() {},
-      append() {},
-      appendChild() {}
+      classList: { contains: () => false, add() { }, remove() { }, toggle() { } },
+      insertAdjacentHTML() { },
+      prepend() { },
+      append() { },
+      appendChild() { }
     },
-    head: { insertAdjacentHTML() {}, append() {} },
+    head: { insertAdjacentHTML() { }, append() { } },
     documentElement: rootEl,
     createElement: () => stubNode(),
     querySelector: (sel) => (sel === 'link[rel="manifest"]' ? {} : null),
@@ -4725,18 +4725,18 @@ test('navigation shell preserves active role tabs, notification count, and user 
       return [];
     },
     getElementById: (id) => (id === 'sidebar-user' ? sidebarUser : id === 'app-loader' ? dashLoader : null),
-    addEventListener() {}
+    addEventListener() { }
   };
   const dashCtx = {
-    URL, URLSearchParams, CustomEvent: class {}, Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    URL, URLSearchParams, CustomEvent: class { }, Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
     sessionStorage: storageDash,
     localStorage: storageDash,
     navigator: { userAgent: 'Mozilla/5.0', onLine: true },
     setTimeout: () => 1,
-    clearTimeout() {},
+    clearTimeout() { },
     location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', href: 'https://my-ipon.vercel.app/dashboard.html', pathname: '/dashboard.html', search: '', hash: '' },
-    matchMedia: () => ({ matches: false, addEventListener() {} }),
-    addEventListener() {},
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    addEventListener() { },
     document: dashDoc,
     window: null,
     console
@@ -4769,14 +4769,14 @@ test('navigation shell preserves active role tabs, notification count, and user 
   const userDoc = {
     body: {
       dataset: { page: 'user' },
-      classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
-      insertAdjacentHTML() {},
-      prepend() {},
-      append() {},
-      appendChild() {}
+      classList: { contains: () => false, add() { }, remove() { }, toggle() { } },
+      insertAdjacentHTML() { },
+      prepend() { },
+      append() { },
+      appendChild() { }
     },
-    head: { insertAdjacentHTML() {}, append() {}, appendChild() {} },
-    documentElement: { dataset: {}, style: { setProperty() {}, removeProperty() {} } },
+    head: { insertAdjacentHTML() { }, append() { }, appendChild() { } },
+    documentElement: { dataset: {}, style: { setProperty() { }, removeProperty() { } } },
     createElement: () => stubNode(),
     querySelector: (sel) => (sel === 'link[rel="manifest"]' ? {} : null),
     querySelectorAll: (sel) => (sel === '.sidebar-user-avatar' ? [userAvatarSlot] : []),
@@ -4786,7 +4786,7 @@ test('navigation shell preserves active role tabs, notification count, and user 
       if (id === 'app-loader') return dashLoader;
       return null;
     },
-    addEventListener() {}
+    addEventListener() { }
   };
   const userCtx = {
     ...dashCtx,
@@ -4867,22 +4867,22 @@ test('Android v31 splash screen and progressive anti-bruteforce login protection
       elements: {},
       checkValidity() { return Boolean(this.value); },
       reportValidity() { return true; },
-      setCustomValidity() {},
+      setCustomValidity() { },
       setAttribute(k, v) { this.attrs[k] = String(v); },
       removeAttribute(k) { delete this.attrs[k]; },
       addEventListener(evt, fn) { (listeners[evt] ||= []).push(fn); },
       dispatch(evt, payload = {}) {
         for (const fn of listeners[evt] || []) {
-          return fn({ preventDefault() {}, ...payload });
+          return fn({ preventDefault() { }, ...payload });
         }
       },
       querySelector: () => null,
       querySelectorAll: () => [],
-      after() {},
-      before() {},
-      focus() {},
-      close() {},
-      showModal() {},
+      after() { },
+      before() { },
+      focus() { },
+      close() { },
+      showModal() { },
       reset() { this.value = ''; },
       offsetLeft: 0,
       offsetWidth: 80
@@ -4919,21 +4919,21 @@ test('Android v31 splash screen and progressive anti-bruteforce login protection
     body: makeEl('body'),
     getElementById: (id) => els.get(id) || makeEl(id),
     querySelectorAll: () => [],
-    addEventListener() {}
+    addEventListener() { }
   };
   const IponMock = {
     init: async () => ({ configured: true, session: null, profile: null }),
-    setLoading() {},
+    setLoading() { },
     setBusy(btn, busy, text) {
       if (!btn) return;
       btn.disabled = Boolean(busy);
       btn.classList.toggle('is-busy', Boolean(busy));
       if (busy && text) btn.textContent = text;
     },
-    bindPasswordStrength: () => ({ element: makeEl('pw-strength'), update() {} }),
+    bindPasswordStrength: () => ({ element: makeEl('pw-strength'), update() { } }),
     nameRuleForField: () => ({ ruleMsg: '', placeholder: '' }),
     friendlyError: (e) => String(e?.message || e || 'Error'),
-    broadcastAuthEvent() {},
+    broadcastAuthEvent() { },
     requiresMfaChallenge: async () => false,
     rpc: async () => null,
     homeForRole: () => 'dashboard.html',
@@ -4992,7 +4992,7 @@ test('Android v31 splash screen and progressive anti-bruteforce login protection
     Ipon: IponMock,
     navigator: { onLine: true, standalone: false },
     location: { search: '', href: 'https://my-ipon.vercel.app/login.html', pathname: '/login.html', replace(u) { replacedTo = u; } },
-    history: { replaceState() {} },
+    history: { replaceState() { } },
     localStorage: {
       getItem: (k) => (storage.has(k) ? storage.get(k) : null),
       setItem: (k, v) => storage.set(k, String(v)),
@@ -5008,10 +5008,10 @@ test('Android v31 splash screen and progressive anti-bruteforce login protection
     setTimeout,
     clearTimeout,
     setInterval: () => 1,
-    clearInterval() {},
+    clearInterval() { },
     requestAnimationFrame: (fn) => fn(),
     matchMedia: () => ({ matches: false }),
-    addEventListener() {},
+    addEventListener() { },
     console
   };
   ctx.window = ctx;
@@ -5163,7 +5163,7 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
       innerHTML: '',
       className: '',
       dataset: {},
-      style: { setProperty() {}, removeProperty() {} },
+      style: { setProperty() { }, removeProperty() { } },
       children: [],
       listeners: {},
       classList: {
@@ -5176,8 +5176,8 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
       showModal() { this.open = true; },
       show() { this.open = true; },
       close() { this.open = false; },
-      focus() {},
-      scrollIntoView() {},
+      focus() { },
+      scrollIntoView() { },
       removeAttribute(k) { delete this[k]; },
       setAttribute(k, v) { this[k] = v; },
       appendChild(child) { this.children.push(child); return child; },
@@ -5187,7 +5187,7 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
         this.listeners[type].push(fn);
       },
       dispatch(type, ev = {}) {
-        const event = { target: this, preventDefault() {}, ...ev };
+        const event = { target: this, preventDefault() { }, ...ev };
         if (type === 'click' && typeof this.onclick === 'function') this.onclick(event);
         for (const fn of this.listeners[type] || []) fn(event);
       },
@@ -5350,19 +5350,19 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
     documentElement: { dataset: {} },
     body: {
       dataset: { page: 'dashboard' },
-      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      classList: { add() { }, remove() { }, toggle() { }, contains: () => false },
       querySelectorAll: () => [],
-      insertAdjacentHTML() {},
-      appendChild() {},
-      addEventListener() {}
+      insertAdjacentHTML() { },
+      appendChild() { },
+      addEventListener() { }
     },
-    head: { appendChild() {}, insertAdjacentHTML() {} },
+    head: { appendChild() { }, insertAdjacentHTML() { } },
     readyState: 'complete',
     getElementById: (id) => ids.get(id) || null,
     querySelector: (sel) => (sel.startsWith('#') ? ids.get(sel.slice(1)) || null : null),
     querySelectorAll: () => [],
     createElement: (tag) => makeEl('', { tagName: String(tag || 'div').toUpperCase() }),
-    addEventListener() {}
+    addEventListener() { }
   };
 
   class CustomEventPolyfill {
@@ -5384,15 +5384,15 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
     document: doc,
     CustomEvent: CustomEventPolyfill,
     Event: CustomEventPolyfill,
-    HTMLInputElement: class {},
-    HTMLFormElement: class {},
-    HTMLElement: class {},
+    HTMLInputElement: class { },
+    HTMLFormElement: class { },
+    HTMLElement: class { },
     navigator: {
       onLine: true,
       userAgent: 'Mozilla/5.0',
       serviceWorker: {
         controller: null,
-        register: async () => ({ update: async () => {} }),
+        register: async () => ({ update: async () => { } }),
         addEventListener(type, fn) { swListeners.set(type, fn); }
       }
     },
@@ -5406,21 +5406,21 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
         locationObj.hash = parsed.hash;
       }
     },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     sessionStorage: {
       getItem: (k) => sessionStore.get(k) ?? null,
       setItem: (k, v) => sessionStore.set(k, String(v)),
       removeItem: (k) => sessionStore.delete(k)
     },
     Notification: { permission: 'default' },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class { observe() { } },
     CSS: { escape: (v) => String(v) },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
     supabase: {
       createClient: () => ({
         auth: {
           getSession: async () => ({ data: { session: null } }),
-          onAuthStateChange: () => {}
+          onAuthStateChange: () => { }
         },
         from: (table) => makeQueryChain(table),
         rpc: async (fn, args) => {
@@ -5428,11 +5428,11 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
           return { data: null, error: null };
         },
         channel: () => ({ on() { return this; }, subscribe() { return this; } }),
-        removeChannel: async () => {}
+        removeChannel: async () => { }
       })
     },
     Intl, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval: () => 0,
+    setTimeout: () => 0, clearTimeout() { }, setInterval: () => 0, clearInterval: () => 0,
     requestAnimationFrame: (fn) => fn(),
     addEventListener(type, fn) {
       if (!windowListeners.has(type)) windowListeners.set(type, []);
@@ -5518,7 +5518,7 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
   // D. Record detail deep link renders record summary & actions, and openNoticeDetailModal restores cached notice
   await openRecordDetails('contribution', 'rec-c1', {
     allowReview: true,
-    onUpdated: async () => {}
+    onUpdated: async () => { }
   });
   assert.match(recordSummary.innerHTML, /Juan Dela Cruz/);
   assert.match(recordSummary.innerHTML, /GCash/);
@@ -5581,28 +5581,28 @@ test('audit log renders plain-language summaries and clean field-level Before/Af
     dataset: {},
     className: '',
     children: [],
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-    style: { setProperty() {}, removeProperty() {} },
-    setAttribute() {},
-    removeAttribute() {},
+    classList: { add() { }, remove() { }, toggle() { }, contains: () => false },
+    style: { setProperty() { }, removeProperty() { } },
+    setAttribute() { },
+    removeAttribute() { },
     getAttribute: () => '',
-    appendChild() {},
-    append() {},
-    prepend() {},
-    insertAdjacentHTML() {},
-    addEventListener() {},
+    appendChild() { },
+    append() { },
+    prepend() { },
+    insertAdjacentHTML() { },
+    addEventListener() { },
     querySelector: () => null,
     querySelectorAll: () => []
   });
   const doc = {
-    documentElement: { setAttribute() {}, removeAttribute() {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} }, style: { setProperty() {}, removeProperty() {} } },
-    body: { dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, appendChild() {}, append() {}, insertAdjacentHTML() {}, addEventListener() {}, querySelector: () => null },
-    head: { appendChild() {}, insertAdjacentHTML() {}, querySelector: () => null },
+    documentElement: { setAttribute() { }, removeAttribute() { }, dataset: {}, classList: { add() { }, remove() { }, toggle() { } }, style: { setProperty() { }, removeProperty() { } } },
+    body: { dataset: {}, classList: { add() { }, remove() { }, toggle() { }, contains: () => false }, appendChild() { }, append() { }, insertAdjacentHTML() { }, addEventListener() { }, querySelector: () => null },
+    head: { appendChild() { }, insertAdjacentHTML() { }, querySelector: () => null },
     createElement: (tag) => makeNode(tag),
     getElementById: () => null,
     querySelector: () => null,
     querySelectorAll: () => [],
-    addEventListener() {}
+    addEventListener() { }
   };
   const ctx = vm.createContext({
     console,
@@ -5627,17 +5627,17 @@ test('audit log renders plain-language summaries and clean field-level Before/Af
     window: {
       location: { pathname: '/audit.html', search: '', hash: '' },
       IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon' },
-      addEventListener() {},
-      dispatchEvent() {},
-      CustomEvent: class CustomEvent {},
-      matchMedia: () => ({ matches: false, addEventListener() {} })
+      addEventListener() { },
+      dispatchEvent() { },
+      CustomEvent: class CustomEvent { },
+      matchMedia: () => ({ matches: false, addEventListener() { } })
     },
     navigator: { onLine: true, serviceWorker: null },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    location: { pathname: '/audit.html', search: '', hash: '', replace() {} },
-    history: { replaceState() {} },
-    supabase: { createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }), onAuthStateChange() {} } }) }
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    location: { pathname: '/audit.html', search: '', hash: '', replace() { } },
+    history: { replaceState() { } },
+    supabase: { createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }), onAuthStateChange() { } } }) }
   });
   ctx.globalThis = ctx;
   ctx.self = ctx.window;
@@ -6090,7 +6090,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
     },
     getElementById: () => null,
     querySelectorAll: () => [],
-    addEventListener: () => {}
+    addEventListener: () => { }
   };
   const winStub = {
     Ipon: {
@@ -6098,7 +6098,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
       rpc: async () => [],
       client: null
     },
-    addEventListener: () => {},
+    addEventListener: () => { },
     location: { search: '', href: 'https://example.test/dashboard.html' }
   };
   const ctx = {
@@ -6110,7 +6110,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
     URLSearchParams,
     navigator: {},
     setInterval: () => 0,
-    clearInterval: () => {}
+    clearInterval: () => { }
   };
   winStub.window = winStub;
   vm.runInNewContext(messagesJs, ctx);
@@ -6153,9 +6153,9 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
       setAttribute: (k, v) => attrs.set(k, String(v)),
       getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
       getBoundingClientRect: () => ({ left: 240, right: 270, top: 200, bottom: 230 }),
-      addEventListener: () => {},
-      focus: () => {},
-      select: () => {},
+      addEventListener: () => { },
+      focus: () => { },
+      select: () => { },
       appendChild: (node) => { createdNodes.push(node); },
       contains: () => false,
       querySelectorAll: () => [],
@@ -6217,8 +6217,8 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   const docListeners = new Map();
   const doc2 = {
     documentElement: { dataset: {} },
-    visibilityState: 'hidden',
-    body: { insertAdjacentHTML() {}, appendChild(node) { createdNodes.push(node); } },
+    visibilityState: 'visible',
+    body: { insertAdjacentHTML() { }, appendChild(node) { createdNodes.push(node); } },
     createElement: (tag) => {
       const classes = new Set();
       let clsName = '';
@@ -6280,9 +6280,9 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
       escapeHtml: (s) => String(s ?? ''),
       initials: () => 'NJ',
       isUserOnline: () => true,
-      bindAvatarFallbacks: () => {},
-      syncPresenceDots: () => {},
-      syncMessagesBadges: () => {},
+      bindAvatarFallbacks: () => { },
+      syncPresenceDots: () => { },
+      syncMessagesBadges: () => { },
       openImageViewer: () => { imageViewerOpened += 1; },
       setBusy: () => { setBusyCalls += 1; },
       toast: (msg, kind = 'info') => toastCalls.push({ msg, kind }),
@@ -6395,26 +6395,26 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
       client: {
         from: () => ({ select: () => ({ like: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }),
         channel: () => rtChannelMock,
-        removeChannel: () => {}
+        removeChannel: () => { }
       }
     },
-    addEventListener: () => {},
+    addEventListener: () => { },
     location: { search: '', href: 'https://example.test/dashboard.html' }
   };
   win2.window = win2;
   vm.runInNewContext(messagesJs, {
     window: win2, document: doc2, location: win2.location,
     Map, Set, URLSearchParams, navigator: {}, Math, JSON, Date, Intl,
-    URL: { createObjectURL: (f) => `blob:mock/${f?.name || 'file'}`, revokeObjectURL: () => {} },
+    URL: { createObjectURL: (f) => `blob:mock/${f?.name || 'file'}`, revokeObjectURL: () => { } },
     CSS: { escape: (s) => String(s) },
     XMLHttpRequest: class {
       constructor() { this.upload = {}; this.status = 200; }
-      open() {}
-      setRequestHeader() {}
+      open() { }
+      setRequestHeader() { }
       send() { this.upload.onprogress?.({ lengthComputable: true, loaded: 100, total: 100 }); this.onload?.(); }
     },
     requestAnimationFrame: (fn) => fn(),
-    setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {}
+    setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => { }
   });
 
   await win2.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', chat_privacy: { show_online: true } });
@@ -6458,7 +6458,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   // Clear button inside search input cleanly clears & exits back to inbox without ReferenceError
   const dispatchClick = async (matchSel, node = { dataset: {} }) => {
     await Promise.all(clickHandlers.map((fn) => fn({
-      stopPropagation: () => {},
+      stopPropagation: () => { },
       target: { closest: (sel) => (sel === matchSel ? node : null) }
     })));
   };
@@ -6505,7 +6505,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
 
   // Submit queued media while upload fails -> queue clears, carousel + red failed bar render, Retry/Delete shown, send SVG intact
   failNextUpload = true;
-  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => {}, target: getEl('msg-composer-form') })));
+  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => { }, target: getEl('msg-composer-form') })));
   await new Promise((r) => setTimeout(r, 30));
   assert.equal(setBusyCalls, 0, 'send button must never be overwritten via setBusy');
   assert.equal(sendBtnEl.innerHTML, originalSendSvg, 'send button SVG icon must stay intact');
@@ -6526,7 +6526,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   failNextUpload = false;
   failNextSend = true;
   getEl('msg-composer-input').value = 'Failed ping test';
-  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => {}, target: getEl('msg-composer-form') })));
+  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => { }, target: getEl('msg-composer-form') })));
   await new Promise((r) => setTimeout(r, 30));
   assert.equal(getEl('msg-composer-input').value, '');
   msgsHtml = getEl('msg-messages-list').innerHTML;
@@ -6542,11 +6542,10 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.doesNotMatch(msgsHtml, /msg-row is-mine is-pending is-failed/);
   assert.equal(setBusyCalls, 0);
 
-  // Delivery & read checkmarks: 1 gray check (Sent) -> 1 green check (Delivered) -> 2 green checks (Seen)
+  // Delivery & read checkmarks: 1 gray check (Sent) -> 2 gray checks (Delivered) -> 2 green checks (Seen)
   const sentRow = threadMessages[threadMessages.length - 1];
   assert.ok(sentRow?.id, 'sent message row present');
   assert.match(msgsHtml, /class="msg-tick is-sent"[\s\S]*?<svg class="msg-tick-svg"/);
-  assert.doesNotMatch(msgsHtml, /class="msg-tick-svg is-double"/);
 
   sentRow.delivered_at = '2026-11-15T10:10:05Z';
   tableHandlers.get('message_receipts')?.({
@@ -6554,8 +6553,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
     new: { message_id: sentRow.id, user_id: peerId, delivered_at: sentRow.delivered_at, read_at: null }
   });
   msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /class="msg-tick is-delivered"[\s\S]*?<svg class="msg-tick-svg"/);
-  assert.doesNotMatch(msgsHtml, /class="msg-tick-svg is-double"/);
+  assert.match(msgsHtml, /class="msg-tick is-delivered"[\s\S]*?<svg class="msg-tick-svg is-double"/);
 
   sentRow.read_at = '2026-11-15T10:11:00Z';
   tableHandlers.get('message_receipts')?.({
@@ -6578,7 +6576,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(toastCalls[toastCalls.length - 1]?.msg || '', /2 batches \(up to 10/);
 
   const batchesBefore = sentBatches.length;
-  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => {}, target: getEl('msg-composer-form') })));
+  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => { }, target: getEl('msg-composer-form') })));
   await new Promise((r) => setTimeout(r, 80));
   assert.deepEqual(sentBatches.slice(batchesBefore), [10, 2]);
   msgsHtml = getEl('msg-messages-list').innerHTML;
@@ -6626,7 +6624,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   changeHandlers.forEach((fn) => fn({
     target: { id: 'msg-file-input', value: 'selected', files: [{ name: 'clip.mp4', type: 'video/mp4', size: 12000 }] }
   }));
-  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => {}, target: getEl('msg-composer-form') })));
+  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => { }, target: getEl('msg-composer-form') })));
   await new Promise((r) => setTimeout(r, 40));
   msgsHtml = getEl('msg-messages-list').innerHTML;
   assert.match(msgsHtml, /class="msg-video-player"[\s\S]*?<video class="msg-att-video" preload="metadata" playsinline/);
@@ -6746,8 +6744,8 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   };
   const mockVoiceBars = Array.from({ length: 10 }, () => makeEl('bar'));
   const mockVoiceTime = { textContent: '0:00 / 0:06' };
-  const mockVoicePlayBtn = { innerHTML: '', setAttribute: () => {} };
-  const mockVoiceMuteBtn = { innerHTML: '', setAttribute: () => {} };
+  const mockVoicePlayBtn = { innerHTML: '', setAttribute: () => { } };
+  const mockVoiceMuteBtn = { innerHTML: '', setAttribute: () => { } };
   const mockVoiceWave = makeEl('mock-voice-wave');
   mockVoiceWave.querySelectorAll = (sel) => (sel === '.msg-voice-wave-bar' ? mockVoiceBars : []);
   mockVoiceWave.getBoundingClientRect = () => ({ left: 100, right: 300, width: 200, top: 0, bottom: 24 });
@@ -6770,7 +6768,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.equal(mockAudio.paused, false);
   await Promise.all(clickHandlers.map((fn) => fn({
     clientX: 200,
-    stopPropagation: () => {},
+    stopPropagation: () => { },
     target: { closest: (sel) => (sel === '.msg-voice-wave' ? mockVoiceWave : null) }
   })));
   assert.equal(mockAudio.currentTime, 3);
@@ -6799,10 +6797,10 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(reactMenuNode.innerHTML, /data-react-expand[\s\S]*?class="msg-react-palette"/);
 
   // Expanding '+' reveals extra emojis in the floating palette while keeping menu open
-  const clickEl = (target) => Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: target?.closest ? target : { closest: () => null, ...target } })));
+  const clickEl = (target) => Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: target?.closest ? target : { closest: () => null, ...target } })));
   const expandBtnMock = {
     closest: (sel) => (sel === '[data-react-expand]' ? expandBtnMock : (sel === '.msg-react-menu' || sel === '.msg-floating-menu' ? reactMenuNode : null)),
-    setAttribute: () => {}
+    setAttribute: () => { }
   };
   await clickEl(expandBtnMock);
   assert.equal(reactMenuNode._palette.hidden, false);
@@ -6927,7 +6925,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
     dataset: {},
     closest: (sel) => (sel === '[data-pinned-toggle]' || sel === '#msg-pinned-banner' ? pinToggleTarget : null)
   };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: pinToggleTarget })));
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: pinToggleTarget })));
   assert.match(pinBannerEl.innerHTML, /data-pinned-toggle[^>]*aria-expanded="true"/);
   assert.doesNotMatch(pinBannerEl.innerHTML, /id="msg-pinned-panel" hidden/);
   assert.match(pinBannerEl.innerHTML, /<h3>Pinned messages <em>2<\/em><\/h3>[\s\S]*?msg-pinned-item is-active[\s\S]*?msg-pinned-item-num">1<\/span>/);
@@ -6945,7 +6943,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
     dataset: { pinnedSelect: 'sent-1', jumpMsg: 'sent-1' },
     closest: (sel) => (sel === '[data-jump-msg]' || sel === '#msg-pinned-banner' ? selectPin2Target : null)
   };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: selectPin2Target })));
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: selectPin2Target })));
   assert.equal(mockBubble1.classList.contains('is-pinned'), false);
   assert.equal(mockBubble2.classList.contains('is-pinned'), true);
   assert.match(pinBannerEl.innerHTML, /<strong>Second pinned note<\/strong>/);
@@ -7088,7 +7086,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
     if (s === '#msg-profile-popover') return popEl;
     return null;
   };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: mockGroupsToggle })));
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: mockGroupsToggle })));
   assert.equal(popEl.hidden, false, 'expanding shared groups must not trigger outside-click close');
   assert.equal(mockGroupsList.hidden, false);
   assert.equal(mockGroupsCard.classList.contains('is-open'), true);
@@ -7266,19 +7264,19 @@ test('friendlyError offline mapping, edge-to-edge pinch-zoom image viewer, nativ
   const makeNode = (tag) => ({
     tagName: String(tag || 'DIV').toUpperCase(),
     dataset: {},
-    style: { setProperty() {}, removeProperty() {} },
-    classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
-    setAttribute() {},
-    removeAttribute() {},
-    addEventListener() {},
+    style: { setProperty() { }, removeProperty() { } },
+    classList: { contains: () => false, add() { }, remove() { }, toggle() { } },
+    setAttribute() { },
+    removeAttribute() { },
+    addEventListener() { },
     querySelector: () => null,
     querySelectorAll: () => [],
-    append() {},
-    prepend() {},
-    appendChild() {},
-    insertAdjacentHTML() {},
-    remove() {},
-    click() {}
+    append() { },
+    prepend() { },
+    appendChild() { },
+    insertAdjacentHTML() { },
+    remove() { },
+    click() { }
   });
   const nativeDlCalls = [];
   const webAnchors = [];
@@ -7294,25 +7292,25 @@ test('friendlyError offline mapping, edge-to-edge pinch-zoom image viewer, nativ
     querySelector: () => null,
     querySelectorAll: () => [],
     getElementById: () => null,
-    addEventListener() {}
+    addEventListener() { }
   };
   let blobReads = 0;
   const ctx = {
     URLSearchParams,
     URL: {
       createObjectURL: () => 'blob:mock-dl-1',
-      revokeObjectURL() {}
+      revokeObjectURL() { }
     },
     Blob: class { constructor(parts, opts) { this.parts = parts; this.type = opts?.type || ''; } },
     FileReader: class {
       readAsDataURL() { this.result = 'data:image/jpeg;base64,QUJD'; this.onload?.(); }
     },
-    CustomEvent: class {},
+    CustomEvent: class { },
     Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, TypeError,
     navigator: navState,
-    location: { origin: 'https://myipon.example', href: 'https://myipon.example/dashboard.html', pathname: '/dashboard.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() {} },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/dashboard.html', pathname: '/dashboard.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
     Capacitor: {
       Plugins: {
@@ -7325,9 +7323,9 @@ test('friendlyError offline mapping, edge-to-edge pinch-zoom image viewer, nativ
       blobReads += 1;
       return { ok: true, status: 200, blob: async () => ({ type: 'image/jpeg' }) };
     },
-    addEventListener() {},
-    removeEventListener() {},
-    dispatchEvent() {},
+    addEventListener() { },
+    removeEventListener() { },
+    dispatchEvent() { },
     setTimeout,
     clearTimeout,
     document: docStub,
@@ -7395,24 +7393,24 @@ test('mobile APK background usage controls render in My account and auto-prompt 
       open: false,
       disabled: false,
       dataset,
-      style: { setProperty() {}, removeProperty() {} },
+      style: { setProperty() { }, removeProperty() { } },
       get hidden() { return hidden; },
       set hidden(v) { hidden = Boolean(v); if (hidden) attrs.hidden = ''; else delete attrs.hidden; },
       get textContent() { return textContent; },
       set textContent(v) { textContent = String(v ?? ''); },
       set innerHTML(v) { el._html = String(v ?? ''); },
       get innerHTML() { return el._html || ''; },
-      classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+      classList: { contains: () => false, add() { }, remove() { }, toggle() { } },
       setAttribute(k, v) { attrs[k] = String(v); if (k === 'id') el.id = String(v); if (k === 'data-tone') dataset.tone = String(v); },
       getAttribute(k) { return attrs[k] ?? null; },
       hasAttribute(k) { return k in attrs; },
       removeAttribute(k) { delete attrs[k]; },
-      addEventListener() {},
+      addEventListener() { },
       appendChild(child) { children.push(child); child.parentNode = el; return child; },
       append(...nodes) { nodes.forEach((n) => el.appendChild(n)); },
-      prepend() {},
+      prepend() { },
       insertBefore(n) { return el.appendChild(n); },
-      insertAdjacentHTML() {},
+      insertAdjacentHTML() { },
       dispatchEvent() { return true; },
       showModal() { el.open = true; },
       close() { el.open = false; },
@@ -7481,7 +7479,7 @@ test('mobile APK background usage controls render in My account and auto-prompt 
     ),
     querySelector: (sel) => (sel === 'dialog[open]' && promptDialog?.open ? promptDialog : null),
     querySelectorAll: (sel) => (sel === '[data-device-background-row]' ? [bgRow] : []),
-    addEventListener() {}
+    addEventListener() { }
   };
   const navStub = {
     userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 myIPONApp/20',
@@ -7492,13 +7490,13 @@ test('mobile APK background usage controls render in My account and auto-prompt 
     window: null,
     document: docStub,
     navigator: navStub,
-    location: { origin: 'https://myipon.example', href: 'https://myipon.example/dashboard.html', pathname: '/dashboard.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() {} },
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/dashboard.html', pathname: '/dashboard.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() { } },
     localStorage: {
       getItem: (k) => (store.has(k) ? store.get(k) : null),
       setItem: (k, v) => { store.set(k, String(v)); },
       removeItem: (k) => { store.delete(k); }
     },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
     Capacitor: {
       Plugins: {
@@ -7510,7 +7508,7 @@ test('mobile APK background usage controls render in My account and auto-prompt 
             nativePermState.hasPermission = true;
             return { display: 'granted' };
           },
-          createChannel: async () => {}
+          createChannel: async () => { }
         },
         BackgroundNotifications: {
           getBackgroundStatus: async () => ({ ...nativePermState }),
@@ -7526,12 +7524,12 @@ test('mobile APK background usage controls render in My account and auto-prompt 
       }
     },
     Notification: { permission: 'default' },
-    CustomEvent: class {},
+    CustomEvent: class { },
     URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
     setTimeout: (fn) => { if (typeof fn === 'function') fn(); return 0; },
-    clearTimeout() {},
-    addEventListener() {},
-    removeEventListener() {},
+    clearTimeout() { },
+    addEventListener() { },
+    removeEventListener() { },
     dispatchEvent(evt) { toasts.push(evt); },
     console
   };
@@ -7584,4 +7582,555 @@ test('mobile APK background usage controls render in My account and auto-prompt 
   assert.equal(bgRow._pill.textContent, 'Restricted');
   assert.equal(bgRow._btn.textContent, 'Allow background usage');
   assert.equal(bgRow._btn.disabled, false);
+});
+
+test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video previews, custom Pic 3 video viewer, and flicker-free reactions work end-to-end', async () => {
+  const vm = await import('node:vm');
+  const mainJava = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const css = read('css/app.css');
+  const coreJs = read('js/core.js');
+  const messagesJs = read('js/messages.js');
+
+  // 1. Static source & styling contracts
+  assert.match(mainJava, /import androidx\.activity\.OnBackPressedCallback;/);
+  assert.match(mainJava, /window\.Ipon\.handleNativeBack/);
+  assert.match(mainJava, /performDefaultBack\(/);
+  assert.match(mainJava, /public void onWindowFocusChanged\(boolean hasFocus\)/);
+  assert.match(css, /\.msg-scroll-wrap[\s\S]*?overflow-anchor:\s*auto;/);
+  assert.doesNotMatch(css, /\.msg-tick\.is-delivered,\s*\n\s*\.msg-tick\.is-read/);
+  assert.match(css, /\.msg-tick\.is-delivered\s*\{\s*color:\s*#7c8a83;/);
+  assert.match(css, /\.msg-tick\.is-read\s*\{\s*color:\s*#16a34a;/);
+  assert.match(css, /\.msg-row\.is-mine \.msg-tick\.is-read\s*\{\s*color:\s*#5ef29d;/);
+  assert.match(css, /\.msg-video-player\s*\{[\s\S]*?aspect-ratio:\s*var\(--vid-ar/);
+  assert.match(css, /\.msg-att-video::-webkit-media-controls[\s\S]*?display:\s*none\s*!important;/);
+  assert.match(css, /\.video-viewer-dialog \.msg-video-controls\.is-viewer-dock/);
+  assert.match(css, /\.msg-video-center-play\b/);
+
+  // 2. core.js runtime: openVideoViewer (Pic 3 dock, no native controls) & step-by-step handleNativeBack
+  const idMap = new Map();
+  const makeCoreEl = (tag) => {
+    const cls = new Set();
+    const attrs = new Map();
+    const listeners = new Map();
+    const children = [];
+    let html = '';
+    const el = {
+      tagName: String(tag || 'div').toUpperCase(),
+      open: false,
+      hidden: false,
+      disabled: false,
+      muted: false,
+      paused: true,
+      duration: 5.2,
+      currentTime: 0,
+      textContent: '',
+      dataset: {},
+      style: { setProperty() {}, removeProperty() {} },
+      classList: {
+        add: (c) => cls.add(c),
+        remove: (c) => cls.delete(c),
+        toggle: (c, f) => {
+          if (f === undefined ? !cls.has(c) : f) cls.add(c);
+          else cls.delete(c);
+        },
+        contains: (c) => cls.has(c)
+      },
+      attributes: attrs,
+      children,
+      appendChild(c) { children.push(c); return c; },
+      append(...nodes) { children.push(...nodes); },
+      prepend() {},
+      insertBefore(n) { return n; },
+      insertAdjacentHTML() {},
+      remove() {},
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+      removeAttribute(k) { attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      dispatchEvent(ev) { (listeners.get(ev?.type) || []).forEach((fn) => fn(ev)); },
+      showModal() { this.open = true; },
+      close() { this.open = false; this.dispatchEvent({ type: 'close' }); },
+      play() { this.paused = false; this.dispatchEvent({ type: 'play' }); return Promise.resolve(); },
+      pause() { this.paused = true; this.dispatchEvent({ type: 'pause' }); },
+      load() {},
+      removeEventListener() {},
+      focus() {},
+      querySelector(sel) {
+        const idMatch = /^#([A-Za-z0-9_-]+)$/.exec(sel);
+        if (idMatch) return idMap.get(idMatch[1]) || null;
+        return null;
+      },
+      querySelectorAll: () => []
+    };
+    Object.defineProperty(el, 'id', {
+      get: () => attrs.get('id') || '',
+      set: (v) => { attrs.set('id', String(v)); if (v) idMap.set(String(v), el); }
+    });
+    Object.defineProperty(el, 'className', {
+      get: () => [...cls].join(' '),
+      set: (v) => {
+        cls.clear();
+        String(v || '').split(/\s+/).filter(Boolean).forEach((c) => cls.add(c));
+      }
+    });
+    Object.defineProperty(el, 'innerHTML', {
+      get: () => html,
+      set: (v) => {
+        html = String(v ?? '');
+        for (const m of html.matchAll(/<([a-z0-9-]+)([^>]*?)\bid="([^"]+)"([^>]*)>/gi)) {
+          const cid = m[3];
+          const child = idMap.get(cid) || makeCoreEl(m[1]);
+          child.id = cid;
+          const classMatch = /\bclass="([^"]+)"/i.exec(`${m[2]} ${m[4]}`);
+          if (classMatch) child.className = classMatch[1];
+          if (/download/i.test(m[1]) || cid === 'ipon-vv-download') child.hidden = true;
+          idMap.set(cid, child);
+        }
+      }
+    });
+    return el;
+  };
+
+  let backNavPending = false;
+  let locAssigned = '';
+  const coreLoaderEl = makeCoreEl('div');
+  const coreDoc = {
+    documentElement: makeCoreEl('html'),
+    head: makeCoreEl('head'),
+    body: Object.assign(makeCoreEl('body'), { dataset: { page: 'contributions' } }),
+    createElement: (tag) => makeCoreEl(tag),
+    getElementById: (id) => (id === 'app-loader' ? coreLoaderEl : (idMap.get(id) || null)),
+    querySelector: (sel) => {
+      if (sel === 'dialog[open]') {
+        for (const el of idMap.values()) {
+          if (el.tagName === 'DIALOG' && el.open) return el;
+        }
+        return null;
+      }
+      return null;
+    },
+    querySelectorAll: (sel) => {
+      if (sel === 'dialog[open]') {
+        return [...idMap.values()].filter((el) => el.tagName === 'DIALOG' && el.open);
+      }
+      return [];
+    },
+    addEventListener() {}
+  };
+  const coreCtx = {
+    window: null,
+    document: coreDoc,
+    navigator: { userAgent: 'myIPONApp/21', onLine: true },
+    location: {
+      origin: 'https://myipon.example',
+      href: 'https://myipon.example/contributions.html',
+      pathname: '/contributions.html',
+      search: '',
+      replace(url) { locAssigned = url; },
+      assign(url) { locAssigned = url; }
+    },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    IponMessages: {
+      dismissTransientMenus: () => false,
+      handleBackNavigation: () => {
+        if (!backNavPending) return false;
+        backNavPending = false;
+        return true;
+      }
+    },
+    CustomEvent: class {},
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
+    setTimeout: (fn) => { if (typeof fn === 'function') fn(); return 0; },
+    clearTimeout() {},
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {},
+    console
+  };
+  coreCtx.window = coreCtx;
+  vm.runInNewContext(coreJs, coreCtx, { filename: 'js/core.js' });
+  assert.equal(typeof coreCtx.window.Ipon.openVideoViewer, 'function');
+  assert.equal(typeof coreCtx.window.Ipon.handleNativeBack, 'function');
+
+  coreCtx.window.Ipon.openVideoViewer('https://cdn.example/clip.mp4', 'Video', 'Shared in chat', 'clip.mp4', { aspectRatio: '16 / 9' });
+  const vvDialog = idMap.get('ipon-video-viewer');
+  const vvVideo = idMap.get('ipon-vv-video');
+  const vvControls = idMap.get('ipon-vv-controls');
+  assert.equal(vvDialog?.open, true);
+  assert.equal(vvVideo?.hasAttribute('controls'), false, 'custom lightbox video must omit native browser controls bar');
+  assert.ok(vvControls?.classList.contains('msg-video-controls') && vvControls?.classList.contains('is-viewer-dock'));
+
+  // Back step 1: video viewer closes first
+  assert.equal(coreCtx.window.Ipon.handleNativeBack(), 'handled');
+  assert.equal(vvDialog.open, false);
+
+  // Back step 2: message thread navigation unwinds, then workspace dialog closes, then sub-page returns to dashboard, then root exits
+  const msgDialog = makeCoreEl('dialog');
+  msgDialog.id = 'msg-workspace-dialog';
+  msgDialog.open = true;
+  backNavPending = true;
+  assert.equal(coreCtx.window.Ipon.handleNativeBack(), 'handled');
+  assert.equal(backNavPending, false);
+  assert.equal(coreCtx.window.Ipon.handleNativeBack(), 'handled');
+  assert.equal(msgDialog.open, false);
+  assert.equal(coreCtx.window.Ipon.handleNativeBack(), 'handled');
+  assert.equal(coreCtx.location.href, 'dashboard.html');
+  coreDoc.body.dataset.page = 'dashboard';
+  coreCtx.location.pathname = '/dashboard.html';
+  assert.equal(coreCtx.window.Ipon.handleNativeBack(), 'exit');
+
+  // 3. messages.js runtime: ticks (1 gray / 2 gray / 2 green), mobile visibility read guard, video preview poster & lightbox, flicker-free reactions
+  const meId = '00000000-0000-0000-0000-000000000010';
+  const peerId = '00000000-0000-0000-0000-000000000020';
+  const convId = '00000000-0000-0000-0000-0000000000c1';
+  const msgEls = new Map();
+  const msgTableHandlers = new Map();
+  const msgDocListeners = new Map();
+  const msgRpcCalls = [];
+  const videoViewerCalls = [];
+  let threadHtmlWrites = 0;
+  let reqFullscreenCalls = 0;
+
+  let currentMsgs = [
+    { id: 'm-sent', conversation_id: convId, sender_id: meId, body: 'Only sent', message_type: 'TEXT', created_at: '2026-11-15T10:00:00Z', delivered_at: null, read_at: null, attachments: [], reactions: [] },
+    { id: 'm-deliv', conversation_id: convId, sender_id: meId, body: 'Delivered only', message_type: 'TEXT', created_at: '2026-11-15T10:01:00Z', delivered_at: '2026-11-15T10:01:02Z', read_at: null, attachments: [], reactions: [] },
+    { id: 'm-seen', conversation_id: convId, sender_id: meId, body: 'Seen by peer', message_type: 'TEXT', created_at: '2026-11-15T10:02:00Z', delivered_at: '2026-11-15T10:02:02Z', read_at: '2026-11-15T10:02:05Z', attachments: [], reactions: [] },
+    {
+      id: 'm-vid',
+      conversation_id: convId,
+      sender_id: peerId,
+      body: '',
+      message_type: 'MEDIA',
+      created_at: '2026-11-15T10:03:00Z',
+      delivered_at: '2026-11-15T10:03:01Z',
+      read_at: '2026-11-15T10:03:02Z',
+      attachments: [{ path: `${convId}/preview-clip.mp4`, kind: 'video', name: 'preview-clip.mp4', size: 120000 }],
+      reactions: []
+    }
+  ];
+
+  const makeMsgEl = (id) => {
+    const cls = new Set();
+    const attrs = new Map();
+    const elListeners = new Map();
+    let html = '';
+    const el = {
+      id,
+      hidden: false,
+      open: false,
+      value: '',
+      scrollTop: 500,
+      scrollHeight: 500,
+      clientHeight: 500,
+      dataset: {},
+      style: { setProperty() {} },
+      classList: {
+        add: (c) => cls.add(c),
+        remove: (c) => cls.delete(c),
+        toggle: (c, f) => {
+          if (f === undefined ? !cls.has(c) : f) cls.add(c);
+          else cls.delete(c);
+        },
+        contains: (c) => cls.has(c)
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+      hasAttribute: (k) => attrs.has(k),
+      addEventListener: (ev, fn) => {
+        if (!elListeners.has(ev)) elListeners.set(ev, []);
+        elListeners.get(ev).push(fn);
+      },
+      dispatchEvent: (ev) => { (elListeners.get(ev?.type) || []).forEach((fn) => fn(ev)); },
+      focus: () => {},
+      select: () => {},
+      querySelectorAll: () => [],
+      querySelector: () => null,
+      showModal() { this.open = true; },
+      close() { this.open = false; this.dispatchEvent({ type: 'close' }); }
+    };
+    Object.defineProperty(el, 'innerHTML', {
+      get: () => html,
+      set: (v) => {
+        html = String(v ?? '');
+        if (id === 'msg-messages-list') threadHtmlWrites += 1;
+      }
+    });
+    return el;
+  };
+  const getMsgEl = (id) => {
+    if (!msgEls.has(id)) msgEls.set(id, makeMsgEl(id));
+    return msgEls.get(id);
+  };
+
+  let focusedState = true;
+  let mockUnreadFirstId = null;
+  const msgWinListeners = new Map();
+  const msgDoc = {
+    documentElement: { dataset: {} },
+    visibilityState: 'visible',
+    hasFocus: () => focusedState,
+    body: { insertAdjacentHTML() {}, appendChild() {} },
+    createElement: (tag) => makeMsgEl(tag),
+    getElementById: (id) => getMsgEl(id),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener: (ev, fn) => {
+      if (!msgDocListeners.has(ev)) msgDocListeners.set(ev, []);
+      msgDocListeners.get(ev).push(fn);
+    }
+  };
+  const msgWin = {
+    innerWidth: 390,
+    innerHeight: 844,
+    matchMedia: (q) => {
+      const m = /max-width:\s*(\d+)px/.exec(String(q || ''));
+      return { matches: m ? msgWin.innerWidth <= Number(m[1]) : false };
+    },
+    Ipon: {
+      escapeHtml: (s) => String(s ?? ''),
+      initials: () => 'PU',
+      isUserOnline: () => true,
+      bindAvatarFallbacks: () => {},
+      syncPresenceDots: () => {},
+      syncMessagesBadges: () => {},
+      friendlyError: (e) => String(e?.message || e),
+      toast: () => {},
+      confirmAction: async () => true,
+      openVideoViewer: (...args) => videoViewerCalls.push(args),
+      invokeAccountFunction: async (payload) => (payload?.action === 'chat-view-urls'
+        ? { urls: Object.fromEntries((payload.paths || []).map((p) => [p, `https://cdn.example/view/${encodeURIComponent(p)}`])) }
+        : {}),
+      rpc: async (name, params) => {
+        msgRpcCalls.push(name);
+        if (name === 'get_conversations') {
+          return [{
+            id: convId, status: 'ACCEPTED', initiator_id: peerId, is_incoming_request: false,
+            peer: { id: peerId, full_name: 'Peer User', allow_online_status: true },
+            unread_count: mockUnreadFirstId ? 1 : 0, marked_unread: false, last_message_at: '2026-11-15T10:03:00Z',
+            last_message_preview: 'Video', last_message_sender_id: peerId
+          }];
+        }
+        if (name === 'get_conversation_messages') {
+          return {
+            conversation: { id: convId, full_name: 'Peer User', status: 'ACCEPTED', friendship_status: 'FRIENDS', allow_online_status: true, receipts_enabled: true },
+            has_older: false,
+            unread_first_id: mockUnreadFirstId,
+            pinned_messages: [],
+            messages: currentMsgs
+          };
+        }
+        if (name === 'mark_conversation_read') {
+          mockUnreadFirstId = null;
+          return { read_at: '2026-11-15T10:03:50Z', receipts_shared: true };
+        }
+        if (name === 'get_social_overview') {
+          return { me: { id: meId, chat_privacy: {} }, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] };
+        }
+        if (name === 'toggle_message_reaction') {
+          const mid = params?.p_message_id;
+          const emoji = params?.p_emoji;
+          currentMsgs = currentMsgs.map((m) => (m.id === mid
+            ? { ...m, reactions: [{ emoji, user_id: meId, user_name: 'Me' }] }
+            : m));
+          return { added: true };
+        }
+        return {};
+      },
+      client: {
+        from: () => ({ select: () => ({ like: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }),
+        channel: () => ({
+          on(kind, filter, cb) {
+            if (kind === 'postgres_changes' && filter?.table) msgTableHandlers.set(filter.table, cb);
+            return this;
+          },
+          subscribe() { return this; }
+        })
+      }
+    },
+    addEventListener: (ev, fn) => {
+      if (!msgWinListeners.has(ev)) msgWinListeners.set(ev, []);
+      msgWinListeners.get(ev).push(fn);
+    },
+    location: { search: '', href: 'https://myipon.example/dashboard.html' }
+  };
+  msgWin.window = msgWin;
+  vm.runInNewContext(messagesJs, {
+    window: msgWin,
+    document: msgDoc,
+    location: msgWin.location,
+    Map, Set, URLSearchParams, navigator: {}, Math, JSON, Date, Intl,
+    URL: { createObjectURL: () => 'blob:mock', revokeObjectURL: () => {} },
+    CSS: { escape: (s) => String(s) },
+    requestAnimationFrame: (fn) => fn(),
+    setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {}
+  });
+
+  await msgWin.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', chat_privacy: { show_online: true } });
+  await msgWin.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
+  const initialThreadHtml = getMsgEl('msg-messages-list').innerHTML;
+
+  // Sent = 1 gray check; Delivered = 2 gray checks; Seen = 2 green checks
+  assert.match(initialThreadHtml, /Only sent[\s\S]*?<span class="msg-tick is-sent"[^>]*aria-label="Sent"><svg class="msg-tick-svg"[^>]*><path d="M3\.2 8\.6 6\.4 11\.8 13\.2 4\.6"\/><\/svg><\/span>/);
+  assert.match(initialThreadHtml, /Delivered only[\s\S]*?<span class="msg-tick is-delivered"[^>]*aria-label="Delivered"><svg class="msg-tick-svg is-double"[\s\S]*?M7\.2 8\.6[\s\S]*?<\/svg><\/span>/);
+  assert.match(initialThreadHtml, /Seen by peer[\s\S]*?<span class="msg-tick is-read"[^>]*aria-label="Seen"><svg class="msg-tick-svg is-double"[\s\S]*?M7\.2 8\.6[\s\S]*?<\/svg><\/span>/);
+
+  // Inline video has SVG poster preview and custom center play button
+  assert.match(initialThreadHtml, /class="msg-video-player"[\s\S]*?<video class="msg-att-video" preload="metadata" playsinline\s+poster="data:image\/svg\+xml/);
+  assert.match(initialThreadHtml, /class="msg-video-center-play" data-vact="play"/);
+
+  // Clicking fullscreen calls Ipon.openVideoViewer (never native requestFullscreen)
+  const fsVideoEl = {
+    currentSrc: 'https://cdn.example/view/clip.mp4',
+    src: 'https://cdn.example/view/clip.mp4',
+    videoWidth: 720,
+    videoHeight: 1280,
+    currentTime: 1.5,
+    paused: true,
+    poster: '',
+    pause() {},
+    requestFullscreen() { reqFullscreenCalls += 1; }
+  };
+  const fsPlayer = Object.assign(makeMsgEl('fs-player'), {
+    dataset: { vidConv: convId, vidPath: `${convId}/preview-clip.mp4`, vidName: 'preview-clip.mp4', vidKey: `${convId}/preview-clip.mp4` },
+    querySelector: (s) => (s === 'video' ? fsVideoEl : null),
+    closest: () => null
+  });
+  const fsBtn = {
+    dataset: { vact: 'fs' },
+    closest: (s) => {
+      if (s === '[data-vact]') return fsBtn;
+      if (s === '.msg-video-player') return fsPlayer;
+      return null;
+    }
+  };
+  const clickHandlers = msgDocListeners.get('click') || [];
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: fsBtn })));
+  assert.equal(reqFullscreenCalls, 0, 'video fullscreen must use custom Pic 3 viewer instead of native requestFullscreen');
+  assert.equal(videoViewerCalls.length, 1);
+  assert.equal(videoViewerCalls[0][0], 'https://cdn.example/view/clip.mp4');
+
+  // Shared media drawer also opens Shared Media videos in Ipon.openVideoViewer
+  await Promise.all(clickHandlers.map((fn) => fn({
+    stopPropagation: () => {},
+    target: { closest: (s) => (s === '#msg-thread-info-toggle' ? { dataset: {} } : null) }
+  })));
+  await Promise.all(clickHandlers.map((fn) => fn({
+    stopPropagation: () => {},
+    target: { closest: (s) => (s === '[data-drawer-view]' ? { dataset: { drawerView: 'media' } } : null) }
+  })));
+  const drawerMediaHtml = getMsgEl('msg-thread-drawer').innerHTML;
+  assert.match(drawerMediaHtml, /data-open-vid="https:\/\/cdn\.example\/view\/[^"]*preview-clip\.mp4"[\s\S]*?poster="data:image\/svg\+xml/);
+  const vidThumb = {
+    dataset: { openVid: 'https://cdn.example/view/clip2.mp4', vidConv: convId, vidPath: `${convId}/clip2.mp4`, vidName: 'preview-clip.mp4' },
+    closest: (s) => (s === '[data-open-vid]' ? vidThumb : null)
+  };
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: vidThumb })));
+  assert.equal(videoViewerCalls.length, 2);
+
+  // In-place reaction & receipt patching does NOT rebuild #msg-messages-list.innerHTML (prevents video flicker!)
+  const bubbleVidCol = makeMsgEl('col-m-vid');
+  let insertedReactHtml = '';
+  bubbleVidCol.querySelector = () => null;
+  bubbleVidCol.insertAdjacentHTML = (_pos, html) => { insertedReactHtml = String(html || ''); };
+  const vidRowNode = {
+    dataset: { msgId: 'm-vid' },
+    querySelector: (sel) => (sel === '.msg-bubble-col' ? bubbleVidCol : null)
+  };
+  getMsgEl('msg-messages-list').querySelector = (sel) => (String(sel).includes('m-vid') ? vidRowNode : null);
+  const writesBeforeReact = threadHtmlWrites;
+  const reactBtn = {
+    dataset: { reactMsg: 'm-vid', reactEmoji: '❤️' },
+    closest: (s) => (s === '[data-react-msg]' ? reactBtn : null)
+  };
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: reactBtn })));
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(threadHtmlWrites, writesBeforeReact, 'reacting on a video message must patch reactions in place without resetting innerHTML');
+  assert.ok(insertedReactHtml.includes('❤️'), 'reactions row must update in place on existing video bubble column');
+
+  // Mobile Back unwinds drawer first: drawer subview -> drawer root -> drawer close
+  assert.equal(msgWin.IponMessages.handleBackNavigation(), true); // media -> root
+  assert.match(getMsgEl('msg-thread-drawer').innerHTML, /data-drawer-screen="root"/);
+  assert.equal(msgWin.IponMessages.handleBackNavigation(), true); // root -> closed
+  assert.equal(getMsgEl('msg-thread-drawer').hidden, true);
+
+  // When window is unfocused (notification shade / lockscreen wake / background window), incoming message marks Delivered ONLY, NEVER Seen
+  const origRpcCallsCount = () => msgRpcCalls.filter((r) => r === 'mark_conversation_read').length;
+  const deliveredCallsCount = () => msgRpcCalls.filter((r) => r === 'mark_messages_delivered').length;
+  focusedState = false;
+  (msgWinListeners.get('blur') || []).forEach((fn) => fn());
+  const readsWhileUnfocusedBefore = origRpcCallsCount();
+  const deliveredBeforeUnfocused = deliveredCallsCount();
+  currentMsgs = [
+    ...currentMsgs,
+    { id: 'm-unfocused-notif', conversation_id: convId, sender_id: peerId, body: 'Just notifying', message_type: 'TEXT', created_at: '2026-11-15T10:03:30Z', attachments: [], reactions: [] }
+  ];
+  mockUnreadFirstId = 'm-unfocused-notif';
+  msgTableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm-unfocused-notif', conversation_id: convId, sender_id: peerId } });
+  await new Promise((r) => setTimeout(r, 340));
+  assert.equal(
+    deliveredCallsCount() > deliveredBeforeUnfocused,
+    true,
+    'unfocused window still marks incoming peer message as delivered'
+  );
+  assert.equal(
+    origRpcCallsCount(),
+    readsWhileUnfocusedBefore,
+    'unfocused window (notification shade / lockscreen wake / background app) must NOT mark conversation read'
+  );
+
+  // Returning focus onto open thread marks it read once the user actually views it
+  focusedState = true;
+  (msgWinListeners.get('focus') || []).forEach((fn) => fn());
+  await new Promise((r) => setTimeout(r, 40));
+  const readsWhenFocused = origRpcCallsCount();
+  assert.equal(
+    readsWhenFocused > readsWhileUnfocusedBefore,
+    true,
+    'returning window focus onto active unread thread marks conversation read once user looks at it'
+  );
+
+  // When an overlay dialog (e.g. notification sheet) covers the open thread, incoming message must NOT mark read
+  getMsgEl('notification-dialog').open = true;
+  currentMsgs = [
+    ...currentMsgs,
+    { id: 'm-under-overlay', conversation_id: convId, sender_id: peerId, body: 'Under notif dialog', message_type: 'TEXT', created_at: '2026-11-15T10:03:45Z', attachments: [], reactions: [] }
+  ];
+  mockUnreadFirstId = 'm-under-overlay';
+  msgTableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm-under-overlay', conversation_id: convId, sender_id: peerId } });
+  await new Promise((r) => setTimeout(r, 340));
+  assert.equal(
+    origRpcCallsCount(),
+    readsWhenFocused,
+    'overlay dialog over workspace must prevent auto-marking Seen'
+  );
+  getMsgEl('notification-dialog').open = false;
+
+  // Back from open conversation -> chats list
+  assert.equal(msgWin.IponMessages.handleBackNavigation(), true); // convo -> chats list
+  assert.equal(getMsgEl('msg-view-chats').classList.contains('is-mobile-thread'), false);
+
+  // When back on Chats list (including 721px-820px compact viewports), incoming peer message MUST NOT auto-mark read!
+  msgWin.innerWidth = 800;
+  const readsBeforeIncoming = msgRpcCalls.filter((r) => r === 'mark_conversation_read').length;
+  currentMsgs = [
+    ...currentMsgs,
+    { id: 'm-unseen-list', conversation_id: convId, sender_id: peerId, body: 'Are you there?', message_type: 'TEXT', created_at: '2026-11-15T10:04:00Z', attachments: [], reactions: [] }
+  ];
+  msgTableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm-unseen-list', conversation_id: convId, sender_id: peerId } });
+  await new Promise((r) => setTimeout(r, 340));
+  assert.equal(
+    msgRpcCalls.filter((r) => r === 'mark_conversation_read').length,
+    readsBeforeIncoming,
+    'peer message arriving while compact/mobile user is on Chats list (<= 820px) must NOT auto-mark seen'
+  );
+  msgWin.innerWidth = 390;
+  assert.equal(msgWin.IponMessages.handleBackNavigation(), false, 'at root Chats list handleBackNavigation returns false so dashboard step unwinds next');
+  getMsgEl('msg-workspace-dialog').close();
+  assert.equal(getMsgEl('msg-view-chats').classList.contains('is-mobile-thread'), false);
 });

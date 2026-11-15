@@ -13,6 +13,7 @@ import android.view.View;
 import android.webkit.URLUtil;
 import android.webkit.WebView;
 import android.widget.Toast;
+import androidx.activity.OnBackPressedCallback;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.splashscreen.SplashScreen;
@@ -60,12 +61,63 @@ public class MainActivity extends BridgeActivity {
         NotificationSyncService.ensureStarted(this);
         NotificationSyncWorker.ensureScheduled(this);
         handleNotificationIntent(getIntent());
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                final OnBackPressedCallback self = this;
+                final WebView currentWebView = getBridge() != null ? getBridge().getWebView() : null;
+                if (currentWebView == null) {
+                    performDefaultBack(self);
+                    return;
+                }
+                currentWebView.evaluateJavascript(
+                    "(function(){try{return window.Ipon&&typeof window.Ipon.handleNativeBack==='function'?window.Ipon.handleNativeBack():'unhandled';}catch(e){return 'unhandled';}})()",
+                    result -> {
+                        String normalized = result == null ? "" : result.replace("\"", "").trim();
+                        if ("handled".equals(normalized)) {
+                            return;
+                        }
+                        if ("exit".equals(normalized)) {
+                            performDefaultBack(self);
+                            return;
+                        }
+                        if (currentWebView.canGoBack()) {
+                            currentWebView.goBack();
+                        } else {
+                            performDefaultBack(self);
+                        }
+                    }
+                );
+            }
+        });
+    }
+
+    private void performDefaultBack(OnBackPressedCallback callback) {
+        if (callback != null) callback.setEnabled(false);
+        try {
+            getOnBackPressedDispatcher().onBackPressed();
+        } finally {
+            if (callback != null) callback.setEnabled(true);
+        }
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         handleNotificationIntent(intent);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        if (webView != null) {
+            final String evName = hasFocus ? "focus" : "blur";
+            webView.post(() -> webView.evaluateJavascript(
+                "(function(){try{window.dispatchEvent(new Event('" + evName + "'));}catch(e){}})()",
+                null
+            ));
+        }
     }
 
     @Override

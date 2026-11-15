@@ -50,6 +50,9 @@
   let suppressBubbleClickId = null;
   let recentHoldMsgId = null;
   let recentHoldAt = 0;
+  let isWindowFocused = typeof document !== 'undefined' && typeof document.hasFocus === 'function'
+    ? Boolean(document.hasFocus())
+    : true;
 
   const NEW_CHAT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
   const BACK_ARROW_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>';
@@ -562,8 +565,13 @@
       }
       closeProfilePopover();
       closeFloatingMenus();
+      state.showThreadInfo = false;
+      state.threadInfoView = 'root';
       document.querySelectorAll('#msg-messages-list video, #msg-messages-list audio').forEach((m) => { try { m.pause?.(); } catch { } });
       if (typeof disconnectTypingChannel === 'function') disconnectTypingChannel();
+      clearActiveThreadSelection();
+      state.mobileShowThread = false;
+      syncMobilePaneState();
       state.lastTypingState = false;
       state.lastTypingSentAt = 0;
     });
@@ -652,6 +660,322 @@
     } catch (error) {
       ipon().toast(ipon().friendlyError(error), 'error');
     }
+  }
+
+  const VIDEO_POSTER_FALLBACK = "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2016%209'%3E%3Cdefs%3E%3ClinearGradient%20id%3D'g'%20x1%3D'0'%20y1%3D'0'%20x2%3D'1'%20y2%3D'1'%3E%3Cstop%20offset%3D'0'%20stop-color%3D'%230f241c'%2F%3E%3Cstop%20offset%3D'1'%20stop-color%3D'%23071510'%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D'16'%20height%3D'9'%20fill%3D'url(%23g)'%2F%3E%3C%2Fsvg%3E";
+  const videoMetaCache = new Map();
+  const videoPosterInFlight = new Set();
+
+  function getVideoMetaKey(path, url) {
+    return String(path || url || '').trim();
+  }
+
+  function formatVideoBoxStyle(meta) {
+    const w = Number(meta?.width || 0);
+    const h = Number(meta?.height || 0);
+    if (!(w > 0 && h > 0)) return '';
+    const ar = w / h;
+    const clampedW = Math.max(140, Math.min(260, Math.round(300 * ar)));
+    return `--vid-w:${clampedW}px;--vid-ar:${w} / ${h};`;
+  }
+
+  function applyCachedVideoMetaToDom(key, meta) {
+    if (!key || !meta || typeof document?.querySelectorAll !== 'function') return;
+    const selKey = typeof CSS?.escape === 'function' ? CSS.escape(key) : key.replace(/"/g, '\\"');
+    const styleStr = formatVideoBoxStyle(meta);
+    document.querySelectorAll(`[data-vid-key="${selKey}"]`).forEach((node) => {
+      if (styleStr && node.classList?.contains?.('msg-video-player')) {
+        const wMatch = styleStr.match(/--vid-w:([^;]+);/);
+        const arMatch = styleStr.match(/--vid-ar:([^;]+);/);
+        if (wMatch) node.style?.setProperty?.('--vid-w', wMatch[1]);
+        if (arMatch) node.style?.setProperty?.('--vid-ar', arMatch[1]);
+      }
+      const vid = node.tagName === 'VIDEO' ? node : node.querySelector?.('video');
+      if (vid && meta.poster && vid.getAttribute?.('poster') !== meta.poster) {
+        vid.setAttribute?.('poster', meta.poster);
+        try { vid.poster = meta.poster; } catch { }
+      }
+    });
+  }
+
+  function copyVideoMetaAlias(fromKey, toKey) {
+    if (!fromKey || !toKey || fromKey === toKey) return;
+    const existing = videoMetaCache.get(fromKey);
+    if (existing) {
+      videoMetaCache.set(toKey, { ...existing });
+      applyCachedVideoMetaToDom(toKey, existing);
+    }
+  }
+
+  function probeAndCaptureVideoMeta(src, key, { isLocalBlob = false } = {}) {
+    if (!src || !key || typeof document?.createElement !== 'function') return;
+    const prev = videoMetaCache.get(key);
+    if (prev?.poster || videoPosterInFlight.has(key)) return;
+    if (prev?.failed) return;
+    videoPosterInFlight.add(key);
+
+    let settled = false;
+    let probeVid = null;
+    const finish = (patch = null) => {
+      if (settled) return;
+      settled = true;
+      videoPosterInFlight.delete(key);
+      clearTimeout(timeoutId);
+      if (patch) {
+        const merged = { ...(videoMetaCache.get(key) || {}), ...patch };
+        videoMetaCache.set(key, merged);
+        applyCachedVideoMetaToDom(key, merged);
+      }
+      if (probeVid) {
+        try {
+          probeVid.pause?.();
+          probeVid.removeAttribute?.('src');
+          probeVid.load?.();
+        } catch { }
+        probeVid = null;
+      }
+    };
+    const timeoutId = setTimeout(() => finish({ failed: true }), 9000);
+
+    try {
+      probeVid = document.createElement('video');
+      if (!probeVid || typeof probeVid.addEventListener !== 'function') {
+        finish({ failed: true });
+        return;
+      }
+      probeVid.muted = true;
+      probeVid.playsInline = true;
+      probeVid.preload = 'auto';
+      const canUseCors = !isLocalBlob && !src.startsWith('blob:') && !src.startsWith('data:');
+      if (canUseCors) probeVid.crossOrigin = 'anonymous';
+
+      const captureFrame = () => {
+        if (settled || !probeVid) return false;
+        const vw = Number(probeVid.videoWidth || 0);
+        const vh = Number(probeVid.videoHeight || 0);
+        if (!(vw > 0 && vh > 0)) return false;
+        try {
+          const canvas = document.createElement('canvas');
+          if (!canvas?.getContext) return false;
+          const scale = Math.min(1, 480 / Math.max(vw, vh));
+          canvas.width = Math.max(1, Math.round(vw * scale));
+          canvas.height = Math.max(1, Math.round(vh * scale));
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return false;
+          ctx.drawImage(probeVid, 0, 0, canvas.width, canvas.height);
+          const poster = canvas.toDataURL('image/jpeg', 0.82);
+          if (poster && poster.startsWith('data:image/')) {
+            finish({ width: vw, height: vh, duration: Number(probeVid.duration || 0), poster });
+            return true;
+          }
+        } catch {
+          finish({ width: vw, height: vh, duration: Number(probeVid.duration || 0), failed: true });
+          return true;
+        }
+        return false;
+      };
+
+      probeVid.addEventListener('loadedmetadata', () => {
+        const vw = Number(probeVid?.videoWidth || 0);
+        const vh = Number(probeVid?.videoHeight || 0);
+        if (vw > 0 && vh > 0) {
+          const base = { ...(videoMetaCache.get(key) || {}), width: vw, height: vh, duration: Number(probeVid?.duration || 0) };
+          videoMetaCache.set(key, base);
+          applyCachedVideoMetaToDom(key, base);
+        }
+        try {
+          const targetTime = Number.isFinite(probeVid.duration) && probeVid.duration > 0.25
+            ? Math.min(0.25, probeVid.duration * 0.1)
+            : 0.05;
+          probeVid.currentTime = targetTime;
+        } catch { }
+      });
+      probeVid.addEventListener('seeked', () => { if (!captureFrame()) finish({ failed: true }); });
+      probeVid.addEventListener('loadeddata', () => { captureFrame(); });
+      probeVid.addEventListener('error', () => finish({ failed: true }));
+      probeVid.src = src;
+    } catch {
+      finish({ failed: true });
+    }
+  }
+
+  function openVideoViewerForPlayer(triggerEl) {
+    if (!triggerEl || typeof ipon()?.openVideoViewer !== 'function') return;
+    const convId = triggerEl.dataset?.vidConv || state.activeConvId || '';
+    const path = triggerEl.dataset?.vidPath || '';
+    const name = triggerEl.dataset?.vidName || 'video.mp4';
+    const inlineVideo = triggerEl.querySelector?.('video') || (triggerEl.tagName === 'VIDEO' ? triggerEl : null);
+    const src = inlineVideo?.currentSrc || inlineVideo?.src || (path ? state.signedUrlCache.get(path) : '') || triggerEl.dataset?.openVid || '';
+    if (!src) return;
+    const key = getVideoMetaKey(path, src);
+    const cached = videoMetaCache.get(key);
+    const rawPoster = cached?.poster || (inlineVideo?.poster && inlineVideo.poster !== VIDEO_POSTER_FALLBACK ? inlineVideo.poster : '');
+    const dur = Number.isFinite(inlineVideo?.duration) && inlineVideo.duration > 0
+      ? inlineVideo.duration
+      : Number(cached?.duration || 0);
+    const sub = dur > 0 ? formatMediaDuration(dur) : '';
+    pauseOtherChatMedia(null);
+    if (inlineVideo && !inlineVideo.paused) {
+      try { inlineVideo.pause?.(); } catch { }
+    }
+    ipon().openVideoViewer(src, name || 'Video', sub, name || 'video.mp4', {
+      poster: rawPoster,
+      startTime: Number(inlineVideo?.currentTime || 0),
+      muted: Boolean(inlineVideo?.muted),
+      autoplay: true,
+      onDownload: path && convId ? () => downloadOriginalAttachment(convId, path, name || 'video.mp4') : null,
+      onClose: ({ currentTime, muted } = {}) => {
+        if (!inlineVideo || inlineVideo.isConnected === false) return;
+        try {
+          if (typeof muted === 'boolean') inlineVideo.muted = muted;
+          if (Number.isFinite(currentTime) && Number.isFinite(inlineVideo.duration) && inlineVideo.duration > 0) {
+            inlineVideo.currentTime = Math.max(0, Math.min(inlineVideo.duration, currentTime));
+          }
+        } catch { }
+        syncVideoPlayerUi(inlineVideo);
+      }
+    });
+  }
+
+  function isThreadActivelyVisible() {
+    const dialog = document.getElementById('msg-workspace-dialog');
+    if (!dialog?.open || !state.activeConvId) return false;
+    if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
+    if (!isWindowFocused) return false;
+    if (typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
+    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
+    if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
+    if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
+      return false;
+    }
+    const isCompact = (typeof window.matchMedia === 'function' && (window.matchMedia('(max-width: 820px)').matches || window.matchMedia('(max-width: 720px)').matches))
+      || (Number(window.innerWidth) > 0 && Number(window.innerWidth) <= 820);
+    if (isCompact && (!state.mobileShowThread || state.showThreadInfo || state.searchActive)) {
+      return false;
+    }
+    return state.tab === 'chats' || state.tab === 'requests';
+  }
+
+  function renderReactionsRowHtml(m) {
+    const reactionCounts = new Map();
+    (m?.reactions || []).forEach((r) => {
+      const prev = reactionCounts.get(r.emoji) || { count: 0, mine: false, users: [] };
+      prev.count += 1;
+      if (r.user_id === initializedProfile?.id) prev.mine = true;
+      prev.users.push(r.user_name || 'User');
+      reactionCounts.set(r.emoji, prev);
+    });
+    return reactionCounts.size
+      ? `<div class="msg-reactions-row">${Array.from(reactionCounts.entries()).map(([emoji, meta]) =>
+          `<button type="button" class="msg-reaction-pill${meta.mine ? ' is-mine' : ''}" data-react-msg="${escapeHtml(m.id)}" data-react-emoji="${escAttr(emoji)}" title="${escapeHtml(meta.users.join(', '))}">${escapeHtml(emoji)} <span>${meta.count}</span></button>`
+        ).join('')}</div>`
+      : '';
+  }
+
+  function renderReceiptTickHtml(m, conv) {
+    const mine = m?.sender_id === initializedProfile?.id;
+    const isDeleted = Boolean(m?.deleted_for_everyone_at);
+    if (!mine || isDeleted) return '';
+    if (conv?.receipts_enabled && m.read_at) {
+      return `<span class="msg-tick is-read" title="Seen" aria-label="Seen">${DOUBLE_CHECK_SVG}</span>`;
+    }
+    if (m.delivered_at) {
+      return `<span class="msg-tick is-delivered" title="Delivered" aria-label="Delivered">${DOUBLE_CHECK_SVG}</span>`;
+    }
+    return `<span class="msg-tick is-sent" title="Sent" aria-label="Sent">${SINGLE_CHECK_SVG}</span>`;
+  }
+
+  function patchMessageReactionsDom(msg) {
+    const list = document.getElementById('msg-messages-list');
+    if (!msg?.id || !list?.querySelector) return false;
+    const escId = typeof CSS?.escape === 'function' ? CSS.escape(String(msg.id)) : String(msg.id);
+    const row = list.querySelector(`.msg-row[data-msg-id="${escId}"]`);
+    const col = row?.querySelector?.('.msg-bubble-col');
+    if (!row || !col) return false;
+    const wrap = document.getElementById('msg-scroll-wrap');
+    const prevTop = wrap ? wrap.scrollTop : 0;
+    const nearBottom = !wrap || (wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 96);
+    const html = renderReactionsRowHtml(msg);
+    const existing = col.querySelector('.msg-reactions-row');
+    if (!html) {
+      existing?.remove?.();
+    } else if (existing) {
+      existing.outerHTML = html;
+    } else {
+      col.insertAdjacentHTML('beforeend', html);
+    }
+    if (wrap) {
+      if (nearBottom) wrap.scrollTop = wrap.scrollHeight;
+      else wrap.scrollTop = prevTop;
+    }
+    return true;
+  }
+
+  function patchMessageReceiptsDom(msg, conv = state.activeThread?.conversation) {
+    const list = document.getElementById('msg-messages-list');
+    if (!msg?.id || !list?.querySelector) return false;
+    const escId = typeof CSS?.escape === 'function' ? CSS.escape(String(msg.id)) : String(msg.id);
+    const row = list.querySelector(`.msg-row[data-msg-id="${escId}"]`);
+    if (!row) return false;
+    const nextTick = renderReceiptTickHtml(msg, conv);
+    const metaEl = row.querySelector('.msg-bubble-meta');
+    if (metaEl) {
+      const oldTick = metaEl.querySelector('.msg-tick');
+      if (oldTick) oldTick.outerHTML = nextTick;
+      else if (nextTick) metaEl.insertAdjacentHTML('beforeend', nextTick);
+      return true;
+    }
+    return false;
+  }
+
+  function tryPatchActiveThreadInPlace(prevThread, nextThread) {
+    if (!prevThread?.conversation || !nextThread?.conversation) return false;
+    const pc = prevThread.conversation;
+    const nc = nextThread.conversation;
+    if (
+      pc.conversation_id !== nc.conversation_id
+      || pc.status !== nc.status
+      || pc.chat_theme !== nc.chat_theme
+      || Boolean(pc.receipts_enabled) !== Boolean(nc.receipts_enabled)
+      || pc.friendship_status !== nc.friendship_status
+      || Boolean(prevThread.has_older) !== Boolean(nextThread.has_older)
+    ) {
+      return false;
+    }
+    if (JSON.stringify(prevThread.pinned_messages || []) !== JSON.stringify(nextThread.pinned_messages || [])) {
+      return false;
+    }
+    const prevMsgs = prevThread.messages || [];
+    const nextMsgs = nextThread.messages || [];
+    if (prevMsgs.length !== nextMsgs.length) return false;
+    const changedReactions = [];
+    const changedReceipts = [];
+    for (let i = 0; i < prevMsgs.length; i += 1) {
+      const a = prevMsgs[i];
+      const b = nextMsgs[i];
+      if (
+        a.id !== b.id
+        || a.body !== b.body
+        || a.edited_at !== b.edited_at
+        || a.deleted_for_everyone_at !== b.deleted_for_everyone_at
+        || JSON.stringify(a.attachments || []) !== JSON.stringify(b.attachments || [])
+      ) {
+        return false;
+      }
+      if (JSON.stringify(a.reactions || []) !== JSON.stringify(b.reactions || [])) {
+        changedReactions.push(b);
+      }
+      if (a.delivered_at !== b.delivered_at || a.read_at !== b.read_at) {
+        changedReceipts.push(b);
+      }
+    }
+    for (const m of changedReactions) {
+      if (!patchMessageReactionsDom(m)) return false;
+    }
+    for (const m of changedReceipts) {
+      patchMessageReceiptsDom(m, nc);
+    }
+    return true;
   }
 
   function revealVideoControls(player, { autoHideMs = 2400 } = {}) {
@@ -1134,6 +1458,7 @@
       const scrollWrap = document.getElementById('msg-scroll-wrap');
       const prevScrollTop = scrollWrap ? scrollWrap.scrollTop : 0;
       const wasNearBottom = !scrollWrap || (scrollWrap.scrollHeight - scrollWrap.scrollTop - scrollWrap.clientHeight < 96);
+      const prevThreadSnapshot = state.activeThread;
       const prevMsgs = state.activeThread?.messages || [];
       const prevLastId = prevMsgs.length ? prevMsgs[prevMsgs.length - 1]?.id : null;
       const nextMsgs = data?.messages || [];
@@ -1154,7 +1479,7 @@
         (n) => !n.read_at && String(n.link || '').includes(conversationId)
       );
       const shouldMarkRead = Boolean(
-        markRead && dialogOpen && (
+        markRead && dialogOpen && isThreadActivelyVisible() && (
           forceMarkRead ||
           data?.unread_first_id ||
           convItem?.unread_count > 0 ||
@@ -1187,12 +1512,23 @@
 
       if (!backgroundRefresh || nextFingerprint !== state.lastThreadFingerprint) {
         state.lastThreadFingerprint = nextFingerprint;
-        renderActiveThread({
-          scrollToBottom: shouldScrollBottom,
-          highlightMessageId: aroundMessageId,
-          preserveScrollTop: backgroundRefresh && !shouldScrollBottom ? prevScrollTop : null,
-          animate: !backgroundRefresh
-        });
+        if (backgroundRefresh && !aroundMessageId && tryPatchActiveThreadInPlace(prevThreadSnapshot, data)) {
+          const activeWrap = document.getElementById('msg-thread-active');
+          ipon().syncPresenceDots(activeWrap);
+          const subEl = document.getElementById('msg-peer-status-text');
+          if (subEl && data?.conversation) {
+            const typing = state.typingPeers.has(conversationId);
+            subEl.textContent = formatStatusLine(data.conversation, typing);
+            subEl.classList.toggle('is-typing', typing);
+          }
+        } else {
+          renderActiveThread({
+            scrollToBottom: shouldScrollBottom,
+            highlightMessageId: aroundMessageId,
+            preserveScrollTop: backgroundRefresh && !shouldScrollBottom ? prevScrollTop : null,
+            animate: !backgroundRefresh
+          });
+        }
       } else {
         const activeWrap = document.getElementById('msg-thread-active');
         ipon().syncPresenceDots(activeWrap);
@@ -1595,9 +1931,13 @@
       </figure>`;
     }
     if (item.kind === 'video' && item.previewUrl) {
+      const vKey = getVideoMetaKey(item.uploaded?.path, item.previewUrl);
+      const meta = videoMetaCache.get(vKey);
+      const boxStyle = formatVideoBoxStyle(meta);
       return `<div class="msg-att-media-card">
-        <div class="msg-video-player">
-          <video class="msg-att-video" muted preload="metadata" playsinline src="${escAttr(item.previewUrl)}"></video>
+        <div class="msg-video-player" data-vid-key="${escAttr(vKey)}"${boxStyle ? ` style="${escAttr(boxStyle)}"` : ''}>
+          <video class="msg-att-video" muted preload="metadata" playsinline poster="${escAttr(meta?.poster || VIDEO_POSTER_FALLBACK)}" src="${escAttr(item.previewUrl)}"></video>
+          <span class="msg-video-center-play is-passive" aria-hidden="true">${VIDEO_PLAY_SVG}</span>
         </div>
       </div>`;
     }
@@ -1722,7 +2062,10 @@
             updatePendingProgressDom(pending);
           });
           entry.progress = 100;
-          if (entry.previewUrl) state.signedUrlCache.set(up.path, entry.previewUrl);
+          if (entry.previewUrl) {
+            state.signedUrlCache.set(up.path, entry.previewUrl);
+            if (entry.kind === 'video') copyVideoMetaAlias(entry.previewUrl, up.path);
+          }
           entry.uploaded = {
             path: up.path,
             name: up.name,
@@ -1864,30 +2207,9 @@
       const fwdHtml = !isDeleted && m.forwarded_from_id ? '<div class="msg-forwarded-tag">Forwarded</div>' : '';
 
       // Group reactions by emoji
-      const reactionCounts = new Map();
-      (m.reactions || []).forEach((r) => {
-        if (!reactionCounts.has(r.emoji)) reactionCounts.set(r.emoji, { count: 0, mine: false, users: [] });
-        const slot = reactionCounts.get(r.emoji);
-        slot.count += 1;
-        if (r.user_id === myId) slot.mine = true;
-        slot.users.push(r.user_name || 'User');
-      });
-      const reactionHtml = !isDeleted && reactionCounts.size
-        ? `<div class="msg-reactions-row">${Array.from(reactionCounts.entries()).map(([emoji, meta]) =>
-            `<button type="button" class="msg-reaction-pill${meta.mine ? ' is-mine' : ''}" data-react-msg="${escapeHtml(m.id)}" data-react-emoji="${escAttr(emoji)}" title="${escapeHtml(meta.users.join(', '))}">${escapeHtml(emoji)} <span>${meta.count}</span></button>`
-          ).join('')}</div>`
-        : '';
+      const reactionHtml = isDeleted ? '' : renderReactionsRowHtml(m);
 
-      let receiptIcon = '';
-      if (mine && !isDeleted) {
-        if (conv.receipts_enabled && m.read_at) {
-          receiptIcon = `<span class="msg-tick is-read" title="Seen" aria-label="Seen">${DOUBLE_CHECK_SVG}</span>`;
-        } else if (m.delivered_at) {
-          receiptIcon = `<span class="msg-tick is-delivered" title="Delivered" aria-label="Delivered">${SINGLE_CHECK_SVG}</span>`;
-        } else {
-          receiptIcon = `<span class="msg-tick is-sent" title="Sent" aria-label="Sent">${SINGLE_CHECK_SVG}</span>`;
-        }
-      }
+      const receiptIcon = renderReceiptTickHtml(m, conv);
 
       const activeMatch = state.threadSearchMatches[state.threadSearchCursor] === m.id;
       const isMatch = searchQuery && state.threadSearchMatches.includes(m.id);
@@ -1964,9 +2286,16 @@
       </figure>`;
     }
     if (att.kind === 'video') {
+      const vidKey = getVideoMetaKey(att.path, url);
+      const cached = vidKey ? videoMetaCache.get(vidKey) : null;
+      const boxStyle = formatVideoBoxStyle(cached);
+      if (url && vidKey && !cached?.poster && !cached?.failed && !videoPosterInFlight.has(vidKey)) {
+        Promise.resolve().then(() => probeAndCaptureVideoMeta(url, vidKey));
+      }
       return `<div class="msg-att-media-card">
-        ${url ? `<div class="msg-video-player" data-vid-conv="${escAttr(conversationId)}" data-vid-path="${escAttr(att.path)}" data-vid-name="${escAttr(att.name || 'video')}">
-          <video class="msg-att-video" preload="metadata" playsinline src="${escAttr(url)}"></video>
+        ${url ? `<div class="msg-video-player" data-vid-conv="${escAttr(conversationId)}" data-vid-path="${escAttr(att.path)}" data-vid-name="${escAttr(att.name || 'video')}" data-vid-key="${escAttr(vidKey)}"${boxStyle ? ` style="${escAttr(boxStyle)}"` : ''}>
+          <video class="msg-att-video" preload="metadata" playsinline poster="${escAttr(cached?.poster || VIDEO_POSTER_FALLBACK)}" src="${escAttr(url)}"></video>
+          <button type="button" class="msg-video-center-play" data-vact="play" aria-label="Play video">${VIDEO_PLAY_SVG}</button>
           <div class="msg-video-controls">
             <input type="range" class="msg-video-seek" min="0" max="1000" value="0" aria-label="Seek video">
             <div class="msg-video-bar-actions">
@@ -2067,9 +2396,15 @@
             ? `<div class="msg-drawer-media-grid">${orderedMedia.map(({ att: a, msgId }) => {
                 const url = state.signedUrlCache.get(a.path) || '';
                 if (!url) return `<span class="msg-drawer-thumb is-loading msg-skel" title="${escapeHtml(a.name || 'Media')}" aria-label="Loading ${escapeHtml(a.name || 'media')}"></span>`;
-                return a.kind === 'video'
-                  ? `<button type="button" class="msg-drawer-thumb is-video" data-jump-msg="${escAttr(msgId)}" title="Jump to ${escapeHtml(a.name || 'video')}" aria-label="Jump to video ${escapeHtml(a.name || 'video')}"><video muted preload="metadata" playsinline src="${escAttr(url)}"></video><span class="msg-drawer-video-badge" aria-hidden="true">${VIDEO_PLAY_SVG}</span></button>`
-                  : `<button type="button" class="msg-drawer-thumb" data-open-img="${escAttr(url)}" data-img-name="${escAttr(a.name || 'image')}" data-img-conv="${escAttr(conv.conversation_id)}" data-img-path="${escAttr(a.path)}" aria-label="View ${escapeHtml(a.name || 'image')}"><img src="${escAttr(url)}" alt="${escapeHtml(a.name || 'Shared media')}" loading="lazy"></button>`;
+                if (a.kind === 'video') {
+                  const vidKey = getVideoMetaKey(a.path, url);
+                  const cached = vidKey ? videoMetaCache.get(vidKey) : null;
+                  if (url && vidKey && !cached?.poster && !cached?.failed && !videoPosterInFlight.has(vidKey)) {
+                    Promise.resolve().then(() => probeAndCaptureVideoMeta(url, vidKey));
+                  }
+                  return `<button type="button" class="msg-drawer-thumb is-video" data-open-vid="${escAttr(url)}" data-vid-conv="${escAttr(conv.conversation_id)}" data-vid-path="${escAttr(a.path)}" data-vid-name="${escAttr(a.name || 'video')}" data-vid-key="${escAttr(vidKey)}" title="Play ${escapeHtml(a.name || 'video')}" aria-label="Play video ${escapeHtml(a.name || 'video')}"><video muted preload="metadata" playsinline poster="${escAttr(cached?.poster || VIDEO_POSTER_FALLBACK)}" src="${escAttr(url)}"></video><span class="msg-drawer-video-badge" aria-hidden="true">${VIDEO_PLAY_SVG}</span></button>`;
+                }
+                return `<button type="button" class="msg-drawer-thumb" data-open-img="${escAttr(url)}" data-img-name="${escAttr(a.name || 'image')}" data-img-conv="${escAttr(conv.conversation_id)}" data-img-path="${escAttr(a.path)}" aria-label="View ${escapeHtml(a.name || 'image')}"><img src="${escAttr(url)}" alt="${escapeHtml(a.name || 'Shared media')}" loading="lazy"></button>`;
               }).join('')}</div>`
             : `<div class="msg-drawer-empty empty-state"><strong>No shared media yet</strong><span>Photos and videos shared in this chat will appear here.</span></div>`}
         </div>`;
@@ -2529,7 +2864,10 @@
         continue;
       }
       const kind = detectAttachmentKind(file);
-      const previewUrl = kind === 'image' && typeof URL?.createObjectURL === 'function' ? URL.createObjectURL(file) : '';
+      const previewUrl = (kind === 'image' || kind === 'video') && typeof URL?.createObjectURL === 'function' ? URL.createObjectURL(file) : '';
+      if (kind === 'video' && previewUrl) {
+        probeAndCaptureVideoMeta(previewUrl, previewUrl, { isLocalBlob: true });
+      }
       state.uploadQueue.push({ file, name, type: file.type || '', size: file.size, kind, previewUrl, progress: 0, error: '' });
     }
     const nextBatches = Math.ceil(state.uploadQueue.length / MAX_ATTACHMENTS_PER_MSG);
@@ -3615,10 +3953,34 @@
       const reactPill = ev.target.closest?.('[data-react-msg]');
       if (reactPill) {
         closeFloatingMenus();
+        const rMsgId = reactPill.dataset.reactMsg;
+        const rEmoji = reactPill.dataset.reactEmoji;
+        const targetMsg = (state.activeThread?.messages || []).find((m) => String(m.id) === String(rMsgId));
+        const prevReactions = targetMsg ? [...(targetMsg.reactions || [])] : null;
+        if (targetMsg) {
+          const myId = initializedProfile?.id;
+          const myName = initializedProfile?.full_name || 'You';
+          const existingMine = (targetMsg.reactions || []).find((r) => r.user_id === myId);
+          const others = (targetMsg.reactions || []).filter((r) => r.user_id !== myId);
+          targetMsg.reactions = existingMine?.emoji === rEmoji
+            ? others
+            : [...others, { user_id: myId, user_name: myName, emoji: rEmoji }];
+          patchMessageReactionsDom(targetMsg);
+          state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
+        }
         try {
-          await ipon().rpc('toggle_message_reaction', { p_message_id: reactPill.dataset.reactMsg, p_emoji: reactPill.dataset.reactEmoji });
-          if (state.activeConvId) await openConversation(state.activeConvId, { markRead: false, silent: true });
-        } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
+          await ipon().rpc('toggle_message_reaction', { p_message_id: rMsgId, p_emoji: rEmoji });
+          if (!targetMsg && state.activeConvId) {
+            await openConversation(state.activeConvId, { markRead: false, silent: true });
+          }
+        } catch (err) {
+          if (targetMsg && prevReactions) {
+            targetMsg.reactions = prevReactions;
+            patchMessageReactionsDom(targetMsg);
+            state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
+          }
+          ipon().toast(ipon().friendlyError(err), 'error');
+        }
         return;
       }
 
@@ -3783,12 +4145,7 @@
           syncVideoPlayerUi(video);
           revealVideoControls(player);
         } else if (vact === 'fs') {
-          try {
-            if (document.fullscreenElement) await document.exitFullscreen?.();
-            else if (video.requestFullscreen) await video.requestFullscreen();
-            else if (player.requestFullscreen) await player.requestFullscreen();
-            else video.webkitEnterFullscreen?.();
-          } catch { }
+          openVideoViewerForPlayer(player);
           revealVideoControls(player);
         } else if (vact === 'menu') {
           const existingMenu = Array.from(document.querySelectorAll('.msg-floating-menu') || [])
@@ -3856,6 +4213,11 @@
         if (card && audio && rect && rect.width > 0) {
           seekVoiceAudio(card, audio, (ev.clientX - rect.left) / rect.width);
         }
+        return;
+      }
+      const openVidBtn = ev.target.closest?.('[data-open-vid]');
+      if (openVidBtn) {
+        openVideoViewerForPlayer(openVidBtn);
         return;
       }
       const imgBtn = ev.target.closest?.('[data-open-img]');
@@ -3963,10 +4325,35 @@
     });
 
     const onMediaEvent = (ev) => {
-      if (ev.target?.classList?.contains('msg-att-video')) syncVideoPlayerUi(ev.target);
-      else if (ev.target?.classList?.contains('msg-att-audio')) syncVoicePlayerUi(ev.target);
+      if (ev.target?.classList?.contains('msg-att-video')) {
+        const video = ev.target;
+        const player = video.closest?.('.msg-video-player');
+        if (player && (ev.type === 'loadedmetadata' || ev.type === 'loadeddata' || ev.type === 'seeked')) {
+          const vKey = player.dataset?.vidKey || getVideoMetaKey(player.dataset?.vidPath, video.currentSrc || video.src);
+          const vw = Number(video.videoWidth || 0);
+          const vh = Number(video.videoHeight || 0);
+          if (vw > 0 && vh > 0 && vKey && !player.dataset.arLocked) {
+            player.dataset.arLocked = '1';
+            const merged = { ...(videoMetaCache.get(vKey) || {}), width: vw, height: vh, duration: Number(video.duration || 0) };
+            videoMetaCache.set(vKey, merged);
+            applyCachedVideoMetaToDom(vKey, merged);
+          }
+          const curPoster = video.getAttribute?.('poster') || '';
+          if (curPoster === VIDEO_POSTER_FALLBACK && video.readyState >= 2) {
+            if (ev.type === 'loadeddata' && video.paused && Number(video.currentTime || 0) === 0 && !video.dataset?.thumbSeeked && Number(video.duration || 0) > 0.1) {
+              if (video.dataset) video.dataset.thumbSeeked = '1';
+              try { video.currentTime = 0.05; } catch { }
+            } else if (ev.type === 'seeked' || Number(video.duration || 0) <= 0.1) {
+              video.removeAttribute?.('poster');
+            }
+          }
+        }
+        syncVideoPlayerUi(video);
+      } else if (ev.target?.classList?.contains('msg-att-audio')) {
+        syncVoicePlayerUi(ev.target);
+      }
     };
-    for (const evt of ['play', 'pause', 'ended', 'timeupdate', 'loadedmetadata', 'volumechange']) {
+    for (const evt of ['play', 'pause', 'ended', 'timeupdate', 'loadedmetadata', 'loadeddata', 'seeked', 'volumechange']) {
       document.addEventListener(evt, onMediaEvent, true);
     }
 
@@ -4235,16 +4622,17 @@
             state.typingPeers.delete(cId);
             updateTypingIndicators({ listChanged: true });
           }
-          const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
-          if (!isForActive || !dialogOpen) {
+          const threadActiveHere = isForActive && isThreadActivelyVisible();
+          if (!threadActiveHere) {
             ipon().rpc('mark_messages_delivered', { p_conversation_id: cId }).catch(() => { });
           }
         }
+        const markIncomingReadHere = Boolean(isForActive && isInsert && fromPeer && isThreadActivelyVisible());
         scheduleRefresh({
           convs: true,
           thread: isForActive,
-          markRead: Boolean(isForActive && isInsert && fromPeer),
-          forceMarkRead: Boolean(isForActive && isInsert && fromPeer),
+          markRead: markIncomingReadHere,
+          forceMarkRead: markIncomingReadHere,
           alerts: Boolean(isInsert && fromPeer)
         });
       })
@@ -4267,7 +4655,10 @@
           if (row.read_at && state.activeThread?.conversation?.receipts_enabled !== false) {
             msgItem.read_at = row.read_at;
           }
-          renderMessagesList();
+          if (!patchMessageReceiptsDom(msgItem, state.activeThread?.conversation)) {
+            renderMessagesList();
+          }
+          state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
         }
         const inActive = !row.message_id || Boolean(msgItem);
         if (inActive) scheduleRefresh({ convs: false, thread: true, markRead: false });
@@ -4338,24 +4729,44 @@
       ipon().rpc('mark_messages_delivered', { p_conversation_id: null }).catch(() => { })
     ]);
 
-    // Last seen heartbeat respecting privacy + instant delivery receipt ping on focus
+    // Last seen heartbeat respecting privacy + instant delivery receipt ping on foreground focus
     const pingLastSeen = () => {
       if (document.visibilityState === 'visible' && (initializedProfile?.chat_privacy?.show_online !== false)) {
         ipon().rpc('touch_user_last_seen').catch(() => { });
+      }
+    };
+    const syncForegroundReceipts = () => {
+      pingLastSeen();
+      ipon().rpc('mark_messages_delivered', { p_conversation_id: null }).catch(() => { });
+      if (isThreadActivelyVisible()) {
+        openConversation(state.activeConvId, { markRead: true, silent: true }).catch(() => { });
       }
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         sendTypingBroadcast(false);
       } else if (document.visibilityState === 'visible') {
-        pingLastSeen();
-        ipon().rpc('mark_messages_delivered', { p_conversation_id: null }).catch(() => { });
+        syncForegroundReceipts();
+      }
+    };
+    const onWindowBlur = () => {
+      isWindowFocused = false;
+      sendTypingBroadcast(false);
+    };
+    const onWindowFocus = () => {
+      isWindowFocused = true;
+      if (document.visibilityState === 'visible') {
+        syncForegroundReceipts();
       }
     };
     pingLastSeen();
     if (!lastSeenTimer) {
       lastSeenTimer = setInterval(pingLastSeen, 60000);
       document.addEventListener('visibilitychange', onVisibilityChange);
+      if (typeof window.addEventListener === 'function') {
+        window.addEventListener('focus', onWindowFocus);
+        window.addEventListener('blur', onWindowBlur);
+      }
     }
 
     // Consume deep-link params (?chat=..., ?messages=...)
@@ -4367,11 +4778,76 @@
 
   bindEvents();
 
+  function dismissTransientMenus() {
+    let dismissed = false;
+    const activeMenu = Array.from(document.querySelectorAll('.msg-floating-menu') || [])
+      .find((node) => !node.classList?.contains?.('is-leaving'));
+    if (activeMenu) {
+      closeFloatingMenus();
+      dismissed = true;
+    }
+    const pop = document.getElementById('msg-profile-popover');
+    if (pop && !pop.hidden) {
+      closeProfilePopover();
+      dismissed = true;
+    }
+    const emojiPop = document.getElementById('msg-emoji-popover');
+    if (emojiPop && !emojiPop.hidden) {
+      emojiPop.hidden = true;
+      dismissed = true;
+    }
+    if (state.showPinnedList) {
+      state.showPinnedList = false;
+      renderPinnedBanner();
+      dismissed = true;
+    }
+    return dismissed;
+  }
+
+  function handleBackNavigation() {
+    if (state.showThreadInfo) {
+      if (state.threadInfoView !== 'root') {
+        state.threadInfoView = 'root';
+      } else {
+        state.showThreadInfo = false;
+        state.threadInfoView = 'root';
+      }
+      renderThreadInfoDrawer();
+      return true;
+    }
+    if (state.showThreadSearch) {
+      state.showThreadSearch = false;
+      state.threadSearchQuery = '';
+      state.threadSearchMatches = [];
+      const bar = document.getElementById('msg-thread-search-bar');
+      if (bar) bar.hidden = true;
+      renderMessagesList();
+      return true;
+    }
+    if (state.mobileShowThread) {
+      closeFloatingMenus();
+      state.mobileShowThread = false;
+      syncMobilePaneState();
+      return true;
+    }
+    if (state.searchActive) {
+      clearSidebarSearch();
+      return true;
+    }
+    if (state.tab !== 'chats') {
+      switchTab('chats');
+      return true;
+    }
+    return false;
+  }
+
   window.IponMessages = {
     init,
     openWorkspace,
     openFromNotification,
     openProfilePopover,
+    dismissTransientMenus,
+    handleBackNavigation,
     formatBytes,
     detectAttachmentKind
   };
