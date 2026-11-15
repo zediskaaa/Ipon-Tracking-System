@@ -5879,6 +5879,24 @@ test('migration 071 enforces login activation before official membership, fixes 
   assert.match(schema, /'20261115_072'/);
 });
 
+test('desktop dashboard calendar maintains fixed row heights and announcement panel scrolls cleanly inside right rail', () => {
+  const heroCss = read('css/hero-plates.css');
+  const appCss = read('css/app.css');
+
+  // Calendar grid keeps fixed row height on desktop and never stretches to match right rail announcements
+  assert.match(heroCss, /\.calendar-card\s*\{[^}]*flex:\s*0 0 auto;/);
+  assert.match(heroCss, /\.calendar-board\s*\{[^}]*flex:\s*0 0 auto;/);
+  assert.match(heroCss, /\.calendar-week\s*\{[^}]*flex:\s*0 0 90px;\s*height:\s*90px;\s*min-height:\s*90px;/);
+  assert.match(heroCss, /@media \(max-width:860px\)[\s\S]*?\.calendar-week\s*\{[^}]*height:\s*auto;\s*min-height:\s*56px;/);
+
+  // Desktop 3-column grid prevents right rail from inflating row height while aligning bottom with calendar card
+  assert.match(heroCss, /@media \(min-width:1181px\)\s*\{[\s\S]*?\.comp-frame\s*\{\s*grid-template-rows:\s*auto minmax\(0,1fr\);\s*\}[\s\S]*?\.review-column\s*\{[^}]*contain:\s*size;\s*overflow:\s*hidden;[^}]*\}[\s\S]*?\.announcement-panel\s*\{[^}]*flex:\s*1 1 0;\s*min-height:\s*220px;/);
+
+  // Announcement list scrolls internally instead of rendering all cards inline/stacked or squishing cards
+  assert.match(appCss, /\.announcement-panel \.announcement-list\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/);
+  assert.match(appCss, /\.announcement-panel \.announcement-item\{[^}]*flex:\s*0 0 auto;/);
+});
+
 
 
 

@@ -628,7 +628,7 @@ html[data-shell-role="SUPER_ADMIN"] .dashboard-sidebar .nav-link[data-role] { di
 
 .calendar-card {
   display:flex;
-  flex:1;
+  flex:0 0 auto;
   flex-direction:column;
   padding:20px 24px 24px;
   border:1px solid rgba(20,45,43,.09);
@@ -737,7 +737,7 @@ html[data-shell-role="SUPER_ADMIN"] .dashboard-sidebar .nav-link[data-role] { di
 .calendar-board {
   position:relative;
   display:flex;
-  flex:1;
+  flex:0 0 auto;
   flex-direction:column;
   overflow:hidden;
   border:1px solid rgba(20,45,43,.1);
@@ -771,8 +771,9 @@ html[data-shell-role="SUPER_ADMIN"] .dashboard-sidebar .nav-link[data-role] { di
 
 .calendar-week {
   display:grid;
-  flex:1;
-  min-height:86px;
+  flex:0 0 90px;
+  height:90px;
+  min-height:90px;
   grid-template-columns:repeat(7,1fr);
 }
 
@@ -1321,6 +1322,15 @@ html[data-shell-role="SUPER_ADMIN"] .dashboard-sidebar .nav-link[data-role] { di
 
 .mobile-month-bar,.mobile-goal-picker { display:none; }
 
+@media (min-width:1181px) {
+  .comp-frame { grid-template-rows:auto minmax(0,1fr); }
+  .dashboard-sidebar { grid-column:1; grid-row:1 / -1; }
+  .dashboard-workspace { grid-column:2; grid-row:1; align-self:start; }
+  .review-column { grid-column:3; grid-row:1; align-self:stretch; min-height:0; contain:size; overflow:hidden; }
+  .review-panel { flex:0 0 auto; }
+  .announcement-panel { flex:1 1 0; min-height:220px; }
+}
+
 @media (max-width:1180px) {
   .comp-frame { grid-template-columns:210px minmax(0,1fr); }
   .review-column { grid-column:2; padding:0 20px 28px 26px; }
@@ -1388,7 +1398,7 @@ html[data-shell-role="SUPER_ADMIN"] .dashboard-sidebar .nav-link[data-role] { di
   .mobile-goal-picker select { min-width:0; max-width:68%; min-height:36px; }
   .calendar-card { padding:14px 10px; }
   .weekday-headings span { padding:9px 2px; font-size:10px; letter-spacing:0; }
-  .calendar-week { min-height:56px; }
+  .calendar-week { flex:0 0 auto; height:auto; min-height:56px; }
   .day { min-height:54px; padding:5px; gap:4px 2px; grid-template-rows:auto 1fr; touch-action:manipulation; }
   .day b { font-size:12px; }
   .day.is-today b { width:20px; height:20px; margin:-2px 0 0 -2px; font-size:11px; }
