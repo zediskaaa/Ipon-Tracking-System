@@ -5897,6 +5897,30 @@ test('desktop dashboard calendar maintains fixed row heights and announcement pa
   assert.match(appCss, /\.announcement-panel \.announcement-item\{[^}]*flex:\s*0 0 auto;/);
 });
 
+test('migration 075 restores group summary RPC and read-only group transparency RLS for members', () => {
+  const migration075 = read('database/migrations/20261115_075_restore_member_group_visibility_and_summary.sql');
+  const schema = read('database/schema.sql');
+
+  for (const sql of [migration075, schema]) {
+    assert.match(sql, /'20261115_075'/);
+  }
+
+  assert.match(migration075, /create or replace function public\.get_savings_summary\(\)/i);
+  assert.match(migration075, /when ctx\.role_name not in \('ADMIN', 'TREASURER', 'MEMBER'\) or ctx\.group_id is null then null/i);
+  assert.doesNotMatch(migration075, /is_treasurer_or_admin/i);
+  for (const policy of [
+    'members_select',
+    'contribution_periods_select',
+    'contributions_select',
+    'expenses_select',
+    'withdrawals_select'
+  ]) {
+    assert.match(migration075, new RegExp(`create policy ${policy} on public\\.\\w+ for select to authenticated[\\s\\S]*?current_user_role\\(\\) in \\('ADMIN', 'TREASURER', 'MEMBER'\\)`, 'i'));
+  }
+  assert.match(migration075, /create policy members_select on public\.members[\s\S]*?deleted_at is null/i);
+});
+
+
 
 
 
