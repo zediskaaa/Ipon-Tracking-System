@@ -88,8 +88,7 @@ for (const file of files) {
   }
 }
 
-// Create offline fallback page for live web loading mode (embed SVG inline so offline webviews never show broken image icons)
-const faviconSvg = fs.readFileSync(path.join(rootDir, 'assets', 'favicon.svg'), 'utf-8').trim();
+// Create offline fallback page for live web loading mode
 const offlineHtml = `<!doctype html>
 <html lang="en">
 <head>
@@ -97,20 +96,16 @@ const offlineHtml = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
   <title>Offline — myIPON</title>
-  <link rel="icon" href="data:image/svg+xml,${encodeURIComponent(faviconSvg)}" type="image/svg+xml">
   <style>
     body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#0a1b17;color:#f5eee0;font-family:Arial,sans-serif;text-align:center}
     .card{max-width:360px;padding:28px 22px;border-radius:18px;background:#102922;border:1px solid rgba(245,238,224,.14);box-shadow:0 20px 50px rgba(0,0,0,.45)}
-    .offline-brand{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;overflow:hidden;box-shadow:0 8px 20px rgba(0,0,0,.3)}
-    .offline-brand svg{width:100%;height:100%;display:block}
-    h1{margin:12px 0 8px;font-size:22px}
+    h1{margin:0 0 8px;font-size:22px}
     p{margin:0 0 20px;font-size:14px;line-height:1.5;color:rgba(245,238,224,.78)}
     a{display:inline-block;padding:12px 22px;border-radius:10px;background:#e4b95b;color:#0a1b17;font-weight:700;text-decoration:none}
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="offline-brand" role="img" aria-label="myIPON">${faviconSvg}</div>
     <h1>You appear to be offline</h1>
     <p>Please check your internet connection so myIPON can load your latest records.</p>
     <a href="https://my-ipon.vercel.app/login.html?app=1">Try again</a>

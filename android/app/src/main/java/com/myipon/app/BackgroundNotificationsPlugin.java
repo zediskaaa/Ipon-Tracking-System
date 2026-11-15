@@ -2,25 +2,49 @@ package com.myipon.app;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.DownloadManager;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
 import android.os.PowerManager;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.util.Base64;
+import android.webkit.MimeTypeMap;
+import android.webkit.URLUtil;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-@CapacitorPlugin(name = "BackgroundNotifications")
+@CapacitorPlugin(
+    name = "BackgroundNotifications",
+    permissions = {
+        @Permission(
+            strings = { Manifest.permission.RECORD_AUDIO, Manifest.permission.MODIFY_AUDIO_SETTINGS },
+            alias = "microphone"
+        )
+    }
+)
 public class BackgroundNotificationsPlugin extends Plugin {
     @PluginMethod
     public void configure(PluginCall call) {
@@ -129,9 +153,10 @@ public class BackgroundNotificationsPlugin extends Plugin {
     public void requestIgnoreBatteryOptimizations(PluginCall call) {
         Context context = getContext();
         boolean launched = false;
+        boolean alreadyIgnored = true;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-            boolean alreadyIgnored = pm != null && pm.isIgnoringBatteryOptimizations(context.getPackageName());
+            alreadyIgnored = pm != null && pm.isIgnoringBatteryOptimizations(context.getPackageName());
             if (!alreadyIgnored && getActivity() != null) {
                 try {
                     Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
@@ -144,12 +169,20 @@ public class BackgroundNotificationsPlugin extends Plugin {
                         getActivity().startActivity(fallback);
                         launched = true;
                     } catch (Throwable ignored2) {
+                        try {
+                            Intent appInfo = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                .setData(Uri.parse("package:" + context.getPackageName()));
+                            getActivity().startActivity(appInfo);
+                            launched = true;
+                        } catch (Throwable ignored3) {
+                        }
                     }
                 }
             }
         }
         JSObject result = new JSObject();
         result.put("launched", launched);
+        result.put("alreadyIgnored", alreadyIgnored);
         call.resolve(result);
     }
 
@@ -196,5 +229,165 @@ public class BackgroundNotificationsPlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("launched", launched);
         call.resolve(result);
+    }
+
+    @PluginMethod
+    public void ensureMicrophonePermission(PluginCall call) {
+        Context context = getContext();
+        boolean hasAudio = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+            == PackageManager.PERMISSION_GRANTED;
+        PermissionState state = getPermissionState("microphone");
+        if (hasAudio && state == PermissionState.GRANTED) {
+            JSObject result = new JSObject();
+            result.put("granted", true);
+            result.put("state", "granted");
+            result.put("canAskAgain", true);
+            call.resolve(result);
+            return;
+        }
+        requestPermissionForAlias("microphone", call, "microphonePermsCallback");
+    }
+
+    @PermissionCallback
+    private void microphonePermsCallback(PluginCall call) {
+        if (call == null) return;
+        PermissionState state = getPermissionState("microphone");
+        boolean granted = state == PermissionState.GRANTED
+            && ContextCompat.checkSelfPermission(getContext(), Manifest.permission.RECORD_AUDIO)
+            == PackageManager.PERMISSION_GRANTED;
+        JSObject result = new JSObject();
+        result.put("granted", granted);
+        result.put("state", state != null ? state.toString() : (granted ? "granted" : "denied"));
+        result.put("canAskAgain", state != PermissionState.DENIED);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        Context context = getContext();
+        boolean launched = false;
+        if (getActivity() != null) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(Uri.parse("package:" + context.getPackageName()));
+                getActivity().startActivity(intent);
+                launched = true;
+            } catch (Throwable ignored) {
+            }
+        }
+        JSObject result = new JSObject();
+        result.put("launched", launched);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void downloadFile(PluginCall call) {
+        String url = call.getString("url", "");
+        String fileName = call.getString("fileName", "");
+        String mimeType = call.getString("mimeType", "");
+        try {
+            JSObject result = enqueueSystemDownload(getContext(), url, fileName, mimeType);
+            call.resolve(result);
+        } catch (Throwable err) {
+            call.reject(err.getMessage() != null ? err.getMessage() : "Could not download file.");
+        }
+    }
+
+    static String sanitizeDownloadName(String requestedName, String rawUrl, String mimeType) {
+        String base = TextUtils.isEmpty(requestedName)
+            ? URLUtil.guessFileName(rawUrl, null, mimeType)
+            : requestedName;
+        String clean = base.replaceAll("[\\\\/:*?\"<>|\\x00-\\x1F]+", "-").replaceAll("^[.\\s-]+", "").trim();
+        if (TextUtils.isEmpty(clean)) clean = "myipon-attachment";
+        if (!clean.contains(".") && !TextUtils.isEmpty(mimeType)) {
+            String ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType);
+            if (!TextUtils.isEmpty(ext)) clean = clean + "." + ext;
+        }
+        return clean;
+    }
+
+    static JSObject enqueueSystemDownload(Context context, String rawUrl, String requestedName, String requestedMime) throws Exception {
+        if (context == null || TextUtils.isEmpty(rawUrl)) {
+            throw new IllegalArgumentException("Missing download link.");
+        }
+        String url = rawUrl.trim();
+        if (url.startsWith("data:")) {
+            int commaIdx = url.indexOf(',');
+            if (commaIdx < 0) throw new IllegalArgumentException("Invalid file payload.");
+            String meta = url.substring(5, commaIdx);
+            String payload = url.substring(commaIdx + 1);
+            String detectedMime = requestedMime;
+            if (TextUtils.isEmpty(detectedMime)) {
+                int semiIdx = meta.indexOf(';');
+                String candidate = semiIdx >= 0 ? meta.substring(0, semiIdx) : meta;
+                if (!TextUtils.isEmpty(candidate)) detectedMime = candidate;
+            }
+            if (TextUtils.isEmpty(detectedMime)) detectedMime = "application/octet-stream";
+            String safeName = sanitizeDownloadName(requestedName, url, detectedMime);
+            byte[] bytes = meta.contains(";base64")
+                ? Base64.decode(payload, Base64.DEFAULT)
+                : Uri.decode(payload).getBytes();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentResolver resolver = context.getContentResolver();
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.MediaColumns.DISPLAY_NAME, safeName);
+                values.put(MediaStore.MediaColumns.MIME_TYPE, detectedMime);
+                values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+                Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (uri == null) throw new IllegalStateException("Could not create download entry.");
+                try (OutputStream out = resolver.openOutputStream(uri)) {
+                    if (out == null) throw new IllegalStateException("Could not open download stream.");
+                    out.write(bytes);
+                    out.flush();
+                }
+                values.clear();
+                values.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                resolver.update(uri, values, null, null);
+            } else {
+                File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if (dir == null || (!dir.exists() && !dir.mkdirs()) || !dir.canWrite()) {
+                    dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                }
+                if (dir != null && !dir.exists()) dir.mkdirs();
+                File outFile = new File(dir, safeName);
+                try (FileOutputStream out = new FileOutputStream(outFile)) {
+                    out.write(bytes);
+                    out.flush();
+                }
+            }
+            JSObject result = new JSObject();
+            result.put("saved", true);
+            result.put("started", true);
+            result.put("fileName", safeName);
+            return result;
+        }
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            throw new IllegalArgumentException("Unsupported download URL.");
+        }
+        String safeName = sanitizeDownloadName(requestedName, url, requestedMime);
+        DownloadManager dm = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
+        if (dm == null) throw new IllegalStateException("Download manager unavailable.");
+        DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+        req.setTitle(safeName);
+        req.setDescription("Downloading from myIPON");
+        req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+        req.setAllowedOverMetered(true);
+        req.setAllowedOverRoaming(true);
+        if (!TextUtils.isEmpty(requestedMime)) {
+            req.setMimeType(requestedMime);
+        }
+        try {
+            req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, safeName);
+        } catch (SecurityException ignored) {
+            req.setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, safeName);
+        }
+        long id = dm.enqueue(req);
+        JSObject result = new JSObject();
+        result.put("started", true);
+        result.put("saved", false);
+        result.put("fileName", safeName);
+        result.put("downloadId", id);
+        return result;
     }
 }

@@ -1519,7 +1519,7 @@ test('background notification feed, permission banner, and native poll receiver 
   assert.match(capConfig.appendUserAgent, /myIPONApp\/20/);
   assert.match(manifest, /com\.myipon\.app\.NotificationPollReceiver/);
   assert.match(mainActivity, /registerPlugin\(BackgroundNotificationsPlugin\.class\)/);
-  assert.match(bgPlugin, /@CapacitorPlugin\(name = "BackgroundNotifications"\)/);
+  assert.match(bgPlugin, /@CapacitorPlugin\([\s\S]*?name\s*=\s*"BackgroundNotifications"/);
   assert.match(pollReceiver, /get_unread_notifications_by_token/);
 
   assert.match(core, /id="notification-permission-bar"/);
@@ -6038,8 +6038,9 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(messagesJs, /setTimeout\([\s\S]*?'is-highlight-focus'[\s\S]*?3600\)/);
   assert.doesNotMatch(messagesJs, /msg-att-file-foot|Original<\/a>/);
   assert.match(vercel, /"Permissions-Policy"[\s\S]*?camera=\(\),\s*microphone=\(self\)/);
-  assert.doesNotMatch(manifest, /android\.permission\.CAMERA|MODIFY_AUDIO_SETTINGS/);
+  assert.doesNotMatch(manifest, /android\.permission\.CAMERA/);
   assert.match(manifest, /android\.permission\.RECORD_AUDIO/);
+  assert.match(manifest, /android\.permission\.MODIFY_AUDIO_SETTINGS/);
 
   // 5. CSS responsive layout, circular X geometry, dark theme & badge hiding
   assert.match(appCss, /\.msg-dialog,[\s\S]*?font-family:\s*system-ui/);
@@ -7096,9 +7097,27 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   // Close popover via close X button
   await dispatchClick('#msg-pop-close', { dataset: {} });
   assert.equal(popEl.hidden, true);
+
+  // Switching to Requests tab while inside a chat conversation exits mobile thread & clears mismatched chat pane
+  await dispatchClick('[data-open-conv]', { dataset: { openConv: convId } });
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), true);
+  assert.equal(getEl('msg-thread-active').hidden, false);
+  await dispatchClick('[data-msg-tab]', { dataset: { msgTab: 'requests' } });
+  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), false, 'switching to Requests tab must exit mobile conversation view');
+  assert.equal(getEl('msg-thread-active').hidden, true, 'switching to Requests from a regular chat must clear active thread pane');
+  assert.equal(getEl('msg-thread-empty').hidden, false);
+
+  // Re-opening workspace from Dashboard without explicit tab/conversationId always defaults to Chats list
+  await dispatchClick('[data-msg-tab]', { dataset: { msgTab: 'friends' } });
+  assert.equal(getEl('msg-view-friends').hidden, false);
+  await win2.IponMessages.openWorkspace();
+  assert.equal(getEl('msg-view-chats').hidden, false, 'default openWorkspace must always land on Chats view');
+  assert.equal(getEl('msg-view-friends').hidden, true);
+  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), false, 'default openWorkspace must show Chats list instead of sticky thread');
 });
 
-test('migration 078 filters audit logs to meaningful governance/financial events and offline page embeds inline SVG logo', () => {
+test('migration 078 filters audit logs to meaningful governance/financial events and offline page omits broken logo', () => {
   const migration078 = read('database/migrations/20261115_078_filter_audit_log_signal_only.sql');
   const schema = read('database/schema.sql');
   const core = read('js/core.js');
@@ -7119,9 +7138,8 @@ test('migration 078 filters audit logs to meaningful governance/financial events
     assert.match(core, new RegExp(`'${noiseField}'`));
   }
 
-  assert.match(prepareMobile, /assets',\s*'favicon\.svg'/);
-  assert.match(prepareMobile, /class="offline-brand"/);
-  assert.doesNotMatch(prepareMobile, /<img[^>]+src="assets\/favicon\.svg"/);
+  assert.doesNotMatch(prepareMobile, /class="offline-brand"|favicon\.svg/);
+  assert.match(prepareMobile, /<h1>You appear to be offline<\/h1>/);
 });
 
 test('chat captionless media overlay and audit log calendar date-range chips meet UI reliability contracts', () => {
@@ -7214,4 +7232,356 @@ test('chat captionless media overlay and audit log calendar date-range chips mee
   assert.match(css, /\.msg-pop-primary-btn\s*\{[^}]*background:\s*#142620;/s);
   assert.match(css, /\.msg-pop-secondary-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(css, /html\[data-theme="dark"\]\s+\.msg-pop-groups-card\s*\{/);
+});
+
+test('friendlyError offline mapping, edge-to-edge pinch-zoom image viewer, native downloads, and microphone permission runtime contracts', async () => {
+  const coreJs = read('js/core.js');
+  const messagesJs = read('js/messages.js');
+  const css = read('css/app.css');
+  const mainActivity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
+  const infoPlist = read('ios/App/App/Info.plist');
+
+  // CSS edge-to-edge full-screen image viewer with Messenger overlay chrome & pinch touch-action
+  assert.match(css, /\.image-viewer-stage\s*\{[^}]*padding:\s*0;[^}]*touch-action:\s*none;/s);
+  assert.match(css, /\.image-viewer-stage img\s*\{[^}]*width:\s*100%;\s*height:\s*100%;[^}]*border-radius:\s*0;\s*border:\s*0;[^}]*object-fit:\s*contain;/s);
+  assert.match(css, /\.image-viewer-dialog\.is-chrome-hidden \.image-viewer-header\s*\{[^}]*opacity:\s*0;/s);
+
+  // Android & iOS native mic + download contracts
+  assert.match(mainActivity, /maybeRequestStartupPermissions\(/);
+  assert.match(mainActivity, /Manifest\.permission\.POST_NOTIFICATIONS[\s\S]*?Manifest\.permission\.RECORD_AUDIO/);
+  assert.match(mainActivity, /webView\.setDownloadListener\(/);
+  assert.match(bgPlugin, /Manifest\.permission\.RECORD_AUDIO,\s*Manifest\.permission\.MODIFY_AUDIO_SETTINGS[\s\S]*?alias\s*=\s*"microphone"/);
+  assert.match(bgPlugin, /public void ensureMicrophonePermission\(PluginCall call\)/);
+  assert.match(bgPlugin, /public void openAppSettings\(PluginCall call\)/);
+  assert.match(bgPlugin, /public void downloadFile\(PluginCall call\)/);
+  assert.match(bgPlugin, /DownloadManager\.Request/);
+  assert.match(bgPlugin, /MediaStore\.Downloads\.EXTERNAL_CONTENT_URI/);
+  assert.match(infoPlist, /NSMicrophoneUsageDescription/);
+  assert.match(messagesJs, /ensureMicrophoneAccess\(\)[\s\S]*?offerOpenAppSettingsForMic\(\)/);
+  assert.match(messagesJs, /downloadOriginalAttachment[\s\S]*?ipon\(\)\.downloadFile\(/);
+  assert.match(coreJs, /touchstart[\s\S]*?touchmove[\s\S]*?touchDist[\s\S]*?applyZoom/);
+
+  // Execute js/core.js in VM to verify friendlyError & Ipon.downloadFile runtime behavior
+  const makeNode = (tag) => ({
+    tagName: String(tag || 'DIV').toUpperCase(),
+    dataset: {},
+    style: { setProperty() {}, removeProperty() {} },
+    classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+    setAttribute() {},
+    removeAttribute() {},
+    addEventListener() {},
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    append() {},
+    prepend() {},
+    appendChild() {},
+    insertAdjacentHTML() {},
+    remove() {},
+    click() {}
+  });
+  const nativeDlCalls = [];
+  const webAnchors = [];
+  const navState = { onLine: false };
+  const docStub = {
+    body: Object.assign(makeNode('body'), {
+      appendChild(n) { webAnchors.push(n); return n; },
+      dataset: {}
+    }),
+    head: makeNode('head'),
+    documentElement: makeNode('html'),
+    createElement: (t) => makeNode(t),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: () => null,
+    addEventListener() {}
+  };
+  let blobReads = 0;
+  const ctx = {
+    URLSearchParams,
+    URL: {
+      createObjectURL: () => 'blob:mock-dl-1',
+      revokeObjectURL() {}
+    },
+    Blob: class { constructor(parts, opts) { this.parts = parts; this.type = opts?.type || ''; } },
+    FileReader: class {
+      readAsDataURL() { this.result = 'data:image/jpeg;base64,QUJD'; this.onload?.(); }
+    },
+    CustomEvent: class {},
+    Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, TypeError,
+    navigator: navState,
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/dashboard.html', pathname: '/dashboard.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    Capacitor: {
+      Plugins: {
+        BackgroundNotifications: {
+          downloadFile: async (args) => { nativeDlCalls.push(args); return { started: true, saved: false, fileName: args.fileName }; }
+        }
+      }
+    },
+    fetch: async () => {
+      blobReads += 1;
+      return { ok: true, status: 200, blob: async () => ({ type: 'image/jpeg' }) };
+    },
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {},
+    setTimeout,
+    clearTimeout,
+    document: docStub,
+    window: null,
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  // Offline & runtime error messages never leak TypeError: Failed to fetch
+  assert.equal(ctx.window.Ipon.friendlyError(new TypeError('Failed to fetch')), 'No internet connection. Please check your connection and try again.');
+  navState.onLine = true;
+  assert.equal(ctx.window.Ipon.friendlyError(new TypeError('Failed to fetch')), 'Something went wrong. Please check your internet connection and try again.');
+  assert.equal(ctx.window.Ipon.friendlyError({ message: 'TypeError: Failed to fetch' }), 'Something went wrong. Please check your internet connection and try again.');
+  assert.equal(ctx.window.Ipon.friendlyError(new Error('Load failed')), 'Something went wrong. Please check your internet connection and try again.');
+  assert.equal(ctx.window.Ipon.friendlyError({ message: "TypeError: Cannot read properties of undefined (reading 'x')" }), 'Something went wrong. Please try again.');
+  assert.equal(ctx.window.Ipon.friendlyError({ message: 'Record not found.' }), 'Record not found.');
+
+  // Native APK download path converts blob: to data: and passes safe fileName
+  await ctx.window.Ipon.downloadFile('https://woslmwokhhyszkgevnli.supabase.co/storage/v1/object/sign/chat/a.jpg', 'IMG/1026.jpeg');
+  assert.equal(nativeDlCalls.length, 1);
+  assert.equal(nativeDlCalls[0].fileName, 'IMG-1026.jpeg');
+  await ctx.window.Ipon.downloadFile('blob:https://myipon.example/123', 'preview.jpg');
+  assert.equal(blobReads, 1);
+  assert.equal(nativeDlCalls[1].url, 'data:image/jpeg;base64,QUJD');
+
+  // Web browser cross-origin download uses fetch -> blob: URL so <a download> works seamlessly
+  delete ctx.Capacitor.Plugins.BackgroundNotifications;
+  await ctx.window.Ipon.downloadFile('https://woslmwokhhyszkgevnli.supabase.co/storage/v1/object/sign/chat/a.jpg', 'photo.jpg');
+  assert.equal(blobReads, 2);
+  assert.equal(webAnchors[0].href, 'blob:mock-dl-1');
+  assert.equal(webAnchors[0].download, 'photo.jpg');
+});
+
+test('mobile APK background usage controls render in My account and auto-prompt new users once until granted', async () => {
+  const coreJs = read('js/core.js');
+  const accountHtml = read('account.html');
+  const accountJs = read('js/account.js');
+  const css = read('css/app.css');
+  const mainActivity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
+
+  assert.match(accountHtml, /data-device-background-row/);
+  assert.match(accountJs, /syncDevicePermissionUI/);
+  assert.match(coreJs, /id="account-dialog"[\s\S]*?data-device-background-row/);
+  assert.match(coreJs, /function maybePromptBackgroundUsage/);
+  assert.match(coreJs, /function requestBackgroundUsageAccess/);
+  assert.match(css, /\.preference-background-row\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+  assert.match(css, /\.bg-usage-dialog/);
+  assert.match(mainActivity, /public void onResume\(\)[\s\S]*?NotificationSyncService\.ensureStarted\(this\)/);
+  assert.match(bgPlugin, /result\.put\("alreadyIgnored",\s*alreadyIgnored\)/);
+  assert.match(bgPlugin, /ACTION_APPLICATION_DETAILS_SETTINGS/);
+
+  const makeMockEl = (tag = 'div') => {
+    const attrs = {};
+    const dataset = {};
+    const children = [];
+    let hidden = false;
+    let textContent = '';
+    const el = {
+      tagName: tag.toUpperCase(),
+      id: '',
+      className: '',
+      type: '',
+      open: false,
+      disabled: false,
+      dataset,
+      style: { setProperty() {}, removeProperty() {} },
+      get hidden() { return hidden; },
+      set hidden(v) { hidden = Boolean(v); if (hidden) attrs.hidden = ''; else delete attrs.hidden; },
+      get textContent() { return textContent; },
+      set textContent(v) { textContent = String(v ?? ''); },
+      set innerHTML(v) { el._html = String(v ?? ''); },
+      get innerHTML() { return el._html || ''; },
+      classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+      setAttribute(k, v) { attrs[k] = String(v); if (k === 'id') el.id = String(v); if (k === 'data-tone') dataset.tone = String(v); },
+      getAttribute(k) { return attrs[k] ?? null; },
+      hasAttribute(k) { return k in attrs; },
+      removeAttribute(k) { delete attrs[k]; },
+      addEventListener() {},
+      appendChild(child) { children.push(child); child.parentNode = el; return child; },
+      append(...nodes) { nodes.forEach((n) => el.appendChild(n)); },
+      prepend() {},
+      insertBefore(n) { return el.appendChild(n); },
+      insertAdjacentHTML() {},
+      dispatchEvent() { return true; },
+      showModal() { el.open = true; },
+      close() { el.open = false; },
+      remove() { el._removed = true; },
+      querySelector(sel) {
+        if (sel === '[data-device-bg-pill]') return el._pill || null;
+        if (sel === '[data-device-bg-status]') return el._status || null;
+        if (sel === '[data-device-bg-actions]') return el._actions || null;
+        if (sel === '[data-device-bg-btn]') return el._btn || null;
+        if (sel === '[data-bg-prompt-notif-badge]') return el._notifBadge || null;
+        if (sel === '[data-bg-prompt-battery-badge]') return el._batBadge || null;
+        if (sel === '[data-bg-prompt-allow]') return el._allowBtn || null;
+        if (sel === '[data-bg-prompt-settings]') return el._settingsBtn || null;
+        if (sel === '[data-bg-prompt-hint]') return el._hint || null;
+        return null;
+      },
+      querySelectorAll(sel) {
+        if (sel === '[data-device-bg-extra]') return children.filter((c) => c.hasAttribute('data-device-bg-extra') && !c._removed);
+        return [];
+      }
+    };
+    return el;
+  };
+
+  const buildBgRow = () => {
+    const row = makeMockEl('div');
+    row.hidden = true;
+    row._pill = makeMockEl('span');
+    row._status = makeMockEl('small');
+    row._actions = makeMockEl('div');
+    row._btn = makeMockEl('button');
+    row._actions.appendChild(row._btn);
+    return row;
+  };
+
+  const bgRow = buildBgRow();
+  let promptDialog = null;
+  const store = new Map();
+  let nativePermState = { hasPermission: false, batteryOptimizationIgnored: false, instantSyncEnabled: true, instantSyncRunning: false, androidSdk: 34 };
+  let capPermDisplay = 'prompt';
+  let requestPermCalls = 0;
+  let requestBatteryCalls = 0;
+  const toasts = [];
+  const loaderStub = makeMockEl('div');
+  const docStub = {
+    documentElement: makeMockEl('html'),
+    head: makeMockEl('head'),
+    body: Object.assign(makeMockEl('body'), {
+      dataset: {},
+      append(node) {
+        if (node?.id === 'background-usage-prompt-dialog') {
+          node._notifBadge = makeMockEl('span');
+          node._batBadge = makeMockEl('span');
+          node._allowBtn = makeMockEl('button');
+          node._settingsBtn = makeMockEl('button');
+          node._hint = makeMockEl('p');
+          promptDialog = node;
+        }
+      }
+    }),
+    createElement: (tag) => makeMockEl(tag),
+    getElementById: (id) => (
+      id === 'background-usage-prompt-dialog'
+        ? promptDialog
+        : (id === 'page-loader' ? loaderStub : makeMockEl('div'))
+    ),
+    querySelector: (sel) => (sel === 'dialog[open]' && promptDialog?.open ? promptDialog : null),
+    querySelectorAll: (sel) => (sel === '[data-device-background-row]' ? [bgRow] : []),
+    addEventListener() {}
+  };
+  const navStub = {
+    userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 myIPONApp/20',
+    onLine: true,
+    serviceWorker: null
+  };
+  const ctx = {
+    window: null,
+    document: docStub,
+    navigator: navStub,
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/dashboard.html', pathname: '/dashboard.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() {} },
+    localStorage: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => { store.set(k, String(v)); },
+      removeItem: (k) => { store.delete(k); }
+    },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    Capacitor: {
+      Plugins: {
+        LocalNotifications: {
+          checkPermissions: async () => ({ display: capPermDisplay }),
+          requestPermissions: async () => {
+            requestPermCalls += 1;
+            capPermDisplay = 'granted';
+            nativePermState.hasPermission = true;
+            return { display: 'granted' };
+          },
+          createChannel: async () => {}
+        },
+        BackgroundNotifications: {
+          getBackgroundStatus: async () => ({ ...nativePermState }),
+          requestSystemPermission: async () => ({ hasPermission: true }),
+          requestIgnoreBatteryOptimizations: async () => {
+            requestBatteryCalls += 1;
+            nativePermState.batteryOptimizationIgnored = true;
+            return { launched: true, alreadyIgnored: false };
+          },
+          openAppSettings: async () => ({ launched: true }),
+          openNotificationSettings: async () => ({ launched: true })
+        }
+      }
+    },
+    Notification: { permission: 'default' },
+    CustomEvent: class {},
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
+    setTimeout: (fn) => { if (typeof fn === 'function') fn(); return 0; },
+    clearTimeout() {},
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent(evt) { toasts.push(evt); },
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+  docStub.body.dataset.page = 'dashboard';
+
+  // 1. Desktop PC hides background usage row and does not prompt
+  const savedUa = navStub.userAgent;
+  const savedCap = ctx.Capacitor;
+  navStub.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
+  ctx.Capacitor = null;
+  await ctx.window.Ipon.syncDevicePermissionUI();
+  assert.equal(bgRow.hidden, true);
+  assert.equal(await ctx.window.Ipon.maybePromptBackgroundUsage({ id: 'u1', status: 'ACTIVE', notifications_enabled: true }, { immediate: true }), false);
+
+  // 2. Android APK shows row in My account and opens prompt once for new user
+  navStub.userAgent = savedUa;
+  ctx.Capacitor = savedCap;
+  await ctx.window.Ipon.syncDevicePermissionUI();
+  assert.equal(bgRow.hidden, false);
+  assert.equal(bgRow._pill.textContent, 'Needs access');
+  assert.equal(bgRow._btn.textContent, 'Allow background usage');
+
+  const openedFirst = await ctx.window.Ipon.maybePromptBackgroundUsage({ id: 'u-new-1', status: 'ACTIVE', notifications_enabled: true, first_name: 'Juan', last_name: 'Dela Cruz', contact_number: '09171234567' }, { immediate: true });
+  assert.equal(openedFirst, true);
+  assert.equal(promptDialog?.open, true);
+  assert.equal(store.get('myipon_bg_prompt_seen_u-new-1'), '1');
+
+  // Calling again does not re-open once seen
+  promptDialog.open = false;
+  const openedSecond = await ctx.window.Ipon.maybePromptBackgroundUsage({ id: 'u-new-1', status: 'ACTIVE', notifications_enabled: true, first_name: 'Juan', last_name: 'Dela Cruz', contact_number: '09171234567' }, { immediate: true });
+  assert.equal(openedSecond, false);
+
+  // 3. Granting both notification permission and background battery updates UI & closes prompt cleanly
+  promptDialog.open = true;
+  const outcome = await ctx.window.Ipon.requestBackgroundUsageAccess({ fromPrompt: true });
+  assert.equal(requestPermCalls, 1);
+  assert.equal(requestBatteryCalls, 1);
+  assert.equal(outcome.granted, true);
+  assert.equal(promptDialog.open, false);
+  assert.equal(bgRow._pill.textContent, 'Active');
+  assert.equal(bgRow._btn.textContent, 'Granted');
+  assert.equal(bgRow._btn.disabled, true);
+  assert.ok(bgRow._actions.querySelectorAll('[data-device-bg-extra]').some((b) => b.textContent === 'App settings'));
+
+  // 4. Restricted state when notifications ON but battery restriction ON
+  nativePermState.batteryOptimizationIgnored = false;
+  await ctx.window.Ipon.syncDevicePermissionUI();
+  assert.equal(bgRow._pill.textContent, 'Restricted');
+  assert.equal(bgRow._btn.textContent, 'Allow background usage');
+  assert.equal(bgRow._btn.disabled, false);
 });

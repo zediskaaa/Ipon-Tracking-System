@@ -90,6 +90,7 @@
     }
     emailForm.elements.email.value = profile.email || state.session.user.email || '';
     notificationToggle.checked = profile.notifications_enabled !== false;
+    Ipon.syncDevicePermissionUI?.().catch?.(() => { });
     const activities = activityResult.data || [];
     activityBody.innerHTML = activities.length ? activities.map((row) => `<tr><td>${Ipon.escapeHtml(row.event.replaceAll('_', ' ').toLowerCase().replace(/^./, (character) => character.toUpperCase()))}</td><td>${Ipon.dateLabel(row.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">No account activity recorded yet.</td></tr>';
     if (onboarding) {

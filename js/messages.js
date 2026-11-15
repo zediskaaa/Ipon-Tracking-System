@@ -563,15 +563,19 @@
       closeProfilePopover();
       closeFloatingMenus();
       document.querySelectorAll('#msg-messages-list video, #msg-messages-list audio').forEach((m) => { try { m.pause?.(); } catch { } });
-      if (typingChannel) {
-        try { ipon().client?.removeChannel(typingChannel); } catch { }
-        typingChannel = null;
-        state.typingChannelConvId = null;
-      }
+      if (typeof disconnectTypingChannel === 'function') disconnectTypingChannel();
       state.lastTypingState = false;
       state.lastTypingSentAt = 0;
     });
     document.getElementById('msg-scroll-wrap')?.addEventListener('scroll', closeFloatingMenus, { passive: true });
+  }
+
+  function disconnectTypingChannel() {
+    if (typingChannel) {
+      try { ipon().client?.removeChannel(typingChannel); } catch { }
+      typingChannel = null;
+      state.typingChannelConvId = null;
+    }
   }
 
   // Edge Storage helpers (raw lossless upload & XHR byte progress)
@@ -634,13 +638,17 @@
         download_name: fileName || 'attachment'
       });
       if (!downloadUrl) throw new Error('Download link unavailable.');
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = fileName || 'attachment';
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      if (typeof ipon().downloadFile === 'function') {
+        await ipon().downloadFile(downloadUrl, fileName || 'attachment');
+      } else {
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = fileName || 'attachment';
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
     } catch (error) {
       ipon().toast(ipon().friendlyError(error), 'error');
     }
@@ -2653,13 +2661,55 @@
   }
 
   // Voice Note Recording
+  async function ensureMicrophoneAccess() {
+    const bgPlugin = window.Capacitor?.Plugins?.BackgroundNotifications || null;
+    if (typeof bgPlugin?.ensureMicrophonePermission !== 'function') return { granted: true, native: false };
+    try {
+      const res = await bgPlugin.ensureMicrophonePermission();
+      return {
+        native: true,
+        granted: Boolean(res?.granted),
+        canAskAgain: res?.canAskAgain !== false
+      };
+    } catch {
+      return { granted: false, native: true, canAskAgain: true };
+    }
+  }
+
+  async function offerOpenAppSettingsForMic() {
+    const bgPlugin = window.Capacitor?.Plugins?.BackgroundNotifications || null;
+    if (typeof bgPlugin?.openAppSettings === 'function' && typeof ipon().confirmAction === 'function') {
+      const openSettings = await ipon().confirmAction({
+        title: 'Microphone access needed',
+        message: 'Allow microphone permission in your phone settings to record and send voice messages.',
+        confirmLabel: 'Open Settings',
+        cancelLabel: 'Not now'
+      });
+      if (openSettings) await bgPlugin.openAppSettings().catch(() => { });
+      return true;
+    }
+    return false;
+  }
+
   async function startVoiceRecording() {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       return ipon().toast('Voice recording is not supported on this device or browser.', 'error');
     }
+    const nativeMic = await ensureMicrophoneAccess();
+    if (nativeMic.native && !nativeMic.granted) {
+      if (!nativeMic.canAskAgain) {
+        const offered = await offerOpenAppSettingsForMic();
+        if (offered) return;
+      }
+      return ipon().toast('Please allow microphone access to record a voice message.', 'error');
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : (MediaRecorder.isTypeSupported('audio/ogg')
+          ? 'audio/ogg'
+          : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : ''));
       const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       state.voiceRecorder = rec;
       state.voiceChunks = [];
@@ -2676,7 +2726,12 @@
         if (timerEl) timerEl.textContent = `Recording ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
       }, 350);
     } catch (err) {
-      ipon().toast(err?.name === 'NotAllowedError' ? 'Microphone access was denied.' : ipon().friendlyError(err), 'error');
+      if (err?.name === 'NotAllowedError') {
+        const offered = await offerOpenAppSettingsForMic();
+        if (offered) return;
+        return ipon().toast('Microphone access is blocked. Allow microphone permission in your browser or phone settings and try again.', 'error');
+      }
+      ipon().toast(ipon().friendlyError(err), 'error');
     }
   }
 
@@ -2898,12 +2953,42 @@
     renderConversationList();
   }
 
+  function clearActiveThreadSelection() {
+    disconnectTypingChannel();
+    state.activeConvId = null;
+    state.activeThread = null;
+    state.replyToMsg = null;
+    state.editingMsg = null;
+    state.threadSearchActive = false;
+    state.threadSearchQuery = '';
+    state.threadSearchMatches = [];
+    state.infoOpen = false;
+    document.getElementById('msg-thread-pane')?.classList.remove('has-info-open');
+    const infoDrawer = document.getElementById('msg-info-drawer');
+    if (infoDrawer) infoDrawer.hidden = true;
+    const activePane = document.getElementById('msg-thread-active');
+    const emptyPane = document.getElementById('msg-thread-empty');
+    if (activePane) activePane.hidden = true;
+    if (emptyPane) emptyPane.hidden = false;
+  }
+
   function switchTab(nextTab) {
+    closeFloatingMenus();
+    closeProfilePopover();
     if (nextTab === 'discover') {
       activateSidebarSearch(true);
       return;
     }
     state.tab = nextTab;
+    if (nextTab === 'chats' || nextTab === 'requests') {
+      state.mobileShowThread = false;
+      syncMobilePaneState();
+      const activeConv = state.activeThread?.conversation;
+      const isReq = Boolean(activeConv?.is_incoming_request);
+      if (state.activeConvId && activeConv && ((nextTab === 'requests' && !isReq) || (nextTab === 'chats' && isReq))) {
+        clearActiveThreadSelection();
+      }
+    }
     syncTabUi();
 
     if (nextTab === 'chats' || nextTab === 'requests') {
@@ -4037,19 +4122,28 @@
     ensureDialogsMounted();
     const dialog = document.getElementById('msg-workspace-dialog');
     if (!dialog) return;
+    const defaultLanding = !tab && !conversationId;
+    const targetTab = tab || 'chats';
     if (!dialog.open) dialog.showModal();
-    if (tab) switchTab(tab);
+    if (defaultLanding) {
+      clearSidebarSearch();
+      clearActiveThreadSelection();
+    }
+    switchTab(targetTab);
     if (!state.conversationsLoaded && !state.conversations.length) {
       state.loadingConvs = true;
       renderConversationList();
     }
     await Promise.all([refreshConversations(), refreshOverview(), refreshSocialNotifications()]);
-    if (tab) switchTab(tab);
-    else renderConversationList();
     if (conversationId) {
+      switchTab(targetTab);
       await openConversation(conversationId, { aroundMessageId: messageId });
-    } else if (state.activeConvId && state.activeThread?.conversation) {
-      await openConversation(state.activeConvId, { silent: true, markRead: true });
+    } else {
+      syncTabUi();
+      syncMobilePaneState();
+      if (state.tab === 'friends') renderFriendsView();
+      else if (state.tab === 'notifications') renderAlertsView();
+      else renderConversationList();
     }
   }
 

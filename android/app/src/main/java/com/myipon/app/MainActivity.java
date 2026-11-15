@@ -10,11 +10,15 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.View;
+import android.webkit.URLUtil;
 import android.webkit.WebView;
+import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends BridgeActivity {
     @Override
@@ -32,6 +36,18 @@ public class MainActivity extends BridgeActivity {
             if (webView.getParent() instanceof View) {
                 ((View) webView.getParent()).setBackgroundColor(emeraldBg);
             }
+            webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+                if (url == null || (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("data:"))) {
+                    return;
+                }
+                try {
+                    String suggested = URLUtil.guessFileName(url, contentDisposition, mimetype);
+                    BackgroundNotificationsPlugin.enqueueSystemDownload(MainActivity.this, url, suggested, mimetype);
+                    Toast.makeText(MainActivity.this, "Downloading " + suggested, Toast.LENGTH_SHORT).show();
+                } catch (Throwable err) {
+                    Toast.makeText(MainActivity.this, "Unable to start download.", Toast.LENGTH_SHORT).show();
+                }
+            });
         }
         splashScreen.setKeepOnScreenCondition(() -> {
             final long elapsed = SystemClock.uptimeMillis() - splashStartMs;
@@ -40,7 +56,7 @@ public class MainActivity extends BridgeActivity {
             return elapsed < 250L || webView.getProgress() < 80;
         });
         NotificationPollReceiver.ensureChannel(this);
-        maybeRequestPostNotifications();
+        maybeRequestStartupPermissions();
         NotificationSyncService.ensureStarted(this);
         NotificationSyncWorker.ensureScheduled(this);
         handleNotificationIntent(getIntent());
@@ -53,6 +69,13 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        NotificationSyncService.ensureStarted(this);
+        NotificationSyncWorker.ensureScheduled(this);
+    }
+
+    @Override
     public void onStop() {
         super.onStop();
         NotificationSyncService.ensureStarted(this);
@@ -60,16 +83,25 @@ public class MainActivity extends BridgeActivity {
         NotificationPollReceiver.scheduleNext(this, 30_000L);
     }
 
-    private void maybeRequestPostNotifications() {
-        if (Build.VERSION.SDK_INT < 33) return;
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-            == PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
+    private void maybeRequestStartupPermissions() {
         SharedPreferences prefs = getSharedPreferences(NotificationPollReceiver.PREFS_NAME, MODE_PRIVATE);
-        if (!prefs.getBoolean("native_perm_asked", false)) {
-            prefs.edit().putBoolean("native_perm_asked", true).apply();
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1001);
+        if (prefs.getBoolean("native_perm_asked", false)) return;
+        prefs.edit()
+            .putBoolean("native_perm_asked", true)
+            .putBoolean("native_mic_perm_asked", true)
+            .apply();
+        List<String> needed = new ArrayList<>();
+        if (Build.VERSION.SDK_INT >= 33
+            && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.POST_NOTIFICATIONS);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.RECORD_AUDIO);
+        }
+        if (!needed.isEmpty()) {
+            ActivityCompat.requestPermissions(this, needed.toArray(new String[0]), 1001);
         }
     }
 

@@ -1544,7 +1544,7 @@
           <div class="account-dialog-content">
             <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
-            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label></section></div>
+            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Background usage</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device access for closed-app messages and alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div></section></div>
             <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
           </div>
         </div>
@@ -2441,6 +2441,7 @@
       profileForm.elements.contact_number.value = data.contact_number || '';
       setPayoutFields(profileForm, payoutSource);
       emailForm.elements.email.value = data.email || '';
+      if (currentProfile) currentProfile.notifications_enabled = data.notifications_enabled !== false;
       document.getElementById('quick-notifications-enabled').checked = data.notifications_enabled !== false;
       document.getElementById('quick-account-name').textContent = data.full_name;
       document.getElementById('quick-account-role').textContent = currentProfile.role === 'SUPER_ADMIN' ? 'Owner' : (data.email || 'My account');
@@ -2455,8 +2456,9 @@
   async function openAccountDialog() {
     const dialog = document.getElementById('account-dialog');
     if (!dialog || !currentProfile) return;
+    bindDeviceNotificationControls();
     dialog.showModal();
-    try { await Promise.all([loadAccountDialog(), quickMfaController?.load()]); }
+    try { await Promise.all([loadAccountDialog(), quickMfaController?.load(), syncDevicePermissionUI()]); }
     catch (error) { toast(friendlyError(error), 'error'); }
   }
 
@@ -3273,16 +3275,22 @@
     return notifStatus !== 'unsupported' ? notifStatus : (permApiStatus !== 'unsupported' ? permApiStatus : pushPermStatus);
   }
 
-  async function syncDevicePermissionUI() {
-    const rows = document.querySelectorAll('[data-device-notif-row]');
-    const bar = document.getElementById('notification-permission-bar');
-    if (!isMobileDeviceNotifClient()) {
-      rows.forEach((row) => { row.hidden = true; });
-      if (bar) {
-        bar.hidden = true;
-        bar.textContent = '';
-      }
-      return;
+  let lastBgGrantedToastAt = 0;
+
+  async function collectDeviceBackgroundSnapshot() {
+    const isMobile = isMobileDeviceNotifClient();
+    if (!isMobile) {
+      return {
+        isMobile: false,
+        isApp: false,
+        needsApkUpdate: false,
+        status: 'unsupported',
+        nativeBgStatus: null,
+        batteryKnown: true,
+        batteryOk: true,
+        pushState: { supported: false, subscribed: false },
+        isIosBrowser: false
+      };
     }
     const status = await getDeviceNotificationPermission();
     const isApp = isInstalledAppUser();
@@ -3292,6 +3300,8 @@
     if (isApp && bgPlugin?.getBackgroundStatus) {
       nativeBgStatus = await bgPlugin.getBackgroundStatus().catch(() => null);
     }
+    const batteryKnown = !isApp || Boolean(nativeBgStatus && typeof nativeBgStatus.batteryOptimizationIgnored === 'boolean');
+    const batteryOk = !isApp || !nativeBgStatus || nativeBgStatus.batteryOptimizationIgnored !== false;
     let pushState = !isApp && status === 'granted'
       ? await getWebPushState()
       : { supported: !isApp && Boolean(config.vapidPublicKey) && 'PushManager' in window, subscribed: false };
@@ -3307,6 +3317,394 @@
 
     const isIosBrowser = !isApp && /iphone|ipad|ipod/i.test(navigator.userAgent || '')
       && !(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true);
+
+    return {
+      isMobile,
+      isApp,
+      needsApkUpdate,
+      status,
+      nativeBgStatus,
+      batteryKnown,
+      batteryOk,
+      pushState,
+      isIosBrowser
+    };
+  }
+
+  function syncBackgroundRowsUI(bgRows, snap) {
+    bgRows.forEach((row) => {
+      if (!snap.isMobile) {
+        row.hidden = true;
+        return;
+      }
+      const pillEl = row.querySelector('[data-device-bg-pill]');
+      const statusEl = row.querySelector('[data-device-bg-status]');
+      const actionsEl = row.querySelector('[data-device-bg-actions]');
+      const button = row.querySelector('[data-device-bg-btn]');
+      if (!pillEl || !statusEl || !actionsEl || !button) return;
+
+      actionsEl.querySelectorAll('[data-device-bg-extra]').forEach((el) => el.remove());
+      const addExtra = (labelText, attrs = {}) => {
+        const extra = document.createElement('button');
+        extra.type = 'button';
+        extra.className = 'button button-secondary button-sm';
+        extra.textContent = labelText;
+        extra.setAttribute('data-device-bg-extra', '');
+        Object.entries(attrs).forEach(([k, v]) => extra.setAttribute(k, v));
+        actionsEl.appendChild(extra);
+        return extra;
+      };
+      const setPill = (text, tone) => {
+        pillEl.textContent = text;
+        pillEl.dataset.tone = tone;
+      };
+
+      if (snap.isApp) {
+        row.hidden = false;
+        if (snap.needsApkUpdate) {
+          setPill('Update APK', 'warning');
+          statusEl.textContent = 'Update to the latest myIPON APK to enable unrestricted background usage and closed-app alerts.';
+          button.textContent = 'Update APK';
+          button.className = 'button button-primary button-sm';
+          button.dataset.bgAction = 'update-apk';
+          button.disabled = false;
+          button.hidden = false;
+        } else if (snap.status === 'granted' && snap.batteryKnown && snap.batteryOk) {
+          setPill('Active', 'success');
+          statusEl.textContent = 'Background usage and notifications are active. Messages and alerts arrive whenever your phone is on, even when myIPON is closed.';
+          button.textContent = 'Granted';
+          button.className = 'button button-secondary button-sm';
+          delete button.dataset.bgAction;
+          button.disabled = true;
+          button.hidden = false;
+          addExtra('App settings', { 'data-bg-action': 'app-settings' });
+          if (currentProfile?.notifications_enabled !== false) {
+            addExtra('Test alert', { 'data-device-test-btn': '' });
+          }
+        } else if (snap.status === 'granted' && !snap.batteryOk) {
+          setPill('Restricted', 'warning');
+          statusEl.textContent = 'Notifications are on, but Android battery restriction is active. Allow unrestricted background usage so alerts stay active when myIPON is closed.';
+          button.textContent = 'Allow background usage';
+          button.className = 'button button-primary button-sm';
+          button.dataset.bgAction = 'allow-background';
+          button.disabled = false;
+          button.hidden = false;
+          addExtra('App settings', { 'data-bg-action': 'app-settings' });
+        } else if (snap.status === 'granted') {
+          setPill('Check access', 'neutral');
+          statusEl.textContent = 'Device notifications are active. Verify Battery is set to Unrestricted in App settings so alerts arrive when closed.';
+          button.textContent = 'App settings';
+          button.className = 'button button-secondary button-sm';
+          button.dataset.bgAction = 'app-settings';
+          button.disabled = false;
+          button.hidden = false;
+          addExtra('Recheck', { 'data-bg-action': 'recheck' });
+        } else if (snap.status === 'default') {
+          setPill('Needs access', 'warning');
+          statusEl.textContent = snap.batteryOk
+            ? 'Device notifications are off. Allow alerts so messages and updates appear even when myIPON is closed.'
+            : 'Allow notifications and unrestricted background usage so messages and alerts keep arriving when myIPON is closed.';
+          button.textContent = snap.batteryOk ? 'Turn on alerts' : 'Allow background usage';
+          button.className = 'button button-primary button-sm';
+          button.dataset.bgAction = 'allow-all';
+          button.disabled = false;
+          button.hidden = false;
+          if (!snap.batteryOk) addExtra('App settings', { 'data-bg-action': 'app-settings' });
+        } else {
+          setPill('Blocked', 'danger');
+          statusEl.textContent = !snap.batteryOk
+            ? 'Notifications and background battery access are blocked in Android settings. Open App settings, allow Notifications, and set Battery to Unrestricted.'
+            : 'Device notifications are blocked in Android settings. Open App settings, allow Notifications, then tap Recheck.';
+          button.textContent = 'Open settings';
+          button.className = 'button button-primary button-sm';
+          button.dataset.bgAction = !snap.batteryOk ? 'app-settings' : 'notif-settings';
+          button.disabled = false;
+          button.hidden = false;
+          addExtra('Recheck', { 'data-bg-action': 'recheck' });
+        }
+        return;
+      }
+
+      if (snap.status === 'insecure' || (!snap.pushState?.supported && !snap.isIosBrowser && snap.status === 'unsupported')) {
+        row.hidden = true;
+        return;
+      }
+      row.hidden = false;
+      if (snap.isIosBrowser) {
+        setPill('Add to Home', 'neutral');
+        statusEl.textContent = 'On iPhone/iPad, tap Share -> Add to Home Screen, then open myIPON to enable closed-app alerts.';
+        button.hidden = true;
+      } else if (snap.status === 'granted' && snap.pushState?.subscribed) {
+        setPill('Active', 'success');
+        statusEl.textContent = 'Background push alerts are active even when this tab or browser is closed.';
+        button.textContent = 'On';
+        button.className = 'button button-secondary button-sm';
+        delete button.dataset.bgAction;
+        button.disabled = true;
+        button.hidden = false;
+        if (currentProfile?.notifications_enabled !== false) {
+          addExtra('Test alert', { 'data-device-test-btn': '' });
+        }
+      } else if (snap.status === 'granted' && snap.pushState?.supported) {
+        setPill('Finish setup', 'warning');
+        statusEl.textContent = 'Notifications are allowed. Tap Finish setup to sync background alerts for closed tabs.';
+        button.textContent = 'Finish setup';
+        button.className = 'button button-primary button-sm';
+        button.dataset.bgAction = 'sync-push';
+        button.disabled = false;
+        button.hidden = false;
+      } else if (snap.status === 'denied') {
+        setPill('Blocked', 'danger');
+        statusEl.textContent = 'Browser notifications are blocked for this site. Allow notifications in site settings, then tap Recheck.';
+        button.textContent = 'How to unblock';
+        button.className = 'button button-primary button-sm';
+        button.dataset.bgAction = 'unblock-help';
+        button.disabled = false;
+        button.hidden = false;
+        addExtra('Recheck', { 'data-bg-action': 'recheck' });
+      } else {
+        setPill('Off', 'warning');
+        statusEl.textContent = 'Turn on browser notifications so message and group alerts reach this device when closed.';
+        button.textContent = 'Turn on';
+        button.className = 'button button-primary button-sm';
+        button.dataset.bgAction = 'enable-notif';
+        button.disabled = false;
+        button.hidden = false;
+      }
+    });
+  }
+
+  function markBackgroundPromptSeen(userId) {
+    if (!userId) return;
+    try { localStorage.setItem(`myipon_bg_prompt_seen_${userId}`, '1'); } catch { /* ignore storage quota errors */ }
+  }
+
+  function syncBackgroundUsagePrompt(snap) {
+    const dialog = document.getElementById('background-usage-prompt-dialog');
+    if (!dialog || !snap) return;
+    const notifBadge = dialog.querySelector('[data-bg-prompt-notif-badge]');
+    const batteryBadge = dialog.querySelector('[data-bg-prompt-battery-badge]');
+    const allowBtn = dialog.querySelector('[data-bg-prompt-allow]');
+    const settingsBtn = dialog.querySelector('[data-bg-prompt-settings]');
+    const hintEl = dialog.querySelector('[data-bg-prompt-hint]');
+    if (notifBadge) {
+      if (snap.status === 'granted') {
+        notifBadge.textContent = 'Allowed';
+        notifBadge.dataset.tone = 'success';
+      } else if (snap.status === 'denied') {
+        notifBadge.textContent = 'Blocked';
+        notifBadge.dataset.tone = 'danger';
+      } else {
+        notifBadge.textContent = 'Required';
+        notifBadge.dataset.tone = 'warning';
+      }
+    }
+    if (batteryBadge) {
+      if (snap.batteryOk) {
+        batteryBadge.textContent = 'Unrestricted';
+        batteryBadge.dataset.tone = 'success';
+      } else {
+        batteryBadge.textContent = 'Required';
+        batteryBadge.dataset.tone = 'warning';
+      }
+    }
+    const allDone = snap.status === 'granted' && snap.batteryOk;
+    if (allowBtn) {
+      allowBtn.textContent = allDone
+        ? 'Done'
+        : (snap.status === 'denied' && snap.batteryOk
+          ? 'Open notification settings'
+          : (snap.status === 'denied' ? 'Open app settings' : 'Allow background usage'));
+    }
+    if (settingsBtn) {
+      settingsBtn.hidden = !(snap.status === 'denied' || (dialog.dataset.attempted === '1' && !snap.batteryOk));
+    }
+    if (hintEl) {
+      if (dialog.dataset.attempted === '1' && !allDone) {
+        hintEl.textContent = snap.status === 'denied'
+          ? 'Notifications are blocked in Android Settings. Tap Open app settings, allow Notifications, and set Battery to Unrestricted.'
+          : 'If your phone did not switch battery usage automatically, tap Open app settings -> Battery -> Unrestricted.';
+      } else {
+        hintEl.textContent = 'You can review or change this anytime in My account -> Appearance & notifications.';
+      }
+    }
+  }
+
+  function ensureBackgroundUsagePromptDialog() {
+    let dialog = document.getElementById('background-usage-prompt-dialog');
+    if (dialog) return dialog;
+    dialog = document.createElement('dialog');
+    dialog.id = 'background-usage-prompt-dialog';
+    dialog.className = 'form-dialog bg-usage-dialog';
+    dialog.setAttribute('aria-labelledby', 'bg-usage-prompt-title');
+    dialog.innerHTML = `
+      <div class="form-dialog-sheet bg-usage-sheet">
+        <header class="form-dialog-header bg-usage-header">
+          <div>
+            <h2 id="bg-usage-prompt-title">Keep alerts active when closed</h2>
+            <p>Allow myIPON to run while your phone is on so new messages and alerts never get missed.</p>
+          </div>
+          <button class="dialog-close" type="button" data-bg-prompt-close aria-label="Close background usage prompt">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </header>
+        <div class="bg-usage-body">
+          <div class="bg-usage-checklist">
+            <div class="bg-usage-item">
+              <div>
+                <strong>Device notifications</strong>
+                <small>Deliver chat messages, approvals, and payment reminders in your notification drawer.</small>
+              </div>
+              <span class="bg-access-pill" data-bg-prompt-notif-badge data-tone="warning">Required</span>
+            </div>
+            <div class="bg-usage-item">
+              <div>
+                <strong>Unrestricted background usage</strong>
+                <small>Stay connected whenever your device is powered on, even after closing the app.</small>
+              </div>
+              <span class="bg-access-pill" data-bg-prompt-battery-badge data-tone="warning">Required</span>
+            </div>
+          </div>
+          <p class="bg-usage-hint" data-bg-prompt-hint>You can review or change this anytime in My account -&gt; Appearance &amp; notifications.</p>
+          <div class="form-actions bg-usage-actions">
+            <button class="button button-secondary" type="button" data-bg-prompt-dismiss>Maybe later</button>
+            <button class="button button-secondary" type="button" data-bg-prompt-settings hidden>Open app settings</button>
+            <button class="button button-primary" type="button" data-bg-prompt-allow>Allow background usage</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.append(dialog);
+    const closePrompt = () => {
+      markBackgroundPromptSeen(currentProfile?.id);
+      dialog.close?.();
+    };
+    dialog.querySelector('[data-bg-prompt-close]')?.addEventListener('click', closePrompt);
+    dialog.querySelector('[data-bg-prompt-dismiss]')?.addEventListener('click', closePrompt);
+    dialog.addEventListener('cancel', () => { markBackgroundPromptSeen(currentProfile?.id); });
+    dialog.querySelector('[data-bg-prompt-settings]')?.addEventListener('click', async () => {
+      markBackgroundPromptSeen(currentProfile?.id);
+      dialog.dataset.attempted = '1';
+      await getBackgroundNotificationsPlugin()?.openAppSettings?.().catch?.(() => null);
+    });
+    dialog.querySelector('[data-bg-prompt-allow]')?.addEventListener('click', async (event) => {
+      const btn = event.currentTarget;
+      markBackgroundPromptSeen(currentProfile?.id);
+      dialog.dataset.attempted = '1';
+      btn.disabled = true;
+      try {
+        await requestBackgroundUsageAccess({ fromPrompt: true });
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    return dialog;
+  }
+
+  async function openBackgroundUsagePrompt(snapOverride = null) {
+    bindDeviceNotificationControls();
+    const snap = snapOverride || await collectDeviceBackgroundSnapshot();
+    const dialog = ensureBackgroundUsagePromptDialog();
+    syncBackgroundUsagePrompt(snap);
+    if (!dialog.open) dialog.showModal?.();
+    return dialog;
+  }
+
+  async function requestBackgroundUsageAccess({ fromPrompt = false } = {}) {
+    if (!isInstalledAppUser()) {
+      const status = await requestDeviceNotificationPermission({ userInitiated: true });
+      return {
+        notificationPermission: status,
+        batteryOptimizationIgnored: true,
+        granted: status === 'granted'
+      };
+    }
+    if (!hasNativeNotificationBridge()) {
+      window.open(APK_LATEST_DOWNLOAD_URL, '_blank', 'noopener');
+      return { notificationPermission: 'unsupported', batteryOptimizationIgnored: false, granted: false, needsApkUpdate: true };
+    }
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    let perm = await getDeviceNotificationPermission().catch(() => 'unsupported');
+    if (perm === 'default') {
+      perm = await requestDeviceNotificationPermission({ userInitiated: true }).catch(() => perm);
+    }
+    let bgStatus = bgPlugin?.getBackgroundStatus
+      ? await bgPlugin.getBackgroundStatus().catch(() => null)
+      : null;
+    if (bgStatus && bgStatus.batteryOptimizationIgnored === false && bgPlugin?.requestIgnoreBatteryOptimizations) {
+      await new Promise((resolve) => setTimeout(resolve, perm === 'granted' ? 160 : 280));
+      const batRes = await bgPlugin.requestIgnoreBatteryOptimizations().catch(() => null);
+      if (!batRes?.launched && !batRes?.alreadyIgnored) {
+        await bgPlugin.openAppSettings?.().catch?.(() => { });
+      }
+      bgStatus = bgPlugin?.getBackgroundStatus
+        ? await bgPlugin.getBackgroundStatus().catch(() => bgStatus)
+        : bgStatus;
+    } else if (perm === 'denied') {
+      const notifSettings = await bgPlugin?.openNotificationSettings?.().catch?.(() => null);
+      if (!notifSettings?.launched) {
+        await bgPlugin?.openAppSettings?.().catch?.(() => { });
+      }
+    }
+    const latestSnap = await syncDevicePermissionUI().catch(() => null);
+    const latestPerm = latestSnap?.status || perm;
+    const batteryOk = latestSnap ? latestSnap.batteryOk : (!bgStatus || bgStatus.batteryOptimizationIgnored !== false);
+    if (latestPerm === 'granted' && currentProfile) {
+      lastBgPollSyncAt = 0;
+      await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+    }
+    if (latestPerm === 'granted' && batteryOk) {
+      if (fromPrompt) {
+        document.getElementById('background-usage-prompt-dialog')?.close?.();
+      }
+      if (Date.now() - lastBgGrantedToastAt > 1200) {
+        lastBgGrantedToastAt = Date.now();
+        toast('Background usage and alerts are active even when myIPON is closed.');
+      }
+    }
+    return {
+      notificationPermission: latestPerm,
+      batteryOptimizationIgnored: batteryOk,
+      granted: latestPerm === 'granted' && batteryOk
+    };
+  }
+
+  async function maybePromptBackgroundUsage(profile = currentProfile, { immediate = false, force = false } = {}) {
+    if (!profile || profile.status !== 'ACTIVE' || profile.notifications_enabled === false) return false;
+    if (!isInstalledAppUser() || !hasNativeNotificationBridge()) return false;
+    if (document.body.classList.contains('security-page') || document.body.dataset.page === 'account' || profileNeedsSetup(profile)) {
+      return false;
+    }
+    const seenKey = `myipon_bg_prompt_seen_${profile.id}`;
+    if (!force && localStorage.getItem(seenKey)) return false;
+    const snap = await collectDeviceBackgroundSnapshot().catch(() => null);
+    if (!snap || (snap.status === 'granted' && (!snap.batteryKnown || snap.batteryOk))) return false;
+    if (!immediate) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+    if (document.querySelector('dialog[open]')) return false;
+    markBackgroundPromptSeen(profile.id);
+    await openBackgroundUsagePrompt(snap);
+    return true;
+  }
+
+  async function syncDevicePermissionUI() {
+    const rows = document.querySelectorAll('[data-device-notif-row]');
+    const bgRows = document.querySelectorAll('[data-device-background-row]');
+    const bar = document.getElementById('notification-permission-bar');
+    const snap = await collectDeviceBackgroundSnapshot();
+    syncBackgroundRowsUI(bgRows, snap);
+    if (document.getElementById('background-usage-prompt-dialog')?.open) {
+      syncBackgroundUsagePrompt(snap);
+    }
+    if (!snap.isMobile) {
+      rows.forEach((row) => { row.hidden = true; });
+      if (bar) {
+        bar.hidden = true;
+        bar.textContent = '';
+      }
+      return snap;
+    }
+    const { status, isApp, needsApkUpdate, nativeBgStatus, pushState, isIosBrowser } = snap;
 
     rows.forEach((row) => {
       row.hidden = false;
@@ -3370,7 +3768,7 @@
           actionsWrap.appendChild(testBtn);
         }
       } else if (status === 'denied') {
-        const canOpenNativeSettings = isApp && Boolean(bgPlugin?.openNotificationSettings);
+        const canOpenNativeSettings = isApp && Boolean(getBackgroundNotificationsPlugin()?.openNotificationSettings);
         label.textContent = canOpenNativeSettings
           ? 'Device permission: Blocked in Android settings — open settings, turn on Notifications, then tap Recheck.'
           : 'Device permission: Blocked in browser settings — allow notifications for this site, then tap Recheck.';
@@ -3406,6 +3804,7 @@
     });
 
     if (bar) {
+      const bgPlugin = getBackgroundNotificationsPlugin();
       if (needsApkUpdate) {
         bar.hidden = false;
         bar.innerHTML = '<span>Update your installed APK to enable closed-app background alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Update APK</button>';
@@ -3431,6 +3830,7 @@
         bar.textContent = '';
       }
     }
+    return snap;
   }
 
   async function requestDeviceNotificationPermission({ userInitiated = false, nativePromptPromise = null } = {}) {
@@ -3528,6 +3928,89 @@
     return status;
   }
 
+  async function handleBackgroundRowAction(button) {
+    const action = button?.dataset?.bgAction;
+    if (!action) return;
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    if (action === 'update-apk') {
+      window.open(APK_LATEST_DOWNLOAD_URL, '_blank', 'noopener');
+      return;
+    }
+    if (action === 'allow-all' || action === 'allow-background') {
+      button.disabled = true;
+      try {
+        await requestBackgroundUsageAccess();
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+    if (action === 'app-settings') {
+      const outcome = await bgPlugin?.openAppSettings?.().catch?.(() => null);
+      if (!outcome?.launched) openNotificationUnblockGuide();
+      return;
+    }
+    if (action === 'notif-settings') {
+      const outcome = await bgPlugin?.openNotificationSettings?.().catch?.(() => null);
+      if (!outcome?.launched) {
+        const fallback = await bgPlugin?.openAppSettings?.().catch?.(() => null);
+        if (!fallback?.launched) openNotificationUnblockGuide();
+      }
+      return;
+    }
+    if (action === 'recheck') {
+      button.disabled = true;
+      try {
+        const snap = await syncDevicePermissionUI();
+        if (snap?.status === 'granted' && (!snap.isApp || snap.batteryOk)) {
+          if (currentProfile) {
+            lastBgPollSyncAt = 0;
+            await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+          }
+          toast('Background usage and alerts are active even when myIPON is closed.');
+        } else if (snap?.isApp && snap.status === 'granted' && !snap.batteryOk) {
+          toast('Battery restriction is still active. Set Battery to Unrestricted in App settings.', 'error');
+        } else {
+          toast('Notifications are still off. Allow Notifications in settings, then tap Recheck.', 'error');
+        }
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+    if (action === 'unblock-help') {
+      openNotificationUnblockGuide();
+      return;
+    }
+    if (action === 'sync-push') {
+      button.disabled = true;
+      try {
+        const ok = await syncWebPushSubscription({ force: true });
+        await syncDevicePermissionUI();
+        if (ok) toast('Background push notifications enabled for closed tabs.');
+        else toast('Could not register background push on this browser.', 'error');
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+    if (action === 'enable-notif') {
+      const nativePromptPromise = (!hasNativeNotificationBridge() && window.isSecureContext !== false
+        && 'Notification' in window && Notification.permission === 'default')
+        ? Promise.resolve(Notification.requestPermission()).catch(() => Notification.permission)
+        : null;
+      button.disabled = true;
+      const result = await requestDeviceNotificationPermission({ userInitiated: true, nativePromptPromise });
+      if (result === 'granted') {
+        toast('Background notification alerts enabled.');
+      } else if (result === 'denied') {
+        toast('Notifications are blocked in your device or browser settings.', 'error');
+      } else {
+        toast('Click Turn on and choose Allow when your browser asks for notifications.', 'error');
+      }
+    }
+  }
+
   function bindDeviceNotificationControls() {
     if (!document.body.dataset.boundDeviceNotifDelegation) {
       document.body.dataset.boundDeviceNotifDelegation = 'true';
@@ -3536,18 +4019,40 @@
         const wasNotGranted = Boolean(document.querySelector(
           '[data-action-mode="unblock-help"],[data-action-mode="open-settings"],[data-device-notif-row] [data-device-notif-btn]:not([data-action-mode]):not([disabled])'
         ));
-        const status = await getDeviceNotificationPermission().catch(() => 'unsupported');
+        const promptOpen = Boolean(document.getElementById('background-usage-prompt-dialog')?.open);
+        const bgRowPending = Boolean(document.querySelector('[data-device-background-row]:not([hidden]) [data-device-bg-pill]:not([data-tone="success"])'));
+        const snap = await syncDevicePermissionUI().catch(() => null);
+        const status = snap?.status || await getDeviceNotificationPermission().catch(() => 'unsupported');
+        const fullBgGranted = Boolean(snap && snap.status === 'granted' && (!snap.isApp || (snap.batteryKnown && snap.batteryOk)));
         if (wasNotGranted && status === 'granted') {
           await requestDeviceNotificationPermission({ userInitiated: false }).catch(() => { });
           document.getElementById('notification-unblock-dialog')?.close?.();
-          toast('Background notification alerts enabled.');
-        } else {
-          await syncDevicePermissionUI().catch(() => { });
+        }
+        if ((promptOpen || bgRowPending || wasNotGranted) && fullBgGranted) {
+          if (promptOpen) {
+            document.getElementById('background-usage-prompt-dialog')?.close?.();
+          }
+          document.getElementById('notification-unblock-dialog')?.close?.();
+          if (currentProfile && currentProfile.notifications_enabled !== false) {
+            lastBgPollSyncAt = 0;
+            await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+          }
+          if (Date.now() - lastBgGrantedToastAt > 1200) {
+            lastBgGrantedToastAt = Date.now();
+            toast(snap?.isApp
+              ? 'Background usage and alerts are active even when myIPON is closed.'
+              : 'Background notification alerts enabled.');
+          }
         }
       };
       document.addEventListener('visibilitychange', resyncOnReturn);
       window.addEventListener('focus', resyncOnReturn);
       document.body.addEventListener('click', async (event) => {
+        const bgActionBtn = event.target.closest('[data-device-bg-btn], [data-device-background-row] [data-bg-action]');
+        if (bgActionBtn) {
+          await handleBackgroundRowAction(bgActionBtn);
+          return;
+        }
         const recheckBtn = event.target.closest('[data-device-recheck-btn]');
         if (recheckBtn) {
           recheckBtn.disabled = true;
@@ -4562,8 +5067,10 @@
 
     if (isApp && hasNativeNotificationBridge() && profile.notifications_enabled !== false) {
       const promptKey = `myipon_native_notif_prompt_${profile.id}`;
+      const bgPromptHandled = Boolean(localStorage.getItem(`myipon_bg_prompt_seen_${profile.id}`));
+      const deferToBgPrompt = !bgPromptHandled && document.body.dataset.page !== 'account' && !profileNeedsSetup(profile);
       const perm = await getDeviceNotificationPermission();
-      if (perm === 'default' && !localStorage.getItem(promptKey)) {
+      if (!deferToBgPrompt && perm === 'default' && !localStorage.getItem(promptKey)) {
         localStorage.setItem(promptKey, '1');
         requestDeviceNotificationPermission({ userInitiated: true }).catch(() => { });
       }
@@ -4897,7 +5404,7 @@
       }
 
       const fetchProfile = () => client.from('profiles')
-        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,username,bio,chat_privacy,last_seen_at')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at')
         .eq('id', session.user.id)
         .single();
       let { data: profile, error } = await runWithStartupRetry(fetchProfile);
@@ -4979,6 +5486,9 @@
       appInitialized = true;
       dismissStartupFailure();
       if (options.requireAuth === false) setLoading(false);
+      if (options.requireAuth !== false && !options.skipBackgroundPrompt) {
+        maybePromptBackgroundUsage(profile).catch(() => { });
+      }
       return { configured: true, profile, session };
     } catch (error) {
       setLoading(false);
@@ -5124,14 +5634,28 @@
   }
 
   function friendlyError(error) {
-    const message = error?.message || 'Something went wrong. Please try again.';
-    if (/mfa_verification_failed|invalid.*totp|challenge.*expired/i.test(`${error?.code || ''} ${message}`)) return 'That authenticator code is invalid or expired. Enter the latest code and try again.';
-    if (/rate limit|too many requests|over_email_send_rate_limit/i.test(`${error?.code || ''} ${message}`)) return 'Too many attempts. Wait a moment, then try again.';
+    const raw = typeof error === 'string' ? error : (error?.message || String(error || ''));
+    const message = String(raw || '').trim();
+    const combined = `${error?.name || ''} ${error?.code || ''} ${message}`.trim();
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return 'No internet connection. Please check your connection and try again.';
+    }
+    if (/failed to fetch|load failed|networkerror|network request failed|failed to send a request to the edge function|err_internet_disconnected|err_network_changed|err_name_not_resolved|fetcherror|functionsfetcherror|econnrefused|econnreset/i.test(combined)) {
+      return 'Something went wrong. Please check your internet connection and try again.';
+    }
+    if (/aborterror|timed out|timeout/i.test(combined)) {
+      return 'The request timed out. Please try again.';
+    }
+    if (/mfa_verification_failed|invalid.*totp|challenge.*expired/i.test(combined)) return 'That authenticator code is invalid or expired. Enter the latest code and try again.';
+    if (/rate limit|too many requests|over_email_send_rate_limit/i.test(combined)) return 'Too many attempts. Wait a moment, then try again.';
     if (/duplicate key|unique constraint/i.test(message)) return 'That reference was already used.';
     if (/cannot remove or disable your own administrator|another active administrator/i.test(message)) return 'Assign another active administrator before changing administrator access.';
     if (/row-level security|permission denied|not allowed to|only (?:a |an )?.*administrator/i.test(message)) return 'You do not have permission for that action.';
     if (/BILLING_DISABLED|requires billing to be enabled|billing is disabled/i.test(message)) return 'Google Cloud billing is disabled for the current Google Cloud project key. Enable Cloud billing on that project, or click Configure API key to save a free-tier key from Google AI Studio.';
     if (/ACCESS_TOKEN_TYPE_UNSUPPORTED|API key not valid|API_KEY_INVALID|API key expired/i.test(message)) return 'The server Gemini API key was rejected or revoked by Google. Click Configure API key to test and save a fresh Google AI Studio key.';
+    if (!message || /^(?:TypeError|ReferenceError|SyntaxError|RangeError|URIError|EvalError):/i.test(message) || message === '[object Object]') {
+      return 'Something went wrong. Please try again.';
+    }
     return message;
   }
 
@@ -7159,6 +7683,70 @@
     }
   }
 
+  function normalizeDownloadFileName(name, fallback = 'attachment') {
+    const clean = String(name || '').replace(/[\\/:*?"<>|\u0000-\u001F]+/g, '-').trim();
+    return clean || fallback;
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('Could not read file data.'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function downloadFile(url, fileName = 'attachment', opts = {}) {
+    const raw = String(url || '').trim();
+    const isSafe = raw.startsWith('data:') || raw.startsWith('blob:') || /^https?:\/\//i.test(raw);
+    if (!raw || !isSafe) throw new Error('Download link unavailable.');
+    const safeName = normalizeDownloadFileName(fileName, 'attachment');
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    if (typeof bgPlugin?.downloadFile === 'function') {
+      let payloadUrl = raw;
+      let mimeType = String(opts?.mimeType || '').trim();
+      if (raw.startsWith('blob:')) {
+        const res = await fetch(raw);
+        if (!res.ok) throw new Error('Could not read attachment.');
+        const blob = await res.blob();
+        if (!mimeType && blob.type) mimeType = blob.type;
+        payloadUrl = await blobToDataUrl(blob);
+      }
+      const outcome = await bgPlugin.downloadFile({ url: payloadUrl, fileName: safeName, mimeType });
+      if (outcome?.started || outcome?.saved) {
+        toast(outcome?.saved ? `Saved ${outcome.fileName || safeName} to Downloads.` : `Downloading ${outcome.fileName || safeName}…`);
+        return outcome;
+      }
+    }
+    const triggerAnchor = (href, openBlank = false) => {
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = safeName;
+      a.rel = 'noopener';
+      if (openBlank) a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    };
+    if (raw.startsWith('data:') || raw.startsWith('blob:')) {
+      triggerAnchor(raw, false);
+      return { saved: true, fileName: safeName };
+    }
+    try {
+      const res = await fetch(raw, { mode: 'cors' });
+      if (!res.ok) throw new Error(`Download failed (${res.status}).`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      triggerAnchor(blobUrl, false);
+      setTimeout(() => { try { URL.revokeObjectURL(blobUrl); } catch { } }, 1500);
+      return { saved: true, fileName: safeName };
+    } catch {
+      triggerAnchor(raw, true);
+      return { started: true, fileName: safeName };
+    }
+  }
+
   function openImageViewer(src, title = 'Attachment', subtitle = '', downloadName = '', opts = {}) {
     const raw = String(src || '').trim();
     const isSafeUrl = raw.startsWith('data:image/') || raw.startsWith('blob:') || /^https?:\/\//i.test(raw);
@@ -7181,22 +7769,203 @@
             <a class="image-viewer-dl-pill" id="ipon-iv-download" download="myipon-attachment.jpg" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span>Download</span></a>
           </div>
         </header>
-        <div class="image-viewer-stage" id="ipon-iv-stage"><img id="ipon-iv-img" alt="" title="Tap or click to toggle actual size"></div>
+        <div class="image-viewer-stage" id="ipon-iv-stage"><img id="ipon-iv-img" alt="" title="Pinch or double-tap to zoom"></div>
       </div>`;
       document.body.appendChild(dialog);
-      dialog.querySelector('#ipon-iv-close').addEventListener('click', () => dialog.close());
-      dialog.querySelector('#ipon-iv-download').addEventListener('click', (event) => {
-        if (typeof dialog._onDownload === 'function') {
-          event.preventDefault();
-          dialog._onDownload();
+      const stageEl = dialog.querySelector('#ipon-iv-stage');
+      const imgEl = dialog.querySelector('#ipon-iv-img');
+      const dlBtn = dialog.querySelector('#ipon-iv-download');
+      const zoomState = { scale: 1, tx: 0, ty: 0 };
+      dialog._zoomState = zoomState;
+      const getStageOffset = (clientX, clientY) => {
+        const rect = stageEl.getBoundingClientRect();
+        return {
+          rect,
+          fx: clientX - (rect.left + rect.width / 2),
+          fy: clientY - (rect.top + rect.height / 2)
+        };
+      };
+      const applyZoom = (nextScale, nextTx, nextTy, animate = false) => {
+        const rect = stageEl.getBoundingClientRect();
+        const sw = rect.width || window.innerWidth || 1;
+        const sh = rect.height || window.innerHeight || 1;
+        const nw = imgEl.naturalWidth || sw;
+        const nh = imgEl.naturalHeight || sh;
+        const fit = Math.min(sw / nw, sh / nh);
+        const baseW = nw * fit;
+        const baseH = nh * fit;
+        let s = Math.max(1, Math.min(4, Number(nextScale) || 1));
+        let tx = Number(nextTx) || 0;
+        let ty = Number(nextTy) || 0;
+        if (s <= 1.01) {
+          s = 1; tx = 0; ty = 0;
+        } else {
+          const maxTx = Math.max(0, (baseW * s - sw) / 2);
+          const maxTy = Math.max(0, (baseH * s - sh) / 2);
+          tx = Math.max(-maxTx, Math.min(maxTx, tx));
+          ty = Math.max(-maxTy, Math.min(maxTy, ty));
         }
+        zoomState.scale = s;
+        zoomState.tx = tx;
+        zoomState.ty = ty;
+        imgEl.style.transition = animate ? 'transform .18s cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
+        imgEl.style.transform = `translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
+        const zoomed = s > 1.02;
+        stageEl.classList.toggle('is-actual-size', zoomed);
+        imgEl.title = zoomed ? 'Drag to pan · Pinch or double-tap to reset' : 'Pinch or double-tap to zoom';
+      };
+      const zoomAtPoint = (targetScale, clientX, clientY, animate = true) => {
+        const { fx, fy } = getStageOffset(clientX, clientY);
+        const s = Math.max(1, Math.min(4, targetScale));
+        if (s <= 1.01) {
+          applyZoom(1, 0, 0, animate);
+          return;
+        }
+        const lx = (fx - zoomState.tx) / zoomState.scale;
+        const ly = (fy - zoomState.ty) / zoomState.scale;
+        applyZoom(s, fx - s * lx, fy - s * ly, animate);
+      };
+      dialog._resetZoom = () => applyZoom(1, 0, 0, false);
+
+      let pinchState = null;
+      let panState = null;
+      let lastTouchAt = 0;
+      let lastTapAt = 0;
+      let lastTapPos = null;
+      let singleTapTimer = null;
+      let dragMoved = false;
+
+      const touchDist = (t1, t2) => Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const touchMid = (t1, t2) => ({ clientX: (t1.clientX + t2.clientX) / 2, clientY: (t1.clientY + t2.clientY) / 2 });
+
+      stageEl.addEventListener('touchstart', (ev) => {
+        lastTouchAt = Date.now();
+        clearTimeout(singleTapTimer);
+        if (ev.touches.length === 2) {
+          ev.preventDefault();
+          const mid = touchMid(ev.touches[0], ev.touches[1]);
+          const off = getStageOffset(mid.clientX, mid.clientY);
+          pinchState = {
+            dist: Math.max(10, touchDist(ev.touches[0], ev.touches[1])),
+            scale: zoomState.scale,
+            tx: zoomState.tx,
+            ty: zoomState.ty,
+            fx: off.fx,
+            fy: off.fy
+          };
+          panState = null;
+          dragMoved = true;
+        } else if (ev.touches.length === 1) {
+          const t = ev.touches[0];
+          const now = Date.now();
+          if (lastTapPos && now - lastTapAt < 280 && Math.hypot(t.clientX - lastTapPos.x, t.clientY - lastTapPos.y) < 30) {
+            ev.preventDefault();
+            lastTapAt = 0;
+            lastTapPos = null;
+            panState = null;
+            dragMoved = true;
+            zoomAtPoint(zoomState.scale > 1.05 ? 1 : 2.5, t.clientX, t.clientY, true);
+            return;
+          }
+          lastTapAt = now;
+          lastTapPos = { x: t.clientX, y: t.clientY };
+          dragMoved = false;
+          panState = { x: t.clientX, y: t.clientY, tx: zoomState.tx, ty: zoomState.ty };
+        }
+      }, { passive: false });
+
+      stageEl.addEventListener('touchmove', (ev) => {
+        if (ev.touches.length === 2 && pinchState) {
+          ev.preventDefault();
+          dragMoved = true;
+          const dist = touchDist(ev.touches[0], ev.touches[1]);
+          const mid = touchMid(ev.touches[0], ev.touches[1]);
+          const off = getStageOffset(mid.clientX, mid.clientY);
+          const nextScale = Math.max(1, Math.min(4, pinchState.scale * (dist / pinchState.dist)));
+          const lx = (pinchState.fx - pinchState.tx) / pinchState.scale;
+          const ly = (pinchState.fy - pinchState.ty) / pinchState.scale;
+          applyZoom(nextScale, off.fx - nextScale * lx, off.fy - nextScale * ly, false);
+        } else if (ev.touches.length === 1 && panState && zoomState.scale > 1.02) {
+          ev.preventDefault();
+          const t = ev.touches[0];
+          const dx = t.clientX - panState.x;
+          const dy = t.clientY - panState.y;
+          if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+          applyZoom(zoomState.scale, panState.tx + dx, panState.ty + dy, false);
+        }
+      }, { passive: false });
+
+      const onTouchFinish = (ev) => {
+        if (ev.touches.length === 1 && pinchState) {
+          const t = ev.touches[0];
+          pinchState = null;
+          panState = { x: t.clientX, y: t.clientY, tx: zoomState.tx, ty: zoomState.ty };
+          return;
+        }
+        if (ev.touches.length === 0) {
+          const wasTap = !dragMoved && panState;
+          pinchState = null;
+          panState = null;
+          if (wasTap) {
+            singleTapTimer = setTimeout(() => {
+              dialog.classList.toggle('is-chrome-hidden');
+            }, 260);
+          }
+        }
+      };
+      stageEl.addEventListener('touchend', onTouchFinish);
+      stageEl.addEventListener('touchcancel', onTouchFinish);
+
+      stageEl.addEventListener('wheel', (ev) => {
+        ev.preventDefault();
+        const factor = ev.deltaY < 0 ? 1.18 : 0.85;
+        zoomAtPoint(zoomState.scale * factor, ev.clientX, ev.clientY, false);
+      }, { passive: false });
+
+      let mouseDrag = null;
+      stageEl.addEventListener('mousedown', (ev) => {
+        if (ev.button !== 0 || zoomState.scale <= 1.02) return;
+        mouseDrag = { x: ev.clientX, y: ev.clientY, tx: zoomState.tx, ty: zoomState.ty, moved: false };
       });
-      dialog.querySelector('#ipon-iv-img').addEventListener('click', () => {
-        const stage = dialog.querySelector('#ipon-iv-stage');
-        const imgEl = dialog.querySelector('#ipon-iv-img');
-        if (!stage || !imgEl) return;
-        const actual = stage.classList.toggle('is-actual-size');
-        imgEl.title = actual ? 'Tap or click to fit screen' : 'Tap or click to toggle actual size';
+      stageEl.addEventListener('mousemove', (ev) => {
+        if (!mouseDrag) return;
+        const dx = ev.clientX - mouseDrag.x;
+        const dy = ev.clientY - mouseDrag.y;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) mouseDrag.moved = true;
+        applyZoom(zoomState.scale, mouseDrag.tx + dx, mouseDrag.ty + dy, false);
+      });
+      stageEl.addEventListener('mouseup', () => {
+        if (mouseDrag?.moved) dragMoved = true;
+        mouseDrag = null;
+      });
+      stageEl.addEventListener('mouseleave', () => { mouseDrag = null; });
+
+      imgEl.addEventListener('click', (ev) => {
+        if (Date.now() - lastTouchAt < 500 || dragMoved) {
+          dragMoved = false;
+          return;
+        }
+        zoomAtPoint(zoomState.scale > 1.05 ? 1 : 2.2, ev.clientX, ev.clientY, true);
+      });
+
+      dialog.querySelector('#ipon-iv-close').addEventListener('click', () => dialog.close());
+      dlBtn.addEventListener('click', async (event) => {
+        event.preventDefault();
+        if (dlBtn.dataset.busy === '1') return;
+        dlBtn.dataset.busy = '1';
+        dlBtn.setAttribute('aria-busy', 'true');
+        try {
+          if (typeof dialog._onDownload === 'function') {
+            await dialog._onDownload();
+          } else {
+            await downloadFile(dialog._currentSrc || dlBtn.href, dlBtn.download || 'attachment');
+          }
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          dlBtn.dataset.busy = '0';
+          dlBtn.removeAttribute('aria-busy');
+        }
       });
       dialog.addEventListener('click', (event) => {
         if (event.target === dialog) dialog.close();
@@ -7208,13 +7977,15 @@
     const subEl = dialog.querySelector('#ipon-iv-subtitle');
     const dl = dialog.querySelector('#ipon-iv-download');
     const baseSub = String(subtitle || '').trim();
+    dialog.classList.remove('is-chrome-hidden');
+    dialog._currentSrc = raw;
     dialog._onDownload = typeof opts?.onDownload === 'function' ? opts.onDownload : null;
     if (stage) {
-      stage.classList.remove('is-actual-size');
       stage.scrollTop = 0;
       stage.scrollLeft = 0;
     }
-    img.title = 'Tap or click to toggle actual size';
+    dialog._resetZoom?.();
+    img.title = 'Pinch or double-tap to zoom';
     img.onload = () => {
       if (!baseSub || !img.naturalWidth || !img.naturalHeight || !subEl) return;
       subEl.textContent = `${baseSub} · ${img.naturalWidth} × ${img.naturalHeight}`;
@@ -7226,8 +7997,7 @@
     subEl.textContent = baseSub;
     subEl.hidden = !baseSub;
     dl.href = raw;
-    if (!dialog._onDownload && /^https?:\/\//i.test(raw)) dl.target = '_blank';
-    else dl.removeAttribute('target');
+    dl.removeAttribute('target');
     const cleanDl = String(downloadName || '').trim();
     dl.download = cleanDl || `${String(title || 'attachment').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`;
     if (!dialog.open) dialog.showModal();
@@ -9227,7 +9997,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, downloadFile, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     setOnlineVisibility, syncMessagesBadges,
     updateLocalProfile(patch = {}) {
@@ -9241,7 +10011,7 @@
     resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
-    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, setNotificationPreference,
+    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference,
     auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry,
     get profile() { return currentProfile; }
   };
