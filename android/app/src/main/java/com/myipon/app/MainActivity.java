@@ -18,8 +18,6 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
-import java.util.ArrayList;
-import java.util.List;
 
 public class MainActivity extends BridgeActivity {
     @Override
@@ -138,22 +136,11 @@ public class MainActivity extends BridgeActivity {
     private void maybeRequestStartupPermissions() {
         SharedPreferences prefs = getSharedPreferences(NotificationPollReceiver.PREFS_NAME, MODE_PRIVATE);
         if (prefs.getBoolean("native_perm_asked", false)) return;
-        prefs.edit()
-            .putBoolean("native_perm_asked", true)
-            .putBoolean("native_mic_perm_asked", true)
-            .apply();
-        List<String> needed = new ArrayList<>();
+        prefs.edit().putBoolean("native_perm_asked", true).apply();
         if (Build.VERSION.SDK_INT >= 33
             && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
-            needed.add(Manifest.permission.POST_NOTIFICATIONS);
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            needed.add(Manifest.permission.RECORD_AUDIO);
-        }
-        if (!needed.isEmpty()) {
-            ActivityCompat.requestPermissions(this, needed.toArray(new String[0]), 1001);
+            ActivityCompat.requestPermissions(this, new String[] { Manifest.permission.POST_NOTIFICATIONS }, 1001);
         }
     }
 

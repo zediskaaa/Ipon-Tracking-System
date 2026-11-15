@@ -1054,10 +1054,10 @@ input::-ms-reveal,input::-ms-clear{display:none!important}
 .announcement-viewer-release{display:none!important}
 
 .avatar-presence-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;line-height:0;flex-shrink:0;border:0;background:transparent}
-.presence-dot{position:absolute;right:0;bottom:0;width:9.5px;height:9.5px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.08);pointer-events:none;opacity:0;transform:scale(.3);transition:transform .22s cubic-bezier(.175,.885,.32,1.275),opacity .18s ease;z-index:3}
+.presence-dot{position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.08);pointer-events:none;opacity:0;transform:scale(.3);transition:transform .22s cubic-bezier(.175,.885,.32,1.275),opacity .18s ease;z-index:3}
 .presence-dot.is-online{opacity:1;transform:scale(1)}
-.sidebar-user-card .presence-dot{width:11.5px;height:11.5px;right:1px;bottom:1px;border-width:2px}
-.avatar-lg-wrap .presence-dot{width:13px;height:13px;right:2px;bottom:2px;border-width:2.5px}
+.sidebar-user-card .presence-dot{width:13.5px;height:13.5px;right:0;bottom:0;border-width:2px}
+.avatar-lg-wrap .presence-dot{width:15px;height:15px;right:1px;bottom:1px;border-width:2.5px}
 .account-avatar-picker .presence-dot,.reaction-user-avatar-wrap .presence-dot{display:none!important}
 
 .view-mode-toggle{display:inline-flex;align-items:center;background:rgba(20,45,43,.07);border:1px solid var(--rule);border-radius:10px;padding:3px;gap:3px}
@@ -6854,9 +6854,18 @@ html[data-theme="dark"] .msg-thread-pane[data-chat-theme="midnight"] {
 }
 
 .msg-thread-active {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.msg-thread-main {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-width: 0;
   min-height: 0;
 }
 .msg-thread-header {
@@ -6870,6 +6879,9 @@ html[data-theme="dark"] .msg-thread-pane[data-chat-theme="midnight"] {
   color: var(--thread-ink, var(--ink));
   flex-shrink: 0;
   transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+.msg-thread-header .presence-dot {
+  border-color: var(--thread-chrome-bg, var(--surface, #fff));
 }
 .msg-thread-header-left {
   display: flex;
@@ -6905,11 +6917,22 @@ html[data-theme="dark"] .msg-thread-pane[data-chat-theme="midnight"] {
   align-items: center;
   gap: 7px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 .msg-thread-peer-title strong {
   font-size: 15px;
   font-weight: 700;
+  line-height: 1.2;
   color: var(--thread-ink, var(--ink-strong, #0c261d));
+  overflow-wrap: anywhere;
+}
+.msg-thread-peer-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  min-width: 0;
 }
 .msg-handle-chip,
 .msg-rel-chip {
@@ -6929,9 +6952,14 @@ html[data-theme="dark"] .msg-thread-pane[data-chat-theme="midnight"] {
   color: var(--thread-rel-ink, #14533c);
 }
 .msg-peer-status {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
+  line-height: 1.25;
   color: var(--thread-muted, var(--muted));
+  min-width: 0;
+  max-width: 100%;
 }
 .msg-peer-status.is-typing {
   color: var(--thread-typing-ink, var(--green, #186348));
@@ -7273,7 +7301,7 @@ html[data-theme="dark"] .msg-thread-pane[data-chat-theme="midnight"] {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   background: var(--thread-stage-bg, linear-gradient(180deg, #faf6ee 0%, #f4efe6 100%));
 }
 .msg-thread-stage[data-chat-theme="emerald"] {
@@ -8396,6 +8424,7 @@ html[data-theme="dark"] .msg-row.is-failed .msg-bubble.has-audio-only .msg-tick.
 /* Info Drawer */
 .msg-thread-drawer {
   width: 320px;
+  flex-shrink: 0;
   border-left: 1px solid var(--rule);
   background: var(--surface, #fcfaf5);
   color: var(--ink);
@@ -8404,6 +8433,7 @@ html[data-theme="dark"] .msg-row.is-failed .msg-bubble.has-audio-only .msg-tick.
   min-height: 0;
   overflow: hidden;
   padding: 0;
+  z-index: 2;
 }
 .msg-drawer-head {
   flex: 0 0 auto;
@@ -10019,13 +10049,18 @@ html[data-theme="dark"] .msg-friends-hero {
   .msg-thread-drawer {
     position: absolute;
     inset: 0 0 0 auto;
-    width: min(326px, 94%);
-    z-index: 8;
+    width: min(360px, 100%);
+    z-index: 30;
     box-shadow: -12px 0 36px rgba(0, 0, 0, .18);
   }
 }
 
 @media (max-width: 820px) {
+  .msg-thread-drawer {
+    width: 100%;
+    border-left: 0;
+    box-shadow: none;
+  }
   .msg-topbar {
     grid-template-columns: minmax(0, 1fr) auto;
     padding: 12px 14px;

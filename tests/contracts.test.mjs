@@ -223,8 +223,8 @@ test('all three role dashboards subscribe to permitted database changes', () => 
 test('dashboard refresh failures never mix stale totals with cleared sections', () => {
   const dashboard = read('js/dashboard.js');
   assert.match(read('dashboard.html'), /id="dashboard-data-status"[^>]*role="status"/);
-  assert.match(dashboard, /if \(!hasSnapshot\) renderEmptySnapshot\(\)/);
-  assert.match(dashboard, /previous complete snapshot remains visible and may be outdated/);
+  assert.match(dashboard, /if \(!hasSnapshot\)\s*\{\s*renderEmptySnapshot\(\)/);
+  assert.doesNotMatch(dashboard, /previous complete snapshot remains visible and may be outdated/);
   assert.doesNotMatch(dashboard, /catch \(error\) \{ Ipon\.toast\([\s\S]*?renderCalendar\(\[\]\); renderPending\(\[\]\); \}/);
 });
 
@@ -7142,8 +7142,11 @@ test('migration 078 filters audit logs to meaningful governance/financial events
     assert.match(core, new RegExp(`'${noiseField}'`));
   }
 
-  assert.doesNotMatch(prepareMobile, /class="offline-brand"|favicon\.svg/);
+  assert.doesNotMatch(prepareMobile, /class="offline-brand"|favicon\.svg|<img\b|alt="myIPON"/i);
   assert.match(prepareMobile, /<h1>You appear to be offline<\/h1>/);
+  const bundledOffline = read('android/app/src/main/assets/public/offline.html');
+  assert.doesNotMatch(bundledOffline, /class="offline-brand"|favicon\.svg|<img\b|<svg\b|alt="myIPON"/i);
+  assert.match(bundledOffline, /<h1>You appear to be offline<\/h1>/);
 });
 
 test('chat captionless media overlay and audit log calendar date-range chips meet UI reliability contracts', () => {
@@ -7253,16 +7256,19 @@ test('friendlyError offline mapping, edge-to-edge pinch-zoom image viewer, nativ
 
   // Android & iOS native mic + download contracts
   assert.match(mainActivity, /maybeRequestStartupPermissions\(/);
-  assert.match(mainActivity, /Manifest\.permission\.POST_NOTIFICATIONS[\s\S]*?Manifest\.permission\.RECORD_AUDIO/);
+  assert.match(mainActivity, /Manifest\.permission\.POST_NOTIFICATIONS/);
+  assert.doesNotMatch(mainActivity, /maybeRequestStartupPermissions\([\s\S]*?Manifest\.permission\.RECORD_AUDIO/);
   assert.match(mainActivity, /webView\.setDownloadListener\(/);
   assert.match(bgPlugin, /Manifest\.permission\.RECORD_AUDIO,\s*Manifest\.permission\.MODIFY_AUDIO_SETTINGS[\s\S]*?alias\s*=\s*"microphone"/);
+  assert.match(bgPlugin, /hasManifestPermission\(/);
+  assert.match(bgPlugin, /shouldShowRequestPermissionRationale\(/);
   assert.match(bgPlugin, /public void ensureMicrophonePermission\(PluginCall call\)/);
   assert.match(bgPlugin, /public void openAppSettings\(PluginCall call\)/);
   assert.match(bgPlugin, /public void downloadFile\(PluginCall call\)/);
   assert.match(bgPlugin, /DownloadManager\.Request/);
   assert.match(bgPlugin, /MediaStore\.Downloads\.EXTERNAL_CONTENT_URI/);
   assert.match(infoPlist, /NSMicrophoneUsageDescription/);
-  assert.match(messagesJs, /ensureMicrophoneAccess\(\)[\s\S]*?offerOpenAppSettingsForMic\(\)/);
+  assert.match(messagesJs, /ensureMicrophoneAccess\(\)[\s\S]*?showMicApkUpdateNotice\(\)[\s\S]*?offerOpenAppSettingsForMic\(\)/);
   assert.match(messagesJs, /downloadOriginalAttachment[\s\S]*?ipon\(\)\.downloadFile\(/);
   assert.match(coreJs, /touchstart[\s\S]*?touchmove[\s\S]*?touchDist[\s\S]*?applyZoom/);
 
@@ -7631,7 +7637,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
       currentTime: 0,
       textContent: '',
       dataset: {},
-      style: { setProperty() {}, removeProperty() {} },
+      style: { setProperty() { }, removeProperty() { } },
       classList: {
         add: (c) => cls.add(c),
         remove: (c) => cls.delete(c),
@@ -7645,10 +7651,10 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
       children,
       appendChild(c) { children.push(c); return c; },
       append(...nodes) { children.push(...nodes); },
-      prepend() {},
+      prepend() { },
       insertBefore(n) { return n; },
-      insertAdjacentHTML() {},
-      remove() {},
+      insertAdjacentHTML() { },
+      remove() { },
       setAttribute(k, v) { attrs.set(k, String(v)); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
       removeAttribute(k) { attrs.delete(k); },
@@ -7662,9 +7668,9 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
       close() { this.open = false; this.dispatchEvent({ type: 'close' }); },
       play() { this.paused = false; this.dispatchEvent({ type: 'play' }); return Promise.resolve(); },
       pause() { this.paused = true; this.dispatchEvent({ type: 'pause' }); },
-      load() {},
-      removeEventListener() {},
-      focus() {},
+      load() { },
+      removeEventListener() { },
+      focus() { },
       querySelector(sel) {
         const idMatch = /^#([A-Za-z0-9_-]+)$/.exec(sel);
         if (idMatch) return idMap.get(idMatch[1]) || null;
@@ -7725,7 +7731,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
       }
       return [];
     },
-    addEventListener() {}
+    addEventListener() { }
   };
   const coreCtx = {
     window: null,
@@ -7739,8 +7745,8 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
       replace(url) { locAssigned = url; },
       assign(url) { locAssigned = url; }
     },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
     IponMessages: {
       dismissTransientMenus: () => false,
@@ -7750,13 +7756,13 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
         return true;
       }
     },
-    CustomEvent: class {},
+    CustomEvent: class { },
     URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
     setTimeout: (fn) => { if (typeof fn === 'function') fn(); return 0; },
-    clearTimeout() {},
-    addEventListener() {},
-    removeEventListener() {},
-    dispatchEvent() {},
+    clearTimeout() { },
+    addEventListener() { },
+    removeEventListener() { },
+    dispatchEvent() { },
     console
   };
   coreCtx.window = coreCtx;
@@ -7836,7 +7842,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
       scrollHeight: 500,
       clientHeight: 500,
       dataset: {},
-      style: { setProperty() {} },
+      style: { setProperty() { } },
       classList: {
         add: (c) => cls.add(c),
         remove: (c) => cls.delete(c),
@@ -7854,8 +7860,8 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
         elListeners.get(ev).push(fn);
       },
       dispatchEvent: (ev) => { (elListeners.get(ev?.type) || []).forEach((fn) => fn(ev)); },
-      focus: () => {},
-      select: () => {},
+      focus: () => { },
+      select: () => { },
       querySelectorAll: () => [],
       querySelector: () => null,
       showModal() { this.open = true; },
@@ -7882,7 +7888,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
     documentElement: { dataset: {} },
     visibilityState: 'visible',
     hasFocus: () => focusedState,
-    body: { insertAdjacentHTML() {}, appendChild() {} },
+    body: { insertAdjacentHTML() { }, appendChild() { } },
     createElement: (tag) => makeMsgEl(tag),
     getElementById: (id) => getMsgEl(id),
     querySelector: () => null,
@@ -7903,13 +7909,13 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
       escapeHtml: (s) => String(s ?? ''),
       initials: () => 'PU',
       isUserOnline: () => true,
-      bindAvatarFallbacks: () => {},
-      syncPresenceDots: () => {},
-      syncMessagesBadges: () => {},
-      setFieldError: () => {},
-      setBusy: () => {},
+      bindAvatarFallbacks: () => { },
+      syncPresenceDots: () => { },
+      syncMessagesBadges: () => { },
+      setFieldError: () => { },
+      setBusy: () => { },
       friendlyError: (e) => String(e?.message || e),
-      toast: () => {},
+      toast: () => { },
       confirmAction: async () => true,
       openVideoViewer: (...args) => videoViewerCalls.push(args),
       invokeAccountFunction: async (payload) => (payload?.action === 'chat-view-urls'
@@ -7979,10 +7985,10 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
     document: msgDoc,
     location: msgWin.location,
     Map, Set, URLSearchParams, navigator: {}, Math, JSON, Date, Intl,
-    URL: { createObjectURL: () => 'blob:mock', revokeObjectURL: () => {} },
+    URL: { createObjectURL: () => 'blob:mock', revokeObjectURL: () => { } },
     CSS: { escape: (s) => String(s) },
     requestAnimationFrame: (fn) => fn(),
-    setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {}
+    setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => { }
   });
 
   await msgWin.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', chat_privacy: { show_online: true } });
@@ -8007,7 +8013,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
     currentTime: 1.5,
     paused: true,
     poster: '',
-    pause() {},
+    pause() { },
     requestFullscreen() { reqFullscreenCalls += 1; }
   };
   const fsPlayer = Object.assign(makeMsgEl('fs-player'), {
@@ -8024,18 +8030,18 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
     }
   };
   const clickHandlers = msgDocListeners.get('click') || [];
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: fsBtn })));
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: fsBtn })));
   assert.equal(reqFullscreenCalls, 0, 'video fullscreen must use custom Pic 3 viewer instead of native requestFullscreen');
   assert.equal(videoViewerCalls.length, 1);
   assert.equal(videoViewerCalls[0][0], 'https://cdn.example/view/clip.mp4');
 
   // Shared media drawer also opens Shared Media videos in Ipon.openVideoViewer
   await Promise.all(clickHandlers.map((fn) => fn({
-    stopPropagation: () => {},
+    stopPropagation: () => { },
     target: { closest: (s) => (s === '#msg-thread-info-toggle' ? { dataset: {} } : null) }
   })));
   await Promise.all(clickHandlers.map((fn) => fn({
-    stopPropagation: () => {},
+    stopPropagation: () => { },
     target: { closest: (s) => (s === '[data-drawer-view]' ? { dataset: { drawerView: 'media' } } : null) }
   })));
   const drawerMediaHtml = getMsgEl('msg-thread-drawer').innerHTML;
@@ -8044,7 +8050,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
     dataset: { openVid: 'https://cdn.example/view/clip2.mp4', vidConv: convId, vidPath: `${convId}/clip2.mp4`, vidName: 'preview-clip.mp4' },
     closest: (s) => (s === '[data-open-vid]' ? vidThumb : null)
   };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: vidThumb })));
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: vidThumb })));
   assert.equal(videoViewerCalls.length, 2);
 
   // In-place reaction & receipt patching does NOT rebuild #msg-messages-list.innerHTML (prevents video flicker!)
@@ -8062,7 +8068,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
     dataset: { reactMsg: 'm-vid', reactEmoji: '❤️' },
     closest: (s) => (s === '[data-react-msg]' ? reactBtn : null)
   };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: reactBtn })));
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: reactBtn })));
   await new Promise((r) => setTimeout(r, 30));
   assert.equal(threadHtmlWrites, writesBeforeReact, 'reacting on a video message must patch reactions in place without resetting innerHTML');
   assert.ok(insertedReactHtml.includes('❤️'), 'reactions row must update in place on existing video bubble column');
@@ -8155,7 +8161,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
 
   // Open drawer -> verify Pic 1 structure (header X, avatar, 2-col Chat Action icon cards, 5 circular Theme swatches, Media & files cards)
   await Promise.all(clickHandlers.map((fn) => fn({
-    stopPropagation: () => {},
+    stopPropagation: () => { },
     target: { closest: (s) => (s === '#msg-thread-info-toggle' ? { dataset: {} } : null) }
   })));
   const rootDrawerHtml = getMsgEl('msg-thread-drawer').innerHTML;
@@ -8169,14 +8175,14 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
 
   // Switch chat theme to Midnight -> BOTH msg-thread-pane (top header + pinned + bottom composer) AND msg-thread-stage adopt midnight theme
   const midnightBtn = { dataset: { convTheme: 'midnight' }, closest: (s) => (s === '[data-conv-theme]' ? midnightBtn : null) };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: midnightBtn })));
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: midnightBtn })));
   assert.equal(getMsgEl('msg-thread-pane').dataset.chatTheme, 'midnight', 'top/middle/bottom container must receive chatTheme');
   assert.equal(getMsgEl('msg-thread-stage').dataset.chatTheme, 'midnight');
   assert.match(getMsgEl('msg-thread-drawer').innerHTML, /class="msg-theme-chip is-active" data-conv-theme="midnight"/);
 
   // Pic 2: Open Messaging & Privacy modal -> verify form grid, bio counter, right-aligned toggle switches, dark save CTA, and blocked accounts section
   await Promise.all(clickHandlers.map((fn) => fn({
-    stopPropagation: () => {},
+    stopPropagation: () => { },
     target: { closest: (s) => (s === '#msg-privacy-btn' ? { dataset: {} } : null) }
   })));
   const settingsDialog = getMsgEl('msg-settings-dialog');
@@ -8383,4 +8389,184 @@ test('mobile notifications never auto-inject update alerts on push and omit Down
   assert.match(notifList.innerHTML, /Update 1\.0\.20: Chat polish/);
   assert.doesNotMatch(notifList.innerHTML, /Download APK|notification-download-row/i);
   assert.equal(notifBadge.textContent, '0');
+});
+
+test('presence dot size, Chat Info drawer overlay over pinned banner, inline Friend + Active now header, and native VM mic permission flow work reliably', async () => {
+  const css = read('css/app.css');
+  const messagesJs = read('js/messages.js');
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
+  const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
+
+  // Pic 1: Larger green online indicator across avatar sizes + header theme ring contrast
+  assert.match(css, /\.presence-dot\{[^}]*width:12px;height:12px;/);
+  assert.match(css, /\.sidebar-user-card \.presence-dot\{width:13\.5px;height:13\.5px;/);
+  assert.match(css, /\.avatar-lg-wrap \.presence-dot\{width:15px;height:15px;/);
+  assert.match(css, /\.msg-thread-header \.presence-dot\s*\{[^}]*border-color:\s*var\(--thread-chrome-bg/);
+
+  // Pic 2: Drawer sits as direct child of #msg-thread-active (sibling of .msg-thread-main) and covers pinned banner
+  assert.match(messagesJs, /<div class="msg-thread-active" id="msg-thread-active" hidden>[\s\S]*?<div class="msg-thread-main">[\s\S]*?<\/div>\s*<aside class="msg-thread-drawer" id="msg-thread-drawer" hidden/);
+  assert.match(css, /\.msg-thread-active\s*\{[^}]*position:\s*relative;[^}]*display:\s*flex;[^}]*flex-direction:\s*row;/s);
+  assert.match(css, /\.msg-thread-main\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;/s);
+  assert.match(css, /@media\s*\(max-width:\s*980px\)\s*\{\s*\.msg-thread-drawer\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0 0 0 auto;[^}]*z-index:\s*30;/s);
+  assert.match(css, /@media\s*\(max-width:\s*820px\)\s*\{\s*\.msg-thread-drawer\s*\{[^}]*width:\s*100%;/s);
+
+  // Pic 3: Active now sits inline to the right of Friend badge inside .msg-thread-peer-sub
+  assert.match(messagesJs, /<div class="msg-thread-peer-sub">[\s\S]*?<span class="msg-rel-chip">Friend<\/span>[\s\S]*?<small class="msg-peer-status[\s\S]*?id="msg-peer-status-text"/);
+  assert.match(css, /\.msg-thread-peer-sub\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*flex-wrap:\s*wrap;/s);
+  assert.match(css, /\.msg-peer-status\s*\{[^}]*display:\s*inline-flex;/s);
+
+  // Pic 4: Native Android manifest + Java plugin + JS voice-recording permission state machine
+  assert.match(manifest, /android\.permission\.RECORD_AUDIO/);
+  assert.match(bgPlugin, /manifestDeclared[\s\S]*?manifestMissing/);
+
+  const makeEl = (tag = 'div') => {
+    const attrs = new Map();
+    const classes = new Set();
+    return {
+      tagName: String(tag).toUpperCase(),
+      innerHTML: '',
+      textContent: '',
+      value: '',
+      hidden: false,
+      disabled: false,
+      files: [],
+      dataset: {},
+      style: { setProperty() { }, removeProperty() { } },
+      classList: {
+        add: (...c) => c.forEach((x) => classes.add(x)),
+        remove: (...c) => c.forEach((x) => classes.delete(x)),
+        toggle: (c, f) => (f === undefined ? (classes.has(c) ? classes.delete(c) : classes.add(c)) : (f ? classes.add(c) : classes.delete(c))),
+        contains: (c) => classes.has(c)
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k) ?? null,
+      removeAttribute: (k) => attrs.delete(k),
+      addEventListener() { },
+      removeEventListener() { },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      closest: () => null,
+      appendChild(n) { return n; },
+      showModal() { this.open = true; },
+      close() { this.open = false; }
+    };
+  };
+  const els = new Map();
+  const getEl = (id) => {
+    if (!els.has(id)) els.set(id, makeEl());
+    return els.get(id);
+  };
+  const docClicks = [];
+  const docStub = {
+    body: Object.assign(makeEl('body'), { dataset: { page: 'dashboard' }, classList: { toggle() { }, add() { }, remove() { }, contains: () => false } }),
+    documentElement: makeEl('html'),
+    getElementById: (id) => getEl(id),
+    createElement: (t) => makeEl(t),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener(type, fn) { if (type === 'click') docClicks.push(fn); },
+    removeEventListener() { }
+  };
+
+  let micBehavior = { granted: false, canAskAgain: true, manifestMissing: false };
+  let getUserMediaCalls = 0;
+  let getUserMediaError = null;
+  const confirmCalls = [];
+  const openSettingsCalls = [];
+  const toasts = [];
+  let recorderStarted = 0;
+
+  const ctx = {
+    window: null,
+    document: docStub,
+    navigator: {
+      userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 myIPONApp/20',
+      onLine: true,
+      mediaDevices: {
+        getUserMedia: async () => {
+          getUserMediaCalls += 1;
+          if (getUserMediaError) throw getUserMediaError;
+          return { getTracks: () => [{ stop() { } }] };
+        }
+      }
+    },
+    MediaRecorder: class {
+      constructor(stream) { this.stream = stream; this.state = 'inactive'; }
+      static isTypeSupported() { return true; }
+      start() { this.state = 'recording'; recorderStarted += 1; }
+      stop() { this.state = 'inactive'; }
+    },
+    Capacitor: {
+      isNativePlatform: () => true,
+      getPlatform: () => 'android',
+      Plugins: {
+        BackgroundNotifications: {
+          ensureMicrophonePermission: async () => ({ ...micBehavior }),
+          openAppSettings: async () => { openSettingsCalls.push(true); return { launched: true }; }
+        }
+      }
+    },
+    Ipon: {
+      profile: { id: 'u1', full_name: 'Juan Dela Cruz' },
+      client: {
+        rpc: async () => ({ data: null, error: null }),
+        channel: () => ({ on() { return this; }, subscribe() { return this; }, track: async () => { }, untrack: async () => { }, send: async () => { } }),
+        removeChannel() { },
+        storage: { from: () => ({ upload: async () => ({ error: null }) }) }
+      },
+      avatarMarkup: () => '<span></span>',
+      syncPresenceDots() { },
+      bindAvatarFallbacks() { },
+      toast: (msg, type) => toasts.push({ msg, type }),
+      confirmAction: async (opts) => { confirmCalls.push(opts); return true; },
+      friendlyError: (e) => String(e?.message || e)
+    },
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
+    setTimeout: () => 0,
+    clearTimeout() { },
+    setInterval: () => 1,
+    clearInterval() { },
+    requestAnimationFrame: (fn) => fn(),
+    addEventListener() { },
+    removeEventListener() { },
+    console
+  };
+  ctx.window = ctx;
+  ctx.MediaRecorder.isTypeSupported = () => true;
+  vm.runInNewContext(messagesJs, ctx, { filename: 'js/messages.js' });
+  await ctx.window.IponMessages.init({ profile: ctx.Ipon.profile });
+
+  const tapVoiceBtn = () => Promise.all(docClicks.map((fn) => fn({
+    target: { closest: (sel) => (sel === '#msg-voice-btn' ? getEl('msg-voice-btn') : null) }
+  })));
+
+  // Scenario A: First deny (canAskAgain: true) does NOT kick user to Settings — leaves system prompt re-triggerable
+  micBehavior = { granted: false, canAskAgain: true, manifestMissing: false };
+  await tapVoiceBtn();
+  assert.equal(confirmCalls.length, 0);
+  assert.equal(getUserMediaCalls, 0);
+  assert.match(toasts.at(-1)?.msg || '', /Allow microphone access when prompted/);
+
+  // Scenario B: User permanently denies twice (canAskAgain: false) -> offers Open Settings cleanly
+  micBehavior = { granted: false, canAskAgain: false, manifestMissing: false };
+  await tapVoiceBtn();
+  assert.equal(confirmCalls.length, 1);
+  assert.equal(confirmCalls[0].confirmLabel, 'Open Settings');
+  assert.equal(openSettingsCalls.length, 1);
+
+  // Scenario C: Old APK without ensureMicrophonePermission on Android fails NotAllowedError -> shows APK update notice (not broken Settings redirect)
+  const savedBgPlugin = ctx.Capacitor.Plugins.BackgroundNotifications;
+  ctx.Capacitor.Plugins.BackgroundNotifications = {};
+  getUserMediaError = Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' });
+  await tapVoiceBtn();
+  assert.equal(confirmCalls.length, 2);
+  assert.match(confirmCalls[1].title, /App update needed/);
+
+  // Scenario D: New APK where user taps Allow in system prompt -> immediately starts recording
+  ctx.Capacitor.Plugins.BackgroundNotifications = savedBgPlugin;
+  getUserMediaError = null;
+  micBehavior = { granted: true, canAskAgain: true, manifestDeclared: true, manifestMissing: false };
+  await tapVoiceBtn();
+  assert.equal(recorderStarted, 1);
+  assert.equal(getEl('msg-voice-recording').hidden, false);
 });

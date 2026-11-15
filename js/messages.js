@@ -438,75 +438,77 @@
                 </div>
 
                 <div class="msg-thread-active" id="msg-thread-active" hidden>
-                  <header class="msg-thread-header" id="msg-thread-header"></header>
-                  <div class="msg-thread-search-bar" id="msg-thread-search-bar" hidden>
-                    <div class="msg-thread-search-controls">
-                      <div class="msg-search-input-wrap msg-thread-search-wrap">
-                        <svg class="msg-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                        <input id="msg-thread-search-input" type="search" placeholder="Search words, files, or phrases…" aria-label="Search in conversation" autocomplete="off">
+                  <div class="msg-thread-main">
+                    <header class="msg-thread-header" id="msg-thread-header"></header>
+                    <div class="msg-thread-search-bar" id="msg-thread-search-bar" hidden>
+                      <div class="msg-thread-search-controls">
+                        <div class="msg-search-input-wrap msg-thread-search-wrap">
+                          <svg class="msg-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                          <input id="msg-thread-search-input" type="search" placeholder="Search words, files, or phrases…" aria-label="Search in conversation" autocomplete="off">
+                        </div>
+                        <select id="msg-thread-search-sender" aria-label="Filter by sender">
+                          <option value="">All senders</option>
+                        </select>
+                        <span class="msg-search-counter" id="msg-thread-search-count"></span>
+                        <button type="button" class="msg-mini-btn" id="msg-search-prev" aria-label="Previous match" title="Previous match">&#8593;</button>
+                        <button type="button" class="msg-mini-btn" id="msg-search-next" aria-label="Next match" title="Next match">&#8595;</button>
+                        <button type="button" class="dialog-close msg-mini-close" id="msg-thread-search-close" aria-label="Close thread search"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
                       </div>
-                      <select id="msg-thread-search-sender" aria-label="Filter by sender">
-                        <option value="">All senders</option>
-                      </select>
-                      <span class="msg-search-counter" id="msg-thread-search-count"></span>
-                      <button type="button" class="msg-mini-btn" id="msg-search-prev" aria-label="Previous match" title="Previous match">&#8593;</button>
-                      <button type="button" class="msg-mini-btn" id="msg-search-next" aria-label="Next match" title="Next match">&#8595;</button>
-                      <button type="button" class="dialog-close msg-mini-close" id="msg-thread-search-close" aria-label="Close thread search"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
                     </div>
-                  </div>
-                  <div class="msg-pinned-banner" id="msg-pinned-banner" hidden></div>
-                  <div class="msg-request-banner" id="msg-request-banner" hidden></div>
+                    <div class="msg-pinned-banner" id="msg-pinned-banner" hidden></div>
+                    <div class="msg-request-banner" id="msg-request-banner" hidden></div>
 
-                  <div class="msg-thread-stage" id="msg-thread-stage">
-                    <div class="msg-scroll-wrap" id="msg-scroll-wrap">
-                      <div class="msg-load-older-wrap" id="msg-load-older-wrap" hidden>
-                        <button type="button" class="button button-secondary button-sm" id="msg-load-older-btn">Load older messages</button>
-                      </div>
-                      <div class="msg-messages-list" id="msg-messages-list" role="log" aria-live="polite"></div>
-                      <div class="msg-typing-live" id="msg-typing-live" aria-hidden="true" aria-live="polite">
-                        <div class="msg-typing-live-inner">
-                          <div class="msg-typing-avatar" id="msg-typing-avatar"></div>
-                          <div class="msg-typing-bubble">
-                            <span class="msg-typing-text" aria-hidden="true">is typing<span class="msg-typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
-                            <span class="sr-only" id="msg-typing-live-text">Typing…</span>
+                    <div class="msg-thread-stage" id="msg-thread-stage">
+                      <div class="msg-scroll-wrap" id="msg-scroll-wrap">
+                        <div class="msg-load-older-wrap" id="msg-load-older-wrap" hidden>
+                          <button type="button" class="button button-secondary button-sm" id="msg-load-older-btn">Load older messages</button>
+                        </div>
+                        <div class="msg-messages-list" id="msg-messages-list" role="log" aria-live="polite"></div>
+                        <div class="msg-typing-live" id="msg-typing-live" aria-hidden="true" aria-live="polite">
+                          <div class="msg-typing-live-inner">
+                            <div class="msg-typing-avatar" id="msg-typing-avatar"></div>
+                            <div class="msg-typing-bubble">
+                              <span class="msg-typing-text" aria-hidden="true">is typing<span class="msg-typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
+                              <span class="sr-only" id="msg-typing-live-text">Typing…</span>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <aside class="msg-thread-drawer" id="msg-thread-drawer" hidden aria-label="Shared media and thread details"></aside>
-                  </div>
 
-                  <footer class="msg-composer-wrap" id="msg-composer-wrap">
-                    <div class="msg-blocked-banner" id="msg-blocked-banner" hidden></div>
-                    <div class="msg-context-bar" id="msg-context-bar" hidden></div>
-                    <div class="msg-upload-queue" id="msg-upload-queue" hidden></div>
-                    <div class="msg-emoji-popover" id="msg-emoji-popover" hidden></div>
-                    <form class="msg-composer-form" id="msg-composer-form">
-                      <input id="msg-file-input" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,.md,.zip" hidden>
-                      <div class="msg-composer-tools">
-                        <button type="button" class="msg-tool-btn" id="msg-attach-btn" aria-label="Attach photos or documents" title="Attach photos, videos, or documents (original quality)">
-                          <svg viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    <footer class="msg-composer-wrap" id="msg-composer-wrap">
+                      <div class="msg-blocked-banner" id="msg-blocked-banner" hidden></div>
+                      <div class="msg-context-bar" id="msg-context-bar" hidden></div>
+                      <div class="msg-upload-queue" id="msg-upload-queue" hidden></div>
+                      <div class="msg-emoji-popover" id="msg-emoji-popover" hidden></div>
+                      <form class="msg-composer-form" id="msg-composer-form">
+                        <input id="msg-file-input" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,.md,.zip" hidden>
+                        <div class="msg-composer-tools">
+                          <button type="button" class="msg-tool-btn" id="msg-attach-btn" aria-label="Attach photos or documents" title="Attach photos, videos, or documents (original quality)">
+                            <svg viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                          </button>
+                          <button type="button" class="msg-tool-btn" id="msg-emoji-btn" aria-label="Insert emoji" title="Emoji picker">
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                          </button>
+                          <button type="button" class="msg-tool-btn" id="msg-voice-btn" aria-label="Record voice message" title="Record voice note">
+                            <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                          </button>
+                        </div>
+                        <div class="msg-voice-recording" id="msg-voice-recording" hidden>
+                          <span class="msg-rec-dot" aria-hidden="true"></span>
+                          <span id="msg-voice-timer">Recording 0:00</span>
+                          <button type="button" class="button button-secondary button-sm" id="msg-voice-cancel">Cancel</button>
+                          <button type="button" class="button button-primary button-sm" id="msg-voice-send">Send voice</button>
+                        </div>
+                        <label class="sr-only" for="msg-composer-input">Message text</label>
+                        <textarea id="msg-composer-input" rows="1" maxlength="5000" placeholder="Write a message…"></textarea>
+                        <button type="submit" class="msg-send-btn" id="msg-send-btn" aria-label="Send message" title="Send">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                         </button>
-                        <button type="button" class="msg-tool-btn" id="msg-emoji-btn" aria-label="Insert emoji" title="Emoji picker">
-                          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-                        </button>
-                        <button type="button" class="msg-tool-btn" id="msg-voice-btn" aria-label="Record voice message" title="Record voice note">
-                          <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                        </button>
-                      </div>
-                      <div class="msg-voice-recording" id="msg-voice-recording" hidden>
-                        <span class="msg-rec-dot" aria-hidden="true"></span>
-                        <span id="msg-voice-timer">Recording 0:00</span>
-                        <button type="button" class="button button-secondary button-sm" id="msg-voice-cancel">Cancel</button>
-                        <button type="button" class="button button-primary button-sm" id="msg-voice-send">Send voice</button>
-                      </div>
-                      <label class="sr-only" for="msg-composer-input">Message text</label>
-                      <textarea id="msg-composer-input" rows="1" maxlength="5000" placeholder="Write a message…"></textarea>
-                      <button type="submit" class="msg-send-btn" id="msg-send-btn" aria-label="Send message" title="Send">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                      </button>
-                    </form>
-                  </footer>
+                      </form>
+                    </footer>
+                  </div>
+                  <aside class="msg-thread-drawer" id="msg-thread-drawer" hidden aria-label="Shared media and thread details"></aside>
                 </div>
               </section>
             </section>
@@ -1596,9 +1598,11 @@
             <div class="msg-thread-peer-meta">
               <div class="msg-thread-peer-title">
                 <strong>${escapeHtml(peer.full_name || 'User')}</strong>
-                ${peer.username ? `<span class="msg-handle-chip">@${escapeHtml(peer.username)}</span>` : ''}
               </div>
-              <small class="msg-peer-status is-syncing"><span class="msg-sync-dot" aria-hidden="true"></span>Syncing messages…</small>
+              <div class="msg-thread-peer-sub">
+                ${peer.username ? `<span class="msg-handle-chip">@${escapeHtml(peer.username)}</span>` : ''}
+                <small class="msg-peer-status is-syncing"><span class="msg-sync-dot" aria-hidden="true"></span>Syncing messages…</small>
+              </div>
             </div>
           </div>
           <div class="msg-thread-header-actions">
@@ -1794,10 +1798,12 @@
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
             <strong>${escapeHtml(conv.full_name || 'User')}</strong>
+          </div>
+          <div class="msg-thread-peer-sub">
             ${conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
             ${conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
+            <small class="msg-peer-status${isTyping ? ' is-typing' : ''}" id="msg-peer-status-text">${escapeHtml(formatStatusLine(conv, isTyping))}</small>
           </div>
-          <small class="msg-peer-status${isTyping ? ' is-typing' : ''}" id="msg-peer-status-text">${escapeHtml(formatStatusLine(conv, isTyping))}</small>
         </div>
       </div>
       <div class="msg-thread-header-actions">
@@ -3020,18 +3026,40 @@
   }
 
   // Voice Note Recording
+  function isAndroidNativeShell() {
+    const capPlatform = String(window.Capacitor?.getPlatform?.() || '').toLowerCase();
+    if (capPlatform) return capPlatform === 'android';
+    return /myIPONApp/i.test(navigator.userAgent || '') && /Android/i.test(navigator.userAgent || '');
+  }
+
   async function ensureMicrophoneAccess() {
     const bgPlugin = window.Capacitor?.Plugins?.BackgroundNotifications || null;
-    if (typeof bgPlugin?.ensureMicrophonePermission !== 'function') return { granted: true, native: false };
+    if (typeof bgPlugin?.ensureMicrophonePermission !== 'function') {
+      return {
+        granted: true,
+        native: isAndroidNativeShell(),
+        hasNativeBridge: false,
+        manifestMissing: false
+      };
+    }
     try {
       const res = await bgPlugin.ensureMicrophonePermission();
       return {
         native: true,
+        hasNativeBridge: true,
         granted: Boolean(res?.granted),
-        canAskAgain: res?.canAskAgain !== false
+        canAskAgain: res?.canAskAgain !== false,
+        manifestMissing: Boolean(res?.manifestMissing || res?.manifestDeclared === false)
       };
-    } catch {
-      return { granted: false, native: true, canAskAgain: true };
+    } catch (err) {
+      const missingManifest = /Missing the following permissions in AndroidManifest\.xml/i.test(String(err?.message || err || ''));
+      return {
+        granted: false,
+        native: true,
+        hasNativeBridge: true,
+        canAskAgain: !missingManifest,
+        manifestMissing: missingManifest
+      };
     }
   }
 
@@ -3040,11 +3068,24 @@
     if (typeof bgPlugin?.openAppSettings === 'function' && typeof ipon().confirmAction === 'function') {
       const openSettings = await ipon().confirmAction({
         title: 'Microphone access needed',
-        message: 'Allow microphone permission in your phone settings to record and send voice messages.',
+        message: 'Allow Microphone permission in your phone settings to record and send voice messages.',
         confirmLabel: 'Open Settings',
         cancelLabel: 'Not now'
       });
       if (openSettings) await bgPlugin.openAppSettings().catch(() => { });
+      return true;
+    }
+    return false;
+  }
+
+  async function showMicApkUpdateNotice() {
+    if (typeof ipon().confirmAction === 'function') {
+      await ipon().confirmAction({
+        title: 'App update needed for voice messages',
+        message: 'This installed myIPON APK build does not include Android Microphone permission yet, which is why only Notifications appears in App Settings. Install the latest myIPON APK build to enable Microphone permission and voice messages.',
+        confirmLabel: 'Got it',
+        cancelLabel: 'Close'
+      });
       return true;
     }
     return false;
@@ -3055,12 +3096,16 @@
       return ipon().toast('Voice recording is not supported on this device or browser.', 'error');
     }
     const nativeMic = await ensureMicrophoneAccess();
-    if (nativeMic.native && !nativeMic.granted) {
+    if (nativeMic.native && nativeMic.hasNativeBridge && !nativeMic.granted) {
+      if (nativeMic.manifestMissing) {
+        const shown = await showMicApkUpdateNotice();
+        if (shown) return;
+      }
       if (!nativeMic.canAskAgain) {
         const offered = await offerOpenAppSettingsForMic();
         if (offered) return;
       }
-      return ipon().toast('Please allow microphone access to record a voice message.', 'error');
+      return ipon().toast('Allow microphone access when prompted to record a voice message.', 'error');
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -3086,6 +3131,10 @@
       }, 350);
     } catch (err) {
       if (err?.name === 'NotAllowedError') {
+        if (nativeMic.native && !nativeMic.hasNativeBridge) {
+          const shown = await showMicApkUpdateNotice();
+          if (shown) return;
+        }
         const offered = await offerOpenAppSettingsForMic();
         if (offered) return;
         return ipon().toast('Microphone access is blocked. Allow microphone permission in your browser or phone settings and try again.', 'error');

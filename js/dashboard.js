@@ -592,9 +592,14 @@
       renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
       hasSnapshot = true; dataStatus.hidden = true;
     } catch (error) {
-      if (!hasSnapshot) renderEmptySnapshot();
-      dataStatus.textContent = hasSnapshot ? 'Refresh failed. The previous complete snapshot remains visible and may be outdated.' : 'Dashboard data is unavailable. No financial snapshot could be loaded.';
-      dataStatus.hidden = false;
+      if (!hasSnapshot) {
+        renderEmptySnapshot();
+        dataStatus.textContent = 'Dashboard data is unavailable. No financial snapshot could be loaded.';
+        dataStatus.hidden = false;
+      } else {
+        dataStatus.textContent = '';
+        dataStatus.hidden = true;
+      }
       Ipon.toast(Ipon.friendlyError(error), 'error');
     }
   }

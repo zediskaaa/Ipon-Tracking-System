@@ -8,6 +8,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -231,17 +232,48 @@ public class BackgroundNotificationsPlugin extends Plugin {
         call.resolve(result);
     }
 
+    private static boolean hasManifestPermission(Context context, String permission) {
+        if (context == null || TextUtils.isEmpty(permission)) return false;
+        try {
+            PackageManager pm = context.getPackageManager();
+            PackageInfo info = Build.VERSION.SDK_INT >= 33
+                ? pm.getPackageInfo(
+                    context.getPackageName(),
+                    PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS)
+                )
+                : pm.getPackageInfo(context.getPackageName(), PackageManager.GET_PERMISSIONS);
+            if (info != null && info.requestedPermissions != null) {
+                for (String declared : info.requestedPermissions) {
+                    if (permission.equals(declared)) return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
     @PluginMethod
     public void ensureMicrophonePermission(PluginCall call) {
         Context context = getContext();
+        if (!hasManifestPermission(context, Manifest.permission.RECORD_AUDIO)) {
+            JSObject result = new JSObject();
+            result.put("granted", false);
+            result.put("state", "missing_manifest");
+            result.put("canAskAgain", false);
+            result.put("manifestDeclared", false);
+            result.put("manifestMissing", true);
+            call.resolve(result);
+            return;
+        }
         boolean hasAudio = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             == PackageManager.PERMISSION_GRANTED;
-        PermissionState state = getPermissionState("microphone");
-        if (hasAudio && state == PermissionState.GRANTED) {
+        if (hasAudio) {
             JSObject result = new JSObject();
             result.put("granted", true);
             result.put("state", "granted");
             result.put("canAskAgain", true);
+            result.put("manifestDeclared", true);
+            result.put("manifestMissing", false);
             call.resolve(result);
             return;
         }
@@ -251,14 +283,19 @@ public class BackgroundNotificationsPlugin extends Plugin {
     @PermissionCallback
     private void microphonePermsCallback(PluginCall call) {
         if (call == null) return;
-        PermissionState state = getPermissionState("microphone");
-        boolean granted = state == PermissionState.GRANTED
-            && ContextCompat.checkSelfPermission(getContext(), Manifest.permission.RECORD_AUDIO)
+        Context context = getContext();
+        boolean hasAudio = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             == PackageManager.PERMISSION_GRANTED;
+        PermissionState state = getPermissionState("microphone");
+        boolean rationale = getActivity() != null
+            && ActivityCompat.shouldShowRequestPermissionRationale(getActivity(), Manifest.permission.RECORD_AUDIO);
+        boolean canAskAgain = hasAudio || rationale || state != PermissionState.DENIED;
         JSObject result = new JSObject();
-        result.put("granted", granted);
-        result.put("state", state != null ? state.toString() : (granted ? "granted" : "denied"));
-        result.put("canAskAgain", state != PermissionState.DENIED);
+        result.put("granted", hasAudio);
+        result.put("state", hasAudio ? "granted" : (state != null ? state.toString() : "denied"));
+        result.put("canAskAgain", canAskAgain);
+        result.put("manifestDeclared", true);
+        result.put("manifestMissing", false);
         call.resolve(result);
     }
 
