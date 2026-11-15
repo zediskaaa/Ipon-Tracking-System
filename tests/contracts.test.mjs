@@ -7192,7 +7192,7 @@ test('chat captionless media overlay and audit log calendar date-range chips mee
   assert.match(css, /\.image-viewer-dl-pill\s*\{[^}]*border-radius:\s*999px;[^}]*background:\s*#e6c678;/s);
   assert.match(css, /\.image-viewer-header \.dialog-close\s*\{[^}]*width:\s*38px;\s*height:\s*38px;[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/s);
   assert.match(css, /\.image-viewer-stage\.is-actual-size img\s*\{[^}]*max-width:\s*none;[^}]*max-height:\s*none;/s);
-  assert.match(css, /\.msg-pinned-pill\s*\{[^}]*background:\s*linear-gradient\(135deg,\s*#ecf5ef\s+0%,\s*#e1efe6\s+100%\);[\s\S]*?\.msg-pinned-panel\s*\{/s);
+  assert.match(css, /\.msg-pinned-pill\s*\{[^}]*background:\s*var\(--thread-pin-pill-bg,\s*linear-gradient\(135deg,\s*#ecf5ef\s+0%,\s*#e1efe6\s+100%\)\);[\s\S]*?\.msg-pinned-panel\s*\{/s);
   assert.doesNotMatch(css, /\.msg-pinned-item-unpin/);
   assert.match(css, /\.msg-bubble-wrap\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*6px;/s);
   assert.match(msgJs, /function syncActivePinnedHighlight\(/);
@@ -7797,6 +7797,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   let threadHtmlWrites = 0;
   let reqFullscreenCalls = 0;
 
+  let mockChatTheme = 'paper';
   let currentMsgs = [
     { id: 'm-sent', conversation_id: convId, sender_id: meId, body: 'Only sent', message_type: 'TEXT', created_at: '2026-11-15T10:00:00Z', delivered_at: null, read_at: null, attachments: [], reactions: [] },
     { id: 'm-deliv', conversation_id: convId, sender_id: meId, body: 'Delivered only', message_type: 'TEXT', created_at: '2026-11-15T10:01:00Z', delivered_at: '2026-11-15T10:01:02Z', read_at: null, attachments: [], reactions: [] },
@@ -7899,6 +7900,8 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
       bindAvatarFallbacks: () => {},
       syncPresenceDots: () => {},
       syncMessagesBadges: () => {},
+      setFieldError: () => {},
+      setBusy: () => {},
       friendlyError: (e) => String(e?.message || e),
       toast: () => {},
       confirmAction: async () => true,
@@ -7911,6 +7914,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
         if (name === 'get_conversations') {
           return [{
             id: convId, status: 'ACCEPTED', initiator_id: peerId, is_incoming_request: false,
+            chat_theme: mockChatTheme,
             peer: { id: peerId, full_name: 'Peer User', allow_online_status: true },
             unread_count: mockUnreadFirstId ? 1 : 0, marked_unread: false, last_message_at: '2026-11-15T10:03:00Z',
             last_message_preview: 'Video', last_message_sender_id: peerId
@@ -7918,12 +7922,16 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
         }
         if (name === 'get_conversation_messages') {
           return {
-            conversation: { id: convId, full_name: 'Peer User', status: 'ACCEPTED', friendship_status: 'FRIENDS', allow_online_status: true, receipts_enabled: true },
+            conversation: { id: convId, full_name: 'Peer User', status: 'ACCEPTED', friendship_status: 'FRIENDS', allow_online_status: true, receipts_enabled: true, chat_theme: mockChatTheme },
             has_older: false,
             unread_first_id: mockUnreadFirstId,
             pinned_messages: [],
             messages: currentMsgs
           };
+        }
+        if (name === 'update_conversation_member_state') {
+          if (params?.p_action === 'theme' && params?.p_theme) mockChatTheme = String(params.p_theme);
+          return { chat_theme: mockChatTheme };
         }
         if (name === 'mark_conversation_read') {
           mockUnreadFirstId = null;
@@ -8133,4 +8141,69 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   assert.equal(msgWin.IponMessages.handleBackNavigation(), false, 'at root Chats list handleBackNavigation returns false so dashboard step unwinds next');
   getMsgEl('msg-workspace-dialog').close();
   assert.equal(getMsgEl('msg-view-chats').classList.contains('is-mobile-thread'), false);
+
+  // Pic 1 + Pic 3: Reopen thread -> Chat Info drawer redesign + full-column theme sync (pane + stage)
+  await msgWin.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
+  assert.equal(getMsgEl('msg-thread-pane').dataset.chatTheme, 'paper');
+  assert.equal(getMsgEl('msg-thread-stage').dataset.chatTheme, 'paper');
+
+  // Open drawer -> verify Pic 1 structure (header X, avatar, 2-col Chat Action icon cards, 5 circular Theme swatches, Media & files cards)
+  await Promise.all(clickHandlers.map((fn) => fn({
+    stopPropagation: () => {},
+    target: { closest: (s) => (s === '#msg-thread-info-toggle' ? { dataset: {} } : null) }
+  })));
+  const rootDrawerHtml = getMsgEl('msg-thread-drawer').innerHTML;
+  assert.match(rootDrawerHtml, /<h3>Chat Info &amp; Options<\/h3>[\s\S]*?class="dialog-close msg-drawer-close-btn" id="msg-drawer-close"/);
+  assert.match(rootDrawerHtml, /class="msg-drawer-action-btn" data-conv-act="pin"[\s\S]*?<svg[^>]*>[\s\S]*?<span>Pin chat<\/span>/);
+  assert.match(rootDrawerHtml, /class="msg-drawer-action-btn is-danger" data-social-action="block"[\s\S]*?<span>Block user<\/span>/);
+  assert.match(rootDrawerHtml, /class="msg-theme-chip is-active" data-conv-theme="paper"[\s\S]*?class="msg-theme-swatch is-paper"[\s\S]*?class="msg-theme-label">Paper<\/span>/);
+  assert.match(rootDrawerHtml, /data-conv-theme="midnight"[\s\S]*?class="msg-theme-swatch is-midnight"[\s\S]*?class="msg-theme-label">Midnight<\/span>/);
+  assert.match(rootDrawerHtml, /data-drawer-view="media"[\s\S]*?Shared media[\s\S]*?<span class="msg-drawer-nav-count">1<\/span>/);
+  assert.match(rootDrawerHtml, /data-drawer-view="files"[\s\S]*?Shared files[\s\S]*?<span class="msg-drawer-nav-count">0<\/span>/);
+
+  // Switch chat theme to Midnight -> BOTH msg-thread-pane (top header + pinned + bottom composer) AND msg-thread-stage adopt midnight theme
+  const midnightBtn = { dataset: { convTheme: 'midnight' }, closest: (s) => (s === '[data-conv-theme]' ? midnightBtn : null) };
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: midnightBtn })));
+  assert.equal(getMsgEl('msg-thread-pane').dataset.chatTheme, 'midnight', 'top/middle/bottom container must receive chatTheme');
+  assert.equal(getMsgEl('msg-thread-stage').dataset.chatTheme, 'midnight');
+  assert.match(getMsgEl('msg-thread-drawer').innerHTML, /class="msg-theme-chip is-active" data-conv-theme="midnight"/);
+
+  // Pic 2: Open Messaging & Privacy modal -> verify form grid, bio counter, right-aligned toggle switches, dark save CTA, and blocked accounts section
+  await Promise.all(clickHandlers.map((fn) => fn({
+    stopPropagation: () => {},
+    target: { closest: (s) => (s === '#msg-privacy-btn' ? { dataset: {} } : null) }
+  })));
+  const settingsDialog = getMsgEl('msg-settings-dialog');
+  assert.equal(settingsDialog.open, true);
+  const settingsHtml = getMsgEl('msg-settings-body').innerHTML;
+  assert.match(settingsHtml, /<form id="msg-privacy-form" class="form-grid msg-privacy-form"/);
+  assert.match(settingsHtml, /class="field-help msg-bio-counter" id="msg-set-bio-count">0 \/ 240 characters<\/small>/);
+  assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Show active status[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="show_online"/);
+  assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Show last seen timestamp[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="show_last_seen"/);
+  assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Send &amp; receive read receipts[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="read_receipts"/);
+  assert.match(settingsHtml, /id="msg-settings-save"[\s\S]*?Save messaging settings/);
+  assert.match(settingsHtml, /class="msg-blocked-section"[\s\S]*?class="msg-blocked-count">0<\/span>[\s\S]*?class="msg-blocked-empty"[\s\S]*?You have not blocked anyone\./);
+  // Closing workspace resets active theme back to paper cleanly
+  settingsDialog.close();
+  getMsgEl('msg-workspace-dialog').close();
+  assert.equal(getMsgEl('msg-thread-pane').dataset.chatTheme, 'paper');
+  assert.equal(getMsgEl('msg-thread-stage').dataset.chatTheme, 'paper');
+});
+
+test('chat drawer, messaging privacy dialog, and full-column chat themes declare cohesive light & dark CSS tokens', () => {
+  const appCss = read('css/app.css');
+  // Pic 3: Full-column variables cover header, pinned banner, stage, search bar, and bottom composer
+  assert.match(appCss, /\.msg-thread-pane\[data-chat-theme="midnight"\],\s*html\[data-theme="dark"\] \.msg-thread-pane\[data-chat-theme="midnight"\]/);
+  assert.match(appCss, /\.msg-thread-header\s*\{[^}]*background:\s*var\(--thread-chrome-bg/);
+  assert.match(appCss, /\.msg-pinned-banner\s*\{[^}]*background:\s*var\(--thread-banner-bg/);
+  assert.match(appCss, /\.msg-composer-wrap\s*\{[^}]*background:\s*var\(--thread-chrome-bg/);
+  assert.match(appCss, /#msg-composer-input\s*\{[^}]*background:\s*var\(--thread-input-bg/);
+  // Dark mode must not override swatch chips or composer theme tokens flatly
+  assert.doesNotMatch(appCss, /html\[data-theme="dark"\]\s*\.msg-theme-chip\s*\{[^}]*background:\s*var\(--surface-input\)/);
+  assert.doesNotMatch(appCss, /html\[data-theme="dark"\]\s*#msg-composer-input\s*\{/);
+  // Pic 1 & Pic 2 key styling rules exist
+  assert.match(appCss, /\.msg-theme-swatch\.is-midnight\s*\{/);
+  assert.match(appCss, /\.msg-drawer-action-btn\.is-danger/);
+  assert.match(appCss, /\.msg-settings-save-btn:not\(\.is-busy\)::before/);
+  assert.match(appCss, /\.msg-blocked-count\s*\{/);
 });

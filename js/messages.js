@@ -1560,6 +1560,14 @@
     }
   }
 
+  function applyThreadTheme(theme = 'paper') {
+    const normalized = ['paper', 'emerald', 'sage', 'sand', 'midnight'].includes(theme) ? theme : 'paper';
+    const pane = document.getElementById('msg-thread-pane');
+    const stage = document.getElementById('msg-thread-stage');
+    if (pane) pane.dataset.chatTheme = normalized;
+    if (stage) stage.dataset.chatTheme = normalized;
+  }
+
   function renderThreadHeaderLoading(conversationId = state.activeConvId, explicitPeer = null) {
     document.getElementById('msg-thread-empty').hidden = true;
     const activeEl = document.getElementById('msg-thread-active');
@@ -1573,9 +1581,8 @@
       typingEl.classList.remove('is-visible');
       typingEl.setAttribute('aria-hidden', 'true');
     }
-    const stage = document.getElementById('msg-thread-stage');
     const peer = findKnownPeer(conversationId, explicitPeer?.id) || explicitPeer;
-    if (stage) stage.dataset.chatTheme = peer?.chat_theme || 'paper';
+    applyThreadTheme(peer?.chat_theme || 'paper');
 
     const headerEl = document.getElementById('msg-thread-header');
     if (headerEl) {
@@ -1770,8 +1777,7 @@
     document.getElementById('msg-thread-active').hidden = false;
 
     const conv = thread.conversation;
-    const stage = document.getElementById('msg-thread-stage');
-    if (stage) stage.dataset.chatTheme = conv.chat_theme || 'paper';
+    applyThreadTheme(conv.chat_theme || 'paper');
 
     const canInteract = conv.friendship_status !== 'BLOCKED_BY_ME' && conv.friendship_status !== 'BLOCKED_ME';
     const isPendingReq = conv.status === 'PENDING_REQUEST';
@@ -2361,7 +2367,7 @@
       });
     });
 
-    const closeBtnHtml = '<button type="button" class="dialog-close msg-mini-close" id="msg-drawer-close" aria-label="Close chat details"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>';
+    const closeBtnHtml = `<button type="button" class="dialog-close msg-drawer-close-btn" id="msg-drawer-close" aria-label="Close chat details">${MSG_CLOSE_X_SVG}</button>`;
 
     if (view === 'media') {
       const orderedMedia = media.slice().reverse();
@@ -2442,36 +2448,51 @@
     }
 
     const themes = ['paper', 'emerald', 'sage', 'sand', 'midnight'];
+    const currentTheme = themes.includes(conv.chat_theme) ? conv.chat_theme : 'paper';
     const mediaIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 21"/></svg>';
     const fileIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h6"/></svg>';
     const chevronRightSvg = '<svg class="msg-drawer-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
+    const themeCheckSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+    const bellMuteSvg = conv.is_muted
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
+    const archiveIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="5" rx="1.5"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></svg>';
+    const mailUnreadIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>';
+    const trashIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+    const blockIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.64 5.64 12.72 12.72"/></svg>';
+    const isBlockedByMe = conv.friendship_status === 'BLOCKED_BY_ME';
     drawer.innerHTML = `
       <div class="msg-drawer-head">
         <h3>Chat Info &amp; Options</h3>
         ${closeBtnHtml}
       </div>
-      <div class="msg-drawer-body" data-drawer-screen="root">
-        <div class="msg-drawer-profile">
-          ${userAvatarHtml(conv, 'avatar-lg')}
-          <strong>${escapeHtml(conv.full_name || 'User')}</strong>
-          ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
-          ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
-        </div>
-        <div class="msg-drawer-section">
-          <h4>Chat actions</h4>
-          <div class="msg-drawer-actions">
-            <button type="button" class="button button-secondary button-sm" data-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}">${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</button>
-            <button type="button" class="button button-secondary button-sm" data-conv-act="${conv.is_muted ? 'unmute' : 'mute'}">${conv.is_muted ? 'Unmute' : 'Mute'}</button>
-            <button type="button" class="button button-secondary button-sm" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${conv.is_archived ? 'Unarchive' : 'Archive'}</button>
-            <button type="button" class="button button-secondary button-sm" data-conv-act="mark_unread">Mark unread</button>
-            <button type="button" class="button button-secondary button-sm" data-conv-act="delete_for_me">Delete for me</button>
-            <button type="button" class="button button-secondary button-sm is-danger" data-social-action="${conv.friendship_status === 'BLOCKED_BY_ME' ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${conv.friendship_status === 'BLOCKED_BY_ME' ? 'Unblock user' : 'Block user'}</button>
+      <div class="msg-drawer-body is-root" data-drawer-screen="root">
+        <div class="msg-drawer-section is-top">
+          <div class="msg-drawer-profile">
+            ${userAvatarHtml(conv, 'avatar-lg', { showPresence: false })}
+            <strong>${escapeHtml(conv.full_name || 'User')}</strong>
+            ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
+            ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
+          </div>
+          <div class="msg-drawer-actions-block">
+            <h4>Chat actions</h4>
+            <div class="msg-drawer-actions">
+              <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}">${MSG_PIN_SVG}<span>${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</span></button>
+              <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_muted ? 'unmute' : 'mute'}">${bellMuteSvg}<span>${conv.is_muted ? 'Unmute' : 'Mute'}</span></button>
+              <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${archiveIconSvg}<span>${conv.is_archived ? 'Unarchive' : 'Archive'}</span></button>
+              <button type="button" class="msg-drawer-action-btn" data-conv-act="mark_unread">${mailUnreadIconSvg}<span>Mark unread</span></button>
+              <button type="button" class="msg-drawer-action-btn" data-conv-act="delete_for_me">${trashIconSvg}<span>Delete for me</span></button>
+              <button type="button" class="msg-drawer-action-btn is-danger" data-social-action="${isBlockedByMe ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${blockIconSvg}<span>${isBlockedByMe ? 'Unblock user' : 'Block user'}</span></button>
+            </div>
           </div>
         </div>
         <div class="msg-drawer-section">
           <h4>Theme</h4>
           <div class="msg-theme-swatches">
-            ${themes.map((t) => `<button type="button" class="msg-theme-chip${(conv.chat_theme || 'paper') === t ? ' is-active' : ''}" data-conv-theme="${t}">${escapeHtml(t[0].toUpperCase() + t.slice(1))}</button>`).join('')}
+            ${themes.map((t) => {
+              const active = currentTheme === t;
+              return `<button type="button" class="msg-theme-chip${active ? ' is-active' : ''}" data-conv-theme="${t}" aria-pressed="${active ? 'true' : 'false'}"><span class="msg-theme-swatch is-${t}" aria-hidden="true">${themeCheckSvg}</span><span class="msg-theme-label">${escapeHtml(t[0].toUpperCase() + t.slice(1))}</span></button>`;
+            }).join('')}
           </div>
         </div>
         <div class="msg-drawer-section">
@@ -3130,7 +3151,7 @@
       : '<p class="empty-state">Add friends or open conversations first to forward messages.</p>';
     body.dataset.fwdMsgId = messageObj.id;
     body.dataset.fwdBody = messageObj.body || '';
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
   }
 
   async function openPrivacySettingsModal() {
@@ -3142,12 +3163,15 @@
     const priv = me.chat_privacy || {};
     const blocked = state.overview?.blocked_users || [];
 
+    const shieldSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
+
     body.innerHTML = `
-      <form id="msg-privacy-form" class="form-grid" novalidate>
+      <form id="msg-privacy-form" class="form-grid msg-privacy-form" novalidate>
         <div class="field">
           <label for="msg-set-username">Username handle (optional)</label>
           <input id="msg-set-username" name="username" type="text" maxlength="24" value="${escAttr(me.username || '')}" placeholder="e.g. juan_delacruz" autocomplete="off">
           <small class="field-help msg-field-help" id="msg-set-username-help">3–24 lowercase letters, numbers, or underscores.</small>
+          <small class="field-error msg-field-help" id="msg-set-username-error" role="alert" hidden></small>
         </div>
         <div class="field">
           <label for="msg-set-friend-req">Who can send friend requests</label>
@@ -3159,8 +3183,8 @@
         </div>
         <div class="field field-wide">
           <label for="msg-set-bio">Short bio (optional)</label>
-          <textarea id="msg-set-bio" name="bio" rows="2" maxlength="240" placeholder="Share a short intro visible when people view your profile…">${escapeHtml(me.bio || '')}</textarea>
-          <small class="field-help" id="msg-set-bio-count">${(me.bio || '').length} / 240 characters</small>
+          <textarea id="msg-set-bio" name="bio" rows="3" maxlength="240" placeholder="Share a short intro visible when people view your profile…">${escapeHtml(me.bio || '')}</textarea>
+          <small class="field-help msg-bio-counter" id="msg-set-bio-count">${(me.bio || '').length} / 240 characters</small>
         </div>
         <div class="field field-wide">
           <label for="msg-set-msg-req">Who can message you (non-friends)</label>
@@ -3169,25 +3193,26 @@
             <option value="FRIENDS_ONLY"${priv.allow_message_requests === 'FRIENDS_ONLY' ? ' selected' : ''}>Friends only (reject non-friend messages)</option>
           </select>
         </div>
-        <label class="msg-switch-row field-wide"><input type="checkbox" name="show_online"${priv.show_online !== false ? ' checked' : ''}><span><strong>Show active status</strong><small>Let connections see when you are online</small></span></label>
-        <label class="msg-switch-row field-wide"><input type="checkbox" name="show_last_seen"${priv.show_last_seen !== false ? ' checked' : ''}><span><strong>Show last seen timestamp</strong><small>Share when you were last active (requires active status enabled)</small></span></label>
-        <label class="msg-switch-row field-wide"><input type="checkbox" name="read_receipts"${priv.read_receipts !== false ? ' checked' : ''}><span><strong>Send &amp; receive read receipts</strong><small>Turning this off hides Seen indicators on accepted conversations</small></span></label>
+        <label class="msg-switch-row toggle-switch-row field-wide"><span><strong>Show active status</strong><small>Let connections see when you are online</small></span><input type="checkbox" class="toggle-switch-input" name="show_online"${priv.show_online !== false ? ' checked' : ''}></label>
+        <label class="msg-switch-row toggle-switch-row field-wide"><span><strong>Show last seen timestamp</strong><small>Share when you were last active (requires active status enabled)</small></span><input type="checkbox" class="toggle-switch-input" name="show_last_seen"${priv.show_last_seen !== false ? ' checked' : ''}></label>
+        <label class="msg-switch-row toggle-switch-row field-wide"><span><strong>Send &amp; receive read receipts</strong><small>Turning this off hides Seen indicators on accepted conversations</small></span><input type="checkbox" class="toggle-switch-input" name="read_receipts"${priv.read_receipts !== false ? ' checked' : ''}></label>
         <p class="mfa-message field-wide" id="msg-settings-error" role="alert" hidden></p>
         <div class="form-actions field-wide">
-          <button type="submit" class="button button-primary" id="msg-settings-save">Save messaging settings</button>
+          <button type="submit" class="button button-primary msg-settings-save-btn" id="msg-settings-save">Save messaging settings</button>
         </div>
       </form>
       <section class="msg-blocked-section">
-        <h4>Blocked accounts (${blocked.length})</h4>
+        <h4><span>Blocked accounts</span><span class="msg-blocked-count">${blocked.length}</span></h4>
         ${blocked.length ? `<div class="msg-blocked-list">${blocked.map((b) => `
           <div class="msg-blocked-row">
             <span><strong>${escapeHtml(b.full_name)}</strong>${b.username ? ` <small>@${escapeHtml(b.username)}</small>` : ''}</span>
             <button type="button" class="button button-secondary button-sm" data-unblock-user="${escapeHtml(b.id)}">Unblock</button>
-          </div>`).join('')}</div>` : '<p class="msg-muted-copy">You have not blocked anyone.</p>'}
+          </div>`).join('')}</div>` : `<p class="msg-blocked-empty">${shieldSvg}<span>You have not blocked anyone.</span></p>`}
       </section>`;
 
     const form = document.getElementById('msg-privacy-form');
     const unameInput = document.getElementById('msg-set-username');
+    const unameHelp = document.getElementById('msg-set-username-help');
     const bioInput = document.getElementById('msg-set-bio');
     const bioCounter = document.getElementById('msg-set-bio-count');
 
@@ -3196,6 +3221,7 @@
       const val = unameInput.value.trim().toLowerCase();
       unameInput.value = val;
       const ok = !val || /^[a-z0-9_]{3,24}$/.test(val);
+      if (unameHelp) unameHelp.hidden = !ok;
       ipon().setFieldError(unameInput, ok ? '' : 'Use 3–24 lowercase letters, numbers, or underscores.');
       return ok;
     };
@@ -3239,7 +3265,7 @@
       }
     };
 
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
   }
 
   // UI View Switcher & Event Delegation
@@ -3297,13 +3323,15 @@
     state.activeThread = null;
     state.replyToMsg = null;
     state.editingMsg = null;
-    state.threadSearchActive = false;
+    state.showThreadSearch = false;
     state.threadSearchQuery = '';
     state.threadSearchMatches = [];
-    state.infoOpen = false;
-    document.getElementById('msg-thread-pane')?.classList.remove('has-info-open');
-    const infoDrawer = document.getElementById('msg-info-drawer');
-    if (infoDrawer) infoDrawer.hidden = true;
+    const searchBar = document.getElementById('msg-thread-search-bar');
+    if (searchBar) searchBar.hidden = true;
+    state.showThreadInfo = false;
+    state.threadInfoView = 'root';
+    renderThreadInfoDrawer();
+    applyThreadTheme('paper');
     const activePane = document.getElementById('msg-thread-active');
     const emptyPane = document.getElementById('msg-thread-empty');
     if (activePane) activePane.hidden = true;
@@ -3735,10 +3763,7 @@
         try {
           await ipon().rpc('update_conversation_member_state', { p_conversation_id: cId, p_action: act });
           if (act === 'delete_for_me' && state.activeConvId === cId) {
-            state.activeConvId = null;
-            state.activeThread = null;
-            document.getElementById('msg-thread-active').hidden = true;
-            document.getElementById('msg-thread-empty').hidden = false;
+            clearActiveThreadSelection();
           }
           await refreshConversations();
         } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
@@ -3755,12 +3780,7 @@
         try {
           await ipon().rpc('update_conversation_member_state', { p_conversation_id: state.activeConvId, p_action: act });
           if (act === 'delete_for_me') {
-            state.activeConvId = null;
-            state.activeThread = null;
-            state.showThreadInfo = false;
-            state.threadInfoView = 'root';
-            document.getElementById('msg-thread-active').hidden = true;
-            document.getElementById('msg-thread-empty').hidden = false;
+            clearActiveThreadSelection();
           } else {
             await openConversation(state.activeConvId, { markRead: false, silent: true });
           }
@@ -3771,10 +3791,21 @@
 
       const themeBtn = ev.target.closest?.('[data-conv-theme]');
       if (themeBtn && state.activeConvId) {
+        const nextTheme = themeBtn.dataset.convTheme || 'paper';
+        const conv = state.activeThread?.conversation;
+        const prevTheme = conv?.chat_theme || 'paper';
+        if (conv) conv.chat_theme = nextTheme;
+        applyThreadTheme(nextTheme);
+        if (state.showThreadInfo) renderThreadInfoDrawer();
         try {
-          await ipon().rpc('update_conversation_member_state', { p_conversation_id: state.activeConvId, p_action: 'theme', p_theme: themeBtn.dataset.convTheme });
+          await ipon().rpc('update_conversation_member_state', { p_conversation_id: state.activeConvId, p_action: 'theme', p_theme: nextTheme });
           await openConversation(state.activeConvId, { markRead: false, silent: true });
-        } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
+        } catch (err) {
+          if (conv) conv.chat_theme = prevTheme;
+          applyThreadTheme(prevTheme);
+          if (state.showThreadInfo) renderThreadInfoDrawer();
+          ipon().toast(ipon().friendlyError(err), 'error');
+        }
         return;
       }
 
@@ -3884,10 +3915,7 @@
           await refreshConversations();
           if (dec === 'ACCEPT') { switchTab('chats'); await openConversation(state.activeConvId); }
           else {
-            state.activeConvId = null;
-            state.activeThread = null;
-            document.getElementById('msg-thread-active').hidden = true;
-            document.getElementById('msg-thread-empty').hidden = false;
+            clearActiveThreadSelection();
           }
         } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
         return;
