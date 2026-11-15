@@ -378,7 +378,13 @@ test('account settings open from the responsive identity control', () => {
   assert.match(css, /grid-template-columns:repeat\(auto-fit,minmax\(44px,1fr\)\)/);
   assert.match(css, /\.account-dialog-header\{[^}]*linear-gradient\(125deg,#062d23/);
   assert.match(css, /\.account-dialog-content\{[^}]*grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
+  assert.match(css, /\.account-card\{[^}]*background:#fcfaf5/);
+  assert.match(css, /\.account-section-heading h3\{[^}]*"IPON Serif",serif/);
+  assert.match(css, /\.account-profile-identity strong\{[^}]*"IPON Serif",serif/);
   assert.match(css, /\.account-support\{[^}]*margin-top:auto/);
+  assert.match(css, /\.account-support strong\{[^}]*"IPON Serif",serif/);
+  assert.match(css, /\.account-support \.button\{[^}]*border-radius:999px/);
+  assert.match(css, /\.payout-fieldset-grid\s*>\s*\.payout-detail-field:last-of-type\s*\{[^}]*grid-column:\s*1 \/ -1;/);
   assert.match(css, /\.account-dialog\{width:100%;height:100dvh/);
 });
 
@@ -3396,8 +3402,7 @@ test('sidebar profile card, account modal, and announcement reactions omit group
 
   assert.match(coreJs, /sidebarUser\.innerHTML = `<strong>\$\{escapeHtml\(profile\.full_name\)\}<\/strong><small>\$\{escapeHtml\(profile\.role === 'SUPER_ADMIN' \? 'Owner' : 'My account'\)\}<\/small>`/);
   assert.match(coreJs, /getElementById\('quick-account-role'\)\.textContent = currentProfile\.role === 'SUPER_ADMIN' \? 'Owner' : \(data\.email \|\| 'My account'\)/);
-  assert.match(appCss, /\.account-profile-identity\s+small\s*\{[^}]*color\s*:\s*var\(--muted\)/);
-  assert.doesNotMatch(appCss, /\.account-profile-identity\s+small\s*\{[^}]*(?:border-radius|background|border\s*:)/);
+  assert.match(appCss, /\.account-profile-identity\s+small\s*\{[^}]*border-radius\s*:\s*999px[^}]*background\s*:\s*#dceee3[^}]*color\s*:\s*#16553e/);
   assert.match(coreJs, /\$\{isOwner \? '<span class="reaction-user-role-badge is-owner">Owner<\/span>' : ''\}/);
   assert.doesNotMatch(coreJs, /reaction-user-role-badge \$\{roleClass\}/);
   assert.match(settingsJs, /class="role-badge/);
