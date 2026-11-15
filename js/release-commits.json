@@ -1,5 +1,17 @@
 [
   {
+    "date": "2026-11-15T16:44:23+08:00",
+    "message": "Restore member group savings summary and read-only transparency RLS"
+  },
+  {
+    "date": "2026-11-15T12:40:24+08:00",
+    "message": "Lock desktop calendar row heights and contain scrollable announcements\n\n- Fix desktop calendar cards and rows stretching vertically by setting flex: 0 0 auto on .calendar-card/.calendar-board and fixed 90px row height on .calendar-week while keeping compact mobile heights.\n- Isolate desktop 3-column grid row sizing using contain: size on .review-column so the right rail aligns cleanly with the calendar bottom without inflating calendar height.\n- Ensure .announcement-panel .announcement-list scrolls smoothly with thin themed scrollbars and flex: 0 0 auto on announcement items so cards never squish or dump unclipped down the page.\n- Bump asset cache tags (?v=20261115-83), sync Capacitor assets, and add contract tests."
+  },
+  {
+    "date": "2026-11-15T12:27:59+08:00",
+    "message": "Enforce member login activation gate and fix member count & delete integrity\n\n- Gate official active membership on account sign-in via members.activation_status (PENDING | ACTIVE) and \u0007ctivate_own_pending_account RPC sync on login/session init.\n- Fix members_select RLS policy and query filters to exclude soft-deleted members (deleted_at IS NULL) across Dashboard, Member directory, Records, Reports, Savings, and Settings.\n- Drop remaining stale overloaded RPC signatures in migration 072 and clean empty orphan contribution periods for non-official members.\n- Update manage-account Edge Function to keep invited members pending until actual sign-in, and refine Member directory status/delete UX."
+  },
+  {
     "date": "2026-11-15T03:53:36+08:00",
     "message": "Fix create_announcement RPC overload conflict (PGRST203) and clean up stale signatures\n\n- Add migration 20261115_070_drop_overloaded_rpc_signatures.sql to drop the 7 stale shorter overloaded RPC signatures left over in production (including 4-arg public.create_announcement) and reload PostgREST schema cache.\n\n- Fix database/schema.sql grants for 6-arg public.create_announcement(uuid, text, text, jsonb, text, text) and sync migration 070 drops and ledger entry.\n\n- Pass explicit p_announcement_type: 'GENERAL' and p_release_version: null in js/core.js when publishing announcements.\n\n- Bump core.js HTML cache-buster tags (?v=20261115-81), sync Capacitor/www assets, refresh js/release-commits.json, and add contract tests (122/122 passing)."
   },
@@ -166,17 +178,5 @@
   {
     "date": "2026-11-14T02:46:14+08:00",
     "message": "Fix Android notification permission prompt and add background polling"
-  },
-  {
-    "date": "2026-11-14T02:35:33+08:00",
-    "message": "Bump dashboard script cache version after removing AI Coach"
-  },
-  {
-    "date": "2026-11-14T02:34:41+08:00",
-    "message": "Align compact brand header across all pages and bust stale asset cache"
-  },
-  {
-    "date": "2026-11-14T02:32:16+08:00",
-    "message": "Complete role-based notifications and phone notification drawer alerts"
   }
 ]
