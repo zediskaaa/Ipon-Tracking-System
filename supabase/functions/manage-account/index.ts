@@ -1765,6 +1765,116 @@ Deno.serve(async (request) => {
     return json({ removed: allowedPaths.length });
   }
 
+  const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
+  const ALLOWED_CHAT_EXT_RE = /\.(jpg|jpeg|png|webp|gif|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|rtf|odt|ods|odp|md|mp3|wav|ogg|m4a|webm|aac|mp4|mov|zip)$/i;
+
+  if (body.action === 'chat-upload-urls') {
+    if (actor.role === 'SUPER_ADMIN') {
+      return json({ error: 'Platform owners do not have access to messaging.' }, 403);
+    }
+    const conversationId = String(body.conversation_id || '').trim();
+    const files = Array.isArray(body.files) ? body.files : [];
+    if (!UUID_RE.test(conversationId) || !files.length || files.length > 10) {
+      return json({ error: 'Invalid chat attachment upload request.' }, 400);
+    }
+    const { data: canSend, error: permError } = await caller.rpc('can_send_to_conversation', { p_conversation_id: conversationId });
+    if (permError || canSend !== true) {
+      return json({ error: permError?.message || 'You cannot attach files to this conversation.' }, 403);
+    }
+    try {
+      const { error: bucketErr } = await admin.storage.createBucket(CHAT_ATTACHMENTS_BUCKET, { public: false, fileSizeLimit: 52428800 });
+      if (bucketErr && !/already exists/i.test(bucketErr.message || '')) throw bucketErr;
+      const uploads = [];
+      for (let i = 0; i < files.length; i += 1) {
+        const entry = (files[i] || {}) as { name?: unknown; kind?: unknown; type?: unknown; size?: unknown };
+        const rawName = String(entry.name || 'attachment').trim().slice(0, 180) || 'attachment';
+        const rawType = String(entry.type || '').trim().toLowerCase().slice(0, 120);
+        const rawSize = Number(entry.size || 0);
+        if (rawSize < 0 || rawSize > 52428800) {
+          return json({ error: `"${rawName}" exceeds the 50 MB file size limit.` }, 400);
+        }
+        if (BLOCKED_DISCUSSION_EXT_RE.test(rawName) || BLOCKED_DISCUSSION_MIMES.has(rawType)) {
+          return json({ error: `"${rawName}" cannot be uploaded for security reasons.` }, 400);
+        }
+        if (!ALLOWED_CHAT_EXT_RE.test(rawName) && !rawType.startsWith('image/') && !rawType.startsWith('audio/')) {
+          return json({ error: `"${rawName}" is not a supported chat file format.` }, 400);
+        }
+        const cleanName = rawName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-100) || 'attachment';
+        const kind = ['image', 'document', 'audio', 'video', 'file'].includes(String(entry.kind || '')) ? String(entry.kind) : 'file';
+        const path = `${conversationId}/${userResult.user.id}/${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
+        const { data, error } = await admin.storage.from(CHAT_ATTACHMENTS_BUCKET).createSignedUploadUrl(path);
+        if (error || !data) throw error || new Error('Could not prepare file upload.');
+        uploads.push({
+          path,
+          token: data.token,
+          signedUrl: data.signedUrl,
+          name: rawName,
+          kind,
+          type: String(entry.type || '').slice(0, 120),
+          size: Math.max(0, Math.round(rawSize))
+        });
+      }
+      return json({ uploads });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Unable to prepare chat attachment uploads.' }, 400);
+    }
+  }
+
+  if (body.action === 'chat-view-urls') {
+    if (actor.role === 'SUPER_ADMIN') {
+      return json({ error: 'Platform owners do not have access to messaging.' }, 403);
+    }
+    const conversationId = String(body.conversation_id || '').trim();
+    const rawPaths = Array.isArray(body.paths) ? body.paths.map((value) => String(value || '')).filter((p) => p && !p.includes('..')).slice(0, 100) : [];
+    const downloadPath = typeof body.download_path === 'string' && !body.download_path.includes('..') ? body.download_path.trim() : '';
+    const downloadName = typeof body.download_name === 'string' ? body.download_name.replace(/[^a-zA-Z0-9._ -]/g, '_').slice(0, 140) : '';
+    if (!UUID_RE.test(conversationId)) return json({ error: 'Invalid conversation reference.' }, 400);
+
+    const requestPaths = downloadPath ? [downloadPath] : rawPaths;
+    if (!requestPaths.length) return json({ urls: {} });
+
+    const { data: allowed, error: allowedError } = await caller.rpc('get_conversation_attachment_paths', {
+      p_conversation_id: conversationId,
+      p_paths: requestPaths
+    });
+    if (allowedError) return json({ error: allowedError.message || 'Unable to authorize attachments.' }, 403);
+
+    const allowedPaths = Array.isArray(allowed) ? allowed : [];
+    if (!allowedPaths.length) return json({ urls: {} });
+
+    if (downloadPath) {
+      const targetPath = allowedPaths[0];
+      const { data: dlData, error: dlError } = await admin.storage
+        .from(CHAT_ATTACHMENTS_BUCKET)
+        .createSignedUrl(targetPath, 3600, { download: downloadName || true });
+      if (dlError || !dlData?.signedUrl) {
+        return json({ error: dlError?.message || 'Unable to prepare file download link.' }, 400);
+      }
+      return json({ downloadUrl: dlData.signedUrl });
+    }
+
+    const urls: Record<string, string> = {};
+    const { data: signed, error: signError } = await admin.storage.from(CHAT_ATTACHMENTS_BUCKET).createSignedUrls(allowedPaths, 3600);
+    if (signError) return json({ error: signError.message || 'Unable to load attachment links.' }, 400);
+    (signed || []).forEach((item: { path?: string | null; signedUrl?: string | null }) => {
+      if (item.path && item.signedUrl) urls[item.path] = item.signedUrl;
+    });
+    return json({ urls });
+  }
+
+  if (body.action === 'chat-cleanup-media') {
+    if (actor.role === 'SUPER_ADMIN') {
+      return json({ error: 'Platform owners do not have access to messaging.' }, 403);
+    }
+    const requested = Array.isArray(body.paths) ? body.paths.map((value) => String(value || '')).filter(Boolean) : [];
+    const ownSegment = `/${userResult.user.id}/`;
+    const allowedPaths = requested.filter((path) => !path.includes('..') && path.includes(ownSegment));
+    if (!allowedPaths.length) return json({ removed: 0 });
+    const { error: removeError } = await admin.storage.from(CHAT_ATTACHMENTS_BUCKET).remove(allowedPaths);
+    if (removeError) return json({ error: removeError.message || 'Unable to clean up uploaded files.' }, 400);
+    return json({ removed: allowedPaths.length });
+  }
+
   if (body.action === 'change-password') {
     const password = String(body.password || '');
     const currentPassword = String(body.current_password || '');

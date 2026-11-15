@@ -130,7 +130,6 @@
   const inviteDialog = document.getElementById('group-invite-dialog');
   const inviteForm = document.getElementById('group-invite-form');
   const inviteOnlyRows = document.getElementById('invite-only-rows');
-  document.getElementById('dashboard-signout').addEventListener('click', Ipon.signOut);
 
   function syncGroupHub() {
     if (!currentGroup) return;

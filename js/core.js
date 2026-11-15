@@ -1293,7 +1293,10 @@
         fullName: typeof patch.fullName === 'string' && patch.fullName.trim() ? patch.fullName.trim() : (base.fullName || ''),
         unreadCount: patch.unreadCount !== undefined && Number.isFinite(Number(patch.unreadCount))
           ? Math.max(0, Math.floor(Number(patch.unreadCount)))
-          : (Number.isFinite(Number(base.unreadCount)) ? Math.max(0, Math.floor(Number(base.unreadCount))) : 0)
+          : (Number.isFinite(Number(base.unreadCount)) ? Math.max(0, Math.floor(Number(base.unreadCount))) : 0),
+        unreadMessagesCount: patch.unreadMessagesCount !== undefined && Number.isFinite(Number(patch.unreadMessagesCount))
+          ? Math.max(0, Math.floor(Number(patch.unreadMessagesCount)))
+          : (Number.isFinite(Number(base.unreadMessagesCount)) ? Math.max(0, Math.floor(Number(base.unreadMessagesCount))) : 0)
       };
       const serialized = JSON.stringify(next);
       if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(SHELL_SNAPSHOT_KEY, serialized);
@@ -1346,6 +1349,15 @@
     if (persist) writeShellSnapshot({ unreadCount: count });
   }
 
+  function syncMessagesBadges(unread, { persist = true } = {}) {
+    const count = Math.max(0, Math.floor(Number(unread) || 0));
+    document.querySelectorAll('[data-messages-count]').forEach((badge) => {
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.hidden = count === 0;
+    });
+    if (persist) writeShellSnapshot({ unreadMessagesCount: count });
+  }
+
   function syncShellRoleVisibility(effectiveRole) {
     if (document?.documentElement?.dataset && VALID_SHELL_ROLES.includes(effectiveRole)) {
       document.documentElement.dataset.shellRole = effectiveRole;
@@ -1354,6 +1366,9 @@
       const roles = String(element.dataset?.role || '').split(',');
       element.hidden = !roles.includes(effectiveRole);
     });
+    if (effectiveRole === 'SUPER_ADMIN') {
+      document.querySelectorAll('[data-messages-open]').forEach((el) => { el.remove(); });
+    }
   }
 
   function resolveActiveRole(passedRole) {
@@ -1379,6 +1394,7 @@
     const cachedRole = currentProfile?.role || snapshot?.role || effectiveRole;
     const cachedUserId = currentProfile?.id || snapshot?.userId || '';
     const cachedUnread = Number.isFinite(Number(snapshot?.unreadCount)) ? Math.max(0, Math.floor(Number(snapshot.unreadCount))) : 0;
+    const cachedMsgUnread = Number.isFinite(Number(snapshot?.unreadMessagesCount)) ? Math.max(0, Math.floor(Number(snapshot.unreadMessagesCount))) : 0;
     const cachedAvatar = currentProfile?.avatar_url || readShellAvatar(cachedUserId);
     const roleLabel = cachedRole && VALID_SHELL_ROLES.includes(cachedRole)
       ? (cachedRole === 'SUPER_ADMIN' ? 'Owner' : 'My account')
@@ -1386,6 +1402,10 @@
     if (host) {
       const page = document.body.dataset.page;
       const superAdminPanel = document.body.dataset.panel === 'super-admin';
+      const allowMessages = !superAdminPanel && effectiveRole !== 'SUPER_ADMIN';
+      const msgUtilityHtml = allowMessages
+        ? `<button class="sidebar-utility" data-messages-open type="button" aria-label="Open messages and connections" title="Messages"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg><b data-messages-count${cachedMsgUnread > 0 ? '' : ' hidden'}>${cachedMsgUnread > 99 ? '99+' : cachedMsgUnread}</b></button>`
+        : '';
       const navigation = (superAdminPanel || effectiveRole === 'SUPER_ADMIN' ? superAdminNavItems : effectiveRole === 'MEMBER' ? userNavItems : navItems)
         .filter(([, , , , requiredRole]) => !requiredRole || requiredRole === effectiveRole);
       const activeId = superAdminPanel ? location.hash.slice(1) || 'overview' : ['contributions', 'withdrawals', 'expenses', 'savings'].includes(page) ? 'contributions' : page;
@@ -1406,7 +1426,7 @@
         ${sidebarArtHtml}
         <div class="app-sidebar-footer">
           <div class="sidebar-utilities">
-            <button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><b data-notification-count${cachedUnread > 0 ? '' : ' hidden'}>${cachedUnread}</b></button>
+            ${msgUtilityHtml}<button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><b data-notification-count${cachedUnread > 0 ? '' : ' hidden'}>${cachedUnread}</b></button>
           </div>
           <button class="sidebar-user-card" data-account-open type="button" aria-label="Open my account">
             <span class="avatar-presence-wrap">
@@ -1420,16 +1440,12 @@
               <small>${escapeHtml(cachedName ? roleLabel : 'ACCOUNT')}</small>
             </div>
           </button>
-          <button class="sidebar-signout text-button" id="sign-out" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg>
-            <span>Sign out</span>
-          </button>
         </div>`;
-        document.getElementById('sign-out')?.addEventListener('click', signOut);
       }
     }
     syncShellRoleVisibility(effectiveRole);
     syncNotificationBadges(cachedUnread, { persist: false });
+    syncMessagesBadges(cachedMsgUnread, { persist: false });
     if (cachedName) syncSidebarUserInfo(cachedName, cachedRole);
     if (cachedAvatar) {
       syncProfileAvatars({ id: cachedUserId, full_name: cachedName, role: cachedRole, avatar_url: cachedAvatar }, { persist: false });
@@ -1529,6 +1545,7 @@
             <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label></section></div>
+            <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
           </div>
         </div>
       </dialog>
@@ -1622,12 +1639,35 @@
     } catch (_) { }
   }
 
+  let presenceShowOnline = true;
+
+  function setOnlineVisibility(showOnline) {
+    presenceShowOnline = showOnline !== false;
+    if (!currentProfile?.id) return;
+    if (presenceShowOnline) {
+      onlineUserIds.add(String(currentProfile.id));
+      presenceChannel?.track?.({
+        user_id: currentProfile.id,
+        full_name: currentProfile.full_name,
+        role: currentProfile.role,
+        online_at: new Date().toISOString()
+      }).catch?.(() => { });
+    } else {
+      onlineUserIds.delete(String(currentProfile.id));
+      presenceChannel?.untrack?.().catch?.(() => { });
+    }
+    syncPresenceDots();
+    broadcastLocalPresence();
+  }
+
   function initPresence(profile) {
     const client = getClient();
     if (!client || !profile?.id) return;
+    presenceShowOnline = profile?.chat_privacy?.show_online !== false;
     if (presenceChannel) return;
 
-    onlineUserIds.add(String(profile.id));
+    if (presenceShowOnline) onlineUserIds.add(String(profile.id));
+    else onlineUserIds.delete(String(profile.id));
     syncPresenceDots();
 
     try {
@@ -1636,6 +1676,7 @@
         bc.addEventListener('message', (event) => {
           if (event.data?.ids && Array.isArray(event.data.ids)) {
             event.data.ids.forEach((id) => onlineUserIds.add(String(id)));
+            if (!presenceShowOnline) onlineUserIds.delete(String(profile.id));
             syncPresenceDots();
           }
         });
@@ -1646,6 +1687,7 @@
             const data = JSON.parse(event.newValue);
             if (Array.isArray(data?.ids)) {
               data.ids.forEach((id) => onlineUserIds.add(String(id)));
+              if (!presenceShowOnline) onlineUserIds.delete(String(profile.id));
               syncPresenceDots();
             }
           } catch (_) { }
@@ -1666,7 +1708,7 @@
         try {
           const state = presenceChannel.presenceState();
           onlineUserIds.clear();
-          onlineUserIds.add(String(profile.id));
+          if (presenceShowOnline) onlineUserIds.add(String(profile.id));
           Object.keys(state || {}).forEach((key) => {
             if (key) onlineUserIds.add(String(key));
             const presences = state[key] || [];
@@ -1689,11 +1731,11 @@
         })
         .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
           const state = presenceChannel.presenceState();
-          if (!state[key] && key !== String(profile.id)) {
+          if (!state[key] && (key !== String(profile.id) || !presenceShowOnline)) {
             onlineUserIds.delete(String(key));
           }
           (leftPresences || []).forEach((p) => {
-            if (p?.user_id && p.user_id !== String(profile.id) && !state[p.user_id]) {
+            if (p?.user_id && (p.user_id !== String(profile.id) || !presenceShowOnline) && !state[p.user_id]) {
               onlineUserIds.delete(String(p.user_id));
             }
           });
@@ -1701,7 +1743,7 @@
           broadcastLocalPresence();
         })
         .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
+          if (status === 'SUBSCRIBED' && presenceShowOnline) {
             try {
               await presenceChannel.track({
                 user_id: profile.id,
@@ -2293,6 +2335,7 @@
     };
     document.querySelectorAll('[data-account-open]').forEach((button) => button.onclick = openAccountDialog);
     document.querySelectorAll('[data-account-close]').forEach((button) => button.onclick = () => account?.close());
+    document.querySelectorAll('[data-sign-out]').forEach((button) => button.onclick = signOut);
     if (notifications && !notifications.dataset.bound) {
       notifications.dataset.bound = 'true';
       document.addEventListener('pointerdown', (event) => {
@@ -3871,6 +3914,19 @@
       return `dashboard.html?review_notice=${encodeQueryValue(item.id || '')}`;
     }
 
+    if (type.startsWith('SOCIAL_') && role !== 'SUPER_ADMIN') {
+      const currentFile = (location.pathname.split('/').pop() || 'dashboard.html').toLowerCase();
+      const targetPage = ['index.html', 'login.html', 'mfa.html', 'reset-password.html', 'super-admin.html'].includes(currentFile)
+        ? 'dashboard.html'
+        : currentFile;
+      if (safe && !/^https?:\/\//i.test(safe)) {
+        const qIndex = safe.indexOf('?');
+        const query = qIndex >= 0 ? safe.slice(qIndex) : '?messages=inbox';
+        return `${targetPage}${query}`;
+      }
+      return `${targetPage}?messages=inbox`;
+    }
+
     const baseTarget = safe && !/^https?:\/\//i.test(safe)
       ? normalizeRolePageTarget(safe, role)
       : (item.id ? `${location.pathname.split('/').pop() || homeForRole(role)}?notice=${encodeQueryValue(item.id)}` : '');
@@ -4411,6 +4467,12 @@
     }
     const targetFile = (parsedTarget.pathname.split('/').pop() || 'index.html').toLowerCase();
 
+    if (rawItem?.type?.startsWith('SOCIAL_') && currentProfile?.role !== 'SUPER_ADMIN' && window.IponMessages?.openFromNotification) {
+      history.replaceState(null, '', target);
+      window.IponMessages.openFromNotification(rawItem, parsedTarget);
+      return target;
+    }
+
     if (currentFile === targetFile && !didSwitchGroup) {
       history.replaceState(null, '', target);
       window.dispatchEvent(new CustomEvent('ipon:deep-link', { detail: { url: target, item: rawItem } }));
@@ -4576,9 +4638,14 @@
         const isReleaseNotif = item.type === 'RELEASE' || (item.title && /release|version|app update/i.test(item.title));
         notificationItemsById.set(String(item.id), item);
       const safeTarget = isInvite ? '' : resolveNotificationTarget(item);
+        const iconPath = item.type === 'GROUP_INVITE' || item.type === 'SOCIAL_FRIEND_REQUEST' || item.type === 'SOCIAL_FRIEND_ACCEPTED'
+          ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'
+          : String(item.type || '').startsWith('SOCIAL_')
+            ? 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'
+            : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
         return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"${safeTarget ? ` data-nav-target="${escapeHtml(safeTarget)}"` : ''}>
           <span class="notification-item-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="${item.type === 'GROUP_INVITE' ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4'}"/></svg>
+            <svg viewBox="0 0 24 24"><path d="${iconPath}"/></svg>
           </span>
           <div class="notification-item-copy">
             <strong>${escapeHtml(item.title)}</strong>
@@ -4830,7 +4897,7 @@
       }
 
       const fetchProfile = () => client.from('profiles')
-        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,username,bio,chat_privacy,last_seen_at')
         .eq('id', session.user.id)
         .single();
       let { data: profile, error } = await runWithStartupRetry(fetchProfile);
@@ -4906,6 +4973,9 @@
       if (options.requireAuth !== false) watchCrossTabAuth(client, profile.id);
       initNotifications(profile).catch(() => { });
       initPresence(profile);
+      if (profile.role !== 'SUPER_ADMIN' && options.requireAuth !== false) {
+        try { window.IponMessages?.init?.(profile); } catch (_) { }
+      }
       appInitialized = true;
       dismissStartupFailure();
       if (options.requireAuth === false) setLoading(false);
@@ -7102,27 +7172,54 @@
         <header class="image-viewer-header">
           <div><h2 id="ipon-iv-title"></h2><p id="ipon-iv-subtitle"></p></div>
           <div class="image-viewer-actions">
+            <button class="button button-secondary button-sm" id="ipon-iv-zoom" type="button" aria-pressed="false">Actual size</button>
             <a class="button button-secondary button-sm" id="ipon-iv-download" download="myipon-attachment.jpg" target="_blank" rel="noopener">Download</a>
             <button class="dialog-close" id="ipon-iv-close" type="button" aria-label="Close image viewer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </div>
         </header>
-        <div class="image-viewer-stage"><img id="ipon-iv-img" alt=""></div>
+        <div class="image-viewer-stage" id="ipon-iv-stage"><img id="ipon-iv-img" alt=""></div>
       </div>`;
       document.body.appendChild(dialog);
       dialog.querySelector('#ipon-iv-close').addEventListener('click', () => dialog.close());
+      dialog.querySelector('#ipon-iv-zoom').addEventListener('click', () => {
+        const stage = dialog.querySelector('#ipon-iv-stage');
+        const zoomBtn = dialog.querySelector('#ipon-iv-zoom');
+        if (!stage || !zoomBtn) return;
+        const actual = stage.classList.toggle('is-actual-size');
+        zoomBtn.setAttribute('aria-pressed', String(actual));
+        zoomBtn.textContent = actual ? 'Fit screen' : 'Actual size';
+      });
       dialog.addEventListener('click', (event) => {
         if (event.target === dialog) dialog.close();
       });
     }
     const img = dialog.querySelector('#ipon-iv-img');
+    const stage = dialog.querySelector('#ipon-iv-stage');
+    const zoomBtn = dialog.querySelector('#ipon-iv-zoom');
     const titleEl = dialog.querySelector('#ipon-iv-title');
     const subEl = dialog.querySelector('#ipon-iv-subtitle');
     const dl = dialog.querySelector('#ipon-iv-download');
+    const baseSub = String(subtitle || '').trim();
+    if (stage) {
+      stage.classList.remove('is-actual-size');
+      stage.scrollTop = 0;
+      stage.scrollLeft = 0;
+    }
+    if (zoomBtn) {
+      zoomBtn.setAttribute('aria-pressed', 'false');
+      zoomBtn.textContent = 'Actual size';
+    }
+    img.onload = () => {
+      if (!img.naturalWidth || !img.naturalHeight || !subEl) return;
+      const dims = `${img.naturalWidth} × ${img.naturalHeight}`;
+      subEl.textContent = baseSub ? `${baseSub} · ${dims}` : dims;
+      subEl.hidden = false;
+    };
     img.src = raw;
     img.alt = title;
     titleEl.textContent = title;
-    subEl.textContent = subtitle || '';
-    subEl.hidden = !subtitle;
+    subEl.textContent = baseSub;
+    subEl.hidden = !baseSub;
     dl.href = raw;
     const cleanDl = String(downloadName || '').trim();
     dl.download = cleanDl || `${String(title || 'attachment').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`;
@@ -8534,6 +8631,10 @@
     'idempotency_key',
     'created_at',
     'updated_at',
+    'last_seen_at',
+    'chat_privacy',
+    'username',
+    'bio',
     'name_setup_required',
     'previous_account_status'
   ]);
@@ -9121,6 +9222,11 @@
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, openImageViewer, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
+    setOnlineVisibility, syncMessagesBadges,
+    updateLocalProfile(patch = {}) {
+      if (currentProfile && patch && typeof patch === 'object') Object.assign(currentProfile, patch);
+      return currentProfile;
+    },
     PAYMENT_METHODS, normalizePaymentMethod, guessPaymentMethodFromLabel, paymentMethodMeta, paymentMethodIconHtml, paymentMethodBadge, paymentMethodPickerHtml, mountPaymentMethodPickers, setPaymentMethod, paymentMethodOptionsHtml,
     CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
     payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,

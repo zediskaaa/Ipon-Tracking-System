@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v9';
+const CACHE_NAME = 'ipon-shell-v10';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
   'assets/favicon.svg',
@@ -8,7 +8,8 @@ const STATIC_ASSETS = [
   'assets/icon-512.png',
   'css/app.css',
   'js/config.js',
-  'js/core.js'
+  'js/core.js',
+  'js/messages.js'
 ];
 
 self.addEventListener('install', (event) => {

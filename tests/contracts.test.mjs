@@ -406,13 +406,21 @@ test('calendar navigation includes the administrator audit log', () => {
   assert.doesNotMatch(read('js/audit.js'), /<details\b/);
 });
 
-test('logout protects restored pages from browser history', () => {
+test('logout protects restored pages from browser history and lives at the bottom of settings', () => {
   const core = read('js/core.js');
+  const dashHtml = read('dashboard.html');
+  const settingsHtml = read('settings.html');
+  const accountHtml = read('account.html');
   assert.match(core, /addEventListener\('pagehide'[\s\S]*?visibility = 'hidden'/);
   assert.match(core, /addEventListener\('pageshow'[\s\S]*?event\.persisted[\s\S]*?auth\.getSession\(\)[\s\S]*?location\.replace\('login\.html'\)/);
   assert.match(core, /homeForRole, signOut, toast/);
   assert.match(core, /signOut\(\)[\s\S]*?confirmAction\(\{ title: 'Sign out\?'/);
-  assert.match(read('js/dashboard.js'), /addEventListener\('click', Ipon\.signOut\)/);
+  assert.match(core, /querySelectorAll\('\[data-sign-out\]'\)\.forEach\(\(button\) => button\.onclick = signOut\)/);
+  assert.doesNotMatch(dashHtml, /dashboard-signout|sidebar-signout/);
+  assert.doesNotMatch(core, /class="sidebar-signout|id="sign-out"/);
+  assert.match(core, /class="account-card account-session-card"[\s\S]*?id="account-dialog-signout" data-sign-out/);
+  assert.match(settingsHtml, /class="panel settings-session-panel"[\s\S]*?id="settings-signout" data-sign-out/);
+  assert.match(accountHtml, /class="panel account-page-session-panel"[\s\S]*?id="account-page-signout" data-sign-out/);
 });
 
 test('notifications use a responsive non-blocking activity panel', () => {
@@ -432,18 +440,18 @@ test('notifications use a responsive non-blocking activity panel', () => {
   assert.match(css, /@media\(max-width:720px\)\{\.app-sidebar-footer \.sidebar-utilities\{order:1\}[\s\S]*?\.notification-dialog/);
 });
 
-test('compact dashboard header keeps notifications, profile, and logout in one ordered row', () => {
+test('compact dashboard header keeps notifications and profile in one ordered row without sidebar logout', () => {
   const dashboardCss = read('css/hero-plates.css');
   const appCss = read('css/app.css');
   assert.match(appCss, /\.app-sidebar-footer\s*\{[^}]*grid-template-columns:repeat\(2/);
   assert.match(appCss, /\.sidebar-user-card\s*\{[^}]*grid-column:1\/-1;[^}]*grid-row:1/);
-  assert.match(appCss, /\.sidebar-signout\s*\{[^}]*grid-column:1\/-1;[^}]*grid-row:2/);
+  assert.doesNotMatch(appCss, /\.sidebar-signout/);
+  assert.doesNotMatch(dashboardCss, /\.sidebar-signout/);
   assert.match(dashboardCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar \.app-sidebar-footer\s*\{[^}]*grid-row:1/);
-  assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-signout\s*\{[^}]*order:3/);
   assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-user-card\s*\{[^}]*order:2/);
   assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-utilities\s*\{[^}]*order:1/);
   assert.match(dashboardCss, /\.dashboard-sidebar \.sidebar-utility\[data-donate-open\]\s*\{\s*display:none/);
-  assert.match(appCss, /@media\(max-width:720px\)\{\.app-sidebar-footer \.sidebar-utilities\{order:1\}\.sidebar-user-card\{order:2\}\.sidebar-signout\{order:3\}/);
+  assert.match(appCss, /@media\(max-width:720px\)\{\.app-sidebar-footer \.sidebar-utilities\{order:1\}\.sidebar-user-card\{order:2\}/);
 });
 
 test('security-sensitive email recovery actions require confirmation', () => {
@@ -1640,7 +1648,7 @@ test('workflow enhancements migration 049, schema sync, and all UI integrations 
   }
 
   // Service worker offline shell + connectivity banner
-  assert.match(sw, /ipon-shell-v9/);
+  assert.match(sw, /ipon-shell-v10/);
   assert.match(sw, /ignoreSearch:\s*true/);
   assert.match(core, /function initConnectivityBanner\(/);
   assert.match(core, /function initInfoTips\(/);
@@ -5114,7 +5122,7 @@ test('all notification types route to exact destination modals or highlighted ta
   assert.match(manageAccount, /link:\s*`dashboard\.html\?invite=\$\{encodeURIComponent\(actor\.group_id\)\}`/);
   assert.match(sendPush, /select\('id, recipient_id, group_id, type, title, message, link, dedupe_key, read_at, created_at'\)/);
   assert.match(sendPush, /notif\.type === 'RELEASE' && \/\^https\?:/);
-  assert.match(sw, /const CACHE_NAME = 'ipon-shell-v9'/);
+  assert.match(sw, /const CACHE_NAME = 'ipon-shell-v10'/);
   assert.match(sw, /group_id:\s*payload\.group_id \?\? null/);
   assert.match(sw, /type:\s*'MYIPON_NOTIFICATION_CLICK'/);
   assert.match(mainJava, /\[a-zA-Z0-9_=&:%\.-]\+/);
@@ -5923,6 +5931,949 @@ test('migration 075 restores group summary RPC and read-only group transparency 
     assert.match(migration075, new RegExp(`create policy ${policy} on public\\.\\w+ for select to authenticated[\\s\\S]*?current_user_role\\(\\) in \\('ADMIN', 'TREASURER', 'MEMBER'\\)`, 'i'));
   }
   assert.match(migration075, /create policy members_select on public\.members[\s\S]*?deleted_at is null/i);
+});
+
+test('migration 076, 077, Edge Function, shell integration, and UI implement Messaging & Social Connections cleanly with Super Admin excluded', async () => {
+  const migration076 = read('database/migrations/20261115_076_messaging_and_social_system.sql');
+  const migration077 = read('database/migrations/20261115_077_messaging_delivery_receipts.sql');
+  const schema = read('database/schema.sql');
+  const edge = read('supabase/functions/manage-account/index.ts');
+  const core = read('js/core.js');
+  const messagesJs = read('js/messages.js');
+  const sw = read('sw.js');
+  const appCss = read('css/app.css');
+  const heroCss = read('css/hero-plates.css');
+  const vercel = read('vercel.json');
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
+
+  // 1. SQL schema & Super Admin complete exclusion + MFA + private storage bucket
+  for (const sql of [migration076, schema]) {
+    assert.match(sql, /'20261115_076'/);
+    assert.match(sql, /create or replace function public\.is_messaging_eligible\(/i);
+    assert.match(sql, /role in \('ADMIN', 'TREASURER', 'MEMBER'\)/i);
+    assert.match(sql, /create or replace function public\.is_user_blocked_between\(/i);
+  }
+  for (const sql of [migration077, schema]) {
+    assert.match(sql, /'20261115_077'/);
+    assert.match(sql, /values\s*\(\s*v_msg\.id,\s*v_peer_id,\s*null,\s*null\s*\)/i);
+    assert.match(sql, /create or replace function public\.mark_messages_delivered\(/i);
+    assert.match(sql, /delivered_at\s*=\s*coalesce\(mr\.delivered_at,\s*now\(\)\)/i);
+  }
+  assert.match(migration077, /alter table public\.message_receipts\s+alter column delivered_at drop not null/i);
+  assert.match(migration077, /grant execute on function[\s\S]*?public\.mark_messages_delivered\(uuid\)[\s\S]*?to authenticated/i);
+  for (const tbl of [
+    'blocked_users',
+    'friend_requests',
+    'friendships',
+    'conversations',
+    'conversation_participants',
+    'messages',
+    'message_attachments',
+    'message_reactions',
+    'message_receipts',
+    'call_sessions'
+  ]) {
+    assert.match(migration076, new RegExp(`create policy social_exclude_super_admin on public\\.${tbl}[\\s\\S]*?as restrictive[\\s\\S]*?mfa_access_allowed\\(\\)`, 'i'));
+    assert.match(migration076, new RegExp(`'${tbl}'`, 'i'));
+  }
+  assert.match(migration076, /execute format\('alter publication supabase_realtime add table public\.%I', v_tbl\)/i);
+  assert.match(migration076, /values\s*\('chat-attachments',\s*'chat-attachments',\s*false,\s*52428800/i);
+  assert.match(migration076, /when o\.sender_id = v_uid and v_share_receipts then/i);
+
+  // 2. Edge Function lossless attachment signing and cleanup (calls/VC disabled)
+  for (const action of ['chat-upload-urls', 'chat-view-urls', 'chat-cleanup-media']) {
+    assert.match(edge, new RegExp(`body\\.action === '${action}'`));
+  }
+  assert.doesNotMatch(edge, /webrtc-ice-servers|TURN_SERVER_URLS/);
+  assert.match(edge, /ALLOWED_CHAT_EXT_RE/);
+  assert.match(edge, /BLOCKED_DISCUSSION_EXT_RE/);
+  assert.match(edge, /signedUrl:\s*data\.signedUrl/);
+
+  // 3. Reserved slot integration across shell & desktop dashboard (excluded from Super Admin)
+  assert.match(read('dashboard.html'), /id="dashboard-group-actions"[\s\S]*?data-messages-open[\s\S]*?data-notifications-open/);
+  assert.doesNotMatch(read('super-admin.html'), /js\/messages\.js/);
+  for (const page of ['dashboard.html', 'user.html', 'members.html', 'contributions.html', 'expenses.html', 'withdrawals.html', 'savings.html', 'reports.html', 'audit.html', 'settings.html', 'account.html']) {
+    assert.match(read(page), /js\/messages\.js\?v=\d+/);
+  }
+  assert.match(core, /data-messages-open/);
+  assert.match(core, /function syncMessagesBadges\(/);
+  assert.match(core, /function setOnlineVisibility\(/);
+  assert.match(core, /window\.IponMessages\?\.openFromNotification/);
+  assert.match(core, /role !== 'SUPER_ADMIN'[\s\S]*?window\.IponMessages\?\.init\?\.\(profile\)/);
+  assert.match(sw, /'js\/messages\.js'/);
+
+  // 4. Frontend messaging features, raw lossless file uploads, & camera/VC removal
+  assert.match(messagesJs, /xhr\.send\(entry\.file\)/);
+  assert.doesNotMatch(messagesJs, /prepareImageDataUrl|canvas\.toBlob/);
+  assert.doesNotMatch(messagesJs, /CallManager|data-start-call|msg-call-dialog|msg-incoming-call-dialog/);
+  assert.match(messagesJs, /download_path:\s*path/);
+  assert.match(messagesJs, /ev\.isComposing\s*\|\|\s*ev\.keyCode\s*===\s*229/);
+  assert.match(messagesJs, /id="msg-profile-popover"/);
+  assert.match(messagesJs, /ipon\(\)\.confirmAction\(/);
+  assert.doesNotMatch(messagesJs, /\bwindow\.(alert|confirm|prompt)\s*\(/);
+  assert.match(messagesJs, /data-msg-tab="chats"[\s\S]*?data-msg-tab="requests"[\s\S]*?data-msg-tab="friends"/);
+  assert.doesNotMatch(messagesJs, /data-msg-tab="discover"|id="msg-view-discover"|class="msg-brand-icon"/);
+  assert.match(messagesJs, /id="msg-list-search"[\s\S]*?id="msg-list-search-clear"[\s\S]*?id="msg-new-chat-btn"/);
+  assert.doesNotMatch(messagesJs, /setBusy\s*\(\s*sendBtn/);
+  assert.match(messagesJs, /data-pending-retry[\s\S]*?data-pending-delete/);
+  assert.match(messagesJs, /MAX_QUEUE_ATTACHMENTS\s*=\s*30/);
+  assert.match(messagesJs, /SINGLE_CHECK_SVG[\s\S]*?DOUBLE_CHECK_SVG/);
+  assert.match(messagesJs, /id="msg-typing-live"[\s\S]*?class="msg-typing-text"[^>]*>is typing<span class="msg-typing-dots">/);
+  assert.match(messagesJs, /class="msg-video-player"[\s\S]*?class="msg-att-video"[\s\S]*?class="msg-video-controls"[\s\S]*?class="msg-video-seek"[\s\S]*?data-vact="play"[\s\S]*?data-vact="mute"[\s\S]*?data-vact="fs"[\s\S]*?data-vact="menu"/);
+  assert.doesNotMatch(messagesJs, /<video controls\b|<audio controls\b/);
+  assert.match(messagesJs, /class="msg-voice-card"[\s\S]*?data-aact="play"[\s\S]*?class="msg-voice-wave"[\s\S]*?data-aact="mute"[\s\S]*?class="msg-att-audio"/);
+  assert.match(messagesJs, /has-top-media[\s\S]*?has-audio-only|has-audio-only[\s\S]*?has-top-media/);
+  assert.match(messagesJs, /class="msg-bubble-body-pad"/);
+  assert.match(messagesJs, /function buildMetaHtml\(/);
+  assert.match(messagesJs, /lastShownClockKey/);
+  assert.match(messagesJs, /is-media-only/);
+  assert.match(messagesJs, /is-media-overlay/);
+  assert.match(messagesJs, /is-tick-only/);
+  assert.match(messagesJs, /data-ctx-do="download"[\s\S]*?if\s*\(\s*op\s*===\s*'download'/);
+  assert.match(messagesJs, /MSG_REACT_SVG[\s\S]*?MSG_REPLY_SVG[\s\S]*?MSG_MORE_SVG[\s\S]*?MSG_PLUS_SVG/);
+  assert.match(messagesJs, /function closeFloatingMenus\(/);
+  assert.match(messagesJs, /data-react-expand/);
+  assert.doesNotMatch(messagesJs, /data-react-more-ctx|>More…<|Suggestions|get_friend_suggestions|View suggestions/);
+  assert.match(messagesJs, /class="msg-friends-hero"[\s\S]*?class="msg-friends-tabs"[\s\S]*?data-friends-sub="all"[\s\S]*?data-friends-sub="incoming"[\s\S]*?data-friends-sub="sent"/);
+  assert.match(messagesJs, /setTimeout\([\s\S]*?'is-highlight-focus'[\s\S]*?3600\)/);
+  assert.doesNotMatch(messagesJs, /msg-att-file-foot|Original<\/a>/);
+  assert.match(vercel, /"Permissions-Policy"[\s\S]*?camera=\(\),\s*microphone=\(self\)/);
+  assert.doesNotMatch(manifest, /android\.permission\.CAMERA|MODIFY_AUDIO_SETTINGS/);
+  assert.match(manifest, /android\.permission\.RECORD_AUDIO/);
+
+  // 5. CSS responsive layout, circular X geometry, dark theme & badge hiding
+  assert.match(appCss, /\.msg-dialog,[\s\S]*?font-family:\s*system-ui/);
+  assert.match(appCss, /\.msg-topbar\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+auto;/);
+  assert.match(appCss, /\.msg-topbar-actions\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?justify-self:\s*end;/);
+  assert.match(appCss, /\.msg-topbar-actions\s+\.msg-icon-btn\s*\{[\s\S]*?border-radius:\s*50%;/);
+  assert.match(appCss, /\.msg-mini-close,\s*\.msg-queue-remove,\s*\.msg-pop-close\s*\{[^}]*flex:\s*0\s+0\s+26px\s*!important;[^}]*aspect-ratio:\s*1\s*\/\s*1/s);
+  assert.match(appCss, /\.msg-upload-queue\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/s);
+  assert.match(appCss, /\.msg-attachments\.is-carousel\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/s);
+  assert.match(appCss, /\.msg-row\.is-failed\s+\.msg-bubble[\s\S]*?background:\s*#c62828\s*!important/);
+  assert.match(appCss, /\.msg-tick\.is-sent\s*\{[\s\S]*?\.msg-tick\.is-delivered,[\s\S]*?\.msg-tick\.is-read\s*\{/);
+  assert.match(appCss, /\.msg-typing-live\.is-visible\s*\{[\s\S]*?grid-template-rows:\s*1fr;/);
+  assert.match(appCss, /\.msg-typing-text\s*\{[\s\S]*?font-style:\s*italic;/);
+  assert.match(appCss, /@keyframes\s+msgTypingDot\s*\{/);
+  assert.match(appCss, /\.msg-video-controls\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?\.msg-video-player\.is-controls-visible\s+\.msg-video-controls\s*\{[\s\S]*?opacity:\s*1;/);
+  assert.match(appCss, /\.msg-video-seek\s*\{[\s\S]*?#e5c994/);
+  assert.match(appCss, /\.msg-bubble\.has-top-media\s*\{[\s\S]*?padding:\s*0;[\s\S]*?border:\s*0;/);
+  assert.match(appCss, /\.msg-bubble\.has-audio-only[\s\S]*?padding:\s*0;[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;/);
+  assert.match(appCss, /\.msg-voice-card\s*\{[\s\S]*?#0d1f19[\s\S]*?\.msg-voice-play-btn\s*\{[\s\S]*?#e2c385[\s\S]*?\.msg-voice-wave-bar\.is-played\s*\{[\s\S]*?#e2c385/);
+  assert.match(appCss, /\.msg-row\.is-highlight-focus,\s*\.msg-system-event\.is-highlight-focus\s*\{[\s\S]*?outline:\s*none\s*!important;[\s\S]*?box-shadow:\s*none\s*!important;/);
+  assert.match(appCss, /@keyframes\s+msgFocusGlow\s*\{[\s\S]*?3\.4s cubic-bezier|msgFocusGlow\s+3\.4s\s+cubic-bezier/s);
+  assert.match(appCss, /@keyframes\s+msgFocusGlowDark\s*\{/);
+  assert.match(appCss, /@keyframes\s+appFocusFade\s*\{/);
+  assert.match(appCss, /@media\s*\(hover:\s*none\),\s*\(max-width:\s*820px\)\s*\{[\s\S]*?\.msg-row-actions\s+\.msg-action-mini\[data-msg-act="react"\],\s*\.msg-row-actions\s+\.msg-action-mini\[data-msg-act="reply"\]\s*\{\s*display:\s*none;/);
+  assert.match(appCss, /\.msg-bubble-col\s*\{[\s\S]*?calc\(100% - 144px\)/);
+  assert.match(appCss, /\.msg-voice-card\s*\{[\s\S]*?min-width:\s*0;/);
+  assert.match(appCss, /\.msg-react-strip\s*\{[\s\S]*?\.msg-react-btn\.is-selected\s*\{[\s\S]*?\.msg-react-palette\s*\{[\s\S]*?\.msg-react-quick-actions\s*\{/);
+  assert.match(appCss, /@keyframes\s+msgWaveDot\s*\{/);
+  assert.match(appCss, /\.msg-search-clear\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1/s);
+  assert.match(appCss, /\.msg-dialog\[open\]/);
+  assert.match(appCss, /@media\s*\(max-width:\s*820px\)\s*\{[\s\S]*?\.msg-topbar-actions\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;[\s\S]*?justify-self:\s*end;[\s\S]*?\.msg-tabs\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(appCss, /@media\s*\(max-width:\s*820px\)\s*\{[\s\S]*?\.msg-chat-layout\.is-mobile-thread\s+\.msg-sidebar\s*\{\s*display:\s*none/s);
+  assert.match(appCss, /\.sidebar-utility\s+\.notification-badge\[hidden\][\s\S]*?display:\s*none\s*!important/s);
+  assert.match(appCss, /\.msg-thread-skeleton\s*\{/);
+  assert.match(appCss, /\.msg-wave-dots\s*\{/);
+  assert.match(appCss, /@keyframes\s+msgShimmer\s*\{/);
+  assert.match(appCss, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.msg-skel/);
+  assert.match(heroCss, /\.group-bar-msg-btn\s*\{/);
+
+  // 6. Behavioral check of IponMessages utilities & SUPER_ADMIN guard in sandboxed VM
+  const { default: vm } = await import('node:vm');
+  const inserted = [];
+  const docStub = {
+    documentElement: { dataset: {} },
+    body: {
+      insertAdjacentHTML(_pos, html) { inserted.push(html); }
+    },
+    getElementById: () => null,
+    querySelectorAll: () => [],
+    addEventListener: () => {}
+  };
+  const winStub = {
+    Ipon: {
+      escapeHtml: (s) => String(s ?? ''),
+      rpc: async () => [],
+      client: null
+    },
+    addEventListener: () => {},
+    location: { search: '', href: 'https://example.test/dashboard.html' }
+  };
+  const ctx = {
+    window: winStub,
+    document: docStub,
+    location: winStub.location,
+    Map,
+    Set,
+    URLSearchParams,
+    navigator: {},
+    setInterval: () => 0,
+    clearInterval: () => {}
+  };
+  winStub.window = winStub;
+  vm.runInNewContext(messagesJs, ctx);
+  assert.equal(typeof winStub.IponMessages?.detectAttachmentKind, 'function');
+  assert.equal(winStub.IponMessages.detectAttachmentKind({ name: 'photo.png', type: 'image/png' }), 'image');
+  assert.equal(winStub.IponMessages.detectAttachmentKind({ name: 'receipt.pdf', type: 'application/pdf' }), 'document');
+  assert.equal(winStub.IponMessages.detectAttachmentKind({ name: 'voice.webm', type: 'audio/webm' }), 'audio');
+  assert.equal(winStub.IponMessages.formatBytes(2048), '2.0 KB');
+  await winStub.IponMessages.init({ id: '00000000-0000-0000-0000-000000000001', role: 'SUPER_ADMIN', status: 'ACTIVE' });
+  assert.equal(inserted.length, 0, 'SUPER_ADMIN must never mount messaging dialogs');
+
+  // 7. Regression guard against mark_conversation_read <-> realtime flicker loop
+  let createdNodes = [];
+  const makeEl = (id) => {
+    const classes = new Set();
+    const attrs = new Map();
+    const cls = {
+      toggle: (c, force) => {
+        if (force === undefined ? !classes.has(c) : force) classes.add(c);
+        else classes.delete(c);
+      },
+      add: (c) => classes.add(c),
+      remove: (c) => classes.delete(c),
+      contains: (c) => classes.has(c)
+    };
+    let html = '';
+    const el = {
+      id,
+      hidden: false,
+      open: false,
+      value: '',
+      scrollTop: 100,
+      scrollHeight: 500,
+      clientHeight: 400,
+      dataset: {},
+      style: {},
+      classList: cls,
+      children: [],
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+      getBoundingClientRect: () => ({ left: 240, right: 270, top: 200, bottom: 230 }),
+      addEventListener: () => {},
+      focus: () => {},
+      select: () => {},
+      appendChild: (node) => { createdNodes.push(node); },
+      contains: () => false,
+      querySelectorAll: () => [],
+      querySelector: () => null,
+      showModal() { this.open = true; },
+      close() { this.open = false; }
+    };
+    Object.defineProperty(el, 'innerHTML', {
+      get: () => html,
+      set: (v) => {
+        html = String(v ?? '');
+        if (id === 'msg-messages-list' && html.includes('Loading conversation')) {
+          loadingFlashes += 1;
+          lastThreadSkeletonHtml = html;
+        }
+        if (id === 'msg-thread-header' && html.includes('Syncing messages')) {
+          lastLoadingHeaderHtml = html;
+        }
+      }
+    });
+    return el;
+  };
+
+  let loadingFlashes = 0;
+  let lastThreadSkeletonHtml = '';
+  let lastLoadingHeaderHtml = '';
+  const elements = new Map();
+  const getEl = (id) => {
+    if (!elements.has(id)) elements.set(id, makeEl(id));
+    return elements.get(id);
+  };
+
+  const rpcCalls = [];
+  const tableHandlers = new Map();
+  const broadcastHandlers = new Map();
+  const broadcastSent = [];
+  const sentBatches = [];
+  const downloadRequests = [];
+  const clickedAnchors = [];
+  const meId = '00000000-0000-0000-0000-000000000010';
+  const peerId = '00000000-0000-0000-0000-000000000020';
+  const convId = '00000000-0000-0000-0000-0000000000c1';
+  let threadMessages = [
+    { id: 'm1', conversation_id: convId, sender_id: peerId, body: 'hello', message_type: 'TEXT', created_at: '2026-11-15T10:02:00Z', attachments: [], reactions: [] }
+  ];
+  let convUnread = 1;
+
+  const rtChannelMock = {
+    on(kind, filter, cb) {
+      if (kind === 'postgres_changes' && filter?.table) tableHandlers.set(filter.table, cb);
+      if (kind === 'broadcast' && filter?.event) broadcastHandlers.set(filter.event, cb);
+      return this;
+    },
+    subscribe() { return this; },
+    async send(payload) { broadcastSent.push(payload); return { status: 'ok' }; }
+  };
+
+  const docListeners = new Map();
+  const doc2 = {
+    documentElement: { dataset: {} },
+    visibilityState: 'hidden',
+    body: { insertAdjacentHTML() {}, appendChild(node) { createdNodes.push(node); } },
+    createElement: (tag) => {
+      const classes = new Set();
+      let clsName = '';
+      const node = {
+        tagName: String(tag || '').toUpperCase(),
+        get className() { return clsName; },
+        set className(v) {
+          clsName = String(v ?? '');
+          classes.clear();
+          clsName.split(/\s+/).filter(Boolean).forEach((c) => classes.add(c));
+        },
+        innerHTML: '',
+        style: {},
+        dataset: {},
+        attributes: new Map(),
+        _palette: { hidden: true },
+        classList: {
+          add: (c) => { classes.add(c); clsName = [...classes].join(' '); },
+          remove: (c) => { classes.delete(c); clsName = [...classes].join(' '); },
+          toggle: (c, f) => {
+            if (f === undefined ? !classes.has(c) : f) classes.add(c);
+            else classes.delete(c);
+            clsName = [...classes].join(' ');
+          },
+          contains: (c) => classes.has(c)
+        },
+        setAttribute(k, v) { this.attributes.set(k, String(v)); },
+        getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; },
+        querySelector(sel) {
+          if (sel === '.msg-react-palette') return this._palette;
+          if (sel === '.msg-react-quick-actions' && this.innerHTML.includes('msg-react-quick-actions')) return {};
+          return null;
+        },
+        click() { clickedAnchors.push(this); },
+        remove() { createdNodes = createdNodes.filter((n) => n !== this); }
+      };
+      createdNodes.push(node);
+      return node;
+    },
+    getElementById: (id) => getEl(id),
+    querySelectorAll: (sel) => (sel.includes('msg-floating-menu') ? createdNodes.filter((n) => String(n.className).includes('msg-floating-menu')) : []),
+    querySelector: (sel) => (sel.includes('msg-react-menu')
+      ? createdNodes.find((n) => String(n.className).includes('msg-react-menu')) || null
+      : (sel.includes('msg-floating-menu') ? createdNodes.find((n) => String(n.className).includes('msg-floating-menu')) || null : null)),
+    addEventListener: (evName, fn) => {
+      if (!docListeners.has(evName)) docListeners.set(evName, []);
+      docListeners.get(evName).push(fn);
+    }
+  };
+  const toastCalls = [];
+  let setBusyCalls = 0;
+  let failNextSend = false;
+  let failNextUpload = false;
+  let nextSentSeq = 0;
+  const win2 = {
+    innerWidth: 1200,
+    innerHeight: 800,
+    Ipon: {
+      escapeHtml: (s) => String(s ?? ''),
+      initials: () => 'NJ',
+      isUserOnline: () => true,
+      bindAvatarFallbacks: () => {},
+      syncPresenceDots: () => {},
+      syncMessagesBadges: () => {},
+      setBusy: () => { setBusyCalls += 1; },
+      toast: (msg, kind = 'info') => toastCalls.push({ msg, kind }),
+      friendlyError: (e) => String(e?.message || e),
+      invokeAccountFunction: async (payload) => {
+        if (payload?.action === 'chat-upload-urls') {
+          if (failNextUpload) throw new Error('Upload link expired');
+          return {
+            uploads: (payload.files || []).map((f, idx) => ({
+              path: `${convId}/up-${idx}-${f.name}`,
+              token: `tok-${idx}`,
+              signedUrl: `https://upload.test/${idx}`,
+              name: f.name,
+              type: f.type
+            }))
+          };
+        }
+        if (payload?.action === 'chat-view-urls') {
+          if (payload.download_path) {
+            downloadRequests.push(payload);
+            return { downloadUrl: `https://cdn.example/dl/${encodeURIComponent(payload.download_path)}` };
+          }
+          return {
+            urls: Object.fromEntries((payload.paths || []).map((p) => [p, `https://cdn.example/view/${encodeURIComponent(p)}`]))
+          };
+        }
+        return {};
+      },
+      rpc: async (name, params) => {
+        rpcCalls.push(name);
+        if (name === 'start_or_open_direct_chat') {
+          return { id: convId, status: 'ACCEPTED', initiator_id: meId };
+        }
+        if (name === 'mark_messages_delivered') {
+          return 0;
+        }
+        if (name === 'send_chat_message') {
+          if (failNextSend) throw new Error('Network offline');
+          const id = `sent-${++nextSentSeq}`;
+          sentBatches.push((params?.p_attachments || []).length);
+          const row = {
+            id,
+            conversation_id: convId,
+            sender_id: meId,
+            body: params?.p_body || '',
+            message_type: params?.p_message_type || 'TEXT',
+            created_at: '2026-11-15T10:10:00Z',
+            delivered_at: null,
+            read_at: null,
+            attachments: params?.p_attachments || [],
+            reactions: []
+          };
+          threadMessages = [...threadMessages, row];
+          return { id };
+        }
+        if (name === 'get_conversations') {
+          return [{
+            id: convId, status: 'ACCEPTED', initiator_id: peerId, is_incoming_request: false,
+            peer: { id: peerId, full_name: 'Nhicole Joy Gadia Antalan', allow_online_status: true },
+            unread_count: convUnread, marked_unread: false, last_message_at: '2026-11-15T10:02:00Z',
+            last_message_preview: threadMessages[threadMessages.length - 1].body, last_message_sender_id: peerId
+          }];
+        }
+        if (name === 'search_social_users') {
+          return [{ id: '00000000-0000-0000-0000-000000000030', full_name: 'Zedrick De Monteverde', username: 'zedrick', friendship_status: 'NONE' }];
+        }
+        if (name === 'search_conversation_messages') {
+          return [{ conversation_id: convId, message_id: 'm1', peer_name: 'Nhicole Joy Gadia Antalan', sender_name: 'Nhicole', body: 'hello world', created_at: '2026-11-15T10:02:00Z' }];
+        }
+        if (name === 'get_social_overview') return { me: { id: meId, chat_privacy: {} }, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] };
+        if (name === 'mark_conversation_read') {
+          convUnread = 0;
+          // Simulate Postgres realtime echoes caused by mark_conversation_read
+          tableHandlers.get('conversation_participants')?.({ eventType: 'UPDATE', new: { conversation_id: convId, user_id: meId } });
+          tableHandlers.get('message_receipts')?.({ eventType: 'UPDATE', new: { message_id: 'm1', user_id: meId, read_at: '2026-11-15T10:05:00Z' } });
+          return { read_at: '2026-11-15T10:05:00Z', receipts_shared: true };
+        }
+        if (name === 'get_conversation_messages') {
+          return {
+            conversation: { id: peerId, conversation_id: convId, full_name: 'Nhicole Joy Gadia Antalan', status: 'ACCEPTED', friendship_status: 'FRIENDS', allow_online_status: true, receipts_enabled: true },
+            has_older: false,
+            unread_first_id: convUnread > 0 ? 'm1' : null,
+            pinned_messages: [],
+            messages: threadMessages
+          };
+        }
+        return [];
+      },
+      client: {
+        from: () => ({ select: () => ({ like: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }),
+        channel: () => rtChannelMock,
+        removeChannel: () => {}
+      }
+    },
+    addEventListener: () => {},
+    location: { search: '', href: 'https://example.test/dashboard.html' }
+  };
+  win2.window = win2;
+  vm.runInNewContext(messagesJs, {
+    window: win2, document: doc2, location: win2.location,
+    Map, Set, URLSearchParams, navigator: {}, Math, JSON, Date, Intl,
+    URL: { createObjectURL: (f) => `blob:mock/${f?.name || 'file'}`, revokeObjectURL: () => {} },
+    CSS: { escape: (s) => String(s) },
+    XMLHttpRequest: class {
+      constructor() { this.upload = {}; this.status = 200; }
+      open() {}
+      setRequestHeader() {}
+      send() { this.upload.onprogress?.({ lengthComputable: true, loaded: 100, total: 100 }); this.onload?.(); }
+    },
+    requestAnimationFrame: (fn) => fn(),
+    setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {}
+  });
+
+  await win2.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', chat_privacy: { show_online: true } });
+  await win2.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
+  assert.equal(loadingFlashes, 1, 'initial thread load renders loading indicator exactly once');
+  assert.match(lastThreadSkeletonHtml, /msg-thread-skeleton[\s\S]*msg-wave-dots[\s\S]*msg-bubble-skel/);
+  assert.match(lastLoadingHeaderHtml, /Nhicole Joy Gadia Antalan[\s\S]*Syncing messages/);
+  const markReadAfterOpen = rpcCalls.filter((r) => r === 'mark_conversation_read').length;
+  assert.equal(markReadAfterOpen, 1);
+
+  // User types a draft while self echoes & peer receipt update fire via realtime
+  getEl('msg-composer-input').value = 'typing reply';
+  await new Promise((r) => setTimeout(r, 320));
+  assert.equal(loadingFlashes, 1, 'self echoes must never flash Loading conversation');
+  assert.equal(rpcCalls.filter((r) => r === 'mark_conversation_read').length, 1, 'self echoes must never loop mark_conversation_read');
+
+  // Incoming peer message updates thread silently without flashing loading or wiping draft
+  threadMessages = [
+    ...threadMessages,
+    { id: 'm2', conversation_id: convId, sender_id: peerId, body: 'kamusta', message_type: 'TEXT', created_at: '2026-11-15T10:06:00Z', attachments: [], reactions: [] }
+  ];
+  convUnread = 1;
+  tableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm2', conversation_id: convId, sender_id: peerId } });
+  await new Promise((r) => setTimeout(r, 320));
+  assert.equal(loadingFlashes, 1, 'live incoming message updates silently without flashing Loading conversation');
+  assert.equal(getEl('msg-composer-input').value, 'typing reply', 'silent realtime refresh must preserve unsent composer draft');
+  assert.equal(rpcCalls.filter((r) => r === 'mark_conversation_read').length, 2, 'incoming peer message marks read once and settles');
+
+  // Unified inline sidebar search renders People + Messages without a separate top tab
+  const inputHandlers = docListeners.get('input') || [];
+  const clickHandlers = docListeners.get('click') || [];
+  inputHandlers.forEach((fn) => fn({ target: { id: 'msg-list-search', value: 'hello' } }));
+  await new Promise((r) => setTimeout(r, 240));
+  const listHtml = getEl('msg-conv-list').innerHTML;
+  assert.match(listHtml, /Zedrick De Monteverde/);
+  assert.match(listHtml, /Messages<\/span><b>1<\/b>/);
+  assert.equal(getEl('msg-filter-pills').hidden, true);
+  assert.equal(getEl('msg-list-search-clear').hidden, false);
+  assert.equal(getEl('msg-new-chat-btn').dataset.mode, 'back');
+
+  // Clear button inside search input cleanly clears & exits back to inbox without ReferenceError
+  const dispatchClick = async (matchSel, node = { dataset: {} }) => {
+    await Promise.all(clickHandlers.map((fn) => fn({
+      stopPropagation: () => {},
+      target: { closest: (sel) => (sel === matchSel ? node : null) }
+    })));
+  };
+  await dispatchClick('#msg-list-search-clear', getEl('msg-list-search-clear'));
+  assert.equal(getEl('msg-list-search').value, '');
+  assert.equal(getEl('msg-filter-pills').hidden, false);
+  assert.equal(getEl('msg-new-chat-btn').dataset.mode, 'compose');
+
+  // Rapid spam toggling of People directory / Back button never throws and omits useless Done banner
+  for (let i = 0; i < 4; i += 1) {
+    await dispatchClick('#msg-new-chat-btn', getEl('msg-new-chat-btn'));
+  }
+  await dispatchClick('#msg-new-chat-btn', getEl('msg-new-chat-btn'));
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(getEl('msg-new-chat-btn').dataset.mode, 'back');
+  assert.equal(getEl('msg-list-search-clear').hidden, true);
+  assert.doesNotMatch(getEl('msg-conv-list').innerHTML, /msg-directory-done|>Done</);
+
+  // Tapping a user from directory opens direct chat cleanly with zero error toasts
+  await dispatchClick('[data-social-action]', { dataset: { socialAction: 'message', targetId: '00000000-0000-0000-0000-000000000030' } });
+  assert.equal(getEl('msg-new-chat-btn').dataset.mode, 'compose');
+  assert.equal(toastCalls.filter((t) => t.kind === 'error').length, 0);
+
+  // Optimistic Messenger-style sending, preserved send-button SVG, carousel strip & red failed Retry/Delete
+  const sendBtnEl = getEl('msg-send-btn');
+  const originalSendSvg = '<svg viewBox="0 0 24 24"><path d="M22 2 11 13"/></svg>';
+  sendBtnEl.innerHTML = originalSendSvg;
+  const changeHandlers = docListeners.get('change') || [];
+  const submitHandlers = docListeners.get('submit') || [];
+
+  // Queue 2 attachments -> horizontal strip queue renders both cards
+  changeHandlers.forEach((fn) => fn({
+    target: {
+      id: 'msg-file-input',
+      value: 'selected',
+      files: [
+        { name: 'money.png', type: 'image/png', size: 22700 },
+        { name: 'receipt.pdf', type: 'application/pdf', size: 14200 }
+      ]
+    }
+  }));
+  assert.equal(getEl('msg-upload-queue').dataset.count, '2');
+  assert.match(getEl('msg-upload-queue').innerHTML, /money\.png[\s\S]*receipt\.pdf/);
+
+  // Submit queued media while upload fails -> queue clears, carousel + red failed bar render, Retry/Delete shown, send SVG intact
+  failNextUpload = true;
+  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => {}, target: getEl('msg-composer-form') })));
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(setBusyCalls, 0, 'send button must never be overwritten via setBusy');
+  assert.equal(sendBtnEl.innerHTML, originalSendSvg, 'send button SVG icon must stay intact');
+  assert.equal(getEl('msg-upload-queue').hidden, true);
+  let msgsHtml = getEl('msg-messages-list').innerHTML;
+  assert.match(msgsHtml, /class="msg-row is-mine is-pending is-failed"/);
+  assert.match(msgsHtml, /class="msg-attachments is-carousel"/);
+  assert.match(msgsHtml, /Upload link expired/);
+  const failedMediaId = msgsHtml.match(/data-pending-delete="([^"]+)"/)?.[1];
+  assert.ok(failedMediaId);
+
+  // Clicking Delete removes the failed attachment bubble cleanly
+  await dispatchClick('[data-pending-delete]', { dataset: { pendingDelete: failedMediaId } });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.doesNotMatch(getEl('msg-messages-list').innerHTML, /msg-row is-mine is-pending is-failed/);
+
+  // Submit text while RPC fails -> turns red with Retry; clicking Retry delivers and reconciles
+  failNextUpload = false;
+  failNextSend = true;
+  getEl('msg-composer-input').value = 'Failed ping test';
+  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => {}, target: getEl('msg-composer-form') })));
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(getEl('msg-composer-input').value, '');
+  msgsHtml = getEl('msg-messages-list').innerHTML;
+  assert.match(msgsHtml, /Failed ping test[\s\S]*data-pending-retry="pending-/);
+  const failedTextId = msgsHtml.match(/data-pending-retry="([^"]+)"/)?.[1];
+  assert.ok(failedTextId);
+
+  failNextSend = false;
+  await dispatchClick('[data-pending-retry]', { dataset: { pendingRetry: failedTextId } });
+  await new Promise((r) => setTimeout(r, 40));
+  msgsHtml = getEl('msg-messages-list').innerHTML;
+  assert.match(msgsHtml, /Failed ping test/);
+  assert.doesNotMatch(msgsHtml, /msg-row is-mine is-pending is-failed/);
+  assert.equal(setBusyCalls, 0);
+
+  // Delivery & read checkmarks: 1 gray check (Sent) -> 1 green check (Delivered) -> 2 green checks (Seen)
+  const sentRow = threadMessages[threadMessages.length - 1];
+  assert.ok(sentRow?.id, 'sent message row present');
+  assert.match(msgsHtml, /class="msg-tick is-sent"[\s\S]*?<svg class="msg-tick-svg"/);
+  assert.doesNotMatch(msgsHtml, /class="msg-tick-svg is-double"/);
+
+  sentRow.delivered_at = '2026-11-15T10:10:05Z';
+  tableHandlers.get('message_receipts')?.({
+    eventType: 'UPDATE',
+    new: { message_id: sentRow.id, user_id: peerId, delivered_at: sentRow.delivered_at, read_at: null }
+  });
+  msgsHtml = getEl('msg-messages-list').innerHTML;
+  assert.match(msgsHtml, /class="msg-tick is-delivered"[\s\S]*?<svg class="msg-tick-svg"/);
+  assert.doesNotMatch(msgsHtml, /class="msg-tick-svg is-double"/);
+
+  sentRow.read_at = '2026-11-15T10:11:00Z';
+  tableHandlers.get('message_receipts')?.({
+    eventType: 'UPDATE',
+    new: { message_id: sentRow.id, user_id: peerId, delivered_at: sentRow.delivered_at, read_at: sentRow.read_at }
+  });
+  msgsHtml = getEl('msg-messages-list').innerHTML;
+  assert.match(msgsHtml, /class="msg-tick is-read"[\s\S]*?<svg class="msg-tick-svg is-double"/);
+
+  // Batch splitting: queuing 12 files (>10, <=30) auto-splits into sequential batches of 10 + 2
+  const twelveFiles = Array.from({ length: 12 }, (_, idx) => ({
+    name: `photo-${idx + 1}.png`,
+    type: 'image/png',
+    size: 4096 + idx
+  }));
+  changeHandlers.forEach((fn) => fn({
+    target: { id: 'msg-file-input', value: 'selected', files: twelveFiles }
+  }));
+  assert.equal(getEl('msg-upload-queue').dataset.count, '12');
+  assert.match(toastCalls[toastCalls.length - 1]?.msg || '', /2 batches \(up to 10/);
+
+  const batchesBefore = sentBatches.length;
+  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => {}, target: getEl('msg-composer-form') })));
+  await new Promise((r) => setTimeout(r, 80));
+  assert.deepEqual(sentBatches.slice(batchesBefore), [10, 2]);
+  msgsHtml = getEl('msg-messages-list').innerHTML;
+  assert.doesNotMatch(msgsHtml, /msg-att-file-foot|<figcaption|Original<\/a>/);
+
+  // Download lives in the 3-dots message menu & downloads batch attachments cleanly
+  const tenBatchMsg = threadMessages.find((m) => (m.attachments || []).length === 10);
+  assert.ok(tenBatchMsg);
+  createdNodes = [];
+  await dispatchClick('[data-msg-act]', {
+    dataset: { msgAct: 'menu', msgId: tenBatchMsg.id },
+    getBoundingClientRect: () => ({ left: 240, right: 270, top: 200, bottom: 230 })
+  });
+  const ctxMenuNode = createdNodes.find((n) => String(n.className).includes('msg-ctx-menu'));
+  assert.ok(ctxMenuNode, 'context menu created for attachment message');
+  assert.match(ctxMenuNode.innerHTML, /data-ctx-do="download"[\s\S]*?Download all \(10\)/);
+  await dispatchClick('[data-ctx-do]', { dataset: { ctxDo: 'download', msgId: tenBatchMsg.id } });
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(downloadRequests.length, 10);
+  assert.equal(clickedAnchors.length, 10);
+
+  // Typing indicator: smooth .is-visible reveal, instant clear on peer INSERT, and stop on blur
+  broadcastHandlers.get('typing')?.({ payload: { conversationId: convId, user_id: peerId, typing: true } });
+  assert.equal(getEl('msg-typing-live').classList.contains('is-visible'), true);
+  assert.equal(getEl('msg-typing-live').getAttribute('aria-hidden'), 'false');
+
+  threadMessages = [
+    ...threadMessages,
+    { id: 'm3', conversation_id: convId, sender_id: peerId, body: 'got your photos!', message_type: 'TEXT', created_at: '2026-11-15T10:12:00Z', attachments: [], reactions: [] }
+  ];
+  tableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm3', conversation_id: convId, sender_id: peerId } });
+  assert.equal(getEl('msg-typing-live').classList.contains('is-visible'), false);
+  assert.equal(getEl('msg-typing-live').getAttribute('aria-hidden'), 'true');
+
+  getEl('msg-composer-input').value = 'drafting now';
+  inputHandlers.forEach((fn) => fn({ target: getEl('msg-composer-input') }));
+  assert.equal(broadcastSent.filter((b) => b?.payload?.typing === true).length >= 1, true);
+  const focusoutHandlers = docListeners.get('focusout') || [];
+  const falseBefore = broadcastSent.filter((b) => b?.payload?.typing === false).length;
+  focusoutHandlers.forEach((fn) => fn({ target: { id: 'msg-composer-input' } }));
+  assert.equal(broadcastSent.filter((b) => b?.payload?.typing === false).length, falseBefore + 1);
+
+  // Custom video player: renders without permanent native controls, shows floating controls on tap & auto-hides
+  changeHandlers.forEach((fn) => fn({
+    target: { id: 'msg-file-input', value: 'selected', files: [{ name: 'clip.mp4', type: 'video/mp4', size: 12000 }] }
+  }));
+  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => {}, target: getEl('msg-composer-form') })));
+  await new Promise((r) => setTimeout(r, 40));
+  msgsHtml = getEl('msg-messages-list').innerHTML;
+  assert.match(msgsHtml, /class="msg-video-player"[\s\S]*?<video class="msg-att-video" preload="metadata" playsinline/);
+  assert.doesNotMatch(msgsHtml, /class="msg-video-player is-controls-visible"|<video[^>]*\bcontrols\b/);
+  assert.match(msgsHtml, /class="msg-video-controls"[\s\S]*?data-vact="play"[\s\S]*?data-vact="mute"[\s\S]*?data-vact="fs"[\s\S]*?data-vact="menu"/);
+
+  const mockVideo = {
+    paused: true,
+    ended: false,
+    muted: false,
+    volume: 1,
+    duration: 10,
+    currentTime: 0,
+    play() { this.paused = false; return Promise.resolve(); },
+    pause() { this.paused = true; }
+  };
+  const mockPlayer = makeEl('mock-vid-player');
+  mockPlayer.querySelector = (sel) => (sel === 'video' ? mockVideo : null);
+  await dispatchClick('.msg-video-player', mockPlayer);
+  assert.equal(mockVideo.paused, false);
+  assert.equal(mockPlayer.classList.contains('is-controls-visible'), true);
+  await new Promise((r) => setTimeout(r, 2500));
+  assert.equal(mockPlayer.classList.contains('is-controls-visible'), false);
+
+  // Captionless media renders edge-to-edge without bottom slab, using frosted overlay meta; captioned media keeps body pad; voice card hides native controls
+  assert.match(msgsHtml, /class="msg-row is-mine[^"]*"[\s\S]*?class="msg-bubble has-top-media is-media-only"[\s\S]*?class="msg-bubble-meta is-media-overlay(?:\s+is-tick-only)?"/);
+  const mediaOnlyIdx = msgsHtml.indexOf('has-top-media is-media-only');
+  assert.ok(mediaOnlyIdx >= 0);
+  const mediaOnlyEnd = msgsHtml.indexOf('</article>', mediaOnlyIdx);
+  assert.doesNotMatch(msgsHtml.slice(mediaOnlyIdx, mediaOnlyEnd), /class="msg-bubble-body-pad"/);
+  assert.match(msgsHtml, /class="msg-bubble has-top-media"[\s\S]*?clip\.mp4[\s\S]*?class="msg-bubble-body-pad"[\s\S]*?drafting now/);
+
+  threadMessages = [
+    ...threadMessages,
+    {
+      id: 'm4',
+      conversation_id: convId,
+      sender_id: peerId,
+      body: '',
+      message_type: 'TEXT',
+      created_at: '2026-11-15T10:15:00Z',
+      attachments: [{ path: `${convId}/voice.webm`, name: 'voice.webm', kind: 'audio', duration_seconds: 6 }],
+      reactions: []
+    },
+    {
+      id: 'm5',
+      conversation_id: convId,
+      sender_id: meId,
+      body: 'First same-minute msg',
+      message_type: 'TEXT',
+      created_at: '2026-11-15T10:20:00Z',
+      delivered_at: null,
+      read_at: null,
+      attachments: [],
+      reactions: []
+    },
+    {
+      id: 'm6',
+      conversation_id: convId,
+      sender_id: meId,
+      body: 'Second same-minute msg',
+      message_type: 'TEXT',
+      created_at: '2026-11-15T10:20:42Z',
+      delivered_at: '2026-11-15T10:20:45Z',
+      read_at: null,
+      attachments: [],
+      reactions: []
+    },
+    {
+      id: 'm7',
+      conversation_id: convId,
+      sender_id: meId,
+      body: 'Receipt copy',
+      message_type: 'TEXT',
+      created_at: '2026-11-15T10:21:05Z',
+      delivered_at: '2026-11-15T10:21:06Z',
+      read_at: '2026-11-15T10:21:10Z',
+      attachments: [{ path: `${convId}/receipt.png`, name: 'receipt.png', kind: 'image' }],
+      reactions: []
+    }
+  ];
+  tableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm7', conversation_id: convId, sender_id: meId } });
+  await new Promise((r) => setTimeout(r, 320));
+  msgsHtml = getEl('msg-messages-list').innerHTML;
+  assert.match(msgsHtml, /class="msg-bubble has-audio-only"[\s\S]*?class="msg-voice-card"[\s\S]*?0:00 \/ 0:06[\s\S]*?<audio class="msg-att-audio"/);
+  assert.doesNotMatch(msgsHtml, /<audio[^>]*\bcontrols\b/);
+
+  // Same-minute messages show <time> only on the first message of that minute while preserving Sent / Delivered / Seen checkmarks on every sent message
+  const m5Pos = msgsHtml.indexOf('data-msg-id="m5"');
+  const m6Pos = msgsHtml.indexOf('data-msg-id="m6"');
+  const m7Pos = msgsHtml.indexOf('data-msg-id="m7"');
+  assert.ok(m5Pos >= 0 && m6Pos > m5Pos && m7Pos > m6Pos, 'ordered m5/m6/m7 rendered');
+  const m5Slice = msgsHtml.slice(m5Pos, m6Pos);
+  const m6Slice = msgsHtml.slice(m6Pos, m7Pos);
+  const m7Slice = msgsHtml.slice(m7Pos);
+  assert.match(m5Slice, /<time\b[^>]*>[^<]+<\/time>/);
+  assert.match(m5Slice, /class="msg-tick is-sent"[^>]*aria-label="Sent"/);
+  assert.doesNotMatch(m6Slice, /<time\b/);
+  assert.match(m6Slice, /class="msg-bubble-meta is-tick-only"[\s\S]*?class="msg-tick is-delivered"[^>]*aria-label="Delivered"/);
+  assert.match(m7Slice, /<time\b[^>]*>[^<]+<\/time>/);
+  assert.match(m7Slice, /class="msg-tick is-read"[^>]*aria-label="Seen"/);
+  assert.match(m7Slice, /class="msg-bubble has-top-media"[\s\S]*?class="msg-bubble-body-pad"[\s\S]*?Receipt copy/);
+
+  const mockAudio = {
+    paused: true,
+    ended: false,
+    muted: false,
+    volume: 1,
+    duration: 6,
+    currentTime: 0,
+    closest: (sel) => (sel === '.msg-voice-card' ? mockVoiceCard : null),
+    play() { this.paused = false; return Promise.resolve(); },
+    pause() { this.paused = true; }
+  };
+  const mockVoiceBars = Array.from({ length: 10 }, () => makeEl('bar'));
+  const mockVoiceTime = { textContent: '0:00 / 0:06' };
+  const mockVoicePlayBtn = { innerHTML: '', setAttribute: () => {} };
+  const mockVoiceMuteBtn = { innerHTML: '', setAttribute: () => {} };
+  const mockVoiceWave = makeEl('mock-voice-wave');
+  mockVoiceWave.querySelectorAll = (sel) => (sel === '.msg-voice-wave-bar' ? mockVoiceBars : []);
+  mockVoiceWave.getBoundingClientRect = () => ({ left: 100, right: 300, width: 200, top: 0, bottom: 24 });
+  const mockVoiceCard = makeEl('mock-voice-card');
+  mockVoiceCard.dataset.dur = '6';
+  mockVoiceCard.querySelectorAll = () => [];
+  mockVoiceCard.querySelector = (sel) => ({
+    'audio.msg-att-audio': mockAudio,
+    '[data-aact="play"]': mockVoicePlayBtn,
+    '[data-aact="mute"]': mockVoiceMuteBtn,
+    '.msg-voice-wave': mockVoiceWave,
+    '.msg-voice-time': mockVoiceTime
+  }[sel] || null);
+  mockVoiceWave.closest = (sel) => (sel === '.msg-voice-card' ? mockVoiceCard : null);
+
+  await dispatchClick('[data-aact]', {
+    dataset: { aact: 'play' },
+    closest: (sel) => (sel === '.msg-voice-card' ? mockVoiceCard : null)
+  });
+  assert.equal(mockAudio.paused, false);
+  await Promise.all(clickHandlers.map((fn) => fn({
+    clientX: 200,
+    stopPropagation: () => {},
+    target: { closest: (sel) => (sel === '.msg-voice-wave' ? mockVoiceWave : null) }
+  })));
+  assert.equal(mockAudio.currentTime, 3);
+  assert.equal(mockVoiceTime.textContent, '0:03 / 0:06');
+  assert.equal(mockVoiceBars.filter((b) => b.classList.contains('is-played')).length, 5);
+
+  await dispatchClick('[data-aact]', {
+    dataset: { aact: 'mute' },
+    closest: (sel) => (sel === '.msg-voice-card' ? mockVoiceCard : null)
+  });
+  assert.equal(mockAudio.muted, true);
+
+  // Messenger-style floating reaction menu highlights user's active reaction, expands '+' palette, and exposes quick actions on mobile tap
+  threadMessages = threadMessages.map((m) => (m.id === 'm3' ? { ...m, reactions: [{ user_id: meId, emoji: '❤️' }] } : m));
+  tableHandlers.get('message_reactions')?.({ eventType: 'INSERT', new: { message_id: 'm3', user_id: meId, emoji: '❤️' } });
+  await new Promise((r) => setTimeout(r, 320));
+
+  createdNodes = [];
+  await dispatchClick('[data-msg-act]', {
+    dataset: { msgAct: 'react', msgId: 'm3' },
+    getBoundingClientRect: () => ({ left: 240, right: 270, top: 200, bottom: 230, width: 30 })
+  });
+  const reactMenuNode = createdNodes.find((n) => String(n.className).includes('msg-react-menu'));
+  assert.ok(reactMenuNode, 'clicking React opens upgraded floating reaction menu');
+  assert.match(reactMenuNode.innerHTML, /class="msg-react-strip"[\s\S]*?class="msg-react-btn is-selected"[^>]*data-react-emoji="❤️"/);
+  assert.match(reactMenuNode.innerHTML, /data-react-expand[\s\S]*?class="msg-react-palette"/);
+
+  // Expanding '+' reveals extra emojis in the floating palette
+  await dispatchClick('[data-react-expand]', {
+    closest: (sel) => (sel === '.msg-react-menu' ? reactMenuNode : null),
+    setAttribute: () => {}
+  });
+  assert.equal(reactMenuNode._palette.hidden, false);
+  assert.equal(reactMenuNode.classList.contains('has-extra'), true);
+
+  // Narrow mobile viewport tap on a bubble opens reactions + Reply / Copy strip (no redundant More...; 3-dots stays separate)
+  win2.innerWidth = 390;
+  createdNodes = [];
+  const mockRow = makeEl('mock-row-m3');
+  mockRow.dataset.msgId = 'm3';
+  const mockBubble = makeEl('mock-bubble-m3');
+  mockRow.querySelector = (s) => (s === '.msg-bubble' ? mockBubble : null);
+  mockBubble.getBoundingClientRect = () => ({ left: 24, right: 240, top: 320, bottom: 370, width: 216 });
+  mockBubble.closest = (s) => (s === '.msg-row' || s === '[data-msg-id]' ? mockRow : (s === '#msg-messages-list .msg-bubble:not(.is-deleted)' ? mockBubble : null));
+  await dispatchClick('#msg-messages-list .msg-bubble:not(.is-deleted)', mockBubble);
+  const mobileMenuNode = createdNodes.find((n) => String(n.className).includes('msg-react-menu'));
+  assert.ok(mobileMenuNode, 'mobile bubble tap opens floating Messenger action + reaction bar');
+  assert.match(mobileMenuNode.innerHTML, /class="msg-react-quick-actions"[\s\S]*?data-ctx-do="reply"[\s\S]*?data-ctx-do="copy"/);
+  assert.doesNotMatch(mobileMenuNode.innerHTML, /data-react-more-ctx|More…/);
+
+  // Switching to Friends view renders dark-emerald hero card with 3 underline tabs and zero Suggestions UI
+  await dispatchClick('[data-msg-tab]', { dataset: { msgTab: 'friends' } });
+  const friendsHtml = getEl('msg-view-friends').innerHTML;
+  assert.match(friendsHtml, /class="msg-friends-hero"[\s\S]*?Friends <span class="msg-hero-amp">&amp;<\/span> Connections/);
+  assert.match(friendsHtml, /class="msg-friends-tabs"[\s\S]*?data-friends-sub="all"[\s\S]*?My Friends[\s\S]*?data-friends-sub="incoming"[\s\S]*?Friend Requests[\s\S]*?data-friends-sub="sent"[\s\S]*?Sent/);
+  assert.doesNotMatch(friendsHtml, /Suggestions|privacy-respecting suggestions|data-friends-sub="suggestions"/);
+});
+
+test('migration 078 filters audit logs to meaningful governance/financial events and offline page embeds inline SVG logo', () => {
+  const migration078 = read('database/migrations/20261115_078_filter_audit_log_signal_only.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+  const prepareMobile = read('scripts/prepare-mobile.mjs');
+
+  for (const sql of [migration078, schema]) {
+    assert.match(sql, /create or replace function public\.write_audit_log\(/i);
+    assert.match(sql, /'last_seen_at'/);
+    assert.match(sql, /'chat_privacy'/);
+    assert.match(sql, /'username'/);
+    assert.match(sql, /'bio'/);
+    assert.match(sql, /if tg_op = 'UPDATE' and v_old = v_new then\s+return (?:new|null);\s+end if;/i);
+  }
+  assert.match(migration078, /delete from public\.audit_logs/i);
+  assert.match(migration078, /'20261115_078'/);
+
+  for (const noiseField of ['last_seen_at', 'chat_privacy', 'username', 'bio']) {
+    assert.match(core, new RegExp(`'${noiseField}'`));
+  }
+
+  assert.match(prepareMobile, /assets',\s*'favicon\.svg'/);
+  assert.match(prepareMobile, /class="offline-brand"/);
+  assert.doesNotMatch(prepareMobile, /<img[^>]+src="assets\/favicon\.svg"/);
+});
+
+test('chat captionless media overlay and audit log calendar date-range chips meet UI reliability contracts', () => {
+  const auditHtml = read('audit.html');
+  const auditJs = read('js/audit.js');
+  const css = read('css/app.css');
+
+  // Chat captionless media & timestamp grouping CSS
+  assert.match(css, /\.msg-bubble\.has-top-media\.is-media-only\s*\{/);
+  assert.match(css, /\.msg-bubble-meta\.is-media-overlay\s*\{/);
+  assert.match(css, /\.msg-bubble\.is-video-controls-active\s+\.msg-bubble-meta\.is-media-overlay\s*\{/);
+  assert.match(css, /\.msg-bubble-meta\.is-tick-only\s*\{/);
+  assert.match(css, /\.msg-send-progress\.is-media-overlay\s*\{/);
+
+  // Audit Log calendar range chips & filter bar DOM + JS + CSS
+  assert.match(auditHtml, /class="panel-header audit-panel-header"/);
+  assert.match(auditHtml, /class="table-filters audit-filters"/);
+  assert.match(auditHtml, /id="audit-search-clear"/);
+  assert.match(auditHtml, /class="audit-date-range"/);
+  assert.match(auditHtml, /data-date-chip="audit-date-from"[\s\S]*?id="audit-date-from-label">\s*Start date\s*<[\s\S]*?id="audit-date-from"[\s\S]*?data-clear-date="audit-date-from"/);
+  assert.match(auditHtml, /data-date-chip="audit-date-to"[\s\S]*?id="audit-date-to-label">\s*End date\s*<[\s\S]*?id="audit-date-to"[\s\S]*?data-clear-date="audit-date-to"/);
+  assert.match(auditHtml, /id="audit-filters-reset"[^>]*hidden/);
+
+  assert.match(auditJs, /function formatFilterDate\(iso\)/);
+  assert.match(auditJs, /function syncAuditFilterUi\(changedInput = null\)/);
+  assert.match(auditJs, /showPicker\?\.\(\)/);
+  assert.match(auditJs, /dateToInput\.value = dateFromInput\.value/);
+  assert.match(auditJs, /dateFromInput\.value = dateToInput\.value/);
+  assert.match(auditJs, /\[data-clear-date\]/);
+  assert.match(auditJs, /audit-filters-reset/);
+
+  assert.match(css, /\.table-filters\.audit-filters\s*\{/);
+  assert.match(css, /\.audit-date-range\s*\{/);
+  assert.match(css, /\.date-filter-chip\s*\{/);
+  assert.match(css, /\.date-filter-chip\s+input\[type="date"\]::-webkit-calendar-picker-indicator\s*\{/);
+  assert.match(css, /html\[data-theme="dark"\]\s+\.date-filter-chip\b/);
+
+  // Uniform chat photo thumbnail frame, aligned mobile bubble gutters, full-size image viewer toggle, centered voice speaker button, mobile 3-dots preservation, and Pic 2 Friends hero card
+  const coreJs = read('js/core.js');
+  assert.match(css, /\.msg-att-image\s*\{[^}]*width:\s*clamp\(176px,\s*56vw,\s*232px\);\s*max-width:\s*100%;\s*height:\s*220px;/s);
+  assert.match(css, /\.msg-attachments\.is-carousel\s*>\s*\.msg-att-image\s*\{[^}]*width:\s*clamp\(176px,\s*56vw,\s*232px\);\s*height:\s*220px;/s);
+  assert.match(css, /\.msg-bubble-col,\s*\.msg-row\.is-mine\s+\.msg-bubble-col\s*\{\s*max-width:\s*min\(520px,\s*calc\(100%\s*-\s*72px\)\);\s*\}/s);
+  assert.doesNotMatch(css, /@media\s*\(max-width:\s*720px\)\s*\{[^}]*\.msg-bubble-col\s*\{\s*max-width:\s*86%;/s);
+  assert.match(css, /\.msg-voice-wave\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s);
+  assert.match(css, /\.msg-voice-mute-btn\s*\{[^}]*align-self:\s*center;[^}]*border-radius:\s*50%;/s);
+  assert.match(css, /\.msg-att-image img\s*\{[^}]*width:\s*100%;\s*height:\s*100%;[^}]*object-fit:\s*cover;/s);
+  assert.match(css, /\.msg-row-actions \.msg-action-mini\[data-msg-act="react"\],\s*\.msg-row-actions \.msg-action-mini\[data-msg-act="reply"\]\s*\{\s*display:\s*none;\s*\}/s);
+  assert.match(coreJs, /id="ipon-iv-zoom"[\s\S]*?is-actual-size[\s\S]*?naturalWidth[\s\S]*?naturalHeight/);
+  assert.match(css, /\.image-viewer-stage\.is-actual-size img\s*\{[^}]*max-width:\s*none;[^}]*max-height:\s*none;/s);
+  assert.match(css, /\.msg-friends-hero\s*\{[\s\S]*?\.msg-friends-tabs\s*\{[\s\S]*?\.msg-friends-tab\.is-active::after\s*\{/s);
 });
 
 

@@ -10,7 +10,56 @@
   const dateToInput = document.getElementById('audit-date-to');
   const tableFilter = document.getElementById('audit-table-filter');
   const actionFilter = document.getElementById('audit-action-filter');
+  const searchClearBtn = document.getElementById('audit-search-clear');
+  const resetFiltersBtn = document.getElementById('audit-filters-reset');
   const pager = document.getElementById('audit-pager');
+
+  function formatFilterDate(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+    try {
+      return new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+        .format(new Date(`${iso}T00:00:00+08:00`));
+    } catch {
+      return iso;
+    }
+  }
+
+  function syncAuditFilterUi(changedInput = null) {
+    if (dateFromInput?.value && dateToInput?.value && dateFromInput.value > dateToInput.value) {
+      if (changedInput === dateFromInput) dateToInput.value = dateFromInput.value;
+      else if (changedInput === dateToInput) dateFromInput.value = dateToInput.value;
+    }
+    if (dateFromInput) dateFromInput.max = dateToInput?.value || '';
+    if (dateToInput) dateToInput.min = dateFromInput?.value || '';
+
+    [
+      { input: dateFromInput, placeholder: 'Start date', labelEl: document.getElementById('audit-date-from-label') },
+      { input: dateToInput, placeholder: 'End date', labelEl: document.getElementById('audit-date-to-label') }
+    ].forEach(({ input, placeholder, labelEl }) => {
+      if (!input) return;
+      const val = input.value || '';
+      const chip = document.querySelector(`[data-date-chip="${input.id}"]`);
+      const clearBtn = document.querySelector(`[data-clear-date="${input.id}"]`);
+      if (chip) {
+        chip.dataset.empty = val ? 'false' : 'true';
+        chip.classList.toggle('is-filled', Boolean(val));
+      }
+      if (labelEl) labelEl.textContent = val ? formatFilterDate(val) : placeholder;
+      if (clearBtn) clearBtn.hidden = !val;
+    });
+
+    const hasSearch = Boolean((searchInput?.value || '').trim());
+    if (searchClearBtn) searchClearBtn.hidden = !hasSearch;
+    if (resetFiltersBtn) {
+      resetFiltersBtn.hidden = !(
+        hasSearch ||
+        Boolean(dateFromInput?.value) ||
+        Boolean(dateToInput?.value) ||
+        Boolean(tableFilter?.value) ||
+        Boolean(actionFilter?.value)
+      );
+    }
+  }
   const detailDialog = document.getElementById('audit-detail-dialog');
   const detailEyebrow = document.getElementById('audit-detail-eyebrow');
   const detailTitle = document.getElementById('audit-detail-title');
@@ -201,10 +250,49 @@
     await load();
   });
 
+  syncAuditFilterUi();
   let searchTimer = null;
   const resetAndLoad = async () => { page = 0; try { await load(); } catch (error) { Ipon.showInlineError(body, error, load, 6); } };
-  [tableFilter, actionFilter, dateFromInput, dateToInput].forEach((filter) => filter?.addEventListener('change', resetAndLoad));
+  [tableFilter, actionFilter, dateFromInput, dateToInput].forEach((filter) => filter?.addEventListener('change', (ev) => {
+    syncAuditFilterUi(ev.target);
+    resetAndLoad();
+  }));
+  document.querySelectorAll('[data-date-chip]').forEach((chip) => {
+    chip.addEventListener('click', (event) => {
+      if (event.target.closest('[data-clear-date]')) return;
+      const inp = document.getElementById(chip.dataset.dateChip);
+      try { inp?.showPicker?.(); } catch {}
+    });
+  });
+  document.querySelectorAll('[data-clear-date]').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const inp = document.getElementById(btn.dataset.clearDate);
+      if (inp) inp.value = '';
+      syncAuditFilterUi();
+      resetAndLoad();
+    });
+  });
+  searchClearBtn?.addEventListener('click', () => {
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.focus();
+    }
+    syncAuditFilterUi();
+    resetAndLoad();
+  });
+  resetFiltersBtn?.addEventListener('click', () => {
+    if (searchInput) searchInput.value = '';
+    if (dateFromInput) dateFromInput.value = '';
+    if (dateToInput) dateToInput.value = '';
+    if (tableFilter) tableFilter.value = '';
+    if (actionFilter) actionFilter.value = '';
+    syncAuditFilterUi();
+    resetAndLoad();
+  });
   searchInput?.addEventListener('input', () => {
+    syncAuditFilterUi();
     clearTimeout(searchTimer);
     searchTimer = setTimeout(resetAndLoad, 220);
   });

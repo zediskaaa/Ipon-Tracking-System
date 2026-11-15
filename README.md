@@ -49,3 +49,7 @@ Keep the hosted Auth password policy aligned with the application. In the projec
 Enable **App Authenticator (TOTP)** enrollment and verification in the hosted Auth MFA settings. Users can then add one or more authenticator apps from **My account → Sign-in security**. Migration `20261112_014_enforce_opt_in_mfa.sql` requires an AAL2 session across database access and account-management functions after a user enrolls a verified factor.
 
 Password recovery uses Supabase's hosted reset link and redirects back to `reset-password.html`. Add every deployed reset-page URL to the hosted Auth redirect allow list. The local equivalent is tracked in `supabase/templates/recovery.html`. The built-in Supabase mailer is suitable only for limited team-member testing; configure custom SMTP later when a verified sending domain is available.
+
+## Messaging and lossless media
+
+Direct messaging, friends management, message requests, and notifications run on Supabase Postgres RPCs, Row-Level Security (`SUPER_ADMIN` excluded at database, Edge Function, and UI levels), and Supabase Realtime. Lossless file and image attachments use the private `chat-attachments` storage bucket with short-lived signed upload and download URLs issued by the `manage-account` Edge Function.

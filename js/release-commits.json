@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-11-15T17:12:38+08:00",
+    "message": "Style My Account modal with warm cards, serif typography, and emerald header"
+  },
+  {
+    "date": "2026-11-15T17:03:50+08:00",
+    "message": "Refresh release commits feed"
+  },
+  {
     "date": "2026-11-15T16:44:23+08:00",
     "message": "Restore member group savings summary and read-only transparency RLS"
   },
@@ -170,13 +178,5 @@
   {
     "date": "2026-11-14T02:54:16+08:00",
     "message": "Remove section icon badges from My Account dialog"
-  },
-  {
-    "date": "2026-11-14T02:53:03+08:00",
-    "message": "Upgrade group switcher dropdowns with avatar DPs and role badges"
-  },
-  {
-    "date": "2026-11-14T02:46:14+08:00",
-    "message": "Fix Android notification permission prompt and add background polling"
   }
 ]
