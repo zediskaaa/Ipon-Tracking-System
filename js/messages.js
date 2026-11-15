@@ -16,7 +16,12 @@
   const MSG_REPLY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>';
   const MSG_MORE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.75" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.75" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.75" fill="currentColor" stroke="none"/></svg>';
   const MSG_PLUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5"/><line x1="5.5" y1="12" x2="18.5" y2="12"/></svg>';
-  const BUBBLE_INTERACTIVE_SEL = 'a, button, input, textarea, select, label, video, audio, [data-open-img], [data-jump-msg], [data-retry-pending], [data-cancel-pending], .msg-video-controls, .msg-voice-wave';
+  const MSG_PIN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+  const MSG_CHEVRON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  const MSG_CLOSE_X_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
+  const HOLD_EXCLUDE_SEL = 'a, input, textarea, select, label, [data-aact], [data-vact], [data-react-msg], [data-jump-msg], [data-retry-pending], [data-cancel-pending], .msg-video-controls, .msg-voice-wave';
+  const MSG_HOLD_DELAY_MS = 380;
+  const MENU_EXIT_MS = 200;
   const VOICE_WAVE_HEIGHTS = [28, 48, 36, 62, 42, 78, 96, 54, 44, 68, 86, 50, 74, 40, 84, 92, 60, 46, 72, 98, 56, 48, 66, 38, 76, 52];
   const BLOCKED_EXT_RE = /\.(exe|msi|bat|cmd|com|pif|scr|vbs|vbe|js|mjs|cjs|jse|wsf|wsh|ps1|psm1|sh|bash|html|htm|xhtml|svg|php|asp|aspx|jsp|jar|dll|sys|drv|reg|hta|cpl)$/i;
   const ALLOWED_EXT_RE = /\.(jpg|jpeg|png|webp|gif|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|rtf|odt|ods|odp|md|mp3|wav|ogg|m4a|webm|aac|mp4|mov|zip)$/i;
@@ -43,6 +48,8 @@
   let activeVideoMenuPlayer = null;
   let activeFloatingMenuAnchor = null;
   let suppressBubbleClickId = null;
+  let recentHoldMsgId = null;
+  let recentHoldAt = 0;
 
   const NEW_CHAT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
   const BACK_ARROW_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>';
@@ -50,10 +57,9 @@
   const state = {
     tab: 'chats', // chats | requests | friends | discover | notifications
     chatFilter: 'inbox', // inbox | unread | archived
-    friendsSubTab: 'all', // all | incoming | sent | suggestions
+    friendsSubTab: 'all', // all | incoming | sent
     conversations: [],
     overview: { me: null, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] },
-    suggestions: [],
     socialNotifications: [],
     discoverUsers: [],
     discoverMessages: [],
@@ -71,6 +77,7 @@
     threadError: '',
     mobileShowThread: false,
     showThreadInfo: false,
+    threadInfoView: 'root', // root | media | files
     showThreadSearch: false,
     threadSearchQuery: '',
     threadSearchSenderId: '',
@@ -93,7 +100,9 @@
     voiceChunks: [],
     voiceStartedAt: 0,
     voiceTimer: null,
-    openDropdownMsgId: null
+    openDropdownMsgId: null,
+    showPinnedList: false,
+    activePinnedId: null
   };
 
   function ipon() { return window.Ipon; }
@@ -176,7 +185,6 @@
       const pools = [
         ...(state.discoverUsers || []),
         ...(state.overview?.friends || []),
-        ...(state.suggestions || []),
         ...(state.overview?.incoming_requests || []).map((r) => ({ id: r.user_id, full_name: r.full_name, username: r.username, avatar_url: r.avatar_url })),
         ...(state.overview?.sent_requests || []).map((r) => ({ id: r.user_id, full_name: r.full_name, username: r.username, avatar_url: r.avatar_url }))
       ];
@@ -234,16 +242,19 @@
     if (kind === 'popover') {
       return `<div class="msg-pop-skeleton" role="status" aria-label="Loading profile">
         <div class="msg-pop-head">
-          <span class="msg-skel msg-skel-circle msg-skel-av-md"></span>
-          <div class="msg-skel-col">
-            <span class="msg-skel msg-skel-line" style="width:130px;height:13px"></span>
-            <span class="msg-skel msg-skel-line" style="width:84px;height:10px"></span>
+          <span class="msg-skel msg-skel-circle" style="width:64px;height:64px;flex-shrink:0"></span>
+          <div class="msg-skel-col" style="flex:1">
+            <span class="msg-skel msg-skel-line" style="width:74%;height:18px"></span>
+            <span class="msg-skel msg-skel-line" style="width:58%;height:12px"></span>
           </div>
         </div>
-        <span class="msg-skel msg-skel-line" style="width:88%;height:11px"></span>
+        <span class="msg-skel msg-skel-rect" style="width:100%;height:44px;border-radius:14px"></span>
         <div class="msg-pop-actions">
-          <span class="msg-skel msg-skel-pill" style="width:94px;height:30px"></span>
-          <span class="msg-skel msg-skel-pill" style="width:86px;height:30px"></span>
+          <span class="msg-skel msg-skel-rect" style="width:100%;height:44px;border-radius:13px"></span>
+          <div class="msg-pop-secondary-row">
+            <span class="msg-skel msg-skel-rect" style="width:100%;height:40px;border-radius:13px"></span>
+            <span class="msg-skel msg-skel-rect" style="width:100%;height:40px;border-radius:13px"></span>
+          </div>
         </div>
       </div>`;
     }
@@ -497,7 +508,7 @@
               </section>
             </section>
 
-            <!-- Friends management & suggestions view -->
+            <!-- Friends & connections view -->
             <section class="msg-panel-view" id="msg-view-friends" hidden></section>
 
             <!-- Dedicated Social Notifications view -->
@@ -638,10 +649,14 @@
   function revealVideoControls(player, { autoHideMs = 2400 } = {}) {
     if (!player) return;
     player.classList.add('is-controls-visible');
+    player.closest?.('.msg-bubble')?.classList?.toggle('is-video-controls-active', true);
     clearTimeout(player._hideTimer);
     if (autoHideMs > 0) {
       player._hideTimer = setTimeout(() => {
-        if (!player.dataset.seeking) player.classList.remove('is-controls-visible');
+        if (!player.dataset.seeking) {
+          player.classList.remove('is-controls-visible');
+          player.closest?.('.msg-bubble')?.classList?.toggle('is-video-controls-active', false);
+        }
       }, autoHideMs);
     }
   }
@@ -752,7 +767,7 @@
   }
 
   function showVideoOptionsMenu(player, anchorBtn) {
-    closeFloatingMenus();
+    closeFloatingMenus({ immediate: true });
     activeVideoMenuPlayer = player;
     const menu = document.createElement('div');
     menu.className = 'msg-floating-menu msg-ctx-menu';
@@ -767,6 +782,7 @@
       ${video ? `<button type="button" data-vspeed="${nextSpeed}">Playback speed (${curRate}x → ${nextSpeed}x)</button>` : ''}`;
     document.getElementById('msg-workspace-dialog')?.appendChild(menu);
     placeFloatingMenu(menu, anchorBtn, { preferAbove: true, estWidth: 196, estHeight: 84, align: 'end' });
+    revealFloatingMenu(menu);
   }
 
   // Data loading & badge counters
@@ -819,16 +835,6 @@
       renderFriendsView();
     }
     return state.overview;
-  }
-
-  async function refreshSuggestions({ render = true } = {}) {
-    if (!isEligible()) return [];
-    const data = await ipon().rpc('get_friend_suggestions', { p_limit: 20 });
-    state.suggestions = Array.isArray(data) ? data : [];
-    if (render && document.getElementById('msg-workspace-dialog')?.open && state.tab === 'friends') {
-      renderFriendsView();
-    }
-    return state.suggestions;
   }
 
   async function refreshSocialNotifications({ render = true } = {}) {
@@ -1069,35 +1075,42 @@
   // Conversation opening & thread loading
   async function openConversation(conversationId, { aroundMessageId = null, markRead = true, silent = false, scrollToBottom = null, forceMarkRead = false, previewPeer = null } = {}) {
     if (!conversationId || !isEligible()) return;
+    const isSwitchingConv = state.activeConvId !== conversationId;
     const isSameLoadedThread = Boolean(
-      state.activeConvId === conversationId &&
+      !isSwitchingConv &&
       state.activeThread?.conversation?.conversation_id === conversationId &&
       !aroundMessageId &&
       !state.threadError
     );
     const backgroundRefresh = Boolean(silent || isSameLoadedThread);
 
-    if (state.activeConvId && state.activeConvId !== conversationId) {
+    if (state.activeConvId && isSwitchingConv) {
       sendTypingBroadcast(false);
+      state.threadInfoView = 'root';
+      state.activePinnedId = null;
       const prevInput = document.getElementById('msg-composer-input');
       if (prevInput) state.draftsByConv.set(state.activeConvId, prevInput.value);
     }
 
     state.activeConvId = conversationId;
-    state.mobileShowThread = true;
+    if (!silent) state.mobileShowThread = true;
     state.threadError = '';
     const reqSeq = ++state.openConvSeq;
+    if (!silent) {
+      syncMobilePaneState();
+      renderConversationList();
+    }
 
     if (!backgroundRefresh) {
       state.replyToMsg = null;
       state.editingMsg = null;
       state.showThreadSearch = false;
+      state.showPinnedList = false;
+      if (isSwitchingConv) state.activePinnedId = null;
       state.threadSearchQuery = '';
       state.threadSearchMatches = [];
       state.loadingThread = true;
       state.lastThreadFingerprint = '';
-      syncMobilePaneState();
-      renderConversationList();
       renderThreadHeaderLoading(conversationId, previewPeer);
     }
 
@@ -1337,6 +1350,75 @@
     syncLiveTypingBubble(typing);
   }
 
+  function getPinnedPreviewText(pin) {
+    const body = String(pin?.body || '').trim();
+    if (body) return body;
+    const match = (state.activeThread?.messages || []).find((m) => m.id === pin?.id);
+    const att = (match?.attachments || [])[0];
+    if (att?.kind === 'image') return 'Photo';
+    if (att?.kind === 'video') return 'Video';
+    if (att?.kind === 'audio') return 'Voice message';
+    if (att?.name) return att.name;
+    return 'Attachment';
+  }
+
+  function renderPinnedBanner() {
+    const pinnedBanner = document.getElementById('msg-pinned-banner');
+    if (!pinnedBanner) return;
+    const conv = state.activeThread?.conversation;
+    const pins = state.activeThread?.pinned_messages || [];
+    const canInteract = Boolean(conv && conv.friendship_status !== 'BLOCKED_BY_ME' && conv.friendship_status !== 'BLOCKED_ME');
+    if (!pins.length || !canInteract) {
+      state.showPinnedList = false;
+      state.activePinnedId = null;
+      pinnedBanner.hidden = true;
+      pinnedBanner.innerHTML = '';
+      return;
+    }
+    if (!state.activePinnedId || !pins.some((p) => p.id === state.activePinnedId)) {
+      state.activePinnedId = pins[0].id;
+    }
+    const activePin = pins.find((p) => p.id === state.activePinnedId) || pins[0];
+    const expanded = Boolean(state.showPinnedList);
+    pinnedBanner.hidden = false;
+    pinnedBanner.innerHTML = `
+      <div class="msg-pinned-pill${expanded ? ' is-open' : ''}">
+        <button type="button" class="msg-pinned-jump" data-jump-msg="${escapeHtml(activePin.id)}" title="Jump to pinned message">
+          <span class="msg-pinned-icon" aria-hidden="true">${MSG_PIN_SVG}</span>
+          <span class="msg-pinned-copy">
+            <span class="msg-pinned-kicker">PINNED MESSAGE <span class="msg-pinned-count">${pins.length}</span></span>
+            <strong>${escapeHtml(getPinnedPreviewText(activePin))}</strong>
+          </span>
+        </button>
+        <button type="button" class="msg-pinned-toggle" data-pinned-toggle aria-expanded="${expanded}" aria-label="${expanded ? 'Collapse pinned messages' : 'Show pinned messages'}">${MSG_CHEVRON_SVG}</button>
+      </div>
+      <div class="msg-pinned-panel" id="msg-pinned-panel"${expanded ? '' : ' hidden'}>
+        <div class="msg-pinned-panel-head">
+          <h3>Pinned messages <em>${pins.length}</em></h3>
+        </div>
+        <div class="msg-pinned-list">
+          ${pins.map((p, idx) => {
+            const isCurrent = p.id === activePin.id;
+            return `<div class="msg-pinned-item${isCurrent ? ' is-active' : ''}">
+              <button type="button" class="msg-pinned-item-jump" data-pinned-select="${escapeHtml(p.id)}" data-jump-msg="${escapeHtml(p.id)}">
+                <span class="msg-pinned-item-num">${idx + 1}</span>
+                <span class="msg-pinned-item-text">${escapeHtml(getPinnedPreviewText(p))}</span>
+              </button>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  function syncActivePinnedHighlight() {
+    const list = document.getElementById('msg-messages-list');
+    if (!list?.querySelectorAll) return;
+    list.querySelectorAll('.msg-row[data-msg-id]').forEach((row) => {
+      const bubble = row.querySelector?.('.msg-bubble');
+      if (bubble) bubble.classList.toggle('is-pinned', Boolean(state.activePinnedId && row.dataset?.msgId === state.activePinnedId));
+    });
+  }
+
   function renderActiveThread({ scrollToBottom = false, highlightMessageId = null, preserveScrollTop = null, animate = false } = {}) {
     const thread = state.activeThread;
     if (!thread?.conversation) return;
@@ -1405,20 +1487,7 @@
       }
     }
 
-    const pinnedBanner = document.getElementById('msg-pinned-banner');
-    if (pinnedBanner) {
-      const pins = thread.pinned_messages || [];
-      if (pins.length && canInteract) {
-        const latestPin = pins[0];
-        pinnedBanner.hidden = false;
-        pinnedBanner.innerHTML = `<button type="button" class="msg-pinned-jump" data-jump-msg="${escapeHtml(latestPin.id)}">
-          <span>📌 Pinned message${pins.length > 1 ? ` (${pins.length})` : ''}:</span>
-          <strong>${escapeHtml(latestPin.body || 'Attachment')}</strong>
-        </button>`;
-      } else {
-        pinnedBanner.hidden = true;
-      }
-    }
+    renderPinnedBanner();
 
     const blockedBanner = document.getElementById('msg-blocked-banner');
     const composerForm = document.getElementById('msg-composer-form');
@@ -1536,7 +1605,18 @@
     </div>`;
   }
 
-  function renderPendingRowHtml(p) {
+  function buildMetaHtml({ ts, showTime = true, pinned = false, edited = false, rightHtml = '', overlay = false } = {}) {
+    const timePart = showTime && ts ? `<time datetime="${escAttr(ts)}">${escapeHtml(formatClock(ts))}</time>` : '';
+    const pinPart = pinned ? '<span title="Pinned message">📌</span>' : '';
+    const editPart = edited ? '<span>Edited ·</span>' : '';
+    if (!pinPart && !editPart && !timePart && !rightHtml) return '';
+    const tickOnly = !pinPart && !editPart && !timePart && Boolean(rightHtml);
+    return `<div class="msg-bubble-meta${overlay ? ' is-media-overlay' : ''}${tickOnly ? ' is-tick-only' : ''}">
+      ${pinPart}${editPart}${timePart}${rightHtml}
+    </div>`;
+  }
+
+  function renderPendingRowHtml(p, clockState = null) {
     const isFailed = p.status === 'failed';
     const isSending = p.status === 'sending';
     const atts = p.files || [];
@@ -1549,9 +1629,6 @@
           <span>${escapeHtml(p.replyPreview.body || 'Attachment')}</span>
         </div>`
       : '';
-    const progressBar = isSending && atts.length && p.progressPct < 100
-      ? `<div class="msg-send-progress" aria-hidden="true"><span style="width:${p.progressPct}%"></span></div>`
-      : '';
     const statusLabel = isSending && atts.length && p.progressPct > 0 && p.progressPct < 100
       ? `Sending ${p.progressPct}%…`
       : 'Sending…';
@@ -1559,21 +1636,35 @@
       ? '<span class="msg-tick is-failed-meta">! Not sent</span>'
       : `<span class="msg-tick is-sending"><span class="msg-mini-spin" aria-hidden="true"></span><span class="msg-pending-status-text">${escapeHtml(statusLabel)}</span></span>`;
     const bodyHtml = p.body ? `<p class="msg-text">${formatMessageBodyHtml(p.body)}</p>` : '';
-    const metaHtml = `<div class="msg-bubble-meta">
-      <time datetime="${escAttr(p.createdAt)}">${escapeHtml(formatClock(p.createdAt))}</time>
-      ${metaRight}
-    </div>`;
     const { hasTopMedia, hasAudioOnly } = getBubbleMediaLayout(atts, {
       hasText: Boolean(p.body),
-      hasHeaderMeta: Boolean(replyHtml)
+      hasHeaderMeta: false
     });
-    const bubbleInner = hasTopMedia
-      ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${progressBar}${metaHtml}</div>`
-      : `${replyHtml}${bodyHtml}${attHtml}${progressBar}${metaHtml}`;
+    const isMediaOnly = hasTopMedia && !bodyHtml;
+    const progressBar = isSending && atts.length && p.progressPct < 100
+      ? `<div class="msg-send-progress${isMediaOnly ? ' is-media-overlay' : ''}" aria-hidden="true"><span style="width:${p.progressPct}%"></span></div>`
+      : '';
+    const dateStr = formatDateDivider(p.createdAt);
+    const clockLabel = formatClock(p.createdAt);
+    const clockKey = clockLabel ? `${dateStr}|${clockLabel}` : '';
+    const showTime = clockState ? Boolean(clockKey && clockKey !== clockState.lastKey) : true;
+    if (showTime && clockState) clockState.lastKey = clockKey;
+    const metaHtml = buildMetaHtml({
+      ts: p.createdAt,
+      showTime,
+      rightHtml: metaRight,
+      overlay: isMediaOnly
+    });
+    const bubbleInner = isMediaOnly
+      ? `${attHtml}${progressBar}${metaHtml}`
+      : (hasTopMedia
+          ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${progressBar}${metaHtml}</div>`
+          : `${bodyHtml}${attHtml}${progressBar}${metaHtml}`);
 
     return `<article class="msg-row is-mine is-pending${isFailed ? ' is-failed' : ' is-sending'}" data-pending-id="${escapeHtml(p.localId)}">
       <div class="msg-bubble-col">
-        <div class="msg-bubble${isFailed ? ' is-failed' : ' is-sending'}${hasTopMedia ? ' has-top-media' : ''}${hasAudioOnly ? ' has-audio-only' : ''}">
+        ${replyHtml}
+        <div class="msg-bubble${isFailed ? ' is-failed' : ' is-sending'}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}">
           ${bubbleInner}
         </div>
         ${isFailed ? `
@@ -1721,9 +1812,13 @@
     }
 
     let lastDateStr = '';
+    let lastShownClockKey = '';
+    const pinnedIds = new Set((state.activeThread.pinned_messages || []).map((p) => p.id));
     const html = msgs.map((m, idx) => {
       const curDateStr = formatDateDivider(m.created_at);
-      const dateDivider = curDateStr !== lastDateStr
+      const isNewDate = curDateStr !== lastDateStr;
+      if (isNewDate) lastShownClockKey = '';
+      const dateDivider = isNewDate
         ? `<div class="msg-date-sep"><span>${escapeHtml(curDateStr)}</span></div>`
         : '';
       lastDateStr = curDateStr;
@@ -1733,6 +1828,7 @@
         : '';
 
       if (m.message_type === 'CALL_EVENT' || m.message_type === 'SYSTEM') {
+        lastShownClockKey = '';
         const sysLabel = escapeHtml(m.body || (m.message_type === 'CALL_EVENT' ? 'Call event' : 'System notice'));
         return `${dateDivider}${unreadDivider}<div class="msg-system-event" data-msg-id="${escapeHtml(m.id)}"><span>${sysLabel} · ${escapeHtml(formatClock(m.created_at))}</span></div>`;
       }
@@ -1791,40 +1887,55 @@
         ? { hasTopMedia: false, hasAudioOnly: false }
         : getBubbleMediaLayout(m.attachments, {
             hasText: Boolean(m.body),
-            hasHeaderMeta: Boolean(fwdHtml || replyHtml)
+            hasHeaderMeta: Boolean(fwdHtml)
           });
       const bodyHtml = m.body ? `<p class="msg-text">${formatMessageBodyHtml(m.body, searchQuery)}</p>` : '';
-      const metaHtml = `<div class="msg-bubble-meta">
-        ${m.pinned_at ? '<span title="Pinned message">📌</span>' : ''}
-        ${m.edited_at && !isDeleted ? '<span>Edited ·</span>' : ''}
-        <time datetime="${escAttr(m.created_at)}">${escapeHtml(formatClock(m.created_at))}</time>
-        ${receiptIcon}
-      </div>`;
+      const clockLabel = formatClock(m.created_at);
+      const curClockKey = clockLabel ? `${curDateStr}|${clockLabel}` : '';
+      const showTime = Boolean(curClockKey && curClockKey !== lastShownClockKey);
+      if (showTime) lastShownClockKey = curClockKey;
+      const isMediaOnly = !isDeleted && hasTopMedia && !bodyHtml;
+      const isPinned = Boolean(m.pinned_at || pinnedIds.has(m.id));
+      const metaHtml = buildMetaHtml({
+        ts: m.created_at,
+        showTime,
+        pinned: isPinned && !isDeleted,
+        edited: Boolean(m.edited_at && !isDeleted),
+        rightHtml: receiptIcon,
+        overlay: isMediaOnly
+      });
       const bubbleContent = isDeleted
-        ? `${fwdHtml}${replyHtml}<p class="msg-deleted-note">This message was unsent.</p>${metaHtml}`
-        : (hasTopMedia
-            ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${metaHtml}</div>`
-            : `${fwdHtml}${replyHtml}${bodyHtml}${attHtml}${metaHtml}`);
+        ? `${fwdHtml}<p class="msg-deleted-note">This message was unsent.</p>${metaHtml}`
+        : (isMediaOnly
+            ? `${attHtml}${metaHtml}`
+            : (hasTopMedia
+                ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${metaHtml}</div>`
+                : `${fwdHtml}${bodyHtml}${attHtml}${metaHtml}`));
 
+      const isActivePinned = Boolean(isPinned && !isDeleted && state.activePinnedId && m.id === state.activePinnedId);
       return `${dateDivider}${unreadDivider}
         <article class="msg-row${mine ? ' is-mine' : ' is-peer'}${groupedWithPrev ? ' is-grouped-prev' : ''}${groupedWithNext ? ' is-grouped-next' : ''}${isMatch ? ' is-search-match' : ''}${activeMatch ? ' is-active-search-match' : ''}" data-msg-id="${escapeHtml(m.id)}">
           ${!mine ? `<div class="msg-row-avatar">${groupedWithNext ? '' : userAvatarHtml(conv, 'avatar-sm')}</div>` : ''}
           <div class="msg-bubble-col">
-            <div class="msg-bubble${isDeleted ? ' is-deleted' : ''}${m.pinned_at ? ' is-pinned' : ''}${hasTopMedia ? ' has-top-media' : ''}${hasAudioOnly ? ' has-audio-only' : ''}">
-              ${bubbleContent}
+            ${replyHtml}
+            <div class="msg-bubble-wrap">
+              <div class="msg-bubble${isDeleted ? ' is-deleted' : ''}${isActivePinned ? ' is-pinned' : ''}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}">
+                ${bubbleContent}
+              </div>
+              ${!isDeleted ? `
+                <div class="msg-row-actions">
+                  <button type="button" class="msg-action-mini" data-msg-act="react" data-msg-id="${escapeHtml(m.id)}" aria-label="React" title="React">${MSG_REACT_SVG}</button>
+                  <button type="button" class="msg-action-mini" data-msg-act="reply" data-msg-id="${escapeHtml(m.id)}" aria-label="Reply" title="Reply">${MSG_REPLY_SVG}</button>
+                  <button type="button" class="msg-action-mini" data-msg-act="menu" data-msg-id="${escapeHtml(m.id)}" aria-label="More message actions" title="More options">${MSG_MORE_SVG}</button>
+                </div>` : ''}
             </div>
             ${reactionHtml}
           </div>
-          ${!isDeleted ? `
-            <div class="msg-row-actions">
-              <button type="button" class="msg-action-mini" data-msg-act="react" data-msg-id="${escapeHtml(m.id)}" aria-label="React" title="React">${MSG_REACT_SVG}</button>
-              <button type="button" class="msg-action-mini" data-msg-act="reply" data-msg-id="${escapeHtml(m.id)}" aria-label="Reply" title="Reply">${MSG_REPLY_SVG}</button>
-              <button type="button" class="msg-action-mini" data-msg-act="menu" data-msg-id="${escapeHtml(m.id)}" aria-label="More message actions" title="More options">${MSG_MORE_SVG}</button>
-            </div>` : ''}
         </article>`;
     }).join('');
 
-    const pendingHtml = pendingList.map(renderPendingRowHtml).join('');
+    const pendingClockState = { lastKey: lastShownClockKey };
+    const pendingHtml = pendingList.map((p) => renderPendingRowHtml(p, pendingClockState)).join('');
     list.innerHTML = `${html}${pendingHtml}`;
     list.classList.toggle('is-thread-entering', Boolean(animate));
     ipon().bindAvatarFallbacks(list);
@@ -1838,7 +1949,7 @@
     if (att.kind === 'image') {
       return `<figure class="msg-att-image">
         ${url
-          ? `<button type="button" class="msg-img-open-btn" data-open-img="${escAttr(url)}" data-img-name="${escAttr(att.name || 'image')}" aria-label="View original ${safeName}">
+          ? `<button type="button" class="msg-img-open-btn" data-open-img="${escAttr(url)}" data-img-name="${escAttr(att.name || 'image')}" data-img-conv="${escAttr(conversationId)}" data-img-path="${escAttr(att.path)}" aria-label="View original ${safeName}">
               <img src="${escAttr(url)}" alt="${safeName}" loading="lazy">
             </button>`
           : '<div class="msg-att-loading msg-skel" role="status"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>Loading image…</span></div>'}
@@ -1894,89 +2005,187 @@
 
   function renderThreadInfoDrawer() {
     const drawer = document.getElementById('msg-thread-drawer');
+    document.getElementById('msg-thread-info-toggle')?.classList?.toggle?.('is-active', Boolean(state.showThreadInfo));
     if (!drawer) return;
     drawer.hidden = !state.showThreadInfo;
     if (!state.showThreadInfo || !state.activeThread?.conversation) return;
     const conv = state.activeThread.conversation;
     const msgs = state.activeThread.messages || [];
+    const view = (state.threadInfoView === 'media' || state.threadInfoView === 'files') ? state.threadInfoView : 'root';
+    state.threadInfoView = view;
     const media = [];
     const docs = [];
     msgs.forEach((m) => {
       if (m.deleted_for_everyone_at) return;
       (m.attachments || []).forEach((a) => {
-        if (a.kind === 'image' || a.kind === 'video') media.push(a);
-        else docs.push(a);
+        const entry = { att: a, msgId: m.id, createdAt: m.created_at };
+        if (a.kind === 'image' || a.kind === 'video') media.push(entry);
+        else docs.push(entry);
       });
     });
 
+    const closeBtnHtml = '<button type="button" class="dialog-close msg-mini-close" id="msg-drawer-close" aria-label="Close chat details"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>';
+
+    if (view === 'media') {
+      const orderedMedia = media.slice().reverse();
+      const missingPaths = orderedMedia
+        .map((x) => x.att?.path)
+        .filter((p) => p && !state.signedUrlCache.has(p));
+      if (missingPaths.length && conv.conversation_id) {
+        ensureSignedViewUrls(conv.conversation_id, missingPaths)
+          .then(() => {
+            if (
+              missingPaths.some((p) => state.signedUrlCache.has(p))
+              && state.showThreadInfo
+              && state.threadInfoView === 'media'
+              && state.activeConvId === conv.conversation_id
+            ) {
+              renderThreadInfoDrawer();
+            }
+          })
+          .catch(() => { });
+      }
+      drawer.innerHTML = `
+        <div class="msg-drawer-head is-subview">
+          <div class="msg-drawer-head-left">
+            <button type="button" class="msg-drawer-back" data-drawer-view="root" aria-label="Back to chat info">${BACK_ARROW_ICON_SVG}</button>
+            <h3>Shared media</h3>
+            <span class="msg-drawer-head-count">${media.length}</span>
+          </div>
+          ${closeBtnHtml}
+        </div>
+        <div class="msg-drawer-body" data-drawer-screen="media">
+          ${orderedMedia.length
+            ? `<div class="msg-drawer-media-grid">${orderedMedia.map(({ att: a, msgId }) => {
+                const url = state.signedUrlCache.get(a.path) || '';
+                if (!url) return `<span class="msg-drawer-thumb is-loading msg-skel" title="${escapeHtml(a.name || 'Media')}" aria-label="Loading ${escapeHtml(a.name || 'media')}"></span>`;
+                return a.kind === 'video'
+                  ? `<button type="button" class="msg-drawer-thumb is-video" data-jump-msg="${escAttr(msgId)}" title="Jump to ${escapeHtml(a.name || 'video')}" aria-label="Jump to video ${escapeHtml(a.name || 'video')}"><video muted preload="metadata" playsinline src="${escAttr(url)}"></video><span class="msg-drawer-video-badge" aria-hidden="true">${VIDEO_PLAY_SVG}</span></button>`
+                  : `<button type="button" class="msg-drawer-thumb" data-open-img="${escAttr(url)}" data-img-name="${escAttr(a.name || 'image')}" data-img-conv="${escAttr(conv.conversation_id)}" data-img-path="${escAttr(a.path)}" aria-label="View ${escapeHtml(a.name || 'image')}"><img src="${escAttr(url)}" alt="${escapeHtml(a.name || 'Shared media')}" loading="lazy"></button>`;
+              }).join('')}</div>`
+            : `<div class="msg-drawer-empty empty-state"><strong>No shared media yet</strong><span>Photos and videos shared in this chat will appear here.</span></div>`}
+        </div>`;
+      return;
+    }
+
+    if (view === 'files') {
+      const orderedDocs = docs.slice().reverse();
+      drawer.innerHTML = `
+        <div class="msg-drawer-head is-subview">
+          <div class="msg-drawer-head-left">
+            <button type="button" class="msg-drawer-back" data-drawer-view="root" aria-label="Back to chat info">${BACK_ARROW_ICON_SVG}</button>
+            <h3>Shared files</h3>
+            <span class="msg-drawer-head-count">${docs.length}</span>
+          </div>
+          ${closeBtnHtml}
+        </div>
+        <div class="msg-drawer-body" data-drawer-screen="files">
+          ${orderedDocs.length
+            ? `<ul class="msg-drawer-files">${orderedDocs.map(({ att: d, createdAt }) => {
+                const metaParts = [formatBytes(d.size), formatShortDate(createdAt)].filter(Boolean).join(' · ');
+                return `
+                <li>
+                  <span class="msg-drawer-file-badge">${escapeHtml(formatBadgeLabel(d))}</span>
+                  <div class="msg-drawer-file-meta">
+                    <strong title="${escapeHtml(d.name || 'File')}">${escapeHtml(d.name || 'Attachment')}</strong>
+                    ${metaParts ? `<small>${escapeHtml(metaParts)}</small>` : ''}
+                  </div>
+                  <button type="button" class="msg-att-dl-btn" data-dl-conv="${escAttr(conv.conversation_id)}" data-dl-path="${escAttr(d.path)}" data-dl-name="${escAttr(d.name || 'file')}">Download</button>
+                </li>`;
+              }).join('')}</ul>`
+            : `<div class="msg-drawer-empty empty-state"><strong>No shared files yet</strong><span>Documents and other attachments sent in this chat will appear here.</span></div>`}
+        </div>`;
+      return;
+    }
+
     const themes = ['paper', 'emerald', 'sage', 'sand', 'midnight'];
+    const mediaIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 21"/></svg>';
+    const fileIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h6"/></svg>';
+    const chevronRightSvg = '<svg class="msg-drawer-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
     drawer.innerHTML = `
       <div class="msg-drawer-head">
         <h3>Chat Info &amp; Options</h3>
-        <button type="button" class="dialog-close msg-mini-close" id="msg-drawer-close" aria-label="Close chat details"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        ${closeBtnHtml}
       </div>
-      <div class="msg-drawer-profile">
-        ${userAvatarHtml(conv, 'avatar-lg')}
-        <strong>${escapeHtml(conv.full_name || 'User')}</strong>
-        ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
-        ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
-      </div>
-      <div class="msg-drawer-section">
-        <h4>Chat actions</h4>
-        <div class="msg-drawer-actions">
-          <button type="button" class="button button-secondary button-sm" data-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}">${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</button>
-          <button type="button" class="button button-secondary button-sm" data-conv-act="${conv.is_muted ? 'unmute' : 'mute'}">${conv.is_muted ? 'Unmute' : 'Mute'}</button>
-          <button type="button" class="button button-secondary button-sm" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${conv.is_archived ? 'Unarchive' : 'Archive'}</button>
-          <button type="button" class="button button-secondary button-sm" data-conv-act="mark_unread">Mark unread</button>
-          <button type="button" class="button button-secondary button-sm" data-conv-act="delete_for_me">Delete for me</button>
-          <button type="button" class="button button-secondary button-sm is-danger" data-social-action="${conv.friendship_status === 'BLOCKED_BY_ME' ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${conv.friendship_status === 'BLOCKED_BY_ME' ? 'Unblock user' : 'Block user'}</button>
+      <div class="msg-drawer-body" data-drawer-screen="root">
+        <div class="msg-drawer-profile">
+          ${userAvatarHtml(conv, 'avatar-lg')}
+          <strong>${escapeHtml(conv.full_name || 'User')}</strong>
+          ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
+          ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
         </div>
-      </div>
-      <div class="msg-drawer-section">
-        <h4>Theme</h4>
-        <div class="msg-theme-swatches">
-          ${themes.map((t) => `<button type="button" class="msg-theme-chip${(conv.chat_theme || 'paper') === t ? ' is-active' : ''}" data-conv-theme="${t}">${escapeHtml(t[0].toUpperCase() + t.slice(1))}</button>`).join('')}
+        <div class="msg-drawer-section">
+          <h4>Chat actions</h4>
+          <div class="msg-drawer-actions">
+            <button type="button" class="button button-secondary button-sm" data-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}">${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</button>
+            <button type="button" class="button button-secondary button-sm" data-conv-act="${conv.is_muted ? 'unmute' : 'mute'}">${conv.is_muted ? 'Unmute' : 'Mute'}</button>
+            <button type="button" class="button button-secondary button-sm" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${conv.is_archived ? 'Unarchive' : 'Archive'}</button>
+            <button type="button" class="button button-secondary button-sm" data-conv-act="mark_unread">Mark unread</button>
+            <button type="button" class="button button-secondary button-sm" data-conv-act="delete_for_me">Delete for me</button>
+            <button type="button" class="button button-secondary button-sm is-danger" data-social-action="${conv.friendship_status === 'BLOCKED_BY_ME' ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${conv.friendship_status === 'BLOCKED_BY_ME' ? 'Unblock user' : 'Block user'}</button>
+          </div>
         </div>
-      </div>
-      <div class="msg-drawer-section">
-        <h4>Shared media (${media.length})</h4>
-        ${media.length
-          ? `<div class="msg-drawer-media-grid">${media.slice(-9).reverse().map((a) => {
-              const url = state.signedUrlCache.get(a.path) || '';
-              if (!url) return '';
-              return a.kind === 'video'
-                ? `<span class="msg-drawer-thumb is-video" title="${escapeHtml(a.name)}"><video muted preload="metadata" src="${escAttr(url)}"></video></span>`
-                : `<button type="button" class="msg-drawer-thumb" data-open-img="${escAttr(url)}" data-img-name="${escAttr(a.name)}"><img src="${escAttr(url)}" alt="${escapeHtml(a.name)}"></button>`;
-            }).join('')}</div>`
-          : '<p class="msg-muted-copy">No photos or videos shared yet.</p>'}
-      </div>
-      <div class="msg-drawer-section">
-        <h4>Shared files (${docs.length})</h4>
-        ${docs.length
-          ? `<ul class="msg-drawer-files">${docs.slice(-8).reverse().map((d) => `<li><span>${escapeHtml(d.name)}</span><button type="button" class="msg-att-dl-btn" data-dl-conv="${escAttr(conv.conversation_id)}" data-dl-path="${escAttr(d.path)}" data-dl-name="${escAttr(d.name)}">Download</button></li>`).join('')}</ul>`
-          : '<p class="msg-muted-copy">No documents shared yet.</p>'}
+        <div class="msg-drawer-section">
+          <h4>Theme</h4>
+          <div class="msg-theme-swatches">
+            ${themes.map((t) => `<button type="button" class="msg-theme-chip${(conv.chat_theme || 'paper') === t ? ' is-active' : ''}" data-conv-theme="${t}">${escapeHtml(t[0].toUpperCase() + t.slice(1))}</button>`).join('')}
+          </div>
+        </div>
+        <div class="msg-drawer-section">
+          <h4>Media &amp; files</h4>
+          <div class="msg-drawer-nav-list">
+            <button type="button" class="msg-drawer-nav-btn" data-drawer-view="media">
+              <span class="msg-drawer-nav-icon" aria-hidden="true">${mediaIconSvg}</span>
+              <span class="msg-drawer-nav-copy">
+                <strong>Shared media</strong>
+                <small>Photos &amp; videos</small>
+              </span>
+              <span class="msg-drawer-nav-right">
+                <span class="msg-drawer-nav-count">${media.length}</span>
+                ${chevronRightSvg}
+              </span>
+            </button>
+            <button type="button" class="msg-drawer-nav-btn" data-drawer-view="files">
+              <span class="msg-drawer-nav-icon" aria-hidden="true">${fileIconSvg}</span>
+              <span class="msg-drawer-nav-copy">
+                <strong>Shared files</strong>
+                <small>Documents &amp; attachments</small>
+              </span>
+              <span class="msg-drawer-nav-right">
+                <span class="msg-drawer-nav-count">${docs.length}</span>
+                ${chevronRightSvg}
+              </span>
+            </button>
+          </div>
+        </div>
       </div>`;
   }
 
-  // Friends, Requests & Suggestions View
+  // Friends, Requests & Sent Connections View
   function renderFriendsView() {
     const view = document.getElementById('msg-view-friends');
     if (!view) return;
     const { friends = [], incoming_requests = [], sent_requests = [] } = state.overview || {};
-    const sub = state.friendsSubTab;
+    const sub = ['all', 'incoming', 'sent'].includes(state.friendsSubTab) ? state.friendsSubTab : 'all';
+    state.friendsSubTab = sub;
     view.innerHTML = `
-      <div class="msg-panel-header">
-        <div>
-          <h3>Friends &amp; Connections</h3>
-          <p>Manage accepted friends, incoming and sent requests, and privacy-respecting suggestions.</p>
+      <section class="msg-friends-hero" aria-label="Friends and Connections">
+        <div class="msg-friends-hero-copy">
+          <h3>Friends <span class="msg-hero-amp">&amp;</span> Connections</h3>
+          <p>Manage accepted friends, incoming requests, and sent requests.</p>
         </div>
-        <div class="msg-subtabs">
-          <button type="button" class="msg-pill${sub === 'all' ? ' is-active' : ''}" data-friends-sub="all">My Friends (${friends.length})</button>
-          <button type="button" class="msg-pill${sub === 'incoming' ? ' is-active' : ''}" data-friends-sub="incoming">Friend Requests${incoming_requests.length ? ` (${incoming_requests.length})` : ''}</button>
-          <button type="button" class="msg-pill${sub === 'sent' ? ' is-active' : ''}" data-friends-sub="sent">Sent (${sent_requests.length})</button>
-          <button type="button" class="msg-pill${sub === 'suggestions' ? ' is-active' : ''}" data-friends-sub="suggestions">Suggestions</button>
+        <div class="msg-friends-tabs" role="tablist" aria-label="Connections sections">
+          <button type="button" role="tab" aria-selected="${sub === 'all'}" class="msg-friends-tab${sub === 'all' ? ' is-active' : ''}" data-friends-sub="all">
+            <span>My Friends</span><em class="msg-tab-count">${friends.length}</em>
+          </button>
+          <button type="button" role="tab" aria-selected="${sub === 'incoming'}" class="msg-friends-tab${sub === 'incoming' ? ' is-active' : ''}" data-friends-sub="incoming">
+            <span>Friend Requests</span>${incoming_requests.length ? `<em class="msg-tab-count">${incoming_requests.length}</em>` : ''}
+          </button>
+          <button type="button" role="tab" aria-selected="${sub === 'sent'}" class="msg-friends-tab${sub === 'sent' ? ' is-active' : ''}" data-friends-sub="sent">
+            <span>Sent</span><em class="msg-tab-count">${sent_requests.length}</em>
+          </button>
         </div>
-      </div>
+      </section>
       <div class="msg-friends-body" id="msg-friends-list-host"></div>`;
 
     const host = document.getElementById('msg-friends-list-host');
@@ -1999,7 +2208,7 @@
            </div>
            <div class="msg-cards-grid">${friends.map((f) => renderFriendCardHtml(f)).join('')}</div>
            <div class="empty-state msg-friend-filter-empty" id="msg-friend-filter-empty" hidden><strong>No matching friends</strong><p>Try another name or @username, or search all eligible members in Chats.</p></div>`
-        : '<div class="empty-state"><strong>No friends added yet</strong><p>Check Suggestions or search eligible members to connect and chat.</p><div class="msg-empty-cta-row"><button type="button" class="button button-primary button-sm" data-friends-sub="suggestions">View suggestions</button><button type="button" class="button button-secondary button-sm" data-goto-discover>Search people</button></div></div>';
+        : '<div class="empty-state"><strong>No friends added yet</strong><p>Search eligible members to send a friend request and start chatting.</p><div class="msg-empty-cta-row"><button type="button" class="button button-primary button-sm" data-goto-discover>Search people</button></div></div>';
     } else if (sub === 'incoming') {
       host.innerHTML = incoming_requests.length
         ? `<div class="msg-cards-grid">${incoming_requests.map((r) => `
@@ -2018,7 +2227,7 @@
               </div>
             </article>`).join('')}</div>`
         : '<div class="empty-state"><strong>No incoming friend requests</strong><p>New friend requests appear here with real-time badge updates.</p></div>';
-    } else if (sub === 'sent') {
+    } else {
       host.innerHTML = sent_requests.length
         ? `<div class="msg-cards-grid">${sent_requests.map((r) => `
             <article class="msg-person-card">
@@ -2034,24 +2243,6 @@
               </div>
             </article>`).join('')}</div>`
         : '<div class="empty-state"><strong>No pending sent requests</strong><p>Requests you send remain here until accepted, declined, or cancelled.</p></div>';
-    } else {
-      host.innerHTML = state.suggestions.length
-        ? `<div class="msg-cards-grid">${state.suggestions.map((s) => `
-            <article class="msg-person-card">
-              <div class="msg-person-head">
-                ${userAvatarHtml(s, 'avatar-md')}
-                <div>
-                  <strong>${escapeHtml(s.full_name)}</strong>
-                  ${s.username ? `<small>@${escapeHtml(s.username)}</small>` : ''}
-                  <small class="msg-suggestion-reason">${escapeHtml(s.suggestion_reason || 'Eligible community connection')}</small>
-                </div>
-              </div>
-              <div class="msg-person-actions">
-                <button type="button" class="button button-primary button-sm" data-social-action="add_friend" data-target-id="${escapeHtml(s.id)}">Add friend</button>
-                <button type="button" class="button button-secondary button-sm" data-social-action="message" data-target-id="${escapeHtml(s.id)}">Message</button>
-              </div>
-            </article>`).join('')}</div>`
-        : '<div class="empty-state"><strong>No new friend suggestions right now</strong><p>Eligible users who share savings groups or mutual friends will appear here automatically.</p></div>';
     }
 
     ipon().bindAvatarFallbacks(view);
@@ -2132,6 +2323,37 @@
   }
 
   // Profile Quick Action Popover (anchored near clicked DP with automatic edge clamping)
+  let activePopoverAnchor = null;
+
+  function renderSharedGroupsCard(rawGroups) {
+    const groups = Array.isArray(rawGroups)
+      ? rawGroups.map((g) => String(g || '').trim()).filter(Boolean)
+      : [];
+    if (!groups.length) return '';
+    if (groups.length === 1) {
+      return `<div class="msg-pop-groups-card">
+        <div class="msg-pop-groups-bar">
+          <span class="msg-pop-groups-label">Groups</span>
+          <span class="msg-pop-groups-name" title="${escapeHtml(groups[0])}">${escapeHtml(groups[0])}</span>
+        </div>
+      </div>`;
+    }
+    const extra = groups.length - 1;
+    const firstGroup = groups[0];
+    return `<div class="msg-pop-groups-card" data-pop-groups-card>
+      <button type="button" class="msg-pop-groups-bar msg-pop-groups-toggle" data-pop-groups-toggle aria-expanded="false" aria-label="Show all ${groups.length} shared groups">
+        <span class="msg-pop-groups-label">Groups</span>
+        <span class="msg-pop-groups-name" title="${escapeHtml(firstGroup)}">${escapeHtml(firstGroup)}</span>
+        <span class="msg-pop-groups-more">+${extra}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+      </button>
+      <div class="msg-pop-groups-list" hidden>
+        <div class="msg-pop-groups-chips" role="list" aria-label="Shared groups">
+          ${groups.map((name) => `<span class="msg-pop-group-chip" role="listitem">${escapeHtml(name)}</span>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
   async function openProfilePopover(targetUserId, anchorEl) {
     const pop = document.getElementById('msg-profile-popover');
     if (!pop || !targetUserId || String(targetUserId) === String(initializedProfile?.id)) return;
@@ -2139,9 +2361,10 @@
     const activeDialog = document.querySelector('#msg-workspace-dialog[open], #msg-forward-dialog[open], #msg-settings-dialog[open], dialog[open]');
     const targetHost = activeDialog || document.body;
     if (pop.parentElement !== targetHost) targetHost.appendChild(pop);
+    activePopoverAnchor = anchorEl || null;
     pop.hidden = false;
     pop.innerHTML = skeletonHtml('popover');
-    positionPopoverNearAnchor(pop, anchorEl);
+    positionPopoverNearAnchor(pop, activePopoverAnchor);
 
     try {
       const profile = await ipon().rpc('get_social_user_profile', { p_target_id: targetUserId });
@@ -2149,13 +2372,13 @@
       const fs = profile.friendship_status;
       let friendAction = '';
       if (fs === 'FRIENDS') {
-        friendAction = `<button type="button" class="button button-secondary button-sm" data-social-action="remove_friend" data-target-id="${escapeHtml(profile.id)}">Friends ✓ (Remove)</button>`;
+        friendAction = `<button type="button" class="msg-pop-btn msg-pop-secondary-btn" data-social-action="remove_friend" data-target-id="${escapeHtml(profile.id)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Friends · Remove</span></button>`;
       } else if (fs === 'OUTGOING_REQUEST') {
-        friendAction = `<button type="button" class="button button-secondary button-sm" data-cancel-req="${escapeHtml(profile.friend_request_id)}">Cancel Request</button>`;
+        friendAction = `<button type="button" class="msg-pop-btn msg-pop-secondary-btn" data-cancel-req="${escapeHtml(profile.friend_request_id)}"><span>Cancel Request</span></button>`;
       } else if (fs === 'INCOMING_REQUEST') {
-        friendAction = `<button type="button" class="button button-primary button-sm" data-req-decision="ACCEPT" data-req-id="${escapeHtml(profile.friend_request_id)}">Accept Friend</button>`;
+        friendAction = `<button type="button" class="msg-pop-btn msg-pop-primary-btn" data-req-decision="ACCEPT" data-req-id="${escapeHtml(profile.friend_request_id)}"><svg class="msg-pop-btn-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Accept Friend</span></button>`;
       } else if (profile.can_send_friend_request) {
-        friendAction = `<button type="button" class="button button-primary button-sm" data-social-action="add_friend" data-target-id="${escapeHtml(profile.id)}">Add Friend</button>`;
+        friendAction = `<button type="button" class="msg-pop-btn msg-pop-primary-btn" data-social-action="add_friend" data-target-id="${escapeHtml(profile.id)}"><span>Add Friend</span></button>`;
       }
 
       const statusLabels = {
@@ -2166,33 +2389,40 @@
         BLOCKED_ME: 'Messaging restricted',
         NONE: 'Not friends yet'
       };
+      const mutualCount = Number(profile.mutual_friends_count || 0);
+      const statusLine = statusLabels[fs] || 'Community member';
+      const subtitle = mutualCount > 0
+        ? `${statusLine} · ${mutualCount} mutual friend${mutualCount === 1 ? '' : 's'}`
+        : statusLine;
+      const groupsHtml = renderSharedGroupsCard(profile.shared_groups);
+      const bioText = String(profile.bio || '').trim();
+      const canMessage = Boolean(profile.can_message);
 
       pop.innerHTML = `
         <button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
         <div class="msg-pop-head">
-          ${userAvatarHtml(profile, 'avatar-md', { clickable: false })}
+          ${userAvatarHtml(profile, 'avatar-lg', { clickable: false, showPresence: false })}
           <div class="msg-pop-title">
             <strong id="msg-pop-name">${escapeHtml(profile.full_name)}</strong>
-            ${profile.username ? `<span class="msg-handle-chip">@${escapeHtml(profile.username)}</span>` : ''}
-            <small>${escapeHtml(statusLabels[fs] || 'Community member')}</small>
+            <small class="msg-pop-status">${escapeHtml(subtitle)}</small>
           </div>
         </div>
-        ${profile.bio ? `<p class="msg-pop-bio">${escapeHtml(profile.bio)}</p>` : ''}
-        ${(profile.shared_groups?.length || profile.mutual_friends_count)
-          ? `<p class="msg-pop-meta">${profile.shared_groups?.length ? `Groups: ${escapeHtml(profile.shared_groups.slice(0, 2).join(', '))}` : ''}${profile.shared_groups?.length && profile.mutual_friends_count ? ' · ' : ''}${profile.mutual_friends_count ? `${profile.mutual_friends_count} mutual friend(s)` : ''}</p>`
-          : ''}
+        ${bioText ? `<p class="msg-pop-bio">${escapeHtml(bioText)}</p>` : ''}
+        ${groupsHtml}
         <div class="msg-pop-actions">
           ${friendAction}
-          ${profile.can_message ? `<button type="button" class="button button-secondary button-sm" data-social-action="message" data-target-id="${escapeHtml(profile.id)}">Message</button>` : ''}
-          <button type="button" class="button button-secondary button-sm is-danger" data-social-action="${fs === 'BLOCKED_BY_ME' ? 'unblock' : 'block'}" data-target-id="${escapeHtml(profile.id)}">${fs === 'BLOCKED_BY_ME' ? 'Unblock User' : 'Block User'}</button>
+          <div class="msg-pop-secondary-row${canMessage ? '' : ' is-single'}">
+            ${canMessage ? `<button type="button" class="msg-pop-btn msg-pop-outline-btn" data-social-action="message" data-target-id="${escapeHtml(profile.id)}">Message</button>` : ''}
+            <button type="button" class="msg-pop-btn msg-pop-outline-btn is-danger" data-social-action="${fs === 'BLOCKED_BY_ME' ? 'unblock' : 'block'}" data-target-id="${escapeHtml(profile.id)}">${fs === 'BLOCKED_BY_ME' ? 'Unblock User' : 'Block User'}</button>
+          </div>
         </div>`;
 
       ipon().bindAvatarFallbacks(pop);
       ipon().syncPresenceDots(pop);
-      positionPopoverNearAnchor(pop, anchorEl);
+      positionPopoverNearAnchor(pop, activePopoverAnchor);
     } catch (error) {
       pop.innerHTML = `<button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button><p class="empty-state">${escapeHtml(ipon().friendlyError(error))}</p>`;
-      positionPopoverNearAnchor(pop, anchorEl);
+      positionPopoverNearAnchor(pop, activePopoverAnchor);
     }
   }
 
@@ -2203,8 +2433,8 @@
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const pad = 12;
-    const pw = Math.min(popRect.width || 300, vw - pad * 2);
-    const ph = popRect.height || 220;
+    const pw = Math.min(popRect.width || 364, vw - pad * 2);
+    const ph = popRect.height || 260;
     let left = rect.right + 10;
     if (left + pw > vw - pad) left = rect.left - pw - 10;
     if (left < pad) left = Math.max(pad, Math.min(vw - pw - pad, rect.left));
@@ -2216,6 +2446,7 @@
   }
 
   function closeProfilePopover() {
+    activePopoverAnchor = null;
     const pop = document.getElementById('msg-profile-popover');
     if (pop) pop.hidden = true;
   }
@@ -2678,7 +2909,7 @@
     if (nextTab === 'chats' || nextTab === 'requests') {
       renderConversationList();
     } else if (nextTab === 'friends') {
-      refreshOverview().then(() => refreshSuggestions()).catch(() => { });
+      refreshOverview().catch(() => { });
       renderFriendsView();
     } else if (nextTab === 'notifications') {
       refreshSocialNotifications().catch(() => { });
@@ -2739,7 +2970,7 @@
       if (action === 'add_friend') {
         const res = await ipon().rpc('send_friend_request', { p_target_id: targetId });
         ipon().toast(res?.auto_accepted ? 'Friend request accepted!' : 'Friend request sent.');
-        await Promise.all([refreshOverview(), refreshSuggestions()]);
+        await refreshOverview();
         if (state.searchActive || state.chatListQuery.trim()) await runGlobalDiscovery(state.chatListQuery);
       } else if (action === 'remove_friend') {
         const ok = await ipon().confirmAction({ title: 'Remove friend?', message: 'They will no longer appear in your Friends list.', confirmText: 'Remove' });
@@ -2752,7 +2983,7 @@
         if (!ok) return;
         await ipon().rpc('block_social_user', { p_target_id: targetId });
         ipon().toast('User blocked.');
-        await Promise.all([refreshOverview(), refreshConversations(), refreshSuggestions()]);
+        await Promise.all([refreshOverview(), refreshConversations()]);
         if (state.activeConvId) await openConversation(state.activeConvId, { markRead: false, silent: true });
       } else if (action === 'unblock') {
         await ipon().rpc('unblock_social_user', { p_target_id: targetId });
@@ -2780,11 +3011,29 @@
     }
   }
 
-  function closeFloatingMenus() {
-    document.querySelectorAll('.msg-floating-menu').forEach((node) => node.remove());
+  function closeFloatingMenus(opts) {
+    const immediate = Boolean(opts && opts.immediate === true);
     document.querySelectorAll('#msg-messages-list .msg-row.is-menu-target').forEach((row) => row.classList.remove('is-menu-target'));
     activeVideoMenuPlayer = null;
     activeFloatingMenuAnchor = null;
+    document.querySelectorAll('.msg-floating-menu').forEach((node) => {
+      if (immediate) {
+        if (node._closeTimer) {
+          clearTimeout(node._closeTimer);
+          node._closeTimer = null;
+        }
+        node.remove?.();
+        return;
+      }
+      if (node.classList?.contains?.('is-leaving')) return;
+      node.classList?.remove?.('is-visible');
+      node.classList?.add?.('is-leaving');
+      node.setAttribute?.('aria-hidden', 'true');
+      node._closeTimer = setTimeout(() => {
+        node._closeTimer = null;
+        node.remove?.();
+      }, MENU_EXIT_MS);
+    });
   }
 
   function placeFloatingMenu(menu, anchorEl, { preferAbove = true, estWidth = 250, estHeight = 52, align = 'center' } = {}) {
@@ -2798,25 +3047,44 @@
     else if (align === 'end') left = rect.right - w;
     left = Math.max(12, Math.min(vw - w - 12, left));
     const gap = 8;
+    let placedAbove = Boolean(preferAbove);
     let top = preferAbove ? (rect.top - h - gap) : (rect.bottom + gap);
-    if (preferAbove && top < 12) top = rect.bottom + gap;
-    if (!preferAbove && top + h > vh - 12) top = rect.top - h - gap;
+    if (preferAbove && top < 12) {
+      top = rect.bottom + gap;
+      placedAbove = false;
+    } else if (!preferAbove && top + h > vh - 12) {
+      top = rect.top - h - gap;
+      placedAbove = true;
+    }
     top = Math.max(12, Math.min(vh - h - 12, top));
     menu.style.left = `${Math.round(left)}px`;
     menu.style.top = `${Math.round(top)}px`;
+    if (menu.dataset) menu.dataset.placed = placedAbove ? 'above' : 'below';
+    menu.style.transformOrigin = placedAbove ? 'center bottom' : 'center top';
   }
 
-  function isTouchOrNarrowViewport() {
-    return Boolean(window.matchMedia?.('(hover: none), (max-width: 820px)')?.matches || (window.innerWidth && window.innerWidth <= 820));
+  function revealFloatingMenu(menu) {
+    if (!menu) return;
+    const show = () => {
+      if (menu.isConnected === false || menu.classList?.contains?.('is-leaving')) return;
+      menu.classList?.add?.('is-visible');
+    };
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.getComputedStyle?.(menu)?.opacity;
+      window.requestAnimationFrame(show);
+    } else {
+      show();
+    }
   }
 
-  function showReactionFloatingMenu(msgId, anchorEl, { showActions = false } = {}) {
-    const existing = document.querySelector('.msg-floating-menu.msg-react-menu');
+  function showReactionFloatingMenu(msgId, anchorEl, { toggle = true } = {}) {
+    const existing = Array.from(document.querySelectorAll('.msg-floating-menu.msg-react-menu') || [])
+      .find((node) => !node.classList?.contains?.('is-leaving'));
     if (existing && existing.getAttribute?.('data-react-menu-for') === String(msgId)) {
-      closeFloatingMenus();
+      if (toggle) closeFloatingMenus();
       return;
     }
-    closeFloatingMenus();
+    closeFloatingMenus({ immediate: true });
     const msg = (state.activeThread?.messages || []).find((m) => m.id === msgId);
     if (!msg || msg.deleted_for_everyone_at) return;
     const myReactions = new Set(
@@ -2826,11 +3094,10 @@
     );
     const quickSet = new Set(QUICK_REACTIONS);
     const extraEmojis = EMOJI_PALETTE.filter((e) => !quickSet.has(e));
-    const atts = (msg.attachments || []).filter((a) => a?.path);
     const rowEl = anchorEl?.closest?.('.msg-row');
     const bubbleAnchor = rowEl?.querySelector('.msg-bubble') || anchorEl;
     if (rowEl) rowEl.classList.add('is-menu-target');
-    activeFloatingMenuAnchor = bubbleAnchor;
+    activeFloatingMenuAnchor = anchorEl || bubbleAnchor;
 
     const renderEmojiButtons = (emojis) => emojis.map((e) => {
       const selected = myReactions.has(e);
@@ -2838,7 +3105,7 @@
     }).join('');
 
     const menu = document.createElement('div');
-    menu.className = `msg-floating-menu msg-react-menu${showActions ? ' has-extra' : ''}`;
+    menu.className = 'msg-floating-menu msg-react-menu';
     menu.setAttribute('data-react-menu-for', String(msgId));
     menu.setAttribute('role', 'toolbar');
     menu.setAttribute('aria-label', 'Message reactions');
@@ -2849,26 +3116,28 @@
       </div>
       <div class="msg-react-palette" hidden>
         ${renderEmojiButtons(extraEmojis)}
-      </div>
-      ${showActions ? `
-        <div class="msg-react-quick-actions">
-          <button type="button" class="msg-quick-act-btn" data-ctx-do="reply" data-msg-id="${escAttr(msgId)}">Reply</button>
-          ${msg.body
-            ? `<button type="button" class="msg-quick-act-btn" data-ctx-do="copy" data-msg-id="${escAttr(msgId)}">Copy</button>`
-            : (atts.length ? `<button type="button" class="msg-quick-act-btn" data-ctx-do="download" data-msg-id="${escAttr(msgId)}">${atts.length > 1 ? 'Save all' : 'Download'}</button>` : '')}
-          <button type="button" class="msg-quick-act-btn" data-react-more-ctx="${escAttr(msgId)}">More…</button>
-        </div>` : ''}`;
+      </div>`;
     document.getElementById('msg-workspace-dialog')?.appendChild(menu);
     placeFloatingMenu(menu, anchorEl, {
       preferAbove: true,
       estWidth: 276,
-      estHeight: showActions ? 92 : 48,
+      estHeight: 48,
       align: 'center'
     });
+    revealFloatingMenu(menu);
+  }
+
+  function startReplyToMessage(msgObj) {
+    if (!msgObj) return;
+    closeFloatingMenus();
+    state.editingMsg = null;
+    state.replyToMsg = msgObj;
+    renderContextBar();
+    document.getElementById('msg-composer-input')?.focus();
   }
 
   function showMessageContextMenu(msgId, anchorBtn) {
-    closeFloatingMenus();
+    closeFloatingMenus({ immediate: true });
     const msg = (state.activeThread?.messages || []).find((m) => m.id === msgId);
     if (!msg) return;
     const rowEl = anchorBtn?.closest?.('.msg-row');
@@ -2878,20 +3147,21 @@
     const menu = document.createElement('div');
     menu.className = 'msg-floating-menu msg-ctx-menu';
     menu.innerHTML = `
+      <button type="button" data-ctx-do="reply" data-msg-id="${escAttr(msgId)}">Reply</button>
       ${atts.length ? `<button type="button" data-ctx-do="download" data-msg-id="${escAttr(msgId)}">${atts.length > 1 ? `Download all (${atts.length})` : 'Download'}</button>` : ''}
       ${msg.body ? `<button type="button" data-ctx-do="copy" data-msg-id="${escAttr(msgId)}">Copy text</button>` : ''}
-      <button type="button" data-ctx-do="reply" data-msg-id="${escAttr(msgId)}">Reply</button>
       <button type="button" data-ctx-do="forward" data-msg-id="${escAttr(msgId)}">Forward</button>
       ${state.activeThread?.conversation?.status === 'ACCEPTED' ? `<button type="button" data-ctx-do="pin" data-msg-id="${escAttr(msgId)}">${msg.pinned_at ? 'Unpin' : 'Pin message'}</button>` : ''}
       ${mine ? `<button type="button" data-ctx-do="edit" data-msg-id="${escAttr(msgId)}">Edit message</button>` : ''}
       <button type="button" data-ctx-do="del_me" data-msg-id="${escAttr(msgId)}">Delete for me</button>
       ${mine ? `<button type="button" class="is-danger" data-ctx-do="del_all" data-msg-id="${escAttr(msgId)}">Unsend for everyone</button>` : ''}`;
     document.getElementById('msg-workspace-dialog')?.appendChild(menu);
-    placeFloatingMenu(menu, anchorBtn, { preferAbove: false, estWidth: 184, estHeight: 230, align: 'end' });
+    placeFloatingMenu(menu, anchorBtn, { preferAbove: false, estWidth: 184, estHeight: 236, align: 'end' });
+    revealFloatingMenu(menu);
   }
 
   function showConvContextMenu(convId, anchorBtn) {
-    closeFloatingMenus();
+    closeFloatingMenus({ immediate: true });
     const conv = state.conversations.find((c) => c.id === convId);
     if (!conv) return;
     const menu = document.createElement('div');
@@ -2904,6 +3174,7 @@
       <button type="button" class="is-danger" data-row-conv-act="delete_for_me" data-conv-id="${escAttr(convId)}">Delete conversation</button>`;
     document.getElementById('msg-workspace-dialog')?.appendChild(menu);
     placeFloatingMenu(menu, anchorBtn, { preferAbove: false, estWidth: 196, estHeight: 190, align: 'end' });
+    revealFloatingMenu(menu);
   }
 
   function bindEvents() {
@@ -2923,15 +3194,25 @@
         return;
       }
       suppressBubbleClickId = null;
-      const prevOpenReactFor = document.querySelector('.msg-floating-menu.msg-react-menu')?.getAttribute?.('data-react-menu-for') || '';
 
       // Close floating contextual menus on outside click
       if (!ev.target.closest('.msg-floating-menu') && !ev.target.closest('[data-msg-act]') && !ev.target.closest('[data-conv-menu-toggle]') && !ev.target.closest('[data-vact="menu"]')) {
         closeFloatingMenus();
       }
+      if (state.showPinnedList && !ev.target.closest?.('#msg-pinned-banner')) {
+        state.showPinnedList = false;
+        renderPinnedBanner();
+      }
       const pop = document.getElementById('msg-profile-popover');
-      if (pop && !pop.hidden && !pop.contains(ev.target) && !ev.target.closest('[data-social-user-dp]')) {
+      if (pop && !pop.hidden && !(pop.contains?.(ev.target) || ev.target.closest?.('#msg-profile-popover')) && !ev.target.closest('[data-social-user-dp]')) {
         closeProfilePopover();
+      }
+
+      if (ev.target.closest?.('[data-pinned-toggle]')) {
+        ev.stopPropagation();
+        state.showPinnedList = !state.showPinnedList;
+        renderPinnedBanner();
+        return;
       }
 
       const dpBtn = ev.target.closest?.('[data-social-user-dp]');
@@ -2942,6 +3223,22 @@
       }
 
       if (ev.target.closest?.('#msg-pop-close')) { closeProfilePopover(); return; }
+      const groupsToggle = ev.target.closest?.('[data-pop-groups-toggle]');
+      if (groupsToggle) {
+        ev.stopPropagation();
+        const card = groupsToggle.closest('[data-pop-groups-card]');
+        const list = card?.querySelector('.msg-pop-groups-list');
+        if (card && list) {
+          const open = list.hidden;
+          list.hidden = !open;
+          card.classList.toggle('is-open', open);
+          groupsToggle.setAttribute?.('aria-expanded', String(open));
+          if (pop && !pop.hidden && activePopoverAnchor) {
+            positionPopoverNearAnchor(pop, activePopoverAnchor);
+          }
+        }
+        return;
+      }
       if (ev.target.closest?.('#msg-workspace-close')) { document.getElementById('msg-workspace-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-settings-close]')) { document.getElementById('msg-settings-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-forward-close]')) { document.getElementById('msg-forward-dialog')?.close(); return; }
@@ -2981,7 +3278,7 @@
         }
         return;
       }
-      if (ev.target.closest?.('#msg-back-to-list')) { state.mobileShowThread = false; syncMobilePaneState(); return; }
+      if (ev.target.closest?.('#msg-back-to-list')) { closeFloatingMenus(); state.mobileShowThread = false; syncMobilePaneState(); return; }
       if (ev.target.closest?.('#msg-retry-thread-btn') && state.activeConvId) { await openConversation(state.activeConvId); return; }
 
       const tabBtn = ev.target.closest?.('[data-msg-tab]');
@@ -2991,10 +3288,14 @@
       if (filterBtn) { state.chatFilter = filterBtn.dataset.msgFilter; renderConversationList(); return; }
 
       const subBtn = ev.target.closest?.('[data-friends-sub]');
-      if (subBtn) { state.friendsSubTab = subBtn.dataset.friendsSub; renderFriendsView(); return; }
+      if (subBtn) { state.friendsSubTab = ['all', 'incoming', 'sent'].includes(subBtn.dataset.friendsSub) ? subBtn.dataset.friendsSub : 'all'; renderFriendsView(); return; }
 
       const openConvBtn = ev.target.closest?.('[data-open-conv]');
-      if (openConvBtn) { await openConversation(openConvBtn.dataset.openConv); return; }
+      const openConvFallback = (!openConvBtn && !ev.target.closest?.('[data-social-user-dp], [data-conv-menu-toggle]'))
+        ? ev.target.closest?.('[data-conv-row]')
+        : null;
+      const convIdToOpen = openConvBtn?.dataset?.openConv || openConvFallback?.dataset?.convRow;
+      if (convIdToOpen) { await openConversation(convIdToOpen); return; }
 
       const convMoreBtn = ev.target.closest?.('[data-conv-menu-toggle]');
       if (convMoreBtn) { ev.stopPropagation(); showConvContextMenu(convMoreBtn.dataset.convMenuToggle, convMoreBtn); return; }
@@ -3034,6 +3335,7 @@
             state.activeConvId = null;
             state.activeThread = null;
             state.showThreadInfo = false;
+            state.threadInfoView = 'root';
             document.getElementById('msg-thread-active').hidden = true;
             document.getElementById('msg-thread-empty').hidden = false;
           } else {
@@ -3080,8 +3382,19 @@
         return;
       }
 
+      const drawerViewBtn = ev.target.closest?.('[data-drawer-view]');
+      if (drawerViewBtn) {
+        const nextView = drawerViewBtn.dataset.drawerView;
+        state.threadInfoView = (nextView === 'media' || nextView === 'files') ? nextView : 'root';
+        renderThreadInfoDrawer();
+        const bodyEl = document.getElementById('msg-thread-drawer')?.querySelector?.('.msg-drawer-body');
+        if (bodyEl) bodyEl.scrollTop = 0;
+        return;
+      }
+
       if (ev.target.closest?.('#msg-thread-info-toggle') || ev.target.closest?.('#msg-drawer-close')) {
         state.showThreadInfo = !state.showThreadInfo;
+        state.threadInfoView = 'root';
         renderThreadInfoDrawer();
         return;
       }
@@ -3110,6 +3423,19 @@
       const jumpMsg = ev.target.closest?.('[data-jump-msg]');
       if (jumpMsg) {
         const id = jumpMsg.dataset.jumpMsg;
+        if (jumpMsg.closest?.('#msg-thread-drawer') && window.innerWidth && window.innerWidth <= 980) {
+          state.showThreadInfo = false;
+          state.threadInfoView = 'root';
+          renderThreadInfoDrawer();
+        }
+        if (jumpMsg.dataset.pinnedSelect || jumpMsg.closest?.('.msg-pinned-pill')) {
+          if (jumpMsg.dataset.pinnedSelect) state.activePinnedId = jumpMsg.dataset.pinnedSelect;
+          if (state.showPinnedList || jumpMsg.dataset.pinnedSelect) {
+            state.showPinnedList = false;
+            renderPinnedBanner();
+            syncActivePinnedHighlight();
+          }
+        }
         if ((state.activeThread?.messages || []).some((m) => m.id === id)) jumpToMessageElement(id);
         else if (state.activeConvId) await openConversation(state.activeConvId, { aroundMessageId: id, markRead: false });
         return;
@@ -3160,7 +3486,7 @@
           await ipon().rpc('respond_friend_request', { p_request_id: fReqBtn.dataset.reqId, p_decision: fReqBtn.dataset.reqDecision });
           ipon().toast(fReqBtn.dataset.reqDecision === 'ACCEPT' ? 'Friend request accepted!' : 'Friend request declined.');
           closeProfilePopover();
-          await Promise.all([refreshOverview(), refreshConversations(), refreshSuggestions()]);
+          await Promise.all([refreshOverview(), refreshConversations()]);
           if (state.searchActive || state.chatListQuery.trim()) await runGlobalDiscovery(state.chatListQuery);
         } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
         return;
@@ -3171,7 +3497,7 @@
           await ipon().rpc('cancel_friend_request', { p_request_id: cancelBtn.dataset.cancelReq });
           ipon().toast('Friend request cancelled.');
           closeProfilePopover();
-          await Promise.all([refreshOverview(), refreshSuggestions()]);
+          await refreshOverview();
           if (state.searchActive || state.chatListQuery.trim()) await runGlobalDiscovery(state.chatListQuery);
         } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
         return;
@@ -3186,7 +3512,7 @@
         if (menu && palette) {
           const isOpen = !palette.hidden;
           palette.hidden = isOpen;
-          menu.classList.toggle('has-extra', !isOpen || Boolean(menu.querySelector('.msg-react-quick-actions')));
+          menu.classList.toggle('has-extra', !isOpen);
           expandReactBtn.setAttribute('aria-expanded', String(!isOpen));
           expandReactBtn.setAttribute('aria-label', isOpen ? 'More reactions' : 'Fewer reactions');
           if (activeFloatingMenuAnchor) {
@@ -3198,14 +3524,6 @@
             });
           }
         }
-        return;
-      }
-
-      const moreCtxBtn = ev.target.closest?.('[data-react-more-ctx]');
-      if (moreCtxBtn) {
-        ev.stopPropagation();
-        const anchor = activeFloatingMenuAnchor || moreCtxBtn;
-        showMessageContextMenu(moreCtxBtn.dataset.reactMoreCtx, anchor);
         return;
       }
 
@@ -3227,7 +3545,7 @@
         const msgObj = (state.activeThread?.messages || []).find((m) => m.id === mId);
         if (!msgObj) return;
         if (act === 'react') showReactionFloatingMenu(mId, msgActBtn);
-        else if (act === 'reply') { closeFloatingMenus(); state.editingMsg = null; state.replyToMsg = msgObj; renderContextBar(); document.getElementById('msg-composer-input')?.focus(); }
+        else if (act === 'reply') startReplyToMessage(msgObj);
         else if (act === 'menu') showMessageContextMenu(mId, msgActBtn);
         return;
       }
@@ -3239,6 +3557,10 @@
         const mId = ctxBtn.dataset.msgId;
         const msgObj = (state.activeThread?.messages || []).find((m) => m.id === mId);
         if (!msgObj) return;
+        if (op === 'reply') {
+          startReplyToMessage(msgObj);
+          return;
+        }
         if (op === 'download') {
           const atts = (msgObj.attachments || []).filter((a) => a?.path);
           for (let i = 0; i < atts.length; i += 1) {
@@ -3250,8 +3572,6 @@
         }
         if (op === 'copy') {
           try { await navigator.clipboard.writeText(msgObj.body || ''); ipon().toast('Copied message.'); } catch { }
-        } else if (op === 'reply') {
-          state.editingMsg = null; state.replyToMsg = msgObj; renderContextBar(); document.getElementById('msg-composer-input')?.focus();
         } else if (op === 'edit') {
           state.replyToMsg = null; state.editingMsg = msgObj; renderContextBar();
           const inp = document.getElementById('msg-composer-input');
@@ -3260,6 +3580,7 @@
           await openForwardDialog(msgObj);
         } else if (op === 'pin') {
           await ipon().rpc('pin_chat_message', { p_message_id: mId }).catch((e) => ipon().toast(ipon().friendlyError(e), 'error'));
+          state.activePinnedId = null;
           await openConversation(state.activeConvId, { markRead: false, silent: true });
         } else if (op === 'del_me' || op === 'del_all') {
           if (op === 'del_all') {
@@ -3385,10 +3706,10 @@
           } catch { }
           revealVideoControls(player);
         } else if (vact === 'menu') {
-          const existingMenu = document.querySelector('.msg-floating-menu');
+          const existingMenu = Array.from(document.querySelectorAll('.msg-floating-menu') || [])
+            .find((n) => !n.classList?.contains?.('is-leaving'));
           if (existingMenu && activeVideoMenuPlayer === player) {
-            existingMenu.remove();
-            activeVideoMenuPlayer = null;
+            closeFloatingMenus();
             revealVideoControls(player);
           } else {
             revealVideoControls(player, { autoHideMs: 4000 });
@@ -3454,7 +3775,12 @@
       }
       const imgBtn = ev.target.closest?.('[data-open-img]');
       if (imgBtn) {
-        ipon().openImageViewer(imgBtn.dataset.openImg, imgBtn.dataset.imgName || 'Image', 'Original resolution preview', imgBtn.dataset.imgName || '');
+        const dlPath = imgBtn.dataset.imgPath || '';
+        const dlConv = imgBtn.dataset.imgConv || state.activeConvId || '';
+        const imgName = imgBtn.dataset.imgName || 'Image';
+        ipon().openImageViewer(imgBtn.dataset.openImg, imgName, '', imgName, {
+          onDownload: dlPath && dlConv ? () => downloadOriginalAttachment(dlConv, dlPath, imgName) : null
+        });
         return;
       }
       const dlBtn = ev.target.closest?.('[data-dl-path]');
@@ -3476,15 +3802,6 @@
         if (nId) ipon().rpc('mark_notification_read', { p_notification_id: nId }).catch(() => { });
         await openFromNotification({ type: alertBtn.dataset.socialType, link: alertBtn.dataset.socialLink });
         return;
-      }
-
-      // Responsive touch/narrow-viewport bubble tap -> floating Messenger reactions + actions
-      const bubbleTap = ev.target.closest?.('#msg-messages-list .msg-bubble:not(.is-deleted)');
-      if (bubbleTap && !ev.target.closest?.(BUBBLE_INTERACTIVE_SEL) && isTouchOrNarrowViewport() && !window.getSelection?.()?.toString()?.trim()) {
-        const msgId = bubbleTap.closest('[data-msg-id]')?.dataset?.msgId;
-        if (msgId && prevOpenReactFor !== msgId) {
-          showReactionFloatingMenu(msgId, bubbleTap, { showActions: true });
-        }
       }
     });
 
@@ -3596,6 +3913,10 @@
         }
         closeProfilePopover();
         closeFloatingMenus();
+        if (state.showPinnedList) {
+          state.showPinnedList = false;
+          renderPinnedBanner();
+        }
         const emojiPop = document.getElementById('msg-emoji-popover');
         if (emojiPop) emojiPop.hidden = true;
       }
@@ -3625,47 +3946,89 @@
 
     let pressTimer = null;
     let pressStart = null;
+    let pressHoldTriggeredId = null;
+    let suppressClearTimer = null;
+    const clearSuppressedClickSoon = (msgId) => {
+      if (suppressClearTimer) {
+        clearTimeout(suppressClearTimer);
+        suppressClearTimer = null;
+      }
+      if (!msgId) return;
+      suppressClearTimer = setTimeout(() => {
+        if (suppressBubbleClickId === msgId) suppressBubbleClickId = null;
+        suppressClearTimer = null;
+      }, 140);
+    };
     const cancelLongPress = () => {
-      clearTimeout(pressTimer);
-      pressTimer = null;
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
       pressStart = null;
+      if (pressHoldTriggeredId) {
+        clearSuppressedClickSoon(pressHoldTriggeredId);
+        pressHoldTriggeredId = null;
+      }
+    };
+    const resolveHoldTarget = (target) => {
+      const bubble = target?.closest?.('#msg-messages-list .msg-bubble:not(.is-deleted)');
+      if (!bubble || target?.closest?.(HOLD_EXCLUDE_SEL)) return null;
+      const msgId = bubble.closest?.('[data-msg-id]')?.dataset?.msgId;
+      if (!msgId) return null;
+      const anchor = target?.closest?.('.msg-att-image, .msg-video-player') || bubble;
+      return { msgId, anchor };
     };
     document.addEventListener('pointerdown', (ev) => {
-      suppressBubbleClickId = null;
-      if (ev.pointerType !== 'touch' && ev.pointerType !== 'pen') return;
-      const bubble = ev.target.closest?.('#msg-messages-list .msg-bubble:not(.is-deleted)');
-      if (!bubble || ev.target.closest?.(BUBBLE_INTERACTIVE_SEL)) return;
-      const msgId = bubble.closest('[data-msg-id]')?.dataset?.msgId;
-      if (!msgId) return;
+      if (ev.pointerType === 'mouse' && typeof ev.button === 'number' && ev.button !== 0) return;
+      const target = resolveHoldTarget(ev.target);
+      if (!target) {
+        cancelLongPress();
+        return;
+      }
       cancelLongPress();
-      pressStart = { x: ev.clientX, y: ev.clientY };
+      suppressBubbleClickId = null;
+      const hadSelection = Boolean(window.getSelection?.()?.toString()?.trim());
+      pressStart = { x: ev.clientX || 0, y: ev.clientY || 0 };
       pressTimer = setTimeout(() => {
-        suppressBubbleClickId = msgId;
-        showReactionFloatingMenu(msgId, bubble, { showActions: true });
         pressTimer = null;
         pressStart = null;
-      }, 400);
+        if (!hadSelection && ev.pointerType !== 'mouse') {
+          window.getSelection?.()?.removeAllRanges?.();
+        }
+        pressHoldTriggeredId = target.msgId;
+        suppressBubbleClickId = target.msgId;
+        recentHoldMsgId = target.msgId;
+        recentHoldAt = Date.now();
+        showReactionFloatingMenu(target.msgId, target.anchor, { toggle: false });
+      }, MSG_HOLD_DELAY_MS);
     });
     document.addEventListener('pointermove', (ev) => {
       if (!pressStart) return;
-      if (Math.hypot(ev.clientX - pressStart.x, ev.clientY - pressStart.y) > 10) cancelLongPress();
+      if (Math.hypot((ev.clientX || 0) - pressStart.x, (ev.clientY || 0) - pressStart.y) > 10) cancelLongPress();
     });
     document.addEventListener('pointerup', cancelLongPress);
     document.addEventListener('pointercancel', cancelLongPress);
+    document.addEventListener('dragstart', (ev) => {
+      if (ev.target?.closest?.('#msg-messages-list .msg-bubble img, #msg-messages-list .msg-bubble video')) {
+        ev.preventDefault?.();
+      }
+    });
 
     document.addEventListener('contextmenu', (ev) => {
-      const bubble = ev.target.closest?.('#msg-messages-list .msg-bubble:not(.is-deleted)');
-      if (!bubble || ev.target.closest?.(BUBBLE_INTERACTIVE_SEL)) return;
+      const target = resolveHoldTarget(ev.target);
+      if (!target) return;
       if (window.getSelection?.()?.toString()?.trim()) return;
-      const msgId = bubble.closest('[data-msg-id]')?.dataset?.msgId;
-      if (!msgId) return;
-      ev.preventDefault();
-      showReactionFloatingMenu(msgId, bubble, { showActions: true });
+      ev.preventDefault?.();
+      cancelLongPress();
+      if (recentHoldMsgId === target.msgId && Date.now() - recentHoldAt < 900) return;
+      suppressBubbleClickId = target.msgId;
+      clearSuppressedClickSoon(target.msgId);
+      showReactionFloatingMenu(target.msgId, target.anchor, { toggle: false });
     });
 
     window.addEventListener('resize', () => {
       closeProfilePopover();
-      closeFloatingMenus();
+      closeFloatingMenus({ immediate: true });
     });
   }
 

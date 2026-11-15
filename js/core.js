@@ -7159,7 +7159,7 @@
     }
   }
 
-  function openImageViewer(src, title = 'Attachment', subtitle = '', downloadName = '') {
+  function openImageViewer(src, title = 'Attachment', subtitle = '', downloadName = '', opts = {}) {
     const raw = String(src || '').trim();
     const isSafeUrl = raw.startsWith('data:image/') || raw.startsWith('blob:') || /^https?:\/\//i.test(raw);
     if (!raw || !isSafeUrl) return;
@@ -7170,24 +7170,33 @@
       dialog.className = 'image-viewer-dialog';
       dialog.innerHTML = `<div class="image-viewer-sheet">
         <header class="image-viewer-header">
-          <div><h2 id="ipon-iv-title"></h2><p id="ipon-iv-subtitle"></p></div>
-          <div class="image-viewer-actions">
-            <button class="button button-secondary button-sm" id="ipon-iv-zoom" type="button" aria-pressed="false">Actual size</button>
-            <a class="button button-secondary button-sm" id="ipon-iv-download" download="myipon-attachment.jpg" target="_blank" rel="noopener">Download</a>
+          <div class="image-viewer-title-wrap">
             <button class="dialog-close" id="ipon-iv-close" type="button" aria-label="Close image viewer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+            <div class="image-viewer-meta">
+              <h2 id="ipon-iv-title"></h2>
+              <p id="ipon-iv-subtitle" hidden></p>
+            </div>
+          </div>
+          <div class="image-viewer-actions">
+            <a class="image-viewer-dl-pill" id="ipon-iv-download" download="myipon-attachment.jpg" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span>Download</span></a>
           </div>
         </header>
-        <div class="image-viewer-stage" id="ipon-iv-stage"><img id="ipon-iv-img" alt=""></div>
+        <div class="image-viewer-stage" id="ipon-iv-stage"><img id="ipon-iv-img" alt="" title="Tap or click to toggle actual size"></div>
       </div>`;
       document.body.appendChild(dialog);
       dialog.querySelector('#ipon-iv-close').addEventListener('click', () => dialog.close());
-      dialog.querySelector('#ipon-iv-zoom').addEventListener('click', () => {
+      dialog.querySelector('#ipon-iv-download').addEventListener('click', (event) => {
+        if (typeof dialog._onDownload === 'function') {
+          event.preventDefault();
+          dialog._onDownload();
+        }
+      });
+      dialog.querySelector('#ipon-iv-img').addEventListener('click', () => {
         const stage = dialog.querySelector('#ipon-iv-stage');
-        const zoomBtn = dialog.querySelector('#ipon-iv-zoom');
-        if (!stage || !zoomBtn) return;
+        const imgEl = dialog.querySelector('#ipon-iv-img');
+        if (!stage || !imgEl) return;
         const actual = stage.classList.toggle('is-actual-size');
-        zoomBtn.setAttribute('aria-pressed', String(actual));
-        zoomBtn.textContent = actual ? 'Fit screen' : 'Actual size';
+        imgEl.title = actual ? 'Tap or click to fit screen' : 'Tap or click to toggle actual size';
       });
       dialog.addEventListener('click', (event) => {
         if (event.target === dialog) dialog.close();
@@ -7195,24 +7204,20 @@
     }
     const img = dialog.querySelector('#ipon-iv-img');
     const stage = dialog.querySelector('#ipon-iv-stage');
-    const zoomBtn = dialog.querySelector('#ipon-iv-zoom');
     const titleEl = dialog.querySelector('#ipon-iv-title');
     const subEl = dialog.querySelector('#ipon-iv-subtitle');
     const dl = dialog.querySelector('#ipon-iv-download');
     const baseSub = String(subtitle || '').trim();
+    dialog._onDownload = typeof opts?.onDownload === 'function' ? opts.onDownload : null;
     if (stage) {
       stage.classList.remove('is-actual-size');
       stage.scrollTop = 0;
       stage.scrollLeft = 0;
     }
-    if (zoomBtn) {
-      zoomBtn.setAttribute('aria-pressed', 'false');
-      zoomBtn.textContent = 'Actual size';
-    }
+    img.title = 'Tap or click to toggle actual size';
     img.onload = () => {
-      if (!img.naturalWidth || !img.naturalHeight || !subEl) return;
-      const dims = `${img.naturalWidth} × ${img.naturalHeight}`;
-      subEl.textContent = baseSub ? `${baseSub} · ${dims}` : dims;
+      if (!baseSub || !img.naturalWidth || !img.naturalHeight || !subEl) return;
+      subEl.textContent = `${baseSub} · ${img.naturalWidth} × ${img.naturalHeight}`;
       subEl.hidden = false;
     };
     img.src = raw;
@@ -7221,6 +7226,8 @@
     subEl.textContent = baseSub;
     subEl.hidden = !baseSub;
     dl.href = raw;
+    if (!dialog._onDownload && /^https?:\/\//i.test(raw)) dl.target = '_blank';
+    else dl.removeAttribute('target');
     const cleanDl = String(downloadName || '').trim();
     dl.download = cleanDl || `${String(title || 'attachment').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`;
     if (!dialog.open) dialog.showModal();

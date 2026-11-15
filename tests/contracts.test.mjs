@@ -6064,9 +6064,9 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(appCss, /@keyframes\s+msgFocusGlowDark\s*\{/);
   assert.match(appCss, /@keyframes\s+appFocusFade\s*\{/);
   assert.match(appCss, /@media\s*\(hover:\s*none\),\s*\(max-width:\s*820px\)\s*\{[\s\S]*?\.msg-row-actions\s+\.msg-action-mini\[data-msg-act="react"\],\s*\.msg-row-actions\s+\.msg-action-mini\[data-msg-act="reply"\]\s*\{\s*display:\s*none;/);
-  assert.match(appCss, /\.msg-bubble-col\s*\{[\s\S]*?calc\(100% - 144px\)/);
+  assert.match(appCss, /\.msg-bubble-col\s*\{[\s\S]*?calc\(100% - 46px\)[\s\S]*?\.msg-bubble-wrap\s*\{[\s\S]*?gap:\s*6px;/);
   assert.match(appCss, /\.msg-voice-card\s*\{[\s\S]*?min-width:\s*0;/);
-  assert.match(appCss, /\.msg-react-strip\s*\{[\s\S]*?\.msg-react-btn\.is-selected\s*\{[\s\S]*?\.msg-react-palette\s*\{[\s\S]*?\.msg-react-quick-actions\s*\{/);
+  assert.match(appCss, /\.msg-react-strip\s*\{[\s\S]*?\.msg-react-btn\.is-selected\s*\{[\s\S]*?\.msg-react-palette\s*\{/);
   assert.match(appCss, /@keyframes\s+msgWaveDot\s*\{/);
   assert.match(appCss, /\.msg-search-clear\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1/s);
   assert.match(appCss, /\.msg-dialog\[open\]/);
@@ -6123,6 +6123,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
 
   // 7. Regression guard against mark_conversation_read <-> realtime flicker loop
   let createdNodes = [];
+  let mockSocialProfile = null;
   const makeEl = (id) => {
     const classes = new Set();
     const attrs = new Map();
@@ -6199,6 +6200,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   let threadMessages = [
     { id: 'm1', conversation_id: convId, sender_id: peerId, body: 'hello', message_type: 'TEXT', created_at: '2026-11-15T10:02:00Z', attachments: [], reactions: [] }
   ];
+  let pinnedMsgs = [];
   let convUnread = 1;
 
   const rtChannelMock = {
@@ -6246,7 +6248,6 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
         getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; },
         querySelector(sel) {
           if (sel === '.msg-react-palette') return this._palette;
-          if (sel === '.msg-react-quick-actions' && this.innerHTML.includes('msg-react-quick-actions')) return {};
           return null;
         },
         click() { clickedAnchors.push(this); },
@@ -6267,6 +6268,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   };
   const toastCalls = [];
   let setBusyCalls = 0;
+  let imageViewerOpened = 0;
   let failNextSend = false;
   let failNextUpload = false;
   let nextSentSeq = 0;
@@ -6280,6 +6282,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
       bindAvatarFallbacks: () => {},
       syncPresenceDots: () => {},
       syncMessagesBadges: () => {},
+      openImageViewer: () => { imageViewerOpened += 1; },
       setBusy: () => { setBusyCalls += 1; },
       toast: (msg, kind = 'info') => toastCalls.push({ msg, kind }),
       friendlyError: (e) => String(e?.message || e),
@@ -6349,6 +6352,21 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
           return [{ conversation_id: convId, message_id: 'm1', peer_name: 'Nhicole Joy Gadia Antalan', sender_name: 'Nhicole', body: 'hello world', created_at: '2026-11-15T10:02:00Z' }];
         }
         if (name === 'get_social_overview') return { me: { id: meId, chat_privacy: {} }, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] };
+        if (name === 'get_social_user_profile') {
+          return mockSocialProfile || {
+            id: params?.p_target_id || peerId,
+            full_name: 'Nhicole Joy Gadia Antalan',
+            username: 'nhicole',
+            bio: '',
+            avatar_url: '',
+            friendship_status: 'INCOMING_REQUEST',
+            friend_request_id: 'req-1',
+            can_message: true,
+            can_send_friend_request: false,
+            shared_groups: ['Ipon namin ni prettyynhic'],
+            mutual_friends_count: 0
+          };
+        }
         if (name === 'mark_conversation_read') {
           convUnread = 0;
           // Simulate Postgres realtime echoes caused by mark_conversation_read
@@ -6356,12 +6374,18 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
           tableHandlers.get('message_receipts')?.({ eventType: 'UPDATE', new: { message_id: 'm1', user_id: meId, read_at: '2026-11-15T10:05:00Z' } });
           return { read_at: '2026-11-15T10:05:00Z', receipts_shared: true };
         }
+        if (name === 'pin_chat_message') {
+          const pid = params?.p_message_id;
+          const exists = pinnedMsgs.some((p) => p.id === pid);
+          pinnedMsgs = exists ? pinnedMsgs.filter((p) => p.id !== pid) : [{ id: pid, body: threadMessages.find((m) => m.id === pid)?.body || '', pinned_at: '2026-11-15T10:15:00Z' }, ...pinnedMsgs];
+          return { id: pid, pinned_at: exists ? null : '2026-11-15T10:15:00Z' };
+        }
         if (name === 'get_conversation_messages') {
           return {
             conversation: { id: peerId, conversation_id: convId, full_name: 'Nhicole Joy Gadia Antalan', status: 'ACCEPTED', friendship_status: 'FRIENDS', allow_online_status: true, receipts_enabled: true },
             has_older: false,
             unread_first_id: convUnread > 0 ? 'm1' : null,
-            pinned_messages: [],
+            pinned_messages: pinnedMsgs,
             messages: threadMessages
           };
         }
@@ -6569,6 +6593,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   });
   const ctxMenuNode = createdNodes.find((n) => String(n.className).includes('msg-ctx-menu'));
   assert.ok(ctxMenuNode, 'context menu created for attachment message');
+  assert.match(ctxMenuNode.innerHTML, /data-ctx-do="reply"[^>]*>Reply</);
   assert.match(ctxMenuNode.innerHTML, /data-ctx-do="download"[\s\S]*?Download all \(10\)/);
   await dispatchClick('[data-ctx-do]', { dataset: { ctxDo: 'download', msgId: tenBatchMsg.id } });
   await new Promise((r) => setTimeout(r, 30));
@@ -6654,6 +6679,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
       created_at: '2026-11-15T10:20:00Z',
       delivered_at: null,
       read_at: null,
+      reply_preview: { id: 'm1', sender_id: peerId, sender_name: 'Peer', body: 'original quote' },
       attachments: [],
       reactions: []
     },
@@ -6688,7 +6714,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(msgsHtml, /class="msg-bubble has-audio-only"[\s\S]*?class="msg-voice-card"[\s\S]*?0:00 \/ 0:06[\s\S]*?<audio class="msg-att-audio"/);
   assert.doesNotMatch(msgsHtml, /<audio[^>]*\bcontrols\b/);
 
-  // Same-minute messages show <time> only on the first message of that minute while preserving Sent / Delivered / Seen checkmarks on every sent message
+  // Same-minute messages show <time> only on the first message of that minute while preserving Sent / Delivered / Seen checkmarks, and reply quotes render outside/above the bottom bubble
   const m5Pos = msgsHtml.indexOf('data-msg-id="m5"');
   const m6Pos = msgsHtml.indexOf('data-msg-id="m6"');
   const m7Pos = msgsHtml.indexOf('data-msg-id="m7"');
@@ -6696,6 +6722,8 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   const m5Slice = msgsHtml.slice(m5Pos, m6Pos);
   const m6Slice = msgsHtml.slice(m6Pos, m7Pos);
   const m7Slice = msgsHtml.slice(m7Pos);
+  assert.match(m5Slice, /<div class="msg-bubble-col">\s*<button type="button" class="msg-reply-quote" data-jump-msg="m1">[\s\S]*?<\/button>\s*<div class="msg-bubble-wrap">\s*<div class="msg-bubble(?=["\s])/);
+  assert.doesNotMatch(m5Slice, /<div class="msg-bubble(?=["\s])[\s\S]*?class="msg-reply-quote"/);
   assert.match(m5Slice, /<time\b[^>]*>[^<]+<\/time>/);
   assert.match(m5Slice, /class="msg-tick is-sent"[^>]*aria-label="Sent"/);
   assert.doesNotMatch(m6Slice, /<time\b/);
@@ -6769,28 +6797,237 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(reactMenuNode.innerHTML, /class="msg-react-strip"[\s\S]*?class="msg-react-btn is-selected"[^>]*data-react-emoji="❤️"/);
   assert.match(reactMenuNode.innerHTML, /data-react-expand[\s\S]*?class="msg-react-palette"/);
 
-  // Expanding '+' reveals extra emojis in the floating palette
-  await dispatchClick('[data-react-expand]', {
-    closest: (sel) => (sel === '.msg-react-menu' ? reactMenuNode : null),
+  // Expanding '+' reveals extra emojis in the floating palette while keeping menu open
+  const clickEl = (target) => Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: target?.closest ? target : { closest: () => null, ...target } })));
+  const expandBtnMock = {
+    closest: (sel) => (sel === '[data-react-expand]' ? expandBtnMock : (sel === '.msg-react-menu' || sel === '.msg-floating-menu' ? reactMenuNode : null)),
     setAttribute: () => {}
-  });
+  };
+  await clickEl(expandBtnMock);
   assert.equal(reactMenuNode._palette.hidden, false);
   assert.equal(reactMenuNode.classList.contains('has-extra'), true);
 
-  // Narrow mobile viewport tap on a bubble opens reactions + Reply / Copy strip (no redundant More...; 3-dots stays separate)
+  // Outside click transitions open Pic 1 smoothly via .is-leaving and removes after exit duration
+  assert.equal(reactMenuNode.classList.contains('is-visible'), true);
+  await clickEl(makeEl('outside-stage'));
+  assert.equal(reactMenuNode.classList.contains('is-leaving'), true);
+  assert.equal(reactMenuNode.classList.contains('is-visible'), false);
+  assert.equal(reactMenuNode.getAttribute('aria-hidden'), 'true');
+  await new Promise((r) => setTimeout(r, 230));
+  assert.equal(createdNodes.some((n) => n === reactMenuNode), false);
+
+  // Quick tap does NOT auto-open reactions; hold (touch or stationary mouse) on message, picture, or video opens Pic 1 without triggering media open/play
   win2.innerWidth = 390;
-  createdNodes = [];
+  const pointerDownHandlers = docListeners.get('pointerdown') || [];
+  const pointerMoveHandlers = docListeners.get('pointermove') || [];
+  const pointerUpHandlers = docListeners.get('pointerup') || [];
+  const contextMenuHandlers = docListeners.get('contextmenu') || [];
   const mockRow = makeEl('mock-row-m3');
   mockRow.dataset.msgId = 'm3';
   const mockBubble = makeEl('mock-bubble-m3');
   mockRow.querySelector = (s) => (s === '.msg-bubble' ? mockBubble : null);
   mockBubble.getBoundingClientRect = () => ({ left: 24, right: 240, top: 320, bottom: 370, width: 216 });
-  mockBubble.closest = (s) => (s === '.msg-row' || s === '[data-msg-id]' ? mockRow : (s === '#msg-messages-list .msg-bubble:not(.is-deleted)' ? mockBubble : null));
-  await dispatchClick('#msg-messages-list .msg-bubble:not(.is-deleted)', mockBubble);
-  const mobileMenuNode = createdNodes.find((n) => String(n.className).includes('msg-react-menu'));
-  assert.ok(mobileMenuNode, 'mobile bubble tap opens floating Messenger action + reaction bar');
-  assert.match(mobileMenuNode.innerHTML, /class="msg-react-quick-actions"[\s\S]*?data-ctx-do="reply"[\s\S]*?data-ctx-do="copy"/);
-  assert.doesNotMatch(mobileMenuNode.innerHTML, /data-react-more-ctx|More…/);
+  mockBubble.closest = (s) => (s === '.msg-row' || s === '[data-msg-id]' || s === '[data-msg-id="m3"]' ? mockRow : (s === '#msg-messages-list .msg-bubble:not(.is-deleted)' ? mockBubble : null));
+
+  createdNodes = [];
+  await clickEl(mockBubble);
+  assert.equal(createdNodes.some((n) => String(n.className).includes('msg-react-menu')), false, 'quick tap must not auto-open reaction pill');
+
+  // Hold text message bubble (touch) -> opens Pic 1 & suppresses trailing click
+  pointerDownHandlers.forEach((fn) => fn({ pointerType: 'touch', clientX: 50, clientY: 50, target: mockBubble }));
+  await new Promise((r) => setTimeout(r, 410));
+  const textHoldMenu = createdNodes.find((n) => String(n.className).includes('msg-react-menu'));
+  assert.ok(textHoldMenu, 'holding a text bubble opens reactions floating strip');
+  assert.equal(textHoldMenu.classList.contains('is-visible'), true);
+  assert.match(textHoldMenu.innerHTML, /class="msg-react-strip"[\s\S]*?data-react-msg="m3"[\s\S]*?data-react-expand/);
+  assert.doesNotMatch(textHoldMenu.innerHTML, /msg-react-quick-actions|data-ctx-do="reply"|data-ctx-do="copy"|data-ctx-do="download"|data-react-more-ctx|More…/);
+  pointerUpHandlers.forEach((fn) => fn({ pointerType: 'touch', target: mockBubble }));
+  await clickEl(mockBubble);
+  assert.equal(textHoldMenu.classList.contains('is-leaving'), false, 'trailing click after hold is suppressed');
+
+  // Dismiss cleanly before testing picture & video holds
+  await clickEl(makeEl('outside-stage'));
+  await new Promise((r) => setTimeout(r, 230));
+
+  // Picture: quick tap opens full-size viewer; hold opens Pic 1 WITHOUT opening viewer & ignores OS trailing contextmenu
+  const mockImgFigure = makeEl('mock-att-img');
+  mockImgFigure.getBoundingClientRect = () => ({ left: 24, right: 224, top: 200, bottom: 420, width: 200 });
+  mockImgFigure.closest = (s) => (s === '.msg-row' || s === '[data-msg-id]' || s === '[data-msg-id="m3"]' ? mockRow : (s === '#msg-messages-list .msg-bubble:not(.is-deleted)' ? mockBubble : (s === '.msg-att-image' || s === '.msg-att-image, .msg-video-player' ? mockImgFigure : null)));
+  const mockImgBtn = makeEl('mock-img-btn');
+  mockImgBtn.dataset = { openImg: 'https://cdn.example/view/pic.jpg', imgName: 'pic.jpg', imgPath: 'pic.jpg' };
+  mockImgBtn.closest = (s) => (s === '[data-open-img]' ? mockImgBtn : mockImgFigure.closest(s));
+  const prevViewerCount = imageViewerOpened;
+  await clickEl(mockImgBtn);
+  assert.equal(imageViewerOpened, prevViewerCount + 1, 'quick tap on picture opens full-size viewer');
+
+  createdNodes = [];
+  pointerDownHandlers.forEach((fn) => fn({ pointerType: 'touch', clientX: 80, clientY: 240, target: mockImgBtn }));
+  await new Promise((r) => setTimeout(r, 410));
+  const picHoldMenu = createdNodes.find((n) => String(n.className).includes('msg-react-menu'));
+  assert.ok(picHoldMenu, 'holding a picture opens Pic 1 reaction strip');
+  assert.equal(picHoldMenu.classList.contains('is-visible'), true);
+  let ctxPrevented = false;
+  contextMenuHandlers.forEach((fn) => fn({ target: mockImgBtn, preventDefault: () => { ctxPrevented = true; } }));
+  assert.equal(ctxPrevented, true, 'OS contextmenu on held picture is prevented');
+  assert.equal(picHoldMenu.classList.contains('is-leaving'), false, 'trailing contextmenu keeps held reaction pill open');
+  pointerUpHandlers.forEach((fn) => fn({ pointerType: 'touch', target: mockImgBtn }));
+  await clickEl(mockImgBtn);
+  assert.equal(imageViewerOpened, prevViewerCount + 1, 'trailing click after picture hold must NOT open viewer');
+
+  // Hold video with stationary primary mouse -> opens Pic 1 without playing video; drag >10px cancels hold
+  await clickEl(makeEl('outside-stage'));
+  await new Promise((r) => setTimeout(r, 230));
+  const mockVidEl = { paused: true, ended: false, play() { this.paused = false; return Promise.resolve(); }, pause() { this.paused = true; } };
+  const mockVidPlayer = makeEl('mock-video-player');
+  mockVidPlayer.getBoundingClientRect = () => ({ left: 24, right: 280, top: 240, bottom: 420, width: 256 });
+  mockVidPlayer.querySelector = (s) => (s === 'video' ? mockVidEl : null);
+  mockVidPlayer.closest = (s) => (s === '.msg-row' || s === '[data-msg-id]' || s === '[data-msg-id="m3"]' ? mockRow : (s === '#msg-messages-list .msg-bubble:not(.is-deleted)' ? mockBubble : (s === '.msg-video-player' || s === '.msg-att-image, .msg-video-player' ? mockVidPlayer : null)));
+  const mockVideoTarget = { closest: (s) => (s === 'video' ? mockVideoTarget : mockVidPlayer.closest(s)) };
+
+  createdNodes = [];
+  pointerDownHandlers.forEach((fn) => fn({ pointerType: 'mouse', button: 0, clientX: 100, clientY: 300, target: mockVideoTarget }));
+  pointerMoveHandlers.forEach((fn) => fn({ clientX: 118, clientY: 300 }));
+  await new Promise((r) => setTimeout(r, 410));
+  assert.equal(createdNodes.some((n) => String(n.className).includes('msg-react-menu')), false, 'moving pointer >10px cancels hold');
+
+  createdNodes = [];
+  pointerDownHandlers.forEach((fn) => fn({ pointerType: 'mouse', button: 0, clientX: 100, clientY: 300, target: mockVideoTarget }));
+  await new Promise((r) => setTimeout(r, 410));
+  const vidHoldMenu = createdNodes.find((n) => String(n.className).includes('msg-react-menu'));
+  assert.ok(vidHoldMenu, 'holding a video opens Pic 1 reaction strip');
+  assert.equal(vidHoldMenu.classList.contains('is-visible'), true);
+  pointerUpHandlers.forEach((fn) => fn({ pointerType: 'mouse', button: 0, target: mockVideoTarget }));
+  await clickEl(mockVideoTarget);
+  assert.equal(mockVidEl.paused, true, 'trailing click after video hold must NOT start video playback');
+  await clickEl(makeEl('outside-stage'));
+  await new Promise((r) => setTimeout(r, 230));
+
+  // Pinned message light-green pill banner, expandable panel without row 'X' buttons, and single active-pin highlight
+  threadMessages.forEach((m) => { if (m.id === 'm1' || m.id === 'sent-1') m.pinned_at = '2026-11-15T10:15:00Z'; });
+  pinnedMsgs = [
+    { id: 'm1', body: 'hello', pinned_at: '2026-11-15T10:15:00Z' },
+    { id: 'sent-1', body: 'Second pinned note', pinned_at: '2026-11-15T10:14:00Z' }
+  ];
+  tableHandlers.get('messages')?.({ eventType: 'UPDATE', new: { id: 'm1', conversation_id: convId, sender_id: peerId } });
+  await new Promise((r) => setTimeout(r, 320));
+  const pinBannerEl = getEl('msg-pinned-banner');
+  assert.equal(pinBannerEl.hidden, false);
+  assert.match(pinBannerEl.innerHTML, /class="msg-pinned-pill"[\s\S]*?PINNED MESSAGE\s*<span class="msg-pinned-count">2<\/span>[\s\S]*?<strong>hello<\/strong>[\s\S]*?data-pinned-toggle[^>]*aria-expanded="false"/);
+  assert.match(pinBannerEl.innerHTML, /id="msg-pinned-panel" hidden/);
+
+  // Only the chosen active pinned message gets the .is-pinned border in the thread, and .msg-bubble-wrap hugs .msg-bubble + .msg-row-actions
+  const pinnedMsgsHtml = getEl('msg-messages-list').innerHTML;
+  assert.equal((pinnedMsgsHtml.match(/class="msg-bubble[^"]*\bis-pinned\b/g) || []).length, 1, 'only the active selected pinned message gets the highlight border');
+  assert.match(pinnedMsgsHtml, /data-msg-id="m1"[\s\S]*?class="msg-bubble-wrap"[\s\S]*?class="msg-bubble is-pinned"/);
+  assert.match(pinnedMsgsHtml, /class="msg-bubble-wrap">[\s\S]*?class="msg-bubble[\s\S]*?class="msg-row-actions"/);
+
+  // Toggle chevron expands dropdown panel with no row 'X' unpin buttons
+  const pinToggleTarget = {
+    dataset: {},
+    closest: (sel) => (sel === '[data-pinned-toggle]' || sel === '#msg-pinned-banner' ? pinToggleTarget : null)
+  };
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: pinToggleTarget })));
+  assert.match(pinBannerEl.innerHTML, /data-pinned-toggle[^>]*aria-expanded="true"/);
+  assert.doesNotMatch(pinBannerEl.innerHTML, /id="msg-pinned-panel" hidden/);
+  assert.match(pinBannerEl.innerHTML, /<h3>Pinned messages <em>2<\/em><\/h3>[\s\S]*?msg-pinned-item is-active[\s\S]*?msg-pinned-item-num">1<\/span>/);
+  assert.doesNotMatch(pinBannerEl.innerHTML, /data-unpin-msg|msg-pinned-item-unpin/);
+
+  // Selecting pinned #2 moves the .is-pinned border exclusively to that message and updates the top banner
+  const mockBubble1 = makeEl('mock-b1');
+  mockBubble1.classList.add('is-pinned');
+  const mockBubble2 = makeEl('mock-b2');
+  getEl('msg-messages-list').querySelectorAll = (sel) => (sel === '.msg-row[data-msg-id]' ? [
+    { dataset: { msgId: 'm1' }, querySelector: () => mockBubble1 },
+    { dataset: { msgId: 'sent-1' }, querySelector: () => mockBubble2 }
+  ] : []);
+  const selectPin2Target = {
+    dataset: { pinnedSelect: 'sent-1', jumpMsg: 'sent-1' },
+    closest: (sel) => (sel === '[data-jump-msg]' || sel === '#msg-pinned-banner' ? selectPin2Target : null)
+  };
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: selectPin2Target })));
+  assert.equal(mockBubble1.classList.contains('is-pinned'), false);
+  assert.equal(mockBubble2.classList.contains('is-pinned'), true);
+  assert.match(pinBannerEl.innerHTML, /<strong>Second pinned note<\/strong>/);
+
+  // Clicking 3-dots includes 'Reply' and choosing it arms composer reply bar
+  const dotsTarget = {
+    dataset: { msgAct: 'menu', msgId: 'm1' },
+    getBoundingClientRect: () => ({ left: 100, right: 128, top: 180, bottom: 208, width: 28, height: 28 }),
+    closest: (sel) => (sel === '[data-msg-act]' ? dotsTarget : (sel === '.msg-row' ? makeEl('row-m1') : null))
+  };
+  createdNodes = [];
+  await clickEl(dotsTarget);
+  const dotsCtxMenu = createdNodes.find((n) => String(n.className).includes('msg-ctx-menu'));
+  assert.ok(dotsCtxMenu);
+  assert.match(dotsCtxMenu.innerHTML, /data-ctx-do="reply"[^>]*>Reply<\/button>/);
+  const replyMenuBtn = { dataset: { ctxDo: 'reply', msgId: 'm1' }, closest: (sel) => (sel === '[data-ctx-do]' ? replyMenuBtn : null) };
+  await clickEl(replyMenuBtn);
+  assert.equal(getEl('msg-context-bar').hidden, false);
+  assert.match(getEl('msg-context-bar').innerHTML, /Replying to/);
+
+  // Mobile Back button then clicking the SAME chat again re-opens the thread view immediately
+  const chatsViewEl = getEl('msg-view-chats');
+  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), true);
+  await dispatchClick('#msg-back-to-list', { dataset: {} });
+  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), false);
+  await dispatchClick('[data-open-conv]', { dataset: { openConv: convId } });
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), true, 're-selecting same chat after Back must reopen mobile thread');
+
+  // Messenger-style Chat Info drawer: overview shows ONLY Shared media & Shared files selectors (no inline grids/lists); picking one enters its scrollable view with Back button
+  threadMessages = [
+    ...threadMessages,
+    {
+      id: 'm-media-batch',
+      conversation_id: convId,
+      sender_id: peerId,
+      body: 'Receipts and video',
+      message_type: 'MEDIA',
+      created_at: '2026-11-15T10:20:00Z',
+      attachments: [
+        ...Array.from({ length: 11 }, (_, idx) => ({ path: `${convId}/photo-${idx + 1}.jpg`, kind: 'image', name: `photo-${idx + 1}.jpg`, size: 42000 })),
+        { path: `${convId}/clip.mp4`, kind: 'video', name: 'clip.mp4', size: 256000 },
+        { path: `${convId}/ledger.pdf`, kind: 'file', name: 'ledger.pdf', size: 184320 },
+        { path: `${convId}/summary.xlsx`, kind: 'file', name: 'summary.xlsx', size: 96256 }
+      ],
+      reactions: []
+    }
+  ];
+  tableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm-media-batch', conversation_id: convId, sender_id: peerId } });
+  await new Promise((r) => setTimeout(r, 340));
+
+  const expectedMediaCount = threadMessages.filter((m) => !m.deleted_for_everyone_at).reduce((n, m) => n + (m.attachments || []).filter((a) => a.kind === 'image' || a.kind === 'video').length, 0);
+  const expectedFileCount = threadMessages.filter((m) => !m.deleted_for_everyone_at).reduce((n, m) => n + (m.attachments || []).filter((a) => a.kind !== 'image' && a.kind !== 'video').length, 0);
+  assert.ok(expectedMediaCount >= 12);
+  assert.ok(expectedFileCount >= 2);
+  const drawerEl = getEl('msg-thread-drawer');
+  await dispatchClick('#msg-thread-info-toggle', { dataset: {} });
+  assert.equal(drawerEl.hidden, false);
+  assert.match(drawerEl.innerHTML, new RegExp(`data-drawer-view="media"[\\s\\S]*?Shared media[\\s\\S]*?<span class="msg-drawer-nav-count">${expectedMediaCount}<\\/span>`));
+  assert.match(drawerEl.innerHTML, new RegExp(`data-drawer-view="files"[\\s\\S]*?Shared files[\\s\\S]*?<span class="msg-drawer-nav-count">${expectedFileCount}<\\/span>`));
+  assert.doesNotMatch(drawerEl.innerHTML, /class="msg-drawer-media-grid"|class="msg-drawer-files"|photo-1\.jpg|ledger\.pdf/);
+
+  // Drill into Shared media -> ONLY scrollable media grid renders (all items, never sliced) + Back button
+  await clickEl({ dataset: { drawerView: 'media' }, closest: (sel) => (sel === '[data-drawer-view]' ? { dataset: { drawerView: 'media' } } : null) });
+  assert.match(drawerEl.innerHTML, new RegExp(`class="msg-drawer-back" data-drawer-view="root"[\\s\\S]*?<h3>Shared media<\\/h3>[\\s\\S]*?<span class="msg-drawer-head-count">${expectedMediaCount}<\\/span>`));
+  assert.match(drawerEl.innerHTML, /data-drawer-screen="media"[\s\S]*?class="msg-drawer-media-grid"/);
+  assert.equal((drawerEl.innerHTML.match(/class="msg-drawer-thumb/g) || []).length, expectedMediaCount, 'Shared media subview shows all items for scrolling');
+  assert.doesNotMatch(drawerEl.innerHTML, /class="msg-drawer-profile"|class="msg-drawer-files"|Chat actions/);
+
+  // Navigate back -> root overview again without inline grids/lists
+  await clickEl({ dataset: { drawerView: 'root' }, closest: (sel) => (sel === '[data-drawer-view]' ? { dataset: { drawerView: 'root' } } : null) });
+  assert.match(drawerEl.innerHTML, /data-drawer-screen="root"[\s\S]*?data-drawer-view="media"/);
+  assert.doesNotMatch(drawerEl.innerHTML, /class="msg-drawer-media-grid"|class="msg-drawer-files"/);
+
+  // Drill into Shared files -> ONLY scrollable files list renders + Back button
+  await clickEl({ dataset: { drawerView: 'files' }, closest: (sel) => (sel === '[data-drawer-view]' ? { dataset: { drawerView: 'files' } } : null) });
+  assert.match(drawerEl.innerHTML, new RegExp(`class="msg-drawer-back" data-drawer-view="root"[\\s\\S]*?<h3>Shared files<\\/h3>[\\s\\S]*?<span class="msg-drawer-head-count">${expectedFileCount}<\\/span>`));
+  assert.match(drawerEl.innerHTML, /data-drawer-screen="files"[\s\S]*?class="msg-drawer-files"[\s\S]*?summary\.xlsx[\s\S]*?ledger\.pdf/);
+  assert.doesNotMatch(drawerEl.innerHTML, /class="msg-drawer-profile"|class="msg-drawer-media-grid"|Chat actions/);
+
+  // Close drawer cleanly
+  await dispatchClick('#msg-drawer-close', { dataset: {} });
+  assert.equal(drawerEl.hidden, true);
 
   // Switching to Friends view renders dark-emerald hero card with 3 underline tabs and zero Suggestions UI
   await dispatchClick('[data-msg-tab]', { dataset: { msgTab: 'friends' } });
@@ -6798,6 +7035,67 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(friendsHtml, /class="msg-friends-hero"[\s\S]*?Friends <span class="msg-hero-amp">&amp;<\/span> Connections/);
   assert.match(friendsHtml, /class="msg-friends-tabs"[\s\S]*?data-friends-sub="all"[\s\S]*?My Friends[\s\S]*?data-friends-sub="incoming"[\s\S]*?Friend Requests[\s\S]*?data-friends-sub="sent"[\s\S]*?Sent/);
   assert.doesNotMatch(friendsHtml, /Suggestions|privacy-respecting suggestions|data-friends-sub="suggestions"/);
+
+  // User profile popover matches warm-cream card mockup for 1 group and scales cleanly for many shared groups
+  const popEl = getEl('msg-profile-popover');
+  const dpAnchor = makeEl('mock-dp-anchor');
+  dpAnchor.dataset = { socialUserDp: peerId };
+  dpAnchor.getBoundingClientRect = () => ({ left: 40, right: 80, top: 120, bottom: 160, width: 40, height: 40 });
+  await dispatchClick('[data-social-user-dp]', dpAnchor);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(popEl.hidden, false);
+  assert.match(popEl.innerHTML, /id="msg-pop-close"/);
+  assert.match(popEl.innerHTML, /avatar-circle(?:\s+avatar-fallback)?\s+avatar-lg/);
+  assert.match(popEl.innerHTML, /<strong id="msg-pop-name">Nhicole Joy Gadia Antalan<\/strong>/);
+  assert.match(popEl.innerHTML, /Sent you a friend request/);
+  assert.doesNotMatch(popEl.innerHTML, /msg-handle-chip|@nhicole|data-pop-groups-toggle|mutual friend/);
+  assert.match(popEl.innerHTML, /class="msg-pop-groups-card"[\s\S]*?class="msg-pop-groups-label">Groups<[\s\S]*?class="msg-pop-groups-name"[^>]*>Ipon namin ni prettyynhic</);
+  assert.match(popEl.innerHTML, /class="msg-pop-btn msg-pop-primary-btn" data-req-decision="ACCEPT" data-req-id="req-1"[\s\S]*?<span>Accept Friend<\/span>/);
+  assert.match(popEl.innerHTML, /class="msg-pop-secondary-row"[\s\S]*?>Message<[\s\S]*?class="msg-pop-btn msg-pop-outline-btn is-danger" data-social-action="block"/);
+
+  // Many shared groups -> compact +N bar by default, expanding drawer reveals all groups without closing popover
+  mockSocialProfile = {
+    id: peerId,
+    full_name: 'Nhicole Joy Gadia Antalan',
+    username: 'nhicole',
+    bio: '',
+    avatar_url: '',
+    friendship_status: 'FRIENDS',
+    friend_request_id: null,
+    can_message: true,
+    can_send_friend_request: false,
+    shared_groups: ['Alpha Savers', 'Barkada Fund', 'Emergency Stash', 'Family Ipon', 'Travel Jar'],
+    mutual_friends_count: 3
+  };
+  await dispatchClick('[data-social-user-dp]', dpAnchor);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.match(popEl.innerHTML, /3 mutual friends/);
+  assert.match(popEl.innerHTML, /data-pop-groups-toggle aria-expanded="false"[\s\S]*?>Alpha Savers<[\s\S]*?class="msg-pop-groups-more">\+4<svg/);
+  assert.match(popEl.innerHTML, /class="msg-pop-groups-list" hidden/);
+  for (const g of mockSocialProfile.shared_groups) {
+    assert.match(popEl.innerHTML, new RegExp(`class="msg-pop-group-chip"[^>]*>${g}<`));
+  }
+
+  const mockGroupsCard = makeEl('mock-pop-groups-card');
+  const mockGroupsList = makeEl('mock-pop-groups-list');
+  mockGroupsList.hidden = true;
+  mockGroupsCard.querySelector = (s) => (s === '.msg-pop-groups-list' ? mockGroupsList : null);
+  const mockGroupsToggle = makeEl('mock-pop-groups-toggle');
+  mockGroupsToggle.closest = (s) => {
+    if (s === '[data-pop-groups-toggle]') return mockGroupsToggle;
+    if (s === '[data-pop-groups-card]') return mockGroupsCard;
+    if (s === '#msg-profile-popover') return popEl;
+    return null;
+  };
+  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => {}, target: mockGroupsToggle })));
+  assert.equal(popEl.hidden, false, 'expanding shared groups must not trigger outside-click close');
+  assert.equal(mockGroupsList.hidden, false);
+  assert.equal(mockGroupsCard.classList.contains('is-open'), true);
+  assert.equal(mockGroupsToggle.getAttribute('aria-expanded'), 'true');
+
+  // Close popover via close X button
+  await dispatchClick('#msg-pop-close', { dataset: {} });
+  assert.equal(popEl.hidden, true);
 });
 
 test('migration 078 filters audit logs to meaningful governance/financial events and offline page embeds inline SVG logo', () => {
@@ -6863,6 +7161,7 @@ test('chat captionless media overlay and audit log calendar date-range chips mee
 
   // Uniform chat photo thumbnail frame, aligned mobile bubble gutters, full-size image viewer toggle, centered voice speaker button, mobile 3-dots preservation, and Pic 2 Friends hero card
   const coreJs = read('js/core.js');
+  const msgJs = read('js/messages.js');
   assert.match(css, /\.msg-att-image\s*\{[^}]*width:\s*clamp\(176px,\s*56vw,\s*232px\);\s*max-width:\s*100%;\s*height:\s*220px;/s);
   assert.match(css, /\.msg-attachments\.is-carousel\s*>\s*\.msg-att-image\s*\{[^}]*width:\s*clamp\(176px,\s*56vw,\s*232px\);\s*height:\s*220px;/s);
   assert.match(css, /\.msg-bubble-col,\s*\.msg-row\.is-mine\s+\.msg-bubble-col\s*\{\s*max-width:\s*min\(520px,\s*calc\(100%\s*-\s*72px\)\);\s*\}/s);
@@ -6871,20 +7170,48 @@ test('chat captionless media overlay and audit log calendar date-range chips mee
   assert.match(css, /\.msg-voice-mute-btn\s*\{[^}]*align-self:\s*center;[^}]*border-radius:\s*50%;/s);
   assert.match(css, /\.msg-att-image img\s*\{[^}]*width:\s*100%;\s*height:\s*100%;[^}]*object-fit:\s*cover;/s);
   assert.match(css, /\.msg-row-actions \.msg-action-mini\[data-msg-act="react"\],\s*\.msg-row-actions \.msg-action-mini\[data-msg-act="reply"\]\s*\{\s*display:\s*none;\s*\}/s);
-  assert.match(coreJs, /id="ipon-iv-zoom"[\s\S]*?is-actual-size[\s\S]*?naturalWidth[\s\S]*?naturalHeight/);
+  assert.match(coreJs, /dialog\.id = 'ipon-image-viewer'[\s\S]*?id="ipon-iv-close"[\s\S]*?id="ipon-iv-title"[\s\S]*?class="image-viewer-dl-pill" id="ipon-iv-download"[\s\S]*?is-actual-size[\s\S]*?naturalWidth[\s\S]*?naturalHeight/);
+  assert.doesNotMatch(coreJs, /id="ipon-iv-zoom"/);
+  assert.match(css, /\.image-viewer-sheet\s*\{[^}]*background:\s*#05110d;/s);
+  assert.match(css, /\.image-viewer-dl-pill\s*\{[^}]*border-radius:\s*999px;[^}]*background:\s*#e6c678;/s);
+  assert.match(css, /\.image-viewer-header \.dialog-close\s*\{[^}]*width:\s*38px;\s*height:\s*38px;[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/s);
   assert.match(css, /\.image-viewer-stage\.is-actual-size img\s*\{[^}]*max-width:\s*none;[^}]*max-height:\s*none;/s);
+  assert.match(css, /\.msg-pinned-pill\s*\{[^}]*background:\s*linear-gradient\(135deg,\s*#ecf5ef\s+0%,\s*#e1efe6\s+100%\);[\s\S]*?\.msg-pinned-panel\s*\{/s);
+  assert.doesNotMatch(css, /\.msg-pinned-item-unpin/);
+  assert.match(css, /\.msg-bubble-wrap\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*6px;/s);
+  assert.match(msgJs, /function syncActivePinnedHighlight\(/);
+  assert.match(msgJs, /isActivePinned\s*=\s*Boolean\(isPinned\s*&&\s*!isDeleted\s*&&\s*state\.activePinnedId\s*&&\s*m\.id\s*===\s*state\.activePinnedId\)/);
   assert.match(css, /\.msg-friends-hero\s*\{[\s\S]*?\.msg-friends-tabs\s*\{[\s\S]*?\.msg-friends-tab\.is-active::after\s*\{/s);
+  assert.match(css, /\.msg-unread-sep span\s*\{[^}]*background:\s*#15533e;/s);
+  assert.doesNotMatch(css, /\.msg-unread-sep[^{]*\{[^}]*#b83a2d/);
+  assert.match(css, /\.msg-reply-quote\s*\{[^}]*border:\s*0;[^}]*border-radius:/s);
+  assert.doesNotMatch(css, /\.msg-reply-quote\s*\{[^}]*border-left:/s);
+  assert.doesNotMatch(css, /\.msg-react-quick-actions|\.msg-quick-act-btn|@keyframes\s+msgReactPop/);
+  assert.doesNotMatch(msgJs, /msg-react-quick-actions|showActions/);
+  assert.match(msgJs, /data-ctx-do="reply"[^>]*>Reply<\/button>/);
+  assert.match(css, /\.msg-img-open-btn,\s*\.msg-img-open-btn img,\s*\.msg-video-player,\s*\.msg-att-video\s*\{[^}]*-webkit-touch-callout:\s*none;/s);
+  assert.match(css, /\.msg-floating-menu\s*\{[^}]*opacity:\s*0;[^}]*transition:/s);
+  assert.match(css, /\.msg-floating-menu\.is-visible\s*\{[^}]*opacity:\s*1;/s);
+  assert.match(css, /\.msg-floating-menu\.is-leaving\s*\{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);
+  assert.match(css, /\.msg-floating-menu\[data-placed="below"\]\s*\{/);
+  assert.match(msgJs, /HOLD_EXCLUDE_SEL\s*=/);
+  assert.match(msgJs, /function revealFloatingMenu\(menu\)/);
+  assert.match(msgJs, /showReactionFloatingMenu\([^)]*\{\s*toggle:\s*false\s*\}/);
+  assert.match(msgJs, /threadInfoView:\s*'root'/);
+  assert.doesNotMatch(msgJs, /media\.slice\(-9\)|docs\.slice\(-8\)/);
+  assert.match(css, /\.msg-drawer-body\s*\{[^}]*overflow-y:\s*auto;/s);
+  assert.match(css, /\.msg-drawer-back\s*\{[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%;/s);
+  assert.match(css, /\.msg-drawer-nav-btn\s*\{[\s\S]*?\.msg-drawer-file-badge\s*\{/s);
+
+  // User profile popover card & scalable multi-group drawer
+  assert.match(msgJs, /function renderSharedGroupsCard\(/);
+  assert.doesNotMatch(msgJs, /shared_groups\.slice\(0,\s*2\)/);
+  assert.match(msgJs, /data-pop-groups-toggle/);
+  assert.match(css, /\.msg-profile-popover\s*\{[^}]*border-radius:\s*22px;[^}]*background:\s*#faf7ef;/s);
+  assert.match(css, /\.msg-profile-popover\s+\.msg-pop-close\s*\{[^}]*width:\s*34px\s*!important;[^}]*height:\s*34px\s*!important;/s);
+  assert.match(css, /\.msg-pop-groups-card\s*\{[^}]*border-radius:\s*14px;[^}]*background:\s*#f2ede0;/s);
+  assert.match(css, /\.msg-pop-groups-list\s*\{[^}]*max-height:\s*128px;[^}]*overflow-y:\s*auto;/s);
+  assert.match(css, /\.msg-pop-primary-btn\s*\{[^}]*background:\s*#142620;/s);
+  assert.match(css, /\.msg-pop-secondary-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
+  assert.match(css, /html\[data-theme="dark"\]\s+\.msg-pop-groups-card\s*\{/);
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
