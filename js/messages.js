@@ -22,7 +22,7 @@
   const HOLD_EXCLUDE_SEL = 'a, input, textarea, select, label, [data-aact], [data-vact], [data-react-msg], [data-jump-msg], [data-retry-pending], [data-cancel-pending], .msg-video-controls, .msg-voice-wave';
   const MSG_HOLD_DELAY_MS = 380;
   const MENU_EXIT_MS = 200;
-  const VOICE_WAVE_HEIGHTS = [28, 48, 36, 62, 42, 78, 96, 54, 44, 68, 86, 50, 74, 40, 84, 92, 60, 46, 72, 98, 56, 48, 66, 38, 76, 52];
+  const VOICE_WAVE_HEIGHTS = [28, 48, 36, 62, 42, 78, 96, 54, 44, 68, 86, 50, 74, 40, 84, 92, 60, 46, 72, 98, 56, 48, 66, 38, 76, 52, 82, 44, 70, 90, 58, 42, 74, 60, 46, 32];
   const BLOCKED_EXT_RE = /\.(exe|msi|bat|cmd|com|pif|scr|vbs|vbe|js|mjs|cjs|jse|wsf|wsh|ps1|psm1|sh|bash|html|htm|xhtml|svg|php|asp|aspx|jsp|jar|dll|sys|drv|reg|hta|cpl)$/i;
   const ALLOWED_EXT_RE = /\.(jpg|jpeg|png|webp|gif|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|rtf|odt|ods|odp|md|mp3|wav|ogg|m4a|webm|aac|mp4|mov|zip)$/i;
   const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp|gif)$/i;
@@ -588,6 +588,9 @@
     }
   }
 
+  const missingUrlRetry = new Map(); // path -> { attempts, lastAt }
+  let missingUrlTimer = null;
+
   // Edge Storage helpers (raw lossless upload & XHR byte progress)
   async function ensureSignedViewUrls(conversationId, paths = []) {
     const missing = [...new Set(paths.map((p) => String(p || '').trim()).filter((p) => p && !state.signedUrlCache.has(p)))];
@@ -599,9 +602,41 @@
         paths: missing
       });
       Object.entries(urls).forEach(([path, signed]) => {
-        if (path && signed) state.signedUrlCache.set(path, signed);
+        if (path && signed) {
+          state.signedUrlCache.set(path, signed);
+          missingUrlRetry.delete(path);
+        }
       });
     } catch (_) { }
+  }
+
+  function scheduleMissingSignedUrls(conversationId, paths = []) {
+    if (!conversationId || state.activeConvId !== conversationId || typeof setTimeout !== 'function') return;
+    const now = Date.now();
+    const eligible = [...new Set(paths.map((p) => String(p || '').trim()).filter((p) => {
+      if (!p || state.signedUrlCache.has(p)) return false;
+      const info = missingUrlRetry.get(p);
+      return !info || (info.attempts < 3 && (now - info.lastAt) >= info.attempts * 1500);
+    }))];
+    if (!eligible.length) return;
+    if (missingUrlTimer) clearTimeout(missingUrlTimer);
+    missingUrlTimer = setTimeout(async () => {
+      missingUrlTimer = null;
+      if (state.activeConvId !== conversationId) return;
+      const runAt = Date.now();
+      const batch = eligible.filter((p) => !state.signedUrlCache.has(p));
+      if (!batch.length) return;
+      batch.forEach((p) => {
+        const prev = missingUrlRetry.get(p);
+        missingUrlRetry.set(p, { attempts: (prev?.attempts || 0) + 1, lastAt: runAt });
+      });
+      await ensureSignedViewUrls(conversationId, batch);
+      if (state.activeConvId !== conversationId || !state.activeThread?.conversation) return;
+      if (batch.some((p) => state.signedUrlCache.has(p))) {
+        state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
+        renderMessagesList();
+      }
+    }, 450);
   }
 
   function uploadFileRawWithProgress(entry, uploadMeta, onProgress) {
@@ -945,6 +980,9 @@
       return false;
     }
     if (JSON.stringify(prevThread.pinned_messages || []) !== JSON.stringify(nextThread.pinned_messages || [])) {
+      return false;
+    }
+    if (typeof document !== 'undefined' && document.querySelector?.('#msg-messages-list .msg-att-loading')) {
       return false;
     }
     const prevMsgs = prevThread.messages || [];
@@ -1397,12 +1435,20 @@
 
   function computeThreadFingerprint(data) {
     if (!data?.conversation) return '';
+    const resolvedPaths = [];
+    (data.messages || []).forEach((m) => {
+      if (m.deleted_for_everyone_at) return;
+      (m.attachments || []).forEach((a) => {
+        if (a?.path && state.signedUrlCache.has(a.path)) resolvedPaths.push(a.path);
+      });
+    });
     return JSON.stringify({
       c: data.conversation,
       h: Boolean(data.has_older),
       u: data.unread_first_id || null,
       p: data.pinned_messages || [],
-      m: data.messages || []
+      m: data.messages || [],
+      r: resolvedPaths
     });
   }
 
@@ -2282,6 +2328,16 @@
     list.classList.toggle('is-thread-entering', Boolean(animate));
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);
+    if (conv.conversation_id) {
+      const missingAttPaths = [];
+      msgs.forEach((m) => {
+        if (m.deleted_for_everyone_at) return;
+        (m.attachments || []).forEach((att) => {
+          if (att?.path && !state.signedUrlCache.has(att.path)) missingAttPaths.push(att.path);
+        });
+      });
+      if (missingAttPaths.length) scheduleMissingSignedUrls(conv.conversation_id, missingAttPaths);
+    }
   }
 
   function renderAttachmentItem(conversationId, att) {
@@ -2891,7 +2947,7 @@
         continue;
       }
       const kind = detectAttachmentKind(file);
-      const previewUrl = (kind === 'image' || kind === 'video') && typeof URL?.createObjectURL === 'function' ? URL.createObjectURL(file) : '';
+      const previewUrl = (kind === 'image' || kind === 'video' || kind === 'audio') && typeof URL?.createObjectURL === 'function' ? URL.createObjectURL(file) : '';
       if (kind === 'video' && previewUrl) {
         probeAndCaptureVideoMeta(previewUrl, previewUrl, { isLocalBlob: true });
       }
@@ -3171,12 +3227,13 @@
       const convId = state.activeConvId;
       state.replyToMsg = null;
       renderContextBar();
+      const previewUrl = typeof URL?.createObjectURL === 'function' ? URL.createObjectURL(file || blob) : '';
       enqueuePendingMessage({
         conversationId: convId,
         body: '',
         messageType: 'VOICE',
         replyToMsg: replyTarget,
-        files: [{ file, name: fileName, type: blob.type, size: blob.size, kind: 'audio', previewUrl: '', duration_seconds: durationSeconds }]
+        files: [{ file, name: fileName, type: blob.type, size: blob.size, kind: 'audio', previewUrl, duration_seconds: durationSeconds }]
       });
     };
     try { rec.stop(); } catch { rec.stream?.getTracks?.().forEach((t) => t.stop()); }

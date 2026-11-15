@@ -3295,6 +3295,7 @@
   }
 
   let lastBgGrantedToastAt = 0;
+  let lastBgSnapshot = null;
 
   async function collectDeviceBackgroundSnapshot() {
     const isMobile = isMobileDeviceNotifClient();
@@ -3351,6 +3352,7 @@
   }
 
   function syncBackgroundRowsUI(bgRows, snap) {
+    if (snap) lastBgSnapshot = snap;
     bgRows.forEach((row) => {
       if (!snap.isMobile) {
         row.hidden = true;
@@ -3362,6 +3364,9 @@
       const button = row.querySelector('[data-device-bg-btn]');
       if (!pillEl || !statusEl || !actionsEl || !button) return;
 
+      const busyState = button.classList.contains('is-busy')
+        ? { label: button.textContent, disabled: button.disabled, orig: button.dataset.originalLabel }
+        : null;
       actionsEl.querySelectorAll('[data-device-bg-extra]').forEach((el) => el.remove());
       const addExtra = (labelText, attrs = {}) => {
         const extra = document.createElement('button');
@@ -3490,6 +3495,12 @@
         button.disabled = false;
         button.hidden = false;
       }
+      if (busyState) {
+        button.classList.add('is-busy');
+        button.disabled = busyState.disabled;
+        button.textContent = busyState.label;
+        if (busyState.orig) button.dataset.originalLabel = busyState.orig;
+      }
     });
   }
 
@@ -3500,6 +3511,7 @@
 
   function syncBackgroundUsagePrompt(snap) {
     const dialog = document.getElementById('background-usage-prompt-dialog');
+    if (snap) lastBgSnapshot = snap;
     if (!dialog || !snap) return;
     const notifBadge = dialog.querySelector('[data-bg-prompt-notif-badge]');
     const batteryBadge = dialog.querySelector('[data-bg-prompt-battery-badge]');
@@ -3528,7 +3540,7 @@
       }
     }
     const allDone = snap.status === 'granted' && snap.batteryOk;
-    if (allowBtn) {
+    if (allowBtn && !allowBtn.classList.contains('is-busy')) {
       allowBtn.textContent = allDone
         ? 'Done'
         : (snap.status === 'denied' && snap.batteryOk
@@ -3609,11 +3621,12 @@
       const btn = event.currentTarget;
       markBackgroundPromptSeen(currentProfile?.id);
       dialog.dataset.attempted = '1';
-      btn.disabled = true;
+      setBusy(btn, true, 'Allowing…');
       try {
         await requestBackgroundUsageAccess({ fromPrompt: true });
       } finally {
-        btn.disabled = false;
+        setBusy(btn, false);
+        if (dialog.open && lastBgSnapshot) syncBackgroundUsagePrompt(lastBgSnapshot);
       }
     });
     return dialog;
@@ -3960,13 +3973,18 @@
       openLatestApkDownload();
       return;
     }
-    if (action === 'allow-all' || action === 'allow-background') {
-      button.disabled = true;
+    const runBusyRowAction = async (busyLabel, task) => {
+      const row = button.closest?.('[data-device-background-row]');
+      setBusy(button, true, busyLabel);
       try {
-        await requestBackgroundUsageAccess();
+        return await task();
       } finally {
-        button.disabled = false;
+        setBusy(button, false);
+        if (row && lastBgSnapshot) syncBackgroundRowsUI([row], lastBgSnapshot);
       }
+    };
+    if (action === 'allow-all' || action === 'allow-background') {
+      await runBusyRowAction('Allowing…', () => requestBackgroundUsageAccess());
       return;
     }
     if (action === 'app-settings') {
@@ -3983,8 +4001,7 @@
       return;
     }
     if (action === 'recheck') {
-      button.disabled = true;
-      try {
+      await runBusyRowAction('Checking…', async () => {
         const snap = await syncDevicePermissionUI();
         if (snap?.status === 'granted' && (!snap.isApp || snap.batteryOk)) {
           if (currentProfile) {
@@ -3997,9 +4014,7 @@
         } else {
           toast('Notifications are still off. Allow Notifications in settings, then tap Recheck.', 'error');
         }
-      } finally {
-        button.disabled = false;
-      }
+      });
       return;
     }
     if (action === 'unblock-help') {

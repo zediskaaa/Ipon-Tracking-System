@@ -8744,3 +8744,334 @@ test('outdated APK detection, Android background wake locks, safety polling, and
   });
   assert.equal(openedUrls.length, 3);
 });
+
+test('voice waveform fills full width, background prompt buttons avoid vertical bloat and show busy feedback, and sent voice notes render immediately with missing-URL auto-recovery', async () => {
+  const vm = await import('node:vm');
+  const css = read('css/app.css');
+  const coreJs = read('js/core.js');
+  const messagesJs = read('js/messages.js');
+
+  // 1. Pic 1: Waveform stretches full width with zero trailing blank space
+  assert.match(css, /\.msg-voice-wave\s*\{[^}]*justify-content:\s*space-between;[^}]*gap:\s*1\.5px;[^}]*width:\s*100%;/s);
+  const waveMatch = messagesJs.match(/const VOICE_WAVE_HEIGHTS\s*=\s*\[([^\]]+)\]/);
+  assert.ok(waveMatch, 'VOICE_WAVE_HEIGHTS array must exist in js/messages.js');
+  const waveBars = waveMatch[1].split(',').map((s) => Number(s.trim())).filter(Number.isFinite);
+  assert.ok(waveBars.length >= 34, `VOICE_WAVE_HEIGHTS should have at least 34 bars, found ${waveBars.length}`);
+
+  // 2. Pic 2: Prompt action buttons stay compact (no 140px vertical flex stretch) & show crisp .is-busy indicator
+  assert.match(css, /\.button\.is-busy:disabled\s*\{\s*opacity:\s*\.92;\s*cursor:\s*wait;\s*\}/);
+  assert.match(css, /\.bg-usage-actions\s+\.button\s*\{\s*flex:\s*0 0 auto;\s*min-height:\s*44px;\s*padding:\s*10px 16px;/);
+  assert.match(css, /@media \(max-width:\s*620px\)[\s\S]*?\.bg-usage-actions\s+\.button\s*\{\s*flex:\s*0 0 auto;\s*width:\s*100%;\s*min-height:\s*44px;/);
+
+  const makeEl = (tag) => {
+    const classes = new Set();
+    const listeners = new Map();
+    const attrs = {};
+    const dataset = {};
+    const children = [];
+    let cls = '';
+    let textContent = '';
+    const el = {
+      tagName: String(tag || 'div').toUpperCase(),
+      id: '',
+      open: false,
+      disabled: false,
+      hidden: false,
+      dataset,
+      style: { setProperty() { }, removeProperty() { } },
+      get className() { return cls; },
+      set className(v) {
+        cls = String(v ?? '');
+        classes.clear();
+        cls.split(/\s+/).filter(Boolean).forEach((c) => classes.add(c));
+      },
+      get textContent() { return textContent; },
+      set textContent(v) { textContent = String(v ?? ''); },
+      set innerHTML(v) { el._html = String(v ?? ''); },
+      get innerHTML() { return el._html || ''; },
+      classList: {
+        contains: (c) => classes.has(c),
+        add: (c) => { classes.add(c); cls = [...classes].join(' '); },
+        remove: (c) => { classes.delete(c); cls = [...classes].join(' '); },
+        toggle: (c, f) => {
+          if (f === undefined ? !classes.has(c) : Boolean(f)) classes.add(c);
+          else classes.delete(c);
+          cls = [...classes].join(' ');
+        }
+      },
+      setAttribute(k, v) { attrs[k] = String(v); if (k === 'id') el.id = String(v); },
+      getAttribute(k) { return attrs[k] ?? null; },
+      hasAttribute(k) { return k in attrs; },
+      removeAttribute(k) { delete attrs[k]; },
+      addEventListener(ev, fn) { listeners.set(ev, fn); },
+      getListener(ev) { return listeners.get(ev); },
+      appendChild(c) { children.push(c); return c; },
+      append(...nodes) { nodes.forEach((n) => children.push(n)); },
+      prepend() { },
+      insertBefore(n) { return el.appendChild(n); },
+      insertAdjacentHTML() { },
+      showModal() { el.open = true; },
+      close() { el.open = false; },
+      remove() { },
+      querySelector(sel) {
+        if (sel === '[data-bg-prompt-notif-badge]') return el._notifBadge || null;
+        if (sel === '[data-bg-prompt-battery-badge]') return el._batBadge || null;
+        if (sel === '[data-bg-prompt-allow]') return el._allowBtn || null;
+        if (sel === '[data-bg-prompt-settings]') return el._settingsBtn || null;
+        if (sel === '[data-bg-prompt-hint]') return el._hint || null;
+        return null;
+      },
+      querySelectorAll: () => []
+    };
+    return el;
+  };
+  let promptDlg = null;
+  let resolveBattery;
+  const batPromise = new Promise((res) => { resolveBattery = res; });
+  const permState = { hasPermission: true, batteryOptimizationIgnored: false, micManifestDeclared: true };
+  const docCore = {
+    documentElement: makeEl('html'),
+    head: makeEl('head'),
+    body: Object.assign(makeEl('body'), {
+      dataset: {},
+      append(node) {
+        if (node?.id === 'background-usage-prompt-dialog') {
+          node._notifBadge = makeEl('span');
+          node._batBadge = makeEl('span');
+          node._allowBtn = makeEl('button');
+          node._allowBtn.textContent = 'Allow background usage';
+          node._settingsBtn = makeEl('button');
+          node._hint = makeEl('p');
+          promptDlg = node;
+        }
+      }
+    }),
+    createElement: (t) => makeEl(t),
+    getElementById: (id) => (id === 'background-usage-prompt-dialog' ? promptDlg : makeEl('div')),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener() { }
+  };
+  const ctxCore = {
+    window: null,
+    document: docCore,
+    navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 myIPONApp/20', onLine: true, serviceWorker: null },
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/dashboard.html', pathname: '/dashboard.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    Capacitor: {
+      Plugins: {
+        LocalNotifications: { checkPermissions: async () => ({ display: 'granted' }) },
+        BackgroundNotifications: {
+          getBackgroundStatus: async () => ({ ...permState }),
+          requestIgnoreBatteryOptimizations: () => batPromise,
+          openAppSettings: async () => ({ launched: true }),
+          openNotificationSettings: async () => ({ launched: true })
+        }
+      }
+    },
+    Notification: { permission: 'granted' },
+    CustomEvent: class { },
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
+    setTimeout: (fn) => { if (typeof fn === 'function') fn(); return 0; },
+    clearTimeout() { },
+    addEventListener() { },
+    removeEventListener() { },
+    dispatchEvent() { },
+    console
+  };
+  ctxCore.window = ctxCore;
+  vm.runInNewContext(coreJs, ctxCore, { filename: 'js/core.js' });
+  docCore.body.dataset.page = 'dashboard';
+  await ctxCore.window.Ipon.openBackgroundUsagePrompt({
+    isMobile: true, isApp: true, needsApkUpdate: false, status: 'granted', batteryKnown: true, batteryOk: false, pushState: { supported: false, subscribed: false }, isIosBrowser: false
+  });
+  const allowBtn = promptDlg?._allowBtn;
+  assert.ok(allowBtn, 'Prompt allow button should be wired');
+  const clickFn = allowBtn.getListener('click');
+  assert.equal(typeof clickFn, 'function');
+  const clickTask = clickFn({ currentTarget: allowBtn });
+  await Promise.resolve();
+  assert.equal(allowBtn.classList.contains('is-busy'), true);
+  assert.equal(allowBtn.disabled, true);
+  assert.equal(allowBtn.textContent, 'Allowing…');
+
+  // If battery stays restricted after dialog returns, label recovers cleanly without keeping 'Allowing…'
+  resolveBattery({ launched: true, alreadyIgnored: false });
+  await clickTask;
+  assert.equal(allowBtn.classList.contains('is-busy'), false);
+  assert.equal(allowBtn.disabled, false);
+  assert.equal(allowBtn.textContent, 'Allow background usage');
+
+  // 3. Pic 3: Own sent voice note uses instant blob previewUrl (0 "Loading voice note…" delay), and missed URLs auto-retry
+  const msgEls = new Map();
+  const getMsgEl = (id) => {
+    if (!msgEls.has(id)) {
+      msgEls.set(id, {
+        id,
+        hidden: false,
+        disabled: false,
+        value: '',
+        innerHTML: '',
+        textContent: '',
+        scrollTop: 0,
+        scrollHeight: 200,
+        clientHeight: 200,
+        dataset: {},
+        style: {},
+        files: null,
+        classList: { contains: () => false, add() { }, remove() { }, toggle() { } },
+        addEventListener() { },
+        focus() { },
+        setAttribute() { },
+        removeAttribute() { },
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        showModal() { this.open = true; },
+        close() { this.open = false; }
+      });
+    }
+    return msgEls.get(id);
+  };
+  const convId = 'conv-voice-1';
+  const meId = 'user-me';
+  const peerId = 'user-peer';
+  let viewUrlCalls = 0;
+  let failViewUrlsFirst = false;
+  let sentMsgs = [
+    { id: 'v-peer-1', sender_id: peerId, body: '', message_type: 'VOICE', created_at: '2026-11-15T10:00:00Z', attachments: [{ path: `${convId}/peer-voice.webm`, name: 'voice.webm', kind: 'audio', duration_seconds: 3, size: 1200 }], reactions: [] }
+  ];
+  let uploadedPath = '';
+  const winMsg = {
+    innerWidth: 1200,
+    innerHeight: 800,
+    addEventListener() { },
+    removeEventListener() { },
+    Ipon: {
+      escapeHtml: (s) => String(s ?? ''),
+      initials: () => 'U',
+      isUserOnline: () => true,
+      bindAvatarFallbacks: () => { },
+      syncPresenceDots: () => { },
+      syncMessagesBadges: () => { },
+      setBusy: () => { },
+      setFieldError: () => { },
+      toast: () => { },
+      friendlyError: (e) => String(e?.message || e),
+      invokeAccountFunction: async (payload) => {
+        if (payload?.action === 'chat-upload-urls') {
+          uploadedPath = `${convId}/own-voice.webm`;
+          return { uploads: [{ path: uploadedPath, token: 'tok-v', signedUrl: 'https://upload.test/v', name: 'voice.webm', type: 'audio/webm' }] };
+        }
+        if (payload?.action === 'chat-view-urls') {
+          viewUrlCalls += 1;
+          if (failViewUrlsFirst) {
+            failViewUrlsFirst = false;
+            return { urls: {} };
+          }
+          return { urls: Object.fromEntries((payload.paths || []).map((p) => [p, `https://cdn.example/view/${encodeURIComponent(p)}`])) };
+        }
+        return {};
+      },
+      rpc: async (name, params) => {
+        if (name === 'get_conversations') {
+          return [{ id: convId, status: 'ACCEPTED', initiator_id: peerId, is_incoming_request: false, peer: { id: peerId, full_name: 'Peer', allow_online_status: true }, unread_count: 0, marked_unread: false, last_message_at: '2026-11-15T10:00:00Z', last_message_preview: 'Voice' }];
+        }
+        if (name === 'get_conversation_messages') {
+          return { conversation: { id: peerId, conversation_id: convId, full_name: 'Peer', status: 'ACCEPTED', friendship_status: 'FRIENDS', allow_online_status: true, receipts_enabled: true }, has_older: false, unread_first_id: null, pinned_messages: [], messages: sentMsgs };
+        }
+        if (name === 'get_social_overview') {
+          return { me: { id: meId, chat_privacy: {} }, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] };
+        }
+        if (name === 'mark_messages_delivered') return 0;
+        if (name === 'send_chat_message') {
+          const confirmed = { id: 'v-mine-1', sender_id: meId, body: '', message_type: 'VOICE', created_at: '2026-11-15T10:01:00Z', attachments: params.p_attachments || [], reactions: [] };
+          sentMsgs = [...sentMsgs, confirmed];
+          return confirmed;
+        }
+        return null;
+      },
+      client: {
+        from: () => ({ select: () => ({ like: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }),
+        channel: () => ({ on() { return this; }, subscribe() { return this; }, send: async () => { } }),
+        removeChannel: () => { }
+      }
+    }
+  };
+  let loadingQueryMatches = false;
+  const docMsgListeners = new Map();
+  const docMsg = {
+    documentElement: { dataset: {} },
+    visibilityState: 'visible',
+    body: { insertAdjacentHTML() { }, appendChild() { } },
+    createElement: () => makeEl('div'),
+    getElementById: (id) => getMsgEl(id),
+    querySelector: (sel) => (sel === '#msg-messages-list .msg-att-loading' && loadingQueryMatches ? {} : null),
+    querySelectorAll: () => [],
+    addEventListener(ev, fn) {
+      if (!docMsgListeners.has(ev)) docMsgListeners.set(ev, []);
+      docMsgListeners.get(ev).push(fn);
+    }
+  };
+  winMsg.Ipon.openAudioUnlock = undefined;
+  winMsg.Ipon.supabase = null;
+  class FakeBlob { constructor(parts = [], opts = {}) { this.parts = parts; this.type = opts.type || 'audio/webm'; this.size = 1024; } }
+  class FakeAudioFile extends FakeBlob { constructor(parts, name, opts) { super(parts, opts); this.name = name; } }
+  class MockXhr {
+    open() { }
+    setRequestHeader() { }
+    send() { this.status = 200; this.onload?.(); }
+  }
+  class MockURL extends URL {}
+  MockURL.createObjectURL = () => 'blob:own-voice-instant';
+  MockURL.revokeObjectURL = () => { };
+  const msgCtx = {
+    window: winMsg,
+    document: docMsg,
+    navigator: { userAgent: 'Mozilla/5.0' },
+    location: { origin: 'https://myipon.example', search: '' },
+    XMLHttpRequest: MockXhr,
+    Blob: FakeBlob,
+    File: FakeAudioFile,
+    URL: MockURL,
+    CSS: { escape: (v) => String(v) },
+    URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
+    setTimeout,
+    clearTimeout,
+    setInterval: () => 0,
+    clearInterval: () => { },
+    requestAnimationFrame: (fn) => fn(),
+    console
+  };
+  winMsg.window = winMsg;
+  vm.runInNewContext(messagesJs, msgCtx, { filename: 'js/messages.js' });
+  assert.match(messagesJs, /stopVoiceRecorderStream[\s\S]*?const previewUrl\s*=\s*typeof URL\?\.createObjectURL === 'function'\s*\?\s*URL\.createObjectURL\(file \|\| blob\)\s*:\s*'';/);
+
+  await winMsg.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', full_name: 'Me' });
+
+  // Open thread when chat-view-urls temporarily returns empty -> should show loading placeholder then auto-recover!
+  failViewUrlsFirst = true;
+  await winMsg.IponMessages.openWorkspace({ conversationId: convId });
+  const listEl = getMsgEl('msg-messages-list');
+  assert.match(listEl.innerHTML, /Loading voice note/);
+  loadingQueryMatches = true;
+  await new Promise((r) => setTimeout(r, 550));
+  loadingQueryMatches = false;
+  assert.match(listEl.innerHTML, /<audio class="msg-att-audio"[^>]*src="https:\/\/cdn\.example\/view\//);
+  assert.doesNotMatch(listEl.innerHTML, /Loading voice note/);
+
+  // Sending own audio attachment skips chat-view-urls completely and plays local blob URL immediately
+  const callsBeforeOwnSend = viewUrlCalls;
+  (docMsgListeners.get('change') || []).forEach((fn) => fn({
+    target: { id: 'msg-file-input', value: 'sel', files: [new FakeAudioFile(['a'], 'voice-1.webm', { type: 'audio/webm' })] }
+  }));
+  await Promise.all((docMsgListeners.get('submit') || []).map((fn) => fn({
+    preventDefault() { },
+    target: { id: 'msg-composer-form', closest: (s) => (s === '#msg-composer-form' ? getMsgEl('msg-composer-form') : null) }
+  })));
+  await new Promise((r) => setTimeout(r, 120));
+  assert.match(listEl.innerHTML, /src="blob:own-voice-instant"/);
+  assert.doesNotMatch(listEl.innerHTML, /Loading voice note/);
+  assert.equal(viewUrlCalls, callsBeforeOwnSend);
+});
