@@ -82,7 +82,7 @@ public class BackgroundNotificationsPlugin extends Plugin {
 
         NotificationSyncService.ensureStarted(context);
         NotificationSyncWorker.ensureScheduled(context);
-        NotificationPollReceiver.scheduleNext(context, 45_000L);
+        NotificationPollReceiver.scheduleNext(context, 20_000L);
         call.resolve();
     }
 
@@ -133,16 +133,16 @@ public class BackgroundNotificationsPlugin extends Plugin {
     public void getBackgroundStatus(PluginCall call) {
         Context context = getContext();
         boolean hasPerm = NotificationPollReceiver.hasNotificationPermission(context);
-        boolean batteryIgnored = true;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-            if (pm != null) {
-                batteryIgnored = pm.isIgnoringBatteryOptimizations(context.getPackageName());
-            }
-        }
+        boolean batteryIgnored = NotificationPollReceiver.isBatteryOptimizationIgnored(context);
+        boolean micManifestDeclared = hasManifestPermission(context, Manifest.permission.RECORD_AUDIO);
+        boolean micPermissionGranted = micManifestDeclared
+            && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED;
         JSObject result = new JSObject();
         result.put("hasPermission", hasPerm);
         result.put("batteryOptimizationIgnored", batteryIgnored);
+        result.put("micManifestDeclared", micManifestDeclared);
+        result.put("micPermissionGranted", micPermissionGranted);
         result.put("instantSyncEnabled", NotificationPollReceiver.isInstantSyncEnabled(context));
         result.put("instantSyncRunning", NotificationSyncService.isRunning());
         result.put("androidSdk", Build.VERSION.SDK_INT);

@@ -11,6 +11,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import androidx.core.app.NotificationCompat;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -38,8 +40,28 @@ public class NotificationPollReceiver extends BroadcastReceiver {
     public static final String SYNC_CHANNEL_ID = "myipon_bg_sync";
     public static final String ACTION_POLL = "com.myipon.app.ACTION_POLL_NOTIFICATIONS";
     private static final int ALARM_REQUEST_CODE = 4419;
-    private static final long POLL_INTERVAL_MS = 120_000L;
+    private static final long POLL_INTERVAL_MS = 60_000L;
+    private static final long RESTRICTED_POLL_INTERVAL_MS = 90_000L;
+    private static final long POLL_WAKELOCK_TIMEOUT_MS = 15_000L;
     private static final ExecutorService POLL_EXECUTOR = Executors.newSingleThreadExecutor();
+    private static final AtomicBoolean POLL_IN_FLIGHT = new AtomicBoolean(false);
+    private static volatile long lastPollSuccessElapsedMs = 0L;
+
+    public static long getLastPollSuccessElapsedMs() {
+        return lastPollSuccessElapsedMs;
+    }
+
+    public static boolean isBatteryOptimizationIgnored(Context context) {
+        if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true;
+        }
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        return pm == null || pm.isIgnoringBatteryOptimizations(context.getPackageName());
+    }
+
+    public static long recommendedPollIntervalMs(Context context) {
+        return isBatteryOptimizationIgnored(context) ? POLL_INTERVAL_MS : RESTRICTED_POLL_INTERVAL_MS;
+    }
 
     public static void ensureChannel(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
@@ -199,6 +221,8 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body == null ? "" : body))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(tapPending);
@@ -208,7 +232,40 @@ public class NotificationPollReceiver extends BroadcastReceiver {
 
     public static void pollAsync(Context context) {
         final Context appContext = context.getApplicationContext();
-        POLL_EXECUTOR.execute(() -> pollSync(appContext));
+        if (!hasFeedConfig(appContext) || !hasNotificationPermission(appContext)) {
+            return;
+        }
+        if (!POLL_IN_FLIGHT.compareAndSet(false, true)) {
+            return;
+        }
+        POLL_EXECUTOR.execute(() -> {
+            try {
+                pollWithWakeLock(appContext);
+            } finally {
+                POLL_IN_FLIGHT.set(false);
+            }
+        });
+    }
+
+    public static void pollWithWakeLock(Context context) {
+        final Context appContext = context.getApplicationContext();
+        PowerManager.WakeLock wakeLock = null;
+        try {
+            PowerManager pm = (PowerManager) appContext.getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "myipon:notif-poll");
+                wakeLock.setReferenceCounted(false);
+                wakeLock.acquire(POLL_WAKELOCK_TIMEOUT_MS);
+            }
+            pollSync(appContext);
+        } finally {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                try {
+                    wakeLock.release();
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     public static synchronized void pollSync(Context appContext) {
@@ -255,6 +312,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
                 }
 
                 JSONArray rows = new JSONArray(sb.toString());
+                lastPollSuccessElapsedMs = SystemClock.elapsedRealtime();
                 if (rows.length() > 0) {
                     Set<String> shown = readShownSet(prefs);
                     boolean changed = false;
@@ -304,9 +362,11 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             return;
         }
 
-        scheduleNext(appContext, POLL_INTERVAL_MS);
+        scheduleNext(appContext, recommendedPollIntervalMs(appContext));
         NotificationSyncWorker.ensureScheduled(appContext);
-        NotificationSyncService.ensureStarted(appContext);
+        if (NotificationSyncService.canStartFromBackground(appContext)) {
+            NotificationSyncService.ensureStarted(appContext);
+        }
 
         if (!hasNotificationPermission(appContext)) {
             return;
@@ -315,7 +375,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         final PendingResult pendingResult = goAsync();
         POLL_EXECUTOR.execute(() -> {
             try {
-                pollSync(appContext);
+                pollWithWakeLock(appContext);
             } finally {
                 pendingResult.finish();
             }

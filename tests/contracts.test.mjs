@@ -1648,7 +1648,7 @@ test('workflow enhancements migration 049, schema sync, and all UI integrations 
   }
 
   // Service worker offline shell + connectivity banner
-  assert.match(sw, /ipon-shell-v10/);
+  assert.match(sw, /ipon-shell-v11/);
   assert.match(sw, /ignoreSearch:\s*true/);
   assert.match(core, /function initConnectivityBanner\(/);
   assert.match(core, /function initInfoTips\(/);
@@ -5122,7 +5122,7 @@ test('all notification types route to exact destination modals or highlighted ta
   assert.match(manageAccount, /link:\s*`dashboard\.html\?invite=\$\{encodeURIComponent\(actor\.group_id\)\}`/);
   assert.match(sendPush, /select\('id, recipient_id, group_id, type, title, message, link, dedupe_key, read_at, created_at'\)/);
   assert.match(sendPush, /notif\.type === 'RELEASE' && \/\^https\?:/);
-  assert.match(sw, /const CACHE_NAME = 'ipon-shell-v10'/);
+  assert.match(sw, /const CACHE_NAME = 'ipon-shell-v11'/);
   assert.match(sw, /group_id:\s*payload\.group_id \?\? null/);
   assert.match(sw, /type:\s*'MYIPON_NOTIFICATION_CLICK'/);
   assert.match(mainJava, /\[a-zA-Z0-9_=&:%\.-]\+/);
@@ -8554,13 +8554,18 @@ test('presence dot size, Chat Info drawer overlay over pinned banner, inline Fri
   assert.equal(confirmCalls[0].confirmLabel, 'Open Settings');
   assert.equal(openSettingsCalls.length, 1);
 
-  // Scenario C: Old APK without ensureMicrophonePermission on Android fails NotAllowedError -> shows APK update notice (not broken Settings redirect)
+  // Scenario C: Old APK without ensureMicrophonePermission on Android fails NotAllowedError -> shows APK update notice with Download APK action
   const savedBgPlugin = ctx.Capacitor.Plugins.BackgroundNotifications;
+  let micUpdateDownloadCalls = 0;
+  ctx.window.Ipon.openLatestApkDownload = () => { micUpdateDownloadCalls += 1; };
   ctx.Capacitor.Plugins.BackgroundNotifications = {};
   getUserMediaError = Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' });
   await tapVoiceBtn();
+  delete ctx.window.Ipon.openLatestApkDownload;
   assert.equal(confirmCalls.length, 2);
   assert.match(confirmCalls[1].title, /App update needed/);
+  assert.equal(confirmCalls[1].confirmLabel, 'Download APK');
+  assert.equal(micUpdateDownloadCalls, 1);
 
   // Scenario D: New APK where user taps Allow in system prompt -> immediately starts recording
   ctx.Capacitor.Plugins.BackgroundNotifications = savedBgPlugin;
@@ -8569,4 +8574,173 @@ test('presence dot size, Chat Info drawer overlay over pinned banner, inline Fri
   await tapVoiceBtn();
   assert.equal(recorderStarted, 1);
   assert.equal(getEl('msg-voice-recording').hidden, false);
+});
+
+test('outdated APK detection, Android background wake locks, safety polling, and permission sync hardening stay intact', async () => {
+  const vm = await import('node:vm');
+  const coreJs = read('js/core.js');
+  const pollReceiver = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
+  const syncService = read('android/app/src/main/java/com/myipon/app/NotificationSyncService.java');
+  const syncWorker = read('android/app/src/main/java/com/myipon/app/NotificationSyncWorker.java');
+  const mainActivity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
+  const swJs = read('sw.js');
+
+  // 1. Native Android wake lock, background FGS guard, safety poll, and permission callback contracts
+  assert.match(pollReceiver, /PowerManager\.PARTIAL_WAKE_LOCK/);
+  assert.match(pollReceiver, /pollWithWakeLock\(/);
+  assert.match(pollReceiver, /lastPollSuccessElapsedMs\s*=\s*SystemClock\.elapsedRealtime\(\)/);
+  assert.match(pollReceiver, /NotificationCompat\.VISIBILITY_PRIVATE/);
+  assert.match(pollReceiver, /NotificationCompat\.DEFAULT_ALL/);
+  assert.match(pollReceiver, /NotificationSyncService\.canStartFromBackground\(appContext\)/);
+
+  assert.match(syncService, /SAFETY_POLL_INTERVAL_MS\s*=\s*45_000L/);
+  assert.match(syncService, /NotificationPollReceiver\.pollAsync\(appContext\)/);
+  assert.match(syncService, /"phx_error"\.equals\(event\)\s*\|\|\s*"phx_close"\.equals\(event\)/);
+  assert.match(syncService, /canStartFromBackground\(Context context\)/);
+
+  assert.match(syncWorker, /NotificationSyncService\.canStartFromBackground\(appContext\)/);
+  assert.match(syncWorker, /NotificationPollReceiver\.pollWithWakeLock\(appContext\)/);
+
+  assert.match(mainActivity, /onRequestPermissionsResult\(int requestCode, String\[\] permissions, int\[\] grantResults\)/);
+  assert.match(mainActivity, /NotificationSyncService\.canStartFromBackground\(this\)/);
+  assert.match(mainActivity, /dispatchWindowEvent\("focus"\)/);
+
+  assert.match(bgPlugin, /result\.put\("micManifestDeclared", micManifestDeclared\)/);
+  assert.match(bgPlugin, /result\.put\("micPermissionGranted", micPermissionGranted\)/);
+  assert.match(bgPlugin, /NotificationPollReceiver\.scheduleNext\(context, 20_000L\)/);
+
+  // 2. Service worker & resync cooldown bypass contracts
+  assert.match(swJs, /CACHE_NAME\s*=\s*'ipon-shell-v11'/);
+  assert.match(coreJs, /snap\?\.nativeBgStatus\?\.instantSyncRunning === false/);
+  assert.match(coreJs, /if \(!force && now - lastBgPollSyncAt < 60_000\) return;/);
+
+  // 3. js/core.js runtime VM: outdated APK detection (micManifestDeclared: false or old plugin without requestIgnoreBatteryOptimizations)
+  const makeEl = (tag = 'div') => {
+    const attrs = new Map();
+    const cls = new Set();
+    const children = [];
+    const el = {
+      tagName: String(tag).toUpperCase(),
+      hidden: false,
+      disabled: false,
+      open: false,
+      textContent: '',
+      innerHTML: '',
+      dataset: {},
+      className: '',
+      style: { setProperty() { }, removeProperty() { } },
+      classList: {
+        add: (...c) => c.forEach((x) => cls.add(x)),
+        remove: (...c) => c.forEach((x) => cls.delete(x)),
+        toggle: (c, f) => (f === undefined ? (cls.has(c) ? cls.delete(c) : cls.add(c)) : (f ? cls.add(c) : cls.delete(c))),
+        contains: (c) => cls.has(c)
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k) ?? null,
+      removeAttribute: (k) => attrs.delete(k),
+      appendChild: (n) => { children.push(n); return n; },
+      append: (...ns) => { children.push(...ns); },
+      prepend() { },
+      insertBefore: (n) => { children.push(n); return n; },
+      insertAdjacentHTML() { },
+      dispatchEvent: () => true,
+      showModal() { el.open = true; },
+      close() { el.open = false; },
+      remove() { el._removed = true; },
+      addEventListener() { },
+      removeEventListener() { },
+      closest: () => null,
+      querySelector: (sel) => {
+        if (sel === '[data-device-bg-pill]') return el._pill || null;
+        if (sel === '[data-device-bg-status]') return el._status || null;
+        if (sel === '[data-device-bg-actions]') return el._actions || null;
+        if (sel === '[data-device-bg-btn]') return el._btn || null;
+        return null;
+      },
+      querySelectorAll: () => []
+    };
+    return el;
+  };
+  const bgRow = makeEl('div');
+  bgRow._pill = makeEl('span');
+  bgRow._status = makeEl('small');
+  bgRow._actions = makeEl('div');
+  bgRow._btn = makeEl('button');
+
+  const openedUrls = [];
+  let nativeStatus = { hasPermission: true, batteryOptimizationIgnored: true, micManifestDeclared: false, instantSyncRunning: false };
+  const docListeners = new Map();
+  const docStub = {
+    documentElement: makeEl('html'),
+    head: makeEl('head'),
+    body: Object.assign(makeEl('body'), {
+      dataset: {},
+      addEventListener(evt, fn) { docListeners.set(evt, fn); }
+    }),
+    createElement: (tag) => makeEl(tag),
+    getElementById: () => makeEl('div'),
+    querySelector: () => null,
+    querySelectorAll: (sel) => (sel === '[data-device-background-row]' ? [bgRow] : []),
+    addEventListener() { }
+  };
+  const ctx = {
+    window: null,
+    document: docStub,
+    navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 myIPONApp/20', onLine: true, serviceWorker: null },
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/account.html', pathname: '/account.html', search: '', hostname: 'myipon.example', protocol: 'https:', replace() { } },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
+    Capacitor: {
+      Plugins: {
+        LocalNotifications: { checkPermissions: async () => ({ display: 'granted' }) },
+        BackgroundNotifications: {
+          getBackgroundStatus: async () => ({ ...nativeStatus }),
+          requestIgnoreBatteryOptimizations: async () => ({ launched: true, alreadyIgnored: true })
+        }
+      }
+    },
+    Notification: { permission: 'granted' },
+    CustomEvent: class { },
+    open: (url, target, rel) => { openedUrls.push({ url, target, rel }); return {}; },
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
+    setTimeout: (fn) => { if (typeof fn === 'function') fn(); return 0; },
+    clearTimeout() { },
+    addEventListener() { },
+    removeEventListener() { },
+    dispatchEvent() { },
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  // Case A: APK missing RECORD_AUDIO (micManifestDeclared === false) shows Update APK and opens download
+  await ctx.window.Ipon.syncDevicePermissionUI();
+  assert.equal(bgRow._pill.textContent, 'Update APK');
+  assert.equal(bgRow._btn.textContent, 'Update APK');
+  assert.equal(bgRow._btn.dataset.bgAction, 'update-apk');
+  const resA = await ctx.window.Ipon.requestBackgroundUsageAccess();
+  assert.equal(resA.needsApkUpdate, true);
+  assert.equal(openedUrls.length, 1);
+  assert.match(openedUrls[0].url, /myIPON\.apk$/);
+
+  // Case B: Older APK bridge lacking requestIgnoreBatteryOptimizations ALSO triggers Update APK
+  delete ctx.Capacitor.Plugins.BackgroundNotifications.requestIgnoreBatteryOptimizations;
+  nativeStatus = { hasPermission: true, batteryOptimizationIgnored: true, micManifestDeclared: true };
+  await ctx.window.Ipon.syncDevicePermissionUI();
+  assert.equal(bgRow._pill.textContent, 'Update APK');
+  const resB = await ctx.window.Ipon.requestBackgroundUsageAccess();
+  assert.equal(resB.needsApkUpdate, true);
+  assert.equal(openedUrls.length, 2);
+
+  // Case C: Shared openLatestApkDownload helper & [data-device-notif-btn] update-apk click open APK URL
+  await ctx.window.Ipon.bindDeviceNotificationControls();
+  const bodyClick = docListeners.get('click');
+  assert.equal(typeof bodyClick, 'function');
+  const fakeUpdateBtn = Object.assign(makeEl('button'), { dataset: { actionMode: 'update-apk' } });
+  await bodyClick({
+    target: { closest: (sel) => (sel === '[data-device-notif-btn]' ? fakeUpdateBtn : null) }
+  });
+  assert.equal(openedUrls.length, 3);
 });

@@ -15,6 +15,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -32,6 +33,7 @@ import org.json.JSONObject;
 public class NotificationSyncService extends Service {
     private static final int FOREGROUND_NOTIF_ID = 4401;
     private static final long HEARTBEAT_INTERVAL_MS = 25_000L;
+    private static final long SAFETY_POLL_INTERVAL_MS = 45_000L;
     private static final long INITIAL_RETRY_MS = 3_000L;
     private static final long MAX_RETRY_MS = 60_000L;
 
@@ -47,6 +49,14 @@ public class NotificationSyncService extends Service {
     private long retryDelayMs = INITIAL_RETRY_MS;
     private boolean destroyed = false;
     private String currentFeedToken = "";
+
+    public static boolean canStartFromBackground(Context context) {
+        if (context == null) return false;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return true;
+        }
+        return NotificationPollReceiver.isBatteryOptimizationIgnored(context);
+    }
 
     public static boolean isRunning() {
         return running;
@@ -79,6 +89,7 @@ public class NotificationSyncService extends Service {
         @Override
         public void run() {
             if (destroyed) return;
+            Context appContext = getApplicationContext();
             WebSocket socket = activeSocket;
             if (socket != null) {
                 try {
@@ -90,6 +101,11 @@ public class NotificationSyncService extends Service {
                     socket.send(hb.toString());
                 } catch (Exception ignored) {
                 }
+            }
+            long now = SystemClock.elapsedRealtime();
+            long lastPoll = NotificationPollReceiver.getLastPollSuccessElapsedMs();
+            if (lastPoll == 0L || now - lastPoll >= SAFETY_POLL_INTERVAL_MS) {
+                NotificationPollReceiver.pollAsync(appContext);
             }
             handler.postDelayed(this, HEARTBEAT_INTERVAL_MS);
         }
@@ -285,6 +301,17 @@ public class NotificationSyncService extends Service {
                     JSONObject frame = new JSONObject(text);
                     String event = frame.optString("event", "");
                     JSONObject payload = frame.optJSONObject("payload");
+                    if ("phx_error".equals(event) || "phx_close".equals(event)
+                        || ("phx_reply".equals(event) && payload != null && "error".equals(payload.optString("status", "")))) {
+                        handler.removeCallbacks(heartbeatRunnable);
+                        if (activeSocket == webSocket) activeSocket = null;
+                        try {
+                            webSocket.close(1000, "reconnect");
+                        } catch (Exception ignored) {
+                        }
+                        scheduleReconnect();
+                        return;
+                    }
                     boolean isWake = false;
                     JSONObject innerPayload = payload;
 

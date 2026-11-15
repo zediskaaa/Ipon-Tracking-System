@@ -57,9 +57,11 @@ public class NotificationSyncWorker extends Worker {
         if (!NotificationPollReceiver.hasFeedConfig(appContext)) {
             return Result.success();
         }
-        NotificationSyncService.ensureStarted(appContext);
-        NotificationPollReceiver.pollSync(appContext);
-        NotificationPollReceiver.scheduleNext(appContext, 120_000L);
+        if (NotificationSyncService.canStartFromBackground(appContext)) {
+            NotificationSyncService.ensureStarted(appContext);
+        }
+        NotificationPollReceiver.pollWithWakeLock(appContext);
+        NotificationPollReceiver.scheduleNext(appContext, NotificationPollReceiver.recommendedPollIntervalMs(appContext));
         return Result.success();
     }
 }

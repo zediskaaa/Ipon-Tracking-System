@@ -2999,6 +2999,12 @@
   let lastBgPollSyncAt = 0;
   let lastWebPushSyncAt = 0;
 
+  function openLatestApkDownload() {
+    return typeof window !== 'undefined' && typeof window.open === 'function'
+      ? window.open(APK_LATEST_DOWNLOAD_URL, '_blank', 'noopener')
+      : null;
+  }
+
   function getLocalNotificationsPlugin() {
     return window.Capacitor?.Plugins?.LocalNotifications || null;
   }
@@ -3009,6 +3015,19 @@
 
   function hasNativeNotificationBridge() {
     return Boolean(getLocalNotificationsPlugin() || getBackgroundNotificationsPlugin());
+  }
+
+  function apkNeedsNativeUpdate(bgPlugin = getBackgroundNotificationsPlugin(), nativeBgStatus = null) {
+    if (!hasNativeNotificationBridge() || typeof bgPlugin?.requestIgnoreBatteryOptimizations !== 'function') {
+      return true;
+    }
+    if (nativeBgStatus) {
+      if (nativeBgStatus.micManifestDeclared === false) return true;
+      if (typeof bgPlugin?.getBackgroundStatus === 'function' && typeof nativeBgStatus.batteryOptimizationIgnored !== 'boolean') {
+        return true;
+      }
+    }
+    return false;
   }
 
   function urlBase64ToUint8Array(base64String) {
@@ -3294,14 +3313,14 @@
     }
     const status = await getDeviceNotificationPermission();
     const isApp = isInstalledAppUser();
-    const needsApkUpdate = isApp && !hasNativeNotificationBridge();
     const bgPlugin = getBackgroundNotificationsPlugin();
     let nativeBgStatus = null;
     if (isApp && bgPlugin?.getBackgroundStatus) {
       nativeBgStatus = await bgPlugin.getBackgroundStatus().catch(() => null);
     }
+    const needsApkUpdate = isApp && apkNeedsNativeUpdate(bgPlugin, nativeBgStatus);
     const batteryKnown = !isApp || Boolean(nativeBgStatus && typeof nativeBgStatus.batteryOptimizationIgnored === 'boolean');
-    const batteryOk = !isApp || !nativeBgStatus || nativeBgStatus.batteryOptimizationIgnored !== false;
+    const batteryOk = !isApp || (!needsApkUpdate && (!nativeBgStatus || nativeBgStatus.batteryOptimizationIgnored !== false));
     let pushState = !isApp && status === 'granted'
       ? await getWebPushState()
       : { supported: !isApp && Boolean(config.vapidPublicKey) && 'PushManager' in window, subscribed: false };
@@ -3363,7 +3382,7 @@
         row.hidden = false;
         if (snap.needsApkUpdate) {
           setPill('Update APK', 'warning');
-          statusEl.textContent = 'Update to the latest myIPON APK to enable unrestricted background usage and closed-app alerts.';
+          statusEl.textContent = 'Update to the latest myIPON APK to enable Microphone permission for voice messages, unrestricted background usage, and closed-app alerts.';
           button.textContent = 'Update APK';
           button.className = 'button button-primary button-sm';
           button.dataset.bgAction = 'update-apk';
@@ -3618,11 +3637,11 @@
         granted: status === 'granted'
       };
     }
-    if (!hasNativeNotificationBridge()) {
-      window.open(APK_LATEST_DOWNLOAD_URL, '_blank', 'noopener');
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    if (!hasNativeNotificationBridge() || typeof bgPlugin?.requestIgnoreBatteryOptimizations !== 'function') {
+      openLatestApkDownload();
       return { notificationPermission: 'unsupported', batteryOptimizationIgnored: false, granted: false, needsApkUpdate: true };
     }
-    const bgPlugin = getBackgroundNotificationsPlugin();
     let perm = await getDeviceNotificationPermission().catch(() => 'unsupported');
     if (perm === 'default') {
       perm = await requestDeviceNotificationPermission({ userInitiated: true }).catch(() => perm);
@@ -3630,6 +3649,10 @@
     let bgStatus = bgPlugin?.getBackgroundStatus
       ? await bgPlugin.getBackgroundStatus().catch(() => null)
       : null;
+    if (bgStatus && apkNeedsNativeUpdate(bgPlugin, bgStatus)) {
+      openLatestApkDownload();
+      return { notificationPermission: perm, batteryOptimizationIgnored: false, granted: false, needsApkUpdate: true };
+    }
     if (bgStatus && bgStatus.batteryOptimizationIgnored === false && bgPlugin?.requestIgnoreBatteryOptimizations) {
       await new Promise((resolve) => setTimeout(resolve, perm === 'granted' ? 160 : 280));
       const batRes = await bgPlugin.requestIgnoreBatteryOptimizations().catch(() => null);
@@ -3650,7 +3673,7 @@
     const batteryOk = latestSnap ? latestSnap.batteryOk : (!bgStatus || bgStatus.batteryOptimizationIgnored !== false);
     if (latestPerm === 'granted' && currentProfile) {
       lastBgPollSyncAt = 0;
-      await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+      await syncBackgroundNotificationPolling(currentProfile, [], { force: true }).catch(() => { });
     }
     if (latestPerm === 'granted' && batteryOk) {
       if (fromPrompt) {
@@ -3722,8 +3745,9 @@
       actionsWrap.querySelectorAll('[data-device-extra-btn]').forEach((el) => el.remove());
 
       if (needsApkUpdate) {
-        label.textContent = 'Update to the latest myIPON APK to enable closed-app background alerts.';
+        label.textContent = 'Update to the latest myIPON APK to enable Microphone permission and closed-app background alerts.';
         button.textContent = 'Update APK';
+        button.dataset.actionMode = 'update-apk';
         button.disabled = false;
         button.hidden = false;
       } else if (status === 'granted') {
@@ -3807,7 +3831,7 @@
       const bgPlugin = getBackgroundNotificationsPlugin();
       if (needsApkUpdate) {
         bar.hidden = false;
-        bar.innerHTML = '<span>Update your installed APK to enable closed-app background alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Update APK</button>';
+        bar.innerHTML = '<span>Update your installed APK to enable Microphone permission and closed-app background alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="update-apk">Update APK</button>';
       } else if (status === 'default') {
         bar.hidden = false;
         bar.innerHTML = isApp
@@ -3933,7 +3957,7 @@
     if (!action) return;
     const bgPlugin = getBackgroundNotificationsPlugin();
     if (action === 'update-apk') {
-      window.open(APK_LATEST_DOWNLOAD_URL, '_blank', 'noopener');
+      openLatestApkDownload();
       return;
     }
     if (action === 'allow-all' || action === 'allow-background') {
@@ -4024,6 +4048,13 @@
         const snap = await syncDevicePermissionUI().catch(() => null);
         const status = snap?.status || await getDeviceNotificationPermission().catch(() => 'unsupported');
         const fullBgGranted = Boolean(snap && snap.status === 'granted' && (!snap.isApp || (snap.batteryKnown && snap.batteryOk)));
+        const shouldSyncBgService = Boolean(
+          currentProfile
+          && currentProfile.notifications_enabled !== false
+          && status === 'granted'
+          && snap?.isApp
+          && snap?.nativeBgStatus?.instantSyncRunning === false
+        );
         if (wasNotGranted && status === 'granted') {
           await requestDeviceNotificationPermission({ userInitiated: false }).catch(() => { });
           document.getElementById('notification-unblock-dialog')?.close?.();
@@ -4035,7 +4066,7 @@
           document.getElementById('notification-unblock-dialog')?.close?.();
           if (currentProfile && currentProfile.notifications_enabled !== false) {
             lastBgPollSyncAt = 0;
-            await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+            await syncBackgroundNotificationPolling(currentProfile, [], { force: true }).catch(() => { });
           }
           if (Date.now() - lastBgGrantedToastAt > 1200) {
             lastBgGrantedToastAt = Date.now();
@@ -4043,6 +4074,9 @@
               ? 'Background usage and alerts are active even when myIPON is closed.'
               : 'Background notification alerts enabled.');
           }
+        } else if (shouldSyncBgService) {
+          lastBgPollSyncAt = 0;
+          await syncBackgroundNotificationPolling(currentProfile, [], { force: true }).catch(() => { });
         }
       };
       document.addEventListener('visibilitychange', resyncOnReturn);
@@ -4083,8 +4117,8 @@
         }
         const button = event.target.closest('[data-device-notif-btn]');
         if (!button) return;
-        if (isInstalledAppUser() && !hasNativeNotificationBridge()) {
-          window.open(APK_LATEST_DOWNLOAD_URL, '_blank', 'noopener');
+        if (button.dataset.actionMode === 'update-apk' || (isInstalledAppUser() && apkNeedsNativeUpdate())) {
+          openLatestApkDownload();
           return;
         }
         if (button.dataset.actionMode === 'open-settings') {
@@ -4183,7 +4217,7 @@
     getBackgroundNotificationsPlugin()?.markShown?.({ id: key }).catch?.(() => { });
   }
 
-  async function syncBackgroundNotificationPolling(profile, rows = []) {
+  async function syncBackgroundNotificationPolling(profile, rows = [], { force = false } = {}) {
     const bgPlugin = getBackgroundNotificationsPlugin();
     if (!bgPlugin?.configure || !configured) return;
     if (!profile || profile.notifications_enabled === false) {
@@ -4191,7 +4225,7 @@
       return;
     }
     const now = Date.now();
-    if (now - lastBgPollSyncAt < 60_000) return;
+    if (!force && now - lastBgPollSyncAt < 60_000) return;
     lastBgPollSyncAt = now;
     try {
       const feedToken = await rpc('ensure_notification_feed_token');
@@ -10243,7 +10277,7 @@
     resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
-    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference,
+    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload,
     auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry,
     get profile() { return currentProfile; }
   };

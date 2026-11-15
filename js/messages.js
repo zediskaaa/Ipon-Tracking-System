@@ -3080,12 +3080,19 @@
 
   async function showMicApkUpdateNotice() {
     if (typeof ipon().confirmAction === 'function') {
-      await ipon().confirmAction({
+      const downloadNow = await ipon().confirmAction({
         title: 'App update needed for voice messages',
         message: 'This installed myIPON APK build does not include Android Microphone permission yet, which is why only Notifications appears in App Settings. Install the latest myIPON APK build to enable Microphone permission and voice messages.',
-        confirmLabel: 'Got it',
+        confirmLabel: 'Download APK',
         cancelLabel: 'Close'
       });
+      if (downloadNow) {
+        if (typeof ipon().openLatestApkDownload === 'function') {
+          ipon().openLatestApkDownload();
+        } else if (typeof window !== 'undefined' && typeof window.open === 'function') {
+          window.open('https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk', '_blank', 'noopener');
+        }
+      }
       return true;
     }
     return false;

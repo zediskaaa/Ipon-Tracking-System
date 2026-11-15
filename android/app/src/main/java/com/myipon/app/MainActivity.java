@@ -105,17 +105,20 @@ public class MainActivity extends BridgeActivity {
         handleNotificationIntent(intent);
     }
 
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
+    private void dispatchWindowEvent(final String eventName) {
         final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
         if (webView != null) {
-            final String evName = hasFocus ? "focus" : "blur";
             webView.post(() -> webView.evaluateJavascript(
-                "(function(){try{window.dispatchEvent(new Event('" + evName + "'));}catch(e){}})()",
+                "(function(){try{window.dispatchEvent(new Event('" + eventName + "'));}catch(e){}})()",
                 null
             ));
         }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        dispatchWindowEvent(hasFocus ? "focus" : "blur");
     }
 
     @Override
@@ -128,9 +131,23 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onStop() {
         super.onStop();
-        NotificationSyncService.ensureStarted(this);
+        if (NotificationSyncService.canStartFromBackground(this)) {
+            NotificationSyncService.ensureStarted(this);
+        }
         NotificationSyncWorker.ensureScheduled(this);
-        NotificationPollReceiver.scheduleNext(this, 30_000L);
+        NotificationPollReceiver.scheduleNext(this, NotificationPollReceiver.recommendedPollIntervalMs(this));
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001 && NotificationPollReceiver.hasNotificationPermission(this)) {
+            NotificationPollReceiver.ensureChannel(this);
+            NotificationSyncService.ensureStarted(this);
+            NotificationSyncWorker.ensureScheduled(this);
+            NotificationPollReceiver.scheduleNext(this, 15_000L);
+            dispatchWindowEvent("focus");
+        }
     }
 
     private void maybeRequestStartupPermissions() {
