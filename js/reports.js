@@ -281,7 +281,7 @@
     monthFilter.closest('.panel-header')?.setAttribute('data-print-meta', [monthText, statusText].filter(Boolean).join(' · '));
     const [{ data, error }, { data: activeMembers, error: membersError }] = await Promise.all([
       Ipon.client.from('v_contribution_status').select('*').eq('period_month', `${monthFilter.value}-01`).order('member_name'),
-      Ipon.client.from('members').select('id,payout_channel,payout_account_number,payout_account_name').eq('status', 'ACTIVE')
+      Ipon.client.from('members').select('id,payout_channel,payout_account_number,payout_account_name').eq('status', 'ACTIVE').eq('activation_status', 'ACTIVE').is('deleted_at', null)
     ]);
     if (error) throw error;
     if (membersError) throw membersError;

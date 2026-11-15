@@ -48,7 +48,7 @@
   async function loadAccess() {
     const [accessRows, memberResult, myGroups] = await Promise.all([
       Ipon.rpc('get_group_access_list'),
-      Ipon.client.from('members').select('id,full_name,monthly_contribution_amount').eq('status', 'ACTIVE').order('full_name'),
+      Ipon.client.from('members').select('id,full_name,monthly_contribution_amount,activation_status').eq('status', 'ACTIVE').is('deleted_at', null).order('full_name'),
       Ipon.rpc('get_my_groups')
     ]);
     if (memberResult.error) throw memberResult.error;
@@ -78,7 +78,7 @@
       <td><strong>${Ipon.escapeHtml(profile.full_name)}</strong><br><small class="field-help">${Ipon.escapeHtml(profile.email || '')}</small></td>
       <td><select data-field="role" data-id="${profile.user_id}"><option value="MEMBER" ${profile.role === 'MEMBER' ? 'selected' : ''}>MEMBER</option><option value="TREASURER" ${profile.role === 'TREASURER' ? 'selected' : ''}>TREASURER</option></select></td>
       <td><select data-field="status" data-id="${profile.user_id}"><option value="PENDING" ${profile.status === 'PENDING' ? 'selected' : ''}>PENDING</option><option value="ACTIVE" ${profile.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option><option value="DISABLED" ${profile.status === 'DISABLED' ? 'selected' : ''}>DISABLED</option></select></td>
-      <td><select data-field="member" data-id="${profile.user_id}"><option value="">Not linked</option>${members.map((member) => `<option value="${member.id}" ${profile.member_id === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}</select></td>
+      <td><select data-field="member" data-id="${profile.user_id}"><option value="">Not linked</option>${members.map((member) => `<option value="${member.id}" ${profile.member_id === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}${member.activation_status !== 'ACTIVE' ? ' (Pending login)' : ''}</option>`).join('')}</select></td>
       <td><button class="icon-action" type="button" data-save-access="${profile.user_id}">Save</button></td>
     </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No member or treasurer login accounts in this group.</td></tr>';
   }

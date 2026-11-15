@@ -4843,6 +4843,20 @@
         ({ data: profile, error } = await runWithStartupRetry(fetchProfile));
       }
       if (error) throw error;
+      if (profile && profile.status !== 'DISABLED' && profile.role !== 'SUPER_ADMIN') {
+        const activationKey = `ipon_member_activated:${profile.id}:${profile.group_id || ''}:${profile.member_id || ''}`;
+        let alreadySynced = false;
+        try { alreadySynced = sessionStorage.getItem(activationKey) === '1'; } catch { }
+        if (profile.status === 'PENDING' || !alreadySynced) {
+          try {
+            const actRes = await withTimeout(client.rpc('activate_own_pending_account'), 6000);
+            if (!actRes?.error && actRes?.data) {
+              profile = { ...profile, ...actRes.data };
+              try { sessionStorage.setItem(activationKey, '1'); } catch { }
+            }
+          } catch (_) { }
+        }
+      }
       if (!profile.group_id && profile.role !== 'SUPER_ADMIN' && profile.status === 'ACTIVE') {
         try {
           const { data: myGroups } = await withTimeout(client.rpc('get_my_groups'));

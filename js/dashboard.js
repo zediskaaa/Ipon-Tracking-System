@@ -545,7 +545,7 @@
         Ipon.client.rpc('get_savings_summary'),
         Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'),
         getPending(),
-        Ipon.client.from('members').select('id,full_name,monthly_contribution_amount,payout_channel,payout_account_number,payout_account_name', { count: 'exact' }).eq('status', 'ACTIVE').order('full_name'),
+        Ipon.client.from('members').select('id,full_name,monthly_contribution_amount,payout_channel,payout_account_number,payout_account_name', { count: 'exact' }).eq('status', 'ACTIVE').eq('activation_status', 'ACTIVE').is('deleted_at', null).order('full_name'),
         Ipon.client.from('v_contribution_status').select('member_id,payment_status,paid_amount').eq('period_month', start),
         Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.rpc('get_my_groups'),

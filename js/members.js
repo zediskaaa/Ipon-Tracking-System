@@ -104,35 +104,83 @@
     }
   }
 
+  function memberStatusMeta(member) {
+    if (member.status === 'INACTIVE') {
+      return {
+        tone: 'inactive',
+        label: 'INACTIVE',
+        hint: member.deactivated_at ? `Paused ${Ipon.dateLabel(member.deactivated_at)}` : 'Paused from tracking'
+      };
+    }
+    if (member.activation_status !== 'ACTIVE') {
+      return {
+        tone: 'pending',
+        label: 'PENDING LOGIN',
+        hint: 'Log in to activate'
+      };
+    }
+    return {
+      tone: 'active',
+      label: 'OFFICIAL ACTIVE',
+      hint: member.activated_at ? `Activated ${Ipon.dateLabel(member.activated_at)}` : 'Signed in & verified'
+    };
+  }
+
   function render() {
-    tbody.innerHTML = members.length ? members.map((member) => { const account = accountsByMember.get(member.id); const canDelete = !membersWithContributions.has(member.id); return `<tr>
+    tbody.innerHTML = members.length ? members.map((member) => {
+      const account = accountsByMember.get(member.id);
+      const canDelete = !membersWithContributions.has(member.id);
+      const statusMeta = memberStatusMeta(member);
+      const accountMarkup = account
+        ? `<div class="member-state-stack"><span class="status status-${account.status.toLowerCase()}">${account.status}</span><small class="field-help">${Ipon.escapeHtml(account.email || '')}</small></div>`
+        : '<div class="member-state-stack"><span class="field-help">No sign-in</span></div>';
+      return `<tr>
       <td><strong>${Ipon.escapeHtml(member.full_name)}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.payoutSummaryChip(member, { compact: true, emptyText: 'Not set' })}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
-      <td>${Ipon.money(member.monthly_contribution_amount)}</td><td><span class="status status-${member.status.toLowerCase()}">${member.status}</span></td>
-      <td>${account ? `<span class="status status-${account.status.toLowerCase()}">${account.status}</span><small class="field-help">${Ipon.escapeHtml(account.email || '')}</small>` : '<span class="field-help">No sign-in</span>'}</td>
-      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>${canDelete ? `<button class="icon-action icon-action-danger" data-action="delete" data-id="${member.id}">Delete</button>` : ''}</div></td></tr>`; }).join('') : '<tr><td colspan="8" class="empty-state">No matching members.</td></tr>';
+      <td class="amount-cell">${Ipon.money(member.monthly_contribution_amount)}</td><td><div class="member-state-stack"><span class="status status-${statusMeta.tone}">${statusMeta.label}</span><small class="field-help">${Ipon.escapeHtml(statusMeta.hint)}</small></div></td>
+      <td>${accountMarkup}</td>
+      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>${canDelete ? `<button class="icon-action icon-action-danger" data-action="delete" data-id="${member.id}">Delete</button>` : ''}</div></td></tr>`;
+    }).join('') : '<tr><td colspan="8" class="empty-state">No matching members.</td></tr>';
   }
   async function load() {
-    let query = Ipon.client.from('members').select('*', { count: 'exact' });
+    let query = Ipon.client.from('members').select('*', { count: 'exact' }).is('deleted_at', null);
     const term = search.value.trim().replace(/[%_]/g, '');
     if (term) query = query.ilike('full_name', `%${term}%`);
-    if (statusFilter.value) query = query.eq('status', statusFilter.value);
-    const [{ data, count, error }, accessRows, groups] = await Promise.all([
+    if (statusFilter.value === 'ACTIVE') {
+      query = query.eq('status', 'ACTIVE').eq('activation_status', 'ACTIVE');
+    } else if (statusFilter.value === 'PENDING') {
+      query = query.eq('status', 'ACTIVE').eq('activation_status', 'PENDING');
+    } else if (statusFilter.value === 'INACTIVE') {
+      query = query.eq('status', 'INACTIVE');
+    }
+    const [{ data, count, error }, summaryRes, accessRows, groups] = await Promise.all([
       query.order('full_name').range(memberPage * pageSize, (memberPage + 1) * pageSize - 1),
+      Ipon.client.from('members').select('status,activation_status').is('deleted_at', null),
       Ipon.rpc('get_group_access_list'),
       Ipon.rpc('get_my_groups')
     ]);
     if (error) throw error;
+    if (summaryRes.error) throw summaryRes.error;
     renderGroupContext(groups);
     const memberIds = (data || []).map((member) => member.id);
     const contribResult = memberIds.length
       ? await Ipon.client.from('contribution_periods').select('member_id,contributions!inner(id)').in('member_id', memberIds)
       : { data: [], error: null };
     if (contribResult.error) throw contribResult.error;
-    members = data;
+    members = data || [];
     accountsByMember = new Map((Array.isArray(accessRows) ? accessRows : []).filter((row) => row.member_id).map((row) => [row.member_id, { id: row.user_id, email: row.email, status: row.status, member_id: row.member_id }]));
     membersWithContributions = new Set((contribResult.data || []).map((row) => row.member_id));
-    const pages = Math.max(1, Math.ceil(count / pageSize));
-    document.getElementById('member-count').textContent = `${count} member${count === 1 ? '' : 's'}`;
+    const summaryRows = summaryRes.data || [];
+    const officialActiveCount = summaryRows.filter((row) => row.status === 'ACTIVE' && row.activation_status === 'ACTIVE').length;
+    const pendingLoginCount = summaryRows.filter((row) => row.status === 'ACTIVE' && row.activation_status !== 'ACTIVE').length;
+    const inactiveCount = summaryRows.filter((row) => row.status === 'INACTIVE').length;
+    const filteredCount = Number(count || 0);
+    const countParts = [`${officialActiveCount} official active`];
+    if (pendingLoginCount > 0) countParts.push(`${pendingLoginCount} pending login`);
+    if (inactiveCount > 0) countParts.push(`${inactiveCount} inactive`);
+    if (term || statusFilter.value) countParts.push(`${filteredCount} shown`);
+    document.getElementById('member-count').textContent = countParts.join(' · ');
+    const pages = Math.max(1, Math.ceil(filteredCount / pageSize));
+    if (memberPage >= pages) memberPage = Math.max(0, pages - 1);
     pager.querySelector('span').textContent = `Page ${memberPage + 1} of ${pages}`;
     pager.querySelector('[data-page="previous"]').disabled = memberPage === 0;
     pager.querySelector('[data-page="next"]').disabled = memberPage >= pages - 1;
@@ -206,8 +254,8 @@
       message: existingMemberId
         ? `Update member profile for ${fullName}?`
         : creatingAccount
-          ? `Create member "${fullName}" and activate a sign-in account for ${emailInput.value.trim()}?`
-          : `Add "${fullName}" with monthly contribution ${Ipon.money(Number(values.get('monthly_contribution_amount')))}?`,
+          ? `Create member "${fullName}" and send a sign-in invitation to ${emailInput.value.trim()}? They will become an official active member after signing in.`
+          : `Add "${fullName}" (${Ipon.money(Number(values.get('monthly_contribution_amount')))}/month)? They will remain Pending Login until linked to an account and signed in.`,
       acceptLabel: existingMemberId ? 'Save changes' : 'Add member'
     });
     if (!accepted) return;
@@ -290,7 +338,8 @@
     pendingDeleteMember = member;
     deleteForm.elements.member_id.value = member.id;
     const account = accountsByMember.get(member.id);
-    deleteSummary.innerHTML = `<div class="record-review-summary-top"><span class="record-type-pill is-expense">Delete member</span><span class="status status-${member.status.toLowerCase()}">${Ipon.escapeHtml(member.status)}</span></div><div class="record-review-summary-main"><div class="record-review-author"><div><strong>${Ipon.escapeHtml(member.full_name)}</strong><small>${Ipon.escapeHtml(account?.email || member.contact_number || 'No sign-in account')}</small></div></div><div class="record-review-amount"><small>Monthly target</small><strong>${Ipon.money(member.monthly_contribution_amount)}</strong></div></div><div class="record-review-meta"><span>Registered ${Ipon.escapeHtml(Ipon.dateLabel(member.date_registered))}</span><span>0 recorded contributions</span></div>`;
+    const statusMeta = memberStatusMeta(member);
+    deleteSummary.innerHTML = `<div class="record-review-summary-top"><span class="record-type-pill is-expense">Delete member</span><span class="status status-${statusMeta.tone}">${Ipon.escapeHtml(statusMeta.label)}</span></div><div class="record-review-summary-main"><div class="record-review-author"><div><strong>${Ipon.escapeHtml(member.full_name)}</strong><small>${Ipon.escapeHtml(account?.email || member.contact_number || 'No sign-in account')}</small></div></div><div class="record-review-amount"><small>Monthly target</small><strong>${Ipon.money(member.monthly_contribution_amount)}</strong></div></div><div class="record-review-meta"><span>Registered ${Ipon.escapeHtml(Ipon.dateLabel(member.date_registered))}</span><span>0 recorded contributions</span></div>`;
     deleteDialog.showModal();
     deleteReasonSelect.focus();
   }
@@ -344,6 +393,8 @@
       await load();
       if (binDialog.open) await loadBin();
     } catch (error) {
+      await load().catch(() => {});
+      if (/not found/i.test(String(error?.message || ''))) deleteDialog.close();
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
       Ipon.setBusy(deleteConfirmBtn, false);
@@ -401,6 +452,7 @@
       Ipon.toast(`${itemLabel} recovered.`);
       await Promise.all([loadBin(), load()]);
     } catch (error) {
+      await loadBin().catch(() => {});
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
       Ipon.setBusy(button, false);
@@ -473,7 +525,7 @@
       rowEl = tbody.querySelector(`[data-id="${safeId}"]`)?.closest('tr') || null;
     }
     if (!rowEl) {
-      const { data: ordered } = await Ipon.client.from('members').select('id').order('full_name');
+      const { data: ordered } = await Ipon.client.from('members').select('id').is('deleted_at', null).order('full_name');
       const idx = (ordered || []).findIndex((m) => String(m.id) === String(memberId));
       if (idx >= 0) {
         memberPage = Math.floor(idx / pageSize);

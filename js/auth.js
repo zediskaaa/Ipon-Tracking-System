@@ -427,21 +427,21 @@
       throw new Error('Your account is deactivated or disabled.');
     }
 
-    if (!profile || profile.status !== 'ACTIVE') {
-      // Try direct DB RPC first (no Edge Function cold start or deployment skew dependency), then Edge Function fallback
+    if (profile?.role !== 'SUPER_ADMIN') {
+      // Activate both pending account access and linked member records on sign-in.
       await Ipon.rpc('activate_own_pending_account').catch(() => null);
       ({ data: profile, error: profileError } = await loadProfile());
       if (profileError) throw profileError;
+    }
 
-      if (!profile || profile.status !== 'ACTIVE') {
-        await Ipon.invokeAccountFunction({
-          action: 'ensure-account-active',
-          user_id: user.id,
-          email: fallbackEmail || user.email || ''
-        }).catch(() => null);
-        ({ data: profile, error: profileError } = await loadProfile());
-        if (profileError) throw profileError;
-      }
+    if (!profile || profile.status !== 'ACTIVE') {
+      await Ipon.invokeAccountFunction({
+        action: 'ensure-account-active',
+        user_id: user.id,
+        email: fallbackEmail || user.email || ''
+      }).catch(() => null);
+      ({ data: profile, error: profileError } = await loadProfile());
+      if (profileError) throw profileError;
     }
 
     if (profile?.status === 'DISABLED') {
@@ -524,21 +524,23 @@
         } else {
           message.dataset.tone = 'success';
           message.textContent = res.already_active
-            ? 'Your account is already active. Please sign in with your credentials.'
-            : 'Account activation successful! Log in to your account using the provided credentials.';
-          Ipon.toast('Account activated! Please sign in.', 'success');
+            ? 'Your invitation is verified. Sign in with your credentials to continue.'
+            : res.already_verified
+              ? 'Your email invitation is already verified. Sign in with your credentials to activate your official membership.'
+              : 'Invitation verified! Sign in with your credentials to activate your official membership.';
+          Ipon.toast('Invitation verified. Sign in to activate membership.', 'success');
 
           if (inviteSuccessDialog) {
             if (inviteSuccessEmail) inviteSuccessEmail.textContent = acceptInviteEmail;
             if (inviteSuccessMessage) {
               inviteSuccessMessage.textContent = res.group_name
-                ? `Account activation successful! Log in to your account using the provided credentials to access "${res.group_name}".`
-                : 'Account activation successful! Log in to your account using the provided credentials.';
+                ? `Email verified! Sign in to your account using the provided credentials to activate your official membership in "${res.group_name}".`
+                : 'Email verified! Sign in to your account using the provided credentials to activate your official membership.';
             }
             if (inviteSuccessGroupHint) {
               inviteSuccessGroupHint.textContent = res.group_name
-                ? `Your savings group workspace "${res.group_name}" is ready and linked to your account.`
-                : 'Your savings group workspace has been linked and will open automatically after sign in.';
+                ? `Once you log in, you will appear as an official active member in "${res.group_name}".`
+                : 'Once you log in, your savings group workspace and official membership will activate automatically.';
             }
             inviteSuccessDialog.showModal();
           }

@@ -395,7 +395,7 @@
     const [{ data: summary, error: summaryError }, { data, error }, { count: memberCount }, syncedPlans] = await Promise.all([
       Ipon.client.rpc('get_savings_summary'),
       Ipon.client.from('savings_goals').select('*').order('created_at', { ascending: false }),
-      Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE').is('deleted_at', null),
+      Ipon.client.from('members').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE').eq('activation_status', 'ACTIVE').is('deleted_at', null),
       syncSavedPlansFromCloud()
     ]);
     if (summaryError) throw summaryError;

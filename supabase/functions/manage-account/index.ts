@@ -1081,7 +1081,8 @@ async function findAuthUserByEmail(admin: AdminClient, email: string) {
 async function activateUserAndMembership(
   admin: AdminClient,
   userId: string,
-  fill: { first_name?: string | null; middle_name?: string | null; last_name?: string | null; full_name?: string | null; contact_number?: string | null; email?: string | null } = {}
+  fill: { first_name?: string | null; middle_name?: string | null; last_name?: string | null; full_name?: string | null; contact_number?: string | null; email?: string | null } = {},
+  options: { fromLogin?: boolean } = {}
 ) {
   if (!userId) return { profile: null, disabled: false };
 
@@ -1160,6 +1161,34 @@ async function activateUserAndMembership(
     .neq('status', 'DISABLED')
     .select('id, status, group_id, role, member_id, first_name, last_name, contact_number')
     .maybeSingle();
+
+  let hasSignedIn = Boolean(options.fromLogin);
+  if (!hasSignedIn) {
+    const { data: authCheck } = await admin.auth.admin.getUserById(userId).catch(() => ({ data: null }));
+    hasSignedIn = Boolean(authCheck?.user?.last_sign_in_at);
+  }
+
+  if (hasSignedIn) {
+    const { data: linkedMemberships } = await admin
+      .from('group_memberships')
+      .select('member_id')
+      .eq('user_id', userId)
+      .eq('status', 'ACTIVE')
+      .not('member_id', 'is', null);
+    const memberIds = [...new Set([
+      updated?.member_id || prof.member_id,
+      ...((linkedMemberships || []).map((row: { member_id: string | null }) => row.member_id))
+    ].filter((value): value is string => Boolean(value)))];
+
+    if (memberIds.length) {
+      await admin
+        .from('members')
+        .update({ activation_status: 'ACTIVE', activated_at: new Date().toISOString() })
+        .in('id', memberIds)
+        .is('deleted_at', null)
+        .eq('activation_status', 'PENDING');
+    }
+  }
 
   return { profile: updated || prof, disabled: false };
 }
@@ -1340,56 +1369,46 @@ Deno.serve(async (request) => {
         success: true,
         already_active: true,
         group_name: groupName,
-        message: 'Your account is already active. Please sign in with your credentials.'
+        message: 'Your email invitation is verified. Please sign in with your credentials.'
       });
     }
 
-    const expectedToken = authUser.user_metadata?.invite_token;
-    if (!expectedToken || expectedToken !== token) {
+    const currentMeta = (authUser.user_metadata || {}) as Record<string, unknown>;
+    const expectedToken = currentMeta.invite_token;
+    if (!expectedToken) {
+      if (currentMeta.invite_verified_at || currentMeta.invite_accepted_at) {
+        return json({
+          success: true,
+          already_verified: true,
+          pending_login: true,
+          group_name: groupName,
+          message: 'Your email invitation is already verified. Sign in with your credentials to activate your official membership.'
+        });
+      }
+      return json({ error: 'Invalid or expired invitation link. Please ask your administrator to send a new invite.' }, 400);
+    }
+    if (expectedToken !== token) {
       return json({ error: 'Invalid or expired invitation link. Please ask your administrator to send a new invite.' }, 400);
     }
 
-    const updatePayload: Record<string, unknown> = {
-      status: 'ACTIVE',
-      role: targetRole
-    };
-    if (targetGroupId) updatePayload.group_id = targetGroupId;
-    if (targetMemberId) updatePayload.member_id = targetMemberId;
-
-    const { error: profileUpdateError } = await admin
-      .from('profiles')
-      .update(updatePayload)
-      .eq('id', targetUserId);
-    if (profileUpdateError) {
-      return json({ error: 'Could not activate account. Please try again.' }, 500);
-    }
-
-    if (targetGroupId) {
-      await admin
-        .from('group_memberships')
-        .update({ status: 'ACTIVE' })
-        .eq('user_id', targetUserId)
-        .eq('group_id', targetGroupId);
-    } else {
-      await admin
-        .from('group_memberships')
-        .update({ status: 'ACTIVE' })
-        .eq('user_id', targetUserId);
-    }
-
-    const currentMeta = authUser.user_metadata || {};
     const { invite_token: _, ...cleanMeta } = currentMeta;
-    await admin.auth.admin.updateUserById(targetUserId, {
+    const { error: confirmError } = await admin.auth.admin.updateUserById(targetUserId, {
+      email_confirm: true,
       user_metadata: {
         ...cleanMeta,
-        invite_accepted_at: new Date().toISOString()
+        invite_verified_at: new Date().toISOString()
       }
     });
+    if (confirmError) {
+      return json({ error: 'Could not verify invitation. Please try again.' }, 500);
+    }
 
+    // Keep official membership gated behind the member's first login.
     return json({
       success: true,
+      pending_login: true,
       group_name: groupName,
-      message: 'Invitation accepted! Your account is now active.'
+      message: 'Invitation verified! Sign in with your credentials to activate your official membership.'
     });
   }
 
@@ -1459,7 +1478,8 @@ Deno.serve(async (request) => {
     }
     if (!userId) return json({ error: 'Account could not be resolved.' }, 404);
 
-    const { profile, disabled } = await activateUserAndMembership(admin, userId, { email });
+    const fromLogin = Boolean(caller && caller.id === userId);
+    const { profile, disabled } = await activateUserAndMembership(admin, userId, { email }, { fromLogin });
     if (disabled) return json({ error: 'This account is disabled. Please contact your administrator.' }, 403);
     if (!profile) return json({ error: 'Account profile could not be activated.' }, 404);
     return json({ success: true, activated: true, profile });

@@ -2296,6 +2296,7 @@ test('reports script renders wallet reconciliation and member reports without ru
   const queryChain = (data = []) => ({
     select() { return this; },
     eq() { return this; },
+    is() { return this; },
     order() { return Promise.resolve({ data, error: null }); },
     then(cb) { return Promise.resolve({ data, error: null }).then(cb); }
   });
@@ -5818,6 +5819,66 @@ test('migration 070 drops all stale overloaded RPC signatures and core passes ex
   assert.match(schema, /'20261115_070'/);
   assert.match(core, /rpc\('create_announcement',\s*\{[\s\S]*p_announcement_type:\s*'GENERAL'[\s\S]*p_release_version:\s*null/);
 });
+
+test('migration 071 enforces login activation before official membership, fixes deleted_at RLS, and keeps member counts consistent', () => {
+  const migration071 = read('database/migrations/20261115_071_member_login_activation_and_count_integrity.sql');
+  const schema = read('database/schema.sql');
+  const manageAccountEdge = read('supabase/functions/manage-account/index.ts');
+  const authJs = read('js/auth.js');
+  const coreJs = read('js/core.js');
+  const membersHtml = read('members.html');
+  const membersJs = read('js/members.js');
+  const dashboardJs = read('js/dashboard.js');
+  const recordsJs = read('js/records.js');
+  const reportsJs = read('js/reports.js');
+  const savingsJs = read('js/savings.js');
+  const settingsJs = read('js/settings.js');
+  const css = read('css/app.css');
+
+  for (const sql of [migration071, schema]) {
+    assert.match(sql, /activation_status text not null default 'PENDING'/i);
+    assert.match(sql, /check \(activation_status in \('PENDING', 'ACTIVE'\)\)/i);
+    assert.match(sql, /create policy members_select on public\.members[\s\S]*deleted_at is null[\s\S]*public\.current_user_role\(\) in \('ADMIN', 'TREASURER', 'MEMBER'\)/i);
+    assert.match(sql, /create or replace function public\.activate_member_record\(/i);
+    assert.match(sql, /create or replace function public\.activate_own_pending_account\(\)[\s\S]*activate_member_record\(/i);
+    assert.match(sql, /create or replace function public\.get_my_groups\(\)[\s\S]*m\.activation_status = 'ACTIVE'[\s\S]*m\.deleted_at is null/i);
+    assert.match(sql, /create or replace view public\.v_contribution_status[\s\S]*m\.activation_status = 'ACTIVE'/i);
+    assert.match(sql, /create or replace function public\.delete_member\([\s\S]*delete from public\.contribution_periods[\s\S]*update public\.group_memberships[\s\S]*set status = 'DISABLED'[\s\S]*role <> 'MEMBER'/i);
+    assert.match(sql, /'20261115_071'/);
+  }
+  assert.match(migration071, /notify pgrst, 'reload schema';/i);
+
+  // Invite verification stays gated on actual login before marking members official ACTIVE
+  assert.match(manageAccountEdge, /accept-email-invite[\s\S]*pending_login:\s*true/);
+  assert.match(manageAccountEdge, /activateUserAndMembership[\s\S]*last_sign_in_at[\s\S]*\.from\('members'\)/);
+  assert.match(authJs, /if \(profile\?\.role !== 'SUPER_ADMIN'\)\s*\{\s*\/\/[^\n]*\n\s*await Ipon\.rpc\('activate_own_pending_account'\)/);
+  assert.match(coreJs, /client\.rpc\('activate_own_pending_account'\)/);
+
+  // Every panel counting or tracking active contributors excludes soft-deleted and pending-login members
+  for (const [label, src] of [
+    ['dashboard.js', dashboardJs],
+    ['records.js', recordsJs],
+    ['reports.js', reportsJs],
+    ['savings.js', savingsJs]
+  ]) {
+    assert.match(src, /\.from\('members'\)\.select\([\s\S]*?\.eq\('status',\s*'ACTIVE'\)\.eq\('activation_status',\s*'ACTIVE'\)\.is\('deleted_at',\s*null\)/, `${label} must count only non-deleted official active members`);
+  }
+  assert.match(settingsJs, /\.from\('members'\)\.select\([\s\S]*?activation_status[\s\S]*?\.is\('deleted_at',\s*null\)/);
+
+  // Member directory surfaces clear active vs pending-login breakdown and safe mobile stacking
+  assert.match(membersHtml, /id="member-count"[^>]*role="status"/);
+  assert.match(membersHtml, /<option value="PENDING">Pending login<\/option>/);
+  assert.match(membersJs, /function memberStatusMeta\(member\)/);
+  assert.match(membersJs, /\.from\('members'\)\.select\('\*',\s*\{\s*count:\s*'exact'\s*\}\)\.is\('deleted_at',\s*null\)/);
+  assert.match(membersJs, /pendingLoginCount/);
+  assert.match(css, /\.member-state-stack/);
+
+  const migration072 = read('database/migrations/20261115_072_drop_remaining_rpc_overloads.sql');
+  assert.match(migration072, /drop function if exists public\.create_member\(text, text, text, text, date, numeric, text\);/i);
+  assert.match(migration072, /'20261115_072'/);
+  assert.match(schema, /'20261115_072'/);
+});
+
 
 
 

@@ -209,7 +209,7 @@
     const responsibleSelect = document.getElementById('responsible');
     const editResponsibleSelect = document.getElementById('edit-responsible');
     if (!select && !responsibleSelect && !editResponsibleSelect && !memberFilter) return;
-    const { data, error } = await Ipon.client.from('members').select('id,full_name,monthly_contribution_amount,payout_channel,payout_account_number,payout_account_name').eq('status', 'ACTIVE').order('full_name');
+    const { data, error } = await Ipon.client.from('members').select('id,full_name,monthly_contribution_amount,payout_channel,payout_account_number,payout_account_name').eq('status', 'ACTIVE').eq('activation_status', 'ACTIVE').is('deleted_at', null).order('full_name');
     if (error) throw error;
     membersList = data || [];
 

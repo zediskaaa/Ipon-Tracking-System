@@ -5527,3 +5527,18 @@ html[data-theme="dark"] .audit-snapshot-banner.is-delete {
   border-color: rgba(241, 125, 117, .38);
   color: #ffb5ae;
 }
+.member-state-stack {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+.member-state-stack .field-help {
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+@media (max-width: 960px) {
+  .data-table td > .member-state-stack {
+    justify-items: end;
+    text-align: right;
+  }
+}

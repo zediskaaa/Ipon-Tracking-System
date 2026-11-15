@@ -63,6 +63,8 @@ create table if not exists public.members (
   status public.member_status not null default 'ACTIVE',
   notes text,
   deactivated_at timestamptz,
+  activation_status text not null default 'PENDING' check (activation_status in ('PENDING', 'ACTIVE')),
+  activated_at timestamptz,
   created_by uuid references public.profiles(id) on delete set null,
   updated_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -3658,6 +3660,7 @@ begin
 
   update public.members
   set status = 'ACTIVE',
+      deactivated_at = null,
       updated_by = auth.uid()
   where id = p_member_id
     and group_id = public.current_group_id()
@@ -3692,6 +3695,7 @@ begin
   select id, v_month, monthly_contribution_amount, v_due_date
   from public.members
   where status = 'ACTIVE'
+    and activation_status = 'ACTIVE'
     and deleted_at is null
     and group_id = v_group_id
     and date_registered <= (v_month + interval '1 month - 1 day')::date
@@ -3720,6 +3724,7 @@ begin
     public.contribution_period_due_date(m.group_id, v_month)
   from public.members m
   where m.status = 'ACTIVE'
+    and m.activation_status = 'ACTIVE'
     and m.deleted_at is null
     and m.date_registered <= (v_month + interval '1 month - 1 day')::date
   on conflict (member_id, period_month) do nothing;
@@ -3769,10 +3774,21 @@ begin
   where id = p_member_id
     and group_id = v_group_id
     and status = 'ACTIVE'
+    and activation_status = 'ACTIVE'
     and deleted_at is null
     and date_registered <= (v_month + interval '1 month - 1 day')::date;
 
   if v_required is null then
+    if exists (
+      select 1 from public.members
+      where id = p_member_id
+        and group_id = v_group_id
+        and deleted_at is null
+        and status = 'ACTIVE'
+        and activation_status <> 'ACTIVE'
+    ) then
+      raise exception 'This member must log in to their account to activate official membership before contributions can be recorded.' using errcode = 'P0001';
+    end if;
     raise exception 'Active member not found.' using errcode = 'P0002';
   end if;
 
@@ -3908,6 +3924,14 @@ begin
       updated_by = auth.uid()
   where id = p_member_id;
 
+  delete from public.contribution_periods cp
+  where cp.member_id = p_member_id
+    and not exists (
+      select 1
+      from public.contributions c
+      where c.contribution_period_id = cp.id
+    );
+
   update public.profiles
   set previous_account_status = case
         when status <> 'DISABLED' then status
@@ -3917,6 +3941,24 @@ begin
   where member_id = p_member_id
     and group_id = v_group_id
     and role = 'MEMBER';
+
+  update public.group_memberships
+  set status = 'DISABLED'
+  where member_id = p_member_id
+    and group_id = v_group_id
+    and role = 'MEMBER';
+
+  update public.group_memberships
+  set member_id = null
+  where member_id = p_member_id
+    and group_id = v_group_id
+    and role <> 'MEMBER';
+
+  update public.profiles
+  set member_id = null
+  where member_id = p_member_id
+    and group_id = v_group_id
+    and role <> 'MEMBER';
 end;
 $$;
 
@@ -4016,6 +4058,7 @@ declare
   v_cutoff timestamptz := now() - interval '1 month';
   v_member public.members;
   v_announcement public.announcements;
+  v_month date := date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date;
 begin
   if not public.is_admin() or v_group_id is null then
     raise exception 'Only a group administrator can recover deleted items.' using errcode = '42501';
@@ -4055,6 +4098,37 @@ begin
       and group_id = v_group_id
       and role = 'MEMBER'
       and previous_account_status is not null;
+
+    update public.group_memberships
+    set status = case
+      when v_member.activation_status = 'ACTIVE' then 'ACTIVE'::public.account_status
+      else 'PENDING'::public.account_status
+    end
+    where member_id = p_item_id
+      and group_id = v_group_id
+      and role = 'MEMBER'
+      and status = 'DISABLED';
+
+    if v_member.status = 'ACTIVE'
+       and v_member.activation_status = 'ACTIVE'
+       and v_member.date_registered <= (v_month + interval '1 month - 1 day')::date
+       and exists (
+         select 1
+         from public.contribution_periods cp
+         join public.members m2 on m2.id = cp.member_id
+         where m2.group_id = v_group_id
+           and m2.deleted_at is null
+           and cp.period_month = v_month
+       ) then
+      insert into public.contribution_periods (member_id, period_month, required_amount, due_date)
+      values (
+        v_member.id,
+        v_month,
+        v_member.monthly_contribution_amount,
+        public.contribution_period_due_date(v_group_id, v_month)
+      )
+      on conflict (member_id, period_month) do nothing;
+    end if;
   elsif v_type = 'announcement' then
     select * into v_announcement
     from public.announcements
@@ -4665,6 +4739,7 @@ as $$
       where m.id = mg.member_id
         and m.group_id = mg.group_id
         and m.status = 'ACTIVE'
+        and m.activation_status = 'ACTIVE'
         and m.deleted_at is null
     ) as is_contributor,
     (
@@ -4672,6 +4747,7 @@ as $$
       from public.members m
       where m.group_id = mg.group_id
         and m.status = 'ACTIVE'
+        and m.activation_status = 'ACTIVE'
         and m.deleted_at is null
     ) as active_member_count,
     mg.created_at
@@ -5602,10 +5678,14 @@ begin
 
     v_amount := round(coalesce(p_monthly_amount, v_default_amount, 100), 2);
 
-    if v_member_id is not null then
+    if v_member_id is not null and exists (
+      select 1 from public.members where id = v_member_id and group_id = v_group_id and deleted_at is null
+    ) then
       update public.members
       set status = 'ACTIVE',
           deactivated_at = null,
+          activation_status = 'ACTIVE',
+          activated_at = coalesce(activated_at, now()),
           monthly_contribution_amount = coalesce(p_monthly_amount, monthly_contribution_amount, v_amount),
           updated_by = auth.uid()
       where id = v_member_id and group_id = v_group_id;
@@ -5618,7 +5698,7 @@ begin
       insert into public.members (
         group_id, first_name, middle_name, last_name, full_name,
         contact_number, date_registered, monthly_contribution_amount,
-        status, notes, created_by
+        status, activation_status, activated_at, notes, created_by
       ) values (
         v_group_id,
         v_first,
@@ -5629,6 +5709,8 @@ begin
         (now() at time zone 'Asia/Manila')::date,
         v_amount,
         'ACTIVE',
+        'ACTIVE',
+        now(),
         'Group administrator contributor',
         auth.uid()
       )
@@ -6098,6 +6180,83 @@ $$;
 revoke execute on function public.admin_create_group(text, text, boolean, numeric) from public, anon;
 grant execute on function public.admin_create_group(text, text, boolean, numeric) to authenticated;
 
+create or replace function public.activate_member_record(
+  p_member_id uuid,
+  p_actor_id uuid default auth.uid()
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_member public.members;
+  v_month date := date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date;
+  v_admin record;
+begin
+  if p_member_id is null then
+    return false;
+  end if;
+
+  perform set_config('ipon.activating_member_id', p_member_id::text, true);
+
+  update public.members m
+  set activation_status = 'ACTIVE',
+      activated_at = coalesce(m.activated_at, now()),
+      updated_by = coalesce(p_actor_id, m.updated_by)
+  where m.id = p_member_id
+    and m.deleted_at is null
+    and m.activation_status <> 'ACTIVE'
+  returning m.* into v_member;
+
+  if not found then
+    perform set_config('ipon.activating_member_id', '', true);
+    return false;
+  end if;
+
+  if v_member.status = 'ACTIVE'
+     and v_member.date_registered <= (v_month + interval '1 month - 1 day')::date
+     and exists (
+       select 1
+       from public.contribution_periods cp
+       join public.members m2 on m2.id = cp.member_id
+       where m2.group_id = v_member.group_id
+         and m2.deleted_at is null
+         and cp.period_month = v_month
+     ) then
+    insert into public.contribution_periods (member_id, period_month, required_amount, due_date)
+    values (
+      v_member.id,
+      v_month,
+      v_member.monthly_contribution_amount,
+      public.contribution_period_due_date(v_member.group_id, v_month)
+    )
+    on conflict (member_id, period_month) do nothing;
+  end if;
+
+  perform set_config('ipon.activating_member_id', '', true);
+
+  for v_admin in
+    select user_id as id
+    from public.group_admin_ids(v_member.group_id)
+    where user_id <> coalesce(p_actor_id, '00000000-0000-0000-0000-000000000000'::uuid)
+  loop
+    perform public.push_notification(
+      v_admin.id,
+      'MEMBER_ACTIVATED',
+      'Member activated',
+      v_member.full_name || ' signed in and is now an official active member.',
+      'members.html?member=' || v_member.id::text,
+      v_member.group_id
+    );
+  end loop;
+
+  return true;
+end;
+$$;
+
+revoke execute on function public.activate_member_record(uuid, uuid) from public, anon, authenticated;
+
 create or replace function public.accept_group_invitation(p_notification_id bigint)
 returns jsonb
 language plpgsql
@@ -6139,6 +6298,10 @@ begin
   on conflict (group_id, user_id) do update
   set status = 'ACTIVE'
   returning * into v_membership;
+
+  if v_membership.member_id is not null then
+    perform public.activate_member_record(v_membership.member_id, auth.uid());
+  end if;
 
   update public.profiles
   set group_id = coalesce(group_id, v_notif.group_id),
@@ -6439,10 +6602,21 @@ begin
   where id = p_member_id
     and group_id = v_group_id
     and status = 'ACTIVE'
+    and activation_status = 'ACTIVE'
     and deleted_at is null
     and date_registered <= (v_month + interval '1 month - 1 day')::date;
 
   if v_required is null then
+    if exists (
+      select 1 from public.members
+      where id = p_member_id
+        and group_id = v_group_id
+        and deleted_at is null
+        and status = 'ACTIVE'
+        and activation_status <> 'ACTIVE'
+    ) then
+      raise exception 'This member must log in to their account to activate official membership before contributions can be recorded.' using errcode = 'P0001';
+    end if;
     raise exception 'Active member not found.' using errcode = 'P0002';
   end if;
 
@@ -7077,6 +7251,12 @@ begin
     where id = p_user_id;
   end if;
 
+  if p_status = 'ACTIVE' and v_link_member_id is not null and exists (
+    select 1 from auth.users u where u.id = p_user_id and u.last_sign_in_at is not null
+  ) then
+    perform public.activate_member_record(v_link_member_id, p_user_id);
+  end if;
+
   if v_prev_membership.user_id is not null and (
     v_prev_membership.role is distinct from p_role
     or v_prev_membership.status is distinct from p_status
@@ -7189,6 +7369,10 @@ begin
   on conflict (group_id, user_id) do update
   set status = 'ACTIVE'
   returning * into v_membership;
+
+  if v_membership.member_id is not null then
+    perform public.activate_member_record(v_membership.member_id, auth.uid());
+  end if;
 
   update public.profiles
   set group_id = coalesce(group_id, v_notif.group_id),
@@ -7969,7 +8153,7 @@ from public.contribution_periods cp
 join public.members m on m.id = cp.member_id
 left join public.contributions c on c.contribution_period_id = cp.id
 where m.deleted_at is null
-  and (m.status = 'ACTIVE' or c.id is not null)
+  and ((m.status = 'ACTIVE' and m.activation_status = 'ACTIVE') or c.id is not null)
 group by cp.id, cp.member_id, m.full_name, cp.period_month, cp.required_amount, cp.is_exempt, cp.exempt_reason;
 
 create or replace function public.set_period_exemption(
@@ -8004,9 +8188,19 @@ begin
   from public.members
   where id = p_member_id
     and group_id = v_group_id
+    and activation_status = 'ACTIVE'
     and deleted_at is null;
 
   if v_required is null then
+    if exists (
+      select 1 from public.members
+      where id = p_member_id
+        and group_id = v_group_id
+        and deleted_at is null
+        and activation_status <> 'ACTIVE'
+    ) then
+      raise exception 'This member must log in first before period exemptions apply.' using errcode = 'P0001';
+    end if;
     raise exception 'Member not found in the active group.' using errcode = 'P0002';
   end if;
 
@@ -8133,10 +8327,21 @@ begin
   where id = p_member_id
     and group_id = v_group_id
     and status = 'ACTIVE'
+    and activation_status = 'ACTIVE'
     and deleted_at is null
     and date_registered <= (v_month + interval '1 month - 1 day')::date;
 
   if v_required is null then
+    if exists (
+      select 1 from public.members
+      where id = p_member_id
+        and group_id = v_group_id
+        and deleted_at is null
+        and status = 'ACTIVE'
+        and activation_status <> 'ACTIVE'
+    ) then
+      raise exception 'This member must log in to their account to activate official membership before contributions can be recorded.' using errcode = 'P0001';
+    end if;
     raise exception 'Active member not found.' using errcode = 'P0002';
   end if;
 
@@ -8512,6 +8717,25 @@ begin
     end if;
   end if;
 
+  if tg_op = 'UPDATE'
+     and tg_table_name = 'members'
+     and current_setting('ipon.activating_member_id', true) = new.id::text
+     and pg_trigger_depth() <= 1
+     and old.group_id is not distinct from new.group_id
+     and old.activation_status <> 'ACTIVE'
+     and new.activation_status = 'ACTIVE' then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT'
+     and tg_table_name = 'contribution_periods'
+     and current_setting('ipon.activating_member_id', true) = new.member_id::text
+     and pg_trigger_depth() <= 1 then
+    select group_id into v_row_group from public.members where id = new.member_id;
+    new.group_id := v_row_group;
+    return new;
+  end if;
+
   if tg_op = 'DELETE' then
     v_row_group := old.group_id;
   elsif tg_table_name = 'contribution_periods' then
@@ -8635,6 +8859,7 @@ declare
   v_full text;
   v_contact text;
   v_membership record;
+  v_link record;
 begin
   if v_uid is null then
     raise exception 'Authentication required.' using errcode = '42501';
@@ -8714,6 +8939,25 @@ begin
       and status <> 'DISABLED'
     returning * into v_profile;
   end if;
+
+  for v_link in
+    select distinct m.id as member_id
+    from public.members m
+    where m.deleted_at is null
+      and m.activation_status <> 'ACTIVE'
+      and (
+        m.id = v_profile.member_id
+        or m.id in (
+          select gm.member_id
+          from public.group_memberships gm
+          where gm.user_id = v_uid
+            and gm.status = 'ACTIVE'
+            and gm.member_id is not null
+        )
+      )
+  loop
+    perform public.activate_member_record(v_link.member_id, v_uid);
+  end loop;
 
   return jsonb_build_object(
     'id', v_profile.id,
@@ -9269,10 +9513,21 @@ begin
   where id = p_member_id
     and group_id = v_group_id
     and status = 'ACTIVE'
+    and activation_status = 'ACTIVE'
     and deleted_at is null
     and date_registered <= (v_month + interval '1 month - 1 day')::date;
 
   if v_required is null then
+    if exists (
+      select 1 from public.members
+      where id = p_member_id
+        and group_id = v_group_id
+        and deleted_at is null
+        and status = 'ACTIVE'
+        and activation_status <> 'ACTIVE'
+    ) then
+      raise exception 'This member must log in to their account to activate official membership before contributions can be recorded.' using errcode = 'P0001';
+    end if;
     raise exception 'Active member not found.' using errcode = 'P0002';
   end if;
 
@@ -9392,10 +9647,21 @@ begin
   where id = p_member_id
     and group_id = v_group_id
     and status = 'ACTIVE'
+    and activation_status = 'ACTIVE'
     and deleted_at is null
     and date_registered <= (v_month + interval '1 month - 1 day')::date;
 
   if v_required is null then
+    if exists (
+      select 1 from public.members
+      where id = p_member_id
+        and group_id = v_group_id
+        and deleted_at is null
+        and status = 'ACTIVE'
+        and activation_status <> 'ACTIVE'
+    ) then
+      raise exception 'This member must log in to their account to activate official membership before contributions can be recorded.' using errcode = 'P0001';
+    end if;
     raise exception 'Active member not found.' using errcode = 'P0002';
   end if;
 
@@ -10156,14 +10422,14 @@ begin
 
   insert into public.members (
     full_name, first_name, middle_name, last_name, contact_number, date_registered,
-    monthly_contribution_amount, notes,
+    monthly_contribution_amount, notes, activation_status, activated_at,
     payout_channel, payout_account_number, payout_account_name,
     created_by, updated_by
   ) values (
     concat_ws(' ', v_first_name, v_middle_name, v_last_name), v_first_name, v_middle_name, v_last_name,
     public.normalize_ph_mobile(p_contact_number), p_date_registered,
     public.validated_money(p_monthly_contribution_amount, 'Monthly contribution amount'),
-    nullif(btrim(p_notes), ''),
+    nullif(btrim(p_notes), ''), 'PENDING', null,
     v_payout_channel, v_payout_number, v_payout_name,
     auth.uid(), auth.uid()
   ) returning id into v_id;
@@ -10891,14 +11157,14 @@ begin
 
   insert into public.members (
     full_name, first_name, middle_name, last_name, contact_number, date_registered,
-    monthly_contribution_amount, notes,
+    monthly_contribution_amount, notes, activation_status, activated_at,
     payout_channel, payout_account_number, payout_account_name,
     created_by, updated_by
   ) values (
     concat_ws(' ', v_first_name, v_middle_name, v_last_name), v_first_name, v_middle_name, v_last_name,
     public.normalize_ph_mobile(p_contact_number), p_date_registered,
     public.validated_money(p_monthly_contribution_amount, 'Monthly contribution amount'),
-    nullif(btrim(p_notes), ''),
+    nullif(btrim(p_notes), ''), 'PENDING', null,
     v_payout_channel, v_payout_number, v_payout_name,
     auth.uid(), auth.uid()
   ) returning id into v_id;
@@ -12956,6 +13222,83 @@ begin
 end;
 $$;
 
+create or replace function public.activate_member_record(
+  p_member_id uuid,
+  p_actor_id uuid default auth.uid()
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_member public.members;
+  v_month date := date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date;
+  v_admin record;
+begin
+  if p_member_id is null then
+    return false;
+  end if;
+
+  perform set_config('ipon.activating_member_id', p_member_id::text, true);
+
+  update public.members m
+  set activation_status = 'ACTIVE',
+      activated_at = coalesce(m.activated_at, now()),
+      updated_by = coalesce(p_actor_id, m.updated_by)
+  where m.id = p_member_id
+    and m.deleted_at is null
+    and m.activation_status <> 'ACTIVE'
+  returning m.* into v_member;
+
+  if not found then
+    perform set_config('ipon.activating_member_id', '', true);
+    return false;
+  end if;
+
+  if v_member.status = 'ACTIVE'
+     and v_member.date_registered <= (v_month + interval '1 month - 1 day')::date
+     and exists (
+       select 1
+       from public.contribution_periods cp
+       join public.members m2 on m2.id = cp.member_id
+       where m2.group_id = v_member.group_id
+         and m2.deleted_at is null
+         and cp.period_month = v_month
+     ) then
+    insert into public.contribution_periods (member_id, period_month, required_amount, due_date)
+    values (
+      v_member.id,
+      v_month,
+      v_member.monthly_contribution_amount,
+      public.contribution_period_due_date(v_member.group_id, v_month)
+    )
+    on conflict (member_id, period_month) do nothing;
+  end if;
+
+  perform set_config('ipon.activating_member_id', '', true);
+
+  for v_admin in
+    select user_id as id
+    from public.group_admin_ids(v_member.group_id)
+    where user_id <> coalesce(p_actor_id, '00000000-0000-0000-0000-000000000000'::uuid)
+  loop
+    perform public.push_notification(
+      v_admin.id,
+      'MEMBER_ACTIVATED',
+      'Member activated',
+      v_member.full_name || ' signed in and is now an official active member.',
+      'members.html?member=' || v_member.id::text,
+      v_member.group_id
+    );
+  end loop;
+
+  return true;
+end;
+$$;
+
+revoke execute on function public.activate_member_record(uuid, uuid) from public, anon, authenticated;
+
 create or replace function public.activate_own_pending_account()
 returns jsonb
 language plpgsql
@@ -12973,6 +13316,7 @@ declare
   v_contact text;
   v_membership record;
   v_name_setup_required boolean := false;
+  v_link record;
 begin
   if v_uid is null then
     raise exception 'Authentication required.' using errcode = '42501';
@@ -13056,6 +13400,25 @@ begin
       and status <> 'DISABLED'
     returning * into v_profile;
   end if;
+
+  for v_link in
+    select distinct m.id as member_id
+    from public.members m
+    where m.deleted_at is null
+      and m.activation_status <> 'ACTIVE'
+      and (
+        m.id = v_profile.member_id
+        or m.id in (
+          select gm.member_id
+          from public.group_memberships gm
+          where gm.user_id = v_uid
+            and gm.status = 'ACTIVE'
+            and gm.member_id is not null
+        )
+      )
+  loop
+    perform public.activate_member_record(v_link.member_id, v_uid);
+  end loop;
 
   return jsonb_build_object(
     'id', v_profile.id,
@@ -13621,6 +13984,83 @@ begin
 end;
 $$;
 
+create or replace function public.activate_member_record(
+  p_member_id uuid,
+  p_actor_id uuid default auth.uid()
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_member public.members;
+  v_month date := date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date;
+  v_admin record;
+begin
+  if p_member_id is null then
+    return false;
+  end if;
+
+  perform set_config('ipon.activating_member_id', p_member_id::text, true);
+
+  update public.members m
+  set activation_status = 'ACTIVE',
+      activated_at = coalesce(m.activated_at, now()),
+      updated_by = coalesce(p_actor_id, m.updated_by)
+  where m.id = p_member_id
+    and m.deleted_at is null
+    and m.activation_status <> 'ACTIVE'
+  returning m.* into v_member;
+
+  if not found then
+    perform set_config('ipon.activating_member_id', '', true);
+    return false;
+  end if;
+
+  if v_member.status = 'ACTIVE'
+     and v_member.date_registered <= (v_month + interval '1 month - 1 day')::date
+     and exists (
+       select 1
+       from public.contribution_periods cp
+       join public.members m2 on m2.id = cp.member_id
+       where m2.group_id = v_member.group_id
+         and m2.deleted_at is null
+         and cp.period_month = v_month
+     ) then
+    insert into public.contribution_periods (member_id, period_month, required_amount, due_date)
+    values (
+      v_member.id,
+      v_month,
+      v_member.monthly_contribution_amount,
+      public.contribution_period_due_date(v_member.group_id, v_month)
+    )
+    on conflict (member_id, period_month) do nothing;
+  end if;
+
+  perform set_config('ipon.activating_member_id', '', true);
+
+  for v_admin in
+    select user_id as id
+    from public.group_admin_ids(v_member.group_id)
+    where user_id <> coalesce(p_actor_id, '00000000-0000-0000-0000-000000000000'::uuid)
+  loop
+    perform public.push_notification(
+      v_admin.id,
+      'MEMBER_ACTIVATED',
+      'Member activated',
+      v_member.full_name || ' signed in and is now an official active member.',
+      'members.html?member=' || v_member.id::text,
+      v_member.group_id
+    );
+  end loop;
+
+  return true;
+end;
+$$;
+
+revoke execute on function public.activate_member_record(uuid, uuid) from public, anon, authenticated;
+
 create or replace function public.activate_own_pending_account()
 returns jsonb
 language plpgsql
@@ -13638,6 +14078,7 @@ declare
   v_contact text;
   v_membership record;
   v_name_setup_required boolean := false;
+  v_link record;
 begin
   if v_uid is null then
     raise exception 'Authentication required.' using errcode = '42501';
@@ -13721,6 +14162,25 @@ begin
       and status <> 'DISABLED'
     returning * into v_profile;
   end if;
+
+  for v_link in
+    select distinct m.id as member_id
+    from public.members m
+    where m.deleted_at is null
+      and m.activation_status <> 'ACTIVE'
+      and (
+        m.id = v_profile.member_id
+        or m.id in (
+          select gm.member_id
+          from public.group_memberships gm
+          where gm.user_id = v_uid
+            and gm.status = 'ACTIVE'
+            and gm.member_id is not null
+        )
+      )
+  loop
+    perform public.activate_member_record(v_link.member_id, v_uid);
+  end loop;
 
   return jsonb_build_object(
     'id', v_profile.id,
@@ -14821,8 +15281,11 @@ begin
     perform public.push_notification(
       v_admin.id,
       'MEMBER_CREATED',
-      'Member registered',
-      new.full_name || ' was added to your group.',
+      case when new.activation_status = 'ACTIVE' then 'Member activated' else 'Member added (pending login)' end,
+      case
+        when new.activation_status = 'ACTIVE' then new.full_name || ' was added as an official active member.'
+        else new.full_name || ' was added and will become an official active member after signing in.'
+      end,
       'members.html?member=' || new.id::text,
       new.group_id
     );
@@ -14968,6 +15431,12 @@ begin
     where id = p_user_id;
   end if;
 
+  if p_status = 'ACTIVE' and v_link_member_id is not null and exists (
+    select 1 from auth.users u where u.id = p_user_id and u.last_sign_in_at is not null
+  ) then
+    perform public.activate_member_record(v_link_member_id, p_user_id);
+  end if;
+
   if v_prev_membership.user_id is not null and (
     v_prev_membership.role is distinct from p_role
     or v_prev_membership.status is distinct from p_status
@@ -15086,6 +15555,10 @@ begin
   on conflict (group_id, user_id) do update
   set status = 'ACTIVE'
   returning * into v_membership;
+
+  if v_membership.member_id is not null then
+    perform public.activate_member_record(v_membership.member_id, auth.uid());
+  end if;
 
   update public.profiles
   set group_id = coalesce(group_id, v_notif.group_id),
@@ -15672,9 +16145,19 @@ begin
   from public.members
   where id = p_member_id
     and group_id = v_group_id
+    and activation_status = 'ACTIVE'
     and deleted_at is null;
 
   if v_required is null then
+    if exists (
+      select 1 from public.members
+      where id = p_member_id
+        and group_id = v_group_id
+        and deleted_at is null
+        and activation_status <> 'ACTIVE'
+    ) then
+      raise exception 'This member must log in first before period exemptions apply.' using errcode = 'P0001';
+    end if;
     raise exception 'Member not found in the active group.' using errcode = 'P0002';
   end if;
 
@@ -16266,6 +16749,14 @@ drop function if exists public.update_own_profile(text, text, text, text);
 
 insert into public.schema_migrations (version, name)
 values ('20261115_070', 'drop overloaded rpc signatures')
+on conflict (version) do nothing;
+
+insert into public.schema_migrations (version, name)
+values ('20261115_071', 'member login activation and count integrity')
+on conflict (version) do nothing;
+
+insert into public.schema_migrations (version, name)
+values ('20261115_072', 'drop remaining rpc overloads')
 on conflict (version) do nothing;
 
 commit;
