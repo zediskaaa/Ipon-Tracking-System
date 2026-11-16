@@ -303,12 +303,20 @@ body.is-app .loader-sheet small { margin-top:4px; font-size:12px; }
 .startup-error-actions { display:flex; justify-content:center; gap:10px; margin-top:24px; }
 .startup-error small { display:block; margin-top:16px; color:#52655f; font-family:Arial,sans-serif; font-size:12px; }
 .startup-error .button:focus-visible { outline:3px solid var(--ochre); outline-offset:3px; }
-.confirm-dialog { width:min(480px,calc(100vw - 30px)); border:1px solid var(--rule); border-radius:12px; padding:0; background:var(--paper); color:var(--ink); box-shadow:var(--shadow); }
-.confirm-dialog::backdrop { background:rgba(10,25,22,.58); }
-.confirm-dialog form { padding:28px; }
-.confirm-dialog h2 { margin:0 0 10px; font-size:30px; }
-.confirm-dialog p:not(.eyebrow) { margin:0 0 24px; color:var(--muted); font-family:Arial,sans-serif; line-height:1.5; }
+.confirm-dialog { width:min(440px,calc(100vw - 30px)); overflow:hidden; border:1px solid rgba(20,45,43,.12); border-radius:22px; padding:0; background:#faf6ee; color:#0e241f; box-shadow:0 26px 70px rgba(7,28,24,.34); }
+.confirm-dialog::backdrop { background:rgba(10,22,19,.72); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); }
+.confirm-dialog form { padding:28px 28px 26px; }
+.confirm-dialog h2 { position:relative; margin:0 0 10px; padding-top:16px; color:#0e241f; font-family:"IPON Serif",Georgia,serif; font-size:clamp(26px,5vw,30px); font-weight:800; line-height:1.15; letter-spacing:-.015em; }
+.confirm-dialog h2::before { position:absolute; top:0; left:0; width:26px; height:2px; border-radius:999px; background:#b88c3e; content:""; }
+.confirm-dialog p:not(.eyebrow) { margin:0 0 24px; color:#5b6863; font-family:Arial,sans-serif; font-size:14.5px; line-height:1.52; overflow-wrap:anywhere; }
 .dialog-actions { justify-content:flex-end; }
+.confirm-dialog .dialog-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; justify-content:stretch; }
+.confirm-dialog .dialog-actions .button { width:100%; min-height:46px; padding:10px 14px; border-radius:12px; font-family:Arial,sans-serif; font-size:14.5px; font-weight:700; line-height:1.2; text-align:center; white-space:normal; }
+.confirm-dialog .dialog-actions .button-secondary { border:1px solid rgba(20,45,43,.16); background:#ffffff; color:#0e241f; box-shadow:none; }
+.confirm-dialog .dialog-actions .button-secondary:hover { border-color:rgba(20,45,43,.28); background:#fffdf9; }
+.confirm-dialog .dialog-actions .button-primary { border:1px solid #102420; background:#102420; color:#ffffff; box-shadow:0 3px 10px rgba(10,25,22,.18); }
+.confirm-dialog .dialog-actions .button-primary:hover { border-color:#193731; background:#193731; }
+.confirm-dialog .dialog-actions .button:focus-visible { outline:3px solid #d9b75f; outline-offset:2px; }
 .goal-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; }
 .goal-card { padding:18px; border:1px solid var(--rule); border-radius:10px; background:rgba(255,255,255,.25); }
 .goal-card header { display:flex; justify-content:space-between; gap:16px; }
@@ -397,7 +405,8 @@ body.is-app .loader-sheet small { margin-top:4px; font-size:12px; }
   .loader-sheet p { font-size:16px; }
   .loader-sheet small { margin-top:4px; font-size:12px; }
   .toast { right:12px; bottom:max(12px,env(safe-area-inset-bottom)); left:12px; max-width:none; }
-  .confirm-dialog form { padding:22px 18px; }
+  .confirm-dialog form { padding:24px 20px 22px; }
+  #bulk-confirm-dialog .form-dialog-header > div > p { display:block; }
   .header-actions { width:100%; }.header-actions .button { flex:1 1 140px; min-height:46px; }
   .startup-error { padding:16px; }.startup-error-sheet { padding:26px 20px; }.startup-error-actions { flex-direction:column; }.startup-error-actions .button { width:100%; }
 }
@@ -818,10 +827,28 @@ input::-ms-reveal,input::-ms-clear{display:none!important}
 .record-review-detail-note{margin:0;padding:8px 10px;border-left:3px solid #cfd8d1;border-radius:0 8px 8px 0;background:#f8f5ed;color:#364642;font:13px/1.45 Arial,sans-serif;overflow-wrap:anywhere}
 .record-review-step{display:grid;gap:14px}
 .record-review-step[hidden]{display:none!important}
-.record-review-confirm-box{display:grid;gap:6px;padding:14px 16px;border-radius:12px;border:1px solid #b5dec6;background:#eff7f2}
-.record-review-confirm-box[data-tone="danger"]{border-color:#efc0ba;background:#fdf2f0}
-.record-review-confirm-box strong{font:700 15px/1.3 Arial,sans-serif;color:var(--ink)}
-.record-review-confirm-box p{margin:0;font:13.5px/1.5 Arial,sans-serif;color:#354742}
+.record-review-confirm-box{display:grid;gap:10px;padding:22px 22px 20px;border-radius:18px;border:1px solid rgba(20,45,43,.12);background:#faf6ee;box-shadow:0 6px 20px rgba(7,28,24,.06)}
+.record-review-confirm-box[data-tone="danger"]{border-color:rgba(174,57,52,.26);background:#faf6ee}
+.record-review-confirm-box strong{position:relative;padding-top:14px;font-family:"IPON Serif",Georgia,serif;font-size:clamp(21px,3vw,24px);font-weight:800;line-height:1.15;letter-spacing:-.015em;color:#0e241f}
+.record-review-confirm-box strong::before{position:absolute;top:0;left:0;width:26px;height:2px;border-radius:999px;background:#b88c3e;content:""}
+.record-review-confirm-box[data-tone="danger"] strong::before{background:var(--red)}
+.record-review-confirm-box p{margin:0;font:14px/1.52 Arial,sans-serif;color:#5b6863}
+:is(#record-action-step-confirm,#member-delete-confirm-step) .form-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;justify-content:stretch}
+:is(#record-action-step-confirm,#member-delete-confirm-step) .form-actions .button{width:100%;min-height:46px;padding:10px 14px;border-radius:12px;font-size:14.5px;font-weight:700;line-height:1.2;text-align:center}
+:is(#record-action-step-confirm,#member-delete-confirm-step) .form-actions .button-secondary{border:1px solid rgba(20,45,43,.16);background:#ffffff;color:#0e241f}
+:is(#record-action-step-confirm,#member-delete-confirm-step) .form-actions .button-secondary:hover{border-color:rgba(20,45,43,.28);background:#fffdf9}
+:is(#record-action-step-confirm,#member-delete-confirm-step) .form-actions .button-primary{border:1px solid #102420;background:#102420;color:#ffffff;box-shadow:0 3px 10px rgba(10,25,22,.18)}
+:is(#record-action-step-confirm,#member-delete-confirm-step) .form-actions .button-primary:hover{border-color:#193731;background:#193731}
+:is(#record-action-step-confirm,#member-delete-confirm-step) .form-actions .button-danger{box-shadow:0 3px 10px rgba(174,57,52,.2)}
+#bulk-confirm-dialog{width:min(500px,calc(100vw - 28px));border:1px solid rgba(20,45,43,.12);border-radius:22px;background:#faf6ee;box-shadow:0 26px 70px rgba(7,28,24,.34)}
+#bulk-confirm-dialog .form-dialog-header{background:#faf6ee;border-bottom-color:rgba(20,45,43,.1)}
+#bulk-confirm-dialog .form-dialog-header h2{color:#0e241f;font-size:clamp(24px,4vw,28px)}
+#bulk-confirm-dialog .form-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;justify-content:stretch}
+#bulk-confirm-dialog .form-actions .button{width:100%;min-height:46px;padding:10px 14px;border-radius:12px;font-size:14.5px;font-weight:700;line-height:1.2;text-align:center}
+#bulk-confirm-dialog .form-actions .button-secondary{border:1px solid rgba(20,45,43,.16);background:#ffffff;color:#0e241f}
+#bulk-confirm-dialog .form-actions .button-secondary:hover{border-color:rgba(20,45,43,.28);background:#fffdf9}
+#bulk-confirm-dialog .form-actions .button-primary{border:1px solid #102420;background:#102420;color:#ffffff;box-shadow:0 3px 10px rgba(10,25,22,.18)}
+#bulk-confirm-dialog .form-actions .button-primary:hover{border-color:#193731;background:#193731}
 .record-review-note-preview{padding-top:6px;border-top:1px dashed rgba(20,45,43,.18);font-style:italic}
 .record-reason-note{display:block;margin-top:4px;padding:3px 8px;border-left:3px solid #cfd8d1;border-radius:0 6px 6px 0;background:#f7f4ec;color:#354742;font:600 12px/1.35 Arial,sans-serif;overflow-wrap:anywhere}
 .record-reason-note.is-confirmed{border-left-color:#3a9063;background:#eff7f2;color:#145238}
@@ -3710,6 +3737,7 @@ html[data-theme="dark"] .pm-pill.pm-other input:checked + span { border-color: #
 /* Dialogs, Account Preferences, Notifications, Group Hub & Spotlight */
 html[data-theme="dark"] .form-dialog,
 html[data-theme="dark"] .confirm-dialog,
+html[data-theme="dark"] #bulk-confirm-dialog,
 html[data-theme="dark"] .donate-dialog,
 html[data-theme="dark"] .account-dialog,
 html[data-theme="dark"] .notification-dialog,
@@ -3721,6 +3749,43 @@ html[data-theme="dark"] .mfa-enrollment-dialog {
   border-color: rgba(218, 236, 227, .18);
   box-shadow: 0 28px 80px rgba(0, 0, 0, .65);
 }
+html[data-theme="dark"] .confirm-dialog h2,
+html[data-theme="dark"] #bulk-confirm-dialog .form-dialog-header h2 {
+  color: #f3f7f4;
+}
+html[data-theme="dark"] .confirm-dialog h2::before {
+  background: #d4a84f;
+}
+html[data-theme="dark"] .confirm-dialog p:not(.eyebrow) {
+  color: #9cb2a8;
+}
+html[data-theme="dark"] .confirm-dialog .dialog-actions .button-secondary,
+html[data-theme="dark"] #bulk-confirm-dialog .form-actions .button-secondary,
+html[data-theme="dark"] :is(#record-action-step-confirm, #member-delete-confirm-step) .form-actions .button-secondary {
+  border-color: rgba(218, 236, 227, .2);
+  background: #162923;
+  color: #ecf3ef;
+}
+html[data-theme="dark"] .confirm-dialog .dialog-actions .button-secondary:hover,
+html[data-theme="dark"] #bulk-confirm-dialog .form-actions .button-secondary:hover,
+html[data-theme="dark"] :is(#record-action-step-confirm, #member-delete-confirm-step) .form-actions .button-secondary:hover {
+  border-color: rgba(218, 236, 227, .34);
+  background: #1d342d;
+}
+html[data-theme="dark"] .confirm-dialog .dialog-actions .button-primary,
+html[data-theme="dark"] #bulk-confirm-dialog .form-actions .button-primary,
+html[data-theme="dark"] :is(#record-action-step-confirm, #member-delete-confirm-step) .form-actions .button-primary {
+  border-color: #287a4c;
+  background: #287a4c;
+  color: #ffffff;
+}
+html[data-theme="dark"] .confirm-dialog .dialog-actions .button-primary:hover,
+html[data-theme="dark"] #bulk-confirm-dialog .form-actions .button-primary:hover,
+html[data-theme="dark"] :is(#record-action-step-confirm, #member-delete-confirm-step) .form-actions .button-primary:hover {
+  border-color: #318f5a;
+  background: #318f5a;
+}
+html[data-theme="dark"] #bulk-confirm-dialog .form-dialog-header,
 html[data-theme="dark"] .form-dialog-header,
 html[data-theme="dark"] .notification-sheet > header,
 html[data-theme="dark"] .group-hub-sheet,
@@ -4160,7 +4225,6 @@ html[data-theme="dark"] .record-thread-att-video figcaption {
   color: var(--ink);
 }
 html[data-theme="dark"] .decision-options label:has(input:checked),
-html[data-theme="dark"] .record-review-confirm-box,
 html[data-theme="dark"] .record-reason-note.is-confirmed,
 html[data-theme="dark"] .record-thread-msg.is-own .record-thread-msg-bubble,
 html[data-theme="dark"] .record-thread-composer.is-dragover textarea {
@@ -4168,13 +4232,32 @@ html[data-theme="dark"] .record-thread-composer.is-dragover textarea {
   background: rgba(30, 82, 60, .38);
   color: #d6f7e4;
 }
+html[data-theme="dark"] .record-review-confirm-box {
+  border-color: rgba(218, 236, 227, .18);
+  background: #142520;
+  color: #ecf3ef;
+  box-shadow: none;
+}
+html[data-theme="dark"] .record-review-confirm-box strong {
+  color: #f3f7f4;
+}
+html[data-theme="dark"] .record-review-confirm-box strong::before {
+  background: #d4a84f;
+}
 html[data-theme="dark"] .decision-options label:has(input[value="REJECT"]:checked),
 html[data-theme="dark"] .decision-options label:has(input[value="VOID"]:checked),
-html[data-theme="dark"] .record-review-confirm-box[data-tone="danger"],
 html[data-theme="dark"] .record-reason-note.is-rejected {
   border-color: rgba(241, 125, 117, .48);
   background: rgba(142, 42, 38, .3);
   color: #ffc5c0;
+}
+html[data-theme="dark"] .record-review-confirm-box[data-tone="danger"] {
+  border-color: rgba(241, 125, 117, .38);
+  background: #1b1717;
+  color: #ffdfdc;
+}
+html[data-theme="dark"] .record-review-confirm-box[data-tone="danger"] strong::before {
+  background: #f17d75;
 }
 html[data-theme="dark"] .record-type-pill.is-addition { background: rgba(40, 122, 76, .26); color: #8ee8b5; border-color: rgba(70, 195, 130, .38); }
 html[data-theme="dark"] .record-type-pill.is-deduction { background: rgba(185, 121, 18, .26); color: #f8d27d; border-color: rgba(237, 185, 90, .38); }

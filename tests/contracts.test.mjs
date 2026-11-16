@@ -10120,3 +10120,108 @@ test('migrations 088-089 restore drifted RPCs, fix enforce_group_scope guards, e
   assert.match(expensesHtml, /<section class="panel sticky-panel" data-role="ADMIN,TREASURER">/);
   assert.match(css, /\.split-layout:has\(> \.sticky-panel\[hidden\]\)/);
 });
+
+test('confirmation dialogs match the warm-cream card, top gold rule, editorial serif heading, and equal two-column pill actions', async () => {
+  const vm = await import('node:vm');
+  const coreJs = read('js/core.js');
+  const css = read('css/app.css');
+  const loginHtml = read('login.html');
+
+  // CSS styling contracts matching the "Sign out?" reference card across confirm flows
+  assert.match(css, /\.confirm-dialog\s*\{[^}]*border-radius:\s*22px;[^}]*background:\s*#faf6ee;/);
+  assert.match(css, /\.confirm-dialog h2::before\s*\{[^}]*width:\s*26px;\s*height:\s*2px;[^}]*background:\s*#b88c3e;/);
+  assert.match(css, /\.confirm-dialog \.dialog-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(css, /\.confirm-dialog \.dialog-actions \.button-primary\s*\{[^}]*background:\s*#102420;/);
+  assert.match(css, /\.record-review-confirm-box\s*\{[^}]*border-radius:\s*18px;[^}]*background:\s*#faf6ee;/);
+  assert.match(css, /\.record-review-confirm-box strong::before\s*\{[^}]*width:\s*26px;\s*height:\s*2px;[^}]*background:\s*#b88c3e;/);
+  assert.match(css, /:is\(#record-action-step-confirm,\s*#member-delete-confirm-step\) \.form-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(css, /#bulk-confirm-dialog\s*\{[^}]*border-radius:\s*22px;[^}]*background:\s*#faf6ee;/);
+  assert.match(loginHtml, /\.request-confirm-dialog\{[^}]*border-radius:22px;background:#faf6ee/);
+  assert.match(loginHtml, /\.request-confirm-dialog h2::before\{[^}]*background:#b88c3e/);
+
+  // Runtime test: confirmAction honors acceptLabel, confirmLabel, confirmText, and cancelLabel cleanly
+  const elements = {
+    'confirm-dialog': {
+      returnValue: '',
+      dataset: {},
+      listeners: {},
+      showModal() {
+        const closeHandlers = this.listeners.close || [];
+        this.returnValue = 'confirm';
+        while (closeHandlers.length) closeHandlers.shift()();
+      },
+      addEventListener(type, fn) {
+        (this.listeners[type] ||= []).push(fn);
+      },
+      querySelector() {
+        return elements['confirm-cancel'];
+      }
+    },
+    'confirm-title': { textContent: '' },
+    'confirm-message': { textContent: '' },
+    'confirm-cancel': { textContent: 'Cancel' },
+    'confirm-accept': { textContent: 'Confirm' }
+  };
+  const noop = () => {};
+  const dummyEl = () => ({ hidden: false, dataset: {}, innerHTML: '', textContent: '', style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, setAttribute: noop, removeAttribute: noop, appendChild: noop, prepend: noop, append: noop });
+  const ctx = {
+    console,
+    Date,
+    Math,
+    URL,
+    Set,
+    Map,
+    Promise,
+    setTimeout,
+    clearTimeout,
+    setInterval: () => 0,
+    clearInterval: noop,
+    CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    navigator: { userAgent: 'node', onLine: true },
+    location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', pathname: '/dashboard.html', origin: 'https://my-ipon.vercel.app', href: 'https://my-ipon.vercel.app/dashboard.html', replace: noop, assign: noop },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    addEventListener: noop,
+    removeEventListener: noop,
+    dispatchEvent: noop,
+    document: {
+      documentElement: { setAttribute: noop, dataset: {}, style: { setProperty: noop, removeProperty: noop } },
+      head: { insertAdjacentHTML: noop },
+      body: { dataset: {}, classList: { contains: () => false, add: noop, remove: noop, toggle: noop }, insertAdjacentHTML: noop, appendChild: noop, prepend: noop, append: noop },
+      createElement: () => dummyEl(),
+      addEventListener: noop,
+      removeEventListener: noop,
+      getElementById: (id) => elements[id] || null,
+      querySelectorAll: () => [],
+      querySelector: () => null
+    }
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  await ctx.window.Ipon.confirmAction({
+    title: 'Delete announcement',
+    message: 'Delete this item?',
+    confirmLabel: 'Delete'
+  });
+  assert.equal(elements['confirm-accept'].textContent, 'Delete');
+  assert.equal(elements['confirm-cancel'].textContent, 'Cancel');
+
+  await ctx.window.Ipon.confirmAction({
+    title: 'Remove friend?',
+    message: 'Remove from Friends?',
+    confirmText: 'Remove',
+    cancelLabel: 'Not now'
+  });
+  assert.equal(elements['confirm-accept'].textContent, 'Remove');
+  assert.equal(elements['confirm-cancel'].textContent, 'Not now');
+
+  await ctx.window.Ipon.confirmAction({
+    title: 'Sign out?',
+    message: 'You will need to sign in again to access the system.',
+    acceptLabel: 'Sign out'
+  });
+  assert.equal(elements['confirm-accept'].textContent, 'Sign out');
+  assert.equal(elements['confirm-cancel'].textContent, 'Cancel');
+});

@@ -1509,7 +1509,7 @@
           <h2 id="confirm-title">Continue?</h2>
           <p id="confirm-message"></p>
           <div class="dialog-actions">
-            <button class="button button-secondary" value="cancel">Cancel</button>
+            <button class="button button-secondary" id="confirm-cancel" value="cancel">Cancel</button>
             <button class="button button-primary" id="confirm-accept" value="confirm">Confirm</button>
           </div>
         </form>
@@ -5794,12 +5794,16 @@
     }
   }
 
-  function confirmAction({ title, message, acceptLabel = 'Confirm' }) {
+  function confirmAction({ title = 'Continue?', message = '', acceptLabel, confirmLabel, confirmText, cancelLabel } = {}) {
     const dialog = document.getElementById('confirm-dialog');
+    const resolvedAccept = acceptLabel || confirmLabel || confirmText || 'Confirm';
+    const resolvedCancel = cancelLabel || 'Cancel';
     if (!dialog || typeof dialog.showModal !== 'function') return Promise.resolve(window.confirm(message));
     document.getElementById('confirm-title').textContent = title;
     document.getElementById('confirm-message').textContent = message;
-    document.getElementById('confirm-accept').textContent = acceptLabel;
+    const cancelButton = document.getElementById('confirm-cancel') || dialog.querySelector('button[value="cancel"]');
+    if (cancelButton) cancelButton.textContent = resolvedCancel;
+    document.getElementById('confirm-accept').textContent = resolvedAccept;
     dialog.returnValue = '';
     if (!dialog.dataset.backdropBound) {
       dialog.dataset.backdropBound = 'true';
