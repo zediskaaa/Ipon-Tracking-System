@@ -1064,8 +1064,8 @@ async function generateWithGemini({
   const body: Record<string, unknown> = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: {
-      temperature: 0.92,
-      topP: 0.95,
+      temperature: 0.25,
+      topP: 0.8,
       maxOutputTokens: 8192,
       responseMimeType: 'application/json'
     }
@@ -1362,11 +1362,26 @@ async function fetchRecentSystemUpdates(sinceIso?: string | null, excludedText =
 }
 
 const OBJECT_STR_RE = /\[object\s+[^\]]+\]/i;
+const RELEASE_FLUFF_CLAUSE_RE = /,\s*(?:resulting in|leading to|providing|delivering|creating|offering|ensuring|giving users)\s+(?:a|an)\s+(?:more\s+)?(?:stable|dependable|reliable|smooth(?:er)?|seamless|consistent|streamlined|intuitive|polished|enjoyable|hassle-free|responsive)(?:\s+(?:and|,)\s+(?:more\s+)?(?:stable|dependable|reliable|smooth(?:er)?|seamless|consistent|streamlined|intuitive|polished|enjoyable|hassle-free|responsive))*\s+(?:user\s+|overall\s+|app\s+|tracking\s+)?(?:experience|workflow|process|journey|performance)\.?$/i;
+const RELEASE_FLUFF_TAG_RE = /(?:,\s*|\s+)(?:for|to ensure|to deliver|to provide)\s+(?:a|an)\s+(?:more\s+)?(?:stable|dependable|reliable|smooth(?:er)?|seamless|consistent|streamlined|intuitive|polished|enjoyable|hassle-free|responsive)(?:\s+(?:and|,)\s+(?:more\s+)?(?:stable|dependable|reliable|smooth(?:er)?|seamless|consistent|streamlined|intuitive|polished|enjoyable|hassle-free|responsive))*\s+(?:user\s+|overall\s+|app\s+|tracking\s+)?(?:experience|workflow|process|journey)\.?$/i;
+const RELEASE_FLUFF_SENTENCE_RE = /\.\s+(?:Users|You)\s+can\s+now\s+(?:rely on|enjoy|expect)\s+(?:a\s+)?(?:more\s+)?(?:consistent|seamless|smooth(?:er)?|stable|dependable|reliable)[^.]*\b(?:experience|workflow|dependability)\.?$/i;
+
+function stripReleaseFluffTails(text: string): string {
+  const out = String(text || '').trim();
+  if (!out) return '';
+  return out
+    .replace(RELEASE_FLUFF_SENTENCE_RE, '.')
+    .replace(RELEASE_FLUFF_CLAUSE_RE, '.')
+    .replace(RELEASE_FLUFF_TAG_RE, '.')
+    .replace(/\s+\./g, '.')
+    .replace(/\.\.+/g, '.')
+    .trim();
+}
 
 function coerceReleaseBulletText(raw: unknown): string {
   if (raw == null) return '';
   if (typeof raw === 'string') {
-    const clean = raw.replace(/^[•\s*-]+/, '').trim();
+    const clean = stripReleaseFluffTails(raw.replace(/^[•\s*-]+/, '').trim());
     return OBJECT_STR_RE.test(clean) ? '' : clean;
   }
   if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw);
@@ -1497,15 +1512,16 @@ function sanitizeReleaseDetails(rawDetails: string) {
       return OBJECT_STR_RE.test(block) || TECH_COMMIT_RE.test(block) || CODE_TOKEN_RE.test(block) ? '' : block.trim();
     }
     const header = !/^[•\-*]\s+/.test(lines[0]) ? lines[0] : '';
-    const bullets = (header ? lines.slice(1) : lines).filter((line) => {
-      const clean = line.replace(/^[•\-*]\s+/, '').trim();
+    const bullets = (header ? lines.slice(1) : lines).map((line) => {
+      const prefix = line.match(/^([•\-*]\s+)/)?.[1] || '• ';
+      const clean = stripReleaseFluffTails(line.replace(/^[•\-*]\s+/, '').trim());
       if (!clean || OBJECT_STR_RE.test(clean) || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) {
         strippedCount += 1;
-        return false;
+        return '';
       }
       bulletCount += 1;
-      return true;
-    });
+      return `${prefix}${clean}`;
+    }).filter(Boolean);
     if (!bullets.length) return '';
     return header ? `${header}\n${bullets.join('\n')}` : bullets.join('\n');
   }).filter(Boolean);
@@ -1729,90 +1745,7 @@ function rewriteClauseAsSentence(rawClause: string) {
   return `${clean.charAt(0).toUpperCase() + clean.slice(1)}.`;
 }
 
-function pickUniqueDomainOutcome(clause: string, kind: 'feature' | 'fix' | 'improvement' | 'security', usedEndings: Set<string>, seedOffset = 0) {
-  const lc = clause.toLowerCase();
-  const pools: Record<string, string[]> = {
-    budget: [
-      'Tracked spending and allocation totals stay aligned across your active workspace.',
-      'Your category limits and remaining balances now reflect updates right away.',
-      'Allocated amounts and expense deductions remain consistent without manual recalculation.'
-    ],
-    savings: [
-      'Group contributions and active savings targets stay accurately balanced.',
-      'Individual goal progress and reserve amounts remain preserved across updates.',
-      'Ongoing saving cycles reflect member activity without unintended resets.'
-    ],
-    calendar: [
-      'Scheduled dates and daily contribution entries remain clear when reviewing each month.',
-      'Daily status indicators and entry details match your latest recorded activity.'
-    ],
-    chat: [
-      'Group conversations, attachments, and live status indicators stay responsive in real time.',
-      'Message previews and media playback respond reliably across phone and desktop views.'
-    ],
-    notify: [
-      'Activity alerts open the exact record or notice cleanly when tapped.',
-      'Unread counts and alert panels stay in sync as updates arrive.'
-    ],
-    report: [
-      'Summary tables and printed views keep clean column spacing across pages.',
-      'Totals and ledger breakdowns stay aligned when reviewing or printing summaries.'
-    ],
-    layout: [
-      'Views, tables, and dialog panels stay evenly aligned across desktop and mobile screens.',
-      'Interactive controls remain stable without unwanted shifting or clipped edges.',
-      'Desktop and mobile views adjust cleanly to available screen space.'
-    ],
-    security: [
-      'Access checks apply strictly within the active group and account boundaries.',
-      'Sensitive account and member records stay protected behind verified permissions.'
-    ],
-    fixGeneral: [
-      'Related actions now complete directly without interrupting the screen flow.',
-      'Affected controls respond cleanly on the first interaction.',
-      'Values and view state stay accurate after submitting changes.'
-    ]
-  };
-
-  let pool: string[] = [];
-  if (kind === 'security' || /\b(?:security|permission|auth(?:entication|orization)?|lockout|privacy|password|mfa|unauthorized|access\s+control|access\s+check)\b/.test(lc)) {
-    pool = [...pools.security];
-  } else if (/\b(?:budget|expense|want|need|allocation|split)\b/.test(lc)) {
-    pool = [...pools.budget, ...pools.layout];
-  } else if (/\b(?:saving|goal|batch|bin|contribution|payout|wallet)\b/.test(lc)) {
-    pool = [...pools.savings];
-  } else if (/\b(?:calendar|date|schedule|month|day)\b/.test(lc)) {
-    pool = [...pools.calendar];
-  } else if (/\b(?:chat|message|voice|audio|drawer|attachment)\b/.test(lc)) {
-    pool = [...pools.chat, ...pools.layout];
-  } else if (/\b(?:notif|alert|reminder|badge|bell)\b/.test(lc)) {
-    pool = [...pools.notify];
-  } else if (/\b(?:report|print|export|audit)\b/.test(lc)) {
-    pool = [...pools.report];
-  } else if (/\b(?:modal|dialog|card|layout|padding|spacing|width|align|responsive|overflow|mobile|desktop|button|pill|table|column|row|search)\b/.test(lc)) {
-    pool = [...pools.layout, ...pools.fixGeneral];
-  } else if (kind === 'fix') {
-    pool = [...pools.fixGeneral];
-  }
-  if (!pool.length) return '';
-
-  const start = Math.abs(Number(seedOffset) || 0) % pool.length;
-  for (let i = 0; i < pool.length; i += 1) {
-    const candidate = pool[(start + i) % pool.length];
-    if (!usedEndings.has(candidate)) {
-      usedEndings.add(candidate);
-      return candidate;
-    }
-  }
-  return '';
-}
-
-function buildFallbackBullet(
-  rawText: string,
-  kind: 'feature' | 'fix' | 'improvement' | 'security',
-  seedOffset = 0,
-  usedEndings: Set<string> = new Set()
-) {
+function buildFallbackBullet(rawText: string) {
   let cleaned = String(rawText || '').replace(/^[•\-*]\s*/, '').replace(/\s+/g, ' ').trim();
   if (!cleaned) return '';
   if (cleaned.includes(':')) {
@@ -1828,17 +1761,7 @@ function buildFallbackBullet(
   }
   const topic = deriveFallbackTopicLabel(cleaned);
   const clause = cleaned.replace(/[.\s]+$/, '');
-  const baseSentence = rewriteClauseAsSentence(clause);
-  const hasSelfContainedContext =
-    baseSentence.length >= 44 ||
-    /\b(?:so|because|without|instead of|across|while|during|before|after|when|unless|via|with|from|to keep|to ensure|to prevent|to avoid|rather than)\b|[,;]/i.test(baseSentence);
-  if (hasSelfContainedContext) {
-    return `${topic}: ${baseSentence}`;
-  }
-  const extraDetail = pickUniqueDomainOutcome(clause, kind, usedEndings, seedOffset);
-  return extraDetail
-    ? `${topic}: ${baseSentence} ${extraDetail}`
-    : `${topic}: ${baseSentence}`;
+  return `${topic}: ${rewriteClauseAsSentence(clause)}`;
 }
 
 function draftVerifiedReleaseNotesFallback({
@@ -1858,7 +1781,6 @@ function draftVerifiedReleaseNotesFallback({
 }) {
   const seed = Math.abs(Number(variationSeed) || 0);
   const prefix = formatReleaseVersionPrefix(version);
-  const usedEndings = new Set<string>();
 
   const requestedFeatures: string[] = [];
   const fixes: string[] = [];
@@ -1866,34 +1788,27 @@ function draftVerifiedReleaseNotesFallback({
   const securityUpdates: string[] = [];
   const newFeatures: string[] = [];
 
-  for (let i = 0; i < features.length; i += 1) {
-    const f = features[i];
+  for (const f of features) {
     const title = String(f.title || '').trim();
     if (!title) continue;
     const desc = String(f.description || '').replace(/\s+/g, ' ').trim();
     const credit = f.requester_name ? ` (Requested by: ${f.requester_name})` : '';
-    let detail = '';
-    if (desc && desc.length >= 18) {
-      detail = `${desc.charAt(0).toUpperCase() + desc.slice(1).replace(/([^.!?])$/, '$1.')}${credit}`;
-    } else {
-      const outcome = pickUniqueDomainOutcome(title, 'feature', usedEndings, seed + i);
-      detail = `Added ${title} in ${prefix}.${outcome ? ` ${outcome}` : ''}${credit}`;
-    }
+    const detail = desc
+      ? `${desc.charAt(0).toUpperCase() + desc.slice(1).replace(/([^.!?])$/, '$1.')}${credit}`
+      : `Implemented ${title} in ${prefix}.${credit}`;
     requestedFeatures.push(`${title}: ${detail}`);
   }
 
-  for (let i = 0; i < fixedBugs.length; i += 1) {
-    const b = fixedBugs[i];
+  for (const b of fixedBugs) {
     const title = String(b.title || '').trim();
     if (!title) continue;
     const desc = String(b.description || '').replace(/\s+/g, ' ').trim();
-    let detail = '';
-    if (desc && desc.length >= 18) {
-      detail = desc.charAt(0).toUpperCase() + desc.slice(1).replace(/([^.!?])$/, '$1.');
-    } else {
-      const outcome = pickUniqueDomainOutcome(title, 'fix', usedEndings, seed + i);
-      detail = `Fixed ${title.toLowerCase()}.${outcome ? ` ${outcome}` : ''}`;
-    }
+    const fallbackDetail = /^fix(?:ed|es)?\b/i.test(title)
+      ? `Fixed ${title.replace(/^fix(?:ed|es)?\s+/i, '').toLowerCase()}.`
+      : `Resolved the reported issue with ${title.charAt(0).toLowerCase() + title.slice(1)}.`;
+    const detail = desc
+      ? desc.charAt(0).toUpperCase() + desc.slice(1).replace(/([^.!?])$/, '$1.')
+      : fallbackDetail;
     fixes.push(`${title}: ${detail}`);
   }
 
@@ -1905,17 +1820,17 @@ function draftVerifiedReleaseNotesFallback({
     ? canonicalizeCommitUpdates(systemUpdates, featureBugContext)
     : systemUpdates;
 
-  for (let i = 0; i < dedupedUpdates.length; i += 1) {
-    const item = String(dedupedUpdates[i] || '').trim();
+  for (const rawItem of dedupedUpdates) {
+    const item = String(rawItem || '').trim();
     if (!item) continue;
     if (/\b(?:security|vulnerabilit|permission|auth(?:entication|orization)?|encrypt|lockout|privacy|hardening)\b/i.test(item) && !/^fix\b/i.test(item)) {
-      securityUpdates.push(buildFallbackBullet(item, 'security', seed + i, usedEndings));
+      securityUpdates.push(buildFallbackBullet(item));
     } else if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|bug|mismatch|(?:layout|horizontal|modal|text)\s+overflow|wrap|broken|crash|fallback)\b/i.test(item)) {
-      fixes.push(buildFallbackBullet(item, 'fix', seed + i, usedEndings));
+      fixes.push(buildFallbackBullet(item));
     } else if (/^(?:improv|polish|clean|compact|sync|update|streamline|keep|align|expand|refine|enhance|make|center|style|standardize|elevate|move|stack|hide|reduce|trim|remove|drop|simplify|harden)\b|\b(?:layout|padding|spacing|width|alignment|contrast|responsive|clearer|visible|dialogs?)\b/i.test(item)) {
-      improvements.push(buildFallbackBullet(item, 'improvement', seed + i, usedEndings));
+      improvements.push(buildFallbackBullet(item));
     } else {
-      newFeatures.push(buildFallbackBullet(item, 'feature', seed + i, usedEndings));
+      newFeatures.push(buildFallbackBullet(item));
     }
   }
 
@@ -3176,7 +3091,7 @@ Deno.serve(async (request) => {
       .filter(Boolean);
     const previousTitle = String(body.previous_title || '').trim();
     const currentDraft = sanitizeReleaseDetails(String(body.current_draft || '').trim()).text;
-    const styleAngle = String(body.style_angle || 'Clear, warm, user-benefit focused release notes').trim();
+    const styleAngle = String(body.style_angle || 'Strictly factual, concise, plain-English release notes with zero promotional padding').trim();
     const variationSeed = Number.isFinite(Number(body.variation_seed)) ? Number(body.variation_seed) : Math.floor(Math.random() * 12);
     const clientPriorDetails = (Array.isArray(body.previous_release_details) ? body.previous_release_details : [])
       .map((item: any) => String(item || '').trim())
@@ -3248,11 +3163,11 @@ Deno.serve(async (request) => {
       ...priorBulletTopics.map((topic) => `- Already announced: ${topic}`)
     ].join('\n') || '- None (initial release).';
 
-    const prompt = `Write official, professionally crafted, human-sounding software release notes for myIPON (Group Savings and Financial Tracker). The product name is strictly "myIPON".
+    const prompt = `Write strictly factual, accurate, plain-English release notes for myIPON (Group Savings and Financial Tracker). The product name is strictly "myIPON".
 Version: ${version}
 Release Date: ${releaseDate}
-Voice & Editorial Angle: ${styleAngle}
-Freshness Pass: #${variationSeed + 1}
+Editorial Tone: ${styleAngle}
+Variation Pass: #${variationSeed + 1}
 
 Already shipped in earlier releases (DO NOT repeat, reword, or re-announce ANY of these topics):
 ${prevListText}
@@ -3260,13 +3175,13 @@ ${prevListText}
 Verified user-requested features implemented for ${version}:
 ${featureListText}
 
-Verified bug reports fixed for ${version} (summarize every resolved bug clearly in plain user-facing English under "fixes" without exposing usernames or reporter names):
+Verified bug reports fixed for ${version} (summarize every resolved bug accurately in plain user-facing English under "fixes" without exposing usernames or reporter names):
 ${fixedBugListText}
 
 Verified system updates landed since the previous release (${systemUpdates.length} distinct items — analyze EVERY genuinely new user-facing item 1-to-1 without skipping or merging unrelated items):
 ${updatesListText}
-${previousTitle ? `\nPrevious title in editor (craft a distinct, fresh headline keeping "${formatReleaseVersionPrefix(version)}:" at the front):\n${previousTitle}` : ''}
-${currentDraft ? `\nPrevious draft in editor (generate completely fresh phrasing, intro, bullet openings, and outro—NEVER recycle wording verbatim from it):\n${currentDraft}` : ''}
+${previousTitle ? `\nPrevious title in editor (craft a distinct, factual headline keeping "${formatReleaseVersionPrefix(version)}:" at the front):\n${previousTitle}` : ''}
+${currentDraft ? `\nPrevious draft in editor (vary sentence wording slightly while keeping every fact 100% accurate and never inventing new claims):\n${currentDraft}` : ''}
 
 Categorization Rules (omit empty categories by returning [] for unused arrays):
 - "new_features": Newly added user-facing capabilities or pages.
@@ -3276,26 +3191,26 @@ Categorization Rules (omit empty categories by returning [] for unused arrays):
 - "security_updates": Access control, account protection, privacy, authentication, or security-hardening improvements (leave [] if none apply).
 - "other_changes": Relevant user-facing updates that do not cleanly fit the categories above (leave [] unless genuinely needed).
 
-Writing & Accuracy Standards:
-- Write strictly from the perspective of an everyday myIPON saver or group administrator—like official mobile/web app release notes. Describe ONLY what users can see and use inside the app, NEVER how developers coded it, styled CSS, split clauses, updated AI prompts, or ran tests.
-- Every bullet MUST follow "Descriptive Feature or Change Name: Concrete explanation".
-- Explain clearly what changed, how it behaves now, and where users see it—using crisp, varied sentence structure tailored to each specific change.
-- STRICTLY avoid repetitive closing tags or boilerplate endings (such as "for a smoother experience", "for improved usability", "keeping workflows error-free", or "to keep your app streamlined") at the end of bullets; end each bullet naturally right after its concrete detail.
-- Never invent or embellish unverified changes. If an item is purely internal developer work (tests, build scripts, raw schema/migration filenames, Edge Function plumbing, CSS tokens/selectors, AI prompt/release-note tooling, CLI scripts, git tooling), exclude it completely instead of rewriting code jargon.
-- Keep the tone friendly, polished, clear, natural English with consistent myIPON terminology.
-- The "title" MUST begin strictly with "${formatReleaseVersionPrefix(version)}:" followed by a specific 3-7 word headline summarizing this release's most meaningful additions and fixes.
+Accuracy & Grounding Standards (CRITICAL):
+- Report ONLY verified facts directly supported by the listed updates, fixed bugs, or implemented feature requests above.
+- NEVER invent, exaggerate, extrapolate, or guess unmentioned mechanisms, severity words ("critical"), data claims ("saved preferences are preserved", "without unexpected resets", "over time"), or benefits not explicitly stated in the source item.
+- Keep each bullet concise and concrete (1 crisp sentence is preferred; add a 2nd sentence ONLY when the source item itself supplies extra verified detail). Never pad short items with speculative commentary.
+- Write strictly from what users can directly see and use inside myIPON—NEVER mention developer implementation details (CSS, scripts, migrations, prompts, or tests). If an item is purely internal engineering work, exclude it completely instead of rewriting code jargon.
+- Every bullet MUST follow "Descriptive Feature or Change Name: Factual explanation".
+- STRICTLY forbid empty promotional filler or generic closing clauses (such as "resulting in a more stable and dependable experience", "users can now rely on", "for a smoother experience", "for improved usability", "to keep workflows error-free", or "for peace of mind"); end immediately after the factual change.
+- The "title" MUST begin strictly with "${formatReleaseVersionPrefix(version)}:" followed by a specific, factual 3-7 word headline summarizing this release.
 
 Output strictly valid JSON with this exact schema (EVERY entry inside each string array MUST be a plain JSON string, NEVER a nested object):
 {
-  "title": "${formatReleaseVersionPrefix(version)}: Concise 3-7 word headline",
-  "intro": "1-2 short, natural paragraphs introducing ${version} with fresh wording tailored specifically to the changes in this update.",
-  "new_features": ["Feature Name: Detailed user-focused explanation covering what changed, how it works, what users can expect, and practical impact."],
-  "fixes": ["Fix Name: Detailed explanation of the resolved issue, how workflows now behave, and the reliability impact for users."],
-  "improvements": ["Improvement Name: Detailed explanation of what was enhanced, how it behaves now, and how it improves everyday use."],
-  "requested_features": ["Requested Feature Name: Detailed explanation of the shipped feature and its impact (Requested by: Name if credited)."],
+  "title": "${formatReleaseVersionPrefix(version)}: Concise 3-7 word factual headline",
+  "intro": "1 brief, factual sentence introducing ${version} and summarizing its actual updates without hype.",
+  "new_features": ["Feature Name: Concise, strictly factual explanation stating only what was added and where users use it."],
+  "fixes": ["Fix Name: Concise, strictly factual explanation stating only the issue resolved based on the verified item."],
+  "improvements": ["Improvement Name: Concise, strictly factual explanation stating only what was updated on screen or in behavior."],
+  "requested_features": ["Requested Feature Name: Concise, strictly factual explanation of the shipped feature (Requested by: Name if credited)."],
   "security_updates": [],
   "other_changes": [],
-  "outro": "1 concise, natural closing paragraph thanking myIPON savers for feedback and inviting continued suggestions."
+  "outro": "1 brief, polite closing sentence thanking myIPON savers for feedback."
 }`;
 
     if (geminiKeys.length) {
@@ -3308,7 +3223,7 @@ Output strictly valid JSON with this exact schema (EVERY entry inside each strin
             generated = await generateWithGemini({
               apiKey: entry.key,
               prompt,
-              systemInstruction: 'You are the head of product communications for myIPON, a group savings platform. Write authentic, richly detailed, human-sounding software release notes based strictly on the verified updates provided. Never invent changes, never use static boilerplate, never leak internal filenames/DB/CLI jargon. Output strictly valid JSON with flat string arrays (never nested item objects).'
+              systemInstruction: 'You write strictly factual, unembellished, plain-English software release notes for myIPON based ONLY on the verified changes provided. Never invent claims, mechanisms, severity labels like "critical", or unmentioned guarantees (such as "saved preferences", "without unexpected resets", or "resulting in a more stable and dependable experience"). Keep short items to one crisp factual sentence. Never leak internal filenames/DB/CLI jargon. Output strictly valid JSON with flat string arrays (never nested item objects).'
             });
             activeGeminiKey = entry.key;
             break;
@@ -3340,7 +3255,7 @@ Output strictly valid JSON with this exact schema (EVERY entry inside each strin
 
         if (missingItems.length > 0 && missingItems.length <= 40) {
           try {
-            const pass2Prompt = `The following verified user-facing system changes for myIPON ${version} were missed in the initial changelog draft. Analyze each item and classify any genuine user-facing update into its proper category, writing detailed 1-2 sentence descriptions explaining what changed, how it works, what users can expect, and its practical impact. Omit any item that is purely internal code/testing/build maintenance. Use fresh, non-repetitive phrasing.
+            const pass2Prompt = `The following verified user-facing system changes for myIPON ${version} were missed in the initial changelog draft. Classify each genuine user-facing update into its proper category and write 1 crisp, strictly factual sentence stating ONLY what is supported by that source item—never invent unmentioned benefits, severity labels, data/preference guarantees, or promotional closing phrases like "more stable and dependable experience". Omit any item that is purely internal code/testing/build maintenance.
 
 Missed changes (${missingItems.length}):
 ${missingItems.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}
@@ -3357,7 +3272,7 @@ Output strictly valid JSON with only these flat arrays of plain strings (no nest
             const { parsed: pass2 } = await generateWithGemini({
               apiKey: activeGeminiKey,
               prompt: pass2Prompt,
-              systemInstruction: 'You write accurate, detailed, human-sounding release notes for myIPON strictly from provided changes. Output strictly valid JSON with plain string arrays.'
+              systemInstruction: 'You write strictly factual, concise release notes for myIPON using ONLY the verified changes provided—never invent details or add promotional filler. Output strictly valid JSON with plain string arrays.'
             });
             nf.push(...coerceReleaseBulletList(pass2.new_features));
             fx.push(...coerceReleaseBulletList(pass2.fixes));

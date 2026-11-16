@@ -1468,6 +1468,18 @@
     return { newFeatures, fixes, improvements, securityUpdates };
   }
 
+  function stripReleaseFluffTails(text) {
+    const out = String(text || '').trim();
+    if (!out) return '';
+    return out
+      .replace(/\.\s+(?:Users|You)\s+can\s+now\s+(?:rely on|enjoy|expect)\s+(?:a\s+)?(?:more\s+)?(?:consistent|seamless|smooth(?:er)?|stable|dependable|reliable)[^.]*\b(?:experience|workflow|dependability)\.?$/i, '.')
+      .replace(/,\s*(?:resulting in|leading to|providing|delivering|creating|offering|ensuring|giving users)\s+(?:a|an)\s+(?:more\s+)?(?:stable|dependable|reliable|smooth(?:er)?|seamless|consistent|streamlined|intuitive|polished|enjoyable|hassle-free|responsive)(?:\s+(?:and|,)\s+(?:more\s+)?(?:stable|dependable|reliable|smooth(?:er)?|seamless|consistent|streamlined|intuitive|polished|enjoyable|hassle-free|responsive))*\s+(?:user\s+|overall\s+|app\s+|tracking\s+)?(?:experience|workflow|process|journey|performance)\.?$/i, '.')
+      .replace(/(?:,\s*|\s+)(?:for|to ensure|to deliver|to provide)\s+(?:a|an)\s+(?:more\s+)?(?:stable|dependable|reliable|smooth(?:er)?|seamless|consistent|streamlined|intuitive|polished|enjoyable|hassle-free|responsive)(?:\s+(?:and|,)\s+(?:more\s+)?(?:stable|dependable|reliable|smooth(?:er)?|seamless|consistent|streamlined|intuitive|polished|enjoyable|hassle-free|responsive))*\s+(?:user\s+|overall\s+|app\s+|tracking\s+)?(?:experience|workflow|process|journey)\.?$/i, '.')
+      .replace(/\s+\./g, '.')
+      .replace(/\.\.+/g, '.')
+      .trim();
+  }
+
   function sanitizeReleaseDetails(rawDetails) {
     const text = String(rawDetails || '').trim();
     if (!text) return { text: '', bulletCount: 0, strippedCount: 0 };
@@ -1482,15 +1494,16 @@
         return OBJECT_STR_RE.test(block) || TECH_COMMIT_RE.test(block) || CODE_TOKEN_RE.test(block) ? '' : block.trim();
       }
       const header = !/^[•\-*]\s+/.test(lines[0]) ? lines[0] : '';
-      const bullets = (header ? lines.slice(1) : lines).filter((line) => {
-        const clean = line.replace(/^[•\-*]\s+/, '').trim();
+      const bullets = (header ? lines.slice(1) : lines).map((line) => {
+        const prefix = line.match(/^([•\-*]\s+)/)?.[1] || '• ';
+        const clean = stripReleaseFluffTails(line.replace(/^[•\-*]\s+/, '').trim());
         if (!clean || OBJECT_STR_RE.test(clean) || TECH_COMMIT_RE.test(clean) || CODE_TOKEN_RE.test(clean)) {
           strippedCount += 1;
-          return false;
+          return '';
         }
         bulletCount += 1;
-        return true;
-      });
+        return `${prefix}${clean}`;
+      }).filter(Boolean);
       if (!bullets.length) return '';
       return header ? `${header}\n${bullets.join('\n')}` : bullets.join('\n');
     }).filter(Boolean);
@@ -1500,7 +1513,7 @@
   function coerceReleaseBulletText(raw) {
     if (raw == null) return '';
     if (typeof raw === 'string') {
-      const clean = raw.replace(/^[•\s*-]+/, '').trim();
+      const clean = stripReleaseFluffTails(raw.replace(/^[•\s*-]+/, '').trim());
       return /\[object\s+[^\]]+\]/i.test(clean) ? '' : clean;
     }
     if (Array.isArray(raw)) return raw.map(coerceReleaseBulletText).filter(Boolean).join(' ').trim();
@@ -1555,12 +1568,10 @@
   }
 
   const RELEASE_STYLE_ANGLES = [
-    'Conversational, warm, human product story highlighting everyday convenience and real-life savings moments',
-    'Crisp, high-energy changelog voice spotlighting practical benefits for group members and treasurers',
-    'Friendly community-first tone celebrating cleaner workflows, visual polish, and reliable group tracking',
-    'Clear, modern app-release voice focused on what changed on screen and why daily tracking feels faster',
-    'Upbeat, approachable product update highlighting visual clarity, safer controls, and smoother collaboration',
-    'Concise, benefit-driven release notes written like a thoughtful product manager talking directly to users'
+    'Strictly factual, direct plain-English summary sticking closely to the verified changes',
+    'Concise, plainspoken changelog stating what changed on screen with zero promotional filler',
+    'Clear, objective release notes written for savers and group admins without exaggerated claims',
+    'Matter-of-fact product update highlighting exact additions and fixes without embellishment'
   ];
   let currentReleaseBulletVariant = 0;
   let hasAiDraftInEditor = false;

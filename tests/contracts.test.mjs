@@ -1903,9 +1903,10 @@ test('release composer reads live recent commits and prior releases instead of f
   ]);
   assert.ok(canonicalPreferLonger.some((item) => /Light\/Dark mode switcher inside Settings/i.test(item)), 'canonicalizeCommitUpdates must replace short subject clause with richer commit body explanation');
 
+  const fluffMatch = superAdminJs.match(/function stripReleaseFluffTails\(text\)\s*\{[\s\S]*?\n  \}/);
   const sanMatch = superAdminJs.match(/function sanitizeReleaseDetails\(rawDetails\)\s*\{[\s\S]*?\n  \}/);
-  assert.ok(sanMatch, 'sanitizeReleaseDetails must exist in js/super-admin.js');
-  const sanitizeFn = new Function(`${sharedCommitScope}; ${sanMatch[0]}; return sanitizeReleaseDetails;`)();
+  assert.ok(fluffMatch && sanMatch, 'stripReleaseFluffTails and sanitizeReleaseDetails must exist in js/super-admin.js');
+  const sanitizeFn = new Function(`${sharedCommitScope}; ${fluffMatch[0]}; ${sanMatch[0]}; return sanitizeReleaseDetails;`)();
   const cleaned = sanitizeFn([
     'Welcome to myIPON Update 1.4!',
     'New Features\n• Add group ownership transfer and permanent deletion flow\n• Start group creation without pre-opened invite row and fix enforce_group_scope old.amount\n• Automate Supabase CLI migrations and Edge Function deployment',
@@ -1970,7 +1971,7 @@ test('release composer reads live recent commits and prior releases instead of f
   const coerceMatch = superAdminJs.match(/function coerceReleaseBulletText\(raw\)\s*\{[\s\S]*?\n  \}/);
   const formatBodyMatch = superAdminJs.match(/function formatSectionedReleaseBody\([\s\S]*?\n  \}/);
   assert.ok(coerceMatch && formatBodyMatch, 'coerceReleaseBulletText and formatSectionedReleaseBody must exist in js/super-admin.js');
-  const formatBodyFn = new Function(`${sharedCommitScope}; ${coerceMatch[0]}; ${formatBodyMatch[0]}; return formatSectionedReleaseBody;`)();
+  const formatBodyFn = new Function(`${sharedCommitScope}; ${fluffMatch[0]}; ${coerceMatch[0]}; ${formatBodyMatch[0]}; return formatSectionedReleaseBody;`)();
   assert.match(edgeTs, /coerceReleaseBulletText/);
   assert.match(edgeTs, /coerceReleaseBulletList/);
   assert.match(edgeTs, /OBJECT_STR_RE/);
@@ -11014,4 +11015,55 @@ test('Super Admin and manage-account select and enforce feature_requests.allow_c
   assert.match(edgeTs, /from\('feature_requests'\)[\s\S]*?\.select\('title,details,requester_id,allow_credit'\)/);
   assert.match(edgeTs, /f\.allow_credit !== false && f\.requester_name/);
   assert.match(edgeTs, /from\('profiles'\)[\s\S]*?\.select\('id,full_name'\)/);
+});
+
+test('Write with AI keeps release announcements strictly factual without AI embellishment or canned outcome padding', async () => {
+  const { stripTypeScriptTypes } = await import('node:module');
+  const edgeTs = read('supabase/functions/manage-account/index.ts');
+  const saJs = read('js/super-admin.js');
+  const saHtml = read('super-admin.html');
+
+  // 1. Gemini generation config uses low temperature for factual fidelity and prompts forbid embellishment
+  assert.match(edgeTs, /temperature:\s*0\.25\b/);
+  assert.match(edgeTs, /topP:\s*0\.8\b/);
+  assert.match(edgeTs, /NEVER invent, exaggerate, extrapolate, or guess unmentioned mechanisms/);
+  assert.doesNotMatch(edgeTs, /function pickUniqueDomainOutcome/);
+  assert.match(saJs, /RELEASE_STYLE_ANGLES\s*=\s*\[[\s\S]*Strictly factual/);
+  assert.doesNotMatch(saJs, /product story|high-energy|celebrating cleaner workflows/i);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-90/);
+
+  // 2. Fallback composer produces crisp factual sentences with zero fabricated outcome padding
+  const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
+  const end = edgeTs.indexOf('Deno.serve(');
+  const jsCode = stripTypeScriptTypes(edgeTs.slice(start, end), { mode: 'transform' });
+  const { draftVerifiedReleaseNotesFallback, sanitizeReleaseDetails } = new Function('Deno', 'crypto', 'process', `
+    ${jsCode}
+    return { draftVerifiedReleaseNotesFallback, sanitizeReleaseDetails };
+  `)({ env: { get: () => '' }, serve() {} }, globalThis.crypto, process);
+
+  const shortFallback = draftVerifiedReleaseNotesFallback({
+    version: '1.6',
+    features: [{ title: 'Dark Mode Switch', description: 'Dark theme option', requester_name: 'Ana' }],
+    fixedBugs: [{ title: 'Fix retention bugs', description: '' }],
+    systemUpdates: ['Expand budget workspace full-width']
+  });
+
+  assert.match(shortFallback.details, /• Dark Mode Switch: Dark theme option\. \(Requested by: Ana\)/);
+  assert.match(shortFallback.details, /• Fix retention bugs: Fixed retention bugs\./);
+  assert.match(shortFallback.details, /• Budget Workspace: Expanded budget workspace full-width\./);
+  assert.doesNotMatch(shortFallback.details, /Related actions now complete|without unexpected resets|without unintended resets|saved preferences|resulting in a more stable and dependable experience|stay protected behind verified permissions/i);
+
+  // 3. sanitizeReleaseDetails strips empty promotional tails while keeping real facts intact
+  const dirtyText = [
+    'Fixes',
+    '• Data Retention: Fixed retention issue. Users can now rely on consistent data storage without unexpected resets, resulting in a more stable and dependable experience.',
+    '• Modal Scroll: Fixed dialog scrolling, for a smoother workflow.',
+    '• History Audit: Retained 30-day audit history on deleted records.'
+  ].join('\n');
+  const edgeSanitized = sanitizeReleaseDetails(dirtyText);
+  assert.match(edgeSanitized.text, /• Data Retention: Fixed retention issue\./);
+  assert.match(edgeSanitized.text, /• Modal Scroll: Fixed dialog scrolling\./);
+  assert.match(edgeSanitized.text, /• History Audit: Retained 30-day audit history on deleted records\./);
+  assert.doesNotMatch(edgeSanitized.text, /without unexpected resets|more stable and dependable experience|for a smoother workflow/i);
+  assert.match(saJs, /function stripReleaseFluffTails\(text\)/);
 });
