@@ -17,18 +17,16 @@
     </ul>
     <h3>Notifications &amp; email delivery scope</h3>
     <p><strong>Notifications and direct chat messages are delivered in-app only.</strong> You must open or keep myIPON running on your device or browser to view and receive real-time alerts for new messages, payment reviews, contribution updates, replies, and announcements. Activity notifications are <strong>not sent via email</strong> and are not guaranteed to arrive when the app is completely closed on a phone.</p>
-    <p>Automated <strong>emails</strong> are reserved strictly for account security and retention notices: 6-digit email verification (OTP) codes, password recovery links, dormant savings check-in reminders (90 days idle), and 7-day prior warnings before 6-month inactive account or abandoned savings retention.</p>
-    <h3>Approvals, ongoing savings protection &amp; dormant retention</h3>
+    <p>Automated <strong>emails</strong> are reserved strictly for account security and essential notices: 6-digit email verification (OTP) codes, password recovery links, and 7-day prior warnings before 6-month inactive account cleanup.</p>
+    <h3>Approvals, ongoing savings protection &amp; completion bin</h3>
     <p>Only confirmed entries affect tracked savings totals. Rejected and voided entries carry mandatory reasons and remain recorded in the group audit trail (retained for <strong>90 days</strong>) for accountability.</p>
-    <p><strong>Ongoing savings &amp; active goals are never deleted while you keep saving</strong>, no matter how many months or years it takes your group to reach a target. Active savings records, confirmed ledgers, and ongoing goals stay intact as long as contributions or goal activity continue.</p>
-    <p><strong>Forgotten or abandoned savings policy:</strong> To prevent completely abandoned workspaces from filling storage indefinitely while giving fair notice, groups with <strong>zero contributions, transactions, or goal updates</strong> receive a friendly <strong>email reminder at 90 days</strong>, and if still untouched by <strong>6 months</strong> receive a <strong>7-day prior email notice</strong> before dormant records and untouched goals move into the <strong>30-day Recycle Bin</strong> (still recoverable for 30 days before permanent database &amp; cloud storage removal).</p>
+    <p><strong>Ongoing savings &amp; active goals are never deleted by retention</strong> regardless of how many months or years it takes your group to reach a target. Active savings records, confirmed ledgers, and ongoing goals stay intact until you choose to wrap up a milestone or group cycle.</p>
     <p>Group Owners and Administrators manage invitations, role assignments, ownership transfers, the <strong>30-day soft-delete member recovery bin</strong>, completed goals, finished batch resets, and permanent group deletions. When a goal or finished savings batch is marked <strong>Done / Removed</strong>, it moves into the <strong>30-day Recycle Bin</strong> with a visible remaining-days countdown before automatic removal from the database and cloud storage. Completed financial years older than <strong>1 year</strong> can also be exported to CSV first and rolled up into permanent annual net-savings summaries (<code>financial_annual_archives</code>).</p>
     <h3>Uploads, character limits &amp; automatic cleanup</h3>
     <p>Profile photos, group QR codes, receipts, announcement media, record discussion replies, and chat attachments must stay lawful and relevant to group tracking. Never post PINs, OTP codes, passwords, or private banking credentials. Chat messages, transaction notes, and record replies are capped at <strong>500 characters</strong> (Group Announcements remain unlimited so full notices stay complete).</p>
     <p>To keep database and cloud storage responsive without disturbing active savers, automated nightly maintenance runs every midnight (<strong>12:00 AM Manila time</strong>) strictly on expired temporary/binned data:</p>
     <div class="policy-retention-grid">
-      <div class="policy-retention-row"><span class="policy-ttl-badge is-keep">Ongoing</span><div class="policy-retention-detail"><strong>Active savings &amp; ongoing goals (Protected)</strong><span>Confirmed group savings ledgers and active goals are <strong>never auto-deleted</strong> while deposits or goal updates stay active, regardless of duration.</span></div></div>
-      <div class="policy-retention-row"><span class="policy-ttl-badge is-warn">90d &rarr; 6m</span><div class="policy-retention-detail"><strong>Forgotten savings &amp; goals (Email reminder + 7d notice)</strong><span>If a group stops depositing or updating goals: an email check-in goes out at <strong>90 days</strong> and a final warning <strong>7 days prior to 6 months</strong> before dormant data moves into the 30-day Bin.</span></div></div>
+      <div class="policy-retention-row"><span class="policy-ttl-badge is-keep">Ongoing</span><div class="policy-retention-detail"><strong>Active savings &amp; ongoing goals (Protected)</strong><span>Confirmed group savings ledgers and active goals are <strong>never auto-deleted</strong> by retention regardless of duration. Accounts participating in actively saving groups are also protected from inactivity purge.</span></div></div>
       <div class="policy-retention-row"><span class="policy-ttl-badge">30-day Bin</span><div class="policy-retention-detail"><strong>Completed goals, finished batches &amp; removed items</strong><span>Goals or savings batches marked Done / Reset, soft-deleted members, and deleted announcements stay recoverable in the Bin for <strong>30 days</strong> with a live days-left countdown, then auto-delete permanently from the database and Storage.</span></div></div>
       <div class="policy-retention-row"><span class="policy-ttl-badge">30 days</span><div class="policy-retention-detail"><strong>Call logs &amp; read notifications</strong><span>Voice/video call logs and read notifications clear automatically after 30 days.</span></div></div>
       <div class="policy-retention-row"><span class="policy-ttl-badge">90 days</span><div class="policy-retention-detail"><strong>Direct messages, chat files, logs &amp; rejected receipts</strong><span>Chat messages, chat attachments, audit logs, security activity events, unread notifications, and rejected or voided receipt files are deleted automatically after 90 days.</span></div></div>
@@ -46,7 +44,7 @@
       <li>Authenticate accounts (including email OTP verification, password recovery, and optional TOTP two-factor authentication) and enforce database row-level isolation per group and role.</li>
       <li>Calculate monthly summaries, calendar progress, wallet balances, CSV/print reports, annual roll-up summaries, and audit logs.</li>
       <li>Store uploaded images, voice notes, documents, and receipts inside dedicated cloud object storage buckets (<code>ipon-media</code>, <code>chat-attachments</code>, <code>announcements</code>, <code>record-comments</code>) referenced by URL rather than storing raw binary blobs or Base64 strings inside database tables.</li>
-      <li>Deliver <strong>in-app notifications</strong> (and device banners while myIPON stays open) for payment reviews, chat messages, discussion replies, account status changes, and announcements. Activity alerts are <strong>not sent to your email</strong>; email is reserved strictly for OTP verification codes, password recovery links, dormant savings reminders (90 days idle), and 7-day inactivity/retention warnings.</li>
+      <li>Deliver <strong>in-app notifications</strong> (and device banners while myIPON stays open) for payment reviews, chat messages, discussion replies, account status changes, and announcements. Activity alerts are <strong>not sent to your email</strong>; email is reserved strictly for OTP verification codes, password recovery links, and 7-day inactivity warnings.</li>
       <li>Summarize high-level platform updates in Super Admin release notes without exposing private group financial balances, and display optional requester credit on implemented feature requests when attribution is enabled.</li>
     </ul>
     <h3>Browser storage &amp; device alerts</h3>
@@ -56,8 +54,7 @@
     <h3>Detailed data retention, ongoing savings protection &amp; automatic deletion</h3>
     <p>To keep database tables lean and fast while protecting active group savers permanently, scheduled <code>pg_cron</code> jobs execute nightly at <strong>12:00 AM Manila time</strong> (paired with cloud Storage object cleanup and PostgreSQL <code>autovacuum</code> disk reclamation):</p>
     <div class="policy-retention-grid">
-      <div class="policy-retention-row"><span class="policy-ttl-badge is-keep">Ongoing</span><div class="policy-retention-detail"><strong>Active savings &amp; ongoing goals (Immune)</strong><span>Active goals (<code>savings_goals</code>) and unbinned savings records (<code>contributions</code>, <code>withdrawals</code>, <code>expenses</code>, <code>contribution_periods</code>) are never automatically erased while contributions or goal updates remain active.</span></div></div>
-      <div class="policy-retention-row"><span class="policy-ttl-badge is-warn">90d &rarr; 6m</span><div class="policy-retention-detail"><strong>Dormant / forgotten savings (Email + 7d notice)</strong><span>Groups with zero deposits or goal updates receive an email reminder at <strong>90 days</strong> and a final warning <strong>7 days prior to 6 months</strong> before dormant ledgers and untouched goals move into the 30-day Bin.</span></div></div>
+      <div class="policy-retention-row"><span class="policy-ttl-badge is-keep">Ongoing</span><div class="policy-retention-detail"><strong>Unfinished savings &amp; active goals (Immune)</strong><span>Active goals (<code>savings_goals</code>) and unbinned savings records (<code>contributions</code>, <code>withdrawals</code>, <code>expenses</code>, <code>contribution_periods</code>) are never automatically erased regardless of saving duration.</span></div></div>
       <div class="policy-retention-row"><span class="policy-ttl-badge">7 days</span><div class="policy-retention-detail"><strong>Login rate-limit &amp; throttle logs</strong><span>Failed sign-in attempt counters (<code>auth_login_throttles</code>) expire automatically after 7 days.</span></div></div>
       <div class="policy-retention-row"><span class="policy-ttl-badge">30-day Bin</span><div class="policy-retention-detail"><strong>Done / reset batches, binned goals, members &amp; notices</strong><span>Completed goals or reset savings batches (<code>savings_cycle_batches</code>), deleted announcements, and soft-deleted member profiles remain recoverable for <strong>30 days</strong> with an exact remaining-days countdown before permanent purge from PostgreSQL and cloud Storage.</span></div></div>
       <div class="policy-retention-row"><span class="policy-ttl-badge">30 days</span><div class="policy-retention-detail"><strong>Call logs &amp; read notifications</strong><span>Voice/video call session metadata (<code>call_sessions</code>) and read alerts (<code>notifications</code>) are purged automatically after 30 days.</span></div></div>
@@ -137,7 +134,7 @@
             <div class="retention-policy-grid">
               <article class="retention-policy-item">
                 <strong>Ongoing · Active savings &amp; goals (Protected)</strong>
-                <p>Active savings and goals stay safe while you keep saving. If untouched for <strong>90 days</strong> we send an email check-in; after <strong>6 months</strong> without deposits or goal edits (+ a 7-day notice), dormant data moves to the 30-day Bin.</p>
+                <p>Unfinished savings records and active goals are <strong>never deleted automatically</strong> no matter how long your group saves. Only completed goals or finished batches you move to the Bin enter a 30-day countdown.</p>
               </article>
               <article class="retention-policy-item">
                 <strong>30-day Bin · Done goals, reset batches, members &amp; alerts</strong>
@@ -154,6 +151,10 @@
               <article class="retention-policy-item">
                 <strong>1+ year · CSV annual roll-up &amp; cloud media storage</strong>
                 <p>Confirmed year-old ledgers can be exported to CSV first in <strong>Reports &rarr; Annual data roll-up</strong> and rolled into permanent totals. Messages &amp; notes are capped at 500 characters, and media lives in cloud Storage alongside PostgreSQL <code>autovacuum</code>.</p>
+              </article>
+              <article class="retention-policy-item">
+                <strong>In-app alerts vs. Email delivery</strong>
+                <p>Chat messages, payment reviews, and activity notifications are delivered <strong>in-app only</strong> while myIPON is open. Automated emails are sent strictly for OTP verification codes, password resets, 90-day dormant savings check-ins, and 7-day retention notices.</p>
               </article>
             </div>
             <div class="retention-policy-actions">
@@ -203,7 +204,7 @@
         <strong>Storage &amp; data retention reminder</strong>
         <button class="dialog-close retention-reminder-close" type="button" aria-label="Dismiss retention reminder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </div>
-      <p>Ongoing savings &amp; active goals stay safe while active; abandoned savings get 90-day &amp; 6-month email reminders before the 30-day Bin, chat clears after 90 days, and inactive accounts (6 months) get a 7-day email notice.</p>
+      <p>Ongoing savings &amp; active goals are never deleted automatically. Binned done items auto-clear after 30 days, chat messages &amp; media clear after 90 days, and inactive accounts (6 months) receive a 7-day email notice.</p>
       <div class="retention-reminder-actions">
         <button class="button button-secondary button-sm" type="button" data-retention-rules-open>Retention rules</button>
         <button class="button button-primary button-sm" type="button" data-retention-ack>Got it</button>
@@ -464,7 +465,7 @@
           if (typeof reloadBin === 'function') await reloadBin();
           if (typeof onChanged === 'function') await onChanged('recover', itemType);
         } catch (error) {
-          if (typeof reloadBin === 'function') await reloadBin().catch(() => {});
+          if (typeof reloadBin === 'function') await reloadBin().catch(() => { });
           api.toast?.(api.friendlyError ? api.friendlyError(error) : String(error?.message || error), 'error');
         } finally {
           api.setBusy?.(recoverBtn, false);
@@ -491,7 +492,7 @@
         if (typeof reloadBin === 'function') await reloadBin();
         if (typeof onChanged === 'function') await onChanged('purge', itemType);
       } catch (error) {
-        if (typeof reloadBin === 'function') await reloadBin().catch(() => {});
+        if (typeof reloadBin === 'function') await reloadBin().catch(() => { });
         api.toast?.(api.friendlyError ? api.friendlyError(error) : String(error?.message || error), 'error');
       } finally {
         api.setBusy?.(purgeBtn, false);
