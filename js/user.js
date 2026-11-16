@@ -407,5 +407,5 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions', 'groups', 'savings_goals', 'record_comments'], refresh);
+  Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions', 'groups', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions', 'record_comments'], refresh);
 })();

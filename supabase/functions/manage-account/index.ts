@@ -645,18 +645,21 @@ async function drainPendingStorageDeletions(admin: ReturnType<typeof createClien
 }
 
 async function runRetentionSweep(admin: ReturnType<typeof createClient>, { runSqlCleanup = false } = {}) {
+  const errors: string[] = [];
   let sqlSummary: unknown = null;
   if (runSqlCleanup) {
-    const { data } = await admin.rpc('run_data_retention_cleanup');
+    const { data, error } = await admin.rpc('run_data_retention_cleanup');
+    if (error) errors.push(`run_data_retention_cleanup: ${error.message}`);
     sqlSummary = data ?? null;
   }
 
   const storageFirst = await drainPendingStorageDeletions(admin);
 
-  const { data: inactive } = await admin.rpc('collect_inactive_account_candidates', {
+  const { data: inactive, error: inactiveErr } = await admin.rpc('collect_inactive_account_candidates', {
     p_inactive_months: 6,
     p_warning_days: 7
   });
+  if (inactiveErr) errors.push(`collect_inactive_account_candidates: ${inactiveErr.message}`);
 
   const warnList = Array.isArray((inactive as { warn_candidates?: unknown[] } | null)?.warn_candidates)
     ? (inactive as { warn_candidates: Array<{ user_id: string; email?: string | null; full_name?: string; scheduled_purge_at?: string }> }).warn_candidates
@@ -692,11 +695,14 @@ async function runRetentionSweep(admin: ReturnType<typeof createClient>, { runSq
   }
 
   // Dormant / abandoned savings reminders (90 days idle) & 6-month retention workflow -> 30-day Bin
-  const { data: dormant } = await admin.rpc('collect_dormant_savings_groups', {
+  const { data: dormant, error: dormantErr } = await admin.rpc('collect_dormant_savings_groups', {
     p_remind_days: 90,
     p_inactive_months: 6,
     p_warning_days: 7
-  }).catch(() => ({ data: null }));
+  }).catch((err) => ({ data: null, error: err }));
+  if (dormantErr) {
+    errors.push(`collect_dormant_savings_groups: ${dormantErr instanceof Error ? dormantErr.message : String((dormantErr as { message?: string })?.message || dormantErr)}`);
+  }
 
   type DormantRecipient = { user_id: string; email?: string | null; full_name?: string };
   type DormantGroup = { group_id: string; group_name?: string; last_activity_at?: string; scheduled_bin_at?: string; recipients?: DormantRecipient[] };
@@ -761,15 +767,20 @@ async function runRetentionSweep(admin: ReturnType<typeof createClient>, { runSq
 
   let dormantBinnedGroups = 0;
   for (const grp of binGroups) {
-    const { data: moveRes } = await admin.rpc('move_dormant_savings_group_to_bin', { p_group_id: grp.group_id }).catch(() => ({ data: null }));
-    if ((moveRes as { moved?: boolean } | null)?.moved) {
+    const { data: moveRes, error: moveErr } = await admin.rpc('move_dormant_savings_group_to_bin', { p_group_id: grp.group_id }).catch((err) => ({ data: null, error: err }));
+    if (moveErr) {
+      errors.push(`move_dormant_savings_group_to_bin(${grp.group_id}): ${moveErr instanceof Error ? moveErr.message : String((moveErr as { message?: string })?.message || moveErr)}`);
+    } else if ((moveRes as { moved?: boolean } | null)?.moved) {
       dormantBinnedGroups += 1;
     }
   }
 
-  const storageAfter = purgedUsers > 0 ? await drainPendingStorageDeletions(admin) : { drained: 0 };
+  const storageAfter = (purgedUsers > 0 || runSqlCleanup || dormantBinnedGroups > 0)
+    ? await drainPendingStorageDeletions(admin)
+    : { drained: 0 };
 
   return {
+    errors,
     sql_summary: sqlSummary,
     storage_files_removed: storageFirst.drained + storageAfter.drained,
     inactive_warned_emails: warnedCount,
@@ -1934,7 +1945,7 @@ Deno.serve(async (request) => {
       return json({ error: 'Unauthorized maintenance invocation.' }, 401);
     }
     const result = await runRetentionSweep(admin, { runSqlCleanup: Boolean(body.run_sql) });
-    return json({ success: true, ...result });
+    return json({ success: result.errors.length === 0, ...result }, result.errors.length ? 500 : 200);
   }
 
   const authorization = request.headers.get('Authorization');

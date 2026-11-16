@@ -192,7 +192,9 @@
       reg.update().catch(() => { });
       const checkSw = () => reg.update().catch(() => { });
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkSw(); });
+      window.addEventListener('focus', checkSw);
       window.addEventListener('online', checkSw);
+      setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine !== false) checkSw(); }, 5 * 60 * 1000);
     }).catch(() => { });
     navigator.serviceWorker.addEventListener('message', (event) => {
       const msg = event?.data;
@@ -5202,7 +5204,17 @@
       }
       const rows = data || [];
 
-      if (realtimePayload?.eventType !== 'DELETE' && realtimePayload?.new?.id) {
+      if (realtimePayload?.eventType && realtimePayload.eventType !== 'DELETE' && realtimePayload?.new?.id) {
+        const match = rows.find((item) => String(item.id) === String(realtimePayload.new.id)) || realtimePayload.new;
+        dispatchDeviceNotification(match, profile.id).catch(() => { });
+        const incomingType = String(match?.type || '').toUpperCase();
+        if (['ANNOUNCEMENT', 'PLATFORM_ANNOUNCEMENT', 'RELEASE'].includes(incomingType)) {
+          activeAnnouncementsController?.load?.().catch(() => { });
+        }
+        if (typeof activeLiveRefresh === 'function') {
+          try { activeLiveRefresh(); } catch { }
+        }
+      } else if (realtimePayload?.eventType !== 'DELETE' && realtimePayload?.new?.id) {
         const match = rows.find((item) => String(item.id) === String(realtimePayload.new.id)) || realtimePayload.new;
         dispatchDeviceNotification(match, profile.id).catch(() => { });
       } else if (lastSeenMs === null) {
@@ -7123,6 +7135,7 @@
         openItemId = null;
         viewerDialog.close();
         await load();
+        notifyLiveSync('announcements');
         toast('Announcement moved to bin.');
       } catch (error) {
         toast(friendlyError(error), 'error');
@@ -7174,6 +7187,7 @@
         composeForm.reset();
         clearQueuedMedia();
         await load();
+        notifyLiveSync('announcements');
         toast('Announcement published.');
       } catch (error) {
         if (uploadedPaths.length) invokeAccountFunction({ action: 'announcement-cleanup-media', paths: uploadedPaths }).catch(() => { });
@@ -7283,43 +7297,79 @@
     return controller;
   }
 
+  const LIVE_SYNC_CHANNEL = 'ipon-live-sync';
+  function notifyLiveSync(topic = 'data') {
+    try {
+      if ('BroadcastChannel' in window) {
+        const bc = new BroadcastChannel(LIVE_SYNC_CHANNEL);
+        bc.postMessage({ topic, at: Date.now() });
+        bc.close();
+      }
+    } catch { }
+  }
+
   function subscribeToChanges(name, tables, refresh) {
     const client = getClient();
     if (!client || !tables.length) return null;
     let timer;
+    let dirty = false;
     let pending = Promise.resolve();
     const run = () => {
+      dirty = false;
       pending = pending.then(refresh).catch((error) => toast(friendlyError(error), 'error'));
       return pending;
     };
     activeLiveRefresh = run;
-    const schedule = () => {
+    const schedule = (delayMs = 350) => {
+      dirty = true;
       clearTimeout(timer);
-      timer = setTimeout(() => { if (document.visibilityState === 'visible') run(); }, 350);
+      timer = setTimeout(() => { if (document.visibilityState === 'visible') run(); }, delayMs);
     };
     let channel = client.channel(`live:${name}:${currentProfile?.id || 'session'}`);
     tables.forEach((table) => ['INSERT', 'UPDATE'].forEach((event) => {
-      channel = channel.on('postgres_changes', { event, schema: 'public', table }, schedule);
+      channel = channel.on('postgres_changes', { event, schema: 'public', table }, () => schedule(350));
     }));
-    channel.subscribe();
-    const resume = () => { if (document.visibilityState === 'visible') schedule(); };
+    channel.subscribe((status) => {
+      if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && navigator.onLine !== false) {
+        schedule(1500);
+      }
+    });
+    const resume = () => {
+      if (document.visibilityState === 'visible') {
+        schedule(dirty ? 0 : 120);
+      }
+    };
+    let liveSyncBc = null;
+    try {
+      if ('BroadcastChannel' in window) {
+        liveSyncBc = new BroadcastChannel(LIVE_SYNC_CHANNEL);
+        liveSyncBc.onmessage = () => resume();
+      }
+    } catch { }
     const autoSyncTimer = setInterval(() => {
       if (document.visibilityState !== 'visible' || navigator.onLine === false) return;
       if (document.querySelector('dialog[open]')) return;
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       run();
-    }, 45000);
+    }, 20000);
     document.addEventListener('visibilitychange', resume);
+    document.addEventListener('resume', resume);
     window.addEventListener('focus', resume);
     window.addEventListener('online', resume);
+    window.addEventListener('pageshow', resume);
+    window.addEventListener('resume', resume);
     window.addEventListener('pagehide', () => {
       clearTimeout(timer);
       clearInterval(autoSyncTimer);
       if (activeLiveRefresh === run) activeLiveRefresh = null;
+      try { liveSyncBc?.close?.(); } catch { }
       document.removeEventListener('visibilitychange', resume);
+      document.removeEventListener('resume', resume);
       window.removeEventListener('focus', resume);
       window.removeEventListener('online', resume);
+      window.removeEventListener('pageshow', resume);
+      window.removeEventListener('resume', resume);
       client.removeChannel(channel);
     }, { once: true });
     return channel;
@@ -8348,8 +8398,14 @@
       return 'handled';
     }
 
+    const consentDialog = document.getElementById('ipon-policy-consent-dialog');
+    if (consentDialog?.open && consentDialog.dataset?.accepted !== '1') {
+      window.dispatchEvent?.(new CustomEvent('ipon:policy-back-blocked'));
+      return 'handled';
+    }
+
     const openDialogs = Array.from(document.querySelectorAll('dialog[open]') || []);
-    const extraDialog = openDialogs.reverse().find((d) => d?.id && d.id !== 'msg-workspace-dialog');
+    const extraDialog = openDialogs.reverse().find((d) => d?.id && d.id !== 'msg-workspace-dialog' && d.id !== 'ipon-policy-consent-dialog');
     if (extraDialog) {
       extraDialog.close();
       return 'handled';

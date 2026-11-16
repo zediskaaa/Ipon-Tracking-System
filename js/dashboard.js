@@ -554,6 +554,9 @@
         announcements ? announcements.load().catch((err) => console.warn('Announcement load error:', err)) : Promise.resolve()
       ]);
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
+      if (!summaryResult.data && (state.profile?.group_id || groupsResult?.some?.((g) => g.is_current))) {
+        throw new Error('Group savings summary is currently unavailable.');
+      }
       const profilesList = groupProfilesResult?.data || [];
       Ipon.registerMemberAvatars(profilesList);
       const profileByMemberId = new Map(profilesList.filter((p) => p.member_id).map((p) => [p.member_id, p]));
@@ -1642,5 +1645,5 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'announcements', 'announcement_reactions'], load);
+  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions'], load);
 })();

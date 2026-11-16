@@ -9966,3 +9966,94 @@ test('migration 085, 90-day & 6-month dormant savings email reminders, 30-day bi
   assert.match(policyJs, /dormant savings check-in reminders \(90 days idle\)/i);
   assert.match(savingsHtml, /7-day warning at 6 months/i);
 });
+
+test('migrations 086-087 restore Member transparency + Super Admin name rules, fix retention & back-button gate, and sync realtime live', () => {
+  const mig086 = read('database/migrations/20261116_086_restore_policies_fix_retention_and_realtime.sql');
+  const mig087 = read('database/migrations/20261116_087_preserve_updated_at_during_retention.sql');
+  const schema = read('database/schema.sql');
+  const coreJs = read('js/core.js');
+  const policyJs = read('js/policy.js');
+  const dashboardJs = read('js/dashboard.js');
+  const userJs = read('js/user.js');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+  const accountHtml = read('account.html');
+
+  // 1. Migrations 086 & 087 + schema.sql lock in Super Admin name rules, Member ledger visibility, retention fixes, & realtime publication
+  assert.match(mig086, /v_is_super_admin := \(new\.role = 'SUPER_ADMIN'\)/);
+  assert.match(mig086, /new\.first_name is distinct from old\.first_name/i);
+  assert.match(mig086, /drop function if exists public\.create_member\(text, text, text, text, date, numeric, text\)/i);
+  const latestSummary = [...schema.matchAll(/create or replace function public\.get_savings_summary\(\)[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.match(latestSummary, /'MEMBER'/);
+  assert.doesNotMatch(latestSummary, /is_treasurer_or_admin/i);
+  for (const policy of ['members_select', 'contribution_periods_select', 'contributions_select', 'expenses_select', 'withdrawals_select']) {
+    const latestPol = [...schema.matchAll(new RegExp(`create policy ${policy}[\\s\\S]*?;`, 'gi'))].pop()?.[0] || '';
+    assert.match(latestPol, /'MEMBER'/);
+  }
+  const latestCleanup = [...schema.matchAll(/create or replace function public\.run_data_retention_cleanup[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.match(latestCleanup, /delete from public\.call_sessions[\s\S]*?coalesce\(ended_at,\s*started_at\)\s*<\s*v_call_cutoff/i);
+  assert.doesNotMatch(latestCleanup, /coalesce\(ended_at,\s*started_at,\s*created_at\)/i);
+  assert.match(latestCleanup, /delete from public\.contribution_settings cs/i);
+  assert.match(mig086, /v_is_backend_maintenance boolean :=[\s\S]*?auth\.uid\(\) is null/i);
+  assert.match(mig086, /alter publication supabase_realtime add table public\.%I/i);
+  assert.match(mig087, /create or replace function public\.set_updated_at\(\)/i);
+  assert.match(mig087, /ipon\.maintenance_retention_cleanup/);
+  assert.match(schema, /'20261116_086'/);
+  assert.match(schema, /'20261116_087'/);
+
+  // 2. account.html is clean single-document HTML with zero duplicate </html> or duplicated IDs
+  assert.equal((accountHtml.match(/<\/html>/gi) || []).length, 1);
+  assert.equal((accountHtml.match(/id="account-page-dialog"/g) || []).length, 1);
+
+  // 3. Edge Function surfaces RPC errors cleanly and drains storage on runSqlCleanup / dormant moves
+  assert.match(edgeFn, /runSqlCleanup \|\| dormantBinnedGroups > 0/);
+  assert.match(edgeFn, /success: result\.errors\.length === 0/);
+
+  // 4. Client safety: Dashboard throws instead of masking null summary as P0.00; realtime sync covers notifications + BroadcastChannel
+  assert.match(dashboardJs, /Group savings summary is currently unavailable/);
+  assert.match(userJs, /subscribeToChanges\('member-dashboard',[\s\S]*?'announcements'/);
+  assert.match(coreJs, /notifyLiveSync\('announcements'\)/);
+  assert.match(coreJs, /activeAnnouncementsController\?\.load\?\.\(\)/);
+  assert.match(coreJs, /document\.getElementById\('ipon-policy-consent-dialog'\)[\s\S]*?accepted !== '1'[\s\S]*?ipon:policy-back-blocked/);
+  assert.match(policyJs, /window\.addEventListener\('popstate'/);
+  assert.match(policyJs, /ipon:policy-back-blocked/);
+
+  // 5. Runtime VM verification: handleNativeBack NEVER closes unaccepted #ipon-policy-consent-dialog
+  const consentDlg = { id: 'ipon-policy-consent-dialog', open: true, dataset: {}, closed: false, close() { this.open = false; this.closed = true; } };
+  const dispatched = [];
+  const noop = () => {};
+  const dummyEl = () => ({ hidden: false, dataset: {}, innerHTML: '', textContent: '', style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, setAttribute: noop, removeAttribute: noop, appendChild: noop, prepend: noop, append: noop });
+  const ctx = {
+    window: null,
+    navigator: { onLine: true },
+    location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', pathname: '/dashboard.html', href: 'https://my-ipon.vercel.app/dashboard.html', replace: noop, assign: noop },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    addEventListener: noop,
+    removeEventListener: noop,
+    dispatchEvent: (ev) => dispatched.push(ev.type),
+    setTimeout,
+    clearTimeout,
+    setInterval: () => 0,
+    clearInterval: noop,
+    document: {
+      documentElement: { dataset: {}, style: { setProperty: noop, removeProperty: noop } },
+      body: { dataset: { page: 'dashboard' }, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, insertAdjacentHTML: noop, appendChild: noop, prepend: noop, append: noop },
+      head: { insertAdjacentHTML: noop },
+      createElement: () => dummyEl(),
+      querySelector: () => null,
+      querySelectorAll: (sel) => (sel === 'dialog[open]' ? [consentDlg] : []),
+      getElementById: (id) => (id === 'ipon-policy-consent-dialog' ? consentDlg : id === 'app-loader' ? dummyEl() : null),
+      addEventListener: noop,
+      removeEventListener: noop
+    }
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  assert.equal(ctx.window.Ipon.handleNativeBack(), 'handled');
+  assert.equal(consentDlg.open, true);
+  assert.equal(consentDlg.closed, false);
+  assert.ok(dispatched.includes('ipon:policy-back-blocked'));
+});
