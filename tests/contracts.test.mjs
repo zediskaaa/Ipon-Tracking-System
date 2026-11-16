@@ -10247,3 +10247,29 @@ test('migration 090 grants feature_requests.allow_credit insert, drops stale ove
   assert.match(core, /Bug title must be between 3 and 120 characters\./);
   assert.match(core, /Bug description must be between 10 and 2000 characters\./);
 });
+
+test('migration 091 restores reverted RPCs, 9 RLS SELECT policies, strict grants, and missing group memberships', () => {
+  const mig091 = read('database/migrations/20261116_091_restore_reverted_rpcs_policies_and_memberships.sql');
+  const schema = read('database/schema.sql');
+
+  assert.match(schema, /Do NOT copy\/run partial blocks from this file on an existing or production database/i);
+
+  for (const sql of [mig091, schema]) {
+    assert.match(sql, /drop function if exists public\.create_member\(text, text, text, text, date, numeric, text\);/i);
+    assert.match(sql, /create or replace function public\.get_savings_summary\(\)/i);
+    assert.match(sql, /create or replace function public\.enforce_group_scope\(\)/i);
+    assert.match(sql, /create policy profiles_select on public\.profiles/i);
+    assert.match(sql, /create policy account_activity_select on public\.account_activity/i);
+    assert.match(sql, /create policy groups_select on public\.groups/i);
+    assert.match(sql, /create policy savings_goals_select on public\.savings_goals/i);
+    assert.match(sql, /create policy members_select on public\.members/i);
+    assert.match(sql, /create policy contribution_periods_select on public\.contribution_periods/i);
+    assert.match(sql, /create policy contributions_select on public\.contributions/i);
+    assert.match(sql, /create policy expenses_select on public\.expenses/i);
+    assert.match(sql, /create policy withdrawals_select on public\.withdrawals/i);
+    assert.match(sql, /insert into public\.group_memberships\s*\(group_id,\s*user_id,\s*role,\s*status,\s*member_id\)/i);
+    assert.match(sql, /revoke all on function public\.enforce_data_quality\(\) from public, anon, authenticated;/i);
+    assert.match(sql, /grant execute on function public\.get_savings_summary\(\) to authenticated;/i);
+    assert.match(sql, /'20261116_091'/);
+  }
+});
