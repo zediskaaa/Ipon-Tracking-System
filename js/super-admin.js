@@ -1846,5 +1846,5 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
+  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
 })();

@@ -213,7 +213,13 @@
     if (error) throw error;
     membersList = data || [];
 
-    const { data: groupProfiles } = await Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE');
+    let identRes = null;
+    try {
+      identRes = await Ipon.client.rpc('get_group_member_identities');
+    } catch (_) { }
+    const { data: groupProfiles } = (identRes && !identRes.error && Array.isArray(identRes.data))
+      ? identRes
+      : await Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE');
     profilesByUserId.clear();
     profilesByMemberId.clear();
     profilesByName.clear();
@@ -334,12 +340,18 @@
     const monthlyStats = new Map();
 
     try {
-      const [contribRes, withRes, expRes] = await Promise.all([
+      const [contribRes, archivedRes, withRes, expRes] = await Promise.all([
         safeMemberId
           ? Ipon.client.from('contributions')
               .select('amount,payment_date,approval_status,contribution_periods!inner(period_month,member_id)')
               .eq('approval_status', 'CONFIRMED')
               .eq('contribution_periods.member_id', safeMemberId)
+          : Promise.resolve({ data: [] }),
+        safeMemberId
+          ? Ipon.client.from('contribution_periods')
+              .select('period_month,archived_paid_amount')
+              .eq('member_id', safeMemberId)
+              .gt('archived_paid_amount', 0)
           : Promise.resolve({ data: [] }),
         Ipon.client.from('withdrawals')
           .select('amount,transaction_date,approval_status')
@@ -355,6 +367,18 @@
         const amt = Number(c.amount || 0);
         totalAdditions += amt;
         const month = (c.contribution_periods?.period_month || c.payment_date || '').slice(0, 7);
+        if (month) {
+          const prev = monthlyStats.get(month) || { additions: 0, deductions: 0 };
+          prev.additions += amt;
+          monthlyStats.set(month, prev);
+        }
+      });
+
+      (archivedRes.data || []).forEach((cp) => {
+        const amt = Number(cp.archived_paid_amount || 0);
+        if (!(amt > 0)) return;
+        totalAdditions += amt;
+        const month = (cp.period_month || '').slice(0, 7);
         if (month) {
           const prev = monthlyStats.get(month) || { additions: 0, deductions: 0 };
           prev.additions += amt;
@@ -598,6 +622,14 @@
 
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (['withdrawals', 'expenses'].includes(page) && !['ADMIN', 'TREASURER'].includes(state.profile.role)) {
+      Ipon.toast(`Only administrators and treasurers can record ${page}.`, 'error');
+      return;
+    }
+    if (page === 'contributions' && state.profile.role === 'MEMBER' && (!state.profile.group_id || !state.profile.member_id)) {
+      Ipon.showGroupRequiredDialog({ hasGroup: Boolean(state.profile.group_id) });
+      return;
+    }
     const button = form.querySelector('[type="submit"]');
     const refInput = form.elements.reference || form.elements.reference_number;
     if (refInput && !Ipon.validateNumericInput(refInput)) { refInput.focus(); return; }

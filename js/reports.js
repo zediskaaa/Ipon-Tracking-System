@@ -469,5 +469,5 @@
     downloadYearTransactionsCsv(yearFilter.value, event.currentTarget);
   });
   try { await load(); } catch (error) { Ipon.showInlineError(monthlyBody, error, load, 5); Ipon.showInlineError(memberBody, error, load, 5); } finally { Ipon.setLoading(false); }
-  Ipon.subscribeToChanges('reports', ['contributions', 'withdrawals', 'expenses', 'contribution_periods', 'members', 'groups', 'savings_cycle_batches'], load);
+  Ipon.subscribeToChanges('reports', ['contributions', 'withdrawals', 'expenses', 'contribution_periods', 'members', 'groups', 'savings_cycle_batches', 'financial_annual_archives'], load);
 })();

@@ -1654,7 +1654,7 @@ test('workflow enhancements migration 049, schema sync, and all UI integrations 
   }
 
   // Service worker offline shell + connectivity banner
-  assert.match(sw, /ipon-shell-v11/);
+  assert.match(sw, /ipon-shell-v(?:11|12|\d+)/);
   assert.match(sw, /ignoreSearch:\s*true/);
   assert.match(core, /function initConnectivityBanner\(/);
   assert.match(core, /function initInfoTips\(/);
@@ -5128,7 +5128,7 @@ test('all notification types route to exact destination modals or highlighted ta
   assert.match(manageAccount, /link:\s*`dashboard\.html\?invite=\$\{encodeURIComponent\(actor\.group_id\)\}`/);
   assert.match(sendPush, /select\('id, recipient_id, group_id, type, title, message, link, dedupe_key, read_at, created_at'\)/);
   assert.match(sendPush, /notif\.type === 'RELEASE' && \/\^https\?:/);
-  assert.match(sw, /const CACHE_NAME = 'ipon-shell-v11'/);
+  assert.match(sw, /const CACHE_NAME = 'ipon-shell-v(?:11|12|\d+)'/);
   assert.match(sw, /group_id:\s*payload\.group_id \?\? null/);
   assert.match(sw, /type:\s*'MYIPON_NOTIFICATION_CLICK'/);
   assert.match(mainJava, /\[a-zA-Z0-9_=&:%\.-]\+/);
@@ -8617,7 +8617,7 @@ test('outdated APK detection, Android background wake locks, safety polling, and
   assert.match(bgPlugin, /NotificationPollReceiver\.scheduleNext\(context, 20_000L\)/);
 
   // 2. Service worker & resync cooldown bypass contracts
-  assert.match(swJs, /CACHE_NAME\s*=\s*'ipon-shell-v11'/);
+  assert.match(swJs, /CACHE_NAME\s*=\s*'ipon-shell-v(?:11|12|\d+)'/);
   assert.match(coreJs, /snap\?\.nativeBgStatus\?\.instantSyncRunning === false/);
   assert.match(coreJs, /if \(!force && now - lastBgPollSyncAt < 60_000\) return;/);
 
@@ -10056,4 +10056,67 @@ test('migrations 086-087 restore Member transparency + Super Admin name rules, f
   assert.equal(consentDlg.open, true);
   assert.equal(consentDlg.closed, false);
   assert.ok(dispatched.includes('ipon:policy-back-blocked'));
+});
+
+test('migrations 088-089 restore drifted RPCs, fix enforce_group_scope guards, expose safe member identities, and hide unauthorized forms', () => {
+  const mig088 = read('database/migrations/20261116_088_restore_reverted_rpcs_and_scope_guards.sql');
+  const mig089 = read('database/migrations/20261116_089_fix_enforce_group_scope_nested_if.sql');
+  const schema = read('database/schema.sql');
+  const dashboardJs = read('js/dashboard.js');
+  const recordsJs = read('js/records.js');
+  const auditJs = read('js/audit.js');
+  const reportsJs = read('js/reports.js');
+  const settingsJs = read('js/settings.js');
+  const superAdminJs = read('js/super-admin.js');
+  const withdrawalsHtml = read('withdrawals.html');
+  const expensesHtml = read('expenses.html');
+  const css = read('css/app.css');
+
+  for (const fn of [
+    'current_group_id()',
+    'validated_name_part(',
+    'record_account_activity(',
+    'generate_contribution_periods(',
+    'get_user_dashboard()',
+    'notify_record_activity()',
+    'notify_new_member()',
+    'notify_profile_access()',
+    'create_due_reminders()',
+    'handle_new_user()',
+    'admin_set_user_access(',
+    'super_admin_approve_request(',
+    'super_admin_reject_request(',
+    'super_admin_archive_administrator(',
+    'super_admin_create_group(',
+    'super_admin_set_administrator_status(',
+    'super_admin_update_administrator(',
+    'get_group_member_identities()',
+    'get_pending_review_summary()'
+  ]) {
+    assert.ok(mig088.includes(fn), `Migration 088 must restore or define ${fn}`);
+  }
+  assert.match(mig088, /account_activity[\s\S]*admin_requests[\s\S]*audit_logs[\s\S]*financial_annual_archives/);
+  assert.match(mig089, /create or replace function public\.enforce_group_scope\(\)/i);
+  assert.match(mig089, /ipon\.maintenance_archive_rollup/);
+  assert.match(mig089, /ipon\.maintenance_bin_snapshot/);
+  assert.match(mig089, /ipon\.maintenance_receipt_cleanup/);
+  assert.match(mig089, /ipon\.activating_member_id/);
+  assert.match(mig089, /ipon\.syncing_own_profile_user_id/);
+  assert.match(mig089, /ipon\.syncing_member_profile_id/);
+  assert.match(mig089, /if tg_table_name = 'members' and pg_trigger_depth\(\) <= 1 then/);
+  assert.match(schema, /'20261116_088'/);
+  assert.match(schema, /'20261116_089'/);
+
+  // Client integration checks
+  assert.match(dashboardJs, /get_group_member_identities/);
+  assert.match(recordsJs, /get_group_member_identities/);
+  assert.match(recordsJs, /archived_paid_amount/);
+  assert.match(recordsJs, /Only administrators and treasurers can record/);
+  assert.match(auditJs, /get_group_member_identities/);
+  assert.match(reportsJs, /financial_annual_archives/);
+  assert.match(settingsJs, /group_memberships/);
+  assert.match(superAdminJs, /admin_requests/);
+  assert.match(withdrawalsHtml, /<section class="panel sticky-panel" data-role="ADMIN,TREASURER">/);
+  assert.match(expensesHtml, /<section class="panel sticky-panel" data-role="ADMIN,TREASURER">/);
+  assert.match(css, /\.split-layout:has\(> \.sticky-panel\[hidden\]\)/);
 });

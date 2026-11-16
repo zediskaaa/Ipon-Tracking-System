@@ -145,8 +145,9 @@
   }
 
   async function loadLookups() {
-    const [profileRes, memberRes, groupRes, periodRes] = await Promise.allSettled([
+    const [profileRes, identRes, memberRes, groupRes, periodRes] = await Promise.allSettled([
       Ipon.client.from('profiles').select('id,full_name'),
+      Ipon.client.rpc('get_group_member_identities'),
       Ipon.client.from('members').select('id,full_name'),
       Ipon.client.from('groups').select('id,name'),
       Ipon.client.from('contribution_periods').select('id,member_id,period_month')
@@ -155,6 +156,11 @@
     if (profileRes.value.error) throw profileRes.value.error;
 
     actors = new Map((profileRes.value.data || []).map((profile) => [profile.id, profile.full_name]));
+    if (identRes.status === 'fulfilled' && !identRes.value?.error && Array.isArray(identRes.value?.data)) {
+      identRes.value.data.forEach((p) => {
+        if (p?.id && p.full_name && !actors.has(p.id)) actors.set(p.id, p.full_name);
+      });
+    }
     const members = memberRes.status === 'fulfilled' && !memberRes.value.error
       ? new Map((memberRes.value.data || []).map((member) => [member.id, member.full_name]))
       : new Map();

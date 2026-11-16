@@ -448,7 +448,7 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('settings', ['profiles', 'members', 'contribution_settings', 'groups'], async () => {
+  Ipon.subscribeToChanges('settings', ['profiles', 'members', 'contribution_settings', 'groups', 'group_memberships'], async () => {
     const tasks = [];
     if (document.activeElement !== defaultAmount && document.activeElement !== deadlineDay && document.activeElement !== effectiveMonth) tasks.push(loadContributionDefault());
     if (!document.activeElement?.closest('#access-body')) tasks.push(loadAccess());

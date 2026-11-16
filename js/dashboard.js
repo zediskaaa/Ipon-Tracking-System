@@ -548,7 +548,11 @@
         Ipon.client.from('v_contribution_status').select('member_id,payment_status,paid_amount').eq('period_month', start),
         Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.rpc('get_my_groups'),
-        Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE'),
+        Ipon.client.rpc('get_group_member_identities').then(async (res) => (
+          !res.error && Array.isArray(res.data)
+            ? res
+            : await Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE')
+        )),
         Ipon.client.from('savings_goals').select('id,title,target_amount,target_date').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.client.rpc('get_wallet_reconciliation'),
         announcements ? announcements.load().catch((err) => console.warn('Announcement load error:', err)) : Promise.resolve()

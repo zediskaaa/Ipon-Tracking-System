@@ -25842,6 +25842,22 @@ on conflict (version) do nothing;
 
 commit;
 
+-- Migration 20261116_088: restore 17 reverted live RPCs (get_user_dashboard, admin_set_user_access,
+-- generate_contribution_periods, notify_record_activity, current_group_id, handle_new_user, etc.),
+-- restore full enforce_group_scope() guards + cross-group profile sync, add get_group_member_identities(),
+-- update get_pending_review_summary(), and complete supabase_realtime publication.
+begin;
+insert into public.schema_migrations (version, name)
+values ('20261116_088', 'restore 17 reverted live RPCs and enforce_group_scope guards, add member identity RPC, complete realtime')
+on conflict (version) do nothing;
+commit;
+
+begin;
+insert into public.schema_migrations (version, name)
+values ('20261116_089', 'fix enforce_group_scope PL/pgSQL cross-table field evaluation using nested IFs')
+on conflict (version) do nothing;
+commit;
+
 -- BOOTSTRAP THE FIRST SUPER ADMIN
 -- 1. Create the platform owner in Authentication > Users.
 -- 2. Replace the email below, then run only this statement once:
