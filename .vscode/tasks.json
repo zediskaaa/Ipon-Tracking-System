@@ -5,6 +5,14 @@
       "label": "Supabase Auto-Sync on Open",
       "type": "shell",
       "command": "npm run supabase:sync",
+      "windows": {
+        "options": {
+          "shell": {
+            "executable": "cmd.exe",
+            "args": ["/d", "/c"]
+          }
+        }
+      },
       "problemMatcher": [],
       "presentation": {
         "reveal": "silent",

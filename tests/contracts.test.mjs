@@ -9709,6 +9709,20 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
 
 test('migration 084, ongoing savings protection, 30-day completion bin, print border/break fix, and VM bin/batch flows work cleanly', async () => {
   const vm = await import('node:vm');
+  const mig084 = read('database/migrations/20261116_084_ongoing_savings_protection_and_bin_lifecycle.sql');
+  const schema = read('database/schema.sql');
+  const css = read('css/app.css');
+  const loginHtml = read('login.html');
+  const policyJs = read('js/policy.js');
+  const coreJs = read('js/core.js');
+  const savingsHtml = read('savings.html');
+  const savingsJs = read('js/savings.js');
+  const settingsHtml = read('settings.html');
+  const settingsJs = read('js/settings.js');
+  const membersHtml = read('members.html');
+  const membersJs = read('js/members.js');
+
+  // 1. SQL migration 084 & schema sync protect ongoing savings/goals and wire 30-day completion bin + Storage purge
   assert.match(mig084, /create table if not exists public\.savings_cycle_batches/i);
   assert.match(mig084, /create or replace function public\.complete_and_bin_savings_goal\(/i);
   assert.match(mig084, /create or replace function public\.archive_and_reset_savings_cycle\(/i);
@@ -9855,7 +9869,7 @@ test('migration 084, ongoing savings protection, 30-day completion bin, print bo
   vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
   vm.runInNewContext(policyJs, ctx, { filename: 'js/policy.js' });
   ctx.window.Ipon.confirmAction = async () => true;
-  ctx.window.Ipon.toast = () => {};
+  ctx.window.Ipon.toast = () => { };
   ctx.window.Ipon.rpc = async (fnName, args) => {
     rpcCalls.push({ fnName, args });
     if (fnName === 'get_bin_items') {
@@ -9916,11 +9930,11 @@ test('migration 084, ongoing savings protection, 30-day completion bin, print bo
   assert.match(binDlg.querySelector('#ipon-shared-bin-list').innerHTML, /5 days left/);
 
   // Test Finish Batch & Reset dialog submit
-  assert.equal(ctx.window.IponPolicy.openFinishSavingsBatchDialog({ onDone: () => {} }), true);
+  assert.equal(ctx.window.IponPolicy.openFinishSavingsBatchDialog({ onDone: () => { } }), true);
   const batchDlg = docStub.getElementById('ipon-finish-batch-dialog');
   assert.ok(batchDlg);
   assert.equal(batchDlg.open, true);
-  await batchDlg.querySelector('#ipon-finish-batch-form')._emit('submit', { preventDefault() {} });
+  await batchDlg.querySelector('#ipon-finish-batch-form')._emit('submit', { preventDefault() { } });
   const resetCall = rpcCalls.find((c) => c.fnName === 'archive_and_reset_savings_cycle');
   assert.ok(resetCall);
   assert.equal(resetCall.args.p_title, 'Batch 2026 — Completed Savings');
@@ -10020,7 +10034,7 @@ test('migrations 086-087 restore Member transparency + Super Admin name rules, f
   // 5. Runtime VM verification: handleNativeBack NEVER closes unaccepted #ipon-policy-consent-dialog
   const consentDlg = { id: 'ipon-policy-consent-dialog', open: true, dataset: {}, closed: false, close() { this.open = false; this.closed = true; } };
   const dispatched = [];
-  const noop = () => {};
+  const noop = () => { };
   const dummyEl = () => ({ hidden: false, dataset: {}, innerHTML: '', textContent: '', style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, setAttribute: noop, removeAttribute: noop, appendChild: noop, prepend: noop, append: noop });
   const ctx = {
     window: null,
@@ -10162,7 +10176,7 @@ test('confirmation dialogs match the warm-cream card, top gold rule, editorial s
     'confirm-cancel': { textContent: 'Cancel' },
     'confirm-accept': { textContent: 'Confirm' }
   };
-  const noop = () => {};
+  const noop = () => { };
   const dummyEl = () => ({ hidden: false, dataset: {}, innerHTML: '', textContent: '', style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, setAttribute: noop, removeAttribute: noop, appendChild: noop, prepend: noop, append: noop });
   const ctx = {
     console,
@@ -10445,11 +10459,11 @@ test('migration 094 and budget.html implement non-destructive Budget Allocation 
         toggle: (name, force) => (force === undefined ? (cls.has(name) ? cls.delete(name) : cls.add(name)) : (force ? cls.add(name) : cls.delete(name))),
         contains: (name) => cls.has(name)
       },
-      setAttribute() {},
-      removeAttribute() {},
-      focus() {},
-      select() {},
-      reset() {},
+      setAttribute() { },
+      removeAttribute() { },
+      focus() { },
+      select() { },
+      reset() { },
       replaceChildren() { el.innerHTML = ''; },
       showModal() { el.open = true; },
       close() { el.open = false; },
@@ -10465,7 +10479,7 @@ test('migration 094 and budget.html implement non-destructive Budget Allocation 
       },
       async _emit(type, evt = {}) {
         for (const fn of listeners.get(type) || []) {
-          await fn({ target: el, preventDefault() {}, ...evt });
+          await fn({ target: el, preventDefault() { }, ...evt });
         }
       }
     };
@@ -10521,6 +10535,7 @@ test('migration 094 and budget.html implement non-destructive Budget Allocation 
   assert.match(appCss, /\.budget-empty-history-inner/);
   assert.match(appCss, /\.budget-categories-grid > \.panel \+ \.panel\s*\{\s*margin-top:\s*0;/);
   assert.match(appCss, /\.budget-empty-items::before\s*\{\s*display:\s*none\s*!important;/);
+  assert.match(appCss, /\.budget-workspace\s*\{[\s\S]*?max-width:\s*none/);
   assert.match(appCss, /\.budget-category-card[\s\S]*flex-direction:\s*column/);
   assert.match(appCss, /\.budget-empty-items[\s\S]*flex:\s*1 1 auto/);
 
@@ -10548,15 +10563,15 @@ test('migration 094 and budget.html implement non-destructive Budget Allocation 
       dateLabel: (d) => String(d || ''),
       isoDate: () => '2026-11-16',
       escapeHtml: (s) => String(s || ''),
-      setLoading() {},
-      setBusy() {},
-      setFieldError() {},
-      toast() {},
-      showInlineError() {},
-      renderGroupRequiredCard() {},
-      syncWorkspaceMode() {},
-      populateGroupSelect() {},
-      guardMoneyInput() {},
+      setLoading() { },
+      setBusy() { },
+      setFieldError() { },
+      toast() { },
+      showInlineError() { },
+      renderGroupRequiredCard() { },
+      syncWorkspaceMode() { },
+      populateGroupSelect() { },
+      guardMoneyInput() { },
       paymentMethodOptionsHtml: () => '<option value="CASH">Cash</option><option value="GCASH">GCash</option>',
       paymentMethodMeta: (m) => ({ label: m === 'GCASH' ? 'GCash' : 'Cash' }),
       parseMoneyAmount: (raw) => ({ valid: Number.isFinite(Number(raw)), value: Number(raw || 0), error: '' }),

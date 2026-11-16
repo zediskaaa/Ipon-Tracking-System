@@ -6058,7 +6058,7 @@
             discussBtn.classList.remove('has-comments');
             discussBtn.textContent = 'Discussion';
           }
-        }).catch(() => {});
+        }).catch(() => { });
       }
     }
     summaryBox.hidden = false;
@@ -6607,18 +6607,18 @@
               <strong class="announcement-requested-title">${escapeHtml(block.heading)}</strong>
               <div class="announcement-requested-list">
                 ${block.items.map((item) => {
-                  const creditMatch = item.match(/\((Requested by:[^)]+)\)/i);
-                  let itemHtml = escapeHtml(item);
-                  if (creditMatch) {
-                    const escapedCredit = escapeHtml(creditMatch[0]);
-                    itemHtml = itemHtml.replace(escapedCredit, `<em class="announcement-requester-credit">${escapedCredit}</em>`);
-                  }
-                  return `
+          const creditMatch = item.match(/\((Requested by:[^)]+)\)/i);
+          let itemHtml = escapeHtml(item);
+          if (creditMatch) {
+            const escapedCredit = escapeHtml(creditMatch[0]);
+            itemHtml = itemHtml.replace(escapedCredit, `<em class="announcement-requester-credit">${escapedCredit}</em>`);
+          }
+          return `
                     <div class="announcement-requested-item">
                       <span class="announcement-bullet-dot" aria-hidden="true">•</span>
                       <span>${itemHtml}</span>
                     </div>`;
-                }).join('')}
+        }).join('')}
               </div>
             </div>
           </div>`;
@@ -9376,7 +9376,7 @@
       renderMessages();
       clearDiscussionUnreadBadge(recordId);
       if (currentComments.length) markedReadOnOpen = true;
-      resolveAttachmentUrls().catch(() => {});
+      resolveAttachmentUrls().catch(() => { });
       const canReply = Boolean(payload?.can_reply);
       if (form) form.hidden = !canReply;
       if (readonlyEl) readonlyEl.hidden = canReply;
@@ -9397,7 +9397,7 @@
               didNotifyUpdate = true;
               onUpdated();
             }
-          }).catch(() => {});
+          }).catch(() => { });
         })
         .subscribe()
       : null;
@@ -9515,14 +9515,14 @@
         } else {
           await loadThread();
         }
-        if (attachments.length) resolveAttachmentUrls().catch(() => {});
+        if (attachments.length) resolveAttachmentUrls().catch(() => { });
         if (typeof onUpdated === 'function') {
           didNotifyUpdate = true;
           onUpdated(currentComments.length);
         }
       } catch (error) {
         if (uploadedPaths.length) {
-          invokeAccountFunction({ action: 'record-comment-cleanup-media', paths: uploadedPaths }).catch(() => {});
+          invokeAccountFunction({ action: 'record-comment-cleanup-media', paths: uploadedPaths }).catch(() => { });
         }
         toast(friendlyError(error), 'error');
       } finally {
@@ -9547,8 +9547,8 @@
       input?.removeEventListener('keydown', onKeyDown);
       if (form) form.onsubmit = null;
       messagesEl?.querySelectorAll?.('video')?.forEach((video) => video.pause?.());
-      previewUrlsToRevoke.forEach((url) => { try { URL.revokeObjectURL(url); } catch {} });
-      if (channel && client) client.removeChannel(channel).catch?.(() => {});
+      previewUrlsToRevoke.forEach((url) => { try { URL.revokeObjectURL(url); } catch { } });
+      if (channel && client) client.removeChannel(channel).catch?.(() => { });
       activeThreadCleanup = null;
       if (markedReadOnOpen && !didNotifyUpdate && typeof onUpdated === 'function') {
         didNotifyUpdate = true;
@@ -9943,8 +9943,8 @@
       if (typeof onSync === 'function') onSync(state);
       return state;
     };
-    amountInput.addEventListener('input', () => { sync().catch(() => {}); });
-    amountInput.addEventListener('change', () => { sync().catch(() => {}); });
+    amountInput.addEventListener('input', () => { sync().catch(() => { }); });
+    amountInput.addEventListener('change', () => { sync().catch(() => { }); });
     wrapper.hidden = true;
     return sync;
   }
