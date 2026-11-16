@@ -1569,7 +1569,7 @@
         <div class="notification-sheet"><header><div class="notification-heading"><h2 id="notification-title">Notifications</h2><span>Recent activity</span></div><div class="notification-header-actions"><button class="notification-mark-read" id="mark-all-notifications" type="button">Mark all read</button><button class="dialog-close" data-notifications-close type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header><div class="notification-permission-bar" id="notification-permission-bar" hidden></div><div class="notification-list" id="notification-list" role="feed"><p class="empty-state">Loading notifications…</p></div></div>
       </dialog>
       <dialog class="donate-dialog" id="donate-dialog" aria-labelledby="donate-title">
-        <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><img class="donate-sticker" src="assets/donate-sticker.jpg" alt="" aria-hidden="true"><h2 id="donate-title">Support IPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><div class="donate-actions"><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button><button class="button button-secondary" id="open-donate-qr" type="button">Scan me</button></div></div>
+        <div class="donate-sheet"><button class="dialog-close" data-donate-close type="button" aria-label="Close donation information">&times;</button><img class="donate-sticker" src="assets/donate-sticker.jpg" alt="" aria-hidden="true"><h2 id="donate-title">Support myIPON</h2><p>Donations are voluntary support for the system developer and are never included in group savings or reports.</p><span>GCash number</span><strong id="donate-number">09913564248</strong><div class="donate-actions"><button class="button button-primary" id="copy-donate-number" type="button">Copy number</button><button class="button button-secondary" id="open-donate-qr" type="button">Scan me</button></div></div>
       </dialog>
       <dialog class="donate-dialog donate-qr-dialog" id="donate-qr-dialog" aria-labelledby="donate-qr-title">
         <div class="donate-sheet donate-qr-sheet"><button class="dialog-close" data-donate-qr-close type="button" aria-label="Close QR code">&times;</button><img class="donate-qr-image" src="assets/donate-qr.jpg" alt="GCash QR code"><p class="donate-qr-caption" id="donate-qr-title">Scan with GCash</p></div>
@@ -1584,9 +1584,9 @@
         <div class="account-dialog-sheet">
           <header class="account-dialog-header"><div class="account-dialog-title"><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
+            <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
-            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Background usage</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device access for closed-app messages and alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div><div class="preference-row"><span><strong>Data &amp; storage retention</strong><small>90-day chat &amp; log cleanup · 6-month inactivity notice</small></span><button class="button button-secondary button-sm" type="button" data-retention-rules-open>View rules</button></div><div class="preference-row"><span><strong>Terms &amp; Privacy policies</strong><small>Non-custodial scope, permissions, and full retention schedule</small></span><div class="header-actions"><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="terms">Terms</button><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="privacy">Privacy</button></div></div></section></div>
+            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Device &amp; in-app alerts</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device permissions for in-app alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div><div class="preference-row"><span><strong>Data &amp; storage retention</strong><small>90-day chat &amp; log cleanup · 6-month inactivity notice</small></span><button class="button button-secondary button-sm" type="button" data-retention-rules-open>View rules</button></div><div class="preference-row"><span><strong>Terms &amp; Privacy policies</strong><small>Non-custodial scope, permissions, and full retention schedule</small></span><div class="header-actions"><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="terms">Terms</button><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="privacy">Privacy</button></div></div></section></div>
             <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
           </div>
         </div>
@@ -3451,7 +3451,7 @@
         row.hidden = false;
         if (snap.needsApkUpdate) {
           setPill('Update APK', 'warning');
-          statusEl.textContent = 'Update to the latest myIPON APK to enable Microphone permission for voice messages, unrestricted background usage, and closed-app alerts.';
+          statusEl.textContent = 'Update to the latest myIPON APK for microphone voice notes and smoother in-app notification alerts.';
           button.textContent = 'Update APK';
           button.className = 'button button-primary button-sm';
           button.dataset.bgAction = 'update-apk';
@@ -3459,7 +3459,7 @@
           button.hidden = false;
         } else if (snap.status === 'granted' && snap.batteryKnown && snap.batteryOk) {
           setPill('Active', 'success');
-          statusEl.textContent = 'Background usage and notifications are active. Messages and alerts arrive whenever your phone is on, even when myIPON is closed.';
+          statusEl.textContent = 'Device alerts are enabled while myIPON is open. Stay in the app or check myIPON regularly for new messages and alerts (in-app only, not sent via email).';
           button.textContent = 'Granted';
           button.className = 'button button-secondary button-sm';
           delete button.dataset.bgAction;
@@ -3471,7 +3471,7 @@
           }
         } else if (snap.status === 'granted' && !snap.batteryOk) {
           setPill('Restricted', 'warning');
-          statusEl.textContent = 'Notifications are on, but Android battery restriction is active. Allow unrestricted background usage so alerts stay active when myIPON is closed.';
+          statusEl.textContent = 'Notifications are enabled while myIPON is open. Tap Allow background usage to reduce interruptions when switching apps.';
           button.textContent = 'Allow background usage';
           button.className = 'button button-primary button-sm';
           button.dataset.bgAction = 'allow-background';
@@ -3480,7 +3480,7 @@
           addExtra('App settings', { 'data-bg-action': 'app-settings' });
         } else if (snap.status === 'granted') {
           setPill('Check access', 'neutral');
-          statusEl.textContent = 'Device notifications are active. Verify Battery is set to Unrestricted in App settings so alerts arrive when closed.';
+          statusEl.textContent = 'Device notifications are enabled. Open myIPON directly to view new messages and in-app alerts (not sent via email).';
           button.textContent = 'App settings';
           button.className = 'button button-secondary button-sm';
           button.dataset.bgAction = 'app-settings';
@@ -3490,8 +3490,8 @@
         } else if (snap.status === 'default') {
           setPill('Needs access', 'warning');
           statusEl.textContent = snap.batteryOk
-            ? 'Device notifications are off. Allow alerts so messages and updates appear even when myIPON is closed.'
-            : 'Allow notifications and unrestricted background usage so messages and alerts keep arriving when myIPON is closed.';
+            ? 'Device notifications are off. Allow alerts so banners appear while using myIPON (notifications are in-app only, not sent via email).'
+            : 'Allow device alerts so message banners and updates appear while using myIPON (notifications are in-app only, not sent via email).';
           button.textContent = snap.batteryOk ? 'Turn on alerts' : 'Allow background usage';
           button.className = 'button button-primary button-sm';
           button.dataset.bgAction = 'allow-all';
@@ -3501,7 +3501,7 @@
         } else {
           setPill('Blocked', 'danger');
           statusEl.textContent = !snap.batteryOk
-            ? 'Notifications and background battery access are blocked in Android settings. Open App settings, allow Notifications, and set Battery to Unrestricted.'
+            ? 'Device notifications are blocked in Android settings. Open App settings, turn on Notifications, then tap Recheck.'
             : 'Device notifications are blocked in Android settings. Open App settings, allow Notifications, then tap Recheck.';
           button.textContent = 'Open settings';
           button.className = 'button button-primary button-sm';
@@ -3520,11 +3520,11 @@
       row.hidden = false;
       if (snap.isIosBrowser) {
         setPill('Add to Home', 'neutral');
-        statusEl.textContent = 'On iPhone/iPad, tap Share -> Add to Home Screen, then open myIPON to enable closed-app alerts.';
+        statusEl.textContent = 'On iPhone/iPad, tap Share -> Add to Home Screen, then open myIPON to view messages and in-app alerts.';
         button.hidden = true;
       } else if (snap.status === 'granted' && snap.pushState?.subscribed) {
         setPill('Active', 'success');
-        statusEl.textContent = 'Background push alerts are active even when this tab or browser is closed.';
+        statusEl.textContent = 'Browser alerts are enabled. Open myIPON to view messages and alerts (in-app only, not sent via email).';
         button.textContent = 'On';
         button.className = 'button button-secondary button-sm';
         delete button.dataset.bgAction;
@@ -3535,7 +3535,7 @@
         }
       } else if (snap.status === 'granted' && snap.pushState?.supported) {
         setPill('Finish setup', 'warning');
-        statusEl.textContent = 'Notifications are allowed. Tap Finish setup to sync background alerts for closed tabs.';
+        statusEl.textContent = 'Notifications are allowed. Tap Finish setup to sync in-app browser alerts.';
         button.textContent = 'Finish setup';
         button.className = 'button button-primary button-sm';
         button.dataset.bgAction = 'sync-push';
@@ -3552,7 +3552,7 @@
         addExtra('Recheck', { 'data-bg-action': 'recheck' });
       } else {
         setPill('Off', 'warning');
-        statusEl.textContent = 'Turn on browser notifications so message and group alerts reach this device when closed.';
+        statusEl.textContent = 'Turn on browser notifications so banners appear while using myIPON (notifications are in-app only).';
         button.textContent = 'Turn on';
         button.className = 'button button-primary button-sm';
         button.dataset.bgAction = 'enable-notif';
@@ -3636,10 +3636,10 @@
       <div class="form-dialog-sheet bg-usage-sheet">
         <header class="form-dialog-header bg-usage-header">
           <div>
-            <h2 id="bg-usage-prompt-title">Keep alerts active when closed</h2>
-            <p>Allow myIPON to run while your phone is on so new messages and alerts never get missed.</p>
+            <h2 id="bg-usage-prompt-title">Enable app alerts</h2>
+            <p>Allow notification alerts on this device. Open myIPON regularly for new messages and updates (alerts are in-app only, not emailed).</p>
           </div>
-          <button class="dialog-close" type="button" data-bg-prompt-close aria-label="Close background usage prompt">
+          <button class="dialog-close" type="button" data-bg-prompt-close aria-label="Close alert permission prompt">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
           </button>
         </header>
@@ -3648,14 +3648,14 @@
             <div class="bg-usage-item">
               <div>
                 <strong>Device notifications</strong>
-                <small>Deliver chat messages, approvals, and payment reminders in your notification drawer.</small>
+                <small>Show banners for chat messages, approvals, and payment reminders while myIPON is open.</small>
               </div>
               <span class="bg-access-pill" data-bg-prompt-notif-badge data-tone="warning">Required</span>
             </div>
             <div class="bg-usage-item">
               <div>
-                <strong>Unrestricted background usage</strong>
-                <small>Stay connected whenever your device is powered on, even after closing the app.</small>
+                <strong>App session permission</strong>
+                <small>Helps reduce interruptions when switching between apps (keep myIPON open to receive real-time alerts).</small>
               </div>
               <span class="bg-access-pill" data-bg-prompt-battery-badge data-tone="warning">Required</span>
             </div>
@@ -3758,7 +3758,7 @@
       }
       if (Date.now() - lastBgGrantedToastAt > 1200) {
         lastBgGrantedToastAt = Date.now();
-        toast('Background usage and alerts are active even when myIPON is closed.');
+        toast('Device alerts enabled while myIPON stays open (in-app only).');
       }
     }
     return {
@@ -3822,38 +3822,38 @@
       actionsWrap.querySelectorAll('[data-device-extra-btn]').forEach((el) => el.remove());
 
       if (needsApkUpdate) {
-        label.textContent = 'Update to the latest myIPON APK to enable Microphone permission and closed-app background alerts.';
+        label.textContent = 'Update to the latest myIPON APK for Microphone voice notes and smoother in-app notification alerts.';
         button.textContent = 'Update APK';
         button.dataset.actionMode = 'update-apk';
         button.disabled = false;
         button.hidden = false;
       } else if (status === 'granted') {
         if (isApp && nativeBgStatus && nativeBgStatus.batteryOptimizationIgnored === false) {
-          label.textContent = 'Notification permission: On — turn off battery restriction so alerts arrive when myIPON is closed.';
+          label.textContent = 'Notification permission: On — keep myIPON open in recent apps to receive new messages and alerts (in-app only).';
           button.textContent = 'Allow always-on';
           button.dataset.actionMode = 'battery';
           button.disabled = false;
           button.hidden = false;
         } else if (isApp) {
-          label.textContent = 'Notification permission: On — instant background alerts stay active even when myIPON is closed.';
+          label.textContent = 'Notification permission: On — alerts arrive while myIPON is open (in-app only, not emailed).';
           button.textContent = 'On';
           delete button.dataset.actionMode;
           button.disabled = true;
           button.hidden = false;
         } else if (pushState.subscribed) {
-          label.textContent = 'Notification permission: On — background push active even when this tab or browser is closed.';
+          label.textContent = 'Notification permission: On — alerts appear while myIPON is open (not sent via email).';
           button.textContent = 'On';
           delete button.dataset.actionMode;
           button.disabled = true;
           button.hidden = false;
         } else if (pushState.supported) {
-          label.textContent = 'Notification permission: On — tap Finish setup to sync background push for closed tabs.';
+          label.textContent = 'Notification permission: On — tap Finish setup to sync in-app browser alerts.';
           button.textContent = 'Finish setup';
           button.dataset.actionMode = 'sync-push';
           button.disabled = false;
           button.hidden = false;
         } else {
-          label.textContent = 'Notification permission: On — active while open. Open in Chrome, Edge, or installed PWA for closed-app push.';
+          label.textContent = 'Notification permission: On — active while open (notifications are in-app only).';
           button.textContent = 'On';
           delete button.dataset.actionMode;
           button.disabled = true;
@@ -3886,7 +3886,7 @@
         actionsWrap.appendChild(recheckBtn);
       } else if (status === 'default') {
         label.textContent = isApp
-          ? 'Device permission: Off — tap Turn on so alerts arrive on your phone even when myIPON is closed.'
+          ? 'Device permission: Off — tap Turn on for in-app banner alerts while myIPON is open.'
           : 'Browser site permission: Off — click Turn on and choose Allow (PC settings alone keep this site Off).';
         button.textContent = 'Turn on';
         delete button.dataset.actionMode;
@@ -3896,7 +3896,7 @@
         label.textContent = 'Site notifications require HTTPS or localhost (unavailable on plain HTTP LAN URLs).';
         button.hidden = true;
       } else if (isIosBrowser) {
-        label.textContent = 'On iPhone/iPad, tap Share -> Add to Home Screen, then open myIPON to enable background alerts.';
+        label.textContent = 'On iPhone/iPad, tap Share -> Add to Home Screen, then open myIPON directly for in-app alerts.';
         button.hidden = true;
       } else {
         label.textContent = 'Device notification drawer alerts are unavailable on this browser.';
@@ -3908,15 +3908,15 @@
       const bgPlugin = getBackgroundNotificationsPlugin();
       if (needsApkUpdate) {
         bar.hidden = false;
-        bar.innerHTML = '<span>Update your installed APK to enable Microphone permission and closed-app background alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="update-apk">Update APK</button>';
+        bar.innerHTML = '<span>Update your installed APK to enable Microphone permission and smoother in-app alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="update-apk">Update APK</button>';
       } else if (status === 'default') {
         bar.hidden = false;
         bar.innerHTML = isApp
-          ? '<span>Device notifications are off. Tap Turn on so alerts arrive even when myIPON is closed.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Turn on</button>'
+          ? '<span>Device notifications are off. Tap Turn on for alerts while myIPON is open (in-app only).</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Turn on</button>'
           : '<span>Browser notifications for this site are off. Click Turn on, then allow notifications for this site.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Turn on</button>';
       } else if (status === 'granted' && isApp && nativeBgStatus && nativeBgStatus.batteryOptimizationIgnored === false) {
         bar.hidden = false;
-        bar.innerHTML = '<span>Notification permission is On — allow unrestricted battery so alerts stay active after closing myIPON.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="battery">Allow always-on</button>';
+        bar.innerHTML = '<span>Notification permission is On — keep myIPON open in recent apps to receive new messages and alerts reliably.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="battery">Allow always-on</button>';
       } else if (status === 'denied') {
         const canOpenNativeSettings = isApp && Boolean(bgPlugin?.openNotificationSettings);
         bar.hidden = false;
@@ -4072,7 +4072,7 @@
             lastBgPollSyncAt = 0;
             await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
           }
-          toast('Background usage and alerts are active even when myIPON is closed.');
+          toast('Device alerts enabled while myIPON stays open (in-app only).');
         } else if (snap?.isApp && snap.status === 'granted' && !snap.batteryOk) {
           toast('Battery restriction is still active. Set Battery to Unrestricted in App settings.', 'error');
         } else {
@@ -4090,7 +4090,7 @@
       try {
         const ok = await syncWebPushSubscription({ force: true });
         await syncDevicePermissionUI();
-        if (ok) toast('Background push notifications enabled for closed tabs.');
+        if (ok) toast('Device push notifications synced for myIPON alerts.');
         else toast('Could not register background push on this browser.', 'error');
       } finally {
         button.disabled = false;
@@ -4154,8 +4154,8 @@
           if (Date.now() - lastBgGrantedToastAt > 1200) {
             lastBgGrantedToastAt = Date.now();
             toast(snap?.isApp
-              ? 'Background usage and alerts are active even when myIPON is closed.'
-              : 'Background notification alerts enabled.');
+              ? 'Device alerts enabled while myIPON stays open (in-app only).'
+              : 'Device notification alerts enabled.');
           }
         } else if (shouldSyncBgService) {
           lastBgPollSyncAt = 0;
@@ -4191,7 +4191,7 @@
                 toast('Test alert requested. Check your notification drawer.');
               }
             } else if (result?.web_sent > 0) {
-              toast('Background push test sent. Alerts now work even when myIPON is closed.');
+              toast('Test alert sent. Keep myIPON open to receive real-time alerts (in-app only).');
             } else {
               toast('Background push registered. Retry test if the banner did not appear.', 'error');
             }
@@ -4226,7 +4226,7 @@
           button.disabled = true;
           const ok = await syncWebPushSubscription({ force: true });
           await syncDevicePermissionUI();
-          if (ok) toast('Background push notifications enabled for closed tabs.');
+          if (ok) toast('Device push notifications synced for myIPON alerts.');
           else toast('Could not register background push on this browser.', 'error');
           return;
         }

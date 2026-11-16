@@ -944,7 +944,7 @@
     return String(rawLine || '')
       .replace(/\([^)]*(?:migrations?|js\/|css\/|\.html|tests\/|manage-account|AGENTS\.md|parseMoneyAmount|validateMoneyInput|guardMoneyInput)[^)]*\)/gi, ' ')
       .replace(/\bvia\s+shared\s+helpers(?:\s+in\s+[a-z0-9._/-]+)?/gi, '')
-      .replace(/\bthrough\s+VAPID\s+Web\s+Push\s+delivery[^.;]*/gi, 'for closed-app web and mobile background alerts')
+      .replace(/\bthrough\s+VAPID\s+Web\s+Push\s+delivery[^.;]*/gi, 'for in-app web and mobile alerts')
       .replace(/\b(?:in|under)\s+(?:[a-z0-9._-]+\/[a-z0-9._/-]+|AGENTS\.md|account\.html|super-admin\.html)\b(?:\s+and\s+[a-z0-9._/-]+)?/gi, '')
       .replace(/\bAdditional\s+UI\s+refinements\s+/gi, '')
       .replace(/\s+,/g, ',')

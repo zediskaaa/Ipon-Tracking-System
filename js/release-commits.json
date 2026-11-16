@@ -1,5 +1,9 @@
 [
   {
+    "date": "2026-11-16T14:34:47+08:00",
+    "message": "Protect ongoing savings and goals from retention, add 30-day completion bin, and fix report print layout\n\n- Protect active savings goals and ongoing group ledgers from automated retention cleanup regardless of savings duration, and prevent premature 6-month inactivity purging for accounts in actively saving groups (via member-linked contribution activity and active goal participation).\n- Add Migration 084 (savings_goals soft-delete lifecycle, savings_cycle_batches snapshot table, complete_and_bin_savings_goal, delete_savings_goal soft-binning, archive_and_reset_savings_cycle, purge_bin_item_permanently, shared purge_bin_item_storage helper, and updated get_bin_items/recover_bin_item/run_data_retention_cleanup) with receipt & attachment Storage cleanup after 30 days.\n- Add premium Mark done, Finish batch & reset to PHP 0, Recycle bin viewer with live remaining-days countdown badges, Recover, and Delete forever controls across Goals, Settings, and Members.\n- Update Terms of Use, Privacy Policy, and in-app Retention Rules modal (login.html & js/policy.js) to explain permanent ongoing-savings protection and 30-day completion Bin auto-deletion.\n- Fix Reports print layout in css/app.css by restoring the missing td:last-child bottom border under STATUS at print width and preventing compact report panels from splitting mid-card across pages."
+  },
+  {
     "date": "2026-11-16T13:44:12+08:00",
     "message": "Refine 1-time policy consent modal to match clean 2-tab pill and stacked action layout\n\n- Removed the retention highlight chips and extra switch/note clutter from #ipon-policy-consent-dialog in js/policy.js.\n- Styled the full-width 2-tab Terms of Use / Privacy Policy switcher, clean serif body headings, concise confirmation checkbox (I have read and agree to the myIPON Terms of Use and Privacy Policy.), and full-width stacked I agree & continue + Sign out buttons in css/app.css.\n- Bumped css/app.css?v=20261116-118 and js/policy.js?v=20261116-02 across all HTML pages, synced mobile assets (npm run mobile:sync), and updated tests/contracts.test.mjs (141/141 passing)."
   },
@@ -174,9 +178,5 @@
   {
     "date": "2026-11-14T13:11:08+08:00",
     "message": "Fix account creation and mobile/web sign-in activation flow"
-  },
-  {
-    "date": "2026-11-14T12:52:26+08:00",
-    "message": "Fix summary-list descendant selector leak into custom group dropdown"
   }
 ]

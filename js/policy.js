@@ -15,6 +15,9 @@
       <li>Verify important balances, member payouts, and excess carry-over entries against physical or e-wallet receipts.</li>
       <li>Accept the current Terms of Use and Privacy Policy upon your first sign-in or after major policy updates.</li>
     </ul>
+    <h3>Notifications &amp; email delivery scope</h3>
+    <p><strong>Notifications and direct chat messages are delivered in-app only.</strong> You must open or keep myIPON running on your device or browser to view and receive real-time alerts for new messages, payment reviews, contribution updates, replies, and announcements. Activity notifications are <strong>not sent via email</strong> and are not guaranteed to arrive when the app is completely closed on a phone.</p>
+    <p>Automated <strong>emails</strong> are reserved strictly for account security and essential notices: 6-digit email verification (OTP) codes, password recovery links, and 7-day prior warnings before 6-month inactive account cleanup.</p>
     <h3>Approvals, ongoing savings protection &amp; completion bin</h3>
     <p>Only confirmed entries affect tracked savings totals. Rejected and voided entries carry mandatory reasons and remain recorded in the group audit trail (retained for <strong>90 days</strong>) for accountability.</p>
     <p><strong>Ongoing savings &amp; active goals are never deleted by retention</strong> regardless of how many months or years it takes your group to reach a target. Active savings records, confirmed ledgers, and ongoing goals stay intact until you choose to wrap up a milestone or group cycle.</p>
@@ -41,11 +44,11 @@
       <li>Authenticate accounts (including email OTP verification, password recovery, and optional TOTP two-factor authentication) and enforce database row-level isolation per group and role.</li>
       <li>Calculate monthly summaries, calendar progress, wallet balances, CSV/print reports, annual roll-up summaries, and audit logs.</li>
       <li>Store uploaded images, voice notes, documents, and receipts inside dedicated cloud object storage buckets (<code>ipon-media</code>, <code>chat-attachments</code>, <code>announcements</code>, <code>record-comments</code>) referenced by URL rather than storing raw binary blobs or Base64 strings inside database tables.</li>
-      <li>Deliver email, in-app, and optional Web Push notifications for payment reviews, discussion replies, account status changes, inactivity warnings, and announcements.</li>
+      <li>Deliver <strong>in-app notifications</strong> (and device banners while myIPON stays open) for payment reviews, chat messages, discussion replies, account status changes, and announcements. Activity alerts are <strong>not sent to your email</strong>; email is reserved strictly for OTP verification codes, password recovery links, and 7-day inactivity warnings.</li>
       <li>Summarize high-level platform updates in Super Admin release notes without exposing private group financial balances, and display optional requester credit on implemented feature requests when attribution is enabled.</li>
     </ul>
     <h3>Browser storage &amp; device alerts</h3>
-    <p>The app stores session credentials, cross-tab sync keys, your light or dark theme selection, per-account policy consent cache keys, periodic data-retention reminder timestamps, and optional Web Push subscription tokens locally on your browser or Android app so settings stay consistent. Push alerts can be disabled anytime in your device settings or Account preferences.</p>
+    <p>The app stores session credentials, cross-tab sync keys, your light or dark theme selection, per-account policy consent cache keys, periodic data-retention reminder timestamps, and optional Web Push subscription tokens locally on your browser or Android app so settings stay consistent. Open myIPON directly to check incoming messages and activity notifications (alerts are in-app only and not emailed). Device alerts can be disabled anytime in your device settings or Account preferences.</p>
     <h3>Who can access it</h3>
     <p>Access is strictly limited by assigned role and active savings group. Authorized group administrators and treasurers review permitted group workspace activity and payout info. Platform administrators manage system health, storage hygiene, account access, bug reports, and feature requests, and are not intended to view private group savings ledgers.</p>
     <h3>Detailed data retention, ongoing savings protection &amp; automatic deletion</h3>
