@@ -3121,17 +3121,39 @@ Deno.serve(async (request) => {
     if (!rawFeatures) {
       const { data: implRows } = await admin
         .from('feature_requests')
-        .select('title,details,requester_id')
+        .select('title,details,requester_id,allow_credit')
         .eq('status', 'IMPLEMENTED')
         .is('release_version', null)
         .order('reviewed_at', { ascending: false })
         .limit(50);
-      rawFeatures = implRows || [];
+      const rows = implRows || [];
+      const creditedIds = [...new Set(
+        rows
+          .filter((r: any) => r.allow_credit !== false && r.requester_id)
+          .map((r: any) => String(r.requester_id))
+      )];
+      const nameById = new Map<string, string>();
+      if (creditedIds.length) {
+        const { data: profRows } = await admin
+          .from('profiles')
+          .select('id,full_name')
+          .in('id', creditedIds);
+        for (const prof of profRows || []) {
+          const cleanName = String(prof?.full_name || '').trim();
+          if (prof?.id && cleanName) nameById.set(String(prof.id), cleanName);
+        }
+      }
+      rawFeatures = rows.map((r: any) => ({
+        title: r.title,
+        details: r.details,
+        allow_credit: r.allow_credit !== false,
+        requester_name: r.allow_credit !== false && r.requester_id ? (nameById.get(String(r.requester_id)) || null) : null
+      }));
     }
     const features = rawFeatures.map((f: any) => ({
       title: String(f.title || '').trim(),
       description: String(f.details || f.description || '').trim(),
-      requester_name: f.requester_name ? String(f.requester_name).trim() : null
+      requester_name: f.allow_credit !== false && f.requester_name ? String(f.requester_name).trim() : null
     })).filter((f) => Boolean(f.title));
     let rawFixedBugs = Array.isArray(body.fixed_bugs) ? body.fixed_bugs : null;
     if (!rawFixedBugs) {

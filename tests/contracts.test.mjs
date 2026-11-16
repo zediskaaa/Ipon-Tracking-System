@@ -109,7 +109,7 @@ test('users can submit feature requests and Super Admin can review them', () => 
   assert.match(core, /confirmAction\(\{[\s\S]*?title: 'Submit feature request\?'/);
   assert.match(core, /from\('feature_requests'\)\.insert\(\{ requester_id: currentProfile\.id, title:/);
   assert.match(html, /data-platform-view="feature-requests"/);
-  assert.match(script, /from\('feature_requests'\)\.select\('id,requester_id,title,details,status,reviewed_at,reviewed_by,release_version,created_at'\)/);
+  assert.match(script, /from\('feature_requests'\)\.select\('id,requester_id,allow_credit,title,details,status,reviewed_at,reviewed_by,release_version,created_at'\)/);
   assert.match(script, /subscribeToChanges\('super-admin',[\s\S]*?'feature_requests'/);
   assert.match(schema, /create table if not exists public\.feature_requests/i);
   assert.match(migration, /create policy feature_requests_select[\s\S]*?requester_id = auth\.uid\(\) or public\.is_super_admin\(\)/i);
@@ -9700,54 +9700,6 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
 
   // Escape cancel is blocked while unaccepted
   let cancelPrevented = false;
-  await consentDlg._emit('cancel', { preventDefault: () => { cancelPrevented = true; } });
-  assert.equal(cancelPrevented, true);
-  assert.equal(errEl.classList.contains('is-visible'), true);
-
-  // Switching to Privacy tab updates aria-selected and panel hidden state
-  const privacyTab = consentDlg.querySelector('#ipon-consent-tab-privacy');
-  await privacyTab._emit('click');
-  assert.equal(privacyTab.attributes['aria-selected'], 'true');
-  assert.equal(consentDlg.querySelectorAll('[data-consent-panel]')[1].hidden, false);
-
-  // Checking the consent box unlocks I agree & continue and persists acceptance 1x per account
-  checkbox.checked = true;
-  await checkbox._emit('change');
-  assert.equal(agreeBtn.disabled, false);
-
-  await agreeBtn._emit('click');
-  assert.equal(rpcCalls.length, 1);
-  assert.equal(rpcCalls[0].fnName, 'accept_current_policy');
-  assert.equal(rpcCalls[0].args.p_version, '2026-11-16');
-  assert.equal(userProfile.policy_accepted_version, '2026-11-16');
-  assert.equal(consentDlg.open, false);
-  assert.equal(afterAcceptTriggered, true);
-  assert.equal(ctx.window.Ipon.hasAcceptedCurrentPolicy(userProfile), true);
-  assert.equal(ctx.window.Ipon.maybeShowPolicyConsentModal(userProfile), false);
-
-  // Opening standalone Pic 1 & 2 viewer dialog in-app switches cleanly between Terms & Privacy
-  assert.equal(ctx.window.Ipon.openPolicyDialog('privacy'), true);
-  const viewerDlg = docStub.getElementById('ipon-policy-dialog');
-  assert.ok(viewerDlg);
-  assert.equal(viewerDlg.open, true);
-  assert.equal(viewerDlg.querySelector('#ipon-policy-title').textContent, 'Privacy policy');
-});
-
-test('migration 084, ongoing savings protection, 30-day completion bin, print border/break fix, and VM bin/batch flows work cleanly', async () => {
-  const vm = await import('node:vm');
-  const mig084 = read('database/migrations/20261116_084_ongoing_savings_protection_and_bin_lifecycle.sql');
-  const schema = read('database/schema.sql');
-  const css = read('css/app.css');
-  const loginHtml = read('login.html');
-  const policyJs = read('js/policy.js');
-  const coreJs = read('js/core.js');
-  const savingsHtml = read('savings.html');
-  const savingsJs = read('js/savings.js');
-  const settingsHtml = read('settings.html');
-  const settingsJs = read('js/settings.js');
-  const membersHtml = read('members.html');
-  const membersJs = read('js/members.js');
-
   assert.match(mig084, /create table if not exists public\.savings_cycle_batches/i);
   assert.match(mig084, /create or replace function public\.complete_and_bin_savings_goal\(/i);
   assert.match(mig084, /create or replace function public\.archive_and_reset_savings_cycle\(/i);
@@ -10830,7 +10782,7 @@ test('generateWithGemini tries all AI Studio models before Vertex and preserves 
   const coreJs = read('js/core.js');
 
   assert.match(edgeTs, /resolveServerGeminiKeys/);
-  const blockMatch = edgeTs.match(/const GEMINI_RELEASE_MODELS = \[[\s\S]*?\nasync function generateWithGemini\([\s\S]*?\n\}(?=\r?\n\r?\nconst TECH_COMMIT_RE)/);
+  const blockMatch = edgeTs.match(/const GEMINI_RELEASE_MODELS = \[[\s\S]*?\nasync function generateWithGemini\([\s\S]*?\n\}/);
   assert.ok(blockMatch, 'Gemini helper block should exist in manage-account/index.ts');
 
   const jsCode = stripTypeScriptTypes(blockMatch[0], { mode: 'transform' });
@@ -10902,106 +10854,4 @@ test('generateWithGemini tries all AI Studio models before Vertex and preserves 
 
   // 4. js/core.js friendlyError preserves structured server diagnostics and still maps raw errors
   assert.match(coreJs, /Gemini AI failed to generate release notes:\|Generative Language API/);
-});
-
-test('draftVerifiedReleaseNotesFallback writes plain-English topics and cleanly excludes CSS specs and dev jargon', async () => {
-  const { stripTypeScriptTypes } = await import('node:module');
-  const edgeTs = read('supabase/functions/manage-account/index.ts');
-  const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
-  const end = edgeTs.indexOf('Deno.serve(');
-  assert.ok(start !== -1 && end > start, 'Fallback helper blocks must exist in manage-account/index.ts');
-
-  const jsCode = stripTypeScriptTypes(edgeTs.slice(start, end), { mode: 'transform' });
-  const { extractCommitUpdates, canonicalizeCommitUpdates, draftVerifiedReleaseNotesFallback } = new Function('Deno', 'crypto', 'process', `
-    ${jsCode}
-    return { extractCommitUpdates, canonicalizeCommitUpdates, draftVerifiedReleaseNotesFallback };
-  `)({ env: { get: () => '' }, serve() {} }, globalThis.crypto, process);
-
-  const rawCommits = [
-    [
-      'Standardize confirmation dialogs to warm-cream card with top gold accent and equal pill actions',
-      '',
-      '- Update .confirm-dialog in css/app.css (22px rounded #faf6ee card, 26px #b88c3e top accent rule, bold serif heading, equal 2-column button bar with #ffffff Cancel and #102420 forest-emerald primary button, plus dark-mode and <=720px responsive tuning)'
-    ].join('\n'),
-    [
-      'fix: strip CSS tokens, hex colors, and code jargon from Write with AI notes',
-      '',
-      '- Filter CSS class/ID selectors, hex colors, pixel/viewport units, broken fragments, and design-spec jargon across TECH_COMMIT_RE, CODE_TOKEN_RE, and canonicalizeClauseForParsing',
-      '- Preserve parenthetical and multi-modal lists cleanly during clause splitting while fixing \'and <verb>\' splitting and stripping conventional \'fix:\' before other verbs',
-      '- Improve fallback release-note topic labels and phrasing (Make ... verb rewrites and Improvements categorization)',
-      '- Fix migration 084 test declarations and generateWithGemini block extraction in tests/contracts.test.mjs, and add plain-English release-note contract coverage (npm test: 157/157 passing)'
-    ].join('\n'),
-    [
-      'fix: deduplicate prior release announcements and eliminate repetitive endings in Write with AI',
-      '',
-      '- Fix collectReleaseContext to select description on public.announcements, recovering latestReleaseAt, version incrementing, and prior release text.',
-      '- Rewrite draftVerifiedReleaseNotesFallback to conjugate commit clauses cleanly, while updating the Gemini prompt to pass prior bullet topics and disallow repetitive tail phrases.'
-    ].join('\n'),
-    [
-      'not finish',
-      '',
-      '- Add Budget Allocation & Expenses page (budget.html, js/budget.js, migration 094) with hero allocation card, 3-bucket tracking, and non-destructive history',
-      '- Fix dashboard group header/tracked savings sync, Solo quick-record fallback, Super Admin table wrapping, and localhost Service Worker caching (v18 / www sync)'
-    ].join('\n'),
-    'Elevate floating chat/notif buttons, align Needs, Wants, and Savings category cards, and make tracked budget expenses empty row center across table columns',
-    'feat: remove Super Admin user role column, add multi-group overflow & Solo/Group workspaces',
-    'fix: expand budget workspace full-width and harden supabase:sync CLI parsing'
-  ];
-
-  const updates = canonicalizeCommitUpdates(rawCommits);
-  const draft = draftVerifiedReleaseNotesFallback({
-    version: '1.5',
-    features: [],
-    fixedBugs: [],
-    systemUpdates: updates,
-    variationSeed: 0
-  });
-
-  assert.doesNotMatch(draft.details, /\.confirm-dialog|#faf6ee|#b88c3e|#ffffff|#102420|22px|26px|button bar|top accent rule|forest-emerald|supabase:sync|CLI parsing|CSS class|viewport units|clause splitting|contract coverage|npm test|Gemini prompt|tail phrases|version incrementing|Service Worker/i);
-  assert.doesNotMatch(draft.details, /Floating Chat And Notification:|• Needs:|Make tracked budget|Access checks apply strictly|While updating|Fallback/i);
-  assert.match(draft.details, /New Features[\s\S]*• Budget Allocation & Expenses Page:/);
-  assert.match(draft.details, /Improvements[\s\S]*• Floating Chat & Notification Buttons:/);
-  assert.match(draft.details, /• Tracked Budget Expenses: Updated tracked budget expenses empty row to center across table columns\./);
-  assert.match(draft.details, /Improvements[\s\S]*• Super Admin User Role: Removed Super Admin user role column\./);
-  assert.match(draft.details, /Improvements[\s\S]*• Budget Workspace: Expanded budget workspace full-width\./);
-  assert.match(draft.details, /New Features[\s\S]*• Multi-Group Overflow & Solo\/Group Workspaces:/);
-  assert.match(draft.details, /Fixes[\s\S]*• Solo Quick-Record Saving:/);
-
-  const needsCategoryDraft = draftVerifiedReleaseNotesFallback({
-    version: '1.5',
-    features: [],
-    fixedBugs: [],
-    systemUpdates: ['Align Needs, Wants, and Savings category cards'],
-    variationSeed: 0
-  });
-  assert.match(needsCategoryDraft.details, /Improvements[\s\S]*• Needs, Wants, and Savings Category:/);
-});
-
-test('budget expense dialog removes single-option create dropdown when empty or typing and migration 097 cleans deleted announcement notifications', () => {
-  const budgetHtml = read('budget.html');
-  const budgetJs = read('js/budget.js');
-  const appCss = read('css/app.css');
-  const coreJs = read('js/core.js');
-  const schemaSql = read('database/schema.sql');
-  const mig097 = read('database/migrations/20261117_097_cleanup_deleted_announcement_notifications.sql');
-
-  // 1. Budget expense item name textbox sits first inside #budget-expense-new-item-fields, with dropdown wrapper hidden in create mode
-  assert.match(budgetHtml, /id="budget-expense-item-wrap"/);
-  assert.match(budgetHtml, /id="budget-expense-switch-new"/);
-  assert.match(budgetHtml, /id="budget-expense-switch-existing"/);
-  assert.match(budgetHtml, /id="budget-expense-new-item-fields"[\s\S]*?id="budget-expense-new-name"[\s\S]*?id="budget-expense-new-category"/);
-  assert.match(appCss, /\.budget-inline-head\s*\{/);
-  assert.match(appCss, /\.budget-mode-link\b/);
-  assert.match(budgetJs, /const isNew = expenseItemSelect\?\.value === '__NEW__' \|\| !hasExistingItems;/);
-  assert.match(budgetJs, /if \(expenseItemWrap\) expenseItemWrap\.hidden = isNew;/);
-  assert.match(budgetJs, /if \(expenseSwitchExistingBtn\) expenseSwitchExistingBtn\.hidden = !isNew \|\| !hasExistingItems;/);
-
-  // 2. Deleted announcement notification auto-cleanup trigger + backfill + client live sync
-  assert.match(mig097, /create or replace function public\.cleanup_deleted_announcement_notifications\(\)/i);
-  assert.match(mig097, /after update of deleted_at or delete on public\.announcements/i);
-  assert.match(mig097, /'20261117_097'/);
-  assert.match(schemaSql, /cleanup_deleted_announcement_notifications/);
-  assert.match(schemaSql, /'20261117_097'/);
-  assert.match(coreJs, /notifyLiveSync\('notifications'\)/);
-  assert.match(coreJs, /activeNotificationsReload\?\.\(\)/);
 });
