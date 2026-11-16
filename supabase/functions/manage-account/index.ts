@@ -841,15 +841,33 @@ async function sendAdminRequestOtpEmail({
 }
 
 const GEMINI_RELEASE_MODELS = [
-  'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
   'gemini-2.0-flash',
-  'gemini-flash-latest',
+  'gemini-2.5-flash',
   'gemini-flash-lite-latest',
+  'gemini-flash-latest',
   'gemini-1.5-flash'
 ];
 
-function formatGeminiApiError(status: number, model: string, rawText: string) {
+type GeminiEndpointKind = 'ai-studio' | 'vertex';
+
+interface GeminiErrorInfo {
+  status: number;
+  model: string;
+  endpointKind: GeminiEndpointKind;
+  msg: string;
+  reason: string;
+  isServiceDisabled: boolean;
+  isBillingDisabled: boolean;
+  isInvalidCred: boolean;
+}
+
+function parseGeminiApiError(
+  status: number,
+  model: string,
+  rawText: string,
+  endpointKind: GeminiEndpointKind = 'ai-studio'
+): GeminiErrorInfo {
   let msg = '';
   let reason = '';
   try {
@@ -861,22 +879,74 @@ function formatGeminiApiError(status: number, model: string, rawText: string) {
   } catch {
     msg = String(rawText || '').replace(/\s+/g, ' ').trim().slice(0, 220);
   }
-  if (reason === 'BILLING_DISABLED' || /requires billing to be enabled/i.test(msg)) {
-    return `Google Cloud billing is disabled for this AQ. Vertex AI key (${status} on ${model}). Either enable billing on that Google Cloud project or click Configure API key to save a free-tier Google AI Studio key (created via aistudio.google.com, which also starts with AQ. or AIzaSy).`;
+  const combined = `${reason} ${msg}`;
+  return {
+    status,
+    model,
+    endpointKind,
+    msg,
+    reason,
+    isServiceDisabled: /SERVICE_DISABLED|API_KEY_SERVICE_BLOCKED|has not been used in project|is disabled/i.test(combined),
+    isBillingDisabled: reason === 'BILLING_DISABLED' || /requires billing to be enabled/i.test(msg),
+    isInvalidCred:
+      status === 401 ||
+      reason === 'ACCESS_TOKEN_TYPE_UNSUPPORTED' ||
+      reason === 'API_KEY_INVALID' ||
+      reason === 'CREDENTIALS_MISSING' ||
+      /API key not valid|API key expired|Expected OAuth|not supported by this API|missing required authentication/i.test(msg)
+  };
+}
+
+function formatGeminiApiError(
+  statusOrInfo: number | GeminiErrorInfo,
+  model = '',
+  rawText = '',
+  endpointKind: GeminiEndpointKind = 'ai-studio',
+  glFailure: GeminiErrorInfo | null = null
+) {
+  const info = typeof statusOrInfo === 'number'
+    ? parseGeminiApiError(statusOrInfo, model, rawText, endpointKind)
+    : statusOrInfo;
+
+  if (info.endpointKind === 'vertex' && glFailure) {
+    if (glFailure.isServiceDisabled) {
+      return `Generative Language API is disabled on this Google Cloud project (${glFailure.status} on ${glFailure.model}). Enable "Generative Language API" (free, no Cloud billing needed) in Google Cloud Console, or click Configure API key to save a free-tier Google AI Studio key.`;
+    }
+    if (glFailure.isInvalidCred && info.isBillingDisabled) {
+      return `This key is a Google Cloud Vertex AI Express key whose Cloud billing is disabled (${info.status} on ${info.model}; free-tier AI Studio returned ${glFailure.reason || glFailure.status}). Unlike Vertex AI, a free-tier Google AI Studio key (aistudio.google.com/app/apikey with Generative Language API) keeps working with billing disabled — click Configure API key to save one.`;
+    }
+    if (glFailure.isBillingDisabled) {
+      return `Google AI Studio rejected the free-tier request on ${glFailure.model} (${glFailure.status} ${glFailure.reason || 'BILLING_DISABLED'}: ${glFailure.msg || 'billing disabled'}). Open aistudio.google.com/app/apikey under a personal free-tier project and click Configure API key to save it.`;
+    }
+    if (info.isBillingDisabled) {
+      const glNote = glFailure.reason || glFailure.msg || `HTTP ${glFailure.status}`;
+      return `Google Cloud billing is disabled for this Vertex AI endpoint (${info.status} on ${info.model}; free-tier AI Studio returned: ${glNote}). Click Configure API key to save a free-tier Google AI Studio key.`;
+    }
+  }
+
+  if (info.isServiceDisabled) {
+    return `Generative Language API is disabled or restricted for this key (${info.status} on ${info.model}): ${info.msg || 'Enable Generative Language API on the Google Cloud project (free, no billing required)'}. Or click Configure API key to save a working Google AI Studio key.`;
+  }
+  if (info.isBillingDisabled) {
+    const scopeLabel = info.endpointKind === 'vertex' ? 'Vertex AI endpoint' : 'Google Cloud project';
+    return `Google Cloud billing is disabled for this ${scopeLabel} (${info.status} on ${info.model}). Vertex AI requires active Cloud billing, whereas a free-tier Google AI Studio key (aistudio.google.com/app/apikey with Generative Language API) works without billing — click Configure API key to save one.`;
   }
   if (
-    reason === 'ACCESS_TOKEN_TYPE_UNSUPPORTED' ||
-    reason === 'API_KEY_INVALID' ||
-    /API key not valid|API key expired|PERMISSION_DENIED/i.test(msg)
+    info.isInvalidCred ||
+    info.status === 401 ||
+    info.status === 403 ||
+    /PERMISSION_DENIED/i.test(info.msg)
   ) {
-    return `Gemini server API key rejected (${status} on ${model}): ${msg || 'Invalid or revoked key'}. Open Configure API key to test and save a working key from Google AI Studio on the server.`;
+    return `Gemini server API key rejected (${info.status} on ${info.model}): ${info.msg || 'Invalid or revoked key'}. Open Configure API key to test and save a working key from Google AI Studio on the server.`;
   }
-  return `Gemini API error (${status} on ${model}): ${msg || 'Request failed'}${reason ? ` [${reason}]` : ''}`;
+  return `Gemini API error (${info.status} on ${info.model}): ${info.msg || 'Request failed'}${info.reason ? ` [${info.reason}]` : ''}`;
 }
 
 const GEMINI_CONFIG_KEY = 'gemini_api_key';
 
-async function resolveServerGeminiKey(admin: any): Promise<{ key: string; source: 'saved' | 'env' | 'none' }> {
+async function resolveServerGeminiKeys(admin: any): Promise<Array<{ key: string; source: 'saved' | 'env' }>> {
+  const candidates: Array<{ key: string; source: 'saved' | 'env' }> = [];
+  const seen = new Set<string>();
   try {
     const { data } = await admin
       .from('internal_webhook_config')
@@ -884,13 +954,23 @@ async function resolveServerGeminiKey(admin: any): Promise<{ key: string; source
       .eq('key', GEMINI_CONFIG_KEY)
       .maybeSingle();
     const saved = String(data?.value || '').trim();
-    if (saved) return { key: saved, source: 'saved' };
+    if (saved) {
+      seen.add(saved);
+      candidates.push({ key: saved, source: 'saved' });
+    }
   } catch {
     // Fall back to Edge Function secret if config table lookup fails.
   }
   const envKey = String(Deno.env.get('GEMINI_API_KEY') || '').trim();
-  if (envKey) return { key: envKey, source: 'env' };
-  return { key: '', source: 'none' };
+  if (envKey && !seen.has(envKey)) {
+    candidates.push({ key: envKey, source: 'env' });
+  }
+  return candidates;
+}
+
+async function resolveServerGeminiKey(admin: any): Promise<{ key: string; source: 'saved' | 'env' | 'none' }> {
+  const candidates = await resolveServerGeminiKeys(admin);
+  return candidates[0] || { key: '', source: 'none' };
 }
 
 function maskApiKey(key: string): string {
@@ -898,6 +978,76 @@ function maskApiKey(key: string): string {
   if (!clean) return '';
   if (clean.length <= 10) return `${clean.slice(0, 3)}••••`;
   return `${clean.slice(0, 6)}••••••${clean.slice(-4)}`;
+}
+
+async function tryGeminiEndpoint({
+  endpointKind,
+  cleanKey,
+  body
+}: {
+  endpointKind: GeminiEndpointKind;
+  cleanKey: string;
+  body: Record<string, unknown>;
+}): Promise<{ parsed?: any; model?: string; failure?: GeminiErrorInfo; error?: Error }> {
+  let bestFailure: GeminiErrorInfo | null = null;
+  let lastError: Error | null = null;
+
+  for (const model of GEMINI_RELEASE_MODELS) {
+    const url = endpointKind === 'vertex'
+      ? `https://aiplatform.googleapis.com/v1/publishers/google/models/${encodeURIComponent(model)}:generateContent`
+      : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const controller = new AbortController();
+      timer = setTimeout(() => controller.abort(), 22000);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': cleanKey
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (!response.ok) {
+        const errorText = await response.text();
+        const info = parseGeminiApiError(response.status, model, errorText, endpointKind);
+        if (!bestFailure || (bestFailure.status === 404 && info.status !== 404)) {
+          bestFailure = info;
+          lastError = new Error(formatGeminiApiError(info));
+        } else if (!lastError) {
+          lastError = new Error(formatGeminiApiError(info));
+        }
+        // Key-level rejections apply uniformly across every model on this endpoint.
+        if (info.isInvalidCred || info.isServiceDisabled) {
+          break;
+        }
+        continue;
+      }
+      const data = await response.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) {
+        lastError = new Error(`No text generated by Gemini (${model}).`);
+        continue;
+      }
+      const cleanJson = String(rawText).trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+      return { parsed: JSON.parse(cleanJson), model };
+    } catch (err: any) {
+      if (timer) clearTimeout(timer);
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (err instanceof SyntaxError || err?.name === 'AbortError' || /JSON|Unterminated|Unexpected token|abort/i.test(String(err?.message || ''))) {
+        continue;
+      }
+      return { failure: bestFailure || undefined, error: lastError };
+    }
+  }
+
+  return {
+    failure: bestFailure || undefined,
+    error: lastError || new Error('Unable to generate release notes with Gemini.')
+  };
 }
 
 async function generateWithGemini({
@@ -924,73 +1074,34 @@ async function generateWithGemini({
     body.systemInstruction = { parts: [{ text: systemInstruction }] };
   }
 
-  // Newer Google AI Studio free-tier keys also start with AQ. alongside Vertex Express AQ. keys, so try Generative Language first and Vertex second for AQ. keys.
-  const buildEndpoints = (model: string) => {
-    const glUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-    const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
-    if (isAiStudioKey) return [glUrl];
-    return [glUrl, vertexUrl];
-  };
-
-  let lastErr: Error | null = null;
-  for (const model of GEMINI_RELEASE_MODELS) {
-    const endpoints = buildEndpoints(model);
-    let fatalCredentialOrBilling = true;
-    for (let epIdx = 0; epIdx < endpoints.length; epIdx += 1) {
-      const url = endpoints[epIdx];
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      try {
-        const controller = new AbortController();
-        timer = setTimeout(() => controller.abort(), 22000);
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': cleanKey
-          },
-          body: JSON.stringify(body),
-          signal: controller.signal
-        });
-        clearTimeout(timer);
-        if (!response.ok) {
-          const errorText = await response.text();
-          lastErr = new Error(formatGeminiApiError(response.status, model, errorText));
-          const isCredentialOrBilling =
-            response.status === 401 ||
-            response.status === 403 ||
-            /BILLING_DISABLED|PERMISSION_DENIED|API_KEY_INVALID|API key not valid|API key expired|ACCESS_TOKEN_TYPE_UNSUPPORTED/i.test(errorText);
-          if (isCredentialOrBilling) {
-            if (epIdx + 1 < endpoints.length) continue;
-            break;
-          }
-          fatalCredentialOrBilling = false;
-          if (epIdx + 1 < endpoints.length && /not[\s_]*found/i.test(errorText)) continue;
-          break;
-        }
-        fatalCredentialOrBilling = false;
-        const data = await response.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!rawText) {
-          lastErr = new Error(`No text generated by Gemini (${model}).`);
-          break;
-        }
-        const cleanJson = String(rawText).trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-        return { parsed: JSON.parse(cleanJson), model };
-      } catch (err: any) {
-        if (timer) clearTimeout(timer);
-        fatalCredentialOrBilling = false;
-        lastErr = err instanceof Error ? err : new Error(String(err));
-        if (err instanceof SyntaxError || err?.name === 'AbortError' || /JSON|Unterminated|Unexpected token|abort/i.test(String(err?.message || ''))) {
-          break;
-        }
-        throw lastErr;
-      }
-    }
-    if (fatalCredentialOrBilling && lastErr) {
-      throw lastErr;
-    }
+  // Try all candidate models on Generative Language API first (free tier works with Cloud billing disabled)
+  // before falling back to Vertex AI on AQ. keys, preserving AI Studio failure details if both fail.
+  const glAttempt = await tryGeminiEndpoint({ endpointKind: 'ai-studio', cleanKey, body });
+  if (glAttempt.parsed) {
+    return { parsed: glAttempt.parsed, model: glAttempt.model! };
   }
-  throw lastErr || new Error('Unable to generate release notes with Gemini.');
+
+  if (!isAiStudioKey) {
+    const vertexAttempt = await tryGeminiEndpoint({ endpointKind: 'vertex', cleanKey, body });
+    if (vertexAttempt.parsed) {
+      return { parsed: vertexAttempt.parsed, model: vertexAttempt.model! };
+    }
+    if (vertexAttempt.failure && glAttempt.failure) {
+      throw new Error(formatGeminiApiError(vertexAttempt.failure, '', '', 'vertex', glAttempt.failure));
+    }
+    if (vertexAttempt.failure) {
+      throw new Error(formatGeminiApiError(vertexAttempt.failure));
+    }
+    if (glAttempt.failure) {
+      throw new Error(formatGeminiApiError(glAttempt.failure));
+    }
+    throw vertexAttempt.error || glAttempt.error || new Error('Unable to generate release notes with Gemini.');
+  }
+
+  if (glAttempt.failure) {
+    throw new Error(formatGeminiApiError(glAttempt.failure));
+  }
+  throw glAttempt.error || new Error('Unable to generate release notes with Gemini.');
 }
 
 const TECH_COMMIT_RE = /\b(?:supabase|migrations?|edge\s+functions?|rpc\s+functions?|database\s+functions?|deno|postgres(?:ql)?|postgrest?|rls|sql|triggers?|foreign\s+keys?|jsonb|cli|ide|vscode|antigravity|github|git\s+commits?|repo\s+commits?|live\s+commits?|repo(?:sitory)?|contracts?\.test|unit\s+tests?|test\s+suite|lint(?:ing)?|eslint|prettier|package\.json|lockfile|node_modules|html\s+csp|csp\s+headers?|deployment|deploy(?:ed|ing)?|auto-?sync|automate|release\s+ai|ai\s+release\s+notes|ai\s+and\s+composer|composer\s+formatting|smart\s+composer|procedural\s+composer|prior\s+releases|invite\s+rows?|database\s+rows?|name\s+pills?|ui\/ux\s+skills?|workspace\s+skills?|audit_logs|enforce_group_scope|admin_create_group|old\.amount|group_id|member_id|requester_id|codebase|refactor(?:ing)?|tdz|iife|vm\.run|playwright|puppeteer|cdp|edge\s+function\s+cache|asset\s+cache|cache\s+version|api\s+endpoints?|webhooks?|descendant\s+selector|selector\s+leak|vertex\s+ai|ai\s+studio|ai\s+coach|savings\s+coach|write\s+with\s+ai|invokeaccountfunction|window\.ipon|populategroupselect)\b/i;
@@ -1402,6 +1513,171 @@ function formatReleaseTitle(version: string, candidateTitle = '', contentItems: 
   }
   const full = `${prefix}: ${topic}`;
   return full.length > 140 ? `${full.slice(0, 137).replace(/[\s,&+-]+$/, '')}...` : full;
+}
+
+function deriveFallbackTopicLabel(rawClause: string) {
+  const stripped = String(rawClause || '')
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(/^(?:add(?:ed|s)?|fix(?:ed|es)?|keep|allow(?:ed|s)?|show(?:n|s)?|support(?:ed|s)?|enable[ds]?|improv(?:e[ds]?|ement)|make|update[ds]?|block(?:ed|s)?|prevent(?:ed|s)?|restore[ds]?|deduplicate[ds]?|streamline[ds]?|polish(?:ed)?|align(?:ed)?|expand(?:ed)?|remove[ds]?|clean(?:ed)?(?:\s+up)?|refine[ds]?|harden(?:ed)?|upgrade[ds]?)\s+(?:the\s+|a\s+|an\s+)?/i, '')
+    .replace(/\s+(?:cleanly|properly|correctly|reliably|smoothly|right\s+away|full[-\s]width|end[-\s]to[-\s]end)$/i, '')
+    .trim();
+  const words = (stripped || String(rawClause || ''))
+    .split(/\s+/)
+    .filter((w) => w.length > 1 || /^[a-z0-9]/i.test(w))
+    .slice(0, 4);
+  if (!words.length) return 'Workflow Update';
+  return words
+    .map((w) => (/^[A-Z0-9]{2,}$/.test(w) ? w : w.split('-').map((p) => (p ? p.charAt(0).toUpperCase() + p.slice(1) : '')).join('-')))
+    .join(' ')
+    .replace(/(?:\s+(?:on|in|at|for|to|of|with|from|by|via|the|and|or))+$/i, '')
+    .replace(/[.,;:—–-]+$/, '');
+}
+
+function buildFallbackBullet(
+  rawText: string,
+  kind: 'feature' | 'fix' | 'improvement' | 'security',
+  seedOffset = 0
+) {
+  const cleaned = String(rawText || '').replace(/^[•\-*]\s*/, '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  if (cleaned.includes(':')) {
+    const colonIdx = cleaned.indexOf(':');
+    const head = cleaned.slice(0, colonIdx).trim();
+    const tail = cleaned.slice(colonIdx + 1).trim();
+    if (head && tail && tail.length >= 24) {
+      return `${head}: ${tail.replace(/([^.!?])$/, '$1.')}`;
+    }
+  }
+  const topic = deriveFallbackTopicLabel(cleaned);
+  const clause = cleaned.replace(/[.\s]+$/, '');
+  const lcClause = clause.charAt(0).toLowerCase() + clause.slice(1);
+  const v = Math.abs(Number(seedOffset) || 0) % 3;
+  if (kind === 'security') {
+    const lead = [
+      `Strengthened protections to ${lcClause} across everyday account and group actions.`,
+      `Updated access safeguards to ${lcClause}, keeping group financial records protected.`,
+      `Applied account and data protection updates to ${lcClause} for safer group management.`
+    ][v];
+    return `${topic}: ${lead}`;
+  }
+  if (kind === 'fix') {
+    const lead = [
+      `Resolved an issue to ${lcClause}, keeping related savings and budget workflows dependable and error-free.`,
+      `Corrected workflow handling to ${lcClause} so affected controls and displays respond consistently without interruptions.`,
+      `Addressed a workflow glitch to ${lcClause}, ensuring smooth day-to-day tracking for members and admins.`
+    ][v];
+    return `${topic}: ${lead}`;
+  }
+  if (kind === 'improvement') {
+    const lead = [
+      `Refined the experience to ${lcClause}, giving savers clearer visual balance and easier navigation.`,
+      `Upgraded layout and usability to ${lcClause} for a cleaner, steadier workspace across desktop and mobile.`,
+      `Polished everyday interactions to ${lcClause}, making common group and tracking tasks faster to review.`
+    ][v];
+    return `${topic}: ${lead}`;
+  }
+  const lead = [
+    `Introduced support to ${lcClause}, expanding what members and admins can manage directly inside myIPON.`,
+    `Added capability to ${lcClause} so savers can organize and track group activity more effectively.`,
+    `Rolled out updates enabling ${lcClause} right within the workspace for smoother everyday tracking.`
+  ][v];
+  return `${topic}: ${lead}`;
+}
+
+function draftVerifiedReleaseNotesFallback({
+  version,
+  features,
+  fixedBugs,
+  systemUpdates,
+  previousTitle = '',
+  variationSeed = 0
+}: {
+  version: string;
+  features: Array<{ title: string; description: string; requester_name: string | null }>;
+  fixedBugs: Array<{ title: string; description: string }>;
+  systemUpdates: string[];
+  previousTitle?: string;
+  variationSeed?: number;
+}) {
+  const seed = Math.abs(Number(variationSeed) || 0);
+  const prefix = formatReleaseVersionPrefix(version);
+
+  const requestedFeatures: string[] = [];
+  const fixes: string[] = [];
+  const improvements: string[] = [];
+  const securityUpdates: string[] = [];
+  const newFeatures: string[] = [];
+
+  for (let i = 0; i < features.length; i += 1) {
+    const f = features[i];
+    const title = String(f.title || '').trim();
+    if (!title) continue;
+    const desc = String(f.description || '').replace(/\s+/g, ' ').trim();
+    const credit = f.requester_name ? ` (Requested by: ${f.requester_name})` : '';
+    const detail = desc && desc.length >= 20
+      ? `${desc.replace(/([^.!?])$/, '$1.')}${credit}`
+      : `Implemented this community-suggested enhancement in ${prefix} to make ${title.toLowerCase()} readily available across everyday tracking.${credit}`;
+    requestedFeatures.push(`${title}: ${detail}`);
+  }
+
+  for (let i = 0; i < fixedBugs.length; i += 1) {
+    const b = fixedBugs[i];
+    const title = String(b.title || '').trim();
+    if (!title) continue;
+    const desc = String(b.description || '').replace(/\s+/g, ' ').trim();
+    const detail = desc && desc.length >= 20
+      ? `Resolved this reported issue (${desc.replace(/[.!?]+$/, '')}) so the affected workflow behaves reliably again.`
+      : `Resolved this reported issue so the affected savings and workspace controls operate smoothly without interruptions.`;
+    fixes.push(`${title}: ${detail}`);
+  }
+
+  for (let i = 0; i < systemUpdates.length; i += 1) {
+    const item = String(systemUpdates[i] || '').trim();
+    if (!item) continue;
+    if (/\b(?:security|vulnerabilit|permission|auth(?:entication|orization)?|encrypt|lockout|privacy|hardening)\b/i.test(item)) {
+      securityUpdates.push(buildFallbackBullet(item, 'security', seed + i));
+    } else if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|bug|mismatch|overflow|wrap|broken|crash|fallback)\b/i.test(item)) {
+      fixes.push(buildFallbackBullet(item, 'fix', seed + i));
+    } else if (/^(?:improv|polish|clean|compact|sync|update|streamline|keep|align|expand|refine|enhance|make)\b|\b(?:layout|padding|spacing|width|alignment|contrast|responsive|clearer|visible)\b/i.test(item)) {
+      improvements.push(buildFallbackBullet(item, 'improvement', seed + i));
+    } else {
+      newFeatures.push(buildFallbackBullet(item, 'feature', seed + i));
+    }
+  }
+
+  const allItems = [...requestedFeatures, ...newFeatures, ...fixes, ...improvements, ...securityUpdates];
+  const themes = extractReleaseTopicLabels(allItems);
+  const themePhrase = themes.length >= 2
+    ? `${themes.slice(0, -1).join(', ')}, and ${themes[themes.length - 1]}`
+    : themes[0] || 'everyday savings and group tracking tools';
+
+  const intro = [
+    `${prefix} brings verified updates focused on ${themePhrase}, helping members and administrators keep group savings clear and effortless.`,
+    `A fresh rollout has arrived in ${prefix}, delivering practical enhancements across ${themePhrase} for smoother daily tracking.`,
+    `${prefix} is now ready with targeted updates around ${themePhrase} based on recent improvements and community feedback.`
+  ][seed % 3];
+
+  const outro = [
+    `Thank you for saving with myIPON—keep sharing your ideas and bug reports so each update continues making group tracking even better.`,
+    `We appreciate everyone using myIPON every day; send in your suggestions anytime to help shape upcoming improvements.`,
+    `Thanks for your continued support on myIPON—your feedback helps guide every fix, refinement, and new capability we roll out.`
+  ][seed % 3];
+
+  const rawDetails = formatSectionedReleaseBody({
+    intro,
+    newFeatures,
+    fixes,
+    improvements,
+    requestedFeatures,
+    securityUpdates,
+    outro
+  });
+  const sanitized = sanitizeReleaseDetails(rawDetails);
+  let title = formatReleaseTitle(version, '', [...allItems, sanitized.text], seed);
+  if (previousTitle && title === previousTitle) {
+    title = formatReleaseTitle(version, '', [...allItems, sanitized.text], seed + 1);
+  }
+  return { title, details: sanitized.text, bulletCount: sanitized.bulletCount };
 }
 
 type AdminClient = ReturnType<typeof createClient>;
@@ -2631,12 +2907,10 @@ Deno.serve(async (request) => {
       });
     }
 
-    const { key: geminiKey } = await resolveServerGeminiKey(admin);
-    if (!geminiKey) {
-      return json({
-        error: 'Gemini AI is not configured on the server yet. Click Configure API key to save a Google AI Studio key on the server.'
-      }, 502);
-    }
+    const geminiKeys = await resolveServerGeminiKeys(admin);
+    let geminiFailureMsg = geminiKeys.length
+      ? ''
+      : 'Gemini AI is not configured on the server yet.';
 
     const featureListText = features.length
       ? features.map((f) => `- "${f.title}": ${f.description || 'User-requested enhancement'}${f.requester_name ? ` (Requested by: ${f.requester_name})` : ''}`).join('\n')
@@ -2700,33 +2974,49 @@ Output strictly valid JSON with this exact schema (EVERY entry inside each strin
   "outro": "1 concise, natural closing paragraph thanking myIPON savers for feedback and inviting continued suggestions."
 }`;
 
-    try {
-      const { parsed: aiResult, model: aiModel } = await generateWithGemini({
-        apiKey: geminiKey,
-        prompt,
-        systemInstruction: 'You are the head of product communications for myIPON, a group savings platform. Write authentic, richly detailed, human-sounding software release notes based strictly on the verified updates provided. Never invent changes, never use static boilerplate, never leak internal filenames/DB/CLI jargon. Output strictly valid JSON with flat string arrays (never nested item objects).'
-      });
+    if (geminiKeys.length) {
+      try {
+        let generated: { parsed: any; model: string } | null = null;
+        let activeGeminiKey = geminiKeys[0].key;
+        let firstKeyErr: any = null;
+        for (const entry of geminiKeys) {
+          try {
+            generated = await generateWithGemini({
+              apiKey: entry.key,
+              prompt,
+              systemInstruction: 'You are the head of product communications for myIPON, a group savings platform. Write authentic, richly detailed, human-sounding software release notes based strictly on the verified updates provided. Never invent changes, never use static boilerplate, never leak internal filenames/DB/CLI jargon. Output strictly valid JSON with flat string arrays (never nested item objects).'
+            });
+            activeGeminiKey = entry.key;
+            break;
+          } catch (candidateErr) {
+            if (!firstKeyErr) firstKeyErr = candidateErr;
+          }
+        }
+        if (!generated) {
+          throw firstKeyErr || new Error('Unable to generate release notes with Gemini.');
+        }
+        const { parsed: aiResult, model: aiModel } = generated;
 
-      const nf = coerceReleaseBulletList(aiResult.new_features);
-      const fx = coerceReleaseBulletList(aiResult.fixes);
-      const im = coerceReleaseBulletList(aiResult.improvements);
-      const rf = coerceReleaseBulletList(aiResult.requested_features);
-      const su = coerceReleaseBulletList(aiResult.security_updates);
-      const oc = coerceReleaseBulletList(aiResult.other_changes);
-      const hl = coerceReleaseBulletList(aiResult.highlights);
+        const nf = coerceReleaseBulletList(aiResult.new_features);
+        const fx = coerceReleaseBulletList(aiResult.fixes);
+        const im = coerceReleaseBulletList(aiResult.improvements);
+        const rf = coerceReleaseBulletList(aiResult.requested_features);
+        const su = coerceReleaseBulletList(aiResult.security_updates);
+        const oc = coerceReleaseBulletList(aiResult.other_changes);
+        const hl = coerceReleaseBulletList(aiResult.highlights);
 
-      const missingItems = findMissingReleaseItems({
-        newFeatures: nf,
-        fixes: fx,
-        improvements: im,
-        requestedFeatures: rf,
-        securityUpdates: su,
-        otherChanges: oc
-      }, [...systemUpdates, ...fixedBugPromptLines]);
+        const missingItems = findMissingReleaseItems({
+          newFeatures: nf,
+          fixes: fx,
+          improvements: im,
+          requestedFeatures: rf,
+          securityUpdates: su,
+          otherChanges: oc
+        }, [...systemUpdates, ...fixedBugPromptLines]);
 
-      if (missingItems.length > 0 && missingItems.length <= 40) {
-        try {
-          const pass2Prompt = `The following verified user-facing system changes for myIPON ${version} were missed in the initial changelog draft. Analyze each item and classify any genuine user-facing update into its proper category, writing detailed 1-2 sentence descriptions explaining what changed, how it works, what users can expect, and its practical impact. Omit any item that is purely internal code/testing/build maintenance. Use fresh, non-repetitive phrasing.
+        if (missingItems.length > 0 && missingItems.length <= 40) {
+          try {
+            const pass2Prompt = `The following verified user-facing system changes for myIPON ${version} were missed in the initial changelog draft. Analyze each item and classify any genuine user-facing update into its proper category, writing detailed 1-2 sentence descriptions explaining what changed, how it works, what users can expect, and its practical impact. Omit any item that is purely internal code/testing/build maintenance. Use fresh, non-repetitive phrasing.
 
 Missed changes (${missingItems.length}):
 ${missingItems.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}
@@ -2740,66 +3030,90 @@ Output strictly valid JSON with only these flat arrays of plain strings (no nest
   "security_updates": [],
   "other_changes": []
 }`;
-          const { parsed: pass2 } = await generateWithGemini({
-            apiKey: geminiKey,
-            prompt: pass2Prompt,
-            systemInstruction: 'You write accurate, detailed, human-sounding release notes for myIPON strictly from provided changes. Output strictly valid JSON with plain string arrays.'
-          });
-          nf.push(...coerceReleaseBulletList(pass2.new_features));
-          fx.push(...coerceReleaseBulletList(pass2.fixes));
-          im.push(...coerceReleaseBulletList(pass2.improvements));
-          rf.push(...coerceReleaseBulletList(pass2.requested_features));
-          su.push(...coerceReleaseBulletList(pass2.security_updates));
-          oc.push(...coerceReleaseBulletList(pass2.other_changes));
-        } catch (pass2Error: any) {
-          console.warn('Gemini completeness second pass skipped:', String(pass2Error?.message || pass2Error));
+            const { parsed: pass2 } = await generateWithGemini({
+              apiKey: activeGeminiKey,
+              prompt: pass2Prompt,
+              systemInstruction: 'You write accurate, detailed, human-sounding release notes for myIPON strictly from provided changes. Output strictly valid JSON with plain string arrays.'
+            });
+            nf.push(...coerceReleaseBulletList(pass2.new_features));
+            fx.push(...coerceReleaseBulletList(pass2.fixes));
+            im.push(...coerceReleaseBulletList(pass2.improvements));
+            rf.push(...coerceReleaseBulletList(pass2.requested_features));
+            su.push(...coerceReleaseBulletList(pass2.security_updates));
+            oc.push(...coerceReleaseBulletList(pass2.other_changes));
+          } catch (pass2Error: any) {
+            console.warn('Gemini completeness second pass skipped:', String(pass2Error?.message || pass2Error));
+          }
         }
-      }
 
-      const rawDetails = formatSectionedReleaseBody({
-        intro: coerceReleaseBulletText(aiResult.intro),
-        newFeatures: nf,
-        fixes: fx,
-        improvements: im,
-        requestedFeatures: rf,
-        securityUpdates: su,
-        otherChanges: oc,
-        highlights: hl,
-        outro: coerceReleaseBulletText(aiResult.outro)
-      });
-      const sanitized = sanitizeReleaseDetails(rawDetails);
-      if (sanitized.bulletCount > 0) {
-        let title = formatReleaseTitle(
-          version,
-          String(aiResult.title || ''),
-          [...rf, ...nf, ...fx, ...im, ...su, ...oc, ...hl, sanitized.text],
-          variationSeed
-        );
-        if (previousTitle && title === previousTitle) {
-          title = formatReleaseTitle(
-            version,
-            '',
-            [...rf, ...nf, ...fx, ...im, ...su, ...oc, ...hl, sanitized.text],
-            variationSeed + 1
-          );
-        }
-        return json({
-          success: true,
-          ai_powered: true,
-          provider: 'gemini',
-          model: aiModel,
-          title,
-          details: sanitized.text
+        const rawDetails = formatSectionedReleaseBody({
+          intro: coerceReleaseBulletText(aiResult.intro),
+          newFeatures: nf,
+          fixes: fx,
+          improvements: im,
+          requestedFeatures: rf,
+          securityUpdates: su,
+          otherChanges: oc,
+          highlights: hl,
+          outro: coerceReleaseBulletText(aiResult.outro)
         });
+        const sanitized = sanitizeReleaseDetails(rawDetails);
+        if (sanitized.bulletCount > 0) {
+          let title = formatReleaseTitle(
+            version,
+            String(aiResult.title || ''),
+            [...rf, ...nf, ...fx, ...im, ...su, ...oc, ...hl, sanitized.text],
+            variationSeed
+          );
+          if (previousTitle && title === previousTitle) {
+            title = formatReleaseTitle(
+              version,
+              '',
+              [...rf, ...nf, ...fx, ...im, ...su, ...oc, ...hl, sanitized.text],
+              variationSeed + 1
+            );
+          }
+          return json({
+            success: true,
+            ai_powered: true,
+            provider: 'gemini',
+            model: aiModel,
+            title,
+            details: sanitized.text
+          });
+        }
+        geminiFailureMsg = 'Gemini returned no valid user-facing release notes after filtering internal/technical entries.';
+      } catch (geminiError: any) {
+        geminiFailureMsg = String(geminiError?.message || 'Gemini AI request failed');
+        console.warn('Gemini AI release-notes fallback triggered:', geminiFailureMsg);
       }
-      return json({
-        error: 'Gemini returned no valid user-facing release notes after filtering internal/technical entries. Please try again.'
-      }, 502);
-    } catch (geminiError: any) {
-      const msg = String(geminiError?.message || 'Gemini AI request failed');
-      console.warn('Gemini AI release-notes error:', msg);
-      return json({ error: `Gemini AI failed to generate release notes: ${msg}` }, 502);
     }
+
+    const fallback = draftVerifiedReleaseNotesFallback({
+      version,
+      features,
+      fixedBugs,
+      systemUpdates,
+      previousTitle,
+      variationSeed
+    });
+    if (fallback.bulletCount > 0) {
+      return json({
+        success: true,
+        ai_powered: false,
+        fallback_used: true,
+        provider: 'verified-summary',
+        model: 'verified-composer',
+        warning: geminiFailureMsg || 'Gemini AI unavailable on server key; drafted from verified updates.',
+        title: fallback.title,
+        details: fallback.details
+      });
+    }
+    return json({
+      error: geminiFailureMsg
+        ? `Gemini AI failed to generate release notes: ${geminiFailureMsg}`
+        : 'No valid user-facing release notes were found after filtering internal/technical entries. Please try again.'
+    }, 502);
   }
 
   const role = body.role === 'ADMIN' ? 'ADMIN' : body.role === 'MEMBER' ? 'MEMBER' : body.role === 'TREASURER' ? 'TREASURER' : null;

@@ -32,7 +32,7 @@ const remoteFlag = resolveRemoteFlag();
 
 function isTransientSyncError(error) {
   const msg = String(error?.message || error || '');
-  return /ENOTFOUND|ECONNREFUSED|ECONNRESET|EAI_AGAIN|ETIMEDOUT|EPIPE|EBUSY|EEXIST|network|socket hang up|fetch failed|dial tcp|no such host|i\/o timeout|context deadline exceeded|TLS handshake|unexpected EOF|connection reset|Service Unavailable|Bad Gateway|Gateway Timeout|Too Many Requests|\b(?:429|50[234])\b|offline|unreachable|Access token not provided|not logged in|empty CLI output/i.test(msg);
+  return /ENOTFOUND|ECONNREFUSED|ECONNRESET|EAI_AGAIN|ETIMEDOUT|EPIPE|EBUSY|EEXIST|network|socket hang up|fetch failed|dial tcp|no such host|i\/o timeout|context deadline exceeded|TLS handshake|unexpected EOF|connection reset|Service Unavailable|Bad Gateway|Gateway Timeout|Too Many Requests|\b(?:429|50[234])\b|offline|unreachable|Access token not provided|not logged in|empty CLI output|did not contain a JSON payload|missing the expected rows array/i.test(msg);
 }
 
 function runSupabase(cliArgs, { capture = false } = {}) {
@@ -55,58 +55,66 @@ function runSupabase(cliArgs, { capture = false } = {}) {
     throw new Error(`supabase ${cliArgs[0]} failed (exit ${result.status})${details ? `: ${details}` : ''}`);
   }
   if (!capture) return '';
-  const out = String(result.stdout || '');
-  const errOut = String(result.stderr || '');
-  if (out.includes('{') && out.includes('}')) return out;
-  if (errOut.includes('{') && errOut.includes('}')) return errOut;
-  return [out.trim(), errOut.trim()].filter(Boolean).join('\n');
+  return [String(result.stdout || '').trim(), String(result.stderr || '').trim()].filter(Boolean).join('\n');
 }
 
 function parseJsonPayload(raw) {
-    const text = String(raw || '').trim();
-    if (!text) {
-      throw new Error('Supabase CLI returned empty CLI output.');
-    }
-    let fallback = null;
-    let searchFrom = 0;
-    while (searchFrom < text.length) {
-      const start = text.indexOf('{', searchFrom);
-      if (start === -1) break;
-      let end = text.lastIndexOf('}');
-      while (end > start) {
-        try {
-          const parsed = JSON.parse(text.slice(start, end + 1));
-          if (parsed && Array.isArray(parsed.rows)) return parsed;
-          if (!fallback) fallback = parsed;
-          break;
-        } catch {
-          end = text.lastIndexOf('}', end - 1);
-        }
+  const text = String(raw || '').trim();
+  if (!text) {
+    throw new Error('Supabase CLI returned empty CLI output.');
+  }
+  let fallback = null;
+  let searchFrom = 0;
+  while (searchFrom < text.length) {
+    const start = text.indexOf('{', searchFrom);
+    if (start === -1) break;
+    let end = text.lastIndexOf('}');
+    while (end > start) {
+      try {
+        const parsed = JSON.parse(text.slice(start, end + 1));
+        if (parsed && ('rows' in parsed)) return parsed;
+        if (!fallback) fallback = parsed;
+        break;
+      } catch {
+        end = text.lastIndexOf('}', end - 1);
       }
-      searchFrom = start + 1;
     }
-    if (fallback) return fallback;
-    const preview = text.replace(/\s+/g, ' ').slice(0, 200);
-    throw new Error(`Supabase CLI output did not contain a JSON payload: ${preview}`);
+    searchFrom = start + 1;
   }
-
-  function parseQueryRows(raw) {
-    const payload = parseJsonPayload(raw);
-    if (!payload || !Array.isArray(payload.rows)) {
-      throw new Error('Supabase query output is missing the expected rows array.');
-    }
-    return payload.rows;
-  }
-
-  function queryRows(sql) {
-    const cliArgs = ['db', 'query', remoteFlag, '--read-only', '-o', 'json', sql];
+  const firstBrace = text.indexOf('{');
+  const arrStart = text.indexOf('[');
+  const arrEnd = text.lastIndexOf(']');
+  if (arrStart !== -1 && arrEnd > arrStart && (firstBrace === -1 || arrStart < firstBrace)) {
     try {
-      return parseQueryRows(runSupabase(cliArgs, { capture: true }));
-    } catch (err) {
-      if (!/did not contain a JSON payload|empty CLI output/i.test(String(err?.message || ''))) throw err;
-      return parseQueryRows(runSupabase(cliArgs, { capture: true }));
-    }
+      const parsedArr = JSON.parse(text.slice(arrStart, arrEnd + 1));
+      if (Array.isArray(parsedArr)) return parsedArr;
+    } catch { }
   }
+  if (fallback) return fallback;
+  const preview = text.replace(/\s+/g, ' ').slice(0, 200);
+  throw new Error(`Supabase CLI output did not contain a JSON payload: ${preview}`);
+}
+
+function parseQueryRows(raw) {
+  const payload = parseJsonPayload(raw);
+  if (Array.isArray(payload)) return payload;
+  if (payload && ('rows' in payload) && payload.rows == null) return [];
+  if (!payload || !Array.isArray(payload.rows)) {
+    const preview = String(raw || '').trim().replace(/\s+/g, ' ').slice(0, 200);
+    throw new Error(`Supabase query output is missing the expected rows array.${preview ? ` Output: ${preview}` : ''}`);
+  }
+  return payload.rows;
+}
+
+function queryRows(sql) {
+  const cliArgs = ['db', 'query', remoteFlag, '--read-only', '-o', 'json', '--output-format', 'json', sql];
+  try {
+    return parseQueryRows(runSupabase(cliArgs, { capture: true }));
+  } catch (err) {
+    if (!/did not contain a JSON payload|empty CLI output|missing the expected rows array/i.test(String(err?.message || ''))) throw err;
+    return parseQueryRows(runSupabase(cliArgs, { capture: true }));
+  }
+}
 
   function fetchSchemaState() {
     const [row] = queryRows("select to_regclass('public.schema_migrations')::text as ledger_table, to_regclass('public.profiles')::text as profiles_table;");
@@ -271,7 +279,7 @@ function parseJsonPayload(raw) {
       if (deployFunctions) syncFunctions();
     } catch (err) {
       if (syncMode && isTransientSyncError(err)) {
-        console.warn('[supabase:sync] Remote offline, unreachable, or auth not configured; skipping auto-sync.');
+        console.warn(`[supabase:sync] Remote offline, unreachable, or auth not ready; skipping auto-sync (${err?.message || err}).`);
         return;
       }
       throw err;

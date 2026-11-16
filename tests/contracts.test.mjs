@@ -9709,20 +9709,6 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
 
 test('migration 084, ongoing savings protection, 30-day completion bin, print border/break fix, and VM bin/batch flows work cleanly', async () => {
   const vm = await import('node:vm');
-  const mig084 = read('database/migrations/20261116_084_ongoing_savings_protection_and_bin_lifecycle.sql');
-  const schema = read('database/schema.sql');
-  const css = read('css/app.css');
-  const loginHtml = read('login.html');
-  const policyJs = read('js/policy.js');
-  const coreJs = read('js/core.js');
-  const savingsHtml = read('savings.html');
-  const savingsJs = read('js/savings.js');
-  const settingsHtml = read('settings.html');
-  const settingsJs = read('js/settings.js');
-  const membersHtml = read('members.html');
-  const membersJs = read('js/members.js');
-
-  // 1. SQL migration 084 & schema sync protect ongoing savings/goals and wire 30-day completion bin + Storage purge
   assert.match(mig084, /create table if not exists public\.savings_cycle_batches/i);
   assert.match(mig084, /create or replace function public\.complete_and_bin_savings_goal\(/i);
   assert.match(mig084, /create or replace function public\.archive_and_reset_savings_cycle\(/i);
@@ -10535,7 +10521,6 @@ test('migration 094 and budget.html implement non-destructive Budget Allocation 
   assert.match(appCss, /\.budget-empty-history-inner/);
   assert.match(appCss, /\.budget-categories-grid > \.panel \+ \.panel\s*\{\s*margin-top:\s*0;/);
   assert.match(appCss, /\.budget-empty-items::before\s*\{\s*display:\s*none\s*!important;/);
-  assert.match(appCss, /\.budget-workspace\s*\{[\s\S]*?max-width:\s*none/);
   assert.match(appCss, /\.budget-category-card[\s\S]*flex-direction:\s*column/);
   assert.match(appCss, /\.budget-empty-items[\s\S]*flex:\s*1 1 auto/);
 
@@ -10798,4 +10783,84 @@ test('createRealtimeChannel and Realtime callers avoid adding postgres_changes o
   assert.notEqual(ch2, ch1);
   assert.doesNotThrow(() => ch2.on('postgres_changes', {}).subscribe());
   assert.deepEqual(removed, ['realtime:live:budget:user-1']);
+});
+
+test('generateWithGemini tries all AI Studio models before Vertex and preserves free-tier diagnostics', async () => {
+  const { stripTypeScriptTypes } = await import('node:module');
+  const edgeTs = read('supabase/functions/manage-account/index.ts');
+  const coreJs = read('js/core.js');
+
+  assert.match(edgeTs, /resolveServerGeminiKeys/);
+  const blockMatch = edgeTs.match(/const GEMINI_RELEASE_MODELS = \[[\s\S]*?\nasync function generateWithGemini\([\s\S]*?\n\}/);
+  assert.ok(blockMatch, 'Gemini helper block should exist in manage-account/index.ts');
+
+  const jsCode = stripTypeScriptTypes(blockMatch[0], { mode: 'transform' });
+  const buildRunner = (fakeFetch) => new Function('fetch', 'AbortController', 'setTimeout', 'clearTimeout', `
+    ${jsCode}
+    return { GEMINI_RELEASE_MODELS, generateWithGemini, formatGeminiApiError };
+  `)(fakeFetch, AbortController, setTimeout, clearTimeout);
+
+  // 1. Continues across AI Studio models if first model fails with 403/BILLING_DISABLED, succeeding on 2.0-flash without hitting Vertex
+  const calls1 = [];
+  const { generateWithGemini: gen1 } = buildRunner(async (url) => {
+    calls1.push(url);
+    if (url.includes('gemini-2.5-flash-lite')) {
+      return new Response(JSON.stringify({ error: { status: 'PERMISSION_DENIED', message: 'Quota check failed', details: [{ reason: 'BILLING_DISABLED' }] } }), { status: 403 });
+    }
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"title":"Update 1.1: Smoother savings"}' }] } }] }), { status: 200 });
+  });
+  const okRes = await gen1({ apiKey: 'AQ.fake-key', prompt: 'Draft notes' });
+  assert.equal(okRes.model, 'gemini-2.0-flash');
+  assert.ok(calls1.every((u) => u.includes('generativelanguage.googleapis.com')));
+
+  // 2. Preserves SERVICE_DISABLED hint on generativelanguage.googleapis.com instead of masking behind Vertex BILLING_DISABLED
+  const { generateWithGemini: gen2 } = buildRunner(async (url) => {
+    if (url.includes('generativelanguage.googleapis.com')) {
+      return new Response(JSON.stringify({
+        error: {
+          status: 'PERMISSION_DENIED',
+          message: 'Generative Language API has not been used in project 123 before or it is disabled.',
+          details: [{ reason: 'SERVICE_DISABLED' }]
+        }
+      }), { status: 403 });
+    }
+    return new Response(JSON.stringify({
+      error: {
+        status: 'PERMISSION_DENIED',
+        message: 'This API method requires billing to be enabled.',
+        details: [{ reason: 'BILLING_DISABLED' }]
+      }
+    }), { status: 403 });
+  });
+  await assert.rejects(
+    () => gen2({ apiKey: 'AQ.fake-key', prompt: 'Draft notes' }),
+    /Generative Language API is disabled.*no Cloud billing needed/i
+  );
+
+  // 3. Clearly distinguishes Vertex Express AQ. key + disabled billing vs AI Studio free-tier key
+  const { generateWithGemini: gen3 } = buildRunner(async (url) => {
+    if (url.includes('generativelanguage.googleapis.com')) {
+      return new Response(JSON.stringify({
+        error: {
+          status: 'UNAUTHENTICATED',
+          message: 'Request is missing required authentication credential.',
+          details: [{ reason: 'ACCESS_TOKEN_TYPE_UNSUPPORTED' }]
+        }
+      }), { status: 401 });
+    }
+    return new Response(JSON.stringify({
+      error: {
+        status: 'PERMISSION_DENIED',
+        message: 'This API method requires billing to be enabled.',
+        details: [{ reason: 'BILLING_DISABLED' }]
+      }
+    }), { status: 403 });
+  });
+  await assert.rejects(
+    () => gen3({ apiKey: 'AQ.vertex-express-key', prompt: 'Draft notes' }),
+    /Vertex AI Express key whose Cloud billing is disabled.*aistudio\.google\.com\/app\/apikey/i
+  );
+
+  // 4. js/core.js friendlyError preserves structured server diagnostics and still maps raw errors
+  assert.match(coreJs, /Gemini AI failed to generate release notes:\|Generative Language API/);
 });

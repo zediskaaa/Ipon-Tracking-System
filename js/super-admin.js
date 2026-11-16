@@ -1772,7 +1772,8 @@
         return;
       }
 
-      if (!backendRes?.ai_powered || !backendRes?.title || !backendRes?.details) {
+      const hasDraft = Boolean(backendRes?.title && backendRes?.details && (backendRes?.ai_powered || backendRes?.fallback_used));
+      if (!hasDraft) {
         throw new Error(backendRes?.gemini_error || backendRes?.error || 'Gemini AI did not return release notes. Please try again.');
       }
 
@@ -1790,7 +1791,11 @@
       if (titleInput) titleInput.value = title;
       if (detailsInput) detailsInput.value = details;
       hasAiDraftInEditor = true;
-      Ipon.toast(`Release announcement generated with Gemini AI${backendRes.model ? ` (${backendRes.model})` : ''}.`);
+      Ipon.toast(
+        backendRes.ai_powered
+          ? `Release announcement generated with Gemini AI${backendRes.model ? ` (${backendRes.model})` : ''}.`
+          : 'Release notes drafted from verified system updates (Gemini AI unavailable on current key).'
+      );
     } catch (err) {
       const msg = Ipon.friendlyError ? Ipon.friendlyError(err) : (err?.message || 'Generation failed');
       const isKeyError = /BILLING_DISABLED|billing is disabled|API key|GEMINI_API_KEY|revoked|rejected|not configured|401|403/i.test(`${err?.message || ''} ${msg}`);

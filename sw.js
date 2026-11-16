@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v19';
+const CACHE_NAME = 'ipon-shell-v20';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname) && self.location.protocol !== 'https:';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
@@ -28,7 +28,7 @@ self.addEventListener('activate', (event) => {
     );
     await self.clients.claim();
     if (IS_LOCAL_DEV && self.registration?.unregister) {
-      await self.registration.unregister().catch(() => {});
+      await self.registration.unregister().catch(() => { });
     }
   })());
 });
@@ -45,7 +45,7 @@ self.addEventListener('fetch', (event) => {
       .then((response) => {
         if (response && response.ok && (response.type === 'basic' || response.type === 'cors')) {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => { });
         }
         return response;
       })
@@ -114,7 +114,7 @@ self.addEventListener('notificationclick', (event) => {
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of clients) {
       if (client.url.startsWith(self.location.origin)) {
-        await client.focus().catch(() => {});
+        await client.focus().catch(() => { });
         const samePage = new URL(client.url).pathname === parsedTarget.pathname;
         if (samePage && 'postMessage' in client) {
           client.postMessage({
@@ -126,7 +126,7 @@ self.addEventListener('notificationclick', (event) => {
           return;
         }
         if ('navigate' in client && client.url !== targetUrl) {
-          await client.navigate(targetUrl).catch(() => {});
+          await client.navigate(targetUrl).catch(() => { });
         }
         return;
       }

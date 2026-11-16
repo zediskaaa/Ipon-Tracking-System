@@ -5881,8 +5881,10 @@
     if (/duplicate key|unique constraint/i.test(message)) return 'That reference was already used.';
     if (/cannot remove or disable your own administrator|another active administrator/i.test(message)) return 'Assign another active administrator before changing administrator access.';
     if (/row-level security|permission denied|not allowed to|only (?:a |an )?.*administrator/i.test(message)) return 'You do not have permission for that action.';
-    if (/BILLING_DISABLED|requires billing to be enabled|billing is disabled/i.test(message)) return 'Google Cloud billing is disabled for the current Google Cloud project key. Enable Cloud billing on that project, or click Configure API key to save a free-tier key from Google AI Studio.';
-    if (/ACCESS_TOKEN_TYPE_UNSUPPORTED|API key not valid|API_KEY_INVALID|API key expired/i.test(message)) return 'The server Gemini API key was rejected or revoked by Google. Click Configure API key to test and save a fresh Google AI Studio key.';
+    if (!/^(?:Gemini AI failed to generate release notes:|Generative Language API|Google AI Studio|This key is a Google Cloud|Gemini server API key|Google Cloud billing is disabled for this)/i.test(message)) {
+      if (/BILLING_DISABLED|requires billing to be enabled|billing is disabled/i.test(message)) return 'Google Cloud billing is disabled for the current Google Cloud project key. Enable Cloud billing on that project, or click Configure API key to save a free-tier key from Google AI Studio.';
+      if (/ACCESS_TOKEN_TYPE_UNSUPPORTED|API key not valid|API_KEY_INVALID|API key expired/i.test(message)) return 'The server Gemini API key was rejected or revoked by Google. Click Configure API key to test and save a fresh Google AI Studio key.';
+    }
     if (!message || /^(?:TypeError|ReferenceError|SyntaxError|RangeError|URIError|EvalError):/i.test(message) || message === '[object Object]') {
       return 'Something went wrong. Please try again.';
     }
