@@ -252,26 +252,14 @@
             <h2 id="ipon-consent-title">Terms of Use &amp; Privacy Policy</h2>
             <p>Please review our updated platform terms, exact data retention windows, and inactivity policy before continuing.</p>
           </div>
-          <div class="policy-consent-bar">
-            <div class="policy-consent-tabs" role="tablist" aria-label="Policy documents">
-              <button class="policy-consent-tab" id="ipon-consent-tab-terms" type="button" role="tab" aria-selected="true" data-consent-tab="terms">Terms of Use</button>
-              <button class="policy-consent-tab" id="ipon-consent-tab-privacy" type="button" role="tab" aria-selected="false" data-consent-tab="privacy">Privacy Policy</button>
-            </div>
-            <div class="policy-consent-highlights" aria-label="Key retention rules">
-              <span class="policy-consent-chip">90d Chat &amp; Logs</span>
-              <span class="policy-consent-chip">30d Calls &amp; Bin</span>
-              <span class="policy-consent-chip">6mo Inactive Notice</span>
-              <span class="policy-consent-chip">1yr CSV Roll-up</span>
-            </div>
+          <div class="policy-consent-tabs" role="tablist" aria-label="Policy documents">
+            <button class="policy-consent-tab" id="ipon-consent-tab-terms" type="button" role="tab" aria-selected="true" data-consent-tab="terms">Terms of Use</button>
+            <button class="policy-consent-tab" id="ipon-consent-tab-privacy" type="button" role="tab" aria-selected="false" data-consent-tab="privacy">Privacy Policy</button>
           </div>
         </header>
         <div class="policy-content policy-consent-body" id="ipon-consent-scroll">
           <section data-consent-panel="terms">
             ${POLICY_TERMS_HTML}
-            <div class="policy-consent-switch-hint">
-              <span>Want to review our Privacy Policy and full 7-to-90 day retention table next?</span>
-              <button class="button button-secondary button-sm" type="button" data-consent-jump="privacy">Read Privacy Policy &rarr;</button>
-            </div>
           </section>
           <section data-consent-panel="privacy" hidden>
             ${POLICY_PRIVACY_HTML}
@@ -280,15 +268,12 @@
         <footer class="policy-consent-footer">
           <label class="policy-consent-check" for="ipon-consent-checkbox">
             <input id="ipon-consent-checkbox" type="checkbox">
-            <span>I have read and agree to the myIPON <strong>Terms of Use</strong> and <strong>Privacy Policy</strong>, including the automated retention schedules (90-day chat/logs, 30-day calls/recovery bin, and 6-month inactivity cleanup).</span>
+            <span>I have read and agree to the myIPON Terms of Use and Privacy Policy.</span>
           </label>
-          <p class="policy-consent-error" id="ipon-consent-error" role="alert" aria-live="polite"></p>
+          <p class="policy-consent-error" id="ipon-consent-error" role="alert" aria-live="polite" hidden></p>
           <div class="policy-consent-actions">
-            <div class="policy-consent-actions-left">
-              <button class="button button-secondary button-sm" id="ipon-consent-signout" type="button">Sign out</button>
-              <span class="policy-consent-once-note">Shown once per account after policy updates.</span>
-            </div>
             <button class="button button-primary policy-consent-agree-btn" id="ipon-consent-agree-btn" type="button" disabled>I agree &amp; continue</button>
+            <button class="button button-secondary policy-consent-signout-btn" id="ipon-consent-signout" type="button">Sign out</button>
           </div>
         </footer>
       </div>`;
@@ -303,6 +288,7 @@
     const showConsentError = (text = '') => {
       if (!errorEl) return;
       errorEl.textContent = text;
+      errorEl.hidden = !text;
       errorEl.classList?.toggle?.('is-visible', Boolean(text));
     };
 
@@ -321,7 +307,6 @@
     dialog.querySelectorAll?.('[data-consent-tab]')?.forEach?.((btn) => {
       btn.addEventListener?.('click', () => selectTab(btn.dataset?.consentTab));
     });
-    dialog.querySelector?.('[data-consent-jump]')?.addEventListener?.('click', () => selectTab('privacy'));
 
     checkbox?.addEventListener?.('change', () => {
       if (agreeBtn) agreeBtn.disabled = !checkbox.checked;

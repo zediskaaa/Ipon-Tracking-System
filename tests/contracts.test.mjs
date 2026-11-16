@@ -9647,6 +9647,7 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
   assert.ok(consentDlg);
   assert.equal(consentDlg.open, true);
   assert.match(consentDlg.innerHTML, /I agree &amp; continue/);
+  assert.doesNotMatch(consentDlg.innerHTML, /policy-consent-highlights|policy-consent-once-note/);
   assert.match(consentDlg.innerHTML, /90 days/);
   assert.match(consentDlg.innerHTML, /30 days/);
   assert.match(consentDlg.innerHTML, /6 months/);
