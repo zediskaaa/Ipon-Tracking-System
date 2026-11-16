@@ -92,7 +92,10 @@
   const expenseForm = document.getElementById('budget-expense-form');
   const expenseIdInput = document.getElementById('budget-expense-id');
   const expenseEyebrowEl = document.getElementById('budget-expense-eyebrow');
+  const expenseItemWrap = document.getElementById('budget-expense-item-wrap');
   const expenseItemSelect = document.getElementById('budget-expense-item');
+  const expenseSwitchNewBtn = document.getElementById('budget-expense-switch-new');
+  const expenseSwitchExistingBtn = document.getElementById('budget-expense-switch-existing');
   const expenseNewItemFields = document.getElementById('budget-expense-new-item-fields');
   const expenseNewCategorySelect = document.getElementById('budget-expense-new-category');
   const expenseNewNameInput = document.getElementById('budget-expense-new-name');
@@ -474,9 +477,11 @@
   function renderExpenseSuggestions(category) {
     if (!expenseSuggestions) return;
     const meta = CATEGORY_META[category] || CATEGORY_META.NEEDS;
-    expenseSuggestions.innerHTML = meta.examples.map((label) => (
-      `<button class="budget-suggestion-chip" type="button" data-budget-exp-suggest="${Ipon.escapeHtml(label)}">${Ipon.escapeHtml(label)}</button>`
-    )).join('');
+    const current = (expenseNewNameInput?.value || '').trim().toLowerCase();
+    expenseSuggestions.innerHTML = meta.examples.map((label) => {
+      const active = current === label.toLowerCase();
+      return `<button class="budget-suggestion-chip${active ? ' is-selected' : ''}" type="button" data-budget-exp-suggest="${Ipon.escapeHtml(label)}">${Ipon.escapeHtml(label)}</button>`;
+    }).join('');
   }
 
   function getExpenseAvailableHeadroom() {
@@ -537,7 +542,16 @@
   }
 
   function syncExpenseDialogFields() {
-    const isNew = expenseItemSelect?.value === '__NEW__';
+    const items = Array.isArray(overview?.items) ? overview.items : [];
+    const hasExistingItems = items.length > 0;
+    const isNew = expenseItemSelect?.value === '__NEW__' || !hasExistingItems;
+    if (isNew && expenseItemSelect && expenseItemSelect.value !== '__NEW__') {
+      expenseItemSelect.value = '__NEW__';
+    }
+    if (expenseItemWrap) expenseItemWrap.hidden = isNew;
+    if (expenseItemSelect) expenseItemSelect.required = !isNew && hasExistingItems;
+    if (expenseSwitchNewBtn) expenseSwitchNewBtn.hidden = isNew || !hasExistingItems;
+    if (expenseSwitchExistingBtn) expenseSwitchExistingBtn.hidden = !isNew || !hasExistingItems;
     if (expenseNewItemFields) expenseNewItemFields.hidden = !isNew;
     if (expenseNewNameInput) expenseNewNameInput.required = isNew;
     if (isNew) {
@@ -850,17 +864,40 @@
     itemAmountInput?.select();
   });
 
-  expenseItemSelect?.addEventListener('change', syncExpenseDialogFields);
+  expenseItemSelect?.addEventListener('change', () => {
+    syncExpenseDialogFields();
+    if (expenseItemSelect.value === '__NEW__') {
+      expenseNewNameInput?.focus();
+    }
+  });
+  expenseSwitchNewBtn?.addEventListener('click', () => {
+    if (expenseItemSelect) expenseItemSelect.value = '__NEW__';
+    syncExpenseDialogFields();
+    expenseNewNameInput?.focus();
+  });
+  expenseSwitchExistingBtn?.addEventListener('click', () => {
+    const firstId = overview?.items?.[0]?.id || '';
+    if (expenseItemSelect && firstId) expenseItemSelect.value = firstId;
+    syncExpenseDialogFields();
+    expenseItemSelect?.focus();
+  });
   expenseNewCategorySelect?.addEventListener('change', () => {
     renderExpenseSuggestions(expenseNewCategorySelect.value || 'NEEDS');
+    if (expenseNewNameInput?.value.trim()) validateExpenseNewNameLive();
+  });
+  expenseNewNameInput?.addEventListener('input', () => {
+    validateExpenseNewNameLive();
+    renderExpenseSuggestions(expenseNewCategorySelect?.value || 'NEEDS');
+  });
+  expenseNewNameInput?.addEventListener('blur', (event) => {
+    if (expenseNewItemFields?.contains(event?.relatedTarget)) return;
     validateExpenseNewNameLive();
   });
-  expenseNewNameInput?.addEventListener('input', validateExpenseNewNameLive);
-  expenseNewNameInput?.addEventListener('blur', validateExpenseNewNameLive);
   expenseSuggestions?.addEventListener('click', (event) => {
     const chip = event.target.closest('[data-budget-exp-suggest]');
     if (!chip || !expenseNewNameInput) return;
     expenseNewNameInput.value = chip.dataset.budgetExpSuggest || '';
+    renderExpenseSuggestions(expenseNewCategorySelect?.value || 'NEEDS');
     validateExpenseNewNameLive();
     expenseAmountInput?.focus();
     expenseAmountInput?.select();

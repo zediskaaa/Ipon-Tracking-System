@@ -1104,16 +1104,16 @@ async function generateWithGemini({
   throw glAttempt.error || new Error('Unable to generate release notes with Gemini.');
 }
 
-const TECH_COMMIT_RE = /\b(?:supabase|migrations?|edge\s+functions?|rpc\s+functions?|database\s+functions?|deno|postgres(?:ql)?|postgrest?|rls|sql|triggers?|foreign\s+keys?|jsonb|cli|ide|vscode|antigravity|github|git\s+commits?|repo\s+commits?|live\s+commits?|repo(?:sitory)?|contracts?\.test|unit\s+tests?|test\s+suite|lint(?:ing)?|eslint|prettier|package\.json|lockfile|node_modules|html\s+csp|csp\s+headers?|deployment|deploy(?:ed|ing)?|auto-?sync|automate|release\s+ai|ai\s+release\s+(?:notes|flow)|release-?notes?\s+auto-?fallback|ai\s+and\s+composer|composer\s+formatting|smart\s+composer|procedural\s+composer|prior\s+releases|invite\s+rows?|database\s+rows?|name\s+pills?|ui\/ux\s+skills?|workspace\s+skills?|audit_logs|enforce_group_scope|admin_create_group|old\.amount|group_id|member_id|requester_id|codebase|refactor(?:ing)?|tdz|iife|vm\.run|playwright|puppeteer|cdp|edge\s+function\s+cache|asset\s+cache|cache\s+version|api\s+endpoints?|webhooks?|descendant\s+selector|selector\s+leak|vertex\s+ai|ai\s+studio|ai\s+coach|savings\s+coach|write\s+with\s+ai|invokeaccountfunction|window\.ipon|populategroupselect|openretentionpolicydialog|z-index|max-width|min-height|ledger\s+entries|outer\s+page\s+headers?|card\s+header\s+controls?|static\s+asset|capacitor|contract\s+tests?|profiles_select|group_memberships|review_bug_report|create_announcement|super\s+admin\s+ui|overloaded\s+rpcs?|drifted\s+rpcs?|unlinked\s+groups?|reverted\s+(?:live\s+)?rpcs?|live\s+rpcs?|multi-role\s+audit|system-wide\s+db|build\s*#?\d+|pic\s*\d+|stdout|stderr|localhost|service\s+worker|www\s+sync|broadcastchannel|websocket|popstate|handlenativeback|fail\s+loudly|null\s+summary\s+responses|session\s+profile\s+id|trimmed\s+length\s+validation|role\s+data\/ui\s+gaps?|drop\s+stale|missing\s+memberships?|top\s+accent\s+rules?|accent\s+rules?|button\s+bars?|equal\s+2-column|2-column\s+button|forest-emerald|theme\s+isolation|serif\s+heading|warm-cream|warm\s+parchment|update\s+verify|\d+\/\d+\s+tests?)\b/i;
+const TECH_COMMIT_RE = /\b(?:supabase|migrations?|edge\s+functions?|rpc\s+functions?|database\s+functions?|deno|postgres(?:ql)?|postgrest?|rls|sql|triggers?|foreign\s+keys?|jsonb|cli|ide|vscode|antigravity|github|git\s+commits?|repo\s+commits?|live\s+commits?|repo(?:sitory)?|contracts?\.test|contract\s+coverage|unit\s+tests?|test\s+suite|npm\s+test|vitest|jest|lint(?:ing)?|eslint|prettier|package\.json|lockfile|node_modules|html\s+csp|csp\s+headers?|deployment|deploy(?:ed|ing)?|auto-?sync|automate|release\s+ai|ai\s+release\s+(?:notes|flow)|release[-\s]?notes?|release\s+announcements?|auto-?fallback|ai\s+and\s+composer|composer\s+formatting|smart\s+composer|procedural\s+composer|prior\s+releases?|prior\s+bullet\s+topics?|repetitive\s+(?:endings?|tail\s+phrases?)|invite\s+rows?|database\s+rows?|name\s+pills?|ui\/ux\s+skills?|workspace\s+skills?|audit_logs|enforce_group_scope|admin_create_group|old\.amount|group_id|member_id|requester_id|codebase|refactor(?:ing)?|tdz|iife|vm\.run|playwright|puppeteer|cdp|edge\s+function\s+cache|asset\s+cache|cache\s+version|api\s+endpoints?|webhooks?|descendant\s+selector|selector\s+leak|selectors?|class\/id|css(?:\s+tokens?)?|code\s+(?:tokens?|jargon)|design\s+tokens?|design-?spec|jargon|hex\s+(?:colors?|codes?)|pixel\/viewport|pixels?|viewport\s+units?|broken\s+fragments?|parenthetical|multi-modal|clause\s+(?:splitting|parsing)|verb\s+rewrites?|topic\s+labels?|categorization|block\s+extraction|declarations?|version\s+incrementing|vertex\s+ai|ai\s+studio|ai\s+coach|savings\s+coach|gemini(?:\s+prompt)?|prompt|write\s+with\s+ai|invokeaccountfunction|window\.ipon|populategroupselect|openretentionpolicydialog|z-index|max-width|min-height|ledger\s+entries|outer\s+page\s+headers?|card\s+header\s+controls?|static\s+asset|capacitor|contract\s+tests?|profiles_select|group_memberships|review_bug_report|create_announcement|super\s+admin\s+ui|overloaded\s+rpcs?|drifted\s+rpcs?|unlinked\s+groups?|reverted\s+(?:live\s+)?rpcs?|live\s+rpcs?|multi-role\s+audit|system-wide\s+db|build\s*#?\d+|pic\s*\d+|stdout|stderr|localhost|service\s+worker|www\s+sync|broadcastchannel|websocket|popstate|handlenativeback|fail\s+loudly|null\s+summary\s+responses|session\s+profile\s+id|trimmed\s+length\s+validation|role\s+data\/ui\s+gaps?|drop\s+stale|missing\s+memberships?|top\s+accent\s+rules?|accent\s+rules?|button\s+bars?|equal\s+2-column|2-column\s+button|forest-emerald|theme\s+isolation|serif\s+heading|warm-cream|warm\s+parchment|update\s+verify|\d+\/\d+\s+tests?)\b/i;
 const CODE_TOKEN_RE = /(?:(?:^|[\s(,\[])\.[a-z_-][a-z0-9_-]{1,}\b|\[[a-z0-9_-]+(?:=[^\]]*)?\]|#[a-z_-][a-z0-9_-]*-[a-z0-9_-]*\b|#[0-9a-f]{3,8}\b|\b[a-z_][a-z0-9_]{1,}\.[a-z_][a-z0-9_]{1,}\b|_[a-z]|(?:\b(?:js|css|supabase|database|scripts|tests|android|\.agents)\/[a-z0-9_./-]+|[a-z0-9_-]+\/[a-z0-9_.-]+\.[a-z]{2,4}\b)|`|\(\)|[A-Z][a-z]+Error\b|\b\d+(?:\.\d+)?(?:px|rem|em|vw|vh|ms)\b|[<>]=?\s*\d+px\b)/i;
 const NOISE_CLAUSE_RE = /^(?:ui\s+(?:polish|refinements?|tweaks?)|minor\s+ui\s+(?:polish|tweaks?)|visual\s+polish|code\s+cleanup|polish|refinements?|fixes|all updates are covered.*)$/i;
-const COMMIT_VERB_RE = /^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend|Harden|Move|Stack|Center|Style|Customize|Standardize|Elevate|Reduce|Expand|Clean|Sync|Drop)\b/i;
+const COMMIT_VERB_RE = /^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend|Harden|Move|Stack|Center|Style|Customize|Standardize|Elevate|Reduce|Expand|Clean|Sync|Drop|Strip|Filter)\b/i;
 const COMMIT_STOP_WORDS = new Set(['with', 'from', 'into', 'that', 'this', 'when', 'while', 'across', 'inside', 'under', 'after', 'before', 'their', 'users', 'user', 'added', 'fixed', 'updated', 'keep', 'make', 'allow', 'show', 'support', 'enable', 'improve', 'upgrade', 'remove', 'restrict', 'align', 'enforce', 'ensure', 'resolved', 'issues', 'involving', 'smoother', 'experience', 'workflow', 'workflows', 'feature', 'features', 'system', 'myipon', 'group', 'groups', 'member', 'members', 'admin', 'admins', 'savers', 'treasurer', 'treasurers', 'also', 'plus', 'more', 'less', 'only', 'every', 'each', 'both', 'clear', 'clean', 'cleaner', 'direct', 'directly', 'immediately', 'strictly']);
 
 function canonicalizeClauseForParsing(rawLine: string) {
   return String(rawLine || '')
     .replace(/^(?:feat|perf|ui|ux|style)(?:\([^)]*\))?:\s*/i, '')
-    .replace(/^fix(?:\([^)]*\))?:\s*(?=(?:add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend|harden|move|stack|center|style|customize|standardize|elevate|reduce|expand|clean|sync|drop)\b)/i, '')
+    .replace(/^fix(?:\([^)]*\))?:\s*(?=(?:add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend|harden|move|stack|center|style|customize|standardize|elevate|reduce|expand|clean|sync|drop|strip|filter)\b)/i, '')
     .replace(/^fix(?:\([^)]*\))?:\s*/i, 'Fix ')
     .replace(/^client\s*(?:&|and)\s*ui\s+fixes\s*:\s*/i, '')
     .replace(/\s*\([^)]*(?:migrations?|js\/|css\/|\.html|tests\/|manage-account|AGENTS\.md|parseMoneyAmount|validateMoneyInput|guardMoneyInput|z-index|build\s*#?\d+|ledger\s+entries|0\s+pending|pic\s*\d+(?:\s*&\s*\d+)?|\.[a-z_-]{2,}|\[data-|#[0-9a-f]{3,8}\b|\b\d+(?:\.\d+)?px\b|forest-emerald|button\s+bar|top\s+accent\s+rule|\bpantay\b|handleNativeBack|v\d+\s*\/\s*www\s+sync)[^)]*\)/gi, ' ')
@@ -1121,6 +1121,15 @@ function canonicalizeClauseForParsing(rawLine: string) {
     .replace(/\bsolo\/group\b/gi, 'Solo and Group')
     .replace(/\bheader\/tracked\b/gi, 'header and tracked')
     .replace(/\bheadroom\/unallocated\b/gi, 'unallocated')
+    .replace(/\bacross\s+viewports?\b/gi, 'across all screen sizes')
+    .replace(/\bdashed\s+empty-state\s+containers?\b/gi, 'empty category sections')
+    .replace(/\bempty\s+state\b/gi, 'empty notice')
+    .replace(/\bhero\s+allocation\s+card\b/gi, 'main savings overview')
+    .replace(/\b3-bucket\s+tracking\b/gi, 'Needs, Wants, and Savings tracking')
+    .replace(/\bnon-destructive\s+history\b/gi, 'protected expense history')
+    .replace(/\binline\s+new-item\s+fields\b/gi, 'quick new-item entry')
+    .replace(/\bquick-record\s+fallback\b/gi, 'quick-record saving')
+    .replace(/\bmodals?\b/gi, (m) => (m.endsWith('s') ? 'dialogs' : 'dialog'))
     .replace(/\bnotif\b/gi, 'notification')
     .replace(/\bvia\s+shared\s+helpers(?:\s+in\s+[a-z0-9._/-]+)?/gi, '')
     .replace(/\bthrough\s+VAPID\s+Web\s+Push\s+delivery[^.;]*/gi, 'for closed-app web and mobile background alerts')
@@ -1136,15 +1145,20 @@ function extractCommitUpdates(rawMessage: string) {
   const rawLines = String(rawMessage || '').split(/\r?\n/);
   if (!rawLines.length) return [];
   const results: string[] = [];
+  let abortInternalCommit = false;
   rawLines.forEach((origLine, lineIdx) => {
+    if (abortInternalCommit) return;
     const isBulletOrSubject = lineIdx === 0 || /^[•\-*]\s+/.test(origLine.trim());
-    const line = canonicalizeClauseForParsing(origLine.trim().replace(/^[•\-*]\s*/, '').trim());
+    const rawStripped = origLine.trim().replace(/^[•\-*]\s*/, '').trim();
+    const line = canonicalizeClauseForParsing(rawStripped);
     if (!line) return;
     if (/^(?:merge\b|wip\b|bump\b|prepare\s+mobile\b|revert\b|export\b|(?:chore|ci|build|test|docs|refactor)(?:\([^)]*\))?:)/i.test(line)) {
+      if (lineIdx === 0) abortInternalCommit = true;
       return;
     }
 
     if (!isBulletOrSubject) {
+      if (TECH_COMMIT_RE.test(line) || CODE_TOKEN_RE.test(line)) return;
       const sentences = line
         .split(/(?<=[.!?])\s+/)
         .map((s) => s.trim().replace(/[,.;]+$/, '').trim())
@@ -1152,6 +1166,7 @@ function extractCommitUpdates(rawMessage: string) {
       for (const sentence of sentences) {
         if (sentence.length < 18 || NOISE_CLAUSE_RE.test(sentence)) continue;
         if (/^[\d)\],.:;-]/.test(sentence)) continue;
+        if (/^(?:while|when|if|because|since|although|unless|where|which)\b/i.test(sentence)) continue;
         if ((sentence.match(/\(/g) || []).length !== (sentence.match(/\)/g) || []).length) continue;
         if (TECH_COMMIT_RE.test(sentence) || CODE_TOKEN_RE.test(sentence)) continue;
         results.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));
@@ -1159,27 +1174,32 @@ function extractCommitUpdates(rawMessage: string) {
       return;
     }
 
-    const leadMatch = line.match(/^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend|Harden|Move|Stack|Center|Style|Customize|Standardize|Elevate|Reduce|Expand|Clean|Sync|Drop)\s+(.+)$/i);
+    const leadMatch = line.match(/^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend|Harden|Move|Stack|Center|Style|Customize|Standardize|Elevate|Reduce|Expand|Clean|Sync|Drop|Strip|Filter)\s+(.+)$/i);
     const defaultVerb = leadMatch ? (leadMatch[1].charAt(0).toUpperCase() + leadMatch[1].slice(1).toLowerCase()) : '';
     const remainder = leadMatch ? leadMatch[2] : line;
     const masked = remainder
       .replace(/(\d),(?=\d)/g, '$1\u0001')
       .replace(/\bNeeds,\s*Wants,\s*(?:and\s+)?Savings\b/gi, (seg) => seg.replace(/,/g, '\u0001'))
       .replace(/\([^)]*\)/g, (seg) => seg.replace(/,/g, '\u0001'))
-      .replace(/^([^.;]+?\bmodals?\b)/i, (seg) => seg.replace(/,/g, '\u0001').replace(/\band(?=\s)/gi, '\u0002'))
-      .replace(/\b(?:on|for|with|across|including|such\s+as|among|between)\s+[^.;]+?(?=(?:,\s*(?:and\s+)?(?:add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend|harden|move|stack|center|style|customize|standardize|elevate|reduce|expand|clean|sync|drop)\b|[.;]|$))/gi, (seg) => seg.replace(/,/g, '\u0001'));
+      .replace(/^([^.;]+?\b(?:modals?|dialogs?)\b)/i, (seg) => seg.replace(/,/g, '\u0001').replace(/\band(?=\s)/gi, '\u0002'))
+      .replace(/\b(?:on|for|with|across|including|such\s+as|among|between)\s+[^.;]+?(?=(?:,\s*(?:and\s+)?(?:add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend|harden|move|stack|center|style|customize|standardize|elevate|reduce|expand|clean|sync|drop|strip|filter)\b|[.;]|$))/gi, (seg) => seg.replace(/,/g, '\u0001'));
     const candidateClauses = masked
-      .split(/(?:\s*,\s*(?:and\s+)?|\s*;\s*|\s+(?:and(?=\s+(?:add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend|harden|move|stack|center|style|customize|standardize|elevate|reduce|expand|clean|sync|drop)\b)|plus)\s+)/i)
+      .split(/(?:\s*,\s*(?:and\s+)?|\s*;\s*|\s+(?:and(?=\s+(?:add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend|harden|move|stack|center|style|customize|standardize|elevate|reduce|expand|clean|sync|drop|strip|filter)\b)|plus)\s+)/i)
       .map((part) => part.replace(/\u0001/g, ',').replace(/\u0002/g, 'and').trim().replace(/[,.;]+$/, '').trim())
       .filter(Boolean);
     const hasSingleWordFragment = candidateClauses.length > 1 && candidateClauses.some((part) => !/\s/.test(part));
     const rawClauses = hasSingleWordFragment
       ? [remainder.trim().replace(/[,.;]+$/, '').trim()]
       : candidateClauses;
+    if (lineIdx > 0 && rawClauses.length > 0 && (TECH_COMMIT_RE.test(rawClauses[0]) || CODE_TOKEN_RE.test(rawClauses[0]))) {
+      return;
+    }
+    let addedOnLine = 0;
     for (let idx = 0; idx < rawClauses.length; idx++) {
       const rawClause = rawClauses[idx];
       if (rawClause.length < 10) continue;
       if (/^[\d)\],.:;-]/.test(rawClause)) continue;
+      if (/^(?:while|when|if|because|since|although|unless|where|which)\b/i.test(rawClause)) continue;
       if ((rawClause.match(/\(/g) || []).length !== (rawClause.match(/\)/g) || []).length) continue;
       if ((rawClause.match(/\b[a-z]{3,}\b/gi) || []).length < 2) continue;
       if (NOISE_CLAUSE_RE.test(rawClause)) continue;
@@ -1189,6 +1209,10 @@ function extractCommitUpdates(rawMessage: string) {
       const item = hasOwnVerb ? rawClause : (defaultVerb ? `${defaultVerb} ${rawClause}` : rawClause);
       if (item.length < 12) continue;
       results.push(item.charAt(0).toUpperCase() + item.slice(1));
+      addedOnLine += 1;
+    }
+    if (lineIdx === 0 && addedOnLine === 0 && /\b(?:release[-\s]?notes?|write\s+with\s+ai|ai\s+composer|prior\s+release|gemini|supabase:sync|migrations?|unit\s+tests?|contract\s+tests?|css\s+tokens?|code\s+jargon|refactor(?:ing)?|linter)\b/i.test(rawStripped)) {
+      abortInternalCommit = true;
     }
   });
   return results;
@@ -3231,10 +3255,11 @@ Categorization Rules (omit empty categories by returning [] for unused arrays):
 - "other_changes": Relevant user-facing updates that do not cleanly fit the categories above (leave [] unless genuinely needed).
 
 Writing & Accuracy Standards:
+- Write strictly from the perspective of an everyday myIPON saver or group administrator—like official mobile/web app release notes. Describe ONLY what users can see and use inside the app, NEVER how developers coded it, styled CSS, split clauses, updated AI prompts, or ran tests.
 - Every bullet MUST follow "Descriptive Feature or Change Name: Concrete explanation".
 - Explain clearly what changed, how it behaves now, and where users see it—using crisp, varied sentence structure tailored to each specific change.
 - STRICTLY avoid repetitive closing tags or boilerplate endings (such as "for a smoother experience", "for improved usability", "keeping workflows error-free", or "to keep your app streamlined") at the end of bullets; end each bullet naturally right after its concrete detail.
-- Never invent or embellish unverified changes. If an item is purely internal developer plumbing (tests, build scripts, raw schema/migration filenames, Edge Function plumbing, CLI scripts, git tooling), exclude it instead of rewriting code jargon.
+- Never invent or embellish unverified changes. If an item is purely internal developer work (tests, build scripts, raw schema/migration filenames, Edge Function plumbing, CSS tokens/selectors, AI prompt/release-note tooling, CLI scripts, git tooling), exclude it completely instead of rewriting code jargon.
 - Keep the tone friendly, polished, clear, natural English with consistent myIPON terminology.
 - The "title" MUST begin strictly with "${formatReleaseVersionPrefix(version)}:" followed by a specific 3-7 word headline summarizing this release's most meaningful additions and fixes.
 

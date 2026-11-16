@@ -13996,6 +13996,37 @@ html[data-theme="dark"] .budget-modal-dialog .budget-peso-input-wrap input {
   color: #b42318;
   font-weight: 600;
 }
+.budget-inline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.budget-mode-link,
+html[data-theme="dark"] .budget-mode-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid #d5cab6;
+  background: #ffffff;
+  color: #132a20;
+  font: 700 11.5px/1 Arial, sans-serif;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.budget-mode-link:hover,
+html[data-theme="dark"] .budget-mode-link:hover {
+  border-color: #1f5c43;
+  background: #eff6f2;
+  color: #0e2b22;
+}
+.budget-mode-link[hidden] {
+  display: none !important;
+}
 .budget-inline-new-item {
   padding: 10px 12px 6px;
   border-radius: 12px;

@@ -9,7 +9,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Budget allocation &amp; expenses — myIPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261117-131">
+  <link rel="stylesheet" href="css/app.css?v=20261117-132">
   <script src="js/config.js?v=20261117-76"></script>
 </head>
 
@@ -222,28 +222,34 @@
           <form id="budget-expense-form" class="budget-modal-form">
             <input type="hidden" name="expense_id" id="budget-expense-id">
             <div class="budget-modal-body form-grid">
-              <div class="field field-wide">
-                <label class="budget-uc-label" for="budget-expense-item">Budget item</label>
+              <div class="field field-wide" id="budget-expense-item-wrap">
+                <div class="budget-inline-head">
+                  <label class="budget-uc-label" for="budget-expense-item">Budget item</label>
+                  <button class="budget-mode-link" id="budget-expense-switch-new" type="button">+ New item</button>
+                </div>
                 <select id="budget-expense-item" name="item_id" required></select>
               </div>
               <div class="field-wide budget-inline-new-item" id="budget-expense-new-item-fields" hidden>
                 <div class="form-grid">
-                  <div class="field">
+                  <div class="field field-wide">
+                    <div class="budget-inline-head">
+                      <label class="budget-uc-label" for="budget-expense-new-name">Budget item name</label>
+                      <button class="budget-mode-link" id="budget-expense-switch-existing" type="button" hidden>Choose existing item</button>
+                    </div>
+                    <input id="budget-expense-new-name" name="new_item_name" type="text" maxlength="100"
+                      autocomplete="off" placeholder="e.g., Groceries" aria-describedby="budget-expense-name-error">
+                  </div>
+                  <div class="field field-wide budget-inline-suggest-field">
+                    <div class="budget-suggestion-row" id="budget-expense-suggestions" aria-label="Quick budget item ideas"></div>
+                    <small class="field-error budget-error-slot" id="budget-expense-name-error" role="alert" hidden></small>
+                  </div>
+                  <div class="field field-wide">
                     <label class="budget-uc-label" for="budget-expense-new-category">Category</label>
                     <select id="budget-expense-new-category" name="new_category">
                       <option value="NEEDS">Needs</option>
                       <option value="WANTS">Wants</option>
                       <option value="SAVINGS">Savings</option>
                     </select>
-                  </div>
-                  <div class="field">
-                    <label class="budget-uc-label" for="budget-expense-new-name">New budget item name</label>
-                    <input id="budget-expense-new-name" name="new_item_name" type="text" maxlength="100"
-                      placeholder="e.g., Groceries" aria-describedby="budget-expense-name-error">
-                  </div>
-                  <div class="field field-wide budget-inline-suggest-field">
-                    <div class="budget-suggestion-row" id="budget-expense-suggestions" aria-label="Quick budget item ideas"></div>
-                    <small class="field-error budget-error-slot" id="budget-expense-name-error" role="alert" hidden></small>
                   </div>
                 </div>
               </div>
@@ -380,13 +386,13 @@
     </main>
   </div>
 
-  <script src="js/core.js?v=20261117-109"></script>
+  <script src="js/core.js?v=20261117-110"></script>
   <script src="js/policy.js?v=20261116-07"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
   <script src="js/messages.js?v=20261117-31"></script>
-  <script src="js/budget.js?v=20261117-06"></script>
+  <script src="js/budget.js?v=20261117-07"></script>
 </body>
 
 </html>

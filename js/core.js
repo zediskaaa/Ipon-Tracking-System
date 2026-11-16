@@ -4522,6 +4522,7 @@
 
   const notificationItemsById = new Map();
   let activeAnnouncementsController = null;
+  let activeNotificationsReload = null;
   const MONTH_NAMES_LOOKUP = {
     january: '01', february: '02', march: '03', april: '04', may: '05', june: '06',
     july: '07', august: '08', september: '09', october: '10', november: '11', december: '12'
@@ -5444,9 +5445,27 @@
     });
     window.addEventListener('online', () => { load().catch(() => { }); });
 
+    activeNotificationsReload = () => load();
     await load();
     const notifChannel = createRealtimeChannel(`notifications:${profile.id}`, undefined, client);
-    notifChannel?.on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, (payload) => load(payload)).subscribe();
+    notifChannel
+      ?.on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, (payload) => load(payload))
+      ?.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'announcements' }, (payload) => {
+        if (payload?.new?.deleted_at) load().catch(() => { });
+      })
+      ?.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'announcements' }, () => load().catch(() => { }))
+      ?.subscribe();
+    try {
+      if ('BroadcastChannel' in window) {
+        const notifBc = new BroadcastChannel(LIVE_SYNC_CHANNEL);
+        notifBc.onmessage = (event) => {
+          const topic = String(event?.data?.topic || '');
+          if (topic === 'announcements' || topic === 'notifications') {
+            load().catch(() => { });
+          }
+        };
+      }
+    } catch { }
 
     if (profile.notifications_enabled !== false) {
       const syncKey = `myipon_due_sync_${profile.id}`;
@@ -7275,7 +7294,9 @@
         openItemId = null;
         viewerDialog.close();
         await load();
+        activeNotificationsReload?.().catch(() => { });
         notifyLiveSync('announcements');
+        notifyLiveSync('notifications');
         toast('Announcement moved to bin.');
       } catch (error) {
         toast(friendlyError(error), 'error');
