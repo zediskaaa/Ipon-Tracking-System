@@ -2413,9 +2413,30 @@
       if (!featureForm.reportValidity()) return;
       const button = event.submitter;
       const values = new FormData(featureForm);
-      const title = values.get('title').trim();
-      const details = values.get('details').trim();
+      const title = String(values.get('title') || '').trim();
+      const details = String(values.get('details') || '').trim();
       setFeedbackMessage(featureMessage);
+      if (title.length < 3 || title.length > 120) {
+        const msg = 'Feature name must be between 3 and 120 characters.';
+        setFeedbackMessage(featureMessage, msg, 'error');
+        featureForm.elements.title?.focus();
+        return;
+      }
+      if (details.length < 10 || details.length > 2000) {
+        const msg = 'Feature description must be between 10 and 2000 characters.';
+        setFeedbackMessage(featureMessage, msg, 'error');
+        featureForm.elements.details?.focus();
+        return;
+      }
+      if (!currentProfile?.id) {
+        const { data: authData } = await getClient().auth.getUser().catch(() => ({ data: {} }));
+        if (authData?.user?.id) currentProfile = { ...(currentProfile || {}), id: authData.user.id };
+      }
+      if (!currentProfile?.id) {
+        const msg = 'Your session is still loading. Please try again.';
+        setFeedbackMessage(featureMessage, msg, 'error');
+        return;
+      }
       const accepted = await confirmAction({
         title: 'Submit feature request?',
         message: `Send "${title}" to the Super Admin for review?`,
@@ -2445,9 +2466,30 @@
       if (!bugForm.reportValidity()) return;
       const button = event.submitter;
       const values = new FormData(bugForm);
-      const title = values.get('title').trim();
-      const description = values.get('description').trim();
+      const title = String(values.get('title') || '').trim();
+      const description = String(values.get('description') || '').trim();
       setFeedbackMessage(bugMessage);
+      if (title.length < 3 || title.length > 120) {
+        const msg = 'Bug title must be between 3 and 120 characters.';
+        setFeedbackMessage(bugMessage, msg, 'error');
+        bugForm.elements.title?.focus();
+        return;
+      }
+      if (description.length < 10 || description.length > 2000) {
+        const msg = 'Bug description must be between 10 and 2000 characters.';
+        setFeedbackMessage(bugMessage, msg, 'error');
+        bugForm.elements.description?.focus();
+        return;
+      }
+      if (!currentProfile?.id) {
+        const { data: authData } = await getClient().auth.getUser().catch(() => ({ data: {} }));
+        if (authData?.user?.id) currentProfile = { ...(currentProfile || {}), id: authData.user.id };
+      }
+      if (!currentProfile?.id) {
+        const msg = 'Your session is still loading. Please try again.';
+        setFeedbackMessage(bugMessage, msg, 'error');
+        return;
+      }
       const accepted = await confirmAction({
         title: 'Submit bug report?',
         message: `Send "${title}"${bugImages.length ? ` with ${bugImages.length} attached picture${bugImages.length === 1 ? '' : 's'}` : ''} to the Super Admin?`,

@@ -10225,3 +10225,25 @@ test('confirmation dialogs match the warm-cream card, top gold rule, editorial s
   assert.equal(elements['confirm-accept'].textContent, 'Sign out');
   assert.equal(elements['confirm-cancel'].textContent, 'Cancel');
 });
+
+test('migration 090 grants feature_requests.allow_credit insert, drops stale overloaded RPCs, and validates feedback forms cleanly', () => {
+  const mig090 = read('database/migrations/20261116_090_fix_feature_request_insert_grant_and_drop_stale_rpcs.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+
+  for (const sql of [mig090, schema]) {
+    assert.match(sql, /grant insert \(requester_id, title, details, allow_credit\) on public\.feature_requests to authenticated;/i);
+    assert.match(sql, /grant insert \(reporter_id, title, description, attachments\) on public\.bug_reports to authenticated;/i);
+    assert.match(sql, /drop function if exists public\.create_member\(text, text, text, text, date, numeric, text\);/i);
+    assert.match(sql, /drop function if exists public\.update_member\(uuid, text, text, text, text, numeric, text\);/i);
+    assert.match(sql, /drop function if exists public\.update_own_profile\(text, text, text, text\);/i);
+    assert.match(sql, /drop function if exists public\.update_contribution\(uuid, numeric, date, text, text\);/i);
+    assert.match(sql, /drop function if exists public\.update_expense\(uuid, date, numeric, text, text, text, text, text\);/i);
+    assert.match(sql, /drop function if exists public\.update_withdrawal\(uuid, date, numeric, text, text, text, text, text\);/i);
+    assert.match(sql, /'20261116_090'/);
+  }
+  assert.match(core, /Feature name must be between 3 and 120 characters\./);
+  assert.match(core, /Feature description must be between 10 and 2000 characters\./);
+  assert.match(core, /Bug title must be between 3 and 120 characters\./);
+  assert.match(core, /Bug description must be between 10 and 2000 characters\./);
+});
