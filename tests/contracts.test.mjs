@@ -9736,9 +9736,9 @@ test('migration 084, ongoing savings protection, 30-day completion bin, print bo
   assert.match(printBlock, /\.data-table td:last-child[^}]*border-bottom:1px solid var\(--rule\)!important/);
 
   // 3. Detailed ongoing protection + 30-day completion bin documented in Terms & Privacy (login + in-app)
-  assert.match(loginHtml, /Ongoing savings &amp; active goals are never deleted by retention/i);
+  assert.match(loginHtml, /Ongoing savings &amp; active goals are never deleted while you keep saving/i);
   assert.match(loginHtml, /30-day Recycle Bin/i);
-  assert.match(policyJs, /Ongoing savings &amp; active goals are never deleted by retention/i);
+  assert.match(policyJs, /Ongoing savings &amp; active goals are never deleted while you keep saving/i);
   assert.match(policyJs, /30-day Recycle Bin/i);
   assert.match(loginHtml, /Notifications and direct chat messages are delivered in-app only/i);
   assert.match(policyJs, /Notifications and direct chat messages are delivered in-app only/i);
@@ -9925,4 +9925,44 @@ test('migration 084, ongoing savings protection, 30-day completion bin, print bo
   assert.ok(resetCall);
   assert.equal(resetCall.args.p_title, 'Batch 2026 — Completed Savings');
   assert.equal(resetCall.args.p_include_completed_goals, true);
+});
+test('migration 085, 90-day & 6-month dormant savings email reminders, 30-day bin retention, and policy disclosures work cleanly', () => {
+  const mig085 = read('database/migrations/20261116_085_abandoned_savings_email_reminders_and_retention.sql');
+  const schema = read('database/schema.sql');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+  const loginHtml = read('login.html');
+  const policyJs = read('js/policy.js');
+  const savingsHtml = read('savings.html');
+
+  // 1. SQL migration 085 & schema sync cover group dormant tracking, reminders, 6-month bin transition, & suspended cleanup
+  assert.match(mig085, /add column if not exists savings_inactivity_reminded_at timestamptz/i);
+  assert.match(mig085, /add column if not exists savings_retention_warned_at timestamptz/i);
+  assert.match(mig085, /create or replace function public\.group_last_savings_activity_at\(/i);
+  assert.match(mig085, /create or replace function public\.snapshot_and_clear_group_savings_to_bin\(/i);
+  assert.match(mig085, /create or replace function public\.collect_dormant_savings_groups\(/i);
+  assert.match(mig085, /create or replace function public\.reset_dormant_savings_flag\(/i);
+  assert.match(mig085, /create or replace function public\.move_dormant_savings_group_to_bin\(/i);
+  assert.match(mig085, /'savings_inactivity_reminded_at'/);
+  assert.match(mig085, /'savings_retention_warned_at'/);
+  assert.match(mig085, /abandoned_suspended_groups_deleted/);
+  assert.match(schema, /'20261116_085'/);
+
+  const latestInactive = [...schema.matchAll(/create or replace function public\.collect_inactive_account_candidates[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.match(latestInactive, /group_last_savings_activity_at\(p\.group_id\)/i);
+
+  // 2. Edge Function sends both 90-day check-in reminders and 6-month 7-day prior warnings, and bins abandoned groups after 7 days
+  assert.match(edgeFn, /async function sendDormantSavingsEmail\(/);
+  assert.match(edgeFn, /admin\.rpc\('collect_dormant_savings_groups'/);
+  assert.match(edgeFn, /admin\.rpc\('reset_dormant_savings_flag'/);
+  assert.match(edgeFn, /admin\.rpc\('move_dormant_savings_group_to_bin'/);
+  assert.match(edgeFn, /dormant_savings_reminded_groups/);
+  assert.match(edgeFn, /dormant_savings_warned_groups/);
+  assert.match(edgeFn, /dormant_savings_binned_groups/);
+
+  // 3. Terms of Use, Privacy Policy, in-app modals, & Goals banner clearly explain forgotten/abandoned savings reminders & retention
+  assert.match(loginHtml, /Forgotten or abandoned savings policy/i);
+  assert.match(loginHtml, /dormant savings check-in reminders \(90 days idle\)/i);
+  assert.match(policyJs, /Forgotten or abandoned savings policy/i);
+  assert.match(policyJs, /dormant savings check-in reminders \(90 days idle\)/i);
+  assert.match(savingsHtml, /7-day warning at 6 months/i);
 });

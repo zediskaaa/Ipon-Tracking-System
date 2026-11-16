@@ -515,6 +515,99 @@ async function sendInactivityWarningEmail({
   });
 }
 
+async function sendDormantSavingsEmail({
+  toEmail,
+  recipientName,
+  groupName,
+  stage,
+  lastActivityAt,
+  scheduledBinAt
+}: {
+  toEmail: string;
+  recipientName: string;
+  groupName: string;
+  stage: 'reminder' | 'warning';
+  lastActivityAt?: string;
+  scheduledBinAt?: string;
+}) {
+  const safeName = String(recipientName || '').trim() || 'Saver';
+  const safeGroup = String(groupName || '').trim() || 'your savings group';
+  const formatManilaDate = (iso?: string) => {
+    if (!iso) return 'soon';
+    try {
+      return new Date(iso).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'Asia/Manila'
+      });
+    } catch {
+      return String(iso).slice(0, 10);
+    }
+  };
+  const lastDateLabel = formatManilaDate(lastActivityAt);
+  const binDateLabel = formatManilaDate(scheduledBinAt);
+  const loginUrl = 'https://my-ipon.vercel.app/login.html';
+  const isWarning = stage === 'warning';
+
+  const subject = isWarning
+    ? `Action needed: Forgotten savings in ${safeGroup} enter 30-day retention Bin in 7 days`
+    : `Savings check-in reminder for ${safeGroup} (${SYSTEM_NAME})`;
+
+  const plainText = isWarning
+    ? [
+        `Hello ${safeName},`,
+        '',
+        `Your savings group "${safeGroup}" has had no contributions, transactions, or goal updates since ${lastDateLabel} (nearly 6 months).`,
+        `Under our abandoned savings retention policy, dormant savings and untouched goals move to the 30-day Recycle Bin on ${binDateLabel} (and auto-delete permanently 30 days later from the database and cloud storage).`,
+        '',
+        `To keep all active savings and goals protected automatically, log in and add a contribution or update a goal before ${binDateLabel}:`,
+        loginUrl,
+        '',
+        'Thank you,',
+        `${SYSTEM_NAME}`
+      ].join('\n')
+    : [
+        `Hello ${safeName},`,
+        '',
+        `Just a friendly reminder: your savings group "${safeGroup}" has had no new deposits or goal updates for 3 months (last activity: ${lastDateLabel}).`,
+        `Your ongoing savings and active goals are still completely safe. However, if savings & goals remain untouched for 6 months total, a 7-day final notice will be sent before moving dormant data to the 30-day Recycle Bin.`,
+        '',
+        `Open myIPON to log a contribution or update your targets:`,
+        loginUrl,
+        '',
+        'Thank you,',
+        `${SYSTEM_NAME}`
+      ].join('\n');
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #163029; line-height: 1.6; max-width: 560px; margin: 0 auto; padding: 24px; background: #fbf9f2; border: 1px solid #d9d6c8; border-radius: 14px;">
+      ${emailBrandHeaderMarkup()}
+      <h2 style="margin: 0 0 14px; font-size: 21px; color: ${isWarning ? '#9a4d12' : '#143e30'};">${isWarning ? 'Forgotten Savings Notice: 7 Days Until 30-Day Bin' : 'Dormant Savings Check-In Reminder'}</h2>
+      <p style="margin: 0 0 12px;">Hello <strong>${escapeHtml(safeName)}</strong>,</p>
+      <p style="margin: 0 0 12px;">${isWarning
+        ? `Your savings group <strong>${escapeHtml(safeGroup)}</strong> has recorded no new contributions, transactions, or goal updates for nearly <strong>6 months</strong> (last activity: ${escapeHtml(lastDateLabel)}).`
+        : `We noticed your savings group <strong>${escapeHtml(safeGroup)}</strong> has had no new deposits, transactions, or goal updates for <strong>3 months</strong> (last activity: ${escapeHtml(lastDateLabel)}).`}</p>
+      <div style="background: #ffffff; border-left: 4px solid ${isWarning ? '#b85d19' : '#143e30'}; border-radius: 6px; padding: 12px 16px; margin: 16px 0;">
+        <p style="margin: 0 0 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #6d6552;">${isWarning ? 'Scheduled Move to 30-Day Recycle Bin' : 'Ongoing Savings Protection'}</p>
+        <p style="margin: 0; font-size: 15px; font-weight: 700; color: #163029;">${isWarning ? escapeHtml(binDateLabel) : 'Protected while active — 6-month inactivity rule applies if abandoned'}</p>
+      </div>
+      <p style="margin: 0 0 18px;">${isWarning
+        ? `Sign in and add a deposit or update a goal before <strong>${escapeHtml(binDateLabel)}</strong> to keep everything out of the 30-day Bin. Even if moved to the Bin, you still have 30 days to recover it before automatic database &amp; storage deletion.`
+        : 'Record a deposit or review your goals anytime to keep your savings momentum going. If left completely untouched for 6 months total, we will send a 7-day email notice before moving dormant records to the 30-day Recycle Bin.'}</p>
+      <a href="${loginUrl}" style="display: inline-block; padding: 11px 20px; background: #143e30; color: #ffffff; text-decoration: none; font-weight: 700; border-radius: 8px;">Open myIPON</a>
+    </div>
+  `.trim();
+
+  return deliverEmail({
+    toEmail,
+    recipientName: safeName,
+    subject,
+    html,
+    plainText
+  });
+}
+
 function timingSafeSecretEqual(a: string, b: string) {
   if (!a || !b || a.length !== b.length) return false;
   let diff = 0;
@@ -598,13 +691,92 @@ async function runRetentionSweep(admin: ReturnType<typeof createClient>, { runSq
     }
   }
 
+  // Dormant / abandoned savings reminders (90 days idle) & 6-month retention workflow -> 30-day Bin
+  const { data: dormant } = await admin.rpc('collect_dormant_savings_groups', {
+    p_remind_days: 90,
+    p_inactive_months: 6,
+    p_warning_days: 7
+  }).catch(() => ({ data: null }));
+
+  type DormantRecipient = { user_id: string; email?: string | null; full_name?: string };
+  type DormantGroup = { group_id: string; group_name?: string; last_activity_at?: string; scheduled_bin_at?: string; recipients?: DormantRecipient[] };
+
+  const reminderGroups = Array.isArray((dormant as { reminder_groups?: unknown[] } | null)?.reminder_groups)
+    ? (dormant as { reminder_groups: DormantGroup[] }).reminder_groups
+    : [];
+  const warnGroups = Array.isArray((dormant as { warn_groups?: unknown[] } | null)?.warn_groups)
+    ? (dormant as { warn_groups: DormantGroup[] }).warn_groups
+    : [];
+  const binGroups = Array.isArray((dormant as { bin_groups?: unknown[] } | null)?.bin_groups)
+    ? (dormant as { bin_groups: Array<{ group_id: string; group_name?: string }> }).bin_groups
+    : [];
+
+  let dormantRemindedGroups = 0;
+  for (const grp of reminderGroups) {
+    const recips = (grp.recipients || []).filter((r) => r.email && r.email.includes('@'));
+    if (!recips.length) continue;
+    let anySent = false;
+    for (const r of recips) {
+      const outcome = await sendDormantSavingsEmail({
+        toEmail: r.email!,
+        recipientName: r.full_name || 'Saver',
+        groupName: grp.group_name || 'Savings Group',
+        stage: 'reminder',
+        lastActivityAt: grp.last_activity_at
+      }).catch(() => ({ email_sent: false }));
+      if (outcome?.email_sent) anySent = true;
+    }
+    if (anySent) {
+      dormantRemindedGroups += 1;
+    } else {
+      await admin.rpc('reset_dormant_savings_flag', { p_group_id: grp.group_id, p_stage: 'reminder' }).catch(() => null);
+    }
+  }
+
+  let dormantWarnedGroups = 0;
+  for (const grp of warnGroups) {
+    const recips = (grp.recipients || []).filter((r) => r.email && r.email.includes('@'));
+    if (!recips.length) {
+      await admin.rpc('reset_dormant_savings_flag', { p_group_id: grp.group_id, p_stage: 'warning' }).catch(() => null);
+      continue;
+    }
+    let anySent = false;
+    for (const r of recips) {
+      const outcome = await sendDormantSavingsEmail({
+        toEmail: r.email!,
+        recipientName: r.full_name || 'Saver',
+        groupName: grp.group_name || 'Savings Group',
+        stage: 'warning',
+        lastActivityAt: grp.last_activity_at,
+        scheduledBinAt: grp.scheduled_bin_at || new Date(Date.now() + 7 * 86400000).toISOString()
+      }).catch(() => ({ email_sent: false }));
+      if (outcome?.email_sent) anySent = true;
+    }
+    if (anySent) {
+      dormantWarnedGroups += 1;
+    } else {
+      await admin.rpc('reset_dormant_savings_flag', { p_group_id: grp.group_id, p_stage: 'warning' }).catch(() => null);
+    }
+  }
+
+  let dormantBinnedGroups = 0;
+  for (const grp of binGroups) {
+    const { data: moveRes } = await admin.rpc('move_dormant_savings_group_to_bin', { p_group_id: grp.group_id }).catch(() => ({ data: null }));
+    if ((moveRes as { moved?: boolean } | null)?.moved) {
+      dormantBinnedGroups += 1;
+    }
+  }
+
   const storageAfter = purgedUsers > 0 ? await drainPendingStorageDeletions(admin) : { drained: 0 };
 
   return {
     sql_summary: sqlSummary,
     storage_files_removed: storageFirst.drained + storageAfter.drained,
     inactive_warned_emails: warnedCount,
-    inactive_users_purged: purgedUsers
+    inactive_users_purged: purgedUsers,
+    dormant_savings_reminded_groups: dormantRemindedGroups,
+    dormant_savings_warned_groups: dormantWarnedGroups,
+    dormant_savings_binned_groups: dormantBinnedGroups
   };
 }
 
