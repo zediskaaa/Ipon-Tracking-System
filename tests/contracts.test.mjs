@@ -1994,6 +1994,32 @@ test('release composer reads live recent commits and prior releases instead of f
   assert.equal(cleanedObjects.strippedCount, 1);
   assert.doesNotMatch(cleanedObjects.text, /\[object Object\]/);
 
+  const cssLeakCommit = [
+    'Standardize confirmation dialogs to warm-cream card with top gold accent and equal pill actions',
+    '',
+    '- Update .confirm-dialog in css/app.css (22px rounded #faf6ee card, 26px #b88c3e top accent rule, bold serif heading, equal 2-column button bar with #ffffff Cancel and #102420 forest-emerald primary button, plus dark-mode and <=720px responsive tuning)',
+    '- Elevate .app-sidebar (z-index 190), .dashboard-sidebar (z-index 190), and fixed [data-messages-open]/[data-notifications-open] controls above workspace panels',
+    '- Remove duplicated outer page headers on Super Admin Users, add 0 pending), and update verify 143/143 tests'
+  ].join('\n');
+  assert.deepEqual(extractFn(cssLeakCommit), []);
+
+  const cssSanitized = sanitizeFn([
+    'Improvements',
+    '• .confirm-Dialog (22px Rounded #faf6ee: Updated .confirm-dialog (22px rounded #faf6ee card.',
+    '• 26px #b88c3e Top Accent: Updated 26px #b88c3e top accent rule.',
+    '• Equal 2-Column Button Bar: Updated equal 2-column button bar with #ffffff Cancel and #102420 forest-emerald primary button,.',
+    '• Floating Chat & Notification Buttons: Kept floating chat and notification buttons visible above scrolling workspace panels.'
+  ].join('\n'));
+  assert.equal(cssSanitized.bulletCount, 1);
+  assert.equal(cssSanitized.strippedCount, 3);
+  assert.doesNotMatch(cssSanitized.text, /\.confirm-dialog|#faf6ee|#b88c3e|#ffffff|#102420|22px|26px|button bar|top accent rule|forest-emerald/i);
+  assert.match(cssSanitized.text, /Floating Chat & Notification Buttons/);
+
+  assert.deepEqual(
+    extractFn('fix: expand budget workspace full-width and harden supabase:sync CLI parsing'),
+    ['Expand budget workspace full-width']
+  );
+
   assert.match(edgeTs, /gemini-2\.5-flash/);
   assert.match(edgeTs, /current_draft/);
   assert.match(edgeTs, /previous_title/);
@@ -9709,6 +9735,19 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
 
 test('migration 084, ongoing savings protection, 30-day completion bin, print border/break fix, and VM bin/batch flows work cleanly', async () => {
   const vm = await import('node:vm');
+  const mig084 = read('database/migrations/20261116_084_ongoing_savings_protection_and_bin_lifecycle.sql');
+  const schema = read('database/schema.sql');
+  const css = read('css/app.css');
+  const loginHtml = read('login.html');
+  const policyJs = read('js/policy.js');
+  const coreJs = read('js/core.js');
+  const savingsHtml = read('savings.html');
+  const savingsJs = read('js/savings.js');
+  const settingsHtml = read('settings.html');
+  const settingsJs = read('js/settings.js');
+  const membersHtml = read('members.html');
+  const membersJs = read('js/members.js');
+
   assert.match(mig084, /create table if not exists public\.savings_cycle_batches/i);
   assert.match(mig084, /create or replace function public\.complete_and_bin_savings_goal\(/i);
   assert.match(mig084, /create or replace function public\.archive_and_reset_savings_cycle\(/i);
@@ -10791,7 +10830,7 @@ test('generateWithGemini tries all AI Studio models before Vertex and preserves 
   const coreJs = read('js/core.js');
 
   assert.match(edgeTs, /resolveServerGeminiKeys/);
-  const blockMatch = edgeTs.match(/const GEMINI_RELEASE_MODELS = \[[\s\S]*?\nasync function generateWithGemini\([\s\S]*?\n\}/);
+  const blockMatch = edgeTs.match(/const GEMINI_RELEASE_MODELS = \[[\s\S]*?\nasync function generateWithGemini\([\s\S]*?\n\}(?=\r?\n\r?\nconst TECH_COMMIT_RE)/);
   assert.ok(blockMatch, 'Gemini helper block should exist in manage-account/index.ts');
 
   const jsCode = stripTypeScriptTypes(blockMatch[0], { mode: 'transform' });
@@ -10863,4 +10902,47 @@ test('generateWithGemini tries all AI Studio models before Vertex and preserves 
 
   // 4. js/core.js friendlyError preserves structured server diagnostics and still maps raw errors
   assert.match(coreJs, /Gemini AI failed to generate release notes:\|Generative Language API/);
+});
+
+test('draftVerifiedReleaseNotesFallback writes plain-English topics and cleanly excludes CSS specs and dev jargon', async () => {
+  const { stripTypeScriptTypes } = await import('node:module');
+  const edgeTs = read('supabase/functions/manage-account/index.ts');
+  const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
+  const end = edgeTs.indexOf('Deno.serve(');
+  assert.ok(start !== -1 && end > start, 'Fallback helper blocks must exist in manage-account/index.ts');
+
+  const jsCode = stripTypeScriptTypes(edgeTs.slice(start, end), { mode: 'transform' });
+  const { extractCommitUpdates, canonicalizeCommitUpdates, draftVerifiedReleaseNotesFallback } = new Function('Deno', 'crypto', 'process', `
+    ${jsCode}
+    return { extractCommitUpdates, canonicalizeCommitUpdates, draftVerifiedReleaseNotesFallback };
+  `)({ env: { get: () => '' }, serve() {} }, globalThis.crypto, process);
+
+  const rawCommits = [
+    [
+      'Standardize confirmation dialogs to warm-cream card with top gold accent and equal pill actions',
+      '',
+      '- Update .confirm-dialog in css/app.css (22px rounded #faf6ee card, 26px #b88c3e top accent rule, bold serif heading, equal 2-column button bar with #ffffff Cancel and #102420 forest-emerald primary button, plus dark-mode and <=720px responsive tuning)'
+    ].join('\n'),
+    'Elevate floating chat/notif buttons, align Needs, Wants, and Savings category cards, and make tracked budget expenses empty row center across table columns',
+    'feat: remove Super Admin user role column, add multi-group overflow & Solo/Group workspaces',
+    'fix: expand budget workspace full-width and harden supabase:sync CLI parsing'
+  ];
+
+  const updates = canonicalizeCommitUpdates(rawCommits);
+  const draft = draftVerifiedReleaseNotesFallback({
+    version: '1.5',
+    features: [],
+    fixedBugs: [],
+    systemUpdates: updates,
+    variationSeed: 0
+  });
+
+  assert.doesNotMatch(draft.details, /\.confirm-dialog|#faf6ee|#b88c3e|#ffffff|#102420|22px|26px|button bar|top accent rule|forest-emerald|supabase:sync|CLI parsing/i);
+  assert.doesNotMatch(draft.details, /Floating Chat And Notification:|• Needs:|Make tracked budget|Access checks apply strictly/i);
+  assert.match(draft.details, /Improvements[\s\S]*• Floating Chat & Notification Buttons:/);
+  assert.match(draft.details, /Improvements[\s\S]*• Needs, Wants, and Savings Category:/);
+  assert.match(draft.details, /• Tracked Budget Expenses: Updated tracked budget expenses empty row to center across table columns\./);
+  assert.match(draft.details, /Improvements[\s\S]*• Super Admin User Role: Removed Super Admin user role column\./);
+  assert.match(draft.details, /Improvements[\s\S]*• Budget Workspace: Expanded budget workspace full-width\./);
+  assert.match(draft.details, /New Features[\s\S]*• Multi-Group Overflow & Solo\/Group Workspaces:/);
 });

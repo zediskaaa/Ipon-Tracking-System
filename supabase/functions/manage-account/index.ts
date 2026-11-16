@@ -1104,20 +1104,30 @@ async function generateWithGemini({
   throw glAttempt.error || new Error('Unable to generate release notes with Gemini.');
 }
 
-const TECH_COMMIT_RE = /\b(?:supabase|migrations?|edge\s+functions?|rpc\s+functions?|database\s+functions?|deno|postgres(?:ql)?|postgrest?|rls|sql|triggers?|foreign\s+keys?|jsonb|cli|ide|vscode|antigravity|github|git\s+commits?|repo\s+commits?|live\s+commits?|repo(?:sitory)?|contracts?\.test|unit\s+tests?|test\s+suite|lint(?:ing)?|eslint|prettier|package\.json|lockfile|node_modules|html\s+csp|csp\s+headers?|deployment|deploy(?:ed|ing)?|auto-?sync|automate|release\s+ai|ai\s+release\s+notes|ai\s+and\s+composer|composer\s+formatting|smart\s+composer|procedural\s+composer|prior\s+releases|invite\s+rows?|database\s+rows?|name\s+pills?|ui\/ux\s+skills?|workspace\s+skills?|audit_logs|enforce_group_scope|admin_create_group|old\.amount|group_id|member_id|requester_id|codebase|refactor(?:ing)?|tdz|iife|vm\.run|playwright|puppeteer|cdp|edge\s+function\s+cache|asset\s+cache|cache\s+version|api\s+endpoints?|webhooks?|descendant\s+selector|selector\s+leak|vertex\s+ai|ai\s+studio|ai\s+coach|savings\s+coach|write\s+with\s+ai|invokeaccountfunction|window\.ipon|populategroupselect)\b/i;
-const CODE_TOKEN_RE = /(?:\b[a-z_][a-z0-9_]{1,}\.[a-z_][a-z0-9_]{1,}\b|_[a-z]|(?:\b(?:js|css|supabase|database|scripts|tests|android|\.agents)\/[a-z0-9_./-]+|[a-z0-9_-]+\/[a-z0-9_.-]+\.[a-z]{2,4}\b)|`|\(\)|[A-Z][a-z]+Error\b)/;
+const TECH_COMMIT_RE = /\b(?:supabase|migrations?|edge\s+functions?|rpc\s+functions?|database\s+functions?|deno|postgres(?:ql)?|postgrest?|rls|sql|triggers?|foreign\s+keys?|jsonb|cli|ide|vscode|antigravity|github|git\s+commits?|repo\s+commits?|live\s+commits?|repo(?:sitory)?|contracts?\.test|unit\s+tests?|test\s+suite|lint(?:ing)?|eslint|prettier|package\.json|lockfile|node_modules|html\s+csp|csp\s+headers?|deployment|deploy(?:ed|ing)?|auto-?sync|automate|release\s+ai|ai\s+release\s+(?:notes|flow)|release-?notes?\s+auto-?fallback|ai\s+and\s+composer|composer\s+formatting|smart\s+composer|procedural\s+composer|prior\s+releases|invite\s+rows?|database\s+rows?|name\s+pills?|ui\/ux\s+skills?|workspace\s+skills?|audit_logs|enforce_group_scope|admin_create_group|old\.amount|group_id|member_id|requester_id|codebase|refactor(?:ing)?|tdz|iife|vm\.run|playwright|puppeteer|cdp|edge\s+function\s+cache|asset\s+cache|cache\s+version|api\s+endpoints?|webhooks?|descendant\s+selector|selector\s+leak|vertex\s+ai|ai\s+studio|ai\s+coach|savings\s+coach|write\s+with\s+ai|invokeaccountfunction|window\.ipon|populategroupselect|openretentionpolicydialog|z-index|max-width|min-height|ledger\s+entries|outer\s+page\s+headers?|card\s+header\s+controls?|static\s+asset|capacitor|contract\s+tests?|profiles_select|group_memberships|review_bug_report|create_announcement|super\s+admin\s+ui|overloaded\s+rpcs?|drifted\s+rpcs?|unlinked\s+groups?|reverted\s+(?:live\s+)?rpcs?|live\s+rpcs?|multi-role\s+audit|system-wide\s+db|build\s*#?\d+|pic\s*\d+|stdout|stderr|localhost|service\s+worker|www\s+sync|broadcastchannel|websocket|popstate|handlenativeback|fail\s+loudly|null\s+summary\s+responses|session\s+profile\s+id|trimmed\s+length\s+validation|role\s+data\/ui\s+gaps?|drop\s+stale|missing\s+memberships?|top\s+accent\s+rules?|accent\s+rules?|button\s+bars?|equal\s+2-column|2-column\s+button|forest-emerald|theme\s+isolation|serif\s+heading|warm-cream|warm\s+parchment|update\s+verify|\d+\/\d+\s+tests?)\b/i;
+const CODE_TOKEN_RE = /(?:(?:^|[\s(,\[])\.[a-z_-][a-z0-9_-]{1,}\b|\[[a-z0-9_-]+(?:=[^\]]*)?\]|#[a-z_-][a-z0-9_-]*-[a-z0-9_-]*\b|#[0-9a-f]{3,8}\b|\b[a-z_][a-z0-9_]{1,}\.[a-z_][a-z0-9_]{1,}\b|_[a-z]|(?:\b(?:js|css|supabase|database|scripts|tests|android|\.agents)\/[a-z0-9_./-]+|[a-z0-9_-]+\/[a-z0-9_.-]+\.[a-z]{2,4}\b)|`|\(\)|[A-Z][a-z]+Error\b|\b\d+(?:\.\d+)?(?:px|rem|em|vw|vh|ms)\b|[<>]=?\s*\d+px\b)/i;
 const NOISE_CLAUSE_RE = /^(?:ui\s+(?:polish|refinements?|tweaks?)|minor\s+ui\s+(?:polish|tweaks?)|visual\s+polish|code\s+cleanup|polish|refinements?|fixes|all updates are covered.*)$/i;
-const COMMIT_VERB_RE = /^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend)\b/i;
+const COMMIT_VERB_RE = /^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend|Harden|Move|Stack|Center|Style|Customize|Standardize|Elevate|Reduce|Expand|Clean|Sync|Drop)\b/i;
 const COMMIT_STOP_WORDS = new Set(['with', 'from', 'into', 'that', 'this', 'when', 'while', 'across', 'inside', 'under', 'after', 'before', 'their', 'users', 'user', 'added', 'fixed', 'updated', 'keep', 'make', 'allow', 'show', 'support', 'enable', 'improve', 'upgrade', 'remove', 'restrict', 'align', 'enforce', 'ensure', 'resolved', 'issues', 'involving', 'smoother', 'experience', 'workflow', 'workflows', 'feature', 'features', 'system', 'myipon', 'group', 'groups', 'member', 'members', 'admin', 'admins', 'savers', 'treasurer', 'treasurers', 'also', 'plus', 'more', 'less', 'only', 'every', 'each', 'both', 'clear', 'clean', 'cleaner', 'direct', 'directly', 'immediately', 'strictly']);
 
 function canonicalizeClauseForParsing(rawLine: string) {
   return String(rawLine || '')
-    .replace(/\([^)]*(?:migrations?|js\/|css\/|\.html|tests\/|manage-account|AGENTS\.md|parseMoneyAmount|validateMoneyInput|guardMoneyInput)[^)]*\)/gi, ' ')
+    .replace(/^(?:feat|perf|ui|ux|style)(?:\([^)]*\))?:\s*/i, '')
+    .replace(/^fix(?:\([^)]*\))?:\s*(?=(?:add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend|harden|move|stack|center|style|customize|standardize|elevate|reduce|expand|clean|sync|drop)\b)/i, '')
+    .replace(/^fix(?:\([^)]*\))?:\s*/i, 'Fix ')
+    .replace(/^client\s*(?:&|and)\s*ui\s+fixes\s*:\s*/i, '')
+    .replace(/\s*\([^)]*(?:migrations?|js\/|css\/|\.html|tests\/|manage-account|AGENTS\.md|parseMoneyAmount|validateMoneyInput|guardMoneyInput|z-index|build\s*#?\d+|ledger\s+entries|0\s+pending|pic\s*\d+(?:\s*&\s*\d+)?|\.[a-z_-]{2,}|\[data-|#[0-9a-f]{3,8}\b|\b\d+(?:\.\d+)?px\b|forest-emerald|button\s+bar|top\s+accent\s+rule|\bpantay\b|handleNativeBack|v\d+\s*\/\s*www\s+sync)[^)]*\)/gi, ' ')
+    .replace(/\bchat\/notif(?:ication)?\b/gi, 'chat and notification')
+    .replace(/\bsolo\/group\b/gi, 'Solo and Group')
+    .replace(/\bheader\/tracked\b/gi, 'header and tracked')
+    .replace(/\bheadroom\/unallocated\b/gi, 'unallocated')
+    .replace(/\bnotif\b/gi, 'notification')
     .replace(/\bvia\s+shared\s+helpers(?:\s+in\s+[a-z0-9._/-]+)?/gi, '')
     .replace(/\bthrough\s+VAPID\s+Web\s+Push\s+delivery[^.;]*/gi, 'for closed-app web and mobile background alerts')
     .replace(/\b(?:in|under)\s+(?:[a-z0-9._-]+\/[a-z0-9._/-]+|AGENTS\.md|account\.html|super-admin\.html)\b(?:\s+and\s+[a-z0-9._/-]+)?/gi, '')
     .replace(/\bAdditional\s+UI\s+refinements\s+/gi, '')
     .replace(/\s+,/g, ',')
+    .replace(/,\s*\./g, '.')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -1130,40 +1140,48 @@ function extractCommitUpdates(rawMessage: string) {
     const isBulletOrSubject = lineIdx === 0 || /^[•\-*]\s+/.test(origLine.trim());
     const line = canonicalizeClauseForParsing(origLine.trim().replace(/^[•\-*]\s*/, '').trim());
     if (!line) return;
-    if (/^(?:merge\b|wip\b|bump\b|prepare\s+mobile\b|revert\b|export\b|(?:chore|ci|build|test|docs|style|refactor)(?:\([^)]*\))?:)/i.test(line)) {
+    if (/^(?:merge\b|wip\b|bump\b|prepare\s+mobile\b|revert\b|export\b|(?:chore|ci|build|test|docs|refactor)(?:\([^)]*\))?:)/i.test(line)) {
       return;
     }
 
     if (!isBulletOrSubject) {
       const sentences = line
         .split(/(?<=[.!?])\s+/)
-        .map((s) => s.trim().replace(/[.;]+$/, ''))
+        .map((s) => s.trim().replace(/[,.;]+$/, '').trim())
         .filter(Boolean);
       for (const sentence of sentences) {
         if (sentence.length < 18 || NOISE_CLAUSE_RE.test(sentence)) continue;
+        if (/^[\d)\],.:;-]/.test(sentence)) continue;
+        if ((sentence.match(/\(/g) || []).length !== (sentence.match(/\)/g) || []).length) continue;
         if (TECH_COMMIT_RE.test(sentence) || CODE_TOKEN_RE.test(sentence)) continue;
         results.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));
       }
       return;
     }
 
-    const leadMatch = line.match(/^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend)\s+(.+)$/i);
+    const leadMatch = line.match(/^(Add|Fix|Keep|Allow|Show|Support|Enable|Improve|Make|Update|Upgrade|Block|Prevent|Deduplicate|Streamline|Polish|Implement|Restore|Resolve|Guard|Remove|Restrict|Align|Clarify|Start|Notify|Enforce|Hide|Extend|Harden|Move|Stack|Center|Style|Customize|Standardize|Elevate|Reduce|Expand|Clean|Sync|Drop)\s+(.+)$/i);
     const defaultVerb = leadMatch ? (leadMatch[1].charAt(0).toUpperCase() + leadMatch[1].slice(1).toLowerCase()) : '';
     const remainder = leadMatch ? leadMatch[2] : line;
     const masked = remainder
       .replace(/(\d),(?=\d)/g, '$1\u0001')
-      .replace(/\b(with|across|including|such\s+as|among|between)\s+[^.;]+/gi, (seg) => seg.replace(/,/g, '\u0001'));
+      .replace(/\bNeeds,\s*Wants,\s*(?:and\s+)?Savings\b/gi, (seg) => seg.replace(/,/g, '\u0001'))
+      .replace(/\([^)]*\)/g, (seg) => seg.replace(/,/g, '\u0001'))
+      .replace(/^([^.;]+?\bmodals?\b)/i, (seg) => seg.replace(/,/g, '\u0001').replace(/\band(?=\s)/gi, '\u0002'))
+      .replace(/\b(?:on|for|with|across|including|such\s+as|among|between)\s+[^.;]+?(?=(?:,\s*(?:and\s+)?(?:add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend|harden|move|stack|center|style|customize|standardize|elevate|reduce|expand|clean|sync|drop)\b|[.;]|$))/gi, (seg) => seg.replace(/,/g, '\u0001'));
     const candidateClauses = masked
-      .split(/(?:\s*,\s*(?:and\s+)?|\s*;\s*|\s+(?:and\s+(?=add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend)|plus)\s+)/i)
-      .map((part) => part.replace(/\u0001/g, ',').trim().replace(/[.;]+$/, ''))
+      .split(/(?:\s*,\s*(?:and\s+)?|\s*;\s*|\s+(?:and(?=\s+(?:add|fix|keep|allow|show|support|enable|improve|make|update|upgrade|block|prevent|deduplicate|streamline|polish|implement|restore|resolve|guard|remove|restrict|align|clarify|start|notify|enforce|hide|extend|harden|move|stack|center|style|customize|standardize|elevate|reduce|expand|clean|sync|drop)\b)|plus)\s+)/i)
+      .map((part) => part.replace(/\u0001/g, ',').replace(/\u0002/g, 'and').trim().replace(/[,.;]+$/, '').trim())
       .filter(Boolean);
     const hasSingleWordFragment = candidateClauses.length > 1 && candidateClauses.some((part) => !/\s/.test(part));
     const rawClauses = hasSingleWordFragment
-      ? [remainder.trim().replace(/[.;]+$/, '')]
+      ? [remainder.trim().replace(/[,.;]+$/, '').trim()]
       : candidateClauses;
     for (let idx = 0; idx < rawClauses.length; idx++) {
       const rawClause = rawClauses[idx];
       if (rawClause.length < 10) continue;
+      if (/^[\d)\],.:;-]/.test(rawClause)) continue;
+      if ((rawClause.match(/\(/g) || []).length !== (rawClause.match(/\)/g) || []).length) continue;
+      if ((rawClause.match(/\b[a-z]{3,}\b/gi) || []).length < 2) continue;
       if (NOISE_CLAUSE_RE.test(rawClause)) continue;
       if (TECH_COMMIT_RE.test(rawClause) || CODE_TOKEN_RE.test(rawClause)) continue;
       if (/\b(?:without|with|for|and|or|to|on|in|from|into)$/i.test(rawClause)) continue;
@@ -1491,7 +1509,13 @@ function extractReleaseTopicLabels(items: string[] | string = []) {
     }
     if (TECH_COMMIT_RE.test(line) || CODE_TOKEN_RE.test(line)) continue;
     const head = line.includes(':') ? line.split(':')[0].trim() : line.replace(/\s*\(Requested by:[^)]*\)\s*/gi, '').trim();
-    const shortHead = head.split(/\s+/).slice(0, 5).join(' ').replace(/[.,;:—–-]+$/, '').trim();
+    const shortHead = head
+      .split(/\s+/)
+      .slice(0, 5)
+      .join(' ')
+      .replace(/(?:\s+(?:and|or|&))+$/i, '')
+      .replace(/[.,;:—–&-]+$/, '')
+      .trim();
     if (!shortHead || shortHead.length < 3 || GENERIC_RELEASE_TITLE_RE.test(shortHead)) continue;
     const key = shortHead.toLowerCase();
     if (seen.has(key)) continue;
@@ -1517,8 +1541,9 @@ function formatReleaseTitle(version: string, candidateTitle = '', contentItems: 
   if (!topic || topic.length < 4 || GENERIC_RELEASE_TITLE_RE.test(topic) || TECH_COMMIT_RE.test(topic) || CODE_TOKEN_RE.test(topic)) {
     const labels = extractReleaseTopicLabels(contentItems);
     if (labels.length >= 3) {
+      const hasAmp = (labels[1] + labels[2]).includes('&');
       topic = [
-        `${labels[0]}, ${labels[1]} & ${labels[2]}`,
+        hasAmp ? `${labels[0]}, ${labels[1]}, and ${labels[2]}` : `${labels[0]}, ${labels[1]} & ${labels[2]}`,
         `${labels[0]}, ${labels[1]} & More`,
         `Upgraded ${labels[0]} & ${labels[1]}`
       ][v];
@@ -1543,21 +1568,49 @@ function formatReleaseTitle(version: string, candidateTitle = '', contentItems: 
 }
 
 function deriveFallbackTopicLabel(rawClause: string) {
-  const stripped = String(rawClause || '')
+  const withoutVerb = String(rawClause || '')
     .replace(/\s*\([^)]*\)\s*/g, ' ')
-    .replace(/^(?:add(?:ed|s)?|fix(?:ed|es)?|keep|allow(?:ed|s)?|show(?:n|s)?|support(?:ed|s)?|enable[ds]?|improv(?:e[ds]?|ement)|make|update[ds]?|block(?:ed|s)?|prevent(?:ed|s)?|restore[ds]?|deduplicate[ds]?|streamline[ds]?|polish(?:ed)?|align(?:ed)?|expand(?:ed)?|remove[ds]?|clean(?:ed)?(?:\s+up)?|refine[ds]?|harden(?:ed)?|upgrade[ds]?)\s+(?:the\s+|a\s+|an\s+)?/i, '')
+    .replace(/^(?:add(?:ed|s)?|fix(?:ed|es)?|keep|allow(?:ed|s)?|show(?:n|s)?|support(?:ed|s)?|enable[ds]?|improv(?:e[ds]?|ement)|make|update[ds]?|block(?:ed|s)?|prevent(?:ed|s)?|restore[ds]?|deduplicate[ds]?|streamline[ds]?|polish(?:ed)?|align(?:ed)?|expand(?:ed)?|remove[ds]?|clean(?:ed)?(?:\s+up)?|refine[ds]?|harden(?:ed)?|upgrade[ds]?|center(?:ed)?|style[ds]?|standardize[ds]?|elevate[ds]?|move[ds]?|stack(?:ed)?|reduce[ds]?|trim(?:med)?|hide|hid|customize[ds]?|notify|notified)\s+(?:the\s+|a\s+|an\s+)?/i, '')
     .replace(/\s+(?:cleanly|properly|correctly|reliably|smoothly|right\s+away|full[-\s]width|end[-\s]to[-\s]end)$/i, '')
     .trim();
-  const words = (stripped || String(rawClause || ''))
+  const maskedCore = (withoutVerb || String(rawClause || ''))
+    .replace(/\bSolo\s+and\s+Group\b/gi, 'Solo/Group')
+    .replace(/\s+\/\s+/g, '/')
+    .replace(/\bNeeds,\s*Wants,\s*(?:and\s+)?Savings\b/gi, (seg) => seg.replace(/,/g, '\u0001'));
+  const coreSegment = maskedCore
+    .split(/\s+(?:with|for|to|from|across|inside|under|above|while|when|instead)\s+/i)[0]
+    .split(/,\s+/)[0]
+    .replace(/\u0001/g, ',')
+    .trim();
+  const allTokens = (coreSegment || withoutVerb || String(rawClause || ''))
     .split(/\s+/)
-    .filter((w) => w.length > 1 || /^[a-z0-9]/i.test(w))
-    .slice(0, 4);
+    .filter((w) => w.length > 1 || /^[a-z0-9&]$/i.test(w));
+  const minorTokens = new Set(['&', 'and', 'or', 'on', 'in', 'at', 'of', 'for', 'to', 'with', 'from', 'by', 'via', 'the', 'an']);
+  const words: string[] = [];
+  let contentCount = 0;
+  for (const w of allTokens) {
+    words.push(w);
+    if (!minorTokens.has(w.toLowerCase())) contentCount += 1;
+    if (contentCount >= 4 || words.length >= 5) break;
+  }
   if (!words.length) return 'Workflow Update';
+  const hasAmpersand = words.some((t) => t === '&');
+  const titleToken = (w: string, idx: number, prevWord = '') => {
+    const lc = w.toLowerCase();
+    if (w === '&' || (lc === 'and' && idx > 0 && !prevWord.endsWith(',') && !hasAmpersand)) return '&';
+    if (idx > 0 && minorTokens.has(lc) && lc !== '&') return lc;
+    if (/^(?:AI|IPON|MFA|QR|OTP|DP|[A-Z0-9]{2,})$/.test(w)) return w;
+    if (/^myipon$/i.test(w)) return 'myIPON';
+    return w
+      .split('-')
+      .map((p) => p.split('/').map((s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '')).join('/'))
+      .join('-');
+  };
   return words
-    .map((w) => (/^[A-Z0-9]{2,}$/.test(w) ? w : w.split('-').map((p) => (p ? p.charAt(0).toUpperCase() + p.slice(1) : '')).join('-')))
+    .map((w, idx) => titleToken(w, idx, idx > 0 ? words[idx - 1] : ''))
     .join(' ')
-    .replace(/(?:\s+(?:on|in|at|for|to|of|with|from|by|via|the|and|or))+$/i, '')
-    .replace(/[.,;:—–-]+$/, '');
+    .replace(/(?:\s+(?:on|in|at|for|to|of|with|from|by|via|the|and|or|inside|empty|&))+$/i, '')
+    .replace(/[.,;:—–-]+$/, '') || 'Workflow Update';
 }
 
 const FALLBACK_PAST_VERBS: Record<string, string> = {
@@ -1588,7 +1641,12 @@ const FALLBACK_PAST_VERBS: Record<string, string> = {
   reduce: 'Reduced',
   trim: 'Trimmed',
   center: 'Centered',
-  elevate: 'Elevated',
+  style: 'Styled',
+  customize: 'Updated customization for',
+  move: 'Moved',
+  stack: 'Stacked',
+  elevate: 'Kept',
+  notify: 'Notified',
   refine: 'Refined',
   upgrade: 'Upgraded',
   guard: 'Protected',
@@ -1609,8 +1667,25 @@ const FALLBACK_PAST_VERBS: Record<string, string> = {
 };
 
 function rewriteClauseAsSentence(rawClause: string) {
-  const clean = String(rawClause || '').replace(/[.\s]+$/, '').trim();
+  const clean = String(rawClause || '')
+    .replace(/\bheader\/tracked\b/gi, 'header and tracked')
+    .replace(/\bsolo\/group\b/gi, 'Solo and Group')
+    .replace(/\badmin\/treasurer-only\b/gi, 'admin and treasurer-only')
+    .replace(/,\s*\./g, '.')
+    .replace(/[,.;\s]+$/, '')
+    .trim();
   if (!clean) return '';
+  const elevateMatch = clean.match(/^elevate\s+(.+)$/i);
+  if (elevateMatch) {
+    return `Kept ${elevateMatch[1]} visible above scrolling workspace panels.`;
+  }
+  const makeVerbMatch = clean.match(/^make\s+(.+?)\s+(center|stack|align|expand|shrink|hide|stay|work|open|close|scroll|fit|wrap|show|appear)\b(.*)$/i);
+  if (makeVerbMatch) {
+    const subject = makeVerbMatch[1].replace(/^(?:the\s+)?/i, '');
+    const verb = makeVerbMatch[2].toLowerCase();
+    const rest = makeVerbMatch[3] ? ` ${makeVerbMatch[3].trim()}` : '';
+    return `Updated ${subject} to ${verb}${rest}.`;
+  }
   const makeMatch = clean.match(/^make\s+(.+?)\s+(full[-\s]?width|responsive|compact|consistent|uniform|visible|clickable|clearer|faster|accessible|editable|read-only|equal(?:\s+height)?)(.*)$/i);
   if (makeMatch) {
     const subject = makeMatch[1].replace(/^(?:the\s+)?/i, '');
@@ -1623,7 +1698,8 @@ function rewriteClauseAsSentence(rawClause: string) {
     const key = verbMatch[1].toLowerCase();
     const mapped = FALLBACK_PAST_VERBS[key];
     if (mapped) {
-      return `${mapped} ${verbMatch[2]}.`;
+      const rest = verbMatch[2].replace(/\band\s+(align|expand|polish|refine|update|sync|keep|show|hide|center|remove|fix)\b/gi, (_, v) => `and ${FALLBACK_PAST_VERBS[v.toLowerCase()] ? FALLBACK_PAST_VERBS[v.toLowerCase()].toLowerCase() : v}`);
+      return `${mapped} ${rest}.`;
     }
   }
   return `${clean.charAt(0).toUpperCase() + clean.slice(1)}.`;
@@ -1659,7 +1735,7 @@ function pickUniqueDomainOutcome(clause: string, kind: 'feature' | 'fix' | 'impr
       'Totals and ledger breakdowns stay aligned when reviewing or printing summaries.'
     ],
     layout: [
-      'Cards, spacing, and dialog panels stay evenly aligned across screen sizes.',
+      'Views, tables, and dialog panels stay evenly aligned across desktop and mobile screens.',
       'Interactive controls remain stable without unwanted shifting or clipped edges.',
       'Desktop and mobile views adjust cleanly to available screen space.'
     ],
@@ -1671,34 +1747,30 @@ function pickUniqueDomainOutcome(clause: string, kind: 'feature' | 'fix' | 'impr
       'Related actions now complete directly without interrupting the screen flow.',
       'Affected controls respond cleanly on the first interaction.',
       'Values and view state stay accurate after submitting changes.'
-    ],
-    general: [
-      'The updated behavior is ready across everyday group and personal tracking.',
-      'Members and administrators can use the updated workflow right away.',
-      'Changes apply automatically without extra setup in your settings.'
     ]
   };
 
-  let pool = pools.general;
-  if (kind === 'security' || /\b(?:security|permission|auth|lockout|privacy|password|role|access|mfa)\b/.test(lc)) {
-    pool = [...pools.security, ...pools.general];
+  let pool: string[] = [];
+  if (kind === 'security' || /\b(?:security|permission|auth(?:entication|orization)?|lockout|privacy|password|mfa|unauthorized|access\s+control|access\s+check)\b/.test(lc)) {
+    pool = [...pools.security];
   } else if (/\b(?:budget|expense|want|need|allocation|split)\b/.test(lc)) {
     pool = [...pools.budget, ...pools.layout];
   } else if (/\b(?:saving|goal|batch|bin|contribution|payout|wallet)\b/.test(lc)) {
-    pool = [...pools.savings, ...pools.general];
+    pool = [...pools.savings];
   } else if (/\b(?:calendar|date|schedule|month|day)\b/.test(lc)) {
-    pool = [...pools.calendar, ...pools.general];
+    pool = [...pools.calendar];
   } else if (/\b(?:chat|message|voice|audio|drawer|attachment)\b/.test(lc)) {
     pool = [...pools.chat, ...pools.layout];
   } else if (/\b(?:notif|alert|reminder|badge|bell)\b/.test(lc)) {
-    pool = [...pools.notify, ...pools.general];
+    pool = [...pools.notify];
   } else if (/\b(?:report|print|export|audit)\b/.test(lc)) {
-    pool = [...pools.report, ...pools.general];
-  } else if (/\b(?:modal|dialog|card|layout|padding|spacing|width|align|responsive|overflow|mobile|desktop|button|pill)\b/.test(lc)) {
+    pool = [...pools.report];
+  } else if (/\b(?:modal|dialog|card|layout|padding|spacing|width|align|responsive|overflow|mobile|desktop|button|pill|table|column|row|search)\b/.test(lc)) {
     pool = [...pools.layout, ...pools.fixGeneral];
   } else if (kind === 'fix') {
-    pool = [...pools.fixGeneral, ...pools.layout, ...pools.general];
+    pool = [...pools.fixGeneral];
   }
+  if (!pool.length) return '';
 
   const start = Math.abs(Number(seedOffset) || 0) % pool.length;
   for (let i = 0; i < pool.length; i += 1) {
@@ -1717,13 +1789,16 @@ function buildFallbackBullet(
   seedOffset = 0,
   usedEndings: Set<string> = new Set()
 ) {
-  const cleaned = String(rawText || '').replace(/^[•\-*]\s*/, '').replace(/\s+/g, ' ').trim();
+  let cleaned = String(rawText || '').replace(/^[•\-*]\s*/, '').replace(/\s+/g, ' ').trim();
   if (!cleaned) return '';
   if (cleaned.includes(':')) {
     const colonIdx = cleaned.indexOf(':');
     const head = cleaned.slice(0, colonIdx).trim();
     const tail = cleaned.slice(colonIdx + 1).trim();
-    if (head && tail && tail.length >= 24) {
+    const isDevPrefix = /^(?:client\b|ui\b|feat\b|fix\b|mobile\b|policy\b|system\b)/i.test(head) || COMMIT_VERB_RE.test(tail);
+    if (isDevPrefix && tail) {
+      cleaned = tail;
+    } else if (head && tail && tail.length >= 24) {
       return `${head}: ${tail.replace(/([^.!?])$/, '$1.')}`;
     }
   }
@@ -1731,8 +1806,8 @@ function buildFallbackBullet(
   const clause = cleaned.replace(/[.\s]+$/, '');
   const baseSentence = rewriteClauseAsSentence(clause);
   const hasSelfContainedContext =
-    baseSentence.length >= 52 &&
-    (/\b(?:so|because|without|instead of|across|while|during|before|after|when|unless|via|with|from|to keep|to ensure|to prevent|to avoid|rather than)\b|[,;]/i.test(baseSentence));
+    baseSentence.length >= 44 ||
+    /\b(?:so|because|without|instead of|across|while|during|before|after|when|unless|via|with|from|to keep|to ensure|to prevent|to avoid|rather than)\b|[,;]/i.test(baseSentence);
   if (hasSelfContainedContext) {
     return `${topic}: ${baseSentence}`;
   }
@@ -1809,11 +1884,11 @@ function draftVerifiedReleaseNotesFallback({
   for (let i = 0; i < dedupedUpdates.length; i += 1) {
     const item = String(dedupedUpdates[i] || '').trim();
     if (!item) continue;
-    if (/\b(?:security|vulnerabilit|permission|auth(?:entication|orization)?|encrypt|lockout|privacy|hardening)\b/i.test(item)) {
+    if (/\b(?:security|vulnerabilit|permission|auth(?:entication|orization)?|encrypt|lockout|privacy|hardening)\b/i.test(item) && !/^fix\b/i.test(item)) {
       securityUpdates.push(buildFallbackBullet(item, 'security', seed + i, usedEndings));
-    } else if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|bug|mismatch|overflow|wrap|broken|crash|fallback)\b/i.test(item)) {
+    } else if (/^(?:fix(?:ed|es)?|resolve[ds]?|prevent|restore|deduplicate|guard|block)\b|\b(?:error|bug|mismatch|(?:layout|horizontal|modal|text)\s+overflow|wrap|broken|crash|fallback)\b/i.test(item)) {
       fixes.push(buildFallbackBullet(item, 'fix', seed + i, usedEndings));
-    } else if (/^(?:improv|polish|clean|compact|sync|update|streamline|keep|align|expand|refine|enhance|make)\b|\b(?:layout|padding|spacing|width|alignment|contrast|responsive|clearer|visible)\b/i.test(item)) {
+    } else if (/^(?:improv|polish|clean|compact|sync|update|streamline|keep|align|expand|refine|enhance|make|center|style|standardize|elevate|move|stack|hide|reduce|trim|remove|drop|simplify|harden)\b|\b(?:layout|padding|spacing|width|alignment|contrast|responsive|clearer|visible|dialogs?)\b/i.test(item)) {
       improvements.push(buildFallbackBullet(item, 'improvement', seed + i, usedEndings));
     } else {
       newFeatures.push(buildFallbackBullet(item, 'feature', seed + i, usedEndings));
