@@ -482,6 +482,15 @@
       return;
     }
     if (state.session && state.profile?.status === 'ACTIVE') {
+      if ((requestedPolicy === 'terms' || requestedPolicy === 'privacy') && policyDialog?.open) {
+        clearTimeout(splashSafetyTimer);
+        dismissSplash();
+        policyDialog.addEventListener('close', () => {
+          Ipon.setLoading(true, 'Opening your records…');
+          window.location.replace(Ipon.accountSetupUrl(state.profile, state.session.user) || Ipon.homeForRole(state.profile.role));
+        }, { once: true });
+        return;
+      }
       clearTimeout(splashSafetyTimer);
       const waitMs = isAppLaunch ? Math.max(0, splashMinUntil - Date.now()) : 0;
       if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));

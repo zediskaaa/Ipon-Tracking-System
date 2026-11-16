@@ -302,6 +302,7 @@
     if (!confirmed) return;
     Ipon.setBusy(button, true, 'Submitting…');
     try {
+      const uploadedReceiptUrl = await receiptPicker.upload();
       const result = await Ipon.rpc(allocateExcess ? 'record_contribution_with_carryover' : 'record_contribution', {
         p_member_id: state.profile.member_id,
         p_contribution_month: `${values.get('contribution_month')}-01`,
@@ -310,7 +311,7 @@
         p_transaction_reference: values.get('reference') || null,
         p_notes: values.get('notes') || null,
         p_idempotency_key: crypto.randomUUID(),
-        p_receipt_url: receiptPicker.get(),
+        p_receipt_url: uploadedReceiptUrl,
         p_payment_method: values.get('payment_method') || 'CASH',
         ...(allocateExcess ? { p_allocate_excess: true } : {})
       });

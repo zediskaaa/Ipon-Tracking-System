@@ -1,5 +1,9 @@
 [
   {
+    "date": "2026-11-16T11:58:14+08:00",
+    "message": "Redesign voice recording pill, hide mobile header subtitles, preserve short chat previews, and harden Android background sync\n\n- UI (Messages voice composer): Restyled the voice recording bar into a dark forest-emerald capsule with a pulsing coral indicator, tracked gold RECORDING label, tabular serif timer (`0:00`), outlined Cancel pill, warm gold two-line Send voice pill, and an active emerald mic circle beside equal circular Attach/Emoji buttons (`js/messages.js`, `css/app.css`). Added light/dark/midnight theme styling and responsive <=640px / <=380px sizing with zero horizontal overflow.\n- UI (Mobile clutter cleanup): Hid static header, panel, account, modal, and Messages intro descriptions on mobile (`<=720px`) while keeping desktop copy and dynamic status/count elements intact (`css/app.css`).\n- Database / Push previews: Applied migration `20261116_080_preserve_short_chat_notification_preview.sql` and updated `database/schema.sql` so 1+ character chat messages (e.g., `?`, `a`, `1`) and video attachments keep accurate notification previews instead of generic fallback copy.\n- Android background reliability: Added concurrent wake queuing (`POLL_PENDING` with wake-lock handoff), explicit notification timestamps (`setWhen`/`setShowWhen`), and immediate WorkManager recovery sync (`enqueueImmediateSync`) in `NotificationPollReceiver.java`, `NotificationSyncService.java`, and `NotificationSyncWorker.java` so rapid or post-swipe alerts are not dropped.\n- Build & Verification: Bumped `app.css` / `messages.js` cache-busters across HTML pages, synced Capacitor web assets (`npm run mobile:sync`), and added contract + VM tests (`tests/contracts.test.mjs` — 139/139 passing)."
+  },
+  {
     "date": "2026-11-16T11:27:18+08:00",
     "message": "Fix non-FCM Android background notification delivery, WebSocket wakeups, and Supabase push dispatch\n\n- Add migration `20261116_079_fix_background_push_dispatch.sql` (and sync `database/schema.sql`) so `notifications_push_dispatch` fires whenever unread deduplicated rows advance `created_at`.\n- Harden `supabase/functions/send-push/index.ts` with JWT-safe `Authorization` handling, fallback Realtime broadcast via `SUPABASE_ANON_KEY` and `httpSend('wake')`, and `native_has_token` / `native_ping_status` response telemetry.\n- Add monochrome notification vector `android/app/src/main/res/drawable/ic_stat_myipon.xml` (replacing `@mipmap/ic_launcher` adaptive icon in `NotificationSyncService.java` and `NotificationPollReceiver.java`).\n- Strengthen Android background sync in `NotificationSyncService.java`, `NotificationPollReceiver.java`, `BackgroundNotificationsPlugin.java`, and `AndroidManifest.xml` with `myipon:ws-wake` wake locks, network-switch reconnects, `scheduleServiceRestart` on task removal, `setExactAndAllowWhileIdle` support (`SCHEDULE_EXACT_ALARM` maxSdkVersion 32), JWT-safe REST polling, and socket/poll diagnostic status fields.\n- Force background polling configuration in `js/core.js` when permissions or preferences enable, auto-resync on disconnected socket/missing config, update test alert feedback, bump `core.js?v=20261116-94` and Capacitor metadata, and add contract tests in `tests/contracts.test.mjs`."
   },
@@ -174,9 +178,5 @@
   {
     "date": "2026-11-14T12:48:51+08:00",
     "message": "Clarify contextual info tooltip copy and extend to withdrawals, expenses, and members"
-  },
-  {
-    "date": "2026-11-14T12:45:58+08:00",
-    "message": "Add contextual info tooltips and fix bulk review row alignment"
   }
 ]

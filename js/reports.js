@@ -10,7 +10,9 @@
   const remindBtn = document.getElementById('remind-unpaid-btn');
   const walletBody = document.getElementById('wallet-reconciliation-body');
   const walletClearBtn = document.getElementById('wallet-clear-counts');
-  let monthlyRows = [], memberRows = [], latestWallet = null, chart;
+  const archiveList = document.getElementById('annual-archive-list');
+  let monthlyRows = [], memberRows = [], latestWallet = null, archiveInfo = null, chart;
+  const exportedArchiveYears = new Set();
 
   const walletStorageKey = () => `ipon_wallet_counts_${state.profile?.group_id || 'default'}`;
   function readSavedCounts() {
@@ -294,24 +296,142 @@
     }).join('') : '<tr><td colspan="5" class="empty-state">No member periods match this report.</td></tr>';
   }
 
+  async function downloadYearTransactionsCsv(yearValue, triggerBtn = null) {
+    if (triggerBtn) Ipon.setBusy(triggerBtn, true, 'Exporting…');
+    try {
+      const targetYear = String(yearValue || 'ALL');
+      const filterByYear = (query, col) => (/^\d{4}$/.test(targetYear) ? query.gte(col, `${targetYear}-01-01`).lte(col, `${targetYear}-12-31`) : query);
+      const [contributions, withdrawals, expenses] = await Promise.all([
+        filterByYear(Ipon.client.from('contributions').select('payment_date,amount,payment_method,transaction_reference,approval_status,review_note,void_reason,created_at,contribution_periods!inner(period_month,members!inner(full_name))').order('payment_date'), 'payment_date'),
+        filterByYear(Ipon.client.from('withdrawals').select('transaction_date,amount,category,description,person_responsible,payment_method,reference_number,approval_status,review_note,void_reason,created_at').order('transaction_date'), 'transaction_date'),
+        filterByYear(Ipon.client.from('expenses').select('transaction_date,amount,category,description,person_responsible,payment_method,reference_number,approval_status,review_note,void_reason,created_at').order('transaction_date'), 'transaction_date')
+      ]);
+      for (const result of [contributions, withdrawals, expenses]) if (result.error) throw result.error;
+      const rows = [
+        ...contributions.data.map((row) => ['Contribution', row.payment_date, row.contribution_periods.members.full_name, Ipon.paymentMethodMeta(row.payment_method).label, row.amount, '', '', row.transaction_reference, row.approval_status, row.review_note || row.void_reason || '', row.created_at]),
+        ...withdrawals.data.map((row) => ['Withdrawal', row.transaction_date, row.person_responsible, Ipon.paymentMethodMeta(row.payment_method).label, row.amount, row.category, row.description, row.reference_number, row.approval_status, row.review_note || row.void_reason || '', row.created_at]),
+        ...expenses.data.map((row) => ['Expense', row.transaction_date, row.person_responsible, Ipon.paymentMethodMeta(row.payment_method).label, row.amount, row.category, row.description, row.reference_number, row.approval_status, row.review_note || row.void_reason || '', row.created_at])
+      ].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+      const csv = [['Type', 'Activity date', 'Member or responsible person', 'Payment method', 'Amount', 'Category', 'Description', 'Reference', 'Status', 'Review or void reason', 'Recorded at'], ...rows].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-transactions-${targetYear === 'ALL' ? 'all' : targetYear}-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
+      if (/^\d{4}$/.test(targetYear)) exportedArchiveYears.add(Number(targetYear));
+      return true;
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+      return false;
+    } finally {
+      if (triggerBtn) Ipon.setBusy(triggerBtn, false);
+    }
+  }
+
+  function renderAnnualArchives() {
+    if (!archiveList) return;
+    const eligible = Array.isArray(archiveInfo?.eligible) ? archiveInfo.eligible : [];
+    const archived = Array.isArray(archiveInfo?.archived) ? archiveInfo.archived : [];
+    const isAdmin = state.profile?.role === 'ADMIN';
+    const items = [];
+
+    if (isAdmin) {
+      eligible.forEach((yr) => {
+        const y = Number(yr.year);
+        const net = Number(yr.net_savings || 0);
+        const pending = Number(yr.pending_count || 0);
+        const downloaded = exportedArchiveYears.has(y);
+        items.push(`<article class="archive-row is-eligible">
+          <div class="archive-row-copy">
+            <strong>${y} Ready to Roll Up (${Number(yr.row_count || 0)} transaction rows)</strong>
+            <small>${y} Total Net Savings: ${Ipon.money(net)} · Additions ${Ipon.money(yr.total_additions)} · Outflows ${Ipon.money(Number(yr.total_deductions || 0) + Number(yr.total_expenses || 0))}</small>
+            ${pending > 0 ? `<small class="archive-warn-note">${pending} pending record${pending === 1 ? '' : 's'} must be reviewed before archiving.</small>` : ''}
+          </div>
+          <div class="archive-row-actions">
+            <button class="button button-secondary button-sm" type="button" data-archive-csv="${y}">${downloaded ? 'CSV Downloaded ✓' : 'Download CSV first'}</button>
+            <button class="button button-primary button-sm" type="button" data-archive-year="${y}" ${pending > 0 ? 'disabled' : ''}>Roll up ${y}</button>
+          </div>
+        </article>`);
+      });
+    }
+
+    archived.forEach((row) => {
+      items.push(`<article class="archive-row is-archived">
+        <div class="archive-row-copy">
+          <strong>${Ipon.escapeHtml(row.summary_label || `${row.archive_year} Total Net Savings Roll-up`)}: ${Ipon.money(row.net_savings)}</strong>
+          <small>Rolled up ${Number(row.rows_archived_count || 0)} daily rows on ${Ipon.dateLabel(row.archived_at, { dateStyle: 'medium' })}${row.csv_exported ? ' · CSV exported' : ''}</small>
+        </div>
+        <span class="archive-pill">Archived</span>
+      </article>`);
+    });
+
+    if (!items.length) {
+      const cutoff = archiveInfo?.cutoff_date ? Ipon.dateLabel(archiveInfo.cutoff_date, { dateStyle: 'medium' }) : '1 year ago';
+      archiveList.innerHTML = `<p class="empty-state">No completed years older than 1 year (before ${Ipon.escapeHtml(cutoff)}) need archiving yet.</p>`;
+      return;
+    }
+    archiveList.innerHTML = items.join('');
+  }
+
   async function load() {
     const selectedYear = yearFilter.value;
     const selectedMonth = monthFilter.value;
-    const [{ data: summary, error: summaryError }, { data, error }, { data: walletData, error: walletError }] = await Promise.all([
+    const [{ data: summary, error: summaryError }, { data, error }, { data: walletData, error: walletError }, { data: archData, error: archError }] = await Promise.all([
       Ipon.client.rpc('get_savings_summary'),
       Ipon.client.from('v_monthly_financial_summary').select('*').order('month'),
-      Ipon.client.rpc('get_wallet_reconciliation')
+      Ipon.client.rpc('get_wallet_reconciliation'),
+      Ipon.client.rpc('get_archivable_years')
     ]);
     if (summaryError) throw summaryError; if (error) throw error;
     ['additions', 'deductions', 'expenses'].forEach((key) => { document.getElementById(`report-${key}`).textContent = Ipon.money(summary?.[`total_${key}`]); });
     document.getElementById('report-tracked').textContent = Ipon.money(summary?.tracked_savings); monthlyRows = data || [];
     renderWalletReconciliation(walletError ? null : walletData);
+    archiveInfo = archError ? null : (archData || null);
+    renderAnnualArchives();
     const years = [...new Set([String(new Date().getFullYear()), ...monthlyRows.map((row) => row.month.slice(0, 4))])].sort().reverse();
     yearFilter.innerHTML = [...years.map((year) => `<option value="${year}">${year}</option>`), '<option value="ALL">All years</option>'].join('');
     yearFilter.value = selectedYear === 'ALL' || years.includes(selectedYear) ? selectedYear : years[0];
     monthFilter.value = selectedMonth || Ipon.monthStart().slice(0, 7);
     await loadMembers(); renderMonthly();
   }
+
+  archiveList?.addEventListener('click', async (event) => {
+    const csvBtn = event.target.closest('[data-archive-csv]');
+    if (csvBtn) {
+      await downloadYearTransactionsCsv(csvBtn.dataset.archiveCsv, csvBtn);
+      renderAnnualArchives();
+      return;
+    }
+    const archBtn = event.target.closest('[data-archive-year]');
+    if (!archBtn) return;
+    const yr = Number(archBtn.dataset.archiveYear);
+    const meta = (archiveInfo?.eligible || []).find((item) => Number(item.year) === yr);
+    const alreadyDownloaded = exportedArchiveYears.has(yr);
+    if (!alreadyDownloaded) {
+      const exportFirst = await Ipon.confirmAction({
+        title: `Download ${yr} CSV backup first?`,
+        message: `You are about to condense ${Number(meta?.row_count || 0)} individual ${yr} transaction rows into a single permanent summary (${Ipon.money(meta?.net_savings || 0)} net savings). Would you like to download the ${yr} CSV first?`,
+        acceptLabel: `Download CSV & continue`
+      });
+      if (exportFirst) {
+        const ok = await downloadYearTransactionsCsv(yr, archBtn);
+        if (!ok) return;
+        renderAnnualArchives();
+      }
+    }
+    const confirmed = await Ipon.confirmAction({
+      title: `Roll up ${yr} transactions?`,
+      message: `Replace ${Number(meta?.row_count || 0)} individual ${yr} rows with one permanent summary record (${yr} Total Net Savings: ${Ipon.money(meta?.net_savings || 0)})? Group lifetime and wallet totals remain exact.`,
+      acceptLabel: `Roll up ${yr}`
+    });
+    if (!confirmed) return;
+    Ipon.setBusy(archBtn, true, 'Archiving…');
+    try {
+      await Ipon.rpc('archive_group_year', { p_year: yr, p_csv_exported: exportedArchiveYears.has(yr) });
+      Ipon.toast(`${yr} rolled up into an annual summary archive.`);
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(archBtn, false);
+    }
+  });
 
   yearFilter.addEventListener('change', renderMonthly);
   [monthFilter, statusFilter].forEach((filter) => filter.addEventListener('change', () => loadMembers().catch((error) => Ipon.showInlineError(memberBody, error, loadMembers, 5))));
@@ -345,27 +465,8 @@
     const csv = [['Report type', 'Subject', 'Required/Additions', 'Confirmed/Deductions', 'Outstanding/Expenses', 'Status/Net'], ...monthly, ...members].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
     const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-report-${selectedYear === 'ALL' ? 'all' : selectedYear}-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
   });
-  document.getElementById('export-transactions').addEventListener('click', async (event) => {
-    const button = event.currentTarget;
-    Ipon.setBusy(button, true, 'Exporting…');
-    try {
-      const selectedYear = yearFilter.value;
-      const filterByYear = (query, col) => (/^\d{4}$/.test(selectedYear) ? query.gte(col, `${selectedYear}-01-01`).lte(col, `${selectedYear}-12-31`) : query);
-      const [contributions, withdrawals, expenses] = await Promise.all([
-        filterByYear(Ipon.client.from('contributions').select('payment_date,amount,payment_method,transaction_reference,approval_status,review_note,void_reason,created_at,contribution_periods!inner(period_month,members!inner(full_name))').order('payment_date'), 'payment_date'),
-        filterByYear(Ipon.client.from('withdrawals').select('transaction_date,amount,category,description,person_responsible,payment_method,reference_number,approval_status,review_note,void_reason,created_at').order('transaction_date'), 'transaction_date'),
-        filterByYear(Ipon.client.from('expenses').select('transaction_date,amount,category,description,person_responsible,payment_method,reference_number,approval_status,review_note,void_reason,created_at').order('transaction_date'), 'transaction_date')
-      ]);
-      for (const result of [contributions, withdrawals, expenses]) if (result.error) throw result.error;
-      const rows = [
-        ...contributions.data.map((row) => ['Contribution', row.payment_date, row.contribution_periods.members.full_name, Ipon.paymentMethodMeta(row.payment_method).label, row.amount, '', '', row.transaction_reference, row.approval_status, row.review_note || row.void_reason || '', row.created_at]),
-        ...withdrawals.data.map((row) => ['Withdrawal', row.transaction_date, row.person_responsible, Ipon.paymentMethodMeta(row.payment_method).label, row.amount, row.category, row.description, row.reference_number, row.approval_status, row.review_note || row.void_reason || '', row.created_at]),
-        ...expenses.data.map((row) => ['Expense', row.transaction_date, row.person_responsible, Ipon.paymentMethodMeta(row.payment_method).label, row.amount, row.category, row.description, row.reference_number, row.approval_status, row.review_note || row.void_reason || '', row.created_at])
-      ].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
-      const csv = [['Type', 'Activity date', 'Member or responsible person', 'Payment method', 'Amount', 'Category', 'Description', 'Reference', 'Status', 'Review or void reason', 'Recorded at'], ...rows].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
-      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-transactions-${selectedYear === 'ALL' ? 'all' : selectedYear}-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
-    } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
-    finally { Ipon.setBusy(button, false); }
+  document.getElementById('export-transactions').addEventListener('click', (event) => {
+    downloadYearTransactionsCsv(yearFilter.value, event.currentTarget);
   });
   try { await load(); } catch (error) { Ipon.showInlineError(monthlyBody, error, load, 5); Ipon.showInlineError(memberBody, error, load, 5); } finally { Ipon.setLoading(false); }
   Ipon.subscribeToChanges('reports', ['contributions', 'withdrawals', 'expenses', 'contribution_periods', 'members'], load);

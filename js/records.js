@@ -620,13 +620,14 @@
       if (page === 'contributions') {
         const allocateExcess = Boolean(form.elements.allocate_excess?.checked);
         const rpcName = allocateExcess ? 'record_contribution_with_carryover' : 'record_contribution';
+        const uploadedReceiptUrl = await receiptPicker.upload();
         const rpcPayload = {
           p_member_id: state.profile.role === 'MEMBER' ? state.profile.member_id : values.get('member_id'),
           p_contribution_month: `${values.get('contribution_month')}-01`,
           p_amount: amount, p_payment_date: values.get('payment_date'),
           p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null,
           p_idempotency_key: pendingSubmissionKey,
-          p_receipt_url: receiptPicker.get(),
+          p_receipt_url: uploadedReceiptUrl,
           p_payment_method: values.get('payment_method') || 'CASH'
         };
         if (allocateExcess) rpcPayload.p_allocate_excess = true;
@@ -645,6 +646,7 @@
         return;
       } else {
         const ownResponsible = membersList.find((member) => member.id === state.profile.member_id)?.full_name || state.profile.full_name;
+        const uploadedReceiptUrl = page === 'expenses' ? await receiptPicker.upload() : null;
         const payload = {
           p_transaction_date: values.get('transaction_date'), p_amount: amount,
           p_category: values.get('category'), p_description: values.get('description'),
@@ -653,7 +655,7 @@
           p_idempotency_key: pendingSubmissionKey,
           p_payment_method: values.get('payment_method') || 'CASH'
         };
-        if (page === 'expenses') payload.p_receipt_url = receiptPicker.get();
+        if (page === 'expenses') payload.p_receipt_url = uploadedReceiptUrl;
         await Ipon.rpc(page === 'withdrawals' ? 'record_withdrawal' : 'record_expense', payload);
       }
       pendingSubmissionKey = null;

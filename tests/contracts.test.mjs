@@ -317,7 +317,13 @@ test('login provides development, terms, and privacy disclosures', () => {
   assert.match(html, /IPON is still under active development/);
   assert.match(html, /data-policy-open="terms"/);
   assert.match(html, /data-policy-open="privacy"/);
-  assert.match(html, /Last updated: November 14, 2026/);
+  assert.match(html, /Last updated: November 16, 2026/);
+  assert.match(html, /90-day chat &amp; operational TTL|older than 90 days/i);
+  assert.match(html, /6-month inactive accounts|inactive for 6 months/i);
+  assert.match(html, /7 days prior|7-day prior email notice/i);
+  assert.match(html, /financial_annual_archives|annual net-savings summaries/i);
+  assert.match(html, /ipon-media/);
+  assert.match(html, /capped at 500 characters/i);
   assert.match(html, /body\.is-request-mode :is\(\.development-notice,\.login-legal\)\{display:none\}/);
   assert.match(html, /<dialog class="policy-dialog" id="policy-dialog" aria-labelledby="policy-title">/);
   assert.match(html, /tracking system only and does not hold, transfer, receive, or safeguard money/);
@@ -9292,4 +9298,396 @@ test('voice recording bar uses forest-emerald capsule, gold RECORDING label, ser
   assert.equal(getEl('msg-voice-btn').classList.contains('is-recording'), false);
   assert.equal(getEl('msg-voice-btn').getAttribute('aria-pressed'), 'false');
   assert.equal(getEl('msg-voice-timer').textContent, '0:00');
+});
+
+test('migration 081, Edge cron, Storage media uploads, 500-char limits, annual archives, Terms/Privacy, and 14-day retention reminder work cleanly', async () => {
+  const vm = await import('node:vm');
+  const mig081 = read('database/migrations/20261116_081_data_retention_storage_hygiene_and_archives.sql');
+  const mig082 = read('database/migrations/20261116_082_remove_admin_requests_from_retention.sql');
+  const schema = read('database/schema.sql');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+  const coreJs = read('js/core.js');
+  const policyJs = read('js/policy.js');
+  const authJs = read('js/auth.js');
+  const accountHtml = read('account.html');
+  const messagesJs = read('js/messages.js');
+  const reportsJs = read('js/reports.js');
+  const reportsHtml = read('reports.html');
+
+  // 1. Database TTL, Storage deletion queue, pg_cron schedule, autovacuum, and annual archives (plus admin_requests removal in 082)
+  assert.match(mig081, /insert into storage\.buckets[\s\S]*?'ipon-media'/i);
+  assert.match(mig081, /create table if not exists public\.pending_storage_deletions/i);
+  assert.match(mig081, /create or replace function public\.run_data_retention_cleanup\(/i);
+  assert.match(mig081, /create or replace function public\.collect_inactive_account_candidates\(/i);
+  assert.match(mig081, /create or replace function public\.purge_inactive_user_data\(/i);
+  assert.match(mig081, /create table if not exists public\.financial_annual_archives/i);
+  assert.match(mig081, /create or replace function public\.archive_group_year\(/i);
+  assert.match(mig081, /alter table public\.audit_logs set \([\s\S]*?autovacuum_vacuum_scale_factor = 0\.05/i);
+  assert.match(mig081, /'ipon-daily-retention-cleanup',\s*'0 16 \* \* \*'/);
+  assert.doesNotMatch(mig082, /from public\.admin_requests/i);
+  const cleanupBlock = [...schema.matchAll(/create or replace function public\.run_data_retention_cleanup[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.ok(cleanupBlock.length > 0);
+  assert.doesNotMatch(cleanupBlock, /from public\.admin_requests/i);
+  assert.match(schema, /'20261116_081'/);
+  assert.match(schema, /'20261116_082'/);
+
+  // 2. 500-char caps across SQL & frontend forms while preserving unlimited announcements
+  assert.match(mig081, /add constraint messages_body_check check \(char_length\(body\) <= 500\)/i);
+  assert.match(mig081, /add constraint record_comments_body_length_check check \(char_length\(btrim\(coalesce\(body, ''\)\)\) <= 500\)/i);
+  assert.match(messagesJs, /id="msg-composer-input"[^>]*maxlength="500"/);
+  assert.match(messagesJs, /Messages &amp; media older than 90 days automatically clear/);
+  assert.match(coreJs, /id="record-thread-input"[^>]*maxlength="500"/);
+  for (const page of ['contributions.html', 'withdrawals.html', 'expenses.html', 'user.html', 'dashboard.html', 'members.html', 'savings.html']) {
+    assert.match(read(page), /name="notes"[^>]*maxlength="500"|id="(?:user|member|goal|quick)-notes"[^>]*maxlength="500"/);
+  }
+
+  // 3. Edge Function cloud media signed uploads, retention cron, & 7-day inactivity warning email
+  assert.match(edgeFn, /body\.action === 'retention-cron'/);
+  assert.match(edgeFn, /body\.action === 'media-upload-url'/);
+  assert.match(edgeFn, /body\.action === 'super-admin-run-maintenance'/);
+  assert.match(edgeFn, /sendInactivityWarningEmail/);
+  assert.match(edgeFn, /drainPendingStorageDeletions/);
+
+  // 4. Reports Annual Archive & CSV workflow + in-app retention visibility & auth policy deferral
+  assert.match(reportsHtml, /id="annual-archive-panel"/);
+  assert.match(reportsJs, /get_archivable_years/);
+  assert.match(reportsJs, /archive_group_year/);
+  assert.match(reportsJs, /Download CSV first/);
+  assert.match(accountHtml, /data-retention-rules-open/);
+  assert.match(coreJs, /data-retention-rules-open/);
+  assert.match(authJs, /policyDialog\?\.open/);
+  assert.match(authJs, /policyDialog\.addEventListener\('close'/);
+
+  // 5. Runtime VM check for maybeShowRetentionReminder & openRetentionPolicyDialog (shows on first session, opens in-app rules modal, dismisses for 14 days, reappears after 14 days)
+  let nowMs = 1_795_000_000_000;
+  const FakeDate = class extends Date {
+    static now() { return nowMs; }
+  };
+  const lsStore = new Map();
+  const appendedNodes = [];
+  const loaderEl = { hidden: false, setAttribute() { }, removeAttribute() { }, querySelector: () => ({ textContent: '' }) };
+  const docStub = {
+    head: { insertAdjacentHTML() { } },
+    body: {
+      dataset: { page: 'dashboard' },
+      classList: { add() { }, remove() { }, toggle() { }, contains: () => false },
+      insertAdjacentHTML() { },
+      appendChild(node) { node.parentNode = this; appendedNodes.push(node); return node; },
+      querySelectorAll: () => [],
+      querySelector: () => null
+    },
+    documentElement: { dataset: {}, style: { setProperty() { } }, classList: { add() { }, remove() { }, toggle() { }, contains: () => false } },
+    getElementById(id) {
+      if (id === 'app-loader') return loaderEl;
+      return appendedNodes.find((n) => n.id === id && !n._removed) || null;
+    },
+    createElement(tag) {
+      const clickListeners = [];
+      return {
+        tagName: tag.toUpperCase(),
+        id: '',
+        className: '',
+        innerHTML: '',
+        open: false,
+        _removed: false,
+        setAttribute() { },
+        showModal() { this.open = true; },
+        close() { this.open = false; },
+        remove() { this._removed = true; },
+        addEventListener() { },
+        querySelectorAll: () => [],
+        querySelector(sel) {
+          if (sel === '[data-retention-ack]') {
+            return { addEventListener: (ev, fn) => { if (ev === 'click') clickListeners.push(fn); } };
+          }
+          if (sel === '.retention-reminder-close' || sel === '[data-retention-rules-open]') return { addEventListener() { } };
+          return null;
+        },
+        _triggerAck() { clickListeners.forEach((fn) => fn()); }
+      };
+    },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener() { },
+    removeEventListener() { }
+  };
+  const ctx = {
+    window: null,
+    document: docStub,
+    navigator: { userAgent: 'Mozilla/5.0', onLine: true },
+    location: { protocol: 'https:', pathname: '/dashboard.html', search: '', href: 'https://my-ipon.vercel.app/dashboard.html' },
+    localStorage: {
+      getItem: (k) => (lsStore.has(k) ? lsStore.get(k) : null),
+      setItem: (k, v) => lsStore.set(k, String(v)),
+      removeItem: (k) => lsStore.delete(k)
+    },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    Date: FakeDate,
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, JSON, Promise, RegExp, Error, Intl, Blob, Uint8Array, atob,
+    setTimeout: () => 0,
+    clearTimeout() { },
+    addEventListener() { },
+    removeEventListener() { },
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    requestAnimationFrame: (fn) => fn(),
+    console
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+  vm.runInNewContext(policyJs, ctx, { filename: 'js/policy.js' });
+
+  const prof = { id: 'u-retention-1', full_name: 'Ana Santos', role: 'MEMBER' };
+  const reminderCards = () => appendedNodes.filter((n) => n.id === 'ipon-retention-reminder');
+  assert.equal(ctx.window.Ipon.maybeShowRetentionReminder(prof), true);
+  assert.equal(reminderCards().length, 1);
+  assert.match(reminderCards()[0].innerHTML, /90 days/);
+  assert.match(reminderCards()[0].innerHTML, /6 months/);
+  assert.match(reminderCards()[0].innerHTML, /7-day email notice/);
+  assert.match(reminderCards()[0].innerHTML, /data-retention-rules-open/);
+
+  assert.equal(ctx.window.Ipon.openRetentionPolicyDialog(), true);
+  const policyDlg = docStub.getElementById('ipon-retention-dialog');
+  assert.ok(policyDlg);
+  assert.equal(policyDlg.open, true);
+  assert.match(policyDlg.innerHTML, /12:00 AM PHT/);
+  assert.match(policyDlg.innerHTML, /500 characters/);
+
+  // Dismiss -> sets timestamp and prevents repeat banner inside 14-day window
+  reminderCards()[0]._triggerAck();
+  assert.equal(reminderCards()[0]._removed, true);
+  nowMs += 5 * 24 * 60 * 60 * 1000;
+  assert.equal(ctx.window.Ipon.maybeShowRetentionReminder(prof), false);
+
+  // After 14 days -> subtle reminder appears again once
+  nowMs += 10 * 24 * 60 * 60 * 1000;
+  assert.equal(ctx.window.Ipon.maybeShowRetentionReminder(prof), true);
+  assert.equal(reminderCards().length, 2);
+});
+
+test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-account policy acceptance gate work end-to-end', async () => {
+  const vm = await import('node:vm');
+  const mig083 = read('database/migrations/20261116_083_policy_consent_tracking.sql');
+  const schema = read('database/schema.sql');
+  const loginHtml = read('login.html');
+  const appCss = read('css/app.css');
+  const coreJs = read('js/core.js');
+  const policyJs = read('js/policy.js');
+  const accountHtml = read('account.html');
+
+  // 1. SQL migration 083 adds per-account consent columns, RPC, and suppresses noisy audit_logs entries
+  assert.match(mig083, /add column if not exists policy_accepted_version text/i);
+  assert.match(mig083, /add column if not exists policy_accepted_at timestamptz/i);
+  assert.match(mig083, /create or replace function public\.accept_current_policy\(/i);
+  assert.match(mig083, /'policy_accepted_version'/);
+  assert.match(mig083, /'policy_accepted_at'/);
+  assert.match(schema, /'20261116_083'/);
+
+  // 2. Pic 1 & Pic 2 editorial styling + complete day-by-day retention breakdown in login.html & css/app.css
+  assert.match(loginHtml, /\.policy-header\{[^}]*background:linear-gradient\(135deg,#0b1d18 0%,#081512 100%\)/);
+  assert.match(loginHtml, /\.policy-header \.dialog-close\{[^}]*aspect-ratio:1 \/ 1;[^}]*border-radius:50%/);
+  assert.match(loginHtml, /\.policy-content h3::before\{[^}]*background:#b88c3e/);
+  assert.match(loginHtml, /7 days/);
+  assert.match(loginHtml, /30 days/);
+  assert.match(loginHtml, /90 days/);
+  assert.match(loginHtml, /6 months/);
+  assert.match(loginHtml, /7 days prior/);
+  assert.match(loginHtml, /1\+ year/);
+  assert.match(loginHtml, /500 characters/);
+  assert.match(loginHtml, /12:00 AM Manila time/);
+  assert.match(appCss, /\.policy-consent-dialog\s*\{/);
+  assert.match(appCss, /\.policy-consent-agree-btn\s*\{/);
+  assert.match(accountHtml, /data-policy-open-inapp="terms"/);
+  assert.match(accountHtml, /data-policy-open-inapp="privacy"/);
+  assert.match(coreJs, /select\([^)]*policy_accepted_version,policy_accepted_at/);
+
+  // 3. Runtime VM verification: mandatory 1x-per-account consent modal + Pic 1 & 2 in-app openPolicyDialog
+  const rpcCalls = [];
+  const lsStore = new Map();
+  const createdDialogs = [];
+  const loaderEl = { hidden: false, setAttribute() { }, removeAttribute() { }, querySelector: () => ({ textContent: '' }) };
+  const makeClassList = () => {
+    const set = new Set();
+    return {
+      add: (c) => set.add(c),
+      remove: (c) => set.delete(c),
+      toggle: (c, force) => (force === undefined ? (set.has(c) ? set.delete(c) : set.add(c)) : (force ? set.add(c) : set.delete(c))),
+      contains: (c) => set.has(c)
+    };
+  };
+  const makeStubEl = (tag) => {
+    const listeners = new Map();
+    const el = {
+      tagName: String(tag || 'DIV').toUpperCase(),
+      id: '',
+      className: '',
+      innerHTML: '',
+      textContent: '',
+      dataset: {},
+      attributes: {},
+      classList: makeClassList(),
+      disabled: false,
+      checked: false,
+      hidden: false,
+      open: false,
+      scrollTop: 0,
+      childrenMap: new Map(),
+      setAttribute(k, v) { this.attributes[k] = String(v); },
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      remove() { this._removed = true; },
+      focus() { this._focused = true; },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      async _emit(ev, payload = {}) {
+        for (const fn of listeners.get(ev) || []) await fn(payload);
+      },
+      _child(key) {
+        if (!this.childrenMap.has(key)) {
+          const child = makeStubEl('div');
+          child.id = key.replace(/^#/, '');
+          if (key === '#ipon-consent-agree-btn') child.disabled = true;
+          this.childrenMap.set(key, child);
+        }
+        return this.childrenMap.get(key);
+      },
+      querySelector(sel) {
+        if (sel === '#ipon-consent-tab-terms' || sel === '[data-consent-tab="terms"]') {
+          const c = this._child('tab-terms');
+          c.dataset.consentTab = 'terms';
+          return c;
+        }
+        if (sel === '#ipon-consent-tab-privacy' || sel === '[data-consent-tab="privacy"]') {
+          const c = this._child('tab-privacy');
+          c.dataset.consentTab = 'privacy';
+          return c;
+        }
+        return this._child(sel);
+      },
+      querySelectorAll(sel) {
+        if (sel === '[data-consent-tab]') return [this.querySelector('#ipon-consent-tab-terms'), this.querySelector('#ipon-consent-tab-privacy')];
+        if (sel === '[data-consent-panel]') {
+          const p1 = this._child('panel-terms'); p1.dataset.consentPanel = 'terms';
+          const p2 = this._child('panel-privacy'); p2.dataset.consentPanel = 'privacy';
+          return [p1, p2];
+        }
+        if (sel === '[data-inapp-policy-section]') {
+          const s1 = this._child('sec-terms'); s1.dataset.inappPolicySection = 'terms';
+          const s2 = this._child('sec-privacy'); s2.dataset.inappPolicySection = 'privacy';
+          return [s1, s2];
+        }
+        return [];
+      }
+    };
+    return el;
+  };
+  const docStub = {
+    head: { insertAdjacentHTML() { } },
+    body: {
+      dataset: { page: 'dashboard' },
+      classList: makeClassList(),
+      insertAdjacentHTML() { },
+      appendChild(node) { createdDialogs.push(node); return node; },
+      querySelectorAll: () => [],
+      querySelector: () => null
+    },
+    documentElement: { dataset: {}, style: { setProperty() { } }, classList: makeClassList() },
+    getElementById: (id) => (id === 'app-loader' ? loaderEl : (createdDialogs.find((n) => n.id === id && !n._removed) || null)),
+    createElement: (tag) => makeStubEl(tag),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener() { },
+    removeEventListener() { }
+  };
+  const ctx = {
+    window: null,
+    document: docStub,
+    navigator: { userAgent: 'Mozilla/5.0', onLine: true },
+    location: { protocol: 'https:', pathname: '/dashboard.html', search: '', href: 'https://my-ipon.vercel.app/dashboard.html' },
+    localStorage: {
+      getItem: (k) => (lsStore.has(k) ? lsStore.get(k) : null),
+      setItem: (k, v) => lsStore.set(k, String(v)),
+      removeItem: (k) => lsStore.delete(k)
+    },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    supabase: {
+      createClient: () => ({
+        auth: {
+          getSession: async () => ({ data: { session: null } }),
+          onAuthStateChange: () => ({ data: { subscription: { unsubscribe() { } } } })
+        },
+        rpc: async (fnName, args) => {
+          rpcCalls.push({ fnName, args });
+          return { data: { policy_accepted_version: args?.p_version || '2026-11-16', policy_accepted_at: '2026-11-16T05:00:00Z' }, error: null };
+        }
+      })
+    },
+    Date, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, JSON, Promise, RegExp, Error, Intl, Blob, Uint8Array, atob,
+    setTimeout: () => 0,
+    clearTimeout() { },
+    addEventListener() { },
+    removeEventListener() { },
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    requestAnimationFrame: (fn) => fn(),
+    console
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+  vm.runInNewContext(policyJs, ctx, { filename: 'js/policy.js' });
+
+  const userProfile = { id: 'u-consent-1', full_name: 'Ana Santos', role: 'MEMBER', policy_accepted_version: null };
+  assert.equal(ctx.window.Ipon.hasAcceptedCurrentPolicy(userProfile), false);
+
+  let afterAcceptTriggered = false;
+  assert.equal(ctx.window.Ipon.maybeShowPolicyConsentModal(userProfile, { onAccept: () => { afterAcceptTriggered = true; } }), true);
+  const consentDlg = docStub.getElementById('ipon-policy-consent-dialog');
+  assert.ok(consentDlg);
+  assert.equal(consentDlg.open, true);
+  assert.match(consentDlg.innerHTML, /I agree &amp; continue/);
+  assert.match(consentDlg.innerHTML, /90 days/);
+  assert.match(consentDlg.innerHTML, /30 days/);
+  assert.match(consentDlg.innerHTML, /6 months/);
+  assert.match(consentDlg.innerHTML, /1\+ year/);
+
+  const agreeBtn = consentDlg.querySelector('#ipon-consent-agree-btn');
+  const checkbox = consentDlg.querySelector('#ipon-consent-checkbox');
+  const errEl = consentDlg.querySelector('#ipon-consent-error');
+  assert.equal(agreeBtn.disabled, true);
+
+  // Escape cancel is blocked while unaccepted
+  let cancelPrevented = false;
+  await consentDlg._emit('cancel', { preventDefault: () => { cancelPrevented = true; } });
+  assert.equal(cancelPrevented, true);
+  assert.equal(errEl.classList.contains('is-visible'), true);
+
+  // Switching to Privacy tab updates aria-selected and panel hidden state
+  const privacyTab = consentDlg.querySelector('#ipon-consent-tab-privacy');
+  await privacyTab._emit('click');
+  assert.equal(privacyTab.attributes['aria-selected'], 'true');
+  assert.equal(consentDlg.querySelectorAll('[data-consent-panel]')[1].hidden, false);
+
+  // Checking the consent box unlocks I agree & continue and persists acceptance 1x per account
+  checkbox.checked = true;
+  await checkbox._emit('change');
+  assert.equal(agreeBtn.disabled, false);
+
+  await agreeBtn._emit('click');
+  assert.equal(rpcCalls.length, 1);
+  assert.equal(rpcCalls[0].fnName, 'accept_current_policy');
+  assert.equal(rpcCalls[0].args.p_version, '2026-11-16');
+  assert.equal(userProfile.policy_accepted_version, '2026-11-16');
+  assert.equal(consentDlg.open, false);
+  assert.equal(afterAcceptTriggered, true);
+  assert.equal(ctx.window.Ipon.hasAcceptedCurrentPolicy(userProfile), true);
+  assert.equal(ctx.window.Ipon.maybeShowPolicyConsentModal(userProfile), false);
+
+  // Opening standalone Pic 1 & 2 viewer dialog in-app switches cleanly between Terms & Privacy
+  assert.equal(ctx.window.Ipon.openPolicyDialog('privacy'), true);
+  const viewerDlg = docStub.getElementById('ipon-policy-dialog');
+  assert.ok(viewerDlg);
+  assert.equal(viewerDlg.open, true);
+  assert.equal(viewerDlg.querySelector('#ipon-policy-title').textContent, 'Privacy policy');
 });

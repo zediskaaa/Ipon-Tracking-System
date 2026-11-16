@@ -304,7 +304,8 @@
 
   function userAvatarHtml(user, sizeClass = 'avatar-md', { clickable = true, showPresence = true } = {}) {
     if (!user) return '';
-    const safeUrl = typeof user.avatar_url === 'string' && user.avatar_url.startsWith('data:image/') ? user.avatar_url : '';
+    const rawUrl = typeof user.avatar_url === 'string' ? user.avatar_url.trim() : '';
+    const safeUrl = (rawUrl.startsWith('data:image/') || /^https:\/\//i.test(rawUrl)) ? rawUrl : '';
     const name = String(user.full_name || 'User');
     const letters = escapeHtml(ipon().initials(name));
     const cls = escapeHtml(sizeClass);
@@ -503,11 +504,15 @@
                           <button type="button" class="button msg-voice-send" id="msg-voice-send"><span>Send</span> <span>voice</span></button>
                         </div>
                         <label class="sr-only" for="msg-composer-input">Message text</label>
-                        <textarea id="msg-composer-input" rows="1" maxlength="5000" placeholder="Write a message…"></textarea>
+                        <textarea id="msg-composer-input" rows="1" maxlength="500" placeholder="Write a message…"></textarea>
                         <button type="submit" class="msg-send-btn" id="msg-send-btn" aria-label="Send message" title="Send">
                           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                         </button>
                       </form>
+                      <div class="msg-composer-meta">
+                        <span class="msg-retention-note">Messages &amp; media older than 90 days automatically clear to keep storage fast.</span>
+                        <span class="msg-char-counter" id="msg-char-counter" hidden>0 / 500</span>
+                      </div>
                     </footer>
                   </div>
                   <aside class="msg-thread-drawer" id="msg-thread-drawer" hidden aria-label="Shared media and thread details"></aside>
@@ -2974,6 +2979,15 @@
     if (qBox) requestAnimationFrame(() => { qBox.scrollLeft = qBox.scrollWidth; });
   }
 
+  function syncComposerCharCounter(len) {
+    const el = document.getElementById('msg-char-counter');
+    if (!el) return;
+    const count = Math.max(0, Number(len || 0));
+    el.textContent = `${count} / 500`;
+    el.hidden = count < 350;
+    el.classList?.toggle?.('is-near-limit', count >= 460);
+  }
+
   async function submitComposer(event) {
     event?.preventDefault();
     if (!state.activeConvId || !isEligible()) return;
@@ -3012,6 +3026,7 @@
 
     sendTypingBroadcast(false);
     if (input) { input.value = ''; autoResizeTextarea(input); }
+    syncComposerCharCounter(0);
     state.draftsByConv.delete(convId);
     state.replyToMsg = null;
     renderContextBar();
@@ -4443,6 +4458,7 @@
         threadSearchDebounce = setTimeout(runThreadSearch, 200);
       } else if (ev.target?.id === 'msg-composer-input') {
         autoResizeTextarea(ev.target);
+        syncComposerCharCounter(ev.target.value.length);
         if (state.activeConvId) state.draftsByConv.set(state.activeConvId, ev.target.value);
         sendTypingBroadcast(Boolean(ev.target.value.trim()));
       } else if (ev.target?.classList?.contains('msg-video-seek')) {

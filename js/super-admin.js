@@ -32,6 +32,7 @@
   const accountActionClose = document.getElementById('account-action-close');
   const storageGrid = document.getElementById('sa-storage-grid');
   const cleanupReceiptsBtn = document.getElementById('sa-cleanup-receipts-btn');
+  const runRetentionBtn = document.getElementById('sa-run-retention-btn');
   let storageOverview = null;
 
   function formatBytes(bytes) {
@@ -52,11 +53,14 @@
     const reclaimCount = Number(s.reclaimable_rejected_count || 0);
     const reclaimBytes = Number(s.reclaimable_rejected_bytes || 0);
     const annBytes = Number(s.announcements_media_bytes || 0) + Number(s.bug_reports_media_bytes || 0);
+    const cloudBytes = Number(s.storage_bucket_bytes || 0);
+    const cloudObjs = Number(s.storage_bucket_objects || 0);
+    const auditBytes = Number(s.audit_logs_bytes || 0);
     storageGrid.innerHTML = [
-      `<div class="super-admin-storage-stat"><span>Contribution receipts</span><strong>${formatBytes(s.contribution_receipts_bytes)}</strong><small>${Number(s.contribution_receipts_count || 0)} files attached</small></div>`,
-      `<div class="super-admin-storage-stat"><span>Expense receipts</span><strong>${formatBytes(s.expense_receipts_bytes)}</strong><small>${Number(s.expense_receipts_count || 0)} files attached</small></div>`,
-      `<div class="super-admin-storage-stat"><span>Announcements &amp; bug media</span><strong>${formatBytes(annBytes)}</strong><small>Announcements ${formatBytes(s.announcements_media_bytes)} · Bugs ${formatBytes(s.bug_reports_media_bytes)}</small></div>`,
-      `<div class="super-admin-storage-stat"><span>Avatars, QR &amp; reclaimable</span><strong>${formatBytes(s.avatars_and_qr_bytes)}</strong><small>${reclaimCount} old rejected/voided (${formatBytes(reclaimBytes)})</small></div>`
+      `<div class="super-admin-storage-stat"><span>Cloud Storage buckets</span><strong>${formatBytes(cloudBytes)}</strong><small>${cloudObjs} stored object${cloudObjs === 1 ? '' : 's'} · ${Number(s.pending_storage_deletions || 0)} queued cleanup</small></div>`,
+      `<div class="super-admin-storage-stat"><span>Receipts &amp; inline media</span><strong>${formatBytes(Number(s.contribution_receipts_bytes || 0) + Number(s.expense_receipts_bytes || 0) + annBytes)}</strong><small>${Number(s.contribution_receipts_count || 0)} contrib + ${Number(s.expense_receipts_count || 0)} expense · ${reclaimCount} old (${formatBytes(reclaimBytes)})</small></div>`,
+      `<div class="super-admin-storage-stat"><span>Audit &amp; message tables</span><strong>${formatBytes(auditBytes)}</strong><small>${Number(s.audit_logs_count || 0)} audit logs · ${Number(s.messages_count || 0)} active chats (90d TTL)</small></div>`,
+      `<div class="super-admin-storage-stat"><span>Avatars, QR &amp; archives</span><strong>${formatBytes(s.avatars_and_qr_bytes)}</strong><small>${Number(s.annual_archives_count || 0)} annual financial roll-up${Number(s.annual_archives_count || 0) === 1 ? '' : 's'}</small></div>`
     ].join('');
     if (cleanupReceiptsBtn) {
       cleanupReceiptsBtn.disabled = reclaimCount === 0;
@@ -463,6 +467,29 @@
     }
   });
 
+  runRetentionBtn?.addEventListener('click', async () => {
+    const accepted = await Ipon.confirmAction({
+      title: 'Run retention & storage cleanup now?',
+      message: 'Runs the nightly retention pass immediately: clears 90+ day chat messages/files, expired logs & notifications, drains Storage deletions, and processes 6-month inactive account warnings (7-day email notice before purge).',
+      acceptLabel: 'Run retention sweep'
+    });
+    if (!accepted) return;
+    Ipon.setBusy(runRetentionBtn, true, 'Running…');
+    try {
+      const res = await Ipon.invokeAccountFunction({ action: 'super-admin-run-maintenance' });
+      const msgCount = Number(res?.sql_summary?.messages_deleted || 0);
+      const storageCount = Number(res?.storage_files_removed || 0);
+      const warned = Number(res?.inactive_warned_emails || 0);
+      const purged = Number(res?.inactive_users_purged || 0);
+      Ipon.toast(`Sweep done: ${msgCount} messages, ${storageCount} storage files, ${warned} warned, ${purged} purged.`);
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(runRetentionBtn, false);
+    }
+  });
+
   function openAccountActionDialog(targetProfile, actionType) {
     if (!accountActionDialog || !accountActionForm) return;
     accountActionForm.reset();
@@ -748,11 +775,13 @@
     try {
       const { data, error } = await Ipon.client.from('bug_reports').select('attachments').eq('id', report.id).single();
       if (error) throw error;
-      const images = (Array.isArray(data?.attachments) ? data.attachments : []).filter((item) => String(item?.dataUrl || '').startsWith('data:image/'));
+      const images = (Array.isArray(data?.attachments) ? data.attachments : [])
+        .map((item) => ({ name: item?.name || 'Picture', src: String(item?.url || item?.dataUrl || '').trim() }))
+        .filter((item) => Ipon.isSafeImageRef(item.src));
       container.innerHTML = images.length ? images.map((item) => `
         <figure class="bug-viewer-item">
-          <img src="${item.dataUrl}" alt="${Ipon.escapeHtml(item.name || 'Attached screenshot')}">
-          <figcaption><span>${Ipon.escapeHtml(item.name || 'Picture')}</span><a class="icon-action" href="${item.dataUrl}" download="${Ipon.escapeHtml(item.name || 'bug-picture')}">Download</a></figcaption>
+          <img src="${Ipon.escapeHtml(item.src)}" alt="${Ipon.escapeHtml(item.name || 'Attached screenshot')}">
+          <figcaption><span>${Ipon.escapeHtml(item.name || 'Picture')}</span><a class="icon-action" href="${Ipon.escapeHtml(item.src)}" download="${Ipon.escapeHtml(item.name || 'bug-picture')}" target="_blank" rel="noopener">Download</a></figcaption>
         </figure>`).join('') : '<p class="empty-state">No attached pictures.</p>';
       container.querySelectorAll('img').forEach((img) => {
         img.onerror = () => { img.replaceWith(Object.assign(document.createElement('p'), { className: 'empty-state', textContent: 'Preview unavailable in this browser. Use Download below.' })); };

@@ -1304,6 +1304,48 @@
     } catch { }
   }
 
+  function isSafeImageRef(value) {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    return raw.startsWith('data:image/') || /^https:\/\/[a-z0-9.-]+\//i.test(raw);
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    const raw = String(dataUrl || '');
+    const match = raw.match(/^data:([^;,]+);base64,(.+)$/i);
+    if (!match) throw new Error('Invalid image data format.');
+    const mime = match[1] || 'image/jpeg';
+    const bin = atob(match[2].replace(/\s+/g, ''));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
+
+  async function uploadMediaDataUrl(dataUrl, { category = 'avatars', name = 'image.jpg' } = {}) {
+    const raw = typeof dataUrl === 'string' ? dataUrl.trim() : '';
+    if (!raw) return null;
+    if (/^https:\/\//i.test(raw)) return raw;
+    const client = getClient();
+    if (!client?.storage) return raw;
+    const blob = dataUrlToBlob(raw);
+    const meta = await invokeAccountFunction({
+      action: 'media-upload-url',
+      category,
+      name: String(name || 'image.jpg').slice(0, 120),
+      content_type: blob.type || 'image/jpeg'
+    });
+    if (!meta?.path || !meta?.token || !meta?.publicUrl) {
+      throw new Error('Could not prepare cloud storage upload.');
+    }
+    const { error } = await client.storage
+      .from(meta.bucket || 'ipon-media')
+      .uploadToSignedUrl(meta.path, meta.token, blob, {
+        contentType: blob.type || 'image/jpeg',
+        upsert: true
+      });
+    if (error) throw error;
+    return meta.publicUrl;
+  }
+
   function readShellAvatar(expectedUserId = '') {
     try {
       const raw = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SHELL_AVATAR_KEY) : null)
@@ -1311,7 +1353,7 @@
       if (!raw) return '';
       const parsed = JSON.parse(raw);
       const url = typeof parsed?.avatarUrl === 'string' ? parsed.avatarUrl : '';
-      if (!url.startsWith('data:image/')) return '';
+      if (!isSafeImageRef(url)) return '';
       if (expectedUserId && parsed?.userId && String(parsed.userId) !== String(expectedUserId)) return '';
       return url;
     } catch {
@@ -1321,12 +1363,12 @@
 
   function writeShellAvatar(userId, avatarUrl) {
     try {
-      if (!avatarUrl || typeof avatarUrl !== 'string' || !avatarUrl.startsWith('data:image/')) {
+      if (!isSafeImageRef(avatarUrl)) {
         if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(SHELL_AVATAR_KEY);
         if (typeof localStorage !== 'undefined') localStorage.removeItem(SHELL_AVATAR_KEY);
         return;
       }
-      const serialized = JSON.stringify({ userId: userId ? String(userId) : '', avatarUrl });
+      const serialized = JSON.stringify({ userId: userId ? String(userId) : '', avatarUrl: String(avatarUrl).trim() });
       if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(SHELL_AVATAR_KEY, serialized);
       if (typeof localStorage !== 'undefined') localStorage.setItem(SHELL_AVATAR_KEY, serialized);
     } catch { }
@@ -1484,7 +1526,7 @@
             <div class="record-thread-messages" id="record-thread-messages" role="log" aria-live="polite"><p class="empty-state">Loading discussion…</p></div>
             <form class="record-thread-composer" id="record-thread-form" hidden>
               <label class="sr-only" for="record-thread-input">Reply message</label>
-              <textarea id="record-thread-input" name="body" rows="2" maxlength="1000" placeholder="Write a reply, paste a screenshot, or attach photos, videos, or files…"></textarea>
+              <textarea id="record-thread-input" name="body" rows="2" maxlength="500" placeholder="Write a reply, paste a screenshot, or attach photos, videos, or files…"></textarea>
               <div class="record-thread-queued" id="record-thread-queued" hidden></div>
               <input id="record-thread-files" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.odt,.ods,.ppt,.pptx,.zip,.rar,.7z" hidden>
               <div class="record-thread-composer-bar">
@@ -1544,7 +1586,7 @@
           <div class="account-dialog-content">
             <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support IPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
-            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Background usage</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device access for closed-app messages and alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div></section></div>
+            <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Background usage</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device access for closed-app messages and alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div><div class="preference-row"><span><strong>Data &amp; storage retention</strong><small>90-day chat &amp; log cleanup · 6-month inactivity notice</small></span><button class="button button-secondary button-sm" type="button" data-retention-rules-open>View rules</button></div><div class="preference-row"><span><strong>Terms &amp; Privacy policies</strong><small>Non-custodial scope, permissions, and full retention schedule</small></span><div class="header-actions"><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="terms">Terms</button><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="privacy">Privacy</button></div></div></section></div>
             <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
           </div>
         </div>
@@ -1767,7 +1809,7 @@
   }
 
   function avatarMarkup(avatarUrl, name, className = '', userId = null) {
-    const safeUrl = typeof avatarUrl === 'string' && avatarUrl.startsWith('data:image/') ? avatarUrl : '';
+    const safeUrl = isSafeImageRef(avatarUrl) ? String(avatarUrl).trim() : '';
     const letters = escapeHtml(initials(name));
     const cls = escapeHtml(className);
     const circle = !safeUrl
@@ -1801,7 +1843,7 @@
 
   function syncProfileAvatars(profile = currentProfile, { persist = true } = {}) {
     if (!profile) return;
-    const safeUrl = typeof profile.avatar_url === 'string' && profile.avatar_url.startsWith('data:image/') ? profile.avatar_url : '';
+    const safeUrl = isSafeImageRef(profile.avatar_url) ? String(profile.avatar_url).trim() : '';
     if (persist && profile.id) {
       writeShellAvatar(profile.id, safeUrl);
       writeShellSnapshot({
@@ -2299,6 +2341,21 @@
     document.querySelectorAll('[data-bug-report-close]').forEach((button) => button.onclick = () => bugDialog?.close());
     const anotherBug = document.getElementById('bug-report-another');
     if (anotherBug) anotherBug.onclick = () => { resetBugDialog(); bugForm?.elements.title.focus(); };
+    if (document.body?.dataset && !document.body.dataset.retentionRulesBound) {
+      document.body.dataset.retentionRulesBound = '1';
+      document.addEventListener?.('click', (event) => {
+        if (event.target?.closest?.('[data-retention-rules-open]')) {
+          event.preventDefault();
+          openRetentionPolicyDialog();
+          return;
+        }
+        const policyTrigger = event.target?.closest?.('[data-policy-open-inapp]');
+        if (policyTrigger) {
+          event.preventDefault();
+          openPolicyDialog(policyTrigger.dataset?.policyOpenInapp || 'terms');
+        }
+      });
+    }
     if (bugImageInput) bugImageInput.onchange = async () => {
       const files = Array.from(bugImageInput.files || []);
       bugImageInput.value = '';
@@ -2397,6 +2454,12 @@
       if (!accepted) return;
       setBusy(button, true, 'Submitting…');
       try {
+        if (bugImages.length) {
+          bugImages = await Promise.all(bugImages.map(async (item) => {
+            const url = item?.dataUrl ? await uploadMediaDataUrl(item.dataUrl, { category: 'bug-reports', name: item.name || 'bug.jpg' }) : item?.url;
+            return { name: item.name || 'picture', type: item.type || 'image/jpeg', url };
+          }));
+        }
         const { error } = await getClient().from('bug_reports').insert({ reporter_id: currentProfile.id, title, description, attachments: bugImages });
         if (error) throw error;
         if (bugSubmittedTitle) bugSubmittedTitle.textContent = `"${title}"`;
@@ -2659,18 +2722,19 @@
 
         setBusy(saveBtn, true, 'Saving…');
         try {
+          const uploadedUrl = await uploadMediaDataUrl(croppedDataUrl, { category: 'avatars', name: 'avatar.jpg' });
           if (typeof onSave === 'function') {
-            await onSave(croppedDataUrl);
+            await onSave(uploadedUrl);
           } else {
-            await rpc('update_own_avatar', { p_avatar_url: croppedDataUrl });
-            currentProfile.avatar_url = croppedDataUrl;
+            await rpc('update_own_avatar', { p_avatar_url: uploadedUrl });
+            currentProfile.avatar_url = uploadedUrl;
             syncProfileAvatars(currentProfile);
             window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
             toast('Profile picture updated.');
           }
           cleanup();
           dialog.close();
-          resolve(croppedDataUrl);
+          resolve(uploadedUrl);
         } catch (error) {
           toast(friendlyError(error), 'error');
         } finally {
@@ -5415,7 +5479,7 @@
       }
 
       const fetchProfile = () => client.from('profiles')
-        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at,policy_accepted_version,policy_accepted_at')
         .eq('id', session.user.id)
         .single();
       let { data: profile, error } = await runWithStartupRetry(fetchProfile);
@@ -5497,8 +5561,22 @@
       appInitialized = true;
       dismissStartupFailure();
       if (options.requireAuth === false) setLoading(false);
-      if (options.requireAuth !== false && !options.skipBackgroundPrompt) {
-        maybePromptBackgroundUsage(profile).catch(() => { });
+      if (options.requireAuth !== false) {
+        const shownConsent = !options.skipPolicyConsent && !setupUrl
+          ? maybeShowPolicyConsentModal(profile, {
+            onAccept: () => {
+              if (!options.skipBackgroundPrompt) maybePromptBackgroundUsage(profile).catch(() => { });
+            }
+          })
+          : false;
+        if (!shownConsent) {
+          if (!options.skipBackgroundPrompt) {
+            maybePromptBackgroundUsage(profile).catch(() => { });
+          }
+          if (!options.skipRetentionReminder) {
+            maybeShowRetentionReminder(profile);
+          }
+        }
       }
       return { configured: true, profile, session };
     } catch (error) {
@@ -5809,7 +5887,7 @@
       </div>
       ${metaChips.length ? `<div class="record-review-meta">${metaChips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join('')}</div>` : ''}
       ${detailText ? `<p class="record-review-detail-note">${escapeHtml(detailText)}</p>` : ''}
-      ${entry.receiptUrl && String(entry.receiptUrl).startsWith('data:image/') ? `
+      ${entry.receiptUrl && isSafeImageRef(entry.receiptUrl) ? `
         <button class="record-review-receipt record-review-receipt-btn" type="button" data-summary-receipt-btn>
           <img src="${entry.receiptUrl}" alt="Attached payment receipt">
           <span><strong>Attached payment receipt</strong><small>Tap to view full screenshot</small></span>
@@ -8298,7 +8376,9 @@
 
   function bindReceiptPicker({ input, dropzone, preview, thumb, nameEl, clearBtn, emptyBox, onChange } = {}) {
     let dataUrl = null;
-    const sync = (fileName = '') => {
+    let fileName = 'receipt.jpg';
+    const sync = (nextName = '') => {
+      if (nextName) fileName = nextName;
       const hasFile = Boolean(dataUrl);
       if (preview) preview.hidden = !hasFile;
       if (emptyBox) emptyBox.hidden = hasFile;
@@ -8306,7 +8386,7 @@
         if (hasFile) thumb.src = dataUrl;
         else thumb.removeAttribute('src');
       }
-      if (nameEl && fileName) nameEl.textContent = fileName;
+      if (nameEl && nextName) nameEl.textContent = nextName;
       onChange?.(dataUrl);
     };
     const handleFile = async (file) => {
@@ -8317,6 +8397,7 @@
         sync(prepared.name);
       } catch (error) {
         dataUrl = null;
+        fileName = 'receipt.jpg';
         if (input) input.value = '';
         sync();
         toast(friendlyError(error), 'error');
@@ -8339,14 +8420,23 @@
       e.preventDefault();
       e.stopPropagation();
       dataUrl = null;
+      fileName = 'receipt.jpg';
       if (input) input.value = '';
       sync();
     });
     return {
       get: () => dataUrl,
-      clear: () => { dataUrl = null; if (input) input.value = ''; sync(); }
+      upload: async () => (dataUrl ? await uploadMediaDataUrl(dataUrl, { category: 'receipts', name: fileName }) : null),
+      clear: () => { dataUrl = null; fileName = 'receipt.jpg'; if (input) input.value = ''; sync(); }
     };
   }
+
+  const CURRENT_POLICY_VERSION = '2026-11-16';
+  const openPolicyDialog = (...args) => window.IponPolicy?.openPolicyDialog?.(...args) ?? false;
+  const openRetentionPolicyDialog = (...args) => window.IponPolicy?.openRetentionPolicyDialog?.(...args) ?? false;
+  const maybeShowRetentionReminder = (...args) => window.IponPolicy?.maybeShowRetentionReminder?.(...args) ?? false;
+  const hasAcceptedCurrentPolicy = (...args) => window.IponPolicy?.hasAcceptedCurrentPolicy?.(...args) ?? true;
+  const maybeShowPolicyConsentModal = (...args) => window.IponPolicy?.maybeShowPolicyConsentModal?.(...args) ?? false;
 
   async function triggerManualRefresh() {
     if ('serviceWorker' in navigator && !window.Capacitor) {
@@ -10290,7 +10380,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     setOnlineVisibility, syncMessagesBadges,
     updateLocalProfile(patch = {}) {
@@ -10304,7 +10394,7 @@
     resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
-    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload,
+    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload, maybeShowRetentionReminder, openRetentionPolicyDialog, CURRENT_POLICY_VERSION, openPolicyDialog, hasAcceptedCurrentPolicy, maybeShowPolicyConsentModal,
     auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry,
     get profile() { return currentProfile; }
   };

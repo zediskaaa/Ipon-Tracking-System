@@ -1168,10 +1168,13 @@
     const button = document.getElementById('save-group-dialog');
     Ipon.setBusy(button, true, isCreate ? 'Creating…' : 'Saving…');
     try {
+      const resolvedGroupAvatarUrl = (!pendingGroupClearAvatar && pendingGroupAvatarUrl && pendingGroupAvatarUrl.startsWith('data:'))
+        ? await Ipon.uploadMediaDataUrl(pendingGroupAvatarUrl, { category: 'group-avatars', name: 'group-avatar.jpg' })
+        : pendingGroupAvatarUrl;
       if (isCreate) {
         await Ipon.rpc('admin_create_group', {
           p_name: name,
-          p_avatar_url: pendingGroupAvatarUrl,
+          p_avatar_url: resolvedGroupAvatarUrl,
           p_include_self: includeSelf,
           p_monthly_amount: monthlyAmount
         });
@@ -1187,7 +1190,7 @@
       } else {
         await Ipon.rpc('update_group_profile', {
           p_name: name,
-          p_avatar_url: pendingGroupAvatarUrl,
+          p_avatar_url: resolvedGroupAvatarUrl,
           p_clear_avatar: pendingGroupClearAvatar
         });
         if (includeSelf !== Boolean(currentGroup?.is_contributor) || (includeSelf && monthlyAmount)) {

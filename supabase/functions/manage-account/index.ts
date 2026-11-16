@@ -450,6 +450,164 @@ async function sendAccountStatusEmail({
   });
 }
 
+async function sendInactivityWarningEmail({
+  toEmail,
+  recipientName,
+  scheduledPurgeAt
+}: {
+  toEmail: string;
+  recipientName: string;
+  scheduledPurgeAt: string;
+}) {
+  const safeName = String(recipientName || '').trim() || 'Saver';
+  const purgeDateLabel = (() => {
+    try {
+      return new Date(scheduledPurgeAt).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'Asia/Manila'
+      });
+    } catch {
+      return scheduledPurgeAt.slice(0, 10);
+    }
+  })();
+  const loginUrl = 'https://my-ipon.vercel.app/login.html';
+  const subject = `Action needed: Your ${SYSTEM_NAME} account will be removed in 7 days`;
+
+  const plainText = [
+    `Hello ${safeName},`,
+    '',
+    `You have not signed in or had activity on your ${SYSTEM_NAME} account for nearly 6 months.`,
+    `To keep database and cloud storage lean, inactive accounts are scheduled for automatic deletion after a 7-day notice.`,
+    '',
+    `Scheduled removal date: ${purgeDateLabel}`,
+    '',
+    `To keep your account active and cancel deletion, simply sign in before ${purgeDateLabel}:`,
+    loginUrl,
+    '',
+    'Thank you,',
+    `${SYSTEM_NAME}`
+  ].join('\n');
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #163029; line-height: 1.6; max-width: 560px; margin: 0 auto; padding: 24px; background: #fbf9f2; border: 1px solid #d9d6c8; border-radius: 14px;">
+      ${emailBrandHeaderMarkup()}
+      <h2 style="margin: 0 0 14px; font-size: 21px; color: #9a4d12;">Inactivity Notice: 7 Days Remaining</h2>
+      <p style="margin: 0 0 12px;">Hello <strong>${escapeHtml(safeName)}</strong>,</p>
+      <p style="margin: 0 0 12px;">Your <strong>${escapeHtml(SYSTEM_NAME)}</strong> account has had no sign-in or savings activity for nearly 6 months.</p>
+      <div style="background: #ffffff; border-left: 4px solid #b85d19; border-radius: 6px; padding: 12px 16px; margin: 16px 0;">
+        <p style="margin: 0 0 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #6d6552;">Scheduled Permanent Deletion</p>
+        <p style="margin: 0; font-size: 15px; font-weight: 700; color: #163029;">${escapeHtml(purgeDateLabel)}</p>
+      </div>
+      <p style="margin: 0 0 18px;">Sign in before that date to keep your profile and group access active:</p>
+      <a href="${loginUrl}" style="display: inline-block; padding: 11px 20px; background: #143e30; color: #ffffff; text-decoration: none; font-weight: 700; border-radius: 8px;">Sign in to myIPON</a>
+      <p style="margin: 18px 0 0; font-size: 12.5px; color: #5c5749;">Per our Data Retention Policy, profiles, personal messages, and stored media of accounts inactive for 6 months are automatically removed 7 days after this notice.</p>
+    </div>
+  `.trim();
+
+  return deliverEmail({
+    toEmail,
+    recipientName: safeName,
+    subject,
+    html,
+    plainText
+  });
+}
+
+function timingSafeSecretEqual(a: string, b: string) {
+  if (!a || !b || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+async function drainPendingStorageDeletions(admin: ReturnType<typeof createClient>) {
+  const { data: rows, error } = await admin
+    .from('pending_storage_deletions')
+    .select('id,bucket_id,object_path')
+    .order('queued_at', { ascending: true })
+    .limit(500);
+  if (error || !rows?.length) return { drained: 0 };
+
+  const byBucket = new Map<string, Array<{ id: string; object_path: string }>>();
+  for (const row of rows as Array<{ id: string; bucket_id: string; object_path: string }>) {
+    const list = byBucket.get(row.bucket_id) || [];
+    list.push({ id: row.id, object_path: row.object_path });
+    byBucket.set(row.bucket_id, list);
+  }
+
+  let drained = 0;
+  for (const [bucket, items] of byBucket.entries()) {
+    for (let i = 0; i < items.length; i += 100) {
+      const slice = items.slice(i, i + 100);
+      const { error: remErr } = await admin.storage.from(bucket).remove(slice.map((x) => x.object_path));
+      if (!remErr) {
+        await admin.from('pending_storage_deletions').delete().in('id', slice.map((x) => x.id));
+        drained += slice.length;
+      }
+    }
+  }
+  return { drained };
+}
+
+async function runRetentionSweep(admin: ReturnType<typeof createClient>, { runSqlCleanup = false } = {}) {
+  let sqlSummary: unknown = null;
+  if (runSqlCleanup) {
+    const { data } = await admin.rpc('run_data_retention_cleanup');
+    sqlSummary = data ?? null;
+  }
+
+  const storageFirst = await drainPendingStorageDeletions(admin);
+
+  const { data: inactive } = await admin.rpc('collect_inactive_account_candidates', {
+    p_inactive_months: 6,
+    p_warning_days: 7
+  });
+
+  const warnList = Array.isArray((inactive as { warn_candidates?: unknown[] } | null)?.warn_candidates)
+    ? (inactive as { warn_candidates: Array<{ user_id: string; email?: string | null; full_name?: string; scheduled_purge_at?: string }> }).warn_candidates
+    : [];
+  const purgeList = Array.isArray((inactive as { purge_candidates?: unknown[] } | null)?.purge_candidates)
+    ? (inactive as { purge_candidates: Array<{ user_id: string }> }).purge_candidates
+    : [];
+
+  let warnedCount = 0;
+  for (const candidate of warnList) {
+    if (!candidate.email || !candidate.email.includes('@')) continue;
+    const outcome = await sendInactivityWarningEmail({
+      toEmail: candidate.email,
+      recipientName: candidate.full_name || 'Saver',
+      scheduledPurgeAt: candidate.scheduled_purge_at || new Date(Date.now() + 7 * 86400000).toISOString()
+    }).catch(() => ({ email_sent: false }));
+
+    if (outcome?.email_sent) {
+      warnedCount += 1;
+    } else {
+      // Never purge an inactive user whose 7-day email could not be sent
+      await admin.rpc('reset_inactivity_warning_flag', { p_user_id: candidate.user_id }).catch(() => null);
+    }
+  }
+
+  let purgedUsers = 0;
+  for (const target of purgeList) {
+    const { data: ok } = await admin.rpc('purge_inactive_user_data', { p_user_id: target.user_id });
+    if (ok) {
+      await admin.auth.admin.deleteUser(target.user_id).catch(() => null);
+      purgedUsers += 1;
+    }
+  }
+
+  const storageAfter = purgedUsers > 0 ? await drainPendingStorageDeletions(admin) : { drained: 0 };
+
+  return {
+    sql_summary: sqlSummary,
+    storage_files_removed: storageFirst.drained + storageAfter.drained,
+    inactive_warned_emails: warnedCount,
+    inactive_users_purged: purgedUsers
+  };
+}
+
 async function sendAdminRequestOtpEmail({
   toEmail,
   recipientName,
@@ -1592,6 +1750,21 @@ Deno.serve(async (request) => {
     });
   }
 
+  if (body.action === 'retention-cron') {
+    const providedSecret = String(request.headers.get('x-push-webhook-secret') || '').trim();
+    const { data: cfg } = await admin
+      .from('internal_webhook_config')
+      .select('value')
+      .eq('key', 'push_webhook_secret')
+      .maybeSingle();
+    const expectedSecret = String(cfg?.value || '').trim();
+    if (!expectedSecret || !timingSafeSecretEqual(providedSecret, expectedSecret)) {
+      return json({ error: 'Unauthorized maintenance invocation.' }, 401);
+    }
+    const result = await runRetentionSweep(admin, { runSqlCleanup: Boolean(body.run_sql) });
+    return json({ success: true, ...result });
+  }
+
   const authorization = request.headers.get('Authorization');
   if (!authorization) return json({ error: 'Your session is invalid.' }, 401);
 
@@ -1633,6 +1806,46 @@ Deno.serve(async (request) => {
   if (actor?.status !== 'ACTIVE') {
     await admin.from('profiles').update({ status: 'ACTIVE' }).eq('id', userResult.user.id);
     actor.status = 'ACTIVE';
+  }
+
+  const MEDIA_BUCKET = 'ipon-media';
+  const MEDIA_CATEGORIES = new Set(['avatars', 'group-avatars', 'group-qr', 'receipts', 'bug-reports']);
+
+  if (body.action === 'media-upload-url') {
+    const category = String(body.category || 'misc').trim();
+    if (!MEDIA_CATEGORIES.has(category)) {
+      return json({ error: 'Unsupported media upload category.' }, 400);
+    }
+    const rawType = String(body.content_type || 'image/jpeg').trim().toLowerCase();
+    const ext = rawType === 'image/png' ? 'png'
+      : rawType === 'image/webp' ? 'webp'
+      : rawType === 'image/gif' ? 'gif'
+      : 'jpg';
+    const { error: bucketErr } = await admin.storage.createBucket(MEDIA_BUCKET, { public: true, fileSizeLimit: 10485760 });
+    if (bucketErr && !/already exists/i.test(bucketErr.message || '')) {
+      return json({ error: bucketErr.message || 'Could not prepare media storage bucket.' }, 400);
+    }
+    const objectPath = `${category}/${userResult.user.id}/${crypto.randomUUID()}.${ext}`;
+    const { data, error } = await admin.storage.from(MEDIA_BUCKET).createSignedUploadUrl(objectPath);
+    if (error || !data) {
+      return json({ error: error?.message || 'Could not prepare media upload URL.' }, 400);
+    }
+    const { data: pubData } = admin.storage.from(MEDIA_BUCKET).getPublicUrl(objectPath);
+    return json({
+      bucket: MEDIA_BUCKET,
+      path: objectPath,
+      token: data.token,
+      signedUrl: data.signedUrl,
+      publicUrl: pubData?.publicUrl || `${url}/storage/v1/object/public/${MEDIA_BUCKET}/${objectPath}`
+    });
+  }
+
+  if (body.action === 'super-admin-run-maintenance') {
+    if (actor.role !== 'SUPER_ADMIN') {
+      return json({ error: 'Only the Super Admin can run platform retention cleanup.' }, 403);
+    }
+    const result = await runRetentionSweep(admin, { runSqlCleanup: true });
+    return json({ success: true, ...result });
   }
 
   if (body.action === 'announcement-upload-urls') {

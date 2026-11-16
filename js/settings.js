@@ -347,8 +347,11 @@
     const values = new FormData(paymentForm);
     Ipon.setBusy(button, true);
     try {
+      const uploadedQrUrl = !clearQrFlag && pendingQrDataUrl
+        ? await Ipon.uploadMediaDataUrl(pendingQrDataUrl, { category: 'group-qr', name: 'payment-qr.jpg' })
+        : null;
       await Ipon.rpc('update_group_payment_info', {
-        p_payment_qr_url: pendingQrDataUrl,
+        p_payment_qr_url: uploadedQrUrl,
         p_clear_qr: clearQrFlag,
         p_payment_method_label: values.get('payment_method_label') || null,
         p_payment_account_name: values.get('payment_account_name') || null,
