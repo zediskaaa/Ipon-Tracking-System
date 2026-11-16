@@ -1224,12 +1224,30 @@
   function canonicalizeCommitUpdates(rawItems = [], excludedText = '') {
     const out = [];
     const excludedStems = new Set(extractCommitStems(excludedText));
+    const excludedLineStems = String(excludedText || '')
+      .split(/\r?\n/)
+      .map((line) => extractCommitStems(line))
+      .filter((lineStems) => lineStems.length >= 2);
+    const matchesPriorLine = (stems) => {
+      if (!stems.length) return false;
+      return excludedLineStems.some((lineStems) => {
+        const lineSet = new Set(lineStems);
+        let hits = 0;
+        for (const s of stems) {
+          const prefix = s.slice(0, 5);
+          if (lineSet.has(s) || lineStems.some((ls) => ls.slice(0, 5) === prefix)) hits += 1;
+        }
+        const req = stems.length <= 2 ? stems.length : Math.max(2, Math.ceil(stems.length * 0.5));
+        return hits >= req;
+      });
+    };
     for (const raw of (Array.isArray(rawItems) ? rawItems : [])) {
       for (const item of extractCommitUpdates(raw)) {
         const stems = extractCommitStems(item);
+        if (matchesPriorLine(stems)) continue;
         if (excludedStems.size > 0 && stems.length >= 2) {
           const hitCount = stems.filter((s) => excludedStems.has(s)).length;
-          if (hitCount / stems.length >= 0.75) continue;
+          if (hitCount / stems.length >= 0.65) continue;
         }
         const matchIdx = out.findIndex((existing) => clausesOverlapTopic(existing, item));
         if (matchIdx !== -1) {
@@ -1331,13 +1349,15 @@
   async function collectReleaseContext() {
     let releaseRows = [];
     try {
-      const { data } = await Ipon.client.from('announcements')
-        .select('release_version,title,details,created_at')
+      const { data, error } = await Ipon.client.from('announcements')
+        .select('release_version,title,description,created_at')
         .not('release_version', 'is', null)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(10);
-      releaseRows = Array.isArray(data) ? data : [];
+      if (!error) {
+        releaseRows = Array.isArray(data) ? data : [];
+      }
     } catch (_) { }
 
     let nextVersion = 'Update 1.0';
@@ -1361,12 +1381,15 @@
     const latestReleaseAt = releaseRows[0]?.created_at || null;
     const latestReleaseVersion = releaseRows[0]?.release_version || null;
     const previousReleases = releaseRows
-      .slice(0, 5)
+      .slice(0, 6)
       .map((row) => [row.release_version, row.title].filter(Boolean).join(': '))
       .filter(Boolean);
+    const previousReleaseDetails = releaseRows
+      .slice(0, 5)
+      .map((row) => String(row.description || '').trim())
+      .filter(Boolean);
     const priorText = releaseRows
-      .slice(0, 3)
-      .map((row) => [row.title, row.details].filter(Boolean).join('\n'))
+      .map((row) => [row.title, row.description].filter(Boolean).join('\n'))
       .join('\n');
 
     const targetImplemented = featureRequests.filter(
@@ -1378,7 +1401,7 @@
     const systemUpdates = await fetchRecentSystemUpdates(latestReleaseAt, priorText);
     const hasNewChanges = systemUpdates.length > 0 || targetImplemented.length > 0 || targetFixedBugs.length > 0;
 
-    latestReleaseContext = { nextVersion, latestReleaseAt, latestReleaseVersion, previousReleases, targetImplemented, targetFixedBugs, systemUpdates, hasNewChanges };
+    latestReleaseContext = { nextVersion, latestReleaseAt, latestReleaseVersion, previousReleases, previousReleaseDetails, targetImplemented, targetFixedBugs, systemUpdates, hasNewChanges };
     return latestReleaseContext;
   }
 
@@ -1743,7 +1766,9 @@
         action: 'ai-generate-release-notes',
         version: ver,
         release_date: relDate,
+        latest_release_at: context.latestReleaseAt || null,
         previous_releases: previousReleases,
+        previous_release_details: context.previousReleaseDetails || [],
         previous_title: prevTitle,
         current_draft: currentDraft,
         style_angle: styleAngle,

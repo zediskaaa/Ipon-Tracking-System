@@ -1,5 +1,65 @@
 [
   {
+    "date": "2026-11-17T01:38:15+08:00",
+    "message": "fix: add release-note auto-fallback for Gemini AI and harden supabase:sync output parsing\n\n- Add automatic verified release-note fallback (`draftVerifiedReleaseNotesFallback`) in `supabase/functions/manage-account/index.ts` so Super Admin \"Write with AI\" drafts sectioned New Features, Fixes, Improvements, Security Updates, and Features Requested by Users whenever Gemini AI fails (e.g., Cloud billing disabled, invalid/restricted keys, or quota/network errors).\n- Prioritize free-tier models (`gemini-2.5-flash-lite`, `gemini-2.0-flash`) across `generativelanguage.googleapis.com` before falling back to `aiplatform.googleapis.com`, add saved/env key failover (`resolveServerGeminiKeys`), and surface clear `SERVICE_DISABLED` vs Vertex `BILLING_DISABLED` diagnostics without masking AI Studio errors.\n- Accept `fallback_used` responses in `js/super-admin.js` with non-blocking toast feedback and preserve detailed server Gemini diagnostics in `Ipon.friendlyError` (`js/core.js`).\n- Handle `{ rows: null }` and array payloads safely in `scripts/supabase-migrate.mjs` (`parseJsonPayload` / `parseQueryRows` / `isTransientSyncError`).\n- Bump HTML asset cache versions (`js/core.js?v=20261117-109`, `js/super-admin.js?v=20261117-85`, `ipon-shell-v20` in `sw.js`), refresh `./www` metadata (`version.json`, `js/version.js`), and expand `tests/contracts.test.mjs` with runtime Gemini failover and fallback composer tests (`npm test`: 156/156 passing)."
+  },
+  {
+    "date": "2026-11-17T00:50:16+08:00",
+    "message": "fix: expand budget workspace full-width and harden supabase:sync CLI parsing\n\n- Expand `.budget-workspace` to full available workspace width (`width: 100%; max-width: none;`) in `css/app.css` and bump `css/app.css?v=20261117-131` across all HTML pages (`budget.html`, `dashboard.html`, etc.).\n- Harden `scripts/supabase-migrate.mjs` for `npm run supabase:sync` and CLI JSON queries:\n  - Pass `-o json` explicitly and `--quiet` to `npx`, inspect both stdout and stderr, retry transient non-JSON output once in `queryRows()`, and make `parseJsonPayload()` resilient to surrounding CLI notices while reporting actionable output diagnostics on failure.\n  - Broaden `isTransientSyncError()` to skip gracefully with a warning on Go/Supabase CLI offline, DNS/TLS, empty CLI output, rate-limit, and unauthenticated startup errors during `--sync` (keeping schema safety checks strict).\n- Configure `.vscode/tasks.json` Windows `folderOpen` task (`Supabase Auto-Sync on Open`) to run via `cmd.exe /d /c`.\n- Update `tests/contracts.test.mjs` (full-width `.budget-workspace` assertion, `isTransientSyncError` & `parseJsonPayload` unit tests, and restored migration `084` local declarations) and sync `./www` metadata (`version.json`, `js/version.js`).\n- Verified `npm run supabase:sync`, `npm run db:status`, `npm run mobile:prepare`, and `npm test` (155/155 passing)."
+  },
+  {
+    "date": "2026-11-17T00:19:45+08:00",
+    "message": "feat: sync budget expenses with IPON savings and align budget modals & layout\n\n- Add migration `20261116_096_budget_savings_deduction_sync.sql` and update `database/schema.sql`:\n  - Add `linked_expense_id`, `payment_method`, and `deduct_from_savings` to `public.budget_expenses`.\n  - Replace the 5-arg `save_budget_expense` overload with a unified 9-arg RPC supporting inline budget item creation and confirmed/pending `public.expenses` sync with savings headroom checks.\n  - Update `get_budget_overview`, `delete_budget_expense`, and `delete_budget_item` so IPON savings balances and voids stay synchronized across Dashboard, Calendar, Records, and Reports.\n- Redesign `budget.html`, `js/budget.js`, and `css/app.css`:\n  - Make Needs / Wants / Savings category cards and dashed empty-state containers equal height (`pantay`) across viewports.\n  - Center the Tracked budget expenses empty state across all table columns on desktop and mobile.\n  - Style Add budget item, Record budget expense, and Customize allocation percentages modals with warm parchment surfaces, gold top accents, suggestion chips, live headroom/unallocated summaries, segmented percentage bar, and light/dark theme isolation.\n  - Add inline new-item fields, payment method selection, and the optional savings-deduction switch inside the expense modal.\n- Extend `tests/contracts.test.mjs` and refresh mobile bundle metadata (`version.json`, `js/version.js`):\n  - Verified `npm run mobile:prepare` (Version 1.0.20, Build #20) and `npm test` (154/154 passing)."
+  },
+  {
+    "date": "2026-11-17T00:04:44+08:00",
+    "message": "feat: sync budget expenses with IPON savings and align budget modals & layout\n\n- Add migration `20261116_096_budget_savings_deduction_sync.sql` and update `database/schema.sql`:\n  - Add `linked_expense_id`, `payment_method`, and `deduct_from_savings` to `public.budget_expenses`.\n  - Replace the 5-arg `save_budget_expense` overload with a unified 9-arg RPC supporting inline budget item creation and confirmed/pending `public.expenses` sync with savings headroom checks.\n  - Update `get_budget_overview`, `delete_budget_expense`, and `delete_budget_item` so IPON savings balances and voids stay synchronized across Dashboard, Calendar, Records, and Reports.\n- Redesign `budget.html`, `js/budget.js`, and `css/app.css`:\n  - Make Needs / Wants / Savings category cards and dashed empty-state containers equal height (`pantay`) across viewports.\n  - Center the Tracked budget expenses empty state across all table columns on desktop and mobile.\n  - Style Add budget item, Record budget expense, and Customize allocation percentages modals with warm parchment surfaces, gold top accents, suggestion chips, live headroom/unallocated summaries, segmented percentage bar, and light/dark theme isolation.\n  - Add inline new-item fields, payment method selection, and the optional savings-deduction switch inside the expense modal.\n- Extend `tests/contracts.test.mjs` and refresh mobile bundle metadata (`version.json`, `js/version.js`):\n  - Verified `npm run mobile:prepare` (Version 1.0.20, Build #20) and `npm test` (154/154 passing)."
+  },
+  {
+    "date": "2026-11-16T22:54:01+08:00",
+    "message": "not finish\n\n- Add Budget Allocation & Expenses page (budget.html, js/budget.js, migration 094) with hero allocation card, 3-bucket tracking, and non-destructive history\n- Restore reverted RPCs, RLS policies, and unlinked member cleanup in migration 095 and harden scripts/supabase-migrate.mjs against legacy replay\n- Fix dashboard group header/tracked savings sync, Solo quick-record fallback, Super Admin table wrapping, and localhost Service Worker caching (v18 / www sync)"
+  },
+  {
+    "date": "2026-11-16T21:13:42+08:00",
+    "message": "feat: remove Super Admin user role column, add multi-group overflow & Solo/Group workspaces"
+  },
+  {
+    "date": "2026-11-16T20:32:54+08:00",
+    "message": "Elevate floating chat/notif buttons, add Bug Report Fixed + AI release flow, clean Super Admin UI and stray group link\n\n- Elevate .app-sidebar (z-index 190), .dashboard-sidebar (z-index 190), .notification-dialog (z-index 185), and fixed [data-messages-open]/[data-notifications-open] controls (z-index 192) above workspace panels so scrolling never covers message or notification buttons (Pic 1).\n- Remove duplicated outer page headers on Super Admin Users, Bug reports, Feature requests, and Platform activity tabs, move Create administrator into the Users card header controls, and stack search full-width on mobile (Pic 2 & 3).\n- Add OPEN/FIXED status workflow and Open/Fixed/All segmented tabs to Bug reports via Migration 092 (public.review_bug_report RPC + status columns), notify reporters on fix, wire fixed unreported bugs into Write with AI release notes in manage-account Edge Function and create_announcement() release stamping.\n- Clean Brainier Garcia's unintended group_id and unlinked group_memberships row for Ipon namin ni prettyyynhic (Pic 4), while preserving restored profiles_select visibility from Migration 091 so new users and bug reporters appear cleanly with role badges instead of Former user.\n- Bump static asset cache versions, sync Capacitor mobile assets (build #20), deploy Migration 092 and manage-account to production Supabase, and pass all 149 contract tests."
+  },
+  {
+    "date": "2026-11-16T20:16:52+08:00",
+    "message": "Restore reverted RPCs, RLS policies, and missing memberships (Migration 091)\n\n- Add database/migrations/20261116_091_restore_reverted_rpcs_policies_and_memberships.sql (and sync database/schema.sql) to drop the 6 legacy overloaded RPC signatures, restore 21 drifted RPCs/triggers (including get_savings_summary and enforce_group_scope), re-assert strict execute ACLs, restore 9 reverted RLS SELECT policies (member visibility, multi-group groups_select, active savings_goals, profiles, account_activity), and backfill missing active group_memberships rows from profiles.\n- Add prominent warning header at top of database/schema.sql so partial legacy blocks are not re-executed on production.\n- Add regression contract test in tests/contracts.test.mjs and deploy Migration 091 to production Supabase (92 ledger entries, 0 pending)."
+  },
+  {
+    "date": "2026-11-16T19:37:21+08:00",
+    "message": "Fix feature request permission error, drop stale overloaded RPCs, and harden feedback forms\n\n- Migration 20261116_090: grant column-level INSERT on feature_requests.allow_credit (missing since migration 038) so authenticated users can submit feature requests without hitting PostgreSQL 42501 permission denied\n- Drop 6 stale short-argument RPC overloads in live DB (create_member, update_member, update_own_profile, update_contribution, update_expense, update_withdrawal) that risked overload ambiguity or lacked group isolation and exposed PUBLIC/anon execute privileges\n- Tighten stray PUBLIC/anon grants on set_contribution_setting, update_group_payment_info, get_group_payment_info, and client tables (group_memberships, record_comments, record_comment_reads, savings_calculator_plans, announcement_reactions, email_verifications)\n- Add trimmed length validation and session profile ID fallback to feature request and bug report forms in js/core.js\n- Update database/schema.sql, bump js/core.js cache-busters and sw.js (ipon-shell-v14), sync Capacitor mobile assets, and add contract checks in tests/contracts.test.mjs"
+  },
+  {
+    "date": "2026-11-16T17:31:19+08:00",
+    "message": "Standardize confirmation dialogs to warm-cream card with top gold accent and equal pill actions\n\n- Update .confirm-dialog in css/app.css (22px rounded #faf6ee card, 26px #b88c3e top accent rule, bold serif heading, equal 2-column button bar with #ffffff Cancel and #102420 forest-emerald primary button, plus dark-mode and <=720px responsive tuning)\n- Extend #confirm-dialog styling to secondary confirmation flows (.record-review-confirm-box, #record-action-step-confirm, #member-delete-confirm-step, #bulk-confirm-dialog, and #request-confirm-dialog in login.html)\n- Fix Ipon.confirmAction in js/core.js to support confirmLabel, confirmText, and cancelLabel in addition to acceptLabel\n- Bump HTML cache-busters, update sw.js shell cache to v13, add confirmation dialog style/runtime contract test in tests/contracts.test.mjs, and sync Capacitor assets"
+  },
+  {
+    "date": "2026-11-16T17:04:33+08:00",
+    "message": "System-wide DB & multi-role audit: restore 17 reverted live RPCs, harden enforce_group_scope, and fix role data/UI gaps\n\n- Migrations 088 & 089 (synced to database/schema.sql): restore 17 live Postgres RPCs and triggers that had drifted back to legacy 002/005/007 implementations (get_user_dashboard archival totals/streaks/exemptions/Manila timezone, admin_set_user_access treasurer & group_memberships sync, generate_contribution_periods activation_status & deleted_at filters, notify_record_activity, current_group_id MFA gate, handle_new_user, create_due_reminders, notify_new_member, notify_profile_access, record_account_activity, validated_name_part, and 6 super_admin_* RPCs).\n\n- Fix enforce_group_scope() using table- and operation-nested IF branches (preventing PL/pgSQL cross-table OLD/NEW field evaluation errors on inserts/updates) while restoring maintenance_archive_rollup, maintenance_bin_snapshot, maintenance_receipt_cleanup, activating_member_id, syncing_own_profile_user_id, and syncing_member_profile_id guards.\n\n- Add safe SECURITY DEFINER get_group_member_identities() RPC and upgrade get_pending_review_summary() so ADMIN, TREASURER, and MEMBER roles all load full group avatars and presence IDs without exposing private profile contact/payout fields; add account_activity, admin_requests, audit_logs, and financial_annual_archives to supabase_realtime.\n\n- Client & UI fixes (js/dashboard.js, js/records.js, js/audit.js, js/reports.js, js/settings.js, js/super-admin.js, withdrawals.html, expenses.html, css/app.css, sw.js): hide admin/treasurer-only withdrawal and expense forms from Member view while expanding history panels full-width, block unlinked Member submissions with the Group Required prompt, include archived_paid_amount in Member Spotlight totals, subscribe to remaining realtime tables, bump HTML cache-busters and service worker shell cache v12, sync Capacitor assets, add Migration 088-089 contract tests (145/145 passing), and verify live 4-role + lifecycle E2E probes on production Supabase."
+  },
+  {
+    "date": "2026-11-16T16:34:25+08:00",
+    "message": "Fix retention bugs, Member dashboard visibility, policy Back-button lock, and live realtime sync\n\n- Migrations 086 & 087 (synced to database/schema.sql): fix call_sessions retention cleanup (remove nonexistent created_at column), exempt backend cron maintenance from enforce_group_scope and set_updated_at when scrubbing expired rejected receipts, clean contribution_settings before purging abandoned suspended groups, drop 6 legacy overloaded RPC signatures, restore Super Admin flexible name & unchanged-name bypass in enforce_data_quality (fixes Last name is required on policy consent), restore Member group transparency (get_savings_summary + members/contributions/periods/expenses/withdrawals SELECT policies so Member dashboards show full group savings & calendar), and add group/ledger tables to supabase_realtime.\n\n- Policy & mobile Back-button lock (js/policy.js, js/core.js): prevent Android native Back (handleNativeBack) and mobile browser popstate/close/cancel from dismissing the mandatory Policy Consent dialog until agreed or signed out; restore forgotten/abandoned savings disclosures in js/policy.js and deduplicate account.html.\n\n- Live auto-refresh & reliability (js/core.js, js/dashboard.js, js/user.js, js/reports.js, manage-account Edge Function): trigger instant announcement and workspace refreshes from incoming realtime notifications, same-device BroadcastChannel sync, WebSocket reconnect recovery, and 20s visible fallback polling; fail loudly instead of masking null summary responses as ₱0.00; deploy updated manage-account and sync Capacitor assets (144/144 tests + live DB E2E probes passing)."
+  },
+  {
+    "date": "2026-11-16T15:38:50+08:00",
+    "message": "Sync Data & Storage Retention summary row and in-app vs email rules card\n\n- Update Data & storage retention subtitle in account.html and js/core.js to reflect active-savings protection, 30-day Bin, 90-day reminders, and 6-month rules.\n- Add dedicated In-app alerts vs. Email delivery card inside openRetentionPolicyDialog (js/policy.js).\n- Bump cache-busted script tags across HTML pages, sync Capacitor mobile assets, and verify 143/143 tests pass."
+  },
+  {
+    "date": "2026-11-16T15:31:41+08:00",
+    "message": "Add automated email reminders and 6-month retention lifecycle for forgotten savings and goals\n\n- Add Migration 085 (database/schema.sql sync): track per-group savings_inactivity_reminded_at and savings_retention_warned_at (filtered from Audit Log noise), compute last savings/goal activity via group_last_savings_activity_at, send 90-day check-in reminders and 6-month 7-day prior warnings via collect_dormant_savings_groups, and automatically move abandoned savings & untouched goals to the 30-day Recycle Bin via snapshot_and_clear_group_savings_to_bin before permanent DB + Storage purge.\n- Update manage-account retention-cron Edge Function to email active savers/admins at 90 days idle and 7 days prior to 6 months, reset flags cleanly if delivery fails, and execute move_dormant_savings_group_to_bin after the 7-day grace window.\n- Update Terms of Use, Privacy Policy, in-app Retention Rules modal (login.html & js/policy.js), and Goals notice (savings.html) to document abandoned savings email reminders and 30-day Bin transition, sync mobile bundles, verify 143/143 tests, and apply live to Supabase."
+  },
+  {
+    "date": "2026-11-16T15:14:36+08:00",
+    "message": "Fix Supabase auto-sync task popup and prevent release-commits.json dirty loop\n\n- Stop scripts/supabase-migrate.mjs --sync from rewriting js/release-commits.json automatically on every IDE open/sync (now gated behind --sync-feed), and handle offline network errors gracefully in --sync mode.\n- Set close/echo/showReuseMessage presentation flags in .vscode/tasks.json so Supabase Auto-Sync on Open closes cleanly without leaving a stuck task tab.\n- Sync current release-commits.json feed and ensure working tree stays clean after npm run supabase:sync."
+  },
+  {
     "date": "2026-11-16T15:07:22+08:00",
     "message": "Restore migration 084 test suite and verify in-app notification & Support myIPON contracts\n\n- Restore the complete migration 084 contract & runtime test block alongside assertions verifying in-app-only notification delivery, email reservation scope, Device & in-app alerts UI label, and Support myIPON branding across account and donate views."
   },
@@ -118,65 +178,5 @@
   {
     "date": "2026-11-14T19:03:14+08:00",
     "message": "Add background push notifications, formal name validation, discussion media attachments, and UI refinements\n\nRecord discussions now support lossless file, photo, and video attachments via signed upload and view URLs (migration 061), track read state so unread count badges clear once opened (migration 062), fire replaceable comment notifications (migration 060), and always expose the Discuss button on contribution records including confirmed and void entries.\nClosed-app notifications are enabled through VAPID Web Push delivery with the send-push Edge Function and push subscriptions schema (migration 063, sw.js), alongside native Android background sync via NotificationSyncService, NotificationSyncWorker, BackgroundNotificationsPlugin, and NotificationPollReceiver. Permission handling now checks both OS and browser states live, provides Android settings shortcuts and unblock instructions with recheck support, and uses clear On, Turn on, and Blocked labels.\nAccount and form workflows now enforce formal name capitalization with live validation across signup, account, member, treasurer, and administrator forms, and require optional-name link invites to complete their name immediately after sign-in (migration 064, manage-account). Additional UI refinements hide the excess carry-over toggle unless entered payments exceed the monthly due, restrict the ADMIN badge to group contexts, align the sidebar Sign out button, and remove the redundant green progress bar under Collected this month. All updates are covered by tests/contracts.test.mjs with 103/103 passing on npm test."
-  },
-  {
-    "date": "2026-11-14T17:36:19+08:00",
-    "message": "Fix void/review dialog confirmation and add calendar payment methods plus multi-status day icons"
-  },
-  {
-    "date": "2026-11-14T17:09:21+08:00",
-    "message": "Add wallet reconciliation, payout accounts, record discussion threads, and UI polish"
-  },
-  {
-    "date": "2026-11-14T14:46:05+08:00",
-    "message": "Add sectioned release announcement rendering and composer formatting"
-  },
-  {
-    "date": "2026-11-14T14:33:44+08:00",
-    "message": "Keep Add group action visible to members, align HTML CSP, and sync Edge Function cache"
-  },
-  {
-    "date": "2026-11-14T14:27:42+08:00",
-    "message": "Guard audit_logs group_id on group deletion and transfer"
-  },
-  {
-    "date": "2026-11-14T14:23:27+08:00",
-    "message": "Add group ownership transfer and permanent deletion flow"
-  },
-  {
-    "date": "2026-11-14T14:14:18+08:00",
-    "message": "Start group creation without pre-opened invite row and fix enforce_group_scope old.amount"
-  },
-  {
-    "date": "2026-11-14T14:08:55+08:00",
-    "message": "Restore self-serve admin_create_group for non-admin users"
-  },
-  {
-    "date": "2026-11-14T14:02:36+08:00",
-    "message": "Make release AI and composer read live repo commits and prior releases"
-  },
-  {
-    "date": "2026-11-14T13:56:14+08:00",
-    "message": "Deduplicate and replace announcement reaction notifications"
-  },
-  {
-    "date": "2026-11-14T13:49:11+08:00",
-    "message": "Block recording without a group and show premium join/create group prompt"
-  },
-  {
-    "date": "2026-11-14T13:35:26+08:00",
-    "message": "Make empty-group welcome banner compact, full-width, and clutter-free"
-  },
-  {
-    "date": "2026-11-14T13:31:33+08:00",
-    "message": "Render release feature credits with requester avatar and name pill"
-  },
-  {
-    "date": "2026-11-14T13:27:07+08:00",
-    "message": "Fix Postgrest builder .catch() TypeError during login and init"
-  },
-  {
-    "date": "2026-11-14T13:21:12+08:00",
-    "message": "Auto-sync Supabase migrations and Edge Functions on IDE open and changes"
   }
 ]
