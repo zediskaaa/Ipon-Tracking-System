@@ -39,6 +39,7 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
   const webhookSecret = Deno.env.get('PUSH_WEBHOOK_SECRET') || '';
   const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY') || '';
   const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY') || '';
@@ -208,7 +209,9 @@ Deno.serve(async (req) => {
     }
   }
 
+  let nativeHasToken = false;
   let nativePingSent = false;
+  let nativePingStatus = 0;
   try {
     const { data: feedRow } = await admin
       .from('notification_feed_tokens')
@@ -217,28 +220,55 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (feedRow?.token) {
-      const broadcastRes = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              topic: `notif-wake:${feedRow.token}`,
-              event: 'wake',
-              payload: isTest
-                ? { ts: Date.now(), test: true, title, message, link }
-                : { ts: Date.now(), notification_id: notifId }
-            }
-          ]
-        })
+      nativeHasToken = true;
+      const wakeBody = JSON.stringify({
+        messages: [
+          {
+            topic: `notif-wake:${feedRow.token}`,
+            event: 'wake',
+            payload: isTest
+              ? { ts: Date.now(), test: true, title, message, link }
+              : { ts: Date.now(), notification_id: notifId }
+          }
+        ]
       });
-      nativePingSent = broadcastRes.ok;
+      const authCandidates = [...new Set([serviceKey, anonKey].filter(Boolean))];
+      for (const apiKey of authCandidates) {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          apikey: apiKey
+        };
+        if (apiKey.split('.').length === 3) {
+          headers.Authorization = `Bearer ${apiKey}`;
+        }
+        const broadcastRes = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+          method: 'POST',
+          headers,
+          body: wakeBody
+        });
+        nativePingStatus = broadcastRes.status;
+        if (broadcastRes.ok) {
+          nativePingSent = true;
+          break;
+        }
+        const errText = await broadcastRes.text().catch(() => '');
+        console.error('send-push broadcast attempt failed', broadcastRes.status, errText);
+      }
+      if (!nativePingSent) {
+        try {
+          const ch = admin.channel(`notif-wake:${feedRow.token}`);
+          const httpRes = await ch.httpSend('wake', isTest
+            ? { ts: Date.now(), test: true, title, message, link }
+            : { ts: Date.now(), notification_id: notifId });
+          nativePingSent = Boolean(httpRes?.success);
+          await admin.removeChannel(ch).catch(() => { });
+        } catch (chErr) {
+          console.error('send-push httpSend fallback failed', chErr);
+        }
+      }
     }
-  } catch {
+  } catch (err) {
+    console.error('send-push native wake error', err);
     nativePingSent = false;
   }
 
@@ -247,7 +277,9 @@ Deno.serve(async (req) => {
     web_total: webTotal,
     web_sent: webSent,
     web_failed: webFailed,
-    native_ping_sent: nativePingSent
+    native_has_token: nativeHasToken,
+    native_ping_sent: nativePingSent,
+    native_ping_status: nativePingStatus
   });
 });
 

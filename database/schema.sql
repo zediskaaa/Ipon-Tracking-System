@@ -12933,7 +12933,8 @@ begin
     if old.read_at is null
        and new.title is not distinct from old.title
        and new.message is not distinct from old.message
-       and new.link is not distinct from old.link then
+       and new.link is not distinct from old.link
+       and new.created_at is not distinct from old.created_at then
       return new;
     end if;
   end if;
@@ -12982,7 +12983,7 @@ $$;
 
 drop trigger if exists notifications_push_dispatch on public.notifications;
 create trigger notifications_push_dispatch
-after insert or update of title, message, link, read_at on public.notifications
+after insert or update of title, message, link, read_at, created_at on public.notifications
 for each row execute function public.enqueue_notification_push();
 
 insert into public.schema_migrations (version, name)
@@ -13695,7 +13696,8 @@ begin
     if old.read_at is null
        and new.title is not distinct from old.title
        and new.message is not distinct from old.message
-       and new.link is not distinct from old.link then
+       and new.link is not distinct from old.link
+       and new.created_at is not distinct from old.created_at then
       return new;
     end if;
   end if;
@@ -13744,7 +13746,7 @@ $$;
 
 drop trigger if exists notifications_push_dispatch on public.notifications;
 create trigger notifications_push_dispatch
-after insert or update of title, message, link, read_at on public.notifications
+after insert or update of title, message, link, read_at, created_at on public.notifications
 for each row execute function public.enqueue_notification_push();
 
 insert into public.schema_migrations (version, name)
@@ -19668,7 +19670,8 @@ insert into public.schema_migrations (version, name)
 values
   ('20261115_076', 'messaging and social connection system'),
   ('20261115_077', 'messaging delivery vs read receipt states'),
-  ('20261115_078', 'filter audit log to governance and financial events')
+  ('20261115_078', 'filter audit log to governance and financial events'),
+  ('20261116_079', 'dispatch background push whenever unread deduped notification refreshes created_at')
 on conflict (version) do nothing;
 
 commit;

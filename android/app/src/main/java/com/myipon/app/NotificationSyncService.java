@@ -15,6 +15,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import androidx.annotation.NonNull;
@@ -38,6 +39,10 @@ public class NotificationSyncService extends Service {
     private static final long MAX_RETRY_MS = 60_000L;
 
     private static volatile boolean running = false;
+    private static volatile boolean wsConnected = false;
+    private static volatile long lastWsActivityElapsedMs = 0L;
+    private static volatile boolean stoppedIntentionally = false;
+    private static volatile NotificationSyncService activeInstance = null;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final AtomicInteger refSeq = new AtomicInteger(1);
@@ -62,23 +67,51 @@ public class NotificationSyncService extends Service {
         return running;
     }
 
+    public static boolean isWsConnected() {
+        return running && wsConnected;
+    }
+
     public static void ensureStarted(Context context) {
         Context appContext = context.getApplicationContext();
         if (!NotificationPollReceiver.shouldRunInstantSync(appContext)) {
             stop(appContext);
             return;
         }
+        stoppedIntentionally = false;
         try {
             Intent intent = new Intent(appContext, NotificationSyncService.class);
             ContextCompat.startForegroundService(appContext, intent);
-        } catch (Throwable ignored) {
-            // Android 12+ may restrict starting FGS from certain background contexts;
-            // WorkManager + AlarmManager fallback continues polling safely.
+        } catch (Throwable err) {
+            appContext.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putString("last_service_error", err.getMessage() != null ? err.getMessage() : err.getClass().getSimpleName())
+                .apply();
         }
+    }
+
+    public static void pokeOrReconnect(Context context) {
+        NotificationSyncService svc = activeInstance;
+        if (svc == null || svc.destroyed) {
+            if (context != null && canStartFromBackground(context)) {
+                ensureStarted(context);
+            }
+            return;
+        }
+        svc.handler.post(() -> {
+            if (svc.destroyed) return;
+            long age = SystemClock.elapsedRealtime() - lastWsActivityElapsedMs;
+            if (svc.activeSocket == null || !wsConnected || lastWsActivityElapsedMs == 0L || age > 40_000L) {
+                svc.connectSocket(true);
+            } else {
+                NotificationPollReceiver.pollAsync(svc.getApplicationContext());
+            }
+        });
     }
 
     public static void stop(Context context) {
         Context appContext = context.getApplicationContext();
+        stoppedIntentionally = true;
+        wsConnected = false;
         try {
             appContext.stopService(new Intent(appContext, NotificationSyncService.class));
         } catch (Throwable ignored) {
@@ -122,6 +155,8 @@ public class NotificationSyncService extends Service {
         super.onCreate();
         destroyed = false;
         running = true;
+        wsConnected = false;
+        activeInstance = this;
         wsClient = new OkHttpClient.Builder()
             .connectTimeout(12, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
@@ -145,7 +180,7 @@ public class NotificationSyncService extends Service {
         );
 
         Notification persistent = new NotificationCompat.Builder(appContext, NotificationPollReceiver.SYNC_CHANNEL_ID)
-            .setSmallIcon(appContext.getApplicationInfo().icon)
+            .setSmallIcon(R.drawable.ic_stat_myipon)
             .setColor(0xFF0B3428)
             .setContentTitle("myIPON")
             .setContentText("Instant background alerts active")
@@ -163,7 +198,15 @@ public class NotificationSyncService extends Service {
             } else {
                 startForeground(FOREGROUND_NOTIF_ID, persistent);
             }
-        } catch (Throwable ignored) {
+            appContext.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .remove("last_service_error")
+                .apply();
+        } catch (Throwable err) {
+            appContext.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putString("last_service_error", err.getMessage() != null ? err.getMessage() : err.getClass().getSimpleName())
+                .apply();
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -172,16 +215,18 @@ public class NotificationSyncService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        stoppedIntentionally = false;
 
         SharedPreferences prefs = appContext.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, MODE_PRIVATE);
         String nextToken = prefs.getString("feed_token", "");
         boolean tokenChanged = !TextUtils.equals(currentFeedToken, nextToken);
         currentFeedToken = nextToken == null ? "" : nextToken;
 
-        if (activeSocket == null || tokenChanged) {
+        if (activeSocket == null || !wsConnected || tokenChanged) {
             connectSocket(false);
         }
         NotificationPollReceiver.pollAsync(appContext);
+        NotificationPollReceiver.scheduleNext(appContext, NotificationPollReceiver.recommendedPollIntervalMs(appContext));
         NotificationSyncWorker.ensureScheduled(appContext);
         return START_STICKY;
     }
@@ -193,6 +238,7 @@ public class NotificationSyncService extends Service {
         if (NotificationPollReceiver.shouldRunInstantSync(appContext)) {
             NotificationPollReceiver.scheduleNext(appContext, 15_000L);
             NotificationSyncWorker.ensureScheduled(appContext);
+            NotificationPollReceiver.scheduleServiceRestart(appContext, 2_500L);
         }
     }
 
@@ -200,12 +246,22 @@ public class NotificationSyncService extends Service {
     public void onDestroy() {
         destroyed = true;
         running = false;
+        wsConnected = false;
+        if (activeInstance == this) {
+            activeInstance = null;
+        }
         handler.removeCallbacks(heartbeatRunnable);
         handler.removeCallbacks(reconnectRunnable);
         unregisterNetworkObserver();
         closeActiveSocket();
         if (wsClient != null) {
             wsClient.dispatcher().executorService().shutdown();
+        }
+        Context appContext = getApplicationContext();
+        if (!stoppedIntentionally && NotificationPollReceiver.shouldRunInstantSync(appContext)) {
+            NotificationPollReceiver.scheduleNext(appContext, 15_000L);
+            NotificationSyncWorker.ensureScheduled(appContext);
+            NotificationPollReceiver.scheduleServiceRestart(appContext, 2_500L);
         }
         super.onDestroy();
     }
@@ -268,6 +324,12 @@ public class NotificationSyncService extends Service {
             @Override
             public void onOpen(@NonNull WebSocket webSocket, @NonNull Response response) {
                 retryDelayMs = INITIAL_RETRY_MS;
+                wsConnected = true;
+                lastWsActivityElapsedMs = SystemClock.elapsedRealtime();
+                appContext.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, MODE_PRIVATE)
+                    .edit()
+                    .remove("last_ws_error")
+                    .apply();
                 try {
                     JSONObject broadcastCfg = new JSONObject();
                     broadcastCfg.put("ack", false);
@@ -290,6 +352,7 @@ public class NotificationSyncService extends Service {
                 }
 
                 handler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS);
+                NotificationPollReceiver.scheduleNext(appContext, NotificationPollReceiver.recommendedPollIntervalMs(appContext));
                 if (alsoPoll) {
                     NotificationPollReceiver.pollAsync(appContext);
                 }
@@ -297,12 +360,14 @@ public class NotificationSyncService extends Service {
 
             @Override
             public void onMessage(@NonNull WebSocket webSocket, @NonNull String text) {
+                lastWsActivityElapsedMs = SystemClock.elapsedRealtime();
                 try {
                     JSONObject frame = new JSONObject(text);
                     String event = frame.optString("event", "");
                     JSONObject payload = frame.optJSONObject("payload");
                     if ("phx_error".equals(event) || "phx_close".equals(event)
                         || ("phx_reply".equals(event) && payload != null && "error".equals(payload.optString("status", "")))) {
+                        wsConnected = false;
                         handler.removeCallbacks(heartbeatRunnable);
                         if (activeSocket == webSocket) activeSocket = null;
                         try {
@@ -326,17 +391,34 @@ public class NotificationSyncService extends Service {
 
                     if (!isWake) return;
 
-                    if (innerPayload != null && innerPayload.optBoolean("test", false)) {
-                        NotificationPollReceiver.showDirectNotification(
-                            appContext,
-                            "test-" + System.currentTimeMillis(),
-                            "MYIPON_TEST_ALERT",
-                            innerPayload.optString("title", "myIPON background alerts ready"),
-                            innerPayload.optString("message", "Notifications arrive on this device even when myIPON is closed."),
-                            innerPayload.optString("link", "account.html")
-                        );
-                    } else {
-                        NotificationPollReceiver.pollAsync(appContext);
+                    PowerManager pm = (PowerManager) appContext.getSystemService(Context.POWER_SERVICE);
+                    PowerManager.WakeLock wakeLock = pm != null
+                        ? pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "myipon:ws-wake")
+                        : null;
+                    if (wakeLock != null) {
+                        wakeLock.setReferenceCounted(false);
+                        wakeLock.acquire(12_000L);
+                    }
+                    try {
+                        if (innerPayload != null && innerPayload.optBoolean("test", false)) {
+                            NotificationPollReceiver.showDirectNotification(
+                                appContext,
+                                "test-" + System.currentTimeMillis(),
+                                "MYIPON_TEST_ALERT",
+                                innerPayload.optString("title", "myIPON background alerts ready"),
+                                innerPayload.optString("message", "Notifications arrive on this device even when myIPON is closed."),
+                                innerPayload.optString("link", "account.html")
+                            );
+                        } else {
+                            NotificationPollReceiver.pollWithWakeLock(appContext);
+                        }
+                    } finally {
+                        if (wakeLock != null && wakeLock.isHeld()) {
+                            try {
+                                wakeLock.release();
+                            } catch (Exception ignored) {
+                            }
+                        }
                     }
                 } catch (Exception ignored) {
                 }
@@ -344,13 +426,19 @@ public class NotificationSyncService extends Service {
 
             @Override
             public void onFailure(@NonNull WebSocket webSocket, @NonNull Throwable t, @Nullable Response response) {
+                wsConnected = false;
                 if (activeSocket == webSocket) activeSocket = null;
                 handler.removeCallbacks(heartbeatRunnable);
+                appContext.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, MODE_PRIVATE)
+                    .edit()
+                    .putString("last_ws_error", t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName())
+                    .apply();
                 scheduleReconnect();
             }
 
             @Override
             public void onClosed(@NonNull WebSocket webSocket, int code, @NonNull String reason) {
+                wsConnected = false;
                 if (activeSocket == webSocket) activeSocket = null;
                 handler.removeCallbacks(heartbeatRunnable);
                 if (!destroyed && code != 1000) {
@@ -373,7 +461,8 @@ public class NotificationSyncService extends Service {
                     handler.post(() -> {
                         if (destroyed) return;
                         retryDelayMs = INITIAL_RETRY_MS;
-                        if (activeSocket == null) {
+                        long age = SystemClock.elapsedRealtime() - lastWsActivityElapsedMs;
+                        if (activeSocket == null || !wsConnected || lastWsActivityElapsedMs == 0L || age > 40_000L) {
                             connectSocket(true);
                         } else {
                             NotificationPollReceiver.pollAsync(getApplicationContext());

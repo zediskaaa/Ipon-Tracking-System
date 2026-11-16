@@ -1,5 +1,29 @@
 [
   {
+    "date": "2026-11-16T03:09:09+08:00",
+    "message": "Fix full-width voice waveforms, background prompt buttons, and instant sent voice playback\n\n- Stretch chat voice-note waveforms cleanly across the full player width (`VOICE_WAVE_HEIGHTS` 36 bars + `justify-content: space-between; gap: 1.5px` on `.msg-voice-wave` in `css/app.css` and `js/messages.js`) to eliminate the trailing right gap on mobile and desktop.\n- Prevent mobile vertical stretching on `#background-usage-prompt-dialog` buttons (`.bg-usage-actions .button` resets `flex: 0 0 auto; min-height: 44px;`) and add high-contrast `.is-busy` spinner feedback (`Allowing…` / `Checking…`, `.button.is-busy:disabled { opacity: .92; cursor: wait; }`) in `js/core.js` and `css/app.css`.\n- Generate local `blob:` preview URLs immediately for recorded voice messages and picked audio files so newly sent voice notes render and play without waiting on `chat-view-urls`.\n- Track signed-URL readiness in `computeThreadFingerprint`, bypass in-place thread patching while `.msg-att-loading` placeholders exist, and add bounded retry recovery via `scheduleMissingSignedUrls` in `js/messages.js`.\n- Bump `app.css`, `core.js`, and `messages.js` cache-busters across all HTML pages, sync Capacitor mobile assets (`js/version.js`, `version.json`), and add contract/VM test coverage in `tests/contracts.test.mjs`."
+  },
+  {
+    "date": "2026-11-16T02:33:34+08:00",
+    "message": "Mic App\n\nTest if okay na"
+  },
+  {
+    "date": "2026-11-16T02:01:11+08:00",
+    "message": "Fix chat drawer overlap, inline peer status, presence dot sizing, native VM mic prompt, and dashboard offline UI\n\n- Enlarge .presence-dot across avatar tiers with theme-matched header borders in css/app.css.\n- Restructure #msg-thread-active and .msg-thread-drawer in js/messages.js and css/app.css so Chat Info & Options spans full pane height on desktop and overlays above the pinned banner on tablet/mobile.\n- Move the active/typing status line next to the Friend badge inside .msg-thread-peer-sub without wrapping or horizontal overflow.\n- Keep launch startup limited to notifications in MainActivity.java, trigger Android's system Microphone permission dialog on demand when recording voice messages via BackgroundNotificationsPlugin.java, detect outdated APK binaries lacking RECORD_AUDIO in js/messages.js, and redirect to App Settings only after permanent denial.\n- Remove the stale-snapshot warning banner from js/dashboard.js on refresh errors when data is already loaded, and verify logo-free offline fallback assets via npm run mobile:sync.\n- Bump CSS/JS cache-busters across HTML pages and expand runtime/contract coverage in tests/contracts.test.mjs."
+  },
+  {
+    "date": "2026-11-16T01:34:31+08:00",
+    "message": "Remove automatic push update notifications and APK download buttons\n\n- Stop synthesizing persistent `system-app-release-notice` alerts on mobile in `initNotifications()` (`js/core.js`) so release notifications only appear when explicitly announced via database records and mark read cleanly.\n- Remove `Download APK` buttons, action links, and download-prompt copy from notification items, `openNoticeDetailModal()`, and the release announcement viewer banner.\n- Bump `js/core.js?v=20261115-91` across all 16 HTML pages, sync Capacitor bundle metadata (`version.json` / `js/version.js` 1.0.20 build 20), and add runtime contract coverage in `tests/contracts.test.mjs` (133/133 passing)."
+  },
+  {
+    "date": "2026-11-16T01:23:24+08:00",
+    "message": "Redesign Chat Info drawer, Messaging & Privacy modal, and full-column chat themes\n\n- Chat Info & Options drawer (js/messages.js, css/app.css):\n  - Rebuild the drawer header with a circular close button, centered gold-ringed hero avatar without presence overlap, 2-column outline-icon chat action cards, 5 circular theme swatches with check indicators, and Shared media / Shared files navigation cards with count pills.\n  - Preserve Shared media and Shared files drill-down views and Back navigation.\n- Messaging & Privacy modal (js/messages.js, css/app.css):\n  - Apply a responsive 2-column top form layout with non-shifting username validation, live `0 / 240 characters` bio counter, 3 soft-mint toggle cards, busy-safe Save button styling, and a separated Blocked accounts footer with count badge and empty shield state.\n  - Guard `dialog.showModal()` calls against re-opening an already open dialog.\n- Full-column chat themes (js/messages.js, css/app.css):\n  - Sync `data-chat-theme` (Paper, Emerald, Sage, Sand, Midnight) across both `#msg-thread-pane` and `#msg-thread-stage` via `--thread-*` CSS variables so the top header, search bar, pinned banner/pill/panel, stage, and bottom composer update together in Light and Dark modes, with optimistic UI updates and reset when closing or clearing a thread.\n- Verification & build sync:\n  - Bump CSS and `js/messages.js` cache-buster parameters across the 16 HTML pages, sync Capacitor metadata (`version.json` / `js/version.js` 1.0.20 build 20), and pass all 132 contract checks in `tests/contracts.test.mjs`."
+  },
+  {
+    "date": "2026-11-16T01:01:46+08:00",
+    "message": "Fix messaging back stack, Sent/Delivered/Seen receipts, video viewer, and reaction flicker\n\n- Handle Android hardware Back step by step through window.Ipon.handleNativeBack() and IponMessages.handleBackNavigation() (menus -> viewers/modals -> info drawer -> thread search -> chat list -> inbox tab -> dashboard -> exit) before falling back to native exit.\n- Separate outgoing message receipt states cleanly: 1 gray check for Sent, 2 gray checks for Delivered, and 2 green checks for Seen, and guard isThreadActivelyVisible() with document.hasFocus(), window focus/blur listeners, MainActivity.onWindowFocusChanged(), <= 820px compact-pane checks, and overlay/drawer occlusion checks so incoming notifications never prematurely trigger mark_conversation_read.\n- Add SVG preview posters with probed aspect-ratio locking for inline chat and Shared Media videos, suppress native <video controls>, and route fullscreen playback through the custom #ipon-video-viewer dock (Ipon.openVideoViewer) with download support.\n- Patch message reactions and receipt ticks in place (patchMessageReactionsDom, patchMessageReceiptsDom, tryPatchActiveThreadInPlace) with overflow-anchor: auto so reacting on video messages never resets thread DOM or flickers.\n- Sync mobile assets (npm run mobile:sync), bump HTML cache-busters (css/app.css, js/core.js, js/messages.js), and verify all 131 tests in tests/contracts.test.mjs pass."
+  },
+  {
     "date": "2026-11-16T00:01:54+08:00",
     "message": "Add mobile background usage controls, voice mic access, pinch-zoom viewer, and offline fixes\n\n- Add background usage & device alert controls inside My account (modal and account.html) with live status pills, settings fallbacks, and an automatic onboarding prompt for new APK users so closed-app messages and alerts keep arriving.\n- Harden native Android background sync on resume and battery-optimization request fallbacks across MainActivity and BackgroundNotificationsPlugin.\n- Request microphone permissions on first install and voice-message tap across Android, iOS, and WebView with clean settings recovery guidance.\n- Upgrade the chat image viewer to edge-to-edge pinch-to-zoom and pan with working native DownloadManager/MediaStore and blob downloads.\n- Default the mobile Messages launcher to Chats, close open thread overlays when switching to Requests, map offline/fetch errors to user-friendly messages, and remove the broken offline logo image.\n- Sync mobile assets, bump HTML asset cache-busters, and expand automated checks in tests/contracts.test.mjs."
   },
@@ -154,29 +178,5 @@
   {
     "date": "2026-11-14T12:38:31+08:00",
     "message": "Implement workflow, reporting, member UX, cycle archive, storage cleanup, and offline enhancements"
-  },
-  {
-    "date": "2026-11-14T12:17:31+08:00",
-    "message": "Polish mobile UI, group switchers, notifications, versioning, and Super Admin navigation"
-  },
-  {
-    "date": "2026-11-14T12:02:08+08:00",
-    "message": "Fix oversized stacked buttons on mobile settings and savings pages"
-  },
-  {
-    "date": "2026-11-14T11:59:46+08:00",
-    "message": "Notify Super Admin and authors on announcement reactions"
-  },
-  {
-    "date": "2026-11-14T11:53:31+08:00",
-    "message": "Make login myIPON brand link to landing page"
-  },
-  {
-    "date": "2026-11-14T11:52:13+08:00",
-    "message": "Remove tracking note from login page"
-  },
-  {
-    "date": "2026-11-14T03:19:04+08:00",
-    "message": "Revert back to 3ad6e5f where dashboard and app worked cleanly"
   }
 ]

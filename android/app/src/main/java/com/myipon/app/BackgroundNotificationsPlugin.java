@@ -81,6 +81,7 @@ public class BackgroundNotificationsPlugin extends Plugin {
         }
 
         NotificationSyncService.ensureStarted(context);
+        NotificationSyncService.pokeOrReconnect(context);
         NotificationSyncWorker.ensureScheduled(context);
         NotificationPollReceiver.scheduleNext(context, 20_000L);
         call.resolve();
@@ -132,6 +133,7 @@ public class BackgroundNotificationsPlugin extends Plugin {
     @PluginMethod
     public void getBackgroundStatus(PluginCall call) {
         Context context = getContext();
+        SharedPreferences prefs = context.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, Context.MODE_PRIVATE);
         boolean hasPerm = NotificationPollReceiver.hasNotificationPermission(context);
         boolean batteryIgnored = NotificationPollReceiver.isBatteryOptimizationIgnored(context);
         boolean micManifestDeclared = hasManifestPermission(context, Manifest.permission.RECORD_AUDIO);
@@ -145,6 +147,12 @@ public class BackgroundNotificationsPlugin extends Plugin {
         result.put("micPermissionGranted", micPermissionGranted);
         result.put("instantSyncEnabled", NotificationPollReceiver.isInstantSyncEnabled(context));
         result.put("instantSyncRunning", NotificationSyncService.isRunning());
+        result.put("wsConnected", NotificationSyncService.isWsConnected());
+        result.put("hasFeedConfig", NotificationPollReceiver.hasFeedConfig(context));
+        result.put("lastPollHttpCode", prefs.getInt("last_poll_http_code", 0));
+        result.put("lastPollError", prefs.getString("last_poll_error", ""));
+        result.put("lastServiceError", prefs.getString("last_service_error", ""));
+        result.put("lastWsError", prefs.getString("last_ws_error", ""));
         result.put("androidSdk", Build.VERSION.SDK_INT);
         call.resolve(result);
     }

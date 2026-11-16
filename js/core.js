@@ -3905,7 +3905,7 @@
     }
     if (status === 'granted' && currentProfile?.notifications_enabled !== false) {
       lastBgPollSyncAt = 0;
-      await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+      await syncBackgroundNotificationPolling(currentProfile, [], { force: true }).catch(() => { });
       await syncWebPushSubscription({ force: true }).catch(() => { });
     }
     await syncDevicePermissionUI();
@@ -4068,7 +4068,11 @@
           && currentProfile.notifications_enabled !== false
           && status === 'granted'
           && snap?.isApp
-          && snap?.nativeBgStatus?.instantSyncRunning === false
+          && (
+            snap?.nativeBgStatus?.instantSyncRunning === false
+            || snap?.nativeBgStatus?.wsConnected === false
+            || snap?.nativeBgStatus?.hasFeedConfig === false
+          )
         );
         if (wasNotGranted && status === 'granted') {
           await requestDeviceNotificationPermission({ userInitiated: false }).catch(() => { });
@@ -4115,9 +4119,13 @@
           try {
             const result = await sendBackgroundTestNotification();
             if (isInstalledAppUser()) {
-              toast(result?.native_ping_sent
-                ? 'Test alert sent to your Android notification drawer.'
-                : 'Test alert requested. Check your notification drawer.');
+              if (result?.native_ping_sent) {
+                toast('Test alert sent to your Android notification drawer.');
+              } else if (result?.native_has_token === false) {
+                toast('Background feed token is not registered yet. Reopen My account or sign in again.', 'error');
+              } else {
+                toast('Test alert requested. Check your notification drawer.');
+              }
             } else if (result?.web_sent > 0) {
               toast('Background push test sent. Alerts now work even when myIPON is closed.');
             } else {
@@ -4270,7 +4278,7 @@
     lastBgPollSyncAt = 0;
     lastWebPushSyncAt = 0;
     if (enabled) {
-      await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
+      await syncBackgroundNotificationPolling(currentProfile, [], { force: true }).catch(() => { });
       await syncWebPushSubscription({ force: true }).catch(() => { });
     } else {
       await rpc('revoke_notification_feed_token').catch(() => { });
@@ -5123,7 +5131,11 @@
 
     const load = async (realtimePayload) => {
       const { data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,dedupe_key,read_at,created_at').order('created_at', { ascending: false }).limit(40);
-      if (error) { showInlineError(list, error, load); return; }
+      if (error) {
+        syncBackgroundNotificationPolling(profile).catch(() => { });
+        showInlineError(list, error, load);
+        return;
+      }
       const rows = data || [];
 
       if (realtimePayload?.eventType !== 'DELETE' && realtimePayload?.new?.id) {

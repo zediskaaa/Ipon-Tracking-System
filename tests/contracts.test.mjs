@@ -9023,7 +9023,7 @@ test('voice waveform fills full width, background prompt buttons avoid vertical 
     setRequestHeader() { }
     send() { this.status = 200; this.onload?.(); }
   }
-  class MockURL extends URL {}
+  class MockURL extends URL { }
   MockURL.createObjectURL = () => 'blob:own-voice-instant';
   MockURL.revokeObjectURL = () => { };
   const msgCtx = {
@@ -9074,4 +9074,47 @@ test('voice waveform fills full width, background prompt buttons avoid vertical 
   assert.match(listEl.innerHTML, /src="blob:own-voice-instant"/);
   assert.doesNotMatch(listEl.innerHTML, /Loading voice note/);
   assert.equal(viewUrlCalls, callsBeforeOwnSend);
+});
+
+test('non-FCM Android background sync uses vector icon, JWT-safe REST polling, exact/restart wakeups, and multi-key Edge broadcast', () => {
+  const migration079 = read('database/migrations/20261116_079_fix_background_push_dispatch.sql');
+  const schema = read('database/schema.sql');
+  const sendPush = read('supabase/functions/send-push/index.ts');
+  const coreJs = read('js/core.js');
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
+  const statIcon = read('android/app/src/main/res/drawable/ic_stat_myipon.xml');
+  const pollReceiver = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
+  const syncService = read('android/app/src/main/java/com/myipon/app/NotificationSyncService.java');
+  const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
+
+  assert.match(migration079, /after insert or update of title, message, link, read_at, created_at/i);
+  assert.match(migration079, /new\.created_at is not distinct from old\.created_at/i);
+  assert.match(migration079, /'20261116_079'/);
+  assert.match(schema, /after insert or update of title, message, link, read_at, created_at/i);
+  assert.match(schema, /'20261116_079'/);
+
+  assert.match(sendPush, /Deno\.env\.get\('SUPABASE_ANON_KEY'\)/);
+  assert.match(sendPush, /apiKey\.split\('\.'\)\.length === 3/);
+  assert.match(sendPush, /httpSend\('wake'/);
+  assert.match(sendPush, /native_has_token:/);
+
+  assert.match(statIcon, /<vector[^>]*android:width="24dp"/);
+  assert.match(manifest, /SCHEDULE_EXACT_ALARM[^>]*maxSdkVersion="32"/);
+  assert.doesNotMatch(pollReceiver, /getApplicationInfo\(\)\.icon/);
+  assert.doesNotMatch(syncService, /getApplicationInfo\(\)\.icon/);
+  assert.match(pollReceiver, /R\.drawable\.ic_stat_myipon/);
+  assert.match(pollReceiver, /anonKey\.startsWith\("eyJ"\)/);
+  assert.match(pollReceiver, /setExactAndAllowWhileIdle/);
+  assert.match(pollReceiver, /scheduleServiceRestart\(/);
+  assert.match(pollReceiver, /last_poll_http_code/);
+
+  assert.match(syncService, /R\.drawable\.ic_stat_myipon/);
+  assert.match(syncService, /public static void pokeOrReconnect\(/);
+  assert.match(syncService, /myipon:ws-wake/);
+  assert.match(syncService, /stoppedIntentionally/);
+
+  assert.match(bgPlugin, /result\.put\("wsConnected",\s*NotificationSyncService\.isWsConnected\(\)\)/);
+  assert.match(bgPlugin, /result\.put\("hasFeedConfig",\s*NotificationPollReceiver\.hasFeedConfig\(context\)\)/);
+  assert.match(coreJs, /nativeBgStatus\?\.wsConnected === false/);
+  assert.match(coreJs, /nativeBgStatus\?\.hasFeedConfig === false/);
 });

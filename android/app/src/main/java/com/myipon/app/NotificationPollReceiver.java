@@ -1,6 +1,7 @@
 package com.myipon.app;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -110,6 +111,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             && hasNotificationPermission(context);
     }
 
+    @SuppressLint({"ScheduleExactAlarm", "MissingPermission"})
     public static void scheduleNext(Context context, long delayMs) {
         if (!hasFeedConfig(context)) return;
         AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
@@ -123,6 +125,38 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
         long triggerAt = SystemClock.elapsedRealtime() + Math.max(15_000L, delayMs);
+        boolean canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms();
+        if (canExact) {
+            try {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pending);
+                return;
+            } catch (SecurityException ignored) {
+            }
+        }
+        alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pending);
+    }
+
+    public static void scheduleServiceRestart(Context context, long delayMs) {
+        if (context == null || !shouldRunInstantSync(context) || !NotificationSyncService.canStartFromBackground(context)) {
+            return;
+        }
+        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (alarmManager == null) return;
+        Intent serviceIntent = new Intent(context, NotificationSyncService.class);
+        PendingIntent pending = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? PendingIntent.getForegroundService(
+                context,
+                ALARM_REQUEST_CODE + 1,
+                serviceIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            )
+            : PendingIntent.getService(
+                context,
+                ALARM_REQUEST_CODE + 1,
+                serviceIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+        long triggerAt = SystemClock.elapsedRealtime() + Math.max(2_000L, delayMs);
         alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pending);
     }
 
@@ -179,12 +213,12 @@ public class NotificationPollReceiver extends BroadcastReceiver {
 
     private static int buildNotifId(String id, String dedupeKey) {
         if (!TextUtils.isEmpty(dedupeKey)) {
-            return Math.abs(dedupeKey.hashCode()) + 1000;
+            return (dedupeKey.hashCode() & 0x7fffffff) + 1000;
         }
         try {
-            return Math.abs((int) Long.parseLong(id));
+            return (int) (Math.abs(Long.parseLong(id)) & 0x7fffffffL);
         } catch (NumberFormatException ignored) {
-            return Math.abs(id.hashCode()) + 1000;
+            return (String.valueOf(id).hashCode() & 0x7fffffff) + 1000;
         }
     }
 
@@ -214,7 +248,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         );
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(appContext.getApplicationInfo().icon)
+            .setSmallIcon(R.drawable.ic_stat_myipon)
             .setColor(0xFF0B3428)
             .setContentTitle(TextUtils.isEmpty(title) ? "myIPON" : title)
             .setContentText(body == null ? "" : body)
@@ -290,7 +324,9 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             conn.setReadTimeout(10_000);
             conn.setDoOutput(true);
             conn.setRequestProperty("apikey", anonKey);
-            conn.setRequestProperty("Authorization", "Bearer " + anonKey);
+            if (anonKey.startsWith("eyJ")) {
+                conn.setRequestProperty("Authorization", "Bearer " + anonKey);
+            }
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Accept", "application/json");
 
@@ -301,7 +337,14 @@ public class NotificationPollReceiver extends BroadcastReceiver {
                 os.write(bytes);
             }
 
-            if (conn.getResponseCode() >= 200 && conn.getResponseCode() < 300) {
+            int statusCode = conn.getResponseCode();
+            prefs.edit()
+                .putInt("last_poll_http_code", statusCode)
+                .putLong("last_poll_at_ms", System.currentTimeMillis())
+                .putString("last_poll_error", statusCode >= 200 && statusCode < 300 ? "" : ("HTTP " + statusCode))
+                .apply();
+
+            if (statusCode >= 200 && statusCode < 300) {
                 StringBuilder sb = new StringBuilder();
                 try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
@@ -349,7 +392,12 @@ public class NotificationPollReceiver extends BroadcastReceiver {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception err) {
+            prefs.edit()
+                .putInt("last_poll_http_code", 0)
+                .putLong("last_poll_at_ms", System.currentTimeMillis())
+                .putString("last_poll_error", err.getMessage() != null ? err.getMessage() : err.getClass().getSimpleName())
+                .apply();
         } finally {
             if (conn != null) conn.disconnect();
         }
@@ -364,7 +412,9 @@ public class NotificationPollReceiver extends BroadcastReceiver {
 
         scheduleNext(appContext, recommendedPollIntervalMs(appContext));
         NotificationSyncWorker.ensureScheduled(appContext);
-        if (NotificationSyncService.canStartFromBackground(appContext)) {
+        if (NotificationSyncService.isRunning()) {
+            NotificationSyncService.pokeOrReconnect(appContext);
+        } else if (NotificationSyncService.canStartFromBackground(appContext)) {
             NotificationSyncService.ensureStarted(appContext);
         }
 
