@@ -9118,3 +9118,178 @@ test('non-FCM Android background sync uses vector icon, JWT-safe REST polling, e
   assert.match(coreJs, /nativeBgStatus\?\.wsConnected === false/);
   assert.match(coreJs, /nativeBgStatus\?\.hasFeedConfig === false/);
 });
+
+test('mobile hides page/section descriptions only on <=720px, preserves 1-char chat previews, and queues concurrent Android wakes safely', () => {
+  const migration080 = read('database/migrations/20261116_080_preserve_short_chat_notification_preview.sql');
+  const schema = read('database/schema.sql');
+  const css = read('css/app.css');
+  const pollReceiver = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
+  const syncService = read('android/app/src/main/java/com/myipon/app/NotificationSyncService.java');
+  const syncWorker = read('android/app/src/main/java/com/myipon/app/NotificationSyncWorker.java');
+
+  assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.page-header p:not\(\.eyebrow\),\.panel-header > div > p:not\(#audit-count\),\.platform-overview-heading p,\.account-dialog-title p,\.account-section-heading p,\.account-session-copy p,\.settings-session-copy p,\.review-subtitle,\.msg-brand p,\.msg-friends-hero-copy p,\.msg-panel-header p:not\(\[id\]\),\.form-dialog:not\(\.bg-usage-dialog\):not\(\.recovery-dialog\) \.form-dialog-header:not\(\.bg-usage-header\) > div > p:not\(\.eyebrow\)/);
+  assert.match(css, /\.page-header p:not\(\.eyebrow\)\s*\{\s*max-width:660px;/);
+
+  assert.match(migration080, /check \(char_length\(btrim\(message\)\) between 1 and 500\)/i);
+  assert.match(migration080, /if char_length\(v_clean_msg\) < 1 then/i);
+  assert.match(migration080, /then 'Sent a video'/i);
+  assert.match(migration080, /'20261116_080'/);
+  assert.match(schema, /between 1 and 500/i);
+  assert.match(schema, /if char_length\(v_clean_msg\) < 1 then/i);
+  assert.match(schema, /then 'Sent a video'/i);
+  assert.match(schema, /'20261116_080'/);
+
+  assert.match(pollReceiver, /AtomicBoolean POLL_PENDING/);
+  assert.match(pollReceiver, /POLL_PENDING\.set\(true\)/);
+  assert.match(pollReceiver, /\.setWhen\(System\.currentTimeMillis\(\)\)/);
+  assert.match(syncService, /NotificationPollReceiver\.pollAsync\(appContext, wakeLock\)/);
+  assert.match(syncService, /NotificationSyncWorker\.enqueueImmediateSync\(appContext/);
+  assert.match(syncWorker, /public static void enqueueImmediateSync\(/);
+});
+
+test('voice recording bar uses forest-emerald capsule, gold RECORDING label, serif timer, active mic circle, and mobile zero-overflow fit', async () => {
+  const vm = await import('node:vm');
+  const messagesJs = read('js/messages.js');
+  const css = read('css/app.css');
+
+  // CSS visual & mobile circle/pill contracts
+  assert.match(css, /\.msg-composer-form\.is-recording\s*\{\s*align-items:\s*center;/);
+  assert.match(css, /\.msg-tool-btn\s*\{[\s\S]*?aspect-ratio:\s*1\s*\/\s*1;/);
+  assert.match(css, /\.msg-tool-btn\.is-recording,\s*\.msg-composer-form\.is-recording #msg-voice-btn\s*\{[\s\S]*?background:\s*#e3efe8;[\s\S]*?border-color:\s*#16533e;[\s\S]*?color:\s*#16533e;/);
+  assert.match(css, /\.msg-voice-recording\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?#10241d/);
+  assert.match(css, /\.msg-voice-rec-label\s*\{[\s\S]*?letter-spacing:\s*\.12em;[\s\S]*?color:\s*#e4c378;/);
+  assert.match(css, /#msg-voice-timer\s*\{[\s\S]*?"IPON Serif"[\s\S]*?font-variant-numeric:\s*tabular-nums;[\s\S]*?color:\s*#f6f2e8;/);
+  assert.match(css, /\.msg-voice-recording \.msg-voice-cancel\s*\{[\s\S]*?border-radius:\s*18px;/);
+  assert.match(css, /\.msg-voice-recording \.msg-voice-send\s*\{[\s\S]*?flex-direction:\s*column;[\s\S]*?background:\s*#e4c378;[\s\S]*?color:\s*#0e221b;/);
+  assert.match(css, /@media\s*\(max-width:\s*640px\)[\s\S]*?\.msg-tool-btn\s*\{\s*width:\s*34px;\s*height:\s*34px;/);
+  assert.match(css, /@media\s*\(max-width:\s*380px\)[\s\S]*?\.msg-tool-btn\s*\{\s*width:\s*30px;\s*height:\s*30px;/);
+  assert.match(css, /\.msg-thread-pane\[data-chat-theme="midnight"\] \.msg-voice-recording[\s\S]*?#122921/);
+
+  // Markup keeps semantic labels, two-line "Send voice", and 0:00 timer
+  assert.match(messagesJs, /id="msg-voice-recording"[^>]*>[\s\S]*?class="msg-voice-rec-label">RECORDING<[\s\S]*?id="msg-voice-timer">0:00<[\s\S]*?id="msg-voice-cancel">Cancel<[\s\S]*?id="msg-voice-send"><span>Send<\/span>\s*<span>voice<\/span></);
+
+  // Runtime VM test: starting & cancelling toggles .is-recording, aria-pressed, and tabular clock text cleanly
+  const els = new Map();
+  const makeEl = () => {
+    const classes = new Set();
+    const attrs = new Map();
+    return {
+      hidden: false,
+      disabled: false,
+      value: '',
+      textContent: '',
+      innerHTML: '',
+      children: [],
+      style: { setProperty() { } },
+      dataset: {},
+      classList: {
+        add: (...c) => c.forEach((x) => classes.add(x)),
+        remove: (...c) => c.forEach((x) => classes.delete(x)),
+        toggle: (c, f) => (f === undefined ? (classes.has(c) ? classes.delete(c) : classes.add(c)) : (f ? classes.add(c) : classes.delete(c))),
+        contains: (c) => classes.has(c)
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k) ?? null,
+      addEventListener() { },
+      removeEventListener() { },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      closest: () => null,
+      appendChild(n) { return n; },
+      showModal() { },
+      close() { }
+    };
+  };
+  const getEl = (id) => {
+    if (!els.has(id)) els.set(id, makeEl());
+    return els.get(id);
+  };
+  const docClicks = [];
+  let timerCb = null;
+  let nowMs = 10_000;
+  const FakeDate = class extends Date {
+    static now() { return nowMs; }
+  };
+  const ctx = {
+    window: null,
+    document: {
+      body: Object.assign(makeEl(), { dataset: { page: 'dashboard' }, classList: { toggle() { }, add() { }, remove() { }, contains: () => false } }),
+      documentElement: makeEl(),
+      getElementById: (id) => getEl(id),
+      createElement: () => makeEl(),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener(type, fn) { if (type === 'click') docClicks.push(fn); },
+      removeEventListener() { }
+    },
+    navigator: {
+      userAgent: 'Mozilla/5.0',
+      onLine: true,
+      mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { } }] }) }
+    },
+    MediaRecorder: class {
+      constructor(stream) { this.stream = stream; this.state = 'inactive'; }
+      static isTypeSupported() { return true; }
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.onstop?.(); }
+    },
+    Ipon: {
+      profile: { id: 'u1', full_name: 'Juan Dela Cruz' },
+      client: {
+        rpc: async () => ({ data: null, error: null }),
+        channel: () => ({ on() { return this; }, subscribe() { return this; }, track: async () => { }, untrack: async () => { }, send: async () => { } }),
+        removeChannel() { },
+        storage: { from: () => ({ upload: async () => ({ error: null }) }) }
+      },
+      avatarMarkup: () => '',
+      syncPresenceDots() { },
+      bindAvatarFallbacks() { },
+      toast() { },
+      confirmAction: async () => true,
+      friendlyError: (e) => String(e?.message || e)
+    },
+    Date: FakeDate,
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, JSON, Promise, RegExp, Error, Intl,
+    setTimeout: () => 0,
+    clearTimeout() { },
+    setInterval(fn) { timerCb = fn; return 77; },
+    clearInterval() { timerCb = null; },
+    requestAnimationFrame: (fn) => fn(),
+    addEventListener() { },
+    removeEventListener() { },
+    console
+  };
+  ctx.window = ctx;
+  ctx.MediaRecorder.isTypeSupported = () => true;
+  vm.runInNewContext(messagesJs, ctx, { filename: 'js/messages.js' });
+  await ctx.window.IponMessages.init({ profile: ctx.Ipon.profile });
+
+  // Start recording
+  await Promise.all(docClicks.map((fn) => fn({
+    target: { closest: (sel) => (sel === '#msg-voice-btn' ? getEl('msg-voice-btn') : null) }
+  })));
+  assert.equal(getEl('msg-voice-recording').hidden, false);
+  assert.equal(getEl('msg-composer-input').hidden, true);
+  assert.equal(getEl('msg-send-btn').hidden, true);
+  assert.equal(getEl('msg-composer-form').classList.contains('is-recording'), true);
+  assert.equal(getEl('msg-voice-btn').classList.contains('is-recording'), true);
+  assert.equal(getEl('msg-voice-btn').getAttribute('aria-pressed'), 'true');
+  assert.equal(getEl('msg-voice-timer').textContent, '0:00');
+
+  // Tick 7 seconds -> displays 0:07 without "Recording " prefix
+  nowMs += 7_000;
+  timerCb?.();
+  assert.equal(getEl('msg-voice-timer').textContent, '0:07');
+
+  // Cancel -> clears .is-recording, restores composer, and resets timer to 0:00
+  await Promise.all(docClicks.map((fn) => fn({
+    target: { closest: (sel) => (sel === '#msg-voice-cancel' ? getEl('msg-voice-cancel') : null) }
+  })));
+  assert.equal(getEl('msg-voice-recording').hidden, true);
+  assert.equal(getEl('msg-composer-input').hidden, false);
+  assert.equal(getEl('msg-send-btn').hidden, false);
+  assert.equal(getEl('msg-composer-form').classList.contains('is-recording'), false);
+  assert.equal(getEl('msg-voice-btn').classList.contains('is-recording'), false);
+  assert.equal(getEl('msg-voice-btn').getAttribute('aria-pressed'), 'false');
+  assert.equal(getEl('msg-voice-timer').textContent, '0:00');
+});

@@ -238,6 +238,7 @@ public class NotificationSyncService extends Service {
         if (NotificationPollReceiver.shouldRunInstantSync(appContext)) {
             NotificationPollReceiver.scheduleNext(appContext, 15_000L);
             NotificationSyncWorker.ensureScheduled(appContext);
+            NotificationSyncWorker.enqueueImmediateSync(appContext, 10L);
             NotificationPollReceiver.scheduleServiceRestart(appContext, 2_500L);
         }
     }
@@ -261,6 +262,7 @@ public class NotificationSyncService extends Service {
         if (!stoppedIntentionally && NotificationPollReceiver.shouldRunInstantSync(appContext)) {
             NotificationPollReceiver.scheduleNext(appContext, 15_000L);
             NotificationSyncWorker.ensureScheduled(appContext);
+            NotificationSyncWorker.enqueueImmediateSync(appContext, 10L);
             NotificationPollReceiver.scheduleServiceRestart(appContext, 2_500L);
         }
         super.onDestroy();
@@ -397,10 +399,10 @@ public class NotificationSyncService extends Service {
                         : null;
                     if (wakeLock != null) {
                         wakeLock.setReferenceCounted(false);
-                        wakeLock.acquire(12_000L);
+                        wakeLock.acquire(15_000L);
                     }
-                    try {
-                        if (innerPayload != null && innerPayload.optBoolean("test", false)) {
+                    if (innerPayload != null && innerPayload.optBoolean("test", false)) {
+                        try {
                             NotificationPollReceiver.showDirectNotification(
                                 appContext,
                                 "test-" + System.currentTimeMillis(),
@@ -409,16 +411,16 @@ public class NotificationSyncService extends Service {
                                 innerPayload.optString("message", "Notifications arrive on this device even when myIPON is closed."),
                                 innerPayload.optString("link", "account.html")
                             );
-                        } else {
-                            NotificationPollReceiver.pollWithWakeLock(appContext);
-                        }
-                    } finally {
-                        if (wakeLock != null && wakeLock.isHeld()) {
-                            try {
-                                wakeLock.release();
-                            } catch (Exception ignored) {
+                        } finally {
+                            if (wakeLock != null && wakeLock.isHeld()) {
+                                try {
+                                    wakeLock.release();
+                                } catch (Exception ignored) {
+                                }
                             }
                         }
+                    } else {
+                        NotificationPollReceiver.pollAsync(appContext, wakeLock);
                     }
                 } catch (Exception ignored) {
                 }

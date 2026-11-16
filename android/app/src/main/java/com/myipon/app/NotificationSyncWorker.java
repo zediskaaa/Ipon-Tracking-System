@@ -4,7 +4,9 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.ExistingWorkPolicy;
 import androidx.work.NetworkType;
+import androidx.work.OneTimeWorkRequest;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.Worker;
@@ -45,7 +47,29 @@ public class NotificationSyncWorker extends Worker {
 
     public static void cancel(Context context) {
         try {
-            WorkManager.getInstance(context.getApplicationContext()).cancelUniqueWork(WORK_NAME);
+            WorkManager workManager = WorkManager.getInstance(context.getApplicationContext());
+            workManager.cancelUniqueWork(WORK_NAME);
+            workManager.cancelUniqueWork(WORK_NAME + "_once");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static void enqueueImmediateSync(Context context, long delaySeconds) {
+        Context appContext = context.getApplicationContext();
+        if (!NotificationPollReceiver.hasFeedConfig(appContext)) return;
+        try {
+            Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+            OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(NotificationSyncWorker.class)
+                .setInitialDelay(Math.max(5L, delaySeconds), TimeUnit.SECONDS)
+                .setConstraints(constraints)
+                .build();
+            WorkManager.getInstance(appContext).enqueueUniqueWork(
+                WORK_NAME + "_once",
+                ExistingWorkPolicy.REPLACE,
+                request
+            );
         } catch (Throwable ignored) {
         }
     }

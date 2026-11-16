@@ -490,15 +490,17 @@
                           <button type="button" class="msg-tool-btn" id="msg-emoji-btn" aria-label="Insert emoji" title="Emoji picker">
                             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
                           </button>
-                          <button type="button" class="msg-tool-btn" id="msg-voice-btn" aria-label="Record voice message" title="Record voice note">
+                          <button type="button" class="msg-tool-btn" id="msg-voice-btn" aria-label="Record voice message" aria-pressed="false" title="Record voice note">
                             <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                           </button>
                         </div>
-                        <div class="msg-voice-recording" id="msg-voice-recording" hidden>
-                          <span class="msg-rec-dot" aria-hidden="true"></span>
-                          <span id="msg-voice-timer">Recording 0:00</span>
-                          <button type="button" class="button button-secondary button-sm" id="msg-voice-cancel">Cancel</button>
-                          <button type="button" class="button button-primary button-sm" id="msg-voice-send">Send voice</button>
+                        <div class="msg-voice-recording" id="msg-voice-recording" role="status" aria-live="polite" hidden>
+                          <div class="msg-voice-rec-status">
+                            <span class="msg-voice-rec-eyebrow"><span class="msg-rec-dot" aria-hidden="true"></span><span class="msg-voice-rec-label">RECORDING</span></span>
+                            <span id="msg-voice-timer">0:00</span>
+                          </div>
+                          <button type="button" class="button msg-voice-cancel" id="msg-voice-cancel">Cancel</button>
+                          <button type="button" class="button msg-voice-send" id="msg-voice-send"><span>Send</span> <span>voice</span></button>
                         </div>
                         <label class="sr-only" for="msg-composer-input">Message text</label>
                         <textarea id="msg-composer-input" rows="1" maxlength="5000" placeholder="Write a message…"></textarea>
@@ -3154,7 +3156,25 @@
     return false;
   }
 
+  function syncVoiceRecordingUi(isRecording) {
+    const active = Boolean(isRecording);
+    const form = document.getElementById('msg-composer-form');
+    const voiceBtn = document.getElementById('msg-voice-btn');
+    const recBar = document.getElementById('msg-voice-recording');
+    const input = document.getElementById('msg-composer-input');
+    const sendBtn = document.getElementById('msg-send-btn');
+    const timerEl = document.getElementById('msg-voice-timer');
+    if (form?.classList) form.classList.toggle('is-recording', active);
+    if (voiceBtn?.classList) voiceBtn.classList.toggle('is-recording', active);
+    if (voiceBtn?.setAttribute) voiceBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    if (input) input.hidden = active;
+    if (sendBtn) sendBtn.hidden = active;
+    if (recBar) recBar.hidden = !active;
+    if (timerEl) timerEl.textContent = '0:00';
+  }
+
   async function startVoiceRecording() {
+    if (state.voiceRecorder) return;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       return ipon().toast('Voice recording is not supported on this device or browser.', 'error');
     }
@@ -3184,15 +3204,14 @@
       rec.ondataavailable = (ev) => { if (ev.data?.size) state.voiceChunks.push(ev.data); };
       rec.start();
 
-      document.getElementById('msg-composer-input').hidden = true;
-      document.getElementById('msg-send-btn').hidden = true;
-      document.getElementById('msg-voice-recording').hidden = false;
+      syncVoiceRecordingUi(true);
       const timerEl = document.getElementById('msg-voice-timer');
       state.voiceTimer = setInterval(() => {
         const sec = Math.floor((Date.now() - state.voiceStartedAt) / 1000);
-        if (timerEl) timerEl.textContent = `Recording ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+        if (timerEl) timerEl.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
       }, 350);
     } catch (err) {
+      syncVoiceRecordingUi(false);
       if (err?.name === 'NotAllowedError') {
         if (nativeMic.native && !nativeMic.hasNativeBridge) {
           const shown = await showMicApkUpdateNotice();
@@ -3208,9 +3227,7 @@
 
   function stopVoiceRecorderStream({ send = false } = {}) {
     if (state.voiceTimer) { clearInterval(state.voiceTimer); state.voiceTimer = null; }
-    document.getElementById('msg-composer-input').hidden = false;
-    document.getElementById('msg-send-btn').hidden = false;
-    document.getElementById('msg-voice-recording').hidden = true;
+    syncVoiceRecordingUi(false);
     const rec = state.voiceRecorder;
     if (!rec) return;
     state.voiceRecorder = null;

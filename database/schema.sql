@@ -1881,7 +1881,7 @@ create table if not exists public.notifications (
   group_id uuid references public.groups(id) on delete cascade,
   type text not null,
   title text not null check (char_length(btrim(title)) between 2 and 120),
-  message text not null check (char_length(btrim(message)) between 2 and 500),
+  message text not null check (char_length(btrim(message)) between 1 and 500),
   link text,
   dedupe_key text,
   read_at timestamptz,
@@ -17155,14 +17155,14 @@ as $$
 declare
   v_recipient record;
   v_clean_title text := left(btrim(coalesce(p_title, 'Notification')), 120);
-  v_clean_msg text := left(btrim(coalesce(p_message, 'Update')), 500);
+  v_clean_msg text := left(btrim(coalesce(p_message, '')), 500);
 begin
   if p_recipient_id is null or p_recipient_id = p_actor_id then
     return;
   end if;
 
   if char_length(v_clean_title) < 2 then v_clean_title := 'Message update'; end if;
-  if char_length(v_clean_msg) < 2 then v_clean_msg := 'Open Messages to view this update.'; end if;
+  if char_length(v_clean_msg) < 1 then v_clean_msg := 'Open Messages to view this update.'; end if;
 
   if p_actor_id is not null and not public.is_messaging_eligible(p_actor_id) then
     return;
@@ -18577,8 +18577,9 @@ begin
 
   v_preview := case
     when char_length(v_clean_body) > 0 then left(v_clean_body, 140)
-    when v_type = 'VOICE' then 'Sent a voice message'
+    when v_type = 'VOICE' or (v_att_count = 1 and coalesce(p_attachments -> 0 ->> 'kind', '') = 'audio') then 'Sent a voice message'
     when v_att_count = 1 and coalesce(p_attachments -> 0 ->> 'kind', '') = 'image' then 'Sent a photo'
+    when v_att_count = 1 and coalesce(p_attachments -> 0 ->> 'kind', '') = 'video' then 'Sent a video'
     when v_att_count > 1 then 'Sent ' || v_att_count::text || ' attachments'
     else 'Sent an attachment'
   end;
@@ -19671,7 +19672,8 @@ values
   ('20261115_076', 'messaging and social connection system'),
   ('20261115_077', 'messaging delivery vs read receipt states'),
   ('20261115_078', 'filter audit log to governance and financial events'),
-  ('20261116_079', 'dispatch background push whenever unread deduped notification refreshes created_at')
+  ('20261116_079', 'dispatch background push whenever unread deduped notification refreshes created_at'),
+  ('20261116_080', 'preserve 1-character chat message notification previews and label video/audio previews')
 on conflict (version) do nothing;
 
 commit;

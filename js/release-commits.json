@@ -1,5 +1,9 @@
 [
   {
+    "date": "2026-11-16T11:27:18+08:00",
+    "message": "Fix non-FCM Android background notification delivery, WebSocket wakeups, and Supabase push dispatch\n\n- Add migration `20261116_079_fix_background_push_dispatch.sql` (and sync `database/schema.sql`) so `notifications_push_dispatch` fires whenever unread deduplicated rows advance `created_at`.\n- Harden `supabase/functions/send-push/index.ts` with JWT-safe `Authorization` handling, fallback Realtime broadcast via `SUPABASE_ANON_KEY` and `httpSend('wake')`, and `native_has_token` / `native_ping_status` response telemetry.\n- Add monochrome notification vector `android/app/src/main/res/drawable/ic_stat_myipon.xml` (replacing `@mipmap/ic_launcher` adaptive icon in `NotificationSyncService.java` and `NotificationPollReceiver.java`).\n- Strengthen Android background sync in `NotificationSyncService.java`, `NotificationPollReceiver.java`, `BackgroundNotificationsPlugin.java`, and `AndroidManifest.xml` with `myipon:ws-wake` wake locks, network-switch reconnects, `scheduleServiceRestart` on task removal, `setExactAndAllowWhileIdle` support (`SCHEDULE_EXACT_ALARM` maxSdkVersion 32), JWT-safe REST polling, and socket/poll diagnostic status fields.\n- Force background polling configuration in `js/core.js` when permissions or preferences enable, auto-resync on disconnected socket/missing config, update test alert feedback, bump `core.js?v=20261116-94` and Capacitor metadata, and add contract tests in `tests/contracts.test.mjs`."
+  },
+  {
     "date": "2026-11-16T03:09:09+08:00",
     "message": "Fix full-width voice waveforms, background prompt buttons, and instant sent voice playback\n\n- Stretch chat voice-note waveforms cleanly across the full player width (`VOICE_WAVE_HEIGHTS` 36 bars + `justify-content: space-between; gap: 1.5px` on `.msg-voice-wave` in `css/app.css` and `js/messages.js`) to eliminate the trailing right gap on mobile and desktop.\n- Prevent mobile vertical stretching on `#background-usage-prompt-dialog` buttons (`.bg-usage-actions .button` resets `flex: 0 0 auto; min-height: 44px;`) and add high-contrast `.is-busy` spinner feedback (`Allowing…` / `Checking…`, `.button.is-busy:disabled { opacity: .92; cursor: wait; }`) in `js/core.js` and `css/app.css`.\n- Generate local `blob:` preview URLs immediately for recorded voice messages and picked audio files so newly sent voice notes render and play without waiting on `chat-view-urls`.\n- Track signed-URL readiness in `computeThreadFingerprint`, bypass in-place thread patching while `.msg-att-loading` placeholders exist, and add bounded retry recovery via `scheduleMissingSignedUrls` in `js/messages.js`.\n- Bump `app.css`, `core.js`, and `messages.js` cache-busters across all HTML pages, sync Capacitor mobile assets (`js/version.js`, `version.json`), and add contract/VM test coverage in `tests/contracts.test.mjs`."
   },
@@ -174,9 +178,5 @@
   {
     "date": "2026-11-14T12:45:58+08:00",
     "message": "Add contextual info tooltips and fix bulk review row alignment"
-  },
-  {
-    "date": "2026-11-14T12:38:31+08:00",
-    "message": "Implement workflow, reporting, member UX, cycle archive, storage cleanup, and offline enhancements"
   }
 ]

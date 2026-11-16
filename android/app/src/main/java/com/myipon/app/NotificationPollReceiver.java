@@ -46,6 +46,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
     private static final long POLL_WAKELOCK_TIMEOUT_MS = 15_000L;
     private static final ExecutorService POLL_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final AtomicBoolean POLL_IN_FLIGHT = new AtomicBoolean(false);
+    private static final AtomicBoolean POLL_PENDING = new AtomicBoolean(false);
     private static volatile long lastPollSuccessElapsedMs = 0L;
 
     public static long getLastPollSuccessElapsedMs() {
@@ -257,6 +258,8 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
             .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(tapPending);
@@ -265,18 +268,37 @@ public class NotificationPollReceiver extends BroadcastReceiver {
     }
 
     public static void pollAsync(Context context) {
+        pollAsync(context, null);
+    }
+
+    public static void pollAsync(Context context, final PowerManager.WakeLock handoffLock) {
         final Context appContext = context.getApplicationContext();
         if (!hasFeedConfig(appContext) || !hasNotificationPermission(appContext)) {
+            if (handoffLock != null && handoffLock.isHeld()) {
+                try { handoffLock.release(); } catch (Exception ignored) { }
+            }
             return;
         }
         if (!POLL_IN_FLIGHT.compareAndSet(false, true)) {
+            POLL_PENDING.set(true);
+            if (handoffLock != null && handoffLock.isHeld()) {
+                try { handoffLock.release(); } catch (Exception ignored) { }
+            }
             return;
         }
         POLL_EXECUTOR.execute(() -> {
             try {
-                pollWithWakeLock(appContext);
+                do {
+                    POLL_PENDING.set(false);
+                    pollWithWakeLock(appContext);
+                } while (POLL_PENDING.getAndSet(false)
+                    && hasFeedConfig(appContext)
+                    && hasNotificationPermission(appContext));
             } finally {
                 POLL_IN_FLIGHT.set(false);
+                if (handoffLock != null && handoffLock.isHeld()) {
+                    try { handoffLock.release(); } catch (Exception ignored) { }
+                }
             }
         });
     }
