@@ -45,6 +45,9 @@
   const headerActions = document.getElementById('budget-header-actions');
 
   const splitHeadingEl = document.getElementById('budget-split-heading');
+  const heroTagEl = document.getElementById('budget-hero-tag');
+  const modeTitleEl = document.getElementById('budget-mode-title');
+  const modeCopyEl = document.getElementById('budget-mode-copy');
   const sourceLabelEl = document.getElementById('budget-source-label');
   const ratioNeedsEl = document.getElementById('budget-ratio-needs');
   const ratioWantsEl = document.getElementById('budget-ratio-wants');
@@ -74,19 +77,34 @@
   const itemDialog = document.getElementById('budget-item-dialog');
   const itemForm = document.getElementById('budget-item-form');
   const itemIdInput = document.getElementById('budget-item-id');
+  const itemEyebrowEl = document.getElementById('budget-item-eyebrow');
   const itemCategorySelect = document.getElementById('budget-item-category');
   const itemNameInput = document.getElementById('budget-item-name');
   const itemAmountInput = document.getElementById('budget-item-amount');
   const itemSuggestions = document.getElementById('budget-item-suggestions');
+  const itemBucketLabelEl = document.getElementById('budget-item-bucket-label');
+  const itemBucketTotalEl = document.getElementById('budget-item-bucket-total');
+  const itemUnallocatedEl = document.getElementById('budget-item-unallocated');
   const itemHeadroomHelp = document.getElementById('budget-item-headroom-help');
   const itemSubmitBtn = document.getElementById('budget-item-submit');
 
   const expenseDialog = document.getElementById('budget-expense-dialog');
   const expenseForm = document.getElementById('budget-expense-form');
   const expenseIdInput = document.getElementById('budget-expense-id');
+  const expenseEyebrowEl = document.getElementById('budget-expense-eyebrow');
   const expenseItemSelect = document.getElementById('budget-expense-item');
+  const expenseNewItemFields = document.getElementById('budget-expense-new-item-fields');
+  const expenseNewCategorySelect = document.getElementById('budget-expense-new-category');
+  const expenseNewNameInput = document.getElementById('budget-expense-new-name');
+  const expenseSuggestions = document.getElementById('budget-expense-suggestions');
   const expenseAmountInput = document.getElementById('budget-expense-amount');
+  const expenseHeadroomHelp = document.getElementById('budget-expense-headroom-help');
   const expenseDateInput = document.getElementById('budget-expense-date');
+  const expenseDeductWrap = document.getElementById('budget-expense-deduct-wrap');
+  const expenseDeductInput = document.getElementById('budget-expense-deduct');
+  const expenseDeductHelp = document.getElementById('budget-expense-deduct-help');
+  const expenseMethodWrap = document.getElementById('budget-expense-method-wrap');
+  const expenseMethodSelect = document.getElementById('budget-expense-method');
   const expenseNoteInput = document.getElementById('budget-expense-note');
   const expenseSubmitBtn = document.getElementById('budget-expense-submit');
 
@@ -98,8 +116,13 @@
   const splitNeedsPreview = document.getElementById('split-needs-preview');
   const splitWantsPreview = document.getElementById('split-wants-preview');
   const splitSavingsPreview = document.getElementById('split-savings-preview');
+  const splitLiveNeedsEl = document.getElementById('split-live-needs');
+  const splitLiveWantsEl = document.getElementById('split-live-wants');
+  const splitLiveSavingsEl = document.getElementById('split-live-savings');
   const splitTotalBar = document.getElementById('budget-split-total-bar');
   const splitSumEl = document.getElementById('budget-split-sum');
+  const splitStateLabelEl = document.getElementById('budget-split-state-label');
+  const splitStatusIconEl = document.getElementById('budget-split-status-icon');
   const splitErrorEl = document.getElementById('budget-split-error');
   const splitSubmitBtn = document.getElementById('budget-split-submit');
 
@@ -140,13 +163,26 @@
 
   function getBalanceSourceCopy(data) {
     const name = data.group_name || 'Active workspace';
+    const pool = Number(data.reference_balance || 0);
+    const deductedConfirmed = Number(data.deducted_confirmed || 0);
+    if (deductedConfirmed > 0) {
+      return `Live balance in "${name}" (${Ipon.money(pool)} starting pool minus ${Ipon.money(deductedConfirmed)} deducted from savings).`;
+    }
     if (data.balance_source === 'SOLO_TRACKER') {
-      return `Automatically pulled from your Solo tracker "${name}". Any change in tracked savings recalculates category allocations without affecting expense history.`;
+      return `Synced live with your Solo tracker "${name}". Expenses deducted here reduce tracked savings immediately.`;
     }
     if (data.balance_source === 'MEMBER_CONFIRMED') {
-      return `Automatically pulled from your confirmed member savings in "${name}". Expenses tracked here do not deduct from your contributions.`;
+      return `Automatically pulled from your confirmed savings in "${name}". Planning expenses track your allocation without changing shared group funds.`;
     }
-    return `Automatically pulled from confirmed tracked savings in "${name}". Category budgets recalculate automatically as savings grow.`;
+    return `Pulled from confirmed tracked savings in "${name}". Category budgets recalculate automatically as savings grow or deduct.`;
+  }
+
+  function formatPaymentMethodShort(method) {
+    if (typeof Ipon.paymentMethodMeta === 'function') {
+      return Ipon.paymentMethodMeta(method).label || 'Cash';
+    }
+    const clean = String(method || 'CASH').toUpperCase();
+    return clean === 'BANK_TRANSFER' ? 'Bank transfer' : clean === 'GCASH' ? 'GCash' : clean === 'MAYA' ? 'Maya' : clean === 'OTHER' ? 'Other' : 'Cash';
   }
 
   function renderWorkspaceContext(groups, fallbackName = '') {
@@ -176,7 +212,10 @@
     const totals = data.totals || { allocated: 0, itemized: 0, spent: 0, remaining: 0 };
     const cats = data.categories || {};
     const refBalance = Number(data.reference_balance || 0);
-    const rawBalance = Number(data.raw_savings_balance ?? refBalance);
+    const currentSavings = Number(data.current_savings ?? refBalance);
+    const rawBalance = Number(data.raw_savings_balance ?? currentSavings);
+    const deductedConfirmed = Number(data.deducted_confirmed || 0);
+    const deductedPending = Number(data.deducted_pending || 0);
     const spent = Number(totals.spent || 0);
     const remaining = Number(totals.remaining || 0);
     const fallbackAmounts = computeSplitAmounts(refBalance, cfg.needs_pct, cfg.wants_pct, cfg.savings_pct);
@@ -184,6 +223,24 @@
 
     if (splitHeadingEl) splitHeadingEl.textContent = pctText;
     if (sourceLabelEl) sourceLabelEl.textContent = getBalanceSourceCopy(data);
+
+    const canDeduct = Boolean(data.can_deduct_savings);
+    const heroTagSpan = heroTagEl?.querySelector?.('span');
+    if (heroTagSpan) {
+      heroTagSpan.textContent = canDeduct ? 'Synced with live IPON savings' : 'Auto-linked to existing IPON savings';
+    }
+    if (modeTitleEl && modeCopyEl) {
+      if (canDeduct && data.role === 'ADMIN') {
+        modeTitleEl.textContent = 'Live savings deduction enabled';
+        modeCopyEl.textContent = 'Expenses with deduction enabled update your workspace Expenses and IPON Tracked Savings immediately.';
+      } else if (canDeduct) {
+        modeTitleEl.textContent = 'Treasurer deduction review mode';
+        modeCopyEl.textContent = 'Deducted expenses submit for administrator approval before reducing group IPON savings.';
+      } else {
+        modeTitleEl.textContent = 'Personal monitoring mode';
+        modeCopyEl.textContent = 'Group member plans monitor personal shares without deducting shared funds. Create a Solo workspace to deduct from personal savings.';
+      }
+    }
 
     [
       [ratioNeedsEl, cfg.needs_pct],
@@ -203,7 +260,7 @@
     if (legendWantsAmt) legendWantsAmt.textContent = Ipon.money(cats.WANTS?.allocated ?? fallbackAmounts.WANTS);
     if (legendSavingsAmt) legendSavingsAmt.textContent = Ipon.money(cats.SAVINGS?.allocated ?? fallbackAmounts.SAVINGS);
 
-    if (refBalanceEl) refBalanceEl.textContent = Ipon.money(refBalance);
+    if (refBalanceEl) refBalanceEl.textContent = Ipon.money(currentSavings);
     if (refNoteEl) {
       refNoteEl.hidden = rawBalance >= 0;
       refNoteEl.textContent = rawBalance < 0
@@ -215,7 +272,12 @@
     if (totalItemizedEl) totalItemizedEl.textContent = `Itemized plan: ${Ipon.money(totals.itemized)}`;
     if (totalSpentEl) totalSpentEl.textContent = Ipon.money(spent);
     const usedRatio = refBalance > 0 ? Math.round((spent / refBalance) * 1000) / 10 : (spent > 0 ? 100 : 0);
-    if (spentPctEl) spentPctEl.textContent = `${usedRatio}% of allocated budget`;
+    if (spentPctEl) {
+      const parts = [`${usedRatio}% of allocated budget`];
+      if (deductedConfirmed > 0) parts.push(`${Ipon.money(deductedConfirmed)} deducted`);
+      else if (deductedPending > 0) parts.push(`${Ipon.money(deductedPending)} pending`);
+      spentPctEl.textContent = parts.join(' · ');
+    }
 
     if (totalRemainingEl) {
       totalRemainingEl.textContent = Ipon.money(remaining);
@@ -356,66 +418,193 @@
       historyPager.querySelector('[data-page="next"]').disabled = expensePage >= pages - 1;
     }
 
+    const renderSyncPill = (row) => {
+      const syncStatus = String(row.savings_sync_status || (row.deduct_from_savings ? 'CONFIRMED' : 'MONITORING')).toUpperCase();
+      const methodLabel = formatPaymentMethodShort(row.payment_method);
+      if (syncStatus === 'CONFIRMED') return `<span class="budget-sync-pill is-deducted">Deducted · ${Ipon.escapeHtml(methodLabel)}</span>`;
+      if (syncStatus === 'PENDING') return `<span class="budget-sync-pill is-pending">Pending review · ${Ipon.escapeHtml(methodLabel)}</span>`;
+      if (syncStatus === 'VOIDED' || syncStatus === 'REJECTED') {
+        return `<span class="budget-sync-pill is-voided">${syncStatus === 'REJECTED' ? 'Rejected' : 'Voided'}</span>`;
+      }
+      return '<span class="budget-sync-pill is-monitoring">Planning only</span>';
+    };
+
     expensesBody.innerHTML = visible.length ? visible.map((row) => {
       const meta = CATEGORY_META[row.category] || CATEGORY_META.NEEDS;
+      const syncStatus = String(row.savings_sync_status || '').toUpperCase();
+      const lockedForTreasurer = data?.role !== 'ADMIN' && syncStatus === 'CONFIRMED';
       return `
         <tr data-expense-id="${row.id}">
           <td data-label="Date">${Ipon.dateLabel(row.expense_date)}</td>
           <td data-label="Category"><span class="budget-history-chip ${meta.tone}">${meta.label}</span></td>
           <td data-label="Budget item"><strong>${Ipon.escapeHtml(row.item_name)}</strong></td>
           <td data-label="Amount" class="amount-cell budget-history-amount tabular-nums">${Ipon.money(row.amount)}</td>
+          <td data-label="Savings impact">${renderSyncPill(row)}</td>
           <td data-label="Note">${row.note ? Ipon.escapeHtml(row.note) : '<span class="field-help">—</span>'}</td>
           <td data-label="Actions" class="budget-history-actions-cell">
             <div class="table-actions">
-              <button class="icon-action" type="button" data-budget-edit-expense="${row.id}">Edit</button>
-              <button class="icon-action danger-action" type="button" data-budget-delete-expense="${row.id}">Delete</button>
+              <button class="icon-action" type="button" data-budget-edit-expense="${row.id}" ${lockedForTreasurer ? 'disabled title="Confirmed deductions can only be edited by an administrator"' : ''}>Edit</button>
+              <button class="icon-action danger-action" type="button" data-budget-delete-expense="${row.id}" ${lockedForTreasurer ? 'disabled title="Confirmed deductions can only be voided by an administrator"' : ''}>Delete</button>
             </div>
           </td>
         </tr>`;
-    }).join('') : `<tr><td colspan="6" class="empty-state budget-empty-history">${BUDGET_COIN_SVG}<strong>${term || catFilter ? 'No matching expenses' : 'No budget expenses recorded yet'}</strong><small>${term || catFilter ? 'Try a different search or category.' : 'Click + Add expense to start monitoring.'}</small></td></tr>`;
+    }).join('') : `<tr><td colspan="7" class="empty-state budget-empty-history"><div class="budget-empty-history-inner">${BUDGET_COIN_SVG}<strong>${term || catFilter ? 'No matching expenses' : 'No budget expenses recorded yet'}</strong><small>${term || catFilter ? 'Try a different search or category.' : 'Click + Add expense to start monitoring or deducting from IPON savings.'}</small></div></td></tr>`;
   }
 
   function populateExpenseItemSelect(selectedItemId = '') {
     if (!expenseItemSelect) return false;
     const items = Array.isArray(overview?.items) ? overview.items : [];
-    if (!items.length) {
-      expenseItemSelect.innerHTML = '<option value="">No budget items available</option>';
-      return false;
-    }
     const groupsHtml = CATEGORY_ORDER.map((catKey) => {
       const catItems = items.filter((item) => item.category === catKey);
       if (!catItems.length) return '';
       const meta = CATEGORY_META[catKey];
       return `<optgroup label="${meta.label}">${catItems.map((item) => `<option value="${item.id}">${Ipon.escapeHtml(item.name)}</option>`).join('')}</optgroup>`;
     }).filter(Boolean).join('');
-    expenseItemSelect.innerHTML = groupsHtml;
-    if (selectedItemId && items.some((i) => i.id === selectedItemId)) {
+    expenseItemSelect.innerHTML = `${groupsHtml}<option value="__NEW__">+ Create new budget item…</option>`;
+    if (selectedItemId && selectedItemId !== '__NEW__' && items.some((i) => i.id === selectedItemId)) {
       expenseItemSelect.value = selectedItemId;
-    } else if (items[0]) {
+    } else if (!selectedItemId && items.length > 0) {
       expenseItemSelect.value = items[0].id;
+    } else {
+      expenseItemSelect.value = '__NEW__';
     }
     return true;
+  }
+
+  function renderExpenseSuggestions(category) {
+    if (!expenseSuggestions) return;
+    const meta = CATEGORY_META[category] || CATEGORY_META.NEEDS;
+    expenseSuggestions.innerHTML = meta.examples.map((label) => (
+      `<button class="budget-suggestion-chip" type="button" data-budget-exp-suggest="${Ipon.escapeHtml(label)}">${Ipon.escapeHtml(label)}</button>`
+    )).join('');
+  }
+
+  function getExpenseAvailableHeadroom() {
+    const baseSavings = Math.max(0, Number(overview?.current_savings ?? overview?.raw_savings_balance ?? 0));
+    const editingId = expenseIdInput?.value || '';
+    if (!editingId) return baseSavings;
+    const existing = (overview?.expenses || []).find((e) => e.id === editingId);
+    if (existing && String(existing.savings_sync_status || '').toUpperCase() === 'CONFIRMED') {
+      return roundCentavos(baseSavings + Number(existing.amount || 0));
+    }
+    return baseSavings;
+  }
+
+  function validateExpenseNewNameLive() {
+    if (!expenseNewNameInput) return true;
+    if (expenseItemSelect?.value !== '__NEW__') {
+      Ipon.setFieldError(expenseNewNameInput, '');
+      return true;
+    }
+    const clean = expenseNewNameInput.value.trim().replace(/\s+/g, ' ');
+    if (!clean) {
+      Ipon.setFieldError(expenseNewNameInput, 'Enter a budget item name.');
+      return false;
+    }
+    Ipon.setFieldError(expenseNewNameInput, '');
+    return true;
+  }
+
+  function validateExpenseAmountLive() {
+    if (!expenseAmountInput) return false;
+    const raw = String(expenseAmountInput.value ?? '').trim();
+    if (!raw) {
+      Ipon.setFieldError(expenseAmountInput, '');
+      return false;
+    }
+    const amtCheck = Ipon.parseMoneyAmount(raw, {
+      min: 0.01,
+      max: 999999999999.99,
+      required: true,
+      label: 'Expense amount',
+      badInput: expenseAmountInput.validity?.badInput
+    });
+    if (!amtCheck.valid) {
+      Ipon.setFieldError(expenseAmountInput, amtCheck.error);
+      return false;
+    }
+    const deductOn = Boolean(expenseDeductInput?.checked && !expenseDeductInput?.disabled);
+    const headroom = getExpenseAvailableHeadroom();
+    if (deductOn && amtCheck.value > headroom) {
+      Ipon.setFieldError(
+        expenseAmountInput,
+        `Exceeds available IPON savings (${Ipon.money(headroom)}). Turn off deduction to log as planning only.`
+      );
+      return false;
+    }
+    Ipon.setFieldError(expenseAmountInput, '');
+    return true;
+  }
+
+  function syncExpenseDialogFields() {
+    const isNew = expenseItemSelect?.value === '__NEW__';
+    if (expenseNewItemFields) expenseNewItemFields.hidden = !isNew;
+    if (expenseNewNameInput) expenseNewNameInput.required = isNew;
+    if (isNew) {
+      renderExpenseSuggestions(expenseNewCategorySelect?.value || 'NEEDS');
+    } else if (expenseNewNameInput) {
+      Ipon.setFieldError(expenseNewNameInput, '');
+    }
+
+    const canDeduct = Boolean(overview?.can_deduct_savings);
+    const headroom = getExpenseAvailableHeadroom();
+    if (expenseDeductInput) {
+      expenseDeductInput.disabled = !canDeduct;
+      if (!canDeduct) expenseDeductInput.checked = false;
+    }
+    if (expenseDeductHelp) {
+      expenseDeductHelp.textContent = !canDeduct
+        ? 'Group members record planning expenses here. Switch to a Solo savings workspace to deduct from personal savings.'
+        : (overview?.role === 'ADMIN'
+          ? 'Automatically deducts from workspace IPON savings and records a confirmed entry in Expenses.'
+          : 'Submits a pending deduction for administrator approval so group savings stay accurate.');
+    }
+    const showMethod = Boolean(canDeduct && expenseDeductInput?.checked);
+    if (expenseMethodWrap) expenseMethodWrap.hidden = !showMethod;
+    if (expenseHeadroomHelp) {
+      expenseHeadroomHelp.textContent = canDeduct
+        ? `Available IPON savings: ${Ipon.money(headroom)}`
+        : 'Planning monitor only · does not modify shared group savings';
+    }
+    validateExpenseAmountLive();
   }
 
   function renderItemSuggestions(category) {
     if (!itemSuggestions) return;
     const meta = CATEGORY_META[category] || CATEGORY_META.NEEDS;
-    itemSuggestions.innerHTML = meta.examples.map((label) => (
-      `<button class="budget-suggestion-chip" type="button" data-budget-suggest="${Ipon.escapeHtml(label)}">${Ipon.escapeHtml(label)}</button>`
-    )).join('');
+    const activeName = (itemNameInput?.value || '').trim().toLowerCase();
+    itemSuggestions.innerHTML = meta.examples.map((label) => {
+      const isSelected = activeName && activeName === label.toLowerCase();
+      return `<button class="budget-suggestion-chip${isSelected ? ' is-active' : ''}" type="button" data-budget-suggest="${Ipon.escapeHtml(label)}">${Ipon.escapeHtml(label)}</button>`;
+    }).join('');
   }
 
   function syncItemHeadroomHelp() {
-    if (!itemHeadroomHelp || !overview) return;
+    if (!overview) return;
     const catKey = itemCategorySelect?.value || 'NEEDS';
     const meta = CATEGORY_META[catKey] || CATEGORY_META.NEEDS;
     const bucket = overview.categories?.[catKey];
     if (!bucket) return;
     const editingId = itemIdInput?.value || '';
     const existingItem = editingId ? (overview.items || []).find((i) => i.id === editingId) : null;
-    const currentItemized = Number(bucket.itemized || 0) - (existingItem && existingItem.category === catKey ? Number(existingItem.allocated_amount || 0) : 0);
-    const unallocated = Math.max(0, roundCentavos(Number(bucket.allocated || 0) - currentItemized));
-    itemHeadroomHelp.textContent = `${meta.label} budget: ${Ipon.money(bucket.allocated)} total · ${Ipon.money(unallocated)} currently unallocated. Enter 0 if you prefer open tracking.`;
+    const bucketTotal = Number(bucket.allocated || 0);
+    const otherItemized = Number(bucket.itemized || 0) - (existingItem && existingItem.category === catKey ? Number(existingItem.allocated_amount || 0) : 0);
+    const typedAmt = Math.max(0, Number(itemAmountInput?.value || 0) || 0);
+    const remainingBefore = roundCentavos(bucketTotal - otherItemized);
+    const remainingAfter = roundCentavos(remainingBefore - typedAmt);
+    const displayUnallocated = Math.max(0, remainingAfter);
+
+    if (itemBucketLabelEl) itemBucketLabelEl.textContent = `${meta.label.toUpperCase()} BUDGET`;
+    if (itemBucketTotalEl) itemBucketTotalEl.textContent = Ipon.money(bucketTotal);
+    if (itemUnallocatedEl) {
+      itemUnallocatedEl.textContent = Ipon.money(displayUnallocated);
+      itemUnallocatedEl.classList.toggle('is-over', remainingAfter < 0);
+    }
+    if (itemHeadroomHelp) {
+      itemHeadroomHelp.textContent = remainingAfter < 0
+        ? `Exceeds ${meta.label.toLowerCase()} remaining budget by ${Ipon.money(Math.abs(remainingAfter))}. It will still save as your custom target.`
+        : 'Enter 0 if you prefer open tracking, with no fixed limit.';
+    }
   }
 
   function validateItemNameLive() {
@@ -445,6 +634,7 @@
     itemForm.reset();
     const targetCat = item?.category || category || 'NEEDS';
     if (itemIdInput) itemIdInput.value = item?.id || '';
+    if (itemEyebrowEl) itemEyebrowEl.textContent = item ? 'EDIT ENTRY' : 'NEW ENTRY';
     if (itemCategorySelect) itemCategorySelect.value = targetCat;
     if (itemNameInput) {
       itemNameInput.value = item?.name || '';
@@ -458,24 +648,34 @@
     document.getElementById('budget-item-dialog-copy').textContent = item
       ? 'Rename this item, adjust its planned cap, or move it between Needs, Wants, and Savings.'
       : 'Add any custom budget or expense item to organize this category.';
-    if (itemSubmitBtn) itemSubmitBtn.textContent = item ? 'Save changes' : 'Add item';
+    if (itemSubmitBtn) itemSubmitBtn.textContent = item ? 'Save changes' : '+ Add item';
     renderItemSuggestions(targetCat);
     syncItemHeadroomHelp();
     itemDialog.showModal();
     itemNameInput?.focus();
   }
 
-  function openExpenseDialog({ itemId = '', expense = null } = {}) {
+  function openExpenseDialog({ itemId = '', category = '', expense = null } = {}) {
     if (!expenseDialog || !expenseForm) return;
-    const items = Array.isArray(overview?.items) ? overview.items : [];
-    if (!items.length && !expense) {
-      Ipon.toast('Add at least one budget item first before recording an expense.', 'info');
-      openItemDialog({ category: 'NEEDS' });
-      return;
-    }
     expenseForm.reset();
     if (expenseIdInput) expenseIdInput.value = expense?.id || '';
+    if (expenseEyebrowEl) expenseEyebrowEl.textContent = expense ? 'EDIT EXPENSE' : 'NEW EXPENSE';
+    if (expenseMethodSelect) {
+      if (!expenseMethodSelect.options?.length) {
+        expenseMethodSelect.innerHTML = typeof Ipon.paymentMethodOptionsHtml === 'function'
+          ? Ipon.paymentMethodOptionsHtml()
+          : '<option value="CASH">Cash</option><option value="GCASH">GCash</option><option value="MAYA">Maya</option><option value="BANK_TRANSFER">Bank transfer</option><option value="OTHER">Other</option>';
+      }
+      expenseMethodSelect.value = expense?.payment_method || 'CASH';
+    }
     populateExpenseItemSelect(expense?.item_id || itemId || '');
+    if (!expense && !itemId && category && expenseItemSelect?.value === '__NEW__' && expenseNewCategorySelect) {
+      expenseNewCategorySelect.value = category;
+    }
+    if (expenseNewNameInput) {
+      expenseNewNameInput.value = '';
+      Ipon.setFieldError(expenseNewNameInput, '');
+    }
     if (expenseAmountInput) {
       expenseAmountInput.value = expense ? String(expense.amount) : '';
       Ipon.setFieldError(expenseAmountInput, '');
@@ -486,10 +686,25 @@
     if (expenseNoteInput) {
       expenseNoteInput.value = expense?.note || '';
     }
+    if (expenseDeductInput) {
+      const canDeduct = Boolean(overview?.can_deduct_savings);
+      expenseDeductInput.checked = expense ? Boolean(expense.deduct_from_savings && canDeduct) : canDeduct;
+    }
     document.getElementById('budget-expense-dialog-title').textContent = expense ? 'Edit budget expense' : 'Record budget expense';
+    const copyEl = document.getElementById('budget-expense-dialog-copy');
+    if (copyEl) {
+      copyEl.textContent = overview?.can_deduct_savings
+        ? 'Deduct from your live IPON savings or turn off deduction to log as planning only.'
+        : 'Track spending against a budget item for your personal allocation monitor.';
+    }
     if (expenseSubmitBtn) expenseSubmitBtn.textContent = expense ? 'Save changes' : 'Save expense';
+    syncExpenseDialogFields();
     expenseDialog.showModal();
-    expenseAmountInput?.focus();
+    if (expenseItemSelect?.value === '__NEW__' && expenseNewNameInput) {
+      expenseNewNameInput.focus();
+    } else {
+      expenseAmountInput?.focus();
+    }
   }
 
   function syncSplitPreview() {
@@ -499,9 +714,9 @@
     const wRes = Ipon.parseMoneyAmount(splitWantsInput?.value, { min: 0, max: 100, required: true, label: 'Wants %', badInput: splitWantsInput?.validity?.badInput });
     const sRes = Ipon.parseMoneyAmount(splitSavingsInput?.value, { min: 0, max: 100, required: true, label: 'Savings %', badInput: splitSavingsInput?.validity?.badInput });
 
-    const needsVal = nRes.valid ? Number(nRes.value ?? 0) : 0;
-    const wantsVal = wRes.valid ? Number(wRes.value ?? 0) : 0;
-    const savingsVal = sRes.valid ? Number(sRes.value ?? 0) : 0;
+    const needsVal = nRes.valid ? Math.max(0, Number(nRes.value ?? 0)) : 0;
+    const wantsVal = wRes.valid ? Math.max(0, Number(wRes.value ?? 0)) : 0;
+    const savingsVal = sRes.valid ? Math.max(0, Number(sRes.value ?? 0)) : 0;
     const total = roundCentavos(needsVal + wantsVal + savingsVal);
     const preview = computeSplitAmounts(ref, needsVal, wantsVal, savingsVal);
 
@@ -510,10 +725,34 @@
     if (splitSavingsPreview) splitSavingsPreview.textContent = Ipon.money(preview.SAVINGS);
     if (splitSumEl) splitSumEl.textContent = formatPct(total);
 
+    [
+      [splitLiveNeedsEl, needsVal],
+      [splitLiveWantsEl, wantsVal],
+      [splitLiveSavingsEl, savingsVal]
+    ].forEach(([segEl, pct]) => {
+      if (!segEl) return;
+      segEl.hidden = pct <= 0;
+      segEl.style.flex = `${pct} 1 0`;
+      segEl.style.width = `${pct}%`;
+    });
+
     const exactHundred = nRes.valid && wRes.valid && sRes.valid && Math.abs(total - 100) < 0.005;
     if (splitTotalBar) {
       splitTotalBar.classList.toggle('is-valid', exactHundred);
       splitTotalBar.classList.toggle('is-invalid', !exactHundred);
+    }
+    if (splitStateLabelEl) {
+      const diff = roundCentavos(100 - total);
+      splitStateLabelEl.textContent = exactHundred
+        ? 'Ready to save'
+        : diff > 0
+          ? `${formatPct(diff)} remaining`
+          : `${formatPct(Math.abs(diff))} over`;
+    }
+    if (splitStatusIconEl) {
+      splitStatusIconEl.innerHTML = exactHundred
+        ? '<circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.4 2.4 4.8-5"/>'
+        : '<circle cx="12" cy="12" r="9"/><path d="M12 8v4.5M12 15.8h.01"/>';
     }
     if (splitErrorEl) {
       const errMsg = !nRes.valid ? nRes.error
@@ -582,15 +821,20 @@
 
   // Bind stable money guards and live validation
   Ipon.guardMoneyInput(itemAmountInput, { min: 0, max: 999999999999.99, required: true, label: 'Planned amount' });
-  Ipon.guardMoneyInput(expenseAmountInput, { min: 0.01, max: 999999999999.99, required: true, label: 'Expense amount' });
+  Ipon.guardMoneyInput(expenseAmountInput, { min: 0.01, max: 999999999999.99, required: true, label: 'Expense amount', customDisplay: true });
   [splitNeedsInput, splitWantsInput, splitSavingsInput].forEach((input) => {
     Ipon.guardMoneyInput(input, { min: 0, max: 100, required: true, label: 'Percentage', customDisplay: true });
     input?.addEventListener('input', syncSplitPreview);
     input?.addEventListener('blur', syncSplitPreview);
   });
 
-  itemNameInput?.addEventListener('input', validateItemNameLive);
+  itemNameInput?.addEventListener('input', () => {
+    validateItemNameLive();
+    renderItemSuggestions(itemCategorySelect?.value || 'NEEDS');
+  });
   itemNameInput?.addEventListener('blur', validateItemNameLive);
+  itemAmountInput?.addEventListener('input', syncItemHeadroomHelp);
+  itemAmountInput?.addEventListener('blur', syncItemHeadroomHelp);
   itemCategorySelect?.addEventListener('change', () => {
     renderItemSuggestions(itemCategorySelect.value);
     syncItemHeadroomHelp();
@@ -600,10 +844,30 @@
     const chip = event.target.closest('[data-budget-suggest]');
     if (!chip || !itemNameInput) return;
     itemNameInput.value = chip.dataset.budgetSuggest || '';
+    renderItemSuggestions(itemCategorySelect?.value || 'NEEDS');
     validateItemNameLive();
     itemAmountInput?.focus();
     itemAmountInput?.select();
   });
+
+  expenseItemSelect?.addEventListener('change', syncExpenseDialogFields);
+  expenseNewCategorySelect?.addEventListener('change', () => {
+    renderExpenseSuggestions(expenseNewCategorySelect.value || 'NEEDS');
+    validateExpenseNewNameLive();
+  });
+  expenseNewNameInput?.addEventListener('input', validateExpenseNewNameLive);
+  expenseNewNameInput?.addEventListener('blur', validateExpenseNewNameLive);
+  expenseSuggestions?.addEventListener('click', (event) => {
+    const chip = event.target.closest('[data-budget-exp-suggest]');
+    if (!chip || !expenseNewNameInput) return;
+    expenseNewNameInput.value = chip.dataset.budgetExpSuggest || '';
+    validateExpenseNewNameLive();
+    expenseAmountInput?.focus();
+    expenseAmountInput?.select();
+  });
+  expenseAmountInput?.addEventListener('input', validateExpenseAmountLive);
+  expenseAmountInput?.addEventListener('blur', validateExpenseAmountLive);
+  expenseDeductInput?.addEventListener('change', syncExpenseDialogFields);
 
   document.getElementById('budget-edit-split-btn')?.addEventListener('click', openSplitDialog);
   document.getElementById('budget-quick-expense-btn')?.addEventListener('click', () => openExpenseDialog());
@@ -661,19 +925,24 @@
     if (deleteItemBtn) {
       const target = (overview?.items || []).find((i) => i.id === deleteItemBtn.dataset.budgetDeleteItem);
       if (!target) return;
+      const linkedConfirmedSum = (overview?.expenses || [])
+        .filter((e) => e.item_id === target.id && String(e.savings_sync_status || '').toUpperCase() === 'CONFIRMED')
+        .reduce((acc, e) => acc + Number(e.amount || 0), 0);
       const expCount = Number(target.expense_count || 0);
       const confirmed = await Ipon.confirmAction({
         title: 'Delete budget item?',
-        message: expCount > 0
-          ? `Delete "${target.name}" and its ${expCount} tracked expense entr${expCount === 1 ? 'y' : 'ies'}? Your real IPON savings will not be affected.`
-          : `Remove "${target.name}" from your budget planner? Your real IPON savings will not be affected.`,
+        message: linkedConfirmedSum > 0
+          ? `Delete "${target.name}" and its ${expCount} expense entr${expCount === 1 ? 'y' : 'ies'}? Linked confirmed deductions (${Ipon.money(linkedConfirmedSum)}) will be voided in your ledger and restored to IPON savings.`
+          : expCount > 0
+            ? `Delete "${target.name}" and its ${expCount} tracked expense entr${expCount === 1 ? 'y' : 'ies'}?`
+            : `Remove "${target.name}" from your budget planner?`,
         acceptLabel: 'Delete item'
       });
       if (!confirmed) return;
       Ipon.setBusy(deleteItemBtn, true, 'Deleting…');
       try {
         await Ipon.rpc('delete_budget_item', { p_item_id: target.id });
-        Ipon.toast(`Deleted "${target.name}".`);
+        Ipon.toast(linkedConfirmedSum > 0 ? `Deleted "${target.name}" and restored ${Ipon.money(linkedConfirmedSum)} to IPON savings.` : `Deleted "${target.name}".`);
         await load();
       } catch (error) {
         Ipon.toast(Ipon.friendlyError(error), 'error');
@@ -695,16 +964,22 @@
     if (deleteBtn) {
       const target = (overview?.expenses || []).find((e) => e.id === deleteBtn.dataset.budgetDeleteExpense);
       if (!target) return;
+      const syncStatus = String(target.savings_sync_status || '').toUpperCase();
+      const confirmedMsg = syncStatus === 'CONFIRMED'
+        ? `Delete ${Ipon.money(target.amount)} spent on "${target.item_name}" (${Ipon.dateLabel(target.expense_date)})? This voids the linked ledger expense and restores ${Ipon.money(target.amount)} back into your IPON savings.`
+        : syncStatus === 'PENDING'
+          ? `Cancel and delete pending ${Ipon.money(target.amount)} spent on "${target.item_name}" (${Ipon.dateLabel(target.expense_date)})?`
+          : `Remove ${Ipon.money(target.amount)} spent on "${target.item_name}" (${Ipon.dateLabel(target.expense_date)}) from your budget planner?`;
       const confirmed = await Ipon.confirmAction({
         title: 'Delete budget expense?',
-        message: `Remove ${Ipon.money(target.amount)} spent on "${target.item_name}" (${Ipon.dateLabel(target.expense_date)})? This updates remaining budget and never changes your IPON savings.`,
+        message: confirmedMsg,
         acceptLabel: 'Delete expense'
       });
       if (!confirmed) return;
       Ipon.setBusy(deleteBtn, true, 'Deleting…');
       try {
         await Ipon.rpc('delete_budget_expense', { p_expense_id: target.id });
-        Ipon.toast('Budget expense deleted.');
+        Ipon.toast(syncStatus === 'CONFIRMED' ? `Deleted expense and restored ${Ipon.money(target.amount)} to IPON savings.` : 'Budget expense deleted.');
         await load();
       } catch (error) {
         Ipon.toast(Ipon.friendlyError(error), 'error');
@@ -747,15 +1022,30 @@
 
   expenseForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!validateExpenseNewNameLive()) {
+      expenseNewNameInput?.focus();
+      return;
+    }
     const amtCheck = Ipon.parseMoneyAmount(expenseAmountInput?.value, { min: 0.01, max: 999999999999.99, required: true, label: 'Expense amount', badInput: expenseAmountInput?.validity?.badInput });
     if (!amtCheck.valid) {
       Ipon.setFieldError(expenseAmountInput, amtCheck.error);
       expenseAmountInput?.focus();
       return;
     }
+    const deductOn = Boolean(overview?.can_deduct_savings && expenseDeductInput?.checked);
+    const headroom = getExpenseAvailableHeadroom();
+    if (deductOn && amtCheck.value > headroom) {
+      Ipon.setFieldError(
+        expenseAmountInput,
+        `Exceeds available IPON savings (${Ipon.money(headroom)}). Turn off deduction to log as planning only.`
+      );
+      expenseAmountInput?.focus();
+      return;
+    }
     Ipon.setFieldError(expenseAmountInput, '');
+    const isNew = expenseItemSelect?.value === '__NEW__';
     if (!expenseItemSelect?.value) {
-      Ipon.toast('Select a budget item first.', 'error');
+      Ipon.toast('Select or create a budget item first.', 'error');
       expenseItemSelect?.focus();
       return;
     }
@@ -763,13 +1053,23 @@
     try {
       await Ipon.rpc('save_budget_expense', {
         p_expense_id: expenseIdInput?.value || null,
-        p_item_id: expenseItemSelect.value,
+        p_item_id: isNew ? null : expenseItemSelect.value,
         p_amount: amtCheck.value,
         p_expense_date: expenseDateInput?.value || Ipon.isoDate(),
-        p_note: expenseNoteInput?.value?.trim() || null
+        p_note: expenseNoteInput?.value?.trim() || null,
+        p_category: isNew ? (expenseNewCategorySelect?.value || 'NEEDS') : null,
+        p_item_name: isNew ? expenseNewNameInput.value.trim() : null,
+        p_deduct_from_savings: deductOn,
+        p_payment_method: deductOn ? (expenseMethodSelect?.value || 'CASH') : 'CASH'
       });
       expenseDialog?.close();
-      Ipon.toast(expenseIdInput?.value ? 'Budget expense updated.' : 'Budget expense recorded.');
+      Ipon.toast(
+        deductOn
+          ? (overview?.role === 'ADMIN'
+            ? `Saved & deducted ${Ipon.money(amtCheck.value)} from IPON savings.`
+            : 'Expense submitted for admin approval to deduct from group savings.')
+          : (expenseIdInput?.value ? 'Planning expense updated.' : 'Planning expense recorded.')
+      );
       await load();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');

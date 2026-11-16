@@ -4782,7 +4782,13 @@
       refreshTimer = setTimeout(flushRefresh, 240);
     };
 
-    realtimeChannel = client.channel(`msg-social-live:${profile.id}`)
+    if (realtimeChannel) {
+      try { client.removeChannel(realtimeChannel)?.catch?.(() => { }); } catch { }
+      realtimeChannel = null;
+    }
+    const baseRealtimeTopic = `msg-social-live:${profile.id}`;
+    const createChannel = ipon().createRealtimeChannel;
+    realtimeChannel = (createChannel ? createChannel(baseRealtimeTopic, undefined, client) : client.channel(baseRealtimeTopic))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         const row = payload?.new || payload?.old || {};
         const cId = row.conversation_id;

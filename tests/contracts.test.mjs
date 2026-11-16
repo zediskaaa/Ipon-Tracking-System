@@ -592,7 +592,19 @@ test('HTML dialogs are balanced and page IDs remain unique', () => {
     const html = read(file);
     const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
     assert.equal(new Set(ids).size, ids.length, `${file} contains duplicate IDs`);
-    assert.equal((html.match(/<dialog\b/g) || []).length, (html.match(/<\/dialog>/g) || []).length, `${file} contains an unbalanced dialog`);
+    const scripts = [...html.matchAll(/<script\b([^>]*)>/gi)]
+      .map((match) => /src="([^"]+)"/i.exec(match[1])?.[1]?.split('?')[0])
+      .filter(Boolean);
+    assert.equal(new Set(scripts).size, scripts.length, `${file} loads duplicate scripts`);
+    const links = [...html.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*>/gi)]
+      .map((match) => /href="([^"]+)"/i.exec(match[0])?.[1]?.split('?')[0])
+      .filter(Boolean);
+    assert.equal(new Set(links).size, links.length, `${file} loads duplicate stylesheets`);
+    for (const tag of ['dialog', 'section', 'form', 'div']) {
+      const opens = (html.match(new RegExp(`<${tag}\\b`, 'gi')) || []).length;
+      const closes = (html.match(new RegExp(`<\\/${tag}>`, 'gi')) || []).length;
+      assert.equal(opens, closes, `${file} contains unbalanced <${tag}> tags (${opens} vs ${closes})`);
+    }
   }
 });
 
@@ -9697,20 +9709,6 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
 
 test('migration 084, ongoing savings protection, 30-day completion bin, print border/break fix, and VM bin/batch flows work cleanly', async () => {
   const vm = await import('node:vm');
-  const mig084 = read('database/migrations/20261116_084_ongoing_savings_protection_and_bin_lifecycle.sql');
-  const schema = read('database/schema.sql');
-  const css = read('css/app.css');
-  const loginHtml = read('login.html');
-  const policyJs = read('js/policy.js');
-  const coreJs = read('js/core.js');
-  const savingsHtml = read('savings.html');
-  const savingsJs = read('js/savings.js');
-  const settingsHtml = read('settings.html');
-  const settingsJs = read('js/settings.js');
-  const membersHtml = read('members.html');
-  const membersJs = read('js/members.js');
-
-  // 1. SQL migration 084 & schema sync protect ongoing savings/goals and wire 30-day completion bin + Storage purge
   assert.match(mig084, /create table if not exists public\.savings_cycle_batches/i);
   assert.match(mig084, /create or replace function public\.complete_and_bin_savings_goal\(/i);
   assert.match(mig084, /create or replace function public\.archive_and_reset_savings_cycle\(/i);
@@ -10490,14 +10488,48 @@ test('migration 094 and budget.html implement non-destructive Budget Allocation 
     'budget-expense-note', 'budget-expense-submit', 'budget-split-dialog', 'budget-split-form',
     'split-needs', 'split-wants', 'split-savings', 'split-needs-preview', 'split-wants-preview',
     'split-savings-preview', 'budget-split-total-bar', 'budget-split-sum', 'budget-split-error',
-    'budget-split-submit', 'budget-item-dialog-title', 'budget-item-dialog-copy', 'budget-expense-dialog-title'
+    'budget-split-submit', 'budget-item-dialog-title', 'budget-item-dialog-copy', 'budget-expense-dialog-title',
+    'budget-expense-dialog-copy', 'budget-hero-tag', 'budget-mode-title', 'budget-mode-copy',
+    'budget-expense-new-item-fields', 'budget-expense-new-category', 'budget-expense-new-name',
+    'budget-expense-suggestions', 'budget-expense-headroom-help', 'budget-expense-deduct-wrap',
+    'budget-expense-deduct', 'budget-expense-deduct-help', 'budget-expense-method-wrap', 'budget-expense-method',
+    'budget-item-eyebrow', 'budget-item-bucket-label', 'budget-item-bucket-total', 'budget-item-unallocated',
+    'budget-expense-eyebrow', 'split-live-needs', 'split-live-wants', 'split-live-savings',
+    'budget-split-state-label', 'budget-split-status-icon'
   ].forEach(makeEl);
+
+  const mig096 = read('database/migrations/20261116_096_budget_savings_deduction_sync.sql');
+  for (const sql of [mig096, schema]) {
+    assert.match(sql, /'20261116_096'/);
+    assert.match(sql, /linked_expense_id uuid references public\.expenses\(id\)/i);
+    assert.match(sql, /drop function if exists public\.save_budget_expense\(uuid, uuid, numeric, date, text\);/i);
+    assert.match(sql, /v_ref_balance := greatest\(0\.00, v_raw_balance \+ v_deducted_confirmed\);/i);
+    assert.match(sql, /insert into public\.expenses \(/i);
+  }
+  assert.match(budgetHtml, /id="budget-expense-deduct"/);
+  assert.match(budgetHtml, /id="budget-expense-method"/);
+  assert.match(budgetHtml, /id="budget-expense-new-item-fields"/);
+  assert.match(budgetHtml, /class="budget-item-summary-card"/);
+  assert.match(budgetHtml, /id="budget-item-unallocated"/);
+  assert.match(budgetHtml, /class="budget-split-cards"/);
+  assert.match(budgetHtml, /id="split-live-needs"/);
+  assert.match(budgetHtml, /id="budget-split-state-label"/);
+  assert.match(budgetJs, /budget-empty-history-inner/);
+  assert.match(appCss, /\.budget-sync-pill\.is-deducted/);
+  assert.match(appCss, /\.budget-modal-dialog[\s\S]*#faf5ec/i);
+  assert.match(appCss, /\.budget-split-live-seg/);
+  assert.match(appCss, /\.budget-empty-history-inner/);
+  assert.match(appCss, /\.budget-categories-grid > \.panel \+ \.panel\s*\{\s*margin-top:\s*0;/);
+  assert.match(appCss, /\.budget-empty-items::before\s*\{\s*display:\s*none\s*!important;/);
+  assert.match(appCss, /\.budget-category-card[\s\S]*flex-direction:\s*column/);
+  assert.match(appCss, /\.budget-empty-items[\s\S]*flex:\s*1 1 auto/);
 
   let refSavings = 10000;
   let dbExpenses = [
-    { id: 'exp-1', item_id: 'item-1', item_name: 'Groceries', category: 'NEEDS', amount: 2000, expense_date: '2026-11-16', note: 'Weekly run' }
+    { id: 'exp-1', item_id: 'item-1', item_name: 'Groceries', category: 'NEEDS', amount: 2000, expense_date: '2026-11-16', note: 'Weekly run', payment_method: 'CASH', deduct_from_savings: true, savings_sync_status: 'CONFIRMED' }
   ];
   let realtimeReload = null;
+  const rpcCalls = [];
   const ctx = {
     console,
     Math,
@@ -10525,24 +10557,50 @@ test('migration 094 and budget.html implement non-destructive Budget Allocation 
       syncWorkspaceMode() {},
       populateGroupSelect() {},
       guardMoneyInput() {},
+      paymentMethodOptionsHtml: () => '<option value="CASH">Cash</option><option value="GCASH">GCash</option>',
+      paymentMethodMeta: (m) => ({ label: m === 'GCASH' ? 'GCash' : 'Cash' }),
       parseMoneyAmount: (raw) => ({ valid: Number.isFinite(Number(raw)), value: Number(raw || 0), error: '' }),
       subscribeToChanges: (_name, _tables, fn) => { realtimeReload = fn; },
-      rpc: async (name) => {
+      rpc: async (name, params) => {
+        rpcCalls.push([name, params]);
         if (name === 'get_my_groups') return [{ group_id: 'g1', name: 'Test Savings', is_current: true, workspace_mode: 'GROUP' }];
+        if (name === 'save_budget_expense') {
+          dbExpenses.unshift({
+            id: `exp-${dbExpenses.length + 1}`,
+            item_id: params.p_item_id || 'item-1',
+            item_name: params.p_item_name || 'Groceries',
+            category: params.p_category || 'NEEDS',
+            amount: Number(params.p_amount || 0),
+            expense_date: params.p_expense_date || '2026-11-16',
+            note: params.p_note || '',
+            payment_method: params.p_payment_method || 'CASH',
+            deduct_from_savings: Boolean(params.p_deduct_from_savings),
+            savings_sync_status: params.p_deduct_from_savings ? 'CONFIRMED' : 'MONITORING'
+          });
+          return dbExpenses[0];
+        }
         if (name === 'get_budget_overview') {
           const spent = dbExpenses.reduce((acc, row) => acc + row.amount, 0);
+          const deductedConfirmed = dbExpenses.filter((r) => r.savings_sync_status === 'CONFIRMED').reduce((acc, row) => acc + row.amount, 0);
+          const remainingSavings = refSavings - (spent - 2000);
+          const grossPool = remainingSavings + deductedConfirmed;
           return {
             has_workspace: true,
             group_id: 'g1',
             group_name: 'Test Savings',
-            reference_balance: refSavings,
-            raw_savings_balance: refSavings,
+            role: 'ADMIN',
+            can_deduct_savings: true,
+            current_savings: remainingSavings,
+            deducted_confirmed: deductedConfirmed,
+            deducted_pending: 0,
+            reference_balance: grossPool,
+            raw_savings_balance: remainingSavings,
             config: { needs_pct: 50, wants_pct: 30, savings_pct: 20 },
-            totals: { allocated: refSavings, itemized: 2500, spent, remaining: refSavings - spent },
+            totals: { allocated: grossPool, itemized: 2500, spent, remaining: grossPool - spent },
             categories: {
-              NEEDS: { pct: 50, allocated: refSavings * 0.5, itemized: 2500, spent, remaining: (refSavings * 0.5) - spent },
-              WANTS: { pct: 30, allocated: refSavings * 0.3, itemized: 0, spent: 0, remaining: refSavings * 0.3 },
-              SAVINGS: { pct: 20, allocated: refSavings * 0.2, itemized: 0, spent: 0, remaining: refSavings * 0.2 }
+              NEEDS: { pct: 50, allocated: grossPool * 0.5, itemized: 2500, spent, remaining: (grossPool * 0.5) - spent },
+              WANTS: { pct: 30, allocated: grossPool * 0.3, itemized: 0, spent: 0, remaining: grossPool * 0.3 },
+              SAVINGS: { pct: 20, allocated: grossPool * 0.2, itemized: 0, spent: 0, remaining: grossPool * 0.2 }
             },
             items: [{ id: 'item-1', category: 'NEEDS', name: 'Groceries', allocated_amount: 2500, spent_amount: spent, expense_count: dbExpenses.length }],
             expenses: dbExpenses
@@ -10555,17 +10613,45 @@ test('migration 094 and budget.html implement non-destructive Budget Allocation 
   await vm.runInNewContext(budgetJs, ctx, { filename: 'js/budget.js' });
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(els.get('budget-ref-balance').textContent, '₱10,000.00');
-  assert.equal(els.get('budget-legend-needs-amt').textContent, '₱5,000.00');
+  assert.equal(els.get('budget-legend-needs-amt').textContent, '₱6,000.00');
   assert.equal(els.get('budget-total-spent').textContent, '₱2,000.00');
-  assert.equal(els.get('budget-total-remaining').textContent, '₱8,000.00');
+  assert.equal(els.get('budget-total-remaining').textContent, '₱10,000.00');
+
+  els.get('budget-expense-item').value = '__NEW__';
+  els.get('budget-expense-new-category').value = 'NEEDS';
+  els.get('budget-expense-new-name').value = 'Water bill';
+  els.get('budget-expense-amount').value = '1500';
+  els.get('budget-expense-deduct').checked = true;
+  els.get('budget-expense-method').value = 'GCASH';
+  await els.get('budget-expense-form')._emit('submit');
+  assert.equal(els.get('budget-ref-balance').textContent, '₱8,500.00');
+  assert.equal(els.get('budget-total-spent').textContent, '₱3,500.00');
+  assert.equal(els.get('budget-total-remaining').textContent, '₱8,500.00');
+  assert.equal(rpcCalls.some(([name, p]) => name === 'save_budget_expense' && p?.p_deduct_from_savings === true && p?.p_payment_method === 'GCASH'), true);
 
   refSavings = 15000;
   await realtimeReload();
-  assert.equal(els.get('budget-ref-balance').textContent, '₱15,000.00');
-  assert.equal(els.get('budget-legend-needs-amt').textContent, '₱7,500.00');
-  assert.equal(els.get('budget-total-spent').textContent, '₱2,000.00');
-  assert.equal(els.get('budget-total-remaining').textContent, '₱13,000.00');
-  assert.equal(dbExpenses.length, 1);
+  assert.equal(els.get('budget-ref-balance').textContent, '₱13,500.00');
+  assert.equal(els.get('budget-total-spent').textContent, '₱3,500.00');
+  assert.equal(els.get('budget-total-remaining').textContent, '₱13,500.00');
+  assert.equal(dbExpenses.length, 2);
+
+  els.get('budget-item-category').value = 'WANTS';
+  els.get('budget-item-amount').value = '500';
+  await els.get('budget-item-amount')._emit('input');
+  assert.equal(els.get('budget-item-bucket-label').textContent, 'WANTS BUDGET');
+  assert.equal(els.get('budget-item-bucket-total').textContent, els.get('budget-legend-wants-amt').textContent);
+  assert.match(els.get('budget-item-unallocated').textContent, /^₱[1-9]/);
+
+  els.get('split-needs').value = '50';
+  els.get('split-wants').value = '30';
+  els.get('split-savings').value = '20';
+  await els.get('split-needs')._emit('input');
+  assert.equal(els.get('budget-split-state-label').textContent, 'Ready to save');
+
+  els.get('split-savings').value = '10';
+  await els.get('split-savings')._emit('input');
+  assert.equal(els.get('budget-split-state-label').textContent, '10% remaining');
 });
 
 test('Migration 095 restores reverted RPCs/policies, drops legacy overloads, and cleans unlinked groups', () => {
@@ -10626,4 +10712,55 @@ test('Dashboard header renders before summary failure, Solo quick-record falls b
 
   assert.match(appCss, /#bug-reports \.data-table td:nth-child\(2\)[\s\S]*?white-space:\s*nowrap/);
   assert.match(appCss, /\.users-filters #users-search[\s\S]*?min-width:\s*256px/);
+});
+
+test('createRealtimeChannel and Realtime callers avoid adding postgres_changes or presence callbacks onto subscribed channels', () => {
+  const coreJs = read('js/core.js');
+  const messagesJs = read('js/messages.js');
+  assert.match(coreJs, /function createRealtimeChannel\(baseTopic, options = undefined, clientArg = null\)/);
+  assert.match(coreJs, /createRealtimeChannel\(`live:\$\{name\}:/);
+  assert.match(coreJs, /createRealtimeChannel\(`notifications:\$\{profile\.id\}`/);
+  assert.match(coreJs, /createRealtimeChannel\(`record-thread-\$\{recordType\}-\$\{recordId\}`/);
+  assert.match(coreJs, /existingPresence[\s\S]*realtime:ipon-active-presence/);
+  assert.match(messagesJs, /ipon\(\)\.createRealtimeChannel/);
+
+  const helperSrc = coreJs.match(/let rtChannelNonce = 0;[\s\S]*?return options === undefined \? client\.channel\(baseTopic\) : client\.channel\(baseTopic, options\);\s*\}/)?.[0];
+  assert.ok(helperSrc, 'createRealtimeChannel helper should exist');
+  const activeChannels = [];
+  const removed = [];
+  const fakeClient = {
+    getChannels: () => activeChannels,
+    removeChannel: (ch) => {
+      removed.push(ch.topic);
+      return Promise.resolve('ok');
+    },
+    channel(topic) {
+      const fullTopic = `realtime:${topic}`;
+      const existing = activeChannels.find((c) => c.topic === fullTopic);
+      if (existing) return existing;
+      const ch = {
+        topic: fullTopic,
+        subscribed: false,
+        on(type) {
+          if (ch.subscribed && type === 'postgres_changes') {
+            throw new Error(`cannot add \`postgres_changes\` callbacks for ${ch.topic} after \`subscribe()\`.`);
+          }
+          return ch;
+        },
+        subscribe() {
+          ch.subscribed = true;
+          return ch;
+        }
+      };
+      activeChannels.push(ch);
+      return ch;
+    }
+  };
+  const fn = new Function('getClient', `${helperSrc}; return createRealtimeChannel;`)(() => fakeClient);
+  const ch1 = fn('live:budget:user-1');
+  ch1.on('postgres_changes', {}).subscribe();
+  const ch2 = fn('live:budget:user-1');
+  assert.notEqual(ch2, ch1);
+  assert.doesNotThrow(() => ch2.on('postgres_changes', {}).subscribe());
+  assert.deepEqual(removed, ['realtime:live:budget:user-1']);
 });

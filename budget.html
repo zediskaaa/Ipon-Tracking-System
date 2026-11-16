@@ -7,39 +7,31 @@
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>Budget Planner — myIPON</title>
+  <title>Budget allocation &amp; expenses — myIPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261116-124">
-  <link rel="stylesheet" href="css/app.css?v=20261116-125">
+  <link rel="stylesheet" href="css/app.css?v=20261116-129">
   <script src="js/config.js?v=20261115-75"></script>
 </head>
 
 <body data-page="budget">
   <div class="app-layout">
     <aside class="app-sidebar" id="app-sidebar"></aside>
-    <main class="workspace">
-      <header class="page-header">
     <main class="workspace budget-workspace">
       <header class="page-header budget-page-header">
         <div>
           <h1>Budget allocation &amp; expenses</h1>
-          <p>Automatically plan Needs, Wants, and Savings from your existing IPON balance without touching actual savings.</p>
-          <p>Plan your Needs, Wants, and Savings automatically from your existing IPON balance, without touching your actual savings.</p>
+          <p>Plan your Needs, Wants, and Savings from your live IPON balance, with optional direct deductions synced back to savings.</p>
         </div>
         <div class="header-actions" id="budget-header-actions">
           <button class="button button-secondary" id="budget-edit-split-btn" type="button" data-requires-data>
             Customize % split
           </button>
-          <button class="button button-primary" id="budget-quick-expense-btn" type="button" data-requires-data>
           <button class="button button-primary budget-header-pri-btn" id="budget-quick-expense-btn" type="button" data-requires-data>
             + Record expense
           </button>
         </div>
       </header>
 
-      <section class="group-context-bar" id="budget-group-bar" hidden>
-        <div class="group-context-copy">
-          <span class="calc-eyebrow">Active workspace</span>
       <section class="budget-workspace-strip" id="budget-group-bar" hidden>
         <div class="budget-ws-indicator">
           <span class="budget-ws-dot" aria-hidden="true"></span>
@@ -55,29 +47,20 @@
       <section class="panel" id="budget-no-workspace" hidden></section>
 
       <div id="budget-workspace-content" hidden>
-        <section class="panel budget-connection-panel" aria-labelledby="budget-sync-heading">
-          <div class="budget-connection-row">
-            <div class="budget-connection-copy">
-              <span class="budget-sync-chip">
-                <i class="budget-sync-dot" aria-hidden="true"></i>
-                Auto-linked to existing IPON savings
-              </span>
-              <h2 id="budget-sync-heading">Live reference allocation (<span id="budget-split-heading">50 / 30 / 20</span>)</h2>
-              <p id="budget-source-label">Checking confirmed savings balance…</p>
         <section class="budget-hero" aria-labelledby="budget-sync-heading">
           <div class="budget-hero-main">
-            <span class="budget-hero-tag">
+            <span class="budget-hero-tag" id="budget-hero-tag">
               <i class="budget-sync-dot" aria-hidden="true"></i>
-              Auto-linked to existing IPON savings
+              <span>Synced with live IPON savings</span>
             </span>
-            <h2 class="budget-hero-heading" id="budget-sync-heading">Live reference allocation (<span id="budget-split-heading">50 / 30 / 20</span>)</h2>
+            <h2 class="budget-hero-heading" id="budget-sync-heading">Live remaining IPON savings (<span id="budget-split-heading">50 / 30 / 20</span>)</h2>
             <p class="budget-hero-balance tabular-nums" id="budget-ref-balance">₱0.00</p>
             <p class="budget-hero-cap" id="budget-source-label">Checking confirmed savings balance…</p>
             <small class="budget-hero-ref-note" id="budget-ref-note" hidden></small>
           </div>
           <div class="budget-hero-note" role="note">
-            <strong>Monitoring layer only</strong>
-            <span>Recording or editing budget expenses never withdraws from or alters your real IPON savings balance.</span>
+            <strong id="budget-mode-title">Live savings deduction enabled</strong>
+            <span id="budget-mode-copy">Expenses recorded with deduction turned on reflect directly in your workspace Expenses and IPON Tracked Savings.</span>
           </div>
           <div class="budget-hero-split">
             <div class="budget-ratio-bar" id="budget-ratio-bar" aria-hidden="true">
@@ -85,53 +68,25 @@
               <span class="budget-ratio-seg is-wants" id="budget-ratio-wants"></span>
               <span class="budget-ratio-seg is-savings" id="budget-ratio-savings"></span>
             </div>
-            <div class="budget-non-deduct-note" role="note">
-              <strong>Monitoring layer only</strong>
-              <span>Recording or editing budget expenses never withdraws from or alters your real IPON savings balance.</span>
             <div class="budget-ratio-legend" id="budget-ratio-legend">
               <div><i class="budget-legend-dot is-needs" aria-hidden="true"></i>Needs <strong id="budget-legend-needs-pct">50%</strong><span class="budget-legend-sep" aria-hidden="true">·</span><span class="budget-legend-amt tabular-nums" id="budget-legend-needs-amt">₱0.00</span></div>
               <div><i class="budget-legend-dot is-wants" aria-hidden="true"></i>Wants <strong id="budget-legend-wants-pct">30%</strong><span class="budget-legend-sep" aria-hidden="true">·</span><span class="budget-legend-amt tabular-nums" id="budget-legend-wants-amt">₱0.00</span></div>
               <div><i class="budget-legend-dot is-savings" aria-hidden="true"></i>Savings <strong id="budget-legend-savings-pct">20%</strong><span class="budget-legend-sep" aria-hidden="true">·</span><span class="budget-legend-amt tabular-nums" id="budget-legend-savings-amt">₱0.00</span></div>
             </div>
           </div>
-          <div class="budget-ratio-bar" id="budget-ratio-bar" aria-hidden="true">
-            <span class="budget-ratio-seg is-needs" id="budget-ratio-needs"></span>
-            <span class="budget-ratio-seg is-wants" id="budget-ratio-wants"></span>
-            <span class="budget-ratio-seg is-savings" id="budget-ratio-savings"></span>
-          </div>
-          <div class="budget-ratio-legend" id="budget-ratio-legend">
-            <span><i class="budget-legend-dot is-needs" aria-hidden="true"></i>Needs <strong id="budget-legend-needs-pct">50%</strong></span>
-            <span><i class="budget-legend-dot is-wants" aria-hidden="true"></i>Wants <strong id="budget-legend-wants-pct">30%</strong></span>
-            <span><i class="budget-legend-dot is-savings" aria-hidden="true"></i>Savings <strong id="budget-legend-savings-pct">20%</strong></span>
-          </div>
         </section>
 
         <section class="stats-grid budget-stats-grid" aria-label="Budget summary totals">
-          <article class="stat-card">
-            <span>Existing savings balance</span>
-            <strong id="budget-ref-balance">—</strong>
-            <small class="budget-stat-sub" id="budget-ref-note">Reference source · untouched</small>
-          </article>
-          <article class="stat-card">
-            <span>Total allocated</span>
-            <strong id="budget-total-allocated">—</strong>
           <article class="stat-card budget-stat-card">
             <span class="budget-stat-label">Total allocated</span>
             <strong class="budget-stat-value tabular-nums" id="budget-total-allocated">—</strong>
             <small class="budget-stat-sub" id="budget-total-itemized">Itemized plan: ₱0.00</small>
           </article>
-          <article class="stat-card">
-            <span>Total budget spent</span>
-            <strong id="budget-total-spent">—</strong>
           <article class="stat-card budget-stat-card">
             <span class="budget-stat-label">Total budget spent</span>
             <strong class="budget-stat-value tabular-nums" id="budget-total-spent">—</strong>
             <small class="budget-stat-sub" id="budget-spent-pct">0% of allocated budget</small>
           </article>
-          <article class="stat-card">
-            <span>Remaining budget</span>
-            <strong id="budget-total-remaining">—</strong>
-            <small class="budget-stat-sub" id="budget-remaining-note">Allocated − Total expenses</small>
           <article class="stat-card budget-stat-card">
             <span class="budget-stat-label">Remaining budget</span>
             <strong class="budget-stat-value tabular-nums" id="budget-total-remaining">—</strong>
@@ -143,14 +98,11 @@
         </section>
 
         <section class="panel budget-history-panel" aria-labelledby="budget-history-heading">
-          <div class="panel-header">
           <div class="panel-header budget-history-head">
             <div>
               <h2 id="budget-history-heading">Tracked budget expenses</h2>
-              <p>Independent expense history. Changes to your IPON savings recalculate your allocation automatically without overwriting these records.</p>
-              <p>Independent expense history. Changes to your IPON savings recalculate your allocation without overwriting these records.</p>
+              <p>Complete expense history. Expenses deducted from IPON savings stay synced with Expenses, Calendar, Dashboard, and Audit log.</p>
             </div>
-            <div class="table-filters">
             <div class="table-filters budget-history-tools">
               <input id="budget-expense-search" type="search" placeholder="Search item or note" aria-label="Search budget expenses">
               <select id="budget-expense-filter" aria-label="Filter expenses by category">
@@ -169,21 +121,19 @@
                   <th>Date</th>
                   <th>Category</th>
                   <th>Budget item</th>
-                  <th>Amount</th>
                   <th class="budget-th-amount">Amount</th>
+                  <th>Savings impact</th>
                   <th>Note</th>
-                  <th>Actions</th>
                   <th class="budget-th-actions">Actions</th>
                 </tr>
               </thead>
               <tbody id="budget-expenses-body">
                 <tr class="loading-row">
-                  <td colspan="6">Loading budget expenses…</td>
+                  <td colspan="7">Loading budget expenses…</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <nav class="table-pager" id="budget-history-pager" aria-label="Budget expense pages">
           <nav class="table-pager budget-history-pager" id="budget-history-pager" aria-label="Budget expense pages">
             <button type="button" data-page="previous">Previous</button>
             <span aria-live="polite">Page 1 of 1</span>
@@ -192,12 +142,13 @@
         </section>
       </div>
 
-      <dialog class="form-dialog" id="budget-item-dialog" aria-labelledby="budget-item-dialog-title">
+      <dialog class="form-dialog budget-modal-dialog budget-item-modal" id="budget-item-dialog" aria-labelledby="budget-item-dialog-title">
         <div class="form-dialog-sheet">
           <header class="form-dialog-header">
             <div>
+              <span class="budget-modal-eyebrow" id="budget-item-eyebrow">NEW ENTRY</span>
               <h2 id="budget-item-dialog-title">Add budget item</h2>
-              <p id="budget-item-dialog-copy">Customize your spending or saving categories inside this bucket.</p>
+              <p id="budget-item-dialog-copy">Add any custom budget or expense item to organize this category.</p>
             </div>
             <button class="dialog-close" id="budget-item-close" type="button" aria-label="Close budget item form">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -205,44 +156,62 @@
               </svg>
             </button>
           </header>
-          <form id="budget-item-form" class="form-grid">
+          <form id="budget-item-form" class="budget-modal-form">
             <input type="hidden" name="item_id" id="budget-item-id">
-            <div class="field field-wide">
-              <label for="budget-item-category">Category section</label>
-              <select id="budget-item-category" name="category" required>
-                <option value="NEEDS">Needs (Essential living expenses)</option>
-                <option value="WANTS">Wants (Lifestyle &amp; personal)</option>
-                <option value="SAVINGS">Savings (Planned reserve &amp; goals)</option>
-              </select>
+            <div class="budget-modal-body form-grid">
+              <div class="field field-wide">
+                <label class="budget-uc-label" for="budget-item-category">Category section</label>
+                <select id="budget-item-category" name="category" required>
+                  <option value="NEEDS">Needs (Essential living expenses)</option>
+                  <option value="WANTS">Wants (Lifestyle &amp; personal)</option>
+                  <option value="SAVINGS">Savings (Planned reserve &amp; goals)</option>
+                </select>
+              </div>
+              <div class="field field-wide">
+                <label class="budget-uc-label" for="budget-item-name">Item name</label>
+                <input id="budget-item-name" name="name" type="text" minlength="1" maxlength="100"
+                  placeholder="e.g., Groceries, Rent, Emergency Fund" aria-describedby="budget-item-name-error" required>
+                <div class="budget-suggestion-row" id="budget-item-suggestions" aria-label="Optional item suggestions"></div>
+                <small class="field-error budget-error-slot" id="budget-item-name-error" role="alert" hidden></small>
+              </div>
+              <div class="field field-wide">
+                <label class="budget-uc-label" for="budget-item-amount">Planned item allocation</label>
+                <div class="budget-peso-input-wrap">
+                  <span class="budget-peso-prefix" aria-hidden="true">₱</span>
+                  <input id="budget-item-amount" name="allocated_amount" type="number" min="0" max="999999999999.99"
+                    step="0.01" inputmode="decimal" value="0" aria-describedby="budget-item-headroom-help budget-item-amount-error" required>
+                </div>
+                <small class="field-error budget-error-slot" id="budget-item-amount-error" role="alert" hidden></small>
+                <div class="budget-item-summary-card">
+                  <div class="budget-item-summary-grid">
+                    <div>
+                      <span class="budget-summary-kicker" id="budget-item-bucket-label">NEEDS BUDGET</span>
+                      <strong class="budget-summary-val tabular-nums" id="budget-item-bucket-total">₱0.00</strong>
+                    </div>
+                    <div>
+                      <span class="budget-summary-kicker">UNALLOCATED</span>
+                      <strong class="budget-summary-val tabular-nums" id="budget-item-unallocated">₱0.00</strong>
+                    </div>
+                  </div>
+                  <small class="budget-summary-note" id="budget-item-headroom-help">Enter 0 if you prefer open tracking, with no fixed limit.</small>
+                </div>
+              </div>
             </div>
-            <div class="field field-wide">
-              <label for="budget-item-name">Item name</label>
-              <input id="budget-item-name" name="name" type="text" minlength="1" maxlength="100"
-                placeholder="e.g., Groceries, Rent, Emergency Fund" aria-describedby="budget-item-name-error" required>
-              <small class="field-error budget-error-slot" id="budget-item-name-error" role="alert" hidden></small>
-              <div class="budget-suggestion-row" id="budget-item-suggestions" aria-label="Optional item suggestions"></div>
-            </div>
-            <div class="field field-wide">
-              <label for="budget-item-amount">Planned item allocation (₱)</label>
-              <input id="budget-item-amount" name="allocated_amount" type="number" min="0" max="999999999999.99"
-                step="0.01" inputmode="decimal" value="0" aria-describedby="budget-item-headroom-help budget-item-amount-error" required>
-              <small class="field-help" id="budget-item-headroom-help">Optional planned cap for this item. Enter 0 if you just want to track expenses for it.</small>
-              <small class="field-error budget-error-slot" id="budget-item-amount-error" role="alert" hidden></small>
-            </div>
-            <div class="form-actions field-wide">
+            <footer class="budget-modal-footer">
               <button class="button button-secondary" id="budget-item-cancel" type="button">Cancel</button>
-              <button class="button button-primary" id="budget-item-submit" type="submit" data-requires-data>Save item</button>
-            </div>
+              <button class="button button-primary" id="budget-item-submit" type="submit" data-requires-data>+ Add item</button>
+            </footer>
           </form>
         </div>
       </dialog>
 
-      <dialog class="form-dialog" id="budget-expense-dialog" aria-labelledby="budget-expense-dialog-title">
+      <dialog class="form-dialog budget-modal-dialog budget-expense-modal" id="budget-expense-dialog" aria-labelledby="budget-expense-dialog-title">
         <div class="form-dialog-sheet">
           <header class="form-dialog-header">
             <div>
+              <span class="budget-modal-eyebrow" id="budget-expense-eyebrow">NEW EXPENSE</span>
               <h2 id="budget-expense-dialog-title">Record budget expense</h2>
-              <p>Track spending against a budget item. Your real IPON savings will remain unchanged.</p>
+              <p id="budget-expense-dialog-copy">Deduct from your live IPON savings or log a planning expense.</p>
             </div>
             <button class="dialog-close" id="budget-expense-close" type="button" aria-label="Close expense form">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -250,44 +219,82 @@
               </svg>
             </button>
           </header>
-          <form id="budget-expense-form" class="form-grid">
+          <form id="budget-expense-form" class="budget-modal-form">
             <input type="hidden" name="expense_id" id="budget-expense-id">
-            <div class="budget-dialog-notice field-wide" role="note">
-              Monitoring entry only — this expense updates your budget remaining balance and never withdraws from actual savings.
+            <div class="budget-modal-body form-grid">
+              <div class="field field-wide">
+                <label class="budget-uc-label" for="budget-expense-item">Budget item</label>
+                <select id="budget-expense-item" name="item_id" required></select>
+              </div>
+              <div class="field-wide budget-inline-new-item" id="budget-expense-new-item-fields" hidden>
+                <div class="form-grid">
+                  <div class="field">
+                    <label class="budget-uc-label" for="budget-expense-new-category">Category</label>
+                    <select id="budget-expense-new-category" name="new_category">
+                      <option value="NEEDS">Needs</option>
+                      <option value="WANTS">Wants</option>
+                      <option value="SAVINGS">Savings</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label class="budget-uc-label" for="budget-expense-new-name">New budget item name</label>
+                    <input id="budget-expense-new-name" name="new_item_name" type="text" maxlength="100"
+                      placeholder="e.g., Groceries" aria-describedby="budget-expense-name-error">
+                  </div>
+                  <div class="field field-wide budget-inline-suggest-field">
+                    <div class="budget-suggestion-row" id="budget-expense-suggestions" aria-label="Quick budget item ideas"></div>
+                    <small class="field-error budget-error-slot" id="budget-expense-name-error" role="alert" hidden></small>
+                  </div>
+                </div>
+              </div>
+              <div class="field">
+                <label class="budget-uc-label" for="budget-expense-amount">Amount spent</label>
+                <div class="budget-peso-input-wrap">
+                  <span class="budget-peso-prefix" aria-hidden="true">₱</span>
+                  <input id="budget-expense-amount" name="amount" type="number" min="0.01" max="999999999999.99"
+                    step="0.01" inputmode="decimal" placeholder="0.00" aria-describedby="budget-expense-headroom-help budget-expense-amount-error" required>
+                </div>
+                <small class="field-help tabular-nums" id="budget-expense-headroom-help">Available savings: ₱0.00</small>
+                <small class="field-error budget-error-slot" id="budget-expense-amount-error" role="alert" hidden></small>
+              </div>
+              <div class="field">
+                <label class="budget-uc-label" for="budget-expense-date">Date spent</label>
+                <input id="budget-expense-date" name="expense_date" type="date" min="2000-01-01" data-max-today required>
+              </div>
+              <div class="field field-wide" id="budget-expense-deduct-wrap">
+                <label class="toggle-switch-row budget-modal-switch" for="budget-expense-deduct">
+                  <span>
+                    <strong>Deduct from IPON savings balance</strong>
+                    <small id="budget-expense-deduct-help">Automatically records this expense in IPON savings so Dashboard and Reports update right away.</small>
+                  </span>
+                  <input class="toggle-switch-input" id="budget-expense-deduct" name="deduct_from_savings" type="checkbox" role="switch" checked>
+                </label>
+              </div>
+              <div class="field field-wide" id="budget-expense-method-wrap">
+                <label class="budget-uc-label" for="budget-expense-method">Payment method</label>
+                <select id="budget-expense-method" name="payment_method"></select>
+              </div>
+              <div class="field field-wide">
+                <label class="budget-uc-label" for="budget-expense-note">Note (optional)</label>
+                <textarea id="budget-expense-note" name="note" rows="2" maxlength="500"
+                  placeholder="e.g., Weekly supermarket run"></textarea>
+              </div>
             </div>
-            <div class="field field-wide">
-              <label for="budget-expense-item">Budget item</label>
-              <select id="budget-expense-item" name="item_id" required></select>
-            </div>
-            <div class="field">
-              <label for="budget-expense-amount">Amount spent (₱)</label>
-              <input id="budget-expense-amount" name="amount" type="number" min="0.01" max="999999999999.99"
-                step="0.01" inputmode="decimal" placeholder="0.00" aria-describedby="budget-expense-amount-error" required>
-              <small class="field-error budget-error-slot" id="budget-expense-amount-error" role="alert" hidden></small>
-            </div>
-            <div class="field">
-              <label for="budget-expense-date">Date spent</label>
-              <input id="budget-expense-date" name="expense_date" type="date" min="2000-01-01" data-max-today required>
-            </div>
-            <div class="field field-wide">
-              <label for="budget-expense-note">Note (optional)</label>
-              <textarea id="budget-expense-note" name="note" rows="2" maxlength="500"
-                placeholder="e.g., Weekly supermarket run"></textarea>
-            </div>
-            <div class="form-actions field-wide">
+            <footer class="budget-modal-footer">
               <button class="button button-secondary" id="budget-expense-cancel" type="button">Cancel</button>
               <button class="button button-primary" id="budget-expense-submit" type="submit" data-requires-data>Save expense</button>
-            </div>
+            </footer>
           </form>
         </div>
       </dialog>
 
-      <dialog class="form-dialog" id="budget-split-dialog" aria-labelledby="budget-split-dialog-title">
+      <dialog class="form-dialog budget-modal-dialog budget-split-modal" id="budget-split-dialog" aria-labelledby="budget-split-dialog-title">
         <div class="form-dialog-sheet">
           <header class="form-dialog-header">
             <div>
+              <span class="budget-modal-eyebrow">BUDGET SPLIT</span>
               <h2 id="budget-split-dialog-title">Customize allocation percentages</h2>
-              <p>Adjust Needs, Wants, and Savings percentages. Total must equal 100%.</p>
+              <p>Adjust Needs, Wants, and Savings. The total must equal 100%.</p>
             </div>
             <button class="dialog-close" id="budget-split-close" type="button" aria-label="Close split settings">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -295,48 +302,91 @@
               </svg>
             </button>
           </header>
-          <form id="budget-split-form" class="form-grid form-grid-3">
-            <div class="field">
-              <label for="split-needs">Needs (%)</label>
-              <input id="split-needs" name="needs_pct" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="50" required>
-              <small class="field-help tabular-nums" id="split-needs-preview">₱0.00</small>
-            </div>
-            <div class="field">
-              <label for="split-wants">Wants (%)</label>
-              <input id="split-wants" name="wants_pct" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="30" required>
-              <small class="field-help tabular-nums" id="split-wants-preview">₱0.00</small>
-            </div>
-            <div class="field">
-              <label for="split-savings">Savings (%)</label>
-              <input id="split-savings" name="savings_pct" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="20" required>
-              <small class="field-help tabular-nums" id="split-savings-preview">₱0.00</small>
-            </div>
-            <div class="field field-wide">
-              <div class="budget-split-total-bar" id="budget-split-total-bar">
-                <span>Total allocation: <strong class="tabular-nums" id="budget-split-sum">100%</strong></span>
-                <button class="button button-secondary button-sm" id="split-reset-default" type="button">Reset 50 / 30 / 20</button>
+          <form id="budget-split-form" class="budget-modal-form">
+            <div class="budget-modal-body">
+              <div class="budget-split-cards">
+                <article class="budget-split-card is-needs">
+                  <div class="budget-split-card-head">
+                    <span class="budget-split-dot" aria-hidden="true"></span>
+                    <div>
+                      <label for="split-needs">NEEDS</label>
+                      <small>Essentials &amp; bills</small>
+                    </div>
+                  </div>
+                  <div class="budget-split-input-row">
+                    <input id="split-needs" name="needs_pct" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="50" required>
+                    <span class="budget-split-pct-sign" aria-hidden="true">%</span>
+                  </div>
+                  <span class="budget-split-peso tabular-nums" id="split-needs-preview">₱0.00</span>
+                </article>
+
+                <article class="budget-split-card is-wants">
+                  <div class="budget-split-card-head">
+                    <span class="budget-split-dot" aria-hidden="true"></span>
+                    <div>
+                      <label for="split-wants">WANTS</label>
+                      <small>Lifestyle &amp; personal</small>
+                    </div>
+                  </div>
+                  <div class="budget-split-input-row">
+                    <input id="split-wants" name="wants_pct" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="30" required>
+                    <span class="budget-split-pct-sign" aria-hidden="true">%</span>
+                  </div>
+                  <span class="budget-split-peso tabular-nums" id="split-wants-preview">₱0.00</span>
+                </article>
+
+                <article class="budget-split-card is-savings">
+                  <div class="budget-split-card-head">
+                    <span class="budget-split-dot" aria-hidden="true"></span>
+                    <div>
+                      <label for="split-savings">SAVINGS</label>
+                      <small>Goals &amp; security</small>
+                    </div>
+                  </div>
+                  <div class="budget-split-input-row">
+                    <input id="split-savings" name="savings_pct" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="20" required>
+                    <span class="budget-split-pct-sign" aria-hidden="true">%</span>
+                  </div>
+                  <span class="budget-split-peso tabular-nums" id="split-savings-preview">₱0.00</span>
+                </article>
+              </div>
+
+              <div class="budget-split-total-box" id="budget-split-total-bar">
+                <div class="budget-split-live-bar" aria-hidden="true">
+                  <span class="budget-split-live-seg is-needs" id="split-live-needs"></span>
+                  <span class="budget-split-live-seg is-wants" id="split-live-wants"></span>
+                  <span class="budget-split-live-seg is-savings" id="split-live-savings"></span>
+                </div>
+                <div class="budget-split-total-row">
+                  <span class="budget-split-status-msg">
+                    <svg class="budget-split-status-icon" id="budget-split-status-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="m8.5 12.2 2.4 2.4 4.8-5" />
+                    </svg>
+                    <span>Total allocation: <strong class="tabular-nums" id="budget-split-sum">100%</strong> · <span id="budget-split-state-label">Ready to save</span></span>
+                  </span>
+                  <button class="button button-secondary button-sm budget-split-reset-btn" id="split-reset-default" type="button">Reset 50 / 30 / 20</button>
+                </div>
               </div>
               <small class="field-error budget-error-slot" id="budget-split-error" role="alert" hidden></small>
             </div>
-            <div class="form-actions field-wide">
+            <footer class="budget-modal-footer">
               <button class="button button-secondary" id="budget-split-cancel" type="button">Cancel</button>
               <button class="button button-primary" id="budget-split-submit" type="submit" data-requires-data>Save percentages</button>
-            </div>
+            </footer>
           </form>
         </div>
       </dialog>
     </main>
   </div>
 
-  <script src="js/core.js?v=20261116-105"></script>
-  <script src="js/core.js?v=20261116-106"></script>
+  <script src="js/core.js?v=20261116-107"></script>
   <script src="js/policy.js?v=20261116-07"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/messages.js?v=20261116-29"></script>
-  <script src="js/budget.js?v=20261116-01"></script>
-  <script src="js/budget.js?v=20261116-02"></script>
+  <script src="js/messages.js?v=20261116-30"></script>
+  <script src="js/budget.js?v=20261116-05"></script>
 </body>
 
 </html>

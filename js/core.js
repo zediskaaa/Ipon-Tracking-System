@@ -1795,6 +1795,17 @@
     } catch (_) { }
 
     try {
+      const existingPresence = typeof client.getChannels === 'function'
+        ? client.getChannels().find((ch) => ch?.topic === 'realtime:ipon-active-presence')
+        : null;
+      if (existingPresence && (existingPresence.channelAdapter?.isJoined?.() || existingPresence.channelAdapter?.isJoining?.() || existingPresence.state === 'joined' || existingPresence.state === 'joining')) {
+        presenceChannel = existingPresence;
+        syncPresenceDots();
+        return;
+      }
+      if (existingPresence) {
+        try { client.removeChannel?.(existingPresence)?.catch?.(() => { }); } catch { }
+      }
       presenceChannel = client.channel('ipon-active-presence', {
         config: {
           presence: {
@@ -5429,7 +5440,8 @@
     window.addEventListener('online', () => { load().catch(() => { }); });
 
     await load();
-    client.channel(`notifications:${profile.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, (payload) => load(payload)).subscribe();
+    const notifChannel = createRealtimeChannel(`notifications:${profile.id}`, undefined, client);
+    notifChannel?.on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, (payload) => load(payload)).subscribe();
 
     if (profile.notifications_enabled !== false) {
       const syncKey = `myipon_due_sync_${profile.id}`;
@@ -7429,6 +7441,26 @@
     } catch { }
   }
 
+  let rtChannelNonce = 0;
+
+  function createRealtimeChannel(baseTopic, options = undefined, clientArg = null) {
+    const client = clientArg || getClient();
+    if (!client?.channel) return null;
+    const targetTopic = `realtime:${baseTopic}`;
+    const channels = typeof client.getChannels === 'function' ? client.getChannels() : [];
+    const existing = Array.isArray(channels)
+      ? channels.filter((ch) => ch?.topic === targetTopic)
+      : [];
+    if (existing.length) {
+      existing.forEach((ch) => {
+        try { client.removeChannel?.(ch)?.catch?.(() => { }); } catch { }
+      });
+      const uniqueTopic = `${baseTopic}:${++rtChannelNonce}`;
+      return options === undefined ? client.channel(uniqueTopic) : client.channel(uniqueTopic, options);
+    }
+    return options === undefined ? client.channel(baseTopic) : client.channel(baseTopic, options);
+  }
+
   function subscribeToChanges(name, tables, refresh) {
     const client = getClient();
     if (!client || !tables.length) return null;
@@ -7446,7 +7478,7 @@
       clearTimeout(timer);
       timer = setTimeout(() => { if (document.visibilityState === 'visible') run(); }, delayMs);
     };
-    let channel = client.channel(`live:${name}:${currentProfile?.id || 'session'}`);
+    let channel = createRealtimeChannel(`live:${name}:${currentProfile?.id || 'session'}`, undefined, client);
     tables.forEach((table) => ['INSERT', 'UPDATE'].forEach((event) => {
       channel = channel.on('postgres_changes', { event, schema: 'public', table }, () => schedule(350));
     }));
@@ -9348,7 +9380,7 @@
 
     const client = getClient();
     const channel = client
-      ? client.channel(`record-thread-${recordType}-${recordId}`)
+      ? createRealtimeChannel(`record-thread-${recordType}-${recordId}`, undefined, client)
         .on('postgres_changes', {
           event: 'INSERT',
           schema: 'public',
@@ -10580,7 +10612,7 @@
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload, maybeShowRetentionReminder, openRetentionPolicyDialog, CURRENT_POLICY_VERSION, openPolicyDialog, hasAcceptedCurrentPolicy, maybeShowPolicyConsentModal,
-    auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry,
+    auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry, createRealtimeChannel,
     get profile() { return currentProfile; }
   };
 })();
