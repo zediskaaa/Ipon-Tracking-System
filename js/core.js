@@ -189,10 +189,11 @@
         await Promise.all(regs.map((reg) => reg.unregister().catch(() => false)));
         if (window.caches?.keys) {
           const keys = await window.caches.keys();
-          await Promise.all(keys.filter((k) => k.startsWith('ipon-shell-')).map((k) => window.caches.delete(k)));
+          await Promise.all(keys.map((k) => window.caches.delete(k).catch(() => false)));
         }
-        if (hadController && regs.length && !sessionStorage.getItem('ipon_sw_local_cleaned')) {
-          sessionStorage.setItem('ipon_sw_local_cleaned', '1');
+        if ((hadController || regs.length) && !sessionStorage.getItem('ipon_sw_local_cleaned_v19')) {
+          sessionStorage.setItem('ipon_sw_local_cleaned_v19', '1');
+          await fetch(window.location.href, { cache: 'reload' }).catch(() => { });
           window.location.reload();
         }
       } catch { }
@@ -242,6 +243,10 @@
     });
     window.addEventListener('pageshow', async (event) => {
       if (!event.persisted) return;
+      if (isLocalDevHost) {
+        window.location.reload();
+        return;
+      }
       const client = getClient();
       if (!client) { setLoading(false); return document.documentElement.style.removeProperty('visibility'); }
       try {

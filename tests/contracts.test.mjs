@@ -10707,8 +10707,28 @@ test('Dashboard header renders before summary failure, Solo quick-record falls b
   assert.match(coreJs, /liveSyncBc\.onmessage = \(\) => \{\s*dirty = true;\s*resume\(\);/);
   assert.match(coreJs, /async function rpc\(name, params\)[\s\S]*?notifyLiveSync\('data'\);/);
   assert.match(coreJs, /const isLocalDevHost = window\.location\.protocol !== 'https:'/);
+  assert.match(coreJs, /fetch\(window\.location\.href,\s*\{\s*cache:\s*'reload'\s*\}\)/);
+  assert.match(coreJs, /if \(!event\.persisted\) return;\s*if \(isLocalDevHost\)/);
+  assert.match(read('js/config.js'), /ipon_sw_local_cleaned_v19/);
   assert.match(swJs, /const IS_LOCAL_DEV =/);
   assert.match(swJs, /if \(IS_LOCAL_DEV\) return;/);
+
+  const htmlFiles = readdirSync(root).filter((name) => name.endsWith('.html'));
+  const sharedCss = new Set();
+  const sharedConfig = new Set();
+  const sharedCore = new Set();
+  for (const file of htmlFiles) {
+    const html = read(file);
+    const appCssRef = html.match(/href="(css\/app\.css\?v=[^"]+)"/)?.[1];
+    const configRef = html.match(/src="(js\/config\.js\?v=[^"]+)"/)?.[1];
+    const coreRef = html.match(/src="(js\/core\.js\?v=[^"]+)"/)?.[1];
+    if (appCssRef) sharedCss.add(appCssRef);
+    if (configRef) sharedConfig.add(configRef);
+    if (coreRef) sharedCore.add(coreRef);
+  }
+  assert.equal(sharedCss.size, 1, `css/app.css version mismatch across HTML pages: ${[...sharedCss].join(', ')}`);
+  assert.equal(sharedConfig.size, 1, `js/config.js version mismatch across HTML pages: ${[...sharedConfig].join(', ')}`);
+  assert.equal(sharedCore.size, 1, `js/core.js version mismatch across HTML pages: ${[...sharedCore].join(', ')}`);
 
   assert.match(appCss, /#bug-reports \.data-table td:nth-child\(2\)[\s\S]*?white-space:\s*nowrap/);
   assert.match(appCss, /\.users-filters #users-search[\s\S]*?min-width:\s*256px/);

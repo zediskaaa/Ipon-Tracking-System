@@ -16,3 +16,32 @@ try {
     }
   }
 } catch { }
+
+try {
+  if (
+    typeof window !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    !window.Capacitor &&
+    window.location &&
+    window.location.protocol !== 'https:' &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) &&
+    'serviceWorker' in navigator
+  ) {
+    var hadLocalSw = Boolean(navigator.serviceWorker.controller);
+    (async function () {
+      try {
+        var regs = (await navigator.serviceWorker.getRegistrations?.()) || [];
+        await Promise.all(regs.map(function (reg) { return reg.unregister().catch(function () { return false; }); }));
+        if (window.caches && window.caches.keys) {
+          var keys = await window.caches.keys();
+          await Promise.all(keys.map(function (k) { return window.caches.delete(k).catch(function () { return false; }); }));
+        }
+        if ((hadLocalSw || regs.length) && !sessionStorage.getItem('ipon_sw_local_cleaned_v19')) {
+          sessionStorage.setItem('ipon_sw_local_cleaned_v19', '1');
+          await fetch(window.location.href, { cache: 'reload' }).catch(function () { });
+          window.location.reload();
+        }
+      } catch { }
+    })();
+  }
+} catch { }
