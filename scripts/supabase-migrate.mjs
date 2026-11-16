@@ -49,20 +49,41 @@ function runSupabase(cliArgs, { capture = false } = {}) {
 
 function parseJsonPayload(raw) {
   const jsonStart = raw.indexOf('{');
-  return jsonStart === -1 ? null : JSON.parse(raw.slice(jsonStart));
+  if (jsonStart === -1) {
+    throw new Error('Supabase CLI output did not contain a JSON payload.');
+  }
+  return JSON.parse(raw.slice(jsonStart));
+}
+
+function parseQueryRows(raw) {
+  const payload = parseJsonPayload(raw);
+  if (!payload || !Array.isArray(payload.rows)) {
+    throw new Error('Supabase query output is missing the expected rows array.');
+  }
+  return payload.rows;
+}
+
+function fetchSchemaState() {
+  const out = runSupabase(
+    ['db', 'query', remoteFlag, '--read-only', "select to_regclass('public.schema_migrations')::text as ledger_table, to_regclass('public.profiles')::text as profiles_table;"],
+    { capture: true }
+  );
+  const [row] = parseQueryRows(out);
+  if (!row) {
+    throw new Error('Unable to inspect remote schema state.');
+  }
+  return {
+    hasLedger: Boolean(row.ledger_table),
+    hasProfiles: Boolean(row.profiles_table)
+  };
 }
 
 function fetchAppliedVersions() {
-  try {
-    const out = runSupabase(
-      ['db', 'query', remoteFlag, '--read-only', 'select version from public.schema_migrations order by version;'],
-      { capture: true }
-    );
-    return new Set((parseJsonPayload(out)?.rows || []).map((row) => String(row.version)));
-  } catch (err) {
-    if (!applyMode) throw err;
-    return null;
-  }
+  const out = runSupabase(
+    ['db', 'query', remoteFlag, '--read-only', 'select version from public.schema_migrations order by version;'],
+    { capture: true }
+  );
+  return new Set(parseQueryRows(out).map((row) => String(row.version)));
 }
 
 function listMigrationFiles() {
@@ -106,16 +127,40 @@ function saveFunctionCache(data) {
 }
 
 function syncMigrations() {
-  let applied = fetchAppliedVersions();
-  if (applied === null && applyMode) {
-    console.log('Initializing migration ledger...');
-    runSupabase(['db', 'query', remoteFlag, '--yes', '--file', path.join(migrationsDir, '0000_create_migration_ledger.sql')]);
-    applied = fetchAppliedVersions() || new Set();
+  const { hasLedger, hasProfiles } = fetchSchemaState();
+  if (!hasLedger && hasProfiles) {
+    throw new Error('Refusing to initialize public.schema_migrations on an existing database that already has public.profiles. Restore or backfill schema_migrations first.');
+  }
+
+  let applied;
+  if (!hasLedger && !hasProfiles) {
+    if (applyMode) {
+      console.log('Initializing migration ledger on fresh database...');
+      runSupabase(['db', 'query', remoteFlag, '--yes', '--file', path.join(migrationsDir, '0000_create_migration_ledger.sql')]);
+      applied = fetchAppliedVersions();
+    } else {
+      applied = new Set();
+    }
+  } else {
+    applied = fetchAppliedVersions();
+    if (hasProfiles && applied.size === 0) {
+      throw new Error('Refusing to run migrations: public.profiles exists but public.schema_migrations is empty.');
+    }
   }
 
   const pending = listMigrationFiles().filter((item) => !applied.has(item.version) && (!fromFlag || item.version >= fromFlag));
+  const sortedApplied = [...applied].sort();
+  const maxApplied = sortedApplied[sortedApplied.length - 1] || '';
+  const blockedLegacy = pending.filter((item) => maxApplied && item.version < maxApplied && item.version <= '20261116_094');
+
   console.log(`Target: ${remoteFlag} | Applied ledger entries: ${applied.size} | Pending files: ${pending.length}`);
   for (const item of pending) console.log(`  PENDING ${item.file}`);
+
+  if (blockedLegacy.length > 0 && applyMode) {
+    throw new Error(
+      `Refusing to replay historical migration(s) (${blockedLegacy.map((item) => item.file).join(', ')}) behind already-applied version ${maxApplied}.`
+    );
+  }
 
   if (applyMode) {
     for (const item of pending) {

@@ -558,7 +558,9 @@
   function updateDashboardGoalProgress(trackedSavings) {
     const box = document.getElementById('dashboard-goal-box');
     if (!box) return;
-    if (typeof trackedSavings === 'number') lastTrackedSavings = trackedSavings;
+    if (trackedSavings !== undefined && trackedSavings !== null && trackedSavings !== '' && Number.isFinite(Number(trackedSavings))) {
+      lastTrackedSavings = Number(trackedSavings);
+    }
     const tracked = Number(lastTrackedSavings || 0);
     let targetGoal = null;
     if (selectedGoalId) {
@@ -607,8 +609,20 @@
         Ipon.client.rpc('get_wallet_reconciliation'),
         announcements ? announcements.load().catch((err) => console.warn('Announcement load error:', err)) : Promise.resolve()
       ]);
+      const normalizedGroups = Array.isArray(groupsResult) ? groupsResult : [];
+      renderGroupHeader(normalizedGroups);
+      if (currentGroup) {
+        state.profile.group_id = currentGroup.group_id || state.profile.group_id;
+        state.profile.role = currentGroup.role || state.profile.role;
+        state.profile.member_id = currentGroup.member_id ?? null;
+        state.profile.workspace_mode = currentGroup.workspace_mode || state.profile.workspace_mode;
+      } else if (Array.isArray(groupsResult)) {
+        state.profile.group_id = null;
+        state.profile.member_id = null;
+        state.profile.workspace_mode = null;
+      }
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
-      if (!summaryResult.data && (state.profile?.group_id || groupsResult?.some?.((g) => g.is_current))) {
+      if (!summaryResult.data && (state.profile?.group_id || currentGroup)) {
         throw new Error('Group savings summary is currently unavailable.');
       }
       const profilesList = groupProfilesResult?.data || [];
@@ -622,7 +636,6 @@
       });
       Ipon.registerMemberAvatars(memberResult.data || []);
       activeGoalsList = allGoalsResult?.data || [];
-      renderGroupHeader(groupsResult || []);
       const adminMember = (memberResult.data || []).find((m) => m.id === currentGroup?.member_id || m.id === state?.profile?.member_id);
       if (adminMember && Number(adminMember.monthly_contribution_amount) > 0) {
         currentAdminMonthlyAmount = Number(adminMember.monthly_contribution_amount);
@@ -644,7 +657,7 @@
       renderGoalOptions(goalResult.data || []);
       if (remindUnpaidBtn) remindUnpaidBtn.hidden = !(unpaid > 0 && ['ADMIN', 'TREASURER'].includes(state.profile?.role));
       populateQuickRecordMembers(memberResult.data || []);
-      updateDashboardGoalProgress(summary.tracked_savings);
+      updateDashboardGoalProgress(summary.tracked_savings ?? 0);
       renderWalletStrip(walletResult?.error ? null : walletResult?.data);
       renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
       hasSnapshot = true; dataStatus.hidden = true;
@@ -1601,9 +1614,11 @@
     Ipon.setBusy(quickSubmitBtn, true);
 
     try {
+      const isSoloMode = currentGroup?.workspace_mode === 'SOLO';
+      const fallbackMemberId = state.profile?.member_id || currentGroup?.member_id || cachedMembers[0]?.id || values.get('member_id');
       if (isAddition) {
         await Ipon.rpc('record_contribution', {
-          p_member_id: isMemberRole ? state.profile.member_id : values.get('member_id'),
+          p_member_id: (isMemberRole || isSoloMode) ? fallbackMemberId : values.get('member_id'),
           p_contribution_month: `${values.get('contribution_month')}-01`,
           p_amount: amount,
           p_payment_date: values.get('date'),
@@ -1613,13 +1628,13 @@
           p_payment_method: values.get('payment_method') || 'CASH'
         });
       } else {
-        const ownResponsible = cachedMembers.find((m) => m.id === state.profile?.member_id)?.full_name || state.profile?.full_name;
+        const ownResponsible = cachedMembers.find((m) => m.id === (state.profile?.member_id || currentGroup?.member_id))?.full_name || cachedMembers[0]?.full_name || state.profile?.full_name;
         await Ipon.rpc(isDeduction ? 'record_withdrawal' : 'record_expense', {
           p_transaction_date: values.get('date'),
           p_amount: amount,
           p_category: values.get('category'),
           p_description: values.get('description'),
-          p_person_responsible: isMemberRole ? ownResponsible : values.get('person_responsible'),
+          p_person_responsible: (isMemberRole || isSoloMode) ? (values.get('person_responsible') || ownResponsible) : values.get('person_responsible'),
           p_reference_number: values.get('reference') || null,
           p_notes: values.get('notes') || null,
           p_idempotency_key: quickPendingKey,

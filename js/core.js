@@ -179,7 +179,25 @@
       setTheme(event.newValue || 'light', { persist: false });
     }
   });
-  if (!window.Capacitor && 'serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
+  const isLocalDevHost = window.location.protocol !== 'https:'
+    && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  if (!window.Capacitor && 'serviceWorker' in navigator && isLocalDevHost) {
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    (async () => {
+      try {
+        const regs = (await navigator.serviceWorker.getRegistrations?.()) || [];
+        await Promise.all(regs.map((reg) => reg.unregister().catch(() => false)));
+        if (window.caches?.keys) {
+          const keys = await window.caches.keys();
+          await Promise.all(keys.filter((k) => k.startsWith('ipon-shell-')).map((k) => window.caches.delete(k)));
+        }
+        if (hadController && regs.length && !sessionStorage.getItem('ipon_sw_local_cleaned')) {
+          sessionStorage.setItem('ipon_sw_local_cleaned', '1');
+          window.location.reload();
+        }
+      } catch { }
+    })();
+  } else if (!window.Capacitor && 'serviceWorker' in navigator && window.location.protocol === 'https:') {
     const hadController = Boolean(navigator.serviceWorker.controller);
     let swReloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -267,6 +285,7 @@
   const navItems = [
     ['dashboard', 'dashboard.html', 'Calendar', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18M7 14h2m3 0h2m3 0h1M7 18h2m3 0h2m3 0h1"/></svg>'],
     ['contributions', 'contributions.html', 'Records', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>'],
+    ['budget', 'budget.html', 'Budget', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12A9 9 0 1 1 12 3v9Z"/><path d="M21.2 10A9 9 0 0 0 14 2.8V10Z"/></svg>'],
     ['members', 'members.html', 'Members', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>', 'ADMIN'],
     ['reports', 'reports.html', 'Reports', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10m6 10V4m6 16v-7m5 7H2"/></svg>'],
     ['audit', 'audit.html', 'Audit log', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>', 'ADMIN'],
@@ -283,12 +302,13 @@
     ['dashboard', 'dashboard.html', 'Calendar', navItems[0][3]],
     ['user', 'user.html', 'My savings', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M16 12h5m-5-2a2 2 0 1 0 0 4"/></svg>'],
     ['contributions', 'contributions.html', 'Records', navItems[1][3]],
-    ['reports', 'reports.html', 'Reports', navItems[3][3]]
+    ['budget', 'budget.html', 'Budget', navItems[2][3]],
+    ['reports', 'reports.html', 'Reports', navItems[4][3]]
   ];
   const pageRoles = {
     dashboard: ['ADMIN', 'TREASURER', 'MEMBER'], members: ['ADMIN'], contributions: ['ADMIN', 'TREASURER', 'MEMBER'],
     withdrawals: ['ADMIN', 'TREASURER', 'MEMBER'], expenses: ['ADMIN', 'TREASURER', 'MEMBER'], savings: ['ADMIN', 'TREASURER', 'MEMBER'],
-    reports: ['ADMIN', 'TREASURER', 'MEMBER'], audit: ['ADMIN'], settings: ['ADMIN'], user: ['MEMBER'],
+    budget: ['ADMIN', 'TREASURER', 'MEMBER'], reports: ['ADMIN', 'TREASURER', 'MEMBER'], audit: ['ADMIN'], settings: ['ADMIN'], user: ['MEMBER'],
     'super-admin': ['SUPER_ADMIN'], account: ['SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER']
   };
   const recordTabIcons = {
@@ -3204,7 +3224,7 @@
   }
 
   async function getWebPushRegistration() {
-    if (isInstalledAppUser() || !('serviceWorker' in navigator)) return null;
+    if (isInstalledAppUser() || isLocalDevHost || !('serviceWorker' in navigator)) return null;
     try {
       const existing = await navigator.serviceWorker.getRegistration('/sw.js').catch(() => null)
         || await navigator.serviceWorker.getRegistration().catch(() => null);
@@ -4519,7 +4539,7 @@
       if (params.has('announcement') || params.has('release') || params.has('announcement_title')) {
         page = 'super-admin.html';
         if (!hash) hash = '#announcements';
-      } else if (page === 'user.html' || page === 'contributions.html' || page === 'withdrawals.html' || page === 'expenses.html' || page === 'members.html' || page === 'settings.html') {
+      } else if (page === 'user.html' || page === 'contributions.html' || page === 'withdrawals.html' || page === 'expenses.html' || page === 'budget.html' || page === 'members.html' || page === 'settings.html') {
         page = 'super-admin.html';
       }
     } else if (role !== 'MEMBER' && page === 'user.html') {
@@ -6183,11 +6203,16 @@
     });
   }
 
+  const READ_ONLY_RPC_RE = /^(?:get_|list_|check_|super_admin_storage_overview|record_account_activity|mark_notification_read|mark_all_notifications_read)/i;
+
   async function rpc(name, params) {
     const client = getClient();
     if (!client) throw new Error('Supabase is not connected.');
     const { data, error } = await client.rpc(name, params);
     if (error) throw error;
+    if (!READ_ONLY_RPC_RE.test(String(name || ''))) {
+      notifyLiveSync('data');
+    }
     return data;
   }
 
@@ -7439,7 +7464,10 @@
     try {
       if ('BroadcastChannel' in window) {
         liveSyncBc = new BroadcastChannel(LIVE_SYNC_CHANNEL);
-        liveSyncBc.onmessage = () => resume();
+        liveSyncBc.onmessage = () => {
+          dirty = true;
+          resume();
+        };
       }
     } catch { }
     const autoSyncTimer = setInterval(() => {

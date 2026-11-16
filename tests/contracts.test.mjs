@@ -10384,3 +10384,246 @@ test('migration 093 and workspace UI remove global Role from Super Admin Users, 
   assert.match(membersJs, /currentGroup\?\.workspace_mode === 'SOLO'/);
   assert.match(settingsJs, /activeGroup\?\.workspace_mode === 'SOLO'/);
 });
+
+test('migration 094 and budget.html implement non-destructive Budget Allocation & Expense Tracking linked to live IPON savings', async () => {
+  const mig094 = read('database/migrations/20261116_094_budget_allocation_tracker.sql');
+  const schema = read('database/schema.sql');
+  const budgetHtml = read('budget.html');
+  const budgetJs = read('js/budget.js');
+  const coreJs = read('js/core.js');
+  const appCss = read('css/app.css');
+
+  for (const sql of [mig094, schema]) {
+    assert.match(sql, /'20261116_094'/);
+    assert.match(sql, /create table if not exists public\.budget_configs/i);
+    assert.match(sql, /create table if not exists public\.budget_items/i);
+    assert.match(sql, /create table if not exists public\.budget_expenses/i);
+    assert.match(sql, /create or replace function public\.get_budget_overview\(/i);
+    assert.match(sql, /create or replace function public\.save_budget_allocation\(/i);
+    assert.match(sql, /create or replace function public\.save_budget_item\(/i);
+    assert.match(sql, /create or replace function public\.delete_budget_item\(/i);
+    assert.match(sql, /create or replace function public\.save_budget_expense\(/i);
+    assert.match(sql, /create or replace function public\.delete_budget_expense\(/i);
+  }
+
+  assert.match(coreJs, /\['budget',\s*'budget\.html',\s*'Budget'/);
+  assert.match(budgetHtml, /class="budget-workspace-strip" id="budget-group-bar"/);
+  assert.match(budgetHtml, /class="budget-hero"/);
+  assert.match(budgetHtml, /id="budget-ref-balance"/);
+  assert.match(budgetHtml, /id="budget-total-allocated"/);
+  assert.match(budgetHtml, /id="budget-total-spent"/);
+  assert.match(budgetHtml, /id="budget-total-remaining"/);
+  assert.match(budgetHtml, /id="budget-categories-grid"/);
+  assert.match(budgetHtml, /id="budget-expenses-body"/);
+  assert.match(budgetHtml, /id="budget-item-dialog"/);
+  assert.match(budgetHtml, /id="budget-expense-dialog"/);
+  assert.match(budgetHtml, /id="budget-split-dialog"/);
+
+  assert.match(appCss, /\.budget-hero::after/);
+  assert.match(appCss, /\.budget-stats-grid/);
+  assert.match(appCss, /\.budget-categories-grid/);
+  assert.match(appCss, /\.budget-history-panel/);
+  assert.match(appCss, /html\[data-theme="dark"\] \.budget-workspace/);
+
+  // Runtime VM check for js/budget.js render and live savings recalculation
+  const els = new Map();
+  const makeEl = (id) => {
+    const cls = new Set();
+    const listeners = new Map();
+    const el = {
+      id,
+      value: '',
+      hidden: false,
+      disabled: false,
+      open: false,
+      textContent: '',
+      innerHTML: '',
+      dataset: {},
+      style: {},
+      validity: { badInput: false, valid: true },
+      classList: {
+        add: (...names) => names.forEach((n) => cls.add(n)),
+        remove: (...names) => names.forEach((n) => cls.delete(n)),
+        toggle: (name, force) => (force === undefined ? (cls.has(name) ? cls.delete(name) : cls.add(name)) : (force ? cls.add(name) : cls.delete(name))),
+        contains: (name) => cls.has(name)
+      },
+      setAttribute() {},
+      removeAttribute() {},
+      focus() {},
+      select() {},
+      reset() {},
+      replaceChildren() { el.innerHTML = ''; },
+      showModal() { el.open = true; },
+      close() { el.open = false; },
+      querySelector(sel) {
+        if (sel === 'span') return makeEl(`${id}:span`);
+        if (sel.startsWith('[data-page=')) return makeEl(`${id}:${sel}`);
+        return null;
+      },
+      querySelectorAll() { return []; },
+      addEventListener(type, fn) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push(fn);
+      },
+      async _emit(type, evt = {}) {
+        for (const fn of listeners.get(type) || []) {
+          await fn({ target: el, preventDefault() {}, ...evt });
+        }
+      }
+    };
+    if (id) els.set(id, el);
+    return el;
+  };
+  [
+    'budget-group-bar', 'budget-group-name', 'budget-group-switcher-wrap', 'budget-group-select',
+    'budget-error-slot', 'budget-no-workspace', 'budget-workspace-content', 'budget-header-actions',
+    'budget-split-heading', 'budget-source-label', 'budget-ratio-needs', 'budget-ratio-wants',
+    'budget-ratio-savings', 'budget-legend-needs-pct', 'budget-legend-wants-pct', 'budget-legend-savings-pct',
+    'budget-legend-needs-amt', 'budget-legend-wants-amt', 'budget-legend-savings-amt',
+    'budget-ref-balance', 'budget-ref-note', 'budget-total-allocated', 'budget-total-itemized',
+    'budget-total-spent', 'budget-spent-pct', 'budget-total-remaining', 'budget-remaining-note',
+    'budget-categories-grid', 'budget-expense-search', 'budget-expense-filter', 'budget-expenses-body',
+    'budget-history-pager', 'budget-item-dialog', 'budget-item-form', 'budget-item-id',
+    'budget-item-category', 'budget-item-name', 'budget-item-amount', 'budget-item-suggestions',
+    'budget-item-headroom-help', 'budget-item-submit', 'budget-expense-dialog', 'budget-expense-form',
+    'budget-expense-id', 'budget-expense-item', 'budget-expense-amount', 'budget-expense-date',
+    'budget-expense-note', 'budget-expense-submit', 'budget-split-dialog', 'budget-split-form',
+    'split-needs', 'split-wants', 'split-savings', 'split-needs-preview', 'split-wants-preview',
+    'split-savings-preview', 'budget-split-total-bar', 'budget-split-sum', 'budget-split-error',
+    'budget-split-submit', 'budget-item-dialog-title', 'budget-item-dialog-copy', 'budget-expense-dialog-title'
+  ].forEach(makeEl);
+
+  let refSavings = 10000;
+  let dbExpenses = [
+    { id: 'exp-1', item_id: 'item-1', item_name: 'Groceries', category: 'NEEDS', amount: 2000, expense_date: '2026-11-16', note: 'Weekly run' }
+  ];
+  let realtimeReload = null;
+  const ctx = {
+    console,
+    Math,
+    Number,
+    String,
+    Array,
+    Object,
+    Promise,
+    Date,
+    document: {
+      getElementById: (id) => els.get(id) || makeEl(id)
+    },
+    Ipon: {
+      init: async () => ({ failed: false, redirecting: false, configured: true, profile: { id: 'u1', group_id: 'g1', role: 'ADMIN' } }),
+      money: (v) => `₱${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      dateLabel: (d) => String(d || ''),
+      isoDate: () => '2026-11-16',
+      escapeHtml: (s) => String(s || ''),
+      setLoading() {},
+      setBusy() {},
+      setFieldError() {},
+      toast() {},
+      showInlineError() {},
+      renderGroupRequiredCard() {},
+      syncWorkspaceMode() {},
+      populateGroupSelect() {},
+      guardMoneyInput() {},
+      parseMoneyAmount: (raw) => ({ valid: Number.isFinite(Number(raw)), value: Number(raw || 0), error: '' }),
+      subscribeToChanges: (_name, _tables, fn) => { realtimeReload = fn; },
+      rpc: async (name) => {
+        if (name === 'get_my_groups') return [{ group_id: 'g1', name: 'Test Savings', is_current: true, workspace_mode: 'GROUP' }];
+        if (name === 'get_budget_overview') {
+          const spent = dbExpenses.reduce((acc, row) => acc + row.amount, 0);
+          return {
+            has_workspace: true,
+            group_id: 'g1',
+            group_name: 'Test Savings',
+            reference_balance: refSavings,
+            raw_savings_balance: refSavings,
+            config: { needs_pct: 50, wants_pct: 30, savings_pct: 20 },
+            totals: { allocated: refSavings, itemized: 2500, spent, remaining: refSavings - spent },
+            categories: {
+              NEEDS: { pct: 50, allocated: refSavings * 0.5, itemized: 2500, spent, remaining: (refSavings * 0.5) - spent },
+              WANTS: { pct: 30, allocated: refSavings * 0.3, itemized: 0, spent: 0, remaining: refSavings * 0.3 },
+              SAVINGS: { pct: 20, allocated: refSavings * 0.2, itemized: 0, spent: 0, remaining: refSavings * 0.2 }
+            },
+            items: [{ id: 'item-1', category: 'NEEDS', name: 'Groceries', allocated_amount: 2500, spent_amount: spent, expense_count: dbExpenses.length }],
+            expenses: dbExpenses
+          };
+        }
+        return null;
+      }
+    }
+  };
+  await vm.runInNewContext(budgetJs, ctx, { filename: 'js/budget.js' });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(els.get('budget-ref-balance').textContent, '₱10,000.00');
+  assert.equal(els.get('budget-legend-needs-amt').textContent, '₱5,000.00');
+  assert.equal(els.get('budget-total-spent').textContent, '₱2,000.00');
+  assert.equal(els.get('budget-total-remaining').textContent, '₱8,000.00');
+
+  refSavings = 15000;
+  await realtimeReload();
+  assert.equal(els.get('budget-ref-balance').textContent, '₱15,000.00');
+  assert.equal(els.get('budget-legend-needs-amt').textContent, '₱7,500.00');
+  assert.equal(els.get('budget-total-spent').textContent, '₱2,000.00');
+  assert.equal(els.get('budget-total-remaining').textContent, '₱13,000.00');
+  assert.equal(dbExpenses.length, 1);
+});
+
+test('Migration 095 restores reverted RPCs/policies, drops legacy overloads, and cleans unlinked groups', () => {
+  const mig095 = read('database/migrations/20261116_095_restore_reverted_ddl_and_clean_unlinked_groups.sql');
+  const schema = read('database/schema.sql');
+
+  const expectedDrops = [
+    /drop function if exists public\.create_member\(text, text, text, text, date, numeric, text\)/,
+    /drop function if exists public\.update_member\(uuid, text, text, text, text, numeric, text\)/,
+    /drop function if exists public\.update_own_profile\(text, text, text, text\)/,
+    /drop function if exists public\.update_contribution\(uuid, numeric, date, text, text\)/,
+    /drop function if exists public\.update_withdrawal\(uuid, date, numeric, text, text, text, text, text\)/,
+    /drop function if exists public\.update_expense\(uuid, date, numeric, text, text, text, text, text\)/,
+    /drop function if exists public\.set_contribution_setting\(date, numeric\)/,
+    /drop function if exists public\.super_admin_reject_request\(uuid\)/
+  ];
+  for (const re of expectedDrops) {
+    assert.match(mig095, re, `Migration 095 must match ${re}`);
+  }
+
+  for (const sql of [mig095, schema]) {
+    assert.match(sql, /'20261116_095'/);
+    assert.match(sql, /insert into public\.contribution_periods \(member_id, period_month, required_amount, due_date\)/);
+    assert.match(sql, /when ctx\.role_name not in \('ADMIN', 'TREASURER', 'MEMBER'\) or ctx\.group_id is null then null/);
+    assert.match(sql, /create policy profiles_select on public\.profiles[\s\S]*?or public\.is_super_admin\(\)/);
+    assert.match(sql, /'68853776-6a1b-4170-afb8-5dd93c3de90c'::uuid/);
+    assert.match(sql, /'e9181a7f-7211-47ce-b4ee-bf95e99f78d4'::uuid/);
+  }
+});
+
+test('supabase-migrate.mjs refuses legacy replay or ledger fallback to an empty Set', () => {
+  const migrateScript = read('scripts/supabase-migrate.mjs');
+  assert.doesNotMatch(migrateScript, /fetchAppliedVersions\(\)\s*\|\|\s*new Set\(\)/);
+  assert.doesNotMatch(migrateScript, /catch\s*\([^)]*\)\s*\{\s*if\s*\(!applyMode\)\s*throw[^}]*return null;/);
+  assert.match(migrateScript, /function parseQueryRows\(raw\)/);
+  assert.match(migrateScript, /function fetchSchemaState\(\)/);
+  assert.match(migrateScript, /Refusing to run migrations: public\.profiles exists but public\.schema_migrations is empty/);
+  assert.match(migrateScript, /Refusing to replay historical migration\(s\)/);
+});
+
+test('Dashboard header renders before summary failure, Solo quick-record falls back, live sync covers RPCs/local dev SW cleanup, and bug-reports columns avoid mid-word wraps', () => {
+  const dashboardJs = read('js/dashboard.js');
+  const coreJs = read('js/core.js');
+  const swJs = read('sw.js');
+  const appCss = read('css/app.css');
+
+  const renderIdx = dashboardJs.indexOf('renderGroupHeader(normalizedGroups);');
+  const unavailIdx = dashboardJs.indexOf("throw new Error('Group savings summary is currently unavailable.');");
+  assert.ok(renderIdx > -1 && unavailIdx > -1 && renderIdx < unavailIdx, 'renderGroupHeader must run before summary availability check');
+  assert.match(dashboardJs, /Number\.isFinite\(Number\(trackedSavings\)\)/);
+  assert.match(dashboardJs, /const isSoloMode = currentGroup\?\.workspace_mode === 'SOLO';\s*const fallbackMemberId/);
+
+  assert.match(coreJs, /liveSyncBc\.onmessage = \(\) => \{\s*dirty = true;\s*resume\(\);/);
+  assert.match(coreJs, /async function rpc\(name, params\)[\s\S]*?notifyLiveSync\('data'\);/);
+  assert.match(coreJs, /const isLocalDevHost = window\.location\.protocol !== 'https:'/);
+  assert.match(swJs, /const IS_LOCAL_DEV =/);
+  assert.match(swJs, /if \(IS_LOCAL_DEV\) return;/);
+
+  assert.match(appCss, /#bug-reports \.data-table td:nth-child\(2\)[\s\S]*?white-space:\s*nowrap/);
+  assert.match(appCss, /\.users-filters #users-search[\s\S]*?min-width:\s*256px/);
+});

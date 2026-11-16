@@ -1,6 +1,7 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v16';
+const CACHE_NAME = 'ipon-shell-v18';
+const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname) && self.location.protocol !== 'https:';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
   'assets/favicon.svg',
@@ -14,25 +15,33 @@ const STATIC_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
+    (IS_LOCAL_DEV ? Promise.resolve() : caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys.filter((key) => IS_LOCAL_DEV || key !== CACHE_NAME).map((key) => caches.delete(key))
+    );
+    await self.clients.claim();
+    if (IS_LOCAL_DEV && self.registration?.unregister) {
+      await self.registration.unregister().catch(() => {});
+    }
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
+  if (IS_LOCAL_DEV) return;
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  const isHtmlRequest = request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html');
   event.respondWith(
-    fetch(request)
+    fetch(isHtmlRequest ? new Request(request, { cache: 'no-store' }) : request)
       .then((response) => {
         if (response && response.ok && (response.type === 'basic' || response.type === 'cors')) {
           const copy = response.clone();
