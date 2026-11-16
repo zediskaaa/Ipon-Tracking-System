@@ -9692,3 +9692,230 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
   assert.equal(viewerDlg.open, true);
   assert.equal(viewerDlg.querySelector('#ipon-policy-title').textContent, 'Privacy policy');
 });
+
+test('migration 084, ongoing savings protection, 30-day completion bin, print border/break fix, and VM bin/batch flows work cleanly', async () => {
+  const vm = await import('node:vm');
+  const mig084 = read('database/migrations/20261116_084_ongoing_savings_protection_and_bin_lifecycle.sql');
+  const schema = read('database/schema.sql');
+  const css = read('css/app.css');
+  const loginHtml = read('login.html');
+  const policyJs = read('js/policy.js');
+  const coreJs = read('js/core.js');
+  const savingsHtml = read('savings.html');
+  const savingsJs = read('js/savings.js');
+  const settingsHtml = read('settings.html');
+  const settingsJs = read('js/settings.js');
+  const membersHtml = read('members.html');
+  const membersJs = read('js/members.js');
+
+  // 1. SQL migration 084 & schema sync protect ongoing savings/goals and wire 30-day completion bin + Storage purge
+  assert.match(mig084, /create table if not exists public\.savings_cycle_batches/i);
+  assert.match(mig084, /create or replace function public\.complete_and_bin_savings_goal\(/i);
+  assert.match(mig084, /create or replace function public\.archive_and_reset_savings_cycle\(/i);
+  assert.match(mig084, /create or replace function public\.purge_bin_item_permanently\(/i);
+  assert.match(mig084, /create or replace function public\.purge_bin_item_storage\(/i);
+  assert.match(mig084, /ipon\.maintenance_bin_snapshot/);
+  assert.match(mig084, /days_remaining/);
+  assert.match(mig084, /'savings_cycle'/);
+  assert.match(mig084, /'goal'/);
+  assert.match(schema, /'20261116_084'/);
+
+  const latestCleanup = [...schema.matchAll(/create or replace function public\.run_data_retention_cleanup[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.match(latestCleanup, /delete from public\.savings_goals[\s\S]*?deleted_at is not null[\s\S]*?deleted_at < v_bin_cutoff/i);
+  assert.match(latestCleanup, /expired_bin_goals_deleted/);
+  assert.match(latestCleanup, /expired_bin_savings_batches_deleted/);
+  assert.match(latestCleanup, /purge_bin_item_storage/);
+
+  const latestInactive = [...schema.matchAll(/create or replace function public\.collect_inactive_account_candidates[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.match(latestInactive, /from public\.savings_goals sg[\s\S]*?sg\.deleted_at is null[\s\S]*?sg\.status = 'ACTIVE'/i);
+
+  // 2. Print fix keeps compact panels intact and restores STATUS right-column td:last-child bottom border
+  const printBlock = css.match(/@media print\{[^\r\n]*/)?.[0] || '';
+  assert.match(printBlock, /break-inside:avoid;page-break-inside:avoid/);
+  assert.match(printBlock, /\.report-panel:has\(tbody tr:nth-child\(15\)\)\{break-inside:auto;page-break-inside:auto\}/);
+  assert.match(printBlock, /\.data-table td:last-child[^}]*border-bottom:1px solid var\(--rule\)!important/);
+
+  // 3. Detailed ongoing protection + 30-day completion bin documented in Terms & Privacy (login + in-app)
+  assert.match(loginHtml, /Ongoing savings &amp; active goals are never deleted by retention/i);
+  assert.match(loginHtml, /30-day Recycle Bin/i);
+  assert.match(policyJs, /Ongoing savings &amp; active goals are never deleted by retention/i);
+  assert.match(policyJs, /30-day Recycle Bin/i);
+
+  // 4. UI controls wired across Goals, Settings, and Members
+  assert.match(savingsHtml, /id="open-savings-bin"/);
+  assert.match(savingsHtml, /id="finish-savings-cycle"/);
+  assert.match(savingsJs, /data-complete-goal=/);
+  assert.match(savingsJs, /complete_and_bin_savings_goal/);
+  assert.match(settingsHtml, /id="settings-open-bin"/);
+  assert.match(settingsHtml, /id="settings-finish-cycle"/);
+  assert.match(membersHtml, /option value="goal"/);
+  assert.match(membersHtml, /option value="savings_cycle"/);
+  assert.match(membersJs, /purge_bin_item_permanently/);
+
+  // 5. Runtime VM test for formatBinExpiry, renderBinItemCard, openRecycleBin, and openFinishSavingsBatchDialog
+  const rpcCalls = [];
+  const createdDialogs = [];
+  const loaderEl = { hidden: false, setAttribute() { }, removeAttribute() { }, querySelector: () => ({ textContent: '' }) };
+  const makeClassList = () => {
+    const set = new Set();
+    return { add: (c) => set.add(c), remove: (c) => set.delete(c), toggle: (c, f) => (f ? set.add(c) : set.delete(c)), contains: (c) => set.has(c) };
+  };
+  const makeStub = (tag) => {
+    const listeners = new Map();
+    const children = new Map();
+    const node = {
+      tagName: String(tag || 'DIV').toUpperCase(),
+      id: '',
+      className: '',
+      _innerHTML: '',
+      textContent: '',
+      value: '',
+      checked: true,
+      disabled: false,
+      hidden: false,
+      open: false,
+      dataset: {},
+      attributes: {},
+      classList: makeClassList(),
+      set innerHTML(v) {
+        this._innerHTML = String(v);
+        if (children.has('#ipon-shared-bin-list')) children.get('#ipon-shared-bin-list').innerHTML = this._innerHTML;
+      },
+      get innerHTML() { return this._innerHTML; },
+      setAttribute(k, v) { this.attributes[k] = String(v); },
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      remove() { this._removed = true; },
+      focus() { },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      async _emit(ev, payload = {}) {
+        for (const fn of listeners.get(ev) || []) await fn(payload);
+      },
+      querySelector(sel) {
+        if (!children.has(sel)) {
+          const child = makeStub('div');
+          if (sel === '#batch-reset-title') child.value = 'Batch 2026 — Completed Savings';
+          if (sel === '#batch-reset-reason') child.value = 'Finished saving for emergency fund';
+          if (sel === '#batch-reset-include-goals') child.checked = true;
+          if (sel === '#ipon-shared-bin-filter') child.value = 'goal';
+          children.set(sel, child);
+        }
+        return children.get(sel);
+      },
+      querySelectorAll: () => []
+    };
+    return node;
+  };
+  const docStub = {
+    head: { insertAdjacentHTML() { } },
+    body: {
+      dataset: { page: 'savings' },
+      classList: makeClassList(),
+      insertAdjacentHTML() { },
+      appendChild(node) { createdDialogs.push(node); return node; },
+      querySelectorAll: () => [],
+      querySelector: () => null
+    },
+    documentElement: { dataset: {}, style: { setProperty() { } }, classList: makeClassList() },
+    getElementById: (id) => (id === 'app-loader' ? loaderEl : (createdDialogs.find((n) => n.id === id && !n._removed) || null)),
+    createElement: (tag) => makeStub(tag),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener() { },
+    removeEventListener() { }
+  };
+  const ctx = {
+    window: null,
+    document: docStub,
+    navigator: { userAgent: 'Mozilla/5.0', onLine: true },
+    location: { protocol: 'https:', pathname: '/savings.html', search: '', href: 'https://my-ipon.vercel.app/savings.html' },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    Date, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, JSON, Promise, RegExp, Error, Intl, Blob, Uint8Array, atob,
+    setTimeout: () => 0,
+    clearTimeout() { },
+    addEventListener() { },
+    removeEventListener() { },
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    requestAnimationFrame: (fn) => fn(),
+    console
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+  vm.runInNewContext(policyJs, ctx, { filename: 'js/policy.js' });
+  ctx.window.Ipon.confirmAction = async () => true;
+  ctx.window.Ipon.toast = () => {};
+  ctx.window.Ipon.rpc = async (fnName, args) => {
+    rpcCalls.push({ fnName, args });
+    if (fnName === 'get_bin_items') {
+      return [{
+        item_type: 'goal',
+        type_label: 'Goal',
+        item_id: '00000000-0000-0000-0000-000000000101',
+        title: 'Holiday Trip 2026',
+        subtitle: 'Target PHP 25,000.00 · Completed',
+        reason: 'Goal marked done and moved to 30-day bin',
+        deleted_by_name: 'Ana Santos',
+        deleted_at: '2026-11-16T04:00:00Z',
+        expires_at: '2026-12-16T04:00:00Z',
+        days_remaining: 5
+      }];
+    }
+    return { batch_id: '00000000-0000-0000-0000-000000000202' };
+  };
+
+  const normalExp = ctx.window.IponPolicy.formatBinExpiry({ days_remaining: 18, expires_at: '2026-12-04T00:00:00Z' });
+  assert.equal(normalExp.urgent, false);
+  assert.match(normalExp.text, /18 days left/);
+
+  const urgentExp = ctx.window.IponPolicy.formatBinExpiry({ days_remaining: 3, expires_at: '2026-11-19T00:00:00Z' });
+  assert.equal(urgentExp.urgent, true);
+  assert.match(urgentExp.text, /3 days left/);
+
+  const zeroExp = ctx.window.IponPolicy.formatBinExpiry({ days_remaining: 0, expires_at: '2026-11-16T00:00:00Z' });
+  assert.equal(zeroExp.urgent, true);
+  assert.match(zeroExp.text, /Expires today/);
+
+  const cardHtml = ctx.window.IponPolicy.renderBinItemCard({
+    item_type: 'savings_cycle',
+    type_label: 'Savings batch',
+    item_id: 'batch-1',
+    title: 'Batch 2026',
+    subtitle: '14 records · Net PHP 50,000.00',
+    reason: 'Completed cycle cleared to bin',
+    deleted_by_name: 'Ana Santos',
+    deleted_at: '2026-11-16T00:00:00Z',
+    expires_at: '2026-11-20T00:00:00Z',
+    days_remaining: 4
+  });
+  assert.match(cardHtml, /is-cycle/);
+  assert.match(cardHtml, /is-urgent/);
+  assert.match(cardHtml, /4 days left/);
+  assert.match(cardHtml, /Delete forever/);
+
+  assert.equal(ctx.window.IponPolicy.openRecycleBin({ defaultType: 'goal' }), true);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(rpcCalls[0].fnName, 'get_bin_items');
+  assert.equal(rpcCalls[0].args.p_type, 'goal');
+
+  const binDlg = docStub.getElementById('ipon-shared-bin-dialog');
+  assert.ok(binDlg);
+  assert.equal(binDlg.open, true);
+  assert.match(binDlg.querySelector('#ipon-shared-bin-list').innerHTML, /Holiday Trip 2026/);
+  assert.match(binDlg.querySelector('#ipon-shared-bin-list').innerHTML, /5 days left/);
+
+  // Test Finish Batch & Reset dialog submit
+  assert.equal(ctx.window.IponPolicy.openFinishSavingsBatchDialog({ onDone: () => {} }), true);
+  const batchDlg = docStub.getElementById('ipon-finish-batch-dialog');
+  assert.ok(batchDlg);
+  assert.equal(batchDlg.open, true);
+  await batchDlg.querySelector('#ipon-finish-batch-form')._emit('submit', { preventDefault() {} });
+  const resetCall = rpcCalls.find((c) => c.fnName === 'archive_and_reset_savings_cycle');
+  assert.ok(resetCall);
+  assert.equal(resetCall.args.p_title, 'Batch 2026 — Completed Savings');
+  assert.equal(resetCall.args.p_include_completed_goals, true);
+});

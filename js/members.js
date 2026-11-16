@@ -405,6 +405,7 @@
   deleteDialog.addEventListener('close', resetDeleteDialog);
 
   function binDaysLeftLabel(expiresAt) {
+    if (typeof window.IponPolicy?.formatBinExpiry === 'function') return window.IponPolicy.formatBinExpiry(expiresAt).text;
     const remainingMs = new Date(expiresAt).getTime() - Date.now();
     const days = Math.max(0, Math.ceil(remainingMs / 86400000));
     if (days <= 0) return 'Expires today';
@@ -418,9 +419,10 @@
       const items = Array.isArray(result) ? result : [];
       binCount.textContent = `${items.length} recoverable item${items.length === 1 ? '' : 's'}`;
       binList.innerHTML = items.length ? items.map((item) => {
+        if (typeof window.IponPolicy?.renderBinItemCard === 'function') return window.IponPolicy.renderBinItemCard(item, { canPurge: true });
         const typeClass = item.item_type === 'announcement' ? 'is-deduction' : 'is-addition';
         return `<article class="bin-item"><div class="bin-item-main"><div class="bin-item-top"><span class="record-type-pill ${typeClass}">${Ipon.escapeHtml(item.type_label || item.item_type)}</span><span class="bin-item-expiry">${Ipon.escapeHtml(binDaysLeftLabel(item.expires_at))}</span></div><strong>${Ipon.escapeHtml(item.title)}</strong>${item.subtitle ? `<p class="bin-item-subtitle">${Ipon.escapeHtml(item.subtitle)}</p>` : ''}<p class="bin-item-reason">Reason: ${Ipon.escapeHtml(item.reason || 'No reason provided')}</p><p class="bin-item-meta">Deleted by ${Ipon.escapeHtml(item.deleted_by_name || 'Group Administrator')} on ${Ipon.escapeHtml(Ipon.dateLabel(item.deleted_at))}</p></div><button class="button button-secondary" type="button" data-recover-type="${Ipon.escapeHtml(item.item_type)}" data-recover-id="${Ipon.escapeHtml(item.item_id)}" data-recover-label="${Ipon.escapeHtml(item.type_label || item.item_type)}" data-recover-title="${Ipon.escapeHtml(item.title)}">Recover</button></article>`;
-      }).join('') : '<p class="empty-state">No deleted items found within the 1-month recovery window.</p>';
+      }).join('') : '<p class="empty-state">No binned items found within the 30-day recovery window.</p>';
     } catch (error) {
       binCount.textContent = 'Unable to load bin';
       binList.innerHTML = `<p class="empty-state">${Ipon.escapeHtml(Ipon.friendlyError(error))}</p>`;
@@ -434,28 +436,56 @@
   document.getElementById('close-bin-dialog')?.addEventListener('click', () => binDialog.close());
   binTypeFilter.addEventListener('change', loadBin);
   binList.addEventListener('click', async (event) => {
-    const button = event.target.closest('[data-recover-id]');
-    if (!button) return;
-    const itemType = button.dataset.recoverType;
-    const itemId = button.dataset.recoverId;
-    const itemLabel = button.dataset.recoverLabel || 'Item';
-    const itemTitle = button.dataset.recoverTitle || 'this item';
+    const recoverBtn = event.target.closest('[data-recover-id]');
+    if (recoverBtn) {
+      const itemType = recoverBtn.dataset.recoverType;
+      const itemId = recoverBtn.dataset.recoverId;
+      const itemLabel = recoverBtn.dataset.recoverLabel || 'Item';
+      const itemTitle = recoverBtn.dataset.recoverTitle || 'this item';
+      const accepted = await Ipon.confirmAction({
+        title: `Recover ${itemLabel.toLowerCase()}?`,
+        message: itemType === 'savings_cycle'
+          ? `"${itemTitle}" will restore all records, receipts, comments, and periods back into the active workspace.`
+          : `"${itemTitle}" will be restored to active records.`,
+        acceptLabel: 'Recover'
+      });
+      if (!accepted) return;
+      Ipon.setBusy(recoverBtn, true, 'Recovering…');
+      try {
+        await Ipon.rpc('recover_bin_item', { p_item_type: itemType, p_item_id: itemId });
+        Ipon.toast(`${itemLabel} recovered.`);
+        await Promise.all([loadBin(), load()]);
+      } catch (error) {
+        await loadBin().catch(() => {});
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      } finally {
+        Ipon.setBusy(recoverBtn, false);
+      }
+      return;
+    }
+
+    const purgeBtn = event.target.closest('[data-purge-id]');
+    if (!purgeBtn) return;
+    const itemType = purgeBtn.dataset.purgeType;
+    const itemId = purgeBtn.dataset.purgeId;
+    const itemLabel = purgeBtn.dataset.purgeLabel || 'Item';
+    const itemTitle = purgeBtn.dataset.purgeTitle || 'this item';
     const accepted = await Ipon.confirmAction({
-      title: `Recover ${itemLabel.toLowerCase()}?`,
-      message: `"${itemTitle}" will be restored to active records.`,
-      acceptLabel: 'Recover'
+      title: `Permanently delete ${itemLabel.toLowerCase()}?`,
+      message: `Delete "${itemTitle}" permanently from the database and cloud storage? This cannot be undone.`,
+      acceptLabel: 'Delete forever'
     });
     if (!accepted) return;
-    Ipon.setBusy(button, true, 'Recovering…');
+    Ipon.setBusy(purgeBtn, true, 'Deleting…');
     try {
-      await Ipon.rpc('recover_bin_item', { p_item_type: itemType, p_item_id: itemId });
-      Ipon.toast(`${itemLabel} recovered.`);
+      await Ipon.rpc('purge_bin_item_permanently', { p_item_type: itemType, p_item_id: itemId });
+      Ipon.toast(`${itemLabel} permanently deleted.`);
       await Promise.all([loadBin(), load()]);
     } catch (error) {
       await loadBin().catch(() => {});
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
-      Ipon.setBusy(button, false);
+      Ipon.setBusy(purgeBtn, false);
     }
   });
   document.getElementById('add-member')?.addEventListener('click', () => { resetForm(); dialog.showModal(); firstName.focus(); });

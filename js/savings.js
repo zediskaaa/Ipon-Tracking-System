@@ -362,7 +362,7 @@
         <p class="goal-note">${goal.notes ? Ipon.escapeHtml(goal.notes) : 'Progress tracks against the group’s shared confirmed balance. Funds are not locked or allocated to individual goals.'}</p>
         <div class="goal-actions">
           <button class="icon-action" type="button" data-simulate-goal="${goal.id}">Simulate</button>
-          ${isAdmin ? `<button class="icon-action" type="button" data-edit-goal="${goal.id}">Edit goal</button><button class="icon-action danger-action" type="button" data-delete-goal="${goal.id}">Delete</button>` : ''}
+          ${isAdmin ? `${goal.status === 'ACTIVE' ? `<button class="icon-action is-done" type="button" data-complete-goal="${goal.id}">Mark done</button>` : ''}<button class="icon-action" type="button" data-edit-goal="${goal.id}">Edit goal</button><button class="icon-action danger-action" type="button" data-delete-goal="${goal.id}">Move to bin</button>` : ''}
         </div>
       </article>`;
     }).join('') : `<div class="goal-empty-card">
@@ -495,21 +495,45 @@
       return;
     }
 
+    const completeBtn = event.target.closest('[data-complete-goal]');
+    if (completeBtn) {
+      const goal = goals.find((item) => item.id === completeBtn.dataset.completeGoal);
+      if (!goal) return;
+      const accepted = await Ipon.confirmAction({
+        title: 'Mark savings goal as done?',
+        message: `Mark "${goal.title}" (${Ipon.money(goal.target_amount)}) as completed and move it into the 30-day Recycle Bin? You can still recover it for 30 days before permanent database removal.`,
+        acceptLabel: 'Mark done & bin (30d)'
+      });
+      if (!accepted) return;
+      Ipon.setBusy(completeBtn, true, 'Moving…');
+      try {
+        await Ipon.rpc('complete_and_bin_savings_goal', { p_goal_id: goal.id, p_move_to_bin: true });
+        if (selectedGoalId === goal.id) selectedGoalId = '';
+        Ipon.toast('Goal marked done and moved to the 30-day Bin.');
+        await load();
+      } catch (error) {
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      } finally {
+        Ipon.setBusy(completeBtn, false);
+      }
+      return;
+    }
+
     const deleteBtn = event.target.closest('[data-delete-goal]');
     if (deleteBtn) {
       const goal = goals.find((item) => item.id === deleteBtn.dataset.deleteGoal);
       if (!goal) return;
       const accepted = await Ipon.confirmAction({
         title: 'Delete savings goal?',
-        message: `Delete "${goal.title}" (${Ipon.money(goal.target_amount)})? Group contributions are unaffected, and this removal is recorded in the audit log.`,
-        acceptLabel: 'Delete goal'
+        message: `Move "${goal.title}" (${Ipon.money(goal.target_amount)}) to the 30-day Recycle Bin? Group contributions are unaffected, and you have 30 days to recover it before automatic permanent deletion.`,
+        acceptLabel: 'Move to 30d Bin'
       });
       if (!accepted) return;
-      Ipon.setBusy(deleteBtn, true);
+      Ipon.setBusy(deleteBtn, true, 'Moving…');
       try {
         await Ipon.rpc('delete_savings_goal', { p_goal_id: goal.id });
         if (selectedGoalId === goal.id) selectedGoalId = '';
-        Ipon.toast('Savings goal deleted.');
+        Ipon.toast('Savings goal moved to the 30-day Bin.');
         await load();
       } catch (error) {
         Ipon.toast(Ipon.friendlyError(error), 'error');
@@ -519,6 +543,12 @@
     }
   });
 
+  document.getElementById('open-savings-bin')?.addEventListener('click', () => {
+    window.IponPolicy?.openRecycleBin?.({ defaultType: 'goal', onChanged: load });
+  });
+  document.getElementById('finish-savings-cycle')?.addEventListener('click', () => {
+    window.IponPolicy?.openFinishSavingsBatchDialog?.({ onDone: load });
+  });
   document.getElementById('add-goal')?.addEventListener('click', () => openGoalDialog(null));
   document.getElementById('cancel-goal-edit')?.addEventListener('click', () => dialog.close());
   document.getElementById('close-goal-dialog')?.addEventListener('click', () => dialog.close());
@@ -686,5 +716,5 @@
   } finally {
     Ipon.setLoading(false);
   }
-  Ipon.subscribeToChanges('savings', ['savings_goals', 'savings_calculator_plans', 'contributions', 'withdrawals', 'expenses'], load);
+  Ipon.subscribeToChanges('savings', ['savings_goals', 'savings_calculator_plans', 'contributions', 'withdrawals', 'expenses', 'groups'], load);
 })();

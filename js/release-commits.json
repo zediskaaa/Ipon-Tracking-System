@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-11-16T13:44:12+08:00",
+    "message": "Refine 1-time policy consent modal to match clean 2-tab pill and stacked action layout\n\n- Removed the retention highlight chips and extra switch/note clutter from #ipon-policy-consent-dialog in js/policy.js.\n- Styled the full-width 2-tab Terms of Use / Privacy Policy switcher, clean serif body headings, concise confirmation checkbox (I have read and agree to the myIPON Terms of Use and Privacy Policy.), and full-width stacked I agree & continue + Sign out buttons in css/app.css.\n- Bumped css/app.css?v=20261116-118 and js/policy.js?v=20261116-02 across all HTML pages, synced mobile assets (npm run mobile:sync), and updated tests/contracts.test.mjs (141/141 passing)."
+  },
+  {
+    "date": "2026-11-16T13:25:31+08:00",
+    "message": "Implement automated data retention, cloud media storage, annual archives, updated policies, and 1-time consent gate\n\n- Database & Edge retention automation (Migrations 081–083):\n  - Added nightly pg_cron job (`0 16 * * *` UTC / 12:00 AM PHT) for automated TTL cleanup: 7-day login throttles, 30-day call logs, read notifications, and unlinked recovery bin members, and 90-day chat messages, chat attachments, unread alerts, rejected/voided receipts, audit logs, and security activity logs (excluding removed `admin_requests` cleanup).\n  - Added 6-month inactive account detection and automated purge queue with a 7-day prior warning email and `pending_storage_deletions` draining in `manage-account`, plus tuned `autovacuum` and Base64 scrubbing on `audit_logs`.\n  - Added `ipon-media` bucket support and signed upload URLs (`media-upload-url`) so profile avatars, group DPs, QR codes, and receipts store bucket URLs instead of database Base64 blobs.\n  - Enforced 500-character input caps on chat messages, transaction notes, and record discussion comments (keeping Group Announcements unlimited) across SQL and UI forms.\n  - Added 1+ year financial annual roll-up (`financial_annual_archives`, `archive_group_year`) in Reports with a mandatory CSV-first export workflow.\n\n- Updated Policies & Mandatory 1-Time Acceptance Gate:\n  - Redesigned the Terms of Use & Privacy Policy dialogs with the dark obsidian-forest header, serif headings with warm-gold accent rules, horizontal-overflow fix, and complete day-by-day retention breakdown (`Last updated: November 16, 2026`).\n  - Added `profiles.policy_accepted_version` / `policy_accepted_at`, `accept_current_policy` RPC, and noisy-key audit filtering (`write_audit_log`).\n  - Extracted shared policy UI cleanly into `js/policy.js`, adding the mandatory 1-time-per-account Terms & Privacy consent modal (`I agree & continue`), in-app Terms/Privacy/Retention dialogs in Account Preferences, a 14-day periodic retention reminder, and a 90-day chat composer notice.\n  - Fixed `js/auth.js` so `?policy=terms|privacy` stays open for already signed-in users until closed, synced mobile/web bundles (`npm run mobile:sync`), and verified `npm test` (141/141 passing)."
+  },
+  {
     "date": "2026-11-16T11:58:14+08:00",
     "message": "Redesign voice recording pill, hide mobile header subtitles, preserve short chat previews, and harden Android background sync\n\n- UI (Messages voice composer): Restyled the voice recording bar into a dark forest-emerald capsule with a pulsing coral indicator, tracked gold RECORDING label, tabular serif timer (`0:00`), outlined Cancel pill, warm gold two-line Send voice pill, and an active emerald mic circle beside equal circular Attach/Emoji buttons (`js/messages.js`, `css/app.css`). Added light/dark/midnight theme styling and responsive <=640px / <=380px sizing with zero horizontal overflow.\n- UI (Mobile clutter cleanup): Hid static header, panel, account, modal, and Messages intro descriptions on mobile (`<=720px`) while keeping desktop copy and dynamic status/count elements intact (`css/app.css`).\n- Database / Push previews: Applied migration `20261116_080_preserve_short_chat_notification_preview.sql` and updated `database/schema.sql` so 1+ character chat messages (e.g., `?`, `a`, `1`) and video attachments keep accurate notification previews instead of generic fallback copy.\n- Android background reliability: Added concurrent wake queuing (`POLL_PENDING` with wake-lock handoff), explicit notification timestamps (`setWhen`/`setShowWhen`), and immediate WorkManager recovery sync (`enqueueImmediateSync`) in `NotificationPollReceiver.java`, `NotificationSyncService.java`, and `NotificationSyncWorker.java` so rapid or post-swipe alerts are not dropped.\n- Build & Verification: Bumped `app.css` / `messages.js` cache-busters across HTML pages, synced Capacitor web assets (`npm run mobile:sync`), and added contract + VM tests (`tests/contracts.test.mjs` — 139/139 passing)."
   },
@@ -170,13 +178,5 @@
   {
     "date": "2026-11-14T12:52:26+08:00",
     "message": "Fix summary-list descendant selector leak into custom group dropdown"
-  },
-  {
-    "date": "2026-11-14T12:50:09+08:00",
-    "message": "Remove redundant group identity banner from Members header"
-  },
-  {
-    "date": "2026-11-14T12:48:51+08:00",
-    "message": "Clarify contextual info tooltip copy and extend to withdrawals, expenses, and members"
   }
 ]

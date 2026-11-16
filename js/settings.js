@@ -416,6 +416,12 @@
     saveCycleSetting(val, cycleSaveBtn);
   });
   cycleResetBtn?.addEventListener('click', () => saveCycleSetting('', cycleResetBtn));
+  document.getElementById('settings-open-bin')?.addEventListener('click', () => {
+    window.IponPolicy?.openRecycleBin?.({ defaultType: 'savings_cycle', onChanged: loadCycleSetting });
+  });
+  document.getElementById('settings-finish-cycle')?.addEventListener('click', () => {
+    window.IponPolicy?.openFinishSavingsBatchDialog?.({ onDone: loadCycleSetting });
+  });
 
   try {
     await Promise.all([loadContributionDefault(), loadAccess(), loadPaymentInfo(), loadCycleSetting()]);
