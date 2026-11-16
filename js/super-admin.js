@@ -69,6 +69,7 @@
   }
   const accountActionCancel = document.getElementById('account-action-cancel');
   const featureStatusTabs = document.getElementById('feature-requests-status-tabs');
+  const bugStatusTabs = document.getElementById('bug-reports-status-tabs');
   const featureCardsContainer = document.getElementById('feature-requests-cards');
   const featureTableWrap = document.getElementById('feature-requests-table-wrap');
   const featureViewToggle = document.getElementById('feature-requests-view-toggle');
@@ -101,6 +102,7 @@
   let accountActivities = [];
   let activityLogs = [];
   let activeFeatureStatusFilter = 'ALL';
+  let activeBugStatusFilter = 'OPEN';
   const PAGE_SIZE = 10;
   const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, activity: 0 };
   Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
@@ -116,6 +118,14 @@
     activity: ['Platform activity', 'Review recent administrator and savings-group access changes recorded by the database.']
   };
 
+  const viewFocusHeadings = {
+    overview: 'platform-view-title',
+    'feature-requests': 'feature-requests-title',
+    'bug-reports': 'bug-reports-title',
+    administrators: 'users-title',
+    activity: 'activity-title'
+  };
+
   function showView(focusHeading = false) {
     const requestedView = location.hash.slice(1);
     const isAnnouncementsAnchor = requestedView === 'announcements';
@@ -123,9 +133,10 @@
     const activeView = views[targetView] ? targetView : 'overview';
     if (!views[targetView] && !isAnnouncementsAnchor) history.replaceState(null, '', '#overview');
     document.querySelectorAll('[data-platform-view]').forEach((section) => { section.hidden = section.dataset.platformView !== activeView; });
+    const pageHeader = document.getElementById('platform-page-header');
+    if (pageHeader) pageHeader.hidden = activeView !== 'overview';
     document.getElementById('platform-view-title').textContent = views[activeView][0];
     document.getElementById('platform-view-description').textContent = views[activeView][1];
-    document.getElementById('create-administrator').hidden = activeView !== 'administrators';
     document.querySelectorAll('[data-nav-section]').forEach((link) => {
       const current = link.dataset.navSection === activeView;
       link.classList.toggle('is-active', current);
@@ -141,9 +152,11 @@
         setTimeout(() => announcementsEl.classList.remove('is-highlight-focus'), 2200);
       });
     } else if (focusHeading) {
-      const heading = document.getElementById('platform-view-title');
-      heading.tabIndex = -1;
-      heading.focus({ preventScroll: true });
+      const heading = document.getElementById(viewFocusHeadings[activeView] || 'platform-view-title');
+      if (heading) {
+        heading.tabIndex = -1;
+        heading.focus({ preventScroll: true });
+      }
     }
   }
 
@@ -367,19 +380,46 @@
     Ipon.syncPresenceDots(featureRequestsBody);
   }
 
+  function updateBugReportCounts() {
+    const counts = { ALL: bugReports.length, OPEN: 0, FIXED: 0 };
+    bugReports.forEach((report) => {
+      const st = (report.status || 'OPEN').toUpperCase();
+      if (counts[st] !== undefined) counts[st]++;
+    });
+    const openEl = document.getElementById('count-bug-open');
+    const fixedEl = document.getElementById('count-bug-fixed');
+    const allEl = document.getElementById('count-bug-all');
+    if (openEl) openEl.textContent = counts.OPEN;
+    if (fixedEl) fixedEl.textContent = counts.FIXED;
+    if (allEl) allEl.textContent = counts.ALL;
+  }
+
   function renderBugReports() {
     if (!bugReportsBody) return;
+    updateBugReportCounts();
     const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
     const query = filterValue('bug-reports-search');
     const filtered = bugReports.filter((report) => {
+      const status = (report.status || 'OPEN').toUpperCase();
+      if (activeBugStatusFilter !== 'ALL' && status !== activeBugStatusFilter) return false;
       const profile = profileById.get(report.reporter_id);
-      return matchesQuery(query, [profile?.full_name, profile?.email, profile?.role, report.title, report.description]);
+      return matchesQuery(query, [profile?.full_name, profile?.email, profile?.role, ROLE_LABELS[profile?.role], report.title, report.description, status, report.release_version]);
     });
     const visible = paginateRows('bug-reports', filtered);
     bugReportsBody.innerHTML = visible.length ? visible.map((report) => {
       const profile = profileById.get(report.reporter_id);
       const reporterName = profile?.full_name || 'Former user';
+      const status = (report.status || 'OPEN').toUpperCase();
       const count = Number(report.image_count || 0);
+      const roleCell = profile?.role
+        ? `<span class="role-badge role-${profile.role.toLowerCase()}">${Ipon.escapeHtml(ROLE_LABELS[profile.role] || profile.role.replaceAll('_', ' '))}</span>`
+        : '<span class="field-help">Unavailable</span>';
+      const statusPill = status === 'FIXED'
+        ? `<span class="status-pill status-fixed">Fixed</span>${report.release_version ? `<br><small class="version-tag">${Ipon.escapeHtml(report.release_version)}</small>` : '<br><small class="field-help">Queued for release</small>'}`
+        : '<span class="status-pill status-open">Open</span>';
+      const actionBtn = status === 'FIXED'
+        ? `<button class="icon-action" type="button" data-bug-action="OPEN" data-bug-id="${report.id}">Reopen</button>`
+        : `<button class="icon-action action-fix-bug" type="button" data-bug-action="FIXED" data-bug-id="${report.id}">Fixed</button>`;
       return `<tr data-bug-id="${report.id}">
         <td>
           <div class="table-user-cell">
@@ -390,13 +430,15 @@
             </div>
           </div>
         </td>
-        <td>${Ipon.escapeHtml(profile?.role?.replaceAll('_', ' ') || 'Unavailable')}</td>
+        <td>${roleCell}</td>
         <td><strong>${Ipon.escapeHtml(report.title)}</strong></td>
         <td><span class="feature-request-details">${Ipon.escapeHtml(report.description)}</span></td>
         <td>${count ? `<button class="icon-action" type="button" data-view-bug="${report.id}">View ${count} picture${count === 1 ? '' : 's'}</button>` : '<span class="field-help">None</span>'}</td>
+        <td>${statusPill}</td>
         <td>${Ipon.dateLabel(report.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td>
+        <td><div class="table-actions">${actionBtn}</div></td>
       </tr>`;
-    }).join('') : `<tr><td colspan="6" class="empty-state">${query ? 'No matching bug reports.' : 'No bug reports yet.'}</td></tr>`;
+    }).join('') : `<tr><td colspan="8" class="empty-state">${query ? 'No matching bug reports.' : activeBugStatusFilter === 'FIXED' ? 'No fixed bug reports yet.' : activeBugStatusFilter === 'OPEN' ? 'No open bug reports right now.' : 'No bug reports yet.'}</td></tr>`;
     Ipon.bindAvatarFallbacks(bugReportsBody);
     Ipon.syncPresenceDots(bugReportsBody);
   }
@@ -423,7 +465,7 @@
       safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('feature_requests').select('id,requester_id,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
-      safeQuery(Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,created_at').order('created_at', { ascending: false }).limit(200)),
+      safeQuery(Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,status,reviewed_at,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.rpc('super_admin_storage_overview')),
@@ -759,7 +801,54 @@
   });
 
   document.getElementById('bug-viewer-close')?.addEventListener('click', () => bugViewerDialog?.close());
+  bugStatusTabs?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-bug-status-filter]');
+    if (!button) return;
+    activeBugStatusFilter = button.dataset.bugStatusFilter;
+    bugStatusTabs.querySelectorAll('.segmented-control-btn').forEach((btn) => {
+      btn.classList.toggle('is-active', btn === button);
+    });
+    pageState['bug-reports'] = 0;
+    renderBugReports();
+  });
   bugReportsBody?.addEventListener('click', async (event) => {
+    const actionBtn = event.target.closest('[data-bug-action]');
+    if (actionBtn) {
+      const id = actionBtn.dataset.bugId;
+      const nextStatus = actionBtn.dataset.bugAction;
+      const report = bugReports.find((item) => item.id === id);
+      if (!report) return;
+      const confirmed = await Ipon.confirmAction(nextStatus === 'FIXED' ? {
+        title: 'Mark bug report as fixed?',
+        message: `Mark "${report.title}" as fixed? It will leave the Open list and be included in your next release update with Write with AI.`,
+        acceptLabel: 'Mark fixed'
+      } : {
+        title: 'Reopen bug report?',
+        message: `Move "${report.title}" back to the Open bug reports list?`,
+        acceptLabel: 'Reopen report'
+      });
+      if (!confirmed) return;
+      Ipon.setBusy(actionBtn, true, nextStatus === 'FIXED' ? 'Marking…' : 'Reopening…');
+      try {
+        await Ipon.rpc('review_bug_report', { p_report_id: id, p_status: nextStatus });
+        report.status = nextStatus;
+        if (nextStatus === 'OPEN') {
+          report.reviewed_at = null;
+          report.release_version = null;
+        } else {
+          report.reviewed_at = new Date().toISOString();
+        }
+        renderBugReports();
+        Ipon.toast(nextStatus === 'FIXED'
+          ? 'Bug report marked as fixed and queued for the next release update.'
+          : 'Bug report moved back to Open.');
+      } catch (error) {
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      } finally {
+        Ipon.setBusy(actionBtn, false);
+      }
+      return;
+    }
     const button = event.target.closest('[data-view-bug]');
     if (!button || !bugViewerDialog) return;
     const report = bugReports.find((item) => item.id === button.dataset.viewBug);
@@ -1191,10 +1280,13 @@
     const targetImplemented = featureRequests.filter(
       (req) => req.status === 'IMPLEMENTED' && !req.release_version
     );
+    const targetFixedBugs = bugReports.filter(
+      (bug) => (bug.status || 'OPEN') === 'FIXED' && !bug.release_version
+    );
     const systemUpdates = await fetchRecentSystemUpdates(latestReleaseAt, priorText);
-    const hasNewChanges = systemUpdates.length > 0 || targetImplemented.length > 0;
+    const hasNewChanges = systemUpdates.length > 0 || targetImplemented.length > 0 || targetFixedBugs.length > 0;
 
-    latestReleaseContext = { nextVersion, latestReleaseAt, latestReleaseVersion, previousReleases, targetImplemented, systemUpdates, hasNewChanges };
+    latestReleaseContext = { nextVersion, latestReleaseAt, latestReleaseVersion, previousReleases, targetImplemented, targetFixedBugs, systemUpdates, hasNewChanges };
     return latestReleaseContext;
   }
 
@@ -1326,14 +1418,18 @@
     }
     const updateCount = Array.isArray(context.systemUpdates) ? context.systemUpdates.length : 0;
     const reqCount = Array.isArray(context.targetImplemented) ? context.targetImplemented.length : 0;
+    const bugCount = Array.isArray(context.targetFixedBugs) ? context.targetFixedBugs.length : 0;
     const sinceLabel = context.latestReleaseVersion ? ` since ${context.latestReleaseVersion}` : '';
     notice.hidden = false;
     if (context.hasNewChanges) {
+      const parts = [`${updateCount} system update(s)`];
+      if (reqCount) parts.push(`${reqCount} implemented request(s)`);
+      if (bugCount) parts.push(`${bugCount} fixed bug report(s)`);
       notice.classList.remove('is-empty');
-      noticeText.textContent = `Detected ${updateCount} system update(s)${reqCount ? ` and ${reqCount} implemented request(s)` : ''}${sinceLabel}. Click Write with AI to analyze and draft every item dynamically.`;
+      noticeText.textContent = `Detected ${parts.join(', ')}${sinceLabel}. Click Write with AI to analyze and draft every item dynamically.`;
     } else {
       notice.classList.add('is-empty');
-      noticeText.textContent = `No new system changes or implemented feature requests detected${sinceLabel}. Wait for new updates before generating release notes, or write manually if needed.`;
+      noticeText.textContent = `No new system changes, fixed bug reports, or implemented feature requests detected${sinceLabel}. Wait for new updates before generating release notes, or write manually if needed.`;
     }
   }
 
@@ -1524,7 +1620,7 @@
     if (!context.hasNewChanges) {
       await Ipon.confirmAction({
         title: 'No new system changes yet',
-        message: `All detected system updates and implemented feature requests were already covered in ${context.latestReleaseVersion || 'the latest release'}. Write with AI will generate itemized release notes once new changes land in the system.`,
+        message: `All detected system updates, fixed bug reports, and implemented feature requests were already covered in ${context.latestReleaseVersion || 'the latest release'}. Write with AI will generate itemized release notes once new changes land in the system.`,
         acceptLabel: 'OK'
       });
       return;
@@ -1532,6 +1628,7 @@
 
     const ver = (versionInput?.value || context.nextVersion || 'Update 1.0').trim();
     const targetImplemented = context.targetImplemented;
+    const targetFixedBugs = context.targetFixedBugs || [];
     const systemUpdates = context.systemUpdates;
     const previousReleases = context.previousReleases;
 
@@ -1560,6 +1657,10 @@
         style_angle: styleAngle,
         variation_seed: nextSeed,
         system_updates: systemUpdates,
+        fixed_bugs: targetFixedBugs.map((bug) => ({
+          title: bug.title,
+          description: bug.description
+        })),
         features: targetImplemented.map((req) => {
           const prof = profileById.get(req.requester_id);
           return {
@@ -1680,10 +1781,15 @@
         p_announcement_type: 'RELEASE',
         p_release_version: version
       });
-      // Mark all currently unreleased implemented requests locally with this version
+      // Mark all currently unreleased implemented requests & fixed bugs locally with this version
       featureRequests.forEach((req) => {
         if (req.status === 'IMPLEMENTED' && !req.release_version) {
           req.release_version = version;
+        }
+      });
+      bugReports.forEach((bug) => {
+        if ((bug.status || 'OPEN') === 'FIXED' && !bug.release_version) {
+          bug.release_version = version;
         }
       });
       releaseUpdateDialog.close();
@@ -1735,7 +1841,7 @@
       overviewError.hidden = false;
       Ipon.showInlineError(overviewError, error, refresh);
       Ipon.showInlineError(featureRequestsBody, error, refresh, 5);
-      if (bugReportsBody) Ipon.showInlineError(bugReportsBody, error, refresh, 6);
+      if (bugReportsBody) Ipon.showInlineError(bugReportsBody, error, refresh, 8);
       Ipon.showInlineError(administratorsBody, error, refresh, 7);
       Ipon.showInlineError(activityBody, error, refresh, 3);
     }
@@ -1786,7 +1892,13 @@
     if (bugId) {
       const bugSearch = document.getElementById('bug-reports-search');
       if (bugSearch) bugSearch.value = '';
-      const idx = bugReports.findIndex((item) => String(item.id) === String(bugId));
+      const matchedBug = bugReports.find((item) => String(item.id) === String(bugId));
+      activeBugStatusFilter = matchedBug ? (matchedBug.status || 'OPEN').toUpperCase() : 'ALL';
+      bugStatusTabs?.querySelectorAll('[data-bug-status-filter]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.bugStatusFilter === activeBugStatusFilter);
+      });
+      const visibleBugs = bugReports.filter((item) => activeBugStatusFilter === 'ALL' || (item.status || 'OPEN').toUpperCase() === activeBugStatusFilter);
+      const idx = visibleBugs.findIndex((item) => String(item.id) === String(bugId));
       if (idx >= 0) pageState['bug-reports'] = Math.floor(idx / PAGE_SIZE);
       renderBugReports();
       switchPlatformView('#bug-reports');

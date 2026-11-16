@@ -25,7 +25,7 @@ button,a { color:inherit; font:inherit; }
 .dashboard-sidebar {
   position:sticky;
   top:0;
-  z-index:10;
+  z-index:190;
   display:flex;
   height:100dvh;
   flex-direction:column;

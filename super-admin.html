@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261116-121">
+  <link rel="stylesheet" href="css/app.css?v=20261116-122">
   <script src="js/config.js?v=20261115-75"></script>
 </head>
 
@@ -24,14 +24,12 @@
   <div class="app-layout">
     <aside class="app-sidebar" id="app-sidebar"></aside>
     <main class="workspace">
-      <header class="page-header">
+      <header class="page-header" id="platform-page-header">
         <div>
           <h1 id="platform-view-title">Platform overview</h1>
           <p id="platform-view-description">Monitor administrator accounts, savings groups, and user feedback without
             exposing financial records.</p>
         </div>
-        <button class="button button-primary" id="create-administrator" type="button" hidden>Create
-          administrator</button>
       </header>
 
       <section class="platform-view platform-overview" id="overview" data-platform-view="overview"
@@ -206,9 +204,20 @@
             <h2 id="bug-reports-title">Bug reports</h2>
             <p>Errors and problems reported by active IPON users, newest first.</p>
           </div>
-          <div class="table-filters">
+          <div class="table-filters bug-filters">
             <input id="bug-reports-search" type="search" placeholder="Search bug reports"
               aria-label="Search bug reports">
+          </div>
+        </div>
+        <div class="feature-status-tabs-wrap">
+          <div class="segmented-control" id="bug-reports-status-tabs" role="tablist"
+            aria-label="Filter bug reports by status">
+            <button class="segmented-control-btn is-active" type="button" data-bug-status-filter="OPEN">Open <span
+                class="badge" id="count-bug-open">0</span></button>
+            <button class="segmented-control-btn" type="button" data-bug-status-filter="FIXED">Fixed <span
+                class="badge" id="count-bug-fixed">0</span></button>
+            <button class="segmented-control-btn" type="button" data-bug-status-filter="ALL">All <span class="badge"
+                id="count-bug-all">0</span></button>
           </div>
         </div>
         <div class="data-table-wrap">
@@ -220,12 +229,14 @@
                 <th>Title</th>
                 <th>Description</th>
                 <th>Pictures</th>
+                <th>Status</th>
                 <th>Submitted</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="bug-reports-body">
               <tr class="loading-row">
-                <td colspan="6">Loading bug reports…</td>
+                <td colspan="8">Loading bug reports…</td>
               </tr>
             </tbody>
           </table>
@@ -242,7 +253,9 @@
               <h2 id="users-title">Users</h2>
               <p>Manage administrators, treasurers, and members across all savings groups.</p>
             </div>
-            <div class="table-filters">
+            <div class="table-filters users-filters">
+              <button class="button button-primary" id="create-administrator" type="button">Create
+                administrator</button>
               <input id="users-search" type="search" placeholder="Search name, email, or group"
                 aria-label="Search users">
               <select id="users-role-filter" aria-label="Filter users by role">
@@ -563,7 +576,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261116-82"></script>
+  <script src="js/super-admin.js?v=20261116-83"></script>
 </body>
 
 </html>

@@ -129,7 +129,7 @@ test('users can submit bug reports with up to 5 images and Super Admin can inspe
   assert.match(core, /from\('bug_reports'\)\.insert\(\{ reporter_id: currentProfile\.id, title, description, attachments: bugImages \}\)/);
   assert.match(html, /data-platform-view="bug-reports"/);
   assert.match(html, /id="bug-viewer-dialog"/);
-  assert.match(script, /from\('bug_reports'\)\.select\('id,reporter_id,title,description,image_count,created_at'\)/);
+  assert.match(script, /from\('bug_reports'\)\.select\('id,reporter_id,title,description,image_count,status,reviewed_at,release_version,created_at'\)/);
   assert.match(script, /subscribeToChanges\('super-admin',[\s\S]*?'bug_reports'/);
   assert.match(schema, /create table if not exists public\.bug_reports/i);
   assert.match(migration, /jsonb_array_length\(attachments\) <= 5/i);
@@ -10272,4 +10272,49 @@ test('migration 091 restores reverted RPCs, 9 RLS SELECT policies, strict grants
     assert.match(sql, /grant execute on function public\.get_savings_summary\(\) to authenticated;/i);
     assert.match(sql, /'20261116_091'/);
   }
+});
+
+test('migration 092 and UI fixes elevate floating utilities, clean Brainier group assignment, add Bug Report Fixed + AI release flow, and remove duplicate Super Admin headers', () => {
+  const mig092 = read('database/migrations/20261116_092_bug_report_fixed_status_and_clean_unlinked_group.sql');
+  const schema = read('database/schema.sql');
+  const appCss = read('css/app.css');
+  const heroCss = read('css/hero-plates.css');
+  const saHtml = read('super-admin.html');
+  const saJs = read('js/super-admin.js');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+
+  for (const sql of [mig092, schema]) {
+    assert.match(sql, /delete from public\.group_memberships[\s\S]*?'68853776-6a1b-4170-afb8-5dd93c3de90c'/i);
+    assert.match(sql, /alter table public\.bug_reports[\s\S]*?status text not null default 'OPEN' check \(status in \('OPEN', 'FIXED'\)\)/i);
+    assert.match(sql, /create or replace function public\.review_bug_report\(/i);
+    assert.match(sql, /revoke all on function public\.review_bug_report\(uuid, text, text\) from public, anon;/i);
+    assert.match(sql, /grant execute on function public\.review_bug_report\(uuid, text, text\) to authenticated;/i);
+    assert.match(sql, /update public\.bug_reports[\s\S]*?set release_version = v_version[\s\S]*?where status = 'FIXED' and release_version is null/i);
+    assert.match(sql, /'20261116_092'/);
+  }
+
+  // Pic 1: Message and notification triggers stay above scrolling workspace cards
+  assert.match(appCss, /\.app-sidebar\s*\{[^}]*z-index:190;/);
+  assert.match(appCss, /\.sidebar-utility\[data-notifications-open\]\{[^}]*z-index:192;/);
+  assert.match(appCss, /\.sidebar-utility\[data-messages-open\]\s*\{[^}]*z-index:\s*192;/);
+  assert.match(appCss, /\.notification-dialog\{[^}]*z-index:185;/);
+  assert.match(heroCss, /\.dashboard-sidebar\s*\{[^}]*z-index:190;/);
+
+  // Pic 2 & 3: Remove redundant page header on sub-views, add Bug Report Open/Fixed workflow & Fixed -> Release AI integration
+  assert.match(saHtml, /id="platform-page-header"/);
+  assert.match(saHtml, /id="bug-reports-status-tabs"/);
+  assert.match(saHtml, /data-bug-status-filter="OPEN"[^>]*>Open/);
+  assert.match(saHtml, /data-bug-status-filter="FIXED"[^>]*>Fixed/);
+  const pageHeaderMarkup = saHtml.match(/<header[^>]*id="platform-page-header"[\s\S]*?<\/header>/)?.[0] || '';
+  assert.ok(pageHeaderMarkup, 'super-admin.html must define #platform-page-header');
+  assert.doesNotMatch(pageHeaderMarkup, /id="create-administrator"/);
+  assert.match(saHtml, /id="administrators"[\s\S]*?id="create-administrator"/);
+  assert.match(saJs, /pageHeader\.hidden = activeView !== 'overview'/);
+  assert.match(saJs, /let activeBugStatusFilter = 'OPEN'/);
+  assert.match(saJs, /review_bug_report/);
+  assert.match(saJs, /data-bug-action="FIXED"/);
+  assert.match(saJs, /targetFixedBugs\s*=\s*bugReports\.filter/);
+  assert.match(saJs, /fixed_bugs:\s*targetFixedBugs\.map/);
+  assert.match(edgeFn, /Verified bug reports fixed for/);
+  assert.match(edgeFn, /fixedBugPromptLines/);
 });

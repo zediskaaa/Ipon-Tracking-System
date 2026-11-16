@@ -2583,6 +2583,22 @@ Deno.serve(async (request) => {
       description: String(f.details || f.description || '').trim(),
       requester_name: f.requester_name ? String(f.requester_name).trim() : null
     })).filter((f) => Boolean(f.title));
+    let rawFixedBugs = Array.isArray(body.fixed_bugs) ? body.fixed_bugs : null;
+    if (!rawFixedBugs) {
+      const { data: fixedRows } = await admin
+        .from('bug_reports')
+        .select('title,description')
+        .eq('status', 'FIXED')
+        .is('release_version', null)
+        .order('reviewed_at', { ascending: false })
+        .limit(50);
+      rawFixedBugs = fixedRows || [];
+    }
+    const fixedBugs = rawFixedBugs.map((b: any) => ({
+      title: String(b.title || '').trim(),
+      description: String(b.description || b.details || '').trim()
+    })).filter((b) => Boolean(b.title));
+    const fixedBugPromptLines = fixedBugs.map((b) => b.description ? `${b.title}: ${b.description}` : b.title);
     const previousReleases = (Array.isArray(body.previous_releases) ? body.previous_releases : [])
       .map((item: any) => String(item || '').trim())
       .filter(Boolean);
@@ -2605,13 +2621,13 @@ Deno.serve(async (request) => {
       systemUpdates = await fetchRecentSystemUpdates(latestRel?.[0]?.created_at || null);
     }
 
-    if (!features.length && !systemUpdates.length) {
+    if (!features.length && !fixedBugs.length && !systemUpdates.length) {
       return json({
         success: true,
         no_new_changes: true,
         ai_powered: false,
         provider: 'none',
-        message: 'No new system changes or implemented feature requests detected since the latest release.'
+        message: 'No new system changes, fixed bug reports, or implemented feature requests detected since the latest release.'
       });
     }
 
@@ -2624,6 +2640,9 @@ Deno.serve(async (request) => {
 
     const featureListText = features.length
       ? features.map((f) => `- "${f.title}": ${f.description || 'User-requested enhancement'}${f.requester_name ? ` (Requested by: ${f.requester_name})` : ''}`).join('\n')
+      : '- None in this release.';
+    const fixedBugListText = fixedBugs.length
+      ? fixedBugs.map((b) => `- "${b.title}": ${b.description || 'Reported issue resolved'}`).join('\n')
       : '- None in this release.';
     const updatesListText = systemUpdates.length
       ? systemUpdates.map((u, idx) => `${idx + 1}. ${u}`).join('\n')
@@ -2643,6 +2662,9 @@ ${prevListText}
 
 Verified user-requested features implemented for ${version}:
 ${featureListText}
+
+Verified bug reports fixed for ${version} (summarize every resolved bug clearly in plain user-facing English under "fixes" without exposing usernames or reporter names):
+${fixedBugListText}
 
 Verified system updates landed since the previous release (${systemUpdates.length} distinct items — analyze EVERY user-facing item 1-to-1 without skipping or merging unrelated items):
 ${updatesListText}
@@ -2700,7 +2722,7 @@ Output strictly valid JSON with this exact schema (EVERY entry inside each strin
         requestedFeatures: rf,
         securityUpdates: su,
         otherChanges: oc
-      }, systemUpdates);
+      }, [...systemUpdates, ...fixedBugPromptLines]);
 
       if (missingItems.length > 0 && missingItems.length <= 40) {
         try {
