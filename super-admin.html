@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261116-122">
+  <link rel="stylesheet" href="css/app.css?v=20261116-123">
   <script src="js/config.js?v=20261115-75"></script>
 </head>
 
@@ -258,12 +258,6 @@
                 administrator</button>
               <input id="users-search" type="search" placeholder="Search name, email, or group"
                 aria-label="Search users">
-              <select id="users-role-filter" aria-label="Filter users by role">
-                <option value="">All roles</option>
-                <option value="ADMIN">Administrator</option>
-                <option value="TREASURER">Treasurer</option>
-                <option value="MEMBER">Member</option>
-              </select>
               <select id="users-status-filter" aria-label="Filter users by status">
                 <option value="">All statuses</option>
                 <option>ACTIVE</option>
@@ -277,8 +271,7 @@
               <thead>
                 <tr>
                   <th>User</th>
-                  <th>Role</th>
-                  <th>Group</th>
+                  <th>Groups</th>
                   <th>Registered</th>
                   <th>Last activity</th>
                   <th>Status</th>
@@ -287,7 +280,7 @@
               </thead>
               <tbody id="administrators-body">
                 <tr class="loading-row">
-                  <td colspan="7">Loading users…</td>
+                  <td colspan="6">Loading users…</td>
                 </tr>
               </tbody>
             </table>
@@ -572,11 +565,28 @@
       </form>
     </div>
   </dialog>
-  <script src="js/core.js?v=20261116-103"></script><script src="js/policy.js?v=20261116-07"></script>
+  <dialog class="form-dialog user-groups-dialog" id="user-groups-dialog" aria-labelledby="user-groups-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="user-groups-title">User groups</h2>
+          <p id="user-groups-subtitle">All active savings workspaces linked to this user.</p>
+        </div>
+        <button class="dialog-close" id="user-groups-close" type="button" aria-label="Close user groups">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <div class="user-groups-list" id="user-groups-list"></div>
+      <div class="form-actions">
+        <button class="button button-primary" id="user-groups-done" type="button">Done</button>
+      </div>
+    </div>
+  </dialog>
+  <script src="js/core.js?v=20261116-104"></script><script src="js/policy.js?v=20261116-07"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261116-83"></script>
+  <script src="js/super-admin.js?v=20261116-84"></script>
 </body>
 
 </html>

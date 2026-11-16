@@ -56,6 +56,11 @@
     const groups = Array.isArray(myGroups) ? myGroups : [];
     const activeGroup = groups.find((g) => g.is_current) || groups[0] || null;
     currentGroupId = activeGroup?.group_id || '';
+    const isSolo = activeGroup?.workspace_mode === 'SOLO';
+    Ipon.syncWorkspaceMode?.(isSolo ? 'SOLO' : 'GROUP');
+    document.querySelectorAll('.settings-panel-access, .settings-treasurer-panel').forEach((panel) => {
+      panel.hidden = isSolo;
+    });
     if (groupSelect) {
       groupSelect.disabled = groups.length <= 1;
       Ipon.populateGroupSelect(groupSelect, groups, currentGroupId);
@@ -67,6 +72,7 @@
     if (adminContributorToggle) {
       const isContributor = Boolean(activeGroup?.is_contributor);
       adminContributorToggle.checked = isContributor;
+      adminContributorToggle.disabled = isSolo;
       if (settingsContributorDetails) {
         settingsContributorDetails.hidden = !isContributor;
         if (settingsPledgeVal) settingsPledgeVal.textContent = Ipon.money(currentSettingsAdminAmount || 100);

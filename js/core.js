@@ -1402,13 +1402,48 @@
     if (persist) writeShellSnapshot({ unreadMessagesCount: count });
   }
 
+  const ACTIVE_WORKSPACE_MODE_KEY = 'ipon_workspace_mode';
+
+  function readStoredWorkspaceMode() {
+    const domMode = document?.documentElement?.dataset?.workspaceMode;
+    if (domMode === 'SOLO' || domMode === 'GROUP') return domMode;
+    try {
+      const saved = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(ACTIVE_WORKSPACE_MODE_KEY))
+        || (typeof localStorage !== 'undefined' && localStorage.getItem(ACTIVE_WORKSPACE_MODE_KEY));
+      if (saved === 'SOLO' || saved === 'GROUP') return saved;
+    } catch { }
+    return 'GROUP';
+  }
+
+  function syncWorkspaceMode(mode, { persist = true } = {}) {
+    const normalized = String(mode || '').toUpperCase() === 'SOLO' ? 'SOLO' : 'GROUP';
+    if (document?.documentElement?.dataset) {
+      document.documentElement.dataset.workspaceMode = normalized;
+    }
+    if (persist) {
+      try {
+        sessionStorage.setItem(ACTIVE_WORKSPACE_MODE_KEY, normalized);
+        localStorage.setItem(ACTIVE_WORKSPACE_MODE_KEY, normalized);
+      } catch { }
+    }
+    const effectiveRole = resolveActiveRole();
+    document.querySelectorAll('a[href="members.html"], [data-group-only]').forEach((el) => {
+      const roles = el.dataset?.role ? String(el.dataset.role).split(',') : null;
+      const roleHidden = roles ? !roles.includes(effectiveRole) : false;
+      el.hidden = roleHidden || normalized === 'SOLO';
+    });
+    return normalized;
+  }
+
   function syncShellRoleVisibility(effectiveRole) {
     if (document?.documentElement?.dataset && VALID_SHELL_ROLES.includes(effectiveRole)) {
       document.documentElement.dataset.shellRole = effectiveRole;
     }
+    const workspaceMode = effectiveRole === 'SUPER_ADMIN' ? 'GROUP' : readStoredWorkspaceMode();
     document.querySelectorAll('[data-role]').forEach((element) => {
       const roles = String(element.dataset?.role || '').split(',');
-      element.hidden = !roles.includes(effectiveRole);
+      const groupOnlyHidden = workspaceMode === 'SOLO' && (element.hasAttribute('data-group-only') || element.getAttribute('href') === 'members.html');
+      element.hidden = !roles.includes(effectiveRole) || groupOnlyHidden;
     });
     if (effectiveRole === 'SUPER_ADMIN') {
       document.querySelectorAll('[data-messages-open]').forEach((el) => { el.remove(); });
@@ -1465,7 +1500,7 @@
         host.innerHTML = `
         ${brandHtml.replace('href="dashboard.html"', `href="${superAdminPanel ? 'super-admin.html' : 'dashboard.html'}"`)}
         <nav class="app-nav" aria-label="Main navigation">
-          ${navigation.map(([id, href, label, icon, role]) => `<a class="${activeId === id ? 'is-active' : ''}" href="${href}" aria-label="${label}" data-nav-section="${id}"${activeId === id ? ' aria-current="page"' : ''}${role ? ` data-role="${role}"` : ''}>${icon || ''}<span>${label}</span></a>`).join('')}
+          ${navigation.map(([id, href, label, icon, role]) => `<a class="${activeId === id ? 'is-active' : ''}" href="${href}" aria-label="${label}" data-nav-section="${id}"${activeId === id ? ' aria-current="page"' : ''}${role ? ` data-role="${role}"` : ''}${id === 'members' ? ' data-group-only="1"' : ''}>${icon || ''}<span>${label}</span></a>`).join('')}
         </nav>
         ${sidebarArtHtml}
         <div class="app-sidebar-footer">
@@ -2179,7 +2214,7 @@
     selectEl.replaceChildren(...rows.map((group) => {
       const opt = new Option(group.name || 'Savings Group', group.group_id);
       opt.dataset.avatar = group.avatar_url || '';
-      opt.dataset.badge = group.role || '';
+      opt.dataset.badge = group.workspace_mode === 'SOLO' ? 'SOLO' : (group.role || '');
       return opt;
     }));
     if (selectedGroupId) selectEl.value = selectedGroupId;
@@ -5569,10 +5604,25 @@
             profile.group_id = firstGroup.group_id;
             profile.role = firstGroup.role || profile.role;
             profile.member_id = firstGroup.member_id || profile.member_id;
+            profile.workspace_mode = firstGroup.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP';
           }
         } catch (_) { }
       }
+      if (profile.group_id && profile.role !== 'SUPER_ADMIN' && !profile.workspace_mode) {
+        try {
+          const { data: gModeRow } = await withTimeout(
+            client.from('groups').select('workspace_mode').eq('id', profile.group_id).maybeSingle(),
+            5000
+          );
+          profile.workspace_mode = gModeRow?.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP';
+        } catch (_) {
+          profile.workspace_mode = 'GROUP';
+        }
+      } else if (!profile.workspace_mode) {
+        profile.workspace_mode = 'GROUP';
+      }
       currentProfile = profile;
+      syncWorkspaceMode(profile.workspace_mode);
       try {
         sessionStorage.setItem(ACTIVE_ROLE_KEY, profile.role);
         localStorage.setItem(ACTIVE_ROLE_KEY, profile.role);
@@ -7507,6 +7557,8 @@
       currentProfile.group_id = result.group_id;
       currentProfile.role = result.role;
       currentProfile.member_id = result.member_id ?? null;
+      currentProfile.workspace_mode = result.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP';
+      syncWorkspaceMode(currentProfile.workspace_mode);
     }
     return result;
   }
@@ -8814,13 +8866,13 @@
   }
 
   function groupRequiredContent({ hasGroup = false } = {}) {
-    const title = hasGroup ? 'Member profile link required' : 'Join or create a savings group';
+    const title = hasGroup ? 'Member profile link required' : 'Start a savings workspace';
     const message = hasGroup
       ? 'Your account belongs to a group, but your member slot is not linked yet. Check your notifications or ask your group administrator to link your account.'
-      : 'You need to belong to an active savings group before you can record entries. Create your own group now or accept a group invitation from your notifications.';
-    const createButton = hasGroup
+      : 'Start a personal Solo tracker with no invitations required, create a Group to save with others, or check your notifications for an invite.';
+    const createButtons = hasGroup
       ? ''
-      : '<button class="button button-primary" type="button" data-group-required-create>+ Create savings group</button>';
+      : '<button class="button button-primary" type="button" data-group-required-create="SOLO">Start solo savings</button><button class="button button-secondary" type="button" data-group-required-create="GROUP">+ Create savings group</button>';
     return `
       <div class="group-required-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -8830,16 +8882,19 @@
         <p>${escapeHtml(message)}</p>
       </div>
       <div class="group-required-actions">
-        ${createButton}
+        ${createButtons}
         <button class="button button-secondary" type="button" data-group-required-invites>Check invitations</button>
       </div>`;
   }
 
   function wireGroupRequiredActions(root, { onCreateGroup = null, onClose = null } = {}) {
-    root?.querySelector('[data-group-required-create]')?.addEventListener('click', () => {
-      onClose?.();
-      if (typeof onCreateGroup === 'function') onCreateGroup();
-      else window.location.href = 'dashboard.html?create_group=1';
+    root?.querySelectorAll('[data-group-required-create]')?.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.groupRequiredCreate === 'SOLO' ? 'SOLO' : 'GROUP';
+        onClose?.();
+        if (typeof onCreateGroup === 'function') onCreateGroup(mode);
+        else window.location.href = `dashboard.html?create_group=1&workspace_mode=${mode}`;
+      });
     });
     root?.querySelector('[data-group-required-invites]')?.addEventListener('click', () => {
       onClose?.();
@@ -10482,7 +10537,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     setOnlineVisibility, syncMessagesBadges,
     updateLocalProfile(patch = {}) {

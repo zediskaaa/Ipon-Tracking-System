@@ -27613,6 +27613,771 @@ on conflict (version) do nothing;
 
 commit;
 
+
+begin;
+
+-- 6. Support Solo vs Group savings workspaces while preserving all retention/bin rules
+alter table public.groups
+  add column if not exists workspace_mode text not null default 'GROUP';
+
+alter table public.groups
+  drop constraint if exists groups_workspace_mode_check;
+
+alter table public.groups
+  add constraint groups_workspace_mode_check check (workspace_mode in ('SOLO', 'GROUP'));
+
+-- 7. Upgrade admin_set_user_access with Solo workspace invite guard
+create or replace function public.admin_set_user_access(
+  p_user_id uuid,
+  p_role public.app_role,
+  p_status public.account_status,
+  p_member_id uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor_role public.app_role := public.current_user_role();
+  v_actor_group uuid := public.current_group_id();
+  v_member public.members;
+  v_target public.profiles;
+  v_prev_membership public.group_memberships;
+  v_link_member_id uuid;
+  v_group_name text := 'your savings group';
+  v_group_mode text := 'GROUP';
+begin
+  if v_actor_role = 'SUPER_ADMIN' then
+    if p_role not in ('SUPER_ADMIN', 'ADMIN') or p_member_id is not null then
+      raise exception 'Super administrators can only manage platform administrator accounts.' using errcode = '42501';
+    end if;
+    if p_role = 'SUPER_ADMIN' and p_user_id <> auth.uid() then
+      raise exception 'Additional super administrator accounts cannot be assigned here.' using errcode = '42501';
+    end if;
+    if p_user_id = auth.uid() and (p_role <> 'SUPER_ADMIN' or p_status <> 'ACTIVE') then
+      raise exception 'You cannot remove or disable your own super administrator access.' using errcode = '22023';
+    end if;
+    update public.profiles
+    set role = p_role, status = p_status, member_id = null
+    where id = p_user_id and ((role = 'SUPER_ADMIN' and id = auth.uid()) or role = 'ADMIN' or (p_role = 'ADMIN' and role = 'MEMBER' and group_id is null and member_id is null));
+    if not found then
+      raise exception 'User profile not found in your permitted account scope.' using errcode = 'P0002';
+    end if;
+    return;
+  end if;
+
+  if v_actor_role <> 'ADMIN' or v_actor_group is null then
+    raise exception 'You are not allowed to change user access.' using errcode = '42501';
+  end if;
+
+  select name, coalesce(workspace_mode, 'GROUP') into v_group_name, v_group_mode
+  from public.groups
+  where id = v_actor_group;
+  v_group_name := coalesce(nullif(btrim(v_group_name), ''), 'your savings group');
+
+  if v_group_mode = 'SOLO' and p_status <> 'DISABLED' then
+    raise exception 'Solo savings workspaces do not accept member or treasurer invitations. Switch to Group savings in Group settings first.' using errcode = '42501';
+  end if;
+
+  if p_user_id = auth.uid() or p_role not in ('MEMBER', 'TREASURER') then
+    raise exception 'Group administrators can only manage member and treasurer accounts in their own group.' using errcode = '42501';
+  end if;
+
+  if p_role = 'MEMBER' and p_status = 'ACTIVE' and p_member_id is null then
+    raise exception 'Active member accounts must be linked to a member.' using errcode = '22023';
+  end if;
+
+  if p_role = 'TREASURER' and p_member_id is not null then
+    raise exception 'Treasurer accounts cannot be linked to a member profile.' using errcode = '22023';
+  end if;
+
+  select * into v_target from public.profiles where id = p_user_id;
+  if not found or v_target.role = 'SUPER_ADMIN' then
+    raise exception 'User profile not found in your permitted account scope.' using errcode = 'P0002';
+  end if;
+
+  select * into v_prev_membership
+  from public.group_memberships
+  where group_id = v_actor_group and user_id = p_user_id;
+
+  v_link_member_id := case when p_role = 'MEMBER' then p_member_id else null end;
+
+  if v_link_member_id is not null then
+    select * into v_member from public.members
+    where id = v_link_member_id and group_id = v_actor_group and deleted_at is null;
+    if not found then
+      raise exception 'The selected member does not belong to your savings group.' using errcode = '42501';
+    end if;
+    if exists (
+      select 1 from public.group_memberships gm
+      where gm.group_id = v_actor_group
+        and gm.member_id = v_link_member_id
+        and gm.user_id <> p_user_id
+    ) then
+      raise exception 'That member already has a linked user account in this group.' using errcode = '22023';
+    end if;
+  end if;
+
+  insert into public.group_memberships (group_id, user_id, role, status, member_id)
+  values (v_actor_group, p_user_id, p_role, p_status, v_link_member_id)
+  on conflict (group_id, user_id) do update
+  set role = excluded.role,
+      status = excluded.status,
+      member_id = excluded.member_id;
+
+  if (v_target.group_id is null or v_target.group_id = v_actor_group) and (p_status = 'ACTIVE' or v_target.status <> 'ACTIVE') then
+    update public.profiles
+    set role = p_role,
+        status = case when v_target.status = 'ACTIVE' then 'ACTIVE' else p_status end,
+        member_id = v_link_member_id,
+        group_id = v_actor_group,
+        first_name = coalesce(first_name, v_member.first_name),
+        middle_name = coalesce(middle_name, v_member.middle_name),
+        last_name = coalesce(last_name, v_member.last_name),
+        full_name = coalesce(nullif(btrim(full_name), ''), v_member.full_name),
+        contact_number = coalesce(contact_number, v_member.contact_number)
+    where id = p_user_id;
+  end if;
+
+  if p_status = 'ACTIVE' and v_link_member_id is not null and exists (
+    select 1 from auth.users u where u.id = p_user_id and u.last_sign_in_at is not null
+  ) then
+    perform public.activate_member_record(v_link_member_id, p_user_id);
+  end if;
+
+  if v_prev_membership.user_id is not null and (
+    v_prev_membership.role is distinct from p_role
+    or v_prev_membership.status is distinct from p_status
+  ) then
+    perform public.push_notification(
+      p_user_id,
+      'ACCESS_UPDATED',
+      'Group access updated',
+      case
+        when p_status = 'DISABLED' then 'Your access to "' || v_group_name || '" was disabled by an administrator.'
+        when v_prev_membership.role is distinct from p_role then 'Your role in "' || v_group_name || '" was changed to ' || initcap(lower(p_role::text)) || '.'
+        else 'Your access in "' || v_group_name || '" is now ' || lower(p_status::text) || '.'
+      end,
+      (case when p_role = 'MEMBER' then 'user.html' else 'dashboard.html' end) || '?notice=access-updated',
+      v_actor_group
+    );
+  end if;
+end;
+$$;
+
+-- 8. Allow Super Admin to edit any non-SUPER_ADMIN user regardless of active group role and optional group name
+create or replace function public.super_admin_update_administrator(
+  p_user_id uuid,
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_group_name text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_first text := public.validated_name_part(p_first_name, 'First name');
+  v_middle text := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last text := public.validated_name_part(p_last_name, 'Last name');
+  v_group_name text := nullif(btrim(coalesce(p_group_name, '')), '');
+  v_target_group uuid;
+  v_owned_group uuid;
+begin
+  if not public.is_super_admin() then
+    raise exception 'Only a super administrator can edit user accounts.' using errcode = '42501';
+  end if;
+  if v_group_name is not null and char_length(v_group_name) not between 2 and 150 then
+    raise exception 'Group name must contain between 2 and 150 characters.' using errcode = '22023';
+  end if;
+
+  update public.profiles
+  set first_name = v_first,
+      middle_name = v_middle,
+      last_name = v_last,
+      full_name = concat_ws(' ', v_first, v_middle, v_last)
+  where id = p_user_id
+    and role <> 'SUPER_ADMIN'
+  returning group_id into v_target_group;
+
+  if not found then
+    raise exception 'User account not found.' using errcode = 'P0002';
+  end if;
+
+  if v_group_name is not null then
+    select g.id into v_owned_group
+    from public.groups g
+    where g.owner_id = p_user_id
+    order by (g.id = v_target_group) desc, g.created_at asc
+    limit 1;
+
+    if v_owned_group is not null then
+      update public.groups
+      set name = v_group_name
+      where id = v_owned_group;
+    end if;
+  end if;
+end;
+$$;
+
+-- 9. Solo vs Group workspace RPC upgrades
+drop function if exists public.set_admin_contributor(boolean, numeric);
+create or replace function public.set_admin_contributor(
+  p_enabled boolean,
+  p_monthly_amount numeric default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_group_id uuid := public.current_group_id();
+  v_profile public.profiles;
+  v_gm public.group_memberships;
+  v_member_id uuid;
+  v_default_amount numeric;
+  v_amount numeric;
+  v_first text;
+  v_middle text;
+  v_last text;
+  v_full text;
+  v_contact text;
+  v_mode text;
+begin
+  if not public.is_admin() or v_group_id is null then
+    raise exception 'Only a group administrator can update contributor participation.' using errcode = '42501';
+  end if;
+
+  if p_monthly_amount is not null and (p_monthly_amount <= 0 or p_monthly_amount > 1000000) then
+    raise exception 'Monthly contribution amount must be greater than zero.' using errcode = '22023';
+  end if;
+
+  select coalesce(workspace_mode, 'GROUP') into v_mode
+  from public.groups
+  where id = v_group_id;
+
+  if not p_enabled and v_mode = 'SOLO' then
+    raise exception 'Solo savings workspaces always keep you enabled as the contributor. Switch to Group savings first if needed.' using errcode = '22023';
+  end if;
+
+  select * into v_profile
+  from public.profiles
+  where id = auth.uid() and group_id = v_group_id and status = 'ACTIVE';
+
+  if not found then
+    raise exception 'Active profile not found.' using errcode = 'P0002';
+  end if;
+
+  select * into v_gm
+  from public.group_memberships
+  where group_id = v_group_id and user_id = auth.uid() and status = 'ACTIVE';
+
+  v_member_id := coalesce(v_profile.member_id, v_gm.member_id);
+
+  if p_enabled then
+    select default_amount into v_default_amount
+    from public.contribution_settings
+    where group_id = v_group_id
+    order by effective_month desc
+    limit 1;
+
+    v_amount := round(coalesce(p_monthly_amount, v_default_amount, 100), 2);
+    v_full := coalesce(nullif(btrim(v_profile.full_name), ''), 'Group Admin');
+    v_first := coalesce(nullif(btrim(v_profile.first_name), ''), split_part(v_full, ' ', 1));
+    v_middle := nullif(btrim(v_profile.middle_name), '');
+    v_last := coalesce(nullif(btrim(v_profile.last_name), ''), nullif(btrim(substr(v_full, char_length(split_part(v_full, ' ', 1)) + 1)), ''), 'Admin');
+    v_contact := nullif(public.normalize_ph_mobile(v_profile.contact_number), '09000000000');
+
+    if v_member_id is not null and exists (
+      select 1 from public.members where id = v_member_id and group_id = v_group_id and deleted_at is null
+    ) then
+      update public.members
+      set first_name = case when v_profile.first_name is not null and v_profile.last_name is not null and coalesce(v_profile.name_setup_required, false) = false then v_first else first_name end,
+          middle_name = case when v_profile.first_name is not null and v_profile.last_name is not null and coalesce(v_profile.name_setup_required, false) = false then v_middle else middle_name end,
+          last_name = case when v_profile.first_name is not null and v_profile.last_name is not null and coalesce(v_profile.name_setup_required, false) = false then v_last else last_name end,
+          full_name = case when v_profile.first_name is not null and v_profile.last_name is not null and coalesce(v_profile.name_setup_required, false) = false then concat_ws(' ', v_first, v_middle, v_last) else full_name end,
+          contact_number = coalesce(v_contact, nullif(contact_number, '09000000000')),
+          payout_channel = v_profile.payout_channel,
+          payout_account_number = v_profile.payout_account_number,
+          payout_account_name = v_profile.payout_account_name,
+          status = 'ACTIVE',
+          deactivated_at = null,
+          activation_status = 'ACTIVE',
+          activated_at = coalesce(activated_at, now()),
+          monthly_contribution_amount = coalesce(p_monthly_amount, monthly_contribution_amount, v_amount),
+          updated_by = auth.uid()
+      where id = v_member_id and group_id = v_group_id;
+    else
+      insert into public.members (
+        group_id, first_name, middle_name, last_name, full_name,
+        contact_number, payout_channel, payout_account_number, payout_account_name,
+        date_registered, monthly_contribution_amount,
+        status, activation_status, activated_at, notes, created_by
+      ) values (
+        v_group_id,
+        v_first,
+        v_middle,
+        v_last,
+        concat_ws(' ', v_first, v_middle, v_last),
+        v_contact,
+        v_profile.payout_channel,
+        v_profile.payout_account_number,
+        v_profile.payout_account_name,
+        (now() at time zone 'Asia/Manila')::date,
+        v_amount,
+        'ACTIVE',
+        'ACTIVE',
+        now(),
+        case when v_mode = 'SOLO' then 'Solo savings tracker owner' else 'Group administrator contributor' end,
+        auth.uid()
+      )
+      returning id into v_member_id;
+    end if;
+
+    update public.group_memberships
+    set member_id = v_member_id
+    where group_id = v_group_id and user_id = auth.uid();
+
+    update public.profiles
+    set member_id = v_member_id
+    where id = auth.uid() and group_id = v_group_id;
+
+    perform public.generate_contribution_periods(date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date);
+
+    update public.contribution_periods cp
+    set required_amount = v_amount
+    where cp.member_id = v_member_id
+      and cp.period_month = date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date
+      and not exists (
+        select 1 from public.contributions c
+        where c.contribution_period_id = cp.id
+      );
+
+    return jsonb_build_object('is_contributor', true, 'member_id', v_member_id, 'monthly_contribution_amount', v_amount);
+  else
+    if v_member_id is not null then
+      update public.members
+      set status = 'INACTIVE',
+          deactivated_at = now(),
+          updated_by = auth.uid()
+      where id = v_member_id
+        and group_id = v_group_id
+        and deleted_at is null;
+
+      delete from public.contribution_periods cp
+      where cp.member_id = v_member_id
+        and not exists (
+          select 1 from public.contributions c
+          where c.contribution_period_id = cp.id
+        );
+    end if;
+
+    update public.profiles
+    set member_id = null
+    where id = auth.uid() and group_id = v_group_id;
+
+    return jsonb_build_object('is_contributor', false, 'member_id', null, 'monthly_contribution_amount', null);
+  end if;
+end;
+$$;
+
+drop function if exists public.admin_create_group(text, text, boolean, numeric);
+create or replace function public.admin_create_group(
+  p_name text,
+  p_avatar_url text default null,
+  p_include_self boolean default false,
+  p_monthly_amount numeric default 100,
+  p_workspace_mode text default 'GROUP'
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := btrim(coalesce(p_name, ''));
+  v_new_group_id uuid;
+  v_amount numeric := round(coalesce(p_monthly_amount, 100), 2);
+  v_mode text := upper(btrim(coalesce(p_workspace_mode, 'GROUP')));
+  v_include_self boolean;
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in first before creating a savings workspace.' using errcode = '42501';
+  end if;
+  if not public.mfa_access_allowed() then
+    raise exception 'Complete multi-factor authentication first.' using errcode = '42501';
+  end if;
+  if exists (select 1 from public.profiles p where p.id = auth.uid() and p.status = 'DISABLED') then
+    raise exception 'Your account is deactivated or disabled.' using errcode = '42501';
+  end if;
+  if public.is_super_admin() then
+    raise exception 'Super administrators manage platform access from the Super Admin console.' using errcode = '42501';
+  end if;
+  if v_mode not in ('SOLO', 'GROUP') then
+    raise exception 'Workspace mode must be SOLO or GROUP.' using errcode = '22023';
+  end if;
+  if char_length(v_name) < 2 or char_length(v_name) > 150 then
+    raise exception 'Workspace name must contain between 2 and 150 characters.' using errcode = '22023';
+  end if;
+  if not public.is_valid_media_reference(p_avatar_url) then
+    raise exception 'Workspace picture must be a valid image under 450 KB.' using errcode = '22023';
+  end if;
+  if v_amount <= 0 or v_amount > 1000000 then
+    raise exception 'Monthly contribution amount must be between 1 and 1,000,000.' using errcode = '22023';
+  end if;
+
+  v_include_self := case when v_mode = 'SOLO' then true else coalesce(p_include_self, false) end;
+
+  insert into public.groups (name, owner_id, avatar_url, status, workspace_mode)
+  values (v_name, auth.uid(), p_avatar_url, 'ACTIVE', v_mode)
+  returning id into v_new_group_id;
+
+  insert into public.group_memberships (group_id, user_id, role, status, member_id)
+  values (v_new_group_id, auth.uid(), 'ADMIN', 'ACTIVE', null)
+  on conflict (group_id, user_id) do update
+  set role = 'ADMIN', status = 'ACTIVE';
+
+  update public.profiles
+  set group_id = v_new_group_id,
+      role = 'ADMIN',
+      status = 'ACTIVE',
+      member_id = null
+  where id = auth.uid();
+
+  insert into public.contribution_settings (group_id, effective_month, default_amount, created_by)
+  values (v_new_group_id, date_trunc('month', (now() at time zone 'Asia/Manila')::date)::date, v_amount, auth.uid());
+
+  if v_include_self then
+    perform public.set_admin_contributor(true, v_amount);
+  end if;
+
+  return v_new_group_id;
+end;
+$$;
+
+drop function if exists public.get_my_groups();
+create or replace function public.get_my_groups()
+returns table(
+  group_id uuid,
+  name text,
+  avatar_url text,
+  role public.app_role,
+  status public.account_status,
+  member_id uuid,
+  is_current boolean,
+  is_contributor boolean,
+  active_member_count bigint,
+  workspace_mode text,
+  created_at timestamp with time zone
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with me as (
+    select p.id, p.group_id as current_group_id, p.role as current_role, p.member_id as current_member_id
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.status = 'ACTIVE'
+  ),
+  my_groups as (
+    select
+      g.id as group_id,
+      g.name,
+      g.avatar_url,
+      coalesce(gm.role, me.current_role) as role,
+      coalesce(gm.status, 'ACTIVE'::public.account_status) as status,
+      coalesce(gm.member_id, case when me.current_group_id = g.id then me.current_member_id else null end) as member_id,
+      (me.current_group_id = g.id) as is_current,
+      coalesce(g.workspace_mode, 'GROUP') as workspace_mode,
+      g.created_at
+    from me
+    join public.groups g on g.status = 'ACTIVE'
+    left join public.group_memberships gm
+      on gm.group_id = g.id
+     and gm.user_id = me.id
+    where (gm.id is not null and gm.status = 'ACTIVE')
+       or g.id = me.current_group_id
+  )
+  select
+    mg.group_id,
+    mg.name,
+    mg.avatar_url,
+    mg.role,
+    mg.status,
+    mg.member_id,
+    mg.is_current,
+    exists (
+      select 1
+      from public.members m
+      where m.id = mg.member_id
+        and m.group_id = mg.group_id
+        and m.status = 'ACTIVE'
+        and m.activation_status = 'ACTIVE'
+        and m.deleted_at is null
+    ) as is_contributor,
+    (
+      select count(*)
+      from public.members m
+      where m.group_id = mg.group_id
+        and m.status = 'ACTIVE'
+        and m.activation_status = 'ACTIVE'
+        and m.deleted_at is null
+    ) as active_member_count,
+    mg.workspace_mode,
+    mg.created_at
+  from my_groups mg
+  order by mg.is_current desc, mg.created_at asc;
+$$;
+
+create or replace function public.switch_active_group(p_group_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_gm public.group_memberships;
+  v_group public.groups;
+  v_member_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles where id = auth.uid() and status = 'ACTIVE' and role <> 'SUPER_ADMIN'
+  ) then
+    raise exception 'Only active group users can switch workspaces.' using errcode = '42501';
+  end if;
+
+  select * into v_group
+  from public.groups
+  where id = p_group_id and status = 'ACTIVE';
+
+  if not found then
+    raise exception 'Active savings group not found.' using errcode = 'P0002';
+  end if;
+
+  select * into v_gm
+  from public.group_memberships
+  where group_id = p_group_id
+    and user_id = auth.uid()
+    and status = 'ACTIVE';
+
+  if not found then
+    raise exception 'You do not have active access to that group.' using errcode = '42501';
+  end if;
+
+  if v_gm.role = 'MEMBER' then
+    v_member_id := v_gm.member_id;
+  elsif v_gm.role = 'ADMIN' and v_gm.member_id is not null then
+    select m.id into v_member_id
+    from public.members m
+    where m.id = v_gm.member_id
+      and m.group_id = p_group_id
+      and m.status = 'ACTIVE'
+      and m.deleted_at is null;
+  else
+    v_member_id := null;
+  end if;
+
+  update public.profiles
+  set group_id = v_gm.group_id,
+      role = v_gm.role,
+      member_id = v_member_id
+  where id = auth.uid();
+
+  return jsonb_build_object(
+    'group_id', v_group.id,
+    'name', v_group.name,
+    'role', v_gm.role,
+    'member_id', v_member_id,
+    'workspace_mode', coalesce(v_group.workspace_mode, 'GROUP')
+  );
+end;
+$$;
+
+drop function if exists public.update_group_profile(text, text, boolean);
+create or replace function public.update_group_profile(
+  p_name text,
+  p_avatar_url text default null,
+  p_clear_avatar boolean default false,
+  p_workspace_mode text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_group_id uuid := public.current_group_id();
+  v_name text := btrim(coalesce(p_name, ''));
+  v_next_mode text := upper(nullif(btrim(coalesce(p_workspace_mode, '')), ''));
+  v_current_mode text;
+  v_other_users bigint;
+  v_member_count bigint;
+  v_own_member_id uuid;
+begin
+  if not public.is_admin() or v_group_id is null then
+    raise exception 'Only a group administrator can edit workspace details.' using errcode = '42501';
+  end if;
+  if char_length(v_name) < 2 or char_length(v_name) > 150 then
+    raise exception 'Workspace name must contain between 2 and 150 characters.' using errcode = '22023';
+  end if;
+  if not public.is_valid_media_reference(p_avatar_url) then
+    raise exception 'Workspace picture must be a valid image under 450 KB.' using errcode = '22023';
+  end if;
+  if v_next_mode is not null and v_next_mode not in ('SOLO', 'GROUP') then
+    raise exception 'Workspace mode must be SOLO or GROUP.' using errcode = '22023';
+  end if;
+
+  select coalesce(workspace_mode, 'GROUP') into v_current_mode
+  from public.groups
+  where id = v_group_id;
+
+  if not found then
+    raise exception 'Group not found.' using errcode = 'P0002';
+  end if;
+
+  if v_next_mode = 'SOLO' and v_current_mode <> 'SOLO' then
+    select count(*) into v_other_users
+    from public.group_memberships
+    where group_id = v_group_id
+      and user_id <> auth.uid()
+      and status <> 'DISABLED';
+
+    select count(*) into v_member_count
+    from public.members
+    where group_id = v_group_id
+      and deleted_at is null;
+
+    select coalesce(gm.member_id, p.member_id) into v_own_member_id
+    from public.profiles p
+    left join public.group_memberships gm
+      on gm.group_id = v_group_id
+     and gm.user_id = p.id
+    where p.id = auth.uid();
+
+    if v_other_users > 0
+       or v_member_count > 1
+       or (v_member_count = 1 and not exists (
+             select 1 from public.members m
+             where m.group_id = v_group_id
+               and m.deleted_at is null
+               and m.id = v_own_member_id
+           )) then
+      raise exception 'Remove other members before switching this workspace to Solo savings.' using errcode = '22023';
+    end if;
+  end if;
+
+  update public.groups
+  set name = v_name,
+      avatar_url = case
+        when p_clear_avatar then null
+        when p_avatar_url is not null then p_avatar_url
+        else avatar_url
+      end,
+      workspace_mode = coalesce(v_next_mode, workspace_mode)
+  where id = v_group_id;
+
+  if v_next_mode = 'SOLO' then
+    perform public.set_admin_contributor(true, null);
+  end if;
+end;
+$$;
+
+create or replace function public.create_member(
+  p_first_name text,
+  p_middle_name text,
+  p_last_name text,
+  p_contact_number text,
+  p_date_registered date,
+  p_monthly_contribution_amount numeric,
+  p_notes text default null,
+  p_payout_channel text default null,
+  p_payout_account_number text default null,
+  p_payout_account_name text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_first_name text;
+  v_middle_name text;
+  v_last_name text;
+  v_payout_channel text;
+  v_payout_number text;
+  v_payout_name text;
+  v_mode text;
+begin
+  if not public.is_admin() then
+    raise exception 'Only an administrator can create members.' using errcode = '42501';
+  end if;
+
+  select coalesce(workspace_mode, 'GROUP') into v_mode
+  from public.groups
+  where id = public.current_group_id();
+
+  if v_mode = 'SOLO' then
+    raise exception 'Solo savings workspaces do not support additional members or invites. Switch to Group savings in Group settings first.' using errcode = '42501';
+  end if;
+
+  v_first_name := public.validated_name_part(p_first_name, 'First name');
+  v_middle_name := public.validated_name_part(p_middle_name, 'Middle name', false);
+  v_last_name := public.validated_name_part(p_last_name, 'Last name');
+
+  select vp.out_channel, vp.out_account_number, vp.out_account_name
+  into v_payout_channel, v_payout_number, v_payout_name
+  from public.validated_payout_account(p_payout_channel, p_payout_account_number, p_payout_account_name) vp;
+
+  insert into public.members (
+    full_name, first_name, middle_name, last_name, contact_number, date_registered,
+    monthly_contribution_amount, notes, activation_status, activated_at,
+    payout_channel, payout_account_number, payout_account_name,
+    created_by, updated_by
+  ) values (
+    concat_ws(' ', v_first_name, v_middle_name, v_last_name), v_first_name, v_middle_name, v_last_name,
+    public.normalize_ph_mobile(p_contact_number), p_date_registered,
+    public.validated_money(p_monthly_contribution_amount, 'Monthly contribution amount'),
+    nullif(btrim(p_notes), ''), 'PENDING', null,
+    v_payout_channel, v_payout_number, v_payout_name,
+    auth.uid(), auth.uid()
+  ) returning id into v_id;
+
+  return v_id;
+end;
+$$;
+
+revoke all on function public.admin_create_group(text, text, boolean, numeric, text) from public, anon;
+grant execute on function public.admin_create_group(text, text, boolean, numeric, text) to authenticated;
+revoke all on function public.get_my_groups() from public, anon;
+grant execute on function public.get_my_groups() to authenticated;
+revoke all on function public.switch_active_group(uuid) from public, anon;
+grant execute on function public.switch_active_group(uuid) to authenticated;
+revoke all on function public.update_group_profile(text, text, boolean, text) from public, anon;
+grant execute on function public.update_group_profile(text, text, boolean, text) to authenticated;
+revoke all on function public.set_admin_contributor(boolean, numeric) from public, anon;
+grant execute on function public.set_admin_contributor(boolean, numeric) to authenticated;
+revoke all on function public.create_member(text, text, text, text, date, numeric, text, text, text, text) from public, anon;
+grant execute on function public.create_member(text, text, text, text, date, numeric, text, text, text, text) to authenticated;
+
+notify pgrst, 'reload schema';
+
+insert into public.schema_migrations (version, name)
+values ('20261116_093', 'add solo vs group workspaces, multi-group super admin edit, and restore sync')
+on conflict (version) do nothing;
+
+commit;
+
 -- BOOTSTRAP THE FIRST SUPER ADMIN
 -- 1. Create the platform owner in Authentication > Users.
 -- 2. Replace the email below, then run only this statement once:

@@ -12936,3 +12936,190 @@ html[data-theme="dark"] .batch-reset-check {
   border-color: rgba(218, 236, 227, .18);
   color: #ecf3ef;
 }
+
+/* Super Admin multi-group pills & overflow modal */
+.sa-group-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+}
+.sa-group-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #d5e2db;
+  background: #f4f8f5;
+  color: #173a30;
+  font: 600 12px/1.25 Arial, sans-serif;
+}
+.sa-group-chip.is-solo {
+  border-color: #ead7a3;
+  background: #fdf6e3;
+  color: #7c520d;
+}
+.sa-group-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sa-group-mode {
+  flex: 0 0 auto;
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 1.5px 5px;
+  border-radius: 999px;
+  background: rgba(124, 82, 13, .14);
+  color: #7c520d;
+}
+.sa-group-more-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid #bdd4c6;
+  background: #ffffff;
+  color: #165e43;
+  font: 700 11.5px/1.2 Arial, sans-serif;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.sa-group-more-btn:hover {
+  background: #eaf4ee;
+  border-color: #88ba9f;
+}
+@media (max-width: 960px) {
+  .data-table td .sa-group-pills {
+    justify-content: flex-end;
+  }
+}
+
+.user-groups-dialog {
+  width: min(520px, calc(100vw - 24px));
+}
+.user-groups-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(56dvh, 420px);
+  overflow-y: auto;
+  padding: 2px 0;
+}
+.user-groups-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 11px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: #fffdf9;
+}
+.user-groups-item-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.user-groups-item-copy strong {
+  font: 700 14px/1.3 Arial, sans-serif;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.user-groups-item-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Solo vs Group workspace controls */
+.no-group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+@media (max-width: 680px) {
+  .no-group-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+.workspace-mode-segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}
+.workspace-mode-segmented .segmented-control-btn {
+  justify-content: center;
+  min-height: 36px;
+  font-size: 13px;
+}
+.group-solo-banner {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid #ead7a3;
+  border-radius: 12px;
+  background: #fdf7e6;
+  color: #6b470c;
+}
+.group-solo-banner strong {
+  font: 700 13.5px/1.25 Arial, sans-serif;
+}
+.group-solo-banner small {
+  font: 12.5px/1.4 Arial, sans-serif;
+  color: #7c5617;
+}
+.group-bar-badge.is-solo,
+.group-hub-role.is-solo {
+  border-color: rgba(212, 168, 79, .45);
+  background: rgba(212, 168, 79, .2);
+  color: #f4d68c;
+}
+
+html[data-theme="dark"] .sa-group-chip {
+  border-color: rgba(142, 224, 180, .24);
+  background: #142a22;
+  color: #dcebe3;
+}
+html[data-theme="dark"] .sa-group-chip.is-solo {
+  border-color: rgba(226, 183, 92, .36);
+  background: rgba(212, 168, 79, .14);
+  color: #f4d68c;
+}
+html[data-theme="dark"] .sa-group-mode {
+  background: rgba(226, 183, 92, .22);
+  color: #f7deb0;
+}
+html[data-theme="dark"] .sa-group-more-btn {
+  border-color: rgba(142, 224, 180, .3);
+  background: #10211b;
+  color: #8ce5b4;
+}
+html[data-theme="dark"] .sa-group-more-btn:hover {
+  background: #183228;
+}
+html[data-theme="dark"] .user-groups-item {
+  border-color: rgba(218, 236, 227, .14);
+  background: #12241d;
+}
+html[data-theme="dark"] .group-solo-banner {
+  border-color: rgba(226, 183, 92, .34);
+  background: rgba(212, 168, 79, .12);
+  color: #f3d796;
+}
+html[data-theme="dark"] .group-solo-banner small {
+  color: #dfcb9c;
+}

@@ -250,23 +250,25 @@
       Ipon.enhanceMemberSelect(memberFilter);
     }
 
+    const isSoloMode = state.profile?.workspace_mode === 'SOLO';
     if (select) {
       const currentSelection = select.value;
-      const selectedId = currentSelection || (selectedMemberId && membersList.some((m) => m.id === selectedMemberId) ? selectedMemberId : state.profile.member_id || '');
+      const ownId = state.profile.member_id || (isSoloMode ? (membersList[0]?.id || '') : '');
+      const selectedId = currentSelection || (selectedMemberId && membersList.some((m) => m.id === selectedMemberId) ? selectedMemberId : ownId || '');
       select.innerHTML = membersList.length
         ? `<option value="">Select member</option>${membersList.map((member) => `<option value="${member.id}" data-avatar="${Ipon.escapeHtml(member.avatar_url || '')}" ${selectedId === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}</option>`).join('')}`
         : '<option value="">No active member profile found</option>';
-      if (state.profile.role === 'MEMBER') {
+      if (state.profile.role === 'MEMBER' || (isSoloMode && selectedId)) {
         select.closest('.field').hidden = true;
         select.required = false;
       }
       Ipon.enhanceMemberSelect(select);
     }
     if (responsibleSelect) {
-      const ownMember = membersList.find((member) => member.id === state.profile.member_id);
+      const ownMember = membersList.find((member) => member.id === state.profile.member_id) || (isSoloMode ? membersList[0] : null);
       const defaultResponsible = responsibleSelect.value || (selectedMemberName || ownMember?.full_name || '');
       populateResponsibleSelect(responsibleSelect, defaultResponsible);
-      if (state.profile.role === 'MEMBER') {
+      if (state.profile.role === 'MEMBER' || (isSoloMode && ownMember)) {
         responsibleSelect.closest('.field').hidden = true;
         responsibleSelect.required = false;
       }
@@ -653,8 +655,9 @@
         const allocateExcess = Boolean(form.elements.allocate_excess?.checked);
         const rpcName = allocateExcess ? 'record_contribution_with_carryover' : 'record_contribution';
         const uploadedReceiptUrl = await receiptPicker.upload();
+        const ownMemberId = state.profile.member_id || (state.profile?.workspace_mode === 'SOLO' ? membersList[0]?.id : '') || '';
         const rpcPayload = {
-          p_member_id: state.profile.role === 'MEMBER' ? state.profile.member_id : values.get('member_id'),
+          p_member_id: state.profile.role === 'MEMBER' ? state.profile.member_id : (values.get('member_id') || ownMemberId),
           p_contribution_month: `${values.get('contribution_month')}-01`,
           p_amount: amount, p_payment_date: values.get('payment_date'),
           p_transaction_reference: values.get('reference') || null, p_notes: values.get('notes') || null,

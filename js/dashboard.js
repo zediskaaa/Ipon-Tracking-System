@@ -113,10 +113,27 @@
   const groupDpInput = document.getElementById('group-dp-input');
   const groupDpRemove = document.getElementById('group-dp-remove');
   const groupSelfToggle = document.getElementById('group-self-contributor');
+  const groupSelfWrap = document.getElementById('group-self-contributor-wrap');
   const groupMonthlyWrap = document.getElementById('group-monthly-wrap');
+  const groupMonthlyLabel = document.getElementById('group-monthly-label');
   const groupMonthlyInput = document.getElementById('group-default-amount');
   const groupInviteSection = document.getElementById('group-invite-section');
   const groupInviteRows = document.getElementById('group-invite-rows');
+  const groupWorkspaceModeInput = document.getElementById('group-workspace-mode-input');
+  const groupWorkspaceModeTabs = document.getElementById('group-workspace-mode-tabs');
+  const groupWorkspaceModeHelp = document.getElementById('group-workspace-mode-help');
+  const groupDpLabel = document.getElementById('group-dp-label');
+  const groupNameLabel = document.getElementById('group-name-label');
+  const groupNameHelp = document.getElementById('group-name-help');
+  const groupHubEyebrow = document.getElementById('group-hub-eyebrow');
+  const groupHubSoloBanner = document.getElementById('group-hub-solo-banner');
+  const groupHubContributorSection = document.getElementById('group-hub-contributor-section');
+  const groupHubMembersLink = document.getElementById('group-hub-members-link');
+  const groupHubInviteBtn = document.getElementById('dashboard-invite-member');
+  const groupHubEditTitle = document.getElementById('group-hub-edit-title');
+  const groupHubEditCopy = document.getElementById('group-hub-edit-copy');
+  const groupHubSettingsCopy = document.getElementById('group-hub-settings-copy');
+  const groupHubDeleteBtn = document.getElementById('group-hub-delete-btn');
   const groupDeleteDialog = document.getElementById('group-delete-dialog');
   const groupDeleteForm = document.getElementById('group-delete-form');
   const groupDeleteNameEl = document.getElementById('group-delete-group-name');
@@ -133,17 +150,40 @@
 
   function syncGroupHub() {
     if (!currentGroup) return;
-    const safeName = currentGroup.name || 'Savings Group';
+    const isSolo = currentGroup.workspace_mode === 'SOLO';
+    const safeName = currentGroup.name || (isSolo ? 'Solo Savings' : 'Savings Group');
     if (groupHubAvatar) {
       groupHubAvatar.innerHTML = Ipon.avatarMarkup(currentGroup.avatar_url, safeName, 'avatar-lg');
       Ipon.bindAvatarFallbacks(groupHubAvatar);
     }
+    if (groupHubEyebrow) groupHubEyebrow.textContent = isSolo ? 'Solo workspace' : 'Group workspace';
     if (groupHubTitle) groupHubTitle.textContent = safeName;
-    if (groupHubRole) groupHubRole.textContent = currentGroup.role || state?.profile?.role || 'ADMIN';
+    if (groupHubRole) {
+      groupHubRole.textContent = isSolo ? 'SOLO' : (currentGroup.role || state?.profile?.role || 'ADMIN');
+      groupHubRole.classList.toggle('is-solo', isSolo);
+    }
     const contributorCount = Number(currentGroup.active_member_count || 0);
     if (groupHubMeta) {
-      groupHubMeta.textContent = `${contributorCount} active contributor${contributorCount === 1 ? '' : 's'} · ${currentGroup.is_contributor ? 'You are participating' : 'Manager view only'}`;
+      groupHubMeta.textContent = isSolo
+        ? 'Personal savings tracker · No invitations needed'
+        : `${contributorCount} active contributor${contributorCount === 1 ? '' : 's'} · ${currentGroup.is_contributor ? 'You are participating' : 'Manager view only'}`;
     }
+    if (groupHubSoloBanner) groupHubSoloBanner.hidden = !isSolo;
+    if (groupHubInviteBtn) groupHubInviteBtn.hidden = isSolo;
+    if (groupHubContributorSection) groupHubContributorSection.hidden = isSolo;
+    if (groupHubMembersLink) groupHubMembersLink.hidden = isSolo;
+    if (groupHubEditTitle) groupHubEditTitle.textContent = isSolo ? 'Edit tracker & mode' : 'Edit group & picture';
+    if (groupHubEditCopy) {
+      groupHubEditCopy.textContent = isSolo
+        ? 'Rename tracker, upload picture, or switch to Group savings.'
+        : 'Rename workspace, upload picture, or switch saving mode.';
+    }
+    if (groupHubSettingsCopy) {
+      groupHubSettingsCopy.textContent = isSolo
+        ? 'Configure monthly savings schedules for this tracker'
+        : 'Configure monthly schedules and workspace settings';
+    }
+    if (groupHubDeleteBtn) groupHubDeleteBtn.textContent = isSolo ? 'Delete tracker' : 'Delete group';
     if (groupHubSwitcherWrap && groupHubSelect) {
       groupHubSwitcherWrap.hidden = myGroups.length <= 1;
       Ipon.populateGroupSelect(groupHubSelect, myGroups, currentGroup.group_id);
@@ -161,6 +201,7 @@
   function renderGroupHeader(groups) {
     myGroups = Array.isArray(groups) ? groups : [];
     currentGroup = myGroups.find((group) => group.is_current) || myGroups[0] || null;
+    Ipon.syncWorkspaceMode?.(currentGroup?.workspace_mode || 'GROUP');
     const noGroupCard = document.getElementById('dashboard-no-group-card');
     if (noGroupCard) noGroupCard.hidden = Boolean(currentGroup);
     const summaryCard = document.querySelector('.summary-card');
@@ -168,23 +209,32 @@
     const manageBtn = document.getElementById('dashboard-manage-group');
     if (manageBtn) manageBtn.hidden = !(currentGroup && currentGroup.role === 'ADMIN');
     if (!currentGroup) {
-      if (groupNameEl) groupNameEl.textContent = 'No group selected';
-      if (groupRoleEl) groupRoleEl.textContent = state?.profile?.role || '—';
-      if (groupMetaEl) groupMetaEl.textContent = 'Create or join a savings group';
+      if (groupNameEl) groupNameEl.textContent = 'No workspace selected';
+      if (groupRoleEl) {
+        groupRoleEl.textContent = state?.profile?.role || '—';
+        groupRoleEl.classList.remove('is-solo');
+      }
+      if (groupMetaEl) groupMetaEl.textContent = 'Start solo savings or create a savings group';
       if (groupSwitcherWrap) groupSwitcherWrap.hidden = true;
       groupIdentityEl?.classList.remove('is-switchable');
       return;
     }
-    const safeName = currentGroup.name || 'Savings Group';
+    const isSolo = currentGroup.workspace_mode === 'SOLO';
+    const safeName = currentGroup.name || (isSolo ? 'Solo Savings' : 'Savings Group');
     if (groupAvatarEl) {
       groupAvatarEl.innerHTML = Ipon.avatarMarkup(currentGroup.avatar_url, safeName, 'avatar-md');
       Ipon.bindAvatarFallbacks(groupAvatarEl);
     }
     if (groupNameEl) groupNameEl.textContent = safeName;
-    if (groupRoleEl) groupRoleEl.textContent = currentGroup.role || state?.profile?.role || 'MEMBER';
+    if (groupRoleEl) {
+      groupRoleEl.textContent = isSolo ? 'SOLO' : (currentGroup.role || state?.profile?.role || 'MEMBER');
+      groupRoleEl.classList.toggle('is-solo', isSolo);
+    }
     const contributorCount = Number(currentGroup.active_member_count || 0);
-    const metaParts = [`${contributorCount} contributor${contributorCount === 1 ? '' : 's'}`];
-    if (currentGroup.role === 'ADMIN') metaParts.push(currentGroup.is_contributor ? 'Included as contributor' : 'Manager only');
+    const metaParts = isSolo
+      ? ['Solo savings', 'Personal tracker']
+      : [`${contributorCount} contributor${contributorCount === 1 ? '' : 's'}`];
+    if (!isSolo && currentGroup.role === 'ADMIN') metaParts.push(currentGroup.is_contributor ? 'Included as contributor' : 'Manager only');
     if (groupMetaEl) groupMetaEl.textContent = metaParts.join(' · ');
     const canSwitchGroup = myGroups.length > 1;
     groupIdentityEl?.classList.toggle('is-switchable', canSwitchGroup);
@@ -1078,32 +1128,98 @@
     }
   });
 
-  function openGroupDialog(mode) {
+  function syncGroupFormWorkspaceMode(nextMode, isCreate) {
+    const mode = nextMode === 'SOLO' ? 'SOLO' : 'GROUP';
+    const isSolo = mode === 'SOLO';
+    if (groupWorkspaceModeInput) groupWorkspaceModeInput.value = mode;
+    groupWorkspaceModeTabs?.querySelectorAll('[data-workspace-mode]').forEach((btn) => {
+      const active = btn.dataset.workspaceMode === mode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-checked', active ? 'true' : 'false');
+    });
+    if (groupWorkspaceModeHelp) {
+      groupWorkspaceModeHelp.textContent = isSolo
+        ? 'Personal savings tracker — no invitations needed. Standard 90-day reminder and 6-month inactivity retention applies.'
+        : 'Save together with invited members and treasurers. Standard 90-day reminder and 6-month inactivity retention applies.';
+    }
+    const formTitle = document.getElementById('group-form-title');
+    const formCopy = document.getElementById('group-form-copy');
+    const submitBtn = document.getElementById('save-group-dialog');
+    if (formTitle) {
+      formTitle.textContent = isCreate
+        ? (isSolo ? 'Create solo savings tracker' : 'Create savings group')
+        : (isSolo ? 'Edit solo tracker' : 'Edit group');
+    }
+    if (formCopy) {
+      formCopy.textContent = isCreate
+        ? (isSolo
+          ? 'Name your personal tracker, add an optional icon, and set your monthly target. No invitations needed.'
+          : 'Set a group name, optional group picture, your contributor preference, and optional member invites.')
+        : 'Update your workspace name, picture, saving mode, and contributor settings.';
+    }
+    if (submitBtn) {
+      submitBtn.textContent = isCreate ? (isSolo ? 'Create solo tracker' : 'Create group') : 'Save changes';
+    }
+    if (groupDpLabel) groupDpLabel.textContent = isSolo ? 'Tracker picture (optional)' : 'Group picture (optional)';
+    if (groupNameLabel) groupNameLabel.textContent = isSolo ? 'Tracker name' : 'Group name';
+    if (groupForm?.elements?.name) {
+      groupForm.elements.name.placeholder = isSolo ? 'e.g., My Emergency Fund' : 'e.g., Family Savings Fund';
+    }
+    if (groupNameHelp) {
+      groupNameHelp.textContent = isSolo
+        ? 'Displayed at the top of your personal savings dashboard.'
+        : 'Displayed at the top of this workspace and in invite emails.';
+    }
+    if (groupMonthlyLabel) groupMonthlyLabel.textContent = isSolo ? 'Monthly savings goal (₱)' : 'Monthly contribution amount';
+    if (groupSelfWrap) groupSelfWrap.hidden = isSolo;
+    if (isSolo) {
+      if (groupSelfToggle) groupSelfToggle.checked = true;
+      if (groupMonthlyWrap) groupMonthlyWrap.hidden = false;
+      if (groupMonthlyInput) groupMonthlyInput.required = true;
+      if (groupInviteSection) groupInviteSection.hidden = true;
+    } else {
+      const includeOn = Boolean(groupSelfToggle?.checked);
+      if (groupMonthlyWrap) groupMonthlyWrap.hidden = !includeOn;
+      if (groupMonthlyInput) groupMonthlyInput.required = includeOn;
+      if (groupInviteSection) groupInviteSection.hidden = !isCreate;
+    }
+  }
+
+  groupWorkspaceModeTabs?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-workspace-mode]');
+    if (!btn || !groupForm) return;
+    const isCreate = groupForm.elements.mode.value === 'create';
+    syncGroupFormWorkspaceMode(btn.dataset.workspaceMode, isCreate);
+  });
+
+  function openGroupDialog(mode, presetWorkspaceMode = null) {
     if (!groupDialog || !groupForm) return;
     groupForm.reset();
     groupForm.elements.mode.value = mode;
     const isCreate = mode === 'create';
-    document.getElementById('group-form-title').textContent = isCreate ? 'Create savings group' : 'Edit group';
-    document.getElementById('group-form-copy').textContent = isCreate
-      ? 'Set a group name, optional group picture, your contributor preference, and optional member invites.'
-      : 'Update your group name, picture, and whether you participate as a contributor.';
-    document.getElementById('save-group-dialog').textContent = isCreate ? 'Create group' : 'Save changes';
+    const initialWorkspaceMode = isCreate
+      ? (presetWorkspaceMode === 'SOLO' ? 'SOLO' : 'GROUP')
+      : (currentGroup?.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP');
     pendingGroupAvatarUrl = isCreate ? null : (currentGroup?.avatar_url || null);
     pendingGroupClearAvatar = false;
     groupForm.elements.name.value = isCreate ? '' : (currentGroup?.name || '');
-    const initialIncludeSelf = isCreate ? true : Boolean(currentGroup?.is_contributor);
+    const initialIncludeSelf = isCreate || initialWorkspaceMode === 'SOLO' ? true : Boolean(currentGroup?.is_contributor);
     groupSelfToggle.checked = initialIncludeSelf;
     groupMonthlyInput.value = String(currentAdminMonthlyAmount || 100);
-    groupMonthlyWrap.hidden = !initialIncludeSelf;
-    groupMonthlyInput.required = initialIncludeSelf;
-    groupInviteSection.hidden = !isCreate;
     groupInviteRows.replaceChildren();
     if (isCreate) syncInviteRemoveButtons(groupInviteRows, false);
-    renderGroupDpPreview(pendingGroupAvatarUrl, groupForm.elements.name.value || (isCreate ? 'New Group' : currentGroup?.name));
+    syncGroupFormWorkspaceMode(initialWorkspaceMode, isCreate);
+    renderGroupDpPreview(pendingGroupAvatarUrl, groupForm.elements.name.value || (isCreate ? 'New Workspace' : currentGroup?.name));
     groupDialog.showModal();
     groupForm.elements.name.focus();
   }
   groupSelfToggle?.addEventListener('change', () => {
+    if (groupWorkspaceModeInput?.value === 'SOLO') {
+      groupSelfToggle.checked = true;
+      groupMonthlyWrap.hidden = false;
+      groupMonthlyInput.required = true;
+      return;
+    }
     const on = groupSelfToggle.checked;
     groupMonthlyWrap.hidden = !on;
     groupMonthlyInput.required = on;
@@ -1128,14 +1244,14 @@
   groupDpRemove?.addEventListener('click', async () => {
     if (!pendingGroupAvatarUrl) return;
     const accepted = await Ipon.confirmAction({
-      title: 'Remove group picture?',
-      message: 'Are you sure you want to remove the group display picture?',
+      title: 'Remove workspace picture?',
+      message: 'Are you sure you want to remove the workspace display picture?',
       acceptLabel: 'Remove'
     });
     if (!accepted) return;
     pendingGroupAvatarUrl = null;
     pendingGroupClearAvatar = true;
-    renderGroupDpPreview(null, groupForm.elements.name.value || 'Group');
+    renderGroupDpPreview(null, groupForm.elements.name.value || 'Workspace');
   });
   document.getElementById('group-add-invite-row')?.addEventListener('click', () => {
     appendInviteRow(groupInviteRows, { defaultAmount: Number(groupMonthlyInput.value) > 0 ? Number(groupMonthlyInput.value) : 100, required: false });
@@ -1144,29 +1260,36 @@
     groupHubDialog?.close();
     openGroupDialog('edit');
   });
-  document.getElementById('dashboard-create-group')?.addEventListener('click', () => openGroupDialog('create'));
-  document.getElementById('no-group-create-btn')?.addEventListener('click', () => openGroupDialog('create'));
+  document.getElementById('dashboard-create-group')?.addEventListener('click', () => openGroupDialog('create', 'GROUP'));
+  document.getElementById('no-group-solo-btn')?.addEventListener('click', () => openGroupDialog('create', 'SOLO'));
+  document.getElementById('no-group-create-btn')?.addEventListener('click', () => openGroupDialog('create', 'GROUP'));
   document.getElementById('close-group-dialog')?.addEventListener('click', () => groupDialog?.close());
   document.getElementById('cancel-group-dialog')?.addEventListener('click', () => groupDialog?.close());
   groupForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const isCreate = groupForm.elements.mode.value === 'create';
+    const workspaceMode = groupWorkspaceModeInput?.value === 'SOLO' ? 'SOLO' : 'GROUP';
+    const isSolo = workspaceMode === 'SOLO';
     const name = groupForm.elements.name.value.trim();
-    const includeSelf = groupSelfToggle.checked;
+    const includeSelf = isSolo ? true : groupSelfToggle.checked;
     const monthlyAmount = Number(groupMonthlyInput.value) > 0 ? Number(groupMonthlyInput.value) : 100;
-    const invitePayloads = isCreate ? collectInvitePayloads(groupInviteRows, { allowEmptyRows: true }) : [];
-    if (isCreate && invitePayloads === null) return;
-    const removingSelf = !isCreate && !includeSelf && Boolean(currentGroup?.is_contributor);
+    const invitePayloads = isCreate && !isSolo ? collectInvitePayloads(groupInviteRows, { allowEmptyRows: true }) : [];
+    if (isCreate && !isSolo && invitePayloads === null) return;
+    const removingSelf = !isCreate && !isSolo && !includeSelf && Boolean(currentGroup?.is_contributor);
     const confirmed = await Ipon.confirmAction(removingSelf ? {
       title: 'Save group & remove contributor?',
       message: `Save changes to "${name}" and remove yourself as a contributor from this group?`,
       acceptLabel: 'Save & remove contributor'
     } : {
-      title: isCreate ? 'Create savings group?' : 'Save group changes?',
+      title: isCreate
+        ? (isSolo ? 'Create solo savings tracker?' : 'Create savings group?')
+        : (isSolo ? 'Save solo tracker changes?' : 'Save group changes?'),
       message: isCreate
-        ? `Create "${name}"${invitePayloads.length ? ` and send ${invitePayloads.length} member invitation${invitePayloads.length === 1 ? '' : 's'}` : ''}?`
+        ? (isSolo
+          ? `Create personal solo savings tracker "${name}" with ${Ipon.money(monthlyAmount)} monthly goal?`
+          : `Create "${name}"${invitePayloads.length ? ` and send ${invitePayloads.length} member invitation${invitePayloads.length === 1 ? '' : 's'}` : ''}?`)
         : `Save updated settings for "${name}"?`,
-      acceptLabel: isCreate ? 'Create group' : 'Save changes'
+      acceptLabel: isCreate ? (isSolo ? 'Create solo tracker' : 'Create group') : 'Save changes'
     });
     if (!confirmed) {
       if (removingSelf) groupSelfToggle.checked = true;
@@ -1183,11 +1306,13 @@
           p_name: name,
           p_avatar_url: resolvedGroupAvatarUrl,
           p_include_self: includeSelf,
-          p_monthly_amount: monthlyAmount
+          p_monthly_amount: monthlyAmount,
+          p_workspace_mode: workspaceMode
         });
+        Ipon.syncWorkspaceMode?.(workspaceMode);
         const inviteResults = invitePayloads.length ? await dispatchInvites(invitePayloads) : [];
         groupDialog.close();
-        Ipon.toast('Savings group created.');
+        Ipon.toast(isSolo ? 'Solo savings tracker created.' : 'Savings group created.');
         if (inviteResults.length) {
           Ipon.showInviteSummary({ title: `Invites for ${name}`, results: inviteResults });
           document.getElementById('invite-summary-dialog')?.addEventListener('close', () => location.reload(), { once: true });
@@ -1198,9 +1323,11 @@
         await Ipon.rpc('update_group_profile', {
           p_name: name,
           p_avatar_url: resolvedGroupAvatarUrl,
-          p_clear_avatar: pendingGroupClearAvatar
+          p_clear_avatar: pendingGroupClearAvatar,
+          p_workspace_mode: workspaceMode
         });
-        if (includeSelf !== Boolean(currentGroup?.is_contributor) || (includeSelf && monthlyAmount)) {
+        Ipon.syncWorkspaceMode?.(workspaceMode);
+        if (includeSelf !== Boolean(currentGroup?.is_contributor) || (includeSelf && monthlyAmount !== Number(currentAdminMonthlyAmount || 0))) {
           await Ipon.rpc('set_admin_contributor', {
             p_enabled: includeSelf,
             p_monthly_amount: includeSelf ? monthlyAmount : null
@@ -1208,7 +1335,7 @@
           if (includeSelf) currentAdminMonthlyAmount = monthlyAmount;
         }
         groupDialog.close();
-        Ipon.toast('Group updated.');
+        Ipon.toast(isSolo ? 'Solo tracker updated.' : 'Workspace updated.');
         await load();
       }
     } catch (error) {
@@ -1262,17 +1389,19 @@
   function populateQuickRecordMembers(members) {
     cachedMembers = members || [];
     Ipon.registerMemberAvatars(cachedMembers);
+    const isSoloMode = currentGroup?.workspace_mode === 'SOLO';
+    const ownMemberId = state.profile?.member_id || (isSoloMode ? (cachedMembers[0]?.id || '') : '');
     if (quickMemberSelect) {
       const cur = quickMemberSelect.value;
       quickMemberSelect.innerHTML = `<option value="">Select member</option>${cachedMembers.map((m) => `<option value="${m.id}" data-avatar="${Ipon.escapeHtml(m.avatar_url || '')}" ${cur === m.id ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
-      if (state.profile?.role === 'MEMBER' && state.profile.member_id) {
-        quickMemberSelect.value = state.profile.member_id;
+      if ((state.profile?.role === 'MEMBER' || isSoloMode) && ownMemberId) {
+        quickMemberSelect.value = ownMemberId;
       }
       Ipon.enhanceMemberSelect(quickMemberSelect);
     }
     if (quickResponsibleSelect) {
       const cur = quickResponsibleSelect.value;
-      const ownName = cachedMembers.find((m) => m.id === state.profile?.member_id)?.full_name || state.profile?.full_name || '';
+      const ownName = cachedMembers.find((m) => m.id === ownMemberId)?.full_name || state.profile?.full_name || '';
       quickResponsibleSelect.innerHTML = `<option value="">Select member</option>${cachedMembers.map((m) => `<option value="${Ipon.escapeHtml(m.full_name)}" data-avatar="${Ipon.escapeHtml(m.avatar_url || '')}" ${(cur || ownName) === m.full_name ? 'selected' : ''}>${Ipon.escapeHtml(m.full_name)}</option>`).join('')}`;
       Ipon.enhanceMemberSelect(quickResponsibleSelect);
       syncQuickPayoutDestination(false);
@@ -1298,6 +1427,8 @@
     const isDeduction = type === 'deduction';
     const isExpense = type === 'expense';
     const isMemberRole = state.profile?.role === 'MEMBER';
+    const isSoloSelf = currentGroup?.workspace_mode === 'SOLO' && Boolean(state.profile?.member_id || cachedMembers[0]?.id);
+    const autoSelectMember = isMemberRole || isSoloSelf;
 
     quickTabAddition?.classList.toggle('is-active', isAddition);
     quickTabAddition?.setAttribute('aria-selected', isAddition ? 'true' : 'false');
@@ -1310,7 +1441,7 @@
 
     if (isAddition) {
       if (quickTitle) quickTitle.textContent = isMemberRole ? 'Record addition' : 'Record savings addition';
-      if (quickSubtitle) quickSubtitle.textContent = 'Record money added to the group savings fund.';
+      if (quickSubtitle) quickSubtitle.textContent = currentGroup?.workspace_mode === 'SOLO' ? 'Record money added to your personal savings tracker.' : 'Record money added to the group savings fund.';
       if (quickSubmitBtn) quickSubmitBtn.textContent = 'Save addition';
       if (quickDateLabel) quickDateLabel.textContent = 'Date added';
       if (quickPaymentMethodLabel) quickPaymentMethodLabel.textContent = 'Payment method';
@@ -1323,19 +1454,19 @@
       if (quickDescLabel) quickDescLabel.textContent = 'Reason / description';
     } else {
       if (quickTitle) quickTitle.textContent = 'Record expense';
-      if (quickSubtitle) quickSubtitle.textContent = 'Track group expenses separately from deductions.';
+      if (quickSubtitle) quickSubtitle.textContent = 'Track workspace expenses separately from deductions.';
       if (quickSubmitBtn) quickSubmitBtn.textContent = 'Save expense';
       if (quickDateLabel) quickDateLabel.textContent = 'Date incurred';
       if (quickPaymentMethodLabel) quickPaymentMethodLabel.textContent = 'Paid from wallet';
       if (quickDescLabel) quickDescLabel.textContent = 'Description';
     }
 
-    if (quickFieldMember) quickFieldMember.hidden = !isAddition || isMemberRole;
-    if (quickMemberSelect) quickMemberSelect.required = isAddition && !isMemberRole;
+    if (quickFieldMember) quickFieldMember.hidden = !isAddition || autoSelectMember;
+    if (quickMemberSelect) quickMemberSelect.required = isAddition && !autoSelectMember;
 
     if (quickMemberAuto) {
-      quickMemberAuto.hidden = !isAddition || !isMemberRole;
-      if (quickMemberAutoName) quickMemberAutoName.textContent = state.profile?.full_name || 'Member';
+      quickMemberAuto.hidden = !isAddition || !autoSelectMember;
+      if (quickMemberAutoName) quickMemberAutoName.textContent = state.profile?.full_name || cachedMembers[0]?.full_name || 'Member';
     }
 
     if (quickFieldResponsible) quickFieldResponsible.hidden = isAddition;
@@ -1358,7 +1489,7 @@
     if (!quickRecordDialog) return;
     const hasGroup = Boolean(currentGroup && state.profile?.group_id);
     if (!hasGroup || (state.profile?.role === 'MEMBER' && !state.profile?.member_id)) {
-      Ipon.showGroupRequiredDialog({ hasGroup, onCreateGroup: () => openGroupDialog('create') });
+      Ipon.showGroupRequiredDialog({ hasGroup, onCreateGroup: (mode) => openGroupDialog('create', mode) });
       return;
     }
     quickPendingKey = null;
@@ -1372,13 +1503,19 @@
     if (quickMonthInput) quickMonthInput.value = dateVal.slice(0, 7);
 
     const isMemberRole = state.profile?.role === 'MEMBER';
+    const isSoloSelf = currentGroup?.workspace_mode === 'SOLO' && Boolean(state.profile?.member_id || cachedMembers[0]?.id);
     if (quickRecordTypeTabs) quickRecordTypeTabs.hidden = isMemberRole;
 
     setQuickRecordType(isMemberRole ? 'addition' : presetType);
 
-    if (isMemberRole) {
-      if (quickMemberSelect) quickMemberSelect.value = state.profile.member_id || '';
-      if (quickMemberAutoName) quickMemberAutoName.textContent = state.profile.full_name || 'Member';
+    if (isMemberRole || isSoloSelf) {
+      const ownId = state.profile?.member_id || cachedMembers[0]?.id || '';
+      if (quickMemberSelect) quickMemberSelect.value = ownId;
+      if (quickMemberAutoName) quickMemberAutoName.textContent = state.profile?.full_name || cachedMembers[0]?.full_name || 'Member';
+      if (quickResponsibleSelect && !quickResponsibleSelect.value) {
+        const ownName = cachedMembers.find((m) => m.id === ownId)?.full_name || state.profile?.full_name || '';
+        if (ownName) quickResponsibleSelect.value = ownName;
+      }
     }
 
     quickRecordDialog.showModal();
@@ -1589,8 +1726,9 @@
   };
   Ipon.consumeDeepLink(async (params, hash) => {
     if (params.get('create_group') === '1') {
+      const presetMode = params.get('workspace_mode') === 'SOLO' ? 'SOLO' : 'GROUP';
       try { history.replaceState({}, '', location.pathname); } catch { }
-      openGroupDialog('create');
+      openGroupDialog('create', presetMode);
       return true;
     }
     const annId = params.get('announcement') || '';

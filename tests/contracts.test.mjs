@@ -69,7 +69,9 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.match(html, /id="feature-requests-body"/);
   assert.match(html, /id="bug-reports-body"/);
   assert.match(html, /id="administrators-body"/);
-  assert.match(html, /id="users-role-filter"/);
+  assert.doesNotMatch(html, /id="users-role-filter"/);
+  assert.match(html, /id="users-status-filter"/);
+  assert.match(html, /id="user-groups-dialog"/);
   assert.match(html, /id="user-password-dialog"/);
   for (const view of ['overview', 'feature-requests', 'bug-reports', 'administrators', 'activity']) {
     assert.match(html, new RegExp(`data-platform-view="${view}"`));
@@ -10317,4 +10319,68 @@ test('migration 092 and UI fixes elevate floating utilities, clean Brainier grou
   assert.match(saJs, /fixed_bugs:\s*targetFixedBugs\.map/);
   assert.match(edgeFn, /Verified bug reports fixed for/);
   assert.match(edgeFn, /fixedBugPromptLines/);
+});
+
+test('migration 093 and workspace UI remove global Role from Super Admin Users, add multi-group +N overflow, and add Solo vs Group saving with full retention', () => {
+  const mig093 = read('database/migrations/20261116_093_solo_group_workspaces_and_restore_sync.sql');
+  const schema = read('database/schema.sql');
+  const saHtml = read('super-admin.html');
+  const saJs = read('js/super-admin.js');
+  const dashHtml = read('dashboard.html');
+  const dashJs = read('js/dashboard.js');
+  const coreJs = read('js/core.js');
+  const recordsJs = read('js/records.js');
+  const membersJs = read('js/members.js');
+  const settingsJs = read('js/settings.js');
+  const css = read('css/app.css');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+
+  for (const sql of [mig093, schema]) {
+    assert.match(sql, /alter table public\.groups[\s\S]*?add column if not exists workspace_mode text not null default 'GROUP'/i);
+    assert.match(sql, /check \(workspace_mode in \('SOLO', 'GROUP'\)\)/i);
+    assert.match(sql, /drop function if exists public\.admin_create_group\(text, text, boolean, numeric\);/i);
+    assert.match(sql, /create or replace function public\.admin_create_group\([\s\S]*?p_workspace_mode text default 'GROUP'/i);
+    assert.match(sql, /create or replace function public\.get_my_groups\(\)[\s\S]*?workspace_mode text/i);
+    assert.match(sql, /create or replace function public\.switch_active_group\(p_group_id uuid\)[\s\S]*?'workspace_mode'/i);
+    assert.match(sql, /drop function if exists public\.update_group_profile\(text, text, boolean\);/i);
+    assert.match(sql, /create or replace function public\.update_group_profile\([\s\S]*?p_workspace_mode text default null/i);
+    assert.match(sql, /Remove other members before switching this workspace to Solo savings\./i);
+    assert.match(sql, /Solo savings workspaces do not support additional members or invites\./i);
+    assert.match(sql, /Solo savings workspaces do not accept member or treasurer invitations\./i);
+    assert.match(sql, /where id = p_user_id[\s\S]*?and role <> 'SUPER_ADMIN'/i);
+    assert.match(sql, /'20261116_093'/);
+  }
+
+  // Solo workspaces remain standard rows in public.groups so existing retention/bin cleanup applies automatically
+  assert.doesNotMatch(mig093, /where[^\n]*workspace_mode\s*<>\s*'SOLO'[^\n]*retention/i);
+  assert.match(edgeFn, /targetGroup\?\.workspace_mode === 'SOLO'/);
+
+  // Super Admin Users drops global Role filter/column and displays multi-group pills + overflow dialog
+  const usersSection = saHtml.match(/<div[^>]*id="administrators"[\s\S]*?<\/section>/)?.[0] || '';
+  assert.ok(usersSection, 'super-admin.html must define #administrators section');
+  assert.doesNotMatch(usersSection, /<th>Role<\/th>/);
+  assert.match(usersSection, /<th>Groups<\/th>/);
+  assert.match(saHtml, /id="user-groups-dialog"/);
+  assert.match(saJs, /from\('group_memberships'\)\.select\('group_id,user_id,role,status'\)/);
+  assert.match(saJs, /function getUserGroups\(/);
+  assert.match(saJs, /function renderUserGroupsCell\(/);
+  assert.match(saJs, /data-view-user-groups/);
+  assert.match(saJs, /openUserGroupsDialog\(/);
+  assert.match(css, /\.sa-group-pills\b/);
+  assert.match(css, /\.sa-group-chip\.is-solo\b/);
+  assert.match(css, /\.sa-group-more-btn\b/);
+
+  // Solo vs Group creation, management hub switch, sidebar sync, and memberless flows
+  assert.match(dashHtml, /id="no-group-solo-btn"/);
+  assert.match(dashHtml, /id="group-workspace-mode-tabs"/);
+  assert.match(dashHtml, /id="group-hub-solo-banner"/);
+  assert.match(dashHtml, /href="members\.html"[^>]*data-group-only="1"/);
+  assert.match(dashJs, /function syncGroupFormWorkspaceMode\(/);
+  assert.match(dashJs, /p_workspace_mode:\s*workspaceMode/);
+  assert.match(dashJs, /Ipon\.syncWorkspaceMode\?\./);
+  assert.match(coreJs, /function syncWorkspaceMode\(/);
+  assert.match(coreJs, /data-group-required-create="SOLO"/);
+  assert.match(recordsJs, /state\.profile\?\.workspace_mode === 'SOLO'/);
+  assert.match(membersJs, /currentGroup\?\.workspace_mode === 'SOLO'/);
+  assert.match(settingsJs, /activeGroup\?\.workspace_mode === 'SOLO'/);
 });

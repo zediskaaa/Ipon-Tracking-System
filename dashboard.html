@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261116-122">
+  <link rel="stylesheet" href="css/app.css?v=20261116-123">
   <link rel="stylesheet" href="css/hero-plates.css?v=20261116-86">
   <script src="js/config.js?v=20261115-75"></script>
 </head>
@@ -60,7 +60,7 @@
             <circle cx="4" cy="12" r="1" />
             <circle cx="4" cy="18" r="1" />
           </svg><span>Records</span></a>
-        <a class="nav-link" href="members.html" data-role="ADMIN"><svg viewBox="0 0 24 24" aria-hidden="true">
+        <a class="nav-link" href="members.html" data-role="ADMIN" data-group-only="1"><svg viewBox="0 0 24 24" aria-hidden="true">
             <path
               d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
           </svg><span>Members</span></a>
@@ -173,7 +173,7 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
-                <span>Add group</span>
+                <span>New workspace</span>
               </button>
             </div>
           </div>
@@ -185,12 +185,18 @@
             </div>
             <div class="no-group-copy">
               <h2>Welcome to myIPON!</h2>
-              <p>Create your own savings group to start tracking, or wait for an invitation from your group administrator.</p>
+              <p>Start a personal Solo tracker with no invitations needed, create a Savings group to pool funds with others, or wait for a group invitation.</p>
             </div>
-            <button class="button button-primary" id="no-group-create-btn" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;margin-right:6px;"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              Create savings group
-            </button>
+            <div class="no-group-actions">
+              <button class="button button-primary" id="no-group-solo-btn" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;margin-right:6px;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                Start solo savings
+              </button>
+              <button class="button button-secondary" id="no-group-create-btn" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;margin-right:6px;"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                Create savings group
+              </button>
+            </div>
           </div>
         </section>
         <div class="summary-hero">
@@ -502,7 +508,7 @@
         <div class="group-hub-identity">
           <div class="group-hub-avatar" id="group-hub-avatar" aria-hidden="true"></div>
           <div class="group-hub-copy">
-            <span class="group-hub-eyebrow">Group workspace</span>
+            <span class="group-hub-eyebrow" id="group-hub-eyebrow">Group workspace</span>
             <div class="group-hub-name-row">
               <h2 id="group-hub-title">Savings Group</h2>
               <span class="group-hub-role" id="group-hub-role">ADMIN</span>
@@ -517,8 +523,12 @@
       </header>
       <div class="group-hub-body">
         <div class="group-hub-switcher" id="group-hub-switcher-wrap" hidden>
-          <label for="group-hub-select">Active group</label>
+          <label for="group-hub-select">Active workspace</label>
           <select id="group-hub-select" aria-label="Switch active group"></select>
+        </div>
+        <div class="group-solo-banner" id="group-hub-solo-banner" hidden>
+          <strong>Personal Solo savings tracker</strong>
+          <small>No invitations or members needed. Want to invite others later? Switch to Group savings inside Edit workspace.</small>
         </div>
         <div class="group-hub-grid">
           <button class="group-hub-card" id="dashboard-edit-group" type="button">
@@ -527,8 +537,8 @@
                 <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
               </svg></span>
             <span class="group-hub-card-copy">
-              <strong>Edit group &amp; picture</strong>
-              <small>Rename group, upload group chat DP, and update appearance.</small>
+              <strong id="group-hub-edit-title">Edit group &amp; picture</strong>
+              <small id="group-hub-edit-copy">Rename workspace, upload picture, or switch saving mode.</small>
             </span>
             <svg class="group-hub-arrow" viewBox="0 0 24 24" aria-hidden="true">
               <path d="m9 6 6 6-6 6" />
@@ -549,7 +559,7 @@
             </svg>
           </button>
         </div>
-        <div class="group-hub-contributor-section">
+        <div class="group-hub-contributor-section" id="group-hub-contributor-section">
           <label class="group-hub-switch-card" for="manage-hub-self-toggle">
             <span class="group-hub-card-icon is-sage" aria-hidden="true"><svg viewBox="0 0 24 24">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -563,7 +573,7 @@
           </label>
           <div class="group-hub-contributor-details" id="group-hub-contributor-details" hidden>
             <div class="group-hub-pledge-info">
-              <span class="group-hub-pledge-label">Your monthly contribution:</span>
+              <span class="group-hub-pledge-label" id="group-hub-pledge-label">Your monthly contribution:</span>
               <strong class="group-hub-pledge-value" id="group-hub-pledge-val">₱100.00</strong>
             </div>
             <button class="button button-secondary button-sm" type="button" id="group-hub-edit-pledge">Change
@@ -571,7 +581,7 @@
           </div>
         </div>
         <div class="group-hub-links">
-          <a class="group-hub-link" href="members.html">
+          <a class="group-hub-link" id="group-hub-members-link" href="members.html">
             <span><strong>Member directory &amp; recycle bin</strong><small>Edit shares, reset passwords, or recover
                 removed members</small></span>
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -579,8 +589,7 @@
             </svg>
           </a>
           <a class="group-hub-link" href="settings.html">
-            <span><strong>Contribution defaults &amp; treasurers</strong><small>Configure monthly schedules and group
-                access</small></span>
+            <span><strong id="group-hub-settings-title">Contribution defaults &amp; treasurers</strong><small id="group-hub-settings-copy">Configure monthly schedules and workspace settings</small></span>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m9 6 6 6-6 6" />
             </svg>
@@ -590,7 +599,7 @@
       <footer class="group-hub-footer">
         <button class="button danger-action" type="button" id="group-hub-delete-btn">Delete group</button>
         <div class="group-hub-footer-actions">
-          <button class="button button-secondary" type="button" id="group-hub-create-another">+ Add another group</button>
+          <button class="button button-secondary" type="button" id="group-hub-create-another">+ New workspace</button>
           <button class="button button-primary" type="button" id="done-group-hub-dialog">Done</button>
         </div>
       </footer>
@@ -642,25 +651,34 @@
       </header>
       <form id="group-form" class="form-grid">
         <input type="hidden" name="mode" value="edit">
+        <input type="hidden" name="workspace_mode" id="group-workspace-mode-input" value="GROUP">
+        <div class="field field-wide" id="group-workspace-mode-field">
+          <span class="field-label">Saving mode</span>
+          <div class="segmented-control workspace-mode-segmented" id="group-workspace-mode-tabs" role="radiogroup" aria-label="Saving mode">
+            <button class="segmented-control-btn is-active" type="button" data-workspace-mode="GROUP" role="radio" aria-checked="true">Group savings</button>
+            <button class="segmented-control-btn" type="button" data-workspace-mode="SOLO" role="radio" aria-checked="false">Solo savings</button>
+          </div>
+          <small class="field-help" id="group-workspace-mode-help">Save together with invited members and treasurers. Standard 90-day and 6-month inactivity retention applies.</small>
+        </div>
         <div class="field group-dp-field">
-          <span class="field-label">Group chat picture (optional)</span>
+          <span class="field-label" id="group-dp-label">Group picture (optional)</span>
           <div class="group-dp-picker">
             <div class="group-dp-preview" id="group-dp-preview" aria-hidden="true"></div>
             <div class="group-dp-actions">
               <label class="button button-secondary group-dp-upload" for="group-dp-input">Choose image</label>
               <button class="button button-secondary" id="group-dp-remove" type="button" hidden>Remove</button>
               <input id="group-dp-input" type="file" accept="image/*" hidden>
-              <small class="field-help">Shown in group header.</small>
+              <small class="field-help" id="group-dp-help">Shown in workspace header.</small>
             </div>
           </div>
         </div>
         <div class="field group-name-field">
-          <label for="group-name-input">Group name</label>
+          <label for="group-name-input" id="group-name-label">Group name</label>
           <input id="group-name-input" name="name" minlength="2" maxlength="150" placeholder="e.g., Family Savings Fund"
             required>
-          <small class="field-help">Displayed at the top of this workspace and in invite emails.</small>
+          <small class="field-help" id="group-name-help">Displayed at the top of this workspace and in invite emails.</small>
         </div>
-        <div class="field field-wide">
+        <div class="field field-wide" id="group-self-contributor-wrap">
           <label class="toggle-switch-row" for="group-self-contributor">
             <span>
               <strong>Include me as a contributor</strong>
@@ -671,7 +689,7 @@
           </label>
         </div>
         <div class="field field-wide" id="group-monthly-wrap">
-          <label for="group-default-amount">Monthly contribution amount</label>
+          <label for="group-default-amount" id="group-monthly-label">Monthly contribution amount</label>
           <input id="group-default-amount" name="monthly_amount" type="number" min="1" max="1000000" step="0.01"
             value="100" required>
         </div>
@@ -927,12 +945,12 @@
       </div>
     </div>
   </dialog>
-  <script src="js/core.js?v=20261116-103"></script><script src="js/policy.js?v=20261116-07"></script>
+  <script src="js/core.js?v=20261116-104"></script><script src="js/policy.js?v=20261116-07"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
   <script src="js/messages.js?v=20261116-29"></script>
-  <script src="js/dashboard.js?v=20261116-87"></script>
+  <script src="js/dashboard.js?v=20261116-88"></script>
 </body>
 
 </html>

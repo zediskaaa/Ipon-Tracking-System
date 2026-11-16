@@ -96,12 +96,17 @@
     const list = Array.isArray(groups) ? groups : [];
     const current = list.find((item) => item.is_current) || list[0] || null;
     currentGroupId = current?.group_id || state.profile?.group_id || '';
+    const isSolo = current?.workspace_mode === 'SOLO';
+    Ipon.syncWorkspaceMode?.(isSolo ? 'SOLO' : 'GROUP');
+    const addMemberBtn = document.getElementById('add-member');
+    if (addMemberBtn) addMemberBtn.hidden = isSolo;
     const hasMultipleGroups = list.length > 1;
     if (groupBarEl) groupBarEl.hidden = !hasMultipleGroups;
     if (groupSwitcherWrap && groupSelect) {
       groupSwitcherWrap.hidden = !hasMultipleGroups;
       Ipon.populateGroupSelect(groupSelect, list, current?.group_id);
     }
+    return current;
   }
 
   function memberStatusMeta(member) {
@@ -160,7 +165,18 @@
     ]);
     if (error) throw error;
     if (summaryRes.error) throw summaryRes.error;
-    renderGroupContext(groups);
+    const currentGroup = renderGroupContext(groups);
+    if (currentGroup?.workspace_mode === 'SOLO') {
+      members = [];
+      accountsByMember = new Map();
+      membersWithContributions = new Set();
+      document.getElementById('member-count').textContent = 'Solo tracker (personal savings)';
+      pager.querySelector('span').textContent = 'Page 1 of 1';
+      pager.querySelector('[data-page="previous"]').disabled = true;
+      pager.querySelector('[data-page="next"]').disabled = true;
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Solo savings trackers do not use member rosters or invitations. Switch to a Group workspace above or edit this workspace on the <a href="dashboard.html">Dashboard</a>.</td></tr>';
+      return;
+    }
     const memberIds = (data || []).map((member) => member.id);
     const contribResult = memberIds.length
       ? await Ipon.client.from('contribution_periods').select('member_id,contributions!inner(id)').in('member_id', memberIds)

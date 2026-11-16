@@ -10,6 +10,10 @@
   const activityBody = document.getElementById('activity-body');
   const administratorDialog = document.getElementById('administrator-dialog');
   const administratorForm = document.getElementById('administrator-form');
+  const userGroupsDialog = document.getElementById('user-groups-dialog');
+  const userGroupsTitle = document.getElementById('user-groups-title');
+  const userGroupsSubtitle = document.getElementById('user-groups-subtitle');
+  const userGroupsList = document.getElementById('user-groups-list');
   const userPasswordDialog = document.getElementById('user-password-dialog');
   const userPasswordForm = document.getElementById('user-password-form');
   const bugViewerDialog = document.getElementById('bug-viewer-dialog');
@@ -97,6 +101,7 @@
   });
   let profiles = [];
   let groups = [];
+  let groupMemberships = [];
   let featureRequests = [];
   let bugReports = [];
   let accountActivities = [];
@@ -202,24 +207,98 @@
 
   const ROLE_LABELS = { ADMIN: 'Administrator', TREASURER: 'Treasurer', MEMBER: 'Member' };
 
+  function getUserGroups(profile, groupById) {
+    if (!profile) return [];
+    const seen = new Map();
+    const disabledGroupIds = new Set(
+      groupMemberships
+        .filter((gm) => gm.user_id === profile.id && gm.status === 'DISABLED')
+        .map((gm) => gm.group_id)
+    );
+
+    const addGroup = (group, membershipStatus = 'ACTIVE', isOwner = false) => {
+      if (!group || group.status !== 'ACTIVE' || seen.has(group.id)) return;
+      seen.set(group.id, {
+        id: group.id,
+        name: group.name || 'Savings workspace',
+        workspace_mode: group.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP',
+        status: membershipStatus || 'ACTIVE',
+        isOwner
+      });
+    };
+
+    groupMemberships
+      .filter((gm) => gm.user_id === profile.id && gm.status !== 'DISABLED')
+      .forEach((gm) => addGroup(groupById.get(gm.group_id), gm.status, false));
+
+    groups
+      .filter((group) => group.owner_id === profile.id && group.status === 'ACTIVE')
+      .forEach((group) => {
+        if (seen.has(group.id)) seen.get(group.id).isOwner = true;
+        else addGroup(group, 'ACTIVE', true);
+      });
+
+    if (profile.group_id && !disabledGroupIds.has(profile.group_id)) {
+      addGroup(groupById.get(profile.group_id), 'ACTIVE', false);
+    }
+
+    return Array.from(seen.values());
+  }
+
+  function renderUserGroupsCell(userGroups, userId) {
+    if (!userGroups.length) return '<span class="field-help">No groups yet</span>';
+    const preview = userGroups.slice(0, 2);
+    const overflow = userGroups.length - preview.length;
+    const pills = preview.map((group) => `
+      <span class="sa-group-chip${group.workspace_mode === 'SOLO' ? ' is-solo' : ''}" title="${Ipon.escapeHtml(group.name)}${group.workspace_mode === 'SOLO' ? ' (Solo savings)' : ''}">
+        <span class="sa-group-name">${Ipon.escapeHtml(group.name)}</span>${group.workspace_mode === 'SOLO' ? '<em class="sa-group-mode">Solo</em>' : ''}
+      </span>`).join('');
+    const moreBtn = overflow > 0
+      ? `<button class="sa-group-more-btn" type="button" data-view-user-groups="${userId}" title="View all ${userGroups.length} workspaces">+${overflow} more</button>`
+      : '';
+    return `<div class="sa-group-pills">${pills}${moreBtn}</div>`;
+  }
+
+  function openUserGroupsDialog(profile) {
+    if (!userGroupsDialog || !userGroupsList || !profile) return;
+    const groupById = new Map(groups.map((group) => [group.id, group]));
+    const userGroups = getUserGroups(profile, groupById);
+    if (userGroupsTitle) userGroupsTitle.textContent = `${profile.full_name || 'User'}'s workspaces`;
+    if (userGroupsSubtitle) {
+      userGroupsSubtitle.textContent = `${userGroups.length} active workspace${userGroups.length === 1 ? '' : 's'} linked to ${profile.email || 'this account'}.`;
+    }
+    userGroupsList.innerHTML = userGroups.length ? userGroups.map((group) => `
+      <div class="user-groups-item">
+        <div class="user-groups-item-copy">
+          <strong>${Ipon.escapeHtml(group.name)}</strong>
+          <small class="field-help">${group.isOwner ? 'Created by user' : 'Joined workspace'}</small>
+        </div>
+        <div class="user-groups-item-badges">
+          <span class="sa-group-chip${group.workspace_mode === 'SOLO' ? ' is-solo' : ''}">${group.workspace_mode === 'SOLO' ? 'Solo savings' : 'Group savings'}</span>
+          ${statusLabel(group.status)}
+        </div>
+      </div>`).join('') : '<p class="empty-state">No groups linked to this account yet.</p>';
+    if (!userGroupsDialog.open) userGroupsDialog.showModal();
+  }
+
+  document.getElementById('user-groups-close')?.addEventListener('click', () => userGroupsDialog?.close());
+  document.getElementById('user-groups-done')?.addEventListener('click', () => userGroupsDialog?.close());
+
   function renderUsers() {
     const groupById = new Map(groups.map((group) => [group.id, group]));
-    const groupByOwner = new Map(groups.map((group) => [group.owner_id, group]));
     const lastActivity = new Map();
     accountActivities.forEach((activity) => { if (!lastActivity.has(activity.user_id)) lastActivity.set(activity.user_id, activity); });
     const query = filterValue('users-search');
-    const role = filterValue('users-role-filter');
     const status = filterValue('users-status-filter');
     const users = profiles.filter((profile) => {
-      if (!ROLE_LABELS[profile.role]) return false;
-      if (role && profile.role !== role) return false;
+      if (!profile || profile.role === 'SUPER_ADMIN') return false;
       if (status && profile.status !== status) return false;
-      const group = (profile.group_id ? groupById.get(profile.group_id) : null) || groupByOwner.get(profile.id);
-      return matchesQuery(query, [profile.full_name, profile.email, profile.role, ROLE_LABELS[profile.role], group?.name, profile.status]);
+      const userGroups = getUserGroups(profile, groupById);
+      return matchesQuery(query, [profile.full_name, profile.email, ...userGroups.map((group) => group.name), profile.status]);
     });
     const visible = paginateRows('users', users);
     administratorsBody.innerHTML = visible.length ? visible.map((profile) => {
-      const group = (profile.group_id ? groupById.get(profile.group_id) : null) || groupByOwner.get(profile.id);
+      const userGroups = getUserGroups(profile, groupById);
       const active = profile.status === 'ACTIVE';
       const actions = `<button class="icon-action" type="button" data-edit-admin="${profile.id}">Edit</button><button class="icon-action" type="button" data-set-password="${profile.id}">Change password</button><button class="icon-action" type="button" data-reset-admin="${profile.id}">Reset password</button><button class="icon-action ${active ? 'danger-action' : ''}" type="button" data-admin-status="${profile.id}" data-next-status="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Deactivate' : 'Reactivate'}</button><button class="icon-action danger-action" type="button" data-delete-user="${profile.id}" data-archive-admin="${profile.id}">Delete</button>`;
       return `<tr data-user-id="${profile.id}">
@@ -232,14 +311,13 @@
             </div>
           </div>
         </td>
-        <td><span class="role-badge role-${profile.role.toLowerCase()}">${Ipon.escapeHtml(ROLE_LABELS[profile.role])}</span></td>
-        <td>${group ? Ipon.escapeHtml(group.name) : '<span class="field-help">Unassigned</span>'}</td>
+        <td>${renderUserGroupsCell(userGroups, profile.id)}</td>
         <td>${Ipon.dateLabel(profile.created_at)}</td>
         <td>${lastActivity.has(profile.id) ? `<span class="activity-kind">${Ipon.escapeHtml(lastActivity.get(profile.id).event.replaceAll('_', ' '))}</span><small class="field-help">${Ipon.dateLabel(lastActivity.get(profile.id).created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small>` : '<span class="field-help">No activity</span>'}</td>
         <td>${statusLabel(profile.status)}</td>
         <td><div class="table-actions">${actions}</div></td>
       </tr>`;
-    }).join('') : `<tr><td colspan="7" class="empty-state">${query || role || status ? 'No matching user accounts.' : 'No user accounts.'}</td></tr>`;
+    }).join('') : `<tr><td colspan="6" class="empty-state">${query || status ? 'No matching user accounts.' : 'No user accounts.'}</td></tr>`;
     Ipon.bindAvatarFallbacks(administratorsBody);
     Ipon.syncPresenceDots(administratorsBody);
   }
@@ -461,9 +539,10 @@
     overviewError.hidden = true;
     overviewError.replaceChildren();
     const safeQuery = (query) => (Ipon.withTimeout ? Ipon.withTimeout(query) : Promise.resolve(query)).catch((err) => ({ data: [], error: err }));
-    const [profileResult, groupResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult] = await Promise.all([
+    const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult] = await Promise.all([
       safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at').order('created_at', { ascending: false })),
-      safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,created_at').order('created_at', { ascending: false })),
+      safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,workspace_mode,created_at').order('created_at', { ascending: false })),
+      safeQuery(Ipon.client.from('group_memberships').select('group_id,user_id,role,status')),
       safeQuery(Ipon.client.from('feature_requests').select('id,requester_id,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,status,reviewed_at,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200)),
@@ -475,6 +554,7 @@
     if (groupResult.error) throw groupResult.error;
     profiles = profileResult.data || [];
     groups = groupResult.data || [];
+    groupMemberships = membershipResult.data || [];
     featureRequests = featureRequestResult.data || [];
     bugReports = bugReportResult.data || [];
     accountActivities = activityResult.data || [];
@@ -651,6 +731,12 @@
   });
 
   administratorsBody.addEventListener('click', async (event) => {
+    const viewGroupsBtn = event.target.closest('[data-view-user-groups]');
+    if (viewGroupsBtn) {
+      const targetProfile = profiles.find((item) => item.id === viewGroupsBtn.dataset.viewUserGroups);
+      if (targetProfile) openUserGroupsDialog(targetProfile);
+      return;
+    }
     const edit = event.target.closest('[data-edit-admin]');
     const reset = event.target.closest('[data-reset-admin]');
     const deleteBtn = event.target.closest('[data-delete-user]') || event.target.closest('[data-archive-admin]');
@@ -659,10 +745,8 @@
     if (!id) return;
     const profile = profiles.find((item) => item.id === id);
     if (!profile) return;
-    const roleLabel = ROLE_LABELS[profile.role].toLowerCase();
-    const isAdmin = profile.role === 'ADMIN';
     if (edit) {
-      const group = groups.find((item) => item.owner_id === profile.id);
+      const ownedGroup = groups.find((item) => item.owner_id === profile.id && item.status === 'ACTIVE');
       administratorForm.elements.user_id.value = profile.id;
       administratorForm.elements.first_name.value = profile.first_name || '';
       administratorForm.elements.middle_name.value = profile.middle_name || '';
@@ -671,16 +755,16 @@
       administratorForm.elements.email.disabled = true;
       administratorForm.elements.password.closest('.field').hidden = true;
       administratorForm.elements.password.required = false;
-      administratorForm.elements.group_name.closest('.field').hidden = !isAdmin;
-      administratorForm.elements.group_name.required = isAdmin;
-      administratorForm.elements.group_name.value = group?.name || '';
-      document.getElementById('administrator-dialog-title').textContent = `Edit ${roleLabel}`;
+      administratorForm.elements.group_name.closest('.field').hidden = !ownedGroup;
+      administratorForm.elements.group_name.required = Boolean(ownedGroup);
+      administratorForm.elements.group_name.value = ownedGroup?.name || '';
+      document.getElementById('administrator-dialog-title').textContent = 'Edit user';
       administratorForm.querySelector('[type="submit"]').textContent = 'Save changes';
       administratorDialog.showModal();
       return;
     }
     if (reset) {
-      if (!profile.email) return Ipon.toast(`This ${roleLabel} has no saved email address.`, 'error');
+      if (!profile.email) return Ipon.toast('This user account has no saved email address.', 'error');
       const accepted = await Ipon.confirmAction({ title: 'Send password recovery email?', message: `A password recovery link will be sent to ${profile.email}.`, acceptLabel: 'Send email' });
       if (!accepted) return;
       Ipon.setBusy(reset, true, 'Sending…');
@@ -720,7 +804,7 @@
     if (!target) return;
     userPasswordForm.reset();
     userPasswordForm.elements.user_id.value = target.id;
-    document.getElementById('user-password-copy').textContent = `Set a new password for ${target.full_name} (${target.role.toLowerCase()}).`;
+    document.getElementById('user-password-copy').textContent = `Set a new password for ${target.full_name}${target.email ? ` (${target.email})` : ''}.`;
     userPasswordDialog.showModal();
     userPasswordForm.elements.password.focus();
   }
@@ -780,9 +864,9 @@
     }
     const fullName = [values.get('first_name'), values.get('middle_name'), values.get('last_name')].filter(Boolean).join(' ').trim();
     const accepted = await Ipon.confirmAction({
-      title: isEdit ? 'Save administrator changes?' : 'Create administrator account?',
+      title: isEdit ? 'Save user changes?' : 'Create administrator account?',
       message: isEdit
-        ? `Update administrator details and group name for ${fullName}?`
+        ? `Update account details for ${fullName}?`
         : `Create administrator "${fullName}" for group "${values.get('group_name')}"?`,
       acceptLabel: isEdit ? 'Save changes' : 'Create administrator'
     });
@@ -790,7 +874,15 @@
     Ipon.setBusy(button, true);
     try {
       if (isEdit) {
-        await Ipon.rpc('super_admin_update_administrator', { p_user_id: values.get('user_id'), p_first_name: values.get('first_name'), p_middle_name: values.get('middle_name') || null, p_last_name: values.get('last_name'), p_group_name: values.get('group_name') || '' });
+        const groupNameField = administratorForm.elements.group_name?.closest('.field');
+        const groupNameVal = groupNameField?.hidden ? null : (values.get('group_name') || null);
+        await Ipon.rpc('super_admin_update_administrator', {
+          p_user_id: values.get('user_id'),
+          p_first_name: values.get('first_name'),
+          p_middle_name: values.get('middle_name') || null,
+          p_last_name: values.get('last_name'),
+          p_group_name: groupNameVal
+        });
       } else {
         const { error } = await Ipon.client.functions.invoke('manage-account', { body: { role: 'ADMIN', first_name: values.get('first_name'), middle_name: values.get('middle_name') || null, last_name: values.get('last_name'), email: values.get('email'), password: values.get('password'), group_name: values.get('group_name') } });
         if (error) { const detail = await error.context?.json?.().catch(() => null); throw new Error(detail?.error || error.message); }
@@ -1811,7 +1903,7 @@
   [
     ['feature-requests', ['feature-requests-search'], renderFeatureRequests],
     ['bug-reports', ['bug-reports-search'], renderBugReports],
-    ['users', ['users-search', 'users-role-filter', 'users-status-filter'], renderUsers],
+    ['users', ['users-search', 'users-status-filter'], renderUsers],
     ['activity', ['activity-search'], renderActivity]
   ].forEach(([key, controlIds, render]) => {
     controlIds.forEach((id) => {
@@ -1842,7 +1934,7 @@
       Ipon.showInlineError(overviewError, error, refresh);
       Ipon.showInlineError(featureRequestsBody, error, refresh, 5);
       if (bugReportsBody) Ipon.showInlineError(bugReportsBody, error, refresh, 8);
-      Ipon.showInlineError(administratorsBody, error, refresh, 7);
+      Ipon.showInlineError(administratorsBody, error, refresh, 6);
       Ipon.showInlineError(activityBody, error, refresh, 3);
     }
   }
@@ -1930,10 +2022,8 @@
     const userId = params.get('admin_user') || '';
     if (userId) {
       const userSearch = document.getElementById('users-search');
-      const roleFilter = document.getElementById('users-role-filter');
       const statusFilter = document.getElementById('users-status-filter');
       if (userSearch) userSearch.value = '';
-      if (roleFilter) roleFilter.value = '';
       if (statusFilter) statusFilter.value = '';
       const safeId = CSS.escape ? CSS.escape(userId) : userId;
       const totalPages = Math.max(1, Math.ceil(profiles.length / PAGE_SIZE));
@@ -1958,5 +2048,5 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
+  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'group_memberships', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
 })();

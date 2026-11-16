@@ -2832,6 +2832,19 @@ Output strictly valid JSON with only these flat arrays of plain strings (no nest
   if (role === 'ADMIN' && String(body.group_name || '').trim().length < 2) return json({ error: 'Group name is required.' }, 400);
 
   // Check if user email already exists (allowed for cross-group Member / Treasurer invites by Group Admins).
+  if (role !== 'ADMIN' && actor.group_id) {
+    const { data: targetGroup } = await admin
+      .from('groups')
+      .select('workspace_mode')
+      .eq('id', actor.group_id)
+      .maybeSingle();
+    if (targetGroup?.workspace_mode === 'SOLO') {
+      return json({
+        error: 'Solo savings workspaces do not support member or treasurer invitations. Switch this workspace to Group savings in Group settings first.'
+      }, 400);
+    }
+  }
+
   const { data: existingProfile } = await admin
     .from('profiles')
     .select('id,role,full_name,email')
