@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-11-16T15:07:22+08:00",
+    "message": "Restore migration 084 test suite and verify in-app notification & Support myIPON contracts\n\n- Restore the complete migration 084 contract & runtime test block alongside assertions verifying in-app-only notification delivery, email reservation scope, Device & in-app alerts UI label, and Support myIPON branding across account and donate views."
+  },
+  {
+    "date": "2026-11-16T15:05:18+08:00",
+    "message": "Clarify in-app-only notification and email scope, revise device alerts copy, and rename Support myIPON\n\n- Add Notifications & email delivery scope section to Terms of Use and revise Privacy Policy copy (login.html & js/policy.js) so users clearly see that activity alerts and chat messages are delivered in-app only while the app is open, never via email (email is reserved strictly for OTP codes, password resets, and 7-day inactivity warnings).\n- Revise Device & in-app alerts section and permission prompts (account.html & js/core.js) to remove misleading closed-app delivery claims that do not work reliably when phones force-close apps.\n- Rename Support IPON to Support myIPON across the donation modal and account support row (js/core.js).\n- Bump cache-busted script query tags across HTML pages, sync Capacitor mobile assets, and verify all 142 contract & runtime tests pass."
+  },
+  {
     "date": "2026-11-16T14:34:47+08:00",
     "message": "Protect ongoing savings and goals from retention, add 30-day completion bin, and fix report print layout\n\n- Protect active savings goals and ongoing group ledgers from automated retention cleanup regardless of savings duration, and prevent premature 6-month inactivity purging for accounts in actively saving groups (via member-linked contribution activity and active goal participation).\n- Add Migration 084 (savings_goals soft-delete lifecycle, savings_cycle_batches snapshot table, complete_and_bin_savings_goal, delete_savings_goal soft-binning, archive_and_reset_savings_cycle, purge_bin_item_permanently, shared purge_bin_item_storage helper, and updated get_bin_items/recover_bin_item/run_data_retention_cleanup) with receipt & attachment Storage cleanup after 30 days.\n- Add premium Mark done, Finish batch & reset to PHP 0, Recycle bin viewer with live remaining-days countdown badges, Recover, and Delete forever controls across Goals, Settings, and Members.\n- Update Terms of Use, Privacy Policy, and in-app Retention Rules modal (login.html & js/policy.js) to explain permanent ongoing-savings protection and 30-day completion Bin auto-deletion.\n- Fix Reports print layout in css/app.css by restoring the missing td:last-child bottom border under STATUS at print width and preventing compact report panels from splitting mid-card across pages."
   },
@@ -170,13 +178,5 @@
   {
     "date": "2026-11-14T13:21:12+08:00",
     "message": "Auto-sync Supabase migrations and Edge Functions on IDE open and changes"
-  },
-  {
-    "date": "2026-11-14T13:19:24+08:00",
-    "message": "Automate Supabase CLI migrations and Edge Function deployment"
-  },
-  {
-    "date": "2026-11-14T13:11:08+08:00",
-    "message": "Fix account creation and mobile/web sign-in activation flow"
   }
 ]

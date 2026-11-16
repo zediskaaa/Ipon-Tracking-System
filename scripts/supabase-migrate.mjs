@@ -13,6 +13,7 @@ const NO_VERIFY_JWT_FUNCTIONS = new Set(['manage-account', 'send-push']);
 const args = process.argv.slice(2);
 const syncMode = args.includes('--sync');
 const watchMode = args.includes('--watch');
+const syncFeedMode = args.includes('--sync-feed');
 const applyMode = syncMode || args.includes('--apply');
 const deployFunctions = syncMode || args.includes('--deploy-functions');
 const onlyChangedFunctions = (syncMode || args.includes('--if-changed')) && !args.includes('--force');
@@ -178,9 +179,20 @@ function syncReleaseCommitsFeed() {
 }
 
 function runOnce() {
-  syncReleaseCommitsFeed();
-  if (applyMode || !deployFunctions) syncMigrations();
-  if (deployFunctions) syncFunctions();
+  if (syncFeedMode) {
+    syncReleaseCommitsFeed();
+    if (!applyMode && !deployFunctions && !args.includes('--status')) return;
+  }
+  try {
+    if (applyMode || !deployFunctions) syncMigrations();
+    if (deployFunctions) syncFunctions();
+  } catch (err) {
+    if (syncMode && /ENOTFOUND|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|network|socket hang up|fetch failed/i.test(String(err?.message || ''))) {
+      console.warn('[supabase:sync] Remote offline or unreachable; skipping auto-sync.');
+      return;
+    }
+    throw err;
+  }
 }
 
 if (watchMode) {
@@ -192,7 +204,7 @@ if (watchMode) {
     if (running) { queued = true; return; }
     running = true;
     try {
-      syncReleaseCommitsFeed();
+      if (syncFeedMode) syncReleaseCommitsFeed();
       syncMigrations();
       syncFunctions();
     } catch (err) {
