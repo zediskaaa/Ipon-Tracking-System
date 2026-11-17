@@ -585,6 +585,7 @@
       renderAuthJoinBanner(preview, code);
       if (fromManualInput && preview?.valid && joinCodeInput) {
         joinCodeInput.value = '';
+        joinCodeCtrl?.sync();
       }
     } catch (err) {
       if (fromManualInput && joinCodeError) {
@@ -605,13 +606,14 @@
     haveCodeOpenBtn.setAttribute('aria-expanded', String(willShow));
     if (willShow) joinCodeInput?.focus();
   });
+  const joinCodeCtrl = Ipon.bindInviteCodeInput?.(joinCodeInput);
   joinCodeInput?.addEventListener('input', () => {
     if (joinCodeError) {
       joinCodeError.textContent = '';
       joinCodeError.hidden = true;
     }
     joinCodeInput.removeAttribute('aria-invalid');
-    if (joinCodeInput.value.length <= 7) {
+    if (!joinCodeCtrl && joinCodeInput.value.length <= 7) {
       joinCodeInput.value = fmtJoinCode(joinCodeInput.value);
     }
   });

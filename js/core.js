@@ -10717,15 +10717,23 @@
       .slice(0, 6);
   }
 
+  function isInviteLinkInput(raw) {
+    const str = String(raw || '').trim();
+    return /^(?:https?:\/\/|www\.)/i.test(str) || /[?&#]join=/i.test(str);
+  }
+
   function extractInviteCode(raw) {
     const str = String(raw || '').trim();
     if (!str) return '';
-    if (/[?&#]join=/i.test(str) || /^https?:\/\//i.test(str)) {
+    if (isInviteLinkInput(str)) {
       try {
         const parsed = new URL(str, CANONICAL_PUBLIC_ORIGIN);
         const qp = parsed.searchParams.get('join');
-        if (qp) return normalizeInviteCode(qp);
-      } catch { /* fall through */ }
+        return qp ? normalizeInviteCode(qp) : '';
+      } catch {
+        const match = str.match(/[?&#]join=([A-Za-z0-9-]{1,12})/i);
+        return match ? normalizeInviteCode(match[1]) : '';
+      }
     }
     return normalizeInviteCode(str);
   }
@@ -10733,6 +10741,47 @@
   function formatInviteCode(raw) {
     const clean = normalizeInviteCode(raw);
     return clean.length > 3 ? `${clean.slice(0, 3)}-${clean.slice(3)}` : clean;
+  }
+
+  function bindInviteCodeInput(input, { onUpdate } = {}) {
+    if (!input) return null;
+    let lastEmitted = String(input.value || '');
+    const syncValue = () => {
+      const raw = String(input.value || '');
+      const isUrl = isInviteLinkInput(raw);
+      const code = extractInviteCode(raw);
+      if (!isUrl || code.length === 6) {
+        const formatted = formatInviteCode(code);
+        if (input.value !== formatted) input.value = formatted;
+      }
+      const nextSignal = isUrl && code.length < 6 ? raw : formatInviteCode(code);
+      if (nextSignal !== lastEmitted) {
+        lastEmitted = nextSignal;
+        onUpdate?.(input.value, code);
+      }
+    };
+
+    input.addEventListener('beforeinput', (event) => {
+      const type = String(event.inputType || '');
+      if (!type.startsWith('insert') || type === 'insertFromPaste') return;
+      const data = String(event.data || '');
+      if (!data) return;
+      const raw = String(input.value || '');
+      if (isInviteLinkInput(raw) || isInviteLinkInput(data)) return;
+      const start = typeof input.selectionStart === 'number' ? input.selectionStart : raw.length;
+      const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+      const remaining = normalizeInviteCode(raw.slice(0, start) + raw.slice(end));
+      if (remaining.length >= 6) {
+        event.preventDefault();
+      }
+    });
+
+    input.addEventListener('input', syncValue);
+    return {
+      sync() {
+        lastEmitted = String(input.value || '');
+      }
+    };
   }
 
   function inviteShareUrl(code) {
@@ -11774,8 +11823,9 @@
         renderEmptyPreview();
         return;
       }
-      if (rawVal.trim().length > 10 && input) {
-        input.value = formatInviteCode(code);
+      const formattedCode = formatInviteCode(code);
+      if (input && input.value !== formattedCode) {
+        input.value = formattedCode;
       }
       const seq = ++previewSeq;
       setCodeError('');
@@ -11874,16 +11924,13 @@
       onCancel?.();
     });
 
-    input?.addEventListener('input', () => {
-      const code = extractInviteCode(input.value);
-      if (input.value.length <= 7) {
-        input.value = formatInviteCode(code);
-      }
-      runPreview(input.value);
+    const codeCtrl = bindInviteCodeInput(input, {
+      onUpdate: (formattedVal) => runPreview(formattedVal)
     });
     input?.addEventListener('blur', () => {
       const code = extractInviteCode(input.value);
       if (code.length > 0) input.value = formatInviteCode(code);
+      codeCtrl?.sync();
       if (code.length > 0 && code.length < 6) {
         setCodeError('Enter all 6 characters of your group code.');
       }
@@ -11934,6 +11981,7 @@
 
     const seed = extractInviteCode(initialCode);
     if (input) input.value = seed ? formatInviteCode(seed) : '';
+    codeCtrl?.sync();
     setCodeError('');
     loadOwnPendingJoinRequests().catch(() => { });
     if (seed.length === 6) {
@@ -11947,6 +11995,7 @@
       setCode: (code) => {
         const clean = extractInviteCode(code);
         if (input) input.value = clean ? formatInviteCode(clean) : '';
+        codeCtrl?.sync();
         runPreview(clean);
       }
     };
@@ -12028,7 +12077,7 @@
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload, maybeShowRetentionReminder, openRetentionPolicyDialog, CURRENT_POLICY_VERSION, openPolicyDialog, hasAcceptedCurrentPolicy, maybeShowPolicyConsentModal,
     auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry, createRealtimeChannel,
-    canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, inviteShareUrl,
+    canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, bindInviteCodeInput, inviteShareUrl,
     setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
     generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
     get profile() { return currentProfile; }
