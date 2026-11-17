@@ -11474,3 +11474,30 @@ test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR I
   assert.match(css, /\.invite-code-card\s*\{/);
   assert.match(css, /\.invite-copy-link-full\s*\{/);
 });
+
+test('Reports and member statement CSV exports and Print/Save PDF support Android WebView and mobile browsers', () => {
+  const coreJs = read('js/core.js');
+  const reportsJs = read('js/reports.js');
+  const userJs = read('js/user.js');
+  const pluginJava = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
+
+  assert.match(coreJs, /async function downloadCsv\(/);
+  assert.match(coreJs, /async function printPage\(/);
+  assert.match(coreJs, /downloadFile, downloadCsv, printPage, openImageViewer/);
+  assert.match(coreJs, /\\uFEFF/);
+
+  assert.match(reportsJs, /Ipon\.downloadCsv\(csv,\s*`ipon-transactions-/);
+  assert.match(reportsJs, /Ipon\.downloadCsv\(csv,\s*`ipon-report-/);
+  assert.match(reportsJs, /Ipon\.printPage\(/);
+  assert.doesNotMatch(reportsJs, /URL\.createObjectURL/);
+  assert.doesNotMatch(reportsJs, /window\.print\(\)/);
+
+  assert.match(userJs, /Ipon\.downloadCsv\(csv,\s*`my-ipon-statement-/);
+  assert.match(userJs, /Ipon\.printPage\(/);
+  assert.doesNotMatch(userJs, /URL\.createObjectURL/);
+  assert.doesNotMatch(userJs, /window\.print\(\)/);
+
+  assert.match(pluginJava, /@PluginMethod[\s\S]*?public void printPage\(PluginCall call\)/);
+  assert.match(pluginJava, /PrintManager/);
+  assert.match(pluginJava, /createPrintDocumentAdapter/);
+});

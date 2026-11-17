@@ -240,7 +240,13 @@
     historyPage += button.dataset.page === 'next' ? 1 : -1;
     load().catch((error) => Ipon.showInlineError(body, error, load, 7));
   });
-  printStatementBtn?.addEventListener('click', () => window.print());
+  printStatementBtn?.addEventListener('click', async () => {
+    try {
+      await Ipon.printPage({ jobName: 'myIPON Member Statement' });
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    }
+  });
   exportStatementBtn?.addEventListener('click', async () => {
     if (!state.profile.member_id) return;
     Ipon.setBusy(exportStatementBtn, true, 'Exporting…');
@@ -265,11 +271,7 @@
       const csv = [['For month', 'Date contributed', 'Payment method', 'Amount', 'Status', 'Reference', 'Notes', 'Review / void note'], ...csvRows]
         .map((line) => line.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(','))
         .join('\n');
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-      link.download = `my-ipon-statement-${Ipon.isoDate()}.csv`;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      await Ipon.downloadCsv(csv, `my-ipon-statement-${Ipon.isoDate()}.csv`);
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {

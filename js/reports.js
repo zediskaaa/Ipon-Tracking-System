@@ -313,7 +313,7 @@
         ...expenses.data.map((row) => ['Expense', row.transaction_date, row.person_responsible, Ipon.paymentMethodMeta(row.payment_method).label, row.amount, row.category, row.description, row.reference_number, row.approval_status, row.review_note || row.void_reason || '', row.created_at])
       ].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
       const csv = [['Type', 'Activity date', 'Member or responsible person', 'Payment method', 'Amount', 'Category', 'Description', 'Reference', 'Status', 'Review or void reason', 'Recorded at'], ...rows].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
-      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-transactions-${targetYear === 'ALL' ? 'all' : targetYear}-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
+      await Ipon.downloadCsv(csv, `ipon-transactions-${targetYear === 'ALL' ? 'all' : targetYear}-${Ipon.isoDate()}.csv`);
       if (/^\d{4}$/.test(targetYear)) exportedArchiveYears.add(Number(targetYear));
       return true;
     } catch (error) {
@@ -457,13 +457,30 @@
   window.addEventListener('ipon:themechange', () => renderMonthly());
   window.addEventListener('beforeprint', () => chart?.resize(720, 120));
   window.addEventListener('afterprint', () => chart?.resize());
-  document.getElementById('print-report').addEventListener('click', () => { chart?.resize(720, 120); window.print(); setTimeout(() => chart?.resize(), 300); });
-  document.getElementById('export-csv').addEventListener('click', () => {
-    const selectedYear = yearFilter.value;
-    const monthly = (selectedYear === 'ALL' ? monthlyRows : monthlyRows.filter((row) => row.month.startsWith(selectedYear))).map((row) => ['Monthly', row.month, row.total_additions, row.total_deductions, row.total_expenses, row.net_change]);
-    const members = memberRows.map((row) => ['Member', row.member_name, row.required_amount, row.paid_amount, row.outstanding_amount, row.payment_status]);
-    const csv = [['Report type', 'Subject', 'Required/Additions', 'Confirmed/Deductions', 'Outstanding/Expenses', 'Status/Net'], ...monthly, ...members].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
-    const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `ipon-report-${selectedYear === 'ALL' ? 'all' : selectedYear}-${Ipon.isoDate()}.csv`; link.click(); URL.revokeObjectURL(link.href);
+  document.getElementById('print-report').addEventListener('click', async () => {
+    chart?.resize(720, 120);
+    try {
+      await Ipon.printPage({ jobName: `myIPON Report ${yearFilter.value === 'ALL' ? 'All Years' : yearFilter.value}` });
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      setTimeout(() => chart?.resize(), 300);
+    }
+  });
+  document.getElementById('export-csv').addEventListener('click', async (event) => {
+    const btn = event.currentTarget;
+    Ipon.setBusy(btn, true, 'Exporting…');
+    try {
+      const selectedYear = yearFilter.value;
+      const monthly = (selectedYear === 'ALL' ? monthlyRows : monthlyRows.filter((row) => row.month.startsWith(selectedYear))).map((row) => ['Monthly', row.month, row.total_additions, row.total_deductions, row.total_expenses, row.net_change]);
+      const members = memberRows.map((row) => ['Member', row.member_name, row.required_amount, row.paid_amount, row.outstanding_amount, row.payment_status]);
+      const csv = [['Report type', 'Subject', 'Required/Additions', 'Confirmed/Deductions', 'Outstanding/Expenses', 'Status/Net'], ...monthly, ...members].map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+      await Ipon.downloadCsv(csv, `ipon-report-${selectedYear === 'ALL' ? 'all' : selectedYear}-${Ipon.isoDate()}.csv`);
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(btn, false);
+    }
   });
   document.getElementById('export-transactions').addEventListener('click', (event) => {
     downloadYearTransactionsCsv(yearFilter.value, event.currentTarget);

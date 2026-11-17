@@ -8291,6 +8291,34 @@
     }
   }
 
+  async function downloadCsv(csvText, fileName = 'export.csv') {
+    const safeName = normalizeDownloadFileName(fileName, 'export.csv');
+    const content = `\uFEFF${String(csvText || '')}`;
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    if (typeof bgPlugin?.downloadFile === 'function') {
+      const dataUrl = await blobToDataUrl(blob);
+      return await downloadFile(dataUrl, safeName, { mimeType: 'text/csv' });
+    }
+    const blobUrl = URL.createObjectURL(blob);
+    try {
+      return await downloadFile(blobUrl, safeName, { mimeType: 'text/csv' });
+    } finally {
+      setTimeout(() => { try { URL.revokeObjectURL(blobUrl); } catch { } }, 2000);
+    }
+  }
+
+  async function printPage({ jobName = document.title || 'myIPON Report' } = {}) {
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    if (typeof bgPlugin?.printPage === 'function') {
+      return await bgPlugin.printPage({
+        jobName: normalizeDownloadFileName(jobName, 'myIPON Report')
+      });
+    }
+    window.print?.();
+    return { started: true };
+  }
+
   function openImageViewer(src, title = 'Attachment', subtitle = '', downloadName = '', opts = {}) {
     const raw = String(src || '').trim();
     const isSafeUrl = raw.startsWith('data:image/') || raw.startsWith('blob:') || /^https?:\/\//i.test(raw);
@@ -12730,7 +12758,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     setOnlineVisibility, syncMessagesBadges,
     updateLocalProfile(patch = {}) {

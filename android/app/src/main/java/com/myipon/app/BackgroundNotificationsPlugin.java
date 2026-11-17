@@ -2,6 +2,7 @@ package com.myipon.app;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -14,12 +15,16 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.os.PowerManager;
+import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintManager;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.webkit.MimeTypeMap;
 import android.webkit.URLUtil;
+import android.webkit.WebView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSArray;
@@ -336,6 +341,35 @@ public class BackgroundNotificationsPlugin extends Plugin {
         } catch (Throwable err) {
             call.reject(err.getMessage() != null ? err.getMessage() : "Could not download file.");
         }
+    }
+
+    @PluginMethod
+    public void printPage(PluginCall call) {
+        final String jobName = call.getString("jobName", "myIPON Report");
+        final Activity activity = getActivity();
+        final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        if (activity == null || webView == null) {
+            call.reject("Print view is unavailable.");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                PrintManager printManager = (PrintManager) activity.getSystemService(Context.PRINT_SERVICE);
+                if (printManager == null) {
+                    call.reject("Android Print service is unavailable.");
+                    return;
+                }
+                String cleanJob = TextUtils.isEmpty(jobName) ? "myIPON Report" : jobName.trim();
+                PrintDocumentAdapter adapter = webView.createPrintDocumentAdapter(cleanJob);
+                printManager.print(cleanJob, adapter, new PrintAttributes.Builder().build());
+                JSObject result = new JSObject();
+                result.put("started", true);
+                result.put("jobName", cleanJob);
+                call.resolve(result);
+            } catch (Throwable err) {
+                call.reject(err.getMessage() != null ? err.getMessage() : "Could not open print dialog.");
+            }
+        });
     }
 
     static String sanitizeDownloadName(String requestedName, String rawUrl, String mimeType) {
