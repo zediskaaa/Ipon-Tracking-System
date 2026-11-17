@@ -44,6 +44,18 @@
   const groupBarEl = document.getElementById('members-group-bar');
   const groupSwitcherWrap = document.getElementById('members-group-switcher-wrap');
   const groupSelect = document.getElementById('members-group-select');
+  const permissionsPanel = document.getElementById('member-permissions-panel');
+  const permissionsCount = document.getElementById('member-permissions-count');
+  const permissionsList = document.getElementById('member-permissions-list');
+  const permissionsPager = document.getElementById('member-permissions-pager');
+  const permissionsSearch = document.getElementById('member-permissions-search');
+  const permissionsRoleFilter = document.getElementById('member-permissions-role-filter');
+  const permDialog = document.getElementById('member-permissions-dialog');
+  const permForm = document.getElementById('member-perm-form');
+  const permIdentity = document.getElementById('member-perm-modal-identity');
+  const permPresetsWrap = document.getElementById('member-perm-modal-presets');
+  const permGroupsWrap = document.getElementById('member-perm-modal-groups');
+  const permSaveBtn = document.getElementById('save-member-perm-btn');
   const contactErrorMessage = 'Enter 11 digits starting with 09, or +63 followed by 10 digits starting with 9.';
   const nameFields = [
     [firstName, document.getElementById('first-name-error'), true],
@@ -53,13 +65,18 @@
   let members = [];
   let accountsByMember = new Map();
   let membersWithContributions = new Set();
+  let memberPermissions = [];
   let contributionSettings = [];
   let pendingDeleteMember = null;
   let pendingDeleteReason = '';
   let monthlyAmountTouched = false;
   let currentGroupId = state.profile?.group_id || '';
   const pageSize = 25;
+  const permPageSize = 10;
   let memberPage = 0;
+  let permPage = 0;
+  let activePermUserId = '';
+  let activePermDraft = null;
   let searchTimer;
   Ipon.bindPasswordStrength(passwordInput, () => [firstName.value, middleName.value, lastName.value, emailInput.value]);
   Ipon.bindPasswordStrength(accountForm.elements.password, () => {
@@ -100,6 +117,7 @@
     Ipon.syncWorkspaceMode?.(isSolo ? 'SOLO' : 'GROUP');
     const addMemberBtn = document.getElementById('add-member');
     if (addMemberBtn) addMemberBtn.hidden = isSolo;
+    if (permissionsPanel) permissionsPanel.hidden = isSolo;
     const hasMultipleGroups = list.length > 1;
     if (groupBarEl) groupBarEl.hidden = !hasMultipleGroups;
     if (groupSwitcherWrap && groupSelect) {
@@ -143,8 +161,247 @@
       <td><strong>${Ipon.escapeHtml(member.full_name)}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.payoutSummaryChip(member, { compact: true, emptyText: 'Not set' })}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
       <td class="amount-cell">${Ipon.money(member.monthly_contribution_amount)}</td><td><div class="member-state-stack"><span class="status status-${statusMeta.tone}">${statusMeta.label}</span><small class="field-help">${Ipon.escapeHtml(statusMeta.hint)}</small></div></td>
       <td>${accountMarkup}</td>
-      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>${canDelete ? `<button class="icon-action icon-action-danger" data-action="delete" data-id="${member.id}">Delete</button>` : ''}</div></td></tr>`;
+      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${account?.id && account.role !== 'ADMIN' ? `<button class="icon-action" data-action="permissions" data-id="${member.id}">Permissions</button>` : ''}${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>${canDelete ? `<button class="icon-action icon-action-danger" data-action="delete" data-id="${member.id}">Delete</button>` : ''}</div></td></tr>`;
     }).join('') : '<tr><td colspan="8" class="empty-state">No matching members.</td></tr>';
+  }
+
+  function permissionPresetMatch(u) {
+    const isStd = u.can_edit_own_entries
+      && u.require_edit_approval
+      && u.require_add_approval
+      && u.can_record_expenses === (u.role === 'TREASURER')
+      && u.require_expense_approval
+      && u.can_record_withdrawals === (u.role === 'TREASURER')
+      && u.require_withdrawal_approval;
+    if (isStd) return 'standard';
+    const isTrusted = u.can_edit_own_entries
+      && !u.require_edit_approval
+      && !u.require_add_approval
+      && (!u.can_record_expenses || !u.require_expense_approval)
+      && (!u.can_record_withdrawals || !u.require_withdrawal_approval);
+    if (isTrusted) return 'trusted';
+    if (!u.can_edit_own_entries && u.require_add_approval && !u.can_record_expenses && !u.can_record_withdrawals) {
+      return 'restricted';
+    }
+    return 'custom';
+  }
+
+  function buildPresetPayload(mode, target) {
+    const isTreasurer = String(target?.role || '').toUpperCase() === 'TREASURER';
+    if (mode === 'trusted') {
+      return {
+        can_edit_own_entries: true,
+        require_edit_approval: false,
+        require_add_approval: false,
+        can_record_expenses: Boolean(target?.can_record_expenses || isTreasurer),
+        require_expense_approval: false,
+        can_record_withdrawals: Boolean(target?.can_record_withdrawals || isTreasurer),
+        require_withdrawal_approval: false
+      };
+    }
+    if (mode === 'restricted') {
+      return {
+        can_edit_own_entries: false,
+        require_edit_approval: true,
+        require_add_approval: true,
+        can_record_expenses: false,
+        require_expense_approval: true,
+        can_record_withdrawals: false,
+        require_withdrawal_approval: true
+      };
+    }
+    return {
+      can_edit_own_entries: true,
+      require_edit_approval: true,
+      require_add_approval: true,
+      can_record_expenses: isTreasurer,
+      require_expense_approval: true,
+      can_record_withdrawals: isTreasurer,
+      require_withdrawal_approval: true
+    };
+  }
+
+  function permissionProfileMeta(preset) {
+    if (preset === 'trusted') return { label: 'Trusted (Instant)', tone: 'active' };
+    if (preset === 'restricted') return { label: 'Restricted', tone: 'inactive' };
+    if (preset === 'custom') return { label: 'Custom', tone: 'pending' };
+    return { label: 'Standard', tone: 'confirmed' };
+  }
+
+  function renderPermissionRuleChips(u) {
+    const chips = [
+      !u.can_edit_own_entries
+        ? { text: 'Calendar: Locked', tone: 'is-off' }
+        : (u.require_edit_approval ? { text: 'Calendar: Approval', tone: 'is-approval' } : { text: 'Calendar: Instant', tone: 'is-direct' }),
+      u.require_add_approval
+        ? { text: 'Additions: Approval', tone: 'is-approval' }
+        : { text: 'Additions: Instant', tone: 'is-direct' },
+      !u.can_record_expenses
+        ? { text: 'Expenses: Off', tone: 'is-off' }
+        : (u.require_expense_approval ? { text: 'Expenses: Approval', tone: 'is-approval' } : { text: 'Expenses: Instant', tone: 'is-direct' }),
+      !u.can_record_withdrawals
+        ? { text: 'Deductions: Off', tone: 'is-off' }
+        : (u.require_withdrawal_approval ? { text: 'Deductions: Approval', tone: 'is-approval' } : { text: 'Deductions: Instant', tone: 'is-direct' })
+    ];
+    return `<div class="member-perm-rule-chips">${chips.map((c) => `<span class="member-perm-chip ${c.tone}">${Ipon.escapeHtml(c.text)}</span>`).join('')}</div>`;
+  }
+
+  function permSwitchMarkup(userId, key, checked, label, hint, { disabled = false } = {}) {
+    const id = `perm-modal-${userId}-${key}`;
+    return `
+      <label class="member-perm-switch ${disabled ? 'is-disabled' : ''}" for="${id}">
+        <span class="member-perm-switch-copy">
+          <strong>${Ipon.escapeHtml(label)}</strong>
+          <small>${Ipon.escapeHtml(hint)}</small>
+        </span>
+        <input class="toggle-switch-input" id="${id}" type="checkbox" role="switch" data-perm-toggle="${key}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+      </label>`;
+  }
+
+  function renderPermissionModalControls() {
+    if (!activePermDraft || !permPresetsWrap || !permGroupsWrap) return;
+    const preset = permissionPresetMatch(activePermDraft);
+    permPresetsWrap.querySelectorAll('[data-perm-preset]').forEach((btn) => {
+      btn.setAttribute('aria-pressed', btn.dataset.permPreset === preset ? 'true' : 'false');
+    });
+    const uid = activePermDraft.user_id || activePermUserId || 'member';
+    permGroupsWrap.innerHTML = `
+      <div class="member-perm-group">
+        <span class="member-perm-group-title">Calendar &amp; Additions</span>
+        ${permSwitchMarkup(uid, 'can_edit_own_entries', activePermDraft.can_edit_own_entries, 'Edit calendar entries', 'Allow editing own entries & submitting change reasons')}
+        ${permSwitchMarkup(uid, 'require_edit_approval', activePermDraft.require_edit_approval, 'Edits require approval', activePermDraft.can_edit_own_entries ? 'Off = calendar edits apply immediately' : 'Enable calendar editing first', { disabled: !activePermDraft.can_edit_own_entries })}
+        ${permSwitchMarkup(uid, 'require_add_approval', activePermDraft.require_add_approval, 'Additions require approval', 'Off = new savings additions confirm right away')}
+      </div>
+      <div class="member-perm-group">
+        <span class="member-perm-group-title">Expenses &amp; Deductions</span>
+        ${permSwitchMarkup(uid, 'can_record_expenses', activePermDraft.can_record_expenses, 'Allow recording expenses', 'Can open and submit workspace expense entries')}
+        ${permSwitchMarkup(uid, 'require_expense_approval', activePermDraft.require_expense_approval, 'Expenses require approval', activePermDraft.can_record_expenses ? 'Off = expenses confirm immediately' : 'Enable recording expenses first', { disabled: !activePermDraft.can_record_expenses })}
+        ${permSwitchMarkup(uid, 'can_record_withdrawals', activePermDraft.can_record_withdrawals, 'Allow recording deductions', 'Can open and submit fund deduction entries')}
+        ${permSwitchMarkup(uid, 'require_withdrawal_approval', activePermDraft.require_withdrawal_approval, 'Deductions require approval', activePermDraft.can_record_withdrawals ? 'Off = deductions confirm immediately' : 'Enable recording deductions first', { disabled: !activePermDraft.can_record_withdrawals })}
+      </div>`;
+  }
+
+  function openMemberPermissionsModal(userId) {
+    if (!permDialog || !permForm) return;
+    const target = memberPermissions.find((item) => String(item.user_id) === String(userId));
+    if (!target) {
+      Ipon.toast('Permissions are available once the member has a sign-in account in this group.', 'error');
+      return;
+    }
+    activePermUserId = String(target.user_id);
+    activePermDraft = { ...target };
+    permForm.elements.user_id.value = activePermUserId;
+    const roleCls = target.role === 'TREASURER' ? 'status-pending' : 'status-confirmed';
+    if (permIdentity) {
+      permIdentity.innerHTML = `
+        <div class="member-perm-identity">
+          ${Ipon.avatarMarkup(target.avatar_url || '', target.full_name || 'Member', 'avatar-md')}
+          <div class="member-perm-identity-copy">
+            <div class="member-perm-name-row">
+              <strong>${Ipon.escapeHtml(target.full_name || 'Member')}</strong>
+              <span class="status ${roleCls}">${Ipon.escapeHtml(target.role)}</span>
+            </div>
+            <small>${Ipon.escapeHtml(target.email || '')}${target.status === 'PENDING' ? ' · Pending login' : ''}</small>
+          </div>
+        </div>`;
+      Ipon.bindAvatarFallbacks(permIdentity);
+    }
+    renderPermissionModalControls();
+    if (!permDialog.open) permDialog.showModal();
+    document.getElementById('close-member-perm-dialog')?.focus();
+  }
+
+  function renderPermissions() {
+    if (!permissionsList || !permissionsCount) return;
+    const configurable = (memberPermissions || []).filter((u) => String(u.role || '').toUpperCase() !== 'ADMIN');
+    const q = String(permissionsSearch?.value || '').trim().toLowerCase();
+    const roleFilter = String(permissionsRoleFilter?.value || '').trim().toUpperCase();
+    const filtered = configurable.filter((u) => {
+      if (roleFilter && String(u.role || '').toUpperCase() !== roleFilter) return false;
+      if (!q) return true;
+      return `${u.full_name || ''} ${u.email || ''}`.toLowerCase().includes(q);
+    });
+    const instantCount = configurable.filter((u) => !u.require_add_approval || (u.can_edit_own_entries && !u.require_edit_approval)).length;
+    permissionsCount.textContent = configurable.length
+      ? `${configurable.length} account${configurable.length === 1 ? '' : 's'} · ${instantCount} instant-approved · Click Edit permissions on any row to adjust.`
+      : 'No Member or Treasurer accounts linked yet. Create or invite an account above to configure permissions.';
+    if (!filtered.length) {
+      if (permissionsPager) permissionsPager.hidden = true;
+      permissionsList.innerHTML = configurable.length
+        ? '<tr><td colspan="5" class="empty-state">No member permissions match that search or role filter.</td></tr>'
+        : '<tr><td colspan="5" class="empty-state">Create a sign-in account for a member or invite via group link/QR to customize permissions here.</td></tr>';
+      return;
+    }
+    const totalPages = Math.max(1, Math.ceil(filtered.length / permPageSize));
+    if (permPage >= totalPages) permPage = totalPages - 1;
+    if (permPage < 0) permPage = 0;
+    const slice = filtered.slice(permPage * permPageSize, (permPage + 1) * permPageSize);
+    permissionsList.innerHTML = slice.map((u) => {
+      const preset = permissionPresetMatch(u);
+      const profileMeta = permissionProfileMeta(preset);
+      const roleCls = u.role === 'TREASURER' ? 'status-pending' : 'status-confirmed';
+      return `
+        <tr data-perm-user="${Ipon.escapeHtml(u.user_id)}">
+          <td data-label="Member">
+            <div class="member-perm-user-cell">
+              ${Ipon.avatarMarkup(u.avatar_url || '', u.full_name || 'Member', 'avatar-sm')}
+              <div class="member-perm-user-meta">
+                <strong>${Ipon.escapeHtml(u.full_name || 'Member')}</strong>
+                <small class="field-help">${Ipon.escapeHtml(u.email || '')}${u.status === 'PENDING' ? ' · Pending login' : ''}</small>
+              </div>
+            </div>
+          </td>
+          <td data-label="Role"><span class="status ${roleCls}">${Ipon.escapeHtml(u.role)}</span></td>
+          <td data-label="Profile"><span class="status status-${profileMeta.tone}">${Ipon.escapeHtml(profileMeta.label)}</span></td>
+          <td data-label="Active rules">${renderPermissionRuleChips(u)}</td>
+          <td data-label="Actions">
+            <div class="table-actions">
+              <button class="icon-action" type="button" data-action="edit-permissions" data-user-id="${Ipon.escapeHtml(u.user_id)}">Edit permissions</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+    Ipon.bindAvatarFallbacks(permissionsList);
+    if (permissionsPager) {
+      permissionsPager.hidden = totalPages <= 1;
+      const prevBtn = permissionsPager.querySelector('[data-page="previous"]');
+      const nextBtn = permissionsPager.querySelector('[data-page="next"]');
+      const labelEl = permissionsPager.querySelector('span');
+      if (prevBtn) prevBtn.disabled = permPage <= 0;
+      if (nextBtn) nextBtn.disabled = permPage + 1 >= totalPages;
+      if (labelEl) labelEl.textContent = `Page ${permPage + 1} of ${totalPages}`;
+    }
+  }
+
+  async function saveUserPermissions(userId, nextPatch, busyBtn) {
+    const existing = memberPermissions.find((item) => String(item.user_id) === String(userId));
+    if (!existing) return false;
+    const merged = { ...existing, ...nextPatch };
+    if (busyBtn) Ipon.setBusy(busyBtn, true, 'Saving…');
+    try {
+      const updated = await Ipon.rpc('update_member_permissions', {
+        p_user_id: userId,
+        p_can_edit_own_entries: Boolean(merged.can_edit_own_entries),
+        p_require_edit_approval: Boolean(merged.require_edit_approval),
+        p_require_add_approval: Boolean(merged.require_add_approval),
+        p_can_record_expenses: Boolean(merged.can_record_expenses),
+        p_require_expense_approval: Boolean(merged.require_expense_approval),
+        p_can_record_withdrawals: Boolean(merged.can_record_withdrawals),
+        p_require_withdrawal_approval: Boolean(merged.require_withdrawal_approval)
+      });
+      memberPermissions = memberPermissions.map((item) => (
+        String(item.user_id) === String(userId) ? { ...item, ...merged, ...(updated || {}) } : item
+      ));
+      renderPermissions();
+      Ipon.toast(`Permissions updated for ${existing.full_name || 'member'}.`);
+      return true;
+    } catch (error) {
+      renderPermissions();
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+      return false;
+    } finally {
+      if (busyBtn) Ipon.setBusy(busyBtn, false);
+    }
   }
   async function load() {
     let query = Ipon.client.from('members').select('*', { count: 'exact' }).is('deleted_at', null);
@@ -157,11 +414,12 @@
     } else if (statusFilter.value === 'INACTIVE') {
       query = query.eq('status', 'INACTIVE');
     }
-    const [{ data, count, error }, summaryRes, accessRows, groups] = await Promise.all([
+    const [{ data, count, error }, summaryRes, accessRows, groups, permRows] = await Promise.all([
       query.order('full_name').range(memberPage * pageSize, (memberPage + 1) * pageSize - 1),
       Ipon.client.from('members').select('status,activation_status').is('deleted_at', null),
       Ipon.rpc('get_group_access_list'),
-      Ipon.rpc('get_my_groups')
+      Ipon.rpc('get_my_groups'),
+      Ipon.rpc('get_member_permissions_list').catch(() => [])
     ]);
     if (error) throw error;
     if (summaryRes.error) throw summaryRes.error;
@@ -170,6 +428,7 @@
       members = [];
       accountsByMember = new Map();
       membersWithContributions = new Set();
+      memberPermissions = [];
       document.getElementById('member-count').textContent = 'Solo tracker (personal savings)';
       pager.querySelector('span').textContent = 'Page 1 of 1';
       pager.querySelector('[data-page="previous"]').disabled = true;
@@ -183,7 +442,8 @@
       : { data: [], error: null };
     if (contribResult.error) throw contribResult.error;
     members = data || [];
-    accountsByMember = new Map((Array.isArray(accessRows) ? accessRows : []).filter((row) => row.member_id).map((row) => [row.member_id, { id: row.user_id, email: row.email, status: row.status, member_id: row.member_id }]));
+    memberPermissions = Array.isArray(permRows) ? permRows : [];
+    accountsByMember = new Map((Array.isArray(accessRows) ? accessRows : []).filter((row) => row.member_id).map((row) => [row.member_id, { id: row.user_id, email: row.email, role: row.role, status: row.status, member_id: row.member_id }]));
     membersWithContributions = new Set((contribResult.data || []).map((row) => row.member_id));
     const summaryRows = summaryRes.data || [];
     const officialActiveCount = summaryRows.filter((row) => row.status === 'ACTIVE' && row.activation_status === 'ACTIVE').length;
@@ -201,6 +461,7 @@
     pager.querySelector('[data-page="previous"]').disabled = memberPage === 0;
     pager.querySelector('[data-page="next"]').disabled = memberPage >= pages - 1;
     render();
+    renderPermissions();
   }
   async function refresh() {
     try { await load(); } catch (error) { Ipon.showInlineError(tbody, error, refresh, 8); }
@@ -333,6 +594,10 @@
       const accepted = await Ipon.confirmAction({ title: 'Reactivate member?', message: `${member.full_name} will be included when new contribution periods are generated.`, acceptLabel: 'Reactivate' });
       if (!accepted) return;
       try { await Ipon.rpc('reactivate_member', { p_member_id: member.id }); Ipon.toast('Member reactivated.'); await load(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
+    } else if (button.dataset.action === 'permissions') {
+      const account = accountsByMember.get(member.id);
+      if (!account?.id) return;
+      openMemberPermissionsModal(account.id);
     } else if (button.dataset.action === 'delete') {
       openDeleteDialog(member);
     }
@@ -533,6 +798,48 @@
     finally { Ipon.setBusy(button, false); }
   });
   document.getElementById('close-member-history-dialog').addEventListener('click', () => historyDialog.close());
+  permissionsSearch?.addEventListener('input', () => { permPage = 0; renderPermissions(); });
+  permissionsRoleFilter?.addEventListener('change', () => { permPage = 0; renderPermissions(); });
+  permissionsPager?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-page]');
+    if (!button || button.disabled) return;
+    permPage += button.dataset.page === 'next' ? 1 : -1;
+    renderPermissions();
+  });
+  permissionsList?.addEventListener('click', (event) => {
+    const editBtn = event.target.closest('[data-action="edit-permissions"]');
+    if (!editBtn) return;
+    openMemberPermissionsModal(editBtn.dataset.userId);
+  });
+  permGroupsWrap?.addEventListener('change', (event) => {
+    const toggle = event.target.closest('[data-perm-toggle]');
+    if (!toggle || !activePermDraft) return;
+    activePermDraft = { ...activePermDraft, [toggle.dataset.permToggle]: toggle.checked };
+    renderPermissionModalControls();
+  });
+  permPresetsWrap?.addEventListener('click', (event) => {
+    const presetBtn = event.target.closest('[data-perm-preset]');
+    if (!presetBtn || !activePermDraft) return;
+    const mode = presetBtn.dataset.permPreset;
+    activePermDraft = { ...activePermDraft, ...buildPresetPayload(mode, activePermDraft) };
+    renderPermissionModalControls();
+  });
+  permForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!activePermUserId || !activePermDraft) return;
+    const ok = await saveUserPermissions(activePermUserId, activePermDraft, permSaveBtn);
+    if (ok) permDialog?.close();
+  });
+  document.getElementById('close-member-perm-dialog')?.addEventListener('click', () => permDialog?.close());
+  document.getElementById('cancel-member-perm-dialog')?.addEventListener('click', () => permDialog?.close());
+  permDialog?.addEventListener('click', (event) => {
+    if (event.target === permDialog) permDialog.close();
+  });
+  permDialog?.addEventListener('close', () => {
+    activePermUserId = '';
+    activePermDraft = null;
+  });
+
   search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { memberPage = 0; refresh(); }, 250); });
   statusFilter.addEventListener('change', () => { memberPage = 0; refresh(); });
   groupSelect?.addEventListener('change', async () => {
@@ -542,6 +849,7 @@
     try {
       await Ipon.switchActiveGroup(nextGroupId);
       memberPage = 0;
+      permPage = 0;
       await Promise.all([loadContributionSettings(), load(), ...(binDialog.open ? [loadBin()] : [])]);
       Ipon.toast('Switched active savings group.');
     } catch (error) {

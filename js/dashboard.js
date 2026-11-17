@@ -6,7 +6,10 @@
   let state;
   let currentActivities = [];
   let pendingItemsById = new Map();
+  let currentChangeRequests = [];
+  let pendingChangesByRecord = new Map();
   let activeDate = null;
+  let openModalDate = null;
   let hasSnapshot = false;
   const dataStatus = document.getElementById('dashboard-data-status');
   const detailPanel = document.getElementById('day-detail-panel');
@@ -14,6 +17,7 @@
   const dayModalTitle = document.getElementById('day-modal-title');
   const dayModalSubtitle = document.getElementById('day-modal-subtitle');
   const dayModalBody = document.getElementById('day-modal-body');
+  const changeRequestsWrap = document.getElementById('dashboard-change-requests');
   const calendarCard = document.querySelector('.calendar-card');
   const jumpDialog = document.getElementById('calendar-jump-dialog');
   const jumpMonth = document.getElementById('calendar-jump-month');
@@ -447,7 +451,8 @@
           statuses: new Set(),
           paymentMethods: new Set(),
           notes: [],
-          reviewNotes: []
+          reviewNotes: [],
+          entries: []
         });
       }
       const entry = byContributor.get(key);
@@ -458,6 +463,7 @@
       entry.paymentMethods.add(Ipon.normalizePaymentMethod(activity.payment_method));
       if (activity.notes) entry.notes.push(activity.notes);
       if (activity.review_note) entry.reviewNotes.push(activity.review_note);
+      entry.entries.push(activity);
     });
     return [...byContributor.values()].sort((a, b) => b.totalAmount - a.totalAmount);
   }
@@ -500,8 +506,10 @@
     });
     Ipon.bindAvatarFallbacks(calendarCard);
   }
-  function renderPending(items, count = items.length, total = items.reduce((sum, item) => sum + Number(item.amount), 0)) {
+  function renderPending(items, count = items.length, total = items.reduce((sum, item) => sum + Number(item.amount), 0), changeRequests = []) {
     pendingItemsById = new Map((items || []).filter((item) => item?.id).map((item) => [item.id, item]));
+    currentChangeRequests = Array.isArray(changeRequests) ? changeRequests : [];
+    pendingChangesByRecord = new Map(currentChangeRequests.map((cr) => [`${cr.record_type}:${cr.record_id}`, cr]));
     const buttons = [...document.querySelectorAll('.review-item')];
     buttons.forEach((button, index) => {
       const item = items[index];
@@ -517,7 +525,41 @@
       button.querySelector('small').textContent = item.type === 'contribution' ? 'Addition' : item.type === 'withdrawal' ? 'Deduction' : 'Expense';
       button.querySelector('strong').textContent = Ipon.money(item.amount);
     });
-    const summary = document.querySelector('.review-summary'); summary.querySelector('em').textContent = `${count} item${count === 1 ? '' : 's'} for review`; summary.querySelector('strong').textContent = Ipon.money(total);
+    if (changeRequestsWrap) {
+      changeRequestsWrap.hidden = currentChangeRequests.length === 0;
+      if (currentChangeRequests.length) {
+        const canReviewCr = state?.profile?.role === 'ADMIN';
+        changeRequestsWrap.innerHTML = `
+          <div class="review-cr-head">
+            <strong>Edit requests</strong>
+            <span class="status status-pending">${currentChangeRequests.length} pending</span>
+          </div>
+          <div class="review-cr-list">
+            ${currentChangeRequests.slice(0, 4).map((cr) => {
+              const typeShort = cr.record_type === 'withdrawal' ? 'Deduct' : cr.record_type === 'expense' ? 'Expense' : 'Add';
+              const isOwn = String(cr.requested_by || '') === String(state?.profile?.id || '');
+              const disabled = !(canReviewCr || isOwn);
+              return `
+                <button class="review-cr-item" type="button" data-open-cr="${Ipon.escapeHtml(cr.id)}" ${disabled ? 'disabled' : ''}>
+                  <span class="review-cr-copy">
+                    <b>${Ipon.escapeHtml(cr.requested_by_name || cr.subject_name || 'Member')} · ${Ipon.escapeHtml(typeShort)}</b>
+                    <small>${Ipon.escapeHtml(Ipon.money(cr.current_amount))} → ${Ipon.escapeHtml(Ipon.money(cr.proposed_amount))} · ${Ipon.escapeHtml(Ipon.paymentMethodMeta(cr.proposed_payment_method).label)}</small>
+                    <small class="review-cr-reason">“${Ipon.escapeHtml(cr.reason || '')}”</small>
+                  </span>
+                  <span class="review-cr-cta">${canReviewCr ? 'Review' : isOwn ? 'Open' : 'Pending'}</span>
+                </button>`;
+            }).join('')}
+          </div>`;
+      } else {
+        changeRequestsWrap.replaceChildren();
+      }
+    }
+    const summary = document.querySelector('.review-summary');
+    const crCount = currentChangeRequests.length;
+    summary.querySelector('em').textContent = crCount > 0
+      ? `${count} entry · ${crCount} edit request${crCount === 1 ? '' : 's'}`
+      : `${count} item${count === 1 ? '' : 's'} for review`;
+    summary.querySelector('strong').textContent = Ipon.money(total);
     if (bulkConfirmBtn) {
       const canBulk = state?.profile?.role === 'ADMIN' && ((items || []).some((item) => item.type === 'contribution') || count > (items || []).length);
       bulkConfirmBtn.hidden = !canBulk;
@@ -526,7 +568,7 @@
   async function getPending() {
     const { data, error } = await Ipon.client.rpc('get_pending_review_summary');
     if (error) throw error;
-    return data || { count: 0, amount: 0, items: [] };
+    return data || { count: 0, amount: 0, items: [], change_requests: [] };
   }
   function renderEmptySnapshot() {
     const total = document.querySelector('.tracked-total');
@@ -539,7 +581,7 @@
     updateDashboardGoalProgress(0);
     renderGoalOptions([]);
     renderCalendar([]);
-    renderPending([]);
+    renderPending([], 0, 0, []);
     if (walletStrip) walletStrip.hidden = true;
     announcements?.clear();
   }
@@ -595,7 +637,7 @@
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { renderEmptySnapshot(); return; }
     try {
-      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult, groupsResult, groupProfilesResult, allGoalsResult, walletResult] = await Promise.all([
+      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult, groupsResult, groupProfilesResult, allGoalsResult, walletResult, refreshedPerms] = await Promise.all([
         Ipon.client.rpc('get_savings_summary'),
         Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'),
         getPending(),
@@ -610,6 +652,7 @@
         )),
         Ipon.client.from('savings_goals').select('id,title,target_amount,target_date').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.client.rpc('get_wallet_reconciliation'),
+        Ipon.refreshMyPermissions?.().catch(() => null),
         announcements ? announcements.load().catch((err) => console.warn('Announcement load error:', err)) : Promise.resolve()
       ]);
       const normalizedGroups = Array.isArray(groupsResult) ? groupsResult : [];
@@ -624,6 +667,7 @@
         state.profile.member_id = null;
         state.profile.workspace_mode = null;
       }
+      if (refreshedPerms) state.profile.permissions = refreshedPerms;
       if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
       if (!summaryResult.data && (state.profile?.group_id || currentGroup)) {
         throw new Error('Group savings summary is currently unavailable.');
@@ -662,7 +706,11 @@
       populateQuickRecordMembers(memberResult.data || []);
       updateDashboardGoalProgress(summary.tracked_savings ?? 0);
       renderWalletStrip(walletResult?.error ? null : walletResult?.data);
-      renderCalendar(calendarResult.data || []); renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0));
+      renderCalendar(calendarResult.data || []);
+      renderPending(pending.items || [], Number(pending.count || 0), Number(pending.amount || 0), pending.change_requests || []);
+      if (dayModal?.open && openModalDate) {
+        openDayModal(openModalDate);
+      }
       hasSnapshot = true; dataStatus.hidden = true;
     } catch (error) {
       if (!hasSnapshot) {
@@ -788,10 +836,59 @@
     detailPanel.style.top = `${Math.max(12, y)}px`;
   }
 
+  function activityRecordType(activity) {
+    if (activity?.activity_type === 'DEDUCTION') return 'withdrawal';
+    if (activity?.activity_type === 'EXPENSE') return 'expense';
+    return 'contribution';
+  }
+
+  function canEditCalendarEntry(activity) {
+    if (!activity || !['CONFIRMED', 'PENDING'].includes(activity.approval_status)) return false;
+    const role = String(state?.profile?.role || 'MEMBER').toUpperCase();
+    if (role === 'ADMIN') return true;
+    const perms = state?.profile?.permissions || Ipon.defaultPermissionsForRole(role);
+    if (perms.can_edit_own_entries === false) return false;
+    const actType = activityRecordType(activity);
+    const uid = String(state?.profile?.id || '');
+    const ownMemberId = String(state?.profile?.member_id || '');
+    if (uid && String(activity.submitted_by || '') === uid) return true;
+    if (actType === 'contribution' && ownMemberId && String(activity.subject_member_id || '') === ownMemberId) return true;
+    return false;
+  }
+
+  function pendingEditChipMarkup(activity) {
+    const recType = activityRecordType(activity);
+    const cr = pendingChangesByRecord.get(`${recType}:${activity.id}`);
+    if (!cr) return '';
+    const isAdmin = String(state?.profile?.role || '').toUpperCase() === 'ADMIN';
+    const isOwn = String(cr.requested_by || '') === String(state?.profile?.id || '');
+    const methodLabel = Ipon.paymentMethodMeta(cr.proposed_payment_method).label;
+    const btn = isAdmin
+      ? `<button class="button button-primary button-xs" type="button" data-review-cr="${Ipon.escapeHtml(cr.id)}">Review change</button>`
+      : isOwn
+        ? `<button class="button button-secondary button-xs" type="button" data-review-cr="${Ipon.escapeHtml(cr.id)}">View / Withdraw</button>`
+        : '<span class="status status-pending">Change requested</span>';
+    return `
+      <div class="day-entry-pending-strip">
+        <div class="day-entry-pending-copy">
+          <strong>Change requested: ${Ipon.escapeHtml(Ipon.money(cr.current_amount))} → ${Ipon.escapeHtml(Ipon.money(cr.proposed_amount))} · ${Ipon.escapeHtml(methodLabel)}</strong>
+          <small>Reason: “${Ipon.escapeHtml(cr.reason || '')}”</small>
+        </div>
+        ${btn}
+      </div>`;
+  }
+
+  function editEntryButtonMarkup(activity) {
+    const recType = activityRecordType(activity);
+    if (pendingChangesByRecord.has(`${recType}:${activity.id}`) || !canEditCalendarEntry(activity)) return '';
+    return `<button class="day-entry-edit-btn" type="button" data-edit-record-type="${recType}" data-edit-record-id="${Ipon.escapeHtml(activity.id)}" aria-label="Edit entry amount or payment method"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg><span>Edit</span></button>`;
+  }
+
   function openDayModal(date) {
     if (!dayModal) return;
     detailPanel.hidden = true;
     activeDate = null;
+    openModalDate = date;
     const items = currentActivities.filter((activity) => activity.activity_date === date);
     const contributors = aggregateDayContributors(items);
     const others = items.filter((activity) => activity.activity_type !== 'ADDITION');
@@ -807,20 +904,49 @@
         <h3>Contributors (${contributors.length})</h3>
         <div class="day-contributor-list">
           ${contributors.map((person) => {
+            const entries = Array.isArray(person.entries) ? person.entries : [];
+            const singleEntry = entries.length === 1 ? entries[0] : null;
             const statuses = [...person.statuses].map((s) => s.charAt(0) + s.slice(1).toLowerCase()).join(', ');
             const methodBadges = [...person.paymentMethods].map((pm) => Ipon.paymentMethodBadge(pm)).join('');
             const notes = person.notes.length ? `<p class="day-contributor-notes">${Ipon.escapeHtml(person.notes.join(' · '))}</p>` : '';
             const reviewNotes = person.reviewNotes.length ? `<small class="record-reason-note is-confirmed">Review note: ${Ipon.escapeHtml(person.reviewNotes.join(' · '))}</small>` : '';
+            const singleEditBtn = singleEntry ? editEntryButtonMarkup(singleEntry) : '';
+            const singlePendingStrip = singleEntry ? pendingEditChipMarkup(singleEntry) : '';
+            const multiListHtml = !singleEntry && entries.length > 1 ? `
+              <div class="day-entry-sublist">
+                ${entries.map((entry) => {
+                  const stLabel = entry.approval_status ? (entry.approval_status.charAt(0) + entry.approval_status.slice(1).toLowerCase()) : 'Confirmed';
+                  const subEdit = editEntryButtonMarkup(entry);
+                  const subPending = pendingEditChipMarkup(entry);
+                  return `<div class="day-entry-subrow">
+                    <div class="day-entry-subrow-main">
+                      <div class="day-entry-subrow-meta">
+                        ${Ipon.paymentMethodBadge(entry.payment_method)}
+                        <small>${Ipon.escapeHtml(stLabel)}</small>
+                        ${entry.notes ? `<small class="day-entry-subrow-note">· ${Ipon.escapeHtml(entry.notes)}</small>` : ''}
+                      </div>
+                      <div class="day-entry-subrow-right">
+                        <strong class="day-entry-subrow-amt">+${Ipon.money(entry.amount)}</strong>
+                        ${subEdit}
+                      </div>
+                    </div>
+                    ${subPending}
+                  </div>`;
+                }).join('')}
+              </div>` : '';
             return `<article class="day-contributor-row">
               ${Ipon.avatarMarkup(person.avatarUrl, person.name, 'avatar-md')}
               <div class="day-contributor-info">
                 <strong>${Ipon.escapeHtml(person.name)}</strong>
                 <small>${person.count} contribution${person.count === 1 ? '' : 's'} · ${Ipon.escapeHtml(statuses)}</small>
-                <div class="day-contributor-badges">${methodBadges}</div>
-                ${notes}
-                ${reviewNotes}
+                ${singleEntry ? `<div class="day-contributor-badges">${methodBadges}</div>${notes}${reviewNotes}` : ''}
               </div>
-              <strong class="day-contributor-amount">+${Ipon.money(person.totalAmount)}</strong>
+              <div class="day-contributor-side">
+                <strong class="day-contributor-amount">+${Ipon.money(person.totalAmount)}</strong>
+                ${singleEditBtn}
+              </div>
+              ${singlePendingStrip ? `<div class="day-contributor-extra">${singlePendingStrip}</div>` : ''}
+              ${multiListHtml ? `<div class="day-contributor-extra">${multiListHtml}</div>` : ''}
             </article>`;
           }).join('')}
         </div>
@@ -831,6 +957,8 @@
         <div class="day-contributor-list">
           ${others.map((activity) => {
             const [, label] = statusClass(activity);
+            const editBtn = editEntryButtonMarkup(activity);
+            const pendingStrip = pendingEditChipMarkup(activity);
             return `<article class="day-contributor-row">
               ${Ipon.avatarMarkup('', activity.subject_name || label, 'avatar-md')}
               <div class="day-contributor-info">
@@ -840,7 +968,11 @@
                 ${activity.notes ? `<p class="day-contributor-notes">${Ipon.escapeHtml(activity.notes)}</p>` : ''}
                 ${activity.review_note ? `<small class="record-reason-note is-confirmed">Review note: ${Ipon.escapeHtml(activity.review_note)}</small>` : ''}
               </div>
-              <strong class="day-contributor-amount is-deduction">−${Ipon.money(activity.amount)}</strong>
+              <div class="day-contributor-side">
+                <strong class="day-contributor-amount is-deduction">−${Ipon.money(activity.amount)}</strong>
+                ${editBtn}
+              </div>
+              ${pendingStrip ? `<div class="day-contributor-extra">${pendingStrip}</div>` : ''}
             </article>`;
           }).join('')}
         </div>
@@ -852,8 +984,19 @@
         ? '<div class="day-modal-empty"><p>No contributions or activity recorded for this day.</p><button class="button button-primary" type="button" data-action="quick-record-day">+ Record entry</button></div>'
         : '<div class="day-modal-empty"><p>Join or create a savings group before recording entries for this day.</p><button class="button button-primary" type="button" data-action="create-group-from-day">+ Create savings group</button></div>';
     Ipon.bindAvatarFallbacks(dayModalBody);
-    dayModal.showModal();
+    if (!dayModal.open) dayModal.showModal();
   }
+
+  changeRequestsWrap?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-open-cr]');
+    if (!btn) return;
+    const cr = currentChangeRequests.find((item) => String(item.id) === String(btn.dataset.openCr));
+    if (!cr) return;
+    Ipon.openChangeRequestReviewDialog(cr, {
+      allowReview: state?.profile?.role === 'ADMIN',
+      onReviewed: load
+    });
+  });
 
   const board = document.querySelector('.calendar-board') || document.querySelector('.comp-frame');
   board.addEventListener('pointermove', (event) => {
@@ -887,8 +1030,9 @@
     if (!day) return;
     openDayModal(day.dataset.date);
   });
-  document.getElementById('day-modal-close')?.addEventListener('click', () => dayModal?.close());
-  dayModal?.addEventListener('click', (event) => { if (event.target === dayModal) dayModal.close(); });
+  document.getElementById('day-modal-close')?.addEventListener('click', () => { openModalDate = null; dayModal?.close(); });
+  dayModal?.addEventListener('click', (event) => { if (event.target === dayModal) { openModalDate = null; dayModal.close(); } });
+  dayModal?.addEventListener('close', () => { openModalDate = null; });
   document.getElementById('day-detail-close')?.addEventListener('click', () => {
     detailPanel.hidden = true;
     activeDate = null;
@@ -1641,11 +1785,19 @@
     if (quickDateInput) quickDateInput.value = dateVal;
     if (quickMonthInput) quickMonthInput.value = dateVal.slice(0, 7);
 
+    const perms = state.profile?.permissions || Ipon.defaultPermissionsForRole(state.profile?.role);
     const isMemberRole = state.profile?.role === 'MEMBER';
     const isSoloSelf = currentGroup?.workspace_mode === 'SOLO' && Boolean(state.profile?.member_id || cachedMembers[0]?.id);
-    if (quickRecordTypeTabs) quickRecordTypeTabs.hidden = isMemberRole;
+    const canDeduction = state.profile?.role === 'ADMIN' || perms.can_record_withdrawals === true;
+    const canExpense = state.profile?.role === 'ADMIN' || perms.can_record_expenses === true;
+    if (quickTabDeduction) quickTabDeduction.hidden = !canDeduction;
+    if (quickTabExpense) quickTabExpense.hidden = !canExpense;
+    if (quickRecordTypeTabs) quickRecordTypeTabs.hidden = !(canDeduction || canExpense);
 
-    setQuickRecordType(isMemberRole ? 'addition' : presetType);
+    const initialType = (presetType === 'deduction' && canDeduction) || (presetType === 'expense' && canExpense)
+      ? presetType
+      : 'addition';
+    setQuickRecordType(initialType);
 
     if (isMemberRole || isSoloSelf) {
       const ownId = state.profile?.member_id || cachedMembers[0]?.id || '';
@@ -1666,16 +1818,56 @@
   });
 
   dayModalBody?.addEventListener('click', (event) => {
+    const editBtn = event.target.closest('[data-edit-record-id]');
+    if (editBtn) {
+      const recId = editBtn.dataset.editRecordId;
+      const recType = editBtn.dataset.editRecordType || 'contribution';
+      const activity = currentActivities.find((item) => String(item.id) === String(recId) && activityRecordType(item) === recType);
+      if (activity) {
+        Ipon.openCalendarEntryEditDialog({
+          id: activity.id,
+          type: recType,
+          subjectName: activity.subject_name || 'Entry',
+          amount: activity.amount,
+          paymentMethod: activity.payment_method,
+          date: activity.activity_date,
+          notes: activity.notes || '',
+          status: activity.approval_status || 'CONFIRMED'
+        }, {
+          onSaved: async () => {
+            await load();
+            if (openModalDate && dayModal?.open) openDayModal(openModalDate);
+          }
+        });
+      }
+      return;
+    }
+    const reviewCrBtn = event.target.closest('[data-review-cr]');
+    if (reviewCrBtn) {
+      const crId = reviewCrBtn.dataset.reviewCr;
+      const cr = currentChangeRequests.find((item) => String(item.id) === String(crId)) || crId;
+      Ipon.openChangeRequestReviewDialog(cr, {
+        allowReview: state?.profile?.role === 'ADMIN',
+        onReviewed: async () => {
+          await load();
+          if (openModalDate && dayModal?.open) openDayModal(openModalDate);
+        }
+      });
+      return;
+    }
     const createGroupBtn = event.target.closest('[data-action="create-group-from-day"]');
     if (createGroupBtn) {
+      openModalDate = null;
       dayModal.close();
       openGroupDialog('create');
       return;
     }
     const quickBtn = event.target.closest('[data-action="quick-record-day"]');
     if (quickBtn) {
+      const targetDate = openModalDate || activeDate || null;
+      openModalDate = null;
       dayModal.close();
-      openQuickRecordDialog(activeDate || null, 'addition');
+      openQuickRecordDialog(targetDate, 'addition');
     }
   });
 
@@ -1727,12 +1919,18 @@
     }
     const typeLabel = isAddition ? 'addition' : isDeduction ? 'deduction' : 'expense';
     const isAdmin = state.profile?.role === 'ADMIN';
+    const perms = state.profile?.permissions || Ipon.defaultPermissionsForRole(state.profile?.role);
+    const needsApproval = !isAdmin && (isAddition
+      ? perms.require_add_approval !== false
+      : isDeduction
+        ? perms.require_withdrawal_approval !== false
+        : perms.require_expense_approval !== false);
     const confirmed = await Ipon.confirmAction({
-      title: isAdmin ? `Confirm ${typeLabel}?` : `Submit ${typeLabel} for review?`,
-      message: isAdmin
-        ? `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`
-        : `${Ipon.money(amount)} will be submitted as pending until an administrator confirms it.`,
-      acceptLabel: isAdmin ? 'Confirm and save' : 'Submit for review'
+      title: needsApproval ? `Submit ${typeLabel} for review?` : `Confirm ${typeLabel}?`,
+      message: needsApproval
+        ? `${Ipon.money(amount)} will be submitted as pending until an administrator confirms it.`
+        : `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`,
+      acceptLabel: needsApproval ? 'Submit for review' : 'Confirm and save'
     });
     if (!confirmed) return;
 
@@ -1769,7 +1967,7 @@
       }
 
       quickPendingKey = null;
-      Ipon.toast(state.profile?.role === 'ADMIN' ? 'Confirmed record saved.' : 'Record submitted for admin review.');
+      Ipon.toast(needsApproval ? 'Record submitted for admin review.' : 'Confirmed record saved.');
       quickRecordDialog.close();
       await load();
     } catch (error) {
@@ -1881,6 +2079,29 @@
         if (opened) return true;
       }
     }
+    const crParam = params.get('change_request');
+    if (crParam) {
+      Ipon.highlightFocus('[data-region="review-ground"]');
+      if (crParam === 'pending') {
+        const firstCr = currentChangeRequests[0];
+        if (firstCr) {
+          await Ipon.openChangeRequestReviewDialog(firstCr, { allowReview: state.profile?.role === 'ADMIN', onReviewed: load });
+        }
+      } else {
+        await Ipon.openChangeRequestReviewDialog(crParam, { allowReview: state.profile?.role === 'ADMIN', onReviewed: load });
+      }
+      return true;
+    }
+    const dayParam = params.get('day');
+    if (dayParam && /^\d{4}-\d{2}-\d{2}$/.test(dayParam)) {
+      const targetMonth = new Date(`${dayParam}T00:00:00`);
+      if (!Number.isNaN(targetMonth.getTime())
+          && (targetMonth.getFullYear() !== cursor.getFullYear() || targetMonth.getMonth() !== cursor.getMonth())) {
+        await navigateTo(new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 1));
+      }
+      openDayModal(dayParam);
+      return true;
+    }
     const reviewRef = parseTypedRef(params.get('review'));
     if (reviewRef) {
       Ipon.highlightFocus('[data-region="review-ground"]');
@@ -1928,7 +2149,7 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'group_invite_codes', 'group_join_requests', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions'], () => {
+  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'group_invite_codes', 'group_join_requests', 'financial_change_requests', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions'], () => {
     if (inviteDialog?.open && dashInvitePanelCtrl) {
       dashInvitePanelCtrl.refresh({ silent: true }).catch(() => { });
     }

@@ -9695,4 +9695,1776 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
       })
     },
     Date, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, JSON, Promise, RegExp, Error, Intl, Blob, Uint8Array, atob,
-... [truncated for diff preview]
+    setTimeout: () => 0,
+    clearTimeout() { },
+    addEventListener() { },
+    removeEventListener() { },
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    requestAnimationFrame: (fn) => fn(),
+    console
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+  vm.runInNewContext(policyJs, ctx, { filename: 'js/policy.js' });
+
+  const userProfile = { id: 'u-consent-1', full_name: 'Ana Santos', role: 'MEMBER', policy_accepted_version: null };
+  assert.equal(ctx.window.Ipon.hasAcceptedCurrentPolicy(userProfile), false);
+
+  let afterAcceptTriggered = false;
+  assert.equal(ctx.window.Ipon.maybeShowPolicyConsentModal(userProfile, { onAccept: () => { afterAcceptTriggered = true; } }), true);
+  const consentDlg = docStub.getElementById('ipon-policy-consent-dialog');
+  assert.ok(consentDlg);
+  assert.equal(consentDlg.open, true);
+  assert.match(consentDlg.innerHTML, /I agree &amp; continue/);
+  assert.doesNotMatch(consentDlg.innerHTML, /policy-consent-highlights|policy-consent-once-note/);
+  assert.match(consentDlg.innerHTML, /90 days/);
+  assert.match(consentDlg.innerHTML, /30 days/);
+  assert.match(consentDlg.innerHTML, /6 months/);
+  assert.match(consentDlg.innerHTML, /1\+ year/);
+
+  const agreeBtn = consentDlg.querySelector('#ipon-consent-agree-btn');
+  const checkbox = consentDlg.querySelector('#ipon-consent-checkbox');
+  const errEl = consentDlg.querySelector('#ipon-consent-error');
+  assert.equal(agreeBtn.disabled, true);
+
+  // Escape cancel is blocked while unaccepted
+  let cancelPrevented = false;
+  await consentDlg._emit('cancel', { preventDefault: () => { cancelPrevented = true; } });
+  assert.equal(cancelPrevented, true);
+  assert.equal(errEl.classList.contains('is-visible'), true);
+
+  // Switching to Privacy tab updates aria-selected and panel hidden state
+  const privacyTab = consentDlg.querySelector('#ipon-consent-tab-privacy');
+  await privacyTab._emit('click');
+  assert.equal(privacyTab.attributes['aria-selected'], 'true');
+  assert.equal(consentDlg.querySelectorAll('[data-consent-panel]')[1].hidden, false);
+
+  // Checking the consent box unlocks I agree & continue and persists acceptance 1x per account
+  checkbox.checked = true;
+  await checkbox._emit('change');
+  assert.equal(agreeBtn.disabled, false);
+
+  await agreeBtn._emit('click');
+  assert.equal(rpcCalls.length, 1);
+  assert.equal(rpcCalls[0].fnName, 'accept_current_policy');
+  assert.equal(rpcCalls[0].args.p_version, '2026-11-16');
+  assert.equal(userProfile.policy_accepted_version, '2026-11-16');
+  assert.equal(consentDlg.open, false);
+  assert.equal(afterAcceptTriggered, true);
+  assert.equal(ctx.window.Ipon.hasAcceptedCurrentPolicy(userProfile), true);
+  assert.equal(ctx.window.Ipon.maybeShowPolicyConsentModal(userProfile), false);
+
+  // Opening standalone Pic 1 & 2 viewer dialog in-app switches cleanly between Terms & Privacy
+  assert.equal(ctx.window.Ipon.openPolicyDialog('privacy'), true);
+  const viewerDlg = docStub.getElementById('ipon-policy-dialog');
+  assert.ok(viewerDlg);
+  assert.equal(viewerDlg.open, true);
+  assert.equal(viewerDlg.querySelector('#ipon-policy-title').textContent, 'Privacy policy');
+});
+
+test('migration 084, ongoing savings protection, 30-day completion bin, print border/break fix, and VM bin/batch flows work cleanly', async () => {
+  const vm = await import('node:vm');
+  const mig084 = read('database/migrations/20261116_084_ongoing_savings_protection_and_bin_lifecycle.sql');
+  const schema = read('database/schema.sql');
+  const css = read('css/app.css');
+  const loginHtml = read('login.html');
+  const policyJs = read('js/policy.js');
+  const coreJs = read('js/core.js');
+  const savingsHtml = read('savings.html');
+  const savingsJs = read('js/savings.js');
+  const settingsHtml = read('settings.html');
+  const settingsJs = read('js/settings.js');
+  const membersHtml = read('members.html');
+  const membersJs = read('js/members.js');
+
+  assert.match(mig084, /create table if not exists public\.savings_cycle_batches/i);
+  assert.match(mig084, /create or replace function public\.complete_and_bin_savings_goal\(/i);
+  assert.match(mig084, /create or replace function public\.archive_and_reset_savings_cycle\(/i);
+  assert.match(mig084, /create or replace function public\.purge_bin_item_permanently\(/i);
+  assert.match(mig084, /create or replace function public\.purge_bin_item_storage\(/i);
+  assert.match(mig084, /ipon\.maintenance_bin_snapshot/);
+  assert.match(mig084, /days_remaining/);
+  assert.match(mig084, /'savings_cycle'/);
+  assert.match(mig084, /'goal'/);
+  assert.match(schema, /'20261116_084'/);
+
+  const latestCleanup = [...schema.matchAll(/create or replace function public\.run_data_retention_cleanup[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.match(latestCleanup, /delete from public\.savings_goals[\s\S]*?deleted_at is not null[\s\S]*?deleted_at < v_bin_cutoff/i);
+  assert.match(latestCleanup, /expired_bin_goals_deleted/);
+  assert.match(latestCleanup, /expired_bin_savings_batches_deleted/);
+  assert.match(latestCleanup, /purge_bin_item_storage/);
+
+  const latestInactive = [...schema.matchAll(/create or replace function public\.collect_inactive_account_candidates[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.match(latestInactive, /from public\.savings_goals sg[\s\S]*?sg\.deleted_at is null[\s\S]*?sg\.status = 'ACTIVE'/i);
+
+  // 2. Print fix keeps compact panels intact and restores STATUS right-column td:last-child bottom border
+  const printBlock = css.match(/@media print\{[^\r\n]*/)?.[0] || '';
+  assert.match(printBlock, /break-inside:avoid;page-break-inside:avoid/);
+  assert.match(printBlock, /\.report-panel:has\(tbody tr:nth-child\(15\)\)\{break-inside:auto;page-break-inside:auto\}/);
+  assert.match(printBlock, /\.data-table td:last-child[^}]*border-bottom:1px solid var\(--rule\)!important/);
+
+  // 3. Detailed ongoing protection + 30-day completion bin documented in Terms & Privacy (login + in-app)
+  assert.match(loginHtml, /Ongoing savings &amp; active goals are never deleted while you keep saving/i);
+  assert.match(loginHtml, /30-day Recycle Bin/i);
+  assert.match(policyJs, /Ongoing savings &amp; active goals are never deleted while you keep saving/i);
+  assert.match(policyJs, /30-day Recycle Bin/i);
+  assert.match(loginHtml, /Notifications and direct chat messages are delivered in-app only/i);
+  assert.match(policyJs, /Notifications and direct chat messages are delivered in-app only/i);
+  assert.match(coreJs, /<h2 id="donate-title">Support myIPON<\/h2>/);
+  assert.doesNotMatch(coreJs, /Support IPON/);
+  assert.doesNotMatch(coreJs, /even when myIPON is closed/);
+  assert.match(coreJs, /<span>Device &amp; in-app alerts<\/span>/);
+  assert.match(read('account.html'), /<span>Device &amp; in-app alerts<\/span>/);
+
+  // 4. UI controls wired across Goals, Settings, and Members
+  assert.match(savingsHtml, /id="open-savings-bin"/);
+  assert.match(savingsHtml, /id="finish-savings-cycle"/);
+  assert.match(savingsJs, /data-complete-goal=/);
+  assert.match(savingsJs, /complete_and_bin_savings_goal/);
+  assert.match(settingsHtml, /id="settings-open-bin"/);
+  assert.match(settingsHtml, /id="settings-finish-cycle"/);
+  assert.match(membersHtml, /option value="goal"/);
+  assert.match(membersHtml, /option value="savings_cycle"/);
+  assert.match(membersJs, /purge_bin_item_permanently/);
+
+  // 5. Runtime VM test for formatBinExpiry, renderBinItemCard, openRecycleBin, and openFinishSavingsBatchDialog
+  const rpcCalls = [];
+  const createdDialogs = [];
+  const loaderEl = { hidden: false, setAttribute() { }, removeAttribute() { }, querySelector: () => ({ textContent: '' }) };
+  const makeClassList = () => {
+    const set = new Set();
+    return { add: (c) => set.add(c), remove: (c) => set.delete(c), toggle: (c, f) => (f ? set.add(c) : set.delete(c)), contains: (c) => set.has(c) };
+  };
+  const makeStub = (tag) => {
+    const listeners = new Map();
+    const children = new Map();
+    const node = {
+      tagName: String(tag || 'DIV').toUpperCase(),
+      id: '',
+      className: '',
+      _innerHTML: '',
+      textContent: '',
+      value: '',
+      checked: true,
+      disabled: false,
+      hidden: false,
+      open: false,
+      dataset: {},
+      attributes: {},
+      classList: makeClassList(),
+      set innerHTML(v) {
+        this._innerHTML = String(v);
+        if (children.has('#ipon-shared-bin-list')) children.get('#ipon-shared-bin-list').innerHTML = this._innerHTML;
+      },
+      get innerHTML() { return this._innerHTML; },
+      setAttribute(k, v) { this.attributes[k] = String(v); },
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      remove() { this._removed = true; },
+      focus() { },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      async _emit(ev, payload = {}) {
+        for (const fn of listeners.get(ev) || []) await fn(payload);
+      },
+      querySelector(sel) {
+        if (!children.has(sel)) {
+          const child = makeStub('div');
+          if (sel === '#batch-reset-title') child.value = 'Batch 2026 — Completed Savings';
+          if (sel === '#batch-reset-reason') child.value = 'Finished saving for emergency fund';
+          if (sel === '#batch-reset-include-goals') child.checked = true;
+          if (sel === '#ipon-shared-bin-filter') child.value = 'goal';
+          children.set(sel, child);
+        }
+        return children.get(sel);
+      },
+      querySelectorAll: () => []
+    };
+    return node;
+  };
+  const docStub = {
+    head: { insertAdjacentHTML() { } },
+    body: {
+      dataset: { page: 'savings' },
+      classList: makeClassList(),
+      insertAdjacentHTML() { },
+      appendChild(node) { createdDialogs.push(node); return node; },
+      querySelectorAll: () => [],
+      querySelector: () => null
+    },
+    documentElement: { dataset: {}, style: { setProperty() { } }, classList: makeClassList() },
+    getElementById: (id) => (id === 'app-loader' ? loaderEl : (createdDialogs.find((n) => n.id === id && !n._removed) || null)),
+    createElement: (tag) => makeStub(tag),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener() { },
+    removeEventListener() { }
+  };
+  const ctx = {
+    window: null,
+    document: docStub,
+    navigator: { userAgent: 'Mozilla/5.0', onLine: true },
+    location: { protocol: 'https:', pathname: '/savings.html', search: '', href: 'https://my-ipon.vercel.app/savings.html' },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    Date, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, JSON, Promise, RegExp, Error, Intl, Blob, Uint8Array, atob,
+    setTimeout: () => 0,
+    clearTimeout() { },
+    addEventListener() { },
+    removeEventListener() { },
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    requestAnimationFrame: (fn) => fn(),
+    console
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+  vm.runInNewContext(policyJs, ctx, { filename: 'js/policy.js' });
+  ctx.window.Ipon.confirmAction = async () => true;
+  ctx.window.Ipon.toast = () => { };
+  ctx.window.Ipon.rpc = async (fnName, args) => {
+    rpcCalls.push({ fnName, args });
+    if (fnName === 'get_bin_items') {
+      return [{
+        item_type: 'goal',
+        type_label: 'Goal',
+        item_id: '00000000-0000-0000-0000-000000000101',
+        title: 'Holiday Trip 2026',
+        subtitle: 'Target PHP 25,000.00 · Completed',
+        reason: 'Goal marked done and moved to 30-day bin',
+        deleted_by_name: 'Ana Santos',
+        deleted_at: '2026-11-16T04:00:00Z',
+        expires_at: '2026-12-16T04:00:00Z',
+        days_remaining: 5
+      }];
+    }
+    return { batch_id: '00000000-0000-0000-0000-000000000202' };
+  };
+
+  const normalExp = ctx.window.IponPolicy.formatBinExpiry({ days_remaining: 18, expires_at: '2026-12-04T00:00:00Z' });
+  assert.equal(normalExp.urgent, false);
+  assert.match(normalExp.text, /18 days left/);
+
+  const urgentExp = ctx.window.IponPolicy.formatBinExpiry({ days_remaining: 3, expires_at: '2026-11-19T00:00:00Z' });
+  assert.equal(urgentExp.urgent, true);
+  assert.match(urgentExp.text, /3 days left/);
+
+  const zeroExp = ctx.window.IponPolicy.formatBinExpiry({ days_remaining: 0, expires_at: '2026-11-16T00:00:00Z' });
+  assert.equal(zeroExp.urgent, true);
+  assert.match(zeroExp.text, /Expires today/);
+
+  const cardHtml = ctx.window.IponPolicy.renderBinItemCard({
+    item_type: 'savings_cycle',
+    type_label: 'Savings batch',
+    item_id: 'batch-1',
+    title: 'Batch 2026',
+    subtitle: '14 records · Net PHP 50,000.00',
+    reason: 'Completed cycle cleared to bin',
+    deleted_by_name: 'Ana Santos',
+    deleted_at: '2026-11-16T00:00:00Z',
+    expires_at: '2026-11-20T00:00:00Z',
+    days_remaining: 4
+  });
+  assert.match(cardHtml, /is-cycle/);
+  assert.match(cardHtml, /is-urgent/);
+  assert.match(cardHtml, /4 days left/);
+  assert.match(cardHtml, /Delete forever/);
+
+  assert.equal(ctx.window.IponPolicy.openRecycleBin({ defaultType: 'goal' }), true);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(rpcCalls[0].fnName, 'get_bin_items');
+  assert.equal(rpcCalls[0].args.p_type, 'goal');
+
+  const binDlg = docStub.getElementById('ipon-shared-bin-dialog');
+  assert.ok(binDlg);
+  assert.equal(binDlg.open, true);
+  assert.match(binDlg.querySelector('#ipon-shared-bin-list').innerHTML, /Holiday Trip 2026/);
+  assert.match(binDlg.querySelector('#ipon-shared-bin-list').innerHTML, /5 days left/);
+
+  // Test Finish Batch & Reset dialog submit
+  assert.equal(ctx.window.IponPolicy.openFinishSavingsBatchDialog({ onDone: () => { } }), true);
+  const batchDlg = docStub.getElementById('ipon-finish-batch-dialog');
+  assert.ok(batchDlg);
+  assert.equal(batchDlg.open, true);
+  await batchDlg.querySelector('#ipon-finish-batch-form')._emit('submit', { preventDefault() { } });
+  const resetCall = rpcCalls.find((c) => c.fnName === 'archive_and_reset_savings_cycle');
+  assert.ok(resetCall);
+  assert.equal(resetCall.args.p_title, 'Batch 2026 — Completed Savings');
+  assert.equal(resetCall.args.p_include_completed_goals, true);
+});
+test('migration 085, 90-day & 6-month dormant savings email reminders, 30-day bin retention, and policy disclosures work cleanly', () => {
+  const mig085 = read('database/migrations/20261116_085_abandoned_savings_email_reminders_and_retention.sql');
+  const schema = read('database/schema.sql');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+  const loginHtml = read('login.html');
+  const policyJs = read('js/policy.js');
+  const savingsHtml = read('savings.html');
+
+  // 1. SQL migration 085 & schema sync cover group dormant tracking, reminders, 6-month bin transition, & suspended cleanup
+  assert.match(mig085, /add column if not exists savings_inactivity_reminded_at timestamptz/i);
+  assert.match(mig085, /add column if not exists savings_retention_warned_at timestamptz/i);
+  assert.match(mig085, /create or replace function public\.group_last_savings_activity_at\(/i);
+  assert.match(mig085, /create or replace function public\.snapshot_and_clear_group_savings_to_bin\(/i);
+  assert.match(mig085, /create or replace function public\.collect_dormant_savings_groups\(/i);
+  assert.match(mig085, /create or replace function public\.reset_dormant_savings_flag\(/i);
+  assert.match(mig085, /create or replace function public\.move_dormant_savings_group_to_bin\(/i);
+  assert.match(mig085, /'savings_inactivity_reminded_at'/);
+  assert.match(mig085, /'savings_retention_warned_at'/);
+  assert.match(mig085, /abandoned_suspended_groups_deleted/);
+  assert.match(schema, /'20261116_085'/);
+
+  const latestInactive = [...schema.matchAll(/create or replace function public\.collect_inactive_account_candidates[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.match(latestInactive, /group_last_savings_activity_at\(p\.group_id\)/i);
+
+  // 2. Edge Function sends both 90-day check-in reminders and 6-month 7-day prior warnings, and bins abandoned groups after 7 days
+  assert.match(edgeFn, /async function sendDormantSavingsEmail\(/);
+  assert.match(edgeFn, /admin\.rpc\('collect_dormant_savings_groups'/);
+  assert.match(edgeFn, /admin\.rpc\('reset_dormant_savings_flag'/);
+  assert.match(edgeFn, /admin\.rpc\('move_dormant_savings_group_to_bin'/);
+  assert.match(edgeFn, /dormant_savings_reminded_groups/);
+  assert.match(edgeFn, /dormant_savings_warned_groups/);
+  assert.match(edgeFn, /dormant_savings_binned_groups/);
+
+  // 3. Terms of Use, Privacy Policy, in-app modals, & Goals banner clearly explain forgotten/abandoned savings reminders & retention
+  assert.match(loginHtml, /Forgotten or abandoned savings policy/i);
+  assert.match(loginHtml, /dormant savings check-in reminders \(90 days idle\)/i);
+  assert.match(policyJs, /Forgotten or abandoned savings policy/i);
+  assert.match(policyJs, /dormant savings check-in reminders \(90 days idle\)/i);
+  assert.match(savingsHtml, /7-day warning at 6 months/i);
+});
+
+test('migrations 086-087 restore Member transparency + Super Admin name rules, fix retention & back-button gate, and sync realtime live', () => {
+  const mig086 = read('database/migrations/20261116_086_restore_policies_fix_retention_and_realtime.sql');
+  const mig087 = read('database/migrations/20261116_087_preserve_updated_at_during_retention.sql');
+  const schema = read('database/schema.sql');
+  const coreJs = read('js/core.js');
+  const policyJs = read('js/policy.js');
+  const dashboardJs = read('js/dashboard.js');
+  const userJs = read('js/user.js');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+  const accountHtml = read('account.html');
+
+  // 1. Migrations 086 & 087 + schema.sql lock in Super Admin name rules, Member ledger visibility, retention fixes, & realtime publication
+  assert.match(mig086, /v_is_super_admin := \(new\.role = 'SUPER_ADMIN'\)/);
+  assert.match(mig086, /new\.first_name is distinct from old\.first_name/i);
+  assert.match(mig086, /drop function if exists public\.create_member\(text, text, text, text, date, numeric, text\)/i);
+  const latestSummary = [...schema.matchAll(/create or replace function public\.get_savings_summary\(\)[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.match(latestSummary, /'MEMBER'/);
+  assert.doesNotMatch(latestSummary, /is_treasurer_or_admin/i);
+  for (const policy of ['members_select', 'contribution_periods_select', 'contributions_select', 'expenses_select', 'withdrawals_select']) {
+    const latestPol = [...schema.matchAll(new RegExp(`create policy ${policy}[\\s\\S]*?;`, 'gi'))].pop()?.[0] || '';
+    assert.match(latestPol, /'MEMBER'/);
+  }
+  const latestCleanup = [...schema.matchAll(/create or replace function public\.run_data_retention_cleanup[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
+  assert.match(latestCleanup, /delete from public\.call_sessions[\s\S]*?coalesce\(ended_at,\s*started_at\)\s*<\s*v_call_cutoff/i);
+  assert.doesNotMatch(latestCleanup, /coalesce\(ended_at,\s*started_at,\s*created_at\)/i);
+  assert.match(latestCleanup, /delete from public\.contribution_settings cs/i);
+  assert.match(mig086, /v_is_backend_maintenance boolean :=[\s\S]*?auth\.uid\(\) is null/i);
+  assert.match(mig086, /alter publication supabase_realtime add table public\.%I/i);
+  assert.match(mig087, /create or replace function public\.set_updated_at\(\)/i);
+  assert.match(mig087, /ipon\.maintenance_retention_cleanup/);
+  assert.match(schema, /'20261116_086'/);
+  assert.match(schema, /'20261116_087'/);
+
+  // 2. account.html is clean single-document HTML with zero duplicate </html> or duplicated IDs
+  assert.equal((accountHtml.match(/<\/html>/gi) || []).length, 1);
+  assert.equal((accountHtml.match(/id="account-page-dialog"/g) || []).length, 1);
+
+  // 3. Edge Function surfaces RPC errors cleanly and drains storage on runSqlCleanup / dormant moves
+  assert.match(edgeFn, /runSqlCleanup \|\| dormantBinnedGroups > 0/);
+  assert.match(edgeFn, /success: result\.errors\.length === 0/);
+
+  // 4. Client safety: Dashboard throws instead of masking null summary as P0.00; realtime sync covers notifications + BroadcastChannel
+  assert.match(dashboardJs, /Group savings summary is currently unavailable/);
+  assert.match(userJs, /subscribeToChanges\('member-dashboard',[\s\S]*?'announcements'/);
+  assert.match(coreJs, /notifyLiveSync\('announcements'\)/);
+  assert.match(coreJs, /activeAnnouncementsController\?\.load\?\.\(\)/);
+  assert.match(coreJs, /document\.getElementById\('ipon-policy-consent-dialog'\)[\s\S]*?accepted !== '1'[\s\S]*?ipon:policy-back-blocked/);
+  assert.match(policyJs, /window\.addEventListener\('popstate'/);
+  assert.match(policyJs, /ipon:policy-back-blocked/);
+
+  // 5. Runtime VM verification: handleNativeBack NEVER closes unaccepted #ipon-policy-consent-dialog
+  const consentDlg = { id: 'ipon-policy-consent-dialog', open: true, dataset: {}, closed: false, close() { this.open = false; this.closed = true; } };
+  const dispatched = [];
+  const noop = () => { };
+  const dummyEl = () => ({ hidden: false, dataset: {}, innerHTML: '', textContent: '', style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, setAttribute: noop, removeAttribute: noop, appendChild: noop, prepend: noop, append: noop });
+  const ctx = {
+    window: null,
+    navigator: { onLine: true },
+    location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', pathname: '/dashboard.html', href: 'https://my-ipon.vercel.app/dashboard.html', replace: noop, assign: noop },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    addEventListener: noop,
+    removeEventListener: noop,
+    dispatchEvent: (ev) => dispatched.push(ev.type),
+    setTimeout,
+    clearTimeout,
+    setInterval: () => 0,
+    clearInterval: noop,
+    document: {
+      documentElement: { dataset: {}, style: { setProperty: noop, removeProperty: noop } },
+      body: { dataset: { page: 'dashboard' }, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, insertAdjacentHTML: noop, appendChild: noop, prepend: noop, append: noop },
+      head: { insertAdjacentHTML: noop },
+      createElement: () => dummyEl(),
+      querySelector: () => null,
+      querySelectorAll: (sel) => (sel === 'dialog[open]' ? [consentDlg] : []),
+      getElementById: (id) => (id === 'ipon-policy-consent-dialog' ? consentDlg : id === 'app-loader' ? dummyEl() : null),
+      addEventListener: noop,
+      removeEventListener: noop
+    }
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  assert.equal(ctx.window.Ipon.handleNativeBack(), 'handled');
+  assert.equal(consentDlg.open, true);
+  assert.equal(consentDlg.closed, false);
+  assert.ok(dispatched.includes('ipon:policy-back-blocked'));
+});
+
+test('migrations 088-089 restore drifted RPCs, fix enforce_group_scope guards, expose safe member identities, and hide unauthorized forms', () => {
+  const mig088 = read('database/migrations/20261116_088_restore_reverted_rpcs_and_scope_guards.sql');
+  const mig089 = read('database/migrations/20261116_089_fix_enforce_group_scope_nested_if.sql');
+  const schema = read('database/schema.sql');
+  const dashboardJs = read('js/dashboard.js');
+  const recordsJs = read('js/records.js');
+  const auditJs = read('js/audit.js');
+  const reportsJs = read('js/reports.js');
+  const settingsJs = read('js/settings.js');
+  const superAdminJs = read('js/super-admin.js');
+  const withdrawalsHtml = read('withdrawals.html');
+  const expensesHtml = read('expenses.html');
+  const css = read('css/app.css');
+
+  for (const fn of [
+    'current_group_id()',
+    'validated_name_part(',
+    'record_account_activity(',
+    'generate_contribution_periods(',
+    'get_user_dashboard()',
+    'notify_record_activity()',
+    'notify_new_member()',
+    'notify_profile_access()',
+    'create_due_reminders()',
+    'handle_new_user()',
+    'admin_set_user_access(',
+    'super_admin_approve_request(',
+    'super_admin_reject_request(',
+    'super_admin_archive_administrator(',
+    'super_admin_create_group(',
+    'super_admin_set_administrator_status(',
+    'super_admin_update_administrator(',
+    'get_group_member_identities()',
+    'get_pending_review_summary()'
+  ]) {
+    assert.ok(mig088.includes(fn), `Migration 088 must restore or define ${fn}`);
+  }
+  assert.match(mig088, /account_activity[\s\S]*admin_requests[\s\S]*audit_logs[\s\S]*financial_annual_archives/);
+  assert.match(mig089, /create or replace function public\.enforce_group_scope\(\)/i);
+  assert.match(mig089, /ipon\.maintenance_archive_rollup/);
+  assert.match(mig089, /ipon\.maintenance_bin_snapshot/);
+  assert.match(mig089, /ipon\.maintenance_receipt_cleanup/);
+  assert.match(mig089, /ipon\.activating_member_id/);
+  assert.match(mig089, /ipon\.syncing_own_profile_user_id/);
+  assert.match(mig089, /ipon\.syncing_member_profile_id/);
+  assert.match(mig089, /if tg_table_name = 'members' and pg_trigger_depth\(\) <= 1 then/);
+  assert.match(schema, /'20261116_088'/);
+  assert.match(schema, /'20261116_089'/);
+
+  // Client integration checks
+  assert.match(dashboardJs, /get_group_member_identities/);
+  assert.match(recordsJs, /get_group_member_identities/);
+  assert.match(recordsJs, /archived_paid_amount/);
+  assert.match(recordsJs, /Only administrators and treasurers can record/);
+  assert.match(auditJs, /get_group_member_identities/);
+  assert.match(reportsJs, /financial_annual_archives/);
+  assert.match(settingsJs, /group_memberships/);
+  assert.match(superAdminJs, /admin_requests/);
+  assert.match(withdrawalsHtml, /<section class="panel sticky-panel" data-role="ADMIN,TREASURER">/);
+  assert.match(expensesHtml, /<section class="panel sticky-panel" data-role="ADMIN,TREASURER">/);
+  assert.match(css, /\.split-layout:has\(> \.sticky-panel\[hidden\]\)/);
+});
+
+test('confirmation dialogs match the warm-cream card, top gold rule, editorial serif heading, and equal two-column pill actions', async () => {
+  const vm = await import('node:vm');
+  const coreJs = read('js/core.js');
+  const css = read('css/app.css');
+  const loginHtml = read('login.html');
+
+  // CSS styling contracts matching the "Sign out?" reference card across confirm flows
+  assert.match(css, /\.confirm-dialog\s*\{[^}]*border-radius:\s*22px;[^}]*background:\s*#faf6ee;/);
+  assert.match(css, /\.confirm-dialog h2::before\s*\{[^}]*width:\s*26px;\s*height:\s*2px;[^}]*background:\s*#b88c3e;/);
+  assert.match(css, /\.confirm-dialog \.dialog-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(css, /\.confirm-dialog \.dialog-actions \.button-primary\s*\{[^}]*background:\s*#102420;/);
+  assert.match(css, /\.record-review-confirm-box\s*\{[^}]*border-radius:\s*18px;[^}]*background:\s*#faf6ee;/);
+  assert.match(css, /\.record-review-confirm-box strong::before\s*\{[^}]*width:\s*26px;\s*height:\s*2px;[^}]*background:\s*#b88c3e;/);
+  assert.match(css, /:is\(#record-action-step-confirm,\s*#member-delete-confirm-step\) \.form-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(css, /#bulk-confirm-dialog\s*\{[^}]*border-radius:\s*22px;[^}]*background:\s*#faf6ee;/);
+  assert.match(loginHtml, /\.request-confirm-dialog\{[^}]*border-radius:22px;background:#faf6ee/);
+  assert.match(loginHtml, /\.request-confirm-dialog h2::before\{[^}]*background:#b88c3e/);
+
+  // Runtime test: confirmAction honors acceptLabel, confirmLabel, confirmText, and cancelLabel cleanly
+  const elements = {
+    'confirm-dialog': {
+      returnValue: '',
+      dataset: {},
+      listeners: {},
+      showModal() {
+        const closeHandlers = this.listeners.close || [];
+        this.returnValue = 'confirm';
+        while (closeHandlers.length) closeHandlers.shift()();
+      },
+      addEventListener(type, fn) {
+        (this.listeners[type] ||= []).push(fn);
+      },
+      querySelector() {
+        return elements['confirm-cancel'];
+      }
+    },
+    'confirm-title': { textContent: '' },
+    'confirm-message': { textContent: '' },
+    'confirm-cancel': { textContent: 'Cancel' },
+    'confirm-accept': { textContent: 'Confirm' }
+  };
+  const noop = () => { };
+  const dummyEl = () => ({ hidden: false, dataset: {}, innerHTML: '', textContent: '', style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, setAttribute: noop, removeAttribute: noop, appendChild: noop, prepend: noop, append: noop });
+  const ctx = {
+    console,
+    Date,
+    Math,
+    URL,
+    Set,
+    Map,
+    Promise,
+    setTimeout,
+    clearTimeout,
+    setInterval: () => 0,
+    clearInterval: noop,
+    CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    navigator: { userAgent: 'node', onLine: true },
+    location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', pathname: '/dashboard.html', origin: 'https://my-ipon.vercel.app', href: 'https://my-ipon.vercel.app/dashboard.html', replace: noop, assign: noop },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    addEventListener: noop,
+    removeEventListener: noop,
+    dispatchEvent: noop,
+    document: {
+      documentElement: { setAttribute: noop, dataset: {}, style: { setProperty: noop, removeProperty: noop } },
+      head: { insertAdjacentHTML: noop },
+      body: { dataset: {}, classList: { contains: () => false, add: noop, remove: noop, toggle: noop }, insertAdjacentHTML: noop, appendChild: noop, prepend: noop, append: noop },
+      createElement: () => dummyEl(),
+      addEventListener: noop,
+      removeEventListener: noop,
+      getElementById: (id) => elements[id] || null,
+      querySelectorAll: () => [],
+      querySelector: () => null
+    }
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  await ctx.window.Ipon.confirmAction({
+    title: 'Delete announcement',
+    message: 'Delete this item?',
+    confirmLabel: 'Delete'
+  });
+  assert.equal(elements['confirm-accept'].textContent, 'Delete');
+  assert.equal(elements['confirm-cancel'].textContent, 'Cancel');
+
+  await ctx.window.Ipon.confirmAction({
+    title: 'Remove friend?',
+    message: 'Remove from Friends?',
+    confirmText: 'Remove',
+    cancelLabel: 'Not now'
+  });
+  assert.equal(elements['confirm-accept'].textContent, 'Remove');
+  assert.equal(elements['confirm-cancel'].textContent, 'Not now');
+
+  await ctx.window.Ipon.confirmAction({
+    title: 'Sign out?',
+    message: 'You will need to sign in again to access the system.',
+    acceptLabel: 'Sign out'
+  });
+  assert.equal(elements['confirm-accept'].textContent, 'Sign out');
+  assert.equal(elements['confirm-cancel'].textContent, 'Cancel');
+});
+
+test('migration 090 grants feature_requests.allow_credit insert, drops stale overloaded RPCs, and validates feedback forms cleanly', () => {
+  const mig090 = read('database/migrations/20261116_090_fix_feature_request_insert_grant_and_drop_stale_rpcs.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+
+  for (const sql of [mig090, schema]) {
+    assert.match(sql, /grant insert \(requester_id, title, details, allow_credit\) on public\.feature_requests to authenticated;/i);
+    assert.match(sql, /grant insert \(reporter_id, title, description, attachments\) on public\.bug_reports to authenticated;/i);
+    assert.match(sql, /drop function if exists public\.create_member\(text, text, text, text, date, numeric, text\);/i);
+    assert.match(sql, /drop function if exists public\.update_member\(uuid, text, text, text, text, numeric, text\);/i);
+    assert.match(sql, /drop function if exists public\.update_own_profile\(text, text, text, text\);/i);
+    assert.match(sql, /drop function if exists public\.update_contribution\(uuid, numeric, date, text, text\);/i);
+    assert.match(sql, /drop function if exists public\.update_expense\(uuid, date, numeric, text, text, text, text, text\);/i);
+    assert.match(sql, /drop function if exists public\.update_withdrawal\(uuid, date, numeric, text, text, text, text, text\);/i);
+    assert.match(sql, /'20261116_090'/);
+  }
+  assert.match(core, /Feature name must be between 3 and 120 characters\./);
+  assert.match(core, /Feature description must be between 10 and 2000 characters\./);
+  assert.match(core, /Bug title must be between 3 and 120 characters\./);
+  assert.match(core, /Bug description must be between 10 and 2000 characters\./);
+});
+
+test('migration 091 restores reverted RPCs, 9 RLS SELECT policies, strict grants, and missing group memberships', () => {
+  const mig091 = read('database/migrations/20261116_091_restore_reverted_rpcs_policies_and_memberships.sql');
+  const schema = read('database/schema.sql');
+
+  assert.match(schema, /Do NOT copy\/run partial blocks from this file on an existing or production database/i);
+
+  for (const sql of [mig091, schema]) {
+    assert.match(sql, /drop function if exists public\.create_member\(text, text, text, text, date, numeric, text\);/i);
+    assert.match(sql, /create or replace function public\.get_savings_summary\(\)/i);
+    assert.match(sql, /create or replace function public\.enforce_group_scope\(\)/i);
+    assert.match(sql, /create policy profiles_select on public\.profiles/i);
+    assert.match(sql, /create policy account_activity_select on public\.account_activity/i);
+    assert.match(sql, /create policy groups_select on public\.groups/i);
+    assert.match(sql, /create policy savings_goals_select on public\.savings_goals/i);
+    assert.match(sql, /create policy members_select on public\.members/i);
+    assert.match(sql, /create policy contribution_periods_select on public\.contribution_periods/i);
+    assert.match(sql, /create policy contributions_select on public\.contributions/i);
+    assert.match(sql, /create policy expenses_select on public\.expenses/i);
+    assert.match(sql, /create policy withdrawals_select on public\.withdrawals/i);
+    assert.match(sql, /insert into public\.group_memberships\s*\(group_id,\s*user_id,\s*role,\s*status,\s*member_id\)/i);
+    assert.match(sql, /revoke all on function public\.enforce_data_quality\(\) from public, anon, authenticated;/i);
+    assert.match(sql, /grant execute on function public\.get_savings_summary\(\) to authenticated;/i);
+    assert.match(sql, /'20261116_091'/);
+  }
+});
+
+test('migration 092 and UI fixes elevate floating utilities, clean Brainier group assignment, add Bug Report Fixed + AI release flow, and remove duplicate Super Admin headers', () => {
+  const mig092 = read('database/migrations/20261116_092_bug_report_fixed_status_and_clean_unlinked_group.sql');
+  const schema = read('database/schema.sql');
+  const appCss = read('css/app.css');
+  const heroCss = read('css/hero-plates.css');
+  const saHtml = read('super-admin.html');
+  const saJs = read('js/super-admin.js');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+
+  for (const sql of [mig092, schema]) {
+    assert.match(sql, /delete from public\.group_memberships[\s\S]*?'68853776-6a1b-4170-afb8-5dd93c3de90c'/i);
+    assert.match(sql, /alter table public\.bug_reports[\s\S]*?status text not null default 'OPEN' check \(status in \('OPEN', 'FIXED'\)\)/i);
+    assert.match(sql, /create or replace function public\.review_bug_report\(/i);
+    assert.match(sql, /revoke all on function public\.review_bug_report\(uuid, text, text\) from public, anon;/i);
+    assert.match(sql, /grant execute on function public\.review_bug_report\(uuid, text, text\) to authenticated;/i);
+    assert.match(sql, /update public\.bug_reports[\s\S]*?set release_version = v_version[\s\S]*?where status = 'FIXED' and release_version is null/i);
+    assert.match(sql, /'20261116_092'/);
+  }
+
+  // Pic 1: Message and notification triggers stay above scrolling workspace cards
+  assert.match(appCss, /\.app-sidebar\s*\{[^}]*z-index:190;/);
+  assert.match(appCss, /\.sidebar-utility\[data-notifications-open\]\{[^}]*z-index:192;/);
+  assert.match(appCss, /\.sidebar-utility\[data-messages-open\]\s*\{[^}]*z-index:\s*192;/);
+  assert.match(appCss, /\.notification-dialog\{[^}]*z-index:185;/);
+  assert.match(heroCss, /\.dashboard-sidebar\s*\{[^}]*z-index:190;/);
+
+  // Pic 2 & 3: Remove redundant page header on sub-views, add Bug Report Open/Fixed workflow & Fixed -> Release AI integration
+  assert.match(saHtml, /id="platform-page-header"/);
+  assert.match(saHtml, /id="bug-reports-status-tabs"/);
+  assert.match(saHtml, /data-bug-status-filter="OPEN"[^>]*>Open/);
+  assert.match(saHtml, /data-bug-status-filter="FIXED"[^>]*>Fixed/);
+  const pageHeaderMarkup = saHtml.match(/<header[^>]*id="platform-page-header"[\s\S]*?<\/header>/)?.[0] || '';
+  assert.ok(pageHeaderMarkup, 'super-admin.html must define #platform-page-header');
+  assert.doesNotMatch(pageHeaderMarkup, /id="create-administrator"/);
+  assert.match(saHtml, /id="administrators"[\s\S]*?id="create-administrator"/);
+  assert.match(saJs, /pageHeader\.hidden = activeView !== 'overview'/);
+  assert.match(saJs, /let activeBugStatusFilter = 'OPEN'/);
+  assert.match(saJs, /review_bug_report/);
+  assert.match(saJs, /data-bug-action="FIXED"/);
+  assert.match(saJs, /targetFixedBugs\s*=\s*bugReports\.filter/);
+  assert.match(saJs, /fixed_bugs:\s*targetFixedBugs\.map/);
+  assert.match(edgeFn, /Verified bug reports fixed for/);
+  assert.match(edgeFn, /fixedBugPromptLines/);
+});
+
+test('migration 093 and workspace UI remove global Role from Super Admin Users, add multi-group +N overflow, and add Solo vs Group saving with full retention', () => {
+  const mig093 = read('database/migrations/20261116_093_solo_group_workspaces_and_restore_sync.sql');
+  const schema = read('database/schema.sql');
+  const saHtml = read('super-admin.html');
+  const saJs = read('js/super-admin.js');
+  const dashHtml = read('dashboard.html');
+  const dashJs = read('js/dashboard.js');
+  const coreJs = read('js/core.js');
+  const recordsJs = read('js/records.js');
+  const membersJs = read('js/members.js');
+  const settingsJs = read('js/settings.js');
+  const css = read('css/app.css');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+
+  for (const sql of [mig093, schema]) {
+    assert.match(sql, /alter table public\.groups[\s\S]*?add column if not exists workspace_mode text not null default 'GROUP'/i);
+    assert.match(sql, /check \(workspace_mode in \('SOLO', 'GROUP'\)\)/i);
+    assert.match(sql, /drop function if exists public\.admin_create_group\(text, text, boolean, numeric\);/i);
+    assert.match(sql, /create or replace function public\.admin_create_group\([\s\S]*?p_workspace_mode text default 'GROUP'/i);
+    assert.match(sql, /create or replace function public\.get_my_groups\(\)[\s\S]*?workspace_mode text/i);
+    assert.match(sql, /create or replace function public\.switch_active_group\(p_group_id uuid\)[\s\S]*?'workspace_mode'/i);
+    assert.match(sql, /drop function if exists public\.update_group_profile\(text, text, boolean\);/i);
+    assert.match(sql, /create or replace function public\.update_group_profile\([\s\S]*?p_workspace_mode text default null/i);
+    assert.match(sql, /Remove other members before switching this workspace to Solo savings\./i);
+    assert.match(sql, /Solo savings workspaces do not support additional members or invites\./i);
+    assert.match(sql, /Solo savings workspaces do not accept member or treasurer invitations\./i);
+    assert.match(sql, /where id = p_user_id[\s\S]*?and role <> 'SUPER_ADMIN'/i);
+    assert.match(sql, /'20261116_093'/);
+  }
+
+  // Solo workspaces remain standard rows in public.groups so existing retention/bin cleanup applies automatically
+  assert.doesNotMatch(mig093, /where[^\n]*workspace_mode\s*<>\s*'SOLO'[^\n]*retention/i);
+  assert.match(edgeFn, /targetGroup\?\.workspace_mode === 'SOLO'/);
+
+  // Super Admin Users drops global Role filter/column and displays multi-group pills + overflow dialog
+  const usersSection = saHtml.match(/<div[^>]*id="administrators"[\s\S]*?<\/section>/)?.[0] || '';
+  assert.ok(usersSection, 'super-admin.html must define #administrators section');
+  assert.doesNotMatch(usersSection, /<th>Role<\/th>/);
+  assert.match(usersSection, /<th>Groups<\/th>/);
+  assert.match(saHtml, /id="user-groups-dialog"/);
+  assert.match(saJs, /from\('group_memberships'\)\.select\('group_id,user_id,role,status'\)/);
+  assert.match(saJs, /function getUserGroups\(/);
+  assert.match(saJs, /function renderUserGroupsCell\(/);
+  assert.match(saJs, /data-view-user-groups/);
+  assert.match(saJs, /openUserGroupsDialog\(/);
+  assert.match(css, /\.sa-group-pills\b/);
+  assert.match(css, /\.sa-group-chip\.is-solo\b/);
+  assert.match(css, /\.sa-group-more-btn\b/);
+
+  // Solo vs Group creation, management hub switch, sidebar sync, and memberless flows
+  assert.match(dashHtml, /id="no-group-solo-btn"/);
+  assert.match(dashHtml, /id="group-workspace-mode-tabs"/);
+  assert.match(dashHtml, /id="group-hub-solo-banner"/);
+  assert.match(dashHtml, /href="members\.html"[^>]*data-group-only="1"/);
+  assert.match(dashJs, /function syncGroupFormWorkspaceMode\(/);
+  assert.match(dashJs, /p_workspace_mode:\s*workspaceMode/);
+  assert.match(dashJs, /Ipon\.syncWorkspaceMode\?\./);
+  assert.match(coreJs, /function syncWorkspaceMode\(/);
+  assert.match(coreJs, /data-group-required-create="SOLO"/);
+  assert.match(recordsJs, /state\.profile\?\.workspace_mode === 'SOLO'/);
+  assert.match(membersJs, /currentGroup\?\.workspace_mode === 'SOLO'/);
+  assert.match(settingsJs, /activeGroup\?\.workspace_mode === 'SOLO'/);
+});
+
+test('migration 094 and budget.html implement non-destructive Budget Allocation & Expense Tracking linked to live IPON savings', async () => {
+  const mig094 = read('database/migrations/20261116_094_budget_allocation_tracker.sql');
+  const schema = read('database/schema.sql');
+  const budgetHtml = read('budget.html');
+  const budgetJs = read('js/budget.js');
+  const coreJs = read('js/core.js');
+  const appCss = read('css/app.css');
+
+  for (const sql of [mig094, schema]) {
+    assert.match(sql, /'20261116_094'/);
+    assert.match(sql, /create table if not exists public\.budget_configs/i);
+    assert.match(sql, /create table if not exists public\.budget_items/i);
+    assert.match(sql, /create table if not exists public\.budget_expenses/i);
+    assert.match(sql, /create or replace function public\.get_budget_overview\(/i);
+    assert.match(sql, /create or replace function public\.save_budget_allocation\(/i);
+    assert.match(sql, /create or replace function public\.save_budget_item\(/i);
+    assert.match(sql, /create or replace function public\.delete_budget_item\(/i);
+    assert.match(sql, /create or replace function public\.save_budget_expense\(/i);
+    assert.match(sql, /create or replace function public\.delete_budget_expense\(/i);
+  }
+
+  assert.match(coreJs, /\['budget',\s*'budget\.html',\s*'Budget'/);
+  assert.match(budgetHtml, /class="budget-workspace-strip" id="budget-group-bar"/);
+  assert.match(budgetHtml, /class="budget-hero"/);
+  assert.match(budgetHtml, /id="budget-ref-balance"/);
+  assert.match(budgetHtml, /id="budget-total-allocated"/);
+  assert.match(budgetHtml, /id="budget-total-spent"/);
+  assert.match(budgetHtml, /id="budget-total-remaining"/);
+  assert.match(budgetHtml, /id="budget-categories-grid"/);
+  assert.match(budgetHtml, /id="budget-expenses-body"/);
+  assert.match(budgetHtml, /id="budget-item-dialog"/);
+  assert.match(budgetHtml, /id="budget-expense-dialog"/);
+  assert.match(budgetHtml, /id="budget-split-dialog"/);
+
+  assert.match(appCss, /\.budget-hero::after/);
+  assert.match(appCss, /\.budget-stats-grid/);
+  assert.match(appCss, /\.budget-categories-grid/);
+  assert.match(appCss, /\.budget-history-panel/);
+  assert.match(appCss, /html\[data-theme="dark"\] \.budget-workspace/);
+
+  // Runtime VM check for js/budget.js render and live savings recalculation
+  const els = new Map();
+  const makeEl = (id) => {
+    const cls = new Set();
+    const listeners = new Map();
+    const el = {
+      id,
+      value: '',
+      hidden: false,
+      disabled: false,
+      open: false,
+      textContent: '',
+      innerHTML: '',
+      dataset: {},
+      style: {},
+      validity: { badInput: false, valid: true },
+      classList: {
+        add: (...names) => names.forEach((n) => cls.add(n)),
+        remove: (...names) => names.forEach((n) => cls.delete(n)),
+        toggle: (name, force) => (force === undefined ? (cls.has(name) ? cls.delete(name) : cls.add(name)) : (force ? cls.add(name) : cls.delete(name))),
+        contains: (name) => cls.has(name)
+      },
+      setAttribute() { },
+      removeAttribute() { },
+      focus() { },
+      select() { },
+      reset() { },
+      replaceChildren() { el.innerHTML = ''; },
+      showModal() { el.open = true; },
+      close() { el.open = false; },
+      querySelector(sel) {
+        if (sel === 'span') return makeEl(`${id}:span`);
+        if (sel.startsWith('[data-page=')) return makeEl(`${id}:${sel}`);
+        return null;
+      },
+      querySelectorAll() { return []; },
+      addEventListener(type, fn) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push(fn);
+      },
+      async _emit(type, evt = {}) {
+        for (const fn of listeners.get(type) || []) {
+          await fn({ target: el, preventDefault() { }, ...evt });
+        }
+      }
+    };
+    if (id) els.set(id, el);
+    return el;
+  };
+  [
+    'budget-group-bar', 'budget-group-name', 'budget-group-switcher-wrap', 'budget-group-select',
+    'budget-error-slot', 'budget-no-workspace', 'budget-workspace-content', 'budget-header-actions',
+    'budget-split-heading', 'budget-source-label', 'budget-ratio-needs', 'budget-ratio-wants',
+    'budget-ratio-savings', 'budget-legend-needs-pct', 'budget-legend-wants-pct', 'budget-legend-savings-pct',
+    'budget-legend-needs-amt', 'budget-legend-wants-amt', 'budget-legend-savings-amt',
+    'budget-ref-balance', 'budget-ref-note', 'budget-total-allocated', 'budget-total-itemized',
+    'budget-total-spent', 'budget-spent-pct', 'budget-total-remaining', 'budget-remaining-note',
+    'budget-categories-grid', 'budget-expense-search', 'budget-expense-filter', 'budget-expenses-body',
+    'budget-history-pager', 'budget-item-dialog', 'budget-item-form', 'budget-item-id',
+    'budget-item-category', 'budget-item-name', 'budget-item-amount', 'budget-item-suggestions',
+    'budget-item-headroom-help', 'budget-item-submit', 'budget-expense-dialog', 'budget-expense-form',
+    'budget-expense-id', 'budget-expense-item', 'budget-expense-amount', 'budget-expense-date',
+    'budget-expense-note', 'budget-expense-submit', 'budget-split-dialog', 'budget-split-form',
+    'split-needs', 'split-wants', 'split-savings', 'split-needs-preview', 'split-wants-preview',
+    'split-savings-preview', 'budget-split-total-bar', 'budget-split-sum', 'budget-split-error',
+    'budget-split-submit', 'budget-item-dialog-title', 'budget-item-dialog-copy', 'budget-expense-dialog-title',
+    'budget-expense-dialog-copy', 'budget-hero-tag', 'budget-mode-title', 'budget-mode-copy',
+    'budget-expense-new-item-fields', 'budget-expense-new-category', 'budget-expense-new-name',
+    'budget-expense-suggestions', 'budget-expense-headroom-help', 'budget-expense-deduct-wrap',
+    'budget-expense-deduct', 'budget-expense-deduct-help', 'budget-expense-method-wrap', 'budget-expense-method',
+    'budget-item-eyebrow', 'budget-item-bucket-label', 'budget-item-bucket-total', 'budget-item-unallocated',
+    'budget-expense-eyebrow', 'split-live-needs', 'split-live-wants', 'split-live-savings',
+    'budget-split-state-label', 'budget-split-status-icon'
+  ].forEach(makeEl);
+
+  const mig096 = read('database/migrations/20261116_096_budget_savings_deduction_sync.sql');
+  for (const sql of [mig096, schema]) {
+    assert.match(sql, /'20261116_096'/);
+    assert.match(sql, /linked_expense_id uuid references public\.expenses\(id\)/i);
+    assert.match(sql, /drop function if exists public\.save_budget_expense\(uuid, uuid, numeric, date, text\);/i);
+    assert.match(sql, /v_ref_balance := greatest\(0\.00, v_raw_balance \+ v_deducted_confirmed\);/i);
+    assert.match(sql, /insert into public\.expenses \(/i);
+  }
+  assert.match(budgetHtml, /id="budget-expense-deduct"/);
+  assert.match(budgetHtml, /id="budget-expense-method"/);
+  assert.match(budgetHtml, /id="budget-expense-new-item-fields"/);
+  assert.match(budgetHtml, /class="budget-item-summary-card"/);
+  assert.match(budgetHtml, /id="budget-item-unallocated"/);
+  assert.match(budgetHtml, /class="budget-split-cards"/);
+  assert.match(budgetHtml, /id="split-live-needs"/);
+  assert.match(budgetHtml, /id="budget-split-state-label"/);
+  assert.match(budgetJs, /budget-empty-history-inner/);
+  assert.match(appCss, /\.budget-sync-pill\.is-deducted/);
+  assert.match(appCss, /\.budget-modal-dialog[\s\S]*#faf5ec/i);
+  assert.match(appCss, /\.budget-split-live-seg/);
+  assert.match(appCss, /\.budget-empty-history-inner/);
+  assert.match(appCss, /\.budget-categories-grid > \.panel \+ \.panel\s*\{\s*margin-top:\s*0;/);
+  assert.match(appCss, /\.budget-empty-items::before\s*\{\s*display:\s*none\s*!important;/);
+  assert.match(appCss, /\.budget-category-card[\s\S]*flex-direction:\s*column/);
+  assert.match(appCss, /\.budget-empty-items[\s\S]*flex:\s*1 1 auto/);
+
+  let refSavings = 10000;
+  let dbExpenses = [
+    { id: 'exp-1', item_id: 'item-1', item_name: 'Groceries', category: 'NEEDS', amount: 2000, expense_date: '2026-11-16', note: 'Weekly run', payment_method: 'CASH', deduct_from_savings: true, savings_sync_status: 'CONFIRMED' }
+  ];
+  let realtimeReload = null;
+  const rpcCalls = [];
+  const ctx = {
+    console,
+    Math,
+    Number,
+    String,
+    Array,
+    Object,
+    Promise,
+    Date,
+    document: {
+      getElementById: (id) => els.get(id) || makeEl(id)
+    },
+    Ipon: {
+      init: async () => ({ failed: false, redirecting: false, configured: true, profile: { id: 'u1', group_id: 'g1', role: 'ADMIN' } }),
+      money: (v) => `₱${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      dateLabel: (d) => String(d || ''),
+      isoDate: () => '2026-11-16',
+      escapeHtml: (s) => String(s || ''),
+      setLoading() { },
+      setBusy() { },
+      setFieldError() { },
+      toast() { },
+      showInlineError() { },
+      renderGroupRequiredCard() { },
+      syncWorkspaceMode() { },
+      populateGroupSelect() { },
+      guardMoneyInput() { },
+      paymentMethodOptionsHtml: () => '<option value="CASH">Cash</option><option value="GCASH">GCash</option>',
+      paymentMethodMeta: (m) => ({ label: m === 'GCASH' ? 'GCash' : 'Cash' }),
+      parseMoneyAmount: (raw) => ({ valid: Number.isFinite(Number(raw)), value: Number(raw || 0), error: '' }),
+      subscribeToChanges: (_name, _tables, fn) => { realtimeReload = fn; },
+      rpc: async (name, params) => {
+        rpcCalls.push([name, params]);
+        if (name === 'get_my_groups') return [{ group_id: 'g1', name: 'Test Savings', is_current: true, workspace_mode: 'GROUP' }];
+        if (name === 'save_budget_expense') {
+          dbExpenses.unshift({
+            id: `exp-${dbExpenses.length + 1}`,
+            item_id: params.p_item_id || 'item-1',
+            item_name: params.p_item_name || 'Groceries',
+            category: params.p_category || 'NEEDS',
+            amount: Number(params.p_amount || 0),
+            expense_date: params.p_expense_date || '2026-11-16',
+            note: params.p_note || '',
+            payment_method: params.p_payment_method || 'CASH',
+            deduct_from_savings: Boolean(params.p_deduct_from_savings),
+            savings_sync_status: params.p_deduct_from_savings ? 'CONFIRMED' : 'MONITORING'
+          });
+          return dbExpenses[0];
+        }
+        if (name === 'get_budget_overview') {
+          const spent = dbExpenses.reduce((acc, row) => acc + row.amount, 0);
+          const deductedConfirmed = dbExpenses.filter((r) => r.savings_sync_status === 'CONFIRMED').reduce((acc, row) => acc + row.amount, 0);
+          const remainingSavings = refSavings - (spent - 2000);
+          const grossPool = remainingSavings + deductedConfirmed;
+          return {
+            has_workspace: true,
+            group_id: 'g1',
+            group_name: 'Test Savings',
+            role: 'ADMIN',
+            can_deduct_savings: true,
+            current_savings: remainingSavings,
+            deducted_confirmed: deductedConfirmed,
+            deducted_pending: 0,
+            reference_balance: grossPool,
+            raw_savings_balance: remainingSavings,
+            config: { needs_pct: 50, wants_pct: 30, savings_pct: 20 },
+            totals: { allocated: grossPool, itemized: 2500, spent, remaining: grossPool - spent },
+            categories: {
+              NEEDS: { pct: 50, allocated: grossPool * 0.5, itemized: 2500, spent, remaining: (grossPool * 0.5) - spent },
+              WANTS: { pct: 30, allocated: grossPool * 0.3, itemized: 0, spent: 0, remaining: grossPool * 0.3 },
+              SAVINGS: { pct: 20, allocated: grossPool * 0.2, itemized: 0, spent: 0, remaining: grossPool * 0.2 }
+            },
+            items: [{ id: 'item-1', category: 'NEEDS', name: 'Groceries', allocated_amount: 2500, spent_amount: spent, expense_count: dbExpenses.length }],
+            expenses: dbExpenses
+          };
+        }
+        return null;
+      }
+    }
+  };
+  await vm.runInNewContext(budgetJs, ctx, { filename: 'js/budget.js' });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(els.get('budget-ref-balance').textContent, '₱10,000.00');
+  assert.equal(els.get('budget-legend-needs-amt').textContent, '₱6,000.00');
+  assert.equal(els.get('budget-total-spent').textContent, '₱2,000.00');
+  assert.equal(els.get('budget-total-remaining').textContent, '₱10,000.00');
+
+  els.get('budget-expense-item').value = '__NEW__';
+  els.get('budget-expense-new-category').value = 'NEEDS';
+  els.get('budget-expense-new-name').value = 'Water bill';
+  els.get('budget-expense-amount').value = '1500';
+  els.get('budget-expense-deduct').checked = true;
+  els.get('budget-expense-method').value = 'GCASH';
+  await els.get('budget-expense-form')._emit('submit');
+  assert.equal(els.get('budget-ref-balance').textContent, '₱8,500.00');
+  assert.equal(els.get('budget-total-spent').textContent, '₱3,500.00');
+  assert.equal(els.get('budget-total-remaining').textContent, '₱8,500.00');
+  assert.equal(rpcCalls.some(([name, p]) => name === 'save_budget_expense' && p?.p_deduct_from_savings === true && p?.p_payment_method === 'GCASH'), true);
+
+  refSavings = 15000;
+  await realtimeReload();
+  assert.equal(els.get('budget-ref-balance').textContent, '₱13,500.00');
+  assert.equal(els.get('budget-total-spent').textContent, '₱3,500.00');
+  assert.equal(els.get('budget-total-remaining').textContent, '₱13,500.00');
+  assert.equal(dbExpenses.length, 2);
+
+  els.get('budget-item-category').value = 'WANTS';
+  els.get('budget-item-amount').value = '500';
+  await els.get('budget-item-amount')._emit('input');
+  assert.equal(els.get('budget-item-bucket-label').textContent, 'WANTS BUDGET');
+  assert.equal(els.get('budget-item-bucket-total').textContent, els.get('budget-legend-wants-amt').textContent);
+  assert.match(els.get('budget-item-unallocated').textContent, /^₱[1-9]/);
+
+  els.get('split-needs').value = '50';
+  els.get('split-wants').value = '30';
+  els.get('split-savings').value = '20';
+  await els.get('split-needs')._emit('input');
+  assert.equal(els.get('budget-split-state-label').textContent, 'Ready to save');
+
+  els.get('split-savings').value = '10';
+  await els.get('split-savings')._emit('input');
+  assert.equal(els.get('budget-split-state-label').textContent, '10% remaining');
+});
+
+test('Migration 095 restores reverted RPCs/policies, drops legacy overloads, and cleans unlinked groups', () => {
+  const mig095 = read('database/migrations/20261116_095_restore_reverted_ddl_and_clean_unlinked_groups.sql');
+  const schema = read('database/schema.sql');
+
+  const expectedDrops = [
+    /drop function if exists public\.create_member\(text, text, text, text, date, numeric, text\)/,
+    /drop function if exists public\.update_member\(uuid, text, text, text, text, numeric, text\)/,
+    /drop function if exists public\.update_own_profile\(text, text, text, text\)/,
+    /drop function if exists public\.update_contribution\(uuid, numeric, date, text, text\)/,
+    /drop function if exists public\.update_withdrawal\(uuid, date, numeric, text, text, text, text, text\)/,
+    /drop function if exists public\.update_expense\(uuid, date, numeric, text, text, text, text, text\)/,
+    /drop function if exists public\.set_contribution_setting\(date, numeric\)/,
+    /drop function if exists public\.super_admin_reject_request\(uuid\)/
+  ];
+  for (const re of expectedDrops) {
+    assert.match(mig095, re, `Migration 095 must match ${re}`);
+  }
+
+  for (const sql of [mig095, schema]) {
+    assert.match(sql, /'20261116_095'/);
+    assert.match(sql, /insert into public\.contribution_periods \(member_id, period_month, required_amount, due_date\)/);
+    assert.match(sql, /when ctx\.role_name not in \('ADMIN', 'TREASURER', 'MEMBER'\) or ctx\.group_id is null then null/);
+    assert.match(sql, /create policy profiles_select on public\.profiles[\s\S]*?or public\.is_super_admin\(\)/);
+    assert.match(sql, /'68853776-6a1b-4170-afb8-5dd93c3de90c'::uuid/);
+    assert.match(sql, /'e9181a7f-7211-47ce-b4ee-bf95e99f78d4'::uuid/);
+  }
+});
+
+test('supabase-migrate.mjs refuses legacy replay or ledger fallback to an empty Set', () => {
+  const migrateScript = read('scripts/supabase-migrate.mjs');
+  assert.doesNotMatch(migrateScript, /fetchAppliedVersions\(\)\s*\|\|\s*new Set\(\)/);
+  assert.doesNotMatch(migrateScript, /catch\s*\([^)]*\)\s*\{\s*if\s*\(!applyMode\)\s*throw[^}]*return null;/);
+  assert.match(migrateScript, /function parseQueryRows\(raw\)/);
+  assert.match(migrateScript, /function fetchSchemaState\(\)/);
+  assert.match(migrateScript, /Refusing to run migrations: public\.profiles exists but public\.schema_migrations is empty/);
+  assert.match(migrateScript, /Refusing to replay historical migration\(s\)/);
+});
+
+test('Dashboard header renders before summary failure, Solo quick-record falls back, live sync covers RPCs/local dev SW cleanup, and bug-reports columns avoid mid-word wraps', () => {
+  const dashboardJs = read('js/dashboard.js');
+  const coreJs = read('js/core.js');
+  const swJs = read('sw.js');
+  const appCss = read('css/app.css');
+
+  const renderIdx = dashboardJs.indexOf('renderGroupHeader(normalizedGroups);');
+  const unavailIdx = dashboardJs.indexOf("throw new Error('Group savings summary is currently unavailable.');");
+  assert.ok(renderIdx > -1 && unavailIdx > -1 && renderIdx < unavailIdx, 'renderGroupHeader must run before summary availability check');
+  assert.match(dashboardJs, /Number\.isFinite\(Number\(trackedSavings\)\)/);
+  assert.match(dashboardJs, /const isSoloMode = currentGroup\?\.workspace_mode === 'SOLO';\s*const fallbackMemberId/);
+
+  assert.match(coreJs, /liveSyncBc\.onmessage = \(\) => \{\s*dirty = true;\s*resume\(\);/);
+  assert.match(coreJs, /async function rpc\(name, params\)[\s\S]*?notifyLiveSync\('data'\);/);
+  assert.match(coreJs, /const isLocalDevHost = window\.location\.protocol !== 'https:'/);
+  assert.match(coreJs, /fetch\(window\.location\.href,\s*\{\s*cache:\s*'reload'\s*\}\)/);
+  assert.match(coreJs, /if \(!event\.persisted\) return;\s*if \(isLocalDevHost\)/);
+  assert.match(read('js/config.js'), /ipon_sw_local_cleaned_v19/);
+  assert.match(swJs, /const IS_LOCAL_DEV =/);
+  assert.match(swJs, /if \(IS_LOCAL_DEV\) return;/);
+
+  const htmlFiles = readdirSync(root).filter((name) => name.endsWith('.html'));
+  const sharedCss = new Set();
+  const sharedConfig = new Set();
+  const sharedCore = new Set();
+  for (const file of htmlFiles) {
+    const html = read(file);
+    const appCssRef = html.match(/href="(css\/app\.css\?v=[^"]+)"/)?.[1];
+    const configRef = html.match(/src="(js\/config\.js\?v=[^"]+)"/)?.[1];
+    const coreRef = html.match(/src="(js\/core\.js\?v=[^"]+)"/)?.[1];
+    if (appCssRef) sharedCss.add(appCssRef);
+    if (configRef) sharedConfig.add(configRef);
+    if (coreRef) sharedCore.add(coreRef);
+  }
+  assert.equal(sharedCss.size, 1, `css/app.css version mismatch across HTML pages: ${[...sharedCss].join(', ')}`);
+  assert.equal(sharedConfig.size, 1, `js/config.js version mismatch across HTML pages: ${[...sharedConfig].join(', ')}`);
+  assert.equal(sharedCore.size, 1, `js/core.js version mismatch across HTML pages: ${[...sharedCore].join(', ')}`);
+
+  assert.match(appCss, /#bug-reports \.data-table td:nth-child\(2\)[\s\S]*?white-space:\s*nowrap/);
+  assert.match(appCss, /\.users-filters #users-search[\s\S]*?min-width:\s*256px/);
+});
+
+test('createRealtimeChannel and Realtime callers avoid adding postgres_changes or presence callbacks onto subscribed channels', () => {
+  const coreJs = read('js/core.js');
+  const messagesJs = read('js/messages.js');
+  assert.match(coreJs, /function createRealtimeChannel\(baseTopic, options = undefined, clientArg = null\)/);
+  assert.match(coreJs, /createRealtimeChannel\(`live:\$\{name\}:/);
+  assert.match(coreJs, /createRealtimeChannel\(`notifications:\$\{profile\.id\}`/);
+  assert.match(coreJs, /createRealtimeChannel\(`record-thread-\$\{recordType\}-\$\{recordId\}`/);
+  assert.match(coreJs, /existingPresence[\s\S]*realtime:ipon-active-presence/);
+  assert.match(messagesJs, /ipon\(\)\.createRealtimeChannel/);
+
+  const helperSrc = coreJs.match(/let rtChannelNonce = 0;[\s\S]*?return options === undefined \? client\.channel\(baseTopic\) : client\.channel\(baseTopic, options\);\s*\}/)?.[0];
+  assert.ok(helperSrc, 'createRealtimeChannel helper should exist');
+  const activeChannels = [];
+  const removed = [];
+  const fakeClient = {
+    getChannels: () => activeChannels,
+    removeChannel: (ch) => {
+      removed.push(ch.topic);
+      return Promise.resolve('ok');
+    },
+    channel(topic) {
+      const fullTopic = `realtime:${topic}`;
+      const existing = activeChannels.find((c) => c.topic === fullTopic);
+      if (existing) return existing;
+      const ch = {
+        topic: fullTopic,
+        subscribed: false,
+        on(type) {
+          if (ch.subscribed && type === 'postgres_changes') {
+            throw new Error(`cannot add \`postgres_changes\` callbacks for ${ch.topic} after \`subscribe()\`.`);
+          }
+          return ch;
+        },
+        subscribe() {
+          ch.subscribed = true;
+          return ch;
+        }
+      };
+      activeChannels.push(ch);
+      return ch;
+    }
+  };
+  const fn = new Function('getClient', `${helperSrc}; return createRealtimeChannel;`)(() => fakeClient);
+  const ch1 = fn('live:budget:user-1');
+  ch1.on('postgres_changes', {}).subscribe();
+  const ch2 = fn('live:budget:user-1');
+  assert.notEqual(ch2, ch1);
+  assert.doesNotThrow(() => ch2.on('postgres_changes', {}).subscribe());
+  assert.deepEqual(removed, ['realtime:live:budget:user-1']);
+});
+
+test('generateWithGemini tries all AI Studio models before Vertex and preserves free-tier diagnostics', async () => {
+  const { stripTypeScriptTypes } = await import('node:module');
+  const edgeTs = read('supabase/functions/manage-account/index.ts');
+  const coreJs = read('js/core.js');
+
+  assert.match(edgeTs, /resolveServerGeminiKeys/);
+  const blockMatch = edgeTs.match(/const GEMINI_RELEASE_MODELS = \[[\s\S]*?\nasync function generateWithGemini\([\s\S]*?\n\}(?=\r?\n\r?\nconst TECH_COMMIT_RE)/);
+  assert.ok(blockMatch, 'Gemini helper block should exist in manage-account/index.ts');
+
+  const jsCode = stripTypeScriptTypes(blockMatch[0], { mode: 'transform' });
+  const buildRunner = (fakeFetch) => new Function('fetch', 'AbortController', 'setTimeout', 'clearTimeout', `
+    ${jsCode}
+    return { GEMINI_RELEASE_MODELS, generateWithGemini, formatGeminiApiError };
+  `)(fakeFetch, AbortController, setTimeout, clearTimeout);
+
+  // 1. Continues across AI Studio models if first model fails with 403/BILLING_DISABLED, succeeding on 2.0-flash without hitting Vertex
+  const calls1 = [];
+  const { generateWithGemini: gen1 } = buildRunner(async (url) => {
+    calls1.push(url);
+    if (url.includes('gemini-2.5-flash-lite')) {
+      return new Response(JSON.stringify({ error: { status: 'PERMISSION_DENIED', message: 'Quota check failed', details: [{ reason: 'BILLING_DISABLED' }] } }), { status: 403 });
+    }
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"title":"Update 1.1: Smoother savings"}' }] } }] }), { status: 200 });
+  });
+  const okRes = await gen1({ apiKey: 'AQ.fake-key', prompt: 'Draft notes' });
+  assert.equal(okRes.model, 'gemini-2.0-flash');
+  assert.ok(calls1.every((u) => u.includes('generativelanguage.googleapis.com')));
+
+  // 2. Preserves SERVICE_DISABLED hint on generativelanguage.googleapis.com instead of masking behind Vertex BILLING_DISABLED
+  const { generateWithGemini: gen2 } = buildRunner(async (url) => {
+    if (url.includes('generativelanguage.googleapis.com')) {
+      return new Response(JSON.stringify({
+        error: {
+          status: 'PERMISSION_DENIED',
+          message: 'Generative Language API has not been used in project 123 before or it is disabled.',
+          details: [{ reason: 'SERVICE_DISABLED' }]
+        }
+      }), { status: 403 });
+    }
+    return new Response(JSON.stringify({
+      error: {
+        status: 'PERMISSION_DENIED',
+        message: 'This API method requires billing to be enabled.',
+        details: [{ reason: 'BILLING_DISABLED' }]
+      }
+    }), { status: 403 });
+  });
+  await assert.rejects(
+    () => gen2({ apiKey: 'AQ.fake-key', prompt: 'Draft notes' }),
+    /Generative Language API is disabled.*no Cloud billing needed/i
+  );
+
+  // 3. Clearly distinguishes Vertex Express AQ. key + disabled billing vs AI Studio free-tier key
+  const { generateWithGemini: gen3 } = buildRunner(async (url) => {
+    if (url.includes('generativelanguage.googleapis.com')) {
+      return new Response(JSON.stringify({
+        error: {
+          status: 'UNAUTHENTICATED',
+          message: 'Request is missing required authentication credential.',
+          details: [{ reason: 'ACCESS_TOKEN_TYPE_UNSUPPORTED' }]
+        }
+      }), { status: 401 });
+    }
+    return new Response(JSON.stringify({
+      error: {
+        status: 'PERMISSION_DENIED',
+        message: 'This API method requires billing to be enabled.',
+        details: [{ reason: 'BILLING_DISABLED' }]
+      }
+    }), { status: 403 });
+  });
+  await assert.rejects(
+    () => gen3({ apiKey: 'AQ.vertex-express-key', prompt: 'Draft notes' }),
+    /Vertex AI Express key whose Cloud billing is disabled.*aistudio\.google\.com\/app\/apikey/i
+  );
+
+  // 4. js/core.js friendlyError preserves structured server diagnostics and still maps raw errors
+  assert.match(coreJs, /Gemini AI failed to generate release notes:\|Generative Language API/);
+});
+
+test('draftVerifiedReleaseNotesFallback writes plain-English topics and cleanly excludes CSS specs and dev jargon', async () => {
+  const { stripTypeScriptTypes } = await import('node:module');
+  const edgeTs = read('supabase/functions/manage-account/index.ts');
+  const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
+  const end = edgeTs.indexOf('Deno.serve(');
+  assert.ok(start !== -1 && end > start, 'Fallback helper blocks must exist in manage-account/index.ts');
+
+  const jsCode = stripTypeScriptTypes(edgeTs.slice(start, end), { mode: 'transform' });
+  const { extractCommitUpdates, canonicalizeCommitUpdates, draftVerifiedReleaseNotesFallback } = new Function('Deno', 'crypto', 'process', `
+    ${jsCode}
+    return { extractCommitUpdates, canonicalizeCommitUpdates, draftVerifiedReleaseNotesFallback };
+  `)({ env: { get: () => '' }, serve() {} }, globalThis.crypto, process);
+
+  const rawCommits = [
+    [
+      'Standardize confirmation dialogs to warm-cream card with top gold accent and equal pill actions',
+      '',
+      '- Update .confirm-dialog in css/app.css (22px rounded #faf6ee card, 26px #b88c3e top accent rule, bold serif heading, equal 2-column button bar with #ffffff Cancel and #102420 forest-emerald primary button, plus dark-mode and <=720px responsive tuning)'
+    ].join('\n'),
+    [
+      'fix: strip CSS tokens, hex colors, and code jargon from Write with AI notes',
+      '',
+      '- Filter CSS class/ID selectors, hex colors, pixel/viewport units, broken fragments, and design-spec jargon across TECH_COMMIT_RE, CODE_TOKEN_RE, and canonicalizeClauseForParsing',
+      '- Preserve parenthetical and multi-modal lists cleanly during clause splitting while fixing \'and <verb>\' splitting and stripping conventional \'fix:\' before other verbs',
+      '- Improve fallback release-note topic labels and phrasing (Make ... verb rewrites and Improvements categorization)',
+      '- Fix migration 084 test declarations and generateWithGemini block extraction in tests/contracts.test.mjs, and add plain-English release-note contract coverage (npm test: 157/157 passing)'
+    ].join('\n'),
+    [
+      'fix: deduplicate prior release announcements and eliminate repetitive endings in Write with AI',
+      '',
+      '- Fix collectReleaseContext to select description on public.announcements, recovering latestReleaseAt, version incrementing, and prior release text.',
+      '- Rewrite draftVerifiedReleaseNotesFallback to conjugate commit clauses cleanly, while updating the Gemini prompt to pass prior bullet topics and disallow repetitive tail phrases.'
+    ].join('\n'),
+    [
+      'not finish',
+      '',
+      '- Add Budget Allocation & Expenses page (budget.html, js/budget.js, migration 094) with hero allocation card, 3-bucket tracking, and non-destructive history',
+      '- Fix dashboard group header/tracked savings sync, Solo quick-record fallback, Super Admin table wrapping, and localhost Service Worker caching (v18 / www sync)'
+    ].join('\n'),
+    'Elevate floating chat/notif buttons, align Needs, Wants, and Savings category cards, and make tracked budget expenses empty row center across table columns',
+    'feat: remove Super Admin user role column, add multi-group overflow & Solo/Group workspaces',
+    'fix: expand budget workspace full-width and harden supabase:sync CLI parsing'
+  ];
+
+  const updates = canonicalizeCommitUpdates(rawCommits);
+  const draft = draftVerifiedReleaseNotesFallback({
+    version: '1.5',
+    features: [],
+    fixedBugs: [],
+    systemUpdates: updates,
+    variationSeed: 0
+  });
+
+  assert.doesNotMatch(draft.details, /\.confirm-dialog|#faf6ee|#b88c3e|#ffffff|#102420|22px|26px|button bar|top accent rule|forest-emerald|supabase:sync|CLI parsing|CSS class|viewport units|clause splitting|contract coverage|npm test|Gemini prompt|tail phrases|version incrementing|Service Worker/i);
+  assert.doesNotMatch(draft.details, /Floating Chat And Notification:|• Needs:|Make tracked budget|Access checks apply strictly|While updating|Fallback/i);
+  assert.match(draft.details, /New Features[\s\S]*• Budget Allocation & Expenses Page:/);
+  assert.match(draft.details, /Improvements[\s\S]*• Floating Chat & Notification Buttons:/);
+  assert.match(draft.details, /• Tracked Budget Expenses: Updated tracked budget expenses empty row to center across table columns\./);
+  assert.match(draft.details, /Improvements[\s\S]*• Super Admin User Role: Removed Super Admin user role column\./);
+  assert.match(draft.details, /Improvements[\s\S]*• Budget Workspace: Expanded budget workspace full-width\./);
+  assert.match(draft.details, /New Features[\s\S]*• Multi-Group Overflow & Solo\/Group Workspaces:/);
+  assert.match(draft.details, /Fixes[\s\S]*• Solo Quick-Record Saving:/);
+
+  const needsCategoryDraft = draftVerifiedReleaseNotesFallback({
+    version: '1.5',
+    features: [],
+    fixedBugs: [],
+    systemUpdates: ['Align Needs, Wants, and Savings category cards'],
+    variationSeed: 0
+  });
+  assert.match(needsCategoryDraft.details, /Improvements[\s\S]*• Needs, Wants, and Savings Category:/);
+});
+
+test('budget expense dialog removes single-option create dropdown when empty or typing and migration 097 cleans deleted announcement notifications', () => {
+  const budgetHtml = read('budget.html');
+  const budgetJs = read('js/budget.js');
+  const appCss = read('css/app.css');
+  const coreJs = read('js/core.js');
+  const schemaSql = read('database/schema.sql');
+  const mig097 = read('database/migrations/20261117_097_cleanup_deleted_announcement_notifications.sql');
+
+  // 1. Budget expense item name textbox sits first inside #budget-expense-new-item-fields, with dropdown wrapper hidden in create mode
+  assert.match(budgetHtml, /id="budget-expense-item-wrap"/);
+  assert.match(budgetHtml, /id="budget-expense-switch-new"/);
+  assert.match(budgetHtml, /id="budget-expense-switch-existing"/);
+  assert.match(budgetHtml, /id="budget-expense-new-item-fields"[\s\S]*?id="budget-expense-new-name"[\s\S]*?id="budget-expense-new-category"/);
+  assert.match(appCss, /\.budget-inline-head\s*\{/);
+  assert.match(appCss, /\.budget-mode-link\b/);
+  assert.match(budgetJs, /const isNew = expenseItemSelect\?\.value === '__NEW__' \|\| !hasExistingItems;/);
+  assert.match(budgetJs, /if \(expenseItemWrap\) expenseItemWrap\.hidden = isNew;/);
+  assert.match(budgetJs, /if \(expenseSwitchExistingBtn\) expenseSwitchExistingBtn\.hidden = !isNew \|\| !hasExistingItems;/);
+
+  // 2. Deleted announcement notification auto-cleanup trigger + backfill + client live sync
+  assert.match(mig097, /create or replace function public\.cleanup_deleted_announcement_notifications\(\)/i);
+  assert.match(mig097, /after update of deleted_at or delete on public\.announcements/i);
+  assert.match(mig097, /'20261117_097'/);
+  assert.match(schemaSql, /cleanup_deleted_announcement_notifications/);
+  assert.match(schemaSql, /'20261117_097'/);
+  assert.match(coreJs, /notifyLiveSync\('notifications'\)/);
+  assert.match(coreJs, /activeNotificationsReload\?\.\(\)/);
+});
+
+test('Super Admin and manage-account select and enforce feature_requests.allow_credit for release credits', () => {
+  const saJs = read('js/super-admin.js');
+  const edgeTs = read('supabase/functions/manage-account/index.ts');
+
+  assert.match(saJs, /from\('feature_requests'\)\.select\('[^']*allow_credit[^']*'\)/);
+  assert.match(edgeTs, /from\('feature_requests'\)[\s\S]*?\.select\('title,details,requester_id,allow_credit'\)/);
+  assert.match(edgeTs, /f\.allow_credit !== false && f\.requester_name/);
+  assert.match(edgeTs, /from\('profiles'\)[\s\S]*?\.select\('id,full_name'\)/);
+});
+
+test('Write with AI keeps release announcements strictly factual without AI embellishment or canned outcome padding', async () => {
+  const { stripTypeScriptTypes } = await import('node:module');
+  const edgeTs = read('supabase/functions/manage-account/index.ts');
+  const saJs = read('js/super-admin.js');
+  const saHtml = read('super-admin.html');
+
+  // 1. Gemini generation config uses low temperature for factual fidelity and prompts forbid embellishment
+  assert.match(edgeTs, /temperature:\s*0\.25\b/);
+  assert.match(edgeTs, /topP:\s*0\.8\b/);
+  assert.match(edgeTs, /NEVER invent, exaggerate, extrapolate, or guess unmentioned mechanisms/);
+  assert.doesNotMatch(edgeTs, /function pickUniqueDomainOutcome/);
+  assert.match(saJs, /RELEASE_STYLE_ANGLES\s*=\s*\[[\s\S]*Strictly factual/);
+  assert.doesNotMatch(saJs, /product story|high-energy|celebrating cleaner workflows/i);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-92/);
+
+  // 2. Fallback composer produces crisp factual sentences with zero fabricated outcome padding
+  const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
+  const end = edgeTs.indexOf('Deno.serve(');
+  const jsCode = stripTypeScriptTypes(edgeTs.slice(start, end), { mode: 'transform' });
+  const { draftVerifiedReleaseNotesFallback, sanitizeReleaseDetails } = new Function('Deno', 'crypto', 'process', `
+    ${jsCode}
+    return { draftVerifiedReleaseNotesFallback, sanitizeReleaseDetails };
+  `)({ env: { get: () => '' }, serve() {} }, globalThis.crypto, process);
+
+  const shortFallback = draftVerifiedReleaseNotesFallback({
+    version: '1.6',
+    features: [{ title: 'Dark Mode Switch', description: 'Dark theme option', requester_name: 'Ana' }],
+    fixedBugs: [{ title: 'Fix retention bugs', description: '' }],
+    systemUpdates: ['Expand budget workspace full-width']
+  });
+
+  assert.match(shortFallback.details, /• Dark Mode Switch: Dark theme option\. \(Requested by: Ana\)/);
+  assert.match(shortFallback.details, /• Fix retention bugs: Fixed retention bugs\./);
+  assert.match(shortFallback.details, /• Budget Workspace: Expanded budget workspace full-width\./);
+  assert.doesNotMatch(shortFallback.details, /Related actions now complete|without unexpected resets|without unintended resets|saved preferences|resulting in a more stable and dependable experience|stay protected behind verified permissions/i);
+
+  // 3. sanitizeReleaseDetails strips empty promotional tails while keeping real facts intact
+  const dirtyText = [
+    'Fixes',
+    '• Data Retention: Fixed retention issue. Users can now rely on consistent data storage without unexpected resets, resulting in a more stable and dependable experience.',
+    '• Modal Scroll: Fixed dialog scrolling, for a smoother workflow.',
+    '• History Audit: Retained 30-day audit history on deleted records.'
+  ].join('\n');
+  const edgeSanitized = sanitizeReleaseDetails(dirtyText);
+  assert.match(edgeSanitized.text, /• Data Retention: Fixed retention issue\./);
+  assert.match(edgeSanitized.text, /• Modal Scroll: Fixed dialog scrolling\./);
+  assert.match(edgeSanitized.text, /• History Audit: Retained 30-day audit history on deleted records\./);
+  assert.doesNotMatch(edgeSanitized.text, /without unexpected resets|more stable and dependable experience|for a smoother workflow/i);
+  assert.match(saJs, /function stripReleaseFluffTails\(text\)/);
+});
+
+test('Android MainActivity clears consumed notification_link intent extra and asset caches match v22', () => {
+  const mainAct = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const swJs = read('sw.js');
+  const dashHtml = read('dashboard.html');
+  assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
+  assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
+  assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261117-\d+/);
+});
+
+test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
+  const mig099 = read('database/migrations/20261117_099_specific_user_last_activity.sql');
+  const schema = read('database/schema.sql');
+  const saJs = read('js/super-admin.js');
+  const saHtml = read('super-admin.html');
+
+  for (const sql of [mig099, schema]) {
+    assert.match(sql, /'20261117_099'/);
+    assert.match(sql, /create or replace function public\.super_admin_user_last_activities\(\)/i);
+    assert.match(sql, /if not public\.is_super_admin\(\) then[\s\S]*?errcode = '42501'/i);
+    assert.match(sql, /from public\.audit_logs l[\s\S]*?l\.changed_by is not null/i);
+    assert.match(sql, /from public\.budget_configs bc/i);
+    assert.match(sql, /from public\.bug_reports br/i);
+    assert.match(sql, /from public\.feature_requests fr/i);
+    assert.match(sql, /from public\.messages m/i);
+    assert.match(sql, /\(e\.priority >= 90\) asc,\s*e\.occurred_at desc,\s*e\.priority asc/i);
+    assert.match(sql, /revoke all on function public\.super_admin_user_last_activities\(\) from public, anon;/i);
+    assert.match(sql, /grant execute on function public\.super_admin_user_last_activities\(\) to authenticated;/i);
+  }
+
+  // Ensures Super Admin client never queries raw financial/message tables directly
+  assert.doesNotMatch(saJs, /from\(['"](?:contributions|withdrawals|expenses|members|messages|budget_configs|budget_expenses)['"]\)/);
+  assert.match(saJs, /Ipon\.client\.rpc\('super_admin_user_last_activities'\)/);
+  assert.match(saJs, /function formatUserActivityLabel\(activity\)/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-92/);
+
+  // Verify formatUserActivityLabel handles both new specific RPC rows and legacy fallback events
+  const fnMatch = saJs.match(/function formatUserActivityLabel\(activity\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(fnMatch, 'formatUserActivityLabel helper must exist in js/super-admin.js');
+  const formatUserActivityLabel = new Function(`${fnMatch[0]}; return formatUserActivityLabel;`)();
+  assert.equal(formatUserActivityLabel({ activity_label: 'Recorded contribution', activity_event: 'CONTRIBUTION_ADD' }), 'Recorded contribution');
+  assert.equal(formatUserActivityLabel({ activity_label: 'Submitted bug report', activity_event: 'BUG_REPORT' }), 'Submitted bug report');
+  assert.equal(formatUserActivityLabel({ event: 'LOGIN' }), 'Signed in');
+  assert.equal(formatUserActivityLabel({ event: 'PASSWORD_CHANGE' }), 'Changed password');
+  assert.equal(formatUserActivityLabel({ event: 'PROFILE_UPDATE' }), 'Updated profile');
+});
+
+test('Super Admin Platform overview counts all registered non-super-admin users and wires functional attention & workspace badges', () => {
+  const saHtml = read('super-admin.html');
+  const saJs = read('js/super-admin.js');
+  const css = read('css/app.css');
+
+  // Overview uses Registered users rather than Administrators
+  assert.match(saHtml, /<dt>Registered users<\/dt>[\s\S]*?id="metric-total-users"/);
+  assert.match(saHtml, /<dt>Active users<\/dt>[\s\S]*?id="metric-active-users"/);
+  assert.match(saHtml, /<dt>Suspended<\/dt>[\s\S]*?id="metric-suspended-users"/);
+  assert.match(saHtml, /<dt>Savings groups<\/dt>[\s\S]*?id="metric-groups"/);
+  assert.doesNotMatch(saHtml, /id="metric-total-admins"|Monitor administrator accounts/);
+  assert.doesNotMatch(saJs, /Monitor administrator accounts/);
+
+  // Functional shortcut badges and actionable attention items
+  for (const id of ['shortcut-count-features', 'shortcut-count-bugs', 'shortcut-count-users', 'shortcut-count-activity']) {
+    assert.match(saHtml, new RegExp(`id="${id}"`));
+  }
+  assert.match(saJs, /const registeredUsers = profiles\.filter\(\(profile\) => profile && profile\.role !== 'SUPER_ADMIN'\)/);
+  assert.match(saJs, /data-overview-bug-status="OPEN"/);
+  assert.match(saJs, /data-overview-feature-status="PENDING"/);
+  assert.match(saJs, /data-overview-user-status="DISABLED"/);
+  assert.match(saJs, /data-overview-focus-storage="1"/);
+
+  // Runtime check of renderOverview + setShortcutBadge against mixed roles/statuses
+  const els = new Map();
+  const getEl = (id) => {
+    if (!els.has(id)) {
+      const cls = new Set();
+      els.set(id, {
+        id,
+        textContent: '',
+        innerHTML: '',
+        classList: {
+          toggle: (name, force) => (force ? cls.add(name) : cls.delete(name)),
+          contains: (name) => cls.has(name)
+        }
+      });
+    }
+    return els.get(id);
+  };
+  const badgeBlock = saJs.match(/function setShortcutBadge\([\s\S]*?\n  \}\r?\n\r?\n  function renderOverview\(\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(badgeBlock, 'setShortcutBadge and renderOverview must exist in js/super-admin.js');
+  const nowIso = new Date().toISOString();
+  const runner = new Function(
+    'document', 'Ipon', 'profiles', 'groups', 'bugReports', 'featureRequests', 'accountActivities', 'activityLogs', 'storageOverview', 'formatBytes',
+    `${badgeBlock}; return renderOverview;`
+  )(
+    { getElementById: getEl },
+    { escapeHtml: (s) => String(s || '') },
+    [
+      { id: 'sa', role: 'SUPER_ADMIN', status: 'ACTIVE' },
+      { id: 'u1', role: 'ADMIN', status: 'ACTIVE' },
+      { id: 'u2', role: 'MEMBER', status: 'ACTIVE' },
+      { id: 'u3', role: 'TREASURER', status: 'DISABLED' },
+      { id: 'u4', role: 'MEMBER', status: 'PENDING' }
+    ],
+    [
+      { id: 'g1', status: 'ACTIVE', workspace_mode: 'GROUP' },
+      { id: 'g2', status: 'ACTIVE', workspace_mode: 'SOLO' }
+    ],
+    [{ id: 'b1', status: 'OPEN' }],
+    [{ id: 'f1', status: 'PENDING' }, { id: 'f2', status: 'IMPLEMENTED' }],
+    [{ user_id: 'u1', occurred_at: nowIso }],
+    [{ id: 'a1' }, { id: 'a2' }],
+    { reclaimable_rejected_count: 2, reclaimable_rejected_bytes: 4096 },
+    (n) => `${n} B`
+  );
+  runner();
+  assert.equal(getEl('metric-total-users').textContent, 4);
+  assert.equal(getEl('metric-active-users').textContent, 2);
+  assert.equal(getEl('metric-suspended-users').textContent, 1);
+  assert.equal(getEl('metric-suspended-card').classList.contains('has-alert'), true);
+  assert.equal(getEl('metric-groups').textContent, 2);
+  assert.equal(getEl('metric-groups-meta').textContent, '1 group · 1 solo');
+  assert.equal(getEl('shortcut-count-users').textContent, '4 registered');
+  assert.equal(getEl('shortcut-count-bugs').textContent, '1 open');
+  assert.equal(getEl('shortcut-count-bugs').classList.contains('has-pending'), true);
+  assert.equal(getEl('shortcut-count-features').textContent, '1 pending');
+  assert.match(getEl('platform-attention').innerHTML, /1 open bug report/);
+  assert.match(getEl('platform-attention').innerHTML, /1 pending feature request/);
+  assert.match(getEl('platform-attention').innerHTML, /1 suspended user account/);
+  assert.match(getEl('platform-attention').innerHTML, /1 pending user account/);
+  assert.match(getEl('platform-attention').innerHTML, /2 old rejected receipts to purge/);
+
+  // Premium card styling + dark mode + mobile responsiveness
+  assert.match(css, /\.platform-metric-card\s*\{/);
+  assert.match(css, /\.platform-shortcut-badge\.has-pending\s*\{/);
+  assert.match(css, /html\[data-theme="dark"\] \.platform-metric-card\s*\{/);
+  assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.platform-metric-card\s*\{/);
+});
+
+test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR ISO-18004 Engine work end-to-end', async () => {
+  const mig100 = read('database/migrations/20261117_100_group_invite_links_and_codes.sql');
+  const schema = read('database/schema.sql');
+  const coreJs = read('js/core.js');
+  const authJs = read('js/auth.js');
+  const loginHtml = read('login.html');
+  const dashHtml = read('dashboard.html');
+  const dashJs = read('js/dashboard.js');
+  const settingsHtml = read('settings.html');
+  const settingsJs = read('js/settings.js');
+  const userHtml = read('user.html');
+  const userJs = read('js/user.js');
+  const css = read('css/app.css');
+
+  // 1. Database migration & schema ledger parity + strict ACL checks
+  for (const sql of [mig100, schema]) {
+    assert.match(sql, /'20261117_100'/);
+    assert.match(sql, /create table if not exists public\.group_invite_codes/i);
+    assert.match(sql, /create table if not exists public\.group_join_requests/i);
+    assert.match(sql, /group_invite_codes_one_active_per_group_uidx/i);
+    assert.match(sql, /group_join_requests_one_pending_uidx/i);
+    assert.match(sql, /current_setting\('ipon\.joining_group_id',\s*true\)/i);
+    assert.match(sql, /create or replace function public\.create_group_invite_code\(/i);
+    assert.match(sql, /create or replace function public\.update_group_invite_code\(/i);
+    assert.match(sql, /create or replace function public\.get_group_invite_overview\(/i);
+    assert.match(sql, /create or replace function public\.preview_group_invite_code\(/i);
+    assert.match(sql, /create or replace function public\.join_group_by_code\(/i);
+    assert.match(sql, /create or replace function public\.review_group_join_request\(/i);
+    assert.match(sql, /create or replace function public\.cancel_own_join_request\(/i);
+    assert.match(sql, /grant execute on function public\.preview_group_invite_code\(text\) to anon, authenticated;/i);
+    assert.match(sql, /revoke all on function public\.join_group_by_code\(text\) from public, anon;/i);
+    assert.match(sql, /revoke all on function public\.create_group_invite_code\(integer, boolean, integer\) from public, anon;/i);
+    assert.match(sql, /revoke all on function public\.review_group_join_request\(uuid, text, text\) from public, anon;/i);
+    assert.match(sql, /revoke all on function public\._grant_group_member_via_invite\(uuid, uuid, uuid\) from public, anon, authenticated;/i);
+  }
+
+  // 2. HTML & JS wiring across Login, Dashboard, Settings, Member Portal
+  assert.match(loginHtml, /id="auth-join-banner"/);
+  assert.match(loginHtml, /id="auth-have-code-open"/);
+  assert.match(loginHtml, /id="auth-join-code-input"/);
+  assert.match(authJs, /preview_group_invite_code/);
+  assert.match(authJs, /function renderAuthJoinBanner/);
+
+  assert.match(dashHtml, /id="no-group-join-btn"/);
+  assert.match(dashHtml, /id="group-mode-join-tab"/);
+  assert.match(dashHtml, /id="group-create-join-mount"/);
+  assert.doesNotMatch(dashHtml, /id="group-hub-join-another"/);
+  assert.match(dashHtml, /id="invite-tab-link"/);
+  assert.match(dashHtml, /id="invite-tab-email"/);
+  assert.match(dashHtml, /id="invite-link-code-mount"/);
+  assert.match(dashJs, /no-group-join-btn/);
+  assert.match(dashJs, /mountJoinGroupPanel/);
+  assert.match(dashJs, /mountInviteCodePanel/);
+  assert.match(dashJs, /group_join_requests/);
+  assert.match(css, /\.join-group-dialog(?:,\s*\.join-blocked-dialog)?\s*\{[^}]*width:\s*min\(440px/);
+
+  assert.match(settingsHtml, /id="settings-invite-code-mount"/);
+  assert.match(settingsHtml, /id="settings-join-requests-panel"/);
+  assert.match(settingsHtml, /id="settings-join-group-btn"/);
+  assert.match(settingsJs, /settings-invite-code-mount/);
+  assert.match(settingsJs, /renderJoinRequestsQueue/);
+  assert.match(settingsJs, /join_requests/);
+
+  assert.match(userHtml, /id="user-join-group"/);
+  assert.match(userJs, /user-join-group/);
+  assert.match(css, /\.invite-code-active-card\s*\{/);
+  assert.match(css, /html\[data-theme="dark"\] \.invite-qr-card/);
+  assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*?\.invite-code-active-card/);
+
+  // 3. Real VM execution of Core Invite Helpers & ISO-18004 QR Encoder
+  const store = new Map();
+  const noop = () => {};
+  const dummyEl = () => ({
+    classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+    style: {},
+    setAttribute: noop,
+    removeAttribute: noop,
+    addEventListener: noop,
+    querySelector: () => dummyEl(),
+    querySelectorAll: () => [],
+    insertAdjacentHTML: noop
+  });
+  const ctx = {
+    console, TextEncoder, URL, URLSearchParams, Intl, Math, Date, Number, String, JSON,
+    Uint8Array, Array, Set, Map,
+    navigator: { userAgent: 'node', onLine: true },
+    location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', pathname: '/dashboard.html', origin: 'https://my-ipon.vercel.app', search: '', href: 'https://my-ipon.vercel.app/dashboard.html', replace: noop, assign: noop },
+    localStorage: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k)
+    },
+    sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    history: { replaceState: noop },
+    CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    addEventListener: noop,
+    removeEventListener: noop,
+    dispatchEvent: noop,
+    document: {
+      documentElement: { setAttribute: noop, dataset: {}, style: { setProperty: noop, removeProperty: noop } },
+      head: { insertAdjacentHTML: noop },
+      body: { dataset: {}, classList: { contains: () => false, add: noop, remove: noop, toggle: noop }, insertAdjacentHTML: noop, appendChild: noop, prepend: noop, append: noop },
+      createElement: () => dummyEl(),
+      addEventListener: noop,
+      removeEventListener: noop,
+      getElementById: () => null,
+      querySelectorAll: () => [],
+      querySelector: () => null
+    }
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  const ipon = ctx.window.Ipon;
+  assert.equal(ipon.normalizeInviteCode(' k9m-4pq '), 'K9M4PQ');
+  assert.equal(ipon.formatInviteCode('k9m4pq'), 'K9M-4PQ');
+  assert.equal(ipon.extractInviteCode('https://my-ipon.vercel.app/login.html?join=ab2-3cd'), 'AB23CD');
+  assert.equal(ipon.inviteShareUrl('k9m4pq'), 'https://my-ipon.vercel.app/login.html?join=K9M4PQ');
+
+  ipon.setPendingJoinCode('K9M-4PQ');
+  assert.equal(ipon.getPendingJoinCode(), 'K9M4PQ');
+  ipon.clearPendingJoinCode();
+  assert.equal(ipon.getPendingJoinCode(), '');
+
+  assert.equal(ipon.resolveNotificationTarget({ type: 'GROUP_JOIN_REQUEST' }, 'ADMIN'), 'settings.html?join_requests=1#access');
+  assert.equal(ipon.resolveNotificationTarget({ type: 'GROUP_JOIN_APPROVED', id: '42' }, 'MEMBER'), 'user.html?notice=42');
+
+  // Verify ISO-18004 Version 4 QR matrix + finder patterns + timing strips + alignment + BCH format match
+  const qrUrl = ipon.inviteShareUrl('K9M4PQ');
+  const qr = ipon.generateQrMatrix(qrUrl);
+  assert.equal(qr.version, 4);
+  assert.equal(qr.size, 33);
+  // Finder outer rings at (0,0), (0,26), (26,0)
+  for (const [top, left] of [[0, 0], [0, qr.size - 7], [qr.size - 7, 0]]) {
+    assert.equal(qr.modules[top][left], 1);
+    assert.equal(qr.modules[top + 3][left + 3], 1);
+    assert.equal(qr.modules[top + 1][left + 1], 0);
+  }
+  // Dark module at (size - 8, 8)
+  assert.equal(qr.modules[qr.size - 8][8], 1);
+  // Timing patterns alternating
+  for (let i = 8; i < qr.size - 8; i += 1) {
+    assert.equal(qr.modules[6][i], i % 2 === 0 ? 1 : 0);
+    assert.equal(qr.modules[i][6], i % 2 === 0 ? 1 : 0);
+  }
+  // Primary and secondary 15-bit format strips match bit-for-bit
+  const copy1 = [
+    qr.modules[8][0], qr.modules[8][1], qr.modules[8][2], qr.modules[8][3], qr.modules[8][4], qr.modules[8][5],
+    qr.modules[8][7], qr.modules[8][8], qr.modules[7][8],
+    qr.modules[5][8], qr.modules[4][8], qr.modules[3][8], qr.modules[2][8], qr.modules[1][8], qr.modules[0][8]
+  ];
+  const copy2 = [
+    qr.modules[qr.size - 1][8], qr.modules[qr.size - 2][8], qr.modules[qr.size - 3][8], qr.modules[qr.size - 4][8],
+    qr.modules[qr.size - 5][8], qr.modules[qr.size - 6][8], qr.modules[qr.size - 7][8],
+    qr.modules[8][qr.size - 8], qr.modules[8][qr.size - 7], qr.modules[8][qr.size - 6], qr.modules[8][qr.size - 5],
+    qr.modules[8][qr.size - 4], qr.modules[8][qr.size - 3], qr.modules[8][qr.size - 2], qr.modules[8][qr.size - 1]
+  ];
+  assert.deepEqual(copy1, copy2);
+
+  // Verify SVG output structure
+  const svg = ipon.qrSvgMarkup(qrUrl);
+  assert.match(svg, /^<svg class="invite-qr-svg" viewBox="0 0 41 41"/);
+  assert.match(svg, /<rect width="41" height="41" fill="#ffffff"\/><path d="M/);
+
+  // Capacitor localhost origin maps to canonical public share domain
+  ctx.location.origin = 'http://localhost';
+  ctx.Capacitor = {};
+  assert.equal(ipon.canonicalAppOrigin(), 'https://my-ipon.vercel.app');
+
+  // Verify mountInviteCodePanel renders initial cached overview cleanly without loading-spinner flash on refresh
+  assert.match(coreJs, /inviteOverviewSignature\(stateOverview\)/);
+  assert.match(coreJs, /if \(nextSig === lastRenderedSig\)|nextSig !== lastRenderedSig/);
+  assert.match(coreJs, /class="status \$\{active\.require_approval \? 'status-pending' : 'status-confirmed'\}"/);
+  const mountWrites = [];
+  const mountBox = {
+    children: [],
+    get innerHTML() { return mountWrites[mountWrites.length - 1] || ''; },
+    set innerHTML(v) {
+      mountWrites.push(String(v));
+      mountBox.children = v ? [{}] : [];
+    },
+    querySelector: () => dummyEl(),
+    querySelectorAll: () => []
+  };
+  let rpcCount = 0;
+  const cachedSample = {
+    workspace_mode: 'GROUP',
+    active_code: { id: 'c1', code: 'RLZBX3', require_approval: true, expires_at: new Date(Date.now() + 86400000).toISOString(), use_count: 0, max_uses: null },
+    pending_requests: []
+  };
+  ctx.supabase = {
+    createClient: () => ({
+      rpc: async () => { rpcCount += 1; return { data: cachedSample, error: null }; },
+      channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
+      getChannels: () => []
+    })
+  };
+  const ctx2 = {
+    ...ctx,
+    window: null
+  };
+  ctx2.window = ctx2;
+  ctx2.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx2, { filename: 'js/core.js' });
+  const ctrl = ctx2.window.Ipon.mountInviteCodePanel(mountBox, { groupName: 'Sample', initialOverview: cachedSample });
+  assert.equal(mountWrites.length, 1);
+  assert.doesNotMatch(mountWrites[0], /invite-code-loading/);
+  assert.match(mountWrites[0], /class="status status-pending"/);
+  assert.match(mountWrites[0], /class="invite-qr-card"/);
+  assert.match(mountWrites[0], /class="invite-code-card"/);
+  assert.match(mountWrites[0], /class="[^"]*invite-copy-link-full"/);
+  assert.match(mountWrites[0], /class="invite-secondary-grid"/);
+  await ctrl.refresh({ silent: true, force: true });
+  assert.equal(mountWrites.length, 1, 'refresh with unchanged overview must not re-flash or replace DOM');
+
+  // Verify Migration 101 declined-request blocking, blocked modal dialog, and Pic 2/3 styling contracts
+  const mig101 = read('database/migrations/20261117_101_block_declined_join_requests.sql');
+  for (const sql of [mig101, schema]) {
+    assert.match(sql, /'20261117_101'/);
+    assert.match(sql, /'DECLINED_BLOCKED'/);
+    assert.match(sql, /'blocked',\s*true/);
+    assert.match(sql, /You are blocked from joining "%" using this invite link or code because your previous request was declined\./);
+  }
+  assert.match(coreJs, /function showJoinBlockedDialog\(/);
+  assert.match(coreJs, /id="ipon-join-blocked-dialog"/);
+  assert.match(coreJs, /class="join-request-chips"/);
+  assert.match(css, /\.join-blocked-dialog\s*\{/);
+  assert.match(css, /\.join-panel-footer\s*\{/);
+  assert.match(css, /\.invite-qr-card\s*\{/);
+  assert.match(css, /\.invite-code-card\s*\{/);
+  assert.match(css, /\.invite-copy-link-full\s*\{/);
+});

@@ -4686,6 +4686,14 @@
       return safe && !/^https?:\/\//i.test(safe) ? safe : 'settings.html#access';
     }
 
+    if (type === 'RECORD_CHANGE_REQUESTED') {
+      return safe && !/^https?:\/\//i.test(safe) ? safe : 'dashboard.html?change_request=pending';
+    }
+
+    if (type === 'RECORD_CHANGE_REVIEWED' || type === 'PERMISSION_UPDATED') {
+      return safe && !/^https?:\/\//i.test(safe) ? safe : 'dashboard.html';
+    }
+
     if (type === 'REVIEW_REQUIRED' || type === 'RECORD_UPDATED') {
       return `dashboard.html?review_notice=${encodeQueryValue(item.id || '')}`;
     }
@@ -5746,6 +5754,15 @@
         }
       } else if (!profile.workspace_mode) {
         profile.workspace_mode = 'GROUP';
+      }
+      profile.permissions = defaultPermissionsForRole(profile.role);
+      if (profile.role !== 'SUPER_ADMIN' && profile.group_id && profile.status === 'ACTIVE') {
+        try {
+          const permRes = await withTimeout(client.rpc('get_my_member_permissions'), 5000);
+          if (!permRes?.error && permRes?.data) {
+            profile.permissions = normalizePermissions(permRes.data, profile.role);
+          }
+        } catch (_) { }
       }
       currentProfile = profile;
       syncWorkspaceMode(profile.workspace_mode);
@@ -7711,6 +7728,77 @@
     });
   }
 
+  function defaultPermissionsForRole(role = currentProfile?.role || 'MEMBER') {
+    const r = String(role || 'MEMBER').toUpperCase();
+    if (r === 'ADMIN') {
+      return {
+        role: 'ADMIN',
+        can_edit_own_entries: true,
+        require_edit_approval: false,
+        require_add_approval: false,
+        can_record_expenses: true,
+        require_expense_approval: false,
+        can_record_withdrawals: true,
+        require_withdrawal_approval: false
+      };
+    }
+    if (r === 'TREASURER') {
+      return {
+        role: 'TREASURER',
+        can_edit_own_entries: true,
+        require_edit_approval: true,
+        require_add_approval: true,
+        can_record_expenses: true,
+        require_expense_approval: true,
+        can_record_withdrawals: true,
+        require_withdrawal_approval: true
+      };
+    }
+    return {
+      role: 'MEMBER',
+      can_edit_own_entries: true,
+      require_edit_approval: true,
+      require_add_approval: true,
+      can_record_expenses: false,
+      require_expense_approval: true,
+      can_record_withdrawals: false,
+      require_withdrawal_approval: true
+    };
+  }
+
+  function normalizePermissions(raw, fallbackRole = 'MEMBER') {
+    const base = defaultPermissionsForRole(raw?.role || fallbackRole);
+    if (!raw || typeof raw !== 'object') return base;
+    return {
+      role: raw.role || base.role,
+      can_edit_own_entries: raw.can_edit_own_entries !== undefined ? Boolean(raw.can_edit_own_entries) : base.can_edit_own_entries,
+      require_edit_approval: raw.require_edit_approval !== undefined ? Boolean(raw.require_edit_approval) : base.require_edit_approval,
+      require_add_approval: raw.require_add_approval !== undefined ? Boolean(raw.require_add_approval) : base.require_add_approval,
+      can_record_expenses: raw.can_record_expenses !== undefined ? Boolean(raw.can_record_expenses) : base.can_record_expenses,
+      require_expense_approval: raw.require_expense_approval !== undefined ? Boolean(raw.require_expense_approval) : base.require_expense_approval,
+      can_record_withdrawals: raw.can_record_withdrawals !== undefined ? Boolean(raw.can_record_withdrawals) : base.can_record_withdrawals,
+      require_withdrawal_approval: raw.require_withdrawal_approval !== undefined ? Boolean(raw.require_withdrawal_approval) : base.require_withdrawal_approval
+    };
+  }
+
+  async function refreshMyPermissions() {
+    if (!currentProfile || currentProfile.role === 'SUPER_ADMIN' || !currentProfile.group_id) {
+      const fallback = defaultPermissionsForRole(currentProfile?.role || 'MEMBER');
+      if (currentProfile) currentProfile.permissions = fallback;
+      return fallback;
+    }
+    try {
+      const data = await rpc('get_my_member_permissions');
+      const normalized = normalizePermissions(data, currentProfile.role);
+      currentProfile.permissions = normalized;
+      return normalized;
+    } catch {
+      const fallback = currentProfile.permissions || defaultPermissionsForRole(currentProfile.role);
+      currentProfile.permissions = fallback;
+      return fallback;
+    }
+  }
+
   async function switchActiveGroup(groupId) {
     const result = await rpc('switch_active_group', { p_group_id: groupId });
     clearDeepLinkUrlState();
@@ -7720,6 +7808,7 @@
       currentProfile.member_id = result.member_id ?? null;
       currentProfile.workspace_mode = result.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP';
       syncWorkspaceMode(currentProfile.workspace_mode);
+      await refreshMyPermissions().catch(() => { });
     }
     return result;
   }
@@ -10096,7 +10185,9 @@
     contributions: 'Addition',
     withdrawals: 'Deduction',
     expenses: 'Expense',
-    savings_goals: 'Savings goal'
+    savings_goals: 'Savings goal',
+    group_memberships: 'Member permission',
+    financial_change_requests: 'Change request'
   };
 
   const AUDIT_ACTION_LABELS = {
@@ -10123,11 +10214,11 @@
 
   const AUDIT_TRANSITION_TIMESTAMPS = new Set(['reviewed_at', 'voided_at', 'deactivated_at', 'deleted_at']);
   const AUDIT_IMAGE_FIELDS = new Set(['avatar_url', 'receipt_url', 'payment_qr_url']);
-  const AUDIT_MONEY_FIELDS = new Set(['amount', 'default_amount', 'required_amount', 'monthly_contribution_amount', 'target_amount']);
+  const AUDIT_MONEY_FIELDS = new Set(['amount', 'default_amount', 'required_amount', 'monthly_contribution_amount', 'target_amount', 'current_amount', 'proposed_amount']);
   const AUDIT_MONTH_FIELDS = new Set(['effective_month', 'period_month']);
-  const AUDIT_DATE_FIELDS = new Set(['payment_date', 'transaction_date', 'date_registered', 'due_date', 'target_date', 'cycle_start_date']);
+  const AUDIT_DATE_FIELDS = new Set(['payment_date', 'transaction_date', 'date_registered', 'due_date', 'target_date', 'cycle_start_date', 'entry_date']);
   const AUDIT_DATETIME_FIELDS = new Set(['reviewed_at', 'voided_at', 'deleted_at', 'deactivated_at']);
-  const AUDIT_ACTOR_REF_FIELDS = new Set(['owner_id', 'submitted_by', 'reviewed_by', 'voided_by', 'deleted_by', 'created_by', 'updated_by']);
+  const AUDIT_ACTOR_REF_FIELDS = new Set(['owner_id', 'submitted_by', 'reviewed_by', 'voided_by', 'deleted_by', 'created_by', 'updated_by', 'requested_by']);
   const AUDIT_REASON_FIELDS = new Set(['review_note', 'void_reason', 'delete_reason', 'exempt_reason', 'reason']);
   const AUDIT_ACTION_CONTEXT_FIELDS = new Set([
     ...AUDIT_REASON_FIELDS,
@@ -10215,7 +10306,23 @@
     target_amount: 'Target amount',
     target_date: 'Target date',
     created_by: 'Created by',
-    updated_by: 'Updated by'
+    updated_by: 'Updated by',
+    current_amount: 'Previous amount',
+    proposed_amount: 'Requested amount',
+    current_payment_method: 'Previous payment method',
+    proposed_payment_method: 'Requested payment method',
+    current_notes: 'Previous notes',
+    proposed_notes: 'Requested notes',
+    entry_date: 'Entry date',
+    requested_by: 'Requested by',
+    record_type: 'Entry type',
+    can_edit_own_entries: 'Edit calendar entries',
+    require_edit_approval: 'Edit approval required',
+    require_add_approval: 'Addition approval required',
+    can_record_expenses: 'Record expenses',
+    require_expense_approval: 'Expense approval required',
+    can_record_withdrawals: 'Record deductions',
+    require_withdrawal_approval: 'Deduction approval required'
   };
 
   const AUDIT_FIELD_ORDER = [
@@ -10455,6 +10562,10 @@
       if (table === 'withdrawals') return `Recorded ${money(snap.amount)} deduction${snap.category ? ` (${snap.category})` : ''}`;
       if (table === 'expenses') return `Recorded ${money(snap.amount)} expense${snap.category ? ` (${snap.category})` : ''}`;
       if (table === 'savings_goals') return `Created goal "${snap.title || 'Savings goal'}"`;
+      if (table === 'financial_change_requests') {
+        const entryKind = snap.record_type === 'EXPENSE' ? 'expense' : (snap.record_type === 'WITHDRAWAL' ? 'deduction' : 'addition');
+        return `Requested ${entryKind} edit (${money(snap.current_amount)} → ${money(snap.proposed_amount)})`;
+      }
       return `Created ${auditTableLabel(table).toLowerCase()}`;
     }
 
@@ -10509,6 +10620,17 @@
       if (keys.size === 1 && keys.has('role')) return `Changed role to ${formatAuditValue('role', after.role, row, lookups).text}`;
       if (keys.size === 1 && keys.has('status')) {
       }
+    }
+
+    if (table === 'financial_change_requests') {
+      if (after.status === 'APPROVED' && before.status !== 'APPROVED') return 'Approved requested record edit';
+      if (after.status === 'REJECTED' && before.status !== 'REJECTED') return 'Rejected requested record edit';
+      if (after.status === 'CANCELLED' && before.status !== 'CANCELLED') return 'Cancelled requested record edit';
+    }
+
+    if (table === 'group_memberships') {
+      const permKeys = ['can_edit_own_entries', 'require_edit_approval', 'require_add_approval', 'can_record_expenses', 'require_expense_approval', 'can_record_withdrawals', 'require_withdrawal_approval'];
+      if ([...keys].some((k) => permKeys.includes(k))) return 'Updated member workspace permissions';
     }
 
     if (table === 'contribution_periods') {
@@ -12059,9 +12181,414 @@
     }, 120);
   }
 
+  async function openCalendarEntryEditDialog(entry, { onSaved = null } = {}) {
+    if (!entry?.id || !entry?.type) return null;
+    const role = String(currentProfile?.role || 'MEMBER').toUpperCase();
+    const perms = currentProfile?.permissions || defaultPermissionsForRole(role);
+    if (role !== 'ADMIN' && perms.can_edit_own_entries === false) {
+      toast('Editing calendar entries is currently disabled for your account.', 'error');
+      return null;
+    }
+
+    const typeMeta = entry.type === 'contribution'
+      ? { label: 'Savings Addition', cls: 'is-addition', prefix: '+' }
+      : entry.type === 'withdrawal'
+        ? { label: 'Deduction', cls: 'is-deduction', prefix: '−' }
+        : { label: 'Expense', cls: 'is-expense', prefix: '−' };
+
+    const requiresApproval = role !== 'ADMIN' && perms.require_edit_approval !== false;
+    const origAmount = Number(entry.amount || 0);
+    const origMethod = normalizePaymentMethod(entry.paymentMethod || 'CASH');
+    const origNotes = String(entry.notes || '').trim();
+
+    let dialog = document.getElementById('ipon-entry-edit-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog entry-edit-dialog" id="ipon-entry-edit-dialog" aria-labelledby="ipon-entry-edit-title">
+          <div class="form-dialog-sheet entry-edit-sheet">
+            <header class="form-dialog-header">
+              <div>
+                <span class="dialog-eyebrow" id="ipon-entry-edit-eyebrow">Calendar entry</span>
+                <h2 id="ipon-entry-edit-title">Edit calendar entry</h2>
+                <p id="ipon-entry-edit-copy">Update the amount, payment method, and reason for changing this entry.</p>
+              </div>
+              <button class="dialog-close" type="button" id="ipon-entry-edit-close" aria-label="Close entry editor">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div class="entry-edit-body">
+              <div class="entry-edit-summary" id="ipon-entry-edit-summary"></div>
+              <div class="entry-edit-mode-banner" id="ipon-entry-edit-banner" role="note"></div>
+              <form id="ipon-entry-edit-form" class="form-grid" novalidate>
+                <div class="field">
+                  <label for="ipon-entry-edit-amount">New amount</label>
+                  <input id="ipon-entry-edit-amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" aria-describedby="ipon-entry-edit-amount-error" required>
+                  <small class="field-error" id="ipon-entry-edit-amount-error" role="alert" hidden></small>
+                </div>
+                <div class="field">
+                  <label for="ipon-entry-edit-date-display">Entry date</label>
+                  <input id="ipon-entry-edit-date-display" type="text" readonly>
+                </div>
+                <div class="field field-wide">
+                  <span class="field-label">Payment method</span>
+                  <div id="ipon-entry-edit-pm-wrap">${paymentMethodPickerHtml('payment_method', 'CASH')}</div>
+                </div>
+                <div class="field field-wide">
+                  <label for="ipon-entry-edit-notes">Notes (optional)</label>
+                  <textarea id="ipon-entry-edit-notes" name="notes" rows="2" maxlength="500" placeholder="Optional note attached to this entry"></textarea>
+                </div>
+                <div class="field field-wide">
+                  <label for="ipon-entry-edit-reason">Reason for change <span class="entry-edit-req">(required)</span></label>
+                  <textarea id="ipon-entry-edit-reason" name="reason" rows="3" minlength="3" maxlength="500" aria-describedby="ipon-entry-edit-reason-error" placeholder="Explain why the amount or payment method is being updated (e.g. Paid via Maya instead of GCash)" required></textarea>
+                  <small class="field-error" id="ipon-entry-edit-reason-error" role="alert" hidden></small>
+                </div>
+                <div class="form-actions field-wide">
+                  <button class="button button-secondary" type="button" id="ipon-entry-edit-cancel">Cancel</button>
+                  <button class="button button-primary" type="submit" id="ipon-entry-edit-submit">Send change request</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('ipon-entry-edit-dialog');
+      mountPaymentMethodPickers(dialog);
+      guardMoneyInput(dialog.querySelector('#ipon-entry-edit-amount'));
+    }
+
+    const summaryEl = dialog.querySelector('#ipon-entry-edit-summary');
+    const bannerEl = dialog.querySelector('#ipon-entry-edit-banner');
+    const form = dialog.querySelector('#ipon-entry-edit-form');
+    const amountInput = dialog.querySelector('#ipon-entry-edit-amount');
+    const dateInput = dialog.querySelector('#ipon-entry-edit-date-display');
+    const notesInput = dialog.querySelector('#ipon-entry-edit-notes');
+    const reasonInput = dialog.querySelector('#ipon-entry-edit-reason');
+    const submitBtn = dialog.querySelector('#ipon-entry-edit-submit');
+    const eyebrowEl = dialog.querySelector('#ipon-entry-edit-eyebrow');
+    const titleEl = dialog.querySelector('#ipon-entry-edit-title');
+    const copyEl = dialog.querySelector('#ipon-entry-edit-copy');
+
+    if (eyebrowEl) eyebrowEl.textContent = requiresApproval ? 'Change request' : 'Direct edit';
+    if (titleEl) titleEl.textContent = requiresApproval ? 'Request entry change' : 'Edit calendar entry';
+    if (copyEl) {
+      copyEl.textContent = requiresApproval
+        ? 'Your change and reason will be sent to a group administrator for approval.'
+        : 'Update the amount, payment method, and reason logged for this entry.';
+    }
+    if (submitBtn) submitBtn.textContent = requiresApproval ? 'Send change request' : 'Save changes';
+
+    const statusLower = String(entry.status || 'CONFIRMED').toLowerCase();
+    if (summaryEl) {
+      summaryEl.innerHTML = `
+        <div class="entry-edit-summary-top">
+          <span class="record-type-pill ${typeMeta.cls}">${escapeHtml(typeMeta.label)}</span>
+          <span class="status status-${escapeHtml(statusLower)}">${escapeHtml(entry.status || 'CONFIRMED')}</span>
+        </div>
+        <div class="entry-edit-summary-main">
+          <div>
+            <strong>${escapeHtml(entry.subjectName || typeMeta.label)}</strong>
+            <small>Current: ${escapeHtml(money(origAmount))} · ${escapeHtml(paymentMethodMeta(origMethod).label)}</small>
+          </div>
+          <strong class="entry-edit-current-amount">${typeMeta.prefix}${escapeHtml(money(origAmount))}</strong>
+        </div>`;
+    }
+
+    if (bannerEl) {
+      bannerEl.className = `entry-edit-mode-banner ${requiresApproval ? 'is-approval' : 'is-direct'}`;
+      bannerEl.innerHTML = requiresApproval
+        ? '<strong>Admin approval required:</strong> Savings totals stay unchanged until an administrator accepts your request.'
+        : '<strong>Instant update enabled:</strong> Your edit applies immediately and records your reason in the group audit trail.';
+    }
+
+    form.reset();
+    setFieldError(amountInput, '');
+    setFieldError(reasonInput, '');
+    amountInput.value = origAmount > 0 ? origAmount.toFixed(2) : '';
+    if (dateInput) dateInput.value = entry.date ? dateLabel(entry.date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    notesInput.value = origNotes;
+    reasonInput.value = '';
+    setPaymentMethod(form, origMethod);
+
+    const closeDialog = () => { if (dialog.open) dialog.close('cancel'); };
+    dialog.querySelector('#ipon-entry-edit-close').onclick = closeDialog;
+    dialog.querySelector('#ipon-entry-edit-cancel').onclick = closeDialog;
+    dialog.onclick = (event) => { if (event.target === dialog) closeDialog(); };
+
+    amountInput.oninput = () => setFieldError(amountInput, '');
+    reasonInput.oninput = () => setFieldError(reasonInput, '');
+
+    return new Promise((resolve) => {
+      let resolvedValue = null;
+      dialog.onclose = () => resolve(resolvedValue);
+
+      form.onsubmit = async (event) => {
+        event.preventDefault();
+        setFieldError(amountInput, '');
+        setFieldError(reasonInput, '');
+
+        const parsedAmount = parseMoneyAmount(amountInput.value);
+        if (!parsedAmount.valid) {
+          setFieldError(amountInput, parsedAmount.error || 'Enter a valid amount greater than zero.');
+          amountInput.focus();
+          return;
+        }
+        const nextMethod = normalizePaymentMethod(form.elements.payment_method?.value || 'CASH');
+        const nextNotes = String(notesInput.value || '').trim();
+        const reasonText = String(reasonInput.value || '').trim();
+        if (reasonText.length < 3 || reasonText.length > 500) {
+          setFieldError(reasonInput, 'Enter a clear reason between 3 and 500 characters.');
+          reasonInput.focus();
+          return;
+        }
+
+        if (
+          Math.abs(parsedAmount.amount - origAmount) < 0.005
+          && nextMethod === origMethod
+          && nextNotes === origNotes
+        ) {
+          setFieldError(amountInput, 'Update the amount, payment method, or notes before submitting.');
+          amountInput.focus();
+          return;
+        }
+
+        const confirmed = await confirmAction({
+          title: requiresApproval ? 'Send change request?' : 'Save entry changes?',
+          message: requiresApproval
+            ? `Request to update this entry from ${money(origAmount)} (${paymentMethodMeta(origMethod).label}) to ${money(parsedAmount.amount)} (${paymentMethodMeta(nextMethod).label})? Your admin will review your reason.`
+            : `Update this entry from ${money(origAmount)} (${paymentMethodMeta(origMethod).label}) to ${money(parsedAmount.amount)} (${paymentMethodMeta(nextMethod).label})?`,
+          acceptLabel: requiresApproval ? 'Send request' : 'Save changes'
+        });
+        if (!confirmed) return;
+
+        setBusy(submitBtn, true, requiresApproval ? 'Sending…' : 'Saving…');
+        try {
+          const res = await rpc('submit_record_change_request', {
+            p_record_type: entry.type,
+            p_record_id: entry.id,
+            p_amount: parsedAmount.amount,
+            p_payment_method: nextMethod,
+            p_notes: nextNotes || null,
+            p_reason: reasonText
+          });
+          resolvedValue = res;
+          toast(res?.message || (requiresApproval ? 'Change request sent for approval.' : 'Calendar entry updated.'));
+          dialog.close('saved');
+          if (typeof onSaved === 'function') await onSaved(res);
+        } catch (err) {
+          toast(friendlyError(err), 'error');
+        } finally {
+          setBusy(submitBtn, false);
+        }
+      };
+
+      if (!dialog.open) dialog.showModal();
+      amountInput.focus();
+    });
+  }
+
+  async function openChangeRequestReviewDialog(reqOrId, { allowReview = currentProfile?.role === 'ADMIN', onReviewed = null } = {}) {
+    let req = typeof reqOrId === 'object' && reqOrId ? reqOrId : null;
+    if (!req && reqOrId) {
+      try {
+        const list = await rpc('get_pending_financial_change_requests');
+        req = (Array.isArray(list) ? list : []).find((item) => String(item.id) === String(reqOrId)) || null;
+      } catch { /* fallback below */ }
+      if (!req) {
+        const client = getClient();
+        if (client) {
+          const { data } = await client.from('financial_change_requests').select('*').eq('id', reqOrId).maybeSingle();
+          if (data) req = data;
+        }
+      }
+    }
+    if (!req) {
+      toast('This change request is no longer pending or could not be found.', 'error');
+      return null;
+    }
+
+    let dialog = document.getElementById('ipon-change-request-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog change-review-dialog" id="ipon-change-request-dialog" aria-labelledby="ipon-cr-title">
+          <div class="form-dialog-sheet change-review-sheet">
+            <header class="form-dialog-header">
+              <div>
+                <span class="dialog-eyebrow">Request of changes</span>
+                <h2 id="ipon-cr-title">Review edit request</h2>
+                <p id="ipon-cr-subtitle">Compare the original entry and requested changes before deciding.</p>
+              </div>
+              <button class="dialog-close" type="button" id="ipon-cr-close" aria-label="Close change request review">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div class="change-review-body">
+              <div class="change-review-requester" id="ipon-cr-requester"></div>
+              <div class="change-review-diff" id="ipon-cr-diff"></div>
+              <div class="change-review-reason-card" id="ipon-cr-reason"></div>
+              <form id="ipon-cr-form" class="change-review-form" novalidate>
+                <div class="field field-wide" id="ipon-cr-note-wrap">
+                  <label for="ipon-cr-note" id="ipon-cr-note-label">Administrator note (required if rejecting)</label>
+                  <textarea id="ipon-cr-note" name="review_note" rows="2" maxlength="500" aria-describedby="ipon-cr-note-error" placeholder="Optional note when accepting, or explain why you are rejecting this change"></textarea>
+                  <small class="field-error" id="ipon-cr-note-error" role="alert" hidden></small>
+                </div>
+                <div class="change-review-actions" id="ipon-cr-actions"></div>
+              </form>
+            </div>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('ipon-change-request-dialog');
+    }
+
+    const reqWrap = dialog.querySelector('#ipon-cr-requester');
+    const diffWrap = dialog.querySelector('#ipon-cr-diff');
+    const reasonWrap = dialog.querySelector('#ipon-cr-reason');
+    const noteWrap = dialog.querySelector('#ipon-cr-note-wrap');
+    const noteInput = dialog.querySelector('#ipon-cr-note');
+    const actionsWrap = dialog.querySelector('#ipon-cr-actions');
+    const titleEl = dialog.querySelector('#ipon-cr-title');
+    const subtitleEl = dialog.querySelector('#ipon-cr-subtitle');
+
+    const status = String(req.status || 'PENDING').toUpperCase();
+    const isPending = status === 'PENDING';
+    const isOwnRequest = String(req.requested_by || '') === String(currentProfile?.id || '');
+    const canDecide = isPending && allowReview && currentProfile?.role === 'ADMIN';
+    const typeLabel = req.entry_label || (req.record_type === 'withdrawal' ? 'Deduction' : req.record_type === 'expense' ? 'Expense' : 'Savings Addition');
+    const amtChanged = Number(req.current_amount || 0) !== Number(req.proposed_amount || 0);
+    const pmChanged = normalizePaymentMethod(req.current_payment_method) !== normalizePaymentMethod(req.proposed_payment_method);
+    const notesChanged = String(req.current_notes || '').trim() !== String(req.proposed_notes || '').trim();
+    const requesterName = req.requested_by_name || req.subject_name || 'Group member';
+
+    if (titleEl) titleEl.textContent = isPending ? `Review ${typeLabel.toLowerCase()} change` : `Change request (${status.charAt(0) + status.slice(1).toLowerCase()})`;
+    if (subtitleEl) subtitleEl.textContent = `${req.subject_name ? `${req.subject_name} · ` : ''}${req.entry_date ? dateLabel(req.entry_date, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`;
+
+    if (reqWrap) {
+      reqWrap.innerHTML = `
+        ${avatarMarkup(req.avatar_url || '', requesterName, 'avatar-md')}
+        <div class="change-review-requester-info">
+          <strong>${escapeHtml(requesterName)}</strong>
+          <small>${escapeHtml(typeLabel)}${req.created_at ? ` · Requested ${escapeHtml(dateLabel(req.created_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}` : ''}</small>
+        </div>
+        <span class="status status-${escapeHtml(status.toLowerCase())}">${escapeHtml(status)}</span>`;
+      bindAvatarFallbacks(reqWrap);
+    }
+
+    if (diffWrap) {
+      diffWrap.innerHTML = `
+        <div class="change-diff-col">
+          <span class="change-diff-eyebrow">Current entry</span>
+          <strong class="change-diff-amt">${escapeHtml(money(req.current_amount))}</strong>
+          <div class="change-diff-badges">${paymentMethodBadge(req.current_payment_method)}</div>
+          <p class="change-diff-note">${escapeHtml(req.current_notes || 'No notes')}</p>
+        </div>
+        <div class="change-diff-arrow" aria-hidden="true">→</div>
+        <div class="change-diff-col is-proposed">
+          <span class="change-diff-eyebrow">Requested change</span>
+          <strong class="change-diff-amt ${amtChanged ? 'is-changed' : ''}">${escapeHtml(money(req.proposed_amount))}</strong>
+          <div class="change-diff-badges ${pmChanged ? 'is-changed' : ''}">${paymentMethodBadge(req.proposed_payment_method)}</div>
+          <p class="change-diff-note ${notesChanged ? 'is-changed' : ''}">${escapeHtml(req.proposed_notes || 'No notes')}</p>
+        </div>`;
+    }
+
+    if (reasonWrap) {
+      reasonWrap.innerHTML = `
+        <span class="change-reason-label">Reason from ${escapeHtml(requesterName)}</span>
+        <p>${escapeHtml(req.reason || 'No reason provided.')}</p>
+        ${req.review_note && !isPending ? `<div class="change-review-decision-note"><strong>Admin note:</strong> ${escapeHtml(req.review_note)}</div>` : ''}`;
+    }
+
+    setFieldError(noteInput, '');
+    noteInput.value = '';
+    if (noteWrap) noteWrap.hidden = !canDecide;
+
+    if (actionsWrap) {
+      if (canDecide) {
+        actionsWrap.innerHTML = `
+          <button class="button button-danger" type="button" id="ipon-cr-reject">Reject</button>
+          <button class="button button-primary" type="button" id="ipon-cr-approve">Accept &amp; apply</button>`;
+      } else if (isPending && isOwnRequest) {
+        actionsWrap.innerHTML = `
+          <button class="button button-secondary" type="button" id="ipon-cr-dismiss">Close</button>
+          <button class="button button-danger" type="button" id="ipon-cr-withdraw">Withdraw request</button>`;
+      } else {
+        actionsWrap.innerHTML = '<button class="button button-secondary" type="button" id="ipon-cr-dismiss">Close</button>';
+      }
+    }
+
+    const closeDialog = () => { if (dialog.open) dialog.close('cancel'); };
+    dialog.querySelector('#ipon-cr-close').onclick = closeDialog;
+    dialog.querySelector('#ipon-cr-dismiss')?.addEventListener('click', closeDialog);
+    dialog.onclick = (event) => { if (event.target === dialog) closeDialog(); };
+    noteInput.oninput = () => setFieldError(noteInput, '');
+
+    return new Promise((resolve) => {
+      let result = null;
+      dialog.onclose = () => resolve(result);
+
+      const handleDecision = async (decision, triggerBtn) => {
+        setFieldError(noteInput, '');
+        const noteText = String(noteInput.value || '').trim();
+        if (decision === 'REJECTED' && noteText.length < 2) {
+          setFieldError(noteInput, 'Enter a short reason explaining why this change is rejected.');
+          noteInput.focus();
+          return;
+        }
+        const confirmed = await confirmAction({
+          title: decision === 'APPROVED' ? 'Accept & apply change request?' : 'Reject change request?',
+          message: decision === 'APPROVED'
+            ? `Update this ${typeLabel.toLowerCase()} from ${money(req.current_amount)} (${paymentMethodMeta(req.current_payment_method).label}) to ${money(req.proposed_amount)} (${paymentMethodMeta(req.proposed_payment_method).label})?`
+            : `Keep the original entry at ${money(req.current_amount)} (${paymentMethodMeta(req.current_payment_method).label}) and notify ${requesterName}?`,
+          acceptLabel: decision === 'APPROVED' ? 'Accept & apply' : 'Reject request'
+        });
+        if (!confirmed) return;
+
+        setBusy(triggerBtn, true, decision === 'APPROVED' ? 'Applying…' : 'Rejecting…');
+        try {
+          const res = await rpc('review_financial_change_request', {
+            p_request_id: req.id,
+            p_decision: decision,
+            p_review_note: noteText || null
+          });
+          result = res;
+          toast(res?.message || (decision === 'APPROVED' ? 'Change approved and applied.' : 'Change request rejected.'));
+          dialog.close(decision.toLowerCase());
+          if (typeof onReviewed === 'function') await onReviewed(res);
+        } catch (err) {
+          toast(friendlyError(err), 'error');
+        } finally {
+          setBusy(triggerBtn, false);
+        }
+      };
+
+      dialog.querySelector('#ipon-cr-reject')?.addEventListener('click', (ev) => handleDecision('REJECTED', ev.currentTarget));
+      dialog.querySelector('#ipon-cr-approve')?.addEventListener('click', (ev) => handleDecision('APPROVED', ev.currentTarget));
+      dialog.querySelector('#ipon-cr-withdraw')?.addEventListener('click', async (ev) => {
+        const btn = ev.currentTarget;
+        const ok = await confirmAction({
+          title: 'Withdraw change request?',
+          message: 'Cancel this pending change request? You can submit a new one anytime.',
+          acceptLabel: 'Withdraw'
+        });
+        if (!ok) return;
+        setBusy(btn, true, 'Withdrawing…');
+        try {
+          await rpc('cancel_financial_change_request', { p_request_id: req.id });
+          result = { status: 'CANCELLED', request_id: req.id };
+          toast('Change request withdrawn.');
+          dialog.close('cancelled');
+          if (typeof onReviewed === 'function') await onReviewed(result);
+        } catch (err) {
+          toast(friendlyError(err), 'error');
+        } finally {
+          setBusy(btn, false);
+        }
+      });
+
+      if (!dialog.open) dialog.showModal();
+    });
+  }
+
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     setOnlineVisibility, syncMessagesBadges,
     updateLocalProfile(patch = {}) {
@@ -12072,7 +12599,7 @@
     CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
     payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,
     computeContributionExcess, bindExcessContributionToggle,
-    resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink,
+    resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink, openCalendarEntryEditDialog, openChangeRequestReviewDialog,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload, maybeShowRetentionReminder, openRetentionPolicyDialog, CURRENT_POLICY_VERSION, openPolicyDialog, hasAcceptedCurrentPolicy, maybeShowPolicyConsentModal,

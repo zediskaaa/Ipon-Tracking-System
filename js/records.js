@@ -56,12 +56,31 @@
     Ipon.setLoading(false);
     return;
   }
+  const perms = state.profile.permissions || Ipon.defaultPermissionsForRole(state.profile.role);
+  const canRecordExpenses = state.profile.role === 'ADMIN' || perms.can_record_expenses === true;
+  const canRecordWithdrawals = state.profile.role === 'ADMIN' || perms.can_record_withdrawals === true;
+  const formPanel = form?.closest('.panel');
+  formPanel?.removeAttribute('data-role');
   if (!state.profile.group_id) {
-    Ipon.renderGroupRequiredCard(form.closest('.panel'), { hasGroup: false });
-  } else if ((page === 'expenses' || page === 'withdrawals') && state.profile.role === 'MEMBER') {
-    form.closest('.panel').innerHTML = `<div class="empty-state">Only administrators and treasurers can record ${page === 'expenses' ? 'expenses' : 'deductions'}. You can review the group history here.</div>`;
+    Ipon.renderGroupRequiredCard(formPanel, { hasGroup: false });
+  } else if (page === 'expenses' && !canRecordExpenses) {
+    if (formPanel) {
+      formPanel.hidden = false;
+      formPanel.innerHTML = `<div class="empty-state">${state.profile.role === 'TREASURER'
+        ? 'Your administrator has restricted expense recording for your account. You can still review the group expense history here.'
+        : 'Only administrators and treasurers can record expenses unless granted permission by your admin. You can review the group history here.'}</div>`;
+    }
+  } else if (page === 'withdrawals' && !canRecordWithdrawals) {
+    if (formPanel) {
+      formPanel.hidden = false;
+      formPanel.innerHTML = `<div class="empty-state">${state.profile.role === 'TREASURER'
+        ? 'Your administrator has restricted deduction recording for your account. You can still review the group deduction history here.'
+        : 'Only administrators and treasurers can record deductions unless granted permission by your admin. You can review the group history here.'}</div>`;
+    }
+  } else if ((page === 'expenses' || page === 'withdrawals') && formPanel) {
+    formPanel.hidden = false;
   } else if (page === 'contributions' && state.profile.role === 'MEMBER' && !state.profile.member_id) {
-    Ipon.renderGroupRequiredCard(form.closest('.panel'), { hasGroup: true });
+    Ipon.renderGroupRequiredCard(formPanel, { hasGroup: true });
   }
   setDefaults();
 
@@ -624,8 +643,11 @@
 
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (['withdrawals', 'expenses'].includes(page) && !['ADMIN', 'TREASURER'].includes(state.profile.role)) {
-      Ipon.toast(`Only administrators and treasurers can record ${page}.`, 'error');
+    const curPerms = state.profile.permissions || Ipon.defaultPermissionsForRole(state.profile.role);
+    const allowedExpense = state.profile.role === 'ADMIN' || curPerms.can_record_expenses === true;
+    const allowedWithdrawal = state.profile.role === 'ADMIN' || curPerms.can_record_withdrawals === true;
+    if ((page === 'expenses' && !allowedExpense) || (page === 'withdrawals' && !allowedWithdrawal)) {
+      Ipon.toast(`You do not currently have permission to record ${page}.`, 'error');
       return;
     }
     if (page === 'contributions' && state.profile.role === 'MEMBER' && (!state.profile.group_id || !state.profile.member_id)) {
@@ -640,12 +662,17 @@
     if (!(amount > 0)) { Ipon.setFieldError(form.elements.amount, 'Enter an amount greater than zero.'); form.elements.amount.focus(); return; }
     const typeLabel = page === 'contributions' ? 'addition' : page.slice(0, -1);
     const isAdmin = state.profile.role === 'ADMIN';
+    const needsApproval = !isAdmin && (page === 'contributions'
+      ? curPerms.require_add_approval !== false
+      : page === 'withdrawals'
+        ? curPerms.require_withdrawal_approval !== false
+        : curPerms.require_expense_approval !== false);
     const confirmed = await Ipon.confirmAction({
-      title: isAdmin ? `Confirm ${typeLabel}?` : `Submit ${typeLabel} for review?`,
-      message: isAdmin
-        ? `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`
-        : `${Ipon.money(amount)} will be submitted as pending until an administrator confirms it.`,
-      acceptLabel: isAdmin ? 'Confirm and save' : 'Submit for review'
+      title: needsApproval ? `Submit ${typeLabel} for review?` : `Confirm ${typeLabel}?`,
+      message: needsApproval
+        ? `${Ipon.money(amount)} will be submitted as pending until an administrator confirms it.`
+        : `${Ipon.money(amount)} will be immediately confirmed and included in tracked savings.`,
+      acceptLabel: needsApproval ? 'Submit for review' : 'Confirm and save'
     });
     if (!confirmed) return;
     pendingSubmissionKey ||= crypto.randomUUID();
@@ -671,11 +698,11 @@
         receiptPicker.clear();
         const coveredMonths = Number(result?.months_covered || result?.allocated_months || 0);
         if (allocateExcess && coveredMonths > 1) {
-          Ipon.toast(state.profile.role === 'ADMIN'
-            ? `Confirmed and allocated across ${coveredMonths} months.`
-            : `Submitted across ${coveredMonths} months for admin review.`);
+          Ipon.toast(needsApproval
+            ? `Submitted across ${coveredMonths} months for admin review.`
+            : `Confirmed and allocated across ${coveredMonths} months.`);
         } else {
-          Ipon.toast(state.profile.role === 'ADMIN' ? 'Confirmed record saved.' : 'Record submitted for admin review.');
+          Ipon.toast(needsApproval ? 'Record submitted for admin review.' : 'Confirmed record saved.');
         }
         form.reset(); setDefaults(); await load();
         return;
@@ -695,7 +722,7 @@
       }
       pendingSubmissionKey = null;
       receiptPicker.clear();
-      Ipon.toast(state.profile.role === 'ADMIN' ? 'Confirmed record saved.' : 'Record submitted for admin review.');
+      Ipon.toast(needsApproval ? 'Record submitted for admin review.' : 'Confirmed record saved.');
       form.reset(); setDefaults(); await load();
     } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { Ipon.setBusy(button, false); }
@@ -962,5 +989,8 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges(page, ['members', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'record_comments'], () => load(true));
+  Ipon.subscribeToChanges(page, ['members', 'group_memberships', 'financial_change_requests', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'record_comments'], async () => {
+    await Ipon.refreshMyPermissions?.().catch(() => { });
+    return load(true);
+  });
 })();

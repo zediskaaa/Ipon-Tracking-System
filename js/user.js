@@ -292,15 +292,18 @@
     const amount = Number(values.get('amount'));
     if (!(amount > 0)) { Ipon.setFieldError(form.elements.amount, 'Enter an amount greater than zero.'); form.elements.amount.focus(); return; }
     const allocateExcess = Boolean(form.elements.allocate_excess?.checked);
+    const needsApproval = state.profile?.permissions?.require_add_approval !== false;
     const confirmed = await Ipon.confirmAction({
-      title: 'Submit contribution?',
-      message: allocateExcess
-        ? `Submit ${Ipon.money(amount)} and carry excess over to upcoming unpaid months once confirmed?`
-        : `Submit ${Ipon.money(amount)} for administrator review? It will count toward group totals once confirmed.`,
-      acceptLabel: 'Submit contribution'
+      title: needsApproval ? 'Submit contribution?' : 'Confirm contribution?',
+      message: needsApproval
+        ? (allocateExcess
+          ? `Submit ${Ipon.money(amount)} and carry excess over to upcoming unpaid months once confirmed?`
+          : `Submit ${Ipon.money(amount)} for administrator review? It will count toward group totals once confirmed.`)
+        : `Record ${Ipon.money(amount)} directly into confirmed savings?`,
+      acceptLabel: needsApproval ? 'Submit contribution' : 'Confirm contribution'
     });
     if (!confirmed) return;
-    Ipon.setBusy(button, true, 'Submitting…');
+    Ipon.setBusy(button, true, needsApproval ? 'Submitting…' : 'Saving…');
     try {
       const uploadedReceiptUrl = await receiptPicker.upload();
       const result = await Ipon.rpc(allocateExcess ? 'record_contribution_with_carryover' : 'record_contribution', {
@@ -318,7 +321,9 @@
       receiptPicker.clear();
       dialog.close();
       const monthsCovered = Number(result?.months_covered || 1);
-      Ipon.toast(allocateExcess && monthsCovered > 1 ? `Contribution split across ${monthsCovered} months for review.` : 'Contribution submitted for review.');
+      Ipon.toast(needsApproval
+        ? (allocateExcess && monthsCovered > 1 ? `Contribution split across ${monthsCovered} months for review.` : 'Contribution submitted for review.')
+        : (allocateExcess && monthsCovered > 1 ? `Contribution confirmed across ${monthsCovered} months.` : 'Contribution confirmed and saved.'));
       await load();
     }
     catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
@@ -410,5 +415,8 @@
   document.getElementById('user-join-group')?.addEventListener('click', () => {
     Ipon.openJoinGroupDialog();
   });
-  Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions', 'groups', 'group_memberships', 'group_join_requests', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions', 'record_comments'], refresh);
+  Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions', 'groups', 'group_memberships', 'group_join_requests', 'financial_change_requests', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions', 'record_comments'], async () => {
+    await Ipon.refreshMyPermissions?.().catch(() => { });
+    return refresh();
+  });
 })();
