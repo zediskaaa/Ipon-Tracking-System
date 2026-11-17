@@ -385,11 +385,39 @@
     return results;
   }
 
+  function goalPrefStorageKey(groupId) {
+    return groupId ? `myipon_dashboard_goal_${groupId}` : '';
+  }
+  function readSavedGoalPref(groupId) {
+    const key = goalPrefStorageKey(groupId);
+    if (!key) return null;
+    try { return localStorage.getItem(key); } catch { return null; }
+  }
+  function writeSavedGoalPref(groupId, value) {
+    const key = goalPrefStorageKey(groupId);
+    if (!key) return;
+    try { localStorage.setItem(key, String(value || '')); } catch { }
+  }
   function monthIso(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`; }
   function renderGoalOptions(goals) {
-    const options = [{ id:'', title:'General savings' }, ...goals.map((goal) => ({ id:goal.id, title:goal.title?.trim() || 'Untitled goal' }))];
-    if (!options.some((goal) => goal.id === selectedGoalId)) selectedGoalId = '';
+    const goalOptions = (Array.isArray(goals) ? goals : []).map((goal) => ({
+      id: goal.id,
+      title: goal.title?.trim() || 'Untitled goal'
+    }));
+    const options = goalOptions.length
+      ? [...goalOptions, { id: '', title: 'General savings' }]
+      : [{ id: '', title: 'General savings' }];
+    const activeGroupId = String(currentGroup?.group_id || state?.profile?.group_id || '');
+    const savedPref = readSavedGoalPref(activeGroupId);
+    if (savedPref !== null && options.some((goal) => goal.id === savedPref)) {
+      selectedGoalId = savedPref;
+    } else if (goalOptions.length && !options.some((goal) => goal.id === selectedGoalId && selectedGoalId)) {
+      selectedGoalId = goalOptions[0].id;
+    } else if (!options.some((goal) => goal.id === selectedGoalId)) {
+      selectedGoalId = goalOptions[0]?.id || '';
+    }
     goalSelects.forEach((select) => {
+      if (!select) return;
       select.replaceChildren(...options.map((goal) => new Option(goal.title, goal.id)));
       select.value = selectedGoalId;
     });
@@ -610,8 +638,6 @@
     let targetGoal = null;
     if (selectedGoalId) {
       targetGoal = activeGoalsList.find((g) => g.id === selectedGoalId);
-    } else if (activeGoalsList.length > 0) {
-      targetGoal = activeGoalsList[0];
     }
     if (!targetGoal) {
       box.hidden = true;
@@ -1988,7 +2014,9 @@
 
   goalSelects.forEach((select) => select.addEventListener('change', () => {
     selectedGoalId = select.value;
-    goalSelects.forEach((other) => { other.value = selectedGoalId; });
+    const activeGroupId = String(currentGroup?.group_id || state?.profile?.group_id || '');
+    writeSavedGoalPref(activeGroupId, selectedGoalId);
+    goalSelects.forEach((other) => { if (other) other.value = selectedGoalId; });
     updateDashboardGoalProgress();
   }));
 

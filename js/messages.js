@@ -3788,9 +3788,10 @@
 
     if (titleEl) titleEl.textContent = isAddMode ? 'Add Members to Group' : 'New Group Chat';
     if (subEl) {
+      subEl.hidden = !isAddMode;
       subEl.textContent = isAddMode
         ? `Add eligible members to "${convDisplayTitle(activeConv)}" (${maxAllowed} spot${maxAllowed === 1 ? '' : 's'} left).`
-        : 'Create a group conversation with friends & connections (same 90-day retention).';
+        : '';
     }
 
     const selected = new Map(); // userId -> candidate object
@@ -3801,30 +3802,28 @@
     body.innerHTML = `
       <form class="msg-group-form" id="msg-group-form" novalidate>
         ${isAddMode ? '' : `
-          <div class="msg-group-avatar-picker">
-            <div class="msg-group-avatar-preview-wrap">
-              <div class="msg-group-avatar-preview" id="msg-group-create-pic-preview">${groupPicPreviewMarkup({ sizeClass: 'avatar-lg' })}</div>
-              <button type="button" class="msg-group-avatar-remove" id="msg-group-create-pic-remove" aria-label="Remove group photo" title="Remove photo" hidden>&times;</button>
-            </div>
-            <div class="msg-group-avatar-copy">
-              <span class="msg-group-avatar-label">Group photo (optional)</span>
-              <small class="field-help">Square PNG, JPG, WEBP, or GIF up to 450 KB.</small>
-              <div class="msg-group-avatar-actions">
-                <button type="button" class="button button-secondary button-sm" id="msg-group-create-pic-btn">Choose photo</button>
-              </div>
-              <input id="msg-group-create-pic-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
-            </div>
-          </div>
           <div class="msg-group-fields">
-            <div class="field">
-              <label for="msg-group-title-input">Group name</label>
-              <input id="msg-group-title-input" name="title" type="text" maxlength="80" placeholder="e.g. Barkada Boracay Fund" autocomplete="off" required>
-              <small class="field-error msg-stable-error" id="msg-group-title-error" role="alert" aria-hidden="true"></small>
+            <div class="msg-group-hero-row">
+              <div class="msg-group-avatar-picker is-compact-circle">
+                <div class="msg-group-avatar-preview-wrap">
+                  <div class="msg-group-avatar-preview" id="msg-group-create-pic-preview" role="button" tabindex="0" aria-label="Choose group photo" title="Choose group photo">${groupPicPreviewMarkup({ sizeClass: 'avatar-lg' })}</div>
+                  <button type="button" class="msg-group-avatar-plus-badge" id="msg-group-create-pic-btn" aria-label="Choose group photo" title="Choose group photo">+</button>
+                  <button type="button" class="msg-group-avatar-remove" id="msg-group-create-pic-remove" aria-label="Remove group photo" title="Remove photo" hidden>&times;</button>
+                  <input id="msg-group-create-pic-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                </div>
+              </div>
+              <div class="field msg-group-name-field">
+                <label for="msg-group-title-input">Group name</label>
+                <input id="msg-group-title-input" name="title" type="text" maxlength="80" placeholder="e.g. Barkada Boracay Fund" autocomplete="off" required>
+                <small class="field-error msg-stable-error" id="msg-group-title-error" role="alert" aria-hidden="true"></small>
+              </div>
             </div>
-            <div class="field">
-              <label for="msg-group-desc-input">Topic or description (optional)</label>
-              <input id="msg-group-desc-input" name="description" type="text" maxlength="240" placeholder="What is this group saving or chatting about?" autocomplete="off">
-              <small class="field-help msg-bio-counter" id="msg-group-desc-count">0 / 240</small>
+            <div class="field msg-group-topic-field">
+              <label for="msg-group-desc-input">Topic <span>(optional)</span></label>
+              <div class="msg-group-topic-wrap">
+                <input id="msg-group-desc-input" name="description" type="text" maxlength="240" placeholder="What is this group for?" autocomplete="off">
+                <small class="field-help msg-bio-counter msg-group-topic-counter" id="msg-group-desc-count">0/240</small>
+              </div>
             </div>
           </div>`}
         <div class="msg-group-picker-block">
@@ -3835,7 +3834,7 @@
           <div class="msg-group-chips" id="msg-group-chips" hidden></div>
           <div class="msg-search-input-wrap msg-group-member-search-wrap">
             <svg class="msg-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input id="msg-group-member-search" type="search" placeholder="Search friends or people by name or @username…" aria-label="Filter people for group chat" autocomplete="off">
+            <input id="msg-group-member-search" type="search" placeholder="Search friends or people by name" aria-label="Filter people for group chat" autocomplete="off">
           </div>
           <div class="msg-group-member-list" id="msg-group-member-list" role="listbox" aria-multiselectable="true">
             ${skeletonHtml('person', 4)}
@@ -3843,8 +3842,8 @@
           <small class="field-error msg-stable-error" id="msg-group-members-error" role="alert" aria-hidden="true"></small>
         </div>
         <div class="msg-group-form-actions">
-          <button type="button" class="button button-secondary button-sm" data-msg-group-close>Cancel</button>
-          <button type="submit" class="button button-primary button-sm" id="msg-group-submit-btn">${isAddMode ? 'Add members' : 'Create group'}</button>
+          <button type="button" class="button button-secondary" data-msg-group-close>Cancel</button>
+          <button type="submit" class="button button-primary" id="msg-group-submit-btn">${isAddMode ? 'Add members' : 'Create group'}</button>
         </div>
       </form>`;
 
@@ -3874,7 +3873,11 @@
         sizeClass: 'avatar-lg'
       });
       ipon().bindAvatarFallbacks?.(createPicPreview);
-      if (createPicBtn) createPicBtn.textContent = pendingAvatarDataUrl ? 'Change photo' : 'Choose photo';
+      if (createPicBtn) {
+        const lbl = pendingAvatarDataUrl ? 'Change group photo' : 'Choose group photo';
+        createPicBtn.setAttribute('aria-label', lbl);
+        createPicBtn.title = lbl;
+      }
       if (createPicRemove) createPicRemove.hidden = !pendingAvatarDataUrl;
     };
 
@@ -4020,7 +4023,7 @@
       }
     });
     descInput?.addEventListener('input', () => {
-      if (descCount) descCount.textContent = `${String(descInput.value || '').length} / 240`;
+      if (descCount) descCount.textContent = `${String(descInput.value || '').length}/240`;
     });
     memberSearch?.addEventListener('input', () => {
       query = memberSearch.value;

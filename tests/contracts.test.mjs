@@ -721,6 +721,8 @@ test('dashboard lets users choose the calendar tracking goal and uses a bounded 
   assert.match(script, /rpc\('get_pending_review_summary'\)/);
   assert.match(script, /from\('savings_goals'\)\.select\('id,title'\)[\s\S]*?eq\('status', 'ACTIVE'\)/);
   assert.match(script, /renderGoalOptions\(goalResult\.data \|\| \[\]\)/);
+  assert.match(script, /goalPrefStorageKey\(groupId\)/);
+  assert.match(script, /selectedGoalId = goalOptions\[0\]\.id/);
   assert.match(script, /goalSelects\.forEach\(\(select\) => select\.addEventListener\('change'/);
   assert.match(css, /\.admin-progress\{grid-column:1\/-1;grid-template-columns:repeat\(4/);
 });
