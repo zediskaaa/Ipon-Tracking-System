@@ -58,7 +58,7 @@
       const requests = Array.isArray(data?.pending_requests) ? data.pending_requests : [];
       if (joinRequestsCount) {
         joinRequestsCount.hidden = requests.length === 0;
-        joinRequestsCount.textContent = String(requests.length);
+        joinRequestsCount.textContent = `${requests.length} pending`;
       }
       Ipon.renderJoinRequestsQueue(joinRequestsList, {
         requests,

@@ -11357,41 +11357,41 @@
 
       container.innerHTML = `
         <div class="invite-code-active-card">
-          <div class="invite-qr-stage">
+          <div class="invite-qr-card">
             <div class="invite-qr-plate">${qrHtml}</div>
-            <button class="invite-code-pill" type="button" data-copy-code title="Click to copy 6-character code">
-              <span class="invite-code-pill-label">GROUP CODE</span>
-              <strong class="tabular-nums">${escapeHtml(formatted)}</strong>
-              <span class="invite-code-pill-action">Copy code</span>
+            <span class="invite-qr-caption">Scan with a phone camera to join</span>
+          </div>
+          <button class="invite-code-card" type="button" data-copy-code title="Click to copy 6-character code">
+            <span class="invite-code-pill-label">GROUP CODE</span>
+            <strong class="invite-code-display tabular-nums">${escapeHtml(formatted)}</strong>
+            <span class="invite-code-pill-action">Copy code</span>
+          </button>
+          <div class="invite-meta-pills">
+            <span class="status ${active.require_approval ? 'status-pending' : 'status-confirmed'}" id="${pid}-mode-badge">${active.require_approval ? 'Approval required' : 'Instant join'}</span>
+            <span class="status status-unpaid">${escapeHtml(inviteExpirySummary(active.expires_at))}</span>
+            <span class="status status-unpaid">${escapeHtml(usesText)}</span>
+          </div>
+          <div class="invite-share-link-block">
+            <label class="invite-section-label" for="${pid}-share-url">Shareable invite link</label>
+            <input id="${pid}-share-url" class="invite-url-readonly" type="text" readonly value="${escapeHtml(shareUrl)}" aria-label="Shareable group invite link">
+            <button class="button button-primary invite-copy-link-full" type="button" data-copy-link>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copy link</span>
             </button>
           </div>
-          <div class="invite-share-details">
-            <div class="invite-meta-pills">
-              <span class="status ${active.require_approval ? 'status-pending' : 'status-confirmed'}" id="${pid}-mode-badge">${active.require_approval ? 'Approval required' : 'Instant join'}</span>
-              <span class="status status-unpaid">${escapeHtml(inviteExpirySummary(active.expires_at))}</span>
-              <span class="status status-unpaid">${escapeHtml(usesText)}</span>
-            </div>
-            <div class="field">
-              <label for="${pid}-share-url">Shareable invite link</label>
-              <div class="invite-url-copy-row">
-                <input id="${pid}-share-url" type="text" readonly value="${escapeHtml(shareUrl)}" aria-label="Shareable group invite link">
-                <button class="button button-primary button-sm" type="button" data-copy-link>Copy link</button>
-              </div>
-            </div>
-            <div class="invite-share-actions">
-              ${canNativeShare ? '<button class="button button-secondary button-sm" type="button" data-native-share>Share via phone</button>' : ''}
-              <button class="button button-secondary button-sm" type="button" data-download-qr>Save QR PNG</button>
-              <button class="button button-secondary button-sm" type="button" data-rotate-code>New code</button>
-              <button class="button button-danger button-sm" type="button" data-revoke-code>Revoke</button>
-            </div>
-            <label class="toggle-switch-row invite-approval-toggle" for="${pid}-require-approval">
-              <span>
-                <strong>Require admin approval</strong>
-                <small>Toggle anytime: on = admin approves requests; off = instant join.</small>
-              </span>
-              <input class="toggle-switch-input" id="${pid}-require-approval" type="checkbox" role="switch" ${active.require_approval ? 'checked' : ''}>
-            </label>
+          <div class="invite-secondary-grid${canNativeShare ? ' has-share' : ''}">
+            ${canNativeShare ? '<button class="button button-secondary" type="button" data-native-share>Share</button>' : ''}
+            <button class="button button-secondary" type="button" data-download-qr>Save QR</button>
+            <button class="button button-secondary" type="button" data-rotate-code>New code</button>
+            <button class="button button-secondary invite-revoke-btn" type="button" data-revoke-code>Revoke</button>
           </div>
+          <label class="toggle-switch-row invite-approval-card" for="${pid}-require-approval">
+            <span>
+              <strong>Require admin approval</strong>
+              <small>On: an admin approves each request. Off: anyone with this link joins immediately.</small>
+            </span>
+            <input class="toggle-switch-input" id="${pid}-require-approval" type="checkbox" role="switch" ${active.require_approval ? 'checked' : ''}>
+          </label>
         </div>`;
 
       container.querySelector(`#${pid}-share-url`)?.addEventListener('click', (event) => {
@@ -11411,9 +11411,15 @@
       container.querySelector('[data-copy-link]')?.addEventListener('click', async (event) => {
         const btn = event.currentTarget;
         const ok = await copyPlainText(shareUrl, 'Invite link copied.');
+        const labelEl = btn.querySelector('span');
         if (ok) {
-          btn.textContent = 'Copied!';
-          setTimeout(() => { if (btn.isConnected) btn.textContent = 'Copy link'; }, 1600);
+          if (labelEl) labelEl.textContent = 'Copied!';
+          else btn.textContent = 'Copied!';
+          setTimeout(() => {
+            if (!btn.isConnected) return;
+            if (labelEl) labelEl.textContent = 'Copy link';
+            else btn.textContent = 'Copy link';
+          }, 1600);
         }
       });
 
@@ -11546,13 +11552,21 @@
           ${avatarMarkup(req.avatar_url, req.full_name, 'avatar-md', req.user_id)}
           <div class="join-request-copy">
             <strong>${escapeHtml(req.full_name || 'User')}</strong>
-            <small>${escapeHtml([req.email, req.contact_number, req.code ? `Code ${formatInviteCode(req.code)}` : ''].filter(Boolean).join(' · '))}</small>
-            <span class="join-request-time">Requested ${escapeHtml(dateLabel(req.created_at, { dateStyle: 'medium', timeStyle: 'short' }))}</span>
+            ${req.email ? `<span class="join-request-email">${escapeHtml(req.email)}</span>` : ''}
+            <div class="join-request-chips">
+              ${req.contact_number ? `<span class="join-request-chip">${escapeHtml(req.contact_number)}</span>` : ''}
+              ${req.code ? `<span class="join-request-chip">Code ${escapeHtml(formatInviteCode(req.code))}</span>` : ''}
+            </div>
           </div>
         </div>
+        <div class="join-request-divider" aria-hidden="true"></div>
+        <div class="join-request-time">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <span>Requested ${escapeHtml(dateLabel(req.created_at, { dateStyle: 'medium', timeStyle: 'short' }))}</span>
+        </div>
         <div class="join-request-actions">
-          <button class="button button-secondary button-sm" type="button" data-decline-join="${escapeHtml(req.id)}">Decline</button>
-          <button class="button button-primary button-sm" type="button" data-approve-join="${escapeHtml(req.id)}">Approve</button>
+          <button class="button button-secondary" type="button" data-decline-join="${escapeHtml(req.id)}">Decline</button>
+          <button class="button button-primary" type="button" data-approve-join="${escapeHtml(req.id)}">Approve</button>
         </div>
       </article>`).join('')}</div>`;
     bindAvatarFallbacks(container);
@@ -11563,11 +11577,11 @@
         const requestId = btn.dataset.approveJoin || btn.dataset.declineJoin;
         const item = requests.find((r) => r.id === requestId);
         const ok = await confirmAction({
-          title: isApprove ? 'Approve join request?' : 'Decline join request?',
+          title: isApprove ? 'Approve join request?' : 'Decline & block this request?',
           message: isApprove
             ? `Allow ${item?.full_name || 'this user'} to join this savings group as a Member? A member profile will be created or linked automatically.`
-            : `Decline ${item?.full_name || 'this user'}'s request to join this group?`,
-          acceptLabel: isApprove ? 'Approve member' : 'Decline request'
+            : `Decline ${item?.full_name || 'this user'}'s request to join this group? They will be blocked from joining again using this invite link or code.`,
+          acceptLabel: isApprove ? 'Approve' : 'Decline & block'
         });
         if (!ok) return;
         setBusy(btn, true, isApprove ? 'Approving…' : 'Declining…');
@@ -11576,7 +11590,7 @@
             p_request_id: requestId,
             p_decision: isApprove ? 'APPROVED' : 'DECLINED'
           });
-          toast(isApprove ? `${item?.full_name || 'Member'} joined the group.` : 'Join request declined.');
+          toast(isApprove ? `${item?.full_name || 'Member'} joined the group.` : `${item?.full_name || 'User'} declined and blocked from this invite link/code.`);
           if (typeof onChanged === 'function') await onChanged();
         } catch (error) {
           toast(friendlyError(error), 'error');
@@ -11587,22 +11601,69 @@
     });
   }
 
+  function showJoinBlockedDialog({ groupName = '', message = '' } = {}) {
+    let dialog = document.getElementById('ipon-join-blocked-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog join-blocked-dialog" id="ipon-join-blocked-dialog" aria-labelledby="ipon-blocked-title">
+          <div class="form-dialog-sheet join-blocked-sheet">
+            <header class="form-dialog-header">
+              <div>
+                <span class="dialog-eyebrow is-danger">Access blocked</span>
+                <h2 id="ipon-blocked-title">Unable to join group</h2>
+              </div>
+              <button class="dialog-close" type="button" id="ipon-blocked-close" aria-label="Close notice">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div class="join-blocked-body">
+              <div class="join-blocked-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 9 6 6M15 9l-6 6"/></svg>
+              </div>
+              <strong id="ipon-blocked-group">This invite link or code is blocked</strong>
+              <p id="ipon-blocked-message">Your request was declined by an administrator, so you cannot join with this invite link or code.</p>
+            </div>
+            <footer class="join-panel-footer">
+              <button class="button button-primary" type="button" id="ipon-blocked-ok">Understood</button>
+            </footer>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('ipon-join-blocked-dialog');
+    }
+    const groupEl = dialog.querySelector('#ipon-blocked-group');
+    const msgEl = dialog.querySelector('#ipon-blocked-message');
+    if (groupEl) {
+      groupEl.textContent = groupName
+        ? `Blocked from joining "${groupName}"`
+        : 'Blocked from this invite link or code';
+    }
+    if (msgEl) {
+      msgEl.textContent = message || 'Your previous request was declined by an administrator. This invite link or code can no longer be used to join.';
+    }
+    const closeFn = () => { if (dialog.open) dialog.close(); };
+    dialog.querySelector('#ipon-blocked-close').onclick = closeFn;
+    dialog.querySelector('#ipon-blocked-ok').onclick = closeFn;
+    dialog.onclick = (event) => { if (event.target === dialog) closeFn(); };
+    if (!dialog.open) dialog.showModal();
+    dialog.querySelector('#ipon-blocked-ok')?.focus();
+  }
+
   let joinPanelSeq = 0;
   function mountJoinGroupPanel(container, { initialCode = '', onCancel = null, onJoined = null } = {}) {
     if (!container) return null;
     const jid = `ipon-jp-${++joinPanelSeq}`;
     container.innerHTML = `
-      <form id="${jid}-form" class="form-grid join-group-panel-form" novalidate>
-        <div class="field field-wide">
-          <label for="${jid}-code">6-character group code or invite link</label>
-          <input id="${jid}-code" name="invite_code" class="join-code-input" type="text" maxlength="240" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K9M-4PQ or invite link" aria-describedby="${jid}-error" required>
-          <small class="field-error" id="${jid}-error" role="alert"></small>
-        </div>
-        <div class="field field-wide">
+      <form id="${jid}-form" class="join-group-panel-form" novalidate>
+        <div class="join-group-panel-body">
+          <div class="field field-wide">
+            <label class="invite-section-label" for="${jid}-code">Group code or invite link</label>
+            <input id="${jid}-code" name="invite_code" class="join-code-input" type="text" maxlength="240" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K9M-4PQ or invite link" aria-describedby="${jid}-error" required>
+            <small class="field-error" id="${jid}-error" role="alert"></small>
+          </div>
           <div class="join-preview-slot" id="${jid}-preview" aria-live="polite"></div>
+          <div id="${jid}-pending" hidden></div>
         </div>
-        <div class="field field-wide" id="${jid}-pending" hidden></div>
-        <div class="form-actions field-wide">
+        <div class="join-panel-footer">
           <button class="button button-secondary" type="button" id="${jid}-cancel">Cancel</button>
           <button class="button button-primary" type="submit" id="${jid}-submit" disabled>Join group</button>
         </div>
@@ -11618,6 +11679,7 @@
 
     let latestPreview = null;
     let previewSeq = 0;
+    let blockedDialogShownFor = '';
 
     const setCodeError = (msg) => {
       if (!input || !errorEl) return;
@@ -11714,19 +11776,40 @@
         if (seq !== previewSeq) return;
         latestPreview = res || null;
         if (!res?.valid) {
+          const isBlocked = Boolean(res?.blocked || res?.reason === 'DECLINED_BLOCKED' || res?.reason === 'DISABLED');
           setCodeError(res?.message || 'Invite code could not be verified.');
           if (previewSlot) {
-            previewSlot.innerHTML = `<div class="join-preview-error"><p>${escapeHtml(res?.message || 'Invite code is invalid or expired.')}</p></div>`;
+            previewSlot.innerHTML = isBlocked
+              ? `<div class="join-preview-card is-blocked">
+                  <div class="join-preview-head">
+                    ${res?.group_name ? avatarMarkup(res.group_avatar_url, res.group_name, 'avatar-md') : ''}
+                    <div class="join-preview-info">
+                      <strong>${escapeHtml(res?.group_name || 'Access blocked')}</strong>
+                      <small>${escapeHtml(res?.message || 'You are blocked from using this invite link or code.')}</small>
+                    </div>
+                  </div>
+                  <div class="join-preview-badges"><span class="status status-rejected">Blocked from this link/code</span></div>
+                </div>`
+              : `<div class="join-preview-error"><p>${escapeHtml(res?.message || 'Invite code is invalid or expired.')}</p></div>`;
+            if (isBlocked) bindAvatarFallbacks(previewSlot);
           }
-          if (submitBtn) submitBtn.disabled = true;
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = isBlocked ? 'Blocked' : 'Join group';
+          }
+          if (isBlocked && blockedDialogShownFor !== code) {
+            blockedDialogShownFor = code;
+            clearPendingJoinCode();
+            showJoinBlockedDialog({ groupName: res?.group_name || '', message: res?.message || '' });
+          }
           return;
         }
         const alreadyMember = Boolean(res.already_member);
         const pendingReq = Boolean(res.pending_request);
         const countLabel = `${Number(res.member_count || 0)} ${Number(res.member_count || 0) === 1 ? 'member' : 'members'}`;
         const policyBadge = res.require_approval
-          ? '<span class="status status-pending">Admin approval required</span>'
-          : '<span class="status status-confirmed">Instant join</span>';
+          ? '<span class="status status-pending"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Admin approval required</span>'
+          : '<span class="status status-confirmed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Instant join</span>';
         const statusExtra = alreadyMember
           ? `<div class="join-preview-state"><span>You already belong to this group.</span><button class="button button-secondary button-sm" type="button" data-join-switch-existing="${escapeHtml(res.group_id)}">Open workspace</button></div>`
           : pendingReq
@@ -11821,8 +11904,14 @@
         }
         window.location.href = homeForRole(result?.role || 'MEMBER');
       } catch (err) {
-        setCodeError(friendlyError(err));
-        toast(friendlyError(err), 'error');
+        const msg = friendlyError(err);
+        setCodeError(msg);
+        if (/blocked|declined|disabled/i.test(msg)) {
+          clearPendingJoinCode();
+          showJoinBlockedDialog({ groupName: latestPreview?.group_name || '', message: msg });
+        } else {
+          toast(msg, 'error');
+        }
       } finally {
         setBusy(submitBtn, false);
       }
@@ -11860,6 +11949,7 @@
           <div class="form-dialog-sheet join-group-sheet">
             <header class="form-dialog-header">
               <div>
+                <span class="dialog-eyebrow">Have a code?</span>
                 <h2 id="ipon-join-dialog-title">Join savings group</h2>
                 <p id="ipon-join-dialog-copy">Enter a 6-character code or paste an invite link.</p>
               </div>
@@ -11925,7 +12015,7 @@
     auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry, createRealtimeChannel,
     canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, inviteShareUrl,
     setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
-    generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
+    generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
     get profile() { return currentProfile; }
   };
 })();

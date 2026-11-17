@@ -1432,6 +1432,11 @@
   function renderDialogPendingRequests(requests) {
     if (!inviteDialogRequestsWrap || !inviteDialogRequestsList) return;
     const list = Array.isArray(requests) ? requests : [];
+    const countEl = document.getElementById('invite-dialog-requests-count');
+    if (countEl) {
+      countEl.hidden = list.length === 0;
+      countEl.textContent = `${list.length} pending`;
+    }
     inviteDialogRequestsWrap.hidden = list.length === 0;
     if (!list.length) {
       inviteDialogRequestsList.replaceChildren();

@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261117-138">
+  <link rel="stylesheet" href="css/app.css?v=20261117-139">
   <link rel="stylesheet" href="css/hero-plates.css?v=20261117-87">
   <script src="js/config.js?v=20261117-76"></script>
 </head>
@@ -789,10 +789,11 @@
   </dialog>
   <dialog class="form-dialog group-invite-dialog" id="group-invite-dialog" aria-labelledby="group-invite-title">
     <div class="form-dialog-sheet">
+      <div class="dialog-sheet-handle" aria-hidden="true"></div>
       <header class="form-dialog-header">
         <div>
+          <span class="dialog-eyebrow">Group</span>
           <h2 id="group-invite-title">Invite members</h2>
-          <p id="group-invite-copy">Share a 6-character code &amp; QR link for fast phone onboarding, or send email credentials.</p>
         </div>
         <button class="dialog-close" type="button" id="close-invite-dialog" aria-label="Close invite dialog"><svg
             viewBox="0 0 24 24" aria-hidden="true">
@@ -800,14 +801,18 @@
           </svg></button>
       </header>
       <div class="invite-mode-tabs" role="tablist" aria-label="Invitation methods">
-        <button class="invite-mode-tab is-active" id="invite-tab-link" type="button" role="tab" aria-selected="true" aria-controls="invite-link-panel">Invite Link &amp; QR</button>
-        <button class="invite-mode-tab" id="invite-tab-email" type="button" role="tab" aria-selected="false" aria-controls="group-invite-form">Email Invite</button>
+        <button class="invite-mode-tab is-active" id="invite-tab-link" type="button" role="tab" aria-selected="true" aria-controls="invite-link-panel">Invite link &amp; QR</button>
+        <button class="invite-mode-tab" id="invite-tab-email" type="button" role="tab" aria-selected="false" aria-controls="group-invite-form">Email invite</button>
       </div>
       <div class="invite-link-panel" id="invite-link-panel" role="tabpanel" aria-labelledby="invite-tab-link">
         <div id="invite-link-code-mount"></div>
         <div class="invite-dialog-requests-wrap" id="invite-dialog-requests-wrap" hidden>
-          <div class="invite-section-head">
-            <span><strong>Pending join requests</strong></span>
+          <div class="settings-join-requests-head">
+            <div>
+              <span class="join-queue-eyebrow">Admin</span>
+              <h3>Pending join requests</h3>
+            </div>
+            <span class="status status-pending" id="invite-dialog-requests-count" hidden>0 pending</span>
           </div>
           <div id="invite-dialog-requests-list"></div>
         </div>
@@ -965,12 +970,12 @@
       </div>
     </div>
   </dialog>
-  <script src="js/core.js?v=20261117-115"></script><script src="js/policy.js?v=20261116-07"></script>
+  <script src="js/core.js?v=20261117-116"></script><script src="js/policy.js?v=20261116-07"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
   <script src="js/messages.js?v=20261117-32"></script>
-  <script src="js/dashboard.js?v=20261117-92"></script>
+  <script src="js/dashboard.js?v=20261117-93"></script>
 </body>
 
 </html>
