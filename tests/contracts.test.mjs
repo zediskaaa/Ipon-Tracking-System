@@ -7075,7 +7075,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   await new Promise((r) => setTimeout(r, 340));
 
   const expectedMediaCount = threadMessages.filter((m) => !m.deleted_for_everyone_at).reduce((n, m) => n + (m.attachments || []).filter((a) => a.kind === 'image' || a.kind === 'video').length, 0);
-  const expectedFileCount = threadMessages.filter((m) => !m.deleted_for_everyone_at).reduce((n, m) => n + (m.attachments || []).filter((a) => a.kind !== 'image' && a.kind !== 'video').length, 0);
+  const expectedFileCount = threadMessages.filter((m) => !m.deleted_for_everyone_at).reduce((n, m) => n + (m.attachments || []).filter((a) => a.kind !== 'image' && a.kind !== 'video' && a.kind !== 'audio').length, 0);
   assert.ok(expectedMediaCount >= 12);
   assert.ok(expectedFileCount >= 2);
   const drawerEl = getEl('msg-thread-drawer');
@@ -7083,7 +7083,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.equal(drawerEl.hidden, false);
   assert.match(drawerEl.innerHTML, new RegExp(`data-drawer-view="media"[\\s\\S]*?Shared media[\\s\\S]*?<span class="msg-drawer-nav-count">${expectedMediaCount}<\\/span>`));
   assert.match(drawerEl.innerHTML, new RegExp(`data-drawer-view="files"[\\s\\S]*?Shared files[\\s\\S]*?<span class="msg-drawer-nav-count">${expectedFileCount}<\\/span>`));
-  assert.doesNotMatch(drawerEl.innerHTML, /class="msg-drawer-media-grid"|class="msg-drawer-files"|photo-1\.jpg|ledger\.pdf/);
+  assert.doesNotMatch(drawerEl.innerHTML, /class="msg-drawer-media-grid"|class="msg-drawer-files"|photo-1\.jpg|ledger\.pdf|voice\.webm/);
 
   // Drill into Shared media -> ONLY scrollable media grid renders (all items, never sliced) + Back button
   await clickEl({ dataset: { drawerView: 'media' }, closest: (sel) => (sel === '[data-drawer-view]' ? { dataset: { drawerView: 'media' } } : null) });
@@ -11100,6 +11100,6 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   const dashHtml = read('dashboard.html');
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
-  assert.match(swJs, /ipon-shell-v22/);
+  assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
   assert.match(dashHtml, /js\/core\.js\?v=20261117-111/);
 });

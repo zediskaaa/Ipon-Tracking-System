@@ -347,13 +347,25 @@
     const type = String(file?.type || '').toLowerCase();
     const name = String(file?.name || '').toLowerCase();
     if (type.startsWith('image/')) return 'image';
-    if (type.startsWith('audio/')) return 'audio';
+    if (type.startsWith('audio/') || /^voice-note-/i.test(name)) return 'audio';
     if (type.startsWith('video/')) return 'video';
     if (IMAGE_EXT_RE.test(name)) return 'image';
-    if (/\.(mp3|wav|ogg|m4a|aac)$/i.test(name)) return 'audio';
+    if (/\.(mp3|wav|ogg|m4a|aac|opus)$/i.test(name)) return 'audio';
     if (/\.(mp4|mov|webm)$/i.test(name)) return 'video';
     if (DOC_EXT_RE.test(name) || /pdf|word|excel|spreadsheet|powerpoint|presentation|text|csv/i.test(type)) return 'document';
     return 'file';
+  }
+
+  function isVoiceAttachment(att, msg = null) {
+    const kind = String(att?.kind || '').toLowerCase();
+    const type = String(att?.type || '').toLowerCase();
+    const name = String(att?.name || '').toLowerCase();
+    return kind === 'audio'
+      || String(msg?.message_type || '').toUpperCase() === 'VOICE'
+      || /^voice-note-/i.test(name)
+      || type.startsWith('audio/')
+      || /\.(mp3|wav|ogg|m4a|aac|opus)$/i.test(name)
+      || (Number(att?.duration_seconds) > 0 && kind !== 'video');
   }
 
   function formatBadgeLabel(att) {
@@ -2432,7 +2444,7 @@
       (m.attachments || []).forEach((a) => {
         const entry = { att: a, msgId: m.id, createdAt: m.created_at };
         if (a.kind === 'image' || a.kind === 'video') media.push(entry);
-        else docs.push(entry);
+        else if (!isVoiceAttachment(a, m)) docs.push(entry);
       });
     });
 
