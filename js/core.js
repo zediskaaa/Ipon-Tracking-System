@@ -10547,4 +10547,2072 @@
     const action = String(row?.action || 'UPDATE').toUpperCase();
     const table = String(row?.table_name || '');
     const before = row?.old_data || {};
-... [truncated for diff preview]
+    const after = row?.new_data || {};
+    const snap = Object.keys(after).length ? after : before;
+    const period = snap.contribution_period_id ? lookups.periods?.get(snap.contribution_period_id) : null;
+    const periodMember = period?.member_id ? lookups.members?.get(period.member_id) : '';
+
+    if (action === 'INSERT') {
+      if (table === 'profiles') return `Created account for ${snap.full_name || subject}`;
+      if (table === 'members') return `Added member ${snap.full_name || subject}`;
+      if (table === 'groups') return `Created savings group "${snap.name || subject}"`;
+      if (table === 'contribution_settings') return `Set monthly contribution to ${money(snap.default_amount)}`;
+      if (table === 'contribution_periods') return `Created ${subject}`;
+      if (table === 'contributions') return `Recorded ${money(snap.amount)} addition${periodMember ? ` for ${periodMember}` : ''}`;
+      if (table === 'withdrawals') return `Recorded ${money(snap.amount)} deduction${snap.category ? ` (${snap.category})` : ''}`;
+      if (table === 'expenses') return `Recorded ${money(snap.amount)} expense${snap.category ? ` (${snap.category})` : ''}`;
+      if (table === 'savings_goals') return `Created goal "${snap.title || 'Savings goal'}"`;
+      if (table === 'financial_change_requests') {
+        const entryKind = snap.record_type === 'EXPENSE' ? 'expense' : (snap.record_type === 'WITHDRAWAL' ? 'deduction' : 'addition');
+        return `Requested ${entryKind} edit (${money(snap.current_amount)} → ${money(snap.proposed_amount)})`;
+      }
+      return `Created ${auditTableLabel(table).toLowerCase()}`;
+    }
+
+    if (action === 'DELETE') {
+      if (table === 'profiles') return `Removed account for ${before.full_name || subject}`;
+      if (table === 'members') return `Deleted member ${before.full_name || subject}`;
+      if (table === 'groups') return `Deleted savings group "${before.name || subject}"`;
+      if (table === 'contributions') return `Deleted ${money(before.amount)} addition`;
+      if (table === 'withdrawals') return `Deleted ${money(before.amount)} deduction`;
+      if (table === 'expenses') return `Deleted ${money(before.amount)} expense`;
+      if (table === 'savings_goals') return `Deleted goal "${before.title || 'Savings goal'}"`;
+      return `Deleted ${auditTableLabel(table).toLowerCase()}`;
+    }
+
+    if (action === 'CONFIRM' || action === 'REJECT' || action === 'VOID') {
+      const verb = auditActionLabel(action);
+      const kind = table === 'contributions' ? 'addition' : (table === 'withdrawals' ? 'deduction' : (table === 'expenses' ? 'expense' : auditTableLabel(table).toLowerCase()));
+      const amount = snap.amount != null ? `${money(snap.amount)} ` : '';
+      const tail = periodMember ? ` for ${periodMember}` : (snap.category ? ` (${snap.category})` : '');
+      return `${verb} ${amount}${kind}${tail}`;
+    }
+
+    const keys = new Set(changes.map((c) => c.key));
+    if (!before.deleted_at && after.deleted_at) return `Moved ${subject} to recovery bin`;
+    if (before.deleted_at && !after.deleted_at) return `Restored ${subject} from recovery bin`;
+
+    if (table === 'profiles' && keys.has('full_name') && keys.size === 1 && before.full_name && after.full_name) {
+      return `Renamed account from "${before.full_name}" to "${after.full_name}"`;
+    }
+    if (table === 'members' && keys.has('full_name') && keys.size === 1 && before.full_name && after.full_name) {
+      return `Renamed member from "${before.full_name}" to "${after.full_name}"`;
+    }
+    if (table === 'groups' && keys.has('name') && keys.size === 1 && before.name && after.name) {
+      return `Renamed group from "${before.name}" to "${after.name}"`;
+    }
+    if (table === 'savings_goals' && keys.has('title') && keys.size === 1 && before.title && after.title) {
+      return `Renamed goal from "${before.title}" to "${after.title}"`;
+    }
+
+    if (table === 'profiles') {
+      if (keys.has('group_id') && [...keys].every((k) => k === 'group_id' || k === 'member_id')) {
+        const nextGroupName = after.group_id ? lookups.groups?.get(after.group_id) : '';
+        if (!before.group_id && after.group_id) return nextGroupName ? `Joined "${nextGroupName}"` : 'Joined savings group';
+        if (before.group_id && !after.group_id) return 'Left active savings group';
+        return nextGroupName ? `Switched active group to "${nextGroupName}"` : 'Switched active savings group';
+      }
+      if (keys.size === 1 && keys.has('member_id')) {
+        const mName = after.member_id ? lookups.members?.get(after.member_id) : '';
+        return after.member_id ? (mName ? `Linked account to ${mName}` : 'Linked account to member') : 'Unlinked account from member';
+      }
+      if (keys.size === 1 && keys.has('avatar_url')) return after.avatar_url ? 'Updated profile photo' : 'Removed profile photo';
+      if (keys.size === 1 && keys.has('role')) return `Changed role to ${formatAuditValue('role', after.role, row, lookups).text}`;
+      if (keys.size === 1 && keys.has('status')) {
+      }
+    }
+
+    if (table === 'financial_change_requests') {
+      if (after.status === 'APPROVED' && before.status !== 'APPROVED') return 'Approved requested record edit';
+      if (after.status === 'REJECTED' && before.status !== 'REJECTED') return 'Rejected requested record edit';
+      if (after.status === 'CANCELLED' && before.status !== 'CANCELLED') return 'Cancelled requested record edit';
+    }
+
+    if (table === 'group_memberships') {
+      const permKeys = ['can_edit_own_entries', 'require_edit_approval', 'require_add_approval', 'can_record_expenses', 'require_expense_approval', 'can_record_withdrawals', 'require_withdrawal_approval'];
+      if ([...keys].some((k) => permKeys.includes(k))) return 'Updated member workspace permissions';
+    }
+
+    if (table === 'contribution_periods') {
+      if (keys.has('is_exempt')) return after.is_exempt ? `Exempted ${subject}` : `Removed exemption for ${subject}`;
+      if (keys.size === 1 && keys.has('required_amount')) return `Updated required contribution to ${money(after.required_amount)}`;
+    }
+
+    if (table === 'savings_goals') {
+      if (keys.size === 1 && keys.has('status')) {
+        if (after.status === 'COMPLETED') return `Completed goal "${subject}"`;
+        if (after.status === 'CANCELLED') return `Cancelled goal "${subject}"`;
+      }
+      if (keys.size === 1 && keys.has('target_amount')) return `Updated goal target to ${money(after.target_amount)}`;
+    }
+
+    if (table === 'groups') {
+      const paymentKeys = ['payment_qr_url', 'payment_method_label', 'payment_account_name', 'payment_account_number', 'payment_instructions'];
+      if (changes.length && changes.every((c) => paymentKeys.includes(c.key))) {
+        return keys.size === 1 && keys.has('payment_qr_url') ? 'Updated group payment QR code' : 'Updated group payment details';
+      }
+      if (keys.size === 1 && keys.has('deadline_day')) return `Set monthly due day to Day ${after.deadline_day}`;
+      if (keys.size === 1 && keys.has('allow_credit')) return after.allow_credit ? 'Enabled excess contribution credit' : 'Disabled excess contribution credit';
+    }
+
+    if (changes.length === 1) {
+      const item = changes[0];
+      if (item.key === 'receipt_url') return after.receipt_url ? 'Updated receipt image' : 'Removed receipt image';
+      if (AUDIT_MONEY_FIELDS.has(item.key)) return `Updated ${item.label.toLowerCase()} from ${item.before.text} to ${item.after.text}`;
+      return `Updated ${item.label.toLowerCase()}`;
+    }
+
+    if (changes.length > 1) {
+      const shown = changes.slice(0, 2).map((c) => c.label.toLowerCase());
+      const extra = changes.length - shown.length;
+      return `Updated ${shown.join(' and ')}${extra > 0 ? ` (+${extra} more)` : ''}`;
+    }
+
+    return 'Synced record metadata';
+  }
+
+  function buildAuditDiffChange(key, rawBefore, rawAfter, row, lookups) {
+    const label = auditFieldLabel(key, row?.table_name);
+    const before = formatAuditValue(key, rawBefore, row, lookups);
+    const after = formatAuditValue(key, rawAfter, row, lookups);
+    const beforeEmpty = rawBefore == null || rawBefore === '';
+    const afterEmpty = rawAfter == null || rawAfter === '';
+
+    if (AUDIT_ACTION_CONTEXT_FIELDS.has(key) && (beforeEmpty || afterEmpty)) {
+      const isCleared = !beforeEmpty && afterEmpty;
+      let detailTag = 'Recorded';
+      let detailTone = 'neutral';
+      if (isCleared) {
+        detailTag = 'Previously recorded';
+        detailTone = 'cleared';
+      } else if (key === 'review_note') {
+        detailTag = 'Review note';
+        detailTone = 'reason';
+      } else if (AUDIT_REASON_FIELDS.has(key)) {
+        detailTag = 'Reason';
+        detailTone = 'reason';
+      } else if (AUDIT_ACTOR_REF_FIELDS.has(key)) {
+        detailTag = 'Recorded by';
+      } else if (AUDIT_DATETIME_FIELDS.has(key)) {
+        detailTag = 'Recorded on';
+      }
+      return {
+        key,
+        label,
+        display: 'detail',
+        detailTag,
+        detailTone,
+        detailValue: isCleared ? before : after,
+        before,
+        after
+      };
+    }
+
+    return {
+      key,
+      label,
+      display: 'diff',
+      before,
+      after
+    };
+  }
+
+  function formatAuditEntry(row, rawLookups = {}) {
+    const lookups = rawLookups.groups instanceof Map ? rawLookups : collectAuditLookupsFromRows([], rawLookups);
+    const action = String(row?.action || 'UPDATE').toUpperCase();
+    const table = String(row?.table_name || '');
+    const tableLabel = auditTableLabel(table);
+    const actionLabel = auditActionLabel(action);
+    const subject = auditSubjectLabel(row, lookups);
+    const beforeObj = row?.old_data && typeof row.old_data === 'object' ? row.old_data : null;
+    const afterObj = row?.new_data && typeof row.new_data === 'object' ? row.new_data : null;
+
+    let mode = 'diff';
+    let changes = [];
+
+    if (action === 'INSERT') {
+      mode = 'create';
+      const source = afterObj || {};
+      const hasFullName = Boolean(source.full_name);
+      const keys = Object.keys(source).filter((key) => {
+        if (AUDIT_SKIP_FIELDS.has(key)) return false;
+        if (table !== 'profiles' && key === 'group_id') return false;
+        if (hasFullName && (key === 'first_name' || key === 'middle_name' || key === 'last_name')) return false;
+        if (source.approval_status === 'PENDING' && (key === 'reviewed_by' || key === 'reviewed_at' || key === 'review_note')) return false;
+        if (source.approval_status !== 'VOIDED' && (key === 'voided_by' || key === 'voided_at' || key === 'void_reason')) return false;
+        return source[key] != null && source[key] !== '';
+      });
+      keys.sort((a, b) => auditFieldRank(a) - auditFieldRank(b));
+      changes = keys.map((key) => ({
+        key,
+        label: auditFieldLabel(key, table),
+        before: { kind: 'empty', text: 'Not created yet', muted: true },
+        after: formatAuditValue(key, source[key], row, lookups)
+      }));
+    } else if (action === 'DELETE') {
+      mode = 'delete';
+      const source = beforeObj || {};
+      const hasFullName = Boolean(source.full_name);
+      const keys = Object.keys(source).filter((key) => {
+        if (AUDIT_SKIP_FIELDS.has(key)) return false;
+        if (table !== 'profiles' && key === 'group_id') return false;
+        if (hasFullName && (key === 'first_name' || key === 'middle_name' || key === 'last_name')) return false;
+        return source[key] != null && source[key] !== '';
+      });
+      keys.sort((a, b) => auditFieldRank(a) - auditFieldRank(b));
+      changes = keys.map((key) => ({
+        key,
+        label: auditFieldLabel(key, table),
+        before: formatAuditValue(key, source[key], row, lookups),
+        after: { kind: 'empty', text: 'Removed', muted: true }
+      }));
+    } else {
+      mode = 'diff';
+      const before = beforeObj || {};
+      const after = afterObj || {};
+      const allKeys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+      let changedKeys = allKeys.filter((key) => {
+        if (AUDIT_SKIP_FIELDS.has(key)) return false;
+        if (key === 'updated_by' && row?.changed_by && String(after[key] || '') === String(row.changed_by)) return false;
+        return !auditValuesEqual(key, before[key], after[key]);
+      });
+
+      const changedSet = new Set(changedKeys);
+      if (changedSet.has('full_name')) {
+        changedKeys = changedKeys.filter((k) => k !== 'first_name' && k !== 'middle_name' && k !== 'last_name');
+      }
+      const hasStateTransition = changedSet.has('approval_status') || changedSet.has('status') || changedSet.has('deleted_by') || changedSet.has('deleted_at') || changedSet.has('voided_by');
+      if (hasStateTransition && changedKeys.some((k) => !AUDIT_TRANSITION_TIMESTAMPS.has(k))) {
+        changedKeys = changedKeys.filter((k) => !AUDIT_TRANSITION_TIMESTAMPS.has(k));
+      }
+
+      changes = changedKeys.map((key) => buildAuditDiffChange(key, before[key], after[key], row, lookups));
+      changes.sort((a, b) => {
+        const aGroup = a.display === 'detail' ? 1 : 0;
+        const bGroup = b.display === 'detail' ? 1 : 0;
+        if (aGroup !== bGroup) return aGroup - bGroup;
+        return auditFieldRank(a.key) - auditFieldRank(b.key);
+      });
+    }
+
+    const summary = buildAuditSummary(row, changes, subject, lookups);
+    const actor = lookups.profiles?.get(row?.changed_by) || lookups.actors?.get(row?.changed_by) || 'System';
+    return {
+      mode,
+      tableLabel,
+      actionLabel,
+      actor,
+      subject,
+      summary,
+      changes
+    };
+  }
+
+  // Group Invite Links, 6-Character Join Codes, & Pure-JS ISO-18004 QR Code Engine
+  const PENDING_JOIN_CODE_KEY = 'myipon_pending_join_code';
+  const PENDING_JOIN_TTL_MS = 2 * 60 * 60 * 1000;
+  const CANONICAL_PUBLIC_ORIGIN = 'https://my-ipon.vercel.app';
+
+  function canonicalAppOrigin() {
+    try {
+      const origin = String(window.location?.origin || '');
+      const proto = String(window.location?.protocol || '');
+      if (!origin || origin === 'null' || /^(?:capacitor|file|ionic):/i.test(proto)) {
+        return CANONICAL_PUBLIC_ORIGIN;
+      }
+      if (/^https?:\/\/(?:localhost|127\.0\.0\.1|10\.0\.2\.2)(?::\d+)?$/i.test(origin)) {
+        // Capacitor Android WebView serves assets from http://localhost or https://localhost
+        if (window.Capacitor || /Android|wv\)/i.test(navigator.userAgent || '')) {
+          return CANONICAL_PUBLIC_ORIGIN;
+        }
+      }
+      return origin.replace(/\/+$/, '');
+    } catch {
+      return CANONICAL_PUBLIC_ORIGIN;
+    }
+  }
+
+  function normalizeInviteCode(raw) {
+    return String(raw || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 6);
+  }
+
+  function isInviteLinkInput(raw) {
+    const str = String(raw || '').trim();
+    return /^(?:https?:\/\/|www\.)/i.test(str) || /[?&#]join=/i.test(str);
+  }
+
+  function extractInviteCode(raw) {
+    const str = String(raw || '').trim();
+    if (!str) return '';
+    if (isInviteLinkInput(str)) {
+      try {
+        const parsed = new URL(str, CANONICAL_PUBLIC_ORIGIN);
+        const qp = parsed.searchParams.get('join');
+        return qp ? normalizeInviteCode(qp) : '';
+      } catch {
+        const match = str.match(/[?&#]join=([A-Za-z0-9-]{1,12})/i);
+        return match ? normalizeInviteCode(match[1]) : '';
+      }
+    }
+    return normalizeInviteCode(str);
+  }
+
+  function formatInviteCode(raw) {
+    const clean = normalizeInviteCode(raw);
+    return clean.length > 3 ? `${clean.slice(0, 3)}-${clean.slice(3)}` : clean;
+  }
+
+  function bindInviteCodeInput(input, { onUpdate } = {}) {
+    if (!input) return null;
+    let lastEmitted = String(input.value || '');
+    const syncValue = () => {
+      const raw = String(input.value || '');
+      const isUrl = isInviteLinkInput(raw);
+      const code = extractInviteCode(raw);
+      if (!isUrl || code.length === 6) {
+        const formatted = formatInviteCode(code);
+        if (input.value !== formatted) input.value = formatted;
+      }
+      const nextSignal = isUrl && code.length < 6 ? raw : formatInviteCode(code);
+      if (nextSignal !== lastEmitted) {
+        lastEmitted = nextSignal;
+        onUpdate?.(input.value, code);
+      }
+    };
+
+    input.addEventListener('beforeinput', (event) => {
+      const type = String(event.inputType || '');
+      if (!type.startsWith('insert') || type === 'insertFromPaste') return;
+      const data = String(event.data || '');
+      if (!data) return;
+      const raw = String(input.value || '');
+      if (isInviteLinkInput(raw) || isInviteLinkInput(data)) return;
+      const start = typeof input.selectionStart === 'number' ? input.selectionStart : raw.length;
+      const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+      const remaining = normalizeInviteCode(raw.slice(0, start) + raw.slice(end));
+      if (remaining.length >= 6) {
+        event.preventDefault();
+      }
+    });
+
+    input.addEventListener('input', syncValue);
+    return {
+      sync() {
+        lastEmitted = String(input.value || '');
+      }
+    };
+  }
+
+  function inviteShareUrl(code) {
+    const clean = normalizeInviteCode(code);
+    if (clean.length !== 6) return '';
+    return `${canonicalAppOrigin()}/login.html?join=${encodeURIComponent(clean)}`;
+  }
+
+  function setPendingJoinCode(code) {
+    const clean = extractInviteCode(code);
+    try {
+      if (clean.length === 6) {
+        localStorage.setItem(PENDING_JOIN_CODE_KEY, JSON.stringify({ code: clean, at: Date.now() }));
+      } else {
+        localStorage.removeItem(PENDING_JOIN_CODE_KEY);
+      }
+    } catch { /* ignore */ }
+    return clean.length === 6 ? clean : '';
+  }
+
+  function getPendingJoinCode() {
+    try {
+      const urlCode = extractInviteCode(new URLSearchParams(window.location.search).get('join') || '');
+      if (urlCode.length === 6) {
+        setPendingJoinCode(urlCode);
+        return urlCode;
+      }
+      const stored = JSON.parse(localStorage.getItem(PENDING_JOIN_CODE_KEY) || 'null');
+      if (!stored || typeof stored.code !== 'string') return '';
+      if (Date.now() - Number(stored.at || 0) > PENDING_JOIN_TTL_MS) {
+        localStorage.removeItem(PENDING_JOIN_CODE_KEY);
+        return '';
+      }
+      const clean = normalizeInviteCode(stored.code);
+      return clean.length === 6 ? clean : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function clearPendingJoinCode() {
+    try {
+      localStorage.removeItem(PENDING_JOIN_CODE_KEY);
+      const parsed = new URL(window.location.href);
+      if (parsed.searchParams.has('join') && typeof history?.replaceState === 'function') {
+        parsed.searchParams.delete('join');
+        history.replaceState(null, '', `${parsed.pathname}${parsed.search}${parsed.hash}`);
+      }
+    } catch { /* ignore */ }
+  }
+
+  async function copyPlainText(text, successMsg = 'Copied to clipboard.') {
+    const value = String(text || '');
+    if (!value) return false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        if (successMsg) toast(successMsg);
+        return true;
+      }
+    } catch { /* fall back to textarea */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, value.length);
+      const ok = document.execCommand('copy');
+      ta.remove();
+      if (ok && successMsg) toast(successMsg);
+      return ok;
+    } catch {
+      toast('Could not copy automatically. Please copy the text manually.', 'error');
+      return false;
+    }
+  }
+
+  // Self-contained ISO/IEC 18004 QR encoder (Versions 1-6, ECC Level M, Byte mode)
+  const QR_GF_EXP = new Uint8Array(512);
+  const QR_GF_LOG = new Uint8Array(256);
+  for (let i = 0, x = 1; i < 255; i += 1) {
+    QR_GF_EXP[i] = x;
+    QR_GF_EXP[i + 255] = x;
+    QR_GF_LOG[x] = i;
+    x <<= 1;
+    if (x & 0x100) x ^= 0x11d;
+  }
+
+  function qrGfMul(a, b) {
+    return a && b ? QR_GF_EXP[QR_GF_LOG[a] + QR_GF_LOG[b]] : 0;
+  }
+
+  function qrRsEcBytes(data, ecCount) {
+    let gen = [1];
+    for (let i = 0; i < ecCount; i += 1) {
+      const next = new Array(gen.length + 1).fill(0);
+      const factor = QR_GF_EXP[i];
+      for (let j = 0; j < gen.length; j += 1) {
+        next[j] ^= gen[j];
+        next[j + 1] ^= qrGfMul(gen[j], factor);
+      }
+      gen = next;
+    }
+    const rem = new Uint8Array(ecCount);
+    for (let i = 0; i < data.length; i += 1) {
+      const factor = data[i] ^ rem[0];
+      rem.copyWithin(0, 1);
+      rem[ecCount - 1] = 0;
+      if (factor) {
+        for (let j = 0; j < ecCount; j += 1) {
+          rem[j] ^= qrGfMul(gen[j + 1], factor);
+        }
+      }
+    }
+    return rem;
+  }
+
+  const QR_VERSIONS_M = [
+    { ver: 1, size: 21, dataBytes: 16, blocks: 1, blockData: 16, ecBytes: 10, align: [], remBits: 0 },
+    { ver: 2, size: 25, dataBytes: 28, blocks: 1, blockData: 28, ecBytes: 16, align: [6, 18], remBits: 7 },
+    { ver: 3, size: 29, dataBytes: 44, blocks: 1, blockData: 44, ecBytes: 26, align: [6, 22], remBits: 7 },
+    { ver: 4, size: 33, dataBytes: 64, blocks: 2, blockData: 32, ecBytes: 18, align: [6, 26], remBits: 7 },
+    { ver: 5, size: 37, dataBytes: 86, blocks: 2, blockData: 43, ecBytes: 24, align: [6, 30], remBits: 7 },
+    { ver: 6, size: 41, dataBytes: 108, blocks: 4, blockData: 27, ecBytes: 16, align: [6, 34], remBits: 7 }
+  ];
+
+  function generateQrMatrix(text) {
+    const bytes = new TextEncoder().encode(String(text || ''));
+    const spec = QR_VERSIONS_M.find((v) => bytes.length <= v.dataBytes - 2);
+    if (!spec) {
+      throw new Error('QR payload exceeds supported Version 6 ECC-M capacity (106 bytes).');
+    }
+
+    const bits = [];
+    const pushBits = (val, len) => {
+      for (let i = len - 1; i >= 0; i -= 1) bits.push((val >>> i) & 1);
+    };
+    pushBits(0b0100, 4); // Byte mode
+    pushBits(bytes.length, 8);
+    for (const b of bytes) pushBits(b, 8);
+    const capBits = spec.dataBytes * 8;
+    pushBits(0, Math.min(4, capBits - bits.length));
+    while (bits.length % 8 !== 0) bits.push(0);
+    const padBytes = [0xEC, 0x11];
+    for (let i = 0; bits.length < capBits; i += 1) pushBits(padBytes[i % 2], 8);
+
+    const dataCodewords = new Uint8Array(spec.dataBytes);
+    for (let i = 0; i < spec.dataBytes; i += 1) {
+      let byte = 0;
+      for (let b = 0; b < 8; b += 1) byte = (byte << 1) | bits[i * 8 + b];
+      dataCodewords[i] = byte;
+    }
+
+    const blocks = [];
+    const ecs = [];
+    for (let b = 0; b < spec.blocks; b += 1) {
+      const slice = dataCodewords.slice(b * spec.blockData, (b + 1) * spec.blockData);
+      blocks.push(slice);
+      ecs.push(qrRsEcBytes(slice, spec.ecBytes));
+    }
+
+    const interleaved = [];
+    for (let i = 0; i < spec.blockData; i += 1) {
+      for (let b = 0; b < spec.blocks; b += 1) interleaved.push(blocks[b][i]);
+    }
+    for (let i = 0; i < spec.ecBytes; i += 1) {
+      for (let b = 0; b < spec.blocks; b += 1) interleaved.push(ecs[b][i]);
+    }
+
+    const allBits = [];
+    for (const cw of interleaved) {
+      for (let b = 7; b >= 0; b -= 1) allBits.push((cw >>> b) & 1);
+    }
+    for (let i = 0; i < spec.remBits; i += 1) allBits.push(0);
+
+    const size = spec.size;
+    const base = Array.from({ length: size }, () => new Uint8Array(size));
+    const isFunc = Array.from({ length: size }, () => new Uint8Array(size));
+    const setFunc = (r, c, v) => {
+      if (r < 0 || c < 0 || r >= size || c >= size) return;
+      base[r][c] = v ? 1 : 0;
+      isFunc[r][c] = 1;
+    };
+
+    const drawFinder = (top, left) => {
+      for (let r = -1; r <= 7; r += 1) {
+        for (let c = -1; c <= 7; c += 1) {
+          const dark = r >= 0 && r <= 6 && c >= 0 && c <= 6 && (
+            r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4)
+          );
+          setFunc(top + r, left + c, dark);
+        }
+      }
+    };
+    drawFinder(0, 0);
+    drawFinder(0, size - 7);
+    drawFinder(size - 7, 0);
+
+    for (let i = 8; i < size - 8; i += 1) {
+      const dark = i % 2 === 0;
+      setFunc(6, i, dark);
+      setFunc(i, 6, dark);
+    }
+
+    if (spec.align.length) {
+      for (const cy of spec.align) {
+        for (const cx of spec.align) {
+          if (isFunc[cy][cx]) continue;
+          for (let dy = -2; dy <= 2; dy += 1) {
+            for (let dx = -2; dx <= 2; dx += 1) {
+              const dark = Math.max(Math.abs(dy), Math.abs(dx)) !== 1;
+              setFunc(cy + dy, cx + dx, dark);
+            }
+          }
+        }
+      }
+    }
+
+    // Reserve Format Info strips & place fixed dark module
+    for (let i = 0; i <= 8; i += 1) {
+      if (!isFunc[8][i]) isFunc[8][i] = 1;
+      if (!isFunc[i][8]) isFunc[i][8] = 1;
+    }
+    for (let i = size - 8; i < size; i += 1) {
+      if (!isFunc[8][i]) isFunc[8][i] = 1;
+      if (!isFunc[i][8]) isFunc[i][8] = 1;
+    }
+    setFunc(size - 8, 8, 1);
+
+    // Zig-zag bit placement
+    let bitIdx = 0;
+    let upward = true;
+    for (let right = size - 1; right >= 1; right -= 2) {
+      if (right === 6) right -= 1;
+      for (let step = 0; step < size; step += 1) {
+        const r = upward ? (size - 1 - step) : step;
+        for (let dx = 0; dx < 2; dx += 1) {
+          const c = right - dx;
+          if (!isFunc[r][c]) {
+            base[r][c] = bitIdx < allBits.length ? allBits[bitIdx] : 0;
+            bitIdx += 1;
+          }
+        }
+      }
+      upward = !upward;
+    }
+
+    const maskFn = [
+      (r, c) => (r + c) % 2 === 0,
+      (r) => r % 2 === 0,
+      (_r, c) => c % 3 === 0,
+      (r, c) => (r + c) % 3 === 0,
+      (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0,
+      (r, c) => ((r * c) % 2) + ((r * c) % 3) === 0,
+      (r, c) => (((r * c) % 2) + ((r * c) % 3)) % 2 === 0,
+      (r, c) => (((r + c) % 2) + ((r * c) % 3)) % 2 === 0
+    ];
+
+    const writeFormatBits = (grid, mask) => {
+      const data = mask; // ECC M = 00 -> (0 << 3) | mask
+      let rem = data << 10;
+      for (let i = 14; i >= 10; i -= 1) {
+        if ((rem >>> i) & 1) rem ^= 0x537 << (i - 10);
+      }
+      const fmt = ((data << 10) | rem) ^ 0x5412;
+      const bit = (idx) => (fmt >>> idx) & 1;
+
+      // Primary copy (bits 14 down to 0)
+      for (let c = 0; c <= 5; c += 1) grid[8][c] = bit(14 - c);
+      grid[8][7] = bit(8);
+      grid[8][8] = bit(7);
+      grid[7][8] = bit(6);
+      for (let r = 5; r >= 0; r -= 1) grid[r][8] = bit(r);
+
+      // Secondary copy (bits 14..8 bottom-left col 8; bits 7..0 top-right row 8)
+      for (let i = 0; i < 7; i += 1) grid[size - 1 - i][8] = bit(14 - i);
+      for (let i = 0; i < 8; i += 1) grid[8][size - 8 + i] = bit(7 - i);
+    };
+
+    const penaltyScore = (grid) => {
+      let score = 0;
+      for (let r = 0; r < size; r += 1) {
+        let runColor = -1;
+        let runLen = 0;
+        let patA = 0;
+        for (let c = 0; c < size; c += 1) {
+          const val = grid[r][c];
+          if (val === runColor) {
+            runLen += 1;
+            if (runLen === 5) score += 3;
+            else if (runLen > 5) score += 1;
+          } else {
+            runColor = val;
+            runLen = 1;
+          }
+          patA = ((patA << 1) | val) & 0x7FF;
+          if (c >= 10 && (patA === 0x5D0 || patA === 0x05D)) score += 40;
+        }
+      }
+      for (let c = 0; c < size; c += 1) {
+        let runColor = -1;
+        let runLen = 0;
+        let patA = 0;
+        for (let r = 0; r < size; r += 1) {
+          const val = grid[r][c];
+          if (val === runColor) {
+            runLen += 1;
+            if (runLen === 5) score += 3;
+            else if (runLen > 5) score += 1;
+          } else {
+            runColor = val;
+            runLen = 1;
+          }
+          patA = ((patA << 1) | val) & 0x7FF;
+          if (r >= 10 && (patA === 0x5D0 || patA === 0x05D)) score += 40;
+        }
+      }
+      let darkCount = 0;
+      for (let r = 0; r < size; r += 1) {
+        for (let c = 0; c < size; c += 1) {
+          darkCount += grid[r][c];
+          if (r < size - 1 && c < size - 1) {
+            const sum = grid[r][c] + grid[r][c + 1] + grid[r + 1][c] + grid[r + 1][c + 1];
+            if (sum === 0 || sum === 4) score += 3;
+          }
+        }
+      }
+      const k = Math.floor(Math.abs(darkCount * 20 - size * size * 10) / (size * size));
+      score += k * 10;
+      return score;
+    };
+
+    let bestGrid = null;
+    let bestScore = Infinity;
+    for (let mask = 0; mask < 8; mask += 1) {
+      const candidate = Array.from({ length: size }, (_, r) => {
+        const row = new Uint8Array(size);
+        for (let c = 0; c < size; c += 1) {
+          row[c] = isFunc[r][c] ? base[r][c] : (base[r][c] ^ (maskFn[mask](r, c) ? 1 : 0));
+        }
+        return row;
+      });
+      writeFormatBits(candidate, mask);
+      const sc = penaltyScore(candidate);
+      if (sc < bestScore) {
+        bestScore = sc;
+        bestGrid = candidate;
+      }
+    }
+
+    return { size, version: spec.ver, modules: bestGrid };
+  }
+
+  function qrSvgMarkup(text, { ariaLabel = 'Group invite QR code', size = 216, margin = 4, darkColor = '#0f2e24' } = {}) {
+    const qr = generateQrMatrix(text);
+    const total = qr.size + margin * 2;
+    const cmds = [];
+    for (let r = 0; r < qr.size; r += 1) {
+      const row = qr.modules[r];
+      let c = 0;
+      while (c < qr.size) {
+        if (!row[c]) { c += 1; continue; }
+        let run = 1;
+        while (c + run < qr.size && row[c + run]) run += 1;
+        cmds.push(`M${c + margin} ${r + margin}h${run}v1h-${run}z`);
+        c += run;
+      }
+    }
+    return `<svg class="invite-qr-svg" viewBox="0 0 ${total} ${total}" width="${Number(size) || 216}" height="${Number(size) || 216}" role="img" aria-label="${escapeHtml(ariaLabel)}" shape-rendering="crispEdges"><rect width="${total}" height="${total}" fill="#ffffff"/><path d="${cmds.join('')}" fill="${darkColor}"/></svg>`;
+  }
+
+  async function downloadInviteQrPng({ code, groupName = 'Savings group', shareUrl = '' } = {}) {
+    const clean = normalizeInviteCode(code);
+    const url = shareUrl || inviteShareUrl(clean);
+    if (!url || clean.length !== 6) throw new Error('Valid invite code required to save QR.');
+    const qr = generateQrMatrix(url);
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 780;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas unavailable.');
+
+    // Warm paper outer card
+    ctx.fillStyle = '#faf7f0';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Subtle outer border
+    ctx.strokeStyle = '#d6d2c7';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+
+    // Header badge + group name
+    ctx.fillStyle = '#0d4a36';
+    ctx.font = '700 18px "Segoe UI", Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('MYIPON · GROUP INVITE', canvas.width / 2, 74);
+
+    ctx.fillStyle = '#18241e';
+    ctx.font = '700 30px Georgia, serif';
+    const displayTitle = String(groupName || 'Savings group').trim().slice(0, 34);
+    ctx.fillText(displayTitle, canvas.width / 2, 118);
+
+    // Crisp white QR frame
+    const boxSize = 460;
+    const boxX = (canvas.width - boxSize) / 2;
+    const boxY = 152;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(boxX, boxY, boxSize, boxSize);
+    ctx.strokeStyle = '#dfe5df';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxSize, boxSize);
+
+    const pad = 34;
+    const cell = Math.floor((boxSize - pad * 2) / qr.size);
+    const qrPixelSize = cell * qr.size;
+    const startX = Math.round((canvas.width - qrPixelSize) / 2);
+    const startY = Math.round(boxY + (boxSize - qrPixelSize) / 2);
+    ctx.fillStyle = '#0f2e24';
+    for (let r = 0; r < qr.size; r += 1) {
+      for (let c = 0; c < qr.size; c += 1) {
+        if (qr.modules[r][c]) {
+          ctx.fillRect(startX + c * cell, startY + r * cell, cell, cell);
+        }
+      }
+    }
+
+    // Bottom code + instructions
+    ctx.fillStyle = '#5f6b64';
+    ctx.font = '600 17px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('Scan QR with your phone or enter code:', canvas.width / 2, 660);
+
+    ctx.fillStyle = '#0d4a36';
+    ctx.font = '700 40px Consolas, "Courier New", monospace';
+    ctx.fillText(formatInviteCode(clean), canvas.width / 2, 718);
+
+    const dataUrl = canvas.toDataURL('image/png');
+    const slug = String(groupName || 'ipon-group').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ipon-group';
+    await downloadFile(dataUrl, `${slug}-invite-${clean}.png`, { mimeType: 'image/png' });
+    toast('Saved invite QR card PNG.');
+  }
+
+  function inviteExpirySummary(expiresAt) {
+    if (!expiresAt) return 'Expires soon';
+    const ms = new Date(expiresAt).getTime() - Date.now();
+    if (Number.isNaN(ms) || ms <= 0) return 'Expired';
+    const mins = Math.round(ms / 60000);
+    if (mins < 60) return `Expires in ${Math.max(1, mins)}m`;
+    const hours = Math.round(ms / 3600000);
+    if (hours < 48) return `Expires in ${hours}h`;
+    const days = Math.round(hours / 24);
+    return `Expires in ${days}d (${dateLabel(expiresAt)})`;
+  }
+
+  const inviteOverviewByGroup = new Map();
+  const inviteOverviewInFlight = new Map();
+
+  async function fetchInviteOverview({ force = false } = {}) {
+    const key = currentProfile?.group_id || 'default';
+    if (!force && inviteOverviewByGroup.has(key)) {
+      return inviteOverviewByGroup.get(key);
+    }
+    if (inviteOverviewInFlight.has(key)) {
+      return inviteOverviewInFlight.get(key);
+    }
+    const req = rpc('get_group_invite_overview', {})
+      .then((res) => {
+        const clean = res || {};
+        inviteOverviewByGroup.set(key, clean);
+        return clean;
+      })
+      .finally(() => {
+        inviteOverviewInFlight.delete(key);
+      });
+    inviteOverviewInFlight.set(key, req);
+    return req;
+  }
+
+  function inviteOverviewSignature(ov) {
+    if (!ov) return '';
+    const active = ov.active_code || null;
+    return JSON.stringify([
+      String(ov.workspace_mode || 'GROUP').toUpperCase(),
+      active ? [active.id, active.code, Boolean(active.require_approval), active.expires_at, Number(active.use_count || 0), active.max_uses ?? null] : null
+    ]);
+  }
+
+  let invitePanelSeq = 0;
+  function mountInviteCodePanel(container, { groupName = '', initialOverview = null, onChanged = null } = {}) {
+    if (!container) return null;
+    const pid = `ipon-inv-${++invitePanelSeq}`;
+    const cacheKey = currentProfile?.group_id || 'default';
+    let stateOverview = initialOverview || inviteOverviewByGroup.get(cacheKey) || null;
+    if (initialOverview) inviteOverviewByGroup.set(cacheKey, initialOverview);
+    let lastRenderedSig = '';
+    let fetchSeq = 0;
+    let suppressRefreshUntil = 0;
+
+    function notifyParent(overview) {
+      if (typeof onChanged === 'function') {
+        Promise.resolve(onChanged(overview)).catch(() => { });
+      }
+    }
+
+    function applyOverview(nextOverview, { forceRender = false } = {}) {
+      stateOverview = nextOverview || {};
+      inviteOverviewByGroup.set(cacheKey, stateOverview);
+      const nextSig = inviteOverviewSignature(stateOverview);
+      if (forceRender || nextSig !== lastRenderedSig) {
+        lastRenderedSig = nextSig;
+        render();
+      }
+      notifyParent(stateOverview);
+    }
+
+    async function loadOverview({ silent = false, force = false } = {}) {
+      if (!force && silent && Date.now() < suppressRefreshUntil) return;
+      const mySeq = ++fetchSeq;
+      if (!stateOverview && !silent && !container.children.length) {
+        container.innerHTML = '<div class="invite-code-loading" role="status" aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><span>Loading invite link &amp; QR code…</span></div>';
+      }
+      try {
+        const res = await fetchInviteOverview({ force: true });
+        if (mySeq !== fetchSeq) return;
+        applyOverview(res || {});
+      } catch (error) {
+        if (mySeq !== fetchSeq) return;
+        if (!stateOverview) {
+          lastRenderedSig = '';
+          showInlineError(container, error, () => loadOverview({ silent: false, force: true }));
+        }
+      }
+    }
+
+    function render() {
+      const mode = String(stateOverview?.workspace_mode || 'GROUP').toUpperCase();
+      if (mode === 'SOLO') {
+        container.innerHTML = '<div class="empty-state"><h3>Solo savings mode</h3><p>Invite links and group codes are available when this workspace is set to Group savings.</p></div>';
+        return;
+      }
+
+      const active = stateOverview?.active_code || null;
+      const resolvedGroupName = groupName || currentProfile?.group_name || 'Savings group';
+
+      if (!active) {
+        container.innerHTML = `
+          <div class="invite-code-empty-card">
+            <div class="invite-code-empty-head">
+              <span class="invite-code-empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM18 18h3v3h-3zM14 21h2M21 14v2"/></svg>
+              </span>
+              <div>
+                <h3>Share a group link &amp; QR code</h3>
+                <p>Generate a 6-character code and scannable QR so friends or family can join right from their phone—even before signing up.</p>
+              </div>
+            </div>
+            <div class="invite-code-create-grid">
+              <div class="field">
+                <label for="${pid}-expiry">Expires after</label>
+                <select id="${pid}-expiry" name="expires_hours">
+                  <option value="24">24 hours</option>
+                  <option value="168" selected>7 days (recommended)</option>
+                  <option value="720">30 days</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="${pid}-max-uses">Join limit</label>
+                <select id="${pid}-max-uses" name="max_uses">
+                  <option value="" selected>Unlimited uses</option>
+                  <option value="10">Up to 10 joins</option>
+                  <option value="25">Up to 25 joins</option>
+                  <option value="50">Up to 50 joins</option>
+                </select>
+              </div>
+            </div>
+            <label class="toggle-switch-row invite-approval-toggle" for="${pid}-create-approval">
+              <span>
+                <strong>Require admin approval before joining</strong>
+                <small>When on, anyone scanning or entering the code sends a join request for your approval first.</small>
+              </span>
+              <input class="toggle-switch-input" id="${pid}-create-approval" type="checkbox" role="switch">
+            </label>
+            <div class="invite-code-empty-actions">
+              <button class="button button-primary" type="button" data-invite-generate>Generate invite link &amp; QR</button>
+            </div>
+          </div>`;
+
+        container.querySelector('[data-invite-generate]')?.addEventListener('click', async (event) => {
+          const btn = event.currentTarget;
+          const hours = Number(document.getElementById(`${pid}-expiry`)?.value || 168);
+          const maxRaw = document.getElementById(`${pid}-max-uses`)?.value || '';
+          const maxUses = maxRaw ? Number(maxRaw) : null;
+          const requireApproval = Boolean(document.getElementById(`${pid}-create-approval`)?.checked);
+          setBusy(btn, true, 'Generating…');
+          try {
+            suppressRefreshUntil = Date.now() + 1400;
+            const created = await rpc('create_group_invite_code', {
+              p_expires_hours: hours,
+              p_require_approval: requireApproval,
+              p_max_uses: maxUses
+            });
+            applyOverview({ ...(stateOverview || {}), active_code: created }, { forceRender: true });
+            toast('Invite link & QR code ready to share.');
+          } catch (error) {
+            toast(friendlyError(error), 'error');
+          } finally {
+            setBusy(btn, false);
+          }
+        });
+        return;
+      }
+
+      const rawCode = normalizeInviteCode(active.code);
+      const formatted = formatInviteCode(rawCode);
+      const shareUrl = inviteShareUrl(rawCode);
+      const usesText = active.max_uses
+        ? `${Number(active.use_count || 0)} of ${Number(active.max_uses)} used`
+        : `${Number(active.use_count || 0)} joined`;
+      const qrHtml = qrSvgMarkup(shareUrl, { ariaLabel: `QR code to join ${resolvedGroupName}`, size: 196 });
+      const canNativeShare = typeof navigator.share === 'function';
+
+      container.innerHTML = `
+        <div class="invite-code-active-card">
+          <div class="invite-qr-card">
+            <div class="invite-qr-plate">${qrHtml}</div>
+            <span class="invite-qr-caption">Scan with a phone camera to join</span>
+          </div>
+          <button class="invite-code-card" type="button" data-copy-code title="Click to copy 6-character code">
+            <span class="invite-code-pill-label">GROUP CODE</span>
+            <strong class="invite-code-display tabular-nums">${escapeHtml(formatted)}</strong>
+            <span class="invite-code-pill-action">Copy code</span>
+          </button>
+          <div class="invite-meta-pills">
+            <span class="status ${active.require_approval ? 'status-pending' : 'status-confirmed'}" id="${pid}-mode-badge">${active.require_approval ? 'Approval required' : 'Instant join'}</span>
+            <span class="status status-unpaid">${escapeHtml(inviteExpirySummary(active.expires_at))}</span>
+            <span class="status status-unpaid">${escapeHtml(usesText)}</span>
+          </div>
+          <div class="invite-share-link-block">
+            <label class="invite-section-label" for="${pid}-share-url">Shareable invite link</label>
+            <input id="${pid}-share-url" class="invite-url-readonly" type="text" readonly value="${escapeHtml(shareUrl)}" aria-label="Shareable group invite link">
+            <button class="button button-primary invite-copy-link-full" type="button" data-copy-link>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copy link</span>
+            </button>
+          </div>
+          <div class="invite-secondary-grid${canNativeShare ? ' has-share' : ''}">
+            ${canNativeShare ? '<button class="button button-secondary" type="button" data-native-share>Share</button>' : ''}
+            <button class="button button-secondary" type="button" data-download-qr>Save QR</button>
+            <button class="button button-secondary" type="button" data-rotate-code>New code</button>
+            <button class="button button-secondary invite-revoke-btn" type="button" data-revoke-code>Revoke</button>
+          </div>
+          <label class="toggle-switch-row invite-approval-card" for="${pid}-require-approval">
+            <span>
+              <strong>Require admin approval</strong>
+              <small>On: an admin approves each request. Off: anyone with this link joins immediately.</small>
+            </span>
+            <input class="toggle-switch-input" id="${pid}-require-approval" type="checkbox" role="switch" ${active.require_approval ? 'checked' : ''}>
+          </label>
+        </div>`;
+
+      container.querySelector(`#${pid}-share-url`)?.addEventListener('click', (event) => {
+        event.currentTarget.select?.();
+      });
+
+      container.querySelector('[data-copy-code]')?.addEventListener('click', async (event) => {
+        const pill = event.currentTarget;
+        const ok = await copyPlainText(rawCode, `Copied code ${formatted}`);
+        const badge = pill.querySelector('.invite-code-pill-action');
+        if (ok && badge) {
+          badge.textContent = 'Copied!';
+          setTimeout(() => { if (badge.isConnected) badge.textContent = 'Copy code'; }, 1600);
+        }
+      });
+
+      container.querySelector('[data-copy-link]')?.addEventListener('click', async (event) => {
+        const btn = event.currentTarget;
+        const ok = await copyPlainText(shareUrl, 'Invite link copied.');
+        const labelEl = btn.querySelector('span');
+        if (ok) {
+          if (labelEl) labelEl.textContent = 'Copied!';
+          else btn.textContent = 'Copied!';
+          setTimeout(() => {
+            if (!btn.isConnected) return;
+            if (labelEl) labelEl.textContent = 'Copy link';
+            else btn.textContent = 'Copy link';
+          }, 1600);
+        }
+      });
+
+      container.querySelector('[data-native-share]')?.addEventListener('click', async () => {
+        try {
+          await navigator.share({
+            title: `Join "${resolvedGroupName}" on myIPON`,
+            text: `Join our savings group "${resolvedGroupName}" on myIPON using code ${formatted} or tap this invite link:`,
+            url: shareUrl
+          });
+        } catch (err) {
+          if (err?.name !== 'AbortError') {
+            await copyPlainText(shareUrl, 'Invite link copied.');
+          }
+        }
+      });
+
+      container.querySelector('[data-download-qr]')?.addEventListener('click', async (event) => {
+        const btn = event.currentTarget;
+        setBusy(btn, true, 'Saving…');
+        try {
+          await downloadInviteQrPng({ code: rawCode, groupName: resolvedGroupName, shareUrl });
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          setBusy(btn, false);
+        }
+      });
+
+      const approvalSwitch = container.querySelector(`#${pid}-require-approval`);
+      approvalSwitch?.addEventListener('change', async () => {
+        const nextVal = approvalSwitch.checked;
+        approvalSwitch.disabled = true;
+        suppressRefreshUntil = Date.now() + 1400;
+        try {
+          const updated = await rpc('update_group_invite_code', {
+            p_code_id: active.id,
+            p_require_approval: nextVal
+          });
+          stateOverview = { ...(stateOverview || {}), active_code: updated };
+          inviteOverviewByGroup.set(cacheKey, stateOverview);
+          lastRenderedSig = inviteOverviewSignature(stateOverview);
+          const modeBadge = document.getElementById(`${pid}-mode-badge`);
+          if (modeBadge) {
+            modeBadge.className = `status ${nextVal ? 'status-pending' : 'status-confirmed'}`;
+            modeBadge.textContent = nextVal ? 'Approval required' : 'Instant join';
+          }
+          toast(nextVal ? 'Approval required before joining.' : 'Instant join enabled for this link.');
+          notifyParent(stateOverview);
+        } catch (error) {
+          approvalSwitch.checked = !nextVal;
+          toast(friendlyError(error), 'error');
+        } finally {
+          approvalSwitch.disabled = false;
+        }
+      });
+
+      container.querySelector('[data-rotate-code]')?.addEventListener('click', async (event) => {
+        const btn = event.currentTarget;
+        const ok = await confirmAction({
+          title: 'Generate a new group code?',
+          message: `The current code (${formatted}) and its QR link will stop working immediately once a new code is created.`,
+          acceptLabel: 'Generate new code'
+        });
+        if (!ok) return;
+        setBusy(btn, true, 'Rotating…');
+        suppressRefreshUntil = Date.now() + 1400;
+        try {
+          const created = await rpc('create_group_invite_code', {
+            p_expires_hours: 168,
+            p_require_approval: Boolean(active.require_approval),
+            p_max_uses: active.max_uses ?? null
+          });
+          applyOverview({ ...(stateOverview || {}), active_code: created }, { forceRender: true });
+          toast(`New code ready: ${formatInviteCode(created.code)}`);
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          setBusy(btn, false);
+        }
+      });
+
+      container.querySelector('[data-revoke-code]')?.addEventListener('click', async (event) => {
+        const btn = event.currentTarget;
+        const ok = await confirmAction({
+          title: 'Revoke active invite link & code?',
+          message: `Code ${formatted} and its QR code will stop working immediately. Existing members will not be affected.`,
+          acceptLabel: 'Revoke invite'
+        });
+        if (!ok) return;
+        setBusy(btn, true, 'Revoking…');
+        suppressRefreshUntil = Date.now() + 1400;
+        try {
+          await rpc('update_group_invite_code', { p_code_id: active.id, p_revoke: true });
+          applyOverview({ ...(stateOverview || {}), active_code: null }, { forceRender: true });
+          toast('Invite link and code revoked.');
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          setBusy(btn, false);
+        }
+      });
+    }
+
+    if (stateOverview) {
+      lastRenderedSig = inviteOverviewSignature(stateOverview);
+      render();
+      notifyParent(stateOverview);
+      loadOverview({ silent: true, force: true });
+    } else {
+      loadOverview({ silent: false, force: true });
+    }
+
+    return {
+      refresh: (opts = {}) => loadOverview({ silent: opts?.silent !== false, force: Boolean(opts?.force) }),
+      setOverview: (ov) => applyOverview(ov),
+      getOverview: () => stateOverview
+    };
+  }
+
+  function renderJoinRequestsQueue(container, { requests = [], onChanged = null } = {}) {
+    if (!container) return;
+    if (!Array.isArray(requests) || !requests.length) {
+      container.innerHTML = '<div class="empty-state"><p>No pending join requests right now.</p></div>';
+      return;
+    }
+    container.innerHTML = `<div class="join-requests-list">${requests.map((req) => `
+      <article class="join-request-item" data-join-request-id="${escapeHtml(req.id)}">
+        <div class="join-request-user">
+          ${avatarMarkup(req.avatar_url, req.full_name, 'avatar-md', req.user_id)}
+          <div class="join-request-copy">
+            <strong>${escapeHtml(req.full_name || 'User')}</strong>
+            ${req.email ? `<span class="join-request-email">${escapeHtml(req.email)}</span>` : ''}
+            <div class="join-request-chips">
+              ${req.contact_number ? `<span class="join-request-chip">${escapeHtml(req.contact_number)}</span>` : ''}
+              ${req.code ? `<span class="join-request-chip">Code ${escapeHtml(formatInviteCode(req.code))}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="join-request-divider" aria-hidden="true"></div>
+        <div class="join-request-time">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <span>Requested ${escapeHtml(dateLabel(req.created_at, { dateStyle: 'medium', timeStyle: 'short' }))}</span>
+        </div>
+        <div class="join-request-actions">
+          <button class="button button-secondary" type="button" data-decline-join="${escapeHtml(req.id)}">Decline</button>
+          <button class="button button-primary" type="button" data-approve-join="${escapeHtml(req.id)}">Approve</button>
+        </div>
+      </article>`).join('')}</div>`;
+    bindAvatarFallbacks(container);
+
+    container.querySelectorAll('[data-approve-join], [data-decline-join]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const isApprove = Boolean(btn.dataset.approveJoin);
+        const requestId = btn.dataset.approveJoin || btn.dataset.declineJoin;
+        const item = requests.find((r) => r.id === requestId);
+        const ok = await confirmAction({
+          title: isApprove ? 'Approve join request?' : 'Decline & block this request?',
+          message: isApprove
+            ? `Allow ${item?.full_name || 'this user'} to join this savings group as a Member? A member profile will be created or linked automatically.`
+            : `Decline ${item?.full_name || 'this user'}'s request to join this group? They will be blocked from joining again using this invite link or code.`,
+          acceptLabel: isApprove ? 'Approve' : 'Decline & block'
+        });
+        if (!ok) return;
+        setBusy(btn, true, isApprove ? 'Approving…' : 'Declining…');
+        try {
+          await rpc('review_group_join_request', {
+            p_request_id: requestId,
+            p_decision: isApprove ? 'APPROVED' : 'DECLINED'
+          });
+          toast(isApprove ? `${item?.full_name || 'Member'} joined the group.` : `${item?.full_name || 'User'} declined and blocked from this invite link/code.`);
+          if (typeof onChanged === 'function') await onChanged();
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          setBusy(btn, false);
+        }
+      });
+    });
+  }
+
+  function showJoinBlockedDialog({ groupName = '', message = '' } = {}) {
+    let dialog = document.getElementById('ipon-join-blocked-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog join-blocked-dialog" id="ipon-join-blocked-dialog" aria-labelledby="ipon-blocked-title">
+          <div class="form-dialog-sheet join-blocked-sheet">
+            <header class="form-dialog-header">
+              <div>
+                <span class="dialog-eyebrow is-danger">Access blocked</span>
+                <h2 id="ipon-blocked-title">Unable to join group</h2>
+              </div>
+              <button class="dialog-close" type="button" id="ipon-blocked-close" aria-label="Close notice">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div class="join-blocked-body">
+              <div class="join-blocked-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 9 6 6M15 9l-6 6"/></svg>
+              </div>
+              <strong id="ipon-blocked-group">This invite link or code is blocked</strong>
+              <p id="ipon-blocked-message">Your request was declined by an administrator, so you cannot join with this invite link or code.</p>
+            </div>
+            <footer class="join-panel-footer">
+              <button class="button button-primary" type="button" id="ipon-blocked-ok">Understood</button>
+            </footer>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('ipon-join-blocked-dialog');
+    }
+    const groupEl = dialog.querySelector('#ipon-blocked-group');
+    const msgEl = dialog.querySelector('#ipon-blocked-message');
+    if (groupEl) {
+      groupEl.textContent = groupName
+        ? `Blocked from joining "${groupName}"`
+        : 'Blocked from this invite link or code';
+    }
+    if (msgEl) {
+      msgEl.textContent = message || 'Your previous request was declined by an administrator. This invite link or code can no longer be used to join.';
+    }
+    const closeFn = () => { if (dialog.open) dialog.close(); };
+    dialog.querySelector('#ipon-blocked-close').onclick = closeFn;
+    dialog.querySelector('#ipon-blocked-ok').onclick = closeFn;
+    dialog.onclick = (event) => { if (event.target === dialog) closeFn(); };
+    if (!dialog.open) dialog.showModal();
+    dialog.querySelector('#ipon-blocked-ok')?.focus();
+  }
+
+  let joinPanelSeq = 0;
+  function mountJoinGroupPanel(container, { initialCode = '', onCancel = null, onJoined = null } = {}) {
+    if (!container) return null;
+    const jid = `ipon-jp-${++joinPanelSeq}`;
+    container.innerHTML = `
+      <form id="${jid}-form" class="join-group-panel-form" novalidate>
+        <div class="join-group-panel-body">
+          <div class="field field-wide">
+            <label class="invite-section-label" for="${jid}-code">Group code or invite link</label>
+            <input id="${jid}-code" name="invite_code" class="join-code-input" type="text" maxlength="240" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K9M-4PQ or invite link" aria-describedby="${jid}-error ${jid}-preview" required>
+            <small class="field-error" id="${jid}-error" role="alert"></small>
+          </div>
+          <div class="join-preview-slot" id="${jid}-preview" aria-live="polite"></div>
+          <div id="${jid}-pending" hidden></div>
+        </div>
+        <div class="join-panel-footer">
+          <button class="button button-secondary" type="button" id="${jid}-cancel">Cancel</button>
+          <button class="button button-primary" type="submit" id="${jid}-submit" disabled>Join group</button>
+        </div>
+      </form>`;
+
+    const form = container.querySelector(`#${jid}-form`);
+    const input = container.querySelector(`#${jid}-code`);
+    const errorEl = container.querySelector(`#${jid}-error`);
+    const previewSlot = container.querySelector(`#${jid}-preview`);
+    const pendingWrap = container.querySelector(`#${jid}-pending`);
+    const submitBtn = container.querySelector(`#${jid}-submit`);
+    const cancelBtn = container.querySelector(`#${jid}-cancel`);
+
+    let latestPreview = null;
+    let previewSeq = 0;
+    let blockedDialogShownFor = '';
+
+    const setCodeError = (msg, { inline = true } = {}) => {
+      if (!input || !errorEl) return;
+      input.setCustomValidity(msg || '');
+      if (msg) {
+        input.setAttribute('aria-invalid', 'true');
+        errorEl.textContent = inline ? msg : '';
+      } else {
+        input.removeAttribute('aria-invalid');
+        errorEl.textContent = '';
+      }
+    };
+
+    const renderEmptyPreview = () => {
+      latestPreview = null;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Join group';
+      }
+      if (previewSlot) {
+        previewSlot.innerHTML = '<div class="join-preview-placeholder"><p>Enter the 6-character code or link from your admin to preview the group.</p></div>';
+      }
+    };
+
+    const renderPreviewError = (msg) => {
+      latestPreview = null;
+      setCodeError(msg, { inline: false });
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Join group';
+      }
+      if (previewSlot) {
+        previewSlot.innerHTML = `<div class="join-preview-error" role="alert"><p>${escapeHtml(msg)}</p></div>`;
+      }
+    };
+
+    async function loadOwnPendingJoinRequests() {
+      if (!pendingWrap) return;
+      try {
+        const res = await rpc('get_group_invite_overview', {});
+        const mine = Array.isArray(res?.my_pending_requests) ? res.my_pending_requests : [];
+        if (!mine.length) {
+          pendingWrap.hidden = true;
+          pendingWrap.innerHTML = '';
+          return;
+        }
+        pendingWrap.hidden = false;
+        pendingWrap.innerHTML = `
+          <div class="join-own-pending-box">
+            <strong class="join-own-pending-title">Your pending join requests (${mine.length})</strong>
+            ${mine.map((item) => `
+              <div class="join-own-pending-row">
+                <div>
+                  <strong>${escapeHtml(item.group_name)}</strong>
+                  <small>Requested ${escapeHtml(dateLabel(item.created_at, { dateStyle: 'medium' }))} · Waiting for approval</small>
+                </div>
+                <button class="button button-secondary button-sm" type="button" data-cancel-own-req="${escapeHtml(item.id)}">Withdraw</button>
+              </div>`).join('')}
+          </div>`;
+        pendingWrap.querySelectorAll('[data-cancel-own-req]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const reqId = btn.dataset.cancelOwnReq;
+            const ok = await confirmAction({
+              title: 'Withdraw join request?',
+              message: 'You can re-apply later using a valid group code or invite link.',
+              acceptLabel: 'Withdraw request'
+            });
+            if (!ok) return;
+            setBusy(btn, true, 'Withdrawing…');
+            try {
+              await rpc('cancel_own_join_request', { p_request_id: reqId });
+              toast('Join request withdrawn.');
+              await loadOwnPendingJoinRequests();
+              const curCode = extractInviteCode(input?.value || '');
+              if (curCode.length === 6) await runPreview(curCode);
+            } catch (err) {
+              toast(friendlyError(err), 'error');
+            } finally {
+              setBusy(btn, false);
+            }
+          });
+        });
+      } catch {
+        pendingWrap.hidden = true;
+      }
+    }
+
+    async function runPreview(rawVal) {
+      const code = extractInviteCode(rawVal);
+      if (code.length < 6) {
+        setCodeError('');
+        renderEmptyPreview();
+        return;
+      }
+      const formattedCode = formatInviteCode(code);
+      if (input && input.value !== formattedCode) {
+        input.value = formattedCode;
+      }
+      const seq = ++previewSeq;
+      setCodeError('');
+      if (submitBtn) submitBtn.disabled = true;
+      if (previewSlot) {
+        previewSlot.innerHTML = '<div class="join-preview-loading"><span class="loading-spinner" aria-hidden="true"></span><span>Checking group code…</span></div>';
+      }
+      try {
+        const res = await rpc('preview_group_invite_code', { p_code: code });
+        if (seq !== previewSeq) return;
+        latestPreview = res || null;
+        if (!res?.valid) {
+          const isBlocked = Boolean(res?.blocked || res?.reason === 'DECLINED_BLOCKED' || res?.reason === 'DISABLED');
+          const errMsg = res?.message || (isBlocked ? 'You are blocked from using this invite link or code.' : 'Invite code is invalid or expired.');
+          if (isBlocked) {
+            setCodeError(errMsg, { inline: false });
+            if (previewSlot) {
+              previewSlot.innerHTML = `<div class="join-preview-card is-blocked" role="alert">
+                <div class="join-preview-head">
+                  ${res?.group_name ? avatarMarkup(res.group_avatar_url, res.group_name, 'avatar-md') : ''}
+                  <div class="join-preview-info">
+                    <strong>${escapeHtml(res?.group_name || 'Access blocked')}</strong>
+                    <small>${escapeHtml(errMsg)}</small>
+                  </div>
+                </div>
+                <div class="join-preview-badges"><span class="status status-rejected">Blocked from this link/code</span></div>
+              </div>`;
+              bindAvatarFallbacks(previewSlot);
+            }
+            if (submitBtn) {
+              submitBtn.disabled = true;
+              submitBtn.textContent = 'Blocked';
+            }
+            if (blockedDialogShownFor !== code) {
+              blockedDialogShownFor = code;
+              clearPendingJoinCode();
+              showJoinBlockedDialog({ groupName: res?.group_name || '', message: res?.message || '' });
+            }
+          } else {
+            renderPreviewError(errMsg);
+          }
+          return;
+        }
+        const alreadyMember = Boolean(res.already_member);
+        const pendingReq = Boolean(res.pending_request);
+        const countLabel = `${Number(res.member_count || 0)} ${Number(res.member_count || 0) === 1 ? 'member' : 'members'}`;
+        const policyBadge = res.require_approval
+          ? '<span class="status status-pending"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Admin approval required</span>'
+          : '<span class="status status-confirmed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Instant join</span>';
+        const statusExtra = alreadyMember
+          ? `<div class="join-preview-state"><span>You already belong to this group.</span><button class="button button-secondary button-sm" type="button" data-join-switch-existing="${escapeHtml(res.group_id)}">Open workspace</button></div>`
+          : pendingReq
+            ? '<div class="join-preview-state"><span>Your join request is already pending admin review.</span></div>'
+            : '';
+
+        if (previewSlot) {
+          previewSlot.innerHTML = `
+            <div class="join-preview-card">
+              <div class="join-preview-head">
+                ${avatarMarkup(res.group_avatar_url, res.group_name, 'avatar-md')}
+                <div class="join-preview-info">
+                  <strong>${escapeHtml(res.group_name || 'Savings group')}</strong>
+                  <small>${escapeHtml(countLabel)} · ${escapeHtml(inviteExpirySummary(res.expires_at))}</small>
+                </div>
+              </div>
+              <div class="join-preview-badges">${policyBadge}</div>
+              ${statusExtra}
+            </div>`;
+          bindAvatarFallbacks(previewSlot);
+          previewSlot.querySelector('[data-join-switch-existing]')?.addEventListener('click', async (ev) => {
+            const btn = ev.currentTarget;
+            setBusy(btn, true, 'Switching…');
+            try {
+              const switched = await switchActiveGroup(res.group_id);
+              onCancel?.();
+              window.location.href = homeForRole(switched?.role || res.existing_role || 'MEMBER');
+            } catch (err) {
+              toast(friendlyError(err), 'error');
+            } finally {
+              setBusy(btn, false);
+            }
+          });
+        }
+        if (submitBtn) {
+          submitBtn.disabled = alreadyMember || pendingReq;
+          submitBtn.textContent = res.require_approval ? 'Request to join' : 'Join savings group';
+        }
+      } catch (err) {
+        if (seq !== previewSeq) return;
+        renderPreviewError(friendlyError(err));
+      }
+    }
+
+    cancelBtn?.addEventListener('click', () => {
+      clearPendingJoinCode();
+      onCancel?.();
+    });
+
+    const codeCtrl = bindInviteCodeInput(input, {
+      onUpdate: (formattedVal) => runPreview(formattedVal)
+    });
+    input?.addEventListener('blur', () => {
+      const code = extractInviteCode(input.value);
+      if (code.length > 0) input.value = formatInviteCode(code);
+      codeCtrl?.sync();
+      if (code.length > 0 && code.length < 6) {
+        setCodeError('Enter all 6 characters of your group code.');
+      }
+    });
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const code = extractInviteCode(input?.value || '');
+      if (code.length !== 6) {
+        setCodeError('Enter a valid 6-character group code.');
+        input?.focus();
+        return;
+      }
+      if (!latestPreview?.valid) {
+        await runPreview(code);
+        if (!latestPreview?.valid) return;
+      }
+      setBusy(submitBtn, true, latestPreview?.require_approval ? 'Sending request…' : 'Joining…');
+      try {
+        const result = await rpc('join_group_by_code', { p_code: code });
+        clearPendingJoinCode();
+        if (result?.status === 'PENDING_APPROVAL') {
+          toast(result.message || 'Join request sent!');
+          onCancel?.();
+          if (typeof onJoined === 'function') await onJoined(result);
+          return;
+        }
+        toast(result?.message || `Joined "${result?.group_name || 'savings group'}"!`);
+        onCancel?.();
+        if (typeof onJoined === 'function') {
+          await onJoined(result);
+          return;
+        }
+        window.location.href = homeForRole(result?.role || 'MEMBER');
+      } catch (err) {
+        const msg = friendlyError(err);
+        const blockedGroupName = latestPreview?.group_name || '';
+        renderPreviewError(msg);
+        if (/blocked|declined|disabled/i.test(msg)) {
+          clearPendingJoinCode();
+          showJoinBlockedDialog({ groupName: blockedGroupName, message: msg });
+        } else {
+          toast(msg, 'error');
+        }
+      } finally {
+        setBusy(submitBtn, false);
+      }
+    });
+
+    const seed = extractInviteCode(initialCode);
+    if (input) input.value = seed ? formatInviteCode(seed) : '';
+    codeCtrl?.sync();
+    setCodeError('');
+    loadOwnPendingJoinRequests().catch(() => { });
+    if (seed.length === 6) {
+      runPreview(seed);
+    } else {
+      renderEmptyPreview();
+    }
+
+    return {
+      focus: () => input?.focus(),
+      setCode: (code) => {
+        const clean = extractInviteCode(code);
+        if (input) input.value = clean ? formatInviteCode(clean) : '';
+        codeCtrl?.sync();
+        runPreview(clean);
+      }
+    };
+  }
+
+  async function openJoinGroupDialog({ initialCode = '', onJoined = null } = {}) {
+    if (currentProfile?.role === 'SUPER_ADMIN') {
+      toast('Super administrator accounts cannot join savings groups.', 'error');
+      return;
+    }
+    let dialog = document.getElementById('ipon-join-group-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog join-group-dialog" id="ipon-join-group-dialog" aria-labelledby="ipon-join-dialog-title">
+          <div class="form-dialog-sheet join-group-sheet">
+            <header class="form-dialog-header">
+              <div>
+                <span class="dialog-eyebrow">Have a code?</span>
+                <h2 id="ipon-join-dialog-title">Join savings group</h2>
+                <p id="ipon-join-dialog-copy">Enter a 6-character code or paste an invite link.</p>
+              </div>
+              <button class="dialog-close" type="button" id="ipon-join-close" aria-label="Close join dialog">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div id="ipon-join-mount"></div>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('ipon-join-group-dialog');
+    }
+
+    const handleClose = () => {
+      clearPendingJoinCode();
+      if (dialog.open) dialog.close();
+    };
+    const closeBtn = dialog.querySelector('#ipon-join-close');
+    if (closeBtn) closeBtn.onclick = handleClose;
+    dialog.onclick = (event) => { if (event.target === dialog) handleClose(); };
+
+    const mountEl = dialog.querySelector('#ipon-join-mount');
+    const panel = mountJoinGroupPanel(mountEl, {
+      initialCode,
+      onCancel: handleClose,
+      onJoined
+    });
+    if (!dialog.open) dialog.showModal();
+    if (!extractInviteCode(initialCode)) panel?.focus();
+  }
+
+  let resumedJoinOnce = false;
+  function maybeResumePendingJoin(profile) {
+    if (resumedJoinOnce || !profile || profile.role === 'SUPER_ADMIN') return;
+    const page = String(document.body?.dataset?.page || '').toLowerCase();
+    if (['login', 'mfa', 'account', 'reset-password', 'super-admin'].includes(page)) return;
+    const pending = getPendingJoinCode();
+    if (!pending || pending.length !== 6) return;
+    resumedJoinOnce = true;
+    clearPendingJoinCode();
+    setTimeout(() => {
+      openJoinGroupDialog({ initialCode: pending }).catch(() => { });
+    }, 120);
+  }
+
+  async function openCalendarEntryEditDialog(entry, { onSaved = null } = {}) {
+    if (!entry?.id || !entry?.type) return null;
+    const role = String(currentProfile?.role || 'MEMBER').toUpperCase();
+    const perms = currentProfile?.permissions || defaultPermissionsForRole(role);
+    if (role !== 'ADMIN' && perms.can_edit_own_entries === false) {
+      toast('Editing calendar entries is currently disabled for your account.', 'error');
+      return null;
+    }
+
+    const typeMeta = entry.type === 'contribution'
+      ? { label: 'Savings Addition', cls: 'is-addition', prefix: '+' }
+      : entry.type === 'withdrawal'
+        ? { label: 'Deduction', cls: 'is-deduction', prefix: '−' }
+        : { label: 'Expense', cls: 'is-expense', prefix: '−' };
+
+    const requiresApproval = role !== 'ADMIN' && perms.require_edit_approval !== false;
+    const origAmount = Math.round(Number(entry.amount || 0) * 100) / 100;
+    const origMethodRaw = String(entry.paymentMethod || '').trim();
+    const origMethod = normalizePaymentMethod(origMethodRaw || 'CASH');
+    const origNotes = String(entry.notes || '').trim();
+
+    let dialog = document.getElementById('ipon-entry-edit-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog entry-edit-dialog" id="ipon-entry-edit-dialog" aria-labelledby="ipon-entry-edit-title">
+          <div class="form-dialog-sheet entry-edit-sheet">
+            <header class="form-dialog-header">
+              <div>
+                <span class="dialog-eyebrow" id="ipon-entry-edit-eyebrow">Calendar entry</span>
+                <h2 id="ipon-entry-edit-title">Edit calendar entry</h2>
+                <p id="ipon-entry-edit-copy">Update the amount, payment method, and reason for changing this entry.</p>
+              </div>
+              <button class="dialog-close" type="button" id="ipon-entry-edit-close" aria-label="Close entry editor">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div class="entry-edit-body">
+              <div class="entry-edit-summary" id="ipon-entry-edit-summary"></div>
+              <div class="entry-edit-mode-banner" id="ipon-entry-edit-banner" role="note"></div>
+              <form id="ipon-entry-edit-form" class="form-grid" novalidate>
+                <div class="field">
+                  <label for="ipon-entry-edit-amount">New amount</label>
+                  <input id="ipon-entry-edit-amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" aria-describedby="ipon-entry-edit-amount-error" required>
+                  <small class="field-error" id="ipon-entry-edit-amount-error" role="alert" hidden></small>
+                </div>
+                <div class="field">
+                  <label for="ipon-entry-edit-date-display">Entry date</label>
+                  <input id="ipon-entry-edit-date-display" type="text" readonly>
+                </div>
+                <div class="field field-wide">
+                  <span class="field-label">Payment method</span>
+                  <div id="ipon-entry-edit-pm-wrap">${paymentMethodPickerHtml('payment_method', 'CASH')}</div>
+                </div>
+                <div class="field field-wide">
+                  <label for="ipon-entry-edit-notes">Notes (optional)</label>
+                  <textarea id="ipon-entry-edit-notes" name="notes" rows="2" maxlength="500" placeholder="Optional note attached to this entry"></textarea>
+                </div>
+                <div class="field field-wide">
+                  <label for="ipon-entry-edit-reason">Reason for change <span class="entry-edit-req">(required)</span></label>
+                  <textarea id="ipon-entry-edit-reason" name="reason" rows="3" minlength="3" maxlength="500" aria-describedby="ipon-entry-edit-reason-error" placeholder="Explain why the amount or payment method is being updated (e.g. Paid via Maya instead of GCash)" required></textarea>
+                  <small class="field-error" id="ipon-entry-edit-reason-error" role="alert" hidden></small>
+                </div>
+                <div class="form-actions field-wide">
+                  <button class="button button-secondary" type="button" id="ipon-entry-edit-cancel">Cancel</button>
+                  <button class="button button-primary" type="submit" id="ipon-entry-edit-submit">Send change request</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('ipon-entry-edit-dialog');
+      mountPaymentMethodPickers(dialog);
+      preparePesoInputs(dialog);
+      guardMoneyInput(dialog.querySelector('#ipon-entry-edit-amount'));
+    }
+
+    const summaryEl = dialog.querySelector('#ipon-entry-edit-summary');
+    const bannerEl = dialog.querySelector('#ipon-entry-edit-banner');
+    const form = dialog.querySelector('#ipon-entry-edit-form');
+    const amountInput = dialog.querySelector('#ipon-entry-edit-amount');
+    const dateInput = dialog.querySelector('#ipon-entry-edit-date-display');
+    const notesInput = dialog.querySelector('#ipon-entry-edit-notes');
+    const reasonInput = dialog.querySelector('#ipon-entry-edit-reason');
+    const submitBtn = dialog.querySelector('#ipon-entry-edit-submit');
+    const eyebrowEl = dialog.querySelector('#ipon-entry-edit-eyebrow');
+    const titleEl = dialog.querySelector('#ipon-entry-edit-title');
+    const copyEl = dialog.querySelector('#ipon-entry-edit-copy');
+
+    if (eyebrowEl) eyebrowEl.textContent = requiresApproval ? 'Change request' : 'Direct edit';
+    if (titleEl) titleEl.textContent = requiresApproval ? 'Request entry change' : 'Edit calendar entry';
+    if (copyEl) {
+      copyEl.textContent = requiresApproval
+        ? 'Your change and reason will be sent to a group administrator for approval.'
+        : 'Update the amount, payment method, and reason logged for this entry.';
+    }
+    if (submitBtn) submitBtn.textContent = requiresApproval ? 'Send change request' : 'Save changes';
+
+    const statusLower = String(entry.status || 'CONFIRMED').toLowerCase();
+    if (summaryEl) {
+      summaryEl.innerHTML = `
+        <div class="entry-edit-summary-top">
+          <span class="record-type-pill ${typeMeta.cls}">${escapeHtml(typeMeta.label)}</span>
+          <span class="status status-${escapeHtml(statusLower)}">${escapeHtml(entry.status || 'CONFIRMED')}</span>
+        </div>
+        <div class="entry-edit-summary-main">
+          <div>
+            <strong>${escapeHtml(entry.subjectName || typeMeta.label)}</strong>
+            <small>Current: ${escapeHtml(money(origAmount))} · ${escapeHtml(paymentMethodMeta(origMethod).label)}</small>
+          </div>
+          <strong class="entry-edit-current-amount">${typeMeta.prefix}${escapeHtml(money(origAmount))}</strong>
+        </div>`;
+    }
+
+    if (bannerEl) {
+      bannerEl.className = `entry-edit-mode-banner ${requiresApproval ? 'is-approval' : 'is-direct'}`;
+      bannerEl.innerHTML = requiresApproval
+        ? '<strong>Admin approval required:</strong> Savings totals stay unchanged until an administrator accepts your request.'
+        : '<strong>Instant update enabled:</strong> Your edit applies immediately and records your reason in the group audit trail.';
+    }
+
+    form.reset();
+    setFieldError(amountInput, '');
+    setFieldError(reasonInput, '');
+    amountInput.value = origAmount > 0 ? origAmount.toFixed(2) : '';
+    if (dateInput) dateInput.value = entry.date ? dateLabel(entry.date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    notesInput.value = origNotes;
+    reasonInput.value = '';
+    setPaymentMethod(form, origMethod);
+
+    const closeDialog = () => { if (dialog.open) dialog.close('cancel'); };
+    dialog.querySelector('#ipon-entry-edit-close').onclick = closeDialog;
+    dialog.querySelector('#ipon-entry-edit-cancel').onclick = closeDialog;
+    dialog.onclick = (event) => { if (event.target === dialog) closeDialog(); };
+
+    amountInput.oninput = () => setFieldError(amountInput, '');
+    reasonInput.oninput = () => setFieldError(reasonInput, '');
+
+    return new Promise((resolve) => {
+      let resolvedValue = null;
+      dialog.onclose = () => resolve(resolvedValue);
+
+      form.onsubmit = async (event) => {
+        event.preventDefault();
+        setFieldError(amountInput, '');
+        setFieldError(reasonInput, '');
+
+        const parsedAmount = parseMoneyAmount(amountInput.value, {
+          min: 0.01,
+          required: true,
+          badInput: Boolean(amountInput.validity?.badInput)
+        });
+        if (!parsedAmount.valid || parsedAmount.value == null) {
+          setFieldError(amountInput, parsedAmount.error || 'Enter a valid amount greater than zero.');
+          amountInput.focus();
+          return;
+        }
+        const nextAmount = parsedAmount.value;
+        const nextMethod = normalizePaymentMethod(form.elements.payment_method?.value || 'CASH');
+        const nextNotes = String(notesInput.value || '').trim();
+        const reasonText = String(reasonInput.value || '').trim();
+        if (reasonText.length < 3 || reasonText.length > 500) {
+          setFieldError(reasonInput, 'Enter a clear reason between 3 and 500 characters.');
+          reasonInput.focus();
+          return;
+        }
+
+        const sameAmount = Math.abs(nextAmount - origAmount) < 0.005;
+        const sameMethod = Boolean(origMethodRaw) && nextMethod === origMethod;
+        const sameNotes = nextNotes === origNotes;
+        if (sameAmount && sameMethod && sameNotes) {
+          setFieldError(amountInput, 'Update the amount, payment method, or notes before submitting.');
+          amountInput.focus();
+          return;
+        }
+
+        const confirmed = await confirmAction({
+          title: requiresApproval ? 'Send change request?' : 'Save entry changes?',
+          message: requiresApproval
+            ? `Request to update this entry from ${money(origAmount)} (${paymentMethodMeta(origMethod).label}) to ${money(nextAmount)} (${paymentMethodMeta(nextMethod).label})? Your admin will review your reason.`
+            : `Update this entry from ${money(origAmount)} (${paymentMethodMeta(origMethod).label}) to ${money(nextAmount)} (${paymentMethodMeta(nextMethod).label})?`,
+          acceptLabel: requiresApproval ? 'Send request' : 'Save changes'
+        });
+        if (!confirmed) return;
+
+        setBusy(submitBtn, true, requiresApproval ? 'Sending…' : 'Saving…');
+        try {
+          const res = await rpc('submit_record_change_request', {
+            p_record_type: entry.type,
+            p_record_id: entry.id,
+            p_amount: nextAmount,
+            p_payment_method: nextMethod,
+            p_notes: nextNotes || null,
+            p_reason: reasonText
+          });
+          resolvedValue = res;
+          toast(res?.message || (requiresApproval ? 'Change request sent for approval.' : 'Calendar entry updated.'));
+          dialog.close('saved');
+          if (typeof onSaved === 'function') await onSaved(res);
+        } catch (err) {
+          toast(friendlyError(err), 'error');
+        } finally {
+          setBusy(submitBtn, false);
+        }
+      };
+
+      if (!dialog.open) dialog.showModal();
+      amountInput.focus();
+    });
+  }
+
+  async function openChangeRequestReviewDialog(reqOrId, { allowReview = currentProfile?.role === 'ADMIN', onReviewed = null } = {}) {
+    let req = typeof reqOrId === 'object' && reqOrId ? reqOrId : null;
+    if (!req && reqOrId) {
+      try {
+        const list = await rpc('get_pending_financial_change_requests');
+        req = (Array.isArray(list) ? list : []).find((item) => String(item.id) === String(reqOrId)) || null;
+      } catch { /* fallback below */ }
+      if (!req) {
+        const client = getClient();
+        if (client) {
+          const { data } = await client.from('financial_change_requests').select('*').eq('id', reqOrId).maybeSingle();
+          if (data) req = data;
+        }
+      }
+    }
+    if (!req) {
+      toast('This change request is no longer pending or could not be found.', 'error');
+      return null;
+    }
+
+    let dialog = document.getElementById('ipon-change-request-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog change-review-dialog" id="ipon-change-request-dialog" aria-labelledby="ipon-cr-title">
+          <div class="form-dialog-sheet change-review-sheet">
+            <header class="form-dialog-header">
+              <div>
+                <span class="dialog-eyebrow">Request of changes</span>
+                <h2 id="ipon-cr-title">Review edit request</h2>
+                <p id="ipon-cr-subtitle">Compare the original entry and requested changes before deciding.</p>
+              </div>
+              <button class="dialog-close" type="button" id="ipon-cr-close" aria-label="Close change request review">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div class="change-review-body">
+              <div class="change-review-requester" id="ipon-cr-requester"></div>
+              <div class="change-review-diff" id="ipon-cr-diff"></div>
+              <div class="change-review-reason-card" id="ipon-cr-reason"></div>
+              <form id="ipon-cr-form" class="change-review-form" novalidate>
+                <div class="field field-wide" id="ipon-cr-note-wrap">
+                  <label for="ipon-cr-note" id="ipon-cr-note-label">Administrator note (required if rejecting)</label>
+                  <textarea id="ipon-cr-note" name="review_note" rows="2" maxlength="500" aria-describedby="ipon-cr-note-error" placeholder="Optional note when accepting, or explain why you are rejecting this change"></textarea>
+                  <small class="field-error" id="ipon-cr-note-error" role="alert" hidden></small>
+                </div>
+                <div class="change-review-actions" id="ipon-cr-actions"></div>
+              </form>
+            </div>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('ipon-change-request-dialog');
+    }
+
+    const reqWrap = dialog.querySelector('#ipon-cr-requester');
+    const diffWrap = dialog.querySelector('#ipon-cr-diff');
+    const reasonWrap = dialog.querySelector('#ipon-cr-reason');
+    const noteWrap = dialog.querySelector('#ipon-cr-note-wrap');
+    const noteInput = dialog.querySelector('#ipon-cr-note');
+    const actionsWrap = dialog.querySelector('#ipon-cr-actions');
+    const titleEl = dialog.querySelector('#ipon-cr-title');
+    const subtitleEl = dialog.querySelector('#ipon-cr-subtitle');
+
+    const status = String(req.status || 'PENDING').toUpperCase();
+    const isPending = status === 'PENDING';
+    const isOwnRequest = String(req.requested_by || '') === String(currentProfile?.id || '');
+    const canDecide = isPending && allowReview && currentProfile?.role === 'ADMIN';
+    const typeLabel = req.entry_label || (req.record_type === 'withdrawal' ? 'Deduction' : req.record_type === 'expense' ? 'Expense' : 'Savings Addition');
+    const amtChanged = Number(req.current_amount || 0) !== Number(req.proposed_amount || 0);
+    const pmChanged = normalizePaymentMethod(req.current_payment_method) !== normalizePaymentMethod(req.proposed_payment_method);
+    const notesChanged = String(req.current_notes || '').trim() !== String(req.proposed_notes || '').trim();
+    const requesterName = req.requested_by_name || req.subject_name || 'Group member';
+
+    if (titleEl) titleEl.textContent = isPending ? `Review ${typeLabel.toLowerCase()} change` : `Change request (${status.charAt(0) + status.slice(1).toLowerCase()})`;
+    if (subtitleEl) subtitleEl.textContent = `${req.subject_name ? `${req.subject_name} · ` : ''}${req.entry_date ? dateLabel(req.entry_date, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`;
+
+    if (reqWrap) {
+      reqWrap.innerHTML = `
+        ${avatarMarkup(req.avatar_url || '', requesterName, 'avatar-md')}
+        <div class="change-review-requester-info">
+          <strong>${escapeHtml(requesterName)}</strong>
+          <small>${escapeHtml(typeLabel)}${req.created_at ? ` · Requested ${escapeHtml(dateLabel(req.created_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}` : ''}</small>
+        </div>
+        <span class="status status-${escapeHtml(status.toLowerCase())}">${escapeHtml(status)}</span>`;
+      bindAvatarFallbacks(reqWrap);
+    }
+
+    if (diffWrap) {
+      diffWrap.innerHTML = `
+        <div class="change-diff-col">
+          <span class="change-diff-eyebrow">Current entry</span>
+          <strong class="change-diff-amt">${escapeHtml(money(req.current_amount))}</strong>
+          <div class="change-diff-badges">${paymentMethodBadge(req.current_payment_method)}</div>
+          <p class="change-diff-note">${escapeHtml(req.current_notes || 'No notes')}</p>
+        </div>
+        <div class="change-diff-arrow" aria-hidden="true">→</div>
+        <div class="change-diff-col is-proposed">
+          <span class="change-diff-eyebrow">Requested change</span>
+          <strong class="change-diff-amt ${amtChanged ? 'is-changed' : ''}">${escapeHtml(money(req.proposed_amount))}</strong>
+          <div class="change-diff-badges ${pmChanged ? 'is-changed' : ''}">${paymentMethodBadge(req.proposed_payment_method)}</div>
+          <p class="change-diff-note ${notesChanged ? 'is-changed' : ''}">${escapeHtml(req.proposed_notes || 'No notes')}</p>
+        </div>`;
+    }
+
+    if (reasonWrap) {
+      reasonWrap.innerHTML = `
+        <span class="change-reason-label">Reason from ${escapeHtml(requesterName)}</span>
+        <p>${escapeHtml(req.reason || 'No reason provided.')}</p>
+        ${req.review_note && !isPending ? `<div class="change-review-decision-note"><strong>Admin note:</strong> ${escapeHtml(req.review_note)}</div>` : ''}`;
+    }
+
+    setFieldError(noteInput, '');
+    noteInput.value = '';
+    if (noteWrap) noteWrap.hidden = !canDecide;
+
+    if (actionsWrap) {
+      if (canDecide) {
+        actionsWrap.innerHTML = `
+          <button class="button button-danger" type="button" id="ipon-cr-reject">Reject</button>
+          <button class="button button-primary" type="button" id="ipon-cr-approve">Accept &amp; apply</button>`;
+      } else if (isPending && isOwnRequest) {
+        actionsWrap.innerHTML = `
+          <button class="button button-secondary" type="button" id="ipon-cr-dismiss">Close</button>
+          <button class="button button-danger" type="button" id="ipon-cr-withdraw">Withdraw request</button>`;
+      } else {
+        actionsWrap.innerHTML = '<button class="button button-secondary" type="button" id="ipon-cr-dismiss">Close</button>';
+      }
+    }
+
+    const closeDialog = () => { if (dialog.open) dialog.close('cancel'); };
+    dialog.querySelector('#ipon-cr-close').onclick = closeDialog;
+    dialog.querySelector('#ipon-cr-dismiss')?.addEventListener('click', closeDialog);
+    dialog.onclick = (event) => { if (event.target === dialog) closeDialog(); };
+    noteInput.oninput = () => setFieldError(noteInput, '');
+
+    return new Promise((resolve) => {
+      let result = null;
+      dialog.onclose = () => resolve(result);
+
+      const handleDecision = async (decision, triggerBtn) => {
+        setFieldError(noteInput, '');
+        const noteText = String(noteInput.value || '').trim();
+        if (decision === 'REJECTED' && noteText.length < 2) {
+          setFieldError(noteInput, 'Enter a short reason explaining why this change is rejected.');
+          noteInput.focus();
+          return;
+        }
+        const confirmed = await confirmAction({
+          title: decision === 'APPROVED' ? 'Accept & apply change request?' : 'Reject change request?',
+          message: decision === 'APPROVED'
+            ? `Update this ${typeLabel.toLowerCase()} from ${money(req.current_amount)} (${paymentMethodMeta(req.current_payment_method).label}) to ${money(req.proposed_amount)} (${paymentMethodMeta(req.proposed_payment_method).label})?`
+            : `Keep the original entry at ${money(req.current_amount)} (${paymentMethodMeta(req.current_payment_method).label}) and notify ${requesterName}?`,
+          acceptLabel: decision === 'APPROVED' ? 'Accept & apply' : 'Reject request'
+        });
+        if (!confirmed) return;
+
+        setBusy(triggerBtn, true, decision === 'APPROVED' ? 'Applying…' : 'Rejecting…');
+        try {
+          const res = await rpc('review_financial_change_request', {
+            p_request_id: req.id,
+            p_decision: decision,
+            p_review_note: noteText || null
+          });
+          result = res;
+          toast(res?.message || (decision === 'APPROVED' ? 'Change approved and applied.' : 'Change request rejected.'));
+          dialog.close(decision.toLowerCase());
+          if (typeof onReviewed === 'function') await onReviewed(res);
+        } catch (err) {
+          toast(friendlyError(err), 'error');
+        } finally {
+          setBusy(triggerBtn, false);
+        }
+      };
+
+      dialog.querySelector('#ipon-cr-reject')?.addEventListener('click', (ev) => handleDecision('REJECTED', ev.currentTarget));
+      dialog.querySelector('#ipon-cr-approve')?.addEventListener('click', (ev) => handleDecision('APPROVED', ev.currentTarget));
+      dialog.querySelector('#ipon-cr-withdraw')?.addEventListener('click', async (ev) => {
+        const btn = ev.currentTarget;
+        const ok = await confirmAction({
+          title: 'Withdraw change request?',
+          message: 'Cancel this pending change request? You can submit a new one anytime.',
+          acceptLabel: 'Withdraw'
+        });
+        if (!ok) return;
+        setBusy(btn, true, 'Withdrawing…');
+        try {
+          await rpc('cancel_financial_change_request', { p_request_id: req.id });
+          result = { status: 'CANCELLED', request_id: req.id };
+          toast('Change request withdrawn.');
+          dialog.close('cancelled');
+          if (typeof onReviewed === 'function') await onReviewed(result);
+        } catch (err) {
+          toast(friendlyError(err), 'error');
+        } finally {
+          setBusy(btn, false);
+        }
+      });
+
+      if (!dialog.open) dialog.showModal();
+    });
+  }
+
+  window.Ipon = {
+    get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
+    getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
+    setOnlineVisibility, syncMessagesBadges,
+    updateLocalProfile(patch = {}) {
+      if (currentProfile && patch && typeof patch === 'object') Object.assign(currentProfile, patch);
+      return currentProfile;
+    },
+    PAYMENT_METHODS, normalizePaymentMethod, guessPaymentMethodFromLabel, paymentMethodMeta, paymentMethodIconHtml, paymentMethodBadge, paymentMethodPickerHtml, mountPaymentMethodPickers, setPaymentMethod, paymentMethodOptionsHtml,
+    CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
+    payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,
+    computeContributionExcess, bindExcessContributionToggle,
+    resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink, openCalendarEntryEditDialog, openChangeRequestReviewDialog,
+    getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
+    checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
+    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload, maybeShowRetentionReminder, openRetentionPolicyDialog, CURRENT_POLICY_VERSION, openPolicyDialog, hasAcceptedCurrentPolicy, maybeShowPolicyConsentModal,
+    auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry, createRealtimeChannel,
+    canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, bindInviteCodeInput, inviteShareUrl,
+    setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
+    generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
+    get profile() { return currentProfile; }
+  };
+})();
