@@ -1,4 +1,22 @@
 {
   "typescript.validate.enable": false,
-  "js/ts.implicitProjectConfig.checkJs": false
+  "javascript.validate.enable": false,
+  "js/ts.implicitProjectConfig.checkJs": false,
+  "typescript.tsserver.experimental.enableProjectDiagnostics": false,
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/www/**": true,
+    "**/android/**": true,
+    "**/ios/**": true,
+    "**/supabase/.temp/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/www": true,
+    "**/android/app/src/main/assets/public": true,
+    "**/ios/App/App/public": true,
+    "**/supabase/.temp": true
+  }
 }
