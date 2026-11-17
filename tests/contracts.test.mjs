@@ -407,8 +407,11 @@ test('first-login account setup opens as a locked responsive modal', () => {
   assert.match(css, /body\.account-onboarding \.account-page-dialog \.account-grid>section:nth-child\(n\+3\)\{display:none\}/);
 });
 
-test('calendar navigation includes the administrator audit log', () => {
-  assert.match(read('dashboard.html'), /href="audit\.html" data-role="ADMIN"[^>]*>[\s\S]*?<span>Audit log<\/span>/);
+test('administrator audit log lives inside Reports and Manage Group hub', () => {
+  const dashHtml = read('dashboard.html');
+  assert.match(read('reports.html'), /<a[^>]+href="audit\.html"[^>]+data-role="ADMIN"[^>]+id="reports-open-audit"[\s\S]*?<span>Audit log<\/span>/);
+  assert.match(dashHtml, /<a class="group-hub-link" href="audit\.html" data-role="ADMIN">[\s\S]*?<strong>Audit log<\/strong>/);
+  assert.doesNotMatch(dashHtml.match(/<nav class="app-nav[\s\S]*?<\/nav>/)?.[0] || '', /audit\.html|settings\.html/);
   assert.match(read('audit.html'), /<dialog[^>]+id="audit-detail-dialog"[^>]+aria-labelledby="audit-detail-title"/);
   assert.match(read('js/audit.js'), /detailDialog\.showModal\(\)/);
   assert.doesNotMatch(read('js/audit.js'), /<details\b/);
@@ -11101,5 +11104,5 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261117-111/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261117-112/);
 });
