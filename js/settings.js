@@ -70,11 +70,14 @@
   }
 
   async function loadAccess() {
+    const fetchOverview = typeof Ipon.fetchInviteOverview === 'function'
+      ? () => Ipon.fetchInviteOverview({ force: true })
+      : () => Ipon.rpc('get_group_invite_overview', {});
     const [accessRows, memberResult, myGroups, inviteOverview] = await Promise.all([
       Ipon.rpc('get_group_access_list'),
       Ipon.client.from('members').select('id,full_name,monthly_contribution_amount,activation_status').eq('status', 'ACTIVE').is('deleted_at', null).order('full_name'),
       Ipon.rpc('get_my_groups'),
-      Ipon.rpc('get_group_invite_overview', {}).catch(() => null)
+      fetchOverview().catch(() => null)
     ]);
     if (memberResult.error) throw memberResult.error;
     members = memberResult.data || [];
@@ -91,8 +94,11 @@
         lastInviteGroupId = currentGroupId;
         settingsInviteCtrl = Ipon.mountInviteCodePanel(inviteCodeMount, {
           groupName: activeGroup?.name || '',
-          onChanged: () => loadJoinRequests()
+          initialOverview: inviteOverview,
+          onChanged: (ov) => loadJoinRequests(ov)
         });
+      } else if (inviteOverview) {
+        settingsInviteCtrl.setOverview?.(inviteOverview);
       }
       await loadJoinRequests(inviteOverview);
     } else if (isSolo) {
@@ -523,9 +529,9 @@
     const tasks = [];
     if (document.activeElement !== defaultAmount && document.activeElement !== deadlineDay && document.activeElement !== effectiveMonth) tasks.push(loadContributionDefault());
     if (!document.activeElement?.closest('#access-body')) tasks.push(loadAccess());
+    else if (settingsInviteCtrl && !document.activeElement?.closest('#settings-invite-code-mount')) tasks.push(settingsInviteCtrl.refresh({ silent: true }));
     if (!document.activeElement?.closest('#payment-info-form')) tasks.push(loadPaymentInfo());
     if (document.activeElement !== cycleStartMonth) tasks.push(loadCycleSetting());
-    if (settingsInviteCtrl && !document.activeElement?.closest('#settings-invite-code-mount')) tasks.push(settingsInviteCtrl.refresh());
     await Promise.all(tasks);
   });
 })();

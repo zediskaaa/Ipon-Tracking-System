@@ -244,6 +244,9 @@
     }
     if (groupActionsEl) groupActionsEl.hidden = false;
     syncGroupHub();
+    if (currentGroup.role === 'ADMIN' && currentGroup.workspace_mode !== 'SOLO' && typeof Ipon.fetchInviteOverview === 'function') {
+      Ipon.fetchInviteOverview().catch(() => { });
+    }
   }
 
   function renderGroupDpPreview(avatarUrl, name) {
@@ -920,7 +923,10 @@
     syncGroupHub();
     groupHubDialog?.showModal();
     if (currentGroup?.role === 'ADMIN' && currentGroup?.workspace_mode !== 'SOLO') {
-      Ipon.rpc('get_group_invite_overview', {}).then((res) => {
+      const fetchFn = typeof Ipon.fetchInviteOverview === 'function'
+        ? () => Ipon.fetchInviteOverview({ force: true })
+        : () => Ipon.rpc('get_group_invite_overview', {});
+      fetchFn().then((res) => {
         const badgeEl = document.getElementById('group-hub-requests-badge');
         const count = Array.isArray(res?.pending_requests) ? res.pending_requests.length : 0;
         if (badgeEl) {
@@ -932,10 +938,6 @@
   });
   document.getElementById('close-group-hub-dialog')?.addEventListener('click', () => groupHubDialog?.close());
   document.getElementById('done-group-hub-dialog')?.addEventListener('click', () => groupHubDialog?.close());
-  document.getElementById('group-hub-join-another')?.addEventListener('click', () => {
-    groupHubDialog?.close();
-    Ipon.openJoinGroupDialog();
-  });
   document.getElementById('group-hub-create-another')?.addEventListener('click', () => {
     groupHubDialog?.close();
     openGroupDialog('create');
@@ -1155,22 +1157,59 @@
     }
   });
 
+  const groupCreateJoinMount = document.getElementById('group-create-join-mount');
+  const groupModeJoinTab = document.getElementById('group-mode-join-tab');
+  const groupModeLabelEl = document.getElementById('group-workspace-mode-label');
+
   function syncGroupFormWorkspaceMode(nextMode, isCreate) {
-    const mode = nextMode === 'SOLO' ? 'SOLO' : 'GROUP';
+    const mode = nextMode === 'JOIN' && isCreate
+      ? 'JOIN'
+      : (nextMode === 'SOLO' ? 'SOLO' : 'GROUP');
+    const isJoin = mode === 'JOIN';
     const isSolo = mode === 'SOLO';
-    if (groupWorkspaceModeInput) groupWorkspaceModeInput.value = mode;
+    if (groupModeJoinTab) groupModeJoinTab.hidden = !isCreate;
+    if (groupWorkspaceModeTabs) groupWorkspaceModeTabs.classList.toggle('is-three', isCreate);
+    if (groupModeLabelEl) groupModeLabelEl.textContent = isCreate ? 'Workspace option' : 'Saving mode';
+    if (groupWorkspaceModeInput && !isJoin) groupWorkspaceModeInput.value = mode;
     groupWorkspaceModeTabs?.querySelectorAll('[data-workspace-mode]').forEach((btn) => {
       const active = btn.dataset.workspaceMode === mode;
       btn.classList.toggle('is-active', active);
       btn.setAttribute('aria-checked', active ? 'true' : 'false');
     });
     if (groupWorkspaceModeHelp) {
-      groupWorkspaceModeHelp.textContent = isSolo
-        ? 'Personal savings tracker — no invitations needed. Standard 90-day reminder and 6-month inactivity retention applies.'
-        : 'Save together with invited members and treasurers. Standard 90-day reminder and 6-month inactivity retention applies.';
+      groupWorkspaceModeHelp.textContent = isJoin
+        ? 'Join an existing savings group using a 6-character code or invite link shared by its admin.'
+        : (isSolo
+          ? 'Personal savings tracker — no invitations needed. Standard 90-day reminder and 6-month inactivity retention applies.'
+          : 'Save together with invited members and treasurers. Standard 90-day reminder and 6-month inactivity retention applies.');
     }
     const formTitle = document.getElementById('group-form-title');
     const formCopy = document.getElementById('group-form-copy');
+    if (isJoin) {
+      if (formTitle) formTitle.textContent = 'Join savings group';
+      if (formCopy) formCopy.textContent = 'Enter a 6-character code or paste an invite link.';
+      if (groupForm) groupForm.hidden = true;
+      if (groupCreateJoinMount) {
+        groupCreateJoinMount.hidden = false;
+        const panel = Ipon.mountJoinGroupPanel?.(groupCreateJoinMount, {
+          onCancel: () => groupDialog?.close(),
+          onJoined: async (res) => {
+            if (res?.status === 'JOINED') {
+              window.location.href = Ipon.homeForRole(res.role || 'MEMBER');
+            } else {
+              await load();
+            }
+          }
+        });
+        panel?.focus?.();
+      }
+      return;
+    }
+    if (groupCreateJoinMount) {
+      groupCreateJoinMount.hidden = true;
+      groupCreateJoinMount.replaceChildren();
+    }
+    if (groupForm) groupForm.hidden = false;
     const submitBtn = document.getElementById('save-group-dialog');
     if (formTitle) {
       formTitle.textContent = isCreate
@@ -1225,7 +1264,7 @@
     groupForm.elements.mode.value = mode;
     const isCreate = mode === 'create';
     const initialWorkspaceMode = isCreate
-      ? (presetWorkspaceMode === 'SOLO' ? 'SOLO' : 'GROUP')
+      ? (presetWorkspaceMode === 'JOIN' ? 'JOIN' : (presetWorkspaceMode === 'SOLO' ? 'SOLO' : 'GROUP'))
       : (currentGroup?.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP');
     pendingGroupAvatarUrl = isCreate ? null : (currentGroup?.avatar_url || null);
     pendingGroupClearAvatar = false;
@@ -1238,7 +1277,7 @@
     syncGroupFormWorkspaceMode(initialWorkspaceMode, isCreate);
     renderGroupDpPreview(pendingGroupAvatarUrl, groupForm.elements.name.value || (isCreate ? 'New Workspace' : currentGroup?.name));
     groupDialog.showModal();
-    groupForm.elements.name.focus();
+    if (initialWorkspaceMode !== 'JOIN') groupForm.elements.name.focus();
   }
   groupSelfToggle?.addEventListener('change', () => {
     if (groupWorkspaceModeInput?.value === 'SOLO') {
@@ -1440,7 +1479,6 @@
           }
         }
       });
-      Ipon.rpc('get_group_invite_overview', {}).then((res) => renderDialogPendingRequests(res?.pending_requests)).catch(() => { });
     }
     if (inviteOnlyRows) {
       inviteOnlyRows.replaceChildren();
@@ -1887,8 +1925,7 @@
   });
   Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'group_invite_codes', 'group_join_requests', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions'], () => {
     if (inviteDialog?.open && dashInvitePanelCtrl) {
-      dashInvitePanelCtrl.refresh().catch(() => { });
-      Ipon.rpc('get_group_invite_overview', {}).then((res) => renderDialogPendingRequests(res?.pending_requests)).catch(() => { });
+      dashInvitePanelCtrl.refresh({ silent: true }).catch(() => { });
     }
     return load();
   });

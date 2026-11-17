@@ -11104,7 +11104,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261117-113/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261117-115/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11235,7 +11235,7 @@ test('Super Admin Platform overview counts all registered non-super-admin users 
   assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.platform-metric-card\s*\{/);
 });
 
-test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR ISO-18004 Engine work end-to-end', () => {
+test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR ISO-18004 Engine work end-to-end', async () => {
   const mig100 = read('database/migrations/20261117_100_group_invite_links_and_codes.sql');
   const schema = read('database/schema.sql');
   const coreJs = read('js/core.js');
@@ -11279,13 +11279,17 @@ test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR I
   assert.match(authJs, /function renderAuthJoinBanner/);
 
   assert.match(dashHtml, /id="no-group-join-btn"/);
-  assert.match(dashHtml, /id="group-hub-join-another"/);
+  assert.match(dashHtml, /id="group-mode-join-tab"/);
+  assert.match(dashHtml, /id="group-create-join-mount"/);
+  assert.doesNotMatch(dashHtml, /id="group-hub-join-another"/);
   assert.match(dashHtml, /id="invite-tab-link"/);
   assert.match(dashHtml, /id="invite-tab-email"/);
   assert.match(dashHtml, /id="invite-link-code-mount"/);
   assert.match(dashJs, /no-group-join-btn/);
+  assert.match(dashJs, /mountJoinGroupPanel/);
   assert.match(dashJs, /mountInviteCodePanel/);
   assert.match(dashJs, /group_join_requests/);
+  assert.match(css, /\.join-group-dialog\s*\{[^}]*width:\s*min\(440px/);
 
   assert.match(settingsHtml, /id="settings-invite-code-mount"/);
   assert.match(settingsHtml, /id="settings-join-requests-panel"/);
@@ -11400,4 +11404,46 @@ test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR I
   ctx.location.origin = 'http://localhost';
   ctx.Capacitor = {};
   assert.equal(ipon.canonicalAppOrigin(), 'https://my-ipon.vercel.app');
+
+  // Verify mountInviteCodePanel renders initial cached overview cleanly without loading-spinner flash on refresh
+  assert.match(coreJs, /inviteOverviewSignature\(stateOverview\)/);
+  assert.match(coreJs, /if \(nextSig === lastRenderedSig\)|nextSig !== lastRenderedSig/);
+  assert.match(coreJs, /class="status \$\{active\.require_approval \? 'status-pending' : 'status-confirmed'\}"/);
+  const mountWrites = [];
+  const mountBox = {
+    children: [],
+    get innerHTML() { return mountWrites[mountWrites.length - 1] || ''; },
+    set innerHTML(v) {
+      mountWrites.push(String(v));
+      mountBox.children = v ? [{}] : [];
+    },
+    querySelector: () => dummyEl(),
+    querySelectorAll: () => []
+  };
+  let rpcCount = 0;
+  const cachedSample = {
+    workspace_mode: 'GROUP',
+    active_code: { id: 'c1', code: 'RLZBX3', require_approval: true, expires_at: new Date(Date.now() + 86400000).toISOString(), use_count: 0, max_uses: null },
+    pending_requests: []
+  };
+  ctx.supabase = {
+    createClient: () => ({
+      rpc: async () => { rpcCount += 1; return { data: cachedSample, error: null }; },
+      channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
+      getChannels: () => []
+    })
+  };
+  const ctx2 = {
+    ...ctx,
+    window: null
+  };
+  ctx2.window = ctx2;
+  ctx2.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx2, { filename: 'js/core.js' });
+  const ctrl = ctx2.window.Ipon.mountInviteCodePanel(mountBox, { groupName: 'Sample', initialOverview: cachedSample });
+  assert.equal(mountWrites.length, 1);
+  assert.doesNotMatch(mountWrites[0], /invite-code-loading/);
+  assert.match(mountWrites[0], /class="status status-pending"/);
+  await ctrl.refresh({ silent: true, force: true });
+  assert.equal(mountWrites.length, 1, 'refresh with unchanged overview must not re-flash or replace DOM');
 });

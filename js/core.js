@@ -6313,7 +6313,7 @@
     });
   }
 
-  const READ_ONLY_RPC_RE = /^(?:get_|list_|check_|super_admin_storage_overview|record_account_activity|mark_notification_read|mark_all_notifications_read)/i;
+  const READ_ONLY_RPC_RE = /^(?:get_|list_|check_|preview_|super_admin_storage_overview|record_account_activity|mark_notification_read|mark_all_notifications_read)/i;
 
   async function rpc(name, params) {
     const client = getClient();
@@ -11188,20 +11188,83 @@
     return `Expires in ${days}d (${dateLabel(expiresAt)})`;
   }
 
+  const inviteOverviewByGroup = new Map();
+  const inviteOverviewInFlight = new Map();
+
+  async function fetchInviteOverview({ force = false } = {}) {
+    const key = currentProfile?.group_id || 'default';
+    if (!force && inviteOverviewByGroup.has(key)) {
+      return inviteOverviewByGroup.get(key);
+    }
+    if (inviteOverviewInFlight.has(key)) {
+      return inviteOverviewInFlight.get(key);
+    }
+    const req = rpc('get_group_invite_overview', {})
+      .then((res) => {
+        const clean = res || {};
+        inviteOverviewByGroup.set(key, clean);
+        return clean;
+      })
+      .finally(() => {
+        inviteOverviewInFlight.delete(key);
+      });
+    inviteOverviewInFlight.set(key, req);
+    return req;
+  }
+
+  function inviteOverviewSignature(ov) {
+    if (!ov) return '';
+    const active = ov.active_code || null;
+    return JSON.stringify([
+      String(ov.workspace_mode || 'GROUP').toUpperCase(),
+      active ? [active.id, active.code, Boolean(active.require_approval), active.expires_at, Number(active.use_count || 0), active.max_uses ?? null] : null
+    ]);
+  }
+
   let invitePanelSeq = 0;
-  function mountInviteCodePanel(container, { groupName = '', onChanged = null } = {}) {
+  function mountInviteCodePanel(container, { groupName = '', initialOverview = null, onChanged = null } = {}) {
     if (!container) return null;
     const pid = `ipon-inv-${++invitePanelSeq}`;
-    let stateOverview = null;
+    const cacheKey = currentProfile?.group_id || 'default';
+    let stateOverview = initialOverview || inviteOverviewByGroup.get(cacheKey) || null;
+    if (initialOverview) inviteOverviewByGroup.set(cacheKey, initialOverview);
+    let lastRenderedSig = '';
+    let fetchSeq = 0;
+    let suppressRefreshUntil = 0;
 
-    async function loadOverview() {
-      container.innerHTML = '<div class="invite-code-loading" role="status" aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><span>Loading invite link &amp; QR code…</span></div>';
-      try {
-        const res = await rpc('get_group_invite_overview', {});
-        stateOverview = res || {};
+    function notifyParent(overview) {
+      if (typeof onChanged === 'function') {
+        Promise.resolve(onChanged(overview)).catch(() => { });
+      }
+    }
+
+    function applyOverview(nextOverview, { forceRender = false } = {}) {
+      stateOverview = nextOverview || {};
+      inviteOverviewByGroup.set(cacheKey, stateOverview);
+      const nextSig = inviteOverviewSignature(stateOverview);
+      if (forceRender || nextSig !== lastRenderedSig) {
+        lastRenderedSig = nextSig;
         render();
+      }
+      notifyParent(stateOverview);
+    }
+
+    async function loadOverview({ silent = false, force = false } = {}) {
+      if (!force && silent && Date.now() < suppressRefreshUntil) return;
+      const mySeq = ++fetchSeq;
+      if (!stateOverview && !silent && !container.children.length) {
+        container.innerHTML = '<div class="invite-code-loading" role="status" aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><span>Loading invite link &amp; QR code…</span></div>';
+      }
+      try {
+        const res = await fetchInviteOverview({ force: true });
+        if (mySeq !== fetchSeq) return;
+        applyOverview(res || {});
       } catch (error) {
-        showInlineError(container, error, loadOverview);
+        if (mySeq !== fetchSeq) return;
+        if (!stateOverview) {
+          lastRenderedSig = '';
+          showInlineError(container, error, () => loadOverview({ silent: false, force: true }));
+        }
       }
     }
 
@@ -11266,15 +11329,14 @@
           const requireApproval = Boolean(document.getElementById(`${pid}-create-approval`)?.checked);
           setBusy(btn, true, 'Generating…');
           try {
+            suppressRefreshUntil = Date.now() + 1400;
             const created = await rpc('create_group_invite_code', {
               p_expires_hours: hours,
               p_require_approval: requireApproval,
               p_max_uses: maxUses
             });
-            stateOverview = { ...(stateOverview || {}), active_code: created };
+            applyOverview({ ...(stateOverview || {}), active_code: created }, { forceRender: true });
             toast('Invite link & QR code ready to share.');
-            render();
-            if (typeof onChanged === 'function') await onChanged(stateOverview);
           } catch (error) {
             toast(friendlyError(error), 'error');
           } finally {
@@ -11305,9 +11367,9 @@
           </div>
           <div class="invite-share-details">
             <div class="invite-meta-pills">
-              <span class="badge ${active.require_approval ? 'status-pending' : 'status-confirmed'}" id="${pid}-mode-badge">${active.require_approval ? 'Approval required' : 'Instant join'}</span>
-              <span class="badge">${escapeHtml(inviteExpirySummary(active.expires_at))}</span>
-              <span class="badge">${escapeHtml(usesText)}</span>
+              <span class="status ${active.require_approval ? 'status-pending' : 'status-confirmed'}" id="${pid}-mode-badge">${active.require_approval ? 'Approval required' : 'Instant join'}</span>
+              <span class="status status-unpaid">${escapeHtml(inviteExpirySummary(active.expires_at))}</span>
+              <span class="status status-unpaid">${escapeHtml(usesText)}</span>
             </div>
             <div class="field">
               <label for="${pid}-share-url">Shareable invite link</label>
@@ -11385,19 +11447,22 @@
       approvalSwitch?.addEventListener('change', async () => {
         const nextVal = approvalSwitch.checked;
         approvalSwitch.disabled = true;
+        suppressRefreshUntil = Date.now() + 1400;
         try {
           const updated = await rpc('update_group_invite_code', {
             p_code_id: active.id,
             p_require_approval: nextVal
           });
           stateOverview = { ...(stateOverview || {}), active_code: updated };
+          inviteOverviewByGroup.set(cacheKey, stateOverview);
+          lastRenderedSig = inviteOverviewSignature(stateOverview);
           const modeBadge = document.getElementById(`${pid}-mode-badge`);
           if (modeBadge) {
-            modeBadge.className = `badge ${nextVal ? 'status-pending' : 'status-confirmed'}`;
+            modeBadge.className = `status ${nextVal ? 'status-pending' : 'status-confirmed'}`;
             modeBadge.textContent = nextVal ? 'Approval required' : 'Instant join';
           }
           toast(nextVal ? 'Approval required before joining.' : 'Instant join enabled for this link.');
-          if (typeof onChanged === 'function') await onChanged(stateOverview);
+          notifyParent(stateOverview);
         } catch (error) {
           approvalSwitch.checked = !nextVal;
           toast(friendlyError(error), 'error');
@@ -11415,16 +11480,15 @@
         });
         if (!ok) return;
         setBusy(btn, true, 'Rotating…');
+        suppressRefreshUntil = Date.now() + 1400;
         try {
           const created = await rpc('create_group_invite_code', {
             p_expires_hours: 168,
             p_require_approval: Boolean(active.require_approval),
             p_max_uses: active.max_uses ?? null
           });
-          stateOverview = { ...(stateOverview || {}), active_code: created };
+          applyOverview({ ...(stateOverview || {}), active_code: created }, { forceRender: true });
           toast(`New code ready: ${formatInviteCode(created.code)}`);
-          render();
-          if (typeof onChanged === 'function') await onChanged(stateOverview);
         } catch (error) {
           toast(friendlyError(error), 'error');
         } finally {
@@ -11441,12 +11505,11 @@
         });
         if (!ok) return;
         setBusy(btn, true, 'Revoking…');
+        suppressRefreshUntil = Date.now() + 1400;
         try {
           await rpc('update_group_invite_code', { p_code_id: active.id, p_revoke: true });
-          stateOverview = { ...(stateOverview || {}), active_code: null };
+          applyOverview({ ...(stateOverview || {}), active_code: null }, { forceRender: true });
           toast('Invite link and code revoked.');
-          render();
-          if (typeof onChanged === 'function') await onChanged(stateOverview);
         } catch (error) {
           toast(friendlyError(error), 'error');
         } finally {
@@ -11455,9 +11518,18 @@
       });
     }
 
-    loadOverview();
+    if (stateOverview) {
+      lastRenderedSig = inviteOverviewSignature(stateOverview);
+      render();
+      notifyParent(stateOverview);
+      loadOverview({ silent: true, force: true });
+    } else {
+      loadOverview({ silent: false, force: true });
+    }
+
     return {
-      refresh: loadOverview,
+      refresh: (opts = {}) => loadOverview({ silent: opts?.silent !== false, force: Boolean(opts?.force) }),
+      setOverview: (ov) => applyOverview(ov),
       getOverview: () => stateOverview
     };
   }
@@ -11515,53 +11587,60 @@
     });
   }
 
-  async function openJoinGroupDialog({ initialCode = '', onJoined = null } = {}) {
-    if (currentProfile?.role === 'SUPER_ADMIN') {
-      toast('Super administrator accounts cannot join savings groups.', 'error');
-      return;
-    }
-    let dialog = document.getElementById('ipon-join-group-dialog');
-    if (!dialog) {
-      document.body.insertAdjacentHTML('beforeend', `
-        <dialog class="form-dialog join-group-dialog" id="ipon-join-group-dialog" aria-labelledby="ipon-join-dialog-title">
-          <div class="form-dialog-sheet join-group-sheet">
-            <header class="form-dialog-header">
-              <div>
-                <h2 id="ipon-join-dialog-title">Join savings group</h2>
-                <p id="ipon-join-dialog-copy">Enter a 6-character group code or paste an invite link shared by your admin.</p>
-              </div>
-              <button class="dialog-close" type="button" id="ipon-join-close" aria-label="Close join dialog">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
-              </button>
-            </header>
-            <form id="ipon-join-form" class="form-grid" novalidate>
-              <div class="field field-wide">
-                <label for="ipon-join-code-input">6-character group code or invite link</label>
-                <input id="ipon-join-code-input" name="invite_code" class="join-code-input" type="text" maxlength="240" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. K9M-4PQ" aria-describedby="ipon-join-code-error" required>
-                <small class="field-error" id="ipon-join-code-error" role="alert"></small>
-              </div>
-              <div class="field field-wide">
-                <div class="join-preview-slot" id="ipon-join-preview-slot" aria-live="polite"></div>
-              </div>
-              <div class="field field-wide" id="ipon-join-pending-wrap" hidden></div>
-              <div class="form-actions field-wide">
-                <button class="button button-secondary" type="button" id="ipon-join-cancel">Cancel</button>
-                <button class="button button-primary" type="submit" id="ipon-join-submit" disabled>Join group</button>
-              </div>
-            </form>
-          </div>
-        </dialog>`);
-      dialog = document.getElementById('ipon-join-group-dialog');
-    }
+  let joinPanelSeq = 0;
+  function mountJoinGroupPanel(container, { initialCode = '', onCancel = null, onJoined = null } = {}) {
+    if (!container) return null;
+    const jid = `ipon-jp-${++joinPanelSeq}`;
+    container.innerHTML = `
+      <form id="${jid}-form" class="form-grid join-group-panel-form" novalidate>
+        <div class="field field-wide">
+          <label for="${jid}-code">6-character group code or invite link</label>
+          <input id="${jid}-code" name="invite_code" class="join-code-input" type="text" maxlength="240" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K9M-4PQ or invite link" aria-describedby="${jid}-error" required>
+          <small class="field-error" id="${jid}-error" role="alert"></small>
+        </div>
+        <div class="field field-wide">
+          <div class="join-preview-slot" id="${jid}-preview" aria-live="polite"></div>
+        </div>
+        <div class="field field-wide" id="${jid}-pending" hidden></div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" type="button" id="${jid}-cancel">Cancel</button>
+          <button class="button button-primary" type="submit" id="${jid}-submit" disabled>Join group</button>
+        </div>
+      </form>`;
 
-    const form = dialog.querySelector('#ipon-join-form');
-    const input = dialog.querySelector('#ipon-join-code-input');
-    const errorEl = dialog.querySelector('#ipon-join-code-error');
-    const previewSlot = dialog.querySelector('#ipon-join-preview-slot');
-    const pendingWrap = dialog.querySelector('#ipon-join-pending-wrap');
-    const submitBtn = dialog.querySelector('#ipon-join-submit');
-    const closeBtn = dialog.querySelector('#ipon-join-close');
-    const cancelBtn = dialog.querySelector('#ipon-join-cancel');
+    const form = container.querySelector(`#${jid}-form`);
+    const input = container.querySelector(`#${jid}-code`);
+    const errorEl = container.querySelector(`#${jid}-error`);
+    const previewSlot = container.querySelector(`#${jid}-preview`);
+    const pendingWrap = container.querySelector(`#${jid}-pending`);
+    const submitBtn = container.querySelector(`#${jid}-submit`);
+    const cancelBtn = container.querySelector(`#${jid}-cancel`);
+
+    let latestPreview = null;
+    let previewSeq = 0;
+
+    const setCodeError = (msg) => {
+      if (!input || !errorEl) return;
+      input.setCustomValidity(msg || '');
+      if (msg) {
+        input.setAttribute('aria-invalid', 'true');
+        errorEl.textContent = msg;
+      } else {
+        input.removeAttribute('aria-invalid');
+        errorEl.textContent = '';
+      }
+    };
+
+    const renderEmptyPreview = () => {
+      latestPreview = null;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Join group';
+      }
+      if (previewSlot) {
+        previewSlot.innerHTML = '<div class="join-preview-placeholder"><p>Enter the 6-character code or link from your admin to preview the group.</p></div>';
+      }
+    };
 
     async function loadOwnPendingJoinRequests() {
       if (!pendingWrap) return;
@@ -11614,32 +11693,6 @@
       }
     }
 
-    let latestPreview = null;
-    let previewSeq = 0;
-
-    const setCodeError = (msg) => {
-      if (!input || !errorEl) return;
-      input.setCustomValidity(msg || '');
-      if (msg) {
-        input.setAttribute('aria-invalid', 'true');
-        errorEl.textContent = msg;
-      } else {
-        input.removeAttribute('aria-invalid');
-        errorEl.textContent = '';
-      }
-    };
-
-    const renderEmptyPreview = () => {
-      latestPreview = null;
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Join group';
-      }
-      if (previewSlot) {
-        previewSlot.innerHTML = '<div class="join-preview-placeholder"><p>Ask your group admin for their 6-character code or invite link, then enter it above to preview the group.</p></div>';
-      }
-    };
-
     async function runPreview(rawVal) {
       const code = extractInviteCode(rawVal);
       if (code.length < 6) {
@@ -11647,7 +11700,7 @@
         renderEmptyPreview();
         return;
       }
-      if (rawVal.trim().length > 10) {
+      if (rawVal.trim().length > 10 && input) {
         input.value = formatInviteCode(code);
       }
       const seq = ++previewSeq;
@@ -11672,8 +11725,8 @@
         const pendingReq = Boolean(res.pending_request);
         const countLabel = `${Number(res.member_count || 0)} ${Number(res.member_count || 0) === 1 ? 'member' : 'members'}`;
         const policyBadge = res.require_approval
-          ? '<span class="badge status-pending">Admin approval required</span>'
-          : '<span class="badge status-confirmed">Instant join</span>';
+          ? '<span class="status status-pending">Admin approval required</span>'
+          : '<span class="status status-confirmed">Instant join</span>';
         const statusExtra = alreadyMember
           ? `<div class="join-preview-state"><span>You already belong to this group.</span><button class="button button-secondary button-sm" type="button" data-join-switch-existing="${escapeHtml(res.group_id)}">Open workspace</button></div>`
           : pendingReq
@@ -11684,7 +11737,7 @@
           previewSlot.innerHTML = `
             <div class="join-preview-card">
               <div class="join-preview-head">
-                ${avatarMarkup(res.group_avatar_url, res.group_name, 'avatar-lg')}
+                ${avatarMarkup(res.group_avatar_url, res.group_name, 'avatar-md')}
                 <div class="join-preview-info">
                   <strong>${escapeHtml(res.group_name || 'Savings group')}</strong>
                   <small>${escapeHtml(countLabel)} · ${escapeHtml(inviteExpirySummary(res.expires_at))}</small>
@@ -11699,7 +11752,7 @@
             setBusy(btn, true, 'Switching…');
             try {
               const switched = await switchActiveGroup(res.group_id);
-              dialog.close();
+              onCancel?.();
               window.location.href = homeForRole(switched?.role || res.existing_role || 'MEMBER');
             } catch (err) {
               toast(friendlyError(err), 'error');
@@ -11719,34 +11772,31 @@
       }
     }
 
-    const handleClose = () => {
+    cancelBtn?.addEventListener('click', () => {
       clearPendingJoinCode();
-      dialog.close();
-    };
-    closeBtn.onclick = handleClose;
-    cancelBtn.onclick = handleClose;
-    dialog.onclick = (event) => { if (event.target === dialog) handleClose(); };
+      onCancel?.();
+    });
 
-    input.oninput = () => {
+    input?.addEventListener('input', () => {
       const code = extractInviteCode(input.value);
       if (input.value.length <= 7) {
         input.value = formatInviteCode(code);
       }
       runPreview(input.value);
-    };
-    input.onblur = () => {
+    });
+    input?.addEventListener('blur', () => {
       const code = extractInviteCode(input.value);
       if (code.length > 0) input.value = formatInviteCode(code);
       if (code.length > 0 && code.length < 6) {
         setCodeError('Enter all 6 characters of your group code.');
       }
-    };
-    form.onsubmit = async (event) => {
+    });
+    form?.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const code = extractInviteCode(input.value);
+      const code = extractInviteCode(input?.value || '');
       if (code.length !== 6) {
         setCodeError('Enter a valid 6-character group code.');
-        input.focus();
+        input?.focus();
         return;
       }
       if (!latestPreview?.valid) {
@@ -11759,12 +11809,12 @@
         clearPendingJoinCode();
         if (result?.status === 'PENDING_APPROVAL') {
           toast(result.message || 'Join request sent!');
-          dialog.close();
+          onCancel?.();
           if (typeof onJoined === 'function') await onJoined(result);
           return;
         }
         toast(result?.message || `Joined "${result?.group_name || 'savings group'}"!`);
-        dialog.close();
+        onCancel?.();
         if (typeof onJoined === 'function') {
           await onJoined(result);
           return;
@@ -11776,19 +11826,69 @@
       } finally {
         setBusy(submitBtn, false);
       }
-    };
+    });
 
     const seed = extractInviteCode(initialCode);
-    input.value = seed ? formatInviteCode(seed) : '';
+    if (input) input.value = seed ? formatInviteCode(seed) : '';
     setCodeError('');
-    if (!dialog.open) dialog.showModal();
     loadOwnPendingJoinRequests().catch(() => { });
     if (seed.length === 6) {
-      await runPreview(seed);
+      runPreview(seed);
     } else {
       renderEmptyPreview();
-      input.focus();
     }
+
+    return {
+      focus: () => input?.focus(),
+      setCode: (code) => {
+        const clean = extractInviteCode(code);
+        if (input) input.value = clean ? formatInviteCode(clean) : '';
+        runPreview(clean);
+      }
+    };
+  }
+
+  async function openJoinGroupDialog({ initialCode = '', onJoined = null } = {}) {
+    if (currentProfile?.role === 'SUPER_ADMIN') {
+      toast('Super administrator accounts cannot join savings groups.', 'error');
+      return;
+    }
+    let dialog = document.getElementById('ipon-join-group-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog join-group-dialog" id="ipon-join-group-dialog" aria-labelledby="ipon-join-dialog-title">
+          <div class="form-dialog-sheet join-group-sheet">
+            <header class="form-dialog-header">
+              <div>
+                <h2 id="ipon-join-dialog-title">Join savings group</h2>
+                <p id="ipon-join-dialog-copy">Enter a 6-character code or paste an invite link.</p>
+              </div>
+              <button class="dialog-close" type="button" id="ipon-join-close" aria-label="Close join dialog">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div id="ipon-join-mount"></div>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('ipon-join-group-dialog');
+    }
+
+    const handleClose = () => {
+      clearPendingJoinCode();
+      if (dialog.open) dialog.close();
+    };
+    const closeBtn = dialog.querySelector('#ipon-join-close');
+    if (closeBtn) closeBtn.onclick = handleClose;
+    dialog.onclick = (event) => { if (event.target === dialog) handleClose(); };
+
+    const mountEl = dialog.querySelector('#ipon-join-mount');
+    const panel = mountJoinGroupPanel(mountEl, {
+      initialCode,
+      onCancel: handleClose,
+      onJoined
+    });
+    if (!dialog.open) dialog.showModal();
+    if (!extractInviteCode(initialCode)) panel?.focus();
   }
 
   let resumedJoinOnce = false;
@@ -11825,7 +11925,7 @@
     auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry, createRealtimeChannel,
     canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, inviteShareUrl,
     setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
-    generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, openJoinGroupDialog, mountInviteCodePanel, renderJoinRequestsQueue,
+    generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
     get profile() { return currentProfile; }
   };
 })();

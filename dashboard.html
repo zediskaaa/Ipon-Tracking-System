@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261117-136">
+  <link rel="stylesheet" href="css/app.css?v=20261117-138">
   <link rel="stylesheet" href="css/hero-plates.css?v=20261117-87">
   <script src="js/config.js?v=20261117-76"></script>
 </head>
@@ -550,7 +550,7 @@
                 <path d="M19 8v6M22 11h-6" />
               </svg></span>
             <span class="group-hub-card-copy">
-              <strong>Invite members <span class="badge status-pending" id="group-hub-requests-badge" hidden>0 pending</span></strong>
+              <strong>Invite members <span class="status status-pending" id="group-hub-requests-badge" hidden>0 pending</span></strong>
               <small>Share an invite link / QR code or send email invites.</small>
             </span>
             <svg class="group-hub-arrow" viewBox="0 0 24 24" aria-hidden="true">
@@ -604,7 +604,6 @@
       <footer class="group-hub-footer">
         <button class="button danger-action" type="button" id="group-hub-delete-btn">Delete group</button>
         <div class="group-hub-footer-actions">
-          <button class="button button-secondary" type="button" id="group-hub-join-another">Join group</button>
           <button class="button button-secondary" type="button" id="group-hub-create-another">+ New workspace</button>
           <button class="button button-primary" type="button" id="done-group-hub-dialog">Done</button>
         </div>
@@ -655,17 +654,19 @@
             <path d="m6 6 12 12M18 6 6 18" />
           </svg></button>
       </header>
+      <div class="group-create-mode-bar" id="group-workspace-mode-field">
+        <span class="field-label" id="group-workspace-mode-label">Workspace option</span>
+        <div class="segmented-control workspace-mode-segmented" id="group-workspace-mode-tabs" role="radiogroup" aria-label="Workspace option">
+          <button class="segmented-control-btn is-active" type="button" data-workspace-mode="GROUP" role="radio" aria-checked="true">Group savings</button>
+          <button class="segmented-control-btn" type="button" data-workspace-mode="SOLO" role="radio" aria-checked="false">Solo savings</button>
+          <button class="segmented-control-btn" type="button" data-workspace-mode="JOIN" id="group-mode-join-tab" role="radio" aria-checked="false" hidden>Join via code</button>
+        </div>
+        <small class="field-help" id="group-workspace-mode-help">Save together with invited members and treasurers. Standard 90-day and 6-month inactivity retention applies.</small>
+      </div>
+      <div id="group-create-join-mount" hidden></div>
       <form id="group-form" class="form-grid">
         <input type="hidden" name="mode" value="edit">
         <input type="hidden" name="workspace_mode" id="group-workspace-mode-input" value="GROUP">
-        <div class="field field-wide" id="group-workspace-mode-field">
-          <span class="field-label">Saving mode</span>
-          <div class="segmented-control workspace-mode-segmented" id="group-workspace-mode-tabs" role="radiogroup" aria-label="Saving mode">
-            <button class="segmented-control-btn is-active" type="button" data-workspace-mode="GROUP" role="radio" aria-checked="true">Group savings</button>
-            <button class="segmented-control-btn" type="button" data-workspace-mode="SOLO" role="radio" aria-checked="false">Solo savings</button>
-          </div>
-          <small class="field-help" id="group-workspace-mode-help">Save together with invited members and treasurers. Standard 90-day and 6-month inactivity retention applies.</small>
-        </div>
         <div class="field group-dp-field">
           <span class="field-label" id="group-dp-label">Group picture (optional)</span>
           <div class="group-dp-picker">
@@ -964,12 +965,12 @@
       </div>
     </div>
   </dialog>
-  <script src="js/core.js?v=20261117-113"></script><script src="js/policy.js?v=20261116-07"></script>
+  <script src="js/core.js?v=20261117-115"></script><script src="js/policy.js?v=20261116-07"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
   <script src="js/messages.js?v=20261117-32"></script>
-  <script src="js/dashboard.js?v=20261117-90"></script>
+  <script src="js/dashboard.js?v=20261117-92"></script>
 </body>
 
 </html>

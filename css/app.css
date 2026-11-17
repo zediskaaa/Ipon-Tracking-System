@@ -13181,10 +13181,28 @@ html[data-theme="dark"] .batch-reset-check {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   width: 100%;
 }
+.workspace-mode-segmented.is-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .workspace-mode-segmented .segmented-control-btn {
   justify-content: center;
   min-height: 36px;
   font-size: 13px;
+  white-space: nowrap;
+}
+.group-create-mode-bar {
+  display: grid;
+  gap: 7px;
+  padding: 18px 22px 0;
+  font-family: Arial, sans-serif;
+}
+.group-create-mode-bar[hidden],
+#group-create-join-mount[hidden],
+#group-form[hidden] {
+  display: none !important;
+}
+#group-create-join-mount .join-group-panel-form {
+  padding: 16px 22px 22px;
 }
 .group-solo-banner {
   display: grid;
@@ -14593,17 +14611,19 @@ html[data-theme="dark"] .budget-add-btn:hover {
    GROUP INVITE LINKS, 6-CHAR JOIN CODES & QR CODE UI
    ============================================================ */
 .group-invite-dialog .form-dialog-sheet {
-  width: min(680px, calc(100vw - 24px));
+  width: min(720px, calc(100vw - 24px));
 }
 .invite-mode-tabs {
-  display: inline-grid;
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
+  width: calc(100% - 44px);
   padding: 4px;
-  margin: 0 24px 16px;
+  margin: 14px 22px 0;
   border-radius: 12px;
   border: 1px solid rgba(20, 45, 43, .12);
   background: rgba(20, 62, 48, .06);
+  font-family: Arial, sans-serif;
 }
 .invite-mode-tab {
   min-height: 36px;
@@ -14612,7 +14632,7 @@ html[data-theme="dark"] .budget-add-btn:hover {
   border-radius: 9px;
   background: transparent;
   color: var(--muted);
-  font: 700 13.5px/1.2 inherit;
+  font: 700 13.5px/1.2 Arial, sans-serif;
   cursor: pointer;
   transition: background .16s ease, color .16s ease, box-shadow .16s ease;
 }
@@ -14633,8 +14653,9 @@ html[data-theme="dark"] .budget-add-btn:hover {
 }
 .invite-link-panel {
   display: grid;
-  gap: 18px;
-  padding: 0 24px 24px;
+  gap: 16px;
+  padding: 16px 22px 22px;
+  font-family: Arial, sans-serif;
 }
 .invite-link-panel[hidden] {
   display: none !important;
@@ -14644,7 +14665,7 @@ html[data-theme="dark"] .budget-add-btn:hover {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 150px;
+  min-height: 292px;
   border: 1px dashed rgba(20, 45, 43, .16);
   border-radius: 16px;
   color: var(--muted);
@@ -14723,24 +14744,6 @@ html[data-theme="dark"] .budget-add-btn:hover {
 
 .invite-code-active-card {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-  padding: 18px;
-  border-radius: 16px;
-  border: 1px solid rgba(20, 45, 43, .13);
-  background: linear-gradient(180deg, #fcfaf5 0%, #f7f3e8 100%);
-}
-.invite-qr-stage {
-  display: grid;
-  gap: 10px;
-  justify-items: center;
-}
-.invite-qr-plate {
-  padding: 10px;
-  border-radius: 14px;
-  background: #ffffff;
-  border: 1px solid rgba(20, 45, 43, .14);
   box-shadow: 0 8px 20px rgba(10, 32, 24, .08);
 }
 .invite-qr-svg {
@@ -14788,28 +14791,44 @@ html[data-theme="dark"] .budget-add-btn:hover {
   display: grid;
   gap: 12px;
   min-width: 0;
+  font-family: Arial, sans-serif;
 }
 .invite-meta-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
+  align-items: center;
 }
 .invite-url-copy-row {
   display: flex;
   gap: 8px;
-  align-items: stretch;
+  align-items: center;
   min-width: 0;
 }
 .invite-url-copy-row input {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
   font-family: Consolas, "Courier New", monospace;
   font-size: 12.5px;
+  text-overflow: ellipsis;
+}
+.invite-url-copy-row .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-height: 40px;
+  padding: 0 14px;
+  font-family: Arial, sans-serif;
 }
 .invite-share-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+.invite-share-actions .button {
+  white-space: nowrap;
+  font-family: Arial, sans-serif;
 }
 
 .invite-dialog-requests-wrap {
@@ -14899,8 +14918,28 @@ html[data-theme="dark"] .budget-add-btn:hover {
 }
 
 /* Join Group Dialog */
+.join-group-dialog {
+  width: min(440px, calc(100vw - 24px));
+}
+.join-group-dialog .form-dialog-sheet,
 .join-group-sheet {
-  width: min(490px, calc(100vw - 24px));
+  width: 100%;
+}
+.join-group-dialog .form-dialog-header {
+  padding: 18px 20px 14px;
+}
+.join-group-dialog .form-dialog-header h2 {
+  font-size: 24px;
+}
+.join-group-dialog .form-dialog-header p {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.join-group-panel-form {
+  padding: 16px 20px 20px !important;
+  gap: 12px;
+  font-family: Arial, sans-serif;
 }
 .join-code-input {
   font: 700 20px/1.2 Consolas, "Courier New", monospace !important;
@@ -14908,21 +14947,31 @@ html[data-theme="dark"] .budget-add-btn:hover {
   text-transform: uppercase;
   text-align: center;
 }
-#ipon-join-code-error {
+.join-code-input::placeholder {
+  text-transform: none;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  opacity: .68;
+}
+.join-group-panel-form .field-error {
   display: block;
   min-height: 18px;
+  font-family: Arial, sans-serif;
 }
 .join-preview-slot {
-  min-height: 82px;
+  min-height: 70px;
+  font-family: Arial, sans-serif;
 }
 .join-preview-placeholder,
 .join-preview-loading,
 .join-preview-error,
 .join-preview-card {
-  padding: 14px 16px;
+  padding: 13px 15px;
   border-radius: 14px;
   border: 1px solid rgba(20, 45, 43, .12);
   background: #f8f4ea;
+  font-family: Arial, sans-serif;
 }
 .join-preview-placeholder p,
 .join-preview-error p {
@@ -15213,11 +15262,19 @@ html[data-theme="dark"] .auth-join-code-row input {
 }
 
 @media (max-width: 720px) {
+  .group-create-mode-bar {
+    padding: 14px 16px 0;
+  }
+  .workspace-mode-segmented.is-three .segmented-control-btn {
+    padding: 6px 6px;
+    font-size: 12px;
+  }
   .invite-mode-tabs {
-    margin: 0 16px 14px;
+    width: calc(100% - 32px);
+    margin: 12px 16px 0;
   }
   .invite-link-panel {
-    padding: 0 16px 18px;
+    padding: 14px 16px 18px;
   }
   .invite-code-create-grid,
   .invite-code-active-card {
@@ -15236,6 +15293,7 @@ html[data-theme="dark"] .auth-join-code-row input {
   }
   .invite-url-copy-row {
     flex-direction: column;
+    align-items: stretch;
   }
   .settings-join-requests-head {
     flex-wrap: wrap;
