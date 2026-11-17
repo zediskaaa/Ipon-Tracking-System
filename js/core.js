@@ -8313,6 +8313,7 @@
       .replace(/\u20B1/g, 'PHP ')
       .replace(/[\u2013\u2014]/g, '-')
       .replace(/\u2026/g, '...')
+      .replace(/\u00B7/g, ' - ')
       .replace(/[\r\n\t]+/g, ' ')
       .replace(/[^\x20-\x7E]/g, ' ')
       .replace(/\s{2,}/g, ' ')
@@ -8326,107 +8327,470 @@
       .replace(/\)/g, '\\)');
   }
 
-  function wrapPdfLine(text, maxChars = 90) {
+  function pdfCharWidthRatio(ch) {
+    if (ch >= '0' && ch <= '9') return 0.556;
+    if (" .,:;|!ilIjtfr'()[]-".includes(ch) || ch === '"') return 0.29;
+    if ('MWm@%&'.includes(ch)) return 0.86;
+    if (ch >= 'A' && ch <= 'Z') return 0.67;
+    return 0.52;
+  }
+
+  function pdfTextWidth(text, size = 9, bold = false) {
+    const clean = pdfSafeText(text);
+    let sum = 0;
+    for (let i = 0; i < clean.length; i++) sum += pdfCharWidthRatio(clean[i]);
+    return sum * size * (bold ? 1.05 : 1.0);
+  }
+
+  function truncatePdfText(text, maxWidth, size = 9, bold = false) {
+    const clean = pdfSafeText(text);
+    if (!clean || pdfTextWidth(clean, size, bold) <= maxWidth) return clean;
+    let lo = 0;
+    let hi = clean.length;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (pdfTextWidth(clean.slice(0, mid) + '...', size, bold) <= maxWidth) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo > 0 ? clean.slice(0, lo).trimEnd() + '...' : '';
+  }
+
+  function wrapPdfToWidth(text, maxWidth, size = 9, bold = false) {
     const clean = pdfSafeText(text);
     if (!clean) return [];
-    if (clean.length <= maxChars) return [clean];
+    if (pdfTextWidth(clean, size, bold) <= maxWidth) return [clean];
     const words = clean.split(' ');
-    const lines = [];
-    let cur = '';
+    const out = [];
+    let line = '';
     for (const w of words) {
-      if (!cur) cur = w;
-      else if (cur.length + 1 + w.length <= maxChars) cur += ' ' + w;
-      else { lines.push(cur); cur = w; }
-    }
-    if (cur) lines.push(cur);
-    return lines;
-  }
-
-  function extractPrintablePdfLines(fallbackTitle) {
-    const lines = [];
-    const title = pdfSafeText(document.querySelector('.page-header h1')?.textContent || fallbackTitle || 'myIPON Report');
-    const sub = pdfSafeText(document.querySelector('.page-header p:not(.eyebrow)')?.textContent || '');
-    lines.push({ text: title, bold: true, size: 16, gapAfter: 4 });
-    if (sub) wrapPdfLine(sub, 92).forEach((l) => lines.push({ text: l, size: 9.5, gapAfter: 2 }));
-    lines.push({ text: 'Generated ' + isoDate(), size: 9, gapAfter: 10, rule: true });
-
-    const stats = [...document.querySelectorAll('.stats-grid .stat-card')];
-    if (stats.length) {
-      const pairs = stats.map((c) => {
-        const k = pdfSafeText(c.querySelector('span')?.textContent || '');
-        const v = pdfSafeText(c.querySelector('strong')?.textContent || '');
-        return k && v ? k + ': ' + v : '';
-      }).filter(Boolean);
-      if (pairs.length) {
-        wrapPdfLine(pairs.join('  |  '), 88).forEach((l) => lines.push({ text: l, bold: true, size: 10, gapAfter: 3 }));
-        lines.push({ text: '', size: 6, gapAfter: 6 });
+      const candidate = line ? line + ' ' + w : w;
+      if (pdfTextWidth(candidate, size, bold) <= maxWidth) {
+        line = candidate;
+      } else if (!line) {
+        out.push(truncatePdfText(w, maxWidth, size, bold));
+      } else {
+        out.push(line);
+        line = pdfTextWidth(w, size, bold) <= maxWidth ? w : truncatePdfText(w, maxWidth, size, bold);
       }
     }
+    if (line) out.push(line);
+    return out;
+  }
 
+  function extractCleanNodeText(node) {
+    if (!node) return '';
+    if (typeof node.childNodes !== 'object' || !node.childNodes?.length) {
+      return pdfSafeText(node.textContent || '');
+    }
+    const skipTags = new Set(['BUTTON', 'SVG', 'SCRIPT', 'STYLE']);
+    const parts = [];
+    const walk = (cur) => {
+      if (!cur) return;
+      if (cur.nodeType === 3) {
+        const t = pdfSafeText(cur.textContent || '');
+        if (t) parts.push(t);
+        return;
+      }
+      if (cur.hidden) return;
+      const tag = String(cur.tagName || '').toUpperCase();
+      if (skipTags.has(tag)) return;
+      const cls = cur.className && typeof cur.className === 'string' ? cur.className : '';
+      if (/\b(info-tip-btn|payout-copy-btn|table-actions|wallet-count-error|archive-row-actions)\b/.test(cls)) return;
+      if (cur.childNodes?.length) {
+        for (const child of cur.childNodes) walk(child);
+      } else {
+        const t = pdfSafeText(cur.textContent || '');
+        if (t) parts.push(t);
+      }
+    };
+    walk(node);
+    return pdfSafeText(parts.join(' '));
+  }
+
+  function extractPdfCell(cell) {
+    if (!cell) return { primary: '', secondary: '' };
+    const inputEl = cell.querySelector?.('input');
+    if (inputEl) {
+      const raw = String(inputEl.value ?? '').trim();
+      const num = Number(raw);
+      return { primary: raw && Number.isFinite(num) ? pdfSafeText(money(num)) : '-', secondary: '' };
+    }
+    if (!cell.childNodes?.length) {
+      return { primary: pdfSafeText(cell.textContent || ''), secondary: '' };
+    }
+    const lines = [];
+    const pushLine = (txt) => {
+      const clean = pdfSafeText(txt);
+      if (clean && lines[lines.length - 1] !== clean) lines.push(clean);
+    };
+    const walkCell = (node) => {
+      if (!node || node.hidden) return;
+      if (node.nodeType === 3) {
+        pushLine(node.textContent || '');
+        return;
+      }
+      const tag = String(node.tagName || '').toUpperCase();
+      if (['BUTTON', 'SVG', 'SCRIPT', 'STYLE', 'INPUT'].includes(tag)) return;
+      const cls = typeof node.className === 'string' ? node.className : '';
+      if (/\b(info-tip-btn|payout-copy-btn|table-actions|wallet-count-error|archive-warn-note)\b/.test(cls)) return;
+      if (tag === 'SMALL' || /\b(field-help|payout-meta|payout-line-sub)\b/.test(cls)) {
+        const subText = extractCleanNodeText(node);
+        if (subText) pushLine(subText);
+        return;
+      }
+      if (['DIV', 'P', 'STRONG', 'SPAN', 'B'].includes(tag) && node.children?.length === 0) {
+        pushLine(node.textContent || '');
+        return;
+      }
+      if (['DIV', 'P'].includes(tag)) {
+        const blockTxt = extractCleanNodeText(node);
+        if (blockTxt) pushLine(blockTxt);
+        return;
+      }
+      if (node.childNodes?.length) {
+        for (const ch of node.childNodes) walkCell(ch);
+      } else {
+        pushLine(node.textContent || '');
+      }
+    };
+    for (const child of cell.childNodes) walkCell(child);
+    if (!lines.length) {
+      return { primary: extractCleanNodeText(cell) || '-', secondary: '' };
+    }
+    return {
+      primary: lines[0] || '-',
+      secondary: lines.slice(1).join(' - ')
+    };
+  }
+
+  function isNumericPdfCol(headerText, sampleValues) {
+    const h = String(headerText || '').toLowerCase();
+    if (/amount|in|out|balance|pending|count|variance|additions|deductions|expenses|net|required|confirmed|outstanding/.test(h)) {
+      return true;
+    }
+    return sampleValues.some((v) => /^(?:[+-]?PHP\s|[+-]?[0-9]|-$)/.test(String(v || '').trim()));
+  }
+
+  function collectPrintablePdfModel(fallbackTitle) {
+    const title = extractCleanNodeText(document.querySelector('.page-header h1')) || pdfSafeText(fallbackTitle || 'Reports');
+    const subtitle = extractCleanNodeText(document.querySelector('.page-header p:not(.eyebrow)'));
+    const workspaceName = pdfSafeText(
+      document.querySelector('#dashboard-group-name, .group-bar-title, .sidebar-user-info small')?.textContent
+      || currentProfile?.group_name
+      || ''
+    );
+
+    const kpis = [...document.querySelectorAll('.stats-grid .stat-card')].map((card) => ({
+      label: extractCleanNodeText(card.querySelector?.('span')),
+      value: extractCleanNodeText(card.querySelector?.('strong'))
+    })).filter((k) => k.label && k.value);
+
+    const walletSummaryWrap = document.getElementById('wallet-summary-cards');
+    const walletCards = walletSummaryWrap && !walletSummaryWrap.hidden
+      ? [...walletSummaryWrap.querySelectorAll('.wallet-summary-card')].filter((c) => !c.hidden).map((c) => ({
+        label: extractCleanNodeText(c.querySelector?.('.wallet-card-label')),
+        share: extractCleanNodeText(c.querySelector?.('.wallet-card-top small')),
+        value: extractCleanNodeText(c.querySelector?.('strong')),
+        meta: extractCleanNodeText(c.querySelector?.('strong + small'))
+      })).filter((w) => w.label && w.value)
+      : [];
+
+    const sections = [];
     document.querySelectorAll('.panel, .report-panel').forEach((panel) => {
       if (panel.hidden || panel.style?.display === 'none') return;
-      const heading = pdfSafeText(panel.querySelector('.panel-header h2')?.textContent || '');
-      if (heading) lines.push({ text: heading, bold: true, size: 12, gapAfter: 4 });
-      const rows = [...panel.querySelectorAll('table.data-table tr')];
-      rows.forEach((tr, rowIdx) => {
-        if (tr.hidden) return;
-        const cells = [...tr.children].filter((cell) => !cell.classList?.contains('table-actions') && !cell.querySelector?.('.table-actions'));
-        const txt = cells.map((c) => pdfSafeText(c.textContent || '')).filter(Boolean).join('  |  ');
-        if (!txt) return;
-        const isHeader = rowIdx === 0 || Boolean(tr.closest('thead'));
-        wrapPdfLine(txt, 94).forEach((l) => lines.push({ text: l, bold: isHeader, size: isHeader ? 9 : 8.8, gapAfter: 2 }));
-      });
-      if (!rows.length) {
-        panel.querySelectorAll('.archive-row').forEach((row) => {
-          const t = pdfSafeText(row.textContent || '');
-          wrapPdfLine(t, 94).forEach((l) => lines.push({ text: l, size: 9, gapAfter: 2 }));
+      const panelHead = panel.querySelector?.('.panel-header');
+      const heading = extractCleanNodeText(panel.querySelector?.('.panel-header h2'));
+      const sub = pdfSafeText(panelHead?.getAttribute?.('data-print-meta') || '') || extractCleanNodeText(panel.querySelector?.('.panel-header p'));
+      const allTrs = [...(panel.querySelectorAll?.('table.data-table tr') || [])].filter((tr) => !tr.hidden);
+      const hasTable = allTrs.length > 0;
+      const hasCanvasOnly = !hasTable && Boolean(panel.querySelector?.('canvas'));
+      if (hasCanvasOnly) return;
+
+      if (hasTable) {
+        if (!allTrs.length) return;
+        let headers = [];
+        const bodyRows = [];
+        allTrs.forEach((tr, idx) => {
+          const cells = [...(tr.children || [])].filter((c) => {
+            const cls = typeof c.className === 'string' ? c.className : '';
+            return !/\b(table-actions|row-actions)\b/.test(cls) && !c.querySelector?.('.table-actions');
+          });
+          if (!cells.length) return;
+          const inHead = Boolean(tr.closest?.('thead')) || cells.every((c) => String(c.tagName || '').toUpperCase() === 'TH');
+          if (inHead || (idx === 0 && !headers.length && !tr.closest?.('tbody'))) {
+            headers = cells.map((c) => extractCleanNodeText(c));
+          } else {
+            const firstColSpan = Number(cells[0]?.getAttribute?.('colspan') || 0);
+            if (cells.length === 1 && firstColSpan > 1) return;
+            const parsed = cells.map((c) => extractPdfCell(c));
+            const rowCls = typeof tr.className === 'string' ? tr.className : '';
+            const isTotal = /\bwallet-total-row\b/.test(rowCls) || /^total$/i.test(parsed[0]?.primary || '');
+            bodyRows.push({ cells: parsed, isTotal });
+          }
         });
+        if (headers.length || bodyRows.length) {
+          sections.push({ kind: 'table', title: heading, subtitle: sub, headers, rows: bodyRows });
+        }
+        return;
       }
-      lines.push({ text: '', size: 6, gapAfter: 6 });
+
+      const archiveRows = [...panel.querySelectorAll('.archive-row')].map((row) => ({
+        title: extractCleanNodeText(row.querySelector?.('strong')),
+        meta: extractCleanNodeText(row.querySelector?.('small'))
+      })).filter((r) => r.title);
+      if (archiveRows.length) {
+        sections.push({ kind: 'list', title: heading, subtitle: sub, items: archiveRows });
+      }
     });
-    return lines;
+
+    return { title, subtitle, workspaceName, kpis, walletCards, sections };
   }
 
-  function buildPdfBytesFromLines(lineEntries) {
+  function buildStyledPdfBytes(model) {
+    const pageW = 612;
     const pageH = 792;
-    const topY = 748;
-    const bottomY = 48;
-    const pages = [];
-    let current = [];
-    let y = topY;
-    for (const entry of lineEntries) {
-      const step = (entry.size || 10) + (entry.gapAfter ?? 4);
-      if (y - step < bottomY && current.length) {
-        pages.push(current);
-        current = [];
-        y = topY;
+    const marginX = 42;
+    const contentW = pageW - marginX * 2; // 528
+    const bottomLimit = 52;
+
+    const pages = [[]];
+    const pushOp = (op) => pages[pages.length - 1].push(op);
+    let y = 758;
+
+    const rgbFill = (r, g, b) => `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg`;
+    const rgbStroke = (r, g, b) => `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} RG`;
+    const drawRect = (x, rectY, w, h, fillRgb, strokeRgb = null, lineW = 0.6) => {
+      let s = 'q ';
+      if (fillRgb) s += rgbFill(...fillRgb) + ' ';
+      if (strokeRgb) s += rgbStroke(...strokeRgb) + ` ${lineW} w `;
+      s += `${x.toFixed(1)} ${rectY.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re `;
+      s += fillRgb && strokeRgb ? 'B' : fillRgb ? 'f' : 'S';
+      s += ' Q';
+      pushOp(s);
+    };
+    const drawLine = (x1, y1, x2, y2, strokeRgb, lineW = 0.6) => {
+      pushOp(`q ${rgbStroke(...strokeRgb)} ${lineW} w ${x1.toFixed(1)} ${y1.toFixed(1)} m ${x2.toFixed(1)} ${y2.toFixed(1)} l S Q`);
+    };
+    const drawText = (text, x, textY, { size = 9, bold = false, color = [0.078, 0.176, 0.169] } = {}) => {
+      const clean = pdfSafeText(text);
+      if (!clean) return;
+      const font = bold ? '/F2' : '/F1';
+      pushOp(`BT ${rgbFill(...color)} ${font} ${size.toFixed(1)} Tf 1 0 0 1 ${x.toFixed(1)} ${textY.toFixed(1)} Tm (${pdfEscapeLiteral(clean)}) Tj ET`);
+    };
+    const startNewPage = () => {
+      pages.push([]);
+      y = 748;
+      drawText(model.title + ' (continued)', marginX, y, { size: 9.5, bold: true, color: [0.35, 0.42, 0.39] });
+      const dateStr = 'Generated ' + dateLabel(isoDate(), { month: 'short', day: 'numeric', year: 'numeric' });
+      drawText(dateStr, marginX + contentW - pdfTextWidth(dateStr, 8.5, false), y, { size: 8.5, color: [0.45, 0.48, 0.46] });
+      y -= 8;
+      drawLine(marginX, y, marginX + contentW, y, [0.84, 0.67, 0.33], 1.2);
+      y -= 16;
+    };
+    const ensureSpace = (needed) => {
+      if (y - needed < bottomLimit) {
+        startNewPage();
+        return true;
       }
-      if (entry.text) current.push({ ...entry, y });
-      if (entry.rule) current.push({ ruleY: y - 4 });
-      y -= step;
+      return false;
+    };
+
+    // Header Banner (Forest Emerald + Gold accent)
+    const bannerH = 54;
+    const bannerY = y - bannerH;
+    drawRect(marginX, bannerY, contentW, bannerH, [0.043, 0.204, 0.157]);
+    drawRect(marginX, bannerY, contentW, 2.5, [0.835, 0.671, 0.329]);
+    drawText('MYIPON FINANCIAL RECORD', marginX + 16, bannerY + 36, { size: 7.5, bold: true, color: [0.91, 0.78, 0.48] });
+    drawText(truncatePdfText(model.title, 330, 17, true), marginX + 16, bannerY + 14, { size: 17, bold: true, color: [1, 0.99, 0.96] });
+
+    const rightTop = model.workspaceName ? truncatePdfText(model.workspaceName, 170, 9.5, true) : 'Official Statement';
+    const rightBot = 'Generated ' + dateLabel(isoDate(), { month: 'short', day: 'numeric', year: 'numeric' });
+    drawText(rightTop, marginX + contentW - 16 - pdfTextWidth(rightTop, 9.5, true), bannerY + 32, { size: 9.5, bold: true, color: [0.96, 0.92, 0.85] });
+    drawText(rightBot, marginX + contentW - 16 - pdfTextWidth(rightBot, 8.5, false), bannerY + 16, { size: 8.5, color: [0.80, 0.88, 0.84] });
+    y = bannerY - 12;
+
+    if (model.subtitle) {
+      wrapPdfToWidth(model.subtitle, contentW, 8.8, false).forEach((ln) => {
+        drawText(ln, marginX, y, { size: 8.8, color: [0.35, 0.40, 0.38] });
+        y -= 11.5;
+      });
+      y -= 4;
     }
-    if (current.length || !pages.length) pages.push(current);
+
+    // 4-Column Summary KPI Cards
+    if (model.kpis.length) {
+      const gap = 8;
+      const count = model.kpis.length;
+      const cardW = (contentW - gap * (count - 1)) / count;
+      const cardH = 42;
+      ensureSpace(cardH + 10);
+      const cardY = y - cardH;
+      model.kpis.forEach((kpi, idx) => {
+        const cx = marginX + idx * (cardW + gap);
+        const isLast = idx === count - 1;
+        drawRect(cx, cardY, cardW, cardH, isLast ? [0.92, 0.96, 0.935] : [0.98, 0.965, 0.933], isLast ? [0.68, 0.82, 0.74] : [0.87, 0.84, 0.78], 0.7);
+        if (isLast) drawRect(cx, cardY, 2.5, cardH, [0.08, 0.33, 0.24]);
+        drawText(truncatePdfText(kpi.label.toUpperCase(), cardW - 16, 7.2, true), cx + 9, cardY + 26, { size: 7.2, bold: true, color: [0.37, 0.40, 0.38] });
+        drawText(truncatePdfText(kpi.value, cardW - 16, 11.5, true), cx + 9, cardY + 9, { size: 11.5, bold: true, color: isLast ? [0.043, 0.204, 0.157] : [0.078, 0.176, 0.169] });
+      });
+      y = cardY - 14;
+    }
+
+    // Wallet Summary Strip (optional 2-3 cards)
+    if (model.walletCards.length) {
+      const gap = 8;
+      const count = model.walletCards.length;
+      const cardW = (contentW - gap * (count - 1)) / count;
+      const cardH = 40;
+      ensureSpace(cardH + 10);
+      const cardY = y - cardH;
+      model.walletCards.forEach((wc, idx) => {
+        const cx = marginX + idx * (cardW + gap);
+        drawRect(cx, cardY, cardW, cardH, [0.99, 0.985, 0.97], [0.88, 0.85, 0.80], 0.6);
+        drawText(truncatePdfText(wc.label, cardW - 60, 7.8, true), cx + 9, cardY + 26, { size: 7.8, bold: true, color: [0.30, 0.36, 0.34] });
+        if (wc.share) {
+          const st = truncatePdfText(wc.share, 56, 7, false);
+          drawText(st, cx + cardW - 9 - pdfTextWidth(st, 7, false), cardY + 26, { size: 7, color: [0.10, 0.38, 0.28] });
+        }
+        drawText(truncatePdfText(wc.value, cardW - 18, 10.5, true), cx + 9, cardY + 10, { size: 10.5, bold: true, color: [0.078, 0.176, 0.169] });
+      });
+      y = cardY - 14;
+    }
+
+    // Structured Sections (Tables + Lists)
+    const statusColor = (text) => {
+      const u = String(text || '').trim().toUpperCase();
+      if (/^(PAID|OVERPAID|CONFIRMED|APPROVED)$/.test(u)) return [0.08, 0.37, 0.26];
+      if (/^(UNPAID|REJECTED|VOIDED)$/.test(u)) return [0.68, 0.22, 0.20];
+      if (/^(PARTIALLY PAID|PENDING|EXEMPT)$/.test(u)) return [0.64, 0.43, 0.08];
+      return [0.078, 0.176, 0.169];
+    };
+
+    model.sections.forEach((sec) => {
+      if (sec.kind === 'list') {
+        ensureSpace(44);
+        drawRect(marginX, y - 9, 3, 11, [0.08, 0.33, 0.24]);
+        drawText(sec.title || 'Summary', marginX + 8, y - 8, { size: 11, bold: true });
+        y -= 18;
+        sec.items.forEach((it) => {
+          ensureSpace(28);
+          drawRect(marginX, y - 24, contentW, 24, [0.99, 0.985, 0.97], [0.89, 0.86, 0.81], 0.5);
+          drawText(truncatePdfText(it.title, contentW - 18, 9, true), marginX + 9, y - 10, { size: 9, bold: true });
+          if (it.meta) drawText(truncatePdfText(it.meta, contentW - 18, 7.8, false), marginX + 9, y - 20, { size: 7.8, color: [0.38, 0.42, 0.40] });
+          y -= 28;
+        });
+        y -= 8;
+        return;
+      }
+
+      const headers = sec.headers;
+      const rows = sec.rows;
+      const colCount = Math.max(headers.length, rows[0]?.cells.length || 0);
+      if (!colCount) return;
+
+      ensureSpace(58);
+      if (sec.title) {
+        drawRect(marginX, y - 9, 3, 11, [0.08, 0.33, 0.24]);
+        drawText(sec.title, marginX + 8, y - 8, { size: 11, bold: true });
+        if (sec.subtitle) {
+          const subT = truncatePdfText(sec.subtitle, 280, 7.8, false);
+          drawText(subT, marginX + contentW - pdfTextWidth(subT, 7.8, false), y - 7.5, { size: 7.8, color: [0.42, 0.46, 0.44] });
+        }
+        y -= 16;
+      }
+
+      // Compute column alignments & proportional widths across 528pt
+      const colMeta = Array.from({ length: colCount }, (_, cIdx) => {
+        const hdr = headers[cIdx] || '';
+        const samples = rows.map((r) => r.cells[cIdx]?.primary || '');
+        const numeric = cIdx > 0 && isNumericPdfCol(hdr, samples);
+        const isStatusCol = /status/i.test(hdr);
+        const weight = cIdx === 0 ? 2.1 : isStatusCol ? 1.15 : 1.0;
+        return { hdr, numeric, isStatusCol, weight };
+      });
+      const totalWeight = colMeta.reduce((s, m) => s + m.weight, 0);
+      const colWidths = colMeta.map((m) => (m.weight / totalWeight) * contentW);
+      const colXs = [];
+      let curX = marginX;
+      colWidths.forEach((w) => { colXs.push(curX); curX += w; });
+
+      const drawTableHeader = () => {
+        const hdrH = 20;
+        drawRect(marginX, y - hdrH, contentW, hdrH, [0.945, 0.922, 0.878]);
+        drawLine(marginX, y - hdrH, marginX + contentW, y - hdrH, [0.80, 0.76, 0.69], 0.8);
+        colMeta.forEach((meta, cIdx) => {
+          const cw = colWidths[cIdx];
+          const label = truncatePdfText(meta.hdr, cw - 8, 7.8, true);
+          const xPos = meta.numeric
+            ? colXs[cIdx] + cw - 5 - pdfTextWidth(label, 7.8, true)
+            : colXs[cIdx] + 6;
+          drawText(label, xPos, y - 13, { size: 7.8, bold: true, color: [0.22, 0.28, 0.25] });
+        });
+        y -= hdrH;
+      };
+
+      drawTableHeader();
+
+      rows.forEach((row, rIdx) => {
+        const hasSub = row.cells.some((c) => Boolean(c.secondary));
+        const rowH = hasSub ? 27 : 19;
+        if (ensureSpace(rowH + 6)) {
+          drawTableHeader();
+        }
+        const rowTop = y;
+        const rowBot = y - rowH;
+        if (row.isTotal) {
+          drawRect(marginX, rowBot, contentW, rowH, [0.91, 0.953, 0.925]);
+          drawLine(marginX, rowTop, marginX + contentW, rowTop, [0.55, 0.71, 0.62], 0.7);
+        } else if (rIdx % 2 === 1) {
+          drawRect(marginX, rowBot, contentW, rowH, [0.988, 0.98, 0.964]);
+        } else {
+          drawRect(marginX, rowBot, contentW, rowH, [1, 1, 1]);
+        }
+        drawLine(marginX, rowBot, marginX + contentW, rowBot, [0.90, 0.875, 0.83], 0.45);
+
+        row.cells.forEach((cell, cIdx) => {
+          const meta = colMeta[cIdx] || { numeric: false, isStatusCol: false };
+          const cw = colWidths[cIdx] || 60;
+          const boldCell = row.isTotal || cIdx === 0 || meta.isStatusCol;
+          const color = meta.isStatusCol ? statusColor(cell.primary) : [0.078, 0.176, 0.169];
+          const primary = truncatePdfText(cell.primary || '-', cw - 10, 8.6, boldCell);
+          const primaryY = hasSub ? rowTop - 11.5 : rowTop - 12.5;
+          const xPos = meta.numeric
+            ? colXs[cIdx] + cw - 5 - pdfTextWidth(primary, 8.6, boldCell)
+            : colXs[cIdx] + 6;
+          drawText(primary, xPos, primaryY, { size: 8.6, bold: boldCell, color });
+          if (cell.secondary) {
+            const subTxt = truncatePdfText(cell.secondary, cw - 10, 7.2, false);
+            const sxPos = meta.numeric
+              ? colXs[cIdx] + cw - 5 - pdfTextWidth(subTxt, 7.2, false)
+              : colXs[cIdx] + 6;
+            drawText(subTxt, sxPos, rowTop - 21.5, { size: 7.2, color: [0.40, 0.45, 0.43] });
+          }
+        });
+        y = rowBot;
+      });
+      y -= 14;
+    });
+
+    // Footer on every page
+    const totalPages = pages.length;
+    pages.forEach((ops, idx) => {
+      const footerLine = `myIPON - Page ${idx + 1} of ${totalPages} - Verified Group Record`;
+      const fx = marginX + (contentW - pdfTextWidth(footerLine, 7.6, false)) / 2;
+      ops.push(`q ${rgbStroke(0.87, 0.84, 0.78)} 0.5 w ${marginX.toFixed(1)} 36.0 m ${(marginX + contentW).toFixed(1)} 36.0 l S Q`);
+      ops.push(`BT ${rgbFill(0.45, 0.48, 0.46)} /F1 7.6 Tf 1 0 0 1 ${fx.toFixed(1)} 23.0 Tm (${pdfEscapeLiteral(footerLine)}) Tj ET`);
+    });
 
     const objs = [];
     const pageObjIds = [];
-    const baseObj = 5; // 1=Catalog, 2=Pages, 3=Helvetica, 4=Helvetica-Bold
-    pages.forEach((pageLines, idx) => {
+    const baseObj = 5;
+    pages.forEach((ops, idx) => {
       const pageId = baseObj + idx * 2;
       const contentId = pageId + 1;
       pageObjIds.push(pageId);
-      const streamParts = ['BT'];
-      for (const item of pageLines) {
-        if (item.ruleY) {
-          streamParts.push(`ET 0.75 w 42 ${item.ruleY.toFixed(1)} m 570 ${item.ruleY.toFixed(1)} l S BT`);
-          continue;
-        }
-        const fontRef = item.bold ? '/F2' : '/F1';
-        const fontSize = (item.size || 10).toFixed(1);
-        streamParts.push(`${fontRef} ${fontSize} Tf 1 0 0 1 42 ${item.y.toFixed(1)} Tm (${pdfEscapeLiteral(item.text)}) Tj`);
-      }
-      streamParts.push('ET');
-      const streamBody = streamParts.join('\n');
-      objs.push({ id: pageId, body: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 ${pageH}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>` });
+      const streamBody = ops.join('\n');
+      objs.push({ id: pageId, body: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>` });
       objs.push({ id: contentId, body: `<< /Length ${streamBody.length} >>\nstream\n${streamBody}\nendstream` });
     });
 
@@ -8456,7 +8820,7 @@
   async function savePrintablePdf(jobName = 'myIPON-report') {
     const safeBase = normalizeDownloadFileName(jobName, 'myIPON-report').replace(/\.pdf$/i, '');
     const fileName = `${safeBase}.pdf`;
-    const bytes = buildPdfBytesFromLines(extractPrintablePdfLines(jobName));
+    const bytes = buildStyledPdfBytes(collectPrintablePdfModel(jobName));
     const blob = new Blob([bytes], { type: 'application/pdf' });
     const bgPlugin = getBackgroundNotificationsPlugin();
     if (typeof bgPlugin?.downloadFile === 'function') {
