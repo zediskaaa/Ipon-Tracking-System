@@ -10320,9 +10320,29 @@ html[data-theme="dark"] .msg-friends-hero {
   color: #ffffff;
   font: 700 13.5px/1.2 Arial, sans-serif;
   box-shadow: 0 4px 12px rgba(14, 36, 29, .18);
+  transition: opacity .15s ease, background-color .15s ease, box-shadow .15s ease;
 }
-.msg-settings-save-btn:hover {
+.msg-settings-save-btn:hover:not(:disabled) {
   background: #183b30;
+}
+.msg-settings-save-btn:disabled,
+.button-primary:disabled {
+  opacity: .44;
+  cursor: not-allowed;
+  box-shadow: none;
+  pointer-events: auto;
+}
+.msg-settings-save-btn:disabled:hover,
+.button-primary:disabled:hover {
+  box-shadow: none;
+}
+.msg-privacy-form #msg-settings-error {
+  margin: 0;
+  color: var(--red);
+}
+html[data-theme="dark"] .msg-privacy-form #msg-settings-error {
+  color: #ffa59e;
+}
 }
 .msg-settings-save-btn:not(.is-busy)::before {
   content: "";

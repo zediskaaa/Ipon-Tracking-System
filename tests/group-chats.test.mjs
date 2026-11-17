@@ -691,3 +691,218 @@ test('group chat avatar upload, preview, replace & clear work end-to-end in crea
   assert.match(css, /\.msg-text,\s*\.msg-deleted-note\s*\{[^}]*overflow-wrap:\s*anywhere;/s);
   assert.match(css, /\.msg-conv-preview\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s);
 });
+
+test('messaging privacy username error shows inline under input in red & save buttons stay disabled until modified', async () => {
+  const messagesJs = read('js/messages.js');
+  const coreJs = read('js/core.js');
+  const meId = '11111111-1111-4111-8111-111111111111';
+  const anaId = '44444444-4444-4444-8444-444444444444';
+
+  const makeEl = (tag = 'div') => {
+    const attrs = new Map();
+    const classes = new Set();
+    const listeners = new Map();
+    const el = {
+      tagName: String(tag).toUpperCase(),
+      innerHTML: '',
+      textContent: '',
+      value: '',
+      checked: false,
+      hidden: false,
+      disabled: false,
+      open: false,
+      title: '',
+      dataset: {},
+      style: { setProperty() { }, removeProperty() { } },
+      classList: {
+        add: (...c) => c.forEach((x) => classes.add(x)),
+        remove: (...c) => c.forEach((x) => classes.delete(x)),
+        toggle: (c, f) => (f === undefined ? (classes.has(c) ? classes.delete(c) : classes.add(c)) : (f ? classes.add(c) : classes.delete(c))),
+        contains: (c) => classes.has(c)
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k) ?? null,
+      removeAttribute: (k) => attrs.delete(k),
+      toggleAttribute: (k, force) => {
+        if (force === undefined) { if (attrs.has(k)) attrs.delete(k); else attrs.set(k, ''); }
+        else if (force) attrs.set(k, '');
+        else attrs.delete(k);
+      },
+      hasAttribute: (k) => attrs.has(k),
+      setCustomValidity(m) { this._validity = String(m || ''); },
+      focus() { },
+      select() { },
+      click() { },
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      appendChild(n) { return n; },
+      insertAdjacentHTML() { },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      closest: () => null,
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      removeEventListener() { },
+      async _emit(ev, evObj = {}) {
+        for (const fn of (listeners.get(ev) || [])) {
+          await fn(evObj);
+        }
+      }
+    };
+    return el;
+  };
+
+  const els = new Map();
+  const getEl = (id) => {
+    if (!els.has(id)) {
+      const el = makeEl(id.includes('dialog') ? 'dialog' : 'div');
+      el.id = id;
+      els.set(id, el);
+    }
+    return els.get(id);
+  };
+  const docListeners = new Map();
+
+  // Prepare privacy form controls inside VM
+  const unameInput = getEl('msg-set-username');
+  unameInput.value = 'alex_r';
+  const bioInput = getEl('msg-set-bio');
+  bioInput.value = '';
+  const friendReq = getEl('msg-set-friend-req');
+  friendReq.value = 'EVERYONE';
+  const msgReq = getEl('msg-set-msg-req');
+  msgReq.value = 'EVERYONE';
+  const showOnline = makeEl('input'); showOnline.checked = true;
+  const showLastSeen = makeEl('input'); showLastSeen.checked = true;
+  const readReceipts = makeEl('input'); readReceipts.checked = true;
+  const privacyForm = getEl('msg-privacy-form');
+  privacyForm.elements = {
+    username: unameInput,
+    bio: bioInput,
+    allow_friend_requests: friendReq,
+    allow_message_requests: msgReq,
+    show_online: showOnline,
+    show_last_seen: showLastSeen,
+    read_receipts: readReceipts
+  };
+  const saveBtn = getEl('msg-settings-save');
+  saveBtn.disabled = true;
+
+  const ctx = {
+    window: null,
+    FormData: class {
+      get(k) { return privacyForm.elements[k]?.value ?? ''; }
+    },
+    document: {
+      visibilityState: 'visible',
+      hasFocus: () => true,
+      documentElement: makeEl('html'),
+      body: Object.assign(makeEl('body'), { dataset: { page: 'dashboard' } }),
+      getElementById: (id) => getEl(id),
+      createElement: (t) => makeEl(t),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener(ev, fn) {
+        if (!docListeners.has(ev)) docListeners.set(ev, []);
+        docListeners.get(ev).push(fn);
+      },
+      removeEventListener() { }
+    },
+    navigator: { userAgent: 'Mozilla/5.0' },
+    location: { origin: 'https://myipon.example', search: '' },
+    CSS: { escape: (v) => String(v) },
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
+    setTimeout, clearTimeout,
+    setInterval: () => 0,
+    clearInterval() { },
+    requestAnimationFrame: (fn) => fn(),
+    addEventListener() { },
+    removeEventListener() { },
+    console,
+    Ipon: {
+      profile: { id: meId, role: 'MEMBER', status: 'ACTIVE', full_name: 'Alex Rivera', username: 'alex_r', chat_privacy: { show_online: true } },
+      escapeHtml: (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+      initials: (n) => String(n || 'U').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join(''),
+      isUserOnline: () => false,
+      bindAvatarFallbacks() { },
+      syncPresenceDots() { },
+      syncMessagesBadges() { },
+      setBusy(btn, busy) {
+        if (!btn) return;
+        btn.classList.toggle('is-busy', Boolean(busy));
+        btn.disabled = busy ? true : btn.dataset?.dirtyLocked === 'true';
+      },
+      setFieldError(ctrl, msg) {
+        ctrl?.toggleAttribute?.('aria-invalid', Boolean(msg));
+        const err = getEl(`${ctrl.id}-error`);
+        err.textContent = msg;
+        err.hidden = !msg;
+      },
+      toast() { },
+      confirmAction: async () => true,
+      friendlyError: (e) => String(e?.message || e || 'Error'),
+      dateLabel: (d) => String(d || ''),
+      rpc: async (name) => {
+        if (name === 'get_conversations') return [];
+        if (name === 'get_social_overview') {
+          return {
+            me: { id: meId, full_name: 'Alex Rivera', username: 'alex_r', bio: '', chat_privacy: { show_online: true, show_last_seen: true, read_receipts: true } },
+            friends: [],
+            incoming_requests: [],
+            sent_requests: [],
+            blocked_users: []
+          };
+        }
+        if (name === 'search_social_users') {
+          return [{ id: anaId, full_name: 'Ana Cruz', username: 'zediskaaa' }];
+        }
+        if (name === 'update_social_profile_and_privacy') {
+          const err = new Error('That username is already taken.');
+          err.code = '23505';
+          throw err;
+        }
+        return {};
+      },
+      client: {
+        from: () => ({ select: () => ({ like: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }),
+        channel: () => ({ on() { return this; }, subscribe() { return this; }, send: async () => 'ok' }),
+        removeChannel() { }
+      }
+    }
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(messagesJs, ctx);
+  await ctx.window.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', full_name: 'Alex Rivera' });
+
+  // Open privacy settings modal -> Save button starts disabled until a change is made
+  await Promise.all((docListeners.get('click') || []).map((fn) => fn({
+    target: { closest: (sel) => (sel === '#msg-privacy-btn' ? getEl('msg-privacy-btn') : null) }
+  })));
+  assert.equal(saveBtn.disabled, true, 'Save messaging settings button must be disabled when nothing changed');
+  assert.match(getEl('msg-settings-body').innerHTML, /id="msg-settings-save"[^>]*disabled/);
+
+  // Changing a field enables Save; reverting disables Save again
+  bioInput.value = 'Updated bio';
+  await privacyForm._emit('input');
+  assert.equal(saveBtn.disabled, false, 'Save button enables when bio changes');
+  bioInput.value = '';
+  await privacyForm._emit('input');
+  assert.equal(saveBtn.disabled, true, 'Save button disables again when reverted');
+
+  // Submitting a taken username shows RED inline error under #msg-set-username, NOT at bottom #msg-settings-error
+  unameInput.value = 'zediskaaa';
+  await privacyForm._emit('input');
+  await privacyForm.onsubmit({ preventDefault() { } });
+  assert.equal(getEl('msg-set-username-error').hidden, false);
+  assert.equal(getEl('msg-set-username-error').textContent, 'That username is already taken.');
+  assert.equal(unameInput.hasAttribute('aria-invalid'), true);
+  assert.equal(getEl('msg-set-username-help').hidden, true);
+  assert.equal(getEl('msg-settings-error').hidden, true, 'Taken username error must not be pushed to bottom green box');
+  assert.equal(saveBtn.disabled, true, 'Save button stays locked while known taken username is entered');
+
+  // Shared helper bindDirtySaveForm exists and works in core.js
+  assert.match(coreJs, /function bindDirtySaveForm\(/);
+  assert.match(coreJs, /bindDirtySaveForm/);
+});

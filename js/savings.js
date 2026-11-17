@@ -407,12 +407,17 @@
     render();
   }
 
+  const goalDirty = Ipon.bindDirtySaveForm?.(form, form?.querySelector('[type="submit"]'), {
+    getActive: () => Boolean(form?.elements?.goal_id?.value)
+  });
+
   function resetForm() {
     form.reset();
     form.elements.goal_id.value = '';
     form.elements.status.value = 'ACTIVE';
     document.getElementById('goal-form-title').textContent = 'Add goal';
     document.getElementById('goal-form-copy').textContent = 'Create a shared savings target.';
+    goalDirty?.reset();
   }
 
   function openGoalDialog(goal, overrides) {
@@ -432,6 +437,7 @@
       if (Number(overrides.target_amount) > 0) form.elements.target_amount.value = overrides.target_amount;
       if (overrides.target_date) form.elements.target_date.value = overrides.target_date;
     }
+    goalDirty?.reset();
     dialog.showModal();
     form.elements.title.focus();
   }

@@ -914,6 +914,7 @@
       administratorForm.elements.group_name.value = ownedGroup?.name || '';
       document.getElementById('administrator-dialog-title').textContent = 'Edit user';
       administratorForm.querySelector('[type="submit"]').textContent = 'Save changes';
+      adminFormDirty?.reset();
       administratorDialog.showModal();
       return;
     }
@@ -963,7 +964,11 @@
     userPasswordForm.elements.password.focus();
   }
 
-  document.getElementById('create-administrator').addEventListener('click', () => { resetAdministratorForm(); administratorDialog.showModal(); administratorForm.elements.first_name.focus(); });
+  const adminFormDirty = Ipon.bindDirtySaveForm?.(administratorForm, administratorForm?.querySelector('[type="submit"]'), {
+    getActive: () => Boolean(administratorForm?.elements?.user_id?.value)
+  });
+
+  document.getElementById('create-administrator').addEventListener('click', () => { resetAdministratorForm(); adminFormDirty?.reset(); administratorDialog.showModal(); administratorForm.elements.first_name.focus(); });
   document.getElementById('administrator-dialog-close').addEventListener('click', () => administratorDialog.close());
   document.getElementById('administrator-dialog-cancel').addEventListener('click', () => administratorDialog.close());
   administratorDialog.addEventListener('close', resetAdministratorForm);

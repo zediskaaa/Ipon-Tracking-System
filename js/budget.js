@@ -777,7 +777,16 @@
       splitErrorEl.hidden = !errMsg;
       splitErrorEl.setAttribute('aria-hidden', errMsg ? 'false' : 'true');
     }
-    if (splitSubmitBtn) splitSubmitBtn.disabled = !exactHundred;
+    const cfg = overview?.config || { needs_pct: 50, wants_pct: 30, savings_pct: 20 };
+    const splitDirty = exactHundred && (
+      Math.abs(needsVal - Number(cfg.needs_pct ?? 50)) >= 0.005 ||
+      Math.abs(wantsVal - Number(cfg.wants_pct ?? 30)) >= 0.005 ||
+      Math.abs(savingsVal - Number(cfg.savings_pct ?? 20)) >= 0.005
+    );
+    if (splitSubmitBtn) {
+      splitSubmitBtn.disabled = !splitDirty;
+      splitSubmitBtn.title = !exactHundred ? '' : (splitDirty ? '' : 'Change a percentage before saving.');
+    }
     return exactHundred;
   }
 

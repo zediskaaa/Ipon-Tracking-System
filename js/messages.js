@@ -510,6 +510,27 @@
     if (pickBtn) pickBtn.textContent = hasEffectivePic ? 'Change photo' : 'Upload photo';
     const removeBtn = document.getElementById('msg-group-edit-pic-remove');
     if (removeBtn) removeBtn.hidden = !hasEffectivePic;
+    syncGroupEditDirtyState();
+  }
+
+  function syncGroupEditDirtyState() {
+    const conv = state.activeThread?.conversation;
+    const saveBtn = document.getElementById('msg-group-edit-save');
+    if (!conv || !isGroupConv(conv) || !saveBtn) return;
+    const titleVal = String(document.getElementById('msg-group-edit-title')?.value ?? conv.title ?? '').trim().replace(/\s+/g, ' ');
+    const descVal = String(document.getElementById('msg-group-edit-desc')?.value ?? conv.description ?? '').trim();
+    const origTitle = String(conv.title || '').trim().replace(/\s+/g, ' ');
+    const origDesc = String(conv.description || '').trim();
+    const dirty = titleVal !== origTitle
+      || descVal !== origDesc
+      || Boolean(state.groupEditAvatarDataUrl)
+      || Boolean(state.groupEditAvatarClear && conv.avatar_url);
+    if (saveBtn.dataset) {
+      if (dirty) delete saveBtn.dataset.dirtyLocked;
+      else saveBtn.dataset.dirtyLocked = 'true';
+    }
+    if (!saveBtn.classList?.contains?.('is-busy')) saveBtn.disabled = !dirty;
+    saveBtn.title = dirty ? '' : 'Make a change before saving.';
   }
 
   function highlightMatches(escapedText, query) {
@@ -2953,7 +2974,7 @@
               </div>
               <div class="msg-group-edit-actions">
                 <button type="button" class="button button-secondary button-sm" id="msg-group-edit-cancel">Cancel</button>
-                <button type="submit" class="button button-primary button-sm" id="msg-group-edit-save">Save</button>
+                <button type="submit" class="button button-primary button-sm" id="msg-group-edit-save" disabled data-dirty-locked="true" title="Make a change before saving.">Save</button>
               </div>
             </form>` : ''}
         </div>`
@@ -4220,7 +4241,7 @@
         <label class="msg-switch-row toggle-switch-row field-wide"><span><strong>Send &amp; receive read receipts</strong><small>Turning this off hides Seen indicators on accepted conversations</small></span><input type="checkbox" class="toggle-switch-input" name="read_receipts"${priv.read_receipts !== false ? ' checked' : ''}></label>
         <p class="mfa-message field-wide" id="msg-settings-error" role="alert" hidden></p>
         <div class="form-actions field-wide">
-          <button type="submit" class="button button-primary msg-settings-save-btn" id="msg-settings-save">Save messaging settings</button>
+          <button type="submit" class="button button-primary msg-settings-save-btn" id="msg-settings-save" disabled data-dirty-locked="true" title="Make a change before saving.">Save messaging settings</button>
         </div>
       </form>
       <section class="msg-blocked-section">
@@ -4235,30 +4256,124 @@
     const form = document.getElementById('msg-privacy-form');
     const unameInput = document.getElementById('msg-set-username');
     const unameHelp = document.getElementById('msg-set-username-help');
+    const unameErr = document.getElementById('msg-set-username-error');
     const bioInput = document.getElementById('msg-set-bio');
     const bioCounter = document.getElementById('msg-set-bio-count');
+    const saveBtn = document.getElementById('msg-settings-save');
+    const initialUsername = String(me.username || '').trim().toLowerCase();
+    let usernameCheckTimer = null;
+    let usernameCheckSeq = 0;
+    let takenUsername = '';
 
-    const validateUsernameLive = () => {
+    const setUsernameInlineError = (message = '') => {
+      const msg = String(message || '').trim();
+      if (unameHelp) unameHelp.hidden = Boolean(msg);
+      if (typeof ipon().setFieldError === 'function' && unameInput) {
+        ipon().setFieldError(unameInput, msg);
+      } else if (unameErr) {
+        unameInput?.toggleAttribute?.('aria-invalid', Boolean(msg));
+        unameErr.textContent = msg;
+        unameErr.hidden = !msg;
+      }
+      unameInput?.setCustomValidity?.(msg);
+    };
+
+    const readPrivacySnapshot = () => JSON.stringify({
+      u: String(unameInput?.value || '').trim().toLowerCase(),
+      b: String(bioInput?.value || ''),
+      fr: String(form.elements?.allow_friend_requests?.value || 'EVERYONE'),
+      mr: String(form.elements?.allow_message_requests?.value || 'EVERYONE'),
+      on: Boolean(form.elements?.show_online?.checked),
+      ls: Boolean(form.elements?.show_last_seen?.checked),
+      rr: Boolean(form.elements?.read_receipts?.checked)
+    });
+    const baselineSnapshot = readPrivacySnapshot();
+
+    const syncPrivacySaveState = () => {
+      const dirty = readPrivacySnapshot() !== baselineSnapshot;
+      const val = String(unameInput?.value || '').trim().toLowerCase();
+      const formatOk = !val || /^[a-z0-9_]{3,24}$/.test(val);
+      const isKnownTaken = Boolean(val && takenUsername === val);
+      const canSave = dirty && formatOk && !isKnownTaken;
+      if (saveBtn) {
+        if (saveBtn.dataset) {
+          if (canSave) delete saveBtn.dataset.dirtyLocked;
+          else saveBtn.dataset.dirtyLocked = 'true';
+        }
+        if (!saveBtn.classList?.contains?.('is-busy')) saveBtn.disabled = !canSave;
+        saveBtn.title = !dirty
+          ? 'Make a change before saving.'
+          : (isKnownTaken ? 'Choose an available username before saving.' : (!formatOk ? 'Fix the username format first.' : ''));
+      }
+      return dirty;
+    };
+
+    const checkUsernameAvailability = async (val, seq) => {
+      if (!val || val === initialUsername || !/^[a-z0-9_]{3,24}$/.test(val)) return;
+      try {
+        const hits = await ipon().rpc('search_social_users', { p_query: `@${val}`, p_limit: 5 });
+        if (seq !== usernameCheckSeq) return;
+        const currentVal = String(unameInput?.value || '').trim().toLowerCase();
+        if (currentVal !== val) return;
+        const matchedOther = Array.isArray(hits) && hits.some(
+          (u) => String(u?.username || '').trim().toLowerCase() === val && String(u?.id || '') !== String(me.id || '')
+        );
+        if (matchedOther) {
+          takenUsername = val;
+          setUsernameInlineError('That username is already taken.');
+          syncPrivacySaveState();
+        }
+      } catch {
+        // Non-blocking pre-check; authoritative validation remains on submit
+      }
+    };
+
+    const validateUsernameLive = ({ checkAvailability = false } = {}) => {
       if (!unameInput) return true;
       const val = unameInput.value.trim().toLowerCase();
       unameInput.value = val;
+      clearTimeout(usernameCheckTimer);
+      if (takenUsername && takenUsername !== val) takenUsername = '';
       const ok = !val || /^[a-z0-9_]{3,24}$/.test(val);
-      if (unameHelp) unameHelp.hidden = !ok;
-      ipon().setFieldError(unameInput, ok ? '' : 'Use 3–24 lowercase letters, numbers, or underscores.');
-      return ok;
+      if (!ok) {
+        setUsernameInlineError('Use 3–24 lowercase letters, numbers, or underscores.');
+      } else if (val && takenUsername === val) {
+        setUsernameInlineError('That username is already taken.');
+      } else {
+        setUsernameInlineError('');
+        if (checkAvailability && val && val !== initialUsername) {
+          const seq = ++usernameCheckSeq;
+          usernameCheckTimer = setTimeout(() => checkUsernameAvailability(val, seq), 260);
+        } else {
+          usernameCheckSeq += 1;
+        }
+      }
+      syncPrivacySaveState();
+      return ok && takenUsername !== val;
     };
-    unameInput?.addEventListener('input', validateUsernameLive);
-    unameInput?.addEventListener('blur', validateUsernameLive);
+
+    unameInput?.addEventListener('input', () => validateUsernameLive({ checkAvailability: true }));
+    unameInput?.addEventListener('blur', () => validateUsernameLive({ checkAvailability: true }));
     bioInput?.addEventListener('input', () => {
       if (bioCounter) bioCounter.textContent = `${bioInput.value.length} / 240 characters`;
     });
+    form?.addEventListener('input', syncPrivacySaveState);
+    form?.addEventListener('change', syncPrivacySaveState);
+    syncPrivacySaveState();
 
     form.onsubmit = async (ev) => {
       ev.preventDefault();
-      if (!validateUsernameLive()) return;
-      const saveBtn = document.getElementById('msg-settings-save');
+      if (!syncPrivacySaveState()) return;
+      if (!validateUsernameLive()) {
+        unameInput?.focus();
+        return;
+      }
       const errEl = document.getElementById('msg-settings-error');
-      errEl.hidden = true;
+      if (errEl) {
+        errEl.hidden = true;
+        errEl.textContent = '';
+        delete errEl.dataset.tone;
+      }
       const fd = new FormData(form);
       const nextPrivacy = {
         show_online: Boolean(form.elements.show_online.checked),
@@ -4280,10 +4395,22 @@
         await refreshOverview();
         dialog.close();
       } catch (err) {
-        errEl.textContent = ipon().friendlyError(err);
-        errEl.hidden = false;
+        const msg = ipon().friendlyError(err);
+        const isUsernameErr = err?.code === '23505' || /username|taken/i.test(msg);
+        if (isUsernameErr && unameInput) {
+          const val = unameInput.value.trim().toLowerCase();
+          if (/taken|already/i.test(msg) && val) takenUsername = val;
+          setUsernameInlineError(msg);
+          syncPrivacySaveState();
+          unameInput.focus();
+        } else if (errEl) {
+          errEl.dataset.tone = 'error';
+          errEl.textContent = msg;
+          errEl.hidden = false;
+        }
       } finally {
         ipon().setBusy(saveBtn, false);
+        syncPrivacySaveState();
       }
     };
 
@@ -4774,6 +4901,11 @@
       }
       if (ev.target.closest?.('#msg-group-edit-cancel')) {
         const editForm = document.getElementById('msg-group-edit-form');
+        const conv = state.activeThread?.conversation;
+        const titleInput = document.getElementById('msg-group-edit-title');
+        const descInput = document.getElementById('msg-group-edit-desc');
+        if (titleInput && conv) titleInput.value = conv.title || '';
+        if (descInput && conv) descInput.value = conv.description || '';
         state.groupEditAvatarDataUrl = null;
         state.groupEditAvatarClear = false;
         syncGroupEditAvatarUi();
@@ -5566,6 +5698,7 @@
           ipon().toast(ipon().friendlyError(error), 'error');
         } finally {
           ipon().setBusy?.(saveBtn, false);
+          syncGroupEditDirtyState();
         }
       }
     });
@@ -5613,6 +5746,9 @@
           errEl.setAttribute?.('aria-hidden', err ? 'false' : 'true');
         }
         ev.target.setAttribute?.('aria-invalid', err ? 'true' : 'false');
+        syncGroupEditDirtyState();
+      } else if (ev.target?.id === 'msg-group-edit-desc') {
+        syncGroupEditDirtyState();
       } else if (ev.target?.classList?.contains('msg-video-seek')) {
         const player = ev.target.closest('.msg-video-player');
         const video = player?.querySelector('video');

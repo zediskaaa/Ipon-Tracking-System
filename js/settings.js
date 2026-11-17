@@ -49,6 +49,7 @@
     const { data, error } = await Ipon.client.from('contribution_settings').select('default_amount,deadline_day').eq('effective_month', `${month}-01`).maybeSingle();
     if (error) throw error;
     if (effectiveMonth.value === month) { defaultAmount.value = data?.default_amount ?? ''; deadlineDay.value = data?.deadline_day ?? 28; }
+    contribDirty?.reset();
   }
 
   async function loadJoinRequests(overview = null) {
@@ -143,7 +144,30 @@
       <td data-label="Actions"><button class="icon-action" type="button" data-save-access="${profile.user_id}">Save</button></td>
     </tr>`;
     }).join('') : '<tr><td colspan="4" class="empty-state">No member or treasurer login accounts in this group.</td></tr>';
+    accessBody.querySelectorAll?.('[data-save-access]')?.forEach((btn) => {
+      btn.disabled = true;
+      if (btn.dataset) btn.dataset.dirtyLocked = 'true';
+      btn.title = 'Make a change before saving.';
+    });
   }
+
+  accessBody?.addEventListener('change', (event) => {
+    const row = event.target?.closest?.('tr');
+    const saveBtn = row?.querySelector?.('[data-save-access]');
+    if (!saveBtn) return;
+    const id = saveBtn.dataset.saveAccess;
+    const orig = accessProfiles.get(id);
+    if (!orig) return;
+    const roleVal = row.querySelector('[data-field="role"]')?.value;
+    const statusVal = row.querySelector('[data-field="status"]')?.value;
+    const dirty = roleVal !== orig.role || statusVal !== orig.status;
+    if (saveBtn.dataset) {
+      if (dirty) delete saveBtn.dataset.dirtyLocked;
+      else saveBtn.dataset.dirtyLocked = 'true';
+    }
+    if (!saveBtn.classList.contains('is-busy')) saveBtn.disabled = !dirty;
+    saveBtn.title = dirty ? '' : 'Make a change before saving.';
+  });
 
   groupSelect?.addEventListener('change', async () => {
     const nextGroupId = groupSelect.value;
@@ -169,6 +193,7 @@
       : 'Set your monthly contribution amount to participate in this group.';
     document.getElementById('save-settings-contributor').textContent = isEdit ? 'Save amount' : 'Confirm & join';
     settingsContributorAmount.value = String(currentSettingsAdminAmount || 100);
+    settingsContributorDirty?.reset();
     settingsContributorDialog.showModal();
     settingsContributorAmount.focus();
     settingsContributorAmount.select();
@@ -305,6 +330,7 @@
     Ipon.setBusy(button, true);
     try {
       await Ipon.rpc('set_contribution_setting', { p_effective_month: `${values.get('effective_month')}-01`, p_default_amount: Number(values.get('default_amount')), p_deadline_day: Number(values.get('deadline_day')) });
+      contribDirty?.reset();
       Ipon.toast('Contribution schedule saved.');
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
@@ -335,6 +361,16 @@
   let pendingQrDataUrl = null;
   let savedQrDataUrl = null;
   let clearQrFlag = false;
+  const contribForm = document.getElementById('contribution-setting-form');
+  const contribDirty = Ipon.bindDirtySaveForm?.(contribForm, contribForm?.querySelector('[type="submit"]'));
+  const paymentDirty = Ipon.bindDirtySaveForm?.(paymentForm, paymentForm?.querySelector('[type="submit"]'), {
+    getExtraState: () => ({ pendingQrDataUrl: pendingQrDataUrl || '', clearQrFlag: Boolean(clearQrFlag) })
+  });
+  const settingsContributorDirty = Ipon.bindDirtySaveForm?.(
+    settingsContributorForm,
+    document.getElementById('save-settings-contributor'),
+    { getActive: () => document.getElementById('save-settings-contributor')?.textContent?.trim() === 'Save amount' }
+  );
 
   function renderSettingsQrPreview() {
     if (!settingsQrPreview) return;
@@ -361,6 +397,7 @@
     paymentForm.elements.payment_account_number.value = info?.payment_account_number || '';
     paymentForm.elements.payment_instructions.value = info?.payment_instructions || '';
     renderSettingsQrPreview();
+    paymentDirty?.reset();
   }
 
   paymentQrFile?.addEventListener('change', async () => {
@@ -371,6 +408,7 @@
       pendingQrDataUrl = prepared.dataUrl;
       clearQrFlag = false;
       renderSettingsQrPreview();
+      paymentDirty?.sync();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
@@ -390,6 +428,7 @@
     pendingQrDataUrl = null;
     clearQrFlag = true;
     renderSettingsQrPreview();
+    paymentDirty?.sync();
     Ipon.toast('QR cleared from preview. Save payment details to apply.');
   });
 
@@ -438,17 +477,36 @@
     try { await loadContributionDefault(); } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }
   });
 
+  let savedCycleMonth = '';
+
+  function syncCycleSaveButton() {
+    if (!cycleSaveBtn || !cycleStartMonth) return;
+    const val = cycleStartMonth.value || '';
+    const dirty = Boolean(val) && val !== savedCycleMonth;
+    if (cycleSaveBtn.dataset) {
+      if (dirty) delete cycleSaveBtn.dataset.dirtyLocked;
+      else cycleSaveBtn.dataset.dirtyLocked = 'true';
+    }
+    if (!cycleSaveBtn.classList.contains('is-busy')) cycleSaveBtn.disabled = !dirty;
+    cycleSaveBtn.title = dirty ? '' : 'Pick a different start month before saving.';
+  }
+
+  cycleStartMonth?.addEventListener('input', syncCycleSaveButton);
+  cycleStartMonth?.addEventListener('change', syncCycleSaveButton);
+
   async function loadCycleSetting() {
     if (!state.profile?.group_id || !cycleStartMonth) return;
     const { data, error } = await Ipon.client.from('groups').select('cycle_start_date').eq('id', state.profile.group_id).maybeSingle();
     if (error) return;
     const iso = data?.cycle_start_date || '';
-    cycleStartMonth.value = iso ? iso.slice(0, 7) : '';
+    savedCycleMonth = iso ? iso.slice(0, 7) : '';
+    cycleStartMonth.value = savedCycleMonth;
     if (cycleStatusCopy) {
       cycleStatusCopy.textContent = iso
         ? `Dashboard & goals track active cycle from ${Ipon.dateLabel(iso, { month: 'long', year: 'numeric' })} onward.`
         : 'Showing all-time confirmed savings across every year.';
     }
+    syncCycleSaveButton();
   }
 
   async function saveCycleSetting(nextMonth, btn) {

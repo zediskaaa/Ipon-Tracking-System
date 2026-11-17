@@ -258,6 +258,21 @@
       </label>`;
   }
 
+  let permInitialSnapshot = '';
+
+  function permSnapshot(draft) {
+    if (!draft) return '';
+    return JSON.stringify([
+      Boolean(draft.can_edit_own_entries),
+      Boolean(draft.require_edit_approval),
+      Boolean(draft.require_add_approval),
+      Boolean(draft.can_record_expenses),
+      Boolean(draft.require_expense_approval),
+      Boolean(draft.can_record_withdrawals),
+      Boolean(draft.require_withdrawal_approval)
+    ]);
+  }
+
   function renderPermissionModalControls() {
     if (!activePermDraft || !permPresetsWrap || !permGroupsWrap) return;
     const preset = permissionPresetMatch(activePermDraft);
@@ -279,6 +294,15 @@
         ${permSwitchMarkup(uid, 'can_record_withdrawals', activePermDraft.can_record_withdrawals, 'Allow recording deductions', 'Can open and submit fund deduction entries')}
         ${permSwitchMarkup(uid, 'require_withdrawal_approval', activePermDraft.require_withdrawal_approval, 'Deductions require approval', activePermDraft.can_record_withdrawals ? 'Off = deductions confirm immediately' : 'Enable recording deductions first', { disabled: !activePermDraft.can_record_withdrawals })}
       </div>`;
+    if (permSaveBtn) {
+      const permDirty = permSnapshot(activePermDraft) !== permInitialSnapshot;
+      if (permSaveBtn.dataset) {
+        if (permDirty) delete permSaveBtn.dataset.dirtyLocked;
+        else permSaveBtn.dataset.dirtyLocked = 'true';
+      }
+      if (!permSaveBtn.classList.contains('is-busy')) permSaveBtn.disabled = !permDirty;
+      permSaveBtn.title = permDirty ? '' : 'Change a permission before saving.';
+    }
   }
 
   function openMemberPermissionsModal(userId) {
@@ -290,6 +314,7 @@
     }
     activePermUserId = String(target.user_id);
     activePermDraft = { ...target };
+    permInitialSnapshot = permSnapshot(activePermDraft);
     permForm.elements.user_id.value = activePermUserId;
     const roleCls = target.role === 'TREASURER' ? 'status-pending' : 'status-confirmed';
     if (permIdentity) {
@@ -477,7 +502,11 @@
     Ipon.setPayoutFields(form, null);
     document.getElementById('member-form-title').textContent = 'Add member';
     document.getElementById('member-form-copy').textContent = 'Create a tracking profile and sign-in account for a contributor.';
+    memberDirty?.reset();
   }
+  const memberDirty = Ipon.bindDirtySaveForm?.(form, form?.querySelector('[type="submit"]'), {
+    getActive: () => Boolean(form?.elements?.member_id?.value)
+  });
   function normalizeContactNumber(value) {
     const number = String(value || '').trim();
     if (!number) return '';
@@ -570,7 +599,9 @@
       Ipon.setPayoutFields(form, member);
       dateRegistered.disabled = true; dateRegisteredHelp.hidden = false;
       monthlyAmountTouched = true; monthlyAmountHelp.textContent = 'This member\'s saved amount is used when generating new periods.';
-      document.getElementById('member-form-title').textContent = 'Edit member'; document.getElementById('member-form-copy').textContent = `Update ${member.full_name}'s profile.`; dialog.showModal(); firstName.focus();
+      document.getElementById('member-form-title').textContent = 'Edit member'; document.getElementById('member-form-copy').textContent = `Update ${member.full_name}'s profile.`;
+      memberDirty?.reset();
+      dialog.showModal(); firstName.focus();
     } else if (button.dataset.action === 'account') {
       accountForm.reset(); accountForm.elements.member_id.value = member.id;
       document.getElementById('member-account-copy').textContent = `Create a secure sign-in for ${member.full_name}.`;

@@ -5,6 +5,8 @@
   const profileForm = document.getElementById('profile-form');
   const emailForm = document.getElementById('email-form');
   const passwordForm = document.getElementById('password-form');
+  const profileDirty = Ipon.bindDirtySaveForm?.(profileForm, profileForm?.querySelector('[type="submit"]'));
+  const emailDirty = Ipon.bindDirtySaveForm?.(emailForm, emailForm?.querySelector('[type="submit"]'));
   passwordForm.closest('.panel').insertAdjacentHTML('beforeend', Ipon.mfaSettingsMarkup());
   const mfaController = Ipon.bindMfaSettings(passwordForm.closest('.panel').querySelector('[data-mfa-settings]'));
   const activityBody = document.getElementById('account-activity-body');
@@ -90,6 +92,8 @@
     }
     emailForm.elements.email.value = profile.email || state.session.user.email || '';
     notificationToggle.checked = profile.notifications_enabled !== false;
+    profileDirty?.reset();
+    emailDirty?.reset();
     Ipon.syncDevicePermissionUI?.().catch?.(() => { });
     const activities = activityResult.data || [];
     activityBody.innerHTML = activities.length ? activities.map((row) => `<tr><td>${Ipon.escapeHtml(row.event.replaceAll('_', ' ').toLowerCase().replace(/^./, (character) => character.toUpperCase()))}</td><td>${Ipon.dateLabel(row.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">No account activity recorded yet.</td></tr>';

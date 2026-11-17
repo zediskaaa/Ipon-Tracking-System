@@ -110,6 +110,7 @@
   Ipon.prepareNumericInputs();
   editDialog.querySelectorAll('.transaction-edit-field').forEach((field) => { field.hidden = page === 'contributions'; field.querySelector('input,select,textarea').required = page !== 'contributions'; });
   Ipon.setCategoryPresetGroup(editForm.elements.category, page === 'withdrawals' ? 'deduction' : 'expense', { required: page !== 'contributions' });
+  const editDirty = Ipon.bindDirtySaveForm?.(editForm, editForm?.querySelector('[type="submit"]'));
 
   function statusBadge(status) {
     const statusClass = String(status).toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -751,6 +752,7 @@
       const row = recordRows.find((item) => item.id === button.dataset.id); if (!row) return;
       populateResponsibleSelect(editForm.elements.person_responsible, row.person_responsible || '');
       editForm.elements.record_id.value = row.id; editForm.elements.date.value = row.payment_date || row.transaction_date; editForm.elements.amount.value = row.amount; Ipon.syncCategoryControl(editForm.elements.category, row.category || ''); editForm.elements.description.value = row.description || ''; editForm.elements.person_responsible.value = row.person_responsible || ''; editForm.elements.payment_method.value = row.payment_method || ''; editForm.elements.payment_method._customSelect?.sync(); editForm.elements.reference.value = row.transaction_reference || row.reference_number || ''; editForm.elements.notes.value = row.notes || '';
+      editDirty?.reset();
       editDialog.showModal(); editForm.elements.amount.focus(); return;
     }
     const row = recordRows.find((item) => item.id === button.dataset.id);

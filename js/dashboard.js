@@ -1395,11 +1395,17 @@
     }
   }
 
+  const groupDirty = Ipon.bindDirtySaveForm?.(groupForm, document.getElementById('save-group-dialog'), {
+    getActive: () => groupForm?.elements?.mode?.value !== 'create',
+    getExtraState: () => ({ pendingGroupAvatarUrl: pendingGroupAvatarUrl || '', pendingGroupClearAvatar: Boolean(pendingGroupClearAvatar) })
+  });
+
   groupWorkspaceModeTabs?.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-workspace-mode]');
     if (!btn || !groupForm) return;
     const isCreate = groupForm.elements.mode.value === 'create';
     syncGroupFormWorkspaceMode(btn.dataset.workspaceMode, isCreate);
+    groupDirty?.sync();
   });
 
   function openGroupDialog(mode, presetWorkspaceMode = null) {
@@ -1420,6 +1426,7 @@
     if (isCreate) syncInviteRemoveButtons(groupInviteRows, false);
     syncGroupFormWorkspaceMode(initialWorkspaceMode, isCreate);
     renderGroupDpPreview(pendingGroupAvatarUrl, groupForm.elements.name.value || (isCreate ? 'New Workspace' : currentGroup?.name));
+    groupDirty?.reset();
     groupDialog.showModal();
     if (initialWorkspaceMode !== 'JOIN') groupForm.elements.name.focus();
   }
@@ -1445,6 +1452,7 @@
           pendingGroupAvatarUrl = croppedDataUrl;
           pendingGroupClearAvatar = false;
           renderGroupDpPreview(pendingGroupAvatarUrl, groupForm.elements.name.value);
+          groupDirty?.sync();
         }
       });
     } catch (error) {
@@ -1462,6 +1470,7 @@
     pendingGroupAvatarUrl = null;
     pendingGroupClearAvatar = true;
     renderGroupDpPreview(null, groupForm.elements.name.value || 'Workspace');
+    groupDirty?.sync();
   });
   document.getElementById('group-add-invite-row')?.addEventListener('click', () => {
     appendInviteRow(groupInviteRows, { defaultAmount: Number(groupMonthlyInput.value) > 0 ? Number(groupMonthlyInput.value) : 100, required: false });

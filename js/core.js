@@ -2648,6 +2648,8 @@
       syncProfileAvatars({ ...currentProfile, ...data });
       const support = dialog.querySelector('.account-support');
       if (support) support.hidden = currentProfile.role === 'SUPER_ADMIN';
+      quickProfileDirty?.reset();
+      quickEmailDirty?.reset();
     } finally {
       dialog.removeAttribute('aria-busy');
     }
@@ -2917,12 +2919,17 @@
     });
   }
 
+  let quickProfileDirty = null;
+  let quickEmailDirty = null;
+
   function bindAccountDialog() {
     const profileForm = document.getElementById('quick-profile-form');
     if (!profileForm || profileForm.dataset.bound) return;
     profileForm.dataset.bound = 'true';
     syncProfileNameMode(profileForm, currentProfile?.role === 'SUPER_ADMIN');
     const emailForm = document.getElementById('quick-email-form');
+    quickProfileDirty = bindDirtySaveForm(profileForm, profileForm.querySelector('[type="submit"]'));
+    quickEmailDirty = bindDirtySaveForm(emailForm, emailForm?.querySelector('[type="submit"]'));
     const passwordForm = document.getElementById('quick-password-form');
     const notificationToggle = document.getElementById('quick-notifications-enabled');
     const avatarInput = document.getElementById('quick-avatar-input');
@@ -6029,8 +6036,62 @@
     } else {
       button.textContent = button.dataset.originalLabel || button.textContent;
       delete button.dataset.originalLabel;
-      button.disabled = false;
+      button.disabled = button.dataset?.dirtyLocked === 'true';
     }
+  }
+
+  function readFormSnapshot(form, getExtraState) {
+    const parts = [];
+    const elements = form?.elements ? Array.from(form.elements) : [];
+    elements.forEach((el, idx) => {
+      if (!el || el.type === 'submit' || el.type === 'button' || el.type === 'reset' || el.type === 'file') return;
+      const key = el.name || el.id || String(idx);
+      const val = (el.type === 'checkbox' || el.type === 'radio')
+        ? (el.checked ? '1' : '0')
+        : String(el.value ?? '');
+      parts.push([key, val]);
+    });
+    if (typeof getExtraState === 'function') parts.push(['__extra', getExtraState()]);
+    return JSON.stringify(parts);
+  }
+
+  function bindDirtySaveForm(form, button, { getExtraState, getActive } = {}) {
+    const resolveBtn = () => button || form?.querySelector?.('[type="submit"]');
+    let baseline = readFormSnapshot(form, getExtraState);
+    const sync = () => {
+      const btn = resolveBtn();
+      if (!form || !btn) return false;
+      const active = typeof getActive === 'function' ? Boolean(getActive()) : true;
+      if (!active) {
+        if (btn.dataset) delete btn.dataset.dirtyLocked;
+        if (!btn.classList?.contains?.('is-busy')) btn.disabled = false;
+        if (btn.title === 'Make a change before saving.') btn.title = '';
+        return true;
+      }
+      const dirty = readFormSnapshot(form, getExtraState) !== baseline;
+      if (btn.dataset) {
+        if (dirty) delete btn.dataset.dirtyLocked;
+        else btn.dataset.dirtyLocked = 'true';
+      }
+      if (!btn.classList?.contains?.('is-busy')) btn.disabled = !dirty;
+      if (dirty) {
+        if (btn.title === 'Make a change before saving.') btn.title = '';
+      } else if (!btn.title) {
+        btn.title = 'Make a change before saving.';
+      }
+      return dirty;
+    };
+    const reset = () => {
+      baseline = readFormSnapshot(form, getExtraState);
+      sync();
+    };
+    if (form) {
+      form.addEventListener('input', sync);
+      form.addEventListener('change', sync);
+      form.addEventListener('reset', () => setTimeout(sync, 0));
+    }
+    sync();
+    return { sync, reset, isDirty: () => readFormSnapshot(form, getExtraState) !== baseline };
   }
 
   function confirmAction({ title = 'Continue?', message = '', acceptLabel, confirmLabel, confirmText, cancelLabel } = {}) {
@@ -12658,7 +12719,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     setOnlineVisibility, syncMessagesBadges,
     updateLocalProfile(patch = {}) {
