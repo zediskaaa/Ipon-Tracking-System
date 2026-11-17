@@ -284,22 +284,47 @@
   document.getElementById('user-groups-close')?.addEventListener('click', () => userGroupsDialog?.close());
   document.getElementById('user-groups-done')?.addEventListener('click', () => userGroupsDialog?.close());
 
+  function formatUserActivityLabel(activity) {
+    if (!activity) return '';
+    if (activity.activity_label) return String(activity.activity_label);
+    const event = String(activity.activity_event || activity.event || '').trim().toUpperCase();
+    const labels = {
+      LOGIN: 'Signed in',
+      PROFILE_UPDATE: 'Updated profile',
+      PASSWORD_CHANGE: 'Changed password'
+    };
+    if (labels[event]) return labels[event];
+    const words = event.replaceAll('_', ' ').trim().toLowerCase();
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Active';
+  }
+
   function renderUsers() {
     const groupById = new Map(groups.map((group) => [group.id, group]));
     const lastActivity = new Map();
-    accountActivities.forEach((activity) => { if (!lastActivity.has(activity.user_id)) lastActivity.set(activity.user_id, activity); });
+    accountActivities.forEach((activity) => {
+      if (activity?.user_id && !lastActivity.has(activity.user_id)) lastActivity.set(activity.user_id, activity);
+    });
     const query = filterValue('users-search');
     const status = filterValue('users-status-filter');
     const users = profiles.filter((profile) => {
       if (!profile || profile.role === 'SUPER_ADMIN') return false;
       if (status && profile.status !== status) return false;
       const userGroups = getUserGroups(profile, groupById);
-      return matchesQuery(query, [profile.full_name, profile.email, ...userGroups.map((group) => group.name), profile.status]);
+      const activityText = formatUserActivityLabel(lastActivity.get(profile.id));
+      return matchesQuery(query, [profile.full_name, profile.email, ...userGroups.map((group) => group.name), profile.status, activityText]);
     });
     const visible = paginateRows('users', users);
     administratorsBody.innerHTML = visible.length ? visible.map((profile) => {
       const userGroups = getUserGroups(profile, groupById);
       const active = profile.status === 'ACTIVE';
+      const activity = lastActivity.get(profile.id);
+      const activityLabel = formatUserActivityLabel(activity);
+      const activityAt = activity?.occurred_at || activity?.created_at || '';
+      const lastSeenAt = activity?.last_seen_at || profile.last_seen_at || '';
+      const showLastSeenTitle = lastSeenAt && activityAt && (Date.parse(lastSeenAt) - Date.parse(activityAt) > 120000);
+      const activityTitle = showLastSeenTitle
+        ? ` title="Last seen in app: ${Ipon.escapeHtml(Ipon.dateLabel(lastSeenAt, { dateStyle: 'medium', timeStyle: 'short' }))}"`
+        : '';
       const actions = `<button class="icon-action" type="button" data-edit-admin="${profile.id}">Edit</button><button class="icon-action" type="button" data-set-password="${profile.id}">Change password</button><button class="icon-action" type="button" data-reset-admin="${profile.id}">Reset password</button><button class="icon-action ${active ? 'danger-action' : ''}" type="button" data-admin-status="${profile.id}" data-next-status="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Deactivate' : 'Reactivate'}</button><button class="icon-action danger-action" type="button" data-delete-user="${profile.id}" data-archive-admin="${profile.id}">Delete</button>`;
       return `<tr data-user-id="${profile.id}">
         <td>
@@ -313,7 +338,7 @@
         </td>
         <td>${renderUserGroupsCell(userGroups, profile.id)}</td>
         <td>${Ipon.dateLabel(profile.created_at)}</td>
-        <td>${lastActivity.has(profile.id) ? `<span class="activity-kind">${Ipon.escapeHtml(lastActivity.get(profile.id).event.replaceAll('_', ' '))}</span><small class="field-help">${Ipon.dateLabel(lastActivity.get(profile.id).created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small>` : '<span class="field-help">No activity</span>'}</td>
+        <td${activityTitle}>${activityLabel && activityAt ? `<strong>${Ipon.escapeHtml(activityLabel)}</strong><small class="field-help">${Ipon.dateLabel(activityAt, { dateStyle: 'medium', timeStyle: 'short' })}</small>` : '<span class="field-help">No activity</span>'}</td>
         <td>${statusLabel(profile.status)}</td>
         <td><div class="table-actions">${actions}</div></td>
       </tr>`;
@@ -545,7 +570,7 @@
       safeQuery(Ipon.client.from('group_memberships').select('group_id,user_id,role,status')),
       safeQuery(Ipon.client.from('feature_requests').select('id,requester_id,allow_credit,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,status,reviewed_at,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
-      safeQuery(Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200)),
+      safeQuery(Ipon.client.rpc('super_admin_user_last_activities')),
       safeQuery(Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.rpc('super_admin_storage_overview')),
       announcements ? safeQuery(announcements.load()) : Promise.resolve()
@@ -557,7 +582,14 @@
     groupMemberships = membershipResult.data || [];
     featureRequests = featureRequestResult.data || [];
     bugReports = bugReportResult.data || [];
-    accountActivities = activityResult.data || [];
+    if (activityResult?.error) {
+      const legacyActivity = await safeQuery(
+        Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200)
+      );
+      accountActivities = legacyActivity.data || [];
+    } else {
+      accountActivities = activityResult.data || [];
+    }
     activityLogs = logResult.data || [];
     storageOverview = storageResult?.error ? null : (storageResult?.data || null);
     renderOverview();

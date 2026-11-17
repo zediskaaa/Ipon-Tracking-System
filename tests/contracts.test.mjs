@@ -11059,7 +11059,7 @@ test('Write with AI keeps release announcements strictly factual without AI embe
   assert.doesNotMatch(edgeTs, /function pickUniqueDomainOutcome/);
   assert.match(saJs, /RELEASE_STYLE_ANGLES\s*=\s*\[[\s\S]*Strictly factual/);
   assert.doesNotMatch(saJs, /product story|high-energy|celebrating cleaner workflows/i);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-90/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-91/);
 
   // 2. Fallback composer produces crisp factual sentences with zero fabricated outcome padding
   const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
@@ -11105,4 +11105,41 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
   assert.match(dashHtml, /js\/core\.js\?v=20261117-112/);
+});
+
+test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
+  const mig099 = read('database/migrations/20261117_099_specific_user_last_activity.sql');
+  const schema = read('database/schema.sql');
+  const saJs = read('js/super-admin.js');
+  const saHtml = read('super-admin.html');
+
+  for (const sql of [mig099, schema]) {
+    assert.match(sql, /'20261117_099'/);
+    assert.match(sql, /create or replace function public\.super_admin_user_last_activities\(\)/i);
+    assert.match(sql, /if not public\.is_super_admin\(\) then[\s\S]*?errcode = '42501'/i);
+    assert.match(sql, /from public\.audit_logs l[\s\S]*?l\.changed_by is not null/i);
+    assert.match(sql, /from public\.budget_configs bc/i);
+    assert.match(sql, /from public\.bug_reports br/i);
+    assert.match(sql, /from public\.feature_requests fr/i);
+    assert.match(sql, /from public\.messages m/i);
+    assert.match(sql, /\(e\.priority >= 90\) asc,\s*e\.occurred_at desc,\s*e\.priority asc/i);
+    assert.match(sql, /revoke all on function public\.super_admin_user_last_activities\(\) from public, anon;/i);
+    assert.match(sql, /grant execute on function public\.super_admin_user_last_activities\(\) to authenticated;/i);
+  }
+
+  // Ensures Super Admin client never queries raw financial/message tables directly
+  assert.doesNotMatch(saJs, /from\(['"](?:contributions|withdrawals|expenses|members|messages|budget_configs|budget_expenses)['"]\)/);
+  assert.match(saJs, /Ipon\.client\.rpc\('super_admin_user_last_activities'\)/);
+  assert.match(saJs, /function formatUserActivityLabel\(activity\)/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-91/);
+
+  // Verify formatUserActivityLabel handles both new specific RPC rows and legacy fallback events
+  const fnMatch = saJs.match(/function formatUserActivityLabel\(activity\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(fnMatch, 'formatUserActivityLabel helper must exist in js/super-admin.js');
+  const formatUserActivityLabel = new Function(`${fnMatch[0]}; return formatUserActivityLabel;`)();
+  assert.equal(formatUserActivityLabel({ activity_label: 'Recorded contribution', activity_event: 'CONTRIBUTION_ADD' }), 'Recorded contribution');
+  assert.equal(formatUserActivityLabel({ activity_label: 'Submitted bug report', activity_event: 'BUG_REPORT' }), 'Submitted bug report');
+  assert.equal(formatUserActivityLabel({ event: 'LOGIN' }), 'Signed in');
+  assert.equal(formatUserActivityLabel({ event: 'PASSWORD_CHANGE' }), 'Changed password');
+  assert.equal(formatUserActivityLabel({ event: 'PROFILE_UPDATE' }), 'Updated profile');
 });
