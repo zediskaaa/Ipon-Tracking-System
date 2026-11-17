@@ -10213,6 +10213,13 @@
     'bio',
     'name_setup_required',
     'previous_account_status',
+    'inactivity_warned_at',
+    'savings_inactivity_reminded_at',
+    'savings_retention_warned_at',
+    'policy_accepted_version',
+    'policy_accepted_at',
+    'archived_paid_amount',
+    'archived_first_paid_date',
     'snapshot'
   ]);
 

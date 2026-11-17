@@ -95,4 +95,13 @@ test('migration 103 completes governance audit coverage, audit_logs immutability
     new_data: { requester_name: 'Jessa Dizon', status: 'APPROVED' }
   }, { profiles: new Map([['u2', 'Zedrick De Monteverde']]) });
   assert.equal(joinEntry.summary, 'Approved join request for Jessa Dizon');
+
+  const mig104 = read('database/migrations/20261117_104_purge_metadata_audit_noise.sql');
+  assert.match(mig104, /'20261117_104'/);
+  assert.match(mig104, /delete from public\.audit_logs/i);
+  assert.match(mig104, /'inactivity_warned_at'/);
+  assert.match(mig104, /'policy_accepted_at'/);
+  assert.match(mig104, /\(v_old - array\['updated_by'\]\) = \(v_new - array\['updated_by'\]\)/i);
+  assert.match(coreJs, /'inactivity_warned_at'/);
+  assert.match(coreJs, /'policy_accepted_at'/);
 });
