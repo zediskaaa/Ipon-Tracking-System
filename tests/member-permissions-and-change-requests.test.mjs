@@ -50,6 +50,7 @@ test('Migration 102 adds per-member workspace permissions and calendar change-re
   assert.match(coreJs, /function refreshMyPermissions\(/);
   assert.match(coreJs, /function openCalendarEntryEditDialog\(/);
   assert.match(coreJs, /function openChangeRequestReviewDialog\(/);
+  assert.doesNotMatch(coreJs, /parsedAmount\.amount\b/);
   assert.match(coreJs, /RECORD_CHANGE_REQUESTED/);
   assert.match(coreJs, /RECORD_CHANGE_REVIEWED/);
   assert.match(coreJs, /PERMISSION_UPDATED/);
@@ -95,21 +96,89 @@ test('Migration 102 adds per-member workspace permissions and calendar change-re
     assert.equal(new Set(ids).size, ids.length, `${name} has duplicate IDs`);
   }
 
-  // 4. Runtime VM verification: permissions exports, 6-char code typing cap & single error rendering
+  // 4. Runtime VM verification: permissions exports, 6-char code typing cap, single error rendering & edit RPC payload
   const noop = () => {};
-  const dummyEl = () => ({
-    classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
-    style: {},
-    setAttribute: noop,
-    removeAttribute: noop,
-    addEventListener: noop,
-    querySelector: () => dummyEl(),
-    querySelectorAll: () => [],
-    insertAdjacentHTML: noop
-  });
+  const rpcCalls = [];
+  const domById = new Map();
+  const makeCtrl = (id = '') => {
+    const attrs = {};
+    const listeners = {};
+    const clsSet = new Set();
+    const el = {
+      id,
+      attrs,
+      dataset: {},
+      listeners,
+      classList: {
+        add: (...c) => c.forEach((x) => clsSet.add(x)),
+        remove: (...c) => c.forEach((x) => clsSet.delete(x)),
+        toggle: (x, f) => (f ? clsSet.add(x) : clsSet.delete(x)),
+        contains: (x) => clsSet.has(x)
+      },
+      style: {},
+      value: '',
+      textContent: '',
+      innerHTML: '',
+      disabled: false,
+      hidden: false,
+      open: false,
+      validity: { badInput: false },
+      elements: {},
+      setAttribute(k, v) { attrs[k] = String(v); },
+      getAttribute(k) { return Object.prototype.hasOwnProperty.call(attrs, k) ? attrs[k] : null; },
+      removeAttribute(k) { delete attrs[k]; },
+      toggleAttribute(k, f) { if (f) attrs[k] = ''; else delete attrs[k]; },
+      hasAttribute(k) { return Object.prototype.hasOwnProperty.call(attrs, k); },
+      setCustomValidity(m) { this.validityMsg = m; },
+      addEventListener(ev, fn, opts) { (listeners[ev] ||= []).push({ fn, once: Boolean(opts?.once) }); },
+      closest: () => null,
+      focus: noop,
+      reset() { this.value = ''; },
+      showModal() { this.open = true; },
+      close(rv = '') { this.open = false; this.returnValue = rv; this.onclose?.(); const list = listeners.close || []; listeners.close = list.filter((item) => { item.fn(); return !item.once; }); },
+      querySelector(sel) {
+        const m = sel.match(/^#([a-zA-Z0-9_-]+)$/);
+        if (m && domById.has(m[1])) return domById.get(m[1]);
+        return dummyEl();
+      },
+      querySelectorAll: () => [],
+      insertAdjacentHTML: noop
+    };
+    if (id) domById.set(id, el);
+    return el;
+  };
+  const dummyEl = () => makeCtrl('');
+  const ensureDialogNodes = () => {
+    const formEl = makeCtrl('ipon-entry-edit-form');
+    const pmCtrl = makeCtrl('ipon-entry-edit-pm');
+    pmCtrl.value = 'MAYA';
+    formEl.elements = { payment_method: pmCtrl };
+    makeCtrl('ipon-entry-edit-summary');
+    makeCtrl('ipon-entry-edit-banner');
+    makeCtrl('ipon-entry-edit-amount');
+    makeCtrl('ipon-entry-edit-amount-error');
+    makeCtrl('ipon-entry-edit-date-display');
+    makeCtrl('ipon-entry-edit-notes');
+    makeCtrl('ipon-entry-edit-reason');
+    makeCtrl('ipon-entry-edit-reason-error');
+    makeCtrl('ipon-entry-edit-submit');
+    makeCtrl('ipon-entry-edit-eyebrow');
+    makeCtrl('ipon-entry-edit-title');
+    makeCtrl('ipon-entry-edit-copy');
+    makeCtrl('ipon-entry-edit-close');
+    makeCtrl('ipon-entry-edit-cancel');
+    makeCtrl('confirm-title');
+    makeCtrl('confirm-message');
+    makeCtrl('confirm-cancel');
+    makeCtrl('confirm-accept');
+    makeCtrl('confirm-dialog');
+    return makeCtrl('ipon-entry-edit-dialog');
+  };
   const ctx = {
     console, TextEncoder, URL, URLSearchParams, Intl, Math, Date, Number, String, JSON,
     Uint8Array, Array, Set, Map,
+    HTMLInputElement: class HTMLInputElement {},
+    HTMLElement: class HTMLElement {},
     navigator: { userAgent: 'node', onLine: true },
     location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', pathname: '/dashboard.html', origin: 'https://my-ipon.vercel.app', search: '', href: 'https://my-ipon.vercel.app/dashboard.html', replace: noop, assign: noop },
     localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
@@ -119,22 +188,32 @@ test('Migration 102 adds per-member workspace permissions and calendar change-re
     addEventListener: noop,
     removeEventListener: noop,
     dispatchEvent: noop,
+    window: null,
     document: {
       documentElement: { setAttribute: noop, dataset: {}, style: { setProperty: noop, removeProperty: noop } },
       head: { insertAdjacentHTML: noop },
-      body: { dataset: {}, classList: { contains: () => false, add: noop, remove: noop, toggle: noop }, insertAdjacentHTML: noop, appendChild: noop, prepend: noop, append: noop },
+      body: {
+        dataset: {},
+        classList: { contains: () => false, add: noop, remove: noop, toggle: noop },
+        insertAdjacentHTML(_pos, html) { if (String(html).includes('ipon-entry-edit-dialog')) ensureDialogNodes(); },
+        appendChild: noop, prepend: noop, append: noop
+      },
       createElement: () => dummyEl(),
       addEventListener: noop,
       removeEventListener: noop,
-      getElementById: () => null,
+      getElementById: (id) => domById.get(id) || null,
       querySelectorAll: () => [],
       querySelector: () => null
     },
     supabase: {
       createClient: () => ({
-        rpc: async (fn) => {
+        rpc: async (fn, params) => {
+          rpcCalls.push({ fn, params });
           if (fn === 'preview_group_invite_code') {
             return { data: { valid: false, message: 'Group invite code not found. Double-check the 6-character code or ask your admin for a new link.' }, error: null };
+          }
+          if (fn === 'submit_record_change_request') {
+            return { data: { status: 'PENDING_APPROVAL', request_id: 'cr-1', message: 'Change request sent to your administrator for approval.' }, error: null };
           }
           return { data: {}, error: null };
         },
@@ -159,6 +238,36 @@ test('Migration 102 adds per-member workspace permissions and calendar change-re
   assert.equal(ipon.extractInviteCode('https://my-ipon.vercel.app/login.html'), '');
   assert.match(authJs, /bindInviteCodeInput/);
 
+  // Submit calendar entry edit dialog and verify exact p_amount & RPC payload
+  const editPromise = ipon.openCalendarEntryEditDialog({
+    id: '11111111-1111-1111-1111-111111111111',
+    type: 'contribution',
+    subjectName: 'Zedrick De Monteverde',
+    amount: 100,
+    paymentMethod: 'GCASH',
+    date: '2026-11-14',
+    notes: '',
+    status: 'CONFIRMED'
+  });
+  await new Promise((r) => setTimeout(r, 5));
+  domById.get('ipon-entry-edit-amount').value = '250';
+  domById.get('ipon-entry-edit-form').elements.payment_method.value = 'MAYA';
+  domById.get('ipon-entry-edit-notes').value = 'Updated receipt ref';
+  domById.get('ipon-entry-edit-reason').value = 'Paid via Maya instead of GCash';
+  const submitExec = domById.get('ipon-entry-edit-form').onsubmit({ preventDefault: noop });
+  await new Promise((r) => setTimeout(r, 15));
+  domById.get('confirm-dialog').close('confirm');
+  await submitExec;
+  const editResult = await editPromise;
+  assert.equal(editResult?.status, 'PENDING_APPROVAL');
+  const submitCall = rpcCalls.find((c) => c.fn === 'submit_record_change_request');
+  assert.ok(submitCall, 'submit_record_change_request RPC must be called');
+  assert.equal(typeof submitCall.params.p_amount, 'number');
+  assert.equal(submitCall.params.p_amount, 250);
+  assert.equal(submitCall.params.p_payment_method, 'MAYA');
+  assert.equal(submitCall.params.p_notes, 'Updated receipt ref');
+  assert.equal(submitCall.params.p_reason, 'Paid via Maya instead of GCash');
+
   const makeJoinNode = () => {
     const attrs = {};
     const listeners = {};
@@ -175,6 +284,7 @@ test('Migration 102 adds per-member workspace permissions and calendar change-re
       selectionEnd: 0,
       setCustomValidity(m) { this.validityMsg = m; },
       setAttribute(k, v) { attrs[k] = String(v); },
+      getAttribute(k) { return Object.prototype.hasOwnProperty.call(attrs, k) ? attrs[k] : null; },
       removeAttribute(k) { delete attrs[k]; },
       addEventListener(ev, fn) { (listeners[ev] ||= []).push(fn); },
       querySelector: () => dummyEl(),
