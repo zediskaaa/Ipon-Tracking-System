@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261117-134">
+  <link rel="stylesheet" href="css/app.css?v=20261117-135">
   <script src="js/config.js?v=20261117-76"></script>
 </head>
 
@@ -27,33 +27,51 @@
       <header class="page-header" id="platform-page-header">
         <div>
           <h1 id="platform-view-title">Platform overview</h1>
-          <p id="platform-view-description">Monitor administrator accounts, savings groups, and user feedback without
-            exposing financial records.</p>
+          <p id="platform-view-description">Monitor registered users, savings groups, and feedback without exposing financial records.</p>
         </div>
       </header>
 
       <section class="platform-view platform-overview" id="overview" data-platform-view="overview"
         aria-labelledby="overview-title">
         <div class="platform-overview-heading">
-          <h2 id="overview-title">System overview</h2>
+          <div>
+            <span class="platform-overview-eyebrow">Live platform health</span>
+            <h2 id="overview-title">System overview</h2>
+          </div>
           <p id="platform-status"><span aria-hidden="true"></span>Checking platform access…</p>
         </div>
         <dl class="platform-metrics">
-          <div>
-            <dt>Administrators</dt>
-            <dd id="metric-total-admins">—</dd>
+          <div class="platform-metric-card is-users">
+            <div class="platform-metric-top">
+              <dt>Registered users</dt>
+              <span class="platform-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            </div>
+            <dd id="metric-total-users">—</dd>
+            <small class="platform-metric-meta" id="metric-total-users-meta">Loading registered accounts…</small>
           </div>
-          <div>
-            <dt>Active</dt>
-            <dd id="metric-active-admins">—</dd>
+          <div class="platform-metric-card is-active">
+            <div class="platform-metric-top">
+              <dt>Active users</dt>
+              <span class="platform-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></span>
+            </div>
+            <dd id="metric-active-users">—</dd>
+            <small class="platform-metric-meta" id="metric-active-users-meta">Checking recent activity…</small>
           </div>
-          <div>
-            <dt>Suspended</dt>
-            <dd id="metric-suspended-admins">—</dd>
+          <div class="platform-metric-card is-suspended" id="metric-suspended-card">
+            <div class="platform-metric-top">
+              <dt>Suspended</dt>
+              <span class="platform-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M4.93 4.93 19.07 19.07"/></svg></span>
+            </div>
+            <dd id="metric-suspended-users">—</dd>
+            <small class="platform-metric-meta" id="metric-suspended-users-meta">Deactivated accounts</small>
           </div>
-          <div>
-            <dt>Savings groups</dt>
+          <div class="platform-metric-card is-groups">
+            <div class="platform-metric-top">
+              <dt>Savings groups</dt>
+              <span class="platform-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>
+            </div>
             <dd id="metric-groups">—</dd>
+            <small class="platform-metric-meta" id="metric-groups-meta">Loading workspaces…</small>
           </div>
         </dl>
         <div class="platform-briefing">
@@ -65,22 +83,22 @@
           </section>
           <nav class="platform-shortcuts" aria-labelledby="shortcuts-title">
             <h3 id="shortcuts-title">Platform workspaces</h3>
-            <a href="super-admin.html#feature-requests"><span><strong>Feature requests</strong><small>Read suggestions
-                  from IPON users</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m9 18 6-6-6-6" />
-              </svg></a>
-            <a href="super-admin.html#bug-reports"><span><strong>Bug reports</strong><small>Review reported errors and
-                  screenshots</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m9 18 6-6-6-6" />
-              </svg></a>
-            <a href="super-admin.html#administrators"><span><strong>Users</strong><small>Manage accounts and
-                  groups</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m9 18 6-6-6-6" />
-              </svg></a>
-            <a href="super-admin.html#activity"><span><strong>Platform activity</strong><small>Inspect recent access
-                  changes</small></span><svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m9 18 6-6-6-6" />
-              </svg></a>
+            <a href="super-admin.html#feature-requests">
+              <span class="platform-shortcut-copy"><strong>Feature requests</strong><small>Read suggestions from IPON users</small></span>
+              <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-features">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
+            </a>
+            <a href="super-admin.html#bug-reports">
+              <span class="platform-shortcut-copy"><strong>Bug reports</strong><small>Review reported errors and screenshots</small></span>
+              <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-bugs">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
+            </a>
+            <a href="super-admin.html#administrators">
+              <span class="platform-shortcut-copy"><strong>Users</strong><small>Manage accounts and savings groups</small></span>
+              <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-users">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
+            </a>
+            <a href="super-admin.html#activity">
+              <span class="platform-shortcut-copy"><strong>Platform activity</strong><small>Inspect recent access changes</small></span>
+              <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-activity">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
+            </a>
           </nav>
         </div>
         <section class="panel super-admin-storage" aria-labelledby="sa-storage-title">
@@ -586,7 +604,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261117-91"></script>
+  <script src="js/super-admin.js?v=20261117-92"></script>
 </body>
 
 </html>

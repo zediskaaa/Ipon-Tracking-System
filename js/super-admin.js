@@ -116,11 +116,11 @@
     return target ? [target.first_name, target.middle_name, target.last_name, target.email] : [];
   });
   const views = {
-    overview: ['Platform overview', 'Monitor administrator accounts, savings groups, and user feedback without exposing financial records.'],
+    overview: ['Platform overview', 'Monitor registered users, savings groups, and feedback without exposing financial records.'],
     'feature-requests': ['Feature requests', 'Review improvements suggested by active IPON users.'],
     'bug-reports': ['Bug reports', 'Review reported problems, error details, and attached screenshots from IPON users.'],
-    administrators: ['Users', 'Manage administrators, group users, passwords, and assigned savings groups.'],
-    activity: ['Platform activity', 'Review recent administrator and savings-group access changes recorded by the database.']
+    administrators: ['Users', 'Manage registered users, passwords, and assigned savings groups.'],
+    activity: ['Platform activity', 'Review recent user and savings-group access changes recorded by the database.']
   };
 
   const viewFocusHeadings = {
@@ -169,18 +169,140 @@
     return `<span class="status status-${String(status).toLowerCase()}">${Ipon.escapeHtml(status)}</span>`;
   }
 
-  function renderOverview() {
-    const admins = profiles.filter((profile) => profile.role === 'ADMIN');
-    document.getElementById('metric-total-admins').textContent = admins.length;
-    document.getElementById('metric-active-admins').textContent = admins.filter((profile) => profile.status === 'ACTIVE').length;
-    document.getElementById('metric-suspended-admins').textContent = admins.filter((profile) => profile.status === 'DISABLED').length;
-    document.getElementById('metric-groups').textContent = groups.length;
-    document.getElementById('platform-status').innerHTML = '<span aria-hidden="true"></span>Database access verified';
-    const suspended = admins.filter((profile) => profile.status === 'DISABLED');
-    const attention = [];
-    if (suspended.length) attention.push(`<a href="super-admin.html#administrators"><strong>${suspended.length} suspended administrator${suspended.length === 1 ? '' : 's'}</strong><span>Review disabled accounts and reactivate them only when access should be restored.</span></a>`);
-    document.getElementById('platform-attention').innerHTML = attention.length ? attention.join('') : '<div class="platform-clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span><strong>No urgent platform work</strong><small>Administrator accounts, groups, and feedback queues are currently up to date.</small></span></div>';
+  function setShortcutBadge(id, text, highlight = false) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('has-pending', Boolean(highlight));
   }
+
+  function renderOverview() {
+    const registeredUsers = profiles.filter((profile) => profile && profile.role !== 'SUPER_ADMIN');
+    const activeUsers = registeredUsers.filter((profile) => profile.status === 'ACTIVE');
+    const suspendedUsers = registeredUsers.filter((profile) => profile.status === 'DISABLED');
+    const pendingUsers = registeredUsers.filter((profile) => profile.status === 'PENDING');
+
+    const nowMs = Date.now();
+    const recent24hCount = registeredUsers.filter((profile) => {
+      const act = accountActivities.find((item) => item?.user_id === profile.id);
+      const latestMs = Math.max(
+        Date.parse(act?.occurred_at || act?.created_at || '') || 0,
+        Date.parse(act?.last_seen_at || profile.last_seen_at || '') || 0
+      );
+      return latestMs > 0 && (nowMs - latestMs) <= 86400000;
+    }).length;
+
+    const soloCount = groups.filter((group) => group?.workspace_mode === 'SOLO').length;
+    const groupModeCount = Math.max(0, groups.length - soloCount);
+    const activeGroupsCount = groups.filter((group) => group?.status === 'ACTIVE').length;
+
+    const setText = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+
+    setText('metric-total-users', registeredUsers.length);
+    setText('metric-total-users-meta', pendingUsers.length
+      ? `${activeUsers.length} active · ${pendingUsers.length} pending`
+      : 'Total registered accounts');
+    setText('metric-active-users', activeUsers.length);
+    setText('metric-active-users-meta', `${recent24hCount} active in last 24h`);
+    setText('metric-suspended-users', suspendedUsers.length);
+    setText('metric-suspended-users-meta', suspendedUsers.length
+      ? `${suspendedUsers.length} deactivated account${suspendedUsers.length === 1 ? '' : 's'}`
+      : 'No deactivated accounts');
+    document.getElementById('metric-suspended-card')?.classList.toggle('has-alert', suspendedUsers.length > 0);
+    setText('metric-groups', groups.length);
+    setText('metric-groups-meta', groups.length
+      ? `${groupModeCount} group · ${soloCount} solo${activeGroupsCount < groups.length ? ` (${groups.length - activeGroupsCount} paused)` : ''}`
+      : 'No workspaces created yet');
+
+    document.getElementById('platform-status').innerHTML = '<span aria-hidden="true"></span>Database access verified';
+
+    const openBugs = bugReports.filter((report) => (report?.status || 'OPEN') === 'OPEN');
+    const pendingFeatures = featureRequests.filter((request) => (request?.status || 'PENDING') === 'PENDING');
+    const reclaimableReceipts = Number(storageOverview?.reclaimable_rejected_count || 0);
+
+    setShortcutBadge('shortcut-count-features', pendingFeatures.length ? `${pendingFeatures.length} pending` : 'All reviewed', pendingFeatures.length > 0);
+    setShortcutBadge('shortcut-count-bugs', openBugs.length ? `${openBugs.length} open` : '0 open', openBugs.length > 0);
+    setShortcutBadge('shortcut-count-users', `${registeredUsers.length} registered`, false);
+    setShortcutBadge('shortcut-count-activity', `${activityLogs.length} events`, false);
+
+    const attention = [];
+    if (openBugs.length) {
+      attention.push(`<a href="super-admin.html#bug-reports" data-overview-bug-status="OPEN">
+        <span class="platform-attention-copy"><strong>${openBugs.length} open bug report${openBugs.length === 1 ? '' : 's'}</strong><small>Inspect user-reported issues and attached screenshots.</small></span>
+        <span class="platform-attention-end"><em class="platform-attention-pill is-danger">Review</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+      </a>`);
+    }
+    if (pendingFeatures.length) {
+      attention.push(`<a href="super-admin.html#feature-requests" data-overview-feature-status="PENDING">
+        <span class="platform-attention-copy"><strong>${pendingFeatures.length} pending feature request${pendingFeatures.length === 1 ? '' : 's'}</strong><small>Review incoming suggestions or mark completed items implemented.</small></span>
+        <span class="platform-attention-end"><em class="platform-attention-pill is-warn">Pending</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+      </a>`);
+    }
+    if (suspendedUsers.length) {
+      attention.push(`<a href="super-admin.html#administrators" data-overview-user-status="DISABLED">
+        <span class="platform-attention-copy"><strong>${suspendedUsers.length} suspended user account${suspendedUsers.length === 1 ? '' : 's'}</strong><small>Review disabled accounts and restore access only when verified.</small></span>
+        <span class="platform-attention-end"><em class="platform-attention-pill is-danger">Disabled</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+      </a>`);
+    }
+    if (pendingUsers.length) {
+      attention.push(`<a href="super-admin.html#administrators" data-overview-user-status="PENDING">
+        <span class="platform-attention-copy"><strong>${pendingUsers.length} pending user account${pendingUsers.length === 1 ? '' : 's'}</strong><small>Accounts awaiting initial sign-in or activation completion.</small></span>
+        <span class="platform-attention-end"><em class="platform-attention-pill is-info">Pending</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+      </a>`);
+    }
+    if (reclaimableReceipts > 0) {
+      attention.push(`<button type="button" data-overview-focus-storage="1">
+        <span class="platform-attention-copy"><strong>${reclaimableReceipts} old rejected receipt${reclaimableReceipts === 1 ? '' : 's'} to purge</strong><small>Reclaim ${Ipon.escapeHtml(formatBytes(storageOverview?.reclaimable_rejected_bytes))} from expired 90-day attachments.</small></span>
+        <span class="platform-attention-end"><em class="platform-attention-pill is-info">Clean up</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+      </button>`);
+    }
+    document.getElementById('platform-attention').innerHTML = attention.length
+      ? attention.join('')
+      : '<div class="platform-clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span><strong>No urgent platform work</strong><small>Registered users, savings groups, bug reports, and feature requests are up to date.</small></span></div>';
+  }
+
+  document.getElementById('platform-attention')?.addEventListener('click', (event) => {
+    const bugTrigger = event.target.closest('[data-overview-bug-status]');
+    if (bugTrigger) {
+      activeBugStatusFilter = bugTrigger.dataset.overviewBugStatus || 'OPEN';
+      bugStatusTabs?.querySelectorAll('[data-bug-status-filter]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.bugStatusFilter === activeBugStatusFilter);
+      });
+      pageState['bug-reports'] = 0;
+      renderBugReports();
+      return;
+    }
+    const featureTrigger = event.target.closest('[data-overview-feature-status]');
+    if (featureTrigger) {
+      activeFeatureStatusFilter = featureTrigger.dataset.overviewFeatureStatus || 'PENDING';
+      featureStatusTabs?.querySelectorAll('[data-status-filter]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.statusFilter === activeFeatureStatusFilter);
+      });
+      pageState['feature-requests'] = 0;
+      renderFeatureRequests();
+      return;
+    }
+    const userTrigger = event.target.closest('[data-overview-user-status]');
+    if (userTrigger) {
+      const statusSelect = document.getElementById('users-status-filter');
+      const searchInput = document.getElementById('users-search');
+      if (statusSelect) statusSelect.value = userTrigger.dataset.overviewUserStatus || '';
+      if (searchInput) searchInput.value = '';
+      pageState.users = 0;
+      renderUsers();
+      return;
+    }
+    const storageTrigger = event.target.closest('[data-overview-focus-storage]');
+    if (storageTrigger) {
+      const target = document.querySelector('.super-admin-storage');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      Ipon.highlightFocus?.(target);
+      cleanupReceiptsBtn?.focus({ preventScroll: true });
+    }
+  });
 
   function filterValue(id) {
     return (document.getElementById(id)?.value || '').trim();

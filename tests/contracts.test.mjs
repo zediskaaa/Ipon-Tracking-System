@@ -11059,7 +11059,7 @@ test('Write with AI keeps release announcements strictly factual without AI embe
   assert.doesNotMatch(edgeTs, /function pickUniqueDomainOutcome/);
   assert.match(saJs, /RELEASE_STYLE_ANGLES\s*=\s*\[[\s\S]*Strictly factual/);
   assert.doesNotMatch(saJs, /product story|high-energy|celebrating cleaner workflows/i);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-91/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-92/);
 
   // 2. Fallback composer produces crisp factual sentences with zero fabricated outcome padding
   const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
@@ -11131,7 +11131,7 @@ test('Migration 099 and Super Admin Users surface each user actual latest specif
   assert.doesNotMatch(saJs, /from\(['"](?:contributions|withdrawals|expenses|members|messages|budget_configs|budget_expenses)['"]\)/);
   assert.match(saJs, /Ipon\.client\.rpc\('super_admin_user_last_activities'\)/);
   assert.match(saJs, /function formatUserActivityLabel\(activity\)/);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-91/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-92/);
 
   // Verify formatUserActivityLabel handles both new specific RPC rows and legacy fallback events
   const fnMatch = saJs.match(/function formatUserActivityLabel\(activity\)\s*\{[\s\S]*?\n  \}/);
@@ -11142,4 +11142,95 @@ test('Migration 099 and Super Admin Users surface each user actual latest specif
   assert.equal(formatUserActivityLabel({ event: 'LOGIN' }), 'Signed in');
   assert.equal(formatUserActivityLabel({ event: 'PASSWORD_CHANGE' }), 'Changed password');
   assert.equal(formatUserActivityLabel({ event: 'PROFILE_UPDATE' }), 'Updated profile');
+});
+
+test('Super Admin Platform overview counts all registered non-super-admin users and wires functional attention & workspace badges', () => {
+  const saHtml = read('super-admin.html');
+  const saJs = read('js/super-admin.js');
+  const css = read('css/app.css');
+
+  // Overview uses Registered users rather than Administrators
+  assert.match(saHtml, /<dt>Registered users<\/dt>[\s\S]*?id="metric-total-users"/);
+  assert.match(saHtml, /<dt>Active users<\/dt>[\s\S]*?id="metric-active-users"/);
+  assert.match(saHtml, /<dt>Suspended<\/dt>[\s\S]*?id="metric-suspended-users"/);
+  assert.match(saHtml, /<dt>Savings groups<\/dt>[\s\S]*?id="metric-groups"/);
+  assert.doesNotMatch(saHtml, /id="metric-total-admins"|Monitor administrator accounts/);
+  assert.doesNotMatch(saJs, /Monitor administrator accounts/);
+
+  // Functional shortcut badges and actionable attention items
+  for (const id of ['shortcut-count-features', 'shortcut-count-bugs', 'shortcut-count-users', 'shortcut-count-activity']) {
+    assert.match(saHtml, new RegExp(`id="${id}"`));
+  }
+  assert.match(saJs, /const registeredUsers = profiles\.filter\(\(profile\) => profile && profile\.role !== 'SUPER_ADMIN'\)/);
+  assert.match(saJs, /data-overview-bug-status="OPEN"/);
+  assert.match(saJs, /data-overview-feature-status="PENDING"/);
+  assert.match(saJs, /data-overview-user-status="DISABLED"/);
+  assert.match(saJs, /data-overview-focus-storage="1"/);
+
+  // Runtime check of renderOverview + setShortcutBadge against mixed roles/statuses
+  const els = new Map();
+  const getEl = (id) => {
+    if (!els.has(id)) {
+      const cls = new Set();
+      els.set(id, {
+        id,
+        textContent: '',
+        innerHTML: '',
+        classList: {
+          toggle: (name, force) => (force ? cls.add(name) : cls.delete(name)),
+          contains: (name) => cls.has(name)
+        }
+      });
+    }
+    return els.get(id);
+  };
+  const badgeBlock = saJs.match(/function setShortcutBadge\([\s\S]*?\n  \}\r?\n\r?\n  function renderOverview\(\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(badgeBlock, 'setShortcutBadge and renderOverview must exist in js/super-admin.js');
+  const nowIso = new Date().toISOString();
+  const runner = new Function(
+    'document', 'Ipon', 'profiles', 'groups', 'bugReports', 'featureRequests', 'accountActivities', 'activityLogs', 'storageOverview', 'formatBytes',
+    `${badgeBlock}; return renderOverview;`
+  )(
+    { getElementById: getEl },
+    { escapeHtml: (s) => String(s || '') },
+    [
+      { id: 'sa', role: 'SUPER_ADMIN', status: 'ACTIVE' },
+      { id: 'u1', role: 'ADMIN', status: 'ACTIVE' },
+      { id: 'u2', role: 'MEMBER', status: 'ACTIVE' },
+      { id: 'u3', role: 'TREASURER', status: 'DISABLED' },
+      { id: 'u4', role: 'MEMBER', status: 'PENDING' }
+    ],
+    [
+      { id: 'g1', status: 'ACTIVE', workspace_mode: 'GROUP' },
+      { id: 'g2', status: 'ACTIVE', workspace_mode: 'SOLO' }
+    ],
+    [{ id: 'b1', status: 'OPEN' }],
+    [{ id: 'f1', status: 'PENDING' }, { id: 'f2', status: 'IMPLEMENTED' }],
+    [{ user_id: 'u1', occurred_at: nowIso }],
+    [{ id: 'a1' }, { id: 'a2' }],
+    { reclaimable_rejected_count: 2, reclaimable_rejected_bytes: 4096 },
+    (n) => `${n} B`
+  );
+  runner();
+  assert.equal(getEl('metric-total-users').textContent, 4);
+  assert.equal(getEl('metric-active-users').textContent, 2);
+  assert.equal(getEl('metric-suspended-users').textContent, 1);
+  assert.equal(getEl('metric-suspended-card').classList.contains('has-alert'), true);
+  assert.equal(getEl('metric-groups').textContent, 2);
+  assert.equal(getEl('metric-groups-meta').textContent, '1 group · 1 solo');
+  assert.equal(getEl('shortcut-count-users').textContent, '4 registered');
+  assert.equal(getEl('shortcut-count-bugs').textContent, '1 open');
+  assert.equal(getEl('shortcut-count-bugs').classList.contains('has-pending'), true);
+  assert.equal(getEl('shortcut-count-features').textContent, '1 pending');
+  assert.match(getEl('platform-attention').innerHTML, /1 open bug report/);
+  assert.match(getEl('platform-attention').innerHTML, /1 pending feature request/);
+  assert.match(getEl('platform-attention').innerHTML, /1 suspended user account/);
+  assert.match(getEl('platform-attention').innerHTML, /1 pending user account/);
+  assert.match(getEl('platform-attention').innerHTML, /2 old rejected receipts to purge/);
+
+  // Premium card styling + dark mode + mobile responsiveness
+  assert.match(css, /\.platform-metric-card\s*\{/);
+  assert.match(css, /\.platform-shortcut-badge\.has-pending\s*\{/);
+  assert.match(css, /html\[data-theme="dark"\] \.platform-metric-card\s*\{/);
+  assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.platform-metric-card\s*\{/);
 });
