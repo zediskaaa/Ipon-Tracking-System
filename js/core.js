@@ -8308,6 +8308,169 @@
     }
   }
 
+  function pdfSafeText(value) {
+    return String(value ?? '')
+      .replace(/\u20B1/g, 'PHP ')
+      .replace(/[\u2013\u2014]/g, '-')
+      .replace(/\u2026/g, '...')
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/[^\x20-\x7E]/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  function pdfEscapeLiteral(text) {
+    return pdfSafeText(text)
+      .replace(/\\/g, '\\\\')
+      .replace(/\(/g, '\\(')
+      .replace(/\)/g, '\\)');
+  }
+
+  function wrapPdfLine(text, maxChars = 90) {
+    const clean = pdfSafeText(text);
+    if (!clean) return [];
+    if (clean.length <= maxChars) return [clean];
+    const words = clean.split(' ');
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+      if (!cur) cur = w;
+      else if (cur.length + 1 + w.length <= maxChars) cur += ' ' + w;
+      else { lines.push(cur); cur = w; }
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  function extractPrintablePdfLines(fallbackTitle) {
+    const lines = [];
+    const title = pdfSafeText(document.querySelector('.page-header h1')?.textContent || fallbackTitle || 'myIPON Report');
+    const sub = pdfSafeText(document.querySelector('.page-header p:not(.eyebrow)')?.textContent || '');
+    lines.push({ text: title, bold: true, size: 16, gapAfter: 4 });
+    if (sub) wrapPdfLine(sub, 92).forEach((l) => lines.push({ text: l, size: 9.5, gapAfter: 2 }));
+    lines.push({ text: 'Generated ' + isoDate(), size: 9, gapAfter: 10, rule: true });
+
+    const stats = [...document.querySelectorAll('.stats-grid .stat-card')];
+    if (stats.length) {
+      const pairs = stats.map((c) => {
+        const k = pdfSafeText(c.querySelector('span')?.textContent || '');
+        const v = pdfSafeText(c.querySelector('strong')?.textContent || '');
+        return k && v ? k + ': ' + v : '';
+      }).filter(Boolean);
+      if (pairs.length) {
+        wrapPdfLine(pairs.join('  |  '), 88).forEach((l) => lines.push({ text: l, bold: true, size: 10, gapAfter: 3 }));
+        lines.push({ text: '', size: 6, gapAfter: 6 });
+      }
+    }
+
+    document.querySelectorAll('.panel, .report-panel').forEach((panel) => {
+      if (panel.hidden || panel.style?.display === 'none') return;
+      const heading = pdfSafeText(panel.querySelector('.panel-header h2')?.textContent || '');
+      if (heading) lines.push({ text: heading, bold: true, size: 12, gapAfter: 4 });
+      const rows = [...panel.querySelectorAll('table.data-table tr')];
+      rows.forEach((tr, rowIdx) => {
+        if (tr.hidden) return;
+        const cells = [...tr.children].filter((cell) => !cell.classList?.contains('table-actions') && !cell.querySelector?.('.table-actions'));
+        const txt = cells.map((c) => pdfSafeText(c.textContent || '')).filter(Boolean).join('  |  ');
+        if (!txt) return;
+        const isHeader = rowIdx === 0 || Boolean(tr.closest('thead'));
+        wrapPdfLine(txt, 94).forEach((l) => lines.push({ text: l, bold: isHeader, size: isHeader ? 9 : 8.8, gapAfter: 2 }));
+      });
+      if (!rows.length) {
+        panel.querySelectorAll('.archive-row').forEach((row) => {
+          const t = pdfSafeText(row.textContent || '');
+          wrapPdfLine(t, 94).forEach((l) => lines.push({ text: l, size: 9, gapAfter: 2 }));
+        });
+      }
+      lines.push({ text: '', size: 6, gapAfter: 6 });
+    });
+    return lines;
+  }
+
+  function buildPdfBytesFromLines(lineEntries) {
+    const pageH = 792;
+    const topY = 748;
+    const bottomY = 48;
+    const pages = [];
+    let current = [];
+    let y = topY;
+    for (const entry of lineEntries) {
+      const step = (entry.size || 10) + (entry.gapAfter ?? 4);
+      if (y - step < bottomY && current.length) {
+        pages.push(current);
+        current = [];
+        y = topY;
+      }
+      if (entry.text) current.push({ ...entry, y });
+      if (entry.rule) current.push({ ruleY: y - 4 });
+      y -= step;
+    }
+    if (current.length || !pages.length) pages.push(current);
+
+    const objs = [];
+    const pageObjIds = [];
+    const baseObj = 5; // 1=Catalog, 2=Pages, 3=Helvetica, 4=Helvetica-Bold
+    pages.forEach((pageLines, idx) => {
+      const pageId = baseObj + idx * 2;
+      const contentId = pageId + 1;
+      pageObjIds.push(pageId);
+      const streamParts = ['BT'];
+      for (const item of pageLines) {
+        if (item.ruleY) {
+          streamParts.push(`ET 0.75 w 42 ${item.ruleY.toFixed(1)} m 570 ${item.ruleY.toFixed(1)} l S BT`);
+          continue;
+        }
+        const fontRef = item.bold ? '/F2' : '/F1';
+        const fontSize = (item.size || 10).toFixed(1);
+        streamParts.push(`${fontRef} ${fontSize} Tf 1 0 0 1 42 ${item.y.toFixed(1)} Tm (${pdfEscapeLiteral(item.text)}) Tj`);
+      }
+      streamParts.push('ET');
+      const streamBody = streamParts.join('\n');
+      objs.push({ id: pageId, body: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 ${pageH}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>` });
+      objs.push({ id: contentId, body: `<< /Length ${streamBody.length} >>\nstream\n${streamBody}\nendstream` });
+    });
+
+    const ordered = [
+      { id: 1, body: '<< /Type /Catalog /Pages 2 0 R >>' },
+      { id: 2, body: `<< /Type /Pages /Kids [${pageObjIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjIds.length} >>` },
+      { id: 3, body: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>' },
+      { id: 4, body: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>' },
+      ...objs
+    ].sort((a, b) => a.id - b.id);
+
+    let out = '%PDF-1.4\n';
+    const offsets = [0];
+    for (const o of ordered) {
+      offsets[o.id] = out.length;
+      out += `${o.id} 0 obj\n${o.body}\nendobj\n`;
+    }
+    const xrefStart = out.length;
+    out += `xref\n0 ${ordered.length + 1}\n0000000000 65535 f \n`;
+    for (let i = 1; i <= ordered.length; i++) {
+      out += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+    }
+    out += `trailer\n<< /Size ${ordered.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+    return new Uint8Array([...out].map((ch) => ch.charCodeAt(0) & 0xFF));
+  }
+
+  async function savePrintablePdf(jobName = 'myIPON-report') {
+    const safeBase = normalizeDownloadFileName(jobName, 'myIPON-report').replace(/\.pdf$/i, '');
+    const fileName = `${safeBase}.pdf`;
+    const bytes = buildPdfBytesFromLines(extractPrintablePdfLines(jobName));
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    if (typeof bgPlugin?.downloadFile === 'function') {
+      const dataUrl = await blobToDataUrl(blob);
+      return await downloadFile(dataUrl, fileName, { mimeType: 'application/pdf' });
+    }
+    const blobUrl = URL.createObjectURL(blob);
+    try {
+      return await downloadFile(blobUrl, fileName, { mimeType: 'application/pdf' });
+    } finally {
+      setTimeout(() => { try { URL.revokeObjectURL(blobUrl); } catch { } }, 2000);
+    }
+  }
+
   async function printPage({ jobName = document.title || 'myIPON Report' } = {}) {
     const bgPlugin = getBackgroundNotificationsPlugin();
     if (typeof bgPlugin?.printPage === 'function') {
@@ -8315,7 +8478,11 @@
         jobName: normalizeDownloadFileName(jobName, 'myIPON Report')
       });
     }
-    window.print?.();
+    const isNativeShell = Boolean(window.Capacitor?.isNativePlatform?.() || /myIPONApp\/\d+|\bwv\b/i.test(navigator?.userAgent || ''));
+    if (isNativeShell || typeof window.print !== 'function') {
+      return await savePrintablePdf(`${jobName || 'myIPON-report'}-${isoDate()}`);
+    }
+    window.print();
     return { started: true };
   }
 

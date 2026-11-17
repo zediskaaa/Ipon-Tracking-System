@@ -11475,7 +11475,7 @@ test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR I
   assert.match(css, /\.invite-copy-link-full\s*\{/);
 });
 
-test('Reports and member statement CSV exports and Print/Save PDF support Android WebView and mobile browsers', () => {
+test('Reports and member statement CSV exports and Print/Save PDF support Android WebView and mobile browsers', async () => {
   const coreJs = read('js/core.js');
   const reportsJs = read('js/reports.js');
   const userJs = read('js/user.js');
@@ -11500,4 +11500,97 @@ test('Reports and member statement CSV exports and Print/Save PDF support Androi
   assert.match(pluginJava, /@PluginMethod[\s\S]*?public void printPage\(PluginCall call\)/);
   assert.match(pluginJava, /PrintManager/);
   assert.match(pluginJava, /createPrintDocumentAdapter/);
+
+  // Runtime VM test: old APK without bgPlugin.printPage generates valid PDF 1.4 & BOM CSV via bgPlugin.downloadFile
+  const dlCalls = [];
+  class MockFileReader {
+    readAsDataURL(blob) {
+      blob.arrayBuffer().then((buf) => {
+        this.result = `data:${blob.type || 'application/octet-stream'};base64,${Buffer.from(buf).toString('base64')}`;
+        this.onload?.();
+      });
+    }
+  }
+  const makeNode = (text = '', tag = 'DIV') => ({
+    tagName: tag,
+    hidden: false,
+    textContent: text,
+    style: {},
+    dataset: {},
+    classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+    children: [],
+    setAttribute() {},
+    removeAttribute() {},
+    addEventListener() {},
+    appendChild() {},
+    remove() {},
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    closest: () => null
+  });
+  const headerEl = Object.assign(makeNode('Reports', 'H1'));
+  const panelEl = Object.assign(makeNode('', 'SECTION'), {
+    querySelector: (sel) => (sel === '.panel-header h2' ? makeNode('Monthly report', 'H2') : null),
+    querySelectorAll: (sel) => {
+      if (sel === 'table.data-table tr') {
+        const thRow = Object.assign(makeNode(), { children: [makeNode('Month', 'TH'), makeNode('Additions', 'TH')] });
+        const trRow = Object.assign(makeNode(), { children: [makeNode('2026-11', 'TD'), makeNode('₱500.00', 'TD')] });
+        return [thRow, trRow];
+      }
+      return [];
+    }
+  });
+  const vmCtx = {
+    window: null,
+    location: { href: 'https://my-ipon.vercel.app/reports.html', pathname: '/reports.html', search: '', origin: 'https://my-ipon.vercel.app' },
+    document: {
+      title: 'Reports — myIPON',
+      head: { insertAdjacentHTML() {}, querySelector: () => null },
+      body: Object.assign(makeNode('', 'BODY'), { insertAdjacentHTML() {} }),
+      documentElement: { setAttribute() {}, removeAttribute() {}, dataset: {} },
+      createElement: (tag) => makeNode('', String(tag || 'DIV').toUpperCase()),
+      querySelector: (sel) => (sel === '.page-header h1' ? headerEl : null),
+      querySelectorAll: (sel) => (sel === '.panel, .report-panel' ? [panelEl] : []),
+      getElementById: () => null,
+      addEventListener() {}
+    },
+    addEventListener() {},
+    navigator: { userAgent: 'Mozilla/5.0 myIPONApp/20' },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Blob,
+    FileReader: MockFileReader,
+    URL,
+    TextEncoder,
+    Buffer,
+    Map, Set, Date, Math, JSON, Promise, RegExp, Error, Array, Object, String, Number, Boolean,
+    setTimeout, clearTimeout,
+    IPON_CONFIG: { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' },
+    Capacitor: {
+      isNativePlatform: () => true,
+      Plugins: {
+        BackgroundNotifications: {
+          downloadFile: async (args) => { dlCalls.push(args); return { saved: true, started: true, fileName: args.fileName }; }
+        }
+      }
+    }
+  };
+  vmCtx.window = vmCtx;
+  vm.runInNewContext(coreJs, vmCtx, { filename: 'js/core.js' });
+
+  await vmCtx.window.Ipon.downloadCsv('Month,Amount\n2026-11,₱500.00', 'test-report.csv');
+  assert.equal(dlCalls.length, 1);
+  assert.equal(dlCalls[0].fileName, 'test-report.csv');
+  const decodedCsv = Buffer.from(dlCalls[0].url.split(',')[1], 'base64').toString('utf8');
+  assert.equal(decodedCsv.startsWith('\uFEFFMonth,Amount'), true);
+
+  await vmCtx.window.Ipon.printPage({ jobName: 'myIPON Report 2026' });
+  assert.equal(dlCalls.length, 2);
+  assert.equal(dlCalls[1].mimeType, 'application/pdf');
+  assert.match(dlCalls[1].fileName, /^myIPON Report 2026-\d{4}-\d{2}-\d{2}\.pdf$/);
+  const decodedPdf = Buffer.from(dlCalls[1].url.split(',')[1], 'base64').toString('latin1');
+  assert.equal(decodedPdf.startsWith('%PDF-1.4\n'), true);
+  assert.match(decodedPdf, /Monthly report/);
+  assert.match(decodedPdf, /PHP 500\.00/);
+  assert.equal(decodedPdf.endsWith('%%EOF'), true);
 });
