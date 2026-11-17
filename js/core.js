@@ -4817,6 +4817,10 @@
   } = {}) {
     const dialog = document.getElementById('notice-detail-dialog');
     if (!dialog) return null;
+    if (!dialog.dataset?.deepLinkCleanBound && typeof dialog.addEventListener === 'function') {
+      if (dialog.dataset) dialog.dataset.deepLinkCleanBound = '1';
+      dialog.addEventListener('close', clearDeepLinkUrlState);
+    }
     const titleEl = document.getElementById('notice-detail-title');
     const subtitleEl = document.getElementById('notice-detail-subtitle');
     const bodyEl = document.getElementById('notice-detail-body');
@@ -5217,6 +5221,34 @@
     return target;
   }
 
+  const ONE_SHOT_DEEP_LINK_PARAMS = [
+    'announcement', 'release', 'announcement_title', 'notice',
+    'review', 'review_notice', 'record', 'thread',
+    'feature_request', 'bug_report', 'reminder', 'exemption',
+    'member', 'access_user', 'create_group', 'workspace_mode'
+  ];
+
+  function clearDeepLinkUrlState() {
+    try {
+      const rawUrl = `${location.pathname || '/'}${location.search || ''}${location.hash || ''}`;
+      const current = new URL(rawUrl, location.origin || 'https://ipon.local');
+      let changed = false;
+      for (const key of ONE_SHOT_DEEP_LINK_PARAMS) {
+        if (current.searchParams.has(key)) {
+          current.searchParams.delete(key);
+          changed = true;
+        }
+      }
+      const currentFile = (current.pathname.split('/').pop() || '').toLowerCase();
+      if (currentFile !== 'super-admin.html' && (current.hash === '#announcements' || current.hash === '#announcement-heading')) {
+        current.hash = '';
+        changed = true;
+      }
+      if (!changed || typeof history?.replaceState !== 'function') return;
+      history.replaceState(null, '', `${current.pathname}${current.search}${current.hash}`);
+    } catch { /* ignore */ }
+  }
+
   let deepLinkHandlerRegistered = false;
   function consumeDeepLink(handler) {
     if (typeof handler !== 'function') return;
@@ -5227,6 +5259,9 @@
         const handled = await handler(parsed.searchParams, parsed.hash, parsed);
         if (!handled && parsed.searchParams.has('notice')) {
           await openNoticeDetailModal(parsed.searchParams.get('notice'));
+        }
+        if (!urlLike && (handled || parsed.searchParams.has('notice'))) {
+          clearDeepLinkUrlState();
         }
       } catch (error) {
         console.warn('Deep-link handling error:', error);
@@ -7248,7 +7283,7 @@
       document.getElementById('announcement-viewer-close')?.addEventListener('click', () => viewerDialog.close());
       document.getElementById('announcement-viewer-done')?.addEventListener('click', () => viewerDialog.close());
       viewerDialog.addEventListener('click', (event) => { if (event.target === viewerDialog) viewerDialog.close(); });
-      viewerDialog.addEventListener('close', () => { stopViewerMedia(); openItemId = null; });
+      viewerDialog.addEventListener('close', () => { stopViewerMedia(); openItemId = null; clearDeepLinkUrlState(); });
 
       mediaInput?.addEventListener('change', () => {
         const chosen = [...(mediaInput.files || [])];
@@ -7641,6 +7676,7 @@
 
   async function switchActiveGroup(groupId) {
     const result = await rpc('switch_active_group', { p_group_id: groupId });
+    clearDeepLinkUrlState();
     if (currentProfile && result) {
       currentProfile.group_id = result.group_id;
       currentProfile.role = result.role;

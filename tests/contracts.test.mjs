@@ -5601,6 +5601,32 @@ test('notification deep-link runtime routes updates, reviews, reminders, and fal
   assert.equal(rpcCalls.length, 1);
   assert.equal(rpcCalls[0][0], 'get_release_features');
   assert.equal(rpcCalls[0][1]?.p_release_version, '2.4.0');
+
+  // F. Closing announcement viewer, switching groups, or reloading clears one-shot ?release=/?announcement= URL state
+  ctx.history.replaceState(null, '', 'dashboard.html?release=2.4.0');
+  viewerDialog.close();
+  viewerDialog.dispatch('close');
+  assert.equal(locationObj.search, '');
+  assert.equal(historyUpdates.at(-1), '/dashboard.html');
+
+  ctx.history.replaceState(null, '', 'dashboard.html?announcement=ann-1#announcements');
+  assert.equal(locationObj.search, '?announcement=ann-1');
+  await ctx.window.Ipon.switchActiveGroup('group-2');
+  assert.equal(locationObj.search, '');
+  assert.equal(locationObj.hash, '');
+
+  viewerDialog.open = false;
+  locationObj.href = 'https://my-ipon.vercel.app/dashboard.html?release=2.4.0#announcements';
+  ctx.history.replaceState(null, '', 'dashboard.html?release=2.4.0#announcements');
+  consumeDeepLink(async (params) => {
+    const release = params.get('release') || '';
+    if (release) return annController.openMatching({ releaseVersion: release });
+    return false;
+  });
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  assert.equal(viewerDialog.open, true);
+  assert.equal(locationObj.search, '');
+  assert.equal(locationObj.hash, '');
 });
 
 test('audit log renders plain-language summaries and clean field-level Before/After diffs without raw column names or base64 dumps', () => {
@@ -11066,4 +11092,14 @@ test('Write with AI keeps release announcements strictly factual without AI embe
   assert.match(edgeSanitized.text, /• History Audit: Retained 30-day audit history on deleted records\./);
   assert.doesNotMatch(edgeSanitized.text, /without unexpected resets|more stable and dependable experience|for a smoother workflow/i);
   assert.match(saJs, /function stripReleaseFluffTails\(text\)/);
+});
+
+test('Android MainActivity clears consumed notification_link intent extra and asset caches match v22', () => {
+  const mainAct = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const swJs = read('sw.js');
+  const dashHtml = read('dashboard.html');
+  assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
+  assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
+  assert.match(swJs, /ipon-shell-v22/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261117-111/);
 });

@@ -102,6 +102,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        setIntent(intent);
         handleNotificationIntent(intent);
     }
 
@@ -165,6 +166,7 @@ public class MainActivity extends BridgeActivity {
         if (intent == null) return;
         String link = intent.getStringExtra("notification_link");
         if (link == null || link.isEmpty()) return;
+        intent.removeExtra("notification_link");
         if (!link.matches("^[a-zA-Z0-9_-]+\\.html(?:\\?[a-zA-Z0-9_=&:%.-]+)?(?:#[a-zA-Z0-9_-]+)?$")) return;
         if (bridge != null && bridge.getWebView() != null) {
             final String safePath = link;
