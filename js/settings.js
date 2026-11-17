@@ -21,6 +21,7 @@
   const cycleResetBtn = document.getElementById('cycle-reset-btn');
   let currentSettingsAdminAmount = 100;
   let members = [];
+  const accessProfiles = new Map();
   let currentGroupId = '';
   Ipon.bindPasswordStrength(treasurerForm.elements.password, () => [treasurerForm.elements.first_name.value, treasurerForm.elements.middle_name.value, treasurerForm.elements.last_name.value, treasurerForm.elements.email.value]);
 
@@ -79,14 +80,26 @@
       }
     }
     const profiles = (Array.isArray(accessRows) ? accessRows : []).filter((row) => ['MEMBER', 'TREASURER'].includes(row.role));
+    accessProfiles.clear();
+    profiles.forEach((profile) => accessProfiles.set(profile.user_id, profile));
 
-    accessBody.innerHTML = profiles.length ? profiles.map((profile) => `<tr>
-      <td><strong>${Ipon.escapeHtml(profile.full_name)}</strong><br><small class="field-help">${Ipon.escapeHtml(profile.email || '')}</small></td>
-      <td><select data-field="role" data-id="${profile.user_id}"><option value="MEMBER" ${profile.role === 'MEMBER' ? 'selected' : ''}>MEMBER</option><option value="TREASURER" ${profile.role === 'TREASURER' ? 'selected' : ''}>TREASURER</option></select></td>
-      <td><select data-field="status" data-id="${profile.user_id}"><option value="PENDING" ${profile.status === 'PENDING' ? 'selected' : ''}>PENDING</option><option value="ACTIVE" ${profile.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option><option value="DISABLED" ${profile.status === 'DISABLED' ? 'selected' : ''}>DISABLED</option></select></td>
-      <td><select data-field="member" data-id="${profile.user_id}"><option value="">Not linked</option>${members.map((member) => `<option value="${member.id}" ${profile.member_id === member.id ? 'selected' : ''}>${Ipon.escapeHtml(member.full_name)}${member.activation_status !== 'ACTIVE' ? ' (Pending login)' : ''}</option>`).join('')}</select></td>
-      <td><button class="icon-action" type="button" data-save-access="${profile.user_id}">Save</button></td>
-    </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No member or treasurer login accounts in this group.</td></tr>';
+    accessBody.innerHTML = profiles.length ? profiles.map((profile) => {
+      const fullName = String(profile.full_name || '').trim();
+      const memberName = String(profile.member_name || '').trim();
+      const memberNote = profile.role === 'MEMBER'
+        ? (!profile.member_id
+            ? '<br><small class="field-help">Member profile links on activation</small>'
+            : (memberName && memberName.toLowerCase() !== fullName.toLowerCase()
+                ? `<br><small class="field-help">Member profile: ${Ipon.escapeHtml(memberName)}</small>`
+                : ''))
+        : '';
+      return `<tr>
+      <td data-label="User"><strong>${Ipon.escapeHtml(profile.full_name)}</strong><br><small class="field-help">${Ipon.escapeHtml(profile.email || '')}</small>${memberNote}</td>
+      <td data-label="Role"><select data-field="role" data-id="${profile.user_id}" aria-label="Role for ${Ipon.escapeHtml(profile.full_name)}"><option value="MEMBER" ${profile.role === 'MEMBER' ? 'selected' : ''}>MEMBER</option><option value="TREASURER" ${profile.role === 'TREASURER' ? 'selected' : ''}>TREASURER</option></select></td>
+      <td data-label="Status"><select data-field="status" data-id="${profile.user_id}" aria-label="Status for ${Ipon.escapeHtml(profile.full_name)}"><option value="PENDING" ${profile.status === 'PENDING' ? 'selected' : ''}>PENDING</option><option value="ACTIVE" ${profile.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option><option value="DISABLED" ${profile.status === 'DISABLED' ? 'selected' : ''}>DISABLED</option></select></td>
+      <td data-label="Actions"><button class="icon-action" type="button" data-save-access="${profile.user_id}">Save</button></td>
+    </tr>`;
+    }).join('') : '<tr><td colspan="4" class="empty-state">No member or treasurer login accounts in this group.</td></tr>';
   }
 
   groupSelect?.addEventListener('change', async () => {
@@ -180,17 +193,22 @@
     const button = event.target.closest('[data-save-access]');
     if (!button) return;
     const id = button.dataset.saveAccess;
+    const profile = accessProfiles.get(id) || null;
     const role = accessBody.querySelector(`[data-field="role"][data-id="${id}"]`).value;
     const status = accessBody.querySelector(`[data-field="status"][data-id="${id}"]`).value;
-    const memberSelect = accessBody.querySelector(`[data-field="member"][data-id="${id}"]`);
-    const memberId = role === 'MEMBER' ? memberSelect.value || null : null;
-    if (role === 'MEMBER' && status === 'ACTIVE' && !memberId) {
-      Ipon.setFieldError(memberSelect, 'Link an active login to a member before activation.');
-      memberSelect.focus();
-      Ipon.toast('Link an active login to a member before activation.', 'error');
+    const memberId = role === 'MEMBER' ? (profile?.member_id || null) : null;
+    if (profile && profile.role === role && profile.status === status && (role !== 'MEMBER' || status !== 'ACTIVE' || profile.member_id)) {
+      Ipon.toast('No access changes to save.');
       return;
     }
-    const accepted = await Ipon.confirmAction({ title: 'Update member access?', message: `This member login will be ${status.toLowerCase()}.`, acceptLabel: 'Update access' });
+    const targetName = profile?.full_name || 'this user';
+    let message = `Set ${targetName}'s login status to ${status.toLowerCase()}.`;
+    if (profile && profile.role !== role) {
+      message = role === 'TREASURER'
+        ? `Change ${targetName}'s role from Member to Treasurer (${status.toLowerCase()})? Treasurers manage group records without a linked contributor profile.`
+        : `Change ${targetName}'s role from Treasurer to Member (${status.toLowerCase()})? Their member profile will be linked automatically.`;
+    }
+    const accepted = await Ipon.confirmAction({ title: 'Update account access?', message, acceptLabel: 'Update access' });
     if (!accepted) return;
     Ipon.setBusy(button, true);
     try {

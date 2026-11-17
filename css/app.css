@@ -14464,4 +14464,32 @@ html[data-theme="dark"] .budget-add-btn:hover {
     white-space: nowrap;
     overflow-wrap: normal;
   }
+  .settings-panel-access .data-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  .settings-panel-access .data-table th:nth-child(1),
+  .settings-panel-access .data-table td:nth-child(1) {
+    width: 40%;
+    overflow-wrap: anywhere;
+  }
+  .settings-panel-access .data-table th:nth-child(2),
+  .settings-panel-access .data-table td:nth-child(2),
+  .settings-panel-access .data-table th:nth-child(3),
+  .settings-panel-access .data-table td:nth-child(3) {
+    width: 22%;
+  }
+  .settings-panel-access .data-table th:nth-child(4),
+  .settings-panel-access .data-table td:nth-child(4) {
+    width: 16%;
+  }
+  .settings-panel-access .data-table tbody td {
+    vertical-align: top;
+  }
+  .settings-panel-access .data-table select,
+  .settings-panel-access .data-table td > .icon-action {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
 }

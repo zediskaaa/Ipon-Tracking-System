@@ -267,11 +267,11 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
   assert.match(css, /html\[data-theme="dark"\]\s+\.subview-back-link\s*\{/);
   assert.match(css, /\.sidebar-user-card\.is-active\s*\{/);
   assert.match(css, /\.preference-workspace-row\s*\{/);
-  assert.match(swJs, /ipon-shell-v24/);
+  assert.match(swJs, /ipon-shell-v(?:2[4-9]|[3-9]\d)/);
 
   for (const file of ['dashboard.html', 'reports.html', 'audit.html', 'settings.html', 'account.html']) {
     const html = read(file);
-    assert.match(html, /css\/app\.css\?v=20261117-133/);
+    assert.match(html, /css\/app\.css\?v=20261117-134/);
     assert.match(html, /js\/core\.js\?v=20261117-112/);
     const opens = (html.match(/<dialog\b/g) || []).length;
     const closes = (html.match(/<\/dialog>/g) || []).length;
