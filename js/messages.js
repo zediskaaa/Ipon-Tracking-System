@@ -55,7 +55,9 @@
     : true;
 
   const NEW_CHAT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+  const NEW_GROUP_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>';
   const BACK_ARROW_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>';
+  const CAMERA_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
 
   const state = {
     tab: 'chats', // chats | requests | friends | discover | notifications
@@ -105,7 +107,10 @@
     voiceTimer: null,
     openDropdownMsgId: null,
     showPinnedList: false,
-    activePinnedId: null
+    activePinnedId: null,
+    groupEditAvatarDataUrl: null,
+    groupEditAvatarClear: false,
+    groupEditAvatarConvId: null
   };
 
   function ipon() { return window.Ipon; }
@@ -160,9 +165,56 @@
     return new Intl.DateTimeFormat('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' }).format(d);
   }
 
+  function isGroupConv(conv) {
+    return Boolean(conv && String(conv.kind || '').toUpperCase() === 'GROUP');
+  }
+
+  function convDisplayTitle(conv) {
+    if (!conv) return 'Conversation';
+    if (isGroupConv(conv)) return String(conv.title || conv.full_name || 'Group Chat');
+    return String(conv.peer?.full_name || conv.full_name || 'User');
+  }
+
+  function findGroupMember(conv, userId) {
+    if (!conv || !userId) return null;
+    const target = String(userId);
+    const pool = [...(conv.members || []), ...(conv.members_preview || [])];
+    return pool.find((m) => String(m?.id || '') === target) || null;
+  }
+
+  function getTypingEntries(convId) {
+    const bucket = convId ? state.typingPeers.get(convId) : null;
+    if (!bucket) return [];
+    if (bucket instanceof Map) return [...bucket.values()].filter(Boolean);
+    return bucket.at ? [bucket] : [];
+  }
+
+  function isConvTyping(convId) {
+    return getTypingEntries(convId).length > 0;
+  }
+
   function formatStatusLine(user, isTyping = false) {
-    if (isTyping) return 'Typing…';
+    const typingList = Array.isArray(isTyping) ? isTyping : [];
+    const typingOn = Array.isArray(isTyping) ? typingList.length > 0 : Boolean(isTyping);
+    if (typingOn) {
+      if (isGroupConv(user) && typingList.length === 1 && typingList[0]?.name) {
+        const first = String(typingList[0].name).trim().split(/\s+/)[0] || 'Someone';
+        return `${first} is typing…`;
+      }
+      if (isGroupConv(user) && typingList.length > 1) {
+        return `${typingList.length} people are typing…`;
+      }
+      return 'Typing…';
+    }
     if (!user) return '';
+    if (isGroupConv(user)) {
+      const members = Array.isArray(user.members) && user.members.length ? user.members : (user.members_preview || []);
+      const count = Math.max(Number(user.member_count || 0), Array.isArray(user.members) ? user.members.length : 0);
+      const myId = String(initializedProfile?.id || '');
+      const onlineOthers = members.filter((m) => m && String(m.id || '') !== myId && m.allow_online_status !== false && ipon().isUserOnline(m.id)).length;
+      const base = `${count || 2} ${count === 1 ? 'member' : 'members'}`;
+      return onlineOthers > 0 ? `${base} · ${onlineOthers} active now` : base;
+    }
     if (user.is_blocked || user.friendship_status === 'BLOCKED_BY_ME' || user.friendship_status === 'BLOCKED_ME') {
       return 'Messaging restricted';
     }
@@ -181,6 +233,20 @@
   function findKnownPeer(conversationId, userId = null) {
     if (conversationId) {
       const conv = state.conversations.find((c) => c.id === conversationId);
+      if (conv && isGroupConv(conv)) {
+        return {
+          id: conv.id,
+          conversation_id: conv.id,
+          kind: 'GROUP',
+          title: conv.title,
+          full_name: conv.title || 'Group Chat',
+          description: conv.description || '',
+          avatar_url: conv.avatar_url || null,
+          member_count: conv.member_count || 2,
+          members_preview: conv.members_preview || [],
+          chat_theme: conv.chat_theme || 'paper'
+        };
+      }
       if (conv?.peer) return { ...conv.peer, chat_theme: conv.chat_theme || 'paper' };
     }
     if (userId) {
@@ -321,6 +387,131 @@
     return `<button type="button" class="msg-dp-btn" data-social-user-dp="${escapeHtml(user.id)}" aria-label="View profile options for ${escapeHtml(name)}" title="Profile & options">${wrap}</button>`;
   }
 
+  function groupAvatarHtml(conv, sizeClass = 'avatar-md', { clickable = false, showPresence = true } = {}) {
+    if (!conv) return '';
+    const title = convDisplayTitle(conv);
+    const cls = escapeHtml(sizeClass);
+    const rawUrl = typeof conv.avatar_url === 'string' ? conv.avatar_url.trim() : '';
+    const safeUrl = (rawUrl.startsWith('data:image/') || /^https:\/\//i.test(rawUrl)) ? rawUrl : '';
+    const myId = String(initializedProfile?.id || '');
+    const pool = (Array.isArray(conv.members_preview) && conv.members_preview.length
+      ? conv.members_preview
+      : (Array.isArray(conv.members) ? conv.members : [])
+    ).filter((m) => m && String(m.id || '') !== myId);
+    const activeOnline = showPresence && pool.some((m) => m.allow_online_status !== false && ipon().isUserOnline(m.id));
+    const dot = showPresence
+      ? `<span class="presence-dot${activeOnline ? ' is-online' : ''}" aria-label="${activeOnline ? 'Members online' : 'Offline'}" title="${activeOnline ? 'Members active now' : 'No other members online'}"></span>`
+      : '';
+
+    let coreHtml = '';
+    if (safeUrl) {
+      const letters = escapeHtml(ipon().initials(title));
+      coreHtml = `<span class="avatar-circle ${cls}" title="${escapeHtml(title)}"><img src="${safeUrl}" alt="${escapeHtml(title)}" data-avatar-img><span class="avatar-fallback-inner" hidden>${letters}</span></span>`;
+    } else if (pool.length >= 2) {
+      const renderMini = (m, slotCls) => {
+        const mUrl = typeof m?.avatar_url === 'string' ? m.avatar_url.trim() : '';
+        const mSafe = (mUrl.startsWith('data:image/') || /^https:\/\//i.test(mUrl)) ? mUrl : '';
+        const mName = String(m?.full_name || 'Member');
+        const mLetters = escapeHtml(ipon().initials(mName));
+        return mSafe
+          ? `<span class="msg-group-av-tile ${slotCls}"><img src="${mSafe}" alt="${escapeHtml(mName)}" data-avatar-img><span class="avatar-fallback-inner" hidden>${mLetters}</span></span>`
+          : `<span class="msg-group-av-tile ${slotCls} is-fallback">${mLetters}</span>`;
+      };
+      coreHtml = `<span class="msg-group-avatar ${cls}" title="${escapeHtml(title)}">${renderMini(pool[1], 'is-back')}${renderMini(pool[0], 'is-front')}</span>`;
+    } else if (pool.length === 1) {
+      const m = pool[0];
+      const mUrl = typeof m?.avatar_url === 'string' ? m.avatar_url.trim() : '';
+      const mSafe = (mUrl.startsWith('data:image/') || /^https:\/\//i.test(mUrl)) ? mUrl : '';
+      const mName = String(m?.full_name || 'Member');
+      const mLetters = escapeHtml(ipon().initials(mName));
+      const gLetters = escapeHtml(ipon().initials(title));
+      const gTile = `<span class="msg-group-av-tile is-back is-group-badge">${gLetters}</span>`;
+      const mTile = mSafe
+        ? `<span class="msg-group-av-tile is-front"><img src="${mSafe}" alt="${escapeHtml(mName)}" data-avatar-img><span class="avatar-fallback-inner" hidden>${mLetters}</span></span>`
+        : `<span class="msg-group-av-tile is-front is-fallback">${mLetters}</span>`;
+      coreHtml = `<span class="msg-group-avatar ${cls}" title="${escapeHtml(title)}">${gTile}${mTile}</span>`;
+    } else {
+      coreHtml = `<span class="avatar-circle avatar-fallback msg-group-monogram ${cls}" title="${escapeHtml(title)}">${escapeHtml(ipon().initials(title))}</span>`;
+    }
+
+    const wrap = `<span class="avatar-presence-wrap msg-avatar-wrap msg-group-avatar-wrap">${coreHtml}${dot}</span>`;
+    if (!clickable) return wrap;
+    return `<button type="button" class="msg-dp-btn" data-open-group-info aria-label="View group chat info for ${escapeHtml(title)}" title="Group info & members">${wrap}</button>`;
+  }
+
+  function convAvatarHtml(conv, sizeClass = 'avatar-md', opts = {}) {
+    if (!conv) return '';
+    if (isGroupConv(conv)) return groupAvatarHtml(conv, sizeClass, opts);
+    return userAvatarHtml(conv.peer || conv, sizeClass, opts);
+  }
+
+  function groupPicPreviewMarkup({ conv = null, dataUrl = null, clear = false, title = '', sizeClass = 'avatar-lg' } = {}) {
+    const label = String(title || convDisplayTitle(conv) || 'Group Chat').trim();
+    const safeDraft = !clear && typeof dataUrl === 'string' && dataUrl.startsWith('data:image/') ? dataUrl : '';
+    if (safeDraft) {
+      return `<span class="avatar-circle ${escapeHtml(sizeClass)}" title="${escapeHtml(label)}"><img src="${safeDraft}" alt="${escapeHtml(label)}" data-avatar-img><span class="avatar-fallback-inner" hidden>${escapeHtml(ipon().initials(label))}</span></span>`;
+    }
+    if (conv) {
+      const targetConv = clear ? { ...conv, avatar_url: null } : conv;
+      return groupAvatarHtml(targetConv, sizeClass, { showPresence: false });
+    }
+    const cleanInitials = label ? escapeHtml(ipon().initials(label)) : '';
+    return `<span class="avatar-circle ${escapeHtml(sizeClass)} msg-group-pic-placeholder" title="${escapeHtml(label || 'Group photo')}">${cleanInitials || CAMERA_ICON_SVG}</span>`;
+  }
+
+  async function prepareGroupPicDataUrl(file) {
+    if (!file) return null;
+    const prep = ipon()?.prepareAvatarDataUrl;
+    if (typeof prep !== 'function') throw new Error('Image processor is unavailable.');
+    const prepared = await prep(file);
+    const dataUrl = prepared?.dataUrl || (typeof prepared === 'string' ? prepared : '');
+    if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+      throw new Error('Please choose a valid picture file.');
+    }
+    return dataUrl;
+  }
+
+  async function uploadGroupPicIfNeeded(dataUrl) {
+    if (!dataUrl) return null;
+    const uploader = ipon()?.uploadMediaDataUrl;
+    if (typeof uploader !== 'function') return dataUrl;
+    return await uploader(dataUrl, { category: 'group-avatars', name: 'group-avatar.jpg' });
+  }
+
+  function syncGroupEditAvatarUi() {
+    const conv = state.activeThread?.conversation;
+    if (!conv || !isGroupConv(conv)) return;
+    const titleVal = document.getElementById('msg-group-edit-title')?.value || conv.title || '';
+    const hasDraft = Boolean(state.groupEditAvatarDataUrl);
+    const hasEffectivePic = hasDraft || (!state.groupEditAvatarClear && Boolean(conv.avatar_url));
+    const drawerPreview = document.getElementById('msg-group-drawer-avatar-slot');
+    if (drawerPreview) {
+      drawerPreview.innerHTML = groupPicPreviewMarkup({
+        conv,
+        dataUrl: state.groupEditAvatarDataUrl,
+        clear: state.groupEditAvatarClear,
+        title: titleVal,
+        sizeClass: 'avatar-lg'
+      });
+      ipon().bindAvatarFallbacks?.(drawerPreview);
+    }
+    const formPreview = document.getElementById('msg-group-edit-pic-preview');
+    if (formPreview) {
+      formPreview.innerHTML = groupPicPreviewMarkup({
+        conv,
+        dataUrl: state.groupEditAvatarDataUrl,
+        clear: state.groupEditAvatarClear,
+        title: titleVal,
+        sizeClass: 'avatar-md'
+      });
+      ipon().bindAvatarFallbacks?.(formPreview);
+    }
+    const pickBtn = document.getElementById('msg-group-edit-pic-btn');
+    if (pickBtn) pickBtn.textContent = hasEffectivePic ? 'Change photo' : 'Upload photo';
+    const removeBtn = document.getElementById('msg-group-edit-pic-remove');
+    if (removeBtn) removeBtn.hidden = !hasEffectivePic;
+  }
+
   function highlightMatches(escapedText, query) {
     if (!query) return escapedText;
     const cleanQ = escapeHtml(query.trim());
@@ -430,6 +621,9 @@
                     <button type="button" class="msg-new-chat-btn" id="msg-new-chat-btn" data-mode="compose" aria-label="Browse people directory" aria-pressed="false" title="New chat / Browse people">
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                     </button>
+                    <button type="button" class="msg-new-chat-btn msg-new-group-btn" id="msg-new-group-btn" aria-label="Create group chat" title="New group chat">
+                      ${NEW_GROUP_ICON_SVG}
+                    </button>
                   </div>
                   <div class="msg-filter-pills" id="msg-filter-pills">
                     <button type="button" class="msg-pill is-active" data-msg-filter="inbox">Inbox</button>
@@ -446,8 +640,11 @@
                     <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </div>
                   <h3>Select a conversation</h3>
-                  <p>Pick an existing chat on the left, check Message Requests, or use the search bar to find people.</p>
-                  <button type="button" class="button button-primary button-sm" id="msg-empty-find-btn">Browse people &amp; start chat</button>
+                  <p>Pick an existing chat on the left, create a group chat, or use the search bar to find people.</p>
+                  <div class="msg-empty-cta-row">
+                    <button type="button" class="button button-primary button-sm" id="msg-empty-find-btn">Browse people &amp; start chat</button>
+                    <button type="button" class="button button-secondary button-sm" id="msg-empty-group-btn">Create group chat</button>
+                  </div>
                 </div>
 
                 <div class="msg-thread-active" id="msg-thread-active" hidden>
@@ -481,6 +678,7 @@
                           <div class="msg-typing-live-inner">
                             <div class="msg-typing-avatar" id="msg-typing-avatar"></div>
                             <div class="msg-typing-bubble">
+                              <span class="msg-typing-sender" id="msg-typing-sender" hidden></span>
                               <span class="msg-typing-text" aria-hidden="true">is typing<span class="msg-typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
                               <span class="sr-only" id="msg-typing-live-text">Typing…</span>
                             </div>
@@ -571,13 +769,34 @@
           <div class="msg-forward-body" id="msg-forward-body"></div>
         </div>
       </dialog>
+
+      <!-- Create Group Chat / Add Members Dialog -->
+      <dialog class="form-dialog msg-sub-dialog msg-group-dialog" id="msg-group-dialog" aria-labelledby="msg-group-dialog-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div>
+              <h2 id="msg-group-dialog-title">New Group Chat</h2>
+              <p id="msg-group-dialog-sub">Pick friends or connections to start a shared group conversation.</p>
+            </div>
+            <button class="dialog-close" type="button" data-msg-group-close aria-label="Close group dialog"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="msg-group-dialog-body" id="msg-group-body"></div>
+        </div>
+      </dialog>
     `);
 
     document.getElementById('msg-workspace-dialog')?.addEventListener('close', () => {
       sendTypingBroadcast(false);
       clearTimeout(typingIdleTimer);
       typingIdleTimer = null;
-      state.typingPeers.forEach((entry) => { if (entry?.timer) clearTimeout(entry.timer); });
+      state.typingPeers.forEach((bucket) => {
+        if (bucket instanceof Map) {
+          bucket.forEach((entry) => { if (entry?.timer) clearTimeout(entry.timer); });
+          bucket.clear();
+        } else if (bucket?.timer) {
+          clearTimeout(bucket.timer);
+        }
+      });
       state.typingPeers.clear();
       const liveRow = document.getElementById('msg-typing-live');
       if (liveRow) {
@@ -899,7 +1118,7 @@
     if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
     if (!isWindowFocused) return false;
     if (typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
-    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
+    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
     if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
     if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
       return false;
@@ -933,7 +1152,10 @@
     const isDeleted = Boolean(m?.deleted_for_everyone_at);
     if (!mine || isDeleted) return '';
     if (conv?.receipts_enabled && m.read_at) {
-      return `<span class="msg-tick is-read" title="Seen" aria-label="Seen">${DOUBLE_CHECK_SVG}</span>`;
+      const seenTip = isGroupConv(conv) && Array.isArray(m.seen_by) && m.seen_by.length
+        ? `Seen by ${m.seen_by.map((x) => x?.full_name).filter(Boolean).join(', ')}`
+        : 'Seen';
+      return `<span class="msg-tick is-read" title="${escAttr(seenTip)}" aria-label="${escAttr(seenTip)}">${DOUBLE_CHECK_SVG}</span>`;
     }
     if (m.delivered_at) {
       return `<span class="msg-tick is-delivered" title="Delivered" aria-label="Delivered">${DOUBLE_CHECK_SVG}</span>`;
@@ -990,10 +1212,19 @@
     const nc = nextThread.conversation;
     if (
       pc.conversation_id !== nc.conversation_id
+      || pc.kind !== nc.kind
+      || pc.title !== nc.title
+      || pc.description !== nc.description
+      || (pc.avatar_url || '') !== (nc.avatar_url || '')
       || pc.status !== nc.status
       || pc.chat_theme !== nc.chat_theme
+      || Boolean(pc.is_muted) !== Boolean(nc.is_muted)
+      || Boolean(pc.is_pinned) !== Boolean(nc.is_pinned)
+      || Boolean(pc.is_archived) !== Boolean(nc.is_archived)
+      || Boolean(pc.marked_unread) !== Boolean(nc.marked_unread)
       || Boolean(pc.receipts_enabled) !== Boolean(nc.receipts_enabled)
       || pc.friendship_status !== nc.friendship_status
+      || (pc.members?.length || 0) !== (nc.members?.length || 0)
       || Boolean(prevThread.has_older) !== Boolean(nextThread.has_older)
     ) {
       return false;
@@ -1264,32 +1495,52 @@
         }
       }
       if (!q) return true;
-      const name = String(conv.peer?.full_name || '').toLowerCase();
-      const uname = String(conv.peer?.username || '').toLowerCase();
+      const isGrp = isGroupConv(conv);
+      const name = convDisplayTitle(conv).toLowerCase();
+      const uname = isGrp ? '' : String(conv.peer?.username || '').toLowerCase();
       const preview = String(conv.last_message_preview || '').toLowerCase();
-      return name.includes(q) || uname.includes(q) || preview.includes(q);
+      const memberBlob = isGrp
+        ? (conv.members_preview || []).map((m) => String(m?.full_name || '').toLowerCase()).join(' ')
+        : '';
+      return name.includes(q) || uname.includes(q) || preview.includes(q) || memberBlob.includes(q);
     });
   }
 
   function renderConversationRowHtml(conv) {
-    const peer = conv.peer || {};
+    const isGrp = isGroupConv(conv);
     const active = conv.id === state.activeConvId;
-    const isTyping = state.typingPeers.has(conv.id);
+    const typingEntries = getTypingEntries(conv.id);
+    const isTyping = typingEntries.length > 0;
     const hasUnread = conv.unread_count > 0 || conv.marked_unread;
+    let previewPrefix = '';
+    if (conv.last_message_type === 'SYSTEM') {
+      previewPrefix = '';
+    } else if (conv.last_message_sender_id === initializedProfile?.id) {
+      previewPrefix = 'You: ';
+    } else if (isGrp && conv.last_message_sender_name) {
+      const first = String(conv.last_message_sender_name).trim().split(/\s+/)[0] || '';
+      if (first) previewPrefix = `${first}: `;
+    }
+    const typingLabel = isGrp && typingEntries.length === 1 && typingEntries[0]?.name
+      ? `${String(typingEntries[0].name).trim().split(/\s+/)[0] || 'Someone'} is typing…`
+      : (isGrp && typingEntries.length > 1 ? `${typingEntries.length} typing…` : 'Typing…');
     const previewText = isTyping
-      ? '<span class="msg-typing-preview"><span class="msg-wave-dots is-inline" aria-hidden="true"><i></i><i></i><i></i></span><span>Typing…</span></span>'
-      : `${conv.last_message_sender_id === initializedProfile?.id ? 'You: ' : ''}${escapeHtml(conv.last_message_preview || 'Start a conversation')}`;
+      ? `<span class="msg-typing-preview"><span class="msg-wave-dots is-inline" aria-hidden="true"><i></i><i></i><i></i></span><span>${escapeHtml(typingLabel)}</span></span>`
+      : `${escapeHtml(previewPrefix)}${escapeHtml(conv.last_message_preview || (isGrp ? 'No recent messages' : 'Start a conversation'))}`;
     const pinIcon = conv.is_pinned
       ? '<svg class="msg-meta-icon" viewBox="0 0 24 24" role="img" aria-label="Pinned"><title>Pinned</title><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16h14v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6a1 1 0 0 1 1-1h.5a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5H8a1 1 0 0 1 1 1z"/></svg>'
       : '';
     const muteIcon = conv.is_muted
       ? '<svg class="msg-meta-icon" viewBox="0 0 24 24" role="img" aria-label="Muted"><title>Muted</title><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="2" y1="2" x2="22" y2="22"/></svg>'
       : '';
-    return `<article class="msg-conv-row${active ? ' is-active' : ''}${hasUnread ? ' is-unread' : ''}" data-conv-row="${escapeHtml(conv.id)}" role="option" aria-selected="${active ? 'true' : 'false'}">
-      <div class="msg-conv-avatar">${userAvatarHtml(peer, 'avatar-md')}</div>
+    const groupPill = isGrp
+      ? `<span class="msg-conv-group-pill" title="Group chat · ${Number(conv.member_count || 2)} members">${Number(conv.member_count || 2)}</span>`
+      : '';
+    return `<article class="msg-conv-row${active ? ' is-active' : ''}${hasUnread ? ' is-unread' : ''}${isGrp ? ' is-group' : ''}" data-conv-row="${escapeHtml(conv.id)}" role="option" aria-selected="${active ? 'true' : 'false'}">
+      <div class="msg-conv-avatar">${convAvatarHtml(conv, 'avatar-md')}</div>
       <button type="button" class="msg-conv-main" data-open-conv="${escapeHtml(conv.id)}">
         <div class="msg-conv-top">
-          <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(peer.full_name || 'User')}</span>${pinIcon}${muteIcon}</strong>
+          <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${groupPill}${pinIcon}${muteIcon}</strong>
           <time class="msg-conv-time">${escapeHtml(formatShortDate(conv.last_message_at))}</time>
         </div>
         <div class="msg-conv-bottom">
@@ -1339,16 +1590,23 @@
     const msgHits = q.length >= 2 ? (state.discoverMessages || []) : [];
 
     if (!q && state.searchActive) {
+      const quickGroup = `<button type="button" class="msg-quick-group-btn" id="msg-inline-create-group">
+        <span class="msg-quick-group-icon" aria-hidden="true">${NEW_GROUP_ICON_SVG}</span>
+        <span class="msg-quick-group-copy">
+          <strong>New group chat</strong>
+          <small>Message multiple friends &amp; teammates together</small>
+        </span>
+      </button>`;
       const header = `<div class="msg-search-section-label"><span>All people</span><b>${peopleHits.length}</b></div>`;
       if (state.searchLoading && !peopleHits.length) {
-        listEl.innerHTML = `${header}${skeletonHtml('person', 5)}`;
+        listEl.innerHTML = `${quickGroup}${header}${skeletonHtml('person', 5)}`;
         return;
       }
       if (!peopleHits.length) {
-        listEl.innerHTML = `${header}<div class="empty-state msg-list-empty"><strong>No eligible people found</strong><p>Other active members and admins will appear here when available.</p></div>`;
+        listEl.innerHTML = `${quickGroup}${header}<div class="empty-state msg-list-empty"><strong>No eligible people found</strong><p>Other active members and admins will appear here when available.</p></div>`;
         return;
       }
-      listEl.innerHTML = `${header}${peopleHits.map(renderSearchPersonRowHtml).join('')}`;
+      listEl.innerHTML = `${quickGroup}${header}${peopleHits.map(renderSearchPersonRowHtml).join('')}`;
       ipon().bindAvatarFallbacks(listEl);
       ipon().syncPresenceDots(listEl);
       return;
@@ -1487,6 +1745,9 @@
       sendTypingBroadcast(false);
       state.threadInfoView = 'root';
       state.activePinnedId = null;
+      state.groupEditAvatarDataUrl = null;
+      state.groupEditAvatarClear = false;
+      state.groupEditAvatarConvId = conversationId;
       const prevInput = document.getElementById('msg-composer-input');
       if (prevInput) state.draftsByConv.set(state.activeConvId, prevInput.value);
     }
@@ -1584,8 +1845,9 @@
           ipon().syncPresenceDots(activeWrap);
           const subEl = document.getElementById('msg-peer-status-text');
           if (subEl && data?.conversation) {
-            const typing = state.typingPeers.has(conversationId);
-            subEl.textContent = formatStatusLine(data.conversation, typing);
+            const typingEntries = getTypingEntries(conversationId);
+            const typing = typingEntries.length > 0;
+            subEl.textContent = formatStatusLine(data.conversation, typingEntries);
             subEl.classList.toggle('is-typing', typing);
           }
         } else {
@@ -1601,8 +1863,9 @@
         ipon().syncPresenceDots(activeWrap);
         const subEl = document.getElementById('msg-peer-status-text');
         if (subEl && data?.conversation) {
-          const typing = state.typingPeers.has(conversationId);
-          subEl.textContent = formatStatusLine(data.conversation, typing);
+          const typingEntries = getTypingEntries(conversationId);
+          const typing = typingEntries.length > 0;
+          subEl.textContent = formatStatusLine(data.conversation, typingEntries);
           subEl.classList.toggle('is-typing', typing);
         }
       }
@@ -1654,18 +1917,19 @@
     const headerEl = document.getElementById('msg-thread-header');
     if (headerEl) {
       if (peer) {
+        const isGrp = isGroupConv(peer);
         headerEl.innerHTML = `
           <div class="msg-thread-header-left">
             <button type="button" class="msg-back-mobile-btn" id="msg-back-to-list" aria-label="Back to conversations">
               <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
             </button>
-            ${userAvatarHtml(peer, 'avatar-md')}
+            ${isGrp ? groupAvatarHtml(peer, 'avatar-md') : userAvatarHtml(peer, 'avatar-md')}
             <div class="msg-thread-peer-meta">
               <div class="msg-thread-peer-title">
-                <strong>${escapeHtml(peer.full_name || 'User')}</strong>
+                <strong>${escapeHtml(convDisplayTitle(peer))}</strong>
               </div>
               <div class="msg-thread-peer-sub">
-                ${peer.username ? `<span class="msg-handle-chip">@${escapeHtml(peer.username)}</span>` : ''}
+                ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : (peer.username ? `<span class="msg-handle-chip">@${escapeHtml(peer.username)}</span>` : '')}
                 <small class="msg-peer-status is-syncing"><span class="msg-sync-dot" aria-hidden="true"></span>Syncing messages…</small>
               </div>
             </div>
@@ -1710,41 +1974,93 @@
     state.typingChannelConvId = conversationId;
     typingChannel = client.channel(`chat-typing:${conversationId}`)
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
-        if (!payload || payload.user_id === initializedProfile?.id) return;
-        const prev = state.typingPeers.get(conversationId);
-        const wasTyping = Boolean(prev);
-        if (prev?.timer) clearTimeout(prev.timer);
+        const senderUid = String(payload?.user_id || '');
+        if (!senderUid || senderUid === String(initializedProfile?.id || '')) return;
+        let bucket = state.typingPeers.get(conversationId);
+        if (!(bucket instanceof Map)) {
+          bucket = new Map();
+          state.typingPeers.set(conversationId, bucket);
+        }
+        const prevCount = bucket.size;
+        const prevEntry = bucket.get(senderUid);
+        if (prevEntry?.timer) clearTimeout(prevEntry.timer);
         if (payload.typing) {
           const timer = setTimeout(() => {
-            state.typingPeers.delete(conversationId);
+            const cur = state.typingPeers.get(conversationId);
+            if (cur instanceof Map) {
+              cur.delete(senderUid);
+              if (!cur.size) state.typingPeers.delete(conversationId);
+            }
             updateTypingIndicators({ listChanged: true });
           }, 2600);
-          state.typingPeers.set(conversationId, { timer, at: Date.now() });
+          const known = findKnownPeer(conversationId, senderUid)
+            || findGroupMember(state.activeThread?.conversation, senderUid);
+          bucket.set(senderUid, {
+            id: senderUid,
+            name: payload.user_name || known?.full_name || '',
+            avatar_url: payload.avatar_url || known?.avatar_url || '',
+            timer,
+            at: Date.now()
+          });
         } else {
-          state.typingPeers.delete(conversationId);
+          bucket.delete(senderUid);
+          if (!bucket.size) state.typingPeers.delete(conversationId);
         }
-        updateTypingIndicators({ listChanged: wasTyping !== Boolean(payload.typing) });
+        const nextCount = bucket.size;
+        updateTypingIndicators({ listChanged: (prevCount > 0) !== (nextCount > 0) });
       })
       .subscribe();
   }
 
-  function syncLiveTypingBubble(typing) {
+  function syncLiveTypingBubble(typingEntriesOrBool) {
     const liveRow = document.getElementById('msg-typing-live');
     if (!liveRow) return;
     const conv = state.activeThread?.conversation;
+    const entries = Array.isArray(typingEntriesOrBool) ? typingEntriesOrBool : getTypingEntries(conv?.conversation_id);
+    const typing = Array.isArray(typingEntriesOrBool) ? entries.length > 0 : Boolean(typingEntriesOrBool);
     const wasVisible = liveRow.classList.contains('is-visible');
     const avatarHost = document.getElementById('msg-typing-avatar');
+    const senderLabel = document.getElementById('msg-typing-sender');
     const liveTxt = document.getElementById('msg-typing-live-text');
     if (typing && conv) {
-      if (avatarHost && avatarHost.dataset.peerId !== String(conv.id || '')) {
-        avatarHost.dataset.peerId = String(conv.id || '');
-        avatarHost.innerHTML = userAvatarHtml(conv, 'avatar-sm', { clickable: false, showPresence: true });
+      const firstEntry = entries[0] || null;
+      const isGrp = isGroupConv(conv);
+      const typerUser = isGrp && firstEntry?.id
+        ? {
+            id: firstEntry.id,
+            full_name: firstEntry.name || findGroupMember(conv, firstEntry.id)?.full_name || 'Member',
+            avatar_url: firstEntry.avatar_url || findGroupMember(conv, firstEntry.id)?.avatar_url || '',
+            allow_online_status: true
+          }
+        : conv;
+      const avatarKey = String(typerUser?.id || conv.id || '');
+      if (avatarHost && avatarHost.dataset.peerId !== avatarKey) {
+        avatarHost.dataset.peerId = avatarKey;
+        avatarHost.innerHTML = userAvatarHtml(typerUser, 'avatar-sm', { clickable: false, showPresence: true });
         ipon().bindAvatarFallbacks?.(avatarHost);
         ipon().syncPresenceDots?.(avatarHost);
       }
-      if (liveTxt) liveTxt.textContent = `${conv.full_name || 'User'} is typing…`;
-    } else if (!typing && liveTxt) {
-      liveTxt.textContent = 'Typing…';
+      if (senderLabel) {
+        if (isGrp && firstEntry?.name) {
+          const shortName = String(firstEntry.name).trim().split(/\s+/)[0] || 'Someone';
+          senderLabel.textContent = entries.length > 1 ? `${shortName} +${entries.length - 1}` : shortName;
+          senderLabel.hidden = false;
+        } else {
+          senderLabel.textContent = '';
+          senderLabel.hidden = true;
+        }
+      }
+      if (liveTxt) {
+        liveTxt.textContent = isGrp && firstEntry?.name
+          ? `${firstEntry.name} is typing…`
+          : `${convDisplayTitle(conv)} is typing…`;
+      }
+    } else if (!typing) {
+      if (senderLabel) {
+        senderLabel.textContent = '';
+        senderLabel.hidden = true;
+      }
+      if (liveTxt) liveTxt.textContent = 'Typing…';
     }
     liveRow.classList.toggle('is-visible', Boolean(typing));
     liveRow.setAttribute('aria-hidden', typing ? 'false' : 'true');
@@ -1761,13 +2077,14 @@
   function updateTypingIndicators({ listChanged = true } = {}) {
     if (listChanged) renderConversationList();
     if (!state.activeConvId || !state.activeThread?.conversation) return;
-    const typing = state.typingPeers.has(state.activeConvId);
+    const entries = getTypingEntries(state.activeConvId);
+    const typing = entries.length > 0;
     const subEl = document.getElementById('msg-peer-status-text');
     if (subEl) {
-      subEl.textContent = formatStatusLine(state.activeThread.conversation, typing);
+      subEl.textContent = formatStatusLine(state.activeThread.conversation, entries);
       subEl.classList.toggle('is-typing', typing);
     }
-    syncLiveTypingBubble(typing);
+    syncLiveTypingBubble(entries);
   }
 
   function getPinnedPreviewText(pin) {
@@ -1787,7 +2104,7 @@
     if (!pinnedBanner) return;
     const conv = state.activeThread?.conversation;
     const pins = state.activeThread?.pinned_messages || [];
-    const canInteract = Boolean(conv && conv.friendship_status !== 'BLOCKED_BY_ME' && conv.friendship_status !== 'BLOCKED_ME');
+    const canInteract = Boolean(conv && (isGroupConv(conv) || (conv.friendship_status !== 'BLOCKED_BY_ME' && conv.friendship_status !== 'BLOCKED_ME')));
     if (!pins.length || !canInteract) {
       state.showPinnedList = false;
       state.activePinnedId = null;
@@ -1846,12 +2163,14 @@
     document.getElementById('msg-thread-active').hidden = false;
 
     const conv = thread.conversation;
+    const isGrp = isGroupConv(conv);
     applyThreadTheme(conv.chat_theme || 'paper');
 
-    const canInteract = conv.friendship_status !== 'BLOCKED_BY_ME' && conv.friendship_status !== 'BLOCKED_ME';
-    const isPendingReq = conv.status === 'PENDING_REQUEST';
+    const canInteract = isGrp || (conv.friendship_status !== 'BLOCKED_BY_ME' && conv.friendship_status !== 'BLOCKED_ME');
+    const isPendingReq = !isGrp && conv.status === 'PENDING_REQUEST';
     const isIncomingReq = isPendingReq && conv.initiator_id !== initializedProfile?.id;
-    const isTyping = state.typingPeers.has(conv.conversation_id);
+    const typingEntries = getTypingEntries(conv.conversation_id);
+    const isTyping = typingEntries.length > 0;
 
     const headerEl = document.getElementById('msg-thread-header');
     headerEl.innerHTML = `
@@ -1859,15 +2178,16 @@
         <button type="button" class="msg-back-mobile-btn" id="msg-back-to-list" aria-label="Back to conversations">
           <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
         </button>
-        ${userAvatarHtml(conv, 'avatar-md')}
+        ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md')}
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
-            <strong>${escapeHtml(conv.full_name || 'User')}</strong>
+            <strong>${escapeHtml(convDisplayTitle(conv))}</strong>
           </div>
           <div class="msg-thread-peer-sub">
-            ${conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
-            ${conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
-            <small class="msg-peer-status${isTyping ? ' is-typing' : ''}" id="msg-peer-status-text">${escapeHtml(formatStatusLine(conv, isTyping))}</small>
+            ${!isGrp && conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
+            ${!isGrp && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
+            ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
+            <small class="msg-peer-status${isTyping ? ' is-typing' : ''}" id="msg-peer-status-text">${escapeHtml(formatStatusLine(conv, typingEntries))}</small>
           </div>
         </div>
       </div>
@@ -1882,7 +2202,16 @@
 
     const senderSelect = document.getElementById('msg-thread-search-sender');
     if (senderSelect) {
-      senderSelect.innerHTML = `<option value="">All senders</option><option value="${escAttr(initializedProfile?.id)}">You</option><option value="${escAttr(conv.id)}">${escapeHtml(conv.full_name || 'Peer')}</option>`;
+      if (isGrp) {
+        const myId = String(initializedProfile?.id || '');
+        const otherOpts = (conv.members || [])
+          .filter((m) => m && String(m.id || '') !== myId)
+          .map((m) => `<option value="${escAttr(m.id)}">${escapeHtml(m.full_name || 'Member')}</option>`)
+          .join('');
+        senderSelect.innerHTML = `<option value="">All senders</option><option value="${escAttr(initializedProfile?.id)}">You</option>${otherOpts}`;
+      } else {
+        senderSelect.innerHTML = `<option value="">All senders</option><option value="${escAttr(initializedProfile?.id)}">You</option><option value="${escAttr(conv.id)}">${escapeHtml(conv.full_name || 'Peer')}</option>`;
+      }
       senderSelect.value = state.threadSearchSenderId;
     }
 
@@ -1929,7 +2258,7 @@
     if (olderWrap) olderWrap.hidden = !thread.has_older;
 
     renderMessagesList({ animate });
-    syncLiveTypingBubble(isTyping);
+    syncLiveTypingBubble(typingEntries);
     if (state.showThreadInfo) renderThreadInfoDrawer();
 
     ipon().bindAvatarFallbacks(headerEl);
@@ -2190,6 +2519,9 @@
   function enqueuePendingMessage({ conversationId, body = '', messageType = null, replyToMsg = null, files = [], deferProcess = false }) {
     if (!conversationId) return null;
     const conv = state.activeThread?.conversation;
+    const replyTargetName = replyToMsg
+      ? (replyToMsg.sender_name || findGroupMember(conv, replyToMsg.sender_id)?.full_name || convDisplayTitle(conv))
+      : '';
     const pending = {
       localId: `pending-${Date.now()}-${++pendingMsgSeq}`,
       conversationId,
@@ -2197,7 +2529,7 @@
       messageType: messageType || (files.length ? 'MEDIA' : 'TEXT'),
       replyToId: replyToMsg?.id || null,
       replyPreview: replyToMsg ? {
-        senderLabel: replyToMsg.sender_id === initializedProfile?.id ? 'Replying to yourself' : `Replying to ${conv?.full_name || 'User'}`,
+        senderLabel: replyToMsg.sender_id === initializedProfile?.id ? 'Replying to yourself' : `Replying to ${replyTargetName || 'User'}`,
         body: replyToMsg.body || 'Attachment'
       } : null,
       files: files.map((f) => ({ ...f, progress: f.uploaded ? 100 : 0 })),
@@ -2235,10 +2567,14 @@
 
     if (!msgs.length && !pendingList.length) {
       list.classList.remove('is-thread-entering');
-      list.innerHTML = `<div class="empty-state msg-thread-welcome"><p>Say hello to <strong>${escapeHtml(conv.full_name || 'your connection')}</strong>. Messages and lossless files stay private between you two.</p></div>`;
+      const welcomeCopy = isGroupConv(conv)
+        ? `Say hello in <strong>${escapeHtml(convDisplayTitle(conv))}</strong>. Messages and lossless files stay private to group members.`
+        : `Say hello to <strong>${escapeHtml(conv.full_name || 'your connection')}</strong>. Messages and lossless files stay private between you two.`;
+      list.innerHTML = `<div class="empty-state msg-thread-welcome"><p>${welcomeCopy}</p></div>`;
       return;
     }
 
+    const isGrp = isGroupConv(conv);
     let lastDateStr = '';
     let lastShownClockKey = '';
     const pinnedIds = new Set((state.activeThread.pinned_messages || []).map((p) => p.id));
@@ -2265,10 +2601,25 @@
       const isDeleted = Boolean(m.deleted_for_everyone_at);
       const prev = msgs[idx - 1];
       const next = msgs[idx + 1];
-      const groupedWithPrev = prev && !prev.deleted_for_everyone_at && prev.sender_id === m.sender_id && prev.message_type !== 'CALL_EVENT'
+      const groupedWithPrev = prev && !prev.deleted_for_everyone_at && prev.sender_id === m.sender_id
+        && prev.message_type !== 'CALL_EVENT' && prev.message_type !== 'SYSTEM'
         && (Date.parse(m.created_at) - Date.parse(prev.created_at) < 120000);
-      const groupedWithNext = next && !next.deleted_for_everyone_at && next.sender_id === m.sender_id && next.message_type !== 'CALL_EVENT'
+      const groupedWithNext = next && !next.deleted_for_everyone_at && next.sender_id === m.sender_id
+        && next.message_type !== 'CALL_EVENT' && next.message_type !== 'SYSTEM'
         && (Date.parse(next.created_at) - Date.parse(m.created_at) < 120000);
+
+      const groupMember = isGrp && !mine ? findGroupMember(conv, m.sender_id) : null;
+      const senderUser = isGrp && !mine
+        ? {
+            id: m.sender_id,
+            full_name: m.sender_name || groupMember?.full_name || 'Member',
+            avatar_url: m.sender_avatar_url || groupMember?.avatar_url || '',
+            allow_online_status: groupMember ? groupMember.allow_online_status !== false : false
+          }
+        : conv;
+      const senderNameHtml = isGrp && !mine && !groupedWithPrev && !isDeleted
+        ? `<span class="msg-sender-name">${escapeHtml(senderUser.full_name)}</span>`
+        : '';
 
       const attHtml = !isDeleted && Array.isArray(m.attachments) && m.attachments.length
         ? `<div class="msg-attachments${m.attachments.length > 1 ? ' is-carousel' : ''}">${m.attachments.map((att) => renderAttachmentItem(conv.conversation_id, att)).join('')}</div>`
@@ -2322,8 +2673,9 @@
       const isActivePinned = Boolean(isPinned && !isDeleted && state.activePinnedId && m.id === state.activePinnedId);
       return `${dateDivider}${unreadDivider}
         <article class="msg-row${mine ? ' is-mine' : ' is-peer'}${groupedWithPrev ? ' is-grouped-prev' : ''}${groupedWithNext ? ' is-grouped-next' : ''}${isMatch ? ' is-search-match' : ''}${activeMatch ? ' is-active-search-match' : ''}" data-msg-id="${escapeHtml(m.id)}">
-          ${!mine ? `<div class="msg-row-avatar">${groupedWithNext ? '' : userAvatarHtml(conv, 'avatar-sm')}</div>` : ''}
+          ${!mine ? `<div class="msg-row-avatar">${groupedWithNext ? '' : userAvatarHtml(senderUser, 'avatar-sm')}</div>` : ''}
           <div class="msg-bubble-col">
+            ${senderNameHtml}
             ${replyHtml}
             <div class="msg-bubble-wrap">
               <div class="msg-bubble${isDeleted ? ' is-deleted' : ''}${isActivePinned ? ' is-pinned' : ''}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}">
@@ -2541,32 +2893,134 @@
     const mailUnreadIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>';
     const trashIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
     const blockIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.64 5.64 12.72 12.72"/></svg>';
-    const isBlockedByMe = conv.friendship_status === 'BLOCKED_BY_ME';
+    const leaveIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
+    const isGrp = typeof isGroupConv === 'function' ? isGroupConv(conv) : String(conv?.kind || '').toUpperCase() === 'GROUP';
+    const myId = typeof initializedProfile !== 'undefined' ? String(initializedProfile?.id || '') : '';
+    const myGroupRole = String(conv.my_role || 'MEMBER').toUpperCase();
+    const canManageGroup = isGrp && (myGroupRole === 'OWNER' || myGroupRole === 'ADMIN');
+    const members = isGrp && Array.isArray(conv.members) ? conv.members : [];
+    const isBlockedByMe = !isGrp && conv.friendship_status === 'BLOCKED_BY_ME';
+    const iponApi = typeof ipon === 'function' ? ipon() : null;
+    const grpTitle = typeof convDisplayTitle === 'function' ? convDisplayTitle(conv) : String(conv?.title || conv?.full_name || 'Group Chat');
+    if (isGrp && state.groupEditAvatarConvId !== conv.conversation_id) {
+      state.groupEditAvatarDataUrl = null;
+      state.groupEditAvatarClear = false;
+      state.groupEditAvatarConvId = conv.conversation_id;
+    }
+    const grpDraftUrl = isGrp ? state.groupEditAvatarDataUrl : null;
+    const grpClearPic = isGrp ? Boolean(state.groupEditAvatarClear) : false;
+    const hasEffectiveGrpPic = isGrp && (Boolean(grpDraftUrl) || (!grpClearPic && Boolean(conv.avatar_url)));
+    const grpAvHtml = isGrp
+      ? groupPicPreviewMarkup({ conv, dataUrl: grpDraftUrl, clear: grpClearPic, title: grpTitle, sizeClass: 'avatar-lg' })
+      : '';
+    const grpMiniAvHtml = isGrp
+      ? groupPicPreviewMarkup({ conv, dataUrl: grpDraftUrl, clear: grpClearPic, title: grpTitle, sizeClass: 'avatar-md' })
+      : '';
+    const addIconSvg = typeof NEW_GROUP_ICON_SVG !== 'undefined' ? NEW_GROUP_ICON_SVG : '';
+    const moreDotsSvg = typeof MSG_MORE_SVG !== 'undefined' ? MSG_MORE_SVG : '';
+
+    const profileSectionHtml = isGrp
+      ? `<div class="msg-drawer-profile">
+          <div class="msg-drawer-avatar-wrap">
+            <span class="msg-drawer-avatar-slot${!grpClearPic && (grpDraftUrl || conv.avatar_url) ? ' is-viewable' : ''}" id="msg-group-drawer-avatar-slot">${grpAvHtml}</span>
+            ${canManageGroup ? `<button type="button" class="msg-drawer-avatar-edit-btn" id="msg-group-avatar-quick-btn" title="Change group photo" aria-label="Change group photo">${CAMERA_ICON_SVG}</button>` : ''}
+          </div>
+          <strong>${escapeHtml(grpTitle)}</strong>
+          <small>${members.length || Number(conv.member_count || 2)} ${(members.length || Number(conv.member_count || 2)) === 1 ? 'member' : 'members'}</small>
+          ${conv.description ? `<p class="msg-drawer-bio">${escapeHtml(conv.description)}</p>` : ''}
+          ${canManageGroup ? '<button type="button" class="msg-drawer-edit-link" id="msg-group-edit-toggle">Edit group photo &amp; details</button>' : ''}
+          ${canManageGroup ? `
+            <form class="msg-group-edit-form" id="msg-group-edit-form" hidden novalidate>
+              <div class="msg-group-avatar-picker is-compact">
+                <div class="msg-group-avatar-preview" id="msg-group-edit-pic-preview">${grpMiniAvHtml}</div>
+                <div class="msg-group-avatar-copy">
+                  <span class="msg-group-avatar-label">Group photo</span>
+                  <div class="msg-group-avatar-actions">
+                    <button type="button" class="button button-secondary button-sm" id="msg-group-edit-pic-btn">${hasEffectiveGrpPic ? 'Change photo' : 'Upload photo'}</button>
+                    <button type="button" class="button button-secondary button-sm is-danger-ghost" id="msg-group-edit-pic-remove"${hasEffectiveGrpPic ? '' : ' hidden'}>Remove</button>
+                  </div>
+                  <input id="msg-group-edit-pic-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                </div>
+              </div>
+              <div class="field">
+                <label class="sr-only" for="msg-group-edit-title">Group name</label>
+                <input id="msg-group-edit-title" type="text" maxlength="80" value="${escAttr(conv.title || '')}" placeholder="Group name (2–80 characters)" autocomplete="off">
+                <small class="field-error msg-stable-error" id="msg-group-edit-error" aria-hidden="true"></small>
+              </div>
+              <div class="field">
+                <label class="sr-only" for="msg-group-edit-desc">Description</label>
+                <textarea id="msg-group-edit-desc" rows="2" maxlength="240" placeholder="Optional group topic or goal…">${escapeHtml(conv.description || '')}</textarea>
+              </div>
+              <div class="msg-group-edit-actions">
+                <button type="button" class="button button-secondary button-sm" id="msg-group-edit-cancel">Cancel</button>
+                <button type="submit" class="button button-primary button-sm" id="msg-group-edit-save">Save</button>
+              </div>
+            </form>` : ''}
+        </div>`
+      : `<div class="msg-drawer-profile">
+          ${userAvatarHtml(conv, 'avatar-lg', { showPresence: false })}
+          <strong>${escapeHtml(conv.full_name || 'User')}</strong>
+          ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
+          ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
+        </div>`;
+
+    const actionsGridHtml = isGrp
+      ? `<button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}">${MSG_PIN_SVG}<span>${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</span></button>
+         <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_muted ? 'unmute' : 'mute'}">${bellMuteSvg}<span>${conv.is_muted ? 'Unmute' : 'Mute'}</span></button>
+         <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${archiveIconSvg}<span>${conv.is_archived ? 'Unarchive' : 'Archive'}</span></button>
+         <button type="button" class="msg-drawer-action-btn" data-conv-act="mark_unread">${mailUnreadIconSvg}<span>Mark unread</span></button>
+         ${canManageGroup ? `<button type="button" class="msg-drawer-action-btn" data-group-add-members="${escapeHtml(conv.conversation_id)}">${addIconSvg}<span>Add members</span></button>` : ''}
+         <button type="button" class="msg-drawer-action-btn" data-conv-act="delete_for_me">${trashIconSvg}<span>Clear chat</span></button>
+         <button type="button" class="msg-drawer-action-btn is-danger" data-group-leave="${escapeHtml(conv.conversation_id)}">${leaveIconSvg}<span>Leave group</span></button>`
+      : `<button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}">${MSG_PIN_SVG}<span>${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</span></button>
+         <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_muted ? 'unmute' : 'mute'}">${bellMuteSvg}<span>${conv.is_muted ? 'Unmute' : 'Mute'}</span></button>
+         <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${archiveIconSvg}<span>${conv.is_archived ? 'Unarchive' : 'Archive'}</span></button>
+         <button type="button" class="msg-drawer-action-btn" data-conv-act="mark_unread">${mailUnreadIconSvg}<span>Mark unread</span></button>
+         <button type="button" class="msg-drawer-action-btn" data-conv-act="delete_for_me">${trashIconSvg}<span>Delete for me</span></button>
+         <button type="button" class="msg-drawer-action-btn is-danger" data-social-action="${isBlockedByMe ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${blockIconSvg}<span>${isBlockedByMe ? 'Unblock user' : 'Block user'}</span></button>`;
+
+    const membersSectionHtml = isGrp
+      ? `<div class="msg-drawer-section">
+          <div class="msg-drawer-sec-head">
+            <h4>Members (${members.length})</h4>
+            ${canManageGroup ? `<button type="button" class="msg-drawer-sec-add" data-group-add-members="${escapeHtml(conv.conversation_id)}">+ Add</button>` : ''}
+          </div>
+          <ul class="msg-group-members-list">
+            ${members.map((m) => {
+              const isMe = String(m.id || '') === myId;
+              const role = String(m.role || 'MEMBER').toUpperCase();
+              const roleBadge = role === 'OWNER'
+                ? '<span class="msg-group-role-badge is-owner">Owner</span>'
+                : (role === 'ADMIN' ? '<span class="msg-group-role-badge is-admin">Admin</span>' : '');
+              return `<li class="msg-group-member-row">
+                ${userAvatarHtml(m, 'avatar-sm', { clickable: !isMe, showPresence: !isMe })}
+                <div class="msg-group-member-meta">
+                  <strong><span>${escapeHtml(m.full_name || 'Member')}</span>${isMe ? ' <em>(You)</em>' : ''}${roleBadge}</strong>
+                  ${m.username ? `<small>@${escapeHtml(m.username)}</small>` : `<small>${escapeHtml(m.is_friend ? 'Friend' : 'Group member')}</small>`}
+                </div>
+                ${!isMe ? `<button type="button" class="msg-conv-more-btn msg-group-member-more" data-group-member-menu="${escapeHtml(m.id)}" aria-label="Member options for ${escapeHtml(m.full_name || 'Member')}" title="Member options">${moreDotsSvg}</button>` : ''}
+              </li>`;
+            }).join('')}
+          </ul>
+        </div>`
+      : '';
+
     drawer.innerHTML = `
       <div class="msg-drawer-head">
-        <h3>Chat Info &amp; Options</h3>
+        <h3>${isGrp ? 'Group Info &amp; Options' : 'Chat Info &amp; Options'}</h3>
         ${closeBtnHtml}
       </div>
       <div class="msg-drawer-body is-root" data-drawer-screen="root">
         <div class="msg-drawer-section is-top">
-          <div class="msg-drawer-profile">
-            ${userAvatarHtml(conv, 'avatar-lg', { showPresence: false })}
-            <strong>${escapeHtml(conv.full_name || 'User')}</strong>
-            ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
-            ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
-          </div>
+          ${profileSectionHtml}
           <div class="msg-drawer-actions-block">
             <h4>Chat actions</h4>
             <div class="msg-drawer-actions">
-              <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}">${MSG_PIN_SVG}<span>${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</span></button>
-              <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_muted ? 'unmute' : 'mute'}">${bellMuteSvg}<span>${conv.is_muted ? 'Unmute' : 'Mute'}</span></button>
-              <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${archiveIconSvg}<span>${conv.is_archived ? 'Unarchive' : 'Archive'}</span></button>
-              <button type="button" class="msg-drawer-action-btn" data-conv-act="mark_unread">${mailUnreadIconSvg}<span>Mark unread</span></button>
-              <button type="button" class="msg-drawer-action-btn" data-conv-act="delete_for_me">${trashIconSvg}<span>Delete for me</span></button>
-              <button type="button" class="msg-drawer-action-btn is-danger" data-social-action="${isBlockedByMe ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${blockIconSvg}<span>${isBlockedByMe ? 'Unblock user' : 'Block user'}</span></button>
+              ${actionsGridHtml}
             </div>
           </div>
         </div>
+        ${membersSectionHtml}
         <div class="msg-drawer-section">
           <h4>Theme</h4>
           <div class="msg-theme-swatches">
@@ -2604,6 +3058,8 @@
           </div>
         </div>
       </div>`;
+    iponApi?.bindAvatarFallbacks?.(drawer);
+    iponApi?.syncPresenceDots?.(drawer);
   }
 
   // Friends, Requests & Sent Connections View
@@ -2912,7 +3368,9 @@
       return;
     }
     if (state.replyToMsg) {
-      const senderLabel = state.replyToMsg.sender_id === initializedProfile?.id ? 'yourself' : (state.activeThread?.conversation?.full_name || 'User');
+      const conv = state.activeThread?.conversation;
+      const targetName = state.replyToMsg.sender_name || findGroupMember(conv, state.replyToMsg.sender_id)?.full_name || convDisplayTitle(conv);
+      const senderLabel = state.replyToMsg.sender_id === initializedProfile?.id ? 'yourself' : (targetName || 'User');
       bar.hidden = false;
       bar.innerHTML = `<div><strong>Replying to ${escapeHtml(senderLabel)}</strong><span>${escapeHtml(state.replyToMsg.body || 'Attachment')}</span></div><button type="button" class="dialog-close msg-mini-close" id="msg-cancel-context" aria-label="Cancel reply"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>`;
       return;
@@ -3106,7 +3564,12 @@
     typingChannel.send?.({
       type: 'broadcast',
       event: 'typing',
-      payload: { user_id: initializedProfile.id, typing: next }
+      payload: {
+        user_id: initializedProfile.id,
+        user_name: initializedProfile.full_name || '',
+        avatar_url: initializedProfile.avatar_url || '',
+        typing: next
+      }
     })?.catch?.(() => { });
   }
 
@@ -3283,29 +3746,431 @@
     try { rec.stop(); } catch { rec.stream?.getTracks?.().forEach((t) => t.stop()); }
   }
 
-  // Forward, Delete, Privacy & Settings Modals
+  // Group Chat Modal (Create & Add Members), Forward, Delete, Privacy & Settings Modals
+  async function openGroupChatDialog({ mode = 'create', conversationId = null } = {}) {
+    if (!isEligible()) return;
+    ensureDialogsMounted();
+    const dialog = document.getElementById('msg-group-dialog');
+    const titleEl = document.getElementById('msg-group-dialog-title');
+    const subEl = document.getElementById('msg-group-dialog-sub');
+    const body = document.getElementById('msg-group-body');
+    if (!dialog || !body) return;
+
+    const isAddMode = mode === 'add_members' && Boolean(conversationId);
+    const activeConv = isAddMode ? state.activeThread?.conversation : null;
+    const existingIds = new Set(
+      isAddMode
+        ? (activeConv?.members || []).map((m) => String(m.id || '')).filter(Boolean)
+        : [String(initializedProfile?.id || '')]
+    );
+    const maxAllowed = isAddMode ? Math.max(0, 50 - existingIds.size) : 49;
+
+    if (titleEl) titleEl.textContent = isAddMode ? 'Add Members to Group' : 'New Group Chat';
+    if (subEl) {
+      subEl.textContent = isAddMode
+        ? `Add eligible members to "${convDisplayTitle(activeConv)}" (${maxAllowed} spot${maxAllowed === 1 ? '' : 's'} left).`
+        : 'Create a group conversation with friends & connections (same 90-day retention).';
+    }
+
+    const selected = new Map(); // userId -> candidate object
+    let query = '';
+    let allPeople = [];
+    let pendingAvatarDataUrl = null;
+
+    body.innerHTML = `
+      <form class="msg-group-form" id="msg-group-form" novalidate>
+        ${isAddMode ? '' : `
+          <div class="msg-group-avatar-picker">
+            <div class="msg-group-avatar-preview-wrap">
+              <div class="msg-group-avatar-preview" id="msg-group-create-pic-preview">${groupPicPreviewMarkup({ sizeClass: 'avatar-lg' })}</div>
+              <button type="button" class="msg-group-avatar-remove" id="msg-group-create-pic-remove" aria-label="Remove group photo" title="Remove photo" hidden>&times;</button>
+            </div>
+            <div class="msg-group-avatar-copy">
+              <span class="msg-group-avatar-label">Group photo (optional)</span>
+              <small class="field-help">Square PNG, JPG, WEBP, or GIF up to 450 KB.</small>
+              <div class="msg-group-avatar-actions">
+                <button type="button" class="button button-secondary button-sm" id="msg-group-create-pic-btn">Choose photo</button>
+              </div>
+              <input id="msg-group-create-pic-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+            </div>
+          </div>
+          <div class="msg-group-fields">
+            <div class="field">
+              <label for="msg-group-title-input">Group name</label>
+              <input id="msg-group-title-input" name="title" type="text" maxlength="80" placeholder="e.g. Barkada Boracay Fund" autocomplete="off" required>
+              <small class="field-error msg-stable-error" id="msg-group-title-error" role="alert" aria-hidden="true"></small>
+            </div>
+            <div class="field">
+              <label for="msg-group-desc-input">Topic or description (optional)</label>
+              <input id="msg-group-desc-input" name="description" type="text" maxlength="240" placeholder="What is this group saving or chatting about?" autocomplete="off">
+              <small class="field-help msg-bio-counter" id="msg-group-desc-count">0 / 240</small>
+            </div>
+          </div>`}
+        <div class="msg-group-picker-block">
+          <div class="msg-group-picker-head">
+            <label for="msg-group-member-search">${isAddMode ? 'Select new members' : 'Select members'}</label>
+            <span class="msg-group-picked-count" id="msg-group-picked-count">0 selected</span>
+          </div>
+          <div class="msg-group-chips" id="msg-group-chips" hidden></div>
+          <div class="msg-search-input-wrap msg-group-member-search-wrap">
+            <svg class="msg-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input id="msg-group-member-search" type="search" placeholder="Search friends or people by name or @username…" aria-label="Filter people for group chat" autocomplete="off">
+          </div>
+          <div class="msg-group-member-list" id="msg-group-member-list" role="listbox" aria-multiselectable="true">
+            ${skeletonHtml('person', 4)}
+          </div>
+          <small class="field-error msg-stable-error" id="msg-group-members-error" role="alert" aria-hidden="true"></small>
+        </div>
+        <div class="msg-group-form-actions">
+          <button type="button" class="button button-secondary button-sm" data-msg-group-close>Cancel</button>
+          <button type="submit" class="button button-primary button-sm" id="msg-group-submit-btn">${isAddMode ? 'Add members' : 'Create group'}</button>
+        </div>
+      </form>`;
+
+    if (!dialog.open) dialog.showModal();
+
+    const titleInput = document.getElementById('msg-group-title-input');
+    const titleErr = document.getElementById('msg-group-title-error');
+    const descInput = document.getElementById('msg-group-desc-input');
+    const descCount = document.getElementById('msg-group-desc-count');
+    const memberSearch = document.getElementById('msg-group-member-search');
+    const memberListEl = document.getElementById('msg-group-member-list');
+    const chipsEl = document.getElementById('msg-group-chips');
+    const pickedCountEl = document.getElementById('msg-group-picked-count');
+    const membersErrEl = document.getElementById('msg-group-members-error');
+    const submitBtn = document.getElementById('msg-group-submit-btn');
+    const form = document.getElementById('msg-group-form');
+    const createPicInput = document.getElementById('msg-group-create-pic-input');
+    const createPicBtn = document.getElementById('msg-group-create-pic-btn');
+    const createPicRemove = document.getElementById('msg-group-create-pic-remove');
+    const createPicPreview = document.getElementById('msg-group-create-pic-preview');
+
+    const renderCreateAvatarPreview = () => {
+      if (!createPicPreview) return;
+      createPicPreview.innerHTML = groupPicPreviewMarkup({
+        dataUrl: pendingAvatarDataUrl,
+        title: titleInput?.value || '',
+        sizeClass: 'avatar-lg'
+      });
+      ipon().bindAvatarFallbacks?.(createPicPreview);
+      if (createPicBtn) createPicBtn.textContent = pendingAvatarDataUrl ? 'Change photo' : 'Choose photo';
+      if (createPicRemove) createPicRemove.hidden = !pendingAvatarDataUrl;
+    };
+
+    const setInlineSlot = (el, msg) => {
+      if (!el) return;
+      el.textContent = msg || '';
+      el.title = msg || '';
+      el.classList?.toggle?.('is-visible', Boolean(msg));
+      el.setAttribute?.('aria-hidden', msg ? 'false' : 'true');
+    };
+
+    const validateTitle = () => {
+      if (isAddMode || !titleInput) return true;
+      const val = String(titleInput.value || '').trim().replace(/\s+/g, ' ');
+      let err = '';
+      if (!val) err = 'Enter a group name.';
+      else if (val.length < 2) err = 'Group name must be at least 2 characters.';
+      else if (val.length > 80) err = 'Group name must be 80 characters or fewer.';
+      titleInput.setCustomValidity?.(err);
+      titleInput.setAttribute?.('aria-invalid', err ? 'true' : 'false');
+      setInlineSlot(titleErr, err);
+      return !err;
+    };
+
+    const validateMembers = () => {
+      let err = '';
+      if (!selected.size) {
+        err = isAddMode ? 'Select at least 1 member to add.' : 'Select at least 1 other member.';
+      } else if (selected.size > maxAllowed) {
+        err = `You can select up to ${maxAllowed} member${maxAllowed === 1 ? '' : 's'}.`;
+      }
+      setInlineSlot(membersErrEl, err);
+      return !err;
+    };
+
+    const renderPickerState = () => {
+      if (pickedCountEl) pickedCountEl.textContent = `${selected.size} selected`;
+      if (chipsEl) {
+        chipsEl.hidden = selected.size === 0;
+        chipsEl.innerHTML = selected.size
+          ? [...selected.values()].map((u) => `
+              <span class="msg-group-chip">
+                <span>${escapeHtml(u.full_name || 'User')}</span>
+                <button type="button" class="msg-group-chip-x" data-group-unpick="${escAttr(u.id)}" aria-label="Remove ${escapeHtml(u.full_name || 'User')}">&times;</button>
+              </span>`).join('')
+          : '';
+      }
+      if (!memberListEl) return;
+      const cleanQ = query.trim().toLowerCase();
+      const filtered = allPeople.filter((u) => {
+        if (!cleanQ) return true;
+        const blob = `${u.full_name || ''} ${u.username || ''} ${(u.shared_groups || []).join(' ')}`.toLowerCase();
+        return blob.includes(cleanQ);
+      });
+      if (!filtered.length) {
+        memberListEl.innerHTML = `<div class="empty-state msg-list-empty"><strong>${cleanQ ? 'No matching people' : 'No eligible people available'}</strong><p>${isAddMode ? 'Everyone available may already be in this group.' : 'Connect with friends or group members to start a group chat.'}</p></div>`;
+        return;
+      }
+      memberListEl.innerHTML = filtered.map((u) => {
+        const uid = String(u.id || '');
+        const isPicked = selected.has(uid);
+        const allowed = u.can_message !== false;
+        const subBits = [];
+        if (u.username) subBits.push(`@${u.username}`);
+        if (u.friendship_status === 'FRIENDS') subBits.push('Friend');
+        else if (u.shared_groups?.length) subBits.push(u.shared_groups[0]);
+        if (!allowed) subBits.push('Friends only privacy');
+        return `<button type="button" class="msg-group-pick-row${isPicked ? ' is-selected' : ''}" data-group-pick="${escAttr(uid)}" role="option" aria-selected="${isPicked ? 'true' : 'false'}"${allowed ? '' : ' disabled'}>
+          ${userAvatarHtml(u, 'avatar-sm', { clickable: false, showPresence: false })}
+          <span class="msg-group-pick-copy">
+            <strong>${escapeHtml(u.full_name || 'User')}</strong>
+            <small>${escapeHtml(subBits.join(' · ') || 'Eligible member')}</small>
+          </span>
+          <span class="msg-group-pick-check" aria-hidden="true">${isPicked ? '✓' : '+'}</span>
+        </button>`;
+      }).join('');
+      ipon().bindAvatarFallbacks?.(memberListEl);
+    };
+
+    const loadCandidates = async () => {
+      if (memberListEl) memberListEl.innerHTML = skeletonHtml('person', 4);
+      try {
+        const [users] = await Promise.all([
+          ipon().rpc('search_social_users', { p_query: '', p_limit: 50 }),
+          state.overviewLoaded ? Promise.resolve() : refreshOverview({ render: false }).catch(() => { })
+        ]);
+        const merged = new Map();
+        (state.overview?.friends || []).forEach((f) => {
+          const fid = String(f?.id || '');
+          if (fid && !existingIds.has(fid)) {
+            merged.set(fid, { ...f, friendship_status: 'FRIENDS', can_message: true });
+          }
+        });
+        (Array.isArray(users) ? users : []).forEach((u) => {
+          const uid = String(u?.id || '');
+          if (uid && !existingIds.has(uid)) {
+            const prev = merged.get(uid);
+            merged.set(uid, prev ? { ...u, ...prev } : u);
+          }
+        });
+        allPeople = [...merged.values()].sort((a, b) => {
+          const af = a.friendship_status === 'FRIENDS' ? 0 : 1;
+          const bf = b.friendship_status === 'FRIENDS' ? 0 : 1;
+          if (af !== bf) return af - bf;
+          return String(a.full_name || '').localeCompare(String(b.full_name || ''));
+        });
+        renderPickerState();
+      } catch (err) {
+        if (memberListEl) {
+          ipon().showInlineError?.(memberListEl, err, loadCandidates);
+          if (!ipon().showInlineError) {
+            memberListEl.innerHTML = `<div class="empty-state msg-list-empty"><p>${escapeHtml(ipon().friendlyError(err))}</p></div>`;
+          }
+        }
+      }
+    };
+
+    titleInput?.addEventListener('input', () => {
+      validateTitle();
+      if (!pendingAvatarDataUrl) renderCreateAvatarPreview();
+    });
+    titleInput?.addEventListener('blur', validateTitle);
+    createPicBtn?.addEventListener('click', () => createPicInput?.click());
+    createPicPreview?.addEventListener('click', () => {
+      if (pendingAvatarDataUrl) ipon().openImageViewer?.(pendingAvatarDataUrl, titleInput?.value || 'Group photo');
+      else createPicInput?.click();
+    });
+    createPicRemove?.addEventListener('click', () => {
+      pendingAvatarDataUrl = null;
+      if (createPicInput) createPicInput.value = '';
+      renderCreateAvatarPreview();
+    });
+    createPicInput?.addEventListener('change', async () => {
+      const file = createPicInput.files?.[0];
+      if (!file) return;
+      try {
+        pendingAvatarDataUrl = await prepareGroupPicDataUrl(file);
+        renderCreateAvatarPreview();
+      } catch (err) {
+        ipon().toast(ipon().friendlyError(err), 'error');
+      } finally {
+        createPicInput.value = '';
+      }
+    });
+    descInput?.addEventListener('input', () => {
+      if (descCount) descCount.textContent = `${String(descInput.value || '').length} / 240`;
+    });
+    memberSearch?.addEventListener('input', () => {
+      query = memberSearch.value;
+      renderPickerState();
+    });
+    body.addEventListener('click', (ev) => {
+      const pickBtn = ev.target.closest?.('[data-group-pick]');
+      if (pickBtn && !pickBtn.disabled) {
+        const uid = pickBtn.dataset.groupPick;
+        const userObj = allPeople.find((u) => String(u.id) === uid);
+        if (!userObj) return;
+        if (selected.has(uid)) {
+          selected.delete(uid);
+        } else {
+          if (selected.size >= maxAllowed) {
+            ipon().toast(`You can pick up to ${maxAllowed} member${maxAllowed === 1 ? '' : 's'}.`, 'error');
+            return;
+          }
+          selected.set(uid, userObj);
+        }
+        if (membersErrEl?.classList?.contains?.('is-visible')) validateMembers();
+        renderPickerState();
+        return;
+      }
+      const unpickBtn = ev.target.closest?.('[data-group-unpick]');
+      if (unpickBtn) {
+        selected.delete(unpickBtn.dataset.groupUnpick);
+        if (membersErrEl?.classList?.contains?.('is-visible')) validateMembers();
+        renderPickerState();
+      }
+    });
+
+    form?.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const okTitle = validateTitle();
+      const okMembers = validateMembers();
+      if (!okTitle || !okMembers) {
+        if (!okTitle) titleInput?.focus();
+        return;
+      }
+      if (maxAllowed <= 0 && isAddMode) {
+        ipon().toast('This group already has the maximum of 50 members.', 'error');
+        return;
+      }
+      const memberIds = [...selected.keys()];
+      ipon().setBusy?.(submitBtn, true, isAddMode ? 'Adding…' : 'Creating…');
+      if (submitBtn && !ipon().setBusy) submitBtn.disabled = true;
+      try {
+        if (isAddMode) {
+          await ipon().rpc('add_group_chat_members', {
+            p_conversation_id: conversationId,
+            p_member_ids: memberIds
+          });
+          dialog.close();
+          ipon().toast(`Added ${memberIds.length} ${memberIds.length === 1 ? 'member' : 'members'}.`);
+          await Promise.all([
+            openConversation(conversationId, { markRead: false, silent: true }),
+            refreshConversations()
+          ]);
+        } else {
+          const uploadedAvatarUrl = pendingAvatarDataUrl
+            ? await uploadGroupPicIfNeeded(pendingAvatarDataUrl)
+            : null;
+          const created = await ipon().rpc('create_group_chat', {
+            p_title: String(titleInput?.value || '').trim().replace(/\s+/g, ' '),
+            p_member_ids: memberIds,
+            p_description: String(descInput?.value || '').trim() || null,
+            p_avatar_url: uploadedAvatarUrl || null
+          });
+          dialog.close();
+          clearSidebarSearch();
+          await refreshConversations();
+          switchTab('chats');
+          if (created?.id) await openConversation(created.id);
+          ipon().toast(`Group "${created?.title || 'Chat'}" created.`);
+        }
+      } catch (err) {
+        ipon().toast(ipon().friendlyError(err), 'error');
+      } finally {
+        ipon().setBusy?.(submitBtn, false);
+        if (submitBtn && !ipon().setBusy) submitBtn.disabled = false;
+      }
+    });
+
+    await loadCandidates();
+    if (!isAddMode) titleInput?.focus();
+    else memberSearch?.focus();
+  }
+
+  function showGroupMemberMenu(memberId, anchorBtn) {
+    closeFloatingMenus({ immediate: true });
+    const conv = state.activeThread?.conversation;
+    if (!conv || !isGroupConv(conv)) return;
+    const member = (conv.members || []).find((m) => String(m.id) === String(memberId));
+    if (!member) return;
+    const myRole = String(conv.my_role || 'MEMBER').toUpperCase();
+    const targetRole = String(member.role || 'MEMBER').toUpperCase();
+    const canRemove = (myRole === 'OWNER' && targetRole !== 'OWNER') || (myRole === 'ADMIN' && targetRole === 'MEMBER');
+    const menu = document.createElement('div');
+    menu.className = 'msg-floating-menu msg-ctx-menu';
+    menu.innerHTML = `
+      <button type="button" data-group-mact="view_profile" data-target-id="${escAttr(member.id)}">View profile</button>
+      <button type="button" data-group-mact="message" data-target-id="${escAttr(member.id)}">Message privately</button>
+      ${myRole === 'OWNER' && targetRole === 'MEMBER' ? `<button type="button" data-group-mact="make_admin" data-target-id="${escAttr(member.id)}">Make group admin</button>` : ''}
+      ${myRole === 'OWNER' && targetRole === 'ADMIN' ? `<button type="button" data-group-mact="remove_admin" data-target-id="${escAttr(member.id)}">Remove admin role</button>` : ''}
+      ${myRole === 'OWNER' && targetRole !== 'OWNER' ? `<button type="button" data-group-mact="make_owner" data-target-id="${escAttr(member.id)}">Transfer ownership</button>` : ''}
+      ${canRemove ? `<button type="button" class="is-danger" data-group-mact="remove_member" data-target-id="${escAttr(member.id)}">Remove from group</button>` : ''}`;
+    document.getElementById('msg-workspace-dialog')?.appendChild(menu);
+    placeFloatingMenu(menu, anchorBtn, { preferAbove: false, estWidth: 196, estHeight: 190, align: 'end' });
+    revealFloatingMenu(menu);
+  }
+
   async function openForwardDialog(messageObj) {
     const dialog = document.getElementById('msg-forward-dialog');
     const body = document.getElementById('msg-forward-body');
     if (!dialog || !body) return;
-    const candidates = new Map();
-    state.conversations.filter((c) => c.status === 'ACCEPTED' && !c.peer?.is_blocked).forEach((c) => {
-      if (c.peer?.id) candidates.set(c.peer.id, { userId: c.peer.id, name: c.peer.full_name, avatar_url: c.peer.avatar_url, convId: c.id });
-    });
+    const items = [];
+    const seenDirectUsers = new Set();
+    state.conversations
+      .filter((c) => c.status === 'ACCEPTED' && (isGroupConv(c) || !c.peer?.is_blocked))
+      .forEach((c) => {
+        if (isGroupConv(c)) {
+          items.push({
+            isGroup: true,
+            conv: c,
+            userId: c.id,
+            name: convDisplayTitle(c),
+            sub: `Group · ${Number(c.member_count || 2)} members`,
+            convId: c.id
+          });
+        } else if (c.peer?.id) {
+          seenDirectUsers.add(c.peer.id);
+          items.push({
+            isGroup: false,
+            userId: c.peer.id,
+            name: c.peer.full_name,
+            avatar_url: c.peer.avatar_url,
+            sub: c.peer.username ? `@${c.peer.username}` : '',
+            convId: c.id
+          });
+        }
+      });
     (state.overview?.friends || []).forEach((f) => {
-      if (!candidates.has(f.id)) candidates.set(f.id, { userId: f.id, name: f.full_name, avatar_url: f.avatar_url, convId: null });
+      if (!seenDirectUsers.has(f.id)) {
+        seenDirectUsers.add(f.id);
+        items.push({
+          isGroup: false,
+          userId: f.id,
+          name: f.full_name,
+          avatar_url: f.avatar_url,
+          sub: f.username ? `@${f.username}` : 'Friend',
+          convId: null
+        });
+      }
     });
 
-    const items = [...candidates.values()];
     body.innerHTML = items.length
       ? `<p class="msg-forward-quote">"${escapeHtml(String(messageObj.body || 'Attachment').slice(0, 140))}"</p>
          <div class="msg-forward-list">${items.map((item) => `
            <button type="button" class="msg-forward-row" data-fwd-user="${escAttr(item.userId)}" data-fwd-conv="${escAttr(item.convId || '')}">
-             ${userAvatarHtml({ id: item.userId, full_name: item.name, avatar_url: item.avatar_url, allow_online_status: false }, 'avatar-sm', { clickable: false, showPresence: false })}
-             <strong>${escapeHtml(item.name)}</strong>
+             ${item.isGroup
+               ? groupAvatarHtml(item.conv, 'avatar-sm', { clickable: false, showPresence: false })
+               : userAvatarHtml({ id: item.userId, full_name: item.name, avatar_url: item.avatar_url, allow_online_status: false }, 'avatar-sm', { clickable: false, showPresence: false })}
+             <span class="msg-forward-meta">
+               <strong>${escapeHtml(item.name)}</strong>
+               ${item.sub ? `<small>${escapeHtml(item.sub)}</small>` : ''}
+             </span>
              <span class="button button-secondary button-sm">Send</span>
            </button>`).join('')}</div>`
       : '<p class="empty-state">Add friends or open conversations first to forward messages.</p>';
+    ipon().bindAvatarFallbacks?.(body);
     body.dataset.fwdMsgId = messageObj.id;
     body.dataset.fwdBody = messageObj.body || '';
     if (!dialog.open) dialog.showModal();
@@ -3480,6 +4345,9 @@
     state.activeThread = null;
     state.replyToMsg = null;
     state.editingMsg = null;
+    state.groupEditAvatarDataUrl = null;
+    state.groupEditAvatarClear = false;
+    state.groupEditAvatarConvId = null;
     state.showThreadSearch = false;
     state.threadSearchQuery = '';
     state.threadSearchMatches = [];
@@ -3772,6 +4640,7 @@
     closeFloatingMenus({ immediate: true });
     const conv = state.conversations.find((c) => c.id === convId);
     if (!conv) return;
+    const isGrp = isGroupConv(conv);
     const menu = document.createElement('div');
     menu.className = 'msg-floating-menu msg-ctx-menu';
     menu.innerHTML = `
@@ -3779,9 +4648,10 @@
       <button type="button" data-row-conv-act="${conv.is_muted ? 'unmute' : 'mute'}" data-conv-id="${escAttr(convId)}">${conv.is_muted ? 'Unmute notifications' : 'Mute notifications'}</button>
       <button type="button" data-row-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}" data-conv-id="${escAttr(convId)}">${conv.is_archived ? 'Move to Inbox' : 'Archive chat'}</button>
       <button type="button" data-row-conv-act="${conv.unread_count > 0 || conv.marked_unread ? 'mark_read' : 'mark_unread'}" data-conv-id="${escAttr(convId)}">${conv.unread_count > 0 || conv.marked_unread ? 'Mark as read' : 'Mark as unread'}</button>
-      <button type="button" class="is-danger" data-row-conv-act="delete_for_me" data-conv-id="${escAttr(convId)}">Delete conversation</button>`;
+      <button type="button" class="${isGrp ? '' : 'is-danger'}" data-row-conv-act="delete_for_me" data-conv-id="${escAttr(convId)}">${isGrp ? 'Clear chat history' : 'Delete conversation'}</button>
+      ${isGrp ? `<button type="button" class="is-danger" data-row-group-leave="${escAttr(convId)}">Leave group</button>` : ''}`;
     document.getElementById('msg-workspace-dialog')?.appendChild(menu);
-    placeFloatingMenu(menu, anchorBtn, { preferAbove: false, estWidth: 196, estHeight: 190, align: 'end' });
+    placeFloatingMenu(menu, anchorBtn, { preferAbove: false, estWidth: 196, estHeight: isGrp ? 226 : 190, align: 'end' });
     revealFloatingMenu(menu);
   }
 
@@ -3804,7 +4674,7 @@
       suppressBubbleClickId = null;
 
       // Close floating contextual menus on outside click
-      if (!ev.target.closest('.msg-floating-menu') && !ev.target.closest('[data-msg-act]') && !ev.target.closest('[data-conv-menu-toggle]') && !ev.target.closest('[data-vact="menu"]')) {
+      if (!ev.target.closest('.msg-floating-menu') && !ev.target.closest('[data-msg-act]') && !ev.target.closest('[data-conv-menu-toggle]') && !ev.target.closest('[data-group-member-menu]') && !ev.target.closest('[data-vact="menu"]')) {
         closeFloatingMenus();
       }
       if (state.showPinnedList && !ev.target.closest?.('#msg-pinned-banner')) {
@@ -3850,9 +4720,160 @@
       if (ev.target.closest?.('#msg-workspace-close')) { document.getElementById('msg-workspace-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-settings-close]')) { document.getElementById('msg-settings-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-forward-close]')) { document.getElementById('msg-forward-dialog')?.close(); return; }
+      if (ev.target.closest?.('[data-msg-group-close]')) { document.getElementById('msg-group-dialog')?.close(); return; }
       if (ev.target.closest?.('#msg-privacy-btn')) { await openPrivacySettingsModal(); return; }
       if (ev.target.closest?.('#msg-alerts-btn')) { switchTab('notifications'); return; }
       if (ev.target.closest?.('#msg-empty-find-btn') || ev.target.closest?.('[data-goto-discover]')) { activateSidebarSearch(true); return; }
+      if (ev.target.closest?.('#msg-new-group-btn') || ev.target.closest?.('#msg-empty-group-btn') || ev.target.closest?.('#msg-inline-create-group')) {
+        await openGroupChatDialog({ mode: 'create' });
+        return;
+      }
+      const addGroupMembersBtn = ev.target.closest?.('[data-group-add-members]');
+      if (addGroupMembersBtn) {
+        await openGroupChatDialog({ mode: 'add_members', conversationId: addGroupMembersBtn.dataset.groupAddMembers || state.activeConvId });
+        return;
+      }
+      if (ev.target.closest?.('[data-open-group-info]') && state.activeConvId) {
+        state.showThreadInfo = true;
+        state.threadInfoView = 'root';
+        renderThreadInfoDrawer();
+        return;
+      }
+      if (ev.target.closest?.('#msg-group-edit-toggle')) {
+        const editForm = document.getElementById('msg-group-edit-form');
+        if (editForm) {
+          editForm.hidden = !editForm.hidden;
+          if (!editForm.hidden) document.getElementById('msg-group-edit-title')?.focus();
+        }
+        return;
+      }
+      if (ev.target.closest?.('#msg-group-avatar-quick-btn')) {
+        const editForm = document.getElementById('msg-group-edit-form');
+        if (editForm) editForm.hidden = false;
+        document.getElementById('msg-group-edit-pic-input')?.click();
+        return;
+      }
+      if (ev.target.closest?.('#msg-group-drawer-avatar-slot.is-viewable')) {
+        const conv = state.activeThread?.conversation;
+        const viewSrc = !state.groupEditAvatarClear ? (state.groupEditAvatarDataUrl || conv?.avatar_url) : null;
+        if (viewSrc) ipon().openImageViewer?.(viewSrc, convDisplayTitle(conv));
+        return;
+      }
+      if (ev.target.closest?.('#msg-group-edit-pic-btn')) {
+        document.getElementById('msg-group-edit-pic-input')?.click();
+        return;
+      }
+      if (ev.target.closest?.('#msg-group-edit-pic-remove')) {
+        const conv = state.activeThread?.conversation;
+        const hadSaved = Boolean(conv?.avatar_url);
+        state.groupEditAvatarDataUrl = null;
+        state.groupEditAvatarClear = hadSaved;
+        syncGroupEditAvatarUi();
+        if (hadSaved) ipon().toast('Photo cleared from preview. Click Save to apply.');
+        return;
+      }
+      if (ev.target.closest?.('#msg-group-edit-cancel')) {
+        const editForm = document.getElementById('msg-group-edit-form');
+        state.groupEditAvatarDataUrl = null;
+        state.groupEditAvatarClear = false;
+        syncGroupEditAvatarUi();
+        if (editForm) editForm.hidden = true;
+        return;
+      }
+      const leaveGroupBtn = ev.target.closest?.('[data-group-leave], [data-row-group-leave]');
+      if (leaveGroupBtn) {
+        closeFloatingMenus();
+        const targetConvId = leaveGroupBtn.dataset.groupLeave || leaveGroupBtn.dataset.rowGroupLeave || state.activeConvId;
+        if (!targetConvId) return;
+        const convMeta = state.conversations.find((c) => c.id === targetConvId) || state.activeThread?.conversation;
+        const ok = await ipon().confirmAction({
+          title: `Leave "${convDisplayTitle(convMeta)}"?`,
+          message: 'You will stop receiving messages from this group chat unless an admin adds you back. If you are the owner, ownership transfers to another member automatically.',
+          confirmText: 'Leave group',
+          danger: true
+        });
+        if (!ok) return;
+        try {
+          await ipon().rpc('remove_group_chat_member', { p_conversation_id: targetConvId, p_target_user_id: null });
+          if (state.activeConvId === targetConvId) clearActiveThreadSelection();
+          state.mobileShowThread = false;
+          syncMobilePaneState();
+          await refreshConversations();
+          ipon().toast('You left the group chat.');
+        } catch (err) {
+          ipon().toast(ipon().friendlyError(err), 'error');
+        }
+        return;
+      }
+      const memberMenuBtn = ev.target.closest?.('[data-group-member-menu]');
+      if (memberMenuBtn) {
+        ev.stopPropagation();
+        showGroupMemberMenu(memberMenuBtn.dataset.groupMemberMenu, memberMenuBtn);
+        return;
+      }
+      const groupMactBtn = ev.target.closest?.('[data-group-mact]');
+      if (groupMactBtn) {
+        closeFloatingMenus();
+        const op = groupMactBtn.dataset.groupMact;
+        const targetId = groupMactBtn.dataset.targetId;
+        const conv = state.activeThread?.conversation;
+        if (!targetId) return;
+        if (op === 'view_profile') {
+          await openProfilePopover(targetId, groupMactBtn);
+          return;
+        }
+        if (op === 'message') {
+          await handleSocialAction('message', targetId);
+          return;
+        }
+        if (!conv || !isGroupConv(conv)) return;
+        const memberObj = (conv.members || []).find((m) => String(m.id) === String(targetId));
+        const memberName = memberObj?.full_name || 'this member';
+        try {
+          if (op === 'make_admin' || op === 'remove_admin') {
+            const nextRole = op === 'make_admin' ? 'ADMIN' : 'MEMBER';
+            await ipon().rpc('update_group_chat_member_role', {
+              p_conversation_id: conv.conversation_id,
+              p_target_user_id: targetId,
+              p_role: nextRole
+            });
+            ipon().toast(nextRole === 'ADMIN' ? `${memberName} is now a group admin.` : `Removed admin role from ${memberName}.`);
+          } else if (op === 'make_owner') {
+            const ok = await ipon().confirmAction({
+              title: `Transfer ownership to ${memberName}?`,
+              message: 'They will become the group owner and you will stay in the group as a group admin.',
+              confirmText: 'Transfer ownership'
+            });
+            if (!ok) return;
+            await ipon().rpc('update_group_chat_member_role', {
+              p_conversation_id: conv.conversation_id,
+              p_target_user_id: targetId,
+              p_role: 'OWNER'
+            });
+            ipon().toast(`${memberName} is now the group owner.`);
+          } else if (op === 'remove_member') {
+            const ok = await ipon().confirmAction({
+              title: `Remove ${memberName}?`,
+              message: 'They will be removed from this group chat immediately.',
+              confirmText: 'Remove',
+              danger: true
+            });
+            if (!ok) return;
+            await ipon().rpc('remove_group_chat_member', {
+              p_conversation_id: conv.conversation_id,
+              p_target_user_id: targetId
+            });
+            ipon().toast(`${memberName} was removed from the group.`);
+          }
+          await Promise.all([
+            openConversation(conv.conversation_id, { markRead: false, silent: true }),
+            refreshConversations()
+          ]);
+        } catch (err) {
+          ipon().toast(ipon().friendlyError(err), 'error');
+        }
+        return;
+      }
       if (ev.target.closest?.('#msg-new-chat-btn')) {
         if (state.searchActive || state.chatListQuery.trim()) clearSidebarSearch();
         else activateSidebarSearch(true);
@@ -3908,6 +4929,78 @@
       const convMoreBtn = ev.target.closest?.('[data-conv-menu-toggle]');
       if (convMoreBtn) { ev.stopPropagation(); showConvContextMenu(convMoreBtn.dataset.convMenuToggle, convMoreBtn); return; }
 
+      const CONV_ACT_TOAST = {
+        pin: 'Chat pinned.',
+        unpin: 'Chat unpinned.',
+        mute: 'Chat muted.',
+        unmute: 'Chat unmuted.',
+        archive: 'Chat archived.',
+        unarchive: 'Chat unarchived.',
+        mark_unread: 'Marked as unread.',
+        delete_for_me: 'Chat cleared.'
+      };
+      const snapshotConvFlags = (row) => (row ? {
+        is_pinned: Boolean(row.is_pinned),
+        is_muted: Boolean(row.is_muted),
+        is_archived: Boolean(row.is_archived),
+        marked_unread: Boolean(row.marked_unread)
+      } : null);
+      const applyConvFlagMutation = (target, actName, revertSnap = null) => {
+        if (!target) return;
+        if (revertSnap) {
+          Object.assign(target, revertSnap);
+          return;
+        }
+        if (actName === 'pin') target.is_pinned = true;
+        else if (actName === 'unpin') target.is_pinned = false;
+        else if (actName === 'mute') target.is_muted = true;
+        else if (actName === 'unmute') target.is_muted = false;
+        else if (actName === 'archive') { target.is_archived = true; target.is_pinned = false; }
+        else if (actName === 'unarchive') target.is_archived = false;
+        else if (actName === 'mark_unread') target.marked_unread = true;
+      };
+      const runConvMemberAction = async (cId, act, triggerBtn) => {
+        if (!cId || !act) return;
+        const listRow = state.conversations.find((c) => c.id === cId) || null;
+        const activeConv = state.activeThread?.conversation?.conversation_id === cId ? state.activeThread.conversation : null;
+        const rowSnap = snapshotConvFlags(listRow);
+        const activeSnap = snapshotConvFlags(activeConv);
+        if (act !== 'delete_for_me') {
+          applyConvFlagMutation(listRow, act);
+          applyConvFlagMutation(activeConv, act);
+          renderConversationList();
+          if (state.showThreadInfo && state.activeConvId === cId) renderThreadInfoDrawer();
+        }
+        if (triggerBtn) {
+          triggerBtn.disabled = true;
+          triggerBtn.setAttribute?.('aria-busy', 'true');
+        }
+        try {
+          await ipon().rpc('update_conversation_member_state', { p_conversation_id: cId, p_action: act });
+          if (CONV_ACT_TOAST[act]) ipon().toast(CONV_ACT_TOAST[act]);
+          if (act === 'delete_for_me') {
+            if (state.activeConvId === cId) clearActiveThreadSelection();
+            await refreshConversations();
+          } else {
+            await Promise.all([
+              state.activeConvId === cId ? openConversation(cId, { markRead: false, silent: true }) : Promise.resolve(),
+              refreshConversations()
+            ]);
+          }
+        } catch (err) {
+          if (rowSnap) applyConvFlagMutation(listRow, act, rowSnap);
+          if (activeSnap) applyConvFlagMutation(activeConv, act, activeSnap);
+          renderConversationList();
+          if (state.showThreadInfo && state.activeConvId === cId) renderThreadInfoDrawer();
+          ipon().toast(ipon().friendlyError(err), 'error');
+        } finally {
+          if (triggerBtn) {
+            triggerBtn.disabled = false;
+            triggerBtn.removeAttribute?.('aria-busy');
+          }
+        }
+      };
+
       const rowConvAct = ev.target.closest?.('[data-row-conv-act]');
       if (rowConvAct) {
         closeFloatingMenus();
@@ -3917,13 +5010,7 @@
           const ok = await ipon().confirmAction({ title: 'Delete conversation from your inbox?', message: 'This removes the chat history for you only.', confirmText: 'Delete' });
           if (!ok) return;
         }
-        try {
-          await ipon().rpc('update_conversation_member_state', { p_conversation_id: cId, p_action: act });
-          if (act === 'delete_for_me' && state.activeConvId === cId) {
-            clearActiveThreadSelection();
-          }
-          await refreshConversations();
-        } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
+        await runConvMemberAction(cId, act, rowConvAct);
         return;
       }
 
@@ -3934,15 +5021,7 @@
           const ok = await ipon().confirmAction({ title: 'Delete conversation for you?', message: 'Messages will be cleared from your own inbox view.', confirmText: 'Delete' });
           if (!ok) return;
         }
-        try {
-          await ipon().rpc('update_conversation_member_state', { p_conversation_id: state.activeConvId, p_action: act });
-          if (act === 'delete_for_me') {
-            clearActiveThreadSelection();
-          } else {
-            await openConversation(state.activeConvId, { markRead: false, silent: true });
-          }
-          await refreshConversations();
-        } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
+        await runConvMemberAction(state.activeConvId, act, convActBtn);
         return;
       }
 
@@ -4216,7 +5295,10 @@
           await openConversation(state.activeConvId, { markRead: false, silent: true });
         } else if (op === 'del_me' || op === 'del_all') {
           if (op === 'del_all') {
-            const ok = await ipon().confirmAction({ title: 'Unsend for everyone?', message: 'This removes the message and its attachments for both participants.', confirmText: 'Unsend', danger: true });
+            const unsendMsg = isGroupConv(state.activeThread?.conversation)
+              ? 'This removes the message and its attachments for everyone in this group chat.'
+              : 'This removes the message and its attachments for both participants.';
+            const ok = await ipon().confirmAction({ title: 'Unsend for everyone?', message: unsendMsg, confirmText: 'Unsend', danger: true });
             if (!ok) return;
           }
           try {
@@ -4437,8 +5519,55 @@
       }
     });
 
-    document.addEventListener('submit', (ev) => {
-      if (ev.target?.id === 'msg-composer-form') submitComposer(ev);
+    document.addEventListener('submit', async (ev) => {
+      if (ev.target?.id === 'msg-composer-form') {
+        submitComposer(ev);
+        return;
+      }
+      if (ev.target?.id === 'msg-group-edit-form' && state.activeConvId) {
+        ev.preventDefault();
+        const titleInput = document.getElementById('msg-group-edit-title');
+        const descInput = document.getElementById('msg-group-edit-desc');
+        const errEl = document.getElementById('msg-group-edit-error');
+        const saveBtn = document.getElementById('msg-group-edit-save');
+        const nextTitle = String(titleInput?.value || '').trim().replace(/\s+/g, ' ');
+        const nextDesc = String(descInput?.value || '').trim();
+        let err = '';
+        if (nextTitle.length < 2) err = 'Group name must be at least 2 characters.';
+        else if (nextTitle.length > 80) err = 'Group name must be 80 characters or fewer.';
+        if (errEl) {
+          errEl.textContent = err;
+          errEl.title = err;
+          errEl.classList?.toggle?.('is-visible', Boolean(err));
+          errEl.setAttribute?.('aria-hidden', err ? 'false' : 'true');
+        }
+        titleInput?.setAttribute?.('aria-invalid', err ? 'true' : 'false');
+        if (err) { titleInput?.focus(); return; }
+        ipon().setBusy?.(saveBtn, true, 'Saving…');
+        try {
+          const uploadedAvatarUrl = !state.groupEditAvatarClear && state.groupEditAvatarDataUrl
+            ? await uploadGroupPicIfNeeded(state.groupEditAvatarDataUrl)
+            : null;
+          await ipon().rpc('update_group_chat_info', {
+            p_conversation_id: state.activeConvId,
+            p_title: nextTitle,
+            p_description: nextDesc,
+            p_avatar_url: uploadedAvatarUrl || null,
+            p_clear_avatar: Boolean(state.groupEditAvatarClear && !uploadedAvatarUrl)
+          });
+          state.groupEditAvatarDataUrl = null;
+          state.groupEditAvatarClear = false;
+          ipon().toast('Group info updated.');
+          await Promise.all([
+            openConversation(state.activeConvId, { markRead: false, silent: true }),
+            refreshConversations()
+          ]);
+        } catch (error) {
+          ipon().toast(ipon().friendlyError(error), 'error');
+        } finally {
+          ipon().setBusy?.(saveBtn, false);
+        }
+      }
     });
 
     document.addEventListener('input', (ev) => {
@@ -4473,6 +5602,17 @@
         syncComposerCharCounter(ev.target.value.length);
         if (state.activeConvId) state.draftsByConv.set(state.activeConvId, ev.target.value);
         sendTypingBroadcast(Boolean(ev.target.value.trim()));
+      } else if (ev.target?.id === 'msg-group-edit-title') {
+        const val = String(ev.target.value || '').trim().replace(/\s+/g, ' ');
+        const err = !val ? 'Enter a group name.' : (val.length < 2 ? 'Group name must be at least 2 characters.' : '');
+        const errEl = document.getElementById('msg-group-edit-error');
+        if (errEl) {
+          errEl.textContent = err;
+          errEl.title = err;
+          errEl.classList?.toggle?.('is-visible', Boolean(err));
+          errEl.setAttribute?.('aria-hidden', err ? 'false' : 'true');
+        }
+        ev.target.setAttribute?.('aria-invalid', err ? 'true' : 'false');
       } else if (ev.target?.classList?.contains('msg-video-seek')) {
         const player = ev.target.closest('.msg-video-player');
         const video = player?.querySelector('video');
@@ -4494,10 +5634,24 @@
       }
     });
 
-    document.addEventListener('change', (ev) => {
+    document.addEventListener('change', async (ev) => {
       if (ev.target?.id === 'msg-file-input') {
         queuePickedFiles(ev.target.files);
         ev.target.value = '';
+      } else if (ev.target?.id === 'msg-group-edit-pic-input') {
+        const input = ev.target;
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) return;
+        try {
+          const dataUrl = await prepareGroupPicDataUrl(file);
+          state.groupEditAvatarDataUrl = dataUrl;
+          state.groupEditAvatarClear = false;
+          state.groupEditAvatarConvId = state.activeConvId;
+          syncGroupEditAvatarUi();
+        } catch (error) {
+          ipon().toast(ipon().friendlyError(error), 'error');
+        }
       } else if (ev.target?.id === 'msg-thread-search-sender') {
         state.threadSearchSenderId = ev.target.value;
         runThreadSearch();
@@ -4808,9 +5962,15 @@
         const fromPeer = Boolean(row.sender_id && row.sender_id !== profile.id);
         const isInsert = payload?.eventType === 'INSERT';
         if (isInsert && fromPeer && cId) {
-          if (state.typingPeers.has(cId)) {
-            const prevTyping = state.typingPeers.get(cId);
-            if (prevTyping?.timer) clearTimeout(prevTyping.timer);
+          const bucket = state.typingPeers.get(cId);
+          if (bucket instanceof Map) {
+            const senderEntry = bucket.get(String(row.sender_id || ''));
+            if (senderEntry?.timer) clearTimeout(senderEntry.timer);
+            bucket.delete(String(row.sender_id || ''));
+            if (!bucket.size) state.typingPeers.delete(cId);
+            updateTypingIndicators({ listChanged: true });
+          } else if (bucket) {
+            if (bucket?.timer) clearTimeout(bucket.timer);
             state.typingPeers.delete(cId);
             updateTypingIndicators({ listChanged: true });
           }
@@ -4859,34 +6019,47 @@
         const row = payload?.new || payload?.old || {};
         const cId = row.id;
         const curConv = state.activeThread?.conversation;
-        const statusChanged = Boolean(
+        const metaOrStatusChanged = Boolean(
           cId &&
           cId === state.activeConvId &&
-          row.status &&
-          curConv?.status &&
-          row.status !== curConv.status
+          curConv && (
+            (row.status && curConv.status && row.status !== curConv.status) ||
+            (isGroupConv(curConv) && (
+              (row.title && row.title !== curConv.title) ||
+              (row.description !== undefined && row.description !== curConv.description) ||
+              (row.avatar_url !== undefined && row.avatar_url !== curConv.avatar_url)
+            ))
+          )
         );
         scheduleRefresh({
           convs: true,
-          thread: statusChanged,
+          thread: metaOrStatusChanged,
           markRead: false
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_participants', filter: `user_id=eq.${profile.id}` }, (payload) => {
         const row = payload?.new || payload?.old || {};
         const cId = row.conversation_id;
+        // If current user was removed from active group chat, close the active thread cleanly
+        if (payload?.eventType === 'DELETE' && cId && cId === state.activeConvId) {
+          clearActiveThreadSelection();
+          state.mobileShowThread = false;
+          syncMobilePaneState();
+        }
         // Skip self-triggered last_read_at / marked_unread echoes immediately after mark_conversation_read.
         if (cId && (Date.now() - (state.recentMarkReadAt.get(cId) || 0) < 2500)) return;
         const curConv = state.activeThread?.conversation;
         const metaChanged = Boolean(
           cId &&
           cId === state.activeConvId &&
-          curConv &&
-          row.chat_theme && (
-            row.chat_theme !== curConv.chat_theme ||
-            Boolean(row.is_pinned) !== Boolean(curConv.is_pinned) ||
-            Boolean(row.is_muted) !== Boolean(curConv.is_muted) ||
-            Boolean(row.is_archived) !== Boolean(curConv.is_archived)
+          curConv && (
+            (row.role && isGroupConv(curConv) && row.role !== curConv.my_role) ||
+            (row.chat_theme && (
+              row.chat_theme !== curConv.chat_theme ||
+              Boolean(row.is_pinned) !== Boolean(curConv.is_pinned) ||
+              Boolean(row.is_muted) !== Boolean(curConv.is_muted) ||
+              Boolean(row.is_archived) !== Boolean(curConv.is_archived)
+            ))
           )
         );
         scheduleRefresh({
@@ -4997,6 +6170,11 @@
   }
 
   function handleBackNavigation() {
+    const groupDlg = document.getElementById('msg-group-dialog');
+    if (groupDlg?.open) {
+      groupDlg.close();
+      return true;
+    }
     if (state.showThreadInfo) {
       if (state.threadInfoView !== 'root') {
         state.threadInfoView = 'root';
