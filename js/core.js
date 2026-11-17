@@ -11657,7 +11657,7 @@
         <div class="join-group-panel-body">
           <div class="field field-wide">
             <label class="invite-section-label" for="${jid}-code">Group code or invite link</label>
-            <input id="${jid}-code" name="invite_code" class="join-code-input" type="text" maxlength="240" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K9M-4PQ or invite link" aria-describedby="${jid}-error" required>
+            <input id="${jid}-code" name="invite_code" class="join-code-input" type="text" maxlength="240" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K9M-4PQ or invite link" aria-describedby="${jid}-error ${jid}-preview" required>
             <small class="field-error" id="${jid}-error" role="alert"></small>
           </div>
           <div class="join-preview-slot" id="${jid}-preview" aria-live="polite"></div>
@@ -11681,12 +11681,12 @@
     let previewSeq = 0;
     let blockedDialogShownFor = '';
 
-    const setCodeError = (msg) => {
+    const setCodeError = (msg, { inline = true } = {}) => {
       if (!input || !errorEl) return;
       input.setCustomValidity(msg || '');
       if (msg) {
         input.setAttribute('aria-invalid', 'true');
-        errorEl.textContent = msg;
+        errorEl.textContent = inline ? msg : '';
       } else {
         input.removeAttribute('aria-invalid');
         errorEl.textContent = '';
@@ -11701,6 +11701,18 @@
       }
       if (previewSlot) {
         previewSlot.innerHTML = '<div class="join-preview-placeholder"><p>Enter the 6-character code or link from your admin to preview the group.</p></div>';
+      }
+    };
+
+    const renderPreviewError = (msg) => {
+      latestPreview = null;
+      setCodeError(msg, { inline: false });
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Join group';
+      }
+      if (previewSlot) {
+        previewSlot.innerHTML = `<div class="join-preview-error" role="alert"><p>${escapeHtml(msg)}</p></div>`;
       }
     };
 
@@ -11777,30 +11789,33 @@
         latestPreview = res || null;
         if (!res?.valid) {
           const isBlocked = Boolean(res?.blocked || res?.reason === 'DECLINED_BLOCKED' || res?.reason === 'DISABLED');
-          setCodeError(res?.message || 'Invite code could not be verified.');
-          if (previewSlot) {
-            previewSlot.innerHTML = isBlocked
-              ? `<div class="join-preview-card is-blocked">
-                  <div class="join-preview-head">
-                    ${res?.group_name ? avatarMarkup(res.group_avatar_url, res.group_name, 'avatar-md') : ''}
-                    <div class="join-preview-info">
-                      <strong>${escapeHtml(res?.group_name || 'Access blocked')}</strong>
-                      <small>${escapeHtml(res?.message || 'You are blocked from using this invite link or code.')}</small>
-                    </div>
+          const errMsg = res?.message || (isBlocked ? 'You are blocked from using this invite link or code.' : 'Invite code is invalid or expired.');
+          if (isBlocked) {
+            setCodeError(errMsg, { inline: false });
+            if (previewSlot) {
+              previewSlot.innerHTML = `<div class="join-preview-card is-blocked" role="alert">
+                <div class="join-preview-head">
+                  ${res?.group_name ? avatarMarkup(res.group_avatar_url, res.group_name, 'avatar-md') : ''}
+                  <div class="join-preview-info">
+                    <strong>${escapeHtml(res?.group_name || 'Access blocked')}</strong>
+                    <small>${escapeHtml(errMsg)}</small>
                   </div>
-                  <div class="join-preview-badges"><span class="status status-rejected">Blocked from this link/code</span></div>
-                </div>`
-              : `<div class="join-preview-error"><p>${escapeHtml(res?.message || 'Invite code is invalid or expired.')}</p></div>`;
-            if (isBlocked) bindAvatarFallbacks(previewSlot);
-          }
-          if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.textContent = isBlocked ? 'Blocked' : 'Join group';
-          }
-          if (isBlocked && blockedDialogShownFor !== code) {
-            blockedDialogShownFor = code;
-            clearPendingJoinCode();
-            showJoinBlockedDialog({ groupName: res?.group_name || '', message: res?.message || '' });
+                </div>
+                <div class="join-preview-badges"><span class="status status-rejected">Blocked from this link/code</span></div>
+              </div>`;
+              bindAvatarFallbacks(previewSlot);
+            }
+            if (submitBtn) {
+              submitBtn.disabled = true;
+              submitBtn.textContent = 'Blocked';
+            }
+            if (blockedDialogShownFor !== code) {
+              blockedDialogShownFor = code;
+              clearPendingJoinCode();
+              showJoinBlockedDialog({ groupName: res?.group_name || '', message: res?.message || '' });
+            }
+          } else {
+            renderPreviewError(errMsg);
           }
           return;
         }
@@ -11850,8 +11865,7 @@
         }
       } catch (err) {
         if (seq !== previewSeq) return;
-        setCodeError(friendlyError(err));
-        renderEmptyPreview();
+        renderPreviewError(friendlyError(err));
       }
     }
 
@@ -11905,10 +11919,11 @@
         window.location.href = homeForRole(result?.role || 'MEMBER');
       } catch (err) {
         const msg = friendlyError(err);
-        setCodeError(msg);
+        const blockedGroupName = latestPreview?.group_name || '';
+        renderPreviewError(msg);
         if (/blocked|declined|disabled/i.test(msg)) {
           clearPendingJoinCode();
-          showJoinBlockedDialog({ groupName: latestPreview?.group_name || '', message: msg });
+          showJoinBlockedDialog({ groupName: blockedGroupName, message: msg });
         } else {
           toast(msg, 'error');
         }
