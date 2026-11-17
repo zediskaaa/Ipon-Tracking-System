@@ -10552,6 +10552,144 @@
     if (table === 'contribution_periods') {
       const month = snap.period_month ? dateLabel(snap.period_month, { month: 'short', year: 'numeric' }) : 'Period';
       const memberName = snap.member_id ? lookups.members?.get(snap.member_id) : '';
+      return memberName ? `${month} — ${memberName}` : month;
+    }
+    if (table === 'contributions') {
+      const period = snap.contribution_period_id ? lookups.periods?.get(snap.contribution_period_id) : null;
+      const memberName = period?.member_id ? lookups.members?.get(period.member_id) : '';
+      const amountText = snap.amount != null ? `${money(snap.amount)} addition` : 'Addition';
+      return memberName ? `${amountText} — ${memberName}` : amountText;
+    }
+    if (table === 'withdrawals') {
+      const amountText = snap.amount != null ? `${money(snap.amount)} deduction` : 'Deduction';
+      return snap.category ? `${amountText} (${snap.category})` : amountText;
+    }
+    if (table === 'expenses') {
+      const amountText = snap.amount != null ? `${money(snap.amount)} expense` : 'Expense';
+      return snap.category ? `${amountText} (${snap.category})` : amountText;
+    }
+    if (table === 'group_invite_codes') return snap.code ? `Invite code ${snap.code}` : 'Invite code';
+    if (table === 'group_join_requests') return snap.requester_name || lookups.profiles?.get(snap.requester_id) || 'Join request';
+    if (table === 'savings_cycle_batches') return snap.title || 'Savings cycle';
+    if (table === 'group_memberships') return lookups.members?.get(snap.member_id) || lookups.profiles?.get(snap.user_id) || 'Member permission';
+    if (table === 'financial_change_requests') {
+      const rType = String(snap.record_type || '').toUpperCase();
+      const kind = rType === 'EXPENSE' ? 'expense' : (rType === 'WITHDRAWAL' ? 'deduction' : 'addition');
+      return snap.proposed_amount != null ? `${kind.charAt(0).toUpperCase() + kind.slice(1)} edit (${money(snap.proposed_amount)})` : 'Change request';
+    }
+    return auditTableLabel(table);
+  }
+
+  function buildAuditSummary(row, changes, subject, lookups) {
+    const action = String(row?.action || 'UPDATE').toUpperCase();
+    const table = String(row?.table_name || '');
+    const before = row?.old_data || {};
+    const after = row?.new_data || {};
+    const snap = Object.keys(after).length ? after : before;
+    const period = snap.contribution_period_id ? lookups.periods?.get(snap.contribution_period_id) : null;
+    const periodMember = period?.member_id ? lookups.members?.get(period.member_id) : '';
+
+    if (action === 'INSERT') {
+      if (table === 'profiles') return `Created account for ${snap.full_name || subject}`;
+      if (table === 'members') return `Added member ${snap.full_name || subject}`;
+      if (table === 'groups') return `Created savings group "${snap.name || subject}"`;
+      if (table === 'contribution_settings') return `Set monthly contribution to ${money(snap.default_amount)}`;
+      if (table === 'contribution_periods') return `Created ${subject}`;
+      if (table === 'contributions') return `Recorded ${money(snap.amount)} addition${periodMember ? ` for ${periodMember}` : ''}`;
+      if (table === 'withdrawals') return `Recorded ${money(snap.amount)} deduction${snap.category ? ` (${snap.category})` : ''}`;
+      if (table === 'expenses') return `Recorded ${money(snap.amount)} expense${snap.category ? ` (${snap.category})` : ''}`;
+      if (table === 'savings_goals') return `Created goal "${snap.title || 'Savings goal'}"`;
+      if (table === 'group_invite_codes') return `Created invite code${snap.code ? ` ${snap.code}` : ''}`;
+      if (table === 'group_join_requests') return `Submitted join request (${formatAuditValue('source', snap.source, row, lookups).text})`;
+      if (table === 'savings_cycle_batches') return `Archived savings cycle "${snap.title || 'Cycle batch'}" (${money(snap.net_savings ?? 0)} net)`;
+      if (table === 'financial_change_requests') {
+        const rType = String(snap.record_type || '').toUpperCase();
+        const entryKind = rType === 'EXPENSE' ? 'expense' : (rType === 'WITHDRAWAL' ? 'deduction' : 'addition');
+        return `Requested ${entryKind} edit (${money(snap.current_amount)} → ${money(snap.proposed_amount)})`;
+      }
+      return `Created ${auditTableLabel(table).toLowerCase()}`;
+    }
+
+    if (action === 'DELETE') {
+      if (table === 'profiles') return `Removed account for ${before.full_name || subject}`;
+      if (table === 'members') return `Deleted member ${before.full_name || subject}`;
+      if (table === 'groups') return `Deleted savings group "${before.name || subject}"`;
+      if (table === 'contributions') return `Deleted ${money(before.amount)} addition`;
+      if (table === 'withdrawals') return `Deleted ${money(before.amount)} deduction`;
+      if (table === 'expenses') return `Deleted ${money(before.amount)} expense`;
+      if (table === 'savings_goals') return `Deleted goal "${before.title || 'Savings goal'}"`;
+      if (table === 'group_invite_codes') return `Deleted invite code${before.code ? ` ${before.code}` : ''}`;
+      if (table === 'savings_cycle_batches') return `Purged savings cycle "${before.title || 'Cycle batch'}"`;
+      return `Deleted ${auditTableLabel(table).toLowerCase()}`;
+    }
+
+    if (action === 'CONFIRM' || action === 'REJECT' || action === 'VOID') {
+      const verb = auditActionLabel(action);
+      const kind = table === 'contributions' ? 'addition' : (table === 'withdrawals' ? 'deduction' : (table === 'expenses' ? 'expense' : auditTableLabel(table).toLowerCase()));
+      const amount = snap.amount != null ? `${money(snap.amount)} ` : '';
+      const tail = periodMember ? ` for ${periodMember}` : (snap.category ? ` (${snap.category})` : '');
+      return `${verb} ${amount}${kind}${tail}`;
+    }
+
+    const keys = new Set(changes.map((c) => c.key));
+    if (!before.deleted_at && after.deleted_at) return `Moved ${subject} to recovery bin`;
+    if (before.deleted_at && !after.deleted_at) return `Restored ${subject} from recovery bin`;
+
+    if (table === 'profiles' && keys.has('full_name') && keys.size === 1 && before.full_name && after.full_name) {
+      return `Renamed account from "${before.full_name}" to "${after.full_name}"`;
+    }
+    if (table === 'members' && keys.has('full_name') && keys.size === 1 && before.full_name && after.full_name) {
+      return `Renamed member from "${before.full_name}" to "${after.full_name}"`;
+    }
+    if (table === 'groups' && keys.has('name') && keys.size === 1 && before.name && after.name) {
+      return `Renamed group from "${before.name}" to "${after.name}"`;
+    }
+    if (table === 'savings_goals' && keys.has('title') && keys.size === 1 && before.title && after.title) {
+      return `Renamed goal from "${before.title}" to "${after.title}"`;
+    }
+
+    if (table === 'profiles') {
+      if (keys.has('group_id') && [...keys].every((k) => k === 'group_id' || k === 'member_id')) {
+        const nextGroupName = after.group_id ? lookups.groups?.get(after.group_id) : '';
+        if (!before.group_id && after.group_id) return nextGroupName ? `Joined "${nextGroupName}"` : 'Joined savings group';
+        if (before.group_id && !after.group_id) return 'Left active savings group';
+        return nextGroupName ? `Switched active group to "${nextGroupName}"` : 'Switched active savings group';
+      }
+      if (keys.size === 1 && keys.has('member_id')) {
+        const mName = after.member_id ? lookups.members?.get(after.member_id) : '';
+        return after.member_id ? (mName ? `Linked account to ${mName}` : 'Linked account to member') : 'Unlinked account from member';
+      }
+      if (keys.size === 1 && keys.has('avatar_url')) return after.avatar_url ? 'Updated profile photo' : 'Removed profile photo';
+      if (keys.size === 1 && keys.has('role')) return `Changed role to ${formatAuditValue('role', after.role, row, lookups).text}`;
+      if (keys.size === 1 && keys.has('status')) {
+      }
+    }
+
+    if (table === 'financial_change_requests') {
+      if (after.status === 'APPROVED' && before.status !== 'APPROVED') return 'Approved requested record edit';
+      if (after.status === 'REJECTED' && before.status !== 'REJECTED') return 'Rejected requested record edit';
+      if (after.status === 'CANCELLED' && before.status !== 'CANCELLED') return 'Cancelled requested record edit';
+    }
+
+    if (table === 'group_invite_codes') {
+      if (!before.revoked_at && after.revoked_at) return `Revoked invite code${snap.code ? ` ${snap.code}` : ''}`;
+    }
+
+    if (table === 'group_join_requests') {
+      if (after.status === 'APPROVED' && before.status !== 'APPROVED') return `Approved join request for ${subject}`;
+      if (after.status === 'DECLINED' && before.status !== 'DECLINED') return `Declined join request for ${subject}`;
+      if (after.status === 'CANCELLED' && before.status !== 'CANCELLED') return `Cancelled join request for ${subject}`;
+    }
+
+    if (table === 'savings_cycle_batches') {
+      if (!before.restored_at && after.restored_at) return `Restored savings cycle "${snap.title || 'Cycle batch'}"`;
+    }
+
+    if (table === 'group_memberships') {
+      const permKeys = ['can_edit_own_entries', 'require_edit_approval', 'require_add_approval', 'can_record_expenses', 'require_expense_approval', 'can_record_withdrawals', 'require_withdrawal_approval'];
+      if ([...keys].some((k) => permKeys.includes(k))) return 'Updated member workspace permissions';
+    }
+
     if (table === 'contribution_periods') {
       if (keys.has('is_exempt')) return after.is_exempt ? `Exempted ${subject}` : `Removed exemption for ${subject}`;
       if (keys.size === 1 && keys.has('required_amount')) return `Updated required contribution to ${money(after.required_amount)}`;
@@ -12116,8 +12254,9 @@
         : { label: 'Expense', cls: 'is-expense', prefix: '−' };
 
     const requiresApproval = role !== 'ADMIN' && perms.require_edit_approval !== false;
-    const origAmount = Number(entry.amount || 0);
-    const origMethod = normalizePaymentMethod(entry.paymentMethod || 'CASH');
+    const origAmount = Math.round(Number(entry.amount || 0) * 100) / 100;
+    const origMethodRaw = String(entry.paymentMethod || '').trim();
+    const origMethod = normalizePaymentMethod(origMethodRaw || 'CASH');
     const origNotes = String(entry.notes || '').trim();
 
     let dialog = document.getElementById('ipon-entry-edit-dialog');
@@ -12171,6 +12310,7 @@
         </dialog>`);
       dialog = document.getElementById('ipon-entry-edit-dialog');
       mountPaymentMethodPickers(dialog);
+      preparePesoInputs(dialog);
       guardMoneyInput(dialog.querySelector('#ipon-entry-edit-amount'));
     }
 
@@ -12244,12 +12384,17 @@
         setFieldError(amountInput, '');
         setFieldError(reasonInput, '');
 
-        const parsedAmount = parseMoneyAmount(amountInput.value);
-        if (!parsedAmount.valid) {
+        const parsedAmount = parseMoneyAmount(amountInput.value, {
+          min: 0.01,
+          required: true,
+          badInput: Boolean(amountInput.validity?.badInput)
+        });
+        if (!parsedAmount.valid || parsedAmount.value == null) {
           setFieldError(amountInput, parsedAmount.error || 'Enter a valid amount greater than zero.');
           amountInput.focus();
           return;
         }
+        const nextAmount = parsedAmount.value;
         const nextMethod = normalizePaymentMethod(form.elements.payment_method?.value || 'CASH');
         const nextNotes = String(notesInput.value || '').trim();
         const reasonText = String(reasonInput.value || '').trim();
@@ -12259,11 +12404,10 @@
           return;
         }
 
-        if (
-          Math.abs(parsedAmount.amount - origAmount) < 0.005
-          && nextMethod === origMethod
-          && nextNotes === origNotes
-        ) {
+        const sameAmount = Math.abs(nextAmount - origAmount) < 0.005;
+        const sameMethod = Boolean(origMethodRaw) && nextMethod === origMethod;
+        const sameNotes = nextNotes === origNotes;
+        if (sameAmount && sameMethod && sameNotes) {
           setFieldError(amountInput, 'Update the amount, payment method, or notes before submitting.');
           amountInput.focus();
           return;
@@ -12272,8 +12416,8 @@
         const confirmed = await confirmAction({
           title: requiresApproval ? 'Send change request?' : 'Save entry changes?',
           message: requiresApproval
-            ? `Request to update this entry from ${money(origAmount)} (${paymentMethodMeta(origMethod).label}) to ${money(parsedAmount.amount)} (${paymentMethodMeta(nextMethod).label})? Your admin will review your reason.`
-            : `Update this entry from ${money(origAmount)} (${paymentMethodMeta(origMethod).label}) to ${money(parsedAmount.amount)} (${paymentMethodMeta(nextMethod).label})?`,
+            ? `Request to update this entry from ${money(origAmount)} (${paymentMethodMeta(origMethod).label}) to ${money(nextAmount)} (${paymentMethodMeta(nextMethod).label})? Your admin will review your reason.`
+            : `Update this entry from ${money(origAmount)} (${paymentMethodMeta(origMethod).label}) to ${money(nextAmount)} (${paymentMethodMeta(nextMethod).label})?`,
           acceptLabel: requiresApproval ? 'Send request' : 'Save changes'
         });
         if (!confirmed) return;
@@ -12283,7 +12427,7 @@
           const res = await rpc('submit_record_change_request', {
             p_record_type: entry.type,
             p_record_id: entry.id,
-            p_amount: parsedAmount.amount,
+            p_amount: nextAmount,
             p_payment_method: nextMethod,
             p_notes: nextNotes || null,
             p_reason: reasonText
@@ -12518,7 +12662,7 @@
     CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
     payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,
     computeContributionExcess, bindExcessContributionToggle,
-    resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, openCalendarEntryEditDialog, openChangeRequestReviewDialog, highlightFocus, consumeDeepLink,
+    resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink, openCalendarEntryEditDialog, openChangeRequestReviewDialog,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload, maybeShowRetentionReminder, openRetentionPolicyDialog, CURRENT_POLICY_VERSION, openPolicyDialog, hasAcceptedCurrentPolicy, maybeShowPolicyConsentModal,
