@@ -1252,7 +1252,8 @@ html[data-shell-role="SUPER_ADMIN"] .dashboard-sidebar .nav-link[data-role] { di
   grid-template-columns:auto minmax(0,1fr) auto;
   align-items:center;
   gap:1px 8px;
-  padding-top:8px;
+  padding-top:4px;
+  padding-bottom:6px;
 }
 
 .announcement-panel .announcement-item-meta .avatar-presence-wrap {

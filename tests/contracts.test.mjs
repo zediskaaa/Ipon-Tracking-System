@@ -5989,7 +5989,11 @@ test('desktop dashboard calendar maintains fixed row heights and announcement pa
 
   // Announcement list scrolls internally instead of rendering all cards inline/stacked or squishing cards
   assert.match(appCss, /\.announcement-panel \.announcement-list\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/);
-  assert.match(appCss, /\.announcement-panel \.announcement-item\{[^}]*flex:\s*0 0 auto;/);
+  assert.match(appCss, /\.announcement-panel \.announcement-item\{[^}]*flex:\s*0 0 auto;[^}]*height:\s*260px;/);
+  assert.match(appCss, /\.announcement-item\{[^}]*height:\s*260px;/);
+  assert.match(appCss, /\.announcement-item-head \.announcement-item-title\{[^}]*-webkit-line-clamp:\s*3;/);
+  assert.match(appCss, /\.notification-item\{[^}]*height:\s*106px;/);
+  assert.match(appCss, /\.notification-item p\{[^}]*-webkit-line-clamp:\s*2;/);
 });
 
 test('migration 075 restores group summary RPC and read-only group transparency RLS for members', () => {
