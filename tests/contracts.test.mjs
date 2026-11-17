@@ -11104,7 +11104,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261117-\d+/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261117-116/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11289,7 +11289,7 @@ test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR I
   assert.match(dashJs, /mountJoinGroupPanel/);
   assert.match(dashJs, /mountInviteCodePanel/);
   assert.match(dashJs, /group_join_requests/);
-  assert.match(css, /\.join-group-dialog(?:,\s*\.join-blocked-dialog)?\s*\{[^}]*width:\s*min\(440px/);
+  assert.match(css, /\.join-group-dialog\s*\{[^}]*width:\s*min\(440px/);
 
   assert.match(settingsHtml, /id="settings-invite-code-mount"/);
   assert.match(settingsHtml, /id="settings-join-requests-panel"/);
@@ -11301,7 +11301,7 @@ test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR I
   assert.match(userHtml, /id="user-join-group"/);
   assert.match(userJs, /user-join-group/);
   assert.match(css, /\.invite-code-active-card\s*\{/);
-  assert.match(css, /html\[data-theme="dark"\] \.invite-qr-card/);
+  assert.match(css, /html\[data-theme="dark"\] \.invite-code-active-card/);
   assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*?\.invite-code-active-card/);
 
   // 3. Real VM execution of Core Invite Helpers & ISO-18004 QR Encoder
@@ -11446,7 +11446,7 @@ test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR I
   assert.match(mountWrites[0], /class="status status-pending"/);
   assert.match(mountWrites[0], /class="invite-qr-card"/);
   assert.match(mountWrites[0], /class="invite-code-card"/);
-  assert.match(mountWrites[0], /class="[^"]*invite-copy-link-full"/);
+  assert.match(mountWrites[0], /class="invite-copy-link-full"/);
   assert.match(mountWrites[0], /class="invite-secondary-grid"/);
   await ctrl.refresh({ silent: true, force: true });
   assert.equal(mountWrites.length, 1, 'refresh with unchanged overview must not re-flash or replace DOM');
