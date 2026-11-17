@@ -4674,6 +4674,18 @@
       return `dashboard.html?notice=${encodeQueryValue(item.id || 'group-invite')}`;
     }
 
+    if (type === 'GROUP_JOIN_REQUEST') {
+      return 'settings.html?join_requests=1#access';
+    }
+
+    if (type === 'GROUP_JOIN_APPROVED') {
+      return `user.html?notice=${encodeQueryValue(item.id || 'join-approved')}`;
+    }
+
+    if (type === 'GROUP_JOINED_VIA_CODE') {
+      return safe && !/^https?:\/\//i.test(safe) ? safe : 'settings.html#access';
+    }
+
     if (type === 'REVIEW_REQUIRED' || type === 'RECORD_UPDATED') {
       return `dashboard.html?review_notice=${encodeQueryValue(item.id || '')}`;
     }
@@ -5247,7 +5259,8 @@
     'announcement', 'release', 'announcement_title', 'notice',
     'review', 'review_notice', 'record', 'thread',
     'feature_request', 'bug_report', 'reminder', 'exemption',
-    'member', 'access_user', 'create_group', 'workspace_mode'
+    'member', 'access_user', 'create_group', 'workspace_mode',
+    'join', 'join_requests'
   ];
 
   function clearDeepLinkUrlState() {
@@ -5783,6 +5796,7 @@
           ? maybeShowPolicyConsentModal(profile, {
             onAccept: () => {
               if (!options.skipBackgroundPrompt) maybePromptBackgroundUsage(profile).catch(() => { });
+              maybeResumePendingJoin(profile);
             }
           })
           : false;
@@ -5793,6 +5807,7 @@
           if (!options.skipRetentionReminder) {
             maybeShowRetentionReminder(profile);
           }
+          maybeResumePendingJoin(profile);
         }
       }
       return { configured: true, profile, session };
@@ -9013,12 +9028,12 @@
 
   function groupRequiredContent({ hasGroup = false } = {}) {
     const title = hasGroup ? 'Member profile link required' : 'Start a savings workspace';
-    const message = hasGroup
+      const message = hasGroup
       ? 'Your account belongs to a group, but your member slot is not linked yet. Check your notifications or ask your group administrator to link your account.'
-      : 'Start a personal Solo tracker with no invitations required, create a Group to save with others, or check your notifications for an invite.';
+      : 'Start a personal Solo tracker with no invitations required, create a Group to save with others, or join via invite code.';
     const createButtons = hasGroup
       ? ''
-      : '<button class="button button-primary" type="button" data-group-required-create="SOLO">Start solo savings</button><button class="button button-secondary" type="button" data-group-required-create="GROUP">+ Create savings group</button>';
+      : '<button class="button button-primary" type="button" data-group-required-create="SOLO">Start solo savings</button><button class="button button-secondary" type="button" data-group-required-create="GROUP">+ Create savings group</button><button class="button button-secondary" type="button" data-group-required-join>Join with code</button>';
     return `
       <div class="group-required-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -9041,6 +9056,10 @@
         if (typeof onCreateGroup === 'function') onCreateGroup(mode);
         else window.location.href = `dashboard.html?create_group=1&workspace_mode=${mode}`;
       });
+    });
+    root?.querySelector('[data-group-required-join]')?.addEventListener('click', () => {
+      onClose?.();
+      openJoinGroupDialog();
     });
     root?.querySelector('[data-group-required-invites]')?.addEventListener('click', () => {
       onClose?.();
@@ -10489,20 +10508,6 @@
       if (keys.size === 1 && keys.has('avatar_url')) return after.avatar_url ? 'Updated profile photo' : 'Removed profile photo';
       if (keys.size === 1 && keys.has('role')) return `Changed role to ${formatAuditValue('role', after.role, row, lookups).text}`;
       if (keys.size === 1 && keys.has('status')) {
-        if (after.status === 'ACTIVE' && before.status === 'PENDING') return `Activated account for ${subject}`;
-        return `Set account status to ${formatAuditValue('status', after.status, row, lookups).text}`;
-      }
-      if (keys.size === 1 && keys.has('notifications_enabled')) {
-        return after.notifications_enabled ? 'Enabled notifications' : 'Paused notifications';
-      }
-    }
-
-    if (table === 'members') {
-      if (keys.size === 1 && keys.has('status')) {
-        return after.status === 'INACTIVE' ? `Deactivated member ${subject}` : `Reactivated member ${subject}`;
-      }
-      if (keys.size === 1 && keys.has('monthly_contribution_amount')) {
-        return `Updated ${subject} monthly contribution to ${money(after.monthly_contribution_amount)}`;
       }
     }
 
@@ -10681,6 +10686,1125 @@
     };
   }
 
+  // Group Invite Links, 6-Character Join Codes, & Pure-JS ISO-18004 QR Code Engine
+  const PENDING_JOIN_CODE_KEY = 'myipon_pending_join_code';
+  const PENDING_JOIN_TTL_MS = 2 * 60 * 60 * 1000;
+  const CANONICAL_PUBLIC_ORIGIN = 'https://my-ipon.vercel.app';
+
+  function canonicalAppOrigin() {
+    try {
+      const origin = String(window.location?.origin || '');
+      const proto = String(window.location?.protocol || '');
+      if (!origin || origin === 'null' || /^(?:capacitor|file|ionic):/i.test(proto)) {
+        return CANONICAL_PUBLIC_ORIGIN;
+      }
+      if (/^https?:\/\/(?:localhost|127\.0\.0\.1|10\.0\.2\.2)(?::\d+)?$/i.test(origin)) {
+        // Capacitor Android WebView serves assets from http://localhost or https://localhost
+        if (window.Capacitor || /Android|wv\)/i.test(navigator.userAgent || '')) {
+          return CANONICAL_PUBLIC_ORIGIN;
+        }
+      }
+      return origin.replace(/\/+$/, '');
+    } catch {
+      return CANONICAL_PUBLIC_ORIGIN;
+    }
+  }
+
+  function normalizeInviteCode(raw) {
+    return String(raw || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 6);
+  }
+
+  function extractInviteCode(raw) {
+    const str = String(raw || '').trim();
+    if (!str) return '';
+    if (/[?&#]join=/i.test(str) || /^https?:\/\//i.test(str)) {
+      try {
+        const parsed = new URL(str, CANONICAL_PUBLIC_ORIGIN);
+        const qp = parsed.searchParams.get('join');
+        if (qp) return normalizeInviteCode(qp);
+      } catch { /* fall through */ }
+    }
+    return normalizeInviteCode(str);
+  }
+
+  function formatInviteCode(raw) {
+    const clean = normalizeInviteCode(raw);
+    return clean.length > 3 ? `${clean.slice(0, 3)}-${clean.slice(3)}` : clean;
+  }
+
+  function inviteShareUrl(code) {
+    const clean = normalizeInviteCode(code);
+    if (clean.length !== 6) return '';
+    return `${canonicalAppOrigin()}/login.html?join=${encodeURIComponent(clean)}`;
+  }
+
+  function setPendingJoinCode(code) {
+    const clean = extractInviteCode(code);
+    try {
+      if (clean.length === 6) {
+        localStorage.setItem(PENDING_JOIN_CODE_KEY, JSON.stringify({ code: clean, at: Date.now() }));
+      } else {
+        localStorage.removeItem(PENDING_JOIN_CODE_KEY);
+      }
+    } catch { /* ignore */ }
+    return clean.length === 6 ? clean : '';
+  }
+
+  function getPendingJoinCode() {
+    try {
+      const urlCode = extractInviteCode(new URLSearchParams(window.location.search).get('join') || '');
+      if (urlCode.length === 6) {
+        setPendingJoinCode(urlCode);
+        return urlCode;
+      }
+      const stored = JSON.parse(localStorage.getItem(PENDING_JOIN_CODE_KEY) || 'null');
+      if (!stored || typeof stored.code !== 'string') return '';
+      if (Date.now() - Number(stored.at || 0) > PENDING_JOIN_TTL_MS) {
+        localStorage.removeItem(PENDING_JOIN_CODE_KEY);
+        return '';
+      }
+      const clean = normalizeInviteCode(stored.code);
+      return clean.length === 6 ? clean : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function clearPendingJoinCode() {
+    try {
+      localStorage.removeItem(PENDING_JOIN_CODE_KEY);
+      const parsed = new URL(window.location.href);
+      if (parsed.searchParams.has('join') && typeof history?.replaceState === 'function') {
+        parsed.searchParams.delete('join');
+        history.replaceState(null, '', `${parsed.pathname}${parsed.search}${parsed.hash}`);
+      }
+    } catch { /* ignore */ }
+  }
+
+  async function copyPlainText(text, successMsg = 'Copied to clipboard.') {
+    const value = String(text || '');
+    if (!value) return false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        if (successMsg) toast(successMsg);
+        return true;
+      }
+    } catch { /* fall back to textarea */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, value.length);
+      const ok = document.execCommand('copy');
+      ta.remove();
+      if (ok && successMsg) toast(successMsg);
+      return ok;
+    } catch {
+      toast('Could not copy automatically. Please copy the text manually.', 'error');
+      return false;
+    }
+  }
+
+  // Self-contained ISO/IEC 18004 QR encoder (Versions 1-6, ECC Level M, Byte mode)
+  const QR_GF_EXP = new Uint8Array(512);
+  const QR_GF_LOG = new Uint8Array(256);
+  for (let i = 0, x = 1; i < 255; i += 1) {
+    QR_GF_EXP[i] = x;
+    QR_GF_EXP[i + 255] = x;
+    QR_GF_LOG[x] = i;
+    x <<= 1;
+    if (x & 0x100) x ^= 0x11d;
+  }
+
+  function qrGfMul(a, b) {
+    return a && b ? QR_GF_EXP[QR_GF_LOG[a] + QR_GF_LOG[b]] : 0;
+  }
+
+  function qrRsEcBytes(data, ecCount) {
+    let gen = [1];
+    for (let i = 0; i < ecCount; i += 1) {
+      const next = new Array(gen.length + 1).fill(0);
+      const factor = QR_GF_EXP[i];
+      for (let j = 0; j < gen.length; j += 1) {
+        next[j] ^= gen[j];
+        next[j + 1] ^= qrGfMul(gen[j], factor);
+      }
+      gen = next;
+    }
+    const rem = new Uint8Array(ecCount);
+    for (let i = 0; i < data.length; i += 1) {
+      const factor = data[i] ^ rem[0];
+      rem.copyWithin(0, 1);
+      rem[ecCount - 1] = 0;
+      if (factor) {
+        for (let j = 0; j < ecCount; j += 1) {
+          rem[j] ^= qrGfMul(gen[j + 1], factor);
+        }
+      }
+    }
+    return rem;
+  }
+
+  const QR_VERSIONS_M = [
+    { ver: 1, size: 21, dataBytes: 16, blocks: 1, blockData: 16, ecBytes: 10, align: [], remBits: 0 },
+    { ver: 2, size: 25, dataBytes: 28, blocks: 1, blockData: 28, ecBytes: 16, align: [6, 18], remBits: 7 },
+    { ver: 3, size: 29, dataBytes: 44, blocks: 1, blockData: 44, ecBytes: 26, align: [6, 22], remBits: 7 },
+    { ver: 4, size: 33, dataBytes: 64, blocks: 2, blockData: 32, ecBytes: 18, align: [6, 26], remBits: 7 },
+    { ver: 5, size: 37, dataBytes: 86, blocks: 2, blockData: 43, ecBytes: 24, align: [6, 30], remBits: 7 },
+    { ver: 6, size: 41, dataBytes: 108, blocks: 4, blockData: 27, ecBytes: 16, align: [6, 34], remBits: 7 }
+  ];
+
+  function generateQrMatrix(text) {
+    const bytes = new TextEncoder().encode(String(text || ''));
+    const spec = QR_VERSIONS_M.find((v) => bytes.length <= v.dataBytes - 2);
+    if (!spec) {
+      throw new Error('QR payload exceeds supported Version 6 ECC-M capacity (106 bytes).');
+    }
+
+    const bits = [];
+    const pushBits = (val, len) => {
+      for (let i = len - 1; i >= 0; i -= 1) bits.push((val >>> i) & 1);
+    };
+    pushBits(0b0100, 4); // Byte mode
+    pushBits(bytes.length, 8);
+    for (const b of bytes) pushBits(b, 8);
+    const capBits = spec.dataBytes * 8;
+    pushBits(0, Math.min(4, capBits - bits.length));
+    while (bits.length % 8 !== 0) bits.push(0);
+    const padBytes = [0xEC, 0x11];
+    for (let i = 0; bits.length < capBits; i += 1) pushBits(padBytes[i % 2], 8);
+
+    const dataCodewords = new Uint8Array(spec.dataBytes);
+    for (let i = 0; i < spec.dataBytes; i += 1) {
+      let byte = 0;
+      for (let b = 0; b < 8; b += 1) byte = (byte << 1) | bits[i * 8 + b];
+      dataCodewords[i] = byte;
+    }
+
+    const blocks = [];
+    const ecs = [];
+    for (let b = 0; b < spec.blocks; b += 1) {
+      const slice = dataCodewords.slice(b * spec.blockData, (b + 1) * spec.blockData);
+      blocks.push(slice);
+      ecs.push(qrRsEcBytes(slice, spec.ecBytes));
+    }
+
+    const interleaved = [];
+    for (let i = 0; i < spec.blockData; i += 1) {
+      for (let b = 0; b < spec.blocks; b += 1) interleaved.push(blocks[b][i]);
+    }
+    for (let i = 0; i < spec.ecBytes; i += 1) {
+      for (let b = 0; b < spec.blocks; b += 1) interleaved.push(ecs[b][i]);
+    }
+
+    const allBits = [];
+    for (const cw of interleaved) {
+      for (let b = 7; b >= 0; b -= 1) allBits.push((cw >>> b) & 1);
+    }
+    for (let i = 0; i < spec.remBits; i += 1) allBits.push(0);
+
+    const size = spec.size;
+    const base = Array.from({ length: size }, () => new Uint8Array(size));
+    const isFunc = Array.from({ length: size }, () => new Uint8Array(size));
+    const setFunc = (r, c, v) => {
+      if (r < 0 || c < 0 || r >= size || c >= size) return;
+      base[r][c] = v ? 1 : 0;
+      isFunc[r][c] = 1;
+    };
+
+    const drawFinder = (top, left) => {
+      for (let r = -1; r <= 7; r += 1) {
+        for (let c = -1; c <= 7; c += 1) {
+          const dark = r >= 0 && r <= 6 && c >= 0 && c <= 6 && (
+            r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4)
+          );
+          setFunc(top + r, left + c, dark);
+        }
+      }
+    };
+    drawFinder(0, 0);
+    drawFinder(0, size - 7);
+    drawFinder(size - 7, 0);
+
+    for (let i = 8; i < size - 8; i += 1) {
+      const dark = i % 2 === 0;
+      setFunc(6, i, dark);
+      setFunc(i, 6, dark);
+    }
+
+    if (spec.align.length) {
+      for (const cy of spec.align) {
+        for (const cx of spec.align) {
+          if (isFunc[cy][cx]) continue;
+          for (let dy = -2; dy <= 2; dy += 1) {
+            for (let dx = -2; dx <= 2; dx += 1) {
+              const dark = Math.max(Math.abs(dy), Math.abs(dx)) !== 1;
+              setFunc(cy + dy, cx + dx, dark);
+            }
+          }
+        }
+      }
+    }
+
+    // Reserve Format Info strips & place fixed dark module
+    for (let i = 0; i <= 8; i += 1) {
+      if (!isFunc[8][i]) isFunc[8][i] = 1;
+      if (!isFunc[i][8]) isFunc[i][8] = 1;
+    }
+    for (let i = size - 8; i < size; i += 1) {
+      if (!isFunc[8][i]) isFunc[8][i] = 1;
+      if (!isFunc[i][8]) isFunc[i][8] = 1;
+    }
+    setFunc(size - 8, 8, 1);
+
+    // Zig-zag bit placement
+    let bitIdx = 0;
+    let upward = true;
+    for (let right = size - 1; right >= 1; right -= 2) {
+      if (right === 6) right -= 1;
+      for (let step = 0; step < size; step += 1) {
+        const r = upward ? (size - 1 - step) : step;
+        for (let dx = 0; dx < 2; dx += 1) {
+          const c = right - dx;
+          if (!isFunc[r][c]) {
+            base[r][c] = bitIdx < allBits.length ? allBits[bitIdx] : 0;
+            bitIdx += 1;
+          }
+        }
+      }
+      upward = !upward;
+    }
+
+    const maskFn = [
+      (r, c) => (r + c) % 2 === 0,
+      (r) => r % 2 === 0,
+      (_r, c) => c % 3 === 0,
+      (r, c) => (r + c) % 3 === 0,
+      (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0,
+      (r, c) => ((r * c) % 2) + ((r * c) % 3) === 0,
+      (r, c) => (((r * c) % 2) + ((r * c) % 3)) % 2 === 0,
+      (r, c) => (((r + c) % 2) + ((r * c) % 3)) % 2 === 0
+    ];
+
+    const writeFormatBits = (grid, mask) => {
+      const data = mask; // ECC M = 00 -> (0 << 3) | mask
+      let rem = data << 10;
+      for (let i = 14; i >= 10; i -= 1) {
+        if ((rem >>> i) & 1) rem ^= 0x537 << (i - 10);
+      }
+      const fmt = ((data << 10) | rem) ^ 0x5412;
+      const bit = (idx) => (fmt >>> idx) & 1;
+
+      // Primary copy (bits 14 down to 0)
+      for (let c = 0; c <= 5; c += 1) grid[8][c] = bit(14 - c);
+      grid[8][7] = bit(8);
+      grid[8][8] = bit(7);
+      grid[7][8] = bit(6);
+      for (let r = 5; r >= 0; r -= 1) grid[r][8] = bit(r);
+
+      // Secondary copy (bits 14..8 bottom-left col 8; bits 7..0 top-right row 8)
+      for (let i = 0; i < 7; i += 1) grid[size - 1 - i][8] = bit(14 - i);
+      for (let i = 0; i < 8; i += 1) grid[8][size - 8 + i] = bit(7 - i);
+    };
+
+    const penaltyScore = (grid) => {
+      let score = 0;
+      for (let r = 0; r < size; r += 1) {
+        let runColor = -1;
+        let runLen = 0;
+        let patA = 0;
+        for (let c = 0; c < size; c += 1) {
+          const val = grid[r][c];
+          if (val === runColor) {
+            runLen += 1;
+            if (runLen === 5) score += 3;
+            else if (runLen > 5) score += 1;
+          } else {
+            runColor = val;
+            runLen = 1;
+          }
+          patA = ((patA << 1) | val) & 0x7FF;
+          if (c >= 10 && (patA === 0x5D0 || patA === 0x05D)) score += 40;
+        }
+      }
+      for (let c = 0; c < size; c += 1) {
+        let runColor = -1;
+        let runLen = 0;
+        let patA = 0;
+        for (let r = 0; r < size; r += 1) {
+          const val = grid[r][c];
+          if (val === runColor) {
+            runLen += 1;
+            if (runLen === 5) score += 3;
+            else if (runLen > 5) score += 1;
+          } else {
+            runColor = val;
+            runLen = 1;
+          }
+          patA = ((patA << 1) | val) & 0x7FF;
+          if (r >= 10 && (patA === 0x5D0 || patA === 0x05D)) score += 40;
+        }
+      }
+      let darkCount = 0;
+      for (let r = 0; r < size; r += 1) {
+        for (let c = 0; c < size; c += 1) {
+          darkCount += grid[r][c];
+          if (r < size - 1 && c < size - 1) {
+            const sum = grid[r][c] + grid[r][c + 1] + grid[r + 1][c] + grid[r + 1][c + 1];
+            if (sum === 0 || sum === 4) score += 3;
+          }
+        }
+      }
+      const k = Math.floor(Math.abs(darkCount * 20 - size * size * 10) / (size * size));
+      score += k * 10;
+      return score;
+    };
+
+    let bestGrid = null;
+    let bestScore = Infinity;
+    for (let mask = 0; mask < 8; mask += 1) {
+      const candidate = Array.from({ length: size }, (_, r) => {
+        const row = new Uint8Array(size);
+        for (let c = 0; c < size; c += 1) {
+          row[c] = isFunc[r][c] ? base[r][c] : (base[r][c] ^ (maskFn[mask](r, c) ? 1 : 0));
+        }
+        return row;
+      });
+      writeFormatBits(candidate, mask);
+      const sc = penaltyScore(candidate);
+      if (sc < bestScore) {
+        bestScore = sc;
+        bestGrid = candidate;
+      }
+    }
+
+    return { size, version: spec.ver, modules: bestGrid };
+  }
+
+  function qrSvgMarkup(text, { ariaLabel = 'Group invite QR code', size = 216, margin = 4, darkColor = '#0f2e24' } = {}) {
+    const qr = generateQrMatrix(text);
+    const total = qr.size + margin * 2;
+    const cmds = [];
+    for (let r = 0; r < qr.size; r += 1) {
+      const row = qr.modules[r];
+      let c = 0;
+      while (c < qr.size) {
+        if (!row[c]) { c += 1; continue; }
+        let run = 1;
+        while (c + run < qr.size && row[c + run]) run += 1;
+        cmds.push(`M${c + margin} ${r + margin}h${run}v1h-${run}z`);
+        c += run;
+      }
+    }
+    return `<svg class="invite-qr-svg" viewBox="0 0 ${total} ${total}" width="${Number(size) || 216}" height="${Number(size) || 216}" role="img" aria-label="${escapeHtml(ariaLabel)}" shape-rendering="crispEdges"><rect width="${total}" height="${total}" fill="#ffffff"/><path d="${cmds.join('')}" fill="${darkColor}"/></svg>`;
+  }
+
+  async function downloadInviteQrPng({ code, groupName = 'Savings group', shareUrl = '' } = {}) {
+    const clean = normalizeInviteCode(code);
+    const url = shareUrl || inviteShareUrl(clean);
+    if (!url || clean.length !== 6) throw new Error('Valid invite code required to save QR.');
+    const qr = generateQrMatrix(url);
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 780;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas unavailable.');
+
+    // Warm paper outer card
+    ctx.fillStyle = '#faf7f0';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Subtle outer border
+    ctx.strokeStyle = '#d6d2c7';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+
+    // Header badge + group name
+    ctx.fillStyle = '#0d4a36';
+    ctx.font = '700 18px "Segoe UI", Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('MYIPON · GROUP INVITE', canvas.width / 2, 74);
+
+    ctx.fillStyle = '#18241e';
+    ctx.font = '700 30px Georgia, serif';
+    const displayTitle = String(groupName || 'Savings group').trim().slice(0, 34);
+    ctx.fillText(displayTitle, canvas.width / 2, 118);
+
+    // Crisp white QR frame
+    const boxSize = 460;
+    const boxX = (canvas.width - boxSize) / 2;
+    const boxY = 152;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(boxX, boxY, boxSize, boxSize);
+    ctx.strokeStyle = '#dfe5df';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxSize, boxSize);
+
+    const pad = 34;
+    const cell = Math.floor((boxSize - pad * 2) / qr.size);
+    const qrPixelSize = cell * qr.size;
+    const startX = Math.round((canvas.width - qrPixelSize) / 2);
+    const startY = Math.round(boxY + (boxSize - qrPixelSize) / 2);
+    ctx.fillStyle = '#0f2e24';
+    for (let r = 0; r < qr.size; r += 1) {
+      for (let c = 0; c < qr.size; c += 1) {
+        if (qr.modules[r][c]) {
+          ctx.fillRect(startX + c * cell, startY + r * cell, cell, cell);
+        }
+      }
+    }
+
+    // Bottom code + instructions
+    ctx.fillStyle = '#5f6b64';
+    ctx.font = '600 17px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('Scan QR with your phone or enter code:', canvas.width / 2, 660);
+
+    ctx.fillStyle = '#0d4a36';
+    ctx.font = '700 40px Consolas, "Courier New", monospace';
+    ctx.fillText(formatInviteCode(clean), canvas.width / 2, 718);
+
+    const dataUrl = canvas.toDataURL('image/png');
+    const slug = String(groupName || 'ipon-group').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ipon-group';
+    await downloadFile(dataUrl, `${slug}-invite-${clean}.png`, { mimeType: 'image/png' });
+    toast('Saved invite QR card PNG.');
+  }
+
+  function inviteExpirySummary(expiresAt) {
+    if (!expiresAt) return 'Expires soon';
+    const ms = new Date(expiresAt).getTime() - Date.now();
+    if (Number.isNaN(ms) || ms <= 0) return 'Expired';
+    const mins = Math.round(ms / 60000);
+    if (mins < 60) return `Expires in ${Math.max(1, mins)}m`;
+    const hours = Math.round(ms / 3600000);
+    if (hours < 48) return `Expires in ${hours}h`;
+    const days = Math.round(hours / 24);
+    return `Expires in ${days}d (${dateLabel(expiresAt)})`;
+  }
+
+  let invitePanelSeq = 0;
+  function mountInviteCodePanel(container, { groupName = '', onChanged = null } = {}) {
+    if (!container) return null;
+    const pid = `ipon-inv-${++invitePanelSeq}`;
+    let stateOverview = null;
+
+    async function loadOverview() {
+      container.innerHTML = '<div class="invite-code-loading" role="status" aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><span>Loading invite link &amp; QR code…</span></div>';
+      try {
+        const res = await rpc('get_group_invite_overview', {});
+        stateOverview = res || {};
+        render();
+      } catch (error) {
+        showInlineError(container, error, loadOverview);
+      }
+    }
+
+    function render() {
+      const mode = String(stateOverview?.workspace_mode || 'GROUP').toUpperCase();
+      if (mode === 'SOLO') {
+        container.innerHTML = '<div class="empty-state"><h3>Solo savings mode</h3><p>Invite links and group codes are available when this workspace is set to Group savings.</p></div>';
+        return;
+      }
+
+      const active = stateOverview?.active_code || null;
+      const resolvedGroupName = groupName || currentProfile?.group_name || 'Savings group';
+
+      if (!active) {
+        container.innerHTML = `
+          <div class="invite-code-empty-card">
+            <div class="invite-code-empty-head">
+              <span class="invite-code-empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM18 18h3v3h-3zM14 21h2M21 14v2"/></svg>
+              </span>
+              <div>
+                <h3>Share a group link &amp; QR code</h3>
+                <p>Generate a 6-character code and scannable QR so friends or family can join right from their phone—even before signing up.</p>
+              </div>
+            </div>
+            <div class="invite-code-create-grid">
+              <div class="field">
+                <label for="${pid}-expiry">Expires after</label>
+                <select id="${pid}-expiry" name="expires_hours">
+                  <option value="24">24 hours</option>
+                  <option value="168" selected>7 days (recommended)</option>
+                  <option value="720">30 days</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="${pid}-max-uses">Join limit</label>
+                <select id="${pid}-max-uses" name="max_uses">
+                  <option value="" selected>Unlimited uses</option>
+                  <option value="10">Up to 10 joins</option>
+                  <option value="25">Up to 25 joins</option>
+                  <option value="50">Up to 50 joins</option>
+                </select>
+              </div>
+            </div>
+            <label class="toggle-switch-row invite-approval-toggle" for="${pid}-create-approval">
+              <span>
+                <strong>Require admin approval before joining</strong>
+                <small>When on, anyone scanning or entering the code sends a join request for your approval first.</small>
+              </span>
+              <input class="toggle-switch-input" id="${pid}-create-approval" type="checkbox" role="switch">
+            </label>
+            <div class="invite-code-empty-actions">
+              <button class="button button-primary" type="button" data-invite-generate>Generate invite link &amp; QR</button>
+            </div>
+          </div>`;
+
+        container.querySelector('[data-invite-generate]')?.addEventListener('click', async (event) => {
+          const btn = event.currentTarget;
+          const hours = Number(document.getElementById(`${pid}-expiry`)?.value || 168);
+          const maxRaw = document.getElementById(`${pid}-max-uses`)?.value || '';
+          const maxUses = maxRaw ? Number(maxRaw) : null;
+          const requireApproval = Boolean(document.getElementById(`${pid}-create-approval`)?.checked);
+          setBusy(btn, true, 'Generating…');
+          try {
+            const created = await rpc('create_group_invite_code', {
+              p_expires_hours: hours,
+              p_require_approval: requireApproval,
+              p_max_uses: maxUses
+            });
+            stateOverview = { ...(stateOverview || {}), active_code: created };
+            toast('Invite link & QR code ready to share.');
+            render();
+            if (typeof onChanged === 'function') await onChanged(stateOverview);
+          } catch (error) {
+            toast(friendlyError(error), 'error');
+          } finally {
+            setBusy(btn, false);
+          }
+        });
+        return;
+      }
+
+      const rawCode = normalizeInviteCode(active.code);
+      const formatted = formatInviteCode(rawCode);
+      const shareUrl = inviteShareUrl(rawCode);
+      const usesText = active.max_uses
+        ? `${Number(active.use_count || 0)} of ${Number(active.max_uses)} used`
+        : `${Number(active.use_count || 0)} joined`;
+      const qrHtml = qrSvgMarkup(shareUrl, { ariaLabel: `QR code to join ${resolvedGroupName}`, size: 196 });
+      const canNativeShare = typeof navigator.share === 'function';
+
+      container.innerHTML = `
+        <div class="invite-code-active-card">
+          <div class="invite-qr-stage">
+            <div class="invite-qr-plate">${qrHtml}</div>
+            <button class="invite-code-pill" type="button" data-copy-code title="Click to copy 6-character code">
+              <span class="invite-code-pill-label">GROUP CODE</span>
+              <strong class="tabular-nums">${escapeHtml(formatted)}</strong>
+              <span class="invite-code-pill-action">Copy code</span>
+            </button>
+          </div>
+          <div class="invite-share-details">
+            <div class="invite-meta-pills">
+              <span class="badge ${active.require_approval ? 'status-pending' : 'status-confirmed'}" id="${pid}-mode-badge">${active.require_approval ? 'Approval required' : 'Instant join'}</span>
+              <span class="badge">${escapeHtml(inviteExpirySummary(active.expires_at))}</span>
+              <span class="badge">${escapeHtml(usesText)}</span>
+            </div>
+            <div class="field">
+              <label for="${pid}-share-url">Shareable invite link</label>
+              <div class="invite-url-copy-row">
+                <input id="${pid}-share-url" type="text" readonly value="${escapeHtml(shareUrl)}" aria-label="Shareable group invite link">
+                <button class="button button-primary button-sm" type="button" data-copy-link>Copy link</button>
+              </div>
+            </div>
+            <div class="invite-share-actions">
+              ${canNativeShare ? '<button class="button button-secondary button-sm" type="button" data-native-share>Share via phone</button>' : ''}
+              <button class="button button-secondary button-sm" type="button" data-download-qr>Save QR PNG</button>
+              <button class="button button-secondary button-sm" type="button" data-rotate-code>New code</button>
+              <button class="button button-danger button-sm" type="button" data-revoke-code>Revoke</button>
+            </div>
+            <label class="toggle-switch-row invite-approval-toggle" for="${pid}-require-approval">
+              <span>
+                <strong>Require admin approval</strong>
+                <small>Toggle anytime: on = admin approves requests; off = instant join.</small>
+              </span>
+              <input class="toggle-switch-input" id="${pid}-require-approval" type="checkbox" role="switch" ${active.require_approval ? 'checked' : ''}>
+            </label>
+          </div>
+        </div>`;
+
+      container.querySelector(`#${pid}-share-url`)?.addEventListener('click', (event) => {
+        event.currentTarget.select?.();
+      });
+
+      container.querySelector('[data-copy-code]')?.addEventListener('click', async (event) => {
+        const pill = event.currentTarget;
+        const ok = await copyPlainText(rawCode, `Copied code ${formatted}`);
+        const badge = pill.querySelector('.invite-code-pill-action');
+        if (ok && badge) {
+          badge.textContent = 'Copied!';
+          setTimeout(() => { if (badge.isConnected) badge.textContent = 'Copy code'; }, 1600);
+        }
+      });
+
+      container.querySelector('[data-copy-link]')?.addEventListener('click', async (event) => {
+        const btn = event.currentTarget;
+        const ok = await copyPlainText(shareUrl, 'Invite link copied.');
+        if (ok) {
+          btn.textContent = 'Copied!';
+          setTimeout(() => { if (btn.isConnected) btn.textContent = 'Copy link'; }, 1600);
+        }
+      });
+
+      container.querySelector('[data-native-share]')?.addEventListener('click', async () => {
+        try {
+          await navigator.share({
+            title: `Join "${resolvedGroupName}" on myIPON`,
+            text: `Join our savings group "${resolvedGroupName}" on myIPON using code ${formatted} or tap this invite link:`,
+            url: shareUrl
+          });
+        } catch (err) {
+          if (err?.name !== 'AbortError') {
+            await copyPlainText(shareUrl, 'Invite link copied.');
+          }
+        }
+      });
+
+      container.querySelector('[data-download-qr]')?.addEventListener('click', async (event) => {
+        const btn = event.currentTarget;
+        setBusy(btn, true, 'Saving…');
+        try {
+          await downloadInviteQrPng({ code: rawCode, groupName: resolvedGroupName, shareUrl });
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          setBusy(btn, false);
+        }
+      });
+
+      const approvalSwitch = container.querySelector(`#${pid}-require-approval`);
+      approvalSwitch?.addEventListener('change', async () => {
+        const nextVal = approvalSwitch.checked;
+        approvalSwitch.disabled = true;
+        try {
+          const updated = await rpc('update_group_invite_code', {
+            p_code_id: active.id,
+            p_require_approval: nextVal
+          });
+          stateOverview = { ...(stateOverview || {}), active_code: updated };
+          const modeBadge = document.getElementById(`${pid}-mode-badge`);
+          if (modeBadge) {
+            modeBadge.className = `badge ${nextVal ? 'status-pending' : 'status-confirmed'}`;
+            modeBadge.textContent = nextVal ? 'Approval required' : 'Instant join';
+          }
+          toast(nextVal ? 'Approval required before joining.' : 'Instant join enabled for this link.');
+          if (typeof onChanged === 'function') await onChanged(stateOverview);
+        } catch (error) {
+          approvalSwitch.checked = !nextVal;
+          toast(friendlyError(error), 'error');
+        } finally {
+          approvalSwitch.disabled = false;
+        }
+      });
+
+      container.querySelector('[data-rotate-code]')?.addEventListener('click', async (event) => {
+        const btn = event.currentTarget;
+        const ok = await confirmAction({
+          title: 'Generate a new group code?',
+          message: `The current code (${formatted}) and its QR link will stop working immediately once a new code is created.`,
+          acceptLabel: 'Generate new code'
+        });
+        if (!ok) return;
+        setBusy(btn, true, 'Rotating…');
+        try {
+          const created = await rpc('create_group_invite_code', {
+            p_expires_hours: 168,
+            p_require_approval: Boolean(active.require_approval),
+            p_max_uses: active.max_uses ?? null
+          });
+          stateOverview = { ...(stateOverview || {}), active_code: created };
+          toast(`New code ready: ${formatInviteCode(created.code)}`);
+          render();
+          if (typeof onChanged === 'function') await onChanged(stateOverview);
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          setBusy(btn, false);
+        }
+      });
+
+      container.querySelector('[data-revoke-code]')?.addEventListener('click', async (event) => {
+        const btn = event.currentTarget;
+        const ok = await confirmAction({
+          title: 'Revoke active invite link & code?',
+          message: `Code ${formatted} and its QR code will stop working immediately. Existing members will not be affected.`,
+          acceptLabel: 'Revoke invite'
+        });
+        if (!ok) return;
+        setBusy(btn, true, 'Revoking…');
+        try {
+          await rpc('update_group_invite_code', { p_code_id: active.id, p_revoke: true });
+          stateOverview = { ...(stateOverview || {}), active_code: null };
+          toast('Invite link and code revoked.');
+          render();
+          if (typeof onChanged === 'function') await onChanged(stateOverview);
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          setBusy(btn, false);
+        }
+      });
+    }
+
+    loadOverview();
+    return {
+      refresh: loadOverview,
+      getOverview: () => stateOverview
+    };
+  }
+
+  function renderJoinRequestsQueue(container, { requests = [], onChanged = null } = {}) {
+    if (!container) return;
+    if (!Array.isArray(requests) || !requests.length) {
+      container.innerHTML = '<div class="empty-state"><p>No pending join requests right now.</p></div>';
+      return;
+    }
+    container.innerHTML = `<div class="join-requests-list">${requests.map((req) => `
+      <article class="join-request-item" data-join-request-id="${escapeHtml(req.id)}">
+        <div class="join-request-user">
+          ${avatarMarkup(req.avatar_url, req.full_name, 'avatar-md', req.user_id)}
+          <div class="join-request-copy">
+            <strong>${escapeHtml(req.full_name || 'User')}</strong>
+            <small>${escapeHtml([req.email, req.contact_number, req.code ? `Code ${formatInviteCode(req.code)}` : ''].filter(Boolean).join(' · '))}</small>
+            <span class="join-request-time">Requested ${escapeHtml(dateLabel(req.created_at, { dateStyle: 'medium', timeStyle: 'short' }))}</span>
+          </div>
+        </div>
+        <div class="join-request-actions">
+          <button class="button button-secondary button-sm" type="button" data-decline-join="${escapeHtml(req.id)}">Decline</button>
+          <button class="button button-primary button-sm" type="button" data-approve-join="${escapeHtml(req.id)}">Approve</button>
+        </div>
+      </article>`).join('')}</div>`;
+    bindAvatarFallbacks(container);
+
+    container.querySelectorAll('[data-approve-join], [data-decline-join]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const isApprove = Boolean(btn.dataset.approveJoin);
+        const requestId = btn.dataset.approveJoin || btn.dataset.declineJoin;
+        const item = requests.find((r) => r.id === requestId);
+        const ok = await confirmAction({
+          title: isApprove ? 'Approve join request?' : 'Decline join request?',
+          message: isApprove
+            ? `Allow ${item?.full_name || 'this user'} to join this savings group as a Member? A member profile will be created or linked automatically.`
+            : `Decline ${item?.full_name || 'this user'}'s request to join this group?`,
+          acceptLabel: isApprove ? 'Approve member' : 'Decline request'
+        });
+        if (!ok) return;
+        setBusy(btn, true, isApprove ? 'Approving…' : 'Declining…');
+        try {
+          await rpc('review_group_join_request', {
+            p_request_id: requestId,
+            p_decision: isApprove ? 'APPROVED' : 'DECLINED'
+          });
+          toast(isApprove ? `${item?.full_name || 'Member'} joined the group.` : 'Join request declined.');
+          if (typeof onChanged === 'function') await onChanged();
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          setBusy(btn, false);
+        }
+      });
+    });
+  }
+
+  async function openJoinGroupDialog({ initialCode = '', onJoined = null } = {}) {
+    if (currentProfile?.role === 'SUPER_ADMIN') {
+      toast('Super administrator accounts cannot join savings groups.', 'error');
+      return;
+    }
+    let dialog = document.getElementById('ipon-join-group-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <dialog class="form-dialog join-group-dialog" id="ipon-join-group-dialog" aria-labelledby="ipon-join-dialog-title">
+          <div class="form-dialog-sheet join-group-sheet">
+            <header class="form-dialog-header">
+              <div>
+                <h2 id="ipon-join-dialog-title">Join savings group</h2>
+                <p id="ipon-join-dialog-copy">Enter a 6-character group code or paste an invite link shared by your admin.</p>
+              </div>
+              <button class="dialog-close" type="button" id="ipon-join-close" aria-label="Close join dialog">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <form id="ipon-join-form" class="form-grid" novalidate>
+              <div class="field field-wide">
+                <label for="ipon-join-code-input">6-character group code or invite link</label>
+                <input id="ipon-join-code-input" name="invite_code" class="join-code-input" type="text" maxlength="240" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. K9M-4PQ" aria-describedby="ipon-join-code-error" required>
+                <small class="field-error" id="ipon-join-code-error" role="alert"></small>
+              </div>
+              <div class="field field-wide">
+                <div class="join-preview-slot" id="ipon-join-preview-slot" aria-live="polite"></div>
+              </div>
+              <div class="field field-wide" id="ipon-join-pending-wrap" hidden></div>
+              <div class="form-actions field-wide">
+                <button class="button button-secondary" type="button" id="ipon-join-cancel">Cancel</button>
+                <button class="button button-primary" type="submit" id="ipon-join-submit" disabled>Join group</button>
+              </div>
+            </form>
+          </div>
+        </dialog>`);
+      dialog = document.getElementById('ipon-join-group-dialog');
+    }
+
+    const form = dialog.querySelector('#ipon-join-form');
+    const input = dialog.querySelector('#ipon-join-code-input');
+    const errorEl = dialog.querySelector('#ipon-join-code-error');
+    const previewSlot = dialog.querySelector('#ipon-join-preview-slot');
+    const pendingWrap = dialog.querySelector('#ipon-join-pending-wrap');
+    const submitBtn = dialog.querySelector('#ipon-join-submit');
+    const closeBtn = dialog.querySelector('#ipon-join-close');
+    const cancelBtn = dialog.querySelector('#ipon-join-cancel');
+
+    async function loadOwnPendingJoinRequests() {
+      if (!pendingWrap) return;
+      try {
+        const res = await rpc('get_group_invite_overview', {});
+        const mine = Array.isArray(res?.my_pending_requests) ? res.my_pending_requests : [];
+        if (!mine.length) {
+          pendingWrap.hidden = true;
+          pendingWrap.innerHTML = '';
+          return;
+        }
+        pendingWrap.hidden = false;
+        pendingWrap.innerHTML = `
+          <div class="join-own-pending-box">
+            <strong class="join-own-pending-title">Your pending join requests (${mine.length})</strong>
+            ${mine.map((item) => `
+              <div class="join-own-pending-row">
+                <div>
+                  <strong>${escapeHtml(item.group_name)}</strong>
+                  <small>Requested ${escapeHtml(dateLabel(item.created_at, { dateStyle: 'medium' }))} · Waiting for approval</small>
+                </div>
+                <button class="button button-secondary button-sm" type="button" data-cancel-own-req="${escapeHtml(item.id)}">Withdraw</button>
+              </div>`).join('')}
+          </div>`;
+        pendingWrap.querySelectorAll('[data-cancel-own-req]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const reqId = btn.dataset.cancelOwnReq;
+            const ok = await confirmAction({
+              title: 'Withdraw join request?',
+              message: 'You can re-apply later using a valid group code or invite link.',
+              acceptLabel: 'Withdraw request'
+            });
+            if (!ok) return;
+            setBusy(btn, true, 'Withdrawing…');
+            try {
+              await rpc('cancel_own_join_request', { p_request_id: reqId });
+              toast('Join request withdrawn.');
+              await loadOwnPendingJoinRequests();
+              const curCode = extractInviteCode(input?.value || '');
+              if (curCode.length === 6) await runPreview(curCode);
+            } catch (err) {
+              toast(friendlyError(err), 'error');
+            } finally {
+              setBusy(btn, false);
+            }
+          });
+        });
+      } catch {
+        pendingWrap.hidden = true;
+      }
+    }
+
+    let latestPreview = null;
+    let previewSeq = 0;
+
+    const setCodeError = (msg) => {
+      if (!input || !errorEl) return;
+      input.setCustomValidity(msg || '');
+      if (msg) {
+        input.setAttribute('aria-invalid', 'true');
+        errorEl.textContent = msg;
+      } else {
+        input.removeAttribute('aria-invalid');
+        errorEl.textContent = '';
+      }
+    };
+
+    const renderEmptyPreview = () => {
+      latestPreview = null;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Join group';
+      }
+      if (previewSlot) {
+        previewSlot.innerHTML = '<div class="join-preview-placeholder"><p>Ask your group admin for their 6-character code or invite link, then enter it above to preview the group.</p></div>';
+      }
+    };
+
+    async function runPreview(rawVal) {
+      const code = extractInviteCode(rawVal);
+      if (code.length < 6) {
+        setCodeError('');
+        renderEmptyPreview();
+        return;
+      }
+      if (rawVal.trim().length > 10) {
+        input.value = formatInviteCode(code);
+      }
+      const seq = ++previewSeq;
+      setCodeError('');
+      if (submitBtn) submitBtn.disabled = true;
+      if (previewSlot) {
+        previewSlot.innerHTML = '<div class="join-preview-loading"><span class="loading-spinner" aria-hidden="true"></span><span>Checking group code…</span></div>';
+      }
+      try {
+        const res = await rpc('preview_group_invite_code', { p_code: code });
+        if (seq !== previewSeq) return;
+        latestPreview = res || null;
+        if (!res?.valid) {
+          setCodeError(res?.message || 'Invite code could not be verified.');
+          if (previewSlot) {
+            previewSlot.innerHTML = `<div class="join-preview-error"><p>${escapeHtml(res?.message || 'Invite code is invalid or expired.')}</p></div>`;
+          }
+          if (submitBtn) submitBtn.disabled = true;
+          return;
+        }
+        const alreadyMember = Boolean(res.already_member);
+        const pendingReq = Boolean(res.pending_request);
+        const countLabel = `${Number(res.member_count || 0)} ${Number(res.member_count || 0) === 1 ? 'member' : 'members'}`;
+        const policyBadge = res.require_approval
+          ? '<span class="badge status-pending">Admin approval required</span>'
+          : '<span class="badge status-confirmed">Instant join</span>';
+        const statusExtra = alreadyMember
+          ? `<div class="join-preview-state"><span>You already belong to this group.</span><button class="button button-secondary button-sm" type="button" data-join-switch-existing="${escapeHtml(res.group_id)}">Open workspace</button></div>`
+          : pendingReq
+            ? '<div class="join-preview-state"><span>Your join request is already pending admin review.</span></div>'
+            : '';
+
+        if (previewSlot) {
+          previewSlot.innerHTML = `
+            <div class="join-preview-card">
+              <div class="join-preview-head">
+                ${avatarMarkup(res.group_avatar_url, res.group_name, 'avatar-lg')}
+                <div class="join-preview-info">
+                  <strong>${escapeHtml(res.group_name || 'Savings group')}</strong>
+                  <small>${escapeHtml(countLabel)} · ${escapeHtml(inviteExpirySummary(res.expires_at))}</small>
+                </div>
+              </div>
+              <div class="join-preview-badges">${policyBadge}</div>
+              ${statusExtra}
+            </div>`;
+          bindAvatarFallbacks(previewSlot);
+          previewSlot.querySelector('[data-join-switch-existing]')?.addEventListener('click', async (ev) => {
+            const btn = ev.currentTarget;
+            setBusy(btn, true, 'Switching…');
+            try {
+              const switched = await switchActiveGroup(res.group_id);
+              dialog.close();
+              window.location.href = homeForRole(switched?.role || res.existing_role || 'MEMBER');
+            } catch (err) {
+              toast(friendlyError(err), 'error');
+            } finally {
+              setBusy(btn, false);
+            }
+          });
+        }
+        if (submitBtn) {
+          submitBtn.disabled = alreadyMember || pendingReq;
+          submitBtn.textContent = res.require_approval ? 'Request to join' : 'Join savings group';
+        }
+      } catch (err) {
+        if (seq !== previewSeq) return;
+        setCodeError(friendlyError(err));
+        renderEmptyPreview();
+      }
+    }
+
+    const handleClose = () => {
+      clearPendingJoinCode();
+      dialog.close();
+    };
+    closeBtn.onclick = handleClose;
+    cancelBtn.onclick = handleClose;
+    dialog.onclick = (event) => { if (event.target === dialog) handleClose(); };
+
+    input.oninput = () => {
+      const code = extractInviteCode(input.value);
+      if (input.value.length <= 7) {
+        input.value = formatInviteCode(code);
+      }
+      runPreview(input.value);
+    };
+    input.onblur = () => {
+      const code = extractInviteCode(input.value);
+      if (code.length > 0) input.value = formatInviteCode(code);
+      if (code.length > 0 && code.length < 6) {
+        setCodeError('Enter all 6 characters of your group code.');
+      }
+    };
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const code = extractInviteCode(input.value);
+      if (code.length !== 6) {
+        setCodeError('Enter a valid 6-character group code.');
+        input.focus();
+        return;
+      }
+      if (!latestPreview?.valid) {
+        await runPreview(code);
+        if (!latestPreview?.valid) return;
+      }
+      setBusy(submitBtn, true, latestPreview?.require_approval ? 'Sending request…' : 'Joining…');
+      try {
+        const result = await rpc('join_group_by_code', { p_code: code });
+        clearPendingJoinCode();
+        if (result?.status === 'PENDING_APPROVAL') {
+          toast(result.message || 'Join request sent!');
+          dialog.close();
+          if (typeof onJoined === 'function') await onJoined(result);
+          return;
+        }
+        toast(result?.message || `Joined "${result?.group_name || 'savings group'}"!`);
+        dialog.close();
+        if (typeof onJoined === 'function') {
+          await onJoined(result);
+          return;
+        }
+        window.location.href = homeForRole(result?.role || 'MEMBER');
+      } catch (err) {
+        setCodeError(friendlyError(err));
+        toast(friendlyError(err), 'error');
+      } finally {
+        setBusy(submitBtn, false);
+      }
+    };
+
+    const seed = extractInviteCode(initialCode);
+    input.value = seed ? formatInviteCode(seed) : '';
+    setCodeError('');
+    if (!dialog.open) dialog.showModal();
+    loadOwnPendingJoinRequests().catch(() => { });
+    if (seed.length === 6) {
+      await runPreview(seed);
+    } else {
+      renderEmptyPreview();
+      input.focus();
+    }
+  }
+
+  let resumedJoinOnce = false;
+  function maybeResumePendingJoin(profile) {
+    if (resumedJoinOnce || !profile || profile.role === 'SUPER_ADMIN') return;
+    const page = String(document.body?.dataset?.page || '').toLowerCase();
+    if (['login', 'mfa', 'account', 'reset-password', 'super-admin'].includes(page)) return;
+    const pending = getPendingJoinCode();
+    if (!pending || pending.length !== 6) return;
+    resumedJoinOnce = true;
+    clearPendingJoinCode();
+    setTimeout(() => {
+      openJoinGroupDialog({ initialCode: pending }).catch(() => { });
+    }, 120);
+  }
+
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
@@ -10699,6 +11823,9 @@
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload, maybeShowRetentionReminder, openRetentionPolicyDialog, CURRENT_POLICY_VERSION, openPolicyDialog, hasAcceptedCurrentPolicy, maybeShowPolicyConsentModal,
     auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry, createRealtimeChannel,
+    canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, inviteShareUrl,
+    setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
+    generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, openJoinGroupDialog, mountInviteCodePanel, renderJoinRequestsQueue,
     get profile() { return currentProfile; }
   };
 })();

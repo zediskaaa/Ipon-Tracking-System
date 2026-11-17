@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Settings — myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261117-135">  <script src="js/config.js?v=20261117-76"></script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Settings — myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261117-136">  <script src="js/config.js?v=20261117-76"></script>
 </head>
 <body data-page="settings"><div class="app-layout"><aside class="app-sidebar" id="app-sidebar"></aside><main class="workspace">
 <div class="subview-back-bar"><a class="subview-back-link" href="dashboard.html" data-subview-back="dashboard.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to workspace</span></a></div>
@@ -40,12 +40,28 @@
           </div>
         </form>
       </section>
-      <section class="panel settings-panel-access" data-role="ADMIN"><div class="panel-header"><div><span class="calc-eyebrow">Member logins</span><h2>Account access</h2><p>Manage member and treasurer logins in your group. Administrator access is managed by the Super Admin.</p></div></div>
+      <section class="panel settings-panel-access" data-role="ADMIN"><div class="panel-header"><div><span class="calc-eyebrow">Member logins &amp; invites</span><h2>Account access</h2><p>Share an invite link or QR code, review join requests, and manage member or treasurer logins in your group.</p></div></div>
+        <div class="settings-invite-hub" id="settings-invite-hub">
+          <div id="settings-invite-code-mount"></div>
+          <div class="settings-join-requests-panel" id="settings-join-requests-panel">
+            <div class="settings-join-requests-head">
+              <div>
+                <h3>Pending join requests</h3>
+                <p>People waiting for your approval after scanning or entering your group code.</p>
+              </div>
+              <span class="badge status-pending" id="settings-join-requests-count" hidden>0</span>
+            </div>
+            <div id="settings-join-requests-list"><p class="empty-state">No pending join requests right now.</p></div>
+          </div>
+        </div>
         <div class="data-table-wrap"><table class="data-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody id="access-body"><tr class="loading-row"><td colspan="4">Loading accounts…</td></tr></tbody></table></div>
       </section>
     </div>
     <div class="settings-col-rail">
       <section class="panel settings-access-panel"><div class="panel-header"><div><span class="calc-eyebrow">Profile &amp; pledge</span><h2>Your access</h2><p>Your signed-in profile, active group, and contributor setting.</p></div></div><dl class="summary-list"><div><dt>Name</dt><dd id="my-name">—</dd></div><div><dt>Role</dt><dd id="my-role">—</dd></div><div><dt>Status</dt><dd id="my-status">—</dd></div><div><dt>Group</dt><dd><select id="settings-group-select" aria-label="Active savings group"></select></dd></div></dl>
+        <div class="settings-join-other-wrap">
+          <button class="button button-secondary button-sm" id="settings-join-group-btn" type="button">Join another group with code</button>
+        </div>
         <div class="settings-contributor-toggle" data-role="ADMIN">
           <label class="toggle-switch-row" for="settings-admin-contributor">
             <span><strong>Include me as a contributor<button class="info-tip-btn" type="button" data-info-tip="Turn this on if you are an Admin who also puts money into the group savings, so your own monthly share and payment status are tracked too." aria-label="About contributor toggle" aria-expanded="false">i</button></strong><small>Turn on to include yourself in contribution periods and contributor totals for this group.</small></span>
@@ -111,5 +127,5 @@
       </form>
     </div>
   </dialog>
-</main></div><script src="js/core.js?v=20261117-112"></script><script src="js/policy.js?v=20261116-07"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/messages.js?v=20261117-32"></script><script src="js/settings.js?v=20261117-87"></script></body></html>
+</main></div><script src="js/core.js?v=20261117-113"></script><script src="js/policy.js?v=20261116-07"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/messages.js?v=20261117-32"></script><script src="js/settings.js?v=20261117-88"></script></body></html>
 

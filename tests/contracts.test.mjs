@@ -11104,7 +11104,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261117-112/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261117-113/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11233,4 +11233,171 @@ test('Super Admin Platform overview counts all registered non-super-admin users 
   assert.match(css, /\.platform-shortcut-badge\.has-pending\s*\{/);
   assert.match(css, /html\[data-theme="dark"\] \.platform-metric-card\s*\{/);
   assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.platform-metric-card\s*\{/);
+});
+
+test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR ISO-18004 Engine work end-to-end', () => {
+  const mig100 = read('database/migrations/20261117_100_group_invite_links_and_codes.sql');
+  const schema = read('database/schema.sql');
+  const coreJs = read('js/core.js');
+  const authJs = read('js/auth.js');
+  const loginHtml = read('login.html');
+  const dashHtml = read('dashboard.html');
+  const dashJs = read('js/dashboard.js');
+  const settingsHtml = read('settings.html');
+  const settingsJs = read('js/settings.js');
+  const userHtml = read('user.html');
+  const userJs = read('js/user.js');
+  const css = read('css/app.css');
+
+  // 1. Database migration & schema ledger parity + strict ACL checks
+  for (const sql of [mig100, schema]) {
+    assert.match(sql, /'20261117_100'/);
+    assert.match(sql, /create table if not exists public\.group_invite_codes/i);
+    assert.match(sql, /create table if not exists public\.group_join_requests/i);
+    assert.match(sql, /group_invite_codes_one_active_per_group_uidx/i);
+    assert.match(sql, /group_join_requests_one_pending_uidx/i);
+    assert.match(sql, /current_setting\('ipon\.joining_group_id',\s*true\)/i);
+    assert.match(sql, /create or replace function public\.create_group_invite_code\(/i);
+    assert.match(sql, /create or replace function public\.update_group_invite_code\(/i);
+    assert.match(sql, /create or replace function public\.get_group_invite_overview\(/i);
+    assert.match(sql, /create or replace function public\.preview_group_invite_code\(/i);
+    assert.match(sql, /create or replace function public\.join_group_by_code\(/i);
+    assert.match(sql, /create or replace function public\.review_group_join_request\(/i);
+    assert.match(sql, /create or replace function public\.cancel_own_join_request\(/i);
+    assert.match(sql, /grant execute on function public\.preview_group_invite_code\(text\) to anon, authenticated;/i);
+    assert.match(sql, /revoke all on function public\.join_group_by_code\(text\) from public, anon;/i);
+    assert.match(sql, /revoke all on function public\.create_group_invite_code\(integer, boolean, integer\) from public, anon;/i);
+    assert.match(sql, /revoke all on function public\.review_group_join_request\(uuid, text, text\) from public, anon;/i);
+    assert.match(sql, /revoke all on function public\._grant_group_member_via_invite\(uuid, uuid, uuid\) from public, anon, authenticated;/i);
+  }
+
+  // 2. HTML & JS wiring across Login, Dashboard, Settings, Member Portal
+  assert.match(loginHtml, /id="auth-join-banner"/);
+  assert.match(loginHtml, /id="auth-have-code-open"/);
+  assert.match(loginHtml, /id="auth-join-code-input"/);
+  assert.match(authJs, /preview_group_invite_code/);
+  assert.match(authJs, /function renderAuthJoinBanner/);
+
+  assert.match(dashHtml, /id="no-group-join-btn"/);
+  assert.match(dashHtml, /id="group-hub-join-another"/);
+  assert.match(dashHtml, /id="invite-tab-link"/);
+  assert.match(dashHtml, /id="invite-tab-email"/);
+  assert.match(dashHtml, /id="invite-link-code-mount"/);
+  assert.match(dashJs, /no-group-join-btn/);
+  assert.match(dashJs, /mountInviteCodePanel/);
+  assert.match(dashJs, /group_join_requests/);
+
+  assert.match(settingsHtml, /id="settings-invite-code-mount"/);
+  assert.match(settingsHtml, /id="settings-join-requests-panel"/);
+  assert.match(settingsHtml, /id="settings-join-group-btn"/);
+  assert.match(settingsJs, /settings-invite-code-mount/);
+  assert.match(settingsJs, /renderJoinRequestsQueue/);
+  assert.match(settingsJs, /join_requests/);
+
+  assert.match(userHtml, /id="user-join-group"/);
+  assert.match(userJs, /user-join-group/);
+  assert.match(css, /\.invite-code-active-card\s*\{/);
+  assert.match(css, /html\[data-theme="dark"\] \.invite-code-active-card/);
+  assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*?\.invite-code-active-card/);
+
+  // 3. Real VM execution of Core Invite Helpers & ISO-18004 QR Encoder
+  const store = new Map();
+  const noop = () => {};
+  const dummyEl = () => ({
+    classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+    style: {},
+    setAttribute: noop,
+    removeAttribute: noop,
+    addEventListener: noop,
+    querySelector: () => dummyEl(),
+    querySelectorAll: () => [],
+    insertAdjacentHTML: noop
+  });
+  const ctx = {
+    console, TextEncoder, URL, URLSearchParams, Intl, Math, Date, Number, String, JSON,
+    Uint8Array, Array, Set, Map,
+    navigator: { userAgent: 'node', onLine: true },
+    location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', pathname: '/dashboard.html', origin: 'https://my-ipon.vercel.app', search: '', href: 'https://my-ipon.vercel.app/dashboard.html', replace: noop, assign: noop },
+    localStorage: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k)
+    },
+    sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    history: { replaceState: noop },
+    CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    addEventListener: noop,
+    removeEventListener: noop,
+    dispatchEvent: noop,
+    document: {
+      documentElement: { setAttribute: noop, dataset: {}, style: { setProperty: noop, removeProperty: noop } },
+      head: { insertAdjacentHTML: noop },
+      body: { dataset: {}, classList: { contains: () => false, add: noop, remove: noop, toggle: noop }, insertAdjacentHTML: noop, appendChild: noop, prepend: noop, append: noop },
+      createElement: () => dummyEl(),
+      addEventListener: noop,
+      removeEventListener: noop,
+      getElementById: () => null,
+      querySelectorAll: () => [],
+      querySelector: () => null
+    }
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  const ipon = ctx.window.Ipon;
+  assert.equal(ipon.normalizeInviteCode(' k9m-4pq '), 'K9M4PQ');
+  assert.equal(ipon.formatInviteCode('k9m4pq'), 'K9M-4PQ');
+  assert.equal(ipon.extractInviteCode('https://my-ipon.vercel.app/login.html?join=ab2-3cd'), 'AB23CD');
+  assert.equal(ipon.inviteShareUrl('k9m4pq'), 'https://my-ipon.vercel.app/login.html?join=K9M4PQ');
+
+  ipon.setPendingJoinCode('K9M-4PQ');
+  assert.equal(ipon.getPendingJoinCode(), 'K9M4PQ');
+  ipon.clearPendingJoinCode();
+  assert.equal(ipon.getPendingJoinCode(), '');
+
+  assert.equal(ipon.resolveNotificationTarget({ type: 'GROUP_JOIN_REQUEST' }, 'ADMIN'), 'settings.html?join_requests=1#access');
+  assert.equal(ipon.resolveNotificationTarget({ type: 'GROUP_JOIN_APPROVED', id: '42' }, 'MEMBER'), 'user.html?notice=42');
+
+  // Verify ISO-18004 Version 4 QR matrix + finder patterns + timing strips + alignment + BCH format match
+  const qrUrl = ipon.inviteShareUrl('K9M4PQ');
+  const qr = ipon.generateQrMatrix(qrUrl);
+  assert.equal(qr.version, 4);
+  assert.equal(qr.size, 33);
+  // Finder outer rings at (0,0), (0,26), (26,0)
+  for (const [top, left] of [[0, 0], [0, qr.size - 7], [qr.size - 7, 0]]) {
+    assert.equal(qr.modules[top][left], 1);
+    assert.equal(qr.modules[top + 3][left + 3], 1);
+    assert.equal(qr.modules[top + 1][left + 1], 0);
+  }
+  // Dark module at (size - 8, 8)
+  assert.equal(qr.modules[qr.size - 8][8], 1);
+  // Timing patterns alternating
+  for (let i = 8; i < qr.size - 8; i += 1) {
+    assert.equal(qr.modules[6][i], i % 2 === 0 ? 1 : 0);
+    assert.equal(qr.modules[i][6], i % 2 === 0 ? 1 : 0);
+  }
+  // Primary and secondary 15-bit format strips match bit-for-bit
+  const copy1 = [
+    qr.modules[8][0], qr.modules[8][1], qr.modules[8][2], qr.modules[8][3], qr.modules[8][4], qr.modules[8][5],
+    qr.modules[8][7], qr.modules[8][8], qr.modules[7][8],
+    qr.modules[5][8], qr.modules[4][8], qr.modules[3][8], qr.modules[2][8], qr.modules[1][8], qr.modules[0][8]
+  ];
+  const copy2 = [
+    qr.modules[qr.size - 1][8], qr.modules[qr.size - 2][8], qr.modules[qr.size - 3][8], qr.modules[qr.size - 4][8],
+    qr.modules[qr.size - 5][8], qr.modules[qr.size - 6][8], qr.modules[qr.size - 7][8],
+    qr.modules[8][qr.size - 8], qr.modules[8][qr.size - 7], qr.modules[8][qr.size - 6], qr.modules[8][qr.size - 5],
+    qr.modules[8][qr.size - 4], qr.modules[8][qr.size - 3], qr.modules[8][qr.size - 2], qr.modules[8][qr.size - 1]
+  ];
+  assert.deepEqual(copy1, copy2);
+
+  // Verify SVG output structure
+  const svg = ipon.qrSvgMarkup(qrUrl);
+  assert.match(svg, /^<svg class="invite-qr-svg" viewBox="0 0 41 41"/);
+  assert.match(svg, /<rect width="41" height="41" fill="#ffffff"\/><path d="M/);
+
+  // Capacitor localhost origin maps to canonical public share domain
+  ctx.location.origin = 'http://localhost';
+  ctx.Capacitor = {};
+  assert.equal(ipon.canonicalAppOrigin(), 'https://my-ipon.vercel.app');
 });

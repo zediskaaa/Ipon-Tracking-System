@@ -19,6 +19,11 @@
   const cycleStatusCopy = document.getElementById('cycle-status-copy');
   const cycleSaveBtn = document.getElementById('cycle-save-btn');
   const cycleResetBtn = document.getElementById('cycle-reset-btn');
+  const inviteCodeMount = document.getElementById('settings-invite-code-mount');
+  const joinRequestsList = document.getElementById('settings-join-requests-list');
+  const joinRequestsCount = document.getElementById('settings-join-requests-count');
+  let settingsInviteCtrl = null;
+  let lastInviteGroupId = '';
   let currentSettingsAdminAmount = 100;
   let members = [];
   const accessProfiles = new Map();
@@ -46,11 +51,30 @@
     if (effectiveMonth.value === month) { defaultAmount.value = data?.default_amount ?? ''; deadlineDay.value = data?.deadline_day ?? 28; }
   }
 
+  async function loadJoinRequests(overview = null) {
+    if (!joinRequestsList || typeof Ipon.renderJoinRequestsQueue !== 'function') return;
+    try {
+      const data = overview || await Ipon.rpc('get_group_invite_overview', {});
+      const requests = Array.isArray(data?.pending_requests) ? data.pending_requests : [];
+      if (joinRequestsCount) {
+        joinRequestsCount.hidden = requests.length === 0;
+        joinRequestsCount.textContent = String(requests.length);
+      }
+      Ipon.renderJoinRequestsQueue(joinRequestsList, {
+        requests,
+        onChanged: () => Promise.all([loadAccess(), loadJoinRequests()])
+      });
+    } catch (err) {
+      Ipon.showInlineError?.(joinRequestsList, err, loadJoinRequests);
+    }
+  }
+
   async function loadAccess() {
-    const [accessRows, memberResult, myGroups] = await Promise.all([
+    const [accessRows, memberResult, myGroups, inviteOverview] = await Promise.all([
       Ipon.rpc('get_group_access_list'),
       Ipon.client.from('members').select('id,full_name,monthly_contribution_amount,activation_status').eq('status', 'ACTIVE').is('deleted_at', null).order('full_name'),
-      Ipon.rpc('get_my_groups')
+      Ipon.rpc('get_my_groups'),
+      Ipon.rpc('get_group_invite_overview', {}).catch(() => null)
     ]);
     if (memberResult.error) throw memberResult.error;
     members = memberResult.data || [];
@@ -62,6 +86,19 @@
     document.querySelectorAll('.settings-panel-access, .settings-treasurer-panel').forEach((panel) => {
       panel.hidden = isSolo;
     });
+    if (!isSolo && inviteCodeMount && typeof Ipon.mountInviteCodePanel === 'function') {
+      if (!settingsInviteCtrl || lastInviteGroupId !== currentGroupId) {
+        lastInviteGroupId = currentGroupId;
+        settingsInviteCtrl = Ipon.mountInviteCodePanel(inviteCodeMount, {
+          groupName: activeGroup?.name || '',
+          onChanged: () => loadJoinRequests()
+        });
+      }
+      await loadJoinRequests(inviteOverview);
+    } else if (isSolo) {
+      lastInviteGroupId = '';
+      settingsInviteCtrl = null;
+    }
     if (groupSelect) {
       groupSelect.disabled = groups.length <= 1;
       Ipon.populateGroupSelect(groupSelect, groups, currentGroupId);
@@ -446,6 +483,9 @@
   document.getElementById('settings-finish-cycle')?.addEventListener('click', () => {
     window.IponPolicy?.openFinishSavingsBatchDialog?.({ onDone: loadCycleSetting });
   });
+  document.getElementById('settings-join-group-btn')?.addEventListener('click', () => {
+    Ipon.openJoinGroupDialog();
+  });
 
   try {
     await Promise.all([loadContributionDefault(), loadAccess(), loadPaymentInfo(), loadCycleSetting()]);
@@ -455,6 +495,13 @@
     Ipon.setLoading(false);
   }
   Ipon.consumeDeepLink(async (params, hash) => {
+    if (params.get('join_requests') === '1') {
+      const targetEl = document.getElementById('settings-join-requests-panel') || accessBody?.closest('.panel');
+      if (targetEl) {
+        Ipon.highlightFocus(targetEl);
+        return true;
+      }
+    }
     const accessUserId = params.get('access_user') || '';
     if (accessUserId && accessBody) {
       const safeId = CSS.escape ? CSS.escape(accessUserId) : accessUserId;
@@ -472,12 +519,13 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('settings', ['profiles', 'members', 'contribution_settings', 'groups', 'group_memberships'], async () => {
+  Ipon.subscribeToChanges('settings', ['profiles', 'members', 'contribution_settings', 'groups', 'group_memberships', 'group_invite_codes', 'group_join_requests'], async () => {
     const tasks = [];
     if (document.activeElement !== defaultAmount && document.activeElement !== deadlineDay && document.activeElement !== effectiveMonth) tasks.push(loadContributionDefault());
     if (!document.activeElement?.closest('#access-body')) tasks.push(loadAccess());
     if (!document.activeElement?.closest('#payment-info-form')) tasks.push(loadPaymentInfo());
     if (document.activeElement !== cycleStartMonth) tasks.push(loadCycleSetting());
+    if (settingsInviteCtrl && !document.activeElement?.closest('#settings-invite-code-mount')) tasks.push(settingsInviteCtrl.refresh());
     await Promise.all(tasks);
   });
 })();

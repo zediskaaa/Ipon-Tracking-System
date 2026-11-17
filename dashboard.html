@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261117-135">
+  <link rel="stylesheet" href="css/app.css?v=20261117-136">
   <link rel="stylesheet" href="css/hero-plates.css?v=20261117-87">
   <script src="js/config.js?v=20261117-76"></script>
 </head>
@@ -190,6 +190,10 @@
               <button class="button button-secondary" id="no-group-create-btn" type="button">
                 <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;margin-right:6px;"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 Create savings group
+              </button>
+              <button class="button button-secondary" id="no-group-join-btn" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;margin-right:6px;"><rect x="3" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="15" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="15" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15h6v6h-6z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                Join with code
               </button>
             </div>
           </div>
@@ -546,8 +550,8 @@
                 <path d="M19 8v6M22 11h-6" />
               </svg></span>
             <span class="group-hub-card-copy">
-              <strong>Invite members</strong>
-              <small>Send email sign-in credentials with recommended temporary passwords.</small>
+              <strong>Invite members <span class="badge status-pending" id="group-hub-requests-badge" hidden>0 pending</span></strong>
+              <small>Share an invite link / QR code or send email invites.</small>
             </span>
             <svg class="group-hub-arrow" viewBox="0 0 24 24" aria-hidden="true">
               <path d="m9 6 6 6-6 6" />
@@ -600,6 +604,7 @@
       <footer class="group-hub-footer">
         <button class="button danger-action" type="button" id="group-hub-delete-btn">Delete group</button>
         <div class="group-hub-footer-actions">
+          <button class="button button-secondary" type="button" id="group-hub-join-another">Join group</button>
           <button class="button button-secondary" type="button" id="group-hub-create-another">+ New workspace</button>
           <button class="button button-primary" type="button" id="done-group-hub-dialog">Done</button>
         </div>
@@ -786,14 +791,27 @@
       <header class="form-dialog-header">
         <div>
           <h2 id="group-invite-title">Invite members</h2>
-          <p id="group-invite-copy">Add members by email with a temporary password. Their account activates once they accept the email invitation.</p>
+          <p id="group-invite-copy">Share a 6-character code &amp; QR link for fast phone onboarding, or send email credentials.</p>
         </div>
         <button class="dialog-close" type="button" id="close-invite-dialog" aria-label="Close invite dialog"><svg
             viewBox="0 0 24 24" aria-hidden="true">
             <path d="m6 6 12 12M18 6 6 18" />
           </svg></button>
       </header>
-      <form id="group-invite-form" class="form-grid">
+      <div class="invite-mode-tabs" role="tablist" aria-label="Invitation methods">
+        <button class="invite-mode-tab is-active" id="invite-tab-link" type="button" role="tab" aria-selected="true" aria-controls="invite-link-panel">Invite Link &amp; QR</button>
+        <button class="invite-mode-tab" id="invite-tab-email" type="button" role="tab" aria-selected="false" aria-controls="group-invite-form">Email Invite</button>
+      </div>
+      <div class="invite-link-panel" id="invite-link-panel" role="tabpanel" aria-labelledby="invite-tab-link">
+        <div id="invite-link-code-mount"></div>
+        <div class="invite-dialog-requests-wrap" id="invite-dialog-requests-wrap" hidden>
+          <div class="invite-section-head">
+            <span><strong>Pending join requests</strong></span>
+          </div>
+          <div id="invite-dialog-requests-list"></div>
+        </div>
+      </div>
+      <form id="group-invite-form" class="form-grid" role="tabpanel" aria-labelledby="invite-tab-email" hidden>
         <div class="field field-wide">
           <div class="invite-section-head">
             <span><strong>Members to invite</strong></span>
@@ -946,12 +964,12 @@
       </div>
     </div>
   </dialog>
-  <script src="js/core.js?v=20261117-112"></script><script src="js/policy.js?v=20261116-07"></script>
+  <script src="js/core.js?v=20261117-113"></script><script src="js/policy.js?v=20261116-07"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
   <script src="js/messages.js?v=20261117-32"></script>
-  <script src="js/dashboard.js?v=20261117-89"></script>
+  <script src="js/dashboard.js?v=20261117-90"></script>
 </body>
 
 </html>

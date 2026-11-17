@@ -407,5 +407,8 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions', 'groups', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions', 'record_comments'], refresh);
+  document.getElementById('user-join-group')?.addEventListener('click', () => {
+    Ipon.openJoinGroupDialog();
+  });
+  Ipon.subscribeToChanges('member-dashboard', ['profiles', 'members', 'contribution_periods', 'contributions', 'groups', 'group_memberships', 'group_join_requests', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions', 'record_comments'], refresh);
 })();

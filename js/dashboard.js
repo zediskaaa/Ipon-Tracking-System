@@ -919,9 +919,23 @@
   document.getElementById('dashboard-manage-group')?.addEventListener('click', () => {
     syncGroupHub();
     groupHubDialog?.showModal();
+    if (currentGroup?.role === 'ADMIN' && currentGroup?.workspace_mode !== 'SOLO') {
+      Ipon.rpc('get_group_invite_overview', {}).then((res) => {
+        const badgeEl = document.getElementById('group-hub-requests-badge');
+        const count = Array.isArray(res?.pending_requests) ? res.pending_requests.length : 0;
+        if (badgeEl) {
+          badgeEl.hidden = count === 0;
+          badgeEl.textContent = `${count} pending`;
+        }
+      }).catch(() => { });
+    }
   });
   document.getElementById('close-group-hub-dialog')?.addEventListener('click', () => groupHubDialog?.close());
   document.getElementById('done-group-hub-dialog')?.addEventListener('click', () => groupHubDialog?.close());
+  document.getElementById('group-hub-join-another')?.addEventListener('click', () => {
+    groupHubDialog?.close();
+    Ipon.openJoinGroupDialog();
+  });
   document.getElementById('group-hub-create-another')?.addEventListener('click', () => {
     groupHubDialog?.close();
     openGroupDialog('create');
@@ -1276,6 +1290,17 @@
   document.getElementById('dashboard-create-group')?.addEventListener('click', () => openGroupDialog('create', 'GROUP'));
   document.getElementById('no-group-solo-btn')?.addEventListener('click', () => openGroupDialog('create', 'SOLO'));
   document.getElementById('no-group-create-btn')?.addEventListener('click', () => openGroupDialog('create', 'GROUP'));
+  document.getElementById('no-group-join-btn')?.addEventListener('click', () => {
+    Ipon.openJoinGroupDialog({
+      onJoined: async (res) => {
+        if (res?.status === 'JOINED') {
+          window.location.href = Ipon.homeForRole(res.role || 'MEMBER');
+        } else {
+          await load();
+        }
+      }
+    });
+  });
   document.getElementById('close-group-dialog')?.addEventListener('click', () => groupDialog?.close());
   document.getElementById('cancel-group-dialog')?.addEventListener('click', () => groupDialog?.close());
   groupForm?.addEventListener('submit', async (event) => {
@@ -1357,13 +1382,71 @@
       Ipon.setBusy(button, false);
     }
   });
+  const inviteTabLink = document.getElementById('invite-tab-link');
+  const inviteTabEmail = document.getElementById('invite-tab-email');
+  const inviteLinkPanel = document.getElementById('invite-link-panel');
+  const inviteLinkCodeMount = document.getElementById('invite-link-code-mount');
+  const inviteDialogRequestsWrap = document.getElementById('invite-dialog-requests-wrap');
+  const inviteDialogRequestsList = document.getElementById('invite-dialog-requests-list');
+  let dashInvitePanelCtrl = null;
+
+  function renderDialogPendingRequests(requests) {
+    if (!inviteDialogRequestsWrap || !inviteDialogRequestsList) return;
+    const list = Array.isArray(requests) ? requests : [];
+    inviteDialogRequestsWrap.hidden = list.length === 0;
+    if (!list.length) {
+      inviteDialogRequestsList.replaceChildren();
+      return;
+    }
+    Ipon.renderJoinRequestsQueue(inviteDialogRequestsList, {
+      requests: list,
+      onChanged: async () => {
+        await dashInvitePanelCtrl?.refresh();
+        await load();
+      }
+    });
+  }
+
+  function setInviteTab(tab) {
+    const isLink = tab !== 'email';
+    inviteTabLink?.classList.toggle('is-active', isLink);
+    inviteTabEmail?.classList.toggle('is-active', !isLink);
+    inviteTabLink?.setAttribute('aria-selected', String(isLink));
+    inviteTabEmail?.setAttribute('aria-selected', String(!isLink));
+    if (inviteLinkPanel) inviteLinkPanel.hidden = !isLink;
+    if (inviteForm) inviteForm.hidden = isLink;
+    if (!isLink && inviteOnlyRows && !inviteOnlyRows.children.length) {
+      appendInviteRow(inviteOnlyRows, { defaultAmount: 100, required: true });
+    }
+  }
+
+  inviteTabLink?.addEventListener('click', () => setInviteTab('link'));
+  inviteTabEmail?.addEventListener('click', () => setInviteTab('email'));
+
   document.getElementById('dashboard-invite-member')?.addEventListener('click', () => {
-    if (!inviteDialog || !inviteOnlyRows) return;
+    if (!inviteDialog) return;
     groupHubDialog?.close();
-    inviteOnlyRows.replaceChildren();
-    appendInviteRow(inviteOnlyRows, { defaultAmount: 100, required: true });
+    setInviteTab('link');
+    if (inviteLinkCodeMount) {
+      dashInvitePanelCtrl = Ipon.mountInviteCodePanel(inviteLinkCodeMount, {
+        groupName: currentGroup?.name || '',
+        onChanged: (overview) => {
+          renderDialogPendingRequests(overview?.pending_requests);
+          const badgeEl = document.getElementById('group-hub-requests-badge');
+          if (badgeEl) {
+            const count = Array.isArray(overview?.pending_requests) ? overview.pending_requests.length : 0;
+            badgeEl.hidden = count === 0;
+            badgeEl.textContent = `${count} pending`;
+          }
+        }
+      });
+      Ipon.rpc('get_group_invite_overview', {}).then((res) => renderDialogPendingRequests(res?.pending_requests)).catch(() => { });
+    }
+    if (inviteOnlyRows) {
+      inviteOnlyRows.replaceChildren();
+      appendInviteRow(inviteOnlyRows, { defaultAmount: 100, required: true });
+    }
     inviteDialog.showModal();
-    inviteOnlyRows.querySelector('[name="invite_email"]')?.focus();
   });
   document.getElementById('invite-add-row')?.addEventListener('click', () => {
     appendInviteRow(inviteOnlyRows, { defaultAmount: 100, required: true });
@@ -1802,5 +1885,11 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions'], load);
+  Ipon.subscribeToChanges('dashboard', ['members', 'profiles', 'groups', 'group_memberships', 'group_invite_codes', 'group_join_requests', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'savings_cycle_batches', 'announcements', 'announcement_reactions'], () => {
+    if (inviteDialog?.open && dashInvitePanelCtrl) {
+      dashInvitePanelCtrl.refresh().catch(() => { });
+      Ipon.rpc('get_group_invite_overview', {}).then((res) => renderDialogPendingRequests(res?.pending_requests)).catch(() => { });
+    }
+    return load();
+  });
 })();

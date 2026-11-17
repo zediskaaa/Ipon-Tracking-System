@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v27';
+const CACHE_NAME = 'ipon-shell-v28';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname) && self.location.protocol !== 'https:';
 const STATIC_ASSETS = [
   'manifest.webmanifest',

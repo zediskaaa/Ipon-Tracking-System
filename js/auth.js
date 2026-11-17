@@ -473,6 +473,156 @@
     return state;
   }
 
+  const normJoinCode = (raw) => (typeof Ipon.normalizeInviteCode === 'function'
+    ? Ipon.normalizeInviteCode(raw)
+    : String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6));
+  const extractJoinCode = (raw) => (typeof Ipon.extractInviteCode === 'function'
+    ? Ipon.extractInviteCode(raw)
+    : normJoinCode(String(raw || '').replace(/.*join=([A-Za-z0-9-]+).*/i, '$1')));
+  const fmtJoinCode = (raw) => (typeof Ipon.formatInviteCode === 'function'
+    ? Ipon.formatInviteCode(raw)
+    : (() => { const c = normJoinCode(raw); return c.length > 3 ? `${c.slice(0, 3)}-${c.slice(3)}` : c; })());
+  const setStoredJoinCode = (code) => Ipon.setPendingJoinCode?.(code) || '';
+  const getStoredJoinCode = () => Ipon.getPendingJoinCode?.() || '';
+  const clearStoredJoinCode = () => Ipon.clearPendingJoinCode?.();
+
+  const rawSearchParams = new URLSearchParams(location.search);
+  const urlJoinCode = extractJoinCode(rawSearchParams.get('join') || '');
+  if (urlJoinCode.length === 6) setStoredJoinCode(urlJoinCode);
+  let activeJoinPreview = null;
+
+  const authJoinBanner = document.getElementById('auth-join-banner');
+  const authJoinEntry = document.getElementById('auth-join-entry');
+  const haveCodeOpenBtn = document.getElementById('auth-have-code-open');
+  const joinCodeBox = document.getElementById('auth-join-code-box');
+  const joinCodeInput = document.getElementById('auth-join-code-input');
+  const joinApplyBtn = document.getElementById('auth-join-apply-btn');
+  const joinCodeError = document.getElementById('auth-join-code-error');
+
+  function syncJoinCopy() {
+    const authCopyEl = document.getElementById('auth-copy');
+    if (!authCopyEl) return;
+    const signup = mode === 'signup';
+    authCopyEl.textContent = activeJoinPreview?.valid
+      ? (signup ? `Create an account to join "${activeJoinPreview.group_name}".` : `Sign in to join "${activeJoinPreview.group_name}".`)
+      : (signup ? 'Sign up with myIPON to track and manage your group savings.' : 'Sign in to view your savings records.');
+  }
+
+  function renderAuthJoinBanner(preview, code) {
+    if (!authJoinBanner) return;
+    if (!code) {
+      activeJoinPreview = null;
+      authJoinBanner.hidden = true;
+      authJoinBanner.innerHTML = '';
+      if (authJoinEntry) authJoinEntry.hidden = false;
+      syncJoinCopy();
+      return;
+    }
+    if (!preview?.valid) {
+      activeJoinPreview = null;
+      clearStoredJoinCode();
+      authJoinBanner.hidden = false;
+      authJoinBanner.dataset.state = 'invalid';
+      authJoinBanner.innerHTML = `
+        <div class="auth-join-banner-body">
+          <strong>Invite code unavailable</strong>
+          <small>${Ipon.escapeHtml(preview?.message || 'This invite link or code has expired or is no longer active.')}</small>
+        </div>
+        <button class="auth-join-clear-btn" type="button" data-auth-join-clear>Dismiss</button>`;
+      authJoinBanner.querySelector('[data-auth-join-clear]')?.addEventListener('click', () => renderAuthJoinBanner(null, ''));
+      if (authJoinEntry) authJoinEntry.hidden = false;
+      syncJoinCopy();
+      return;
+    }
+
+    activeJoinPreview = preview;
+    setStoredJoinCode(code);
+    const countLabel = `${Number(preview.member_count || 0)} ${Number(preview.member_count || 0) === 1 ? 'member' : 'members'}`;
+    const approvalText = preview.require_approval ? 'Admin approval required' : 'Instant join';
+    const avatarHtml = typeof Ipon.avatarMarkup === 'function'
+      ? Ipon.avatarMarkup(preview.group_avatar_url, preview.group_name, 'avatar-md')
+      : '';
+    authJoinBanner.hidden = false;
+    authJoinBanner.dataset.state = 'valid';
+    authJoinBanner.innerHTML = `
+      <div class="auth-join-banner-head">
+        ${avatarHtml}
+        <div class="auth-join-banner-body">
+          <span class="auth-join-eyebrow">Group invite · Code ${Ipon.escapeHtml(fmtJoinCode(code))}</span>
+          <strong>${Ipon.escapeHtml(preview.group_name)}</strong>
+          <small>${Ipon.escapeHtml(countLabel)} · ${Ipon.escapeHtml(approvalText)}</small>
+        </div>
+        <button class="auth-join-clear-btn" type="button" data-auth-join-clear aria-label="Remove group invite">Clear</button>
+      </div>`;
+    Ipon.bindAvatarFallbacks?.(authJoinBanner);
+    authJoinBanner.querySelector('[data-auth-join-clear]')?.addEventListener('click', () => renderAuthJoinBanner(null, ''));
+    if (joinCodeBox) joinCodeBox.hidden = true;
+    haveCodeOpenBtn?.setAttribute('aria-expanded', 'false');
+    if (authJoinEntry) authJoinEntry.hidden = true;
+    syncJoinCopy();
+  }
+
+  async function loadLoginJoinPreview(rawCode, { fromManualInput = false } = {}) {
+    const code = extractJoinCode(rawCode);
+    if (code.length !== 6) {
+      if (fromManualInput && joinCodeError) {
+        joinCodeError.textContent = 'Enter a valid 6-character group code.';
+        joinCodeError.hidden = false;
+        joinCodeInput?.setAttribute('aria-invalid', 'true');
+        joinCodeInput?.focus();
+      }
+      return;
+    }
+    if (joinCodeError) {
+      joinCodeError.textContent = '';
+      joinCodeError.hidden = true;
+    }
+    joinCodeInput?.removeAttribute('aria-invalid');
+    if (joinApplyBtn) Ipon.setBusy(joinApplyBtn, true, 'Checking…');
+    try {
+      await ensureInitReady();
+      const preview = await Ipon.rpc('preview_group_invite_code', { p_code: code });
+      renderAuthJoinBanner(preview, code);
+      if (fromManualInput && preview?.valid && joinCodeInput) {
+        joinCodeInput.value = '';
+      }
+    } catch (err) {
+      if (fromManualInput && joinCodeError) {
+        joinCodeError.textContent = Ipon.friendlyError(err);
+        joinCodeError.hidden = false;
+      } else {
+        renderAuthJoinBanner({ valid: false, message: Ipon.friendlyError(err) }, code);
+      }
+    } finally {
+      if (joinApplyBtn) Ipon.setBusy(joinApplyBtn, false);
+    }
+  }
+
+  haveCodeOpenBtn?.addEventListener('click', () => {
+    if (!joinCodeBox) return;
+    const willShow = joinCodeBox.hidden;
+    joinCodeBox.hidden = !willShow;
+    haveCodeOpenBtn.setAttribute('aria-expanded', String(willShow));
+    if (willShow) joinCodeInput?.focus();
+  });
+  joinCodeInput?.addEventListener('input', () => {
+    if (joinCodeError) {
+      joinCodeError.textContent = '';
+      joinCodeError.hidden = true;
+    }
+    joinCodeInput.removeAttribute('aria-invalid');
+    if (joinCodeInput.value.length <= 7) {
+      joinCodeInput.value = fmtJoinCode(joinCodeInput.value);
+    }
+  });
+  joinCodeInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      loadLoginJoinPreview(joinCodeInput.value, { fromManualInput: true });
+    }
+  });
+  joinApplyBtn?.addEventListener('click', () => loadLoginJoinPreview(joinCodeInput?.value || '', { fromManualInput: true }));
+
   void (async () => {
     const state = await initPromise;
     Ipon.setLoading(false);
@@ -508,6 +658,8 @@
     }
     renderSecurityNotice();
     if (email?.value) syncServerThrottleStatus(email.value);
+    const initialJoin = getStoredJoinCode();
+    if (initialJoin) loadLoginJoinPreview(initialJoin).catch(() => { });
 
     if (acceptInviteToken && acceptInviteEmail) {
       try {
@@ -700,7 +852,9 @@
     if (signup) { password.minLength = 8; password.maxLength = 128; }
     else { password.removeAttribute('minlength'); password.removeAttribute('maxlength'); }
     document.getElementById('auth-title').textContent = signup ? 'Create your account' : 'Welcome back';
-    document.getElementById('auth-copy').textContent = signup ? 'Sign up with myIPON to track and manage your group savings.' : 'Sign in to view your savings records.';
+    document.getElementById('auth-copy').textContent = activeJoinPreview?.valid
+      ? (signup ? `Create an account to join "${activeJoinPreview.group_name}".` : `Sign in to join "${activeJoinPreview.group_name}".`)
+      : (signup ? 'Sign up with myIPON to track and manage your group savings.' : 'Sign in to view your savings records.');
     submit.textContent = signup ? 'Create account' : 'Sign in';
     clearFieldErrors();
     setPasswordVisibility(false);
