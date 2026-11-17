@@ -310,7 +310,7 @@
   ];
   const pageRoles = {
     dashboard: ['ADMIN', 'TREASURER', 'MEMBER'], members: ['ADMIN'], contributions: ['ADMIN', 'TREASURER', 'MEMBER'],
-    withdrawals: ['ADMIN', 'TREASURER', 'MEMBER'], expenses: ['ADMIN', 'TREASURER', 'MEMBER'], savings: ['ADMIN', 'TREASURER', 'MEMBER'],
+    withdrawals: ['ADMIN', 'TREASURER', 'MEMBER'], expenses: ['ADMIN', 'TREASURER', 'MEMBER'], savings: ['ADMIN', 'TREASURER', 'MEMBER'], requests: ['ADMIN', 'TREASURER', 'MEMBER'],
     budget: ['ADMIN', 'TREASURER', 'MEMBER'], reports: ['ADMIN', 'TREASURER', 'MEMBER'], audit: ['ADMIN'], settings: ['ADMIN'], user: ['MEMBER'],
     'super-admin': ['SUPER_ADMIN'], account: ['SUPER_ADMIN', 'ADMIN', 'TREASURER', 'MEMBER']
   };
@@ -318,7 +318,8 @@
     'contributions.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8m-4-4h8"/></svg>',
     'withdrawals.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
     'expenses.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6m-6 4h6"/></svg>',
-    'savings.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 1h11l-2 4 2 4H5"/></svg>'
+    'savings.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 1h11l-2 4 2 4H5"/></svg>',
+    'requests.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
   };
 
   function setLoading(visible, label = 'Opening your records…') {
@@ -1510,7 +1511,7 @@
         : '';
       const navigation = (superAdminPanel || effectiveRole === 'SUPER_ADMIN' ? superAdminNavItems : effectiveRole === 'MEMBER' ? userNavItems : navItems)
         .filter(([, , , , requiredRole]) => !requiredRole || requiredRole === effectiveRole);
-      const activeId = superAdminPanel ? location.hash.slice(1) || 'overview' : ['contributions', 'withdrawals', 'expenses', 'savings'].includes(page) ? 'contributions' : page === 'audit' ? 'reports' : page;
+      const activeId = superAdminPanel ? location.hash.slice(1) || 'overview' : ['contributions', 'withdrawals', 'expenses', 'savings', 'requests'].includes(page) ? 'contributions' : page === 'audit' ? 'reports' : page;
       const isAccountSubview = !superAdminPanel && ['account', 'settings'].includes(page);
       if (host.dataset.renderedRole === effectiveRole) {
         host.querySelectorAll('.app-nav a').forEach((link) => {
@@ -1563,8 +1564,10 @@
       if (link.dataset.tabBound === '1') return;
       link.dataset.tabBound = '1';
       const label = link.textContent.trim();
+      const baseHref = String(link.getAttribute('href') || '').split('?')[0];
+      const existingSvg = link.querySelector('svg')?.outerHTML || '';
       link.setAttribute('aria-label', label);
-      link.innerHTML = `${recordTabIcons[link.getAttribute('href')] || ''}<span>${escapeHtml(label)}</span>`;
+      link.innerHTML = `${recordTabIcons[baseHref] || existingSvg}<span>${escapeHtml(label)}</span>`;
     });
     if (!document.getElementById('app-toast')) document.body.insertAdjacentHTML('beforeend', `
       <div class="toast" id="app-toast" popover="manual" role="status" aria-live="polite"></div>
@@ -12591,12 +12594,15 @@
     if (titleEl) titleEl.textContent = isPending ? `Review ${typeLabel.toLowerCase()} change` : `Change request (${status.charAt(0) + status.slice(1).toLowerCase()})`;
     if (subtitleEl) subtitleEl.textContent = `${req.subject_name ? `${req.subject_name} · ` : ''}${req.entry_date ? dateLabel(req.entry_date, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`;
 
+    const editWord = req.record_type === 'withdrawal' ? 'DEDUCTION' : req.record_type === 'expense' ? 'EXPENSE' : 'ADDITION';
+    const methodSummary = !pmChanged ? (paymentMethodMeta(req.current_payment_method)?.label || '') : '';
+
     if (reqWrap) {
       reqWrap.innerHTML = `
         ${avatarMarkup(req.avatar_url || '', requesterName, 'avatar-md')}
         <div class="change-review-requester-info">
           <strong>${escapeHtml(requesterName)}</strong>
-          <small>${escapeHtml(typeLabel)}${req.created_at ? ` · Requested ${escapeHtml(dateLabel(req.created_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}` : ''}</small>
+          <small>${escapeHtml(typeLabel)}${methodSummary ? ` · ${escapeHtml(methodSummary)}` : ''}${req.created_at ? ` · ${escapeHtml(dateLabel(req.created_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}` : ''}</small>
         </div>
         <span class="status status-${escapeHtml(status.toLowerCase())}">${escapeHtml(status)}</span>`;
       bindAvatarFallbacks(reqWrap);
@@ -12604,26 +12610,31 @@
 
     if (diffWrap) {
       diffWrap.innerHTML = `
-        <div class="change-diff-col">
-          <span class="change-diff-eyebrow">Current entry</span>
-          <strong class="change-diff-amt">${escapeHtml(money(req.current_amount))}</strong>
-          <div class="change-diff-badges">${paymentMethodBadge(req.current_payment_method)}</div>
-          <p class="change-diff-note">${escapeHtml(req.current_notes || 'No notes')}</p>
-        </div>
-        <div class="change-diff-arrow" aria-hidden="true">→</div>
-        <div class="change-diff-col is-proposed">
-          <span class="change-diff-eyebrow">Requested change</span>
-          <strong class="change-diff-amt ${amtChanged ? 'is-changed' : ''}">${escapeHtml(money(req.proposed_amount))}</strong>
-          <div class="change-diff-badges ${pmChanged ? 'is-changed' : ''}">${paymentMethodBadge(req.proposed_payment_method)}</div>
-          <p class="change-diff-note ${notesChanged ? 'is-changed' : ''}">${escapeHtml(req.proposed_notes || 'No notes')}</p>
+        <div class="change-summary-card">
+          <div class="change-summary-edit">
+            <span class="change-summary-eyebrow">${escapeHtml(editWord)} EDIT</span>
+            <div class="change-summary-amt-row">
+              ${amtChanged
+                ? `<span class="change-summary-old-amt">${escapeHtml(money(req.current_amount))}</span><span class="change-summary-arrow" aria-hidden="true">→</span><span class="change-summary-new-amt is-changed">${escapeHtml(money(req.proposed_amount))}</span>`
+                : `<span class="change-summary-new-amt">${escapeHtml(money(req.proposed_amount))}</span>`}
+            </div>
+            ${pmChanged || notesChanged ? `
+              <div class="change-summary-deltas">
+                ${pmChanged ? `<div class="change-delta-row"><span class="change-delta-k">Method</span>${paymentMethodBadge(req.current_payment_method)}<span class="change-summary-arrow" aria-hidden="true">→</span>${paymentMethodBadge(req.proposed_payment_method)}</div>` : ''}
+                ${notesChanged ? `<div class="change-delta-row"><span class="change-delta-k">Notes</span><span class="change-delta-old">${escapeHtml(req.current_notes || 'None')}</span><span class="change-summary-arrow" aria-hidden="true">→</span><span class="change-delta-new">${escapeHtml(req.proposed_notes || 'None')}</span></div>` : ''}
+              </div>` : ''}
+          </div>
+          <div class="change-summary-reason">
+            <span class="change-summary-eyebrow">REASON</span>
+            <p>${escapeHtml(req.reason || 'No reason provided.')}</p>
+            ${req.review_note && !isPending ? `<div class="change-review-decision-note"><strong>Admin note:</strong> ${escapeHtml(req.review_note)}</div>` : ''}
+          </div>
         </div>`;
     }
 
     if (reasonWrap) {
-      reasonWrap.innerHTML = `
-        <span class="change-reason-label">Reason from ${escapeHtml(requesterName)}</span>
-        <p>${escapeHtml(req.reason || 'No reason provided.')}</p>
-        ${req.review_note && !isPending ? `<div class="change-review-decision-note"><strong>Admin note:</strong> ${escapeHtml(req.review_note)}</div>` : ''}`;
+      reasonWrap.innerHTML = '';
+      reasonWrap.hidden = true;
     }
 
     setFieldError(noteInput, '');

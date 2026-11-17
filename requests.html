@@ -1,0 +1,131 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co; connect-src 'self' https://woslmwokhhyszkgevnli.supabase.co wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Requests — myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261117-142">  <script src="js/config.js?v=20261117-76"></script>
+</head>
+<body data-page="requests"><div class="app-layout"><aside class="app-sidebar" id="app-sidebar"></aside><main class="workspace">
+  <header class="page-header"><div><h1>Requests</h1><p>Review member edit change requests, pending savings additions, deductions, and expense requests in one filterable view.</p></div></header>
+  <nav class="record-tabs" aria-label="Record types"><a href="contributions.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg><span>Additions</span></a><a href="withdrawals.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg><span>Deductions</span></a><a href="expenses.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg><span>Expenses</span></a><a href="savings.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg><span>Goals</span></a><a class="is-active" href="requests.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>Requests</span></a></nav>
+
+  <section class="stats-grid requests-kpi-grid" aria-label="Request summary counters">
+    <button type="button" class="stat-card requests-kpi-btn" data-req-kpi="PENDING_ALL">
+      <span class="req-kpi-label"><i class="req-kpi-dot is-amber" aria-hidden="true"></i>Pending review</span>
+      <strong id="req-kpi-pending">—</strong>
+      <small id="req-kpi-pending-sub">Awaiting decision</small>
+    </button>
+    <button type="button" class="stat-card requests-kpi-btn" data-req-kpi="CHANGE">
+      <span class="req-kpi-label"><i class="req-kpi-dot is-amber" aria-hidden="true"></i>Change requests</span>
+      <strong id="req-kpi-change">—</strong>
+      <small id="req-kpi-change-sub">Calendar edit proposals</small>
+    </button>
+    <button type="button" class="stat-card requests-kpi-btn" data-req-kpi="ADDITION">
+      <span class="req-kpi-label"><i class="req-kpi-dot is-green" aria-hidden="true"></i>Addition requests</span>
+      <strong id="req-kpi-addition">—</strong>
+      <small id="req-kpi-addition-sub">User deposits</small>
+    </button>
+    <button type="button" class="stat-card requests-kpi-btn" data-req-kpi="DEDUCTION">
+      <span class="req-kpi-label"><i class="req-kpi-dot is-red" aria-hidden="true"></i>Deduction requests</span>
+      <strong id="req-kpi-deduction">—</strong>
+      <small id="req-kpi-deduction-sub">User deductions</small>
+    </button>
+  </section>
+
+  <section class="panel requests-main-panel" id="requests-main-panel">
+    <div class="panel-header requests-panel-head">
+      <div>
+        <h2>User requests<button class="info-tip-btn" type="button" data-info-tip="Shows edit change requests alongside member-submitted additions, deductions, and expenses. Administrators can review, confirm, reject, or void entries right here." aria-label="About user requests" aria-expanded="false">i</button></h2>
+        <p id="req-result-summary">Loading requests…</p>
+      </div>
+      <div class="requests-type-pills" id="req-type-pills" role="tablist" aria-label="Filter by request category">
+        <button type="button" class="requests-type-pill is-active" data-req-type="ALL" role="tab" aria-selected="true">All <b id="req-pill-all-count">0</b></button>
+        <button type="button" class="requests-type-pill" data-req-type="CHANGE" role="tab" aria-selected="false">Change <b id="req-pill-change-count">0</b></button>
+        <button type="button" class="requests-type-pill" data-req-type="ADDITION" role="tab" aria-selected="false">Addition <b id="req-pill-addition-count">0</b></button>
+        <button type="button" class="requests-type-pill" data-req-type="DEDUCTION" role="tab" aria-selected="false">Deduction <b id="req-pill-deduction-count">0</b></button>
+        <button type="button" class="requests-type-pill" data-req-type="EXPENSE" role="tab" aria-selected="false">Expense <b id="req-pill-expense-count">0</b></button>
+      </div>
+    </div>
+
+    <div class="requests-filters" aria-label="Filter requests">
+      <div class="field requests-filter-search">
+        <label for="req-search-input">Search</label>
+        <input id="req-search-input" type="search" maxlength="100" placeholder="Requester, member, reason, or reference…" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="req-status-filter">Status</label>
+        <select id="req-status-filter">
+          <option value="ALL">All statuses</option>
+          <option value="PENDING">Pending review</option>
+          <option value="APPROVED_CONFIRMED">Approved / Confirmed</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="VOIDED_CANCELLED">Voided / Withdrawn</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="req-member-filter">Member / Requester</label>
+        <select id="req-member-filter">
+          <option value="">All people</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="req-method-filter">Method</label>
+        <select id="req-method-filter">
+          <option value="">All methods</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="req-date-from">From</label>
+        <div class="date-filter-chip req-date-chip" data-date-chip="req-date-from" data-empty="true">
+          <span class="date-filter-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M16 2.5v4M8 2.5v4M3 9.5h18"/></svg>
+          </span>
+          <span class="date-filter-copy">
+            <span class="date-filter-value" id="req-date-from-label">Start date</span>
+          </span>
+          <input id="req-date-from" type="date" min="2000-01-01" data-max-today aria-label="From date">
+          <button type="button" class="date-filter-clear" data-clear-date="req-date-from" aria-label="Clear from date" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="req-date-to">To</label>
+        <div class="date-filter-chip req-date-chip" data-date-chip="req-date-to" data-empty="true">
+          <span class="date-filter-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M16 2.5v4M8 2.5v4M3 9.5h18"/></svg>
+          </span>
+          <span class="date-filter-copy">
+            <span class="date-filter-value" id="req-date-to-label">End date</span>
+          </span>
+          <input id="req-date-to" type="date" min="2000-01-01" data-max-today aria-label="To date">
+          <button type="button" class="date-filter-clear" data-clear-date="req-date-to" aria-label="Clear to date" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="requests-filter-actions">
+        <button type="button" class="button button-secondary button-sm" id="req-reset-filters">Reset filters</button>
+      </div>
+    </div>
+
+    <div class="data-table-wrap">
+      <table class="data-table requests-table">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Requested by</th>
+            <th>Details &amp; reason</th>
+            <th>Method</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="requests-body">
+          <tr class="loading-row"><td colspan="7">Loading user requests…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <nav class="table-pager" id="req-pager" aria-label="Requests pages">
+      <button type="button" data-page="previous">Previous</button>
+      <span aria-live="polite">Page 1 of 1</span>
+      <button type="button" data-page="next">Next</button>
+    </nav>
+  </section>
+</main></div><script src="js/core.js?v=20261117-120"></script><script src="js/policy.js?v=20261117-08"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/messages.js?v=20261117-33"></script><script src="js/requests.js?v=20261117-01"></script></body></html>
