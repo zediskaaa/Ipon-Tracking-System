@@ -6750,6 +6750,12 @@
     return false;
   }
 
+  window.addEventListener('ipon:badges-updated', () => {
+    try { renderConversationList(); } catch { }
+    try { renderFriendsView(); } catch { }
+    try { renderActiveThread?.(); } catch { }
+  });
+
   window.IponMessages = {
     init,
     openWorkspace,

@@ -145,9 +145,12 @@ test('verified badge SVGs distinguish Creator dual green from regular Blue seal 
   const future = new Date(Date.now() + 86400000).toISOString();
   const past = new Date(Date.now() - 86400000).toISOString();
 
+  const ackedAt = new Date().toISOString();
   assert.equal(ipon.effectiveVerifiedBadgeTier({ verified_badge_tier: 'CREATOR_GREEN', verified_badge_expires_at: null }), 'CREATOR_GREEN');
-  assert.equal(ipon.effectiveVerifiedBadgeTier({ verified_badge_tier: 'BLUE', verified_badge_expires_at: future }), 'BLUE');
-  assert.equal(ipon.effectiveVerifiedBadgeTier({ verified_badge_tier: 'BLUE', verified_badge_expires_at: past }), 'NONE');
+  assert.equal(ipon.effectiveVerifiedBadgeTier({ verified_badge_tier: 'BLUE', verified_badge_expires_at: future, verified_badge_acknowledged_at: null }), 'NONE');
+  assert.equal(ipon.effectiveVerifiedBadgeTier({ verified_badge_tier: 'BLUE', verified_badge_expires_at: future, verified_badge_acknowledged_at: null }, '', { allowPendingAck: true }), 'BLUE');
+  assert.equal(ipon.effectiveVerifiedBadgeTier({ verified_badge_tier: 'BLUE', verified_badge_expires_at: future, verified_badge_acknowledged_at: ackedAt }), 'BLUE');
+  assert.equal(ipon.effectiveVerifiedBadgeTier({ verified_badge_tier: 'BLUE', verified_badge_expires_at: past, verified_badge_acknowledged_at: ackedAt }), 'NONE');
 
   const creatorHtml = ipon.verifiedBadgesHtml({ id: 'u-creator', verified_badge_tier: 'CREATOR_GREEN' });
   const creatorSvgCount = (creatorHtml.match(/<svg /g) || []).length;
@@ -161,46 +164,55 @@ test('verified badge SVGs distinguish Creator dual green from regular Blue seal 
   assert.doesNotMatch(creatorHtml, /aria-label="[^"]*Verified/i, 'Creator badge label must not call it Verified');
   assert.doesNotMatch(creatorHtml, /<rect[^>]*width="24"/i, 'Badge SVGs must have zero white square background rects');
 
-  const blueHtml = ipon.verifiedBadgesHtml({ id: 'u-blue', verified_badge_tier: 'BLUE' });
+  assert.equal(ipon.verifiedBadgesHtml({ id: 'u-pending-blue', verified_badge_tier: 'BLUE', verified_badge_acknowledged_at: null }), '');
+  const blueHtml = ipon.verifiedBadgesHtml({ id: 'u-blue', verified_badge_tier: 'BLUE', verified_badge_acknowledged_at: ackedAt });
   const blueSvgCount = (blueHtml.match(/<svg /g) || []).length;
   assert.equal(blueSvgCount, 1, 'Regular verified user must only get the single blue check seal');
   assert.match(blueHtml, /#1d9bf0/);
   assert.doesNotMatch(blueHtml, /verified-badge-creator-star/);
 
-  assert.equal(ipon.verifiedBadgesHtml({ id: 'u-expired', verified_badge_tier: 'BLUE', verified_badge_expires_at: past }), '');
+  assert.equal(ipon.verifiedBadgesHtml({ id: 'u-expired', verified_badge_tier: 'BLUE', verified_badge_expires_at: past, verified_badge_acknowledged_at: ackedAt }), '');
 });
 
-test('first-open badge celebration modal pops up once with confetti, creator message, and Thank you button', async () => {
+test('first-open badge celebration modal pops up once with confetti, permanent vs temp distinction, and unlocks badge after Thank you', async () => {
   const rpcCalls = [];
   const { ipon, appendedNodes } = runCoreInVm(async (fn) => {
     rpcCalls.push(fn);
     return { data: { acknowledged_at: '2026-11-18T12:00:00Z' }, error: null };
   });
 
-  // Does not open if already acknowledged or NONE tier
-  assert.equal(ipon.maybeShowBadgeAwardModal({ id: 'u1', role: 'MEMBER', verified_badge_tier: 'NONE', verified_badge_acknowledged_at: null }), false);
-  assert.equal(ipon.maybeShowBadgeAwardModal({ id: 'u1', role: 'MEMBER', verified_badge_tier: 'BLUE', verified_badge_acknowledged_at: '2026-11-18T10:00:00Z' }), false);
-
-  // Opens once for active unacknowledged recipient
-  const shown = ipon.maybeShowBadgeAwardModal({
+  const pendingProfile = {
     id: 'u1',
     role: 'MEMBER',
     full_name: 'Sample Member',
     verified_badge_tier: 'BLUE',
+    verified_badge_granted_at: '2026-11-18T08:00:00Z',
     verified_badge_expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
     verified_badge_message: 'Thank you for leading your group consistently!',
     verified_badge_acknowledged_at: null
-  });
+  };
+
+  // Badge stays hidden beside name until recipient clicks Thank you
+  assert.equal(ipon.verifiedBadgesHtml(pendingProfile), '');
+
+  // Does not open if already acknowledged or NONE tier
+  assert.equal(ipon.maybeShowBadgeAwardModal({ id: 'u1', role: 'MEMBER', verified_badge_tier: 'NONE', verified_badge_acknowledged_at: null }), false);
+  assert.equal(ipon.maybeShowBadgeAwardModal({ id: 'u1', role: 'MEMBER', verified_badge_tier: 'BLUE', verified_badge_acknowledged_at: '2026-11-18T10:00:00Z' }), false);
+
+  // Temporary (7-day) modal: shows Effective until and hides 2-month permanent requirement box
+  const shown = ipon.maybeShowBadgeAwardModal(pendingProfile);
   assert.equal(shown, true);
   assert.equal(appendedNodes.length, 1);
 
   const modal = appendedNodes[0];
   assert.equal(modal.open, true);
-  assert.match(modal.innerHTML, /Congratulations!/);
-  assert.match(modal.innerHTML, /badge-confetti-stage/);
-  assert.match(modal.innerHTML, /Message from creator/);
+  assert.match(modal.innerHTML, /Congratulations/);
+  assert.match(modal.innerHTML, /badge-celebrate-confetti-canvas/);
+  assert.match(modal.innerHTML, /Verified status unlocked/i);
+  assert.match(modal.innerHTML, /Effective until/);
+  assert.match(modal.innerHTML, /Message from creator/i);
   assert.match(modal.innerHTML, /Thank you for leading your group consistently!/);
-  assert.match(modal.innerHTML, /automatically removed if your account stays inactive for 2 months/i);
+  assert.doesNotMatch(modal.innerHTML, /badge-celebrate-activity-box/);
   assert.match(modal.innerHTML, /Thank you<\/button>/);
 
   const ackClick = modal.querySelector('#ipon-badge-award-ack').listeners.get('click');
@@ -208,6 +220,26 @@ test('first-open badge celebration modal pops up once with confetti, creator mes
   await ackClick();
   assert.ok(rpcCalls.includes('acknowledge_my_verified_badge'), 'Thank you button must acknowledge the award via RPC');
   assert.equal(modal.open, false);
+
+  // Permanent badge modal: shows Status: Permanent card and revised 2-month activity requirement
+  const permVm = runCoreInVm(async () => ({ data: { acknowledged_at: '2026-11-18T12:00:00Z' }, error: null }));
+  const permShown = permVm.ipon.maybeShowBadgeAwardModal({
+    id: 'u-perm',
+    role: 'MEMBER',
+    full_name: 'Permanent Member',
+    verified_badge_tier: 'BLUE',
+    verified_badge_granted_at: '2026-11-18T08:00:00Z',
+    verified_badge_expires_at: null,
+    verified_badge_message: 'Trusted co-lead!',
+    verified_badge_acknowledged_at: null
+  });
+  assert.equal(permShown, true);
+  const permModal = permVm.appendedNodes[0];
+  assert.match(permModal.innerHTML, /is-permanent-card/);
+  assert.match(permModal.innerHTML, />Permanent</);
+  assert.match(permModal.innerHTML, /permanent verified badge/i);
+  assert.match(permModal.innerHTML, /badge-celebrate-activity-box/);
+  assert.match(permModal.innerHTML, /Permanent badges stay active while you use myIPON, and are automatically removed after <em>2 months<\/em> of inactivity\./);
 });
 
 test('Super Admin Badges tab, messages integration, and CSS contracts are complete and balanced', () => {
@@ -239,16 +271,19 @@ test('Super Admin Badges tab, messages integration, and CSS contracts are comple
   assert.match(messagesJs, /id="msg-pop-name">\$\{escapeHtml\(profile\.full_name\)\}\$\{userBadgesHtml\(profile\)\}/);
   assert.match(messagesJs, /msg-sender-name">\$\{escapeHtml\(senderUser\.full_name\)\}\$\{userBadgesHtml\(senderUser\)\}/);
 
-  // CSS badge & confetti rules
+  // CSS badge & celebration modal rules
   assert.match(css, /\.verified-badge-svg\s*\{[^}]*width:\s*17px;[^}]*height:\s*17px;[^}]*background:\s*transparent !important/);
-  assert.match(css, /@keyframes badgeConfettiFall/);
+  assert.match(css, /@keyframes badgeCelebrateGlow/);
   assert.match(css, /\.verified-badge-tooltip\s*\{/);
-  assert.match(css, /\.badge-celebrate-policy-note\s*\{/);
+  assert.match(css, /\.badge-celebrate-confetti-canvas\s*\{/);
+  assert.match(css, /\.badge-celebrate-date\.is-permanent-card\s*\{/);
+  assert.match(css, /\.badge-celebrate-activity-box\s*\{/);
   assert.match(css, /\.msg-conv-bottom-meta\s*\{/);
 });
 
-test('2-month inactivity rule and verified-since hover tooltip work across SQL and runtime', () => {
+test('2-month inactivity rule, Thank-you unlock, and verified-since hover tooltip work across SQL and runtime', () => {
   const mig112 = read('database/migrations/20261118_112_verified_badge_inactivity_and_since.sql');
+  const mig113 = read('database/migrations/20261118_113_badge_unlock_on_thankyou.sql');
   assert.match(mig112, /effective_verified_badge_for_user\(/i);
   assert.match(mig112, /interval '2 months'/i);
   assert.match(mig112, /is_protected_retention_account\(/i);
@@ -256,6 +291,10 @@ test('2-month inactivity rule and verified-since hover tooltip work across SQL a
   assert.match(mig112, /granted_at timestamptz/i);
   assert.match(mig112, /'verified_badge_granted_at'/i);
   assert.match(mig112, /automatically removed after 2 months of inactivity/i);
+  assert.match(mig113, /p_acknowledged_at timestamptz default null/i);
+  assert.match(mig113, /p_acknowledged_at is null/i);
+  assert.match(mig113, /get_active_verified_badges\(/i);
+  assert.match(mig113, /get_social_user_profile\(/i);
 
   const { ipon, appendedNodes, docListeners } = runCoreInVm(async () => ({ data: null, error: null }));
 
@@ -268,6 +307,7 @@ test('2-month inactivity rule and verified-since hover tooltip work across SQL a
     verified_badge_tier: 'BLUE',
     verified_badge_expires_at: null,
     verified_badge_granted_at: threeMonthsAgo,
+    verified_badge_acknowledged_at: threeMonthsAgo,
     last_seen_at: threeMonthsAgo
   }), 'NONE');
 
@@ -280,11 +320,12 @@ test('2-month inactivity rule and verified-since hover tooltip work across SQL a
     last_seen_at: threeMonthsAgo
   }), 'CREATOR_GREEN');
 
-  // Recent BLUE user emits data-verified-since without raw native <title> tags
+  // Acknowledged recent BLUE user emits data-verified-since without raw native <title> tags
   const html = ipon.verifiedBadgesHtml({
     id: 'u-active-blue',
     verified_badge_tier: 'BLUE',
     verified_badge_granted_at: '2026-10-05T08:00:00Z',
+    verified_badge_acknowledged_at: recent,
     last_seen_at: recent
   });
   assert.match(html, /data-verified-since="2026-10-05T08:00:00Z"/);

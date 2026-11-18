@@ -2027,7 +2027,7 @@
     return latest <= cutoff.getTime();
   }
 
-  function resolveVerifiedBadgeInfo(userOrId, explicitTier = '') {
+  function resolveVerifiedBadgeInfo(userOrId, explicitTier = '', opts = {}) {
     const uid = typeof userOrId === 'object' && userOrId ? (userOrId.id || userOrId.user_id || '') : String(userOrId || '');
     const cached = uid ? VERIFIED_BADGE_MAP.get(String(uid)) : null;
     const direct = String(explicitTier || (typeof userOrId === 'object' && userOrId ? (userOrId.verified_badge || userOrId.verified_badge_tier) : '') || '').trim().toUpperCase();
@@ -2036,6 +2036,17 @@
     const tier = (direct === 'BLUE' || direct === 'CREATOR_GREEN') ? direct : (direct === 'NONE' ? 'NONE' : (cached?.tier || 'NONE'));
 
     if (tier !== 'BLUE' && tier !== 'CREATOR_GREEN') {
+      return { tier: 'NONE', granted_at: null, expires_at: null };
+    }
+    if (
+      tier !== 'CREATOR_GREEN'
+      && !opts?.allowPendingAck
+      && !explicitTier
+      && typeof userOrId === 'object'
+      && userOrId
+      && Object.prototype.hasOwnProperty.call(userOrId, 'verified_badge_acknowledged_at')
+      && !userOrId.verified_badge_acknowledged_at
+    ) {
       return { tier: 'NONE', granted_at: null, expires_at: null };
     }
     if (expiresAt) {
@@ -2054,8 +2065,8 @@
     return { tier, granted_at: grantedAt, expires_at: expiresAt };
   }
 
-  function effectiveVerifiedBadgeTier(userOrId, explicitTier = '') {
-    return resolveVerifiedBadgeInfo(userOrId, explicitTier).tier;
+  function effectiveVerifiedBadgeTier(userOrId, explicitTier = '', opts = {}) {
+    return resolveVerifiedBadgeInfo(userOrId, explicitTier, opts).tier;
   }
 
   function registerVerifiedBadges(rows = []) {
@@ -2281,32 +2292,20 @@
     return VERIFIED_BADGE_MAP;
   }
 
-  function badgeExpiryText(expiresAt) {
-    if (!expiresAt) return 'Permanent badge';
-    const d = new Date(expiresAt);
-    if (Number.isNaN(d.getTime())) return 'Limited-time badge';
-    return `Effective until ${dateLabel(d.toISOString(), { dateStyle: 'medium' })}`;
-  }
-
-  function buildBadgeConfettiMarkup() {
-    const palette = ['#16a34a', '#1d9bf0', '#f59e0b', '#ec4899', '#10b981', '#fbbf24'];
-    let pieces = '';
-    for (let i = 0; i < 24; i += 1) {
-      const left = ((i * 19 + 7) % 94) + 3;
-      const delay = ((i * 53) % 700) / 1000;
-      const dur = 2.35 + ((i * 31) % 900) / 1000;
-      const rot = (i * 47) % 360;
-      const color = palette[i % palette.length];
-      const w = i % 3 === 0 ? 9 : 7;
-      const h = i % 3 === 0 ? 14 : 11;
-      pieces += `<i class="badge-confetti-piece" style="left:${left}%;width:${w}px;height:${h}px;background:${color};animation-delay:${delay}s;animation-duration:${dur}s;--confetti-rot:${rot}deg"></i>`;
+  function buildSmoothWavySealPath(lobes = 8, radius = 10.15, amplitude = 0.95) {
+    const pts = [];
+    for (let i = 0; i < 180; i += 1) {
+      const t = (2 * Math.PI * i) / 180;
+      const r = radius + amplitude * Math.cos(lobes * t);
+      pts.push(`${(12 + r * Math.sin(t)).toFixed(2)} ${(12 - r * Math.cos(t)).toFixed(2)}`);
     }
-    return `<div class="badge-confetti-stage" aria-hidden="true">${pieces}</div>`;
+    return `M${pts.join(' L')}Z`;
   }
+  const MODAL_WAVY_SEAL_PATH = buildSmoothWavySealPath(8, 10.15, 0.95);
 
   function maybeShowBadgeAwardModal(profile = currentProfile) {
     if (!profile || profile.role === 'SUPER_ADMIN') return false;
-    const tier = effectiveVerifiedBadgeTier(profile);
+    const tier = effectiveVerifiedBadgeTier(profile, '', { allowPendingAck: true });
     if (tier !== 'BLUE' && tier !== 'CREATOR_GREEN') return false;
     if (profile.verified_badge_acknowledged_at) return false;
     if (document.getElementById('ipon-badge-award-dialog')) return false;
@@ -2318,36 +2317,160 @@
     dialog.id = 'ipon-badge-award-dialog';
     dialog.className = 'badge-celebrate-dialog';
     dialog.setAttribute('aria-labelledby', 'ipon-badge-award-title');
+
     const creatorMsg = String(profile.verified_badge_message || '').trim();
-    const durationCopy = badgeExpiryText(profile.verified_badge_expires_at);
-    const verifiedSince = profile.verified_badge_granted_at
-      ? `Verified on ${dateLabel(profile.verified_badge_granted_at, { dateStyle: 'medium' })}`
-      : '';
-    const statusLine = verifiedSince ? `${durationCopy} · ${verifiedSince}` : durationCopy;
+    const isPermanent = !profile.verified_badge_expires_at;
+    const grantedIso = profile.verified_badge_granted_at || new Date().toISOString();
+    const verifiedOnText = dateLabel(grantedIso, { dateStyle: 'medium' });
+    const recipientName = String(profile.full_name || 'Member').trim();
+
+    let datesGridHtml = '';
+    if (isPermanent) {
+      datesGridHtml = `
+        <div class="badge-celebrate-dates is-permanent">
+          <div class="badge-celebrate-date"><small>Verified on</small><b>${escapeHtml(verifiedOnText)}</b></div>
+          <div class="badge-celebrate-date is-permanent-card"><small>Status</small><b>Permanent</b></div>
+        </div>`;
+    } else {
+      const expMs = Date.parse(profile.verified_badge_expires_at);
+      const effectiveUntilText = Number.isNaN(expMs) ? 'Limited time' : dateLabel(new Date(expMs).toISOString(), { dateStyle: 'medium' });
+      datesGridHtml = `
+        <div class="badge-celebrate-dates">
+          <div class="badge-celebrate-date"><small>Verified on</small><b>${escapeHtml(verifiedOnText)}</b></div>
+          <div class="badge-celebrate-date"><small>Effective until</small><b>${escapeHtml(effectiveUntilText)}</b></div>
+        </div>`;
+    }
+
+    const expMs = profile.verified_badge_expires_at ? Date.parse(profile.verified_badge_expires_at) : NaN;
+    const exceedsTwoMonths = !Number.isNaN(expMs) && (expMs - Date.now()) > (62 * 86400000);
+    const activityRequirementHtml = isPermanent
+      ? `
+        <div class="badge-celebrate-activity-box">
+          <div class="badge-celebrate-stat"><strong>2</strong><small>MONTHS</small></div>
+          <div class="badge-celebrate-activity-copy">
+            <b>Activity requirement</b>
+            <span>Permanent badges stay active while you use myIPON, and are automatically removed after <em>2 months</em> of inactivity.</span>
+          </div>
+        </div>`
+      : (exceedsTwoMonths ? `
+        <div class="badge-celebrate-activity-box">
+          <div class="badge-celebrate-stat"><strong>2</strong><small>MONTHS</small></div>
+          <div class="badge-celebrate-activity-copy">
+            <b>Activity requirement</b>
+            <span>Even during longer badge periods, verification is automatically removed if your account stays inactive for <em>2 months</em>.</span>
+          </div>
+        </div>` : '');
 
     dialog.innerHTML = `
-      <div class="badge-celebrate-sheet">
-        ${buildBadgeConfettiMarkup()}
-        <div class="badge-celebrate-showcase">${verifiedBadgesHtml(profile, { tier, showcase: true })}</div>
-        <span class="badge-celebrate-eyebrow">Verified Status Unlocked</span>
-        <h2 id="ipon-badge-award-title">Congratulations!</h2>
-        <p class="badge-celebrate-copy">You have been awarded an official verified badge on myIPON. Your badge now appears beside your name across chats and community views.</p>
-        <div class="badge-celebrate-duration">${escapeHtml(statusLine)}</div>
+      <div class="badge-celebrate-sheet${isPermanent ? ' is-permanent' : ''}" id="ipon-badge-award-sheet">
+        <canvas class="badge-celebrate-confetti-canvas" id="ipon-badge-award-canvas" aria-hidden="true"></canvas>
+        <div class="badge-celebrate-hero" id="ipon-badge-award-hero" title="Tap for confetti">
+          <svg viewBox="0 0 24 24" shape-rendering="geometricPrecision" aria-hidden="true"><path fill="#1d9bf0" d="${MODAL_WAVY_SEAL_PATH}"/><path fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" d="M7.2 12.3l3.2 3.2 6.4-6.9"/></svg>
+        </div>
+        <span class="badge-celebrate-eyebrow">VERIFIED STATUS UNLOCKED</span>
+        <h2 id="ipon-badge-award-title">Congratulations<span class="badge-celebrate-name">${escapeHtml(recipientName)}!</span></h2>
+        <p class="badge-celebrate-copy">You've been awarded an official <b>${isPermanent ? 'permanent verified badge' : 'verified badge'}</b> on myIPON. Tap <b>Thank you</b> to display it beside your name across chats and community views.</p>
+        ${datesGridHtml}
         ${creatorMsg ? `
-          <div class="badge-celebrate-note">
-            <span class="badge-celebrate-note-label">Message from creator</span>
+          <div class="badge-celebrate-quote">
+            <span class="badge-celebrate-quote-mark" aria-hidden="true">“</span>
+            <div class="badge-celebrate-quote-head"><small>MESSAGE FROM CREATOR</small></div>
             <p>${escapeHtml(creatorMsg)}</p>
           </div>` : ''}
-        <div class="badge-celebrate-policy-note">
-          <strong>Activity requirement:</strong> Verified badges (including permanent ones) are automatically removed if your account stays inactive for 2 months.
-        </div>
-        <div class="badge-celebrate-actions">
-          <button type="button" class="button button-primary badge-celebrate-btn" id="ipon-badge-award-ack">Thank you</button>
-        </div>
+        ${activityRequirementHtml}
+        <button type="button" class="badge-celebrate-btn" id="ipon-badge-award-ack">Thank you</button>
       </div>`;
 
     document.body.appendChild(dialog);
     const ackBtn = dialog.querySelector('#ipon-badge-award-ack');
+    const sheet = dialog.querySelector('#ipon-badge-award-sheet');
+    const hero = dialog.querySelector('#ipon-badge-award-hero');
+    const canvas = dialog.querySelector('#ipon-badge-award-canvas');
+
+    let rafId = null;
+    let resizeHandler = null;
+    const stopConfetti = () => {
+      if (rafId !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(rafId);
+      rafId = null;
+      if (resizeHandler && typeof window?.removeEventListener === 'function') {
+        window.removeEventListener('resize', resizeHandler);
+      }
+      resizeHandler = null;
+    };
+
+    const reduceMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+    const ctx = (!reduceMotion && canvas && typeof canvas.getContext === 'function') ? canvas.getContext('2d') : null;
+    if (ctx && sheet) {
+      const palette = ['#1d9bf0', '#3ddc97', '#f0c869', '#ffffff', '#8ff0bf', '#7fb8e6', '#ff7aa2'];
+      let parts = [];
+      let w = 0;
+      let h = 0;
+      const fit = () => {
+        const r = sheet.getBoundingClientRect?.() || { width: 440, height: 520 };
+        const dpr = window.devicePixelRatio || 1;
+        w = r.width || 440;
+        h = r.height || 520;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      };
+      const burst = (count = 70) => {
+        fit();
+        const mr = sheet.getBoundingClientRect?.() || { left: 0, top: 0 };
+        const hr = hero?.getBoundingClientRect?.() || { left: w / 2 - 48, top: 28, width: 96, height: 96 };
+        const ox = hr.left + hr.width / 2 - mr.left;
+        const oy = hr.top + hr.height / 2 - mr.top;
+        for (let i = 0; i < count; i += 1) {
+          const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.5;
+          const s = 6 + Math.random() * 11;
+          parts.push({
+            x: ox, y: oy, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+            w: 5 + Math.random() * 6, h: 3 + Math.random() * 5,
+            rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.4,
+            tilt: Math.random() * 6.28, vt: 0.08 + Math.random() * 0.15,
+            c: palette[i % palette.length], circle: Math.random() < 0.25
+          });
+        }
+      };
+      const tick = () => {
+        if (!dialog.isConnected || !dialog.open) { stopConfetti(); return; }
+        ctx.clearRect(0, 0, w, h);
+        parts = parts.filter((p) => p.y < h + 20);
+        if (Math.random() < 0.4) {
+          parts.push({
+            rain: true, x: Math.random() * w, y: -10,
+            vy: 1.6 + Math.random() * 1.8, sw: Math.random() * 6.28,
+            swv: 0.03 + Math.random() * 0.04, amp: 0.5 + Math.random() * 0.9,
+            w: 5 + Math.random() * 5, h: 3 + Math.random() * 4,
+            rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.2,
+            tilt: Math.random() * 6.28, vt: 0.06 + Math.random() * 0.12,
+            c: palette[(Math.random() * palette.length) | 0], circle: Math.random() < 0.2
+          });
+        }
+        for (const p of parts) {
+          if (p.rain) { p.sw += p.swv; p.x += Math.sin(p.sw) * p.amp; p.y += p.vy; }
+          else { p.vx *= 0.985; p.vy = p.vy * 0.985 + 0.30; p.x += p.vx; p.y += p.vy; }
+          p.rot += p.vr;
+          p.tilt += p.vt;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot);
+          ctx.scale(1, Math.cos(p.tilt));
+          ctx.fillStyle = p.c;
+          if (p.circle) { ctx.beginPath(); ctx.arc(0, 0, p.h / 1.4, 0, 6.28); ctx.fill(); }
+          else ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          ctx.restore();
+        }
+        rafId = requestAnimationFrame(tick);
+      };
+      fit();
+      resizeHandler = fit;
+      window.addEventListener?.('resize', resizeHandler);
+      hero?.addEventListener('click', () => burst(70));
+      setTimeout(() => { if (dialog.open) burst(80); }, 350);
+      setTimeout(() => { if (dialog.open) burst(50); }, 850);
+      rafId = requestAnimationFrame(tick);
+    }
 
     const acknowledgeAndClose = async () => {
       if (ackBtn) setBusy(ackBtn, true, 'Saving…');
@@ -2361,9 +2484,15 @@
           currentProfile.verified_badge_acknowledged_at = new Date().toISOString();
         }
       } finally {
+        stopConfetti();
         if (ackBtn) setBusy(ackBtn, false);
         try { dialog.close(); } catch { }
         dialog.remove();
+        await refreshVerifiedBadgesCache({ force: true, refreshOwnProfile: true }).catch(() => { });
+        renderSidebarUser(currentProfile);
+        if (typeof window?.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+          window.dispatchEvent(new CustomEvent('ipon:badges-updated', { detail: { userId: currentProfile?.id } }));
+        }
       }
     };
 

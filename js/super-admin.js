@@ -242,7 +242,7 @@
     const reclaimableReceipts = Number(storageOverview?.reclaimable_rejected_count || 0);
 
     const verifiedUsersCount = registeredUsers.filter((p) => {
-      const tier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(p) : 'NONE';
+      const tier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(p, '', { allowPendingAck: true }) : 'NONE';
       return tier !== 'NONE';
     }).length;
 
@@ -512,22 +512,22 @@
     const candidates = profiles
       .filter((profile) => {
         if (!profile || profile.role === 'SUPER_ADMIN') return false;
-        const tier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(profile) : 'NONE';
+        const tier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(profile, '', { allowPendingAck: true }) : 'NONE';
         if (filter === 'VERIFIED' && tier === 'NONE') return false;
         if (filter === 'CREATOR_GREEN' && tier !== 'CREATOR_GREEN') return false;
         if (filter === 'NONE' && tier !== 'NONE') return false;
         return matchesQuery(query, [profile.full_name, profile.email, tier, profile.verified_badge_message, profile.status]);
       })
       .sort((a, b) => {
-        const ta = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(a) : 'NONE';
-        const tb = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(b) : 'NONE';
+        const ta = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(a, '', { allowPendingAck: true }) : 'NONE';
+        const tb = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(b, '', { allowPendingAck: true }) : 'NONE';
         const diff = (tierOrder[ta] ?? 2) - (tierOrder[tb] ?? 2);
         if (diff !== 0) return diff;
         return String(a.full_name || '').localeCompare(String(b.full_name || ''));
       });
     const visible = paginateRows('badges', candidates);
     badgesBody.innerHTML = visible.length ? visible.map((profile) => {
-      const tier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(profile) : 'NONE';
+      const tier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(profile, '', { allowPendingAck: true }) : 'NONE';
       const active = profile.status === 'ACTIVE';
       const tierPill = tier === 'CREATOR_GREEN'
         ? '<span class="badge-tier-pill is-creator">Creator &amp; verified</span>'
@@ -535,8 +535,10 @@
           ? '<span class="badge-tier-pill is-blue">Verified blue</span>'
           : '<span class="badge-tier-pill is-none">Unverified</span>');
       const sinceIso = profile.verified_badge_granted_at || profile.created_at;
-      const sinceLine = tier !== 'NONE' && sinceIso
-        ? `<small class="field-help">Since ${Ipon.escapeHtml(Ipon.dateLabel(sinceIso, { dateStyle: 'medium' }))}</small>`
+      const sinceLine = tier !== 'NONE'
+        ? (!profile.verified_badge_acknowledged_at && tier !== 'CREATOR_GREEN'
+          ? '<small class="field-help">Awaiting user Thank you</small>'
+          : (sinceIso ? `<small class="field-help">Since ${Ipon.escapeHtml(Ipon.dateLabel(sinceIso, { dateStyle: 'medium' }))}</small>` : ''))
         : '';
       const creatorNote = profile.verified_badge_message
         ? `<span class="badge-note-preview">${Ipon.escapeHtml(profile.verified_badge_message)}</span>`
@@ -593,7 +595,7 @@
     if (!profile || !badgeGrantDialog || !badgeGrantForm) return;
     const targetEmail = String(profile.email || '').trim().toLowerCase();
     const targetTier = targetEmail === 'breadspanish231@gmail.com' ? 'CREATOR_GREEN' : 'BLUE';
-    const currentTier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(profile) : 'NONE';
+    const currentTier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(profile, '', { allowPendingAck: true }) : 'NONE';
     badgeGrantForm.reset();
     badgeGrantForm.elements.user_id.value = profile.id;
     if (badgeGrantTitle) {
@@ -966,7 +968,7 @@
     }
     activityLogs = logResult.data || [];
     storageOverview = storageResult?.error ? null : (storageResult?.data || null);
-    Ipon.registerVerifiedBadges?.(profiles);
+    Ipon.registerVerifiedBadges?.(profiles.filter((p) => p && (p.verified_badge_tier === 'CREATOR_GREEN' || p.verified_badge_acknowledged_at)));
     renderOverview();
     renderStorageOverview();
     renderFeatureRequests();
