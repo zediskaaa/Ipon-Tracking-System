@@ -222,6 +222,11 @@
     return `Offline since ${datePart} · ${timeStr}`;
   }
 
+  function formatFriendCountText(rawCount) {
+    const count = Math.max(0, Math.floor(Number(rawCount || 0)));
+    return count > 0 ? `${count} friend${count === 1 ? '' : 's'}` : '';
+  }
+
   function formatStatusLine(user, isTyping = false) {
     const typingList = Array.isArray(isTyping) ? isTyping : [];
     const typingOn = Array.isArray(isTyping) ? typingList.length > 0 : Boolean(isTyping);
@@ -1621,21 +1626,20 @@
       relChip = `<button type="button" class="msg-row-chip-btn" data-social-action="add_friend" data-target-id="${escapeHtml(u.id)}">Add</button>`;
     }
     const mutualCount = Number(u.mutual_friends_count || 0);
-    const mutualHtml = renderMutualStackHtml(u.id, u.mutual_friends, mutualCount, { compact: true });
+    const friendCountText = formatFriendCountText(u.friends_count);
     const subParts = [];
     if (u.username) subParts.push(`@${u.username}`);
+    if (friendCountText) subParts.push(friendCountText);
+    if (mutualCount > 0) subParts.push(`${mutualCount} mutual`);
     if (u.shared_groups?.length) subParts.push(u.shared_groups[0]);
-    if (!subParts.length && !mutualHtml) subParts.push('Tap to message');
+    if (!subParts.length) subParts.push('Tap to message');
 
     return `<article class="msg-search-person-row" role="listitem">
       <div class="msg-conv-avatar">${userAvatarHtml(u, 'avatar-md')}</div>
-      <div class="msg-search-person-mid">
-        <button type="button" class="msg-search-person-main" data-social-action="message" data-target-id="${escapeHtml(u.id)}">
-          <strong class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}</strong>
-          ${subParts.length ? `<span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>` : ''}
-        </button>
-        ${mutualHtml}
-      </div>
+      <button type="button" class="msg-search-person-main" data-social-action="message" data-target-id="${escapeHtml(u.id)}">
+        <strong class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}</strong>
+        <span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>
+      </button>
       <div class="msg-search-person-act">${relChip}</div>
     </article>`;
   }
@@ -3169,13 +3173,17 @@
         : '<div class="empty-state"><strong>No friends added yet</strong><p>Search eligible members to send a friend request and start chatting.</p><div class="msg-empty-cta-row"><button type="button" class="button button-primary button-sm" data-goto-discover>Search people</button></div></div>';
     } else if (sub === 'incoming') {
       host.innerHTML = incoming_requests.length
-        ? `<div class="msg-cards-grid">${incoming_requests.map((r) => `
+        ? `<div class="msg-cards-grid">${incoming_requests.map((r) => {
+          const fcText = formatFriendCountText(r.friends_count);
+          const metaParts = [r.username ? `@${r.username}` : `Sent ${formatShortDate(r.created_at)}`];
+          if (fcText) metaParts.push(fcText);
+          return `
             <article class="msg-person-card">
               <div class="msg-person-head">
                 ${userAvatarHtml({ id: r.user_id, full_name: r.full_name, avatar_url: r.avatar_url, allow_online_status: false }, 'avatar-md', { showPresence: false })}
                 <div>
                   <strong>${escapeHtml(r.full_name)}</strong>
-                  ${r.username ? `<small>@${escapeHtml(r.username)}</small>` : `<small>Sent ${escapeHtml(formatShortDate(r.created_at))}</small>`}
+                  <small>${escapeHtml(metaParts.join(' · '))}</small>
                 </div>
               </div>
               ${renderMutualStackHtml(r.user_id, r.mutual_friends, r.mutual_friends_count)}
@@ -3184,24 +3192,30 @@
                 <button type="button" class="button button-secondary button-sm" data-req-decision="DECLINE" data-req-id="${escapeHtml(r.id)}">Decline</button>
                 <button type="button" class="button button-secondary button-sm is-danger" data-social-action="block" data-target-id="${escapeHtml(r.user_id)}">Block</button>
               </div>
-            </article>`).join('')}</div>`
+            </article>`;
+        }).join('')}</div>`
         : '<div class="empty-state"><strong>No incoming friend requests</strong><p>New friend requests appear here with real-time badge updates.</p></div>';
     } else {
       host.innerHTML = sent_requests.length
-        ? `<div class="msg-cards-grid">${sent_requests.map((r) => `
+        ? `<div class="msg-cards-grid">${sent_requests.map((r) => {
+          const fcText = formatFriendCountText(r.friends_count);
+          const metaParts = [`Sent ${formatShortDate(r.created_at)}`];
+          if (fcText) metaParts.push(fcText);
+          return `
             <article class="msg-person-card">
               <div class="msg-person-head">
                 ${userAvatarHtml({ id: r.user_id, full_name: r.full_name, avatar_url: r.avatar_url, allow_online_status: false }, 'avatar-md', { showPresence: false })}
                 <div>
                   <strong>${escapeHtml(r.full_name)}</strong>
-                  <small>Sent ${escapeHtml(formatShortDate(r.created_at))}</small>
+                  <small>${escapeHtml(metaParts.join(' · '))}</small>
                 </div>
               </div>
               ${renderMutualStackHtml(r.user_id, r.mutual_friends, r.mutual_friends_count)}
               <div class="msg-person-actions">
                 <button type="button" class="button button-secondary button-sm" data-cancel-req="${escapeHtml(r.id)}">Cancel request</button>
               </div>
-            </article>`).join('')}</div>`
+            </article>`;
+        }).join('')}</div>`
         : '<div class="empty-state"><strong>No pending sent requests</strong><p>Requests you send remain here until accepted, declined, or cancelled.</p></div>';
     }
 
@@ -3210,12 +3224,16 @@
   }
 
   function renderFriendCardHtml(f) {
+    const fcText = formatFriendCountText(f.friends_count);
+    const metaParts = [];
+    if (f.username) metaParts.push(`@${f.username}`);
+    if (fcText) metaParts.push(fcText);
     return `<article class="msg-person-card" data-friend-card data-search-blob="${escAttr(`${f.full_name} ${f.username || ''}`.toLowerCase())}">
       <div class="msg-person-head">
         ${userAvatarHtml(f, 'avatar-md')}
         <div>
           <strong>${escapeHtml(f.full_name)}</strong>
-          ${f.username ? `<small>@${escapeHtml(f.username)}</small>` : ''}
+          ${metaParts.length ? `<small>${escapeHtml(metaParts.join(' · '))}</small>` : ''}
           <small>${escapeHtml(formatStatusLine(f))}</small>
         </div>
       </div>
@@ -3491,10 +3509,15 @@
       };
       const mutualCount = Number(profile.mutual_friends_count || 0);
       const mutualHtml = renderMutualStackHtml(profile.id, profile.mutual_friends, mutualCount);
+      const friendCountText = formatFriendCountText(profile.friends_count);
       const statusLine = statusLabels[fs] || 'Community member';
-      const subtitle = (!mutualHtml && mutualCount > 0)
-        ? `${statusLine} · ${mutualCount} mutual friend${mutualCount === 1 ? '' : 's'}`
-        : statusLine;
+      const metaParts = [];
+      if (fs !== 'FRIENDS') metaParts.push(statusLine);
+      if (friendCountText) metaParts.push(friendCountText);
+      if (!mutualHtml && mutualCount > 0) metaParts.push(`${mutualCount} mutual friend${mutualCount === 1 ? '' : 's'}`);
+      const statusRowHtml = fs === 'FRIENDS'
+        ? `<div class="msg-pop-status-row"><span class="msg-rel-badge">Friend</span>${metaParts.length ? `<small class="msg-pop-status">${escapeHtml(metaParts.join(' · '))}</small>` : ''}</div>`
+        : `<small class="msg-pop-status">${escapeHtml(metaParts.join(' · '))}</small>`;
       const groupsHtml = renderSharedGroupsCard(profile.shared_groups);
       const bioText = String(profile.bio || '').trim();
       const canMessage = Boolean(profile.can_message);
@@ -3505,7 +3528,7 @@
           ${userAvatarHtml(profile, 'avatar-lg', { clickable: false, showPresence: false })}
           <div class="msg-pop-title">
             <strong id="msg-pop-name">${escapeHtml(profile.full_name)}</strong>
-            <small class="msg-pop-status">${escapeHtml(subtitle)}</small>
+            ${statusRowHtml}
           </div>
         </div>
         ${mutualHtml}

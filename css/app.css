@@ -7189,8 +7189,19 @@ html[data-theme="dark"] .msg-thread-pane[data-chat-theme="midnight"] {
   color: var(--thread-chip-ink, var(--muted));
 }
 .msg-rel-chip {
-  background: var(--thread-rel-bg, rgba(21, 108, 72, .12));
-  color: var(--thread-rel-ink, #14533c);
+  background: rgba(21, 108, 72, .12);
+  color: #14533c;
+}
+.msg-rel-badge,
+.msg-rel-chip:not(.is-group) {
+  background: rgba(21, 108, 72, .12);
+  color: #14533c;
+}
+.msg-pop-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .msg-peer-status {
   display: inline-flex;
@@ -11423,8 +11434,13 @@ html[data-theme="dark"] .msg-handle-chip {
   background: var(--thread-chip-bg, rgba(255, 255, 255, .08));
   color: var(--thread-chip-ink, var(--muted));
 }
-html[data-theme="dark"] .msg-rel-chip,
-html[data-theme="dark"] .msg-rel-badge {
+html[data-theme="dark"] .msg-rel-chip:not(.is-group),
+html[data-theme="dark"] .msg-rel-badge,
+.msg-thread-pane[data-chat-theme="midnight"] .msg-rel-chip:not(.is-group) {
+  background: rgba(70, 195, 130, .18);
+  color: #8ee8b5;
+}
+html[data-theme="dark"] .msg-rel-chip.is-group {
   background: var(--thread-rel-bg, rgba(70, 195, 130, .18));
   color: var(--thread-rel-ink, #8ee8b5);
 }

@@ -42,6 +42,17 @@ test('migration 20261118_107 exposes mutual_friends arrays securely across socia
     assert.ok(depth >= 0, 'CSS brace depth must stay non-negative');
   }
   assert.equal(depth, 0, 'CSS braces must be balanced');
+
+  // Migration 108 exposes friends_count & CSS unifies Friend badges across views/themes
+  const sql108 = read('database/migrations/20261118_108_user_friends_count.sql');
+  assert.match(sql108, /^\s*begin;/i);
+  assert.match(sql108, /commit;\s*$/i);
+  assert.match(sql108, /'20261118_108'/);
+  assert.match(sql108, /create or replace function public\.get_user_friends_count\(/i);
+  assert.match(sql108, /revoke all on function public\.get_user_friends_count\(uuid, uuid\) from public, anon, authenticated;/i);
+  assert.equal((sql108.match(/'friends_count'/g) || []).length >= 6, true, 'All social payloads must expose friends_count');
+  assert.match(css, /\.msg-rel-badge,\s*\.msg-rel-chip:not\(\.is-group\)\s*\{[\s\S]*?background:\s*rgba\(21,\s*108,\s*72,\s*\.12\);[\s\S]*?color:\s*#14533c;/);
+  assert.match(css, /html\[data-theme="dark"\]\s*\.msg-rel-chip:not\(\.is-group\),\s*html\[data-theme="dark"\]\s*\.msg-rel-badge/);
 });
 
 test('messages UI renders max 3 avatars + 4th count badge and opens mutuals popover on hover and click', async () => {
@@ -199,6 +210,7 @@ test('messages UI renders max 3 avatars + 4th count badge and opens mutuals popo
                 full_name: 'Maria Santos',
                 username: 'maria',
                 allow_online_status: true,
+                friends_count: 12,
                 mutual_friends_count: 2,
                 mutual_friends: mutualsTwo
               }
@@ -210,6 +222,7 @@ test('messages UI renders max 3 avatars + 4th count badge and opens mutuals popo
                 full_name: 'Carlo Mendoza',
                 username: 'carlo',
                 created_at: '2026-11-18T08:00:00Z',
+                friends_count: 0,
                 mutual_friends_count: 5,
                 mutual_friends: mutualsFive
               }
@@ -225,22 +238,25 @@ test('messages UI renders max 3 avatars + 4th count badge and opens mutuals popo
               full_name: 'Dana Reyes',
               username: 'dana',
               friendship_status: 'NONE',
+              friends_count: 1,
               mutual_friends_count: 4,
               mutual_friends: mutualsFour
             }
           ];
         }
         if (name === 'get_social_user_profile') {
+          const isIncoming = params.p_target_id === incomingId;
           return {
             id: params.p_target_id,
-            full_name: params.p_target_id === incomingId ? 'Carlo Mendoza' : 'Mutual Person 1',
-            username: params.p_target_id === incomingId ? 'carlo' : 'mutual1',
-            friendship_status: 'INCOMING_REQUEST',
-            friend_request_id: 'req-1',
+            full_name: isIncoming ? 'Carlo Mendoza' : 'Mutual Person 1',
+            username: isIncoming ? 'carlo' : 'mutual1',
+            friendship_status: isIncoming ? 'INCOMING_REQUEST' : 'FRIENDS',
+            friend_request_id: isIncoming ? 'req-1' : null,
             can_send_friend_request: false,
             can_message: true,
             bio: 'Saving together',
             shared_groups: [],
+            friends_count: isIncoming ? 0 : 7,
             mutual_friends_count: 5,
             mutual_friends: mutualsFive
           };
@@ -269,12 +285,13 @@ test('messages UI renders max 3 avatars + 4th count badge and opens mutuals popo
   await ctx.IponMessages.init({ session: { user: { id: meId } }, profile: ctx.Ipon.profile });
   await ctx.IponMessages.openWorkspace({ tab: 'friends', subTab: 'all' });
 
-  // 1. Friends card with 2 mutual friends -> max 2 avatars and NO +N overflow badge
+  // 1. Friends card with 2 mutual friends -> max 2 avatars and NO +N overflow badge, and shows non-zero friends count
   const friendsHost = getEl('msg-friends-list-host');
   assert.match(friendsHost.innerHTML, new RegExp(`data-mutual-trigger="${friendId}"`));
   assert.equal((friendsHost.innerHTML.match(/class="msg-mutual-av"/g) || []).length, 2);
   assert.doesNotMatch(friendsHost.innerHTML, /class="msg-mutual-more"/);
   assert.match(friendsHost.innerHTML, /2 mutual friends/);
+  assert.match(friendsHost.innerHTML, /@maria · 12 friends/);
 
   // 2. Switch to incoming friend requests (5 mutuals -> 3 avatars + 4th badge "+2")
   const clickHandlers = docListeners.get('click') || [];
@@ -293,6 +310,7 @@ test('messages UI renders max 3 avatars + 4th count badge and opens mutuals popo
   assert.equal((friendsHost.innerHTML.match(/class="msg-mutual-av"/g) || []).length, 3);
   assert.match(friendsHost.innerHTML, /<span class="msg-mutual-more" aria-hidden="true">\+2<\/span>/);
   assert.match(friendsHost.innerHTML, /5 mutual friends/);
+  assert.doesNotMatch(friendsHost.innerHTML, /0 friends/i);
 
   // 3. Hover trigger opens #msg-mutual-popover with all 5 mutual friends
   const triggerAttrs = new Map();
@@ -341,8 +359,10 @@ test('messages UI renders max 3 avatars + 4th count badge and opens mutuals popo
   assert.equal(profilePop.hidden, false);
   assert.match(profilePop.innerHTML, /<span class="msg-mutual-more" aria-hidden="true">\+2<\/span>/);
   assert.equal((profilePop.innerHTML.match(/class="msg-mutual-av"/g) || []).length, 3);
+  assert.match(profilePop.innerHTML, /<span class="msg-rel-badge">Friend<\/span>/);
+  assert.match(profilePop.innerHTML, /7 friends/);
 
-  // 7. Inline search person rows render compact 3+1 mutual stack outside the main message button (no nested buttons)
+  // 7. Inline search person rows show clean inline "1 friend · 4 mutual" text without the mutual avatar pill badge
   const chatsTabBtn = {
     dataset: { msgTab: 'chats' },
     closest: (sel) => (sel.includes('[data-msg-tab]') ? chatsTabBtn : null)
@@ -354,9 +374,7 @@ test('messages UI renders max 3 avatars + 4th count badge and opens mutuals popo
   await emitDocEvent('input', { target: searchInput });
   await new Promise((r) => setTimeout(r, 260));
   const convList = getEl('msg-conv-list');
-  assert.match(convList.innerHTML, /class="msg-search-person-mid"/);
-  assert.match(convList.innerHTML, new RegExp(`data-mutual-trigger="${searchId}"`));
-  assert.equal((convList.innerHTML.match(/class="msg-mutual-av"/g) || []).length, 3);
-  assert.match(convList.innerHTML, /<span class="msg-mutual-more" aria-hidden="true">\+1<\/span>/);
-  assert.match(convList.innerHTML, /4 mutual/);
+  assert.doesNotMatch(convList.innerHTML, /class="msg-mutual-trigger/);
+  assert.match(convList.innerHTML, /@dana · 1 friend · 4 mutual/);
+  assert.doesNotMatch(convList.innerHTML, /0 friends/i);
 });
