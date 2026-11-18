@@ -3618,6 +3618,28 @@
     }
   }
 
+  async function loadProfileCardAppearance(pop, targetId) {
+    try {
+      const appearance = await ipon().rpc('get_profile_card_appearance', { p_target_id: targetId });
+      if (pop.hidden || pop.dataset.targetId !== String(targetId) || !pop.querySelector('.msg-pop-head')) return;
+      const theme = ['emerald', 'midnight', 'rose', 'amber', 'ocean', 'mono'].includes(appearance?.card_theme) ? appearance.card_theme : 'emerald';
+      pop.dataset.cardTheme = theme;
+      const banner = document.createElement('div');
+      banner.className = 'msg-pop-cover';
+      const cover = safeDpUrl(appearance?.cover_url);
+      if (cover) {
+        const image = document.createElement('img');
+        image.src = cover;
+        image.alt = '';
+        image.addEventListener('error', () => image.remove());
+        banner.appendChild(image);
+      }
+      pop.querySelector('.msg-pop-cover')?.remove();
+      pop.prepend(banner);
+      positionPopoverNearAnchor(pop, activePopoverAnchor);
+    } catch (_) { /* Keep the profile usable if appearance is unavailable. */ }
+  }
+
   async function openProfilePopover(targetUserId, anchorEl, { pinned = true } = {}) {
     const pop = document.getElementById('msg-profile-popover');
     if (!pop || !targetUserId) return;
@@ -3658,6 +3680,7 @@
       ipon().bindAvatarFallbacks(pop);
       ipon().syncPresenceDots(pop);
       positionPopoverNearAnchor(pop, activePopoverAnchor);
+      void loadProfileCardAppearance(pop, targetUserId);
       return;
     }
 
@@ -3727,6 +3750,7 @@
       ipon().bindAvatarFallbacks(pop);
       ipon().syncPresenceDots(pop);
       positionPopoverNearAnchor(pop, activePopoverAnchor);
+      void loadProfileCardAppearance(pop, targetUserId);
     } catch (error) {
       pop.innerHTML = `<button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button><p class="empty-state">${escapeHtml(ipon().friendlyError(error))}</p>`;
       positionPopoverNearAnchor(pop, activePopoverAnchor);

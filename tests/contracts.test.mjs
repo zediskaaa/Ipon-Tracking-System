@@ -102,6 +102,25 @@ test('MP4 and MP3 uploads use smaller playable encodes before signing and retain
   assert.match(read('vercel.json'), /wasm-unsafe-eval/);
 });
 
+test('profile card cover and theme persist with owner-only edits and storage cleanup', () => {
+  const migration = read('database/migrations/20261118_116_profile_card_appearance.sql');
+  const core = read('js/core.js');
+  const messages = read('js/messages.js');
+  const edge = read('supabase/functions/manage-account/index.ts');
+  const css = read('css/app.css');
+  assert.match(migration, /where id = auth\.uid\(\) and status = 'ACTIVE'/);
+  assert.match(migration, /card_theme in \('emerald', 'midnight', 'rose', 'amber', 'ocean', 'mono'\)/);
+  assert.match(migration, /ipon-media\/covers\/.*auth\.uid\(\)/);
+  assert.match(migration, /queue_media_url_deletion\(old\.cover_url\)/);
+  assert.match(edge, /'avatars', 'covers', 'group-avatars'/);
+  assert.match(core, /id="quick-cover-input"[^>]*accept="image\/jpeg,image\/png,image\/webp"/);
+  assert.match(core, /uploadMediaDataUrl\(image\.dataUrl, \{ category: 'covers'/);
+  assert.match(core, /rpc\('update_own_profile_card', \{ p_cover_url: url \}\)/);
+  assert.match(core, /rpc\('update_own_profile_card', \{ p_clear_cover: true \}\)/);
+  assert.match(messages, /rpc\('get_profile_card_appearance', \{ p_target_id: targetId \}\)/);
+  assert.match(css, /\.msg-pop-cover\{/);
+});
+
 test('database keeps financial writes behind RLS and reviewed RPCs', () => {
   const schema = read('database/schema.sql');
   for (const table of ['profiles', 'members', 'contributions', 'expenses', 'withdrawals', 'audit_logs']) {
@@ -11201,7 +11220,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261118-123/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261118-124/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

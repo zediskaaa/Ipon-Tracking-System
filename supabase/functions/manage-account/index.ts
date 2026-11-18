@@ -2527,7 +2527,7 @@ Deno.serve(async (request) => {
   }
 
   const MEDIA_BUCKET = 'ipon-media';
-  const MEDIA_CATEGORIES = new Set(['avatars', 'group-avatars', 'group-qr', 'receipts', 'bug-reports']);
+  const MEDIA_CATEGORIES = new Set(['avatars', 'covers', 'group-avatars', 'group-qr', 'receipts', 'bug-reports']);
 
   if (body.action === 'media-upload-url') {
     const category = String(body.category || 'misc').trim();

@@ -26,6 +26,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,9 +36,8 @@ jobs:
           node-version: '20'
 
       - name: Apply migrations and deploy Edge Functions via Supabase CLI
-        if: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
+        if: ${{ env.SUPABASE_ACCESS_TOKEN != '' }}
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: woslmwokhhyszkgevnli
           FROM_VERSION: ${{ inputs.from_version }}
         run: |
@@ -46,11 +48,10 @@ jobs:
           fi
 
       - name: Fallback PostgreSQL migration via SUPABASE_DB_URL
-        if: ${{ secrets.SUPABASE_ACCESS_TOKEN == '' && secrets.SUPABASE_DB_URL != '' }}
+        if: ${{ env.SUPABASE_ACCESS_TOKEN == '' && env.SUPABASE_DB_URL != '' }}
         shell: bash
         env:
           PGSSLMODE: require
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
           sudo apt-get update && sudo apt-get install --yes postgresql-client
@@ -73,7 +74,14 @@ jobs:
             fi
           done
 
-      - name: Warn if neither Supabase secret is configured
-        if: ${{ secrets.SUPABASE_ACCESS_TOKEN == '' && secrets.SUPABASE_DB_URL == '' }}
+      - name: Require Supabase access token for Edge Function deployment
+        if: ${{ env.SUPABASE_ACCESS_TOKEN == '' && env.SUPABASE_DB_URL != '' }}
         run: |
-          echo "::warning title=Missing Secret::Set SUPABASE_ACCESS_TOKEN (recommended) or SUPABASE_DB_URL in GitHub repository secrets for automatic Supabase migrations and Edge Function deploys."
+          echo "::error title=Edge Function not deployed::Set SUPABASE_ACCESS_TOKEN to deploy manage-account after database migration."
+          exit 1
+
+      - name: Warn if neither Supabase secret is configured
+        if: ${{ env.SUPABASE_ACCESS_TOKEN == '' && env.SUPABASE_DB_URL == '' }}
+        run: |
+          echo "::error title=Missing Secret::Set SUPABASE_ACCESS_TOKEN or SUPABASE_DB_URL in GitHub repository secrets for deployment."
+          exit 1
