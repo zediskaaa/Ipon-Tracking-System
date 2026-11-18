@@ -271,7 +271,7 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
 
   for (const file of ['dashboard.html', 'reports.html', 'audit.html', 'settings.html', 'account.html']) {
     const html = read(file);
-    assert.match(html, /css\/app\.css\?v=20261118-167/);
+    assert.match(html, /css\/app\.css\?v=20261118-168/);
     assert.match(html, /js\/core\.js\?v=20261118-141/);
     const opens = (html.match(/<dialog\b/g) || []).length;
     const closes = (html.match(/<\/dialog>/g) || []).length;

@@ -8392,6 +8392,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   const settingsHtml = getMsgEl('msg-settings-body').innerHTML;
   assert.match(settingsHtml, /<form id="msg-privacy-form" class="form-grid msg-privacy-form"/);
   assert.doesNotMatch(settingsHtml, /msg-set-username|msg-set-bio/);
+  assert.match(settingsHtml, /id="msg-set-profile-vis" name="profile_visibility"[\s\S]*?value="EVERYONE"[\s\S]*?Everyone[\s\S]*?value="FRIENDS_OF_FRIENDS"[\s\S]*?Friends of friends[\s\S]*?value="FRIENDS_ONLY"[\s\S]*?Friends only[\s\S]*?value="NOBODY"[\s\S]*?No one/);
   assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Show active status[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="show_online"/);
   assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Show last seen timestamp[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="show_last_seen"/);
   assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Send &amp; receive read receipts[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="read_receipts"/);
@@ -8430,6 +8431,34 @@ test('username handle & bio live inside My Account profile form across all roles
   assert.match(mig126, /function public\.update_own_social_identity\(/);
   assert.match(mig126, /p_username text default '__KEEP__'/);
   assert.match(mig126, /p_bio text default '__KEEP__'/);
+});
+
+test('messaging privacy Who can see your profile supports Everyone, Friends of friends, Friends only, and No one across SQL & UI', () => {
+  const mig128 = read('database/migrations/20261118_128_profile_visibility_privacy.sql');
+  const messagesJs = read('js/messages.js');
+  const css = read('css/app.css');
+
+  for (const token of [
+    'create or replace function public.can_view_social_profile(',
+    "'FRIENDS_OF_FRIENDS'",
+    "'FRIENDS_ONLY'",
+    "'NOBODY'",
+    "'profile_visibility'",
+    'create or replace function public.update_social_profile_and_privacy(',
+    'create or replace function public.get_profile_card_appearance(',
+    'create or replace function public.get_social_user_profile(',
+    'create or replace function public.search_social_users(',
+    'create or replace function public.get_social_overview(',
+    'create or replace function public.get_conversations(',
+    "'20261118_128'"
+  ]) {
+    assert.ok(mig128.includes(token), 'migration 128 missing ' + token);
+  }
+  assert.match(messagesJs, /id="msg-set-profile-vis" name="profile_visibility"/);
+  assert.match(messagesJs, /profile_visibility:\s*String\(fd\.get\('profile_visibility'\)/);
+  assert.match(messagesJs, /class="msg-pop-private-note"/);
+  assert.match(css, /\.msg-pop-private-note\s*\{/);
+  assert.match(css, /html\[data-theme="dark"\] \.msg-pop-private-note\s*\{/);
 });
 
 test('chat drawer, messaging privacy dialog, and full-column chat themes declare cohesive light & dark CSS tokens', () => {

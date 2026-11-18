@@ -193,7 +193,7 @@
   }
 
   function userBadgesHtml(userOrId) {
-    if (!userOrId) return '';
+    if (!userOrId || (typeof userOrId === 'object' && userOrId.profile_visible === false)) return '';
     return typeof ipon === 'function' && typeof ipon().verifiedBadgesHtml === 'function'
       ? ipon().verifiedBadgesHtml(userOrId)
       : '';
@@ -2776,13 +2776,15 @@
       list.classList.remove('is-thread-entering');
       const isGrpHero = isGroupConv(conv);
       const isSelfHero = !isGrpHero && isSelfUser(conv);
+      const heroProfileVisible = isGrpHero || isSelfHero || conv.profile_visible !== false;
       const heroTitle = convDisplayTitle(conv);
       const statusText = formatStatusLine(conv, getTypingEntries(conv.conversation_id));
-      const isHeroOnline = isSelfHero || (!isGrpHero && conv.allow_online_status !== false && ipon().isUserOnline(conv.id));
+      const isHeroOnline = isSelfHero || (!isGrpHero && heroProfileVisible && conv.allow_online_status !== false && ipon().isUserOnline(conv.id));
       const heroAvatar = isGrpHero
         ? groupAvatarHtml(conv, 'avatar-lg', { clickable: false })
-        : userAvatarHtml(conv, 'avatar-lg', { clickable: false, showPresence: !isSelfHero });
+        : userAvatarHtml(conv, 'avatar-lg', { clickable: false, showPresence: !isSelfHero && heroProfileVisible });
       const heroAvatarNode = dpPreviewTriggerHtml(conv.avatar_url, heroTitle, heroAvatar);
+      const renderedHeroAvatar = heroProfileVisible ? heroAvatarNode : heroAvatar;
       const welcomeCopy = isGrpHero
         ? 'Say hello to the group! Messages and files stay private to members.'
         : isSelfHero
@@ -2790,16 +2792,16 @@
           : 'Say hello! Messages and files stay private between you two.';
       list.innerHTML = `
         <div class="msg-thread-welcome msg-thread-welcome-hero">
-          <div class="msg-welcome-avatar">${heroAvatarNode}</div>
+          <div class="msg-welcome-avatar">${renderedHeroAvatar}</div>
           <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero ? '' : userBadgesHtml(conv)}${isSelfHero ? '<span class="msg-self-pill">You</span>' : ''}</h3>
-          ${!isGrpHero && conv.username ? `<span class="msg-welcome-username">@${escapeHtml(conv.username)}</span>` : ''}
+          ${!isGrpHero && heroProfileVisible && conv.username ? `<span class="msg-welcome-username">@${escapeHtml(conv.username)}</span>` : ''}
           ${!isSelfHero ? `<div class="msg-welcome-meta">
             ${statusText ? `<span class="msg-welcome-status${isHeroOnline ? ' is-online' : ''}" id="msg-welcome-status-text">${escapeHtml(statusText)}</span>` : ''}
             ${!isGrpHero && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
             ${isGrpHero ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
           </div>` : ''}
-          ${(isGrpHero ? conv.description : conv.bio) ? `<p class="msg-welcome-bio">${escapeHtml(isGrpHero ? conv.description : conv.bio)}</p>` : ''}
-          ${!isGrpHero && conv.social_links ? (ipon().renderSocialAppLinksHtml?.(conv.social_links, { variant: 'welcome' }) || '') : ''}
+          ${heroProfileVisible && (isGrpHero ? conv.description : conv.bio) ? `<p class="msg-welcome-bio">${escapeHtml(isGrpHero ? conv.description : conv.bio)}</p>` : ''}
+          ${!isGrpHero && heroProfileVisible && conv.social_links ? (ipon().renderSocialAppLinksHtml?.(conv.social_links, { variant: 'welcome' }) || '') : ''}
           <p class="msg-welcome-hint">${escapeHtml(welcomeCopy)}</p>
         </div>`;
       ipon().bindAvatarFallbacks?.(list);
@@ -3882,10 +3884,11 @@
         BLOCKED_ME: 'Messaging restricted',
         NONE: 'Not friends yet'
       };
-      const mutualCount = Number(profile.mutual_friends_count || 0);
-      const mutualHtml = renderMutualStackHtml(profile.id, profile.mutual_friends, mutualCount);
-      const friendCountText = formatFriendCountText(profile.friends_count);
-      const cleanUsername = String(profile.username || '').trim().replace(/^@+/, '');
+      const isProfilePrivate = profile.profile_visible === false || fetchedAppearance?.profile_visible === false;
+      const mutualCount = isProfilePrivate ? 0 : Number(profile.mutual_friends_count || 0);
+      const mutualHtml = isProfilePrivate ? '' : renderMutualStackHtml(profile.id, profile.mutual_friends, mutualCount);
+      const friendCountText = isProfilePrivate ? '' : formatFriendCountText(profile.friends_count);
+      const cleanUsername = isProfilePrivate ? '' : String(profile.username || '').trim().replace(/^@+/, '');
       const statusLine = statusLabels[fs] || 'Community member';
       const metaParts = [];
       if (cleanUsername) metaParts.push(`@${cleanUsername}`);
@@ -3895,22 +3898,37 @@
       const statusRowHtml = metaParts.length
         ? `<small class="msg-pop-status">${escapeHtml(metaParts.join(' · '))}</small>`
         : '';
-      const groupsHtml = renderSharedGroupsCard(profile.shared_groups);
-      const bioText = String(profile.bio || '').trim();
-      const peerSocialLinks = ipon().sanitizeSocialLinks ? ipon().sanitizeSocialLinks(profile.social_links) : {};
-      const peerSocialAppsHtml = ipon().renderSocialAppLinksHtml?.(peerSocialLinks, { variant: 'popover' }) || '';
+      const groupsHtml = isProfilePrivate ? '' : renderSharedGroupsCard(profile.shared_groups);
+      const bioText = isProfilePrivate ? '' : String(profile.bio || '').trim();
+      const peerSocialLinks = !isProfilePrivate && ipon().sanitizeSocialLinks ? ipon().sanitizeSocialLinks(profile.social_links) : {};
+      const peerSocialAppsHtml = !isProfilePrivate ? (ipon().renderSocialAppLinksHtml?.(peerSocialLinks, { variant: 'popover' }) || '') : '';
       const peerAppsSig = JSON.stringify(peerSocialLinks);
       const canMessage = Boolean(profile.can_message);
+      const popAvatar = userAvatarHtml(profile, 'avatar-lg', { clickable: false, showPresence: false });
+      const popAvatarTrigger = dpPreviewTriggerHtml(profile?.avatar_url, profile?.full_name || 'User', popAvatar);
+      const renderedPopAvatar = isProfilePrivate ? popAvatar : popAvatarTrigger;
+      const visMode = String(profile.profile_visibility || '').toUpperCase();
+      const privateNoteText = fs === 'BLOCKED_BY_ME' || fs === 'BLOCKED_ME'
+        ? 'Profile details are hidden while messaging is blocked.'
+        : visMode === 'NOBODY'
+          ? 'This profile is private (visible to no one).'
+          : visMode === 'FRIENDS_ONLY'
+            ? 'Only friends can view full profile details.'
+            : visMode === 'FRIENDS_OF_FRIENDS'
+              ? 'Only friends and friends of friends can view full profile details.'
+              : 'Full profile details are private.';
+      const lockSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
 
       pop.innerHTML = `
         <button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
         <div class="msg-pop-head">
-          ${dpPreviewTriggerHtml(profile?.avatar_url, profile?.full_name || 'User', userAvatarHtml(profile, 'avatar-lg', { clickable: false, showPresence: false }))}
+          ${renderedPopAvatar}
           <div class="msg-pop-title">
             <strong id="msg-pop-name">${escapeHtml(profile.full_name)}${userBadgesHtml(profile)}</strong>
             ${statusRowHtml}
           </div>
         </div>
+        ${isProfilePrivate ? `<div class="msg-pop-private-note" role="note">${lockSvg}<span>${escapeHtml(privateNoteText)}</span></div>` : ''}
         ${mutualHtml}
         ${bioText ? `<p class="msg-pop-bio">${escapeHtml(bioText)}</p>` : ''}
         <div class="msg-pop-apps-slot" data-apps-sig="${escAttr(peerAppsSig)}"${peerSocialAppsHtml ? '' : ' hidden'}>${peerSocialAppsHtml}</div>
@@ -3925,10 +3943,19 @@
 
       ipon().bindAvatarFallbacks(pop);
       ipon().syncPresenceDots(pop);
-      applyProfileCardAppearance(pop, targetUserId, {
-        ...(fetchedAppearance || cachedAppearance || {}),
-        social_links: peerSocialLinks
-      });
+      if (isProfilePrivate) {
+        profileAppearanceCache.delete(String(targetUserId));
+        profileEffectStage?.destroy?.();
+        profileEffectStage = null;
+        pop.querySelector('.msg-pop-cover')?.remove();
+        delete pop.dataset.cardTheme;
+        delete pop.dataset.profileEffect;
+      } else {
+        applyProfileCardAppearance(pop, targetUserId, {
+          ...(fetchedAppearance || cachedAppearance || {}),
+          social_links: peerSocialLinks
+        });
+      }
       positionPopoverNearAnchor(pop, activePopoverAnchor);
     } catch (error) {
       pop.innerHTML = `<button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button><p class="empty-state">${escapeHtml(ipon().friendlyError(error))}</p>`;
@@ -4839,6 +4866,15 @@
             <option value="FRIENDS_ONLY"${priv.allow_message_requests === 'FRIENDS_ONLY' ? ' selected' : ''}>Friends only (reject non-friend messages)</option>
           </select>
         </div>
+        <div class="field field-wide">
+          <label for="msg-set-profile-vis">Who can see your profile</label>
+          <select id="msg-set-profile-vis" name="profile_visibility">
+            <option value="EVERYONE"${(priv.profile_visibility || 'EVERYONE') === 'EVERYONE' ? ' selected' : ''}>Everyone</option>
+            <option value="FRIENDS_OF_FRIENDS"${priv.profile_visibility === 'FRIENDS_OF_FRIENDS' ? ' selected' : ''}>Friends of friends</option>
+            <option value="FRIENDS_ONLY"${priv.profile_visibility === 'FRIENDS_ONLY' ? ' selected' : ''}>Friends only</option>
+            <option value="NOBODY"${priv.profile_visibility === 'NOBODY' ? ' selected' : ''}>No one</option>
+          </select>
+        </div>
         <label class="msg-switch-row toggle-switch-row field-wide"><span><strong>Show active status</strong><small>Let connections see when you are online</small></span><input type="checkbox" class="toggle-switch-input" name="show_online"${priv.show_online !== false ? ' checked' : ''}></label>
         <label class="msg-switch-row toggle-switch-row field-wide"><span><strong>Show last seen timestamp</strong><small>Share when you were last active (requires active status enabled)</small></span><input type="checkbox" class="toggle-switch-input" name="show_last_seen"${priv.show_last_seen !== false ? ' checked' : ''}></label>
         <label class="msg-switch-row toggle-switch-row field-wide"><span><strong>Send &amp; receive read receipts</strong><small>Turning this off hides Seen indicators on accepted conversations</small></span><input type="checkbox" class="toggle-switch-input" name="read_receipts"${priv.read_receipts !== false ? ' checked' : ''}></label>
@@ -4862,6 +4898,7 @@
     const readPrivacySnapshot = () => JSON.stringify({
       fr: String(form.elements?.allow_friend_requests?.value || 'EVERYONE'),
       mr: String(form.elements?.allow_message_requests?.value || 'EVERYONE'),
+      pv: String(form.elements?.profile_visibility?.value || 'EVERYONE'),
       on: Boolean(form.elements?.show_online?.checked),
       ls: Boolean(form.elements?.show_last_seen?.checked),
       rr: Boolean(form.elements?.read_receipts?.checked)
@@ -4900,14 +4937,18 @@
         show_last_seen: Boolean(form.elements.show_last_seen.checked),
         read_receipts: Boolean(form.elements.read_receipts.checked),
         allow_friend_requests: String(fd.get('allow_friend_requests') || 'EVERYONE'),
-        allow_message_requests: String(fd.get('allow_message_requests') || 'EVERYONE')
+        allow_message_requests: String(fd.get('allow_message_requests') || 'EVERYONE'),
+        profile_visibility: String(fd.get('profile_visibility') || 'EVERYONE')
       };
       ipon().setBusy(saveBtn, true, 'Saving…');
       try {
         const res = await ipon().rpc('update_social_profile_and_privacy', {
           p_chat_privacy: nextPrivacy
         });
-        ipon().updateLocalProfile?.({ chat_privacy: res.chat_privacy });
+        const mergedPrivacy = res?.chat_privacy || nextPrivacy;
+        if (state.overview?.me) state.overview.me.chat_privacy = mergedPrivacy;
+        if (initializedProfile) initializedProfile.chat_privacy = mergedPrivacy;
+        ipon().updateLocalProfile?.({ chat_privacy: mergedPrivacy });
         ipon().setOnlineVisibility?.(nextPrivacy.show_online);
         ipon().toast('Messaging settings saved.');
         await refreshOverview();

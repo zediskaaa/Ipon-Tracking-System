@@ -10275,6 +10275,33 @@ html[data-theme="dark"] .msg-friends-hero {
   color: #4f5954;
   overflow-wrap: anywhere;
 }
+.msg-pop-private-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 45, 43, .12);
+  background: rgba(20, 62, 48, .055);
+  color: var(--muted, #4f5954);
+  font-size: 12.5px;
+  line-height: 1.38;
+}
+.msg-pop-private-note svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+html[data-theme="dark"] .msg-pop-private-note {
+  border-color: rgba(218, 236, 227, .14);
+  background: rgba(255, 255, 255, .05);
+  color: var(--ink-soft, #cad9d2);
+}
 .msg-pop-groups-card {
   border-radius: 14px;
   border: 1px solid #e5ddc9;

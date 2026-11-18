@@ -58,7 +58,7 @@ test('migration 20261117_105 adds group chats, preserves 90-day retention & secu
   // Policy copy & service worker cache bump
   assert.match(policyJs, /Direct &amp; group messages, chat files/i);
   assert.match(loginHtml, /Direct &amp; group messages, chat files/i);
-  assert.match(sw, /ipon-shell-v67/);
+  assert.match(sw, /ipon-shell-v68/);
 });
 
 test('group chats runtime renders composite avatars, multi-sender bubbles, typing sender, drawer, forward & creation VM flow', async () => {
@@ -773,6 +773,8 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   friendReq.value = 'EVERYONE';
   const msgReq = getEl('msg-set-msg-req');
   msgReq.value = 'EVERYONE';
+  const profileVis = getEl('msg-set-profile-vis');
+  profileVis.value = 'EVERYONE';
   const showOnline = makeEl('input'); showOnline.checked = true;
   const showLastSeen = makeEl('input'); showLastSeen.checked = true;
   const readReceipts = makeEl('input'); readReceipts.checked = true;
@@ -780,6 +782,7 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   privacyForm.elements = {
     allow_friend_requests: friendReq,
     allow_message_requests: msgReq,
+    profile_visibility: profileVis,
     show_online: showOnline,
     show_last_seen: showLastSeen,
     read_receipts: readReceipts
@@ -881,8 +884,9 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   await privacyForm._emit('change');
   assert.equal(saveBtn.disabled, true, 'Save button disables again when reverted');
 
-  // Submitting sends only p_chat_privacy (never overwriting username or bio)
+  // Submitting sends only p_chat_privacy (including profile_visibility) cleanly without overwriting username/bio
   friendReq.value = 'MUTUAL_GROUPS';
+  profileVis.value = 'FRIENDS_OF_FRIENDS';
   await privacyForm._emit('change');
   await privacyForm.onsubmit({ preventDefault() { }, submitter: saveBtn });
   const privCall = rpcCalls.find((c) => c.name === 'update_social_profile_and_privacy');
@@ -890,8 +894,61 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   assert.equal('p_username' in (privCall.args || {}), false);
   assert.equal('p_bio' in (privCall.args || {}), false);
   assert.equal(privCall.args.p_chat_privacy.allow_friend_requests, 'MUTUAL_GROUPS');
+  assert.equal(privCall.args.p_chat_privacy.profile_visibility, 'FRIENDS_OF_FRIENDS');
   assert.equal(localPatch?.chat_privacy?.allow_friend_requests, 'MUTUAL_GROUPS');
+  assert.equal(localPatch?.chat_privacy?.profile_visibility, 'FRIENDS_OF_FRIENDS');
   assert.match(coreJs, /function bindDirtySaveForm\(/);
+
+  // Opening a peer profile popover with profile_visible=false hides bio/username/apps/mutuals/theme & shows private note
+  const popEl = getEl('msg-profile-popover');
+  popEl.getBoundingClientRect = () => ({ width: 340, height: 220, left: 0, right: 340, top: 0, bottom: 220 });
+  const dpTrigger = makeEl('button');
+  dpTrigger.dataset = { socialUserDp: '55555555-5555-4555-8555-555555555555' };
+  dpTrigger.getBoundingClientRect = () => ({ left: 40, right: 80, top: 60, bottom: 100 });
+  dpTrigger.closest = (sel) => (sel.includes('[data-social-user-dp]') ? dpTrigger : null);
+
+  ctx.Ipon.rpc = async (name) => {
+    if (name === 'get_social_user_profile') {
+      return {
+        id: '55555555-5555-4555-8555-555555555555',
+        is_self: false,
+        profile_visible: false,
+        profile_visibility: 'FRIENDS_OF_FRIENDS',
+        full_name: 'Ana Reyes',
+        username: null,
+        bio: null,
+        social_links: {},
+        verified_badge: 'NONE',
+        friendship_status: 'NONE',
+        can_message: true,
+        can_send_friend_request: true,
+        allow_online_status: false,
+        last_seen_at: null,
+        shared_groups: [],
+        friends_count: 0,
+        mutual_friends_count: 0,
+        mutual_friends: []
+      };
+    }
+    if (name === 'get_profile_card_appearance') {
+      return {
+        profile_visible: false,
+        card_theme: 'emerald',
+        cover_url: null,
+        profile_effect: 'none',
+        social_links: {}
+      };
+    }
+    return {};
+  };
+
+  await Promise.all((docListeners.get('click') || []).map((fn) => fn({ target: dpTrigger, stopPropagation() { } })));
+  assert.equal(popEl.hidden, false);
+  assert.match(popEl.innerHTML, /class="msg-pop-private-note"[\s\S]*?Only friends and friends of friends can view full profile details\./);
+  assert.doesNotMatch(popEl.innerHTML, /msg-pop-bio|msg-dp-preview-trigger|msg-mutual-wrap|msg-pop-groups-card/);
+  assert.match(popEl.innerHTML, /data-social-action="add_friend"/);
+  assert.match(popEl.innerHTML, /data-social-action="message"/);
+  assert.equal(popEl.dataset.cardTheme, undefined);
 });
 
 test('My Account profile form validates username availability and bio live for all roles including Super Admin', async () => {
