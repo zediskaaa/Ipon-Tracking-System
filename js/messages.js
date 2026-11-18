@@ -50,6 +50,7 @@
   let activeMutualAnchor = null;
   let mutualHoverTimer = null;
   const mutualFriendsCache = new Map();
+  const liveLastSeenMap = new Map();
   let suppressBubbleClickId = null;
   let recentHoldMsgId = null;
   let recentHoldAt = 0;
@@ -196,6 +197,31 @@
     return getTypingEntries(convId).length > 0;
   }
 
+  function recordLastSeen(userId, ts) {
+    const key = String(userId || '').trim();
+    if (!key || !ts) return;
+    const ms = Date.parse(ts);
+    if (!Number.isFinite(ms)) return;
+    const prevMs = Date.parse(liveLastSeenMap.get(key) || '') || 0;
+    if (ms > prevMs) liveLastSeenMap.set(key, new Date(ms).toISOString());
+  }
+
+  function formatLastSeenTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return '';
+    const timeStr = formatClock(d);
+    if (!timeStr) return '';
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return `Offline since ${timeStr}`;
+    }
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const datePart = d.getFullYear() === now.getFullYear() ? `${mm}/${dd}` : `${mm}/${dd}/${d.getFullYear()}`;
+    return `Offline since ${datePart} · ${timeStr}`;
+  }
+
   function formatStatusLine(user, isTyping = false) {
     const typingList = Array.isArray(isTyping) ? isTyping : [];
     const typingOn = Array.isArray(isTyping) ? typingList.length > 0 : Boolean(isTyping);
@@ -223,12 +249,12 @@
     }
     if (!user.allow_online_status) return 'Privacy mode';
     if (ipon().isUserOnline(user.id)) return 'Active now';
-    if (user.last_seen_at) {
-      const diffSec = Math.max(0, Math.floor((Date.now() - Date.parse(user.last_seen_at)) / 1000));
-      if (diffSec < 90) return 'Last seen moments ago';
-      if (diffSec < 3600) return `Last seen ${Math.floor(diffSec / 60)}m ago`;
-      if (diffSec < 86400) return `Last seen ${Math.floor(diffSec / 3600)}h ago`;
-      return `Last seen ${formatShortDate(user.last_seen_at)}`;
+    const liveTs = user.last_seen_at ? liveLastSeenMap.get(String(user.id || '')) : null;
+    const serverMs = user.last_seen_at ? (Date.parse(user.last_seen_at) || 0) : 0;
+    const liveMs = liveTs ? (Date.parse(liveTs) || 0) : 0;
+    const bestTs = liveMs > serverMs ? liveTs : user.last_seen_at;
+    if (bestTs) {
+      return formatLastSeenTime(bestTs) || 'Offline';
     }
     return 'Offline';
   }
@@ -6478,6 +6504,31 @@
         syncForegroundReceipts();
       }
     };
+    const onPresenceChange = (ev) => {
+      const detail = ev?.detail || {};
+      const at = detail.at || new Date().toISOString();
+      const leftIds = Array.isArray(detail.leftIds) ? detail.leftIds : [];
+      leftIds.forEach((uid) => {
+        recordLastSeen(uid, at);
+        const conv = state.conversations.find((c) => !isGroupConv(c) && String(c.peer?.id || '') === String(uid));
+        if (conv?.peer && conv.peer.last_seen_at) conv.peer.last_seen_at = at;
+        if (state.activeThread?.conversation && !isGroupConv(state.activeThread.conversation) && String(state.activeThread.conversation.id || '') === String(uid)) {
+          if (state.activeThread.conversation.last_seen_at) state.activeThread.conversation.last_seen_at = at;
+        }
+        const friend = (state.overview?.friends || []).find((f) => String(f.id || '') === String(uid));
+        if (friend && friend.last_seen_at) friend.last_seen_at = at;
+      });
+      if (state.activeThread?.conversation) {
+        const subEl = document.getElementById('msg-peer-status-text');
+        if (subEl) {
+          const entries = getTypingEntries(state.activeThread.conversation.conversation_id);
+          subEl.textContent = formatStatusLine(state.activeThread.conversation, entries);
+        }
+      }
+      if (state.tab === 'friends' && state.friendsSubTab === 'all' && document.getElementById('msg-workspace-dialog')?.open) {
+        renderFriendsView();
+      }
+    };
     pingLastSeen();
     if (!lastSeenTimer) {
       lastSeenTimer = setInterval(pingLastSeen, 60000);
@@ -6485,6 +6536,7 @@
       if (typeof window.addEventListener === 'function') {
         window.addEventListener('focus', onWindowFocus);
         window.addEventListener('blur', onWindowBlur);
+        window.addEventListener('ipon:presence-change', onPresenceChange);
       }
     }
 

@@ -25,6 +25,8 @@
     throw new Error('Unable to initialize database client.');
   }
   let currentProfile = null;
+  let cachedAccessToken = null;
+  let lastSeenFlushAt = 0;
   let quickMfaController = null;
   const STARTUP_TIMEOUT_MS = 15000;
   let loaderSafetyTimer = null;
@@ -1755,6 +1757,42 @@
     });
   }
 
+  function emitPresenceChange(leftIds = []) {
+    try {
+      window.dispatchEvent(new CustomEvent('ipon:presence-change', {
+        detail: { onlineIds: Array.from(onlineUserIds), leftIds, at: new Date().toISOString() }
+      }));
+    } catch (_) { }
+  }
+
+  function flushLastSeen({ keepalive = false, force = false } = {}) {
+    if (!currentProfile?.id || !presenceShowOnline || !configured) return;
+    const nowMs = Date.now();
+    if (!force && nowMs - lastSeenFlushAt < 1500) return;
+    lastSeenFlushAt = nowMs;
+    const nowIso = new Date(nowMs).toISOString();
+    currentProfile.last_seen_at = nowIso;
+    if (keepalive && cachedAccessToken && typeof fetch === 'function') {
+      try {
+        fetch(`${config.supabaseUrl}/rest/v1/rpc/touch_user_last_seen`, {
+          method: 'POST',
+          keepalive: true,
+          headers: {
+            apikey: config.supabaseAnonKey,
+            Authorization: `Bearer ${cachedAccessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: '{}'
+        }).catch(() => { });
+        return;
+      } catch (_) { }
+    }
+    const client = getClient();
+    if (client?.rpc) {
+      (async () => { try { await client.rpc('touch_user_last_seen'); } catch (_) { } })();
+    }
+  }
+
   function broadcastLocalPresence() {
     try {
       const ids = Array.from(onlineUserIds);
@@ -1768,6 +1806,7 @@
   }
 
   let presenceShowOnline = true;
+  let presenceLifecycleBound = false;
 
   function setOnlineVisibility(showOnline) {
     presenceShowOnline = showOnline !== false;
@@ -1845,9 +1884,10 @@
 
       const handleSync = () => {
         try {
+          const prev = new Set(onlineUserIds);
           const state = presenceChannel.presenceState();
           onlineUserIds.clear();
-          if (presenceShowOnline) onlineUserIds.add(String(profile.id));
+          if (presenceShowOnline && document.visibilityState !== 'hidden') onlineUserIds.add(String(profile.id));
           Object.keys(state || {}).forEach((key) => {
             if (key) onlineUserIds.add(String(key));
             const presences = state[key] || [];
@@ -1855,8 +1895,10 @@
               if (entry?.user_id) onlineUserIds.add(String(entry.user_id));
             });
           });
+          const leftIds = Array.from(prev).filter((id) => !onlineUserIds.has(id));
           syncPresenceDots();
           broadcastLocalPresence();
+          if (leftIds.length) emitPresenceChange(leftIds);
         } catch (_) { }
       };
 
@@ -1867,22 +1909,26 @@
           (newPresences || []).forEach((p) => { if (p?.user_id) onlineUserIds.add(String(p.user_id)); });
           syncPresenceDots();
           broadcastLocalPresence();
+          emitPresenceChange([]);
         })
         .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
           const state = presenceChannel.presenceState();
-          if (!state[key] && (key !== String(profile.id) || !presenceShowOnline)) {
-            onlineUserIds.delete(String(key));
+          const leftIds = [];
+          if (key && !state[key] && (key !== String(profile.id) || !presenceShowOnline || document.visibilityState === 'hidden')) {
+            if (onlineUserIds.delete(String(key))) leftIds.push(String(key));
           }
           (leftPresences || []).forEach((p) => {
-            if (p?.user_id && (p.user_id !== String(profile.id) || !presenceShowOnline) && !state[p.user_id]) {
-              onlineUserIds.delete(String(p.user_id));
+            const uid = p?.user_id ? String(p.user_id) : '';
+            if (uid && (uid !== String(profile.id) || !presenceShowOnline || document.visibilityState === 'hidden') && !state[uid]) {
+              if (onlineUserIds.delete(uid)) leftIds.push(uid);
             }
           });
           syncPresenceDots();
           broadcastLocalPresence();
+          if (leftIds.length) emitPresenceChange(leftIds);
         })
         .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED' && presenceShowOnline) {
+          if (status === 'SUBSCRIBED' && presenceShowOnline && document.visibilityState !== 'hidden') {
             try {
               await presenceChannel.track({
                 user_id: profile.id,
@@ -1894,9 +1940,46 @@
           }
         });
 
-      window.addEventListener('pagehide', () => {
+      const handleAppAway = () => {
+        const myId = String(profile.id);
+        const wasOnline = onlineUserIds.delete(myId);
+        try { presenceChannel?.untrack?.().catch?.(() => { }); } catch (_) { }
+        syncPresenceDots();
+        broadcastLocalPresence();
+        emitPresenceChange(wasOnline ? [myId] : []);
+        flushLastSeen({ keepalive: true });
+      };
+      const handleAppActive = () => {
+        if (!presenceShowOnline) return;
+        onlineUserIds.add(String(profile.id));
         try {
-          presenceChannel?.untrack();
+          presenceChannel?.track?.({
+            user_id: profile.id,
+            full_name: profile.full_name,
+            role: profile.role,
+            online_at: new Date().toISOString()
+          }).catch?.(() => { });
+        } catch (_) { }
+        syncPresenceDots();
+        broadcastLocalPresence();
+        emitPresenceChange([]);
+        flushLastSeen({ keepalive: false });
+      };
+      if (!presenceLifecycleBound) {
+        presenceLifecycleBound = true;
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') handleAppAway();
+          else if (document.visibilityState === 'visible') handleAppActive();
+        });
+        window.Capacitor?.Plugins?.App?.addListener?.('appStateChange', ({ isActive }) => {
+          if (isActive) handleAppActive();
+          else handleAppAway();
+        });
+      }
+
+      window.addEventListener('pagehide', () => {
+        handleAppAway();
+        try {
           client.removeChannel(presenceChannel);
         } catch (_) { }
       }, { once: true });
@@ -5705,6 +5788,7 @@
       const client = await ensureClient();
       const { data: { session }, error: sessionError } = await runWithStartupRetry(() => client.auth.getSession());
       if (sessionError) throw sessionError;
+      cachedAccessToken = session?.access_token || null;
       if (!session && options.requireAuth !== false) {
         window.location.replace('login.html');
         return { configured: true, profile: null, session: null, redirecting: true };
@@ -5931,6 +6015,7 @@
       } catch { }
     };
     client.auth.onAuthStateChange((event, nextSession) => {
+      cachedAccessToken = nextSession?.access_token || null;
       if (loginPage || event === 'INITIAL_SESSION') return;
       if (event === 'SIGNED_OUT' || !nextSession) return redirectTo('login.html');
       if (expectedUserId && nextSession.user?.id && nextSession.user.id !== expectedUserId) {
