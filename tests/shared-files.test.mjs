@@ -91,5 +91,5 @@ test('Shared files excludes voice notes and voice messages while counting and li
   renderDrawer();
   assert.match(drawerEl.innerHTML, /No shared files yet/);
   assert.match(swJs, /ipon-shell-v(?:2[3-9]|[3-9]\d)/);
-  assert.match(dashboardHtml, /js\/messages\.js\?v=20261118-36/);
+  assert.match(dashboardHtml, /js\/messages\.js\?v=20261118-37/);
 });

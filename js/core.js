@@ -303,7 +303,8 @@
     ['bug-reports', 'super-admin.html#bug-reports', 'Bug reports', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6V5a4 4 0 0 1 8 0v1m-9 4h10a2 2 0 0 1 2 2v3a7 7 0 0 1-14 0v-3a2 2 0 0 1 2-2Zm-3 3H3m18 0h-1M6 9 4 7m14 2 2-2M6 17l-2 2m14-2 2 2"/></svg>'],
     ['administrators', 'super-admin.html#administrators', 'Users', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-1 2 2 4-4"/></svg>'],
     ['badges', 'super-admin.html#badges', 'Badges', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 14.9 4.2l3.6-.3 1.1 3.4 2.9 2-1.1 3.4 1.1 3.4-2.9 2-1.1 3.4-3.6-.3L12 22l-2.9-2.2-3.6.3-1.1-3.4-2.9-2 1.1-3.4-1.1-3.4 2.9-2 1.1-3.4 3.6.3L12 2Z"/><path d="m8.7 12.2 2.2 2.3 4.6-4.8"/></svg>'],
-    ['activity', 'super-admin.html#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2Z"/></svg>']
+    ['effects', 'super-admin.html#effects', 'Profile effects', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2Z"/><path d="M5 3v4M3 5h4M19 17v4M17 19h4"/></svg>'],
+    ['activity', 'super-admin.html#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>']
   ];
   const userNavItems = [
     ['dashboard', 'dashboard.html', 'Calendar', navItems[0][3]],
@@ -1793,7 +1794,7 @@
         <div class="account-dialog-sheet">
           <header class="account-dialog-header"><div class="account-dialog-title"><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><div class="account-card-appearance" id="quick-card-appearance" data-card-theme="emerald"><div class="account-cover-preview" id="quick-cover-preview"><img id="quick-cover-image" alt="Your profile cover" hidden><span class="account-cover-label">PROFILE COVER</span><div class="account-cover-actions"><button class="button button-secondary button-sm" id="quick-cover-change" type="button">Change cover</button><button class="button button-secondary button-sm" id="quick-cover-remove" type="button" hidden>Remove</button></div><input id="quick-cover-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="account-card-colors"><strong>Profile card color</strong><div class="account-card-swatches" role="group" aria-label="Profile card color"><button type="button" data-card-color="emerald" aria-label="Emerald" aria-pressed="true"></button><button type="button" data-card-color="midnight" aria-label="Midnight" aria-pressed="false"></button><button type="button" data-card-color="rose" aria-label="Rose" aria-pressed="false"></button><button type="button" data-card-color="amber" aria-label="Amber" aria-pressed="false"></button><button type="button" data-card-color="ocean" aria-label="Ocean" aria-pressed="false"></button><button type="button" data-card-color="mono" aria-label="Monochrome" aria-pressed="false"></button></div></div><p class="account-card-feedback" id="quick-card-feedback" role="status" aria-live="polite"></p></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Message the creator directly to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-message-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Message creator</span></button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
+            <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><div class="account-card-appearance" id="quick-card-appearance" data-card-theme="emerald"><div class="account-cover-preview" id="quick-cover-preview"><img id="quick-cover-image" alt="Your profile cover" hidden><span class="account-cover-label">PROFILE COVER</span><div class="account-cover-actions"><button class="button button-secondary button-sm" id="quick-cover-change" type="button">Change cover</button><button class="button button-secondary button-sm" id="quick-cover-remove" type="button" hidden>Remove</button></div><input id="quick-cover-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="account-card-colors"><strong>Profile card color</strong><div class="account-card-swatches" role="group" aria-label="Profile card color"><button type="button" data-card-color="emerald" aria-label="Emerald" aria-pressed="true"></button><button type="button" data-card-color="midnight" aria-label="Midnight" aria-pressed="false"></button><button type="button" data-card-color="rose" aria-label="Rose" aria-pressed="false"></button><button type="button" data-card-color="amber" aria-label="Amber" aria-pressed="false"></button><button type="button" data-card-color="ocean" aria-label="Ocean" aria-pressed="false"></button><button type="button" data-card-color="mono" aria-label="Monochrome" aria-pressed="false"></button></div></div><div class="account-card-effects-row"><div class="account-card-effects-copy"><strong>Profile effects</strong><small id="quick-effect-status">Granted permanently by Super Admin</small></div><button class="button button-secondary button-sm" id="quick-effects-open" type="button">Browse effects</button></div><p class="account-card-feedback" id="quick-card-feedback" role="status" aria-live="polite"></p></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Message the creator directly to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-message-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Message creator</span></button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Device &amp; in-app alerts</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device permissions for in-app alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div><div class="preference-row preference-workspace-row" data-role="ADMIN"><span><strong>Workspace settings</strong><small>Monthly schedule, payment QR, access, treasurers &amp; cycle reset</small></span><a class="button button-primary button-sm" href="settings.html" data-workspace-settings-open>Manage</a></div><div class="preference-row"><span><strong>Data &amp; storage retention</strong><small>Active savings protected · 30d bin, 90d &amp; 6-month rules</small></span><button class="button button-secondary button-sm" type="button" data-retention-rules-open>View rules</button></div><div class="preference-row"><span><strong>Terms &amp; Privacy policies</strong><small>Non-custodial scope, permissions, and full retention schedule</small></span><div class="header-actions"><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="terms">Terms</button><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="privacy">Privacy</button></div></div></section></div>
             <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
@@ -1805,14 +1806,14 @@
           <header class="form-dialog-header">
             <div>
               <h2 id="avatar-crop-title">Crop display picture</h2>
-              <p>Drag to reposition or adjust zoom to frame your profile picture.</p>
+              <p id="avatar-crop-subtitle">Drag to reposition or adjust zoom to frame your profile picture.</p>
             </div>
             <button class="dialog-close" id="avatar-crop-close" type="button" aria-label="Close photo editor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
           <div class="avatar-crop-body">
             <div class="avatar-crop-viewport-wrap">
               <canvas class="avatar-crop-canvas" id="avatar-crop-canvas" width="280" height="280" aria-label="Photo crop preview"></canvas>
-              <div class="avatar-crop-overlay" aria-hidden="true"></div>
+              <div class="avatar-crop-overlay" aria-hidden="true"><span class="avatar-crop-corner is-tl"></span><span class="avatar-crop-corner is-tr"></span><span class="avatar-crop-corner is-bl"></span><span class="avatar-crop-corner is-br"></span></div>
             </div>
             <div class="avatar-crop-controls">
               <label for="avatar-crop-zoom" class="avatar-crop-zoom-label">
@@ -2580,81 +2581,7 @@
   }
   const MODAL_WAVY_SEAL_PATH = buildSmoothWavySealPath(8, 10.15, 0.95);
 
-  function maybeShowBadgeAwardModal(profile = currentProfile, opts = {}) {
-    if (!profile || profile.role === 'SUPER_ADMIN') return false;
-    const tier = effectiveVerifiedBadgeTier(profile, '', { allowPendingAck: true });
-    if (tier !== 'BLUE' && tier !== 'CREATOR_GREEN') return false;
-    if (profile.verified_badge_acknowledged_at) return false;
-    if (document.getElementById('ipon-badge-award-dialog')) return false;
-
-    const existingOpen = !opts?.force ? document.querySelector('dialog[open]:not(#notification-dialog)') : null;
-    if (existingOpen) return false;
-
-    const dialog = document.createElement('dialog');
-    dialog.id = 'ipon-badge-award-dialog';
-    dialog.className = 'badge-celebrate-dialog';
-    dialog.setAttribute('aria-labelledby', 'ipon-badge-award-title');
-
-    const creatorMsg = String(profile.verified_badge_message || '').trim();
-    const isPermanent = !profile.verified_badge_expires_at;
-    const grantedIso = profile.verified_badge_granted_at || new Date().toISOString();
-    const verifiedOnText = dateLabel(grantedIso, { dateStyle: 'medium' });
-    const recipientName = String(profile.full_name || 'Member').trim();
-
-    let datesGridHtml = '';
-    if (isPermanent) {
-      datesGridHtml = `
-        <div class="badge-celebrate-dates is-permanent">
-          <div class="badge-celebrate-date"><small>Verified on</small><b>${escapeHtml(verifiedOnText)}</b></div>
-          <div class="badge-celebrate-date is-permanent-card"><small>Status</small><b>Permanent</b></div>
-        </div>`;
-    } else {
-      const expMs = Date.parse(profile.verified_badge_expires_at);
-      const effectiveUntilText = Number.isNaN(expMs) ? 'Limited time' : dateLabel(new Date(expMs).toISOString(), { dateStyle: 'medium' });
-      datesGridHtml = `
-        <div class="badge-celebrate-dates">
-          <div class="badge-celebrate-date"><small>Verified on</small><b>${escapeHtml(verifiedOnText)}</b></div>
-          <div class="badge-celebrate-date"><small>Effective until</small><b>${escapeHtml(effectiveUntilText)}</b></div>
-        </div>`;
-    }
-
-    const activityRequirementHtml = isPermanent
-      ? `
-        <div class="badge-celebrate-activity-box">
-          <div class="badge-celebrate-stat"><strong>2</strong><small>MONTHS</small></div>
-          <div class="badge-celebrate-activity-copy">
-            <b>Activity requirement</b>
-            <span>Permanent badges stay active while you use myIPON, and are automatically removed after <em>2 months</em> of inactivity.</span>
-          </div>
-        </div>`
-      : '';
-
-    dialog.innerHTML = `
-      <div class="badge-celebrate-sheet${isPermanent ? ' is-permanent' : ''}" id="ipon-badge-award-sheet">
-        <canvas class="badge-celebrate-confetti-canvas" id="ipon-badge-award-canvas" aria-hidden="true"></canvas>
-        <div class="badge-celebrate-hero" id="ipon-badge-award-hero" title="Tap for confetti">
-          <svg viewBox="0 0 24 24" shape-rendering="geometricPrecision" aria-hidden="true"><path fill="#1d9bf0" d="${MODAL_WAVY_SEAL_PATH}"/><path fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" d="M7.2 12.3l3.2 3.2 6.4-6.9"/></svg>
-        </div>
-        <span class="badge-celebrate-eyebrow">VERIFIED STATUS UNLOCKED</span>
-        <h2 id="ipon-badge-award-title">Congratulations<span class="badge-celebrate-name">${escapeHtml(recipientName)}!</span></h2>
-        <p class="badge-celebrate-copy">You've been awarded a <b>${isPermanent ? 'permanent verified badge' : 'verified badge'}</b> on myIPON. Tap <b>Thank you</b> to display it beside your name across chats and community views.</p>
-        ${datesGridHtml}
-        ${creatorMsg ? `
-          <div class="badge-celebrate-quote">
-            <span class="badge-celebrate-quote-mark" aria-hidden="true">“</span>
-            <div class="badge-celebrate-quote-head"><small>MESSAGE FROM CREATOR</small></div>
-            <p>${escapeHtml(creatorMsg)}</p>
-          </div>` : ''}
-        ${activityRequirementHtml}
-        <button type="button" class="badge-celebrate-btn" id="ipon-badge-award-ack">Thank you</button>
-      </div>`;
-
-    document.body.appendChild(dialog);
-    const ackBtn = dialog.querySelector('#ipon-badge-award-ack');
-    const sheet = dialog.querySelector('#ipon-badge-award-sheet');
-    const hero = dialog.querySelector('#ipon-badge-award-hero');
-    const canvas = dialog.querySelector('#ipon-badge-award-canvas');
-
+  function mountCelebrateConfetti(dialog, sheet, hero, canvas) {
     let rafId = null;
     let resizeHandler = null;
     const stopConfetti = () => {
@@ -2739,6 +2666,84 @@
       setTimeout(() => { if (dialog.open) burst(50); }, 850);
       rafId = requestAnimationFrame(tick);
     }
+    return stopConfetti;
+  }
+
+  function maybeShowBadgeAwardModal(profile = currentProfile, opts = {}) {
+    if (!profile || profile.role === 'SUPER_ADMIN') return false;
+    const tier = effectiveVerifiedBadgeTier(profile, '', { allowPendingAck: true });
+    if (tier !== 'BLUE' && tier !== 'CREATOR_GREEN') return false;
+    if (profile.verified_badge_acknowledged_at) return false;
+    if (document.getElementById('ipon-badge-award-dialog')) return false;
+
+    const existingOpen = !opts?.force ? document.querySelector('dialog[open]:not(#notification-dialog)') : null;
+    if (existingOpen) return false;
+
+    const dialog = document.createElement('dialog');
+    dialog.id = 'ipon-badge-award-dialog';
+    dialog.className = 'badge-celebrate-dialog';
+    dialog.setAttribute('aria-labelledby', 'ipon-badge-award-title');
+
+    const creatorMsg = String(profile.verified_badge_message || '').trim();
+    const isPermanent = !profile.verified_badge_expires_at;
+    const grantedIso = profile.verified_badge_granted_at || new Date().toISOString();
+    const verifiedOnText = dateLabel(grantedIso, { dateStyle: 'medium' });
+    const recipientName = String(profile.full_name || 'Member').trim();
+
+    let datesGridHtml = '';
+    if (isPermanent) {
+      datesGridHtml = `
+        <div class="badge-celebrate-dates is-permanent">
+          <div class="badge-celebrate-date"><small>Verified on</small><b>${escapeHtml(verifiedOnText)}</b></div>
+          <div class="badge-celebrate-date is-permanent-card"><small>Status</small><b>Permanent</b></div>
+        </div>`;
+    } else {
+      const expMs = Date.parse(profile.verified_badge_expires_at);
+      const effectiveUntilText = Number.isNaN(expMs) ? 'Limited time' : dateLabel(new Date(expMs).toISOString(), { dateStyle: 'medium' });
+      datesGridHtml = `
+        <div class="badge-celebrate-dates">
+          <div class="badge-celebrate-date"><small>Verified on</small><b>${escapeHtml(verifiedOnText)}</b></div>
+          <div class="badge-celebrate-date"><small>Effective until</small><b>${escapeHtml(effectiveUntilText)}</b></div>
+        </div>`;
+    }
+
+    const activityRequirementHtml = isPermanent
+      ? `
+        <div class="badge-celebrate-activity-box">
+          <div class="badge-celebrate-stat"><strong>2</strong><small>MONTHS</small></div>
+          <div class="badge-celebrate-activity-copy">
+            <b>Activity requirement</b>
+            <span>Permanent badges stay active while you use myIPON, and are automatically removed after <em>2 months</em> of inactivity.</span>
+          </div>
+        </div>`
+      : '';
+
+    dialog.innerHTML = `
+      <div class="badge-celebrate-sheet${isPermanent ? ' is-permanent' : ''}" id="ipon-badge-award-sheet">
+        <canvas class="badge-celebrate-confetti-canvas" id="ipon-badge-award-canvas" aria-hidden="true"></canvas>
+        <div class="badge-celebrate-hero" id="ipon-badge-award-hero" title="Tap for confetti">
+          <svg viewBox="0 0 24 24" shape-rendering="geometricPrecision" aria-hidden="true"><path fill="#1d9bf0" d="${MODAL_WAVY_SEAL_PATH}"/><path fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" d="M7.2 12.3l3.2 3.2 6.4-6.9"/></svg>
+        </div>
+        <span class="badge-celebrate-eyebrow">VERIFIED STATUS UNLOCKED</span>
+        <h2 id="ipon-badge-award-title">Congratulations<span class="badge-celebrate-name">${escapeHtml(recipientName)}!</span></h2>
+        <p class="badge-celebrate-copy">You've been awarded a <b>${isPermanent ? 'permanent verified badge' : 'verified badge'}</b> on myIPON. Tap <b>Thank you</b> to display it beside your name across chats and community views.</p>
+        ${datesGridHtml}
+        ${creatorMsg ? `
+          <div class="badge-celebrate-quote">
+            <span class="badge-celebrate-quote-mark" aria-hidden="true">“</span>
+            <div class="badge-celebrate-quote-head"><small>MESSAGE FROM CREATOR</small></div>
+            <p>${escapeHtml(creatorMsg)}</p>
+          </div>` : ''}
+        ${activityRequirementHtml}
+        <button type="button" class="badge-celebrate-btn" id="ipon-badge-award-ack">Thank you</button>
+      </div>`;
+
+    document.body.appendChild(dialog);
+    const ackBtn = dialog.querySelector('#ipon-badge-award-ack');
+    const sheet = dialog.querySelector('#ipon-badge-award-sheet');
+    const hero = dialog.querySelector('#ipon-badge-award-hero');
+    const canvas = dialog.querySelector('#ipon-badge-award-canvas');
+    const stopConfetti = mountCelebrateConfetti(dialog, sheet, hero, canvas);
 
     const acknowledgeAndClose = async () => {
       if (ackBtn) setBusy(ackBtn, true, 'Saving…');
@@ -2762,6 +2767,7 @@
         if (typeof window?.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
           window.dispatchEvent(new CustomEvent('ipon:badges-updated', { detail: { userId: currentProfile?.id } }));
         }
+        maybeShowEffectAwardModal();
       }
     };
 
@@ -2772,6 +2778,577 @@
     });
     if (typeof dialog.showModal === 'function') dialog.showModal();
     return true;
+  }
+
+  let ownProfileEffectsState = { equipped_effect: 'none', grants: [] };
+
+  function syncAccountEffectsSummary() {
+    const statusEl = document.getElementById('quick-effect-status');
+    const openBtn = document.getElementById('quick-effects-open');
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const equippedId = api?.normalizeEffectId
+      ? api.normalizeEffectId(ownProfileEffectsState?.equipped_effect)
+      : (ownProfileEffectsState?.equipped_effect || 'none');
+    const grants = Array.isArray(ownProfileEffectsState?.grants) ? ownProfileEffectsState.grants : [];
+    const pendingCount = grants.filter((item) => !item?.acknowledged_at).length;
+    const ownedCount = grants.length;
+    const effectMeta = api?.getEffect ? api.getEffect(equippedId) : { id: equippedId, name: equippedId };
+
+    if (statusEl) {
+      if (pendingCount > 0) {
+        statusEl.textContent = `${pendingCount} new permanent gift${pendingCount === 1 ? '' : 's'} ready to claim`;
+      } else if (equippedId !== 'none') {
+        statusEl.textContent = `${effectMeta.name} · Active (Permanent)`;
+      } else if (ownedCount > 0) {
+        statusEl.textContent = `None equipped · ${ownedCount} permanent unlocked`;
+      } else if (currentProfile?.role === 'SUPER_ADMIN') {
+        statusEl.textContent = 'All permanent effects ready to preview';
+      } else {
+        statusEl.textContent = 'Granted permanently by Super Admin';
+      }
+    }
+    if (openBtn) {
+      openBtn.textContent = pendingCount > 0 ? 'Claim & browse' : 'Browse effects';
+    }
+  }
+
+  async function refreshProfileEffectsState({ checkModal = false } = {}) {
+    if (!currentProfile?.id) return ownProfileEffectsState;
+    try {
+      const res = await rpc('get_own_profile_effects');
+      if (res && typeof res === 'object') {
+        ownProfileEffectsState = {
+          equipped_effect: res.equipped_effect || 'none',
+          grants: Array.isArray(res.grants) ? res.grants : []
+        };
+        currentProfile.equipped_profile_effect = ownProfileEffectsState.equipped_effect;
+        syncAccountEffectsSummary();
+        if (checkModal) maybeShowEffectAwardModal();
+      }
+    } catch (_) {
+      syncAccountEffectsSummary();
+    }
+    return ownProfileEffectsState;
+  }
+
+  async function openCreatorEffectChat(effectMeta, triggerButton = null) {
+    if (!currentProfile || currentProfile.role === 'SUPER_ADMIN') return false;
+    setBusy(triggerButton, true, 'Opening…');
+    try {
+      const creatorId = await resolveCreatorSocialId();
+      if (!creatorId) {
+        toast('Creator messaging is currently unavailable. Please try again later.', 'error');
+        return false;
+      }
+      if (String(creatorId) === String(currentProfile.id || '')) {
+        toast('Use the Super Admin Profile Effects tab to grant effects.', 'info');
+        return false;
+      }
+      const effectName = effectMeta?.name || 'Profile Effect';
+      const draft = `Hi! I'd like to request the permanent "${effectName}" profile effect for my myIPON account.`;
+      document.getElementById('profile-effects-dialog')?.close?.();
+      const quickDlg = document.getElementById('account-dialog');
+      if (quickDlg?.open) quickDlg.close();
+      if (window.IponMessages?.openDirectMessage) {
+        const opened = await window.IponMessages.openDirectMessage(creatorId, { draft });
+        if (opened) return true;
+      }
+      const conv = await rpc('start_or_open_direct_chat', { p_target_id: creatorId });
+      if (conv?.id) {
+        location.href = `${homeForRole(currentProfile.role)}?chat=${encodeURIComponent(conv.id)}`;
+        return true;
+      }
+      return false;
+    } catch (error) {
+      toast(friendlyError(error), 'error');
+      return false;
+    } finally {
+      setBusy(triggerButton, false);
+    }
+  }
+
+  function maybeShowEffectAwardModal(opts = {}) {
+    const targetProfile = opts?.profile || currentProfile;
+    if (!targetProfile) return false;
+    const sourceGrants = Array.isArray(opts?.grants) ? opts.grants : ownProfileEffectsState?.grants;
+    const pendingGrants = (Array.isArray(sourceGrants) ? sourceGrants : [])
+      .filter((item) => item && !item.acknowledged_at && item.effect_id && item.effect_id !== 'none');
+    if (!pendingGrants.length) return false;
+    if (document.getElementById('ipon-effect-award-dialog')) return false;
+
+    const existingOpen = !opts?.force ? document.querySelector('dialog[open]:not(#notification-dialog)') : null;
+    if (existingOpen) return false;
+
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic'];
+    let activeIdx = 0;
+
+    const dialog = document.createElement('dialog');
+    dialog.id = 'ipon-effect-award-dialog';
+    dialog.className = 'badge-celebrate-dialog effect-celebrate-dialog';
+    dialog.setAttribute('aria-labelledby', 'ipon-effect-award-title');
+
+    const recipientName = String(targetProfile.full_name || 'Member').trim();
+    const firstGrant = pendingGrants[0];
+    const firstEffect = api?.getEffect ? api.getEffect(firstGrant.effect_id) : { id: firstGrant.effect_id, name: firstGrant.effect_id, cat: 'Special', rare: 0 };
+    const grantedIso = firstGrant.granted_at || new Date().toISOString();
+    const unlockedOnText = dateLabel(grantedIso, { dateStyle: 'medium' });
+    const cardTheme = ['emerald', 'midnight', 'rose', 'amber', 'ocean', 'mono'].includes(targetProfile.card_theme)
+      ? targetProfile.card_theme
+      : 'emerald';
+
+    const switchTabsHtml = pendingGrants.length > 1
+      ? `<div class="effect-celebrate-tabs" role="tablist" aria-label="Unlocked profile effects">${pendingGrants.map((g, idx) => {
+        const meta = api?.getEffect ? api.getEffect(g.effect_id) : { name: g.effect_id };
+        return `<button type="button" class="effect-celebrate-tab" data-preview-grant-idx="${idx}" aria-selected="${idx === 0 ? 'true' : 'false'}">${escapeHtml(meta.name)}</button>`;
+      }).join('')}</div>`
+      : '';
+
+    const avatarInner = isSafeImageRef(targetProfile.avatar_url)
+      ? `<img src="${escapeHtml(targetProfile.avatar_url)}" alt="${escapeHtml(recipientName)}"><span>${escapeHtml(initials(recipientName))}</span>`
+      : `<span>${escapeHtml(initials(recipientName))}</span>`;
+
+    const initialMsg = String(firstGrant.grant_message || '').trim();
+    const rarText = firstEffect.rare ? ` · ${rarities[firstEffect.rare] || ''}` : '';
+
+    dialog.innerHTML = `
+      <div class="badge-celebrate-sheet is-permanent is-effect" id="ipon-effect-award-sheet">
+        <canvas class="badge-celebrate-confetti-canvas" id="ipon-effect-award-canvas" aria-hidden="true"></canvas>
+        <div class="effect-celebrate-hero" id="ipon-effect-award-hero" data-card-theme="${escapeHtml(cardTheme)}" title="Tap for confetti">
+          <div class="effect-celebrate-banner"></div>
+          <div class="effect-celebrate-avatar avatar-circle avatar-lg">${avatarInner}</div>
+        </div>
+        <span class="badge-celebrate-eyebrow">PROFILE EFFECT UNLOCKED</span>
+        <h2 id="ipon-effect-award-title">Congratulations<span class="badge-celebrate-name">${escapeHtml(recipientName)}!</span></h2>
+        ${switchTabsHtml}
+        <p class="badge-celebrate-copy" id="ipon-effect-award-copy">You received the permanent <b>${escapeHtml(firstEffect.name)}</b> (${escapeHtml(firstEffect.cat + rarText)}) profile effect. It stays unlocked forever with zero retention expiry.</p>
+        <div class="badge-celebrate-dates is-permanent">
+          <div class="badge-celebrate-date"><small>Unlocked on</small><b id="ipon-effect-award-date">${escapeHtml(unlockedOnText)}</b></div>
+          <div class="badge-celebrate-date is-permanent-card"><small>Status</small><b>Permanent · Never expires</b></div>
+        </div>
+        <div class="badge-celebrate-quote" id="ipon-effect-award-quote"${initialMsg ? '' : ' hidden'}>
+          <span class="badge-celebrate-quote-mark" aria-hidden="true">“</span>
+          <div class="badge-celebrate-quote-head"><small>MESSAGE FROM CREATOR</small></div>
+          <p id="ipon-effect-award-quote-text">${escapeHtml(initialMsg)}</p>
+        </div>
+        <div class="effect-celebrate-actions">
+          <button type="button" class="badge-celebrate-btn" id="ipon-effect-award-equip">Equip now</button>
+          <button type="button" class="effect-celebrate-secondary-btn" id="ipon-effect-award-keep">Thank you · Keep in collection</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(dialog);
+    bindAvatarFallbacks(dialog);
+
+    const equipBtn = dialog.querySelector('#ipon-effect-award-equip');
+    const keepBtn = dialog.querySelector('#ipon-effect-award-keep');
+    const sheet = dialog.querySelector('#ipon-effect-award-sheet');
+    const hero = dialog.querySelector('#ipon-effect-award-hero');
+    const canvas = dialog.querySelector('#ipon-effect-award-canvas');
+    const stopConfetti = mountCelebrateConfetti(dialog, sheet, hero, canvas);
+
+    const heroStage = api?.mountStage
+      ? api.mountStage(hero, {
+        effectId: firstGrant.effect_id,
+        geometryFn: () => ({ cx: hero.clientWidth / 2 || 132, cy: 62, ra: 32 }),
+        fps: 60,
+        maxDpr: 2
+      })
+      : null;
+
+    const selectGrantIdx = (idx) => {
+      activeIdx = Math.max(0, Math.min(pendingGrants.length - 1, idx));
+      const g = pendingGrants[activeIdx];
+      const meta = api?.getEffect ? api.getEffect(g.effect_id) : { id: g.effect_id, name: g.effect_id, cat: 'Special', rare: 0 };
+      const rt = meta.rare ? ` · ${rarities[meta.rare] || ''}` : '';
+      const copyEl = dialog.querySelector('#ipon-effect-award-copy');
+      const dateEl = dialog.querySelector('#ipon-effect-award-date');
+      const quoteBox = dialog.querySelector('#ipon-effect-award-quote');
+      const quoteText = dialog.querySelector('#ipon-effect-award-quote-text');
+      if (copyEl) copyEl.innerHTML = `You received the permanent <b>${escapeHtml(meta.name)}</b> (${escapeHtml(meta.cat + rt)}) profile effect. It stays unlocked forever with zero retention expiry.`;
+      if (dateEl) dateEl.textContent = dateLabel(g.granted_at || new Date().toISOString(), { dateStyle: 'medium' });
+      const msg = String(g.grant_message || '').trim();
+      if (quoteBox && quoteText) {
+        quoteBox.hidden = !msg;
+        quoteText.textContent = msg;
+      }
+      dialog.querySelectorAll('[data-preview-grant-idx]').forEach((btn) => {
+        btn.setAttribute('aria-selected', String(Number(btn.dataset.previewGrantIdx) === activeIdx));
+      });
+      heroStage?.setEffect(g.effect_id);
+    };
+
+    dialog.querySelectorAll('[data-preview-grant-idx]').forEach((btn) => {
+      btn.addEventListener('click', () => selectGrantIdx(Number(btn.dataset.previewGrantIdx)));
+    });
+
+    const finalize = async (shouldEquip) => {
+      if (equipBtn) setBusy(equipBtn, shouldEquip, 'Equipping…');
+      if (keepBtn) setBusy(keepBtn, !shouldEquip, 'Saving…');
+      if (equipBtn && !shouldEquip) equipBtn.disabled = true;
+      if (keepBtn && shouldEquip) keepBtn.disabled = true;
+      const grantIds = pendingGrants.map((g) => g.effect_id);
+      const selectedEffectId = pendingGrants[activeIdx]?.effect_id || pendingGrants[0].effect_id;
+      try {
+        const res = await rpc('acknowledge_my_profile_effects', {
+          p_effect_ids: grantIds,
+          p_equip_effect_id: shouldEquip ? selectedEffectId : null
+        });
+        if (res && typeof res === 'object') {
+          ownProfileEffectsState = {
+            equipped_effect: res.equipped_effect || ownProfileEffectsState.equipped_effect || 'none',
+            grants: Array.isArray(res.grants) ? res.grants : ownProfileEffectsState.grants
+          };
+        } else {
+          const nowIso = new Date().toISOString();
+          ownProfileEffectsState.grants = (ownProfileEffectsState.grants || []).map((g) => ({ ...g, acknowledged_at: g.acknowledged_at || nowIso }));
+          if (shouldEquip) ownProfileEffectsState.equipped_effect = selectedEffectId;
+        }
+        if (currentProfile) currentProfile.equipped_profile_effect = ownProfileEffectsState.equipped_effect;
+        if (targetProfile) targetProfile.equipped_profile_effect = ownProfileEffectsState.equipped_effect;
+        syncAccountEffectsSummary();
+        window.dispatchEvent?.(new CustomEvent('ipon:profile-updated', { detail: targetProfile }));
+        if (shouldEquip) {
+          const meta = api?.getEffect ? api.getEffect(selectedEffectId) : { name: 'Profile effect' };
+          toast(`${meta.name} equipped to your profile.`);
+        }
+      } catch (err) {
+        toast(friendlyError(err), 'error');
+      } finally {
+        stopConfetti();
+        heroStage?.destroy?.();
+        if (equipBtn) setBusy(equipBtn, false);
+        if (keepBtn) setBusy(keepBtn, false);
+        try { dialog.close(); } catch { }
+        dialog.remove();
+      }
+    };
+
+    equipBtn?.addEventListener('click', () => finalize(true));
+    keepBtn?.addEventListener('click', () => finalize(false));
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      finalize(false);
+    });
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    requestAnimationFrame?.(() => heroStage?.refreshGeometry?.());
+    return true;
+  }
+
+  async function openProfileEffectsDialog() {
+    if (!currentProfile) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    if (!api) {
+      toast('Profile effects library is still loading. Please try again.', 'error');
+      return;
+    }
+    document.getElementById('profile-effects-dialog')?.remove();
+
+    const [effectsState, appearance, myGroups] = await Promise.all([
+      refreshProfileEffectsState({ checkModal: false }),
+      rpc('get_profile_card_appearance', { p_target_id: currentProfile.id }).catch(() => null),
+      currentProfile.role !== 'SUPER_ADMIN'
+        ? rpc('get_my_groups').catch(() => [])
+        : Promise.resolve([])
+    ]);
+
+    const cardThemes = ['emerald', 'midnight', 'rose', 'amber', 'ocean', 'mono'];
+    let cardTheme = cardThemes.includes(appearance?.card_theme || currentProfile.card_theme)
+      ? (appearance?.card_theme || currentProfile.card_theme)
+      : 'emerald';
+    const coverUrl = isSafeImageRef(appearance?.cover_url || currentProfile.cover_url)
+      ? (appearance?.cover_url || currentProfile.cover_url)
+      : '';
+    const ownedSet = new Set(
+      currentProfile.role === 'SUPER_ADMIN'
+        ? api.EFFECTS.map((item) => item.id)
+        : (effectsState?.grants || []).map((item) => item.effect_id)
+    );
+    let equipped = api.normalizeEffectId(effectsState?.equipped_effect || currentProfile.equipped_profile_effect);
+    if (equipped !== 'none' && !ownedSet.has(equipped) && currentProfile.role !== 'SUPER_ADMIN') equipped = 'none';
+    let preview = equipped;
+    let activeCategory = 'All';
+    let searchQuery = '';
+
+    const fullName = String(currentProfile.full_name || 'Member').trim();
+    const cleanUsername = String(currentProfile.username || '').trim().replace(/^@+/, '');
+    const roleText = currentProfile.role === 'SUPER_ADMIN'
+      ? 'Platform Owner'
+      : currentProfile.role === 'ADMIN'
+        ? 'Group Admin'
+        : currentProfile.role === 'TREASURER'
+          ? 'Treasurer'
+          : 'Member';
+    const groupText = Array.isArray(myGroups) && myGroups.length
+      ? myGroups.map((g) => g?.group_name || g?.name).filter(Boolean).slice(0, 2).join(' · ')
+      : (currentProfile.role === 'SUPER_ADMIN' ? 'System Administrator' : 'Personal workspace');
+    const avatarInner = isSafeImageRef(currentProfile.avatar_url)
+      ? `<img src="${escapeHtml(currentProfile.avatar_url)}" alt="${escapeHtml(fullName)}"><span>${escapeHtml(initials(fullName))}</span>`
+      : `<span>${escapeHtml(initials(fullName))}</span>`;
+
+    const dialog = document.createElement('dialog');
+    dialog.id = 'profile-effects-dialog';
+    dialog.className = 'effects-gallery-dialog';
+    dialog.setAttribute('aria-labelledby', 'effects-gallery-title');
+
+    dialog.innerHTML = `
+      <div class="effects-gallery-sheet">
+        <header class="effects-gallery-head">
+          <div>
+            <h2 id="effects-gallery-title">Profile Effects</h2>
+            <p>Living animations that orbit and drift around your avatar. Pick one to preview it on your profile, then equip it. All unlocked effects are permanent.</p>
+          </div>
+          <button type="button" class="dialog-close effects-gallery-close" id="effects-gallery-close" aria-label="Close profile effects">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </header>
+        <div class="effects-gallery-layout">
+          <section class="effects-gallery-main">
+            <div class="effects-motion-notice" id="effects-motion-notice" hidden>
+              <span>Your device asks for reduced motion, so effects are shown as still frames.</span>
+              <button type="button" id="effects-play-motion">Play animations</button>
+            </div>
+            <input class="effects-find" id="effects-search" type="search" placeholder="Search effects" aria-label="Search effects">
+            <div class="effects-chips" id="effects-chips">${api.CATEGORIES.map((c) => `<button type="button" class="effects-chip" data-effect-cat="${escapeHtml(c)}" aria-pressed="${c === 'All' ? 'true' : 'false'}">${escapeHtml(c)}</button>`).join('')}</div>
+            <div class="effects-grid" id="effects-grid"></div>
+          </section>
+          <aside class="effects-side">
+            <div class="effects-card" id="effects-preview-card" data-theme="${escapeHtml(cardTheme)}">
+              <div class="effects-banner">${coverUrl ? `<img src="${escapeHtml(coverUrl)}" alt="">` : ''}</div>
+              <div class="effects-card-body">
+                <div class="effects-card-avatar avatar-circle">${avatarInner}</div>
+                <h3 class="effects-card-name">${escapeHtml(fullName)}${verifiedBadgesHtml(currentProfile)}</h3>
+                <p class="effects-card-meta">${cleanUsername ? `@${escapeHtml(cleanUsername)} · ` : ''}${escapeHtml(roleText)}</p>
+                <div class="effects-card-groups"><small>GROUPS</small><b>${escapeHtml(groupText)}</b></div>
+              </div>
+            </div>
+            <div class="effects-panel">
+              <div class="effects-status">
+                <div><small id="effects-st-label">EQUIPPED</small><b id="effects-st-name">No effect</b></div>
+                <span class="effects-pill off" id="effects-st-pill">NONE</span>
+              </div>
+              <div class="effects-pbtns" id="effects-pbtns">
+                <button type="button" class="effects-btn primary" id="effects-equip-btn">Equip effect</button>
+                <button type="button" class="effects-btn ghost" id="effects-cancel-btn" hidden>Cancel</button>
+              </div>
+              <button type="button" class="effects-request-btn" id="effects-request-btn" hidden>Request unlock from creator</button>
+            </div>
+            <div class="effects-dock" id="effects-theme-dock" role="group" aria-label="Card theme">
+              ${cardThemes.map((t) => `<button type="button" data-t="${t}" aria-label="${escapeHtml(t[0].toUpperCase() + t.slice(1))}" aria-pressed="${t === cardTheme ? 'true' : 'false'}"></button>`).join('')}
+            </div>
+          </aside>
+        </div>
+      </div>`;
+
+    document.body.appendChild(dialog);
+    bindAvatarFallbacks(dialog);
+
+    const grid = dialog.querySelector('#effects-grid');
+    const previewCard = dialog.querySelector('#effects-preview-card');
+    const cardStage = api.mountStage(previewCard, { effectId: preview, fps: 60, maxDpr: 2 });
+    const tileControllers = new Map();
+    const tiles = new Map();
+
+    for (const e of api.ALL_OPTIONS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'effects-tile';
+      btn.dataset.id = e.id;
+      btn.dataset.cat = e.cat;
+      btn.setAttribute('aria-pressed', String(e.id === preview));
+      const rarLabel = e.rare ? ` · ${api.RARITIES[e.rare] || ''}` : '';
+      btn.innerHTML = `
+        <div class="tstage">
+          <div class="mav">${escapeHtml(initials(fullName))}</div>
+          <span class="flag">EQUIPPED</span>
+          <span class="lk">LOCKED</span>
+        </div>
+        <div class="tmeta">
+          <div class="trow"><b>${escapeHtml(e.name)}</b><em class="cat rar${e.rare | 0}">${escapeHtml(e.cat + rarLabel)}</em></div>
+          <p>${escapeHtml(e.desc)}</p>
+        </div>`;
+      grid.appendChild(btn);
+      tiles.set(e.id, btn);
+      if (e.id !== 'none') {
+        const tstage = btn.querySelector('.tstage');
+        tileControllers.set(e.id, api.mountStage(tstage, {
+          effectId: e.id,
+          geometryFn: (W, H) => ({ cx: W / 2, cy: H * 0.48, ra: Math.max(12, W * 0.115) }),
+          fps: 30,
+          maxDpr: 1.5
+        }));
+      }
+      btn.addEventListener('click', () => {
+        preview = e.id;
+        cardStage.setEffect(preview);
+        syncGalleryUi();
+      });
+    }
+
+    const emptyMsg = document.createElement('p');
+    emptyMsg.className = 'effects-empty';
+    emptyMsg.textContent = 'No effects match your search.';
+    emptyMsg.hidden = true;
+    grid.appendChild(emptyMsg);
+
+    const isLocked = (id) => id !== 'none' && !ownedSet.has(id);
+
+    function applyFilter() {
+      let visibleCount = 0;
+      for (const e of api.ALL_OPTIONS) {
+        const tile = tiles.get(e.id);
+        if (!tile) continue;
+        const catMatch = activeCategory === 'All' || e.cat === activeCategory || (activeCategory === 'Special' && e.rare > 0);
+        const noneMatch = e.id !== 'none' || activeCategory === 'All';
+        const hay = `${e.name} ${e.cat} ${e.desc} ${api.RARITIES[e.rare] || ''}`.toLowerCase();
+        const queryMatch = !searchQuery || hay.includes(searchQuery);
+        const show = catMatch && noneMatch && queryMatch;
+        tile.hidden = !show;
+        if (show) {
+          tile.classList.remove('in');
+          tile.style.animationDelay = `${Math.min(visibleCount, 12) * 24}ms`;
+          tile.classList.add('in');
+          visibleCount += 1;
+        }
+      }
+      emptyMsg.hidden = visibleCount > 0;
+    }
+
+    function syncGalleryUi() {
+      for (const e of api.ALL_OPTIONS) {
+        const tile = tiles.get(e.id);
+        if (!tile) continue;
+        tile.setAttribute('aria-pressed', String(e.id === preview));
+        tile.dataset.eq = String(e.id === equipped && equipped !== 'none');
+        tile.dataset.lock = String(isLocked(e.id));
+      }
+      const pv = preview !== equipped;
+      const lk = isLocked(preview);
+      const pill = dialog.querySelector('#effects-st-pill');
+      const btn = dialog.querySelector('#effects-equip-btn');
+      const cancelBtn = dialog.querySelector('#effects-cancel-btn');
+      const pbtns = dialog.querySelector('#effects-pbtns');
+      const reqBtn = dialog.querySelector('#effects-request-btn');
+      const stLabel = dialog.querySelector('#effects-st-label');
+      const stName = dialog.querySelector('#effects-st-name');
+
+      const previewMeta = api.getEffect(preview);
+      const equippedMeta = api.getEffect(equipped);
+      if (stLabel) stLabel.textContent = pv ? 'PREVIEWING' : 'EQUIPPED';
+      if (stName) stName.textContent = pv ? previewMeta.name : equippedMeta.name;
+      if (pill) {
+        pill.className = `effects-pill ${lk ? 'lock' : pv ? 'pv' : equipped === 'none' ? 'off' : 'eq'}`;
+        pill.textContent = lk ? 'LOCKED' : pv ? 'NOT SAVED' : equipped === 'none' ? 'NONE' : 'ACTIVE';
+      }
+      if (btn) {
+        btn.disabled = !pv || lk;
+        btn.textContent = lk
+          ? 'Locked · not unlocked yet'
+          : preview === 'none'
+            ? (equipped === 'none' ? 'No effect equipped' : 'Remove effect')
+            : 'Equip effect';
+      }
+      if (cancelBtn) cancelBtn.hidden = !pv;
+      pbtns?.classList.toggle('single', !pv);
+      if (reqBtn) {
+        reqBtn.hidden = !lk || currentProfile.role === 'SUPER_ADMIN';
+        reqBtn.textContent = `Request "${previewMeta.name}" from creator`;
+      }
+    }
+
+    const syncMotionNotice = () => {
+      const notice = dialog.querySelector('#effects-motion-notice');
+      if (notice) notice.hidden = !(api.isReducedMotion() && !api.getMotionForced());
+    };
+    const offMotionListener = api.onMotionChange(syncMotionNotice);
+    syncMotionNotice();
+    dialog.querySelector('#effects-play-motion')?.addEventListener('click', () => api.setMotionForced(true));
+
+    dialog.querySelector('#effects-chips')?.addEventListener('click', (event) => {
+      const chip = event.target.closest('[data-effect-cat]');
+      if (!chip) return;
+      activeCategory = chip.dataset.effectCat || 'All';
+      dialog.querySelectorAll('.effects-chip').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+      applyFilter();
+    });
+    dialog.querySelector('#effects-search')?.addEventListener('input', (event) => {
+      searchQuery = String(event.target.value || '').trim().toLowerCase();
+      applyFilter();
+    });
+    dialog.querySelector('#effects-cancel-btn')?.addEventListener('click', () => {
+      preview = equipped;
+      cardStage.setEffect(preview);
+      syncGalleryUi();
+    });
+    dialog.querySelector('#effects-request-btn')?.addEventListener('click', (event) => {
+      openCreatorEffectChat(api.getEffect(preview), event.currentTarget);
+    });
+    dialog.querySelector('#effects-equip-btn')?.addEventListener('click', async () => {
+      const targetId = preview;
+      if (isLocked(targetId) || targetId === equipped) return;
+      const btn = dialog.querySelector('#effects-equip-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+      try {
+        const res = await rpc('equip_own_profile_effect', { p_effect_id: targetId });
+        ownProfileEffectsState = {
+          equipped_effect: res?.equipped_effect || targetId,
+          grants: Array.isArray(res?.grants) ? res.grants : ownProfileEffectsState.grants
+        };
+        equipped = api.normalizeEffectId(ownProfileEffectsState.equipped_effect);
+        preview = equipped;
+        currentProfile.equipped_profile_effect = equipped;
+        syncAccountEffectsSummary();
+        window.dispatchEvent?.(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
+        toast(equipped === 'none'
+          ? 'Effect removed from your profile.'
+          : `${api.getEffect(equipped).name} equipped and saved permanently.`);
+      } catch (error) {
+        toast(friendlyError(error), 'error');
+      } finally {
+        syncGalleryUi();
+      }
+    });
+
+    dialog.querySelector('#effects-theme-dock')?.addEventListener('click', async (event) => {
+      const sw = event.target.closest('[data-t]');
+      if (!sw) return;
+      const nextTheme = sw.dataset.t;
+      if (!cardThemes.includes(nextTheme)) return;
+      cardTheme = nextTheme;
+      previewCard.dataset.theme = nextTheme;
+      dialog.querySelectorAll('#effects-theme-dock [data-t]').forEach((b) => {
+        b.setAttribute('aria-pressed', String(b.dataset.t === nextTheme));
+      });
+      try {
+        const updated = await rpc('update_own_profile_card', { p_theme: nextTheme });
+        syncProfileCardEditor(updated);
+        window.dispatchEvent?.(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
+      } catch (error) {
+        toast(friendlyError(error), 'error');
+      }
+    });
+
+    const closeGallery = () => {
+      offMotionListener?.();
+      cardStage?.destroy?.();
+      tileControllers.forEach((ctrl) => ctrl?.destroy?.());
+      tileControllers.clear();
+      try { dialog.close(); } catch { }
+      dialog.remove();
+    };
+    dialog.querySelector('#effects-gallery-close')?.addEventListener('click', closeGallery);
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeGallery();
+    });
+
+    applyFilter();
+    syncGalleryUi();
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    requestAnimationFrame?.(() => {
+      cardStage.refreshGeometry();
+      tileControllers.forEach((ctrl) => ctrl.refreshGeometry());
+    });
   }
 
   initVerifiedBadgeTooltip();
@@ -3570,7 +4147,10 @@
       syncAccountBadgeSection(currentProfile);
       document.getElementById('quick-account-role').textContent = currentProfile.role === 'SUPER_ADMIN' ? 'Owner' : (data.email || 'My account');
       syncProfileAvatars({ ...currentProfile, ...data });
-      const appearance = await rpc('get_profile_card_appearance', { p_target_id: currentProfile.id }).catch(() => null);
+      const [appearance] = await Promise.all([
+        rpc('get_profile_card_appearance', { p_target_id: currentProfile.id }).catch(() => null),
+        refreshProfileEffectsState({ checkModal: false }).catch(() => null)
+      ]);
       syncProfileCardEditor(appearance);
       const support = dialog.querySelector('.account-support');
       if (support) support.hidden = currentProfile.role === 'SUPER_ADMIN';
@@ -3590,11 +4170,20 @@
     catch (error) { toast(friendlyError(error), 'error'); }
   }
 
-  function openAvatarCropper(file, { title = 'Crop display picture', onSave } = {}) {
+  function openAvatarCropper(file, {
+    mode = 'avatar',
+    title = 'Crop display picture',
+    subtitle = 'Drag to reposition or adjust zoom to frame your profile picture.',
+    saveLabel = 'Save display picture',
+    category = 'avatars',
+    maxBytes = MAX_AVATAR_BYTES,
+    onSave
+  } = {}) {
     return new Promise((resolve) => {
       const dialog = document.getElementById('avatar-crop-dialog');
       const canvas = document.getElementById('avatar-crop-canvas');
       const titleEl = document.getElementById('avatar-crop-title');
+      const subtitleEl = document.getElementById('avatar-crop-subtitle');
       const zoomInput = document.getElementById('avatar-crop-zoom');
       const previewThumb = document.getElementById('avatar-crop-preview-thumb');
       const rotateBtn = document.getElementById('avatar-crop-rotate');
@@ -3604,23 +4193,37 @@
       const viewport = dialog?.querySelector('.avatar-crop-viewport-wrap');
 
       if (!dialog || !canvas || !viewport) return resolve(null);
-      if (titleEl) titleEl.textContent = title;
 
       if (file instanceof File && !file.type.startsWith('image/') && !PICTURE_FILE_RE.test(file.name || '')) {
         toast('Please choose a valid picture file.', 'error');
         return resolve(null);
       }
 
-      const CROP_X = 15;
-      const CROP_Y = 15;
-      const CROP_SIZE = 250;
-      const CENTER = 140;
+      const isCover = mode === 'cover';
+      const VIEW_W = isCover ? 360 : 280;
+      const VIEW_H = isCover ? 220 : 280;
+      const CROP_X = isCover ? 12 : 15;
+      const CROP_Y = isCover ? 54 : 15;
+      const CROP_W = isCover ? 336 : 250;
+      const CROP_H = isCover ? 112 : 250;
+      const CENTER_X = VIEW_W / 2;
+      const CENTER_Y = VIEW_H / 2;
+      const THUMB_W = isCover ? 84 : 44;
+      const THUMB_H = isCover ? 28 : 44;
+      const THUMB_RADIUS = isCover ? '6px' : '50%';
+      const maxUploadBytes = Number(maxBytes) > 0 ? Number(maxBytes) : MAX_AVATAR_BYTES;
 
-      let thumbCanvas = previewThumb?.querySelector('canvas');
-      if (!thumbCanvas && previewThumb) {
-        previewThumb.innerHTML = '<canvas width="44" height="44" style="display:block;width:44px;height:44px;border-radius:50%;"></canvas>';
-        thumbCanvas = previewThumb.querySelector('canvas');
+      dialog.classList.toggle('is-cover', isCover);
+      canvas.width = VIEW_W;
+      canvas.height = VIEW_H;
+      if (titleEl) titleEl.textContent = title;
+      if (subtitleEl) subtitleEl.textContent = subtitle;
+      if (saveBtn) saveBtn.textContent = saveLabel;
+      if (previewThumb) {
+        previewThumb.classList.toggle('is-cover', isCover);
+        previewThumb.innerHTML = `<canvas width="${THUMB_W}" height="${THUMB_H}" style="display:block;width:${THUMB_W}px;height:${THUMB_H}px;border-radius:${THUMB_RADIUS};"></canvas>`;
       }
+      const thumbCanvas = previewThumb?.querySelector('canvas');
       const thumbCtx = thumbCanvas?.getContext('2d');
       const ctx = canvas.getContext('2d');
 
@@ -3637,6 +4240,7 @@
       let offsetX = 0;
       let offsetY = 0;
       let isDragging = false;
+      let activePointerId = null;
       let startPointerX = 0;
       let startPointerY = 0;
       let startOffsetX = 0;
@@ -3652,16 +4256,16 @@
 
       function updateScaleAndDimensions() {
         const eff = getEffectiveDimensions();
-        minScale = Math.max(CROP_SIZE / eff.w, CROP_SIZE / eff.h);
+        minScale = Math.max(CROP_W / eff.w, CROP_H / eff.h);
         scale = minScale * zoom;
-        imgW = Math.round(eff.w * scale);
-        imgH = Math.round(eff.h * scale);
+        imgW = Math.max(CROP_W, Math.round(eff.w * scale));
+        imgH = Math.max(CROP_H, Math.round(eff.h * scale));
       }
 
       function clampOffsets() {
-        const minX = (CROP_X + CROP_SIZE) - imgW;
+        const minX = (CROP_X + CROP_W) - imgW;
         const maxX = CROP_X;
-        const minY = (CROP_Y + CROP_SIZE) - imgH;
+        const minY = (CROP_Y + CROP_H) - imgH;
         const maxY = CROP_Y;
         offsetX = Math.min(maxX, Math.max(minX, offsetX));
         offsetY = Math.min(maxY, Math.max(minY, offsetY));
@@ -3680,21 +4284,21 @@
         ctx.drawImage(img, -naturalW / 2, -naturalH / 2, naturalW, naturalH);
         ctx.restore();
         if (thumbCtx) {
-          thumbCtx.clearRect(0, 0, 44, 44);
-          thumbCtx.drawImage(canvas, CROP_X, CROP_Y, CROP_SIZE, CROP_SIZE, 0, 0, 44, 44);
+          thumbCtx.clearRect(0, 0, THUMB_W, THUMB_H);
+          thumbCtx.drawImage(canvas, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, THUMB_W, THUMB_H);
         }
       }
 
       function applyZoom(newZoom) {
         newZoom = Math.min(3, Math.max(1, newZoom));
-        const px = CENTER - offsetX;
-        const py = CENTER - offsetY;
+        const px = CENTER_X - offsetX;
+        const py = CENTER_Y - offsetY;
         const prevScale = scale;
         zoom = newZoom;
         updateScaleAndDimensions();
         const ratio = scale / prevScale;
-        offsetX = CENTER - px * ratio;
-        offsetY = CENTER - py * ratio;
+        offsetX = CENTER_X - px * ratio;
+        offsetY = CENTER_Y - py * ratio;
         clampOffsets();
         if (zoomInput) zoomInput.value = String(zoom);
         draw();
@@ -3703,15 +4307,16 @@
       const onRotate = () => {
         rotation = (rotation + 90) % 360;
         updateScaleAndDimensions();
-        offsetX = CENTER - imgW / 2;
-        offsetY = CENTER - imgH / 2;
+        offsetX = CENTER_X - imgW / 2;
+        offsetY = CENTER_Y - imgH / 2;
         clampOffsets();
         draw();
       };
 
       const onPointerDown = (e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || e.isPrimary === false) return;
         isDragging = true;
+        activePointerId = e.pointerId;
         try { viewport.setPointerCapture(e.pointerId); } catch { }
         startPointerX = e.clientX;
         startPointerY = e.clientY;
@@ -3720,16 +4325,18 @@
       };
 
       const onPointerMove = (e) => {
-        if (!isDragging) return;
-        offsetX = startOffsetX + (e.clientX - startPointerX);
-        offsetY = startOffsetY + (e.clientY - startPointerY);
+        if (!isDragging || (activePointerId !== null && e.pointerId !== activePointerId)) return;
+        const pointerScale = VIEW_W / Math.max(1, viewport.clientWidth || VIEW_W);
+        offsetX = startOffsetX + (e.clientX - startPointerX) * pointerScale;
+        offsetY = startOffsetY + (e.clientY - startPointerY) * pointerScale;
         clampOffsets();
         draw();
       };
 
       const onPointerUp = (e) => {
-        if (!isDragging) return;
+        if (!isDragging || (activePointerId !== null && e.pointerId !== activePointerId)) return;
         isDragging = false;
+        activePointerId = null;
         try { viewport.releasePointerCapture(e.pointerId); } catch { }
       };
 
@@ -3757,11 +4364,21 @@
         dialog.removeEventListener('cancel', onDialogCancel);
         dialog.removeEventListener('click', onBackdropClick);
         if (isBlob) URL.revokeObjectURL(objectUrl);
+        dialog.classList.remove('is-cover');
+        canvas.width = 280;
+        canvas.height = 280;
+        if (titleEl) titleEl.textContent = 'Crop display picture';
+        if (subtitleEl) subtitleEl.textContent = 'Drag to reposition or adjust zoom to frame your profile picture.';
+        if (saveBtn) saveBtn.textContent = 'Save display picture';
+        if (previewThumb) {
+          previewThumb.classList.remove('is-cover');
+          previewThumb.innerHTML = '';
+        }
       }
 
       function onCancel() {
+        if (dialog.open) dialog.close();
         cleanup();
-        dialog.close();
         resolve(null);
       }
 
@@ -3778,39 +4395,46 @@
         setBusy(saveBtn, true, 'Saving…');
         try {
           const srcType = file instanceof File ? String(file.type || '').toLowerCase() : '';
-          const isUneditedSquare = file instanceof File
-            && file.size <= MAX_AVATAR_BYTES
+          const fileBase = isCover ? 'cover' : 'avatar';
+          const targetAspect = CROP_W / CROP_H;
+          const isUneditedExact = file instanceof File
+            && file.size <= maxUploadBytes
             && /^image\/(png|jpeg|webp|gif)$/i.test(srcType)
+            && (!isCover || srcType !== 'image/gif')
             && rotation === 0
             && zoom === 1
             && img.naturalWidth > 0
-            && img.naturalWidth === img.naturalHeight
-            && Math.abs(offsetX - (CENTER - imgW / 2)) < 1
-            && Math.abs(offsetY - (CENTER - imgH / 2)) < 1;
+            && img.naturalHeight > 0
+            && Math.abs((img.naturalWidth / img.naturalHeight) - targetAspect) < 0.005
+            && Math.abs(offsetX - (CENTER_X - imgW / 2)) < 1
+            && Math.abs(offsetY - (CENTER_Y - imgH / 2)) < 1;
 
           let croppedDataUrl = '';
-          let uploadName = 'avatar.jpg';
-          if (isUneditedSquare) {
+          let uploadName = `${fileBase}.jpg`;
+          if (isUneditedExact) {
             croppedDataUrl = await readFileAsDataUrl(file);
-            uploadName = srcType === 'image/png' ? 'avatar.png'
-              : srcType === 'image/webp' ? 'avatar.webp'
-              : srcType === 'image/gif' ? 'avatar.gif'
-              : 'avatar.jpg';
+            uploadName = srcType === 'image/png' ? `${fileBase}.png`
+              : srcType === 'image/webp' ? `${fileBase}.webp`
+              : srcType === 'image/gif' ? `${fileBase}.gif`
+              : `${fileBase}.jpg`;
           } else {
             const exportCanvas = document.createElement('canvas');
-            const nativeCropEdge = Math.max(1, Math.round(CROP_SIZE / scale));
-            const exportSize = Math.min(2400, nativeCropEdge);
-            exportCanvas.width = exportSize;
-            exportCanvas.height = exportSize;
+            const nativeCropEdge = Math.max(1, Math.round(CROP_H / scale));
+            const exportH = isCover
+              ? Math.min(800, nativeCropEdge)
+              : Math.min(2400, nativeCropEdge);
+            const exportW = isCover ? exportH * 3 : exportH;
+            exportCanvas.width = exportW;
+            exportCanvas.height = exportH;
             const exportCtx = exportCanvas.getContext('2d');
             if (!exportCtx) return onCancel();
             exportCtx.imageSmoothingEnabled = true;
             exportCtx.imageSmoothingQuality = 'high';
             if (srcType !== 'image/png' && srcType !== 'image/webp') {
               exportCtx.fillStyle = '#ffffff';
-              exportCtx.fillRect(0, 0, exportSize, exportSize);
+              exportCtx.fillRect(0, 0, exportW, exportH);
             }
-            const outScale = exportSize / CROP_SIZE;
+            const outScale = exportW / CROP_W;
             const cx = (offsetX + imgW / 2 - CROP_X) * outScale;
             const cy = (offsetY + imgH / 2 - CROP_Y) * outScale;
             exportCtx.save();
@@ -3823,25 +4447,29 @@
 
             if (srcType === 'image/png') {
               croppedDataUrl = exportCanvas.toDataURL('image/png');
-              uploadName = 'avatar.png';
-              if (Math.ceil((croppedDataUrl.length * 3) / 4) > MAX_AVATAR_BYTES) {
-                croppedDataUrl = exportCanvas.toDataURL('image/webp', 0.96);
-                uploadName = 'avatar.webp';
+              uploadName = `${fileBase}.png`;
+              if (Math.ceil((croppedDataUrl.length * 3) / 4) > maxUploadBytes) {
+                croppedDataUrl = exportCanvas.toDataURL('image/webp', 0.94);
+                uploadName = `${fileBase}.webp`;
               }
             } else if (srcType === 'image/webp') {
               croppedDataUrl = exportCanvas.toDataURL('image/webp', 0.96);
-              uploadName = 'avatar.webp';
+              uploadName = `${fileBase}.webp`;
             } else {
               croppedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.96);
-              uploadName = 'avatar.jpg';
+              uploadName = `${fileBase}.jpg`;
             }
-            if (Math.ceil((croppedDataUrl.length * 3) / 4) > MAX_AVATAR_BYTES) {
+            if (Math.ceil((croppedDataUrl.length * 3) / 4) > maxUploadBytes) {
               croppedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.88);
-              uploadName = 'avatar.jpg';
+              uploadName = `${fileBase}.jpg`;
+            }
+            if (Math.ceil((croppedDataUrl.length * 3) / 4) > maxUploadBytes) {
+              croppedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.76);
+              uploadName = `${fileBase}.jpg`;
             }
           }
 
-          const uploadedUrl = await uploadMediaDataUrl(croppedDataUrl, { category: 'avatars', name: uploadName });
+          const uploadedUrl = await uploadMediaDataUrl(croppedDataUrl, { category, name: uploadName });
           if (typeof onSave === 'function') {
             await onSave(uploadedUrl);
           } else {
@@ -3851,8 +4479,8 @@
             window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
             toast('Profile picture updated.');
           }
+          if (dialog.open) dialog.close();
           cleanup();
-          dialog.close();
           resolve(uploadedUrl);
         } catch (error) {
           toast(friendlyError(error), 'error');
@@ -3865,8 +4493,8 @@
         rotation = 0;
         zoom = 1;
         updateScaleAndDimensions();
-        offsetX = CENTER - imgW / 2;
-        offsetY = CENTER - imgH / 2;
+        offsetX = CENTER_X - imgW / 2;
+        offsetY = CENTER_Y - imgH / 2;
         clampOffsets();
 
         if (zoomInput) {
@@ -3921,7 +4549,12 @@
     if (change) change.disabled = !appearance;
     const feedback = document.getElementById('quick-card-feedback');
     if (feedback) feedback.textContent = appearance ? '' : 'Profile card editing is unavailable until the database update is applied.';
-    if (appearance) Object.assign(currentProfile, { card_theme: theme, cover_url: cover || null });
+    if (appearance) Object.assign(currentProfile, {
+      card_theme: theme,
+      cover_url: cover || null,
+      equipped_profile_effect: appearance.profile_effect || currentProfile.equipped_profile_effect || 'none'
+    });
+    syncAccountEffectsSummary();
   }
 
   function bindAccountDialog() {
@@ -3946,19 +4579,28 @@
       const file = coverInput.files?.[0];
       coverInput.value = '';
       if (!file) return;
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 25 * 1024 * 1024) {
+      const mime = String(file.type || '').trim().toLowerCase();
+      const allowedCover = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(mime)
+        || (!mime && /\.(jpe?g|png|webp)$/i.test(file.name || ''));
+      if (!allowedCover || file.size > 25 * 1024 * 1024) {
         toast('Choose a JPEG, PNG, or WebP image under 25 MB.', 'error');
         return;
       }
-      setBusy(coverChange, true, 'Uploading…');
       try {
-        const image = await prepareImageDataUrl(file, { maxEdge: 2048, skipCompressBytes: 0, maxBytes: 2 * 1024 * 1024 });
-        const url = await uploadMediaDataUrl(image.dataUrl, { category: 'covers', name: image.name });
-        syncProfileCardEditor(await rpc('update_own_profile_card', { p_cover_url: url }));
-        window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
-        toast('Cover photo updated.');
+        await openAvatarCropper(file, {
+          mode: 'cover',
+          title: 'Edit cover photo',
+          subtitle: 'Drag to reposition or adjust zoom to choose which part shows as your cover.',
+          saveLabel: 'Save cover photo',
+          category: 'covers',
+          maxBytes: 2 * 1024 * 1024,
+          onSave: async (url) => {
+            syncProfileCardEditor(await rpc('update_own_profile_card', { p_cover_url: url }));
+            window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
+            toast('Cover photo updated.');
+          }
+        });
       } catch (error) { toast(friendlyError(error), 'error'); }
-      finally { setBusy(coverChange, false); }
     });
     coverRemove?.addEventListener('click', async () => {
       if (!await confirmAction({ title: 'Remove cover photo?', message: 'Your profile card will show its color theme instead.', acceptLabel: 'Remove' })) return;
@@ -3970,14 +4612,28 @@
       } catch (error) { toast(friendlyError(error), 'error'); }
       finally { setBusy(coverRemove, false); }
     });
-    document.querySelectorAll('#quick-card-appearance [data-card-color]').forEach((button) => button.addEventListener('click', async () => {
-      setBusy(button, true);
+    const colorSwatches = Array.from(document.querySelectorAll('#quick-card-appearance [data-card-color]'));
+    colorSwatches.forEach((button) => button.addEventListener('click', async () => {
+      const feedback = document.getElementById('quick-card-feedback');
+      colorSwatches.forEach((swatch) => { swatch.disabled = true; });
+      button.classList.add('is-saving');
+      button.setAttribute('aria-busy', 'true');
+      if (feedback) feedback.textContent = 'Saving color…';
       try {
         syncProfileCardEditor(await rpc('update_own_profile_card', { p_theme: button.dataset.cardColor }));
         window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
-      } catch (error) { toast(friendlyError(error), 'error'); }
-      finally { setBusy(button, false); }
+      } catch (error) {
+        toast(friendlyError(error), 'error');
+      } finally {
+        button.classList.remove('is-saving');
+        button.removeAttribute('aria-busy');
+        colorSwatches.forEach((swatch) => { swatch.disabled = false; });
+        if (feedback && feedback.textContent === 'Saving color…') feedback.textContent = '';
+      }
     }));
+    document.getElementById('quick-effects-open')?.addEventListener('click', () => {
+      openProfileEffectsDialog();
+    });
     if (avatarTrigger && avatarInput) avatarTrigger.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
       event.preventDefault();
@@ -6273,6 +6929,14 @@
       }
     }
 
+    if (rawItem?.type === 'EFFECT_GRANTED') {
+      await refreshProfileEffectsState({ checkModal: false });
+      if (!maybeShowEffectAwardModal({ force: true })) {
+        await openProfileEffectsDialog();
+      }
+      return null;
+    }
+
     const target = rawItem
       ? resolveNotificationTarget(rawItem, currentProfile?.role || 'MEMBER')
       : normalizeRolePageTarget(itemOrTarget, currentProfile?.role || 'MEMBER');
@@ -6460,6 +7124,9 @@
             }
           }).catch(() => { });
         }
+        if (incomingType === 'EFFECT_GRANTED' || incomingType === 'EFFECT_REMOVED') {
+          refreshProfileEffectsState({ checkModal: incomingType === 'EFFECT_GRANTED' }).catch(() => { });
+        }
         if (typeof activeLiveRefresh === 'function') {
           try { activeLiveRefresh(); } catch { }
         }
@@ -6505,9 +7172,11 @@
             : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
         const iconHtml = item.type === 'BADGE_GRANTED'
           ? `<span class="notification-item-icon is-badge-granted" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified badge')}</span>`
-          : item.type === 'BADGE_REMOVED'
+          : item.type === 'BADGE_REMOVED' || item.type === 'EFFECT_REMOVED'
             ? `<span class="notification-item-icon is-badge-removed" aria-hidden="true"><svg class="verified-badge-svg" viewBox="0 0 24 24" shape-rendering="geometricPrecision"><path fill="#dc2626" d="${SCALLOP_SEAL_PATH}"/><path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/></svg></span>`
-            : `<span class="notification-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${iconPath}"/></svg></span>`;
+            : item.type === 'EFFECT_GRANTED'
+              ? '<span class="notification-item-icon is-effect-granted" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 2 2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2Z"/></svg></span>'
+              : `<span class="notification-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${iconPath}"/></svg></span>`;
         return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"${safeTarget ? ` data-nav-target="${escapeHtml(safeTarget)}"` : ''}>
           ${iconHtml}
           <div class="notification-item-copy">
@@ -6763,7 +7432,7 @@
       }
 
       const fetchProfile = () => client.from('profiles')
-        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,card_theme,cover_url,equipped_profile_effect')
         .eq('id', session.user.id)
         .single();
       let { data: profile, error } = await runWithStartupRetry(fetchProfile);
@@ -6870,12 +7539,16 @@
       dismissStartupFailure();
       if (options.requireAuth === false) setLoading(false);
       if (options.requireAuth !== false) {
+        const checkRewards = () => {
+          const shownBadge = maybeShowBadgeAwardModal(profile);
+          refreshProfileEffectsState({ checkModal: !shownBadge }).catch(() => { });
+        };
         const shownConsent = !options.skipPolicyConsent && !setupUrl
           ? maybeShowPolicyConsentModal(profile, {
             onAccept: () => {
               if (!options.skipBackgroundPrompt) maybePromptBackgroundUsage(profile).catch(() => { });
               maybeResumePendingJoin(profile);
-              maybeShowBadgeAwardModal(profile);
+              checkRewards();
             }
           })
           : false;
@@ -6887,7 +7560,7 @@
             maybeShowRetentionReminder(profile);
           }
           maybeResumePendingJoin(profile);
-          maybeShowBadgeAwardModal(profile);
+          checkRewards();
         }
       }
       return { configured: true, profile, session };
@@ -14368,6 +15041,7 @@
     setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
     generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
     resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal, syncAccountBadgeSection, openCreatorBadgeChat,
+    refreshProfileEffectsState, maybeShowEffectAwardModal, openProfileEffectsDialog,
     get profile() { return currentProfile; }
   };
 })();

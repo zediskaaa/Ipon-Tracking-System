@@ -35452,3 +35452,38 @@ end $$;
 drop trigger if exists profiles_cover_cleanup on public.profiles;
 create trigger profiles_cover_cleanup after update or delete on public.profiles
   for each row execute function public.queue_replaced_profile_cover();
+
+-- Profile effects (migration 117: permanent creator-granted avatar card animations, no retention)
+alter table public.profiles
+  add column if not exists equipped_profile_effect text not null default 'none';
+
+alter table public.profiles drop constraint if exists profiles_equipped_profile_effect_check;
+alter table public.profiles add constraint profiles_equipped_profile_effect_check
+  check (equipped_profile_effect in (
+    'none', 'stardust', 'orbit', 'butterflies', 'koi', 'robots', 'drones',
+    'holo', 'glitch', 'fireflies', 'petals', 'singularity', 'warp', 'jelly',
+    'astro', 'constellation', 'sigil'
+  ));
+
+create table if not exists public.profile_effect_grants (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  effect_id text not null,
+  granted_by uuid references public.profiles(id) on delete set null,
+  granted_at timestamptz not null default now(),
+  grant_message text,
+  acknowledged_at timestamptz,
+  primary key (user_id, effect_id),
+  constraint profile_effect_grants_effect_check check (effect_id in (
+    'stardust', 'orbit', 'butterflies', 'koi', 'robots', 'drones',
+    'holo', 'glitch', 'fireflies', 'petals', 'singularity', 'warp', 'jelly',
+    'astro', 'constellation', 'sigil'
+  ))
+);
+
+alter table public.profile_effect_grants enable row level security;
+revoke all on public.profile_effect_grants from public, anon, authenticated;
+grant select on public.profile_effect_grants to authenticated;
+drop policy if exists profile_effect_grants_select_own on public.profile_effect_grants;
+create policy profile_effect_grants_select_own on public.profile_effect_grants
+  for select to authenticated
+  using (user_id = auth.uid() or public.is_super_admin());

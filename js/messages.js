@@ -51,6 +51,7 @@
   let mutualHoverTimer = null;
   let profileHoverTimer = null;
   let profileLeaveTimer = null;
+  let profileEffectStage = null;
   const mutualFriendsCache = new Map();
   const liveLastSeenMap = new Map();
   let suppressBubbleClickId = null;
@@ -3623,7 +3624,10 @@
       const appearance = await ipon().rpc('get_profile_card_appearance', { p_target_id: targetId });
       if (pop.hidden || pop.dataset.targetId !== String(targetId) || !pop.querySelector('.msg-pop-head')) return;
       const theme = ['emerald', 'midnight', 'rose', 'amber', 'ocean', 'mono'].includes(appearance?.card_theme) ? appearance.card_theme : 'emerald';
+      const effectsApi = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+      const effectId = effectsApi?.normalizeEffectId ? effectsApi.normalizeEffectId(appearance?.profile_effect) : 'none';
       pop.dataset.cardTheme = theme;
+      pop.dataset.profileEffect = effectId;
       const banner = document.createElement('div');
       banner.className = 'msg-pop-cover';
       const cover = safeDpUrl(appearance?.cover_url);
@@ -3637,6 +3641,18 @@
       pop.querySelector('.msg-pop-cover')?.remove();
       pop.prepend(banner);
       positionPopoverNearAnchor(pop, activePopoverAnchor);
+      profileEffectStage?.destroy?.();
+      profileEffectStage = null;
+      if (effectId !== 'none' && effectsApi?.mountStage) {
+        profileEffectStage = effectsApi.mountStage(pop, {
+          effectId,
+          fps: 60,
+          maxDpr: 2
+        });
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => profileEffectStage?.refreshGeometry?.());
+        }
+      }
     } catch (_) { /* Keep the profile usable if appearance is unavailable. */ }
   }
 
@@ -3646,12 +3662,16 @@
     const isSelfTarget = String(targetUserId) === String(initializedProfile?.id);
     if (isSelfTarget && !anchorEl?.dataset?.socialHoverDp) return;
     clearProfileHoverTimers();
+    profileEffectStage?.destroy?.();
+    profileEffectStage = null;
     // Keep the popover inside the top-most open modal dialog so Top Layer stacking never obscures it.
     const activeDialog = document.querySelector('#msg-workspace-dialog[open], #msg-forward-dialog[open], #msg-settings-dialog[open], dialog[open]');
     const targetHost = activeDialog || document.body;
     if (pop.parentElement !== targetHost) targetHost.appendChild(pop);
     activePopoverAnchor = anchorEl || null;
     pop.dataset.targetId = String(targetUserId);
+    delete pop.dataset.cardTheme;
+    delete pop.dataset.profileEffect;
     pop.dataset.pinned = pinned ? '1' : '0';
     pop.hidden = false;
 
@@ -3779,12 +3799,16 @@
   function closeProfilePopover() {
     clearProfileHoverTimers();
     closeMutualPopover();
+    profileEffectStage?.destroy?.();
+    profileEffectStage = null;
     activePopoverAnchor = null;
     const pop = document.getElementById('msg-profile-popover');
     if (pop) {
       pop.hidden = true;
       pop.dataset.pinned = '0';
       delete pop.dataset.targetId;
+      delete pop.dataset.cardTheme;
+      delete pop.dataset.profileEffect;
     }
   }
 

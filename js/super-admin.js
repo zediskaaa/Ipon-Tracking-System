@@ -8,6 +8,7 @@
   const bugReportsBody = document.getElementById('bug-reports-body');
   const administratorsBody = document.getElementById('administrators-body');
   const badgesBody = document.getElementById('badges-body');
+  const effectsBody = document.getElementById('effects-body');
   const activityBody = document.getElementById('activity-body');
   const badgeGrantDialog = document.getElementById('badge-grant-dialog');
   const badgeGrantForm = document.getElementById('badge-grant-form');
@@ -24,6 +25,24 @@
   const badgeRemoveCopy = document.getElementById('badge-remove-copy');
   const badgeRemoveReason = document.getElementById('badge-remove-reason');
   const badgeRemoveSubmit = document.getElementById('badge-remove-submit');
+  const effectGrantDialog = document.getElementById('effect-grant-dialog');
+  const effectGrantForm = document.getElementById('effect-grant-form');
+  const effectGrantCopy = document.getElementById('effect-grant-copy');
+  const effectGrantPreviewStage = document.getElementById('effect-grant-preview-stage');
+  const effectGrantPreviewAvatar = document.getElementById('effect-grant-preview-avatar');
+  const effectGrantPreviewName = document.getElementById('effect-grant-preview-name');
+  const effectGrantPreviewSub = document.getElementById('effect-grant-preview-sub');
+  const effectGrantGrid = document.getElementById('effect-grant-grid');
+  const effectGrantCount = document.getElementById('effect-grant-count');
+  const effectGrantError = document.getElementById('effect-grant-error');
+  const effectCreatorMessage = document.getElementById('effect-creator-message');
+  const effectGrantSubmit = document.getElementById('effect-grant-submit');
+  const effectRemoveDialog = document.getElementById('effect-remove-dialog');
+  const effectRemoveForm = document.getElementById('effect-remove-form');
+  const effectRemoveCopy = document.getElementById('effect-remove-copy');
+  const effectRemoveSelect = document.getElementById('effect-remove-select');
+  const effectRemoveReason = document.getElementById('effect-remove-reason');
+  const effectRemoveSubmit = document.getElementById('effect-remove-submit');
   const administratorDialog = document.getElementById('administrator-dialog');
   const administratorForm = document.getElementById('administrator-form');
   const userGroupsDialog = document.getElementById('user-groups-dialog');
@@ -122,10 +141,12 @@
   let bugReports = [];
   let accountActivities = [];
   let activityLogs = [];
+  let profileEffectGrants = [];
+  let effectPreviewStageCtrl = null;
   let activeFeatureStatusFilter = 'ALL';
   let activeBugStatusFilter = 'OPEN';
   const PAGE_SIZE = 10;
-  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, badges: 0, activity: 0 };
+  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, badges: 0, effects: 0, activity: 0 };
   Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
   Ipon.bindPasswordStrength(userPasswordForm.elements.password, () => {
     const target = profiles.find((item) => item.id === userPasswordForm.elements.user_id.value);
@@ -137,6 +158,7 @@
     'bug-reports': ['Bug reports', 'Review reported problems, error details, and attached screenshots from IPON users.'],
     administrators: ['Users', 'Manage registered users, passwords, and assigned savings groups.'],
     badges: ['Verified badges', 'Assign blue verified badges, set temporary or permanent durations, and send a creator note.'],
+    effects: ['Profile effects', 'Grant permanent animated avatar effects to active users with an optional creator note.'],
     activity: ['Platform activity', 'Review recent user and savings-group access changes recorded by the database.']
   };
 
@@ -146,6 +168,7 @@
     'bug-reports': 'bug-reports-title',
     administrators: 'users-title',
     badges: 'badges-title',
+    effects: 'effects-title',
     activity: 'activity-title'
   };
 
@@ -250,6 +273,9 @@
     setShortcutBadge('shortcut-count-bugs', openBugs.length ? `${openBugs.length} open` : '0 open', openBugs.length > 0);
     setShortcutBadge('shortcut-count-users', `${registeredUsers.length} registered`, false);
     setShortcutBadge('shortcut-count-badges', `${verifiedUsersCount} verified`, false);
+    const grantsList = typeof profileEffectGrants !== 'undefined' && Array.isArray(profileEffectGrants) ? profileEffectGrants : [];
+    const unlockedUserCount = new Set(grantsList.map((item) => item?.user_id).filter(Boolean)).size;
+    setShortcutBadge('shortcut-count-effects', `${unlockedUserCount} unlocked`, false);
     setShortcutBadge('shortcut-count-activity', `${activityLogs.length} events`, false);
 
     const attention = [];
@@ -768,6 +794,281 @@
     }
   });
 
+  function userEffectGrants(userId) {
+    return profileEffectGrants.filter((row) => String(row?.user_id || '') === String(userId || ''));
+  }
+
+  function renderEffects() {
+    if (!effectsBody) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const query = filterValue('effects-search');
+    const filter = filterValue('effects-status-filter');
+    const candidates = profiles
+      .filter((profile) => {
+        if (!profile || profile.role === 'SUPER_ADMIN') return false;
+        const grants = userEffectGrants(profile.id);
+        const equipped = api?.normalizeEffectId ? api.normalizeEffectId(profile.equipped_profile_effect) : (profile.equipped_profile_effect || 'none');
+        if (filter === 'UNLOCKED' && !grants.length) return false;
+        if (filter === 'EQUIPPED' && equipped === 'none') return false;
+        if (filter === 'NONE' && grants.length > 0) return false;
+        const effectNames = grants.map((g) => api?.getEffect ? api.getEffect(g.effect_id).name : g.effect_id).join(' ');
+        const latestNote = grants[0]?.grant_message || '';
+        return matchesQuery(query, [profile.full_name, profile.email, effectNames, equipped, latestNote, profile.status]);
+      })
+      .sort((a, b) => {
+        const ga = userEffectGrants(a.id).length;
+        const gb = userEffectGrants(b.id).length;
+        if (gb !== ga) return gb - ga;
+        return String(a.full_name || '').localeCompare(String(b.full_name || ''));
+      });
+    const visible = paginateRows('effects', candidates);
+    effectsBody.innerHTML = visible.length ? visible.map((profile) => {
+      const grants = userEffectGrants(profile.id);
+      const active = profile.status === 'ACTIVE';
+      const equippedId = api?.normalizeEffectId ? api.normalizeEffectId(profile.equipped_profile_effect) : (profile.equipped_profile_effect || 'none');
+      const equippedMeta = equippedId !== 'none' && api?.getEffect ? api.getEffect(equippedId) : null;
+      const unlockedHtml = grants.length
+        ? `<div class="effect-table-pills">${grants.map((g) => {
+          const meta = api?.getEffect ? api.getEffect(g.effect_id) : { name: g.effect_id, rare: 0 };
+          const isEq = equippedId === g.effect_id;
+          return `<span class="effect-table-pill${isEq ? ' is-equipped' : ''}${meta.rare === 2 ? ' is-epic' : meta.rare === 1 ? ' is-rare' : ''}">${Ipon.escapeHtml(meta.name)}</span>`;
+        }).join('')}</div><small class="field-help">${grants.length} permanent${grants.some((g) => !g.acknowledged_at) ? ' · Awaiting claim' : ' · Never expires'}</small>`
+        : '<span class="badge-tier-pill is-none">No effects</span>';
+      const activeHtml = equippedMeta
+        ? `<span class="badge-duration-pill is-permanent">${Ipon.escapeHtml(equippedMeta.name)}</span><small class="field-help">Active on profile</small>`
+        : '<span class="field-help">No effect equipped</span>';
+      const latestNote = grants.find((g) => g.grant_message)?.grant_message;
+      const noteHtml = latestNote
+        ? `<span class="badge-note-preview">${Ipon.escapeHtml(latestNote)}</span>`
+        : '<span class="field-help">No message</span>';
+      let actions = '';
+      if (active) {
+        actions += `<button class="icon-action" type="button" data-effect-grant="${profile.id}">${grants.length ? 'Award more' : 'Award effect'}</button>`;
+      } else {
+        actions += `<span class="field-help">${Ipon.escapeHtml(statusLabel(profile.status))} account</span>`;
+      }
+      if (grants.length) {
+        actions += `<button class="icon-action danger-action" type="button" data-effect-remove="${profile.id}">Remove</button>`;
+      }
+      return `<tr data-effect-user-id="${profile.id}">
+        <td>
+          <div class="table-user-cell">
+            ${Ipon.avatarMarkup(profile.avatar_url, profile.full_name, 'table-user-avatar', profile.id)}
+            <div>
+              <strong>${Ipon.escapeHtml(profile.full_name)}${Ipon.verifiedBadgesHtml ? Ipon.verifiedBadgesHtml(profile) : ''}</strong>
+              ${profile.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}
+            </div>
+          </div>
+        </td>
+        <td>${unlockedHtml}</td>
+        <td>${activeHtml}</td>
+        <td>${noteHtml}</td>
+        <td><div class="table-actions">${actions}</div></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5" class="empty-state">${query || filter ? 'No matching users.' : 'No user accounts available.'}</td></tr>`;
+    Ipon.bindAvatarFallbacks(effectsBody);
+    Ipon.syncPresenceDots(effectsBody);
+  }
+
+  function closeEffectGrantDialog() {
+    effectPreviewStageCtrl?.destroy?.();
+    effectPreviewStageCtrl = null;
+    effectGrantDialog?.close?.();
+  }
+
+  function openEffectGrantDialog(profile) {
+    if (!profile || !effectGrantDialog || !effectGrantForm) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const allEffects = api?.EFFECTS || [];
+    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic'];
+    const ownedIds = new Set(userEffectGrants(profile.id).map((g) => g.effect_id));
+    effectGrantForm.reset();
+    effectGrantForm.elements.user_id.value = profile.id;
+    if (effectGrantError) effectGrantError.textContent = '';
+    if (effectGrantCopy) {
+      effectGrantCopy.innerHTML = `Unlock permanent animated effects for <strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? ` (${Ipon.escapeHtml(profile.email)})` : ''}.`;
+    }
+    if (effectGrantPreviewAvatar) {
+      effectGrantPreviewAvatar.innerHTML = Ipon.isSafeImageRef?.(profile.avatar_url)
+        ? `<img src="${Ipon.escapeHtml(profile.avatar_url)}" alt="${Ipon.escapeHtml(profile.full_name)}"><span>${Ipon.escapeHtml(Ipon.initials(profile.full_name))}</span>`
+        : `<span>${Ipon.escapeHtml(Ipon.initials(profile.full_name))}</span>`;
+      Ipon.bindAvatarFallbacks(effectGrantPreviewAvatar);
+    }
+
+    const firstUnowned = allEffects.find((item) => !ownedIds.has(item.id)) || allEffects[0];
+    let previewId = firstUnowned?.id || 'stardust';
+    if (effectGrantGrid) {
+      effectGrantGrid.innerHTML = allEffects.map((e) => {
+        const isOwned = ownedIds.has(e.id);
+        const rarText = e.rare ? ` · ${rarities[e.rare] || ''}` : '';
+        return `<label class="effect-grant-option${isOwned ? ' is-owned' : ''}" data-preview-option="${Ipon.escapeHtml(e.id)}">
+          <input type="checkbox" name="effect_ids" value="${Ipon.escapeHtml(e.id)}"${isOwned ? ' disabled' : ''}>
+          <span class="effect-grant-option-meta">
+            <strong>${Ipon.escapeHtml(e.name)}</strong>
+            <small class="rar${e.rare | 0}">${Ipon.escapeHtml(e.cat + rarText)}</small>
+          </span>
+          ${isOwned ? '<span class="effect-grant-owned-pill">Owned</span>' : ''}
+        </label>`;
+      }).join('');
+    }
+
+    const syncSelectedSummary = () => {
+      const checked = Array.from(effectGrantGrid?.querySelectorAll('input[name="effect_ids"]:checked') || []);
+      if (effectGrantCount) effectGrantCount.textContent = `${checked.length} new selected (${ownedIds.size} already owned)`;
+      if (effectGrantSubmit) effectGrantSubmit.disabled = ownedIds.size >= allEffects.length;
+    };
+    const updatePreview = (id) => {
+      previewId = id || 'none';
+      const meta = api?.getEffect ? api.getEffect(previewId) : { name: previewId, cat: 'Effect', rare: 0 };
+      const rarText = meta.rare ? ` · ${rarities[meta.rare] || ''}` : '';
+      if (effectGrantPreviewName) effectGrantPreviewName.textContent = meta.name;
+      if (effectGrantPreviewSub) effectGrantPreviewSub.textContent = `${meta.cat}${rarText} · Permanent`;
+      effectGrantGrid?.querySelectorAll('[data-preview-option]').forEach((el) => {
+        el.classList.toggle('is-previewing', el.dataset.previewOption === previewId);
+      });
+      effectPreviewStageCtrl?.setEffect(previewId);
+    };
+
+    effectGrantGrid?.querySelectorAll('[data-preview-option]').forEach((opt) => {
+      opt.addEventListener('click', () => updatePreview(opt.dataset.previewOption));
+      opt.querySelector('input')?.addEventListener('change', (ev) => {
+        if (effectGrantError) effectGrantError.textContent = '';
+        if (ev.target.checked) updatePreview(ev.target.value);
+        syncSelectedSummary();
+      });
+    });
+
+    effectPreviewStageCtrl?.destroy?.();
+    effectPreviewStageCtrl = null;
+    if (effectGrantPreviewStage && api?.mountStage) {
+      effectPreviewStageCtrl = api.mountStage(effectGrantPreviewStage, {
+        effectId: previewId,
+        geometryFn: (_W, H) => ({ cx: 44, cy: Math.round(H / 2), ra: 26 }),
+        fps: 60,
+        maxDpr: 2
+      });
+    }
+    updatePreview(previewId);
+    syncSelectedSummary();
+    effectGrantDialog.showModal();
+    requestAnimationFrame?.(() => effectPreviewStageCtrl?.refreshGeometry?.());
+  }
+
+  function openEffectRemoveDialog(profile) {
+    if (!profile || !effectRemoveDialog || !effectRemoveForm) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const grants = userEffectGrants(profile.id);
+    if (!grants.length) return;
+    effectRemoveForm.reset();
+    effectRemoveForm.elements.user_id.value = profile.id;
+    Ipon.setFieldError(effectRemoveReason, '');
+    if (effectRemoveCopy) {
+      effectRemoveCopy.innerHTML = `Remove a permanent profile effect from <strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? ` (${Ipon.escapeHtml(profile.email)})` : ''}.`;
+    }
+    if (effectRemoveSelect) {
+      effectRemoveSelect.innerHTML = grants.map((g) => {
+        const meta = api?.getEffect ? api.getEffect(g.effect_id) : { name: g.effect_id };
+        const isEq = profile.equipped_profile_effect === g.effect_id;
+        return `<option value="${Ipon.escapeHtml(g.effect_id)}">${Ipon.escapeHtml(meta.name)}${isEq ? ' (Currently equipped)' : ''}</option>`;
+      }).join('');
+    }
+    effectRemoveDialog.showModal();
+  }
+
+  document.getElementById('effect-grant-close')?.addEventListener('click', closeEffectGrantDialog);
+  document.getElementById('effect-grant-cancel')?.addEventListener('click', closeEffectGrantDialog);
+  effectGrantDialog?.addEventListener('cancel', () => { closeEffectGrantDialog(); });
+  document.getElementById('effect-remove-close')?.addEventListener('click', () => effectRemoveDialog?.close());
+  document.getElementById('effect-remove-cancel')?.addEventListener('click', () => effectRemoveDialog?.close());
+
+  effectsBody?.addEventListener('click', (event) => {
+    const grantBtn = event.target.closest('[data-effect-grant]');
+    const removeBtn = event.target.closest('[data-effect-remove]');
+    const id = grantBtn?.dataset.effectGrant || removeBtn?.dataset.effectRemove;
+    if (!id) return;
+    const profile = profiles.find((item) => item.id === id);
+    if (!profile) return;
+    if (grantBtn) openEffectGrantDialog(profile);
+    else if (removeBtn) openEffectRemoveDialog(profile);
+  });
+
+  effectGrantForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const userId = effectGrantForm.elements.user_id.value;
+    const selectedIds = Array.from(effectGrantGrid?.querySelectorAll('input[name="effect_ids"]:checked') || []).map((el) => el.value);
+    if (!selectedIds.length) {
+      if (effectGrantError) effectGrantError.textContent = 'Select at least one new profile effect to award.';
+      return;
+    }
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const selectedNames = selectedIds.map((id) => (api?.getEffect ? api.getEffect(id).name : id)).join(', ');
+    const creatorMsg = String(effectCreatorMessage?.value || '').trim();
+    const targetProfile = profiles.find((item) => item.id === userId);
+    const recipientLabel = targetProfile
+      ? `${targetProfile.full_name}${targetProfile.email ? ` (${targetProfile.email})` : ''}`
+      : 'this user';
+    const accepted = await Ipon.confirmAction({
+      title: `Award permanent profile effect${selectedIds.length > 1 ? 's' : ''}?`,
+      message: `Grant ${selectedNames} permanently to ${recipientLabel}? Effects never expire from inactivity.${creatorMsg ? ' Your creator note will be shown in their celebration pop-up.' : ''}`,
+      acceptLabel: `Award effect${selectedIds.length > 1 ? 's' : ''}`
+    });
+    if (!accepted) return;
+    Ipon.setBusy(effectGrantSubmit, true, 'Saving…');
+    try {
+      await Ipon.rpc('super_admin_grant_profile_effects', {
+        p_user_id: userId,
+        p_effect_ids: selectedIds,
+        p_creator_message: creatorMsg
+      });
+      closeEffectGrantDialog();
+      Ipon.toast('Permanent profile effect(s) awarded and user notified.');
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(effectGrantSubmit, false);
+    }
+  });
+
+  effectRemoveForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const userId = effectRemoveForm.elements.user_id.value;
+    const effectId = String(effectRemoveSelect?.value || '').trim();
+    const reason = String(effectRemoveReason?.value || '').trim();
+    if (reason.length < 2) {
+      Ipon.setFieldError(effectRemoveReason, 'Enter a brief reason explaining why this effect is being removed.');
+      effectRemoveReason?.focus();
+      return;
+    }
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const effectName = api?.getEffect ? api.getEffect(effectId).name : effectId;
+    const targetProfile = profiles.find((item) => item.id === userId);
+    const recipientLabel = targetProfile
+      ? `${targetProfile.full_name}${targetProfile.email ? ` (${targetProfile.email})` : ''}`
+      : 'this user';
+    const accepted = await Ipon.confirmAction({
+      title: `Remove "${effectName}"?`,
+      message: `Remove permanent effect "${effectName}" from ${recipientLabel}? They will receive a silent notification with your reason.`,
+      acceptLabel: 'Remove effect'
+    });
+    if (!accepted) return;
+    Ipon.setBusy(effectRemoveSubmit, true, 'Removing…');
+    try {
+      await Ipon.rpc('super_admin_revoke_profile_effect', {
+        p_user_id: userId,
+        p_effect_id: effectId,
+        p_reason: reason
+      });
+      effectRemoveDialog?.close();
+      Ipon.toast('Profile effect removed. User notified.');
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(effectRemoveSubmit, false);
+    }
+  });
+
   function updateFeatureCounts() {
     const counts = { ALL: featureRequests.length, PENDING: 0, IMPLEMENTED: 0, REJECTED: 0 };
     featureRequests.forEach((req) => {
@@ -986,8 +1287,8 @@
     overviewError.replaceChildren();
     await Ipon.rpc('cleanup_inactive_verified_badges').catch(() => {});
     const safeQuery = (query) => (Ipon.withTimeout ? Ipon.withTimeout(query) : Promise.resolve(query)).catch((err) => ({ data: [], error: err }));
-    const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult] = await Promise.all([
-      safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,last_seen_at').order('created_at', { ascending: false })),
+    const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult, effectsResult] = await Promise.all([
+      safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,last_seen_at,equipped_profile_effect').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,workspace_mode,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('group_memberships').select('group_id,user_id,role,status')),
       safeQuery(Ipon.client.from('feature_requests').select('id,requester_id,allow_credit,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
@@ -995,6 +1296,7 @@
       safeQuery(Ipon.client.rpc('super_admin_user_last_activities')),
       safeQuery(Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.rpc('super_admin_storage_overview')),
+      safeQuery(Ipon.client.rpc('super_admin_list_profile_effects')),
       announcements ? safeQuery(announcements.load()) : Promise.resolve()
     ]);
     if (profileResult.error) throw profileResult.error;
@@ -1004,6 +1306,7 @@
     groupMemberships = membershipResult.data || [];
     featureRequests = featureRequestResult.data || [];
     bugReports = bugReportResult.data || [];
+    profileEffectGrants = !effectsResult?.error && Array.isArray(effectsResult?.data) ? effectsResult.data : [];
     if (activityResult?.error) {
       const legacyActivity = await safeQuery(
         Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200)
@@ -1021,6 +1324,7 @@
     renderBugReports();
     renderUsers();
     renderBadges();
+    renderEffects();
     renderActivity();
   }
 
@@ -2449,6 +2753,7 @@
     ['bug-reports', ['bug-reports-search'], renderBugReports],
     ['users', ['users-search', 'users-status-filter'], renderUsers],
     ['badges', ['badges-search', 'badges-status-filter'], renderBadges],
+    ['effects', ['effects-search', 'effects-status-filter'], renderEffects],
     ['activity', ['activity-search'], renderActivity]
   ].forEach(([key, controlIds, render]) => {
     controlIds.forEach((id) => {
@@ -2481,6 +2786,7 @@
       if (bugReportsBody) Ipon.showInlineError(bugReportsBody, error, refresh, 8);
       Ipon.showInlineError(administratorsBody, error, refresh, 6);
       if (badgesBody) Ipon.showInlineError(badgesBody, error, refresh, 5);
+      if (effectsBody) Ipon.showInlineError(effectsBody, error, refresh, 5);
       Ipon.showInlineError(activityBody, error, refresh, 3);
     }
   }
@@ -2594,5 +2900,5 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('super-admin', ['profiles', 'groups', 'group_memberships', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
+  Ipon.subscribeToChanges('super-admin', ['profiles', 'profile_effect_grants', 'groups', 'group_memberships', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
 })();

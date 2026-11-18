@@ -114,11 +114,16 @@ test('profile card cover and theme persist with owner-only edits and storage cle
   assert.match(migration, /queue_media_url_deletion\(old\.cover_url\)/);
   assert.match(edge, /'avatars', 'covers', 'group-avatars'/);
   assert.match(core, /id="quick-cover-input"[^>]*accept="image\/jpeg,image\/png,image\/webp"/);
-  assert.match(core, /uploadMediaDataUrl\(image\.dataUrl, \{ category: 'covers'/);
+  assert.match(core, /openAvatarCropper\(file,\s*\{[\s\S]*mode:\s*'cover'[\s\S]*category:\s*'covers'/);
+  assert.match(core, /uploadMediaDataUrl\(croppedDataUrl,\s*\{\s*category,\s*name:\s*uploadName\s*\}\)/);
   assert.match(core, /rpc\('update_own_profile_card', \{ p_cover_url: url \}\)/);
   assert.match(core, /rpc\('update_own_profile_card', \{ p_clear_cover: true \}\)/);
   assert.match(messages, /rpc\('get_profile_card_appearance', \{ p_target_id: targetId \}\)/);
+  assert.match(messages, /delete pop\.dataset\.cardTheme/);
   assert.match(css, /\.msg-pop-cover\{/);
+  assert.match(css, /\.account-card-swatches button:focus-visible\{outline:2px solid var\(--ink/);
+  assert.match(css, /html\[data-theme="dark"\] \.account-cover-actions \.button\b/);
+  assert.match(css, /html\[data-theme="dark"\] \.msg-profile-popover:has\(\.msg-pop-cover\) \.msg-pop-head \.avatar-circle\.avatar-lg\b/);
 });
 
 test('database keeps financial writes behind RLS and reviewed RPCs', () => {
@@ -11175,7 +11180,7 @@ test('Write with AI keeps release announcements strictly factual without AI embe
   assert.doesNotMatch(edgeTs, /function pickUniqueDomainOutcome/);
   assert.match(saJs, /RELEASE_STYLE_ANGLES\s*=\s*\[[\s\S]*Strictly factual/);
   assert.doesNotMatch(saJs, /product story|high-energy|celebrating cleaner workflows/i);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-92/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261118-93/);
 
   // 2. Fallback composer produces crisp factual sentences with zero fabricated outcome padding
   const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
@@ -11220,7 +11225,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261118-124/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261118-125/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11247,7 +11252,7 @@ test('Migration 099 and Super Admin Users surface each user actual latest specif
   assert.doesNotMatch(saJs, /from\(['"](?:contributions|withdrawals|expenses|members|messages|budget_configs|budget_expenses)['"]\)/);
   assert.match(saJs, /Ipon\.client\.rpc\('super_admin_user_last_activities'\)/);
   assert.match(saJs, /function formatUserActivityLabel\(activity\)/);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261117-92/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261118-93/);
 
   // Verify formatUserActivityLabel handles both new specific RPC rows and legacy fallback events
   const fnMatch = saJs.match(/function formatUserActivityLabel\(activity\)\s*\{[\s\S]*?\n  \}/);

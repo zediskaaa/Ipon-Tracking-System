@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261118-143">
+  <link rel="stylesheet" href="css/app.css?v=20261118-144">
   <script src="js/config.js?v=20261117-76"></script>
 </head>
 
@@ -98,6 +98,10 @@
             <a href="super-admin.html#badges">
               <span class="platform-shortcut-copy"><strong>Verified badges</strong><small>Award blue badges, duration, and creator notes</small></span>
               <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-badges">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
+            </a>
+            <a href="super-admin.html#effects">
+              <span class="platform-shortcut-copy"><strong>Profile effects</strong><small>Grant permanent animated avatar effects and creator notes</small></span>
+              <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-effects">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
             </a>
             <a href="super-admin.html#activity">
               <span class="platform-shortcut-copy"><strong>Platform activity</strong><small>Inspect recent access changes</small></span>
@@ -350,6 +354,47 @@
           </table>
         </div>
         <nav class="table-pager" id="badges-pager" aria-label="Badges pages"><button type="button"
+            data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
+            data-page="next">Next</button></nav>
+      </section>
+
+      <section class="platform-view panel" id="effects" data-platform-view="effects" aria-labelledby="effects-title"
+        hidden>
+        <div class="panel-header">
+          <div>
+            <h2 id="effects-title">Profile effects</h2>
+            <p>Award permanent animated profile effects to active users and send a creator note. Profile effects never expire and have no inactivity retention.</p>
+          </div>
+          <div class="table-filters">
+            <input id="effects-search" type="search" placeholder="Search users or effects"
+              aria-label="Search profile effect users">
+            <select id="effects-status-filter" aria-label="Filter by profile effect status">
+              <option value="">All users</option>
+              <option value="UNLOCKED">With unlocked effects</option>
+              <option value="EQUIPPED">Currently equipped</option>
+              <option value="NONE">No effects yet</option>
+            </select>
+          </div>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Unlocked effects</th>
+                <th>Active on profile</th>
+                <th>Latest creator note</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="effects-body">
+              <tr class="loading-row">
+                <td colspan="5">Loading profile effect assignments…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <nav class="table-pager" id="effects-pager" aria-label="Profile effects pages"><button type="button"
             data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
             data-page="next">Next</button></nav>
       </section>
@@ -730,11 +775,95 @@
     </div>
   </dialog>
 
-  <script src="js/core.js?v=20261118-124"></script><script src="js/policy.js?v=20261117-08"></script>
+  <dialog class="form-dialog effect-grant-dialog" id="effect-grant-dialog" aria-labelledby="effect-grant-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="effect-grant-title">Award permanent profile effect</h2>
+          <p id="effect-grant-copy">Select one or more effects to unlock permanently for this user.</p>
+        </div>
+        <button class="dialog-close" id="effect-grant-close" type="button" aria-label="Close profile effect dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <form id="effect-grant-form" class="form-grid" novalidate>
+        <input type="hidden" name="user_id">
+        <div class="effect-grant-top field-wide">
+          <div class="effect-grant-stage" id="effect-grant-preview-stage">
+            <div class="effect-grant-banner"></div>
+            <div class="effect-grant-avatar avatar-circle avatar-lg" id="effect-grant-preview-avatar"></div>
+            <div class="effect-grant-preview-meta">
+              <strong id="effect-grant-preview-name">Select an effect</strong>
+              <small id="effect-grant-preview-sub">Live card preview</small>
+            </div>
+          </div>
+          <p class="badge-grant-policy-hint effect-grant-policy-hint">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <span>Permanent reward · All profile effects never expire and are exempt from inactivity cleanup.</span>
+          </p>
+        </div>
+        <div class="field field-wide">
+          <div class="field-label-row">
+            <label>Choose profile effect(s) to unlock</label>
+            <small class="field-help" id="effect-grant-count">0 selected</small>
+          </div>
+          <div class="effect-grant-grid" id="effect-grant-grid"></div>
+          <small class="field-error" id="effect-grant-error" role="alert" aria-live="polite"></small>
+        </div>
+        <div class="field field-wide">
+          <label for="effect-creator-message">Message from creator <span class="badge-optional-tag">(optional)</span></label>
+          <textarea id="effect-creator-message" name="creator_message" rows="3" maxlength="400"
+            placeholder="Write a congratulations note for their profile effect pop-up…"></textarea>
+        </div>
+        <div class="badge-grant-footer field-wide">
+          <small class="field-help">Recipient sees a celebration pop-up and can equip unlocked effects anytime.</small>
+          <div class="form-actions">
+            <button class="button button-secondary" id="effect-grant-cancel" type="button">Cancel</button>
+            <button class="button button-primary" id="effect-grant-submit" type="submit">Award effect</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog class="form-dialog" id="effect-remove-dialog" aria-labelledby="effect-remove-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="effect-remove-title">Remove profile effect</h2>
+          <p id="effect-remove-copy">Remove an unlocked profile effect from this user and notify them silently.</p>
+        </div>
+        <button class="dialog-close" id="effect-remove-close" type="button" aria-label="Close remove effect dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <form id="effect-remove-form" class="form-grid" novalidate>
+        <input type="hidden" name="user_id">
+        <div class="field field-wide">
+          <label for="effect-remove-select">Effect to remove</label>
+          <select id="effect-remove-select" name="effect_id" required></select>
+        </div>
+        <div class="field field-wide">
+          <label for="effect-remove-reason">Reason for removal</label>
+          <textarea id="effect-remove-reason" name="reason" rows="3" maxlength="400" minlength="2" required
+            placeholder="Explain why this profile effect is being removed…"></textarea>
+          <small class="field-help">Sent silently to the user's notification list without a screen pop-up.</small>
+          <small class="field-error" aria-live="polite"></small>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" id="effect-remove-cancel" type="button">Cancel</button>
+          <button class="button button-danger" id="effect-remove-submit" type="submit">Remove effect</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="js/profile-effects.js?v=20261118-01"></script>
+  <script src="js/core.js?v=20261118-125"></script><script src="js/policy.js?v=20261117-08"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261117-92"></script>
+  <script src="js/super-admin.js?v=20261118-93"></script>
 </body>
 
 </html>
