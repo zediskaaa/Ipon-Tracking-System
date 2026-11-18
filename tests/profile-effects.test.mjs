@@ -196,6 +196,9 @@ test('profile card swatch fix, cover upload hardening, Super Admin effects tab, 
   assert.match(core, /equip_own_profile_effect/);
   assert.match(messages, /window\.IponProfileEffects/);
   assert.match(messages, /profileEffectStage\?\.destroy/);
+  assert.match(messages, /profileAppearanceCache/);
+  assert.match(messages, /function applyProfileCardAppearance\(/);
+  assert.match(messages, /Promise\.all\(\[\s*ipon\(\)\.rpc\('get_social_user_profile'/);
   assert.match(css, /\.effects-gallery-dialog\s*\{/);
   assert.match(css, /\.effect-celebrate-hero\s*\{/);
   assert.match(css, /\.msg-profile-popover\[data-card-theme="midnight"\]/);

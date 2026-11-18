@@ -54,6 +54,7 @@
   let profileEffectStage = null;
   const mutualFriendsCache = new Map();
   const liveLastSeenMap = new Map();
+  const profileAppearanceCache = new Map();
   let suppressBubbleClickId = null;
   let recentHoldMsgId = null;
   let recentHoldAt = 0;
@@ -3619,40 +3620,103 @@
     }
   }
 
-  async function loadProfileCardAppearance(pop, targetId) {
-    try {
-      const appearance = await ipon().rpc('get_profile_card_appearance', { p_target_id: targetId });
-      if (pop.hidden || pop.dataset.targetId !== String(targetId) || !pop.querySelector('.msg-pop-head')) return;
-      const theme = ['emerald', 'midnight', 'rose', 'amber', 'ocean', 'mono'].includes(appearance?.card_theme) ? appearance.card_theme : 'emerald';
-      const effectsApi = typeof window !== 'undefined' ? window.IponProfileEffects : null;
-      const effectId = effectsApi?.normalizeEffectId ? effectsApi.normalizeEffectId(appearance?.profile_effect) : 'none';
-      pop.dataset.cardTheme = theme;
-      pop.dataset.profileEffect = effectId;
+  function normalizeCardAppearance(appearance) {
+    const theme = ['emerald', 'midnight', 'rose', 'amber', 'ocean', 'mono'].includes(appearance?.card_theme)
+      ? appearance.card_theme
+      : 'emerald';
+    const effectsApi = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const rawEffect = appearance?.profile_effect ?? appearance?.equipped_profile_effect ?? 'none';
+    const effectId = effectsApi?.normalizeEffectId ? effectsApi.normalizeEffectId(rawEffect) : 'none';
+    const cover = safeDpUrl(appearance?.cover_url);
+    return { card_theme: theme, cover_url: cover || '', profile_effect: effectId };
+  }
+
+  function cacheProfileAppearance(targetId, appearance) {
+    if (!targetId || !appearance || typeof appearance !== 'object') return null;
+    const norm = normalizeCardAppearance(appearance);
+    profileAppearanceCache.set(String(targetId), { ...norm, updatedAt: Date.now() });
+    if (norm.cover_url && typeof Image === 'function') {
+      try {
+        const pre = new Image();
+        pre.src = norm.cover_url;
+      } catch (_) { }
+    }
+    return norm;
+  }
+
+  function getCachedProfileAppearance(targetId, fallbackProfile = null) {
+    const key = String(targetId || '');
+    if (key && profileAppearanceCache.has(key)) return profileAppearanceCache.get(key);
+    if (fallbackProfile && typeof fallbackProfile === 'object') {
+      return cacheProfileAppearance(key || fallbackProfile.id, {
+        card_theme: fallbackProfile.card_theme,
+        cover_url: fallbackProfile.cover_url,
+        profile_effect: fallbackProfile.equipped_profile_effect || fallbackProfile.profile_effect
+      });
+    }
+    return null;
+  }
+
+  function applyProfileCardAppearance(pop, targetId, appearance) {
+    if (!pop || pop.hidden || pop.dataset.targetId !== String(targetId) || !pop.querySelector('.msg-pop-head')) return;
+    const norm = cacheProfileAppearance(targetId, appearance) || normalizeCardAppearance(null);
+    const prevTheme = pop.dataset.cardTheme || '';
+    const prevEffect = pop.dataset.profileEffect || '';
+    const existingBanner = pop.querySelector('.msg-pop-cover');
+    const existingImgSrc = existingBanner?.querySelector('img')?.getAttribute('src') || '';
+    const hasSameBanner = Boolean(existingBanner) && existingImgSrc === norm.cover_url;
+    if (hasSameBanner && prevTheme === norm.card_theme && prevEffect === norm.profile_effect && (norm.profile_effect === 'none' || profileEffectStage)) {
+      return;
+    }
+
+    pop.dataset.cardTheme = norm.card_theme;
+    pop.dataset.profileEffect = norm.profile_effect;
+    if (!hasSameBanner) {
       const banner = document.createElement('div');
       banner.className = 'msg-pop-cover';
-      const cover = safeDpUrl(appearance?.cover_url);
-      if (cover) {
+      if (norm.cover_url) {
         const image = document.createElement('img');
-        image.src = cover;
+        image.src = norm.cover_url;
         image.alt = '';
         image.addEventListener('error', () => image.remove());
         banner.appendChild(image);
       }
-      pop.querySelector('.msg-pop-cover')?.remove();
+      existingBanner?.remove();
       pop.prepend(banner);
-      positionPopoverNearAnchor(pop, activePopoverAnchor);
-      profileEffectStage?.destroy?.();
-      profileEffectStage = null;
-      if (effectId !== 'none' && effectsApi?.mountStage) {
+    }
+
+    const effectsApi = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    if (norm.profile_effect !== 'none' && effectsApi?.mountStage) {
+      if (profileEffectStage && prevEffect !== norm.profile_effect) {
+        profileEffectStage.destroy?.();
+        profileEffectStage = null;
+      }
+      if (!profileEffectStage) {
         profileEffectStage = effectsApi.mountStage(pop, {
-          effectId,
+          effectId: norm.profile_effect,
           fps: 60,
           maxDpr: 2
         });
-        if (typeof requestAnimationFrame === 'function') {
-          requestAnimationFrame(() => profileEffectStage?.refreshGeometry?.());
-        }
       }
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => profileEffectStage?.refreshGeometry?.());
+      }
+    } else if (profileEffectStage) {
+      profileEffectStage.destroy?.();
+      profileEffectStage = null;
+    }
+  }
+
+  async function loadProfileCardAppearance(pop, targetId) {
+    try {
+      const appearance = await ipon().rpc('get_profile_card_appearance', { p_target_id: targetId });
+      if (!appearance || pop.hidden || pop.dataset.targetId !== String(targetId) || !pop.querySelector('.msg-pop-head')) return;
+      const norm = cacheProfileAppearance(targetId, appearance);
+      const changed = (pop.dataset.cardTheme || '') !== norm.card_theme
+        || (pop.dataset.profileEffect || '') !== norm.profile_effect
+        || (pop.querySelector('.msg-pop-cover img')?.getAttribute('src') || '') !== norm.cover_url;
+      applyProfileCardAppearance(pop, targetId, norm);
+      if (changed) positionPopoverNearAnchor(pop, activePopoverAnchor);
     } catch (_) { /* Keep the profile usable if appearance is unavailable. */ }
   }
 
@@ -3670,8 +3734,14 @@
     if (pop.parentElement !== targetHost) targetHost.appendChild(pop);
     activePopoverAnchor = anchorEl || null;
     pop.dataset.targetId = String(targetUserId);
-    delete pop.dataset.cardTheme;
-    delete pop.dataset.profileEffect;
+    const cachedAppearance = getCachedProfileAppearance(targetUserId, isSelfTarget ? initializedProfile : null);
+    if (cachedAppearance) {
+      pop.dataset.cardTheme = cachedAppearance.card_theme;
+      pop.dataset.profileEffect = cachedAppearance.profile_effect;
+    } else {
+      delete pop.dataset.cardTheme;
+      delete pop.dataset.profileEffect;
+    }
     pop.dataset.pinned = pinned ? '1' : '0';
     pop.hidden = false;
 
@@ -3699,6 +3769,7 @@
         </div>`;
       ipon().bindAvatarFallbacks(pop);
       ipon().syncPresenceDots(pop);
+      applyProfileCardAppearance(pop, targetUserId, cachedAppearance);
       positionPopoverNearAnchor(pop, activePopoverAnchor);
       void loadProfileCardAppearance(pop, targetUserId);
       return;
@@ -3708,8 +3779,11 @@
     positionPopoverNearAnchor(pop, activePopoverAnchor);
 
     try {
-      const profile = await ipon().rpc('get_social_user_profile', { p_target_id: targetUserId });
-      if (pop.hidden) return;
+      const [profile, fetchedAppearance] = await Promise.all([
+        ipon().rpc('get_social_user_profile', { p_target_id: targetUserId }),
+        ipon().rpc('get_profile_card_appearance', { p_target_id: targetUserId }).catch(() => cachedAppearance)
+      ]);
+      if (pop.hidden || pop.dataset.targetId !== String(targetUserId)) return;
       const fs = profile.friendship_status;
       let friendAction = '';
       if (fs === 'FRIENDS') {
@@ -3769,8 +3843,8 @@
 
       ipon().bindAvatarFallbacks(pop);
       ipon().syncPresenceDots(pop);
+      applyProfileCardAppearance(pop, targetUserId, fetchedAppearance || cachedAppearance);
       positionPopoverNearAnchor(pop, activePopoverAnchor);
-      void loadProfileCardAppearance(pop, targetUserId);
     } catch (error) {
       pop.innerHTML = `<button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button><p class="empty-state">${escapeHtml(ipon().friendlyError(error))}</p>`;
       positionPopoverNearAnchor(pop, activePopoverAnchor);
@@ -6798,6 +6872,11 @@
   async function init(profile) {
     if (!profile || profile.role === 'SUPER_ADMIN' || profile.status !== 'ACTIVE') return;
     initializedProfile = profile;
+    cacheProfileAppearance(profile.id, {
+      card_theme: profile.card_theme,
+      cover_url: profile.cover_url,
+      profile_effect: profile.equipped_profile_effect
+    });
     bindEvents();
     ensureDialogsMounted();
     subscribeRealtime(profile);
@@ -6878,6 +6957,21 @@
         window.addEventListener('focus', onWindowFocus);
         window.addEventListener('blur', onWindowBlur);
         window.addEventListener('ipon:presence-change', onPresenceChange);
+        window.addEventListener('ipon:profile-updated', (ev) => {
+          const updated = ev?.detail;
+          if (!updated || typeof updated !== 'object') return;
+          if (initializedProfile && String(updated.id || '') === String(initializedProfile.id || '')) {
+            initializedProfile = { ...initializedProfile, ...updated };
+          }
+          const uid = updated.id || initializedProfile?.id;
+          if (uid) {
+            cacheProfileAppearance(uid, {
+              card_theme: updated.card_theme,
+              cover_url: updated.cover_url,
+              profile_effect: updated.equipped_profile_effect || updated.profile_effect
+            });
+          }
+        });
       }
     }
 

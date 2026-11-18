@@ -20266,16 +20266,22 @@ html[data-theme="dark"] .effect-grant-owned-pill {
 
 .msg-profile-popover[data-card-theme],
 html[data-theme="dark"] .msg-profile-popover[data-card-theme] {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--card-a, #2e8a64) 15%, var(--card-s, #0e1a15)),
-    var(--card-s, #0e1a15) 68%
-  );
+  background:
+    radial-gradient(
+      ellipse 95% 130px at 50% 96px,
+      color-mix(in srgb, var(--card-a, #2e8a64) 24%, transparent),
+      transparent 72%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--card-a, #2e8a64) 18%, var(--card-s, #0e1a15)),
+      var(--card-s, #0e1a15) 70%
+    );
   color: #f2f5f3;
-  border-color: color-mix(in srgb, var(--card-a, #2e8a64) 30%, rgba(255, 255, 255, .14));
+  border-color: color-mix(in srgb, var(--card-a, #2e8a64) 42%, rgba(255, 255, 255, .16));
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, .48),
-    0 0 0 1px color-mix(in srgb, var(--card-a, #2e8a64) 20%, transparent);
+    0 24px 64px rgba(0, 0, 0, .52),
+    0 0 0 1px color-mix(in srgb, var(--card-a, #2e8a64) 24%, transparent);
 }
 
 .msg-profile-popover[data-card-theme] .msg-pop-cover,
@@ -20308,7 +20314,9 @@ html[data-theme="dark"] .msg-profile-popover[data-card-theme]:has(.msg-pop-cover
   width: 72px;
   height: 72px;
   border: 4px solid var(--card-s, #0e1a15);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, .46);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--card-a, #2e8a64) 52%, transparent),
+    0 8px 22px rgba(0, 0, 0, .48);
 }
 
 .msg-profile-popover[data-card-theme] .msg-pop-close,
