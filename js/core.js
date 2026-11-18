@@ -2890,7 +2890,7 @@
       const isTrial = g?.is_permanent === false;
       return {
         isTrial,
-        eyebrow: isTrial ? 'TRIAL PROFILE EFFECT APPROVED' : 'PROFILE EFFECT UNLOCKED',
+        eyebrow: isTrial ? 'TRIAL PROFILE EFFECT UNLOCKED' : 'PROFILE EFFECT UNLOCKED',
         copyHtml: isTrial
           ? `Your <b>${escapeHtml(meta.name)}</b> (${escapeHtml(meta.cat + rt)}) trial profile effect is now active.`
           : `You received the permanent <b>${escapeHtml(meta.name)}</b> (${escapeHtml(meta.cat + rt)}) profile effect.`,

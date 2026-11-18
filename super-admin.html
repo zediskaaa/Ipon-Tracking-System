@@ -825,8 +825,8 @@
     <div class="form-dialog-sheet">
       <header class="form-dialog-header">
         <div>
-          <h2 id="effect-grant-title">Award permanent profile effect</h2>
-          <p id="effect-grant-copy">Select one or more effects to unlock permanently for this user.</p>
+          <h2 id="effect-grant-title">Award profile effect</h2>
+          <p id="effect-grant-copy">Select one or more effects to unlock permanently or grant as a trial card.</p>
         </div>
         <button class="dialog-close" id="effect-grant-close" type="button" aria-label="Close profile effect dialog">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
@@ -845,8 +845,25 @@
           </div>
           <p class="badge-grant-policy-hint effect-grant-policy-hint">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
-            <span>Permanent reward · Grants the selected profile effect(s) permanently to this user.</span>
+            <span id="effect-grant-policy-text">Permanent reward · Grants the selected profile effect(s) permanently to this user.</span>
           </p>
+        </div>
+        <div class="field field-wide">
+          <label for="effect-duration-preset">Effective duration</label>
+          <select id="effect-duration-preset" name="duration_preset" required>
+            <option value="permanent" selected>Permanent</option>
+            <option value="1">Trial · 1 day</option>
+            <option value="3">Trial · 3 days</option>
+            <option value="7">Trial · 7 days</option>
+            <option value="14">Trial · 14 days</option>
+            <option value="30">Trial · 30 days</option>
+            <option value="custom">Trial · Custom expiration date &amp; time…</option>
+          </select>
+        </div>
+        <div class="field field-wide" id="effect-custom-expiry-wrap" hidden>
+          <label for="effect-custom-expiry">Custom expiration date &amp; time</label>
+          <input id="effect-custom-expiry" name="expires_at" type="datetime-local">
+          <small class="field-error" aria-live="polite"></small>
         </div>
         <div class="field field-wide">
           <div class="field-label-row">
@@ -992,11 +1009,11 @@
   </dialog>
 
   <script src="js/profile-effects.js?v=20261118-01"></script>
-  <script src="js/core.js?v=20261118-126"></script><script src="js/policy.js?v=20261117-08"></script>
+  <script src="js/core.js?v=20261118-127"></script><script src="js/policy.js?v=20261117-08"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261118-94"></script>
+  <script src="js/super-admin.js?v=20261118-95"></script>
 </body>
 
 </html>

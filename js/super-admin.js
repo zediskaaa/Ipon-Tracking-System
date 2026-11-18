@@ -32,6 +32,10 @@
   const effectGrantPreviewAvatar = document.getElementById('effect-grant-preview-avatar');
   const effectGrantPreviewName = document.getElementById('effect-grant-preview-name');
   const effectGrantPreviewSub = document.getElementById('effect-grant-preview-sub');
+  const effectGrantPolicyText = document.getElementById('effect-grant-policy-text');
+  const effectDurationPreset = document.getElementById('effect-duration-preset');
+  const effectCustomExpiryWrap = document.getElementById('effect-custom-expiry-wrap');
+  const effectCustomExpiry = document.getElementById('effect-custom-expiry');
   const effectGrantGrid = document.getElementById('effect-grant-grid');
   const effectGrantCount = document.getElementById('effect-grant-count');
   const effectGrantError = document.getElementById('effect-grant-error');
@@ -1004,6 +1008,69 @@
     Ipon.syncPresenceDots(effectsBody);
   }
 
+  function syncCustomExpiryControl(presetEl, wrapEl, inputEl, defaultDays = 7) {
+    const isCustom = presetEl?.value === 'custom';
+    if (wrapEl) wrapEl.hidden = !isCustom;
+    if (inputEl) {
+      inputEl.required = Boolean(isCustom);
+      Ipon.setFieldError(inputEl, '');
+      if (isCustom && !inputEl.value) {
+        inputEl.value = toDatetimeLocalValue(new Date(Date.now() + defaultDays * 86400000).toISOString());
+      }
+    }
+  }
+
+  function readEffectDurationInput(presetEl, inputEl, { defaultPreset = 'permanent' } = {}) {
+    const preset = String(presetEl?.value || defaultPreset);
+    if (preset === 'permanent') {
+      return { valid: true, isPermanent: true, durationDays: null, expiresAt: null, label: 'Permanent' };
+    }
+    if (preset === 'custom') {
+      const raw = String(inputEl?.value || '').trim();
+      const parsedMs = raw ? new Date(raw).getTime() : NaN;
+      if (!raw || !Number.isFinite(parsedMs) || parsedMs <= Date.now() + 5 * 60000) {
+        Ipon.setFieldError(inputEl, 'Select an expiration date and time at least 5 minutes in the future.');
+        inputEl?.focus();
+        return { valid: false };
+      }
+      Ipon.setFieldError(inputEl, '');
+      const iso = new Date(parsedMs).toISOString();
+      return {
+        valid: true,
+        isPermanent: false,
+        durationDays: null,
+        expiresAt: iso,
+        label: `until ${Ipon.dateLabel(iso, { dateStyle: 'medium', timeStyle: 'short' })}`
+      };
+    }
+    const days = Number.parseInt(preset, 10) || 7;
+    return {
+      valid: true,
+      isPermanent: false,
+      durationDays: days,
+      expiresAt: null,
+      label: `${days} day${days === 1 ? '' : 's'}`
+    };
+  }
+
+  function syncEffectGrantDurationUi() {
+    syncCustomExpiryControl(effectDurationPreset, effectCustomExpiryWrap, effectCustomExpiry, 7);
+    const isPerm = (effectDurationPreset?.value || 'permanent') === 'permanent';
+    if (effectGrantPolicyText) {
+      effectGrantPolicyText.textContent = isPerm
+        ? 'Permanent reward · Grants the selected profile effect(s) permanently to this user.'
+        : 'Trial card · Active until expiration, then automatically removed from this user.';
+    }
+    if (effectGrantSubmit) {
+      effectGrantSubmit.textContent = isPerm ? 'Award effect' : 'Award trial card';
+    }
+    const curSub = effectGrantPreviewSub?.textContent || '';
+    if (effectGrantPreviewSub && curSub.includes(' · ')) {
+      const base = curSub.replace(/\s·\s(Permanent|Trial.*)$/, '');
+      effectGrantPreviewSub.textContent = `${base} · ${isPerm ? 'Permanent' : 'Trial card'}`;
+    }
+  }
+
   function closeEffectGrantDialog() {
     effectPreviewStageCtrl?.destroy?.();
     effectPreviewStageCtrl = null;
@@ -1020,9 +1087,10 @@
     const trialIds = new Set(grants.filter((g) => g.is_permanent === false).map((g) => g.effect_id));
     effectGrantForm.reset();
     effectGrantForm.elements.user_id.value = profile.id;
+    if (effectDurationPreset) effectDurationPreset.value = 'permanent';
     if (effectGrantError) effectGrantError.textContent = '';
     if (effectGrantCopy) {
-      effectGrantCopy.innerHTML = `Unlock permanent animated effects for <strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? ` (${Ipon.escapeHtml(profile.email)})` : ''}.`;
+      effectGrantCopy.innerHTML = `Grant permanent effects or a limited-time trial card to <strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? ` (${Ipon.escapeHtml(profile.email)})` : ''}.`;
     }
     if (effectGrantPreviewAvatar) {
       effectGrantPreviewAvatar.innerHTML = Ipon.isSafeImageRef?.(profile.avatar_url)
@@ -1058,8 +1126,9 @@
       previewId = id || 'none';
       const meta = api?.getEffect ? api.getEffect(previewId) : { name: previewId, cat: 'Effect', rare: 0 };
       const rarText = meta.rare ? ` · ${rarities[meta.rare] || ''}` : '';
+      const isPerm = (effectDurationPreset?.value || 'permanent') === 'permanent';
       if (effectGrantPreviewName) effectGrantPreviewName.textContent = meta.name;
-      if (effectGrantPreviewSub) effectGrantPreviewSub.textContent = `${meta.cat}${rarText} · Permanent`;
+      if (effectGrantPreviewSub) effectGrantPreviewSub.textContent = `${meta.cat}${rarText} · ${isPerm ? 'Permanent' : 'Trial card'}`;
       effectGrantGrid?.querySelectorAll('[data-preview-option]').forEach((el) => {
         el.classList.toggle('is-previewing', el.dataset.previewOption === previewId);
       });
@@ -1085,6 +1154,7 @@
         maxDpr: 2
       });
     }
+    syncEffectGrantDurationUi();
     updatePreview(previewId);
     syncSelectedSummary();
     effectGrantDialog.showModal();
@@ -1113,6 +1183,7 @@
     effectRemoveDialog.showModal();
   }
 
+  effectDurationPreset?.addEventListener('change', syncEffectGrantDurationUi);
   document.getElementById('effect-grant-close')?.addEventListener('click', closeEffectGrantDialog);
   document.getElementById('effect-grant-cancel')?.addEventListener('click', closeEffectGrantDialog);
   effectGrantDialog?.addEventListener('cancel', () => { closeEffectGrantDialog(); });
@@ -1138,6 +1209,8 @@
       if (effectGrantError) effectGrantError.textContent = 'Select at least one new profile effect to award.';
       return;
     }
+    const duration = readEffectDurationInput(effectDurationPreset, effectCustomExpiry, { defaultPreset: 'permanent' });
+    if (!duration.valid) return;
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
     const selectedNames = selectedIds.map((id) => (api?.getEffect ? api.getEffect(id).name : id)).join(', ');
     const creatorMsg = String(effectCreatorMessage?.value || '').trim();
@@ -1145,10 +1218,17 @@
     const recipientLabel = targetProfile
       ? `${targetProfile.full_name}${targetProfile.email ? ` (${targetProfile.email})` : ''}`
       : 'this user';
+    const noteSuffix = creatorMsg ? ' Your creator note will be shown in their celebration pop-up.' : '';
     const accepted = await Ipon.confirmAction({
-      title: `Award permanent profile effect${selectedIds.length > 1 ? 's' : ''}?`,
-      message: `Grant ${selectedNames} permanently to ${recipientLabel}?${creatorMsg ? ' Your creator note will be shown in their celebration pop-up.' : ''}`,
-      acceptLabel: `Award effect${selectedIds.length > 1 ? 's' : ''}`
+      title: duration.isPermanent
+        ? `Award permanent profile effect${selectedIds.length > 1 ? 's' : ''}?`
+        : `Award trial card${selectedIds.length > 1 ? 's' : ''}?`,
+      message: duration.isPermanent
+        ? `Grant ${selectedNames} permanently to ${recipientLabel}?${noteSuffix}`
+        : `Grant a trial (${duration.label}) of ${selectedNames} to ${recipientLabel}?${noteSuffix}`,
+      acceptLabel: duration.isPermanent
+        ? `Award effect${selectedIds.length > 1 ? 's' : ''}`
+        : `Award trial card${selectedIds.length > 1 ? 's' : ''}`
     });
     if (!accepted) return;
     Ipon.setBusy(effectGrantSubmit, true, 'Saving…');
@@ -1156,10 +1236,14 @@
       await Ipon.rpc('super_admin_grant_profile_effects', {
         p_user_id: userId,
         p_effect_ids: selectedIds,
-        p_creator_message: creatorMsg
+        p_creator_message: creatorMsg,
+        p_duration_days: duration.durationDays,
+        p_expires_at: duration.expiresAt
       });
       closeEffectGrantDialog();
-      Ipon.toast('Permanent profile effect(s) awarded and user notified.');
+      Ipon.toast(duration.isPermanent
+        ? 'Permanent profile effect(s) awarded and user notified.'
+        : `Trial profile effect(s) (${duration.label}) awarded and user notified.`);
       await load();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
@@ -1214,15 +1298,7 @@
   }
 
   function syncEffectTrialCustomVisibility() {
-    const isCustom = effectTrialDurationPreset?.value === 'custom';
-    if (effectTrialCustomWrap) effectTrialCustomWrap.hidden = !isCustom;
-    if (effectTrialCustomExpiry) {
-      effectTrialCustomExpiry.required = Boolean(isCustom);
-      Ipon.setFieldError(effectTrialCustomExpiry, '');
-      if (isCustom && !effectTrialCustomExpiry.value) {
-        effectTrialCustomExpiry.value = toDatetimeLocalValue(new Date(Date.now() + 7 * 86400000).toISOString());
-      }
-    }
+    syncCustomExpiryControl(effectTrialDurationPreset, effectTrialCustomWrap, effectTrialCustomExpiry, 7);
   }
 
   function openEffectTrialApproveDialog(req) {
@@ -1309,29 +1385,13 @@
     const req = profileEffectTrialRequests.find((row) => String(row.id) === String(requestId));
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
     const effectName = req ? (api?.getEffect ? api.getEffect(req.effect_id).name : req.effect_id) : 'this profile effect';
-    const preset = String(effectTrialDurationPreset?.value || '7');
-    let durationDays = null;
-    let customExpiresAtIso = null;
-    let expiryDesc = `${preset} day${preset === '1' ? '' : 's'}`;
-    if (preset === 'custom') {
-      const raw = String(effectTrialCustomExpiry?.value || '').trim();
-      const parsedMs = raw ? new Date(raw).getTime() : NaN;
-      if (!raw || !Number.isFinite(parsedMs) || parsedMs <= Date.now() + 5 * 60000) {
-        Ipon.setFieldError(effectTrialCustomExpiry, 'Select an expiration date and time at least 5 minutes in the future.');
-        effectTrialCustomExpiry?.focus();
-        return;
-      }
-      Ipon.setFieldError(effectTrialCustomExpiry, '');
-      customExpiresAtIso = new Date(parsedMs).toISOString();
-      expiryDesc = `until ${Ipon.dateLabel(customExpiresAtIso, { dateStyle: 'medium', timeStyle: 'short' })}`;
-    } else {
-      durationDays = Number.parseInt(preset, 10) || 7;
-    }
+    const duration = readEffectDurationInput(effectTrialDurationPreset, effectTrialCustomExpiry, { defaultPreset: '7' });
+    if (!duration.valid) return;
     const creatorMsg = String(effectTrialCreatorMessage?.value || '').trim();
     const recipientLabel = req ? `${req.full_name || 'User'}${req.email ? ` (${req.email})` : ''}` : 'this user';
     const accepted = await Ipon.confirmAction({
       title: `Approve "${effectName}" trial?`,
-      message: `Start a ${expiryDesc} trial of "${effectName}" for ${recipientLabel}? They will see the celebration pop-up and begin a 1-month cooldown.`,
+      message: `Start a trial (${duration.label}) of "${effectName}" for ${recipientLabel}? They will see the celebration pop-up and begin a 1-month cooldown.`,
       acceptLabel: 'Approve trial'
     });
     if (!accepted) return;
@@ -1340,12 +1400,12 @@
       await Ipon.rpc('super_admin_review_effect_trial_request', {
         p_request_id: requestId,
         p_decision: 'APPROVE',
-        p_duration_days: durationDays,
-        p_expires_at: customExpiresAtIso,
+        p_duration_days: duration.durationDays,
+        p_expires_at: duration.expiresAt,
         p_creator_message: creatorMsg
       });
       closeEffectTrialApproveDialog();
-      Ipon.toast(`Trial approved for "${effectName}" (${expiryDesc}).`);
+      Ipon.toast(`Trial approved for "${effectName}" (${duration.label}).`);
       await load();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');

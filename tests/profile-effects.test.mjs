@@ -177,6 +177,8 @@ test('profile card swatch fix, cover upload hardening, Super Admin effects tab, 
   assert.match(core, /\['effects',\s*'super-admin\.html#effects',\s*'Profile effects'/);
   assert.match(superAdminHtml, /id="effects"[^>]*data-platform-view="effects"/);
   assert.match(superAdminHtml, /id="effect-grant-dialog"/);
+  assert.match(superAdminHtml, /id="effect-duration-preset"/);
+  assert.match(superAdminHtml, /id="effect-custom-expiry"/);
   assert.match(superAdminHtml, /id="effect-remove-dialog"/);
   assert.match(superAdminJs, /super_admin_list_profile_effects/);
   assert.match(superAdminJs, /super_admin_grant_profile_effects/);
@@ -185,7 +187,7 @@ test('profile card swatch fix, cover upload hardening, Super Admin effects tab, 
   // Celebration modal & Gallery & Popover runtime
   assert.match(core, /function maybeShowEffectAwardModal\(/);
   assert.match(core, /PROFILE EFFECT UNLOCKED/);
-  assert.match(core, /TRIAL PROFILE EFFECT APPROVED/);
+  assert.match(core, /TRIAL PROFILE EFFECT UNLOCKED/);
   assert.doesNotMatch(core, /Never expires|zero retention expiry|Locked · not unlocked yet/i);
   assert.doesNotMatch(superAdminJs, /Awaiting claim' : ' · Never expires'|Effects never expire/);
   assert.doesNotMatch(superAdminHtml, /Never expire|no inactivity retention/i);
@@ -790,9 +792,16 @@ test('migration 118 and runtime enforce 1-per-effect trials, 1-month cooldown, a
   const modal = appendedNodes.find((n) => n.id === 'ipon-effect-award-dialog');
   assert.ok(modal, 'trial approval should mount same celebration modal');
   assert.match(modal.innerHTML, /Congratulations/);
-  assert.match(modal.innerHTML, /TRIAL PROFILE EFFECT APPROVED/);
+  assert.match(modal.innerHTML, /TRIAL PROFILE EFFECT UNLOCKED/);
   assert.match(modal.innerHTML, /Trial expires/);
   assert.match(modal.innerHTML, /Hyperdrive/);
   assert.match(modal.innerHTML, /Enjoy your 7-day trial!/);
   assert.doesNotMatch(modal.innerHTML, /Never expires|zero retention/i);
+
+  const mig119 = read('database/migrations/20261118_119_effect_grant_trials.sql');
+  const saJs = read('js/super-admin.js');
+  assert.match(mig119, /super_admin_grant_profile_effects\([^)]*p_duration_days integer default null,\s*p_expires_at timestamptz default null/i);
+  assert.match(mig119, /'is_permanent',\s*v_is_permanent/);
+  assert.match(saJs, /effectDurationPreset/);
+  assert.match(saJs, /p_duration_days:\s*duration\.durationDays,\s*p_expires_at:\s*duration\.expiresAt/);
 });
