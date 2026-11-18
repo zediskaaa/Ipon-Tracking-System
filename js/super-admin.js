@@ -600,11 +600,11 @@
       badgeGrantTitle.textContent = currentTier !== 'NONE' ? 'Update verified badge' : 'Award verified badge';
     }
     if (badgeGrantCopy) {
-      badgeGrantCopy.textContent = `Assign ${targetTier === 'CREATOR_GREEN' ? 'Owner Verified & Creator Crown badges' : 'the blue verified badge'} to ${profile.full_name}${profile.email ? ` (${profile.email})` : ''}.`;
+      badgeGrantCopy.innerHTML = `Assign ${targetTier === 'CREATOR_GREEN' ? 'the creator &amp; green badges' : 'the blue verified badge'} to <strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? ` (${Ipon.escapeHtml(profile.email)})` : ''}.`;
     }
     if (badgeGrantPreview) {
       const previewSvg = Ipon.verifiedBadgesHtml ? Ipon.verifiedBadgesHtml(profile, { tier: targetTier }) : '';
-      badgeGrantPreview.innerHTML = `<span class="badge-preview-name">${Ipon.escapeHtml(profile.full_name)}${previewSvg}</span><small class="field-help">${targetTier === 'CREATOR_GREEN' ? 'Green check seal & minimalist creator crown' : 'Verified user blue seal'}</small>`;
+      badgeGrantPreview.innerHTML = `<span class="badge-preview-name">${Ipon.escapeHtml(profile.full_name)}${previewSvg}</span><small class="field-help">${targetTier === 'CREATOR_GREEN' ? 'Green seal &amp; crown' : 'Blue seal'}</small>`;
     }
     if (badgeDurationPreset) {
       if (currentTier !== 'NONE' && !profile.verified_badge_expires_at) {

@@ -18521,15 +18521,87 @@ html[data-theme="dark"] .icon-action.is-reject-cta {
   line-height: 1.45;
   color: var(--ink, #14281f);
 }
+.badge-grant-dialog {
+  width: min(640px, calc(100vw - 24px));
+}
+.badge-grant-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 14px;
+  align-items: start;
+}
+.badge-grant-top-row select {
+  min-height: 44px;
+  height: 44px;
+}
 .badge-grant-preview {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(20, 156, 35, 0.06);
-  border: 1px solid rgba(20, 156, 35, 0.18);
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 13px;
+  border-radius: 10px;
+  background: rgba(20, 45, 43, 0.04);
+  border: 1px solid var(--rule, rgba(20, 45, 43, 0.18));
+  box-sizing: border-box;
+}
+.badge-grant-policy-hint {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted, #5c6b63);
+}
+.badge-grant-policy-hint svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+.badge-optional-tag {
+  font-weight: 500;
+  color: var(--muted, #64748b);
+}
+.badge-grant-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 4px;
+}
+.badge-grant-footer .field-help {
+  margin: 0;
+  flex: 1 1 auto;
+}
+.badge-grant-footer .form-actions {
+  margin: 0;
+  flex-shrink: 0;
+}
+:root[data-theme="dark"] .badge-grant-preview {
+  background: rgba(8, 24, 18, 0.55);
+  border-color: rgba(218, 236, 227, 0.18);
+}
+@media (max-width: 620px) {
+  .badge-grant-top-row {
+    grid-template-columns: 1fr;
+  }
+  .badge-grant-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .badge-grant-footer .form-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 .badge-preview-name {
   display: inline-flex;
