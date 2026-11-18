@@ -121,7 +121,10 @@ test('profile card cover and theme persist with owner-only edits and storage cle
   assert.match(messages, /rpc\('get_profile_card_appearance', \{ p_target_id: targetId \}\)/);
   assert.match(messages, /delete pop\.dataset\.cardTheme/);
   assert.match(css, /\.msg-pop-cover\{/);
-  assert.match(css, /\.account-card-swatches button:focus-visible\{outline:2px solid var\(--ink/);
+  assert.match(css, /\.effects-dock button:focus-visible\s*\{/);
+  assert.doesNotMatch(core, /class="account-card-colors"/);
+  assert.match(css, /\.notification-dialog\{[^}]*overflow:hidden/);
+  assert.match(css, /\.notification-sheet\{[^}]*overflow:hidden;border-radius:inherit/);
   assert.match(css, /html\[data-theme="dark"\] \.account-cover-actions \.button\b/);
   assert.match(css, /html\[data-theme="dark"\] \.msg-profile-popover:has\(\.msg-pop-cover\) \.msg-pop-head \.avatar-circle\.avatar-lg\b/);
 });
@@ -11225,7 +11228,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261118-127/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261118-128/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

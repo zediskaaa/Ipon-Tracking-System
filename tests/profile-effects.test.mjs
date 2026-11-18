@@ -162,10 +162,9 @@ test('profile card swatch fix, cover upload hardening, Super Admin effects tab, 
   // Pic 1 & Pic 2 bug fixes
   assert.match(edge, /'avatars', 'covers', 'group-avatars'/);
   assert.match(core, /\['image\/jpeg', 'image\/jpg', 'image\/png', 'image\/webp'\]\.includes\(mime\)/);
-  assert.match(core, /colorSwatches\.forEach\(\(button\) => button\.addEventListener\('click', async \(\) => \{/);
-  assert.doesNotMatch(core, /#quick-card-appearance \[data-card-color\][^}]*setBusy\(button, true\)/);
-  assert.match(core, /feedback\.textContent = 'Saving color…'/);
-  assert.match(css, /\.account-card-swatches button\.is-saving\b/);
+  assert.doesNotMatch(core, /account-card-colors|data-card-color/);
+  assert.match(core, /dialog\.querySelector\('#effects-theme-dock'\)\?\.addEventListener\('click'/);
+  assert.match(css, /\.effects-dock button:focus-visible/);
 
   // Balanced <dialog> tags & unique IDs in super-admin.html + Effects tab
   const opens = (superAdminHtml.match(/<dialog\b/g) || []).length;
