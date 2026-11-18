@@ -58,7 +58,7 @@ test('migration 20261117_105 adds group chats, preserves 90-day retention & secu
   // Policy copy & service worker cache bump
   assert.match(policyJs, /Direct &amp; group messages, chat files/i);
   assert.match(loginHtml, /Direct &amp; group messages, chat files/i);
-  assert.match(sw, /ipon-shell-v60/);
+  assert.match(sw, /ipon-shell-v61/);
 });
 
 test('group chats runtime renders composite avatars, multi-sender bubbles, typing sender, drawer, forward & creation VM flow', async () => {

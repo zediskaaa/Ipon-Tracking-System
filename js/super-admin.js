@@ -162,7 +162,8 @@
   });
   const announcements = Ipon.bindAnnouncements({
     listElement: document.getElementById('sa-announcement-list'),
-    addButton: document.getElementById('sa-add-announcement')
+    addButton: document.getElementById('sa-add-announcement'),
+    allowPin: true
   });
   let profiles = [];
   let groups = [];

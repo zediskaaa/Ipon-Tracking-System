@@ -1148,6 +1148,28 @@ input::-ms-reveal,input::-ms-clear{display:none!important}
   .users-filters input[type="search"],.bug-filters input[type="search"]{grid-column:1 / -1}
 }
 .announcement-item.is-release-update{border-color:rgba(22,163,74,.35);background:linear-gradient(180deg,#f0fdf4 0%,#ffffff 100%)}
+.announcement-item.is-pinned{border-color:rgba(194,140,32,.56);background:linear-gradient(166deg,#fffaf0 0%,#fef9ec 40%,#ffffff 100%);box-shadow:0 6px 20px rgba(138,92,12,.11),0 1px 3px rgba(20,45,43,.06)}
+.announcement-item.is-pinned::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#b88214 0%,#e7bf62 52%,#156548 100%);pointer-events:none;z-index:2}
+.announcement-item.is-pinned:hover{border-color:rgba(180,122,16,.72);box-shadow:0 10px 26px rgba(138,92,12,.16)}
+.announcement-card-top-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;margin-bottom:4px}
+.announcement-card-pills{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;flex:1 1 auto}
+.announcement-pinned-badge{display:inline-flex;align-items:center;gap:4px;padding:2.5px 9px;border-radius:999px;border:1px solid rgba(184,130,20,.4);background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);color:#78350f;font:800 10.5px/1.2 Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.65)}
+.announcement-pinned-badge svg{width:11px;height:11px;flex:0 0 11px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.announcement-pin-btn{width:26px;height:26px;flex:0 0 26px;aspect-ratio:1/1;padding:0;display:inline-grid;place-items:center;border-radius:50%;border:1px solid rgba(20,45,43,.15);background:rgba(255,255,255,.92);color:#52675f;cursor:pointer;transition:background-color .15s ease,border-color .15s ease,color .15s ease,transform .12s ease}
+.announcement-pin-btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+.announcement-pin-btn:hover{border-color:rgba(184,130,20,.55);background:#fff9eb;color:#8a5200}
+.announcement-pin-btn.is-pinned{border-color:rgba(184,130,20,.58);background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);color:#78350f}
+.announcement-pin-btn.is-pinned svg{fill:rgba(146,64,14,.2)}
+.announcement-pin-btn:focus-visible{outline:2px solid #e4b95b;outline-offset:2px}
+.announcement-item:has(.announcement-card-top-row) .announcement-item-head .announcement-item-title{-webkit-line-clamp:2;line-clamp:2;max-height:calc(1.3em * 2)}
+.announcement-category-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.announcement-viewer-dialog.is-pinned .announcement-category-bar{width:46px;background:linear-gradient(90deg,#b88214 0%,#156548 100%)}
+.announcement-viewer-owner-actions{margin-right:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.announcement-viewer-actions .announcement-viewer-owner-actions #announcement-viewer-delete{margin-right:0}
+.announcement-viewer-pin-btn{display:inline-flex;align-items:center;gap:6px}
+.announcement-viewer-pin-btn svg{width:14px;height:14px;flex:0 0 14px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+.announcement-viewer-pin-btn.is-pinned{border-color:rgba(184,130,20,.5)!important;background:#fef3c7!important;color:#78350f!important}
+.announcement-viewer-pin-btn.is-pinned svg{fill:rgba(146,64,14,.2)}
 .announcement-release-banner{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .announcement-release-banner:not(:has(.announcement-version-chip)){display:none!important}
 .announcement-release-badge{display:none!important}
@@ -4229,6 +4251,40 @@ html[data-theme="dark"] .announcement-item.is-owner {
 html[data-theme="dark"] .announcement-item.is-release-update {
   border-color: rgba(70, 195, 130, .42);
   background: linear-gradient(180deg, rgba(20, 62, 46, .62) 0%, var(--surface-subtle) 100%);
+}
+html[data-theme="dark"] .announcement-item.is-pinned {
+  border-color: rgba(235, 185, 76, .52);
+  background: linear-gradient(166deg, rgba(72, 52, 16, .58) 0%, rgba(18, 46, 36, .64) 55%, var(--surface-subtle) 100%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .38);
+}
+html[data-theme="dark"] .announcement-item.is-pinned::before {
+  background: linear-gradient(90deg, #d99b26 0%, #f4cf73 50%, #34a873 100%);
+}
+html[data-theme="dark"] .announcement-pinned-badge {
+  border-color: rgba(246, 207, 127, .44);
+  background: rgba(217, 155, 38, .22);
+  color: #fcd982;
+  box-shadow: none;
+}
+html[data-theme="dark"] .announcement-pin-btn {
+  border-color: rgba(218, 236, 227, .2);
+  background: #172b24;
+  color: #b7d2c6;
+}
+html[data-theme="dark"] .announcement-pin-btn:hover {
+  border-color: rgba(246, 207, 127, .55);
+  background: rgba(217, 155, 38, .2);
+  color: #fcd982;
+}
+html[data-theme="dark"] .announcement-pin-btn.is-pinned {
+  border-color: rgba(246, 207, 127, .58);
+  background: rgba(217, 155, 38, .28);
+  color: #fcd982;
+}
+html[data-theme="dark"] .announcement-viewer-pin-btn.is-pinned {
+  border-color: rgba(246, 207, 127, .48) !important;
+  background: rgba(217, 155, 38, .24) !important;
+  color: #fcd982 !important;
 }
 html[data-theme="dark"] .announcement-author { color: var(--ink); }
 html[data-theme="dark"] .announcement-author.is-owner { color: #f6cf7f; }

@@ -8929,6 +8929,25 @@
     return isVideo ? 'video' : 'image';
   }
 
+  const ANNOUNCEMENT_PIN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+
+  function sortAnnouncementsList(list) {
+    const parseMs = (val) => {
+      const ms = Date.parse(val || '');
+      return Number.isFinite(ms) ? ms : 0;
+    };
+    return (Array.isArray(list) ? list : []).slice().sort((a, b) => {
+      const bPinned = Boolean(b?.is_pinned || b?.pinned_at) ? 1 : 0;
+      const aPinned = Boolean(a?.is_pinned || a?.pinned_at) ? 1 : 0;
+      if (bPinned !== aPinned) return bPinned - aPinned;
+      if (bPinned && aPinned) {
+        const pinDiff = parseMs(b.pinned_at) - parseMs(a.pinned_at);
+        if (pinDiff !== 0) return pinDiff;
+      }
+      return parseMs(b?.created_at) - parseMs(a?.created_at);
+    });
+  }
+
   function ensureAnnouncementDialogs() {
     if (document.getElementById('announcement-viewer-dialog')) return;
     document.body.insertAdjacentHTML('beforeend', `
@@ -8937,7 +8956,10 @@
           <header class="announcement-viewer-topbar">
             <div class="announcement-category-indicator">
               <span class="announcement-category-bar" aria-hidden="true"></span>
-              <span class="announcement-category-label">Announcement</span>
+              <div class="announcement-category-meta">
+                <span class="announcement-category-label">Announcement</span>
+                <span class="announcement-pinned-badge announcement-viewer-pinned" id="announcement-viewer-pinned" hidden>${ANNOUNCEMENT_PIN_SVG}<span>Pinned</span></span>
+              </div>
             </div>
             <button class="dialog-close announcement-modal-close" id="announcement-viewer-close" type="button" aria-label="Close announcement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
@@ -8951,7 +8973,10 @@
             <div class="announcement-viewer-media" id="announcement-viewer-media"></div>
           </div>
           <div class="announcement-viewer-actions">
-            <button class="button button-danger" id="announcement-viewer-delete" type="button" hidden>Delete announcement</button>
+            <div class="announcement-viewer-owner-actions">
+              <button class="button button-danger" id="announcement-viewer-delete" type="button" hidden>Delete announcement</button>
+              <button class="button button-secondary announcement-viewer-pin-btn" id="announcement-viewer-pin" type="button" aria-pressed="false" hidden>${ANNOUNCEMENT_PIN_SVG}<span>Pin</span></button>
+            </div>
             <div class="announcement-viewer-reactions-wrap" id="announcement-viewer-reactions"></div>
             <button class="button announcement-viewer-done-btn" id="announcement-viewer-done" type="button">Close</button>
           </div>
@@ -9299,7 +9324,7 @@
     }).join('');
   }
 
-  function bindAnnouncements({ listElement, addButton, emptyTitle = 'No announcements yet', emptyNote = 'Stay tuned for updates' } = {}) {
+  function bindAnnouncements({ listElement, addButton, allowPin = false, emptyTitle = 'No announcements yet', emptyNote = 'Stay tuned for updates' } = {}) {
     if (!listElement) return null;
     ensureAnnouncementDialogs();
     const viewerDialog = document.getElementById('announcement-viewer-dialog');
@@ -9309,6 +9334,8 @@
     const viewerDescription = document.getElementById('announcement-viewer-description');
     const viewerMedia = document.getElementById('announcement-viewer-media');
     const viewerDelete = document.getElementById('announcement-viewer-delete');
+    const viewerPinBtn = document.getElementById('announcement-viewer-pin');
+    const viewerPinnedBadge = document.getElementById('announcement-viewer-pinned');
     const viewerReactions = document.getElementById('announcement-viewer-reactions');
     const reactionsDialog = document.getElementById('announcement-reactions-dialog');
     const reactionsTabs = document.getElementById('announcement-reactions-tabs');
@@ -9332,6 +9359,59 @@
       if (!item || !currentProfile) return false;
       if (currentProfile.role === 'SUPER_ADMIN') return true;
       return currentProfile.role === 'ADMIN' && item.author_role === 'ADMIN' && item.group_id === currentProfile.group_id;
+    };
+    const canPin = () => Boolean(allowPin && currentProfile?.role === 'SUPER_ADMIN');
+
+    const syncViewerPinUi = (item) => {
+      const pinned = Boolean(item?.is_pinned || item?.pinned_at);
+      viewerDialog?.classList?.toggle?.('is-pinned', pinned);
+      if (viewerPinnedBadge) viewerPinnedBadge.hidden = !pinned;
+      if (viewerPinBtn) {
+        viewerPinBtn.hidden = !item || !canPin();
+        viewerPinBtn.classList?.toggle?.('is-pinned', pinned);
+        viewerPinBtn.setAttribute?.('aria-pressed', pinned ? 'true' : 'false');
+        const label = viewerPinBtn.querySelector?.('span');
+        if (label) label.textContent = pinned ? 'Unpin' : 'Pin';
+      }
+    };
+
+    const handlePinToggle = async (announcementId, triggerBtn = null) => {
+      if (!canPin()) return;
+      const target = items.find((entry) => entry.id === announcementId);
+      if (!target) return;
+      const nextPinned = !Boolean(target.is_pinned || target.pinned_at);
+      const isViewerBtn = triggerBtn === viewerPinBtn;
+      if (triggerBtn) {
+        if (isViewerBtn) setBusy(triggerBtn, true, nextPinned ? 'Pinning…' : 'Unpinning…');
+        else triggerBtn.disabled = true;
+      }
+      try {
+        const res = await rpc('set_announcement_pinned', {
+          p_announcement_id: target.id,
+          p_pinned: nextPinned
+        });
+        const isNowPinned = Boolean(res?.is_pinned ?? nextPinned);
+        target.is_pinned = isNowPinned;
+        target.pinned_at = res?.pinned_at || (isNowPinned ? new Date().toISOString() : null);
+        items = sortAnnouncementsList(items);
+        renderList();
+        if (viewerDialog?.open && openItemId === target.id) {
+          syncViewerPinUi(target);
+        }
+        notifyLiveSync('announcements');
+        toast(isNowPinned ? 'Announcement pinned to top.' : 'Announcement unpinned.');
+      } catch (error) {
+        toast(friendlyError(error), 'error');
+      } finally {
+        if (triggerBtn) {
+          if (isViewerBtn) {
+            setBusy(triggerBtn, false);
+            syncViewerPinUi(target);
+          } else {
+            triggerBtn.disabled = false;
+          }
+        }
+      }
     };
 
     const getReactionSummary = (announcementId) => {
@@ -9542,20 +9622,24 @@
           </div>`;
         return;
       }
-      listElement.innerHTML = items.map((item) => {
+      const sorted = sortAnnouncementsList(items);
+      listElement.innerHTML = sorted.map((item) => {
         const isOwner = item.author_role === 'SUPER_ADMIN';
         const isRelease = item.announcement_type === 'RELEASE' || Boolean(item.release_version);
+        const isPinned = Boolean(item.is_pinned || item.pinned_at);
+        const showVersion = isRelease && Boolean(item.release_version);
+        const showTopRow = isPinned || showVersion || canPin();
         const media = Array.isArray(item.attachments) ? item.attachments : [];
         return `
-          <article class="announcement-item${isOwner ? ' is-owner' : ''}${isRelease ? ' is-release-update' : ''}" data-announcement-id="${escapeHtml(item.id)}">
+          <article class="announcement-item${isOwner ? ' is-owner' : ''}${isRelease ? ' is-release-update' : ''}${isPinned ? ' is-pinned' : ''}" data-announcement-id="${escapeHtml(item.id)}">
             <div class="announcement-item-content" role="button" tabindex="0" aria-label="Open announcement ${escapeHtml(item.title)}">
-              ${isRelease ? `
-                <div class="announcement-release-banner">
-                  <span class="announcement-release-badge">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" class="release-star-icon"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>
-                    Release update
-                  </span>
-                  ${item.release_version ? `<span class="announcement-version-chip">${escapeHtml(item.release_version)}</span>` : ''}
+              ${showTopRow ? `
+                <div class="announcement-card-top-row">
+                  <div class="announcement-card-pills">
+                    ${isPinned ? `<span class="announcement-pinned-badge" title="Pinned by Super Admin">${ANNOUNCEMENT_PIN_SVG}<span>Pinned</span></span>` : ''}
+                    ${showVersion ? `<span class="announcement-version-chip">${escapeHtml(item.release_version)}</span>` : ''}
+                  </div>
+                  ${canPin() ? `<button class="announcement-pin-btn${isPinned ? ' is-pinned' : ''}" type="button" data-announcement-pin="${escapeHtml(item.id)}" aria-pressed="${isPinned ? 'true' : 'false'}" aria-label="${isPinned ? 'Unpin announcement' : 'Pin announcement'}" title="${isPinned ? 'Pinned — click to unpin' : 'Pin announcement to top'}">${ANNOUNCEMENT_PIN_SVG}</button>` : ''}
                 </div>` : ''}
               <div class="announcement-item-head">
                 <strong class="announcement-item-title">${escapeHtml(item.title)}</strong>
@@ -9607,6 +9691,7 @@
         viewerTitle.innerHTML = `<span class="announcement-hero-headline">${escapeHtml(item.title || '')}</span>`;
       }
       viewerDescription.innerHTML = renderAnnouncementDescriptionHtml(item.description, item.release_version);
+      syncViewerPinUi(item);
       viewerDelete.hidden = !canDelete(item);
       if (viewerReactions) viewerReactions.innerHTML = renderReactionsBarHtml(item.id);
       const viewerReleaseFeatures = document.getElementById('announcement-viewer-release-features');
@@ -9723,7 +9808,8 @@
       const [announcementsRes, reactionsRes] = await Promise.all([
         client
           .from('v_announcements')
-          .select('id,group_id,author_id,author_name,author_role,author_avatar_url,author_social_user_id,title,description,attachments,created_at,announcement_type,release_version')
+          .select('id,group_id,author_id,author_name,author_role,author_avatar_url,author_social_user_id,title,description,attachments,created_at,announcement_type,release_version,is_pinned,pinned_at')
+          .order('pinned_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false })
           .limit(200),
         client
@@ -9731,7 +9817,7 @@
           .select('announcement_id,user_id,reaction')
       ]);
       if (announcementsRes.error) throw announcementsRes.error;
-      items = announcementsRes.data || [];
+      items = sortAnnouncementsList(announcementsRes.data || []);
       reactions = (!reactionsRes.error && Array.isArray(reactionsRes.data)) ? reactionsRes.data : [];
       renderList();
       if (viewerDialog?.open && openItemId) {
@@ -9770,7 +9856,14 @@
           if (announcementId) openReactionsModal(announcementId);
           return;
         }
-        if (event.target.closest('.announcement-reactions-bar, [data-social-user-dp]')) return;
+        const pinBtn = event.target.closest('[data-announcement-pin]');
+        if (pinBtn) {
+          event.stopPropagation();
+          const announcementId = pinBtn.dataset.announcementPin;
+          if (announcementId) handlePinToggle(announcementId, pinBtn);
+          return;
+        }
+        if (event.target.closest('.announcement-reactions-bar, [data-social-user-dp], [data-announcement-pin]')) return;
         const trigger = event.target.closest('[data-announcement-id]');
         if (!trigger) return;
         const target = items.find((entry) => entry.id === trigger.dataset.announcementId);
@@ -9908,6 +10001,13 @@
       });
     }
 
+    if (viewerPinBtn) {
+      viewerPinBtn.onclick = async () => {
+        if (!openItemId) return;
+        await handlePinToggle(openItemId, viewerPinBtn);
+      };
+    }
+
     viewerDelete.onclick = async () => {
       const target = items.find((entry) => entry.id === openItemId);
       if (!target || !canDelete(target)) return;
@@ -10021,7 +10121,7 @@
           const { data } = await client.from('v_announcements').select('*').eq('id', id).maybeSingle();
           if (data) {
             found = data;
-            items = [data, ...items];
+            items = sortAnnouncementsList([data, ...items]);
             renderList();
           }
         }
@@ -10051,7 +10151,7 @@
             .limit(25);
           found = matchRelease(data || []);
           if (found && !items.some((entry) => entry.id === found.id)) {
-            items = [found, ...items];
+            items = sortAnnouncementsList([found, ...items]);
             renderList();
           }
         }
