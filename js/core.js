@@ -1372,6 +1372,22 @@
     return meta.publicUrl;
   }
 
+  async function uploadAuthorizedFile(client, bucket, upload, file) {
+    if (upload?.signedUrl) {
+      const response = await fetch(upload.signedUrl, {
+        method: 'PUT',
+        headers: file.type ? { 'Content-Type': file.type } : undefined,
+        body: file
+      });
+      if (!response.ok) throw new Error(`Cloud upload failed (${response.status}).`);
+      return;
+    }
+    const { error } = await client.storage
+      .from(bucket)
+      .uploadToSignedUrl(upload.path, upload.token, file, { contentType: file.type || undefined });
+    if (error) throw error;
+  }
+
   function readShellAvatar(expectedUserId = '') {
     try {
       const raw = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SHELL_AVATAR_KEY) : null)
@@ -7481,10 +7497,7 @@
             const entry = queuedMedia[i];
             const upload = uploads[i];
             if (!upload?.path || !upload?.token) throw new Error('Upload authorization missing.');
-            const { error: uploadError } = await client.storage
-              .from('announcements')
-              .uploadToSignedUrl(upload.path, upload.token, entry.file, { contentType: entry.file.type || undefined });
-            if (uploadError) throw uploadError;
+            await uploadAuthorizedFile(client, 'announcements', upload, entry.file);
             uploadedPaths.push(upload.path);
             attachments.push({ path: upload.path, name: upload.name, kind: entry.kind, type: entry.type || entry.file.type || '' });
           }
@@ -10303,10 +10316,7 @@
             const entry = pendingUploads[i];
             const upload = uploads[i];
             if (!upload?.path || !upload?.token) throw new Error('Upload authorization missing.');
-            const { error: uploadError } = await client.storage
-              .from('record-comments')
-              .uploadToSignedUrl(upload.path, upload.token, entry.file, { contentType: entry.file.type || undefined });
-            if (uploadError) throw uploadError;
+            await uploadAuthorizedFile(client, 'record-comments', upload, entry.file);
             uploadedPaths.push(upload.path);
             if (entry.previewUrl) signedUrlCache.set(upload.path, entry.previewUrl);
             attachments.push({ path: upload.path, name: upload.name, kind: entry.kind, type: upload.type || entry.file.type || '', size: entry.size });

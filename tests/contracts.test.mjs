@@ -16,6 +16,32 @@ test('all browser scripts pass syntax validation', () => {
   }
 });
 
+test('private media uses R2 signed URLs with Supabase Storage fallback and CSP coverage', () => {
+  const edge = read('supabase/functions/manage-account/index.ts');
+  const core = read('js/core.js');
+  const r2Origin = 'https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com';
+  assert.match(edge, /import \{ AwsClient \} from 'npm:aws4fetch@1\.0\.20'/);
+  for (const secret of ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET']) {
+    assert.match(edge, new RegExp(`Deno\\.env\\.get\\('${secret}'\\)`));
+    assert.doesNotMatch(read('js/config.js'), new RegExp(secret));
+  }
+  assert.match(edge, /const R2_PATH_MARKER = '\/r2\/'/);
+  assert.match(edge, /aws: \{ signQuery: true \}/);
+  assert.match(edge, /createPrivateViewUrls\(admin, ANNOUNCEMENTS_BUCKET, paths\)/);
+  assert.match(edge, /createPrivateViewUrls\(admin, RECORD_COMMENTS_BUCKET, paths\)/);
+  assert.match(edge, /createPrivateViewUrls\(admin, CHAT_ATTACHMENTS_BUCKET, allowedPaths\)/);
+  assert.match(edge, /removePrivateObjects\(admin, bucket, slice\.map/);
+  assert.match(core, /function uploadAuthorizedFile\(/);
+  assert.match(core, /fetch\(upload\.signedUrl, \{[\s\S]*?method: 'PUT'/);
+  assert.match(core, /uploadAuthorizedFile\(client, 'announcements'/);
+  assert.match(core, /uploadAuthorizedFile\(client, 'record-comments'/);
+  for (const file of readdirSync(new URL('../', import.meta.url)).filter((name) => name.endsWith('.html'))) {
+    const html = read(file);
+    if (html.includes('Content-Security-Policy')) assert.match(html, new RegExp(r2Origin.replaceAll('.', '\\.')));
+  }
+  assert.match(read('vercel.json'), new RegExp(r2Origin.replaceAll('.', '\\.')));
+});
+
 test('database keeps financial writes behind RLS and reviewed RPCs', () => {
   const schema = read('database/schema.sql');
   for (const table of ['profiles', 'members', 'contributions', 'expenses', 'withdrawals', 'audit_logs']) {
@@ -3014,6 +3040,10 @@ test('record discussion supports photo, video, and document attachments with los
     MutationObserver: class { observe() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
     fetch: async (url, init) => {
+      if (String(url).includes('https://storage.example/upload/')) {
+        uploadedPayloads.push({ path: String(url), token: 'signed-url', file: init.body });
+        return { ok: true, status: 200, text: async () => '' };
+      }
       if (String(url).includes('/functions/v1/manage-account')) {
         const body = JSON.parse(init.body || '{}');
         fnActions.push(body);

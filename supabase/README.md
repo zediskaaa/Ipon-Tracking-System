@@ -12,6 +12,34 @@ Migration `20261112_014_enforce_opt_in_mfa.sql` is applied by the database deplo
 
 Migration `database/migrations/20261111_010_enable_dashboard_realtime.sql` enables automatic dashboard refresh and is also applied by the database deployment workflow. It adds the dashboard source tables to the `supabase_realtime` publication; existing RLS policies still determine which changes each signed-in role can receive.
 
+## Cloudflare R2 private media
+
+The `manage-account` function stores new chat, announcement, and record-comment files in the private `myipon-private-media` R2 bucket when all four secrets below are configured. Existing Supabase Storage paths remain readable and deletable, and missing R2 configuration safely keeps new uploads on Supabase Storage.
+
+```sh
+supabase secrets set \
+  R2_ACCOUNT_ID=4b0fc7ef59cd45a047da632eba75d8af \
+  R2_ACCESS_KEY_ID=... \
+  R2_SECRET_ACCESS_KEY=... \
+  R2_BUCKET=myipon-private-media
+```
+
+Keep the bucket private. Its R2 token only needs Object Read & Write access to that bucket. Configure this bucket CORS policy before deploying the function:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://my-ipon.vercel.app"],
+    "AllowedMethods": ["GET", "PUT", "HEAD"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+Never put R2 credentials in `js/config.js`. The browser receives short-lived, single-object signed URLs only.
+
 For automatic contribution reminders, enable Supabase Cron and schedule this SQL daily:
 
 ```sql

@@ -1,9 +1,79 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8';
+import { AwsClient } from 'npm:aws4fetch@1.0.20';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const SYSTEM_NAME = 'IPON Group Savings Tracker';
 const EMAIL_LOGO_URL = 'https://my-ipon.vercel.app/assets/icon-192.png';
+const R2_PATH_MARKER = '/r2/';
+let r2Client: AwsClient | null = null;
+
+function r2Storage() {
+  const accountId = String(Deno.env.get('R2_ACCOUNT_ID') || '').trim();
+  const accessKeyId = String(Deno.env.get('R2_ACCESS_KEY_ID') || '').trim();
+  const secretAccessKey = String(Deno.env.get('R2_SECRET_ACCESS_KEY') || '').trim();
+  const bucket = String(Deno.env.get('R2_BUCKET') || '').trim();
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucket) return null;
+  r2Client ||= new AwsClient({ accessKeyId, secretAccessKey, service: 's3', region: 'auto', retries: 2 });
+  return { accountId, bucket, client: r2Client };
+}
+
+function isR2Path(path: string) {
+  return String(path || '').includes(R2_PATH_MARKER);
+}
+
+function r2ObjectUrl(logicalBucket: string, path: string) {
+  const storage = r2Storage();
+  if (!storage) throw new Error('Cloud media storage is not configured.');
+  const key = `${logicalBucket}/${path}`.split('/').map(encodeURIComponent).join('/');
+  return new URL(`https://${storage.accountId}.r2.cloudflarestorage.com/${storage.bucket}/${key}`);
+}
+
+async function signR2Object(logicalBucket: string, path: string, method: 'GET' | 'PUT', contentType = '', downloadName = '') {
+  const storage = r2Storage();
+  if (!storage) throw new Error('Cloud media storage is not configured.');
+  const target = r2ObjectUrl(logicalBucket, path);
+  target.searchParams.set('X-Amz-Expires', method === 'PUT' ? '900' : '3600');
+  if (downloadName) target.searchParams.set('response-content-disposition', `attachment; filename="${downloadName.replace(/["\\\r\n]/g, '_')}"`);
+  const request = new Request(target, {
+    method,
+    headers: contentType ? { 'Content-Type': contentType } : undefined
+  });
+  return (await storage.client.sign(request, { aws: { signQuery: true } })).url;
+}
+
+async function createPrivateViewUrls(admin: any, logicalBucket: string, paths: string[]) {
+  const urls: Record<string, string> = {};
+  const r2Paths = paths.filter(isR2Path);
+  const legacyPaths = paths.filter((path) => !isR2Path(path));
+  await Promise.all(r2Paths.map(async (path) => { urls[path] = await signR2Object(logicalBucket, path, 'GET'); }));
+  for (let i = 0; i < legacyPaths.length; i += 100) {
+    const { data, error } = await admin.storage.from(logicalBucket).createSignedUrls(legacyPaths.slice(i, i + 100), 3600);
+    if (error) throw error;
+    (data || []).forEach((item: { path?: string | null; signedUrl?: string | null }) => {
+      if (item.path && item.signedUrl) urls[item.path] = item.signedUrl;
+    });
+  }
+  return urls;
+}
+
+async function removePrivateObjects(admin: any, logicalBucket: string, paths: string[]) {
+  const r2Paths = paths.filter(isR2Path);
+  const legacyPaths = paths.filter((path) => !isR2Path(path));
+  if (r2Paths.length) {
+    const storage = r2Storage();
+    if (!storage) throw new Error('Cloud media storage is not configured.');
+    await Promise.all(r2Paths.map(async (path) => {
+      const response = await storage.client.fetch(r2ObjectUrl(logicalBucket, path), { method: 'DELETE' });
+      if (!response.ok && response.status !== 404) throw new Error(`R2 delete failed (${response.status}).`);
+    }));
+  }
+  if (legacyPaths.length) {
+    const { error } = await admin.storage.from(logicalBucket).remove(legacyPaths);
+    if (error) throw error;
+  }
+  return paths.length;
+}
 
 function emailBrandHeaderMarkup() {
   return `
@@ -634,11 +704,11 @@ async function drainPendingStorageDeletions(admin: ReturnType<typeof createClien
   for (const [bucket, items] of byBucket.entries()) {
     for (let i = 0; i < items.length; i += 100) {
       const slice = items.slice(i, i + 100);
-      const { error: remErr } = await admin.storage.from(bucket).remove(slice.map((x) => x.object_path));
-      if (!remErr) {
+      try {
+        await removePrivateObjects(admin, bucket, slice.map((x) => x.object_path));
         await admin.from('pending_storage_deletions').delete().in('id', slice.map((x) => x.id));
         drained += slice.length;
-      }
+      } catch { /* retry on the next maintenance sweep */ }
     }
   }
   return { drained };
@@ -2429,12 +2499,12 @@ Deno.serve(async (request) => {
   const BLOCKED_DISCUSSION_EXT_RE = /\.(exe|msi|bat|cmd|com|pif|scr|vbs|vbe|js|mjs|cjs|jse|wsf|wsh|ps1|psm1|sh|bash|html|htm|xhtml|svg|php|asp|aspx|jsp|jar|dll|sys|drv|reg|hta|cpl)$/i;
   const BLOCKED_DISCUSSION_MIMES = new Set(['text/html', 'application/javascript', 'text/javascript', 'image/svg+xml', 'application/x-msdownload', 'application/x-msdos-program']);
 
-  async function ensureAnnouncementsBucket(client: ReturnType<typeof createClient>) {
+  async function ensureAnnouncementsBucket(client: any) {
     const { error } = await client.storage.createBucket(ANNOUNCEMENTS_BUCKET, { public: false, fileSizeLimit: 52428800 });
     if (error && !/already exists/i.test(error.message || '')) throw error;
   }
 
-  async function ensureRecordCommentsBucket(client: ReturnType<typeof createClient>) {
+  async function ensureRecordCommentsBucket(client: any) {
     const { error } = await client.storage.createBucket(RECORD_COMMENTS_BUCKET, { public: false, fileSizeLimit: 52428800 });
     if (error && !/already exists/i.test(error.message || '')) throw error;
   }
@@ -2503,16 +2573,20 @@ Deno.serve(async (request) => {
     if (!prefix) return json({ error: 'Only Owner or Group Administrators can attach announcement media.' }, 403);
     if (!UUID_RE.test(announcementId) || !files.length || files.length > 20) return json({ error: 'Invalid announcement media upload request.' }, 400);
     try {
-      await ensureAnnouncementsBucket(admin);
+      if (!r2Storage()) await ensureAnnouncementsBucket(admin);
       const uploads = [];
       for (let i = 0; i < files.length; i += 1) {
         const entry = (files[i] || {}) as { name?: unknown; kind?: unknown; type?: unknown };
         const cleanName = String(entry.name || 'media').replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80) || 'media';
         const kind = entry.kind === 'video' ? 'video' : 'image';
-        const path = `${prefix}${announcementId}/${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
-        const { data, error } = await admin.storage.from(ANNOUNCEMENTS_BUCKET).createSignedUploadUrl(path);
-        if (error || !data) throw error || new Error('Could not create upload URL.');
-        uploads.push({ path, token: data.token, name: String(entry.name || cleanName).slice(0, 120), kind, type: String(entry.type || '') });
+        const path = `${prefix}${announcementId}/${r2Storage() ? 'r2/' : ''}${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
+        if (isR2Path(path)) {
+          uploads.push({ path, token: 'r2', signedUrl: await signR2Object(ANNOUNCEMENTS_BUCKET, path, 'PUT', String(entry.type || '')), name: String(entry.name || cleanName).slice(0, 120), kind, type: String(entry.type || '') });
+        } else {
+          const { data, error } = await admin.storage.from(ANNOUNCEMENTS_BUCKET).createSignedUploadUrl(path);
+          if (error || !data) throw error || new Error('Could not create upload URL.');
+          uploads.push({ path, token: data.token, name: String(entry.name || cleanName).slice(0, 120), kind, type: String(entry.type || '') });
+        }
       }
       return json({ uploads });
     } catch (error) {
@@ -2528,13 +2602,11 @@ Deno.serve(async (request) => {
     const list = Array.isArray(row.attachments) ? row.attachments : [];
     const paths = list.map((item: { path?: unknown }) => String(item?.path || '')).filter(Boolean);
     if (!paths.length) return json({ urls: {} });
-    const { data: signed, error: signError } = await admin.storage.from(ANNOUNCEMENTS_BUCKET).createSignedUrls(paths, 3600);
-    if (signError) return json({ error: signError.message || 'Unable to sign media URLs.' }, 400);
-    const urls: Record<string, string> = {};
-    (signed || []).forEach((item: { path?: string | null; signedUrl?: string | null }) => {
-      if (item.path && item.signedUrl) urls[item.path] = item.signedUrl;
-    });
-    return json({ urls });
+    try {
+      return json({ urls: await createPrivateViewUrls(admin, ANNOUNCEMENTS_BUCKET, paths) });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Unable to sign media URLs.' }, 400);
+    }
   }
 
   if (body.action === 'announcement-cleanup-media') {
@@ -2543,9 +2615,11 @@ Deno.serve(async (request) => {
     const requested = Array.isArray(body.paths) ? body.paths.map((value) => String(value || '')).filter(Boolean) : [];
     const allowedPaths = requested.filter((path) => !path.includes('..') && (actor.role === 'SUPER_ADMIN' || path.startsWith(prefix)));
     if (!allowedPaths.length) return json({ removed: 0 });
-    const { error: removeError } = await admin.storage.from(ANNOUNCEMENTS_BUCKET).remove(allowedPaths);
-    if (removeError) return json({ error: removeError.message || 'Unable to delete media files.' }, 400);
-    return json({ removed: allowedPaths.length });
+    try {
+      return json({ removed: await removePrivateObjects(admin, ANNOUNCEMENTS_BUCKET, allowedPaths) });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Unable to delete media files.' }, 400);
+    }
   }
 
   if (body.action === 'record-comment-upload-urls') {
@@ -2561,7 +2635,7 @@ Deno.serve(async (request) => {
       return json({ error: threadError?.message || 'You do not have permission to attach files to this record.' }, 403);
     }
     try {
-      await ensureRecordCommentsBucket(admin);
+      if (!r2Storage()) await ensureRecordCommentsBucket(admin);
       const uploads = [];
       for (let i = 0; i < files.length; i += 1) {
         const entry = (files[i] || {}) as { name?: unknown; kind?: unknown; type?: unknown; size?: unknown };
@@ -2576,10 +2650,14 @@ Deno.serve(async (request) => {
         }
         const cleanName = rawName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80) || 'attachment';
         const kind = entry.kind === 'image' ? 'image' : (entry.kind === 'video' ? 'video' : 'file');
-        const path = `${actor.group_id}/${recordType}/${recordId}/${userResult.user.id}/${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
-        const { data, error } = await admin.storage.from(RECORD_COMMENTS_BUCKET).createSignedUploadUrl(path);
-        if (error || !data) throw error || new Error('Could not prepare file upload.');
-        uploads.push({ path, token: data.token, name: rawName, kind, type: String(entry.type || '').slice(0, 120), size: Math.max(0, Math.round(rawSize)) });
+        const path = `${actor.group_id}/${recordType}/${recordId}/${userResult.user.id}/${r2Storage() ? 'r2/' : ''}${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
+        if (isR2Path(path)) {
+          uploads.push({ path, token: 'r2', signedUrl: await signR2Object(RECORD_COMMENTS_BUCKET, path, 'PUT', rawType), name: rawName, kind, type: String(entry.type || '').slice(0, 120), size: Math.max(0, Math.round(rawSize)) });
+        } else {
+          const { data, error } = await admin.storage.from(RECORD_COMMENTS_BUCKET).createSignedUploadUrl(path);
+          if (error || !data) throw error || new Error('Could not prepare file upload.');
+          uploads.push({ path, token: data.token, name: rawName, kind, type: String(entry.type || '').slice(0, 120), size: Math.max(0, Math.round(rawSize)) });
+        }
       }
       return json({ uploads });
     } catch (error) {
@@ -2596,24 +2674,19 @@ Deno.serve(async (request) => {
     const { data: thread, error: threadError } = await caller.rpc('get_record_comments', { p_record_type: recordType, p_record_id: recordId });
     if (threadError || !thread) return json({ error: threadError?.message || 'Discussion not found.' }, 404);
     const comments = Array.isArray(thread.comments) ? thread.comments : [];
-    const paths = [...new Set(
+    const paths = [...new Set<string>(
       comments.flatMap((comment: { attachments?: unknown }) =>
         (Array.isArray(comment?.attachments) ? comment.attachments : [])
           .map((att: { path?: unknown }) => String(att?.path || ''))
           .filter((p: string) => p && !p.includes('..'))
-      )
+      ) as string[]
     )];
     if (!paths.length) return json({ urls: {} });
-    const urls: Record<string, string> = {};
-    for (let i = 0; i < paths.length; i += 100) {
-      const slice = paths.slice(i, i + 100);
-      const { data: signed, error: signError } = await admin.storage.from(RECORD_COMMENTS_BUCKET).createSignedUrls(slice, 3600);
-      if (signError) return json({ error: signError.message || 'Unable to load attachment links.' }, 400);
-      (signed || []).forEach((item: { path?: string | null; signedUrl?: string | null }) => {
-        if (item.path && item.signedUrl) urls[item.path] = item.signedUrl;
-      });
+    try {
+      return json({ urls: await createPrivateViewUrls(admin, RECORD_COMMENTS_BUCKET, paths) });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Unable to load attachment links.' }, 400);
     }
-    return json({ urls });
   }
 
   if (body.action === 'record-comment-cleanup-media') {
@@ -2621,9 +2694,11 @@ Deno.serve(async (request) => {
     const ownSegment = `/${userResult.user.id}/`;
     const allowedPaths = requested.filter((path) => !path.includes('..') && path.includes(ownSegment));
     if (!allowedPaths.length) return json({ removed: 0 });
-    const { error: removeError } = await admin.storage.from(RECORD_COMMENTS_BUCKET).remove(allowedPaths);
-    if (removeError) return json({ error: removeError.message || 'Unable to clean up uploaded files.' }, 400);
-    return json({ removed: allowedPaths.length });
+    try {
+      return json({ removed: await removePrivateObjects(admin, RECORD_COMMENTS_BUCKET, allowedPaths) });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Unable to clean up uploaded files.' }, 400);
+    }
   }
 
   const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
@@ -2643,8 +2718,10 @@ Deno.serve(async (request) => {
       return json({ error: permError?.message || 'You cannot attach files to this conversation.' }, 403);
     }
     try {
-      const { error: bucketErr } = await admin.storage.createBucket(CHAT_ATTACHMENTS_BUCKET, { public: false, fileSizeLimit: 52428800 });
-      if (bucketErr && !/already exists/i.test(bucketErr.message || '')) throw bucketErr;
+      if (!r2Storage()) {
+        const { error: bucketErr } = await admin.storage.createBucket(CHAT_ATTACHMENTS_BUCKET, { public: false, fileSizeLimit: 52428800 });
+        if (bucketErr && !/already exists/i.test(bucketErr.message || '')) throw bucketErr;
+      }
       const uploads = [];
       for (let i = 0; i < files.length; i += 1) {
         const entry = (files[i] || {}) as { name?: unknown; kind?: unknown; type?: unknown; size?: unknown };
@@ -2662,13 +2739,14 @@ Deno.serve(async (request) => {
         }
         const cleanName = rawName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-100) || 'attachment';
         const kind = ['image', 'document', 'audio', 'video', 'file'].includes(String(entry.kind || '')) ? String(entry.kind) : 'file';
-        const path = `${conversationId}/${userResult.user.id}/${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
-        const { data, error } = await admin.storage.from(CHAT_ATTACHMENTS_BUCKET).createSignedUploadUrl(path);
-        if (error || !data) throw error || new Error('Could not prepare file upload.');
+        const path = `${conversationId}/${userResult.user.id}/${r2Storage() ? 'r2/' : ''}${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
+        const signedUrl = isR2Path(path) ? await signR2Object(CHAT_ATTACHMENTS_BUCKET, path, 'PUT', rawType) : null;
+        const legacyUpload = signedUrl ? null : await admin.storage.from(CHAT_ATTACHMENTS_BUCKET).createSignedUploadUrl(path);
+        if (!signedUrl && (legacyUpload?.error || !legacyUpload?.data)) throw legacyUpload?.error || new Error('Could not prepare file upload.');
         uploads.push({
           path,
-          token: data.token,
-          signedUrl: data.signedUrl,
+          token: signedUrl ? 'r2' : legacyUpload?.data?.token,
+          signedUrl: signedUrl || legacyUpload?.data?.signedUrl,
           name: rawName,
           kind,
           type: String(entry.type || '').slice(0, 120),
@@ -2705,6 +2783,13 @@ Deno.serve(async (request) => {
 
     if (downloadPath) {
       const targetPath = allowedPaths[0];
+      if (isR2Path(targetPath)) {
+        try {
+          return json({ downloadUrl: await signR2Object(CHAT_ATTACHMENTS_BUCKET, targetPath, 'GET', '', downloadName || 'attachment') });
+        } catch (error) {
+          return json({ error: error instanceof Error ? error.message : 'Unable to prepare file download link.' }, 400);
+        }
+      }
       const { data: dlData, error: dlError } = await admin.storage
         .from(CHAT_ATTACHMENTS_BUCKET)
         .createSignedUrl(targetPath, 3600, { download: downloadName || true });
@@ -2714,13 +2799,11 @@ Deno.serve(async (request) => {
       return json({ downloadUrl: dlData.signedUrl });
     }
 
-    const urls: Record<string, string> = {};
-    const { data: signed, error: signError } = await admin.storage.from(CHAT_ATTACHMENTS_BUCKET).createSignedUrls(allowedPaths, 3600);
-    if (signError) return json({ error: signError.message || 'Unable to load attachment links.' }, 400);
-    (signed || []).forEach((item: { path?: string | null; signedUrl?: string | null }) => {
-      if (item.path && item.signedUrl) urls[item.path] = item.signedUrl;
-    });
-    return json({ urls });
+    try {
+      return json({ urls: await createPrivateViewUrls(admin, CHAT_ATTACHMENTS_BUCKET, allowedPaths) });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Unable to load attachment links.' }, 400);
+    }
   }
 
   if (body.action === 'chat-cleanup-media') {
@@ -2731,9 +2814,11 @@ Deno.serve(async (request) => {
     const ownSegment = `/${userResult.user.id}/`;
     const allowedPaths = requested.filter((path) => !path.includes('..') && path.includes(ownSegment));
     if (!allowedPaths.length) return json({ removed: 0 });
-    const { error: removeError } = await admin.storage.from(CHAT_ATTACHMENTS_BUCKET).remove(allowedPaths);
-    if (removeError) return json({ error: removeError.message || 'Unable to clean up uploaded files.' }, 400);
-    return json({ removed: allowedPaths.length });
+    try {
+      return json({ removed: await removePrivateObjects(admin, CHAT_ATTACHMENTS_BUCKET, allowedPaths) });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Unable to clean up uploaded files.' }, 400);
+    }
   }
 
   if (body.action === 'change-password') {
