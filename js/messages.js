@@ -816,11 +816,27 @@
                       <div class="msg-blocked-banner" id="msg-blocked-banner" hidden></div>
                       <div class="msg-context-bar" id="msg-context-bar" hidden></div>
                       <div class="msg-upload-queue" id="msg-upload-queue" hidden></div>
+                      <div class="msg-attach-menu" id="msg-attach-menu" role="menu" aria-label="Choose attachment source" hidden>
+                        <button type="button" class="msg-attach-option" role="menuitem" data-attach-source="gallery">
+                          <span class="msg-attach-option-icon is-gallery" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 15-4.5-4.5a1.5 1.5 0 0 0-2.1 0L7 18"/></svg></span>
+                          <span class="msg-attach-option-copy"><strong>Phone Gallery</strong><small>Photos &amp; videos from camera roll</small></span>
+                        </button>
+                        <button type="button" class="msg-attach-option" role="menuitem" data-attach-source="files">
+                          <span class="msg-attach-option-icon is-files" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>
+                          <span class="msg-attach-option-copy"><strong>File Manager</strong><small>Documents, audio &amp; device storage</small></span>
+                        </button>
+                        <button type="button" class="msg-attach-option" role="menuitem" data-attach-source="gdrive">
+                          <span class="msg-attach-option-icon is-gdrive" aria-hidden="true"><svg viewBox="0 0 24 24"><polygon fill="#0F9D58" stroke="none" points="9 4 12 9.2 6 19.6 3 14.4"/><polygon fill="#FFCD40" stroke="none" points="9 4 15 4 21 14.4 15 14.4"/><polygon fill="#4285F4" stroke="none" points="9 14.4 21 14.4 18 19.6 6 19.6"/></svg></span>
+                          <span class="msg-attach-option-copy"><strong>Google Drive</strong><small>Pick files from Drive cloud storage</small></span>
+                        </button>
+                      </div>
                       <div class="msg-emoji-popover" id="msg-emoji-popover" hidden></div>
                       <form class="msg-composer-form" id="msg-composer-form">
                         <input id="msg-file-input" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,.md,.zip" hidden>
+                        <input id="msg-gallery-input" type="file" multiple accept="image/*,video/*" hidden>
+                        <input id="msg-drive-input" type="file" multiple accept="*/*" hidden>
                         <div class="msg-composer-tools">
-                          <button type="button" class="msg-tool-btn" id="msg-attach-btn" aria-label="Attach photos or documents" title="Attach photos, videos, or documents (original quality)">
+                          <button type="button" class="msg-tool-btn" id="msg-attach-btn" aria-expanded="false" aria-controls="msg-attach-menu" aria-label="Attach files or media" title="Attach from Gallery, File Manager, or Google Drive">
                             <svg viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                           </button>
                           <button type="button" class="msg-tool-btn" id="msg-emoji-btn" aria-label="Insert emoji" title="Emoji picker">
@@ -2864,6 +2880,7 @@
       const isActivePinned = Boolean(isPinned && !isDeleted && state.activePinnedId && m.id === state.activePinnedId);
       return `${dateDivider}${unreadDivider}
         <article class="msg-row${mine ? ' is-mine' : ' is-peer'}${groupedWithPrev ? ' is-grouped-prev' : ''}${groupedWithNext ? ' is-grouped-next' : ''}${isMatch ? ' is-search-match' : ''}${activeMatch ? ' is-active-search-match' : ''}" data-msg-id="${escapeHtml(m.id)}">
+          ${!mine && !isDeleted ? `<span class="msg-swipe-reply-badge" aria-hidden="true">${MSG_REPLY_SVG}</span>` : ''}
           ${!mine ? `<div class="msg-row-avatar">${groupedWithNext ? '' : userAvatarHtml(senderUser, 'avatar-sm')}</div>` : ''}
           <div class="msg-bubble-col">
             ${senderNameHtml}
@@ -2878,6 +2895,7 @@
                   <button type="button" class="msg-action-mini" data-msg-act="reply" data-msg-id="${escapeHtml(m.id)}" aria-label="Reply" title="Reply">${MSG_REPLY_SVG}</button>
                   <button type="button" class="msg-action-mini" data-msg-act="menu" data-msg-id="${escapeHtml(m.id)}" aria-label="More message actions" title="More options">${MSG_MORE_SVG}</button>
                 </div>` : ''}
+              ${mine && !isDeleted ? `<span class="msg-swipe-reply-badge" aria-hidden="true">${MSG_REPLY_SVG}</span>` : ''}
             </div>
             ${reactionHtml}
           </div>
@@ -5192,6 +5210,13 @@
     }
   }
 
+  function closeAttachMenu() {
+    const menu = document.getElementById('msg-attach-menu');
+    const btn = document.getElementById('msg-attach-btn');
+    if (menu) menu.hidden = true;
+    btn?.setAttribute?.('aria-expanded', 'false');
+  }
+
   function closeFloatingMenus(opts) {
     const immediate = Boolean(opts && opts.immediate === true);
     document.querySelectorAll('#msg-messages-list .msg-row.is-menu-target').forEach((row) => row.classList.remove('is-menu-target'));
@@ -5378,9 +5403,12 @@
       }
       suppressBubbleClickId = null;
 
-      // Close floating contextual menus on outside click
+      // Close floating contextual menus & attachment menu on outside click
       if (!ev.target.closest('.msg-floating-menu') && !ev.target.closest('[data-msg-act]') && !ev.target.closest('[data-conv-menu-toggle]') && !ev.target.closest('[data-group-member-menu]') && !ev.target.closest('[data-vact="menu"]')) {
         closeFloatingMenus();
+      }
+      if (!ev.target.closest?.('#msg-attach-menu, #msg-attach-btn')) {
+        closeAttachMenu();
       }
       if (state.showPinnedList && !ev.target.closest?.('#msg-pinned-banner')) {
         state.showPinnedList = false;
@@ -6096,7 +6124,37 @@
         return;
       }
       if (ev.target.closest?.('#msg-cancel-context')) { state.replyToMsg = null; state.editingMsg = null; renderContextBar(); return; }
-      if (ev.target.closest?.('#msg-attach-btn')) { document.getElementById('msg-file-input')?.click(); return; }
+      const attachTrigger = ev.target.closest?.('#msg-attach-btn');
+      if (attachTrigger) {
+        closeFloatingMenus();
+        const emojiPopEl = document.getElementById('msg-emoji-popover');
+        if (emojiPopEl) emojiPopEl.hidden = true;
+        const menuEl = document.getElementById('msg-attach-menu');
+        if (menuEl) {
+          const nextOpen = menuEl.hidden;
+          menuEl.hidden = !nextOpen;
+          attachTrigger.setAttribute?.('aria-expanded', String(nextOpen));
+          if (nextOpen) menuEl.querySelector?.('[data-attach-source]')?.focus?.();
+        }
+        return;
+      }
+      const attachOptBtn = ev.target.closest?.('[data-attach-source]');
+      if (attachOptBtn) {
+        const source = attachOptBtn.dataset.attachSource || 'files';
+        closeAttachMenu();
+        if (typeof window !== 'undefined' && typeof window.IponNativePicker?.setSource === 'function') {
+          try { window.IponNativePicker.setSource(source); } catch { }
+        } else if (source === 'gdrive' && typeof window !== 'undefined' && !window.Capacitor) {
+          ipon().toast?.('Select Google Drive from your device file picker if available.');
+        }
+        const inputId = source === 'gallery'
+          ? 'msg-gallery-input'
+          : source === 'gdrive'
+            ? 'msg-drive-input'
+            : 'msg-file-input';
+        document.getElementById(inputId)?.click();
+        return;
+      }
       const remQ = ev.target.closest?.('[data-remove-queue]');
       if (remQ) {
         const idx = Number(remQ.dataset.removeQueue);
@@ -6107,6 +6165,7 @@
       }
 
       if (ev.target.closest?.('#msg-emoji-btn')) {
+        closeAttachMenu();
         const popEmoji = document.getElementById('msg-emoji-popover');
         if (popEmoji) {
           popEmoji.hidden = !popEmoji.hidden;
@@ -6387,7 +6446,7 @@
     });
 
     document.addEventListener('change', async (ev) => {
-      if (ev.target?.id === 'msg-file-input') {
+      if (ev.target?.id === 'msg-file-input' || ev.target?.id === 'msg-gallery-input' || ev.target?.id === 'msg-drive-input') {
         queuePickedFiles(ev.target.files);
         ev.target.value = '';
       } else if (ev.target?.id === 'msg-group-edit-pic-input') {
@@ -6483,6 +6542,7 @@
         }
         closeProfilePopover();
         closeFloatingMenus();
+        closeAttachMenu();
         if (state.showPinnedList) {
           state.showPinnedList = false;
           renderPinnedBanner();
@@ -6620,8 +6680,57 @@
       const anchor = target?.closest?.('.msg-att-image, .msg-video-player') || bubble;
       return { msgId, anchor };
     };
+    const SWIPE_REPLY_THRESHOLD = 44;
+    let swipeState = null;
+    const clearSwipeVisuals = (row) => {
+      if (!row) return;
+      row.classList?.remove?.('is-swiping', 'is-swipe-ready');
+      row.style?.removeProperty?.('--swipe-x');
+      row.style?.removeProperty?.('--swipe-progress');
+    };
+    const resolveSwipeTarget = (target, pointerType) => {
+      const row = target?.closest?.('#msg-messages-list .msg-row[data-msg-id]');
+      if (!row || row.classList?.contains?.('is-pending')) return null;
+      if (row.querySelector?.('.msg-bubble.is-deleted')) return null;
+      if (state.activeThread?.conversation?.is_blocked) return null;
+      if (target?.closest?.('button, a, input, textarea, select, [role="button"], .msg-video-controls, .msg-voice-play-btn')) return null;
+      if (pointerType === 'mouse' && target?.closest?.('.msg-text, .msg-reply-quote, .msg-sender-name')) return null;
+      const msgId = row.dataset?.msgId;
+      if (!msgId) return null;
+      const msgObj = (state.activeThread?.messages || []).find((m) => String(m.id) === String(msgId));
+      return msgObj ? { row, msgId, msgObj } : null;
+    };
+    const resetSwipe = ({ triggerReply = false } = {}) => {
+      const active = swipeState;
+      swipeState = null;
+      if (!active) return;
+      clearSwipeVisuals(active.row);
+      if (active.movedFar) {
+        suppressBubbleClickId = active.msgId;
+        clearSuppressedClickSoon(active.msgId);
+      }
+      if (active.lockedHorizontal && active.ready && triggerReply && active.msgObj) {
+        startReplyToMessage(active.msgObj);
+      }
+    };
+
     document.addEventListener('pointerdown', (ev) => {
       if (ev.pointerType === 'mouse' && typeof ev.button === 'number' && ev.button !== 0) return;
+      resetSwipe({ triggerReply: false });
+      const swipeTarget = resolveSwipeTarget(ev.target, ev.pointerType);
+      if (swipeTarget) {
+        swipeState = {
+          ...swipeTarget,
+          pointerId: ev.pointerId,
+          startX: ev.clientX || 0,
+          startY: ev.clientY || 0,
+          lockedHorizontal: false,
+          cancelledVertical: false,
+          ready: false,
+          movedFar: false,
+          vibrated: false
+        };
+      }
       const target = resolveHoldTarget(ev.target);
       if (!target) {
         cancelLongPress();
@@ -6645,11 +6754,54 @@
       }, MSG_HOLD_DELAY_MS);
     });
     document.addEventListener('pointermove', (ev) => {
-      if (!pressStart) return;
-      if (Math.hypot((ev.clientX || 0) - pressStart.x, (ev.clientY || 0) - pressStart.y) > 10) cancelLongPress();
+      if (pressStart && Math.hypot((ev.clientX || 0) - pressStart.x, (ev.clientY || 0) - pressStart.y) > 10) {
+        cancelLongPress();
+      }
+      if (!swipeState || swipeState.cancelledVertical) return;
+      if (swipeState.pointerId !== undefined && ev.pointerId !== undefined && ev.pointerId !== swipeState.pointerId) return;
+      const dx = (ev.clientX || 0) - swipeState.startX;
+      const dy = (ev.clientY || 0) - swipeState.startY;
+      if (!swipeState.lockedHorizontal) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) {
+          swipeState.cancelledVertical = true;
+          clearSwipeVisuals(swipeState.row);
+          return;
+        }
+        if (dx > 8 && dx > Math.abs(dy) * 1.15) {
+          swipeState.lockedHorizontal = true;
+          swipeState.movedFar = true;
+          cancelLongPress();
+          if (ev.pointerType !== 'mouse') window.getSelection?.()?.removeAllRanges?.();
+          swipeState.row.classList?.add?.('is-swiping');
+        }
+      }
+      if (swipeState.lockedHorizontal) {
+        const clampedRaw = Math.max(0, dx);
+        const visualX = clampedRaw <= SWIPE_REPLY_THRESHOLD
+          ? clampedRaw
+          : SWIPE_REPLY_THRESHOLD + Math.min(24, (clampedRaw - SWIPE_REPLY_THRESHOLD) * 0.38);
+        const progress = Math.min(1, clampedRaw / SWIPE_REPLY_THRESHOLD);
+        const isReady = clampedRaw >= SWIPE_REPLY_THRESHOLD;
+        swipeState.ready = isReady;
+        swipeState.row.style?.setProperty?.('--swipe-x', `${visualX.toFixed(1)}px`);
+        swipeState.row.style?.setProperty?.('--swipe-progress', progress.toFixed(2));
+        swipeState.row.classList?.toggle?.('is-swipe-ready', isReady);
+        if (isReady && !swipeState.vibrated) {
+          swipeState.vibrated = true;
+          if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+            try { navigator.vibrate(12); } catch { }
+          }
+        }
+      }
     });
-    document.addEventListener('pointerup', cancelLongPress);
-    document.addEventListener('pointercancel', cancelLongPress);
+    document.addEventListener('pointerup', () => {
+      cancelLongPress();
+      resetSwipe({ triggerReply: true });
+    });
+    document.addEventListener('pointercancel', () => {
+      cancelLongPress();
+      resetSwipe({ triggerReply: false });
+    });
     document.addEventListener('dragstart', (ev) => {
       if (ev.target?.closest?.('#msg-messages-list .msg-bubble img, #msg-messages-list .msg-bubble video')) {
         ev.preventDefault?.();
@@ -6671,6 +6823,7 @@
     window.addEventListener('resize', () => {
       closeProfilePopover();
       closeFloatingMenus({ immediate: true });
+      closeAttachMenu();
     });
   }
 
@@ -7052,6 +7205,11 @@
     const pop = document.getElementById('msg-profile-popover');
     if (pop && !pop.hidden) {
       closeProfilePopover();
+      dismissed = true;
+    }
+    const attachMenu = document.getElementById('msg-attach-menu');
+    if (attachMenu && !attachMenu.hidden) {
+      closeAttachMenu();
       dismissed = true;
     }
     const emojiPop = document.getElementById('msg-emoji-popover');

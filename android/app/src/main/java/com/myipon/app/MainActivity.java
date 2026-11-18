@@ -1,6 +1,8 @@
 package com.myipon.app;
 
 import android.Manifest;
+import android.app.Activity;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -13,16 +15,21 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.JavascriptInterface;
 import android.webkit.URLUtil;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -31,10 +38,13 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebChromeClient;
 
 public class MainActivity extends BridgeActivity {
     private static final long SLOW_CONNECTION_THRESHOLD_MS = 6000L;
@@ -50,6 +60,97 @@ public class MainActivity extends BridgeActivity {
     private Button connectionWaitButton;
     private long connectionStartMs = 0L;
     private boolean userDismissedSlowCard = false;
+    private volatile String pendingPickerSource = "";
+    private volatile long pendingPickerSetAtMs = 0L;
+    private ValueCallback<Uri[]> pendingFileCallback = null;
+
+    private final ActivityResultLauncher<Intent> sourceFilePickerLauncher = registerForActivityResult(
+        new ActivityResultContracts.StartActivityForResult(),
+        result -> {
+            final ValueCallback<Uri[]> callback = pendingFileCallback;
+            pendingFileCallback = null;
+            if (callback == null) return;
+            Uri[] uris = null;
+            final Intent data = result.getData();
+            if (result.getResultCode() == Activity.RESULT_OK && data != null) {
+                final ClipData clip = data.getClipData();
+                if (clip != null && clip.getItemCount() > 0) {
+                    uris = new Uri[clip.getItemCount()];
+                    for (int i = 0; i < clip.getItemCount(); i++) {
+                        uris[i] = clip.getItemAt(i).getUri();
+                    }
+                } else if (data.getData() != null) {
+                    uris = new Uri[] { data.getData() };
+                } else {
+                    uris = WebChromeClient.FileChooserParams.parseResult(result.getResultCode(), data);
+                }
+            }
+            callback.onReceiveValue(uris);
+        }
+    );
+
+    private class PickerSourceBridge {
+        @JavascriptInterface
+        public void setSource(String source) {
+            if ("gallery".equals(source) || "files".equals(source) || "gdrive".equals(source)) {
+                pendingPickerSource = source;
+                pendingPickerSetAtMs = SystemClock.uptimeMillis();
+            } else {
+                pendingPickerSource = "";
+                pendingPickerSetAtMs = 0L;
+            }
+        }
+    }
+
+    private String consumePendingPickerSource() {
+        final String src = pendingPickerSource;
+        final long age = SystemClock.uptimeMillis() - pendingPickerSetAtMs;
+        pendingPickerSource = "";
+        pendingPickerSetAtMs = 0L;
+        return (!src.isEmpty() && age >= 0 && age <= 10_000L) ? src : "";
+    }
+
+    private Intent buildIntentForAttachmentSource(String source, boolean allowMultiple) {
+        if ("gallery".equals(source)) {
+            if (Build.VERSION.SDK_INT >= 33) {
+                final Intent photoPicker = new Intent(MediaStore.ACTION_PICK_IMAGES);
+                if (allowMultiple) {
+                    photoPicker.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, Math.min(20, MediaStore.getPickImagesMaxLimit()));
+                }
+                if (photoPicker.resolveActivity(getPackageManager()) != null) {
+                    return photoPicker;
+                }
+            }
+            final Intent galleryIntent = new Intent(Intent.ACTION_PICK);
+            galleryIntent.setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*");
+            galleryIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] { "image/*", "video/*" });
+            if (allowMultiple) galleryIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            if (galleryIntent.resolveActivity(getPackageManager()) != null) {
+                return galleryIntent;
+            }
+            return null;
+        }
+        if ("gdrive".equals(source)) {
+            final Intent driveIntent = new Intent(Intent.ACTION_GET_CONTENT);
+            driveIntent.addCategory(Intent.CATEGORY_OPENABLE);
+            driveIntent.setType("*/*");
+            driveIntent.setPackage("com.google.android.apps.docs");
+            if (allowMultiple) driveIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            if (driveIntent.resolveActivity(getPackageManager()) != null) {
+                return driveIntent;
+            }
+        }
+        if ("files".equals(source) || "gdrive".equals(source)) {
+            final Intent docsIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            docsIntent.addCategory(Intent.CATEGORY_OPENABLE);
+            docsIntent.setType("*/*");
+            if (allowMultiple) docsIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            if (docsIntent.resolveActivity(getPackageManager()) != null) {
+                return docsIntent;
+            }
+        }
+        return null;
+    }
 
     private final Runnable connectionMonitorTask = new Runnable() {
         @Override
@@ -78,6 +179,38 @@ public class MainActivity extends BridgeActivity {
             webView.setBackgroundColor(Color.parseColor("#0b3428"));
             if (webView.getParent() instanceof View) {
                 ((View) webView.getParent()).setBackgroundColor(emeraldBg);
+            }
+            webView.addJavascriptInterface(new PickerSourceBridge(), "IponNativePicker");
+            if (getBridge() != null) {
+                webView.setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
+                    @Override
+                    public boolean onShowFileChooser(
+                        WebView wv,
+                        ValueCallback<Uri[]> filePathCallback,
+                        FileChooserParams fileChooserParams
+                    ) {
+                        final String source = consumePendingPickerSource();
+                        final boolean allowMultiple = fileChooserParams != null
+                            && fileChooserParams.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE;
+                        if (!source.isEmpty()) {
+                            final Intent targeted = buildIntentForAttachmentSource(source, allowMultiple);
+                            if (targeted != null) {
+                                if (pendingFileCallback != null) {
+                                    pendingFileCallback.onReceiveValue(null);
+                                    pendingFileCallback = null;
+                                }
+                                try {
+                                    pendingFileCallback = filePathCallback;
+                                    sourceFilePickerLauncher.launch(targeted);
+                                    return true;
+                                } catch (Throwable err) {
+                                    pendingFileCallback = null;
+                                }
+                            }
+                        }
+                        return super.onShowFileChooser(wv, filePathCallback, fileChooserParams);
+                    }
+                });
             }
             setupStartupConnectionOverlay(webView);
             webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {

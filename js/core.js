@@ -451,6 +451,13 @@
       svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.86 11.17c-.08-.04-.17-.08-.25-.11-.15-2.77-1.66-4.35-4.2-4.37h-.05c-1.51 0-2.77.65-3.55 1.82l1.42.98c.59-.89 1.5-1.08 2.13-1.08h.03c.84.01 1.47.25 1.88.72.3.34.5.82.6 1.42-.74-.13-1.54-.17-2.4-.12-2.41.14-3.96 1.54-3.86 3.5.05.99.55 1.85 1.4 2.41.72.47 1.64.7 2.6.65 1.27-.07 2.26-.56 2.95-1.45.52-.68.85-1.56.99-2.66.6.36 1.04.84 1.29 1.41.41.95.44 2.51-.85 3.81-1.13 1.13-2.49 1.62-4.55 1.63-2.29-.02-4.01-.75-5.13-2.18-1.05-1.34-1.59-3.28-1.61-5.76.02-2.48.56-4.42 1.61-5.76 1.12-1.43 2.84-2.16 5.13-2.18 2.31.02 4.06.75 5.21 2.19.56.71.99 1.6 1.27 2.64l1.64-.44c-.34-1.28-.88-2.38-1.61-3.3-1.49-1.86-3.68-2.81-6.51-2.83h-.01c-2.82.02-4.98.97-6.44 2.83-1.29 1.65-1.96 3.96-1.99 6.86v.01c.03 2.9.7 5.21 1.99 6.86 1.46 1.86 3.62 2.81 6.44 2.83h.01c2.51-.02 4.29-.67 5.75-2.13 1.91-1.91 1.85-4.31 1.22-5.78-.45-1.05-1.31-1.9-2.48-2.46Zm-4.29 4.08c-1.06.06-2.17-.42-2.23-1.44-.04-.76.54-1.61 2.29-1.71.2-.01.4-.02.59-.02.63 0 1.22.06 1.76.18-.2 2.5-1.37 2.93-2.41 2.99Z"/></svg>'
     },
     {
+      key: 'x',
+      label: 'X (Twitter)',
+      placeholder: 'https://x.com/username or @username',
+      hosts: ['x.com', 'www.x.com', 'mobile.x.com', 'twitter.com', 'www.twitter.com', 'mobile.twitter.com'],
+      svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117Z"/></svg>'
+    },
+    {
       key: 'discord',
       label: 'Discord',
       placeholder: 'https://discord.com/users/1234567890 or discord.gg/...',
@@ -459,7 +466,7 @@
     }
   ]);
   const SOCIAL_APP_MAP = new Map(SOCIAL_APPS.map((app) => [app.key, app]));
-  const SOCIAL_HOST_PREFIX_RE = /^(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog|instagram\.com|instagr\.am|m\.instagram\.com|facebook\.com|m\.facebook\.com|mbasic\.facebook\.com|web\.facebook\.com|fb\.com|fb\.me|m\.me|threads\.net|threads\.com|discord\.com|discord\.gg|discordapp\.com)(?:\/|\?|$)/i;
+  const SOCIAL_HOST_PREFIX_RE = /^(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog|instagram\.com|instagr\.am|m\.instagram\.com|facebook\.com|m\.facebook\.com|mbasic\.facebook\.com|web\.facebook\.com|fb\.com|fb\.me|m\.me|threads\.net|threads\.com|x\.com|mobile\.x\.com|twitter\.com|mobile\.twitter\.com|discord\.com|discord\.gg|discordapp\.com)(?:\/|\?|$)/i;
 
   function validateSocialAppInput(platform, raw, { live = false } = {}) {
     const meta = SOCIAL_APP_MAP.get(String(platform || '').toLowerCase());
@@ -496,6 +503,11 @@
           return { url: '', error: 'Enter a valid Facebook @username or profile link.' };
         }
         candidate = `https://www.facebook.com/${handle}`;
+      } else if (meta.key === 'x') {
+        if (!/^[A-Za-z0-9_]{1,15}$/.test(handle)) {
+          return { url: '', error: 'X (Twitter) @username must be 1 to 15 letters, numbers, or underscores.' };
+        }
+        candidate = `https://x.com/${handle}`;
       } else {
         if (!/^[A-Za-z0-9._]{1,30}$/.test(handle) || handle.includes('..') || handle.startsWith('.') || handle.endsWith('.')) {
           if (live && !handle.includes('..') && /^[A-Za-z0-9._]{0,30}$/.test(handle) && !handle.startsWith('.')) return { url: '', error: '' };
@@ -528,6 +540,11 @@
           return { url: '', error: 'Enter a valid Facebook profile link or @username.' };
         }
         candidate = `https://www.facebook.com/${value}`;
+      } else if (meta.key === 'x') {
+        if (!/^[A-Za-z0-9_]{1,15}$/.test(value)) {
+          return { url: '', error: 'X (Twitter) username must be 1 to 15 letters, numbers, or underscores.' };
+        }
+        candidate = `https://x.com/${value}`;
       } else {
         if (!/^[A-Za-z0-9_]{1,30}$/.test(value)) {
           return { url: '', error: `Enter a valid ${meta.label} @username or profile link.` };
@@ -567,25 +584,84 @@
     return validateSocialAppInput(platform, raw, { live: false }).url;
   }
 
+  function normalizeSocialAppOrder(rawOrder, links = null) {
+    const allowed = links && typeof links === 'object'
+      ? new Set(SOCIAL_APPS.map((app) => app.key).filter((key) => Boolean(normalizeSocialAppUrl(key, links[key]))))
+      : null;
+    const ordered = [];
+    if (Array.isArray(rawOrder)) {
+      for (const rawKey of rawOrder) {
+        const key = String(rawKey || '').trim().toLowerCase();
+        if (!SOCIAL_APP_MAP.has(key) || ordered.includes(key)) continue;
+        if (allowed && !allowed.has(key)) continue;
+        ordered.push(key);
+      }
+    }
+    for (const app of SOCIAL_APPS) {
+      if (allowed && !allowed.has(app.key)) continue;
+      if (!ordered.includes(app.key)) ordered.push(app.key);
+    }
+    return ordered;
+  }
+
   function sanitizeSocialLinks(links) {
     const clean = {};
     if (!links || typeof links !== 'object') return clean;
+    const valid = {};
     for (const app of SOCIAL_APPS) {
       const url = normalizeSocialAppUrl(app.key, links[app.key]);
-      if (url) clean[app.key] = url;
+      if (url) valid[app.key] = url;
+    }
+    const order = normalizeSocialAppOrder(links._order, valid);
+    for (const key of order) {
+      clean[key] = valid[key];
+    }
+    if (order.length) {
+      // Non-enumerable so Object.keys() and JSON.stringify() expose URL keys only in custom order.
+      Object.defineProperty(clean, '_order', {
+        value: order.slice(),
+        enumerable: false,
+        configurable: true
+      });
     }
     return clean;
   }
 
-  function renderSocialAppLinksHtml(links, { variant = 'bio', showEmpty = false } = {}) {
+  function reorderSocialAppKeys(order, dragKey, targetKey, placeAfter = false) {
+    const prev = normalizeSocialAppOrder(order);
+    if (!dragKey || !targetKey || dragKey === targetKey) return prev;
+    const next = prev.slice();
+    const fromIdx = next.indexOf(dragKey);
+    if (fromIdx < 0) return prev;
+    next.splice(fromIdx, 1);
+    const targetIdx = next.indexOf(targetKey);
+    if (targetIdx < 0) return prev;
+    next.splice(placeAfter ? targetIdx + 1 : targetIdx, 0, dragKey);
+    return next;
+  }
+
+  function serializeSocialLinks(links, order) {
     const clean = sanitizeSocialLinks(links);
-    const items = SOCIAL_APPS.filter((app) => Boolean(clean[app.key]));
+    const ordered = normalizeSocialAppOrder(Array.isArray(order) ? order : clean._order, clean);
+    const out = {};
+    for (const key of ordered) {
+      out[key] = clean[key];
+    }
+    if (ordered.length) out._order = ordered;
+    return out;
+  }
+
+  function renderSocialAppLinksHtml(links, { variant = 'bio', showEmpty = false, draggable = false } = {}) {
+    const clean = sanitizeSocialLinks(links);
+    const items = Object.keys(clean).map((key) => SOCIAL_APP_MAP.get(key)).filter(Boolean);
     if (!items.length) {
       return showEmpty
         ? `<p class="social-apps-empty">${variant === 'summary' ? 'No apps connected yet.' : 'No connected apps yet. Paste links below to show icons in your bio.'}</p>`
         : '';
     }
-    return `<div class="social-apps-strip is-${escapeHtml(variant)}" role="list" aria-label="Connected social apps">${items.map((app) => `<a class="social-app-tile is-${app.key}" role="listitem" href="${escapeHtml(clean[app.key])}" target="_blank" rel="noopener noreferrer" data-social-app-link="${app.key}" aria-label="${app.label} profile (opens in a new tab)" title="${app.label}: ${escapeHtml(clean[app.key])}">${app.svg}</a>`).join('')}</div>`;
+    return `<div class="social-apps-strip is-${escapeHtml(variant)}${draggable ? ' is-reorderable' : ''}" role="list" aria-label="Connected social apps">${items.map((app) => (draggable
+      ? `<button class="social-app-tile is-${app.key} is-draggable" type="button" role="listitem" data-drag-app="${app.key}" draggable="false" aria-label="Drag or use arrow keys to reorder ${app.label}" title="Drag to reorder ${app.label}">${app.svg}</button>`
+      : `<a class="social-app-tile is-${app.key}" role="listitem" href="${escapeHtml(clean[app.key])}" target="_blank" rel="noopener noreferrer" data-social-app-link="${app.key}" aria-label="${app.label} profile (opens in a new tab)" title="${app.label}: ${escapeHtml(clean[app.key])}">${app.svg}</a>`)).join('')}</div>`;
   }
 
   function connectAppsFieldsMarkup() {
@@ -1968,7 +2044,7 @@
             <button class="dialog-close" data-connect-apps-close type="button" aria-label="Close connect apps dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
           <div class="connect-apps-modal-body">
-            <div class="account-connect-preview" id="connect-apps-modal-preview-wrap"><span class="account-connect-preview-label">Bio preview</span><div class="account-connect-preview-icons" id="connect-apps-modal-preview" aria-live="polite"></div></div>
+            <div class="account-connect-preview" id="connect-apps-modal-preview-wrap"><div class="account-connect-preview-meta"><span class="account-connect-preview-label">Bio preview</span><small class="account-connect-drag-hint" id="connect-apps-drag-hint" hidden>Drag icons to reorder</small></div><div class="account-connect-preview-icons" id="connect-apps-modal-preview" aria-live="polite"></div></div>
             <form id="quick-connect-apps-form" class="account-connect-apps-form">${connectAppsFieldsMarkup()}<div class="form-actions"><button class="button button-secondary" data-connect-apps-close type="button">Cancel</button><button class="button button-primary" id="quick-connect-apps-save" type="submit">Save links</button></div></form>
           </div>
         </div>
@@ -4949,16 +5025,148 @@
   let quickProfileDirty = null;
   let quickEmailDirty = null;
   let quickConnectAppsDirty = null;
+  let modalAppsOrder = SOCIAL_APPS.map((app) => app.key);
 
   function readConnectAppsDraft(form) {
-    const draft = {};
-    if (!form) return draft;
+    const raw = {};
+    if (!form) return raw;
     for (const app of SOCIAL_APPS) {
       const input = form.elements[app.key];
       const url = normalizeSocialAppUrl(app.key, input?.value);
-      if (url) draft[app.key] = url;
+      if (url) raw[app.key] = url;
     }
-    return draft;
+    raw._order = modalAppsOrder;
+    return sanitizeSocialLinks(raw);
+  }
+
+  function moveModalAppRelative(dragKey, targetKey, placeAfter) {
+    const prev = normalizeSocialAppOrder(modalAppsOrder);
+    const next = reorderSocialAppKeys(prev, dragKey, targetKey, placeAfter);
+    if (!next.some((k, i) => k !== prev[i])) return false;
+    modalAppsOrder = next;
+    return true;
+  }
+
+  function bindConnectAppsPreviewDrag(modalPreview) {
+    if (!modalPreview || modalPreview.dataset.dragBound) return;
+    modalPreview.dataset.dragBound = 'true';
+
+    modalPreview.addEventListener('keydown', (event) => {
+      const tile = event.target?.closest?.('[data-drag-app]');
+      if (!tile) return;
+      const key = tile.dataset.dragApp;
+      const forward = event.key === 'ArrowRight' || event.key === 'ArrowDown';
+      const backward = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
+      if (!forward && !backward) return;
+      const tiles = Array.from(modalPreview.querySelectorAll('[data-drag-app]'));
+      const idx = tiles.indexOf(tile);
+      const nextIdx = forward ? idx + 1 : idx - 1;
+      if (nextIdx < 0 || nextIdx >= tiles.length) return;
+      event.preventDefault();
+      const targetKey = tiles[nextIdx].dataset.dragApp;
+      if (!moveModalAppRelative(key, targetKey, forward)) return;
+      syncConnectAppsPreview(null, { modalOnly: true });
+      quickConnectAppsDirty?.sync?.();
+      modalPreview.querySelector(`[data-drag-app="${key}"]`)?.focus();
+    });
+
+    modalPreview.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      const tile = event.target?.closest?.('[data-drag-app]');
+      const strip = tile?.closest?.('.social-apps-strip');
+      if (!tile || !strip) return;
+      if (strip.querySelectorAll('[data-drag-app]').length < 2) return;
+      event.preventDefault();
+
+      const dragKey = tile.dataset.dragApp;
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const initRect = tile.getBoundingClientRect();
+      const grabOffsetX = startX - initRect.left;
+      const grabOffsetY = startY - initRect.top;
+      let baseLeft = initRect.left;
+      let baseTop = initRect.top;
+      let activated = false;
+
+      const onMove = (moveEv) => {
+        const dx = moveEv.clientX - startX;
+        const dy = moveEv.clientY - startY;
+        if (!activated && Math.hypot(dx, dy) < 4) return;
+        if (!activated) {
+          activated = true;
+          tile.classList.add('is-dragging');
+        }
+        const siblings = Array.from(strip.querySelectorAll('[data-drag-app]'));
+        const dragIdx = siblings.indexOf(tile);
+        const centerX = moveEv.clientX - grabOffsetX + initRect.width / 2;
+        const centerY = moveEv.clientY - grabOffsetY + initRect.height / 2;
+        let destIdx = -1;
+        let placeAfter = false;
+
+        const entries = siblings.map((el, idx) => ({ el, idx, r: el.getBoundingClientRect() }));
+        let nearestMidY = entries[0].r.top + entries[0].r.height / 2;
+        let bestRowDist = Infinity;
+        for (const item of entries) {
+          const dist = Math.abs(centerY - (item.r.top + item.r.height / 2));
+          if (dist < bestRowDist) {
+            bestRowDist = dist;
+            nearestMidY = item.r.top + item.r.height / 2;
+          }
+        }
+        const rowItems = entries.filter((item) => Math.abs((item.r.top + item.r.height / 2) - nearestMidY) <= item.r.height * 0.6);
+        for (const item of rowItems) {
+          if (item.el === tile) continue;
+          const midX = item.r.left + item.r.width / 2;
+          if (item.idx > dragIdx && centerX > midX) {
+            destIdx = item.idx;
+            placeAfter = true;
+          } else if (item.idx < dragIdx && centerX < midX && (destIdx < 0 || item.idx < destIdx)) {
+            destIdx = item.idx;
+            placeAfter = false;
+          }
+        }
+        if (destIdx < 0 && rowItems.length) {
+          const first = rowItems[0];
+          const last = rowItems[rowItems.length - 1];
+          if (first.idx > dragIdx && centerX <= first.r.left + first.r.width / 2) {
+            destIdx = first.idx;
+            placeAfter = false;
+          } else if (last.idx < dragIdx && centerX >= last.r.left + last.r.width / 2) {
+            destIdx = last.idx;
+            placeAfter = true;
+          }
+        }
+
+        if (destIdx >= 0 && siblings[destIdx]) {
+          const targetTile = siblings[destIdx];
+          const targetKey = targetTile.dataset.dragApp;
+          if (moveModalAppRelative(dragKey, targetKey, placeAfter)) {
+            tile.style.transform = '';
+            strip.insertBefore(tile, placeAfter ? targetTile.nextSibling : targetTile);
+            const nextRect = tile.getBoundingClientRect();
+            baseLeft = nextRect.left;
+            baseTop = nextRect.top;
+            quickConnectAppsDirty?.sync?.();
+          }
+        }
+
+        const tx = (moveEv.clientX - grabOffsetX) - baseLeft;
+        const ty = (moveEv.clientY - grabOffsetY) - baseTop;
+        tile.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+      };
+
+      const finishDrag = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', finishDrag);
+        window.removeEventListener('pointercancel', finishDrag);
+        tile.classList.remove('is-dragging');
+        tile.style.transform = '';
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', finishDrag);
+      window.addEventListener('pointercancel', finishDrag);
+    });
   }
 
   function syncConnectAppsPreview(links, { modalOnly = false } = {}) {
@@ -4966,8 +5174,11 @@
     const draft = links && typeof links === 'object' ? sanitizeSocialLinks(links) : readConnectAppsDraft(form);
     const modalPreview = document.getElementById('connect-apps-modal-preview');
     if (modalPreview) {
-      modalPreview.innerHTML = renderSocialAppLinksHtml(draft, { variant: 'preview', showEmpty: true });
+      modalPreview.innerHTML = renderSocialAppLinksHtml(draft, { variant: 'preview', showEmpty: true, draggable: true });
+      bindConnectAppsPreviewDrag(modalPreview);
     }
+    const dragHint = document.getElementById('connect-apps-drag-hint');
+    if (dragHint) dragHint.hidden = Object.keys(draft).length < 2;
     if (!modalOnly) {
       const summaryPreview = document.getElementById('quick-connect-apps-preview');
       if (summaryPreview) {
@@ -4980,6 +5191,7 @@
   function syncConnectAppsForm(links) {
     const form = document.getElementById('quick-connect-apps-form');
     const clean = sanitizeSocialLinks(links);
+    modalAppsOrder = normalizeSocialAppOrder(links?._order ?? clean._order);
     if (form) {
       for (const app of SOCIAL_APPS) {
         const input = form.elements[app.key];
@@ -5041,7 +5253,9 @@
     const connectAppsForm = document.getElementById('quick-connect-apps-form');
     quickProfileDirty = bindDirtySaveForm(profileForm, profileForm.querySelector('[type="submit"]'));
     quickEmailDirty = bindDirtySaveForm(emailForm, emailForm?.querySelector('[type="submit"]'));
-    quickConnectAppsDirty = bindDirtySaveForm(connectAppsForm, connectAppsForm?.querySelector('[type="submit"]'));
+    quickConnectAppsDirty = bindDirtySaveForm(connectAppsForm, connectAppsForm?.querySelector('[type="submit"]'), {
+      getExtraState: () => JSON.stringify(Object.keys(readConnectAppsDraft(connectAppsForm)))
+    });
     const passwordForm = document.getElementById('quick-password-form');
     const notificationToggle = document.getElementById('quick-notifications-enabled');
     const avatarInput = document.getElementById('quick-avatar-input');
@@ -5271,8 +5485,9 @@
         const button = event.submitter || document.getElementById('quick-connect-apps-save');
         setBusy(button, true, 'Saving…');
         try {
-          const saved = await rpc('update_own_social_links', { p_links: check.normalized });
-          const clean = sanitizeSocialLinks(saved?.social_links ?? check.normalized);
+          const payload = serializeSocialLinks(check.normalized, modalAppsOrder);
+          const saved = await rpc('update_own_social_links', { p_links: payload });
+          const clean = sanitizeSocialLinks(saved?.social_links ?? payload);
           currentProfile.social_links = clean;
           syncConnectAppsForm(clean);
           quickConnectAppsDirty?.reset();
@@ -15570,7 +15785,7 @@
     generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
     resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal, syncAccountBadgeSection, openCreatorBadgeChat,
     refreshProfileEffectsState, maybeShowEffectAwardModal, openProfileEffectsDialog,
-    SOCIAL_APPS, validateSocialAppInput, normalizeSocialAppUrl, sanitizeSocialLinks, renderSocialAppLinksHtml,
+    SOCIAL_APPS, validateSocialAppInput, normalizeSocialAppUrl, normalizeSocialAppOrder, reorderSocialAppKeys, sanitizeSocialLinks, serializeSocialLinks, renderSocialAppLinksHtml,
     get profile() { return currentProfile; }
   };
 })();

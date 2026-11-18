@@ -91,5 +91,202 @@ test('Shared files excludes voice notes and voice messages while counting and li
   renderDrawer();
   assert.match(drawerEl.innerHTML, /No shared files yet/);
   assert.match(swJs, /ipon-shell-v(?:2[3-9]|[3-9]\d)/);
-  assert.match(dashboardHtml, /js\/messages\.js\?v=20261118-40/);
+  assert.match(dashboardHtml, /js\/messages\.js\?v=20261118-41/);
+});
+
+test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Manager, Google Drive) work end-to-end', async () => {
+  const messagesJs = read('js/messages.js');
+  const appCss = read('css/app.css');
+  const mainActivity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+
+  // 1. Markup, CSS & Android contracts
+  assert.match(messagesJs, /id="msg-attach-menu"[^>]*aria-label="Choose attachment source"/);
+  assert.match(messagesJs, /data-attach-source="gallery"[\s\S]*Phone Gallery/);
+  assert.match(messagesJs, /data-attach-source="files"[\s\S]*File Manager/);
+  assert.match(messagesJs, /data-attach-source="gdrive"[\s\S]*Google Drive/);
+  assert.match(messagesJs, /id="msg-gallery-input"[^>]*accept="image\/\*,video\/\*"/);
+  assert.match(messagesJs, /id="msg-drive-input"[^>]*accept="\*\/\*"/);
+  assert.match(messagesJs, /class="msg-swipe-reply-badge"/);
+  assert.match(appCss, /\.msg-row\s*\{[^}]*touch-action:\s*pan-y;/s);
+  assert.match(appCss, /\.msg-swipe-reply-badge\s*\{/);
+  assert.match(appCss, /\.msg-attach-menu\s*\{/);
+  assert.match(mainActivity, /addJavascriptInterface\(new PickerSourceBridge\(\),\s*"IponNativePicker"\)/);
+  assert.match(mainActivity, /class PickerSourceBridge[\s\S]*@JavascriptInterface[\s\S]*public void setSource/);
+  assert.match(mainActivity, /MediaStore\.ACTION_PICK_IMAGES/);
+  assert.match(mainActivity, /com\.google\.android\.apps\.docs/);
+  assert.match(mainActivity, /Intent\.ACTION_OPEN_DOCUMENT/);
+
+  // 2. Live VM runtime flow for attachment menu & swipe-right-to-reply
+  const listeners = new Map();
+  const makeClassList = (initial = []) => {
+    const set = new Set(initial);
+    return {
+      add: (...c) => c.forEach((x) => set.add(x)),
+      remove: (...c) => c.forEach((x) => set.delete(x)),
+      toggle: (c, f) => (f === undefined ? (set.has(c) ? (set.delete(c), false) : (set.add(c), true)) : (f ? set.add(c) : set.delete(c))),
+      contains: (c) => set.has(c),
+      _set: set
+    };
+  };
+  const clickedInputs = [];
+  const nativeSources = [];
+  const styleProps = new Map();
+  const msgRowEl = {
+    dataset: { msgId: 'm-peer-1' },
+    classList: makeClassList(['msg-row', 'is-peer']),
+    style: {
+      setProperty: (k, v) => styleProps.set(k, v),
+      removeProperty: (k) => styleProps.delete(k)
+    },
+    closest: (sel) => (sel.includes('.msg-row') ? msgRowEl : null),
+    querySelector: () => null
+  };
+  const attachMenuEl = { hidden: true, querySelector: () => null };
+  const attachBtnEl = { dataset: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = String(v); }, closest: (sel) => (sel === '#msg-attach-btn' ? attachBtnEl : null) };
+  const emojiPopEl = { dataset: {}, hidden: true };
+  const galleryInputEl = { id: 'msg-gallery-input', value: '', click: () => clickedInputs.push('msg-gallery-input') };
+  const fileInputEl = { id: 'msg-file-input', value: '', click: () => clickedInputs.push('msg-file-input') };
+  const driveInputEl = { id: 'msg-drive-input', value: '', click: () => clickedInputs.push('msg-drive-input') };
+  const contextBarEl = { dataset: {}, hidden: true, innerHTML: '' };
+  const uploadQueueEl = { dataset: {}, hidden: true, innerHTML: '', scrollWidth: 0, scrollLeft: 0 };
+  const composerInputEl = { dataset: {}, focused: false, value: '', focus() { this.focused = true; }, style: {} };
+  const msgListEl = { innerHTML: '', scrollTop: 0, scrollHeight: 0, clientHeight: 400 };
+  const elements = {
+    'msg-attach-menu': attachMenuEl,
+    'msg-attach-btn': attachBtnEl,
+    'msg-emoji-popover': emojiPopEl,
+    'msg-gallery-input': galleryInputEl,
+    'msg-file-input': fileInputEl,
+    'msg-drive-input': driveInputEl,
+    'msg-context-bar': contextBarEl,
+    'msg-upload-queue': uploadQueueEl,
+    'msg-composer-input': composerInputEl,
+    'msg-messages-list': msgListEl,
+    'msg-workspace-dialog': null
+  };
+
+  const toasts = [];
+  const winStub = {
+    Ipon: {
+      escapeHtml: (s) => String(s ?? ''),
+      friendlyError: (e) => String(e?.message || e),
+      toast: (msg) => toasts.push(msg),
+      bindAvatarFallbacks: () => { },
+      syncPresenceDots: () => { },
+      isUserOnline: () => false,
+      rpc: async () => [],
+      client: null
+    },
+    IponNativePicker: { setSource: (s) => nativeSources.push(s) },
+    Capacitor: { isNativePlatform: () => true },
+    addEventListener: () => { },
+    removeEventListener: () => { },
+    innerWidth: 390,
+    innerHeight: 844,
+    location: { search: '', href: 'https://example.test/dashboard.html' }
+  };
+  winStub.window = winStub;
+
+  const docStub = {
+    documentElement: { dataset: {} },
+    body: { insertAdjacentHTML: () => { } },
+    getElementById: (id) => elements[id] || null,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener: (ev, fn) => {
+      if (!listeners.has(ev)) listeners.set(ev, []);
+      listeners.get(ev).push(fn);
+    },
+    removeEventListener: () => { }
+  };
+  const emitDoc = async (evName, eventObj) => {
+    for (const fn of listeners.get(evName) || []) {
+      await fn(eventObj);
+    }
+  };
+
+  // Inject test hook at tail of messagesJs IIFE only in sandbox to seed activeThread cleanly
+  const patchedMessages = messagesJs.replace(
+    'window.IponMessages = {',
+    'window.IponMessages = { __setStateForTest(c, ms) { state.activeConvId = c.conversation_id; state.activeThread = { conversation: c, messages: ms, pinned_messages: [] }; initializedProfile = { id: "u-me", full_name: "Me" }; }, __getStateForTest() { return { replyToMsg: state.replyToMsg, queueLen: state.uploadQueue.length }; },'
+  );
+  vm.runInNewContext(patchedMessages, {
+    window: winStub,
+    document: docStub,
+    location: winStub.location,
+    Map,
+    Set,
+    URLSearchParams,
+    URL: { createObjectURL: () => 'blob:mock', revokeObjectURL: () => { } },
+    CSS: { escape: (x) => String(x) },
+    navigator: {},
+    requestAnimationFrame: (fn) => fn(),
+    setTimeout,
+    clearTimeout,
+    setInterval: () => 0,
+    clearInterval: () => { }
+  });
+
+  winStub.IponMessages.__setStateForTest(
+    { conversation_id: 'c1', id: 'u2', full_name: 'Alice', kind: 'DIRECT', status: 'ACCEPTED', is_blocked: false },
+    [{ id: 'm-peer-1', sender_id: 'u2', sender_name: 'Alice', body: 'Hello swipe test!', message_type: 'TEXT', created_at: '2026-11-18T10:00:00Z' }]
+  );
+
+  // Attachment menu flow: toggle open -> select Gallery -> File Manager -> Google Drive
+  await emitDoc('click', {
+    target: { closest: (sel) => (sel.includes('#msg-attach-btn') ? attachBtnEl : null) }
+  });
+  assert.equal(attachMenuEl.hidden, false);
+  assert.equal(attachBtnEl.attrs['aria-expanded'], 'true');
+
+  for (const [source, expectedInput] of [['gallery', 'msg-gallery-input'], ['files', 'msg-file-input'], ['gdrive', 'msg-drive-input']]) {
+    attachMenuEl.hidden = false;
+    const optNode = { dataset: { attachSource: source }, closest: (sel) => (sel.includes('[data-attach-source]') ? optNode : (sel.includes('#msg-attach-menu') ? attachMenuEl : null)) };
+    await emitDoc('click', { target: optNode });
+    assert.equal(attachMenuEl.hidden, true);
+    assert.equal(nativeSources.at(-1), source);
+    assert.equal(clickedInputs.at(-1), expectedInput);
+  }
+
+  // Selecting files from #msg-gallery-input queues into uploadQueue cleanly
+  await emitDoc('change', {
+    target: { id: 'msg-gallery-input', value: 'picked', files: [{ name: 'photo.jpg', type: 'image/jpeg', size: 12000 }] }
+  });
+  assert.equal(winStub.IponMessages.__getStateForTest().queueLen, 1);
+
+  // Swipe right past threshold triggers startReplyToMessage and updates context bar
+  const rowTarget = {
+    closest: (sel) => (sel.includes('.msg-row') ? msgRowEl : null)
+  };
+  await emitDoc('pointerdown', { pointerType: 'touch', pointerId: 1, clientX: 80, clientY: 200, target: rowTarget });
+  await emitDoc('pointermove', { pointerType: 'touch', pointerId: 1, clientX: 136, clientY: 204, target: rowTarget });
+  assert.equal(msgRowEl.classList.contains('is-swiping'), true);
+  assert.equal(msgRowEl.classList.contains('is-swipe-ready'), true);
+  assert.ok(parseFloat(styleProps.get('--swipe-x')) > 44);
+  await emitDoc('pointerup', { pointerType: 'touch', pointerId: 1, clientX: 136, clientY: 204 });
+
+  assert.equal(msgRowEl.classList.contains('is-swiping'), false);
+  assert.equal(msgRowEl.classList.contains('is-swipe-ready'), false);
+  assert.equal(winStub.IponMessages.__getStateForTest().replyToMsg?.id, 'm-peer-1');
+  assert.equal(contextBarEl.hidden, false);
+  assert.match(contextBarEl.innerHTML, /Replying to Alice/);
+  assert.match(contextBarEl.innerHTML, /Hello swipe test!/);
+  assert.equal(composerInputEl.focused, true);
+
+  // Small jitter / vertical scroll does NOT change replyToMsg
+  winStub.IponMessages.__setStateForTest(
+    { conversation_id: 'c1', id: 'u2', full_name: 'Alice', kind: 'DIRECT', status: 'ACCEPTED', is_blocked: false },
+    [{ id: 'm-peer-2', sender_id: 'u2', sender_name: 'Alice', body: 'Second message', message_type: 'TEXT', created_at: '2026-11-18T10:01:00Z' }]
+  );
+  const row2 = {
+    dataset: { msgId: 'm-peer-2' },
+    classList: makeClassList(['msg-row', 'is-peer']),
+    style: { setProperty: () => { }, removeProperty: () => { } },
+    closest: () => row2,
+    querySelector: () => null
+  };
+  await emitDoc('pointerdown', { pointerType: 'touch', pointerId: 2, clientX: 80, clientY: 200, target: { closest: (s) => (s.includes('.msg-row') ? row2 : null) } });
+  await emitDoc('pointermove', { pointerType: 'touch', pointerId: 2, clientX: 86, clientY: 245, target: row2 });
+  await emitDoc('pointerup', { pointerType: 'touch', pointerId: 2, clientX: 86, clientY: 245 });
+  assert.equal(row2.classList.contains('is-swipe-ready'), false);
 });

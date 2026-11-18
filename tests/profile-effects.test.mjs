@@ -825,8 +825,10 @@ test('migration 118 and runtime enforce 1-per-effect trials, 1-month cooldown, a
   assert.match(msgJs, /avatar-presence-wrap msg-avatar-wrap\$\{wrapCls/);
 });
 
-test('Migration 122, Connect Apps UI, uniform SVG logos, and bio redirect links validate safely', () => {
+test('Migration 122-124, Connect Apps X (Twitter) + drag reorder UI, uniform SVG logos, and bio redirect links validate safely', () => {
   const mig122 = read('database/migrations/20261118_122_social_app_links.sql');
+  const mig123 = read('database/migrations/20261118_123_social_app_order.sql');
+  const mig124 = read('database/migrations/20261118_124_social_app_x.sql');
   const schema = read('database/schema.sql');
   const coreJs = read('js/core.js');
   const msgJs = read('js/messages.js');
@@ -841,31 +843,43 @@ test('Migration 122, Connect Apps UI, uniform SVG logos, and bio redirect links 
   assert.match(mig122, /'social_links',\s*case\s+when v_profile\.id <> auth\.uid\(\) and public\.is_user_blocked_between\(auth\.uid\(\), v_profile\.id\) then '\{\}'::jsonb/i);
   assert.match(mig122, /'social_links',\s*case\s+when v_blocked_me then '\{\}'::jsonb else public\.sanitize_social_app_links\(v_target\.social_links, false\) end/i);
   assert.match(mig122, /grant execute on function public\.update_own_social_links\(jsonb\) to authenticated/i);
+  assert.match(mig123, /create or replace function public\.sanitize_social_app_links\(/i);
+  assert.match(mig123, /p_links \? '_order'/i);
+  assert.match(mig123, /jsonb_build_object\('_order',\s*to_jsonb\(v_clean_order\)\)/i);
+  assert.match(mig124, /array\['telegram', 'instagram', 'facebook', 'threads', 'x', 'discord'\]/i);
+  assert.match(mig124, /when 'x' then v_host in \('x\.com', 'www\.x\.com', 'mobile\.x\.com', 'twitter\.com', 'www\.twitter\.com', 'mobile\.twitter\.com'\)/i);
 
-  // 2. UI markup, messaging bio slots & uniform squircle CSS
+  // 2. UI markup, drag preview, messaging bio slots & uniform squircle CSS
   assert.match(coreJs, /id="quick-connect-apps-card"/);
   assert.match(coreJs, /id="quick-connect-apps-open"/);
   assert.match(coreJs, /id="connect-apps-dialog"/);
   assert.match(coreJs, /id="connect-apps-modal-preview"/);
+  assert.match(coreJs, /id="connect-apps-drag-hint"/);
   assert.match(coreJs, /id="quick-connect-apps-form"/);
   assert.match(coreJs, /id="quick-connect-apps-preview"/);
   assert.match(coreJs, /class="effects-card-bio"/);
   assert.match(coreJs, /class="effects-card-apps"/);
   assert.match(coreJs, /renderSocialAppLinksHtml\(previewSocialLinks,\s*\{\s*variant:\s*'effects'\s*\}\)/);
   assert.match(coreJs, /id="quick-app-\$\{app\.key\}"/);
-  for (const key of ['telegram', 'instagram', 'facebook', 'threads', 'discord']) {
+  for (const key of ['telegram', 'instagram', 'facebook', 'threads', 'x', 'discord']) {
     assert.match(coreJs, new RegExp(`key:\\s*'${key}'`));
   }
-  assert.match(coreJs, /rpc\('update_own_social_links',\s*\{\s*p_links:\s*check\.normalized\s*\}/);
+  assert.match(coreJs, /bindConnectAppsPreviewDrag/);
+  assert.match(coreJs, /serializeSocialLinks\(check\.normalized,\s*modalAppsOrder\)/);
+  assert.match(coreJs, /rpc\('update_own_social_links',\s*\{\s*p_links:\s*payload\s*\}/);
   assert.match(msgJs, /class="msg-pop-apps-slot"/);
   assert.match(msgJs, /renderSocialAppLinksHtml\?\.\(conv\.social_links,\s*\{\s*variant:\s*'welcome'\s*\}\)/);
   assert.match(msgJs, /renderSocialAppLinksHtml\?\.\(conv\.social_links,\s*\{\s*variant:\s*'drawer'\s*\}\)/);
   assert.match(appCss, /\.social-apps-strip\s*\{[^}]*display:\s*flex;/);
   assert.match(appCss, /\.social-app-tile\s*\{[^}]*width:\s*24px;\s*height:\s*24px;[^}]*border-radius:\s*7px;/);
+  assert.match(appCss, /button\.social-app-tile\.is-draggable\s*\{[^}]*touch-action:\s*none;/);
+  assert.match(appCss, /button\.social-app-tile\.is-draggable\.is-dragging\s*\{[^}]*cursor:\s*grabbing;/);
+  assert.match(appCss, /\.account-connect-drag-hint\s*\{/);
   assert.match(appCss, /\.social-app-tile\.is-telegram\s*\{/);
   assert.match(appCss, /\.social-app-tile\.is-instagram\s*\{/);
   assert.match(appCss, /\.social-app-tile\.is-facebook\s*\{/);
   assert.match(appCss, /\.social-app-tile\.is-threads\s*\{/);
+  assert.match(appCss, /\.social-app-tile\.is-x\s*\{/);
   assert.match(appCss, /\.social-app-tile\.is-discord\s*\{/);
   assert.doesNotMatch(appCss, /a\.social-app-tile:hover/);
   assert.match(appCss, /\.account-app-field \.account-app-error\s*\{[^}]*min-height:\s*16px;[^}]*visibility:\s*hidden;/);
@@ -947,6 +961,9 @@ test('Migration 122, Connect Apps UI, uniform SVG logos, and bio redirect links 
   assert.equal(ipon.normalizeSocialAppUrl('instagram', 'http://instagram.com/zediskaaa'), 'https://instagram.com/zediskaaa');
   assert.equal(ipon.normalizeSocialAppUrl('facebook', 'fb.com/zediskaaa'), 'https://fb.com/zediskaaa');
   assert.equal(ipon.normalizeSocialAppUrl('threads', '@zed.monteverde'), 'https://www.threads.net/@zed.monteverde');
+  assert.equal(ipon.normalizeSocialAppUrl('x', '@zediskaaa'), 'https://x.com/zediskaaa');
+  assert.equal(ipon.normalizeSocialAppUrl('x', 'zediskaaa'), 'https://x.com/zediskaaa');
+  assert.equal(ipon.normalizeSocialAppUrl('x', 'twitter.com/zediskaaa'), 'https://twitter.com/zediskaaa');
   assert.equal(ipon.normalizeSocialAppUrl('discord', '123456789012345678'), 'https://discord.com/users/123456789012345678');
   assert.equal(ipon.normalizeSocialAppUrl('discord', 'https://discord.gg/iponcommunity'), 'https://discord.gg/iponcommunity');
 
@@ -954,6 +971,8 @@ test('Migration 122, Connect Apps UI, uniform SVG logos, and bio redirect links 
   assert.equal(ipon.normalizeSocialAppUrl('telegram', 'javascript:alert(1)'), '');
   assert.equal(ipon.normalizeSocialAppUrl('instagram', 'https://evil.example/zediskaaa'), '');
   assert.equal(ipon.normalizeSocialAppUrl('facebook', 'https://facebook.com/'), '');
+  assert.ok(ipon.validateSocialAppInput('x', '@handle_too_long_16').error, 'x handle over 15 chars returns error');
+  assert.ok(ipon.validateSocialAppInput('x', 'https://evil.com/user').error, 'foreign x domain returns error');
   assert.ok(ipon.validateSocialAppInput('discord', '@handleonly').error, 'discord handle-only input returns helpful error');
   assert.ok(ipon.validateSocialAppInput('threads', 'https://evil.com/user').error, 'foreign domain returns error');
 
@@ -962,19 +981,73 @@ test('Migration 122, Connect Apps UI, uniform SVG logos, and bio redirect links 
     instagram: 'https://www.instagram.com/zediskaaa',
     facebook: 'https://www.facebook.com/zediskaaa',
     threads: '@zediskaaa',
+    x: 'https://x.com/zediskaaa',
     discord: 'https://discord.gg/myipon',
     ignored: 'https://evil.com/phish'
   });
-  assert.deepEqual(Object.keys(clean), ['telegram', 'instagram', 'facebook', 'threads', 'discord']);
+  assert.deepEqual(Object.keys(clean), ['telegram', 'instagram', 'facebook', 'threads', 'x', 'discord']);
 
   const html = ipon.renderSocialAppLinksHtml(clean, { variant: 'popover' });
   assert.match(html, /class="social-apps-strip is-popover"/);
-  for (const key of ['telegram', 'instagram', 'facebook', 'threads', 'discord']) {
+  for (const key of ['telegram', 'instagram', 'facebook', 'threads', 'x', 'discord']) {
     assert.match(html, new RegExp(`<a class="social-app-tile is-${key}"[^>]*target="_blank" rel="noopener noreferrer"`));
     assert.match(html, new RegExp(`data-social-app-link="${key}"`));
   }
-  assert.equal((html.match(/<a class="social-app-tile /g) || []).length, 5);
-  assert.equal((html.match(/<svg viewBox="0 0 24 24"/g) || []).length, 5);
+  assert.equal((html.match(/<a class="social-app-tile /g) || []).length, 6);
+  assert.equal((html.match(/<svg viewBox="0 0 24 24"/g) || []).length, 6);
   assert.equal(ipon.renderSocialAppLinksHtml({}, { variant: 'popover' }), '');
   assert.match(ipon.renderSocialAppLinksHtml({}, { variant: 'preview', showEmpty: true }), /social-apps-empty/);
+
+  // 4. Custom order normalization, drag-reorder helpers, serialization & ordered HTML reflection
+  assert.deepEqual(
+    Array.from(ipon.normalizeSocialAppOrder(['discord', 'x', 'threads', 'invalid', 'discord'], clean)),
+    ['discord', 'x', 'threads', 'telegram', 'instagram', 'facebook']
+  );
+
+  // Reordering works cleanly even when inactive apps sit between active slots
+  const reorderedForward = Array.from(ipon.reorderSocialAppKeys(
+    ['telegram', 'instagram', 'facebook', 'threads', 'x', 'discord'],
+    'telegram',
+    'discord',
+    true
+  ));
+  assert.deepEqual(reorderedForward, ['instagram', 'facebook', 'threads', 'x', 'discord', 'telegram']);
+  const reorderedBack = Array.from(ipon.reorderSocialAppKeys(reorderedForward, 'x', 'instagram', false));
+  assert.deepEqual(reorderedBack, ['x', 'instagram', 'facebook', 'threads', 'discord', 'telegram']);
+
+  // Sanitization preserves explicit _order while keeping _order non-enumerable in Object.keys & JSON
+  const customClean = ipon.sanitizeSocialLinks({
+    threads: '@zediskaaa',
+    x: '@zediskaaa',
+    discord: 'https://discord.gg/myipon',
+    telegram: '@zediskaaa',
+    _order: ['x', 'discord', 'telegram']
+  });
+  assert.deepEqual(Object.keys(customClean), ['x', 'discord', 'telegram', 'threads']);
+  assert.deepEqual(Object.keys(ipon.sanitizeSocialLinks(customClean)), ['x', 'discord', 'telegram', 'threads']);
+  assert.equal('_order' in JSON.parse(JSON.stringify(customClean)), false);
+
+  // Legacy DB objects without _order stay in canonical SOCIAL_APPS order instead of Postgres jsonb sort order
+  const legacyClean = ipon.sanitizeSocialLinks({
+    threads: 'https://www.threads.net/@zediskaaa',
+    x: 'https://x.com/zediskaaa',
+    discord: 'https://discord.gg/myipon',
+    telegram: 'https://t.me/zediskaaa'
+  });
+  assert.deepEqual(Object.keys(legacyClean), ['telegram', 'threads', 'x', 'discord']);
+
+  // Serialize includes validated _order array for Postgres persistence
+  const serialized = ipon.serializeSocialLinks(clean, ['x', 'threads', 'discord', 'telegram', 'instagram', 'facebook']);
+  assert.deepEqual(Array.from(serialized._order), ['x', 'threads', 'discord', 'telegram', 'instagram', 'facebook']);
+
+  // Draggable modal preview renders button handles in custom order; profile popover reflects exact same order as links
+  const serializedClean = ipon.sanitizeSocialLinks(serialized);
+  const previewHtml = ipon.renderSocialAppLinksHtml(serializedClean, { variant: 'preview', draggable: true });
+  assert.doesNotMatch(previewHtml, /<a\b/);
+  const previewOrder = Array.from(previewHtml.matchAll(/data-drag-app="([^"]+)"/g), (m) => m[1]);
+  assert.deepEqual(previewOrder, ['x', 'threads', 'discord', 'telegram', 'instagram', 'facebook']);
+
+  const popoverHtml = ipon.renderSocialAppLinksHtml(serializedClean, { variant: 'popover' });
+  const popoverOrder = Array.from(popoverHtml.matchAll(/data-social-app-link="([^"]+)"/g), (m) => m[1]);
+  assert.deepEqual(popoverOrder, ['x', 'threads', 'discord', 'telegram', 'instagram', 'facebook']);
 });
