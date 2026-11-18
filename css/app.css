@@ -6678,7 +6678,7 @@ html[data-theme="dark"] .msg-topbar-actions .dialog-close:hover {
 .msg-conv-name {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   flex: 1 1 auto;
   min-width: 0;
   font-size: 13.5px;
@@ -18446,17 +18446,23 @@ html[data-theme="dark"] .icon-action.is-reject-cta {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  margin-left: 5px;
-  vertical-align: -2px;
+  margin-left: 4px;
+  vertical-align: middle;
   flex-shrink: 0;
   background: transparent !important;
   border: 0 !important;
   padding: 0 !important;
   line-height: 1;
 }
+.msg-conv-name .verified-badges-inline,
+#quick-account-name .verified-badges-inline {
+  margin-left: 0;
+}
 .verified-badge-svg {
-  width: 17px;
-  height: 17px;
+  width: 0.95em;
+  height: 0.95em;
+  min-width: 13px;
+  min-height: 13px;
   display: block;
   flex-shrink: 0;
   background: transparent !important;
@@ -19059,4 +19065,191 @@ html[data-theme="dark"] .icon-action.is-reject-cta {
 }
 html[data-theme="dark"] .announcement-card-bottom-bar {
   border-top-color: rgba(218, 236, 227, .14);
+}
+
+/* Verified badge request row in My Account */
+#quick-account-name {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.account-support-row.account-badge-row {
+  padding: 13px 14px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(29, 155, 240, 0.22);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(29, 155, 240, 0.08), rgba(21, 160, 37, 0.04));
+}
+.account-support-row.account-badge-row:first-child {
+  padding-top: 13px;
+}
+.account-support-row.account-badge-row + .account-support-row {
+  border-top: 0;
+  padding-top: 14px;
+}
+.account-badge-row.is-active,
+.account-badge-row.is-awarded {
+  border-color: rgba(21, 160, 37, 0.26);
+  background: linear-gradient(135deg, rgba(21, 160, 37, 0.08), rgba(29, 155, 240, 0.05));
+}
+.account-badge-row.is-creator {
+  border-color: rgba(79, 70, 229, 0.25);
+  background: linear-gradient(135deg, rgba(21, 160, 37, 0.08), rgba(79, 70, 229, 0.07));
+}
+.account-badge-pref-row {
+  padding: 12px 14px;
+  border: 1px solid rgba(29, 155, 240, 0.22);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(29, 155, 240, 0.08), rgba(21, 160, 37, 0.04));
+}
+
+.account-badge-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.account-support .account-badge-emblem,
+.account-badge-emblem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0 7px;
+  border-radius: 12px;
+  border: 1px solid rgba(29, 155, 240, 0.24);
+  background: rgba(29, 155, 240, 0.12);
+  flex: 0 0 auto;
+}
+.account-badge-row.is-creator .account-badge-emblem {
+  border-color: rgba(79, 70, 229, 0.24);
+  background: rgba(21, 160, 37, 0.12);
+}
+.account-badge-emblem .verified-badge-svg {
+  width: 20px;
+  height: 20px;
+}
+.account-support .account-badge-heading,
+.account-badge-heading {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.account-support .account-badge-heading > span:first-child {
+  display: inline;
+}
+.account-support .account-badge-pill,
+.account-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: 700 10.5px/1.3 Arial, sans-serif;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.account-badge-pill.is-available {
+  background: rgba(29, 155, 240, 0.14);
+  color: #0e6fb3;
+}
+.account-badge-pill.is-awarded,
+.account-badge-pill.is-active {
+  background: rgba(21, 160, 37, 0.14);
+  color: #0e6f20;
+}
+.account-badge-pill.is-creator {
+  background: rgba(79, 70, 229, 0.14);
+  color: #4338ca;
+}
+
+.account-support .button.account-badge-cta,
+.button.account-badge-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  border-radius: 999px;
+}
+.account-support .button.button-primary.account-badge-cta,
+.button.button-primary.account-badge-cta {
+  border-color: #0e2620;
+  background: #0e2620;
+  color: #ffffff;
+}
+.account-support .button.button-primary.account-badge-cta:hover,
+.button.button-primary.account-badge-cta:hover {
+  background: #173c32;
+}
+.account-support .button.button-primary.account-badge-cta.is-claim {
+  border-color: #15a025;
+  background: #15a025;
+}
+.account-support .button.button-primary.account-badge-cta.is-claim:hover {
+  background: #128820;
+}
+.account-badge-cta svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: 0 0 auto;
+}
+.account-support .account-badge-cta > span {
+  display: inline;
+}
+
+html[data-theme="dark"] .account-support-row.account-badge-row,
+html[data-theme="dark"] .account-badge-pref-row {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: linear-gradient(135deg, rgba(29, 155, 240, 0.14), rgba(21, 160, 37, 0.06));
+}
+html[data-theme="dark"] .account-badge-row.is-active,
+html[data-theme="dark"] .account-badge-row.is-awarded {
+  border-color: rgba(74, 222, 128, 0.28);
+  background: linear-gradient(135deg, rgba(21, 160, 37, 0.14), rgba(29, 155, 240, 0.08));
+}
+html[data-theme="dark"] .account-badge-pill.is-available {
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+}
+html[data-theme="dark"] .account-badge-pill.is-awarded,
+html[data-theme="dark"] .account-badge-pill.is-active {
+  background: rgba(74, 222, 128, 0.16);
+  color: #86efac;
+}
+html[data-theme="dark"] .account-badge-pill.is-creator {
+  background: rgba(129, 140, 248, 0.2);
+  color: #c7d2fe;
+}
+html[data-theme="dark"] .account-support .button.button-primary.account-badge-cta,
+html[data-theme="dark"] .button.button-primary.account-badge-cta {
+  border-color: #1c5c43;
+  background: #1c5c43;
+  color: #f4faf6;
+}
+html[data-theme="dark"] .account-support .button.button-primary.account-badge-cta:hover,
+html[data-theme="dark"] .button.button-primary.account-badge-cta:hover {
+  background: #237354;
+}
+
+@media (max-width: 620px) {
+  .account-badge-pref-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .account-badge-pref-row .account-badge-cta,
+  .account-support-row.account-badge-row .account-badge-cta {
+    width: 100%;
+  }
 }

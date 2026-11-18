@@ -6756,10 +6756,30 @@
     try { renderActiveThread?.(); } catch { }
   });
 
+  async function openDirectMessage(targetId, { draft = '' } = {}) {
+    if (!targetId) return false;
+    if (!initializedProfile && ipon().profile) {
+      await init(ipon().profile);
+    }
+    if (!isEligible()) return false;
+    await handleSocialAction('message', targetId);
+    if (draft) {
+      const input = document.getElementById('msg-composer-input');
+      if (input && !input.value.trim()) {
+        input.value = draft;
+        try { autoResizeTextarea(input); } catch { }
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+      }
+    }
+    return true;
+  }
+
   window.IponMessages = {
     init,
     openWorkspace,
     openFromNotification,
+    openDirectMessage,
     openProfilePopover,
     dismissTransientMenus,
     handleBackNavigation,

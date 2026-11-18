@@ -41,7 +41,7 @@
 
   async function load() {
     const [profileResult, activityResult] = await Promise.all([
-      Ipon.client.from('profiles').select('role,first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required').eq('id', state.profile.id).single(),
+      Ipon.client.from('profiles').select('role,first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,last_seen_at').eq('id', state.profile.id).single(),
       Ipon.client.from('account_activity').select('id,event,created_at').order('created_at', { ascending: false }).limit(20)
     ]);
     if (profileResult.error) throw profileResult.error;
@@ -92,6 +92,14 @@
     }
     emailForm.elements.email.value = profile.email || state.session.user.email || '';
     notificationToggle.checked = profile.notifications_enabled !== false;
+    const badgePrefRow = document.getElementById('account-verified-badge-row');
+    if (badgePrefRow) {
+      badgePrefRow.hidden = onboarding || isSuperAdmin;
+      if (!badgePrefRow.hidden) {
+        const merged = Object.assign(state.profile || {}, profile);
+        Ipon.syncAccountBadgeSection?.(merged);
+      }
+    }
     profileDirty?.reset();
     emailDirty?.reset();
     Ipon.syncDevicePermissionUI?.().catch?.(() => { });

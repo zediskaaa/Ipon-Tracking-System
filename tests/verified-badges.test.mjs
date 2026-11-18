@@ -272,7 +272,8 @@ test('Super Admin Badges tab, messages integration, and CSS contracts are comple
   assert.match(messagesJs, /msg-sender-name">\$\{escapeHtml\(senderUser\.full_name\)\}\$\{userBadgesHtml\(senderUser\)\}/);
 
   // CSS badge & celebration modal rules
-  assert.match(css, /\.verified-badge-svg\s*\{[^}]*width:\s*17px;[^}]*height:\s*17px;[^}]*background:\s*transparent !important/);
+  assert.match(css, /\.verified-badge-svg\s*\{[^}]*width:\s*0\.95em;[^}]*height:\s*0\.95em;[^}]*background:\s*transparent !important/);
+  assert.match(css, /\.msg-conv-name\s+\.verified-badges-inline/);
   assert.match(css, /@keyframes badgeCelebrateGlow/);
   assert.match(css, /\.verified-badge-tooltip\s*\{/);
   assert.match(css, /\.badge-celebrate-confetti-canvas\s*\{/);
@@ -376,4 +377,32 @@ test('2-month inactivity rule, Thank-you unlock, and verified-since hover toolti
   assert.match(tip.innerHTML, /Verified Account/);
   assert.match(tip.innerHTML, /Verified since Oct 5, 2026/);
   assert.match(tip.innerHTML, /Auto-removes after 2 months inactive/i);
+});
+
+test('My Account verified badge card lets members message the creator directly without error', () => {
+  const coreJs = read('js/core.js');
+  const messagesJs = read('js/messages.js');
+  const accountHtml = read('account.html');
+  const accountJs = read('js/account.js');
+  const css = read('css/app.css');
+
+  // account.html keeps balanced dialogs and unique IDs
+  const openDlgs = (accountHtml.match(/<dialog\b/g) || []).length;
+  const closeDlgs = (accountHtml.match(/<\/dialog>/g) || []).length;
+  assert.equal(openDlgs, closeDlgs);
+  const accIds = [...accountHtml.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(accIds.length, new Set(accIds).size, 'Duplicate IDs in account.html');
+
+  // My Account quick modal and account.html both expose creator messaging entry point
+  assert.match(coreJs, /id="quick-verified-badge-row"/);
+  assert.match(coreJs, /data-message-creator-badge/);
+  assert.match(coreJs, /announcement_author_social_id/);
+  assert.match(coreJs, /window\.IponMessages\?\.openDirectMessage/);
+  assert.match(coreJs, /syncAccountBadgeSection,\s*openCreatorBadgeChat/);
+  assert.match(accountHtml, /id="account-verified-badge-row"/);
+  assert.match(accountJs, /syncAccountBadgeSection/);
+  assert.match(messagesJs, /async function openDirectMessage\(/);
+  assert.match(messagesJs, /window\.IponMessages = \{[\s\S]*openDirectMessage/);
+  assert.match(css, /\.account-support-row\.account-badge-row\s*\{/);
+  assert.match(css, /\.account-badge-pill\.is-available\s*\{/);
 });

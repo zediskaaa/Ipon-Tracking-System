@@ -1695,7 +1695,7 @@
         <div class="account-dialog-sheet">
           <header class="account-dialog-header"><div class="account-dialog-title"><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
+            <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Message the creator directly to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-message-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Message creator</span></button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Device &amp; in-app alerts</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device permissions for in-app alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div><div class="preference-row preference-workspace-row" data-role="ADMIN"><span><strong>Workspace settings</strong><small>Monthly schedule, payment QR, access, treasurers &amp; cycle reset</small></span><a class="button button-primary button-sm" href="settings.html" data-workspace-settings-open>Manage</a></div><div class="preference-row"><span><strong>Data &amp; storage retention</strong><small>Active savings protected · 30d bin, 90d &amp; 6-month rules</small></span><button class="button button-secondary button-sm" type="button" data-retention-rules-open>View rules</button></div><div class="preference-row"><span><strong>Terms &amp; Privacy policies</strong><small>Non-custodial scope, permissions, and full retention schedule</small></span><div class="header-actions"><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="terms">Terms</button><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="privacy">Privacy</button></div></div></section></div>
             <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
@@ -2256,6 +2256,152 @@
     window.addEventListener('resize', () => hideVerifiedBadgeTooltip({ force: true }));
   }
 
+  const CREATOR_ACCOUNT_EMAIL = 'breadspanish231@gmail.com';
+  let cachedCreatorSocialId = null;
+
+  async function resolveCreatorSocialId() {
+    if (cachedCreatorSocialId) return cachedCreatorSocialId;
+    try {
+      const id = await rpc('announcement_author_social_id', { p_author_id: null, p_author_role: 'SUPER_ADMIN' });
+      if (id && typeof id === 'string') {
+        cachedCreatorSocialId = id;
+        return id;
+      }
+    } catch (_) { }
+    return null;
+  }
+
+  function applyBadgeRowState(rowEl, prefix, profile = currentProfile) {
+    if (!rowEl) return;
+    const titleEl = document.getElementById(`${prefix}-badge-title`);
+    const pillEl = document.getElementById(`${prefix}-badge-pill`);
+    const copyEl = document.getElementById(`${prefix}-badge-copy`);
+    const emblemEl = document.getElementById(`${prefix}-badge-emblem`);
+    const ctaBtn = document.getElementById(`${prefix}-badge-cta`);
+
+    const rawInfo = resolveVerifiedBadgeInfo(profile, '', { allowPendingAck: true });
+    const unlockedInfo = resolveVerifiedBadgeInfo(profile);
+    const emailLower = String(profile?.email || '').trim().toLowerCase();
+    const isCreatorSelf = rawInfo.tier === 'CREATOR_GREEN'
+      || emailLower === CREATOR_ACCOUNT_EMAIL
+      || (cachedCreatorSocialId && String(profile?.id || '') === String(cachedCreatorSocialId));
+    const isPendingAck = !isCreatorSelf && rawInfo.tier === 'BLUE' && unlockedInfo.tier !== 'BLUE';
+    const isVerifiedActive = !isCreatorSelf && unlockedInfo.tier === 'BLUE';
+
+    rowEl.classList.remove('is-creator', 'is-awarded', 'is-active', 'is-available');
+    if (pillEl) pillEl.classList.remove('is-creator', 'is-awarded', 'is-active', 'is-available');
+
+    const msgIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    const awardIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.5 4.5L19 7"/></svg>';
+
+    if (isCreatorSelf) {
+      rowEl.classList.add('is-creator');
+      if (emblemEl) emblemEl.innerHTML = badgeSealSvgMarkup('#15a025', 'Owner badge') + creatorCrownBadgeSvgMarkup('Founder & Creator');
+      if (titleEl) titleEl.textContent = 'Creator & Founder';
+      if (pillEl) { pillEl.textContent = 'Official'; pillEl.classList.add('is-creator'); }
+      if (copyEl) copyEl.textContent = 'You are signed in on the creator account. Manage badges in Super Admin.';
+      if (ctaBtn) { ctaBtn.hidden = true; }
+      return;
+    }
+
+    if (emblemEl) emblemEl.innerHTML = badgeSealSvgMarkup('#1d9bf0', 'Verified Badge');
+
+    if (isPendingAck) {
+      rowEl.classList.add('is-awarded');
+      if (titleEl) titleEl.textContent = 'Verified badge awarded';
+      if (pillEl) { pillEl.textContent = 'Ready to claim'; pillEl.classList.add('is-awarded'); }
+      if (copyEl) copyEl.textContent = 'You received a verified badge. Open your award pop-up and tap Thank you to display it.';
+      if (ctaBtn) {
+        ctaBtn.hidden = false;
+        ctaBtn.className = 'button button-primary account-badge-cta is-claim';
+        ctaBtn.removeAttribute('data-message-creator-badge');
+        ctaBtn.setAttribute('data-claim-pending-badge', '1');
+        ctaBtn.innerHTML = `${awardIcon}<span>Claim badge</span>`;
+      }
+      return;
+    }
+
+    if (isVerifiedActive) {
+      rowEl.classList.add('is-active');
+      if (titleEl) titleEl.textContent = 'Verified Account';
+      if (pillEl) { pillEl.textContent = 'Active'; pillEl.classList.add('is-active'); }
+      const sinceText = unlockedInfo.granted_at ? `Verified since ${dateLabel(unlockedInfo.granted_at, { dateStyle: 'medium' })}` : 'Verified status active';
+      const tenureText = unlockedInfo.expires_at
+        ? `Effective until ${dateLabel(unlockedInfo.expires_at, { dateStyle: 'medium' })}`
+        : 'Permanent · Auto-removes after 2 months inactive';
+      if (copyEl) copyEl.textContent = `${sinceText} · ${tenureText}`;
+      if (ctaBtn) {
+        ctaBtn.hidden = false;
+        ctaBtn.className = 'button button-secondary account-badge-cta';
+        ctaBtn.removeAttribute('data-claim-pending-badge');
+        ctaBtn.setAttribute('data-message-creator-badge', '1');
+        ctaBtn.innerHTML = `${msgIcon}<span>Message creator</span>`;
+      }
+      return;
+    }
+
+    rowEl.classList.add('is-available');
+    if (titleEl) titleEl.textContent = 'Verified badge';
+    if (pillEl) { pillEl.textContent = 'Available'; pillEl.classList.add('is-available'); }
+    if (copyEl) copyEl.textContent = 'Want a blue verified badge beside your name? Message the creator directly to request verification.';
+    if (ctaBtn) {
+      ctaBtn.hidden = false;
+      ctaBtn.className = 'button button-primary account-badge-cta';
+      ctaBtn.removeAttribute('data-claim-pending-badge');
+      ctaBtn.setAttribute('data-message-creator-badge', '1');
+      ctaBtn.innerHTML = `${msgIcon}<span>Message creator</span>`;
+    }
+  }
+
+  function syncAccountBadgeSection(profile = currentProfile) {
+    const quickRow = document.getElementById('quick-verified-badge-row');
+    if (quickRow) applyBadgeRowState(quickRow, 'quick', profile);
+    const pageRow = document.getElementById('account-verified-badge-row');
+    if (pageRow) applyBadgeRowState(pageRow, 'account', profile);
+    const quickNameEl = document.getElementById('quick-account-name');
+    if (quickNameEl && profile?.full_name) {
+      quickNameEl.innerHTML = `<span>${escapeHtml(profile.full_name)}</span>${verifiedBadgesHtml(profile)}`;
+    }
+  }
+
+  async function openCreatorBadgeChat(triggerButton = null) {
+    if (!currentProfile || currentProfile.role === 'SUPER_ADMIN') return false;
+    setBusy(triggerButton, true, 'Opening chat…');
+    try {
+      const creatorId = await resolveCreatorSocialId();
+      if (!creatorId) {
+        toast('Creator messaging is currently unavailable. Please try again later.', 'error');
+        return false;
+      }
+      if (String(creatorId) === String(currentProfile.id || '')) {
+        syncAccountBadgeSection(currentProfile);
+        toast('You are signed in as the Creator account.', 'info');
+        return false;
+      }
+      const info = resolveVerifiedBadgeInfo(currentProfile);
+      const draft = info.tier === 'NONE'
+        ? "Hi! I'd like to request a Verified Badge for my myIPON account."
+        : '';
+      const quickDlg = document.getElementById('account-dialog');
+      if (quickDlg?.open) quickDlg.close();
+      if (window.IponMessages?.openDirectMessage) {
+        const opened = await window.IponMessages.openDirectMessage(creatorId, { draft });
+        if (opened) return true;
+      }
+      const conv = await rpc('start_or_open_direct_chat', { p_target_id: creatorId });
+      if (conv?.id) {
+        location.href = `${homeForRole(currentProfile.role)}?chat=${encodeURIComponent(conv.id)}`;
+        return true;
+      }
+      return false;
+    } catch (error) {
+      toast(friendlyError(error), 'error');
+      return false;
+    } finally {
+      setBusy(triggerButton, false);
+    }
+  }
+
   function renderSidebarUser(profile = currentProfile) {
     const sidebarUser = document.getElementById('sidebar-user');
     if (!sidebarUser || !profile) return;
@@ -2303,14 +2449,14 @@
   }
   const MODAL_WAVY_SEAL_PATH = buildSmoothWavySealPath(8, 10.15, 0.95);
 
-  function maybeShowBadgeAwardModal(profile = currentProfile) {
+  function maybeShowBadgeAwardModal(profile = currentProfile, opts = {}) {
     if (!profile || profile.role === 'SUPER_ADMIN') return false;
     const tier = effectiveVerifiedBadgeTier(profile, '', { allowPendingAck: true });
     if (tier !== 'BLUE' && tier !== 'CREATOR_GREEN') return false;
     if (profile.verified_badge_acknowledged_at) return false;
     if (document.getElementById('ipon-badge-award-dialog')) return false;
 
-    const existingOpen = document.querySelector('dialog[open]:not(#notification-dialog)');
+    const existingOpen = !opts?.force ? document.querySelector('dialog[open]:not(#notification-dialog)') : null;
     if (existingOpen) return false;
 
     const dialog = document.createElement('dialog');
@@ -2490,6 +2636,7 @@
         dialog.remove();
         await refreshVerifiedBadgesCache({ force: true, refreshOwnProfile: true }).catch(() => { });
         renderSidebarUser(currentProfile);
+        syncAccountBadgeSection(currentProfile);
         if (typeof window?.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
           window.dispatchEvent(new CustomEvent('ipon:badges-updated', { detail: { userId: currentProfile?.id } }));
         }
@@ -3065,6 +3212,20 @@
           openRetentionPolicyDialog();
           return;
         }
+        const claimBadgeBtn = event.target?.closest?.('[data-claim-pending-badge]');
+        if (claimBadgeBtn) {
+          event.preventDefault();
+          const quickDlg = document.getElementById('account-dialog');
+          if (quickDlg?.open) quickDlg.close();
+          maybeShowBadgeAwardModal(currentProfile, { force: true });
+          return;
+        }
+        const messageCreatorBtn = event.target?.closest?.('[data-message-creator-badge]');
+        if (messageCreatorBtn) {
+          event.preventDefault();
+          openCreatorBadgeChat(messageCreatorBtn);
+          return;
+        }
         const policyTrigger = event.target?.closest?.('[data-policy-open-inapp]');
         if (policyTrigger) {
           event.preventDefault();
@@ -3245,7 +3406,7 @@
     const emailForm = document.getElementById('quick-email-form');
     dialog.setAttribute('aria-busy', 'true');
     try {
-      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required').eq('id', currentProfile.id).single();
+      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,last_seen_at').eq('id', currentProfile.id).single();
       if (error) throw error;
       let payoutSource = data;
       if (!data.payout_channel && (data.member_id || currentProfile.member_id)) {
@@ -3264,7 +3425,18 @@
       emailForm.elements.email.value = data.email || '';
       if (currentProfile) currentProfile.notifications_enabled = data.notifications_enabled !== false;
       document.getElementById('quick-notifications-enabled').checked = data.notifications_enabled !== false;
-      document.getElementById('quick-account-name').textContent = data.full_name;
+      Object.assign(currentProfile, {
+        full_name: data.full_name,
+        email: data.email || currentProfile.email,
+        verified_badge_tier: data.verified_badge_tier,
+        verified_badge_granted_at: data.verified_badge_granted_at,
+        verified_badge_expires_at: data.verified_badge_expires_at,
+        verified_badge_acknowledged_at: data.verified_badge_acknowledged_at,
+        verified_badge_message: data.verified_badge_message,
+        last_seen_at: data.last_seen_at
+      });
+      await resolveCreatorSocialId().catch(() => null);
+      syncAccountBadgeSection(currentProfile);
       document.getElementById('quick-account-role').textContent = currentProfile.role === 'SUPER_ADMIN' ? 'Owner' : (data.email || 'My account');
       syncProfileAvatars({ ...currentProfile, ...data });
       const support = dialog.querySelector('.account-support');
@@ -13940,7 +14112,7 @@
     canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, bindInviteCodeInput, inviteShareUrl,
     setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
     generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
-    resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal,
+    resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal, syncAccountBadgeSection, openCreatorBadgeChat,
     get profile() { return currentProfile; }
   };
 })();
