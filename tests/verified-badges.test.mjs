@@ -405,4 +405,9 @@ test('My Account verified badge card lets members message the creator directly w
   assert.match(messagesJs, /window\.IponMessages = \{[\s\S]*openDirectMessage/);
   assert.match(css, /\.account-support-row\.account-badge-row\s*\{/);
   assert.match(css, /\.account-badge-pill\.is-available\s*\{/);
+
+  // Announcement bullet parser handles "Thank you" before isOutro so release bullets keep section cards
+  const bulletIdx = coreJs.indexOf("if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {");
+  const outroIdx = coreJs.indexOf('if (isOutro(line) && !hasMoreStructuredContent)');
+  assert.ok(bulletIdx !== -1 && outroIdx > bulletIdx, 'Bullet detection must precede outro detection');
 });

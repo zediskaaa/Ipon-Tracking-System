@@ -7480,14 +7480,6 @@
         }
       }
 
-      if (isOutro(line)) {
-        flushSection();
-        flushRequestedBox();
-        const restLines = lines.slice(i).map((l) => l.trim()).filter(Boolean);
-        blocks.push({ type: 'outro', lines: restLines });
-        break;
-      }
-
       if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
         const parsed = parseBulletLine(line);
         if (currentSection) {
@@ -7496,6 +7488,18 @@
           blocks.push({ type: 'loose-bullet', item: parsed });
         }
         continue;
+      }
+
+      const hasMoreStructuredContent = lines.slice(i + 1).some((nextLine) => {
+        const t = String(nextLine || '').trim();
+        return t && (t.startsWith('•') || t.startsWith('-') || t.startsWith('*') || Boolean(classifySectionHeader(t)));
+      });
+      if (isOutro(line) && !hasMoreStructuredContent) {
+        flushSection();
+        flushRequestedBox();
+        const restLines = lines.slice(i).map((l) => l.trim()).filter(Boolean);
+        blocks.push({ type: 'outro', lines: restLines });
+        break;
       }
 
       flushSection();
