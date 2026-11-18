@@ -426,6 +426,14 @@
     return (s.startsWith('data:image/') || /^https:\/\//i.test(s)) ? s : '';
   }
 
+  function dpPreviewTriggerHtml(dpUrl, displayName, innerHtml, extraClass = '') {
+    const safeSrc = safeDpUrl(dpUrl);
+    if (!safeSrc) return innerHtml;
+    const label = String(displayName || 'Display picture').trim();
+    const cls = ['msg-dp-preview-trigger', extraClass].filter(Boolean).join(' ');
+    return `<button type="button" class="${cls}" data-view-dp-src="${escAttr(safeSrc)}" data-view-dp-name="${escAttr(label)}" aria-label="View photo for ${escAttr(label)}" title="View photo">${innerHtml}</button>`;
+  }
+
   function openDpViewer(src, alt = 'Display picture') {
     const raw = String(src || '').trim();
     const isSafeUrl = raw.startsWith('data:image/') || raw.startsWith('blob:') || /^https?:\/\//i.test(raw);
@@ -439,6 +447,7 @@
       dialog.innerHTML = '<img id="ipon-dp-img" alt="">';
       document.body.appendChild(dialog);
       dialog.addEventListener('click', (event) => {
+        event.stopPropagation();
         if (event.target?.id !== 'ipon-dp-img') dialog.close();
       });
     }
@@ -2715,13 +2724,10 @@
       const heroTitle = convDisplayTitle(conv);
       const statusText = formatStatusLine(conv, getTypingEntries(conv.conversation_id));
       const isHeroOnline = isSelfHero || (!isGrpHero && conv.allow_online_status !== false && ipon().isUserOnline(conv.id));
-      const heroDpUrl = safeDpUrl(conv.avatar_url);
       const heroAvatar = isGrpHero
         ? groupAvatarHtml(conv, 'avatar-lg', { clickable: false })
         : userAvatarHtml(conv, 'avatar-lg', { clickable: false, showPresence: !isSelfHero });
-      const heroAvatarNode = heroDpUrl
-        ? `<button type="button" class="msg-dp-preview-trigger" data-view-dp-src="${escAttr(heroDpUrl)}" data-view-dp-name="${escAttr(heroTitle)}" aria-label="View photo for ${escAttr(heroTitle)}" title="View photo">${heroAvatar}</button>`
-        : heroAvatar;
+      const heroAvatarNode = dpPreviewTriggerHtml(conv.avatar_url, heroTitle, heroAvatar);
       const welcomeCopy = isGrpHero
         ? 'Say hello to the group! Messages and lossless files stay private to members.'
         : isSelfHero
@@ -3628,7 +3634,7 @@
       pop.innerHTML = `
         <button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
         <div class="msg-pop-head">
-          ${userAvatarHtml(initializedProfile, 'avatar-lg', { clickable: false, showPresence: false })}
+          ${dpPreviewTriggerHtml(initializedProfile?.avatar_url, initializedProfile?.full_name || 'Your profile', userAvatarHtml(initializedProfile, 'avatar-lg', { clickable: false, showPresence: false }))}
           <div class="msg-pop-title">
             <strong id="msg-pop-name">${escapeHtml(initializedProfile?.full_name || 'Your profile')}${userBadgesHtml(initializedProfile)}</strong>
             <div class="msg-pop-status-row"><span class="msg-rel-badge">You</span>${selfParts.length ? `<small class="msg-pop-status">${escapeHtml(selfParts.join(' · '))}</small>` : ''}</div>
@@ -3691,7 +3697,7 @@
       pop.innerHTML = `
         <button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
         <div class="msg-pop-head">
-          ${userAvatarHtml(profile, 'avatar-lg', { clickable: false, showPresence: false })}
+          ${dpPreviewTriggerHtml(profile?.avatar_url, profile?.full_name || 'User', userAvatarHtml(profile, 'avatar-lg', { clickable: false, showPresence: false }))}
           <div class="msg-pop-title">
             <strong id="msg-pop-name">${escapeHtml(profile.full_name)}${userBadgesHtml(profile)}</strong>
             ${statusRowHtml}
@@ -5309,6 +5315,11 @@
       const dpViewBtn = ev.target.closest?.('[data-view-dp-src]');
       if (dpViewBtn) {
         const dpSrc = safeDpUrl(dpViewBtn.dataset.viewDpSrc);
+        const ownerPop = dpViewBtn.closest?.('#msg-profile-popover');
+        if (ownerPop) {
+          ownerPop.dataset.pinned = '1';
+          clearProfileHoverTimers();
+        }
         if (dpSrc) openDpViewer(dpSrc, dpViewBtn.dataset.viewDpName || 'Display picture');
         return;
       }
@@ -6286,6 +6297,12 @@
         }
       }
       if (ev.key === 'Escape') {
+        const dpDlg = document.getElementById('ipon-dp-viewer');
+        if (dpDlg?.open) {
+          ev.preventDefault();
+          dpDlg.close();
+          return;
+        }
         if (ev.target?.id === 'msg-list-search' && (state.searchActive || state.chatListQuery.trim())) {
           ev.preventDefault();
           clearSidebarSearch();
@@ -6371,6 +6388,7 @@
           if (profileLeaveTimer) clearTimeout(profileLeaveTimer);
           profileLeaveTimer = setTimeout(() => {
             profileLeaveTimer = null;
+            if (document.getElementById('ipon-dp-viewer')?.open) return;
             const cur = document.getElementById('msg-profile-popover');
             if (cur && cur.dataset.pinned !== '1') closeProfilePopover();
           }, 200);

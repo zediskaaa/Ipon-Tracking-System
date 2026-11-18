@@ -9884,6 +9884,9 @@ html[data-theme="dark"] .msg-friends-hero {
   padding-right: 42px;
   min-width: 0;
 }
+.msg-pop-head .msg-dp-preview-trigger {
+  flex-shrink: 0;
+}
 .msg-pop-head .avatar-circle.avatar-lg {
   width: 64px;
   height: 64px;

@@ -494,8 +494,12 @@ test('My Account verified badge card lets members message the creator directly w
 
   // Composer hides desktop scrollbar arrows; minimal DP viewer opens only for real DPs and closes on outside click
   assert.match(messagesJs, /el\.style\.overflowY\s*=\s*el\.scrollHeight\s*>\s*140\s*\?\s*'auto'\s*:\s*'hidden'/);
-  assert.match(messagesJs, /heroDpUrl[\s\S]*data-view-dp-src/);
+  assert.match(messagesJs, /function dpPreviewTriggerHtml\([\s\S]*data-view-dp-src/);
+  assert.match(messagesJs, /heroAvatarNode = dpPreviewTriggerHtml\(conv\.avatar_url/);
+  assert.match(messagesJs, /dpPreviewTriggerHtml\(profile\?\.avatar_url/);
+  assert.match(messagesJs, /dpPreviewTriggerHtml\(initializedProfile\?\.avatar_url/);
   assert.match(messagesJs, /peerDpUrl[\s\S]*data-view-dp-src/);
+  assert.match(css, /\.msg-pop-head \.msg-dp-preview-trigger\s*\{\s*flex-shrink:\s*0;\s*\}/);
   assert.match(css, /#msg-composer-input\s*\{[^}]*overflow-y:\s*hidden;[^}]*scrollbar-width:\s*none;/);
   assert.match(css, /#msg-composer-input::-webkit-scrollbar\s*\{\s*display:\s*none;\s*\}/);
   assert.match(css, /\.dp-viewer-dialog\s*\{/);
