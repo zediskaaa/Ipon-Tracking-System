@@ -3911,12 +3911,14 @@
       const privateNoteText = fs === 'BLOCKED_BY_ME' || fs === 'BLOCKED_ME'
         ? 'Profile details are hidden while messaging is blocked.'
         : visMode === 'NOBODY'
-          ? 'This profile is private (visible to no one).'
-          : visMode === 'FRIENDS_ONLY'
-            ? 'Only friends can view full profile details.'
-            : visMode === 'FRIENDS_OF_FRIENDS'
-              ? 'Only friends and friends of friends can view full profile details.'
-              : 'Full profile details are private.';
+          ? 'This profile is private. Only direct chat connections can view details.'
+          : visMode === 'FRIENDS_AND_CONNECTIONS'
+            ? 'Only friends and chat connections can view full profile details.'
+            : visMode === 'FRIENDS_ONLY'
+              ? 'Only friends can view full profile details.'
+              : visMode === 'FRIENDS_OF_FRIENDS'
+                ? 'Only friends and friends of friends can view full profile details.'
+                : 'Full profile details are private.';
       const lockSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
 
       pop.innerHTML = `
@@ -4871,7 +4873,7 @@
           <select id="msg-set-profile-vis" name="profile_visibility">
             <option value="EVERYONE"${(priv.profile_visibility || 'EVERYONE') === 'EVERYONE' ? ' selected' : ''}>Everyone</option>
             <option value="FRIENDS_OF_FRIENDS"${priv.profile_visibility === 'FRIENDS_OF_FRIENDS' ? ' selected' : ''}>Friends of friends</option>
-            <option value="FRIENDS_ONLY"${priv.profile_visibility === 'FRIENDS_ONLY' ? ' selected' : ''}>Friends only</option>
+            <option value="FRIENDS_AND_CONNECTIONS"${priv.profile_visibility === 'FRIENDS_AND_CONNECTIONS' || priv.profile_visibility === 'FRIENDS_ONLY' ? ' selected' : ''}>Friends &amp; connections</option>
             <option value="NOBODY"${priv.profile_visibility === 'NOBODY' ? ' selected' : ''}>No one</option>
           </select>
         </div>

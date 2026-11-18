@@ -58,7 +58,7 @@ test('migration 20261117_105 adds group chats, preserves 90-day retention & secu
   // Policy copy & service worker cache bump
   assert.match(policyJs, /Direct &amp; group messages, chat files/i);
   assert.match(loginHtml, /Direct &amp; group messages, chat files/i);
-  assert.match(sw, /ipon-shell-v68/);
+  assert.match(sw, /ipon-shell-v69/);
 });
 
 test('group chats runtime renders composite avatars, multi-sender bubbles, typing sender, drawer, forward & creation VM flow', async () => {
@@ -884,9 +884,9 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   await privacyForm._emit('change');
   assert.equal(saveBtn.disabled, true, 'Save button disables again when reverted');
 
-  // Submitting sends only p_chat_privacy (including profile_visibility) cleanly without overwriting username/bio
+  // Submitting sends only p_chat_privacy (including Friends & connections / Friends of friends / No one) cleanly
   friendReq.value = 'MUTUAL_GROUPS';
-  profileVis.value = 'FRIENDS_OF_FRIENDS';
+  profileVis.value = 'FRIENDS_AND_CONNECTIONS';
   await privacyForm._emit('change');
   await privacyForm.onsubmit({ preventDefault() { }, submitter: saveBtn });
   const privCall = rpcCalls.find((c) => c.name === 'update_social_profile_and_privacy');
@@ -894,9 +894,9 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   assert.equal('p_username' in (privCall.args || {}), false);
   assert.equal('p_bio' in (privCall.args || {}), false);
   assert.equal(privCall.args.p_chat_privacy.allow_friend_requests, 'MUTUAL_GROUPS');
-  assert.equal(privCall.args.p_chat_privacy.profile_visibility, 'FRIENDS_OF_FRIENDS');
+  assert.equal(privCall.args.p_chat_privacy.profile_visibility, 'FRIENDS_AND_CONNECTIONS');
   assert.equal(localPatch?.chat_privacy?.allow_friend_requests, 'MUTUAL_GROUPS');
-  assert.equal(localPatch?.chat_privacy?.profile_visibility, 'FRIENDS_OF_FRIENDS');
+  assert.equal(localPatch?.chat_privacy?.profile_visibility, 'FRIENDS_AND_CONNECTIONS');
   assert.match(coreJs, /function bindDirtySaveForm\(/);
 
   // Opening a peer profile popover with profile_visible=false hides bio/username/apps/mutuals/theme & shows private note

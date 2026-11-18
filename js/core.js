@@ -2728,11 +2728,9 @@
         : 'Permanent · Auto-removes after 2 months inactive';
       if (copyEl) copyEl.textContent = `${sinceText} · ${tenureText}`;
       if (ctaBtn) {
-        ctaBtn.hidden = false;
-        ctaBtn.className = 'button button-secondary account-badge-cta';
+        ctaBtn.hidden = true;
         ctaBtn.removeAttribute('data-claim-pending-badge');
-        ctaBtn.setAttribute('data-message-creator-badge', '1');
-        ctaBtn.innerHTML = `${msgIcon}<span>Message creator</span>`;
+        ctaBtn.removeAttribute('data-message-creator-badge');
       }
       return;
     }

@@ -19581,6 +19581,10 @@ html[data-theme="dark"] .announcement-card-bottom-bar {
   white-space: nowrap;
   border-radius: 999px;
 }
+.account-support .button.account-badge-cta[hidden],
+.button.account-badge-cta[hidden] {
+  display: none !important;
+}
 .account-support .button.button-primary.account-badge-cta,
 .button.button-primary.account-badge-cta {
   border-color: #0e2620;

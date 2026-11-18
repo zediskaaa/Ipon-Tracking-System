@@ -8392,7 +8392,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   const settingsHtml = getMsgEl('msg-settings-body').innerHTML;
   assert.match(settingsHtml, /<form id="msg-privacy-form" class="form-grid msg-privacy-form"/);
   assert.doesNotMatch(settingsHtml, /msg-set-username|msg-set-bio/);
-  assert.match(settingsHtml, /id="msg-set-profile-vis" name="profile_visibility"[\s\S]*?value="EVERYONE"[\s\S]*?Everyone[\s\S]*?value="FRIENDS_OF_FRIENDS"[\s\S]*?Friends of friends[\s\S]*?value="FRIENDS_ONLY"[\s\S]*?Friends only[\s\S]*?value="NOBODY"[\s\S]*?No one/);
+  assert.match(settingsHtml, /id="msg-set-profile-vis" name="profile_visibility"[\s\S]*?value="EVERYONE"[\s\S]*?Everyone[\s\S]*?value="FRIENDS_OF_FRIENDS"[\s\S]*?Friends of friends[\s\S]*?value="FRIENDS_AND_CONNECTIONS"[\s\S]*?Friends &amp; connections[\s\S]*?value="NOBODY"[\s\S]*?No one/);
   assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Show active status[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="show_online"/);
   assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Show last seen timestamp[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="show_last_seen"/);
   assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Send &amp; receive read receipts[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="read_receipts"/);
@@ -8435,6 +8435,17 @@ test('username handle & bio live inside My Account profile form across all roles
 
 test('messaging privacy Who can see your profile supports Everyone, Friends of friends, Friends only, and No one across SQL & UI', () => {
   const mig128 = read('database/migrations/20261118_128_profile_visibility_privacy.sql');
+  const mig129 = read('database/migrations/20261118_129_profile_connections_and_search_privacy.sql');
+  for (const token of [
+    'create or replace function public.has_direct_chat_connection(',
+    'create or replace function public.can_view_social_profile(',
+    "'FRIENDS_AND_CONNECTIONS'",
+    "vis.vis_mode <> 'NOBODY'",
+    'public.has_direct_chat_connection(v_uid, p.id)',
+    "'20261118_129'"
+  ]) {
+    assert.ok(mig129.includes(token), 'migration 129 missing ' + token);
+  }
   const messagesJs = read('js/messages.js');
   const css = read('css/app.css');
 
@@ -11287,7 +11298,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261118-141/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261118-142/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

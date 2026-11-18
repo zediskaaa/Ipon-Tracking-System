@@ -523,4 +523,5 @@ test('My Account verified badge card lets members message the creator directly w
   assert.doesNotMatch(badgeRowMatch[0], /pillEl\.textContent\s*=\s*'Active'/);
   assert.doesNotMatch(badgeRowMatch[0], /Verified status active/);
   assert.match(badgeRowMatch[0], /pillEl\.hidden\s*=\s*true/);
+  assert.match(badgeRowMatch[0], /if\s*\(isVerifiedActive\)[\s\S]*?ctaBtn\.hidden\s*=\s*true/);
 });
