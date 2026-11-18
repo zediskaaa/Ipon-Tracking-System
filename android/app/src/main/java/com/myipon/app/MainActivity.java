@@ -1,17 +1,34 @@
 package com.myipon.app;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.URLUtil;
 import android.webkit.WebView;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.app.ActivityCompat;
@@ -20,6 +37,33 @@ import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    private static final long SLOW_CONNECTION_THRESHOLD_MS = 6000L;
+    private static final long OVERLAY_SHOW_DELAY_MS = 350L;
+    private static final String APP_ENTRY_URL = "https://my-ipon.vercel.app/login.html?app=1";
+
+    private final Handler connectionMonitorHandler = new Handler(Looper.getMainLooper());
+    private FrameLayout connectionOverlay;
+    private ProgressBar connectionSpinner;
+    private TextView connectionTitleView;
+    private TextView connectionBodyView;
+    private LinearLayout connectionActionsRow;
+    private Button connectionWaitButton;
+    private long connectionStartMs = 0L;
+    private boolean userDismissedSlowCard = false;
+
+    private final Runnable connectionMonitorTask = new Runnable() {
+        @Override
+        public void run() {
+            updateConnectionOverlay();
+            if (connectionOverlay != null && !isFinishing() && !isDestroyed()) {
+                final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+                if (webView != null && webView.getProgress() < 85) {
+                    connectionMonitorHandler.postDelayed(this, 300L);
+                }
+            }
+        }
+    };
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         final long splashStartMs = SystemClock.uptimeMillis();
@@ -35,6 +79,7 @@ public class MainActivity extends BridgeActivity {
             if (webView.getParent() instanceof View) {
                 ((View) webView.getParent()).setBackgroundColor(emeraldBg);
             }
+            setupStartupConnectionOverlay(webView);
             webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
                 if (url == null || (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("data:"))) {
                     return;
@@ -127,6 +172,20 @@ public class MainActivity extends BridgeActivity {
         super.onResume();
         NotificationSyncService.ensureStarted(this);
         NotificationSyncWorker.ensureScheduled(this);
+        if (connectionOverlay != null) {
+            updateConnectionOverlay();
+            final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+            if (webView != null && webView.getProgress() < 85) {
+                connectionMonitorHandler.removeCallbacks(connectionMonitorTask);
+                connectionMonitorHandler.postDelayed(connectionMonitorTask, 300L);
+            }
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        connectionMonitorHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 
     @Override
@@ -177,5 +236,211 @@ public class MainActivity extends BridgeActivity {
                 )
             );
         }
+    }
+
+    private void setupStartupConnectionOverlay(final WebView webView) {
+        if (webView == null || !(webView.getParent() instanceof ViewGroup)) return;
+        final ViewGroup parent = (ViewGroup) webView.getParent();
+        connectionStartMs = SystemClock.uptimeMillis();
+        userDismissedSlowCard = false;
+
+        connectionOverlay = new FrameLayout(this);
+        connectionOverlay.setBackgroundColor(Color.parseColor("#CC081D16"));
+        connectionOverlay.setVisibility(View.GONE);
+        connectionOverlay.setClickable(true);
+        connectionOverlay.setFocusable(true);
+
+        final LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER_HORIZONTAL);
+        card.setPadding(dp(24), dp(26), dp(24), dp(22));
+        final GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setColor(Color.parseColor("#102922"));
+        cardBg.setCornerRadius(dp(18));
+        cardBg.setStroke(dp(1), Color.argb(46, 245, 238, 224));
+        card.setBackground(cardBg);
+
+        connectionSpinner = new ProgressBar(this);
+        connectionSpinner.setIndeterminateTintList(ColorStateList.valueOf(Color.parseColor("#E4B95B")));
+        final LinearLayout.LayoutParams spinParams = new LinearLayout.LayoutParams(dp(36), dp(36));
+        spinParams.bottomMargin = dp(14);
+        card.addView(connectionSpinner, spinParams);
+
+        connectionTitleView = new TextView(this);
+        connectionTitleView.setTextColor(Color.parseColor("#F5EEE0"));
+        connectionTitleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19);
+        connectionTitleView.setTypeface(Typeface.DEFAULT_BOLD);
+        connectionTitleView.setGravity(Gravity.CENTER);
+        final LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        titleParams.bottomMargin = dp(8);
+        card.addView(connectionTitleView, titleParams);
+
+        connectionBodyView = new TextView(this);
+        connectionBodyView.setTextColor(Color.argb(214, 245, 238, 224));
+        connectionBodyView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        connectionBodyView.setLineSpacing(dp(3), 1.0f);
+        connectionBodyView.setGravity(Gravity.CENTER);
+        final LinearLayout.LayoutParams bodyParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        bodyParams.bottomMargin = dp(18);
+        card.addView(connectionBodyView, bodyParams);
+
+        connectionActionsRow = new LinearLayout(this);
+        connectionActionsRow.setOrientation(LinearLayout.HORIZONTAL);
+        connectionActionsRow.setGravity(Gravity.CENTER);
+        connectionActionsRow.setVisibility(View.GONE);
+
+        connectionWaitButton = new Button(this);
+        connectionWaitButton.setText("Keep waiting");
+        connectionWaitButton.setAllCaps(false);
+        connectionWaitButton.setTextColor(Color.parseColor("#F5EEE0"));
+        connectionWaitButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        connectionWaitButton.setPadding(dp(16), dp(10), dp(16), dp(10));
+        final GradientDrawable waitBg = new GradientDrawable();
+        waitBg.setColor(Color.parseColor("#16382E"));
+        waitBg.setCornerRadius(dp(10));
+        waitBg.setStroke(dp(1), Color.argb(64, 245, 238, 224));
+        connectionWaitButton.setBackground(waitBg);
+        connectionWaitButton.setOnClickListener(v -> {
+            userDismissedSlowCard = true;
+            updateConnectionOverlay();
+        });
+        final LinearLayout.LayoutParams waitParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        waitParams.rightMargin = dp(8);
+        connectionActionsRow.addView(connectionWaitButton, waitParams);
+
+        final Button retryBtn = new Button(this);
+        retryBtn.setText("Try again");
+        retryBtn.setAllCaps(false);
+        retryBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        retryBtn.setTextColor(Color.parseColor("#0A1B17"));
+        retryBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        retryBtn.setPadding(dp(16), dp(10), dp(16), dp(10));
+        final GradientDrawable retryBg = new GradientDrawable();
+        retryBg.setColor(Color.parseColor("#E4B95B"));
+        retryBg.setCornerRadius(dp(10));
+        retryBtn.setBackground(retryBg);
+        retryBtn.setOnClickListener(v -> reloadAfterConnectionIssue(webView));
+        final LinearLayout.LayoutParams retryParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        retryParams.leftMargin = dp(8);
+        connectionActionsRow.addView(retryBtn, retryParams);
+
+        card.addView(connectionActionsRow, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        final FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(
+            Math.min(dp(360), getResources().getDisplayMetrics().widthPixels - dp(40)),
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER
+        );
+        connectionOverlay.addView(card, cardParams);
+
+        parent.addView(connectionOverlay, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        connectionMonitorHandler.removeCallbacks(connectionMonitorTask);
+        connectionMonitorHandler.postDelayed(connectionMonitorTask, OVERLAY_SHOW_DELAY_MS);
+    }
+
+    private void reloadAfterConnectionIssue(final WebView webView) {
+        if (webView == null) return;
+        connectionStartMs = SystemClock.uptimeMillis();
+        userDismissedSlowCard = false;
+        updateConnectionOverlay();
+        connectionMonitorHandler.removeCallbacks(connectionMonitorTask);
+        connectionMonitorHandler.postDelayed(connectionMonitorTask, 300L);
+        final String currentUrl = webView.getUrl();
+        if (currentUrl == null || currentUrl.isEmpty() || "about:blank".equals(currentUrl) || currentUrl.endsWith("offline.html")) {
+            webView.loadUrl(APP_ENTRY_URL);
+        } else {
+            webView.stopLoading();
+            webView.reload();
+        }
+    }
+
+    private void updateConnectionOverlay() {
+        if (connectionOverlay == null) return;
+        final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        if (webView == null) {
+            connectionOverlay.setVisibility(View.GONE);
+            return;
+        }
+        final String currentUrl = webView.getUrl();
+        final boolean showingOfflineFallback = currentUrl != null && currentUrl.endsWith("offline.html");
+        final int progress = webView.getProgress();
+        if (progress >= 85 || showingOfflineFallback) {
+            connectionOverlay.setVisibility(View.GONE);
+            return;
+        }
+
+        final long elapsed = SystemClock.uptimeMillis() - connectionStartMs;
+        final boolean online = hasInternetConnection();
+        if (!online) {
+            connectionOverlay.setVisibility(View.VISIBLE);
+            connectionSpinner.setVisibility(View.GONE);
+            connectionTitleView.setText("No internet connection");
+            connectionBodyView.setText("You appear to be offline. Turn on Wi-Fi or mobile data so myIPON can connect, then tap Try again.");
+            connectionWaitButton.setVisibility(View.GONE);
+            connectionActionsRow.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        if (userDismissedSlowCard) {
+            connectionOverlay.setVisibility(View.VISIBLE);
+            connectionSpinner.setVisibility(View.VISIBLE);
+            connectionTitleView.setText("Still connecting…");
+            connectionBodyView.setText("Waiting for a response over your slow connection.");
+            connectionWaitButton.setVisibility(View.GONE);
+            connectionActionsRow.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        if (elapsed >= SLOW_CONNECTION_THRESHOLD_MS) {
+            connectionOverlay.setVisibility(View.VISIBLE);
+            connectionSpinner.setVisibility(View.GONE);
+            connectionTitleView.setText("Slow or unstable internet");
+            connectionBodyView.setText("myIPON is taking longer than usual to load because your connection is weak. Please check your Wi-Fi or mobile data signal, then try again.");
+            connectionWaitButton.setVisibility(View.VISIBLE);
+            connectionActionsRow.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        if (elapsed >= OVERLAY_SHOW_DELAY_MS) {
+            connectionOverlay.setVisibility(View.VISIBLE);
+            connectionSpinner.setVisibility(View.VISIBLE);
+            connectionTitleView.setText("Connecting to myIPON");
+            connectionBodyView.setText("Loading your workspace. This may take a moment on slower connections.");
+            connectionActionsRow.setVisibility(View.GONE);
+        }
+    }
+
+    private boolean hasInternetConnection() {
+        try {
+            final ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return true;
+            final Network active = cm.getActiveNetwork();
+            if (active == null) return false;
+            final NetworkCapabilities caps = cm.getNetworkCapabilities(active);
+            return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Throwable err) {
+            return true;
+        }
+    }
+
+    private int dp(int value) {
+        return Math.round(TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            value,
+            getResources().getDisplayMetrics()
+        ));
     }
 }

@@ -304,6 +304,9 @@ body[data-page]:not(.security-page):not(.is-ready) .workspace { opacity:0; }
 .loader-coin b { font:800 21px/1 Arial,sans-serif; backface-visibility:hidden; }
 .loader-sheet p { margin:0; font-size:21px; font-weight:750; }
 .loader-sheet small { display:block; margin-top:7px; color:var(--muted); font-family:Arial,sans-serif; line-height:1.45; }
+.loader-slow-box { display:grid; gap:10px; justify-items:center; margin-top:14px; padding-top:12px; border-top:1px solid rgba(20,45,43,.12); }
+.loader-slow-box[hidden] { display:none !important; }
+.loader-slow-hint { margin-top:0 !important; color:#7c4d0e !important; font-weight:600; }
 body.is-app .loader-sheet { width:min(290px,calc(100vw - 36px)); padding:22px 18px 20px; border-radius:20px; }
 body.is-app .loader-brand { font-size:24px; letter-spacing:1.5px; }
 body.is-app .savings-loader { width:114px; height:80px; margin:10px auto 8px; }

@@ -107,7 +107,7 @@ const offlineHtml = `<!doctype html>
 <body>
   <div class="card">
     <h1>You appear to be offline</h1>
-    <p>Please check your internet connection so myIPON can load your latest records.</p>
+    <p>Your internet connection is offline or too slow to reach myIPON. Please check your Wi-Fi or mobile data, then tap Try again.</p>
     <a href="https://my-ipon.vercel.app/login.html?app=1">Try again</a>
   </div>
 </body>

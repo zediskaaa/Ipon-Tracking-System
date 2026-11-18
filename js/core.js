@@ -30,6 +30,7 @@
   let quickMfaController = null;
   const STARTUP_TIMEOUT_MS = 15000;
   let loaderSafetyTimer = null;
+  let loaderSlowTimer = null;
   let navLoaderTimer = null;
   let activeLiveRefresh = null;
 
@@ -329,6 +330,10 @@
       clearTimeout(loaderSafetyTimer);
       loaderSafetyTimer = null;
     }
+    if (loaderSlowTimer) {
+      clearTimeout(loaderSlowTimer);
+      loaderSlowTimer = null;
+    }
     let loader = document.getElementById('app-loader');
     if (!loader) {
       document.body.insertAdjacentHTML('beforeend', `
@@ -364,16 +369,34 @@
             </div>
             <p id="loader-label">Opening your records…</p>
             <small>Counting your latest savings activity.</small>
+            <div class="loader-slow-box" id="app-loader-slow-box" hidden>
+              <small class="loader-slow-hint" id="app-loader-slow-hint">Slow internet detected. Still connecting to your records…</small>
+              <button class="button button-secondary button-sm" id="app-loader-retry" type="button">Retry</button>
+            </div>
           </div>
         </div>`);
       loader = document.getElementById('app-loader');
+      document.getElementById('app-loader-retry')?.addEventListener('click', () => window.location.reload());
     }
+    const slowBox = document.getElementById('app-loader-slow-box');
+    const slowHint = document.getElementById('app-loader-slow-hint');
+    if (slowBox) slowBox.hidden = true;
     if (!visible) document.body.classList.add('is-ready');
     const labelEl = document.getElementById('loader-label');
     if (labelEl) labelEl.textContent = label;
     loader.hidden = !visible;
     loader.setAttribute('aria-busy', String(visible));
     if (visible) {
+      loaderSlowTimer = setTimeout(() => {
+        if (loader && !loader.hidden && slowBox) {
+          if (slowHint) {
+            slowHint.textContent = navigator.onLine === false
+              ? 'You appear to be offline. Reconnect to load your records.'
+              : 'Your connection is slow right now. Still waiting for a response…';
+          }
+          slowBox.hidden = false;
+        }
+      }, 4500);
       loaderSafetyTimer = setTimeout(() => {
         if (loader && !loader.hidden) {
           loader.hidden = true;
