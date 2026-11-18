@@ -510,7 +510,7 @@ body.is-app .loader-sheet small { margin-top:4px; font-size:12px; }
 .account-cover-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
 .account-cover-actions .button{min-height:32px;padding:5px 10px;border:1px solid rgba(255,255,255,.55);background:rgba(6,22,19,.68);color:#fff}
 .account-cover-actions .button:hover{background:rgba(6,22,19,.88)}
-.account-card-feedback{min-height:15px;margin:0;color:var(--muted);font:12px/1.3 Arial,sans-serif}
+.account-card-feedback{min-height:15px;margin:0;color:var(--muted);font:12px/1.3 Arial,sans-serif}.account-card-feedback:empty{display:none;min-height:0}
 .account-profile-card .form-grid{gap:14px}
 .account-dialog .field label{color:#263b35;font:700 12px/1.3 Arial,sans-serif}
 .account-dialog .field input:not([type="checkbox"]):not([type="radio"]),.account-dialog .field select,.account-dialog .custom-select-trigger{min-height:44px;padding:10px 13px;border:1px solid rgba(20,45,43,.16);border-radius:10px;background:#fff;font:500 14.5px/1.35 Arial,sans-serif}
@@ -573,7 +573,7 @@ body.is-app .loader-sheet small { margin-top:4px; font-size:12px; }
 .signout-action-btn{gap:8px;white-space:nowrap;flex-shrink:0}
 .signout-action-btn svg{width:17px;height:17px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .account-dialog .account-session-card .signout-action-btn{border-radius:10px}
-@media(max-width:900px){.account-dialog-content{grid-template-columns:1fr}.account-side-stack{grid-template-columns:1fr 1fr}.account-security-card,.account-connect-apps-card,.account-preferences{min-width:0}.account-connect-apps-card{grid-column:1/-1}}
+@media(max-width:900px){.account-dialog-content{grid-template-columns:1fr}.account-side-stack{grid-template-columns:1fr 1fr}.account-security-card,.account-preferences{min-width:0}}
 .account-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}.account-grid>.panel{margin:0}.section-rule{grid-column:1/-1;width:100%;border:0;border-block-start:1px solid var(--rule);margin:8px 0}.preference-row{display:flex;align-items:center;justify-content:space-between;gap:20px}.preference-row span{display:grid;gap:5px}.preference-row small{color:var(--muted)}.preference-row input{width:22px;height:22px;accent-color:var(--green)}
 .account-page-dialog{width:min(1240px,calc(100vw - 32px))}.account-page-dialog-content{padding:22px;background:radial-gradient(circle at 8% 105%,rgba(99,160,111,.16),transparent 34%),linear-gradient(#fbf8f3,#f7f2ea)}.account-page-dialog .dialog-close[hidden]{display:none}.account-page-dialog .inline-notice{margin-block-end:16px}.account-page-dialog .panel{border-color:rgba(20,45,43,.13);background:rgba(255,255,255,.78);box-shadow:0 8px 24px rgba(27,57,48,.07)}body.account-onboarding .account-page-dialog .account-grid>section:nth-child(n+3){display:none}body.account-onboarding .account-page-dialog .account-grid{align-items:start}
 .inline-notice{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-block-end:20px;padding:14px 18px;border:1px solid #c89942;border-radius:12px;background:#fff3ce;color:var(--ink)}.inline-notice span{color:#66512c}
@@ -9553,6 +9553,117 @@ html[data-theme="dark"] .msg-attach-option-icon.is-files {
 }
 html[data-theme="dark"] .msg-attach-option-icon.is-gdrive {
   background: rgba(96, 165, 250, .14);
+}
+.msg-gdrive-dialog {
+  width: min(470px, calc(100vw - 28px));
+}
+.msg-gdrive-dialog .form-dialog-sheet {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.msg-gdrive-body {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+.msg-gdrive-launch-card,
+.msg-gdrive-local-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 13px;
+  border: 1px solid rgba(20, 45, 43, .12);
+  background: rgba(11, 52, 40, .035);
+}
+.msg-gdrive-launch-meta {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.msg-gdrive-launch-meta > span:last-child,
+.msg-gdrive-local-row > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.msg-gdrive-launch-meta strong,
+.msg-gdrive-local-row strong {
+  font: 700 13.5px/1.25 Arial, sans-serif;
+  color: var(--ink);
+}
+.msg-gdrive-launch-meta small,
+.msg-gdrive-local-row small {
+  font: 12px/1.35 Arial, sans-serif;
+  color: var(--muted);
+}
+.msg-gdrive-launch-card .button,
+.msg-gdrive-local-row .button,
+.msg-gdrive-input-row .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.msg-gdrive-link-form .field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.msg-gdrive-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.msg-gdrive-link-form input[aria-invalid="true"] {
+  border-color: #c23b2b;
+}
+.msg-gdrive-error {
+  display: block;
+  min-height: 16px;
+  line-height: 16px;
+  visibility: hidden;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+.msg-gdrive-error.is-visible {
+  visibility: visible;
+}
+html[data-theme="dark"] .msg-gdrive-launch-card,
+html[data-theme="dark"] .msg-gdrive-local-row {
+  border-color: rgba(255, 255, 255, .1);
+  background: rgba(255, 255, 255, .04);
+}
+html[data-theme="dark"] .msg-gdrive-link-form input[aria-invalid="true"] {
+  border-color: #f87171;
+}
+@media (max-width: 520px) {
+  .msg-gdrive-body {
+    padding: 16px;
+  }
+  .msg-gdrive-launch-card,
+  .msg-gdrive-local-row,
+  .msg-gdrive-input-row {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .msg-gdrive-launch-card .button,
+  .msg-gdrive-local-row .button,
+  .msg-gdrive-input-row .button {
+    width: 100%;
+    justify-content: center;
+  }
+  .msg-gdrive-error:not(.is-visible) {
+    display: none;
+    min-height: 0;
+  }
+  .msg-gdrive-error.is-visible {
+    white-space: normal;
+  }
 }
 html[data-theme="dark"] .msg-swipe-reply-badge {
   background: #172a23;
@@ -21242,26 +21353,29 @@ a.social-app-tile:focus-visible {
   font: 12px/1.35 Arial, sans-serif;
 }
 
-.account-connect-summary-row {
+.account-card-effects-row.account-card-connect-row {
+  display: grid;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 9px;
+}
+
+.account-card-connect-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
-  min-height: 48px;
-  padding: 10px 12px;
-  border: 1px solid rgba(20, 45, 43, .11);
-  border-radius: 12px;
-  background: rgba(11, 52, 40, .035);
+  min-width: 0;
 }
 
-.account-connect-summary-row .account-connect-preview-icons {
-  justify-content: flex-start;
-}
-
-.account-connect-summary-row .button {
+.account-card-connect-head .button {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+.account-card-connect-row .account-connect-preview-icons {
+  justify-content: flex-start;
+  min-height: 24px;
 }
 
 .connect-apps-dialog {
@@ -21392,7 +21506,6 @@ html[data-theme="dark"] button.social-app-tile.is-draggable:focus-visible {
   margin-top: 6px;
 }
 
-html[data-theme="dark"] .account-connect-summary-row,
 html[data-theme="dark"] .account-connect-preview {
   border-color: rgba(255, 255, 255, .1);
   background: rgba(255, 255, 255, .04);
@@ -21404,15 +21517,9 @@ html[data-theme="dark"] .account-dialog .account-app-field input[aria-invalid="t
 }
 
 @media (max-width: 620px) {
-  .account-connect-summary-row {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .account-connect-summary-row .button {
-    width: 100%;
-    justify-content: center;
+  .account-card-connect-head {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .connect-apps-modal-body {

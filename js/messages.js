@@ -827,7 +827,7 @@
                         </button>
                         <button type="button" class="msg-attach-option" role="menuitem" data-attach-source="gdrive">
                           <span class="msg-attach-option-icon is-gdrive" aria-hidden="true"><svg viewBox="0 0 24 24"><polygon fill="#0F9D58" stroke="none" points="9 4 12 9.2 6 19.6 3 14.4"/><polygon fill="#FFCD40" stroke="none" points="9 4 15 4 21 14.4 15 14.4"/><polygon fill="#4285F4" stroke="none" points="9 14.4 21 14.4 18 19.6 6 19.6"/></svg></span>
-                          <span class="msg-attach-option-copy"><strong>Google Drive</strong><small>Pick files from Drive cloud storage</small></span>
+                          <span class="msg-attach-option-copy"><strong>Google Drive</strong><small>Open Google Drive files or folders</small></span>
                         </button>
                       </div>
                       <div class="msg-emoji-popover" id="msg-emoji-popover" hidden></div>
@@ -925,6 +925,42 @@
             <button class="dialog-close" type="button" data-msg-group-close aria-label="Close group dialog"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
           <div class="msg-group-dialog-body" id="msg-group-body"></div>
+        </div>
+      </dialog>
+
+      <!-- Google Drive Picker Dialog (web browsers where file input cannot jump straight into Drive) -->
+      <dialog class="form-dialog msg-sub-dialog msg-gdrive-dialog" id="msg-gdrive-dialog" aria-labelledby="msg-gdrive-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div>
+              <h2 id="msg-gdrive-title">Google Drive</h2>
+              <p>Open your Google Drive files or folders, share a link, or browse Drive storage synced on this device.</p>
+            </div>
+            <button class="dialog-close" type="button" data-msg-gdrive-close aria-label="Close Google Drive dialog"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="msg-gdrive-body">
+            <div class="msg-gdrive-launch-card">
+              <div class="msg-gdrive-launch-meta">
+                <span class="msg-attach-option-icon is-gdrive" aria-hidden="true"><svg viewBox="0 0 24 24"><polygon fill="#0F9D58" stroke="none" points="9 4 12 9.2 6 19.6 3 14.4"/><polygon fill="#FFCD40" stroke="none" points="9 4 15 4 21 14.4 15 14.4"/><polygon fill="#4285F4" stroke="none" points="9 14.4 21 14.4 18 19.6 6 19.6"/></svg></span>
+                <span><strong>My Drive files &amp; folders</strong><small>Opens drive.google.com directly to your Drive folders so you can copy or save a file.</small></span>
+              </div>
+              <a class="button button-primary button-sm" id="msg-gdrive-open-web" href="https://drive.google.com/drive/my-drive" target="_blank" rel="noopener noreferrer">Open Google Drive</a>
+            </div>
+            <form id="msg-gdrive-link-form" class="msg-gdrive-link-form" novalidate>
+              <div class="field">
+                <label for="msg-gdrive-link-input">Paste Google Drive file or folder link</label>
+                <div class="msg-gdrive-input-row">
+                  <input id="msg-gdrive-link-input" name="drive_url" type="url" inputmode="url" maxlength="500" autocomplete="off" spellcheck="false" placeholder="https://drive.google.com/file/d/... or /drive/folders/..." aria-describedby="msg-gdrive-link-error">
+                  <button class="button button-primary button-sm" id="msg-gdrive-insert-btn" type="submit">Add to chat</button>
+                </div>
+                <small class="field-error msg-gdrive-error" id="msg-gdrive-link-error" role="alert" aria-hidden="true"></small>
+              </div>
+            </form>
+            <div class="msg-gdrive-local-row">
+              <span><strong>Synced Drive folder on this device?</strong><small>Browse local files or mounted Drive folders directly.</small></span>
+              <button class="button button-secondary button-sm" id="msg-gdrive-browse-local" type="button">Browse device</button>
+            </div>
+          </div>
         </div>
       </dialog>
     `);
@@ -1262,7 +1298,7 @@
     if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
     if (!isWindowFocused) return false;
     if (typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
-    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
+    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
     if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
     if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
       return false;
@@ -5481,6 +5517,12 @@
       if (ev.target.closest?.('[data-msg-settings-close]')) { document.getElementById('msg-settings-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-forward-close]')) { document.getElementById('msg-forward-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-group-close]')) { document.getElementById('msg-group-dialog')?.close(); return; }
+      if (ev.target.closest?.('[data-msg-gdrive-close]') || ev.target?.id === 'msg-gdrive-dialog') { document.getElementById('msg-gdrive-dialog')?.close?.(); return; }
+      if (ev.target.closest?.('#msg-gdrive-browse-local')) {
+        document.getElementById('msg-gdrive-dialog')?.close?.();
+        document.getElementById('msg-drive-input')?.click();
+        return;
+      }
       if (ev.target.closest?.('#msg-privacy-btn')) { await openPrivacySettingsModal(); return; }
       if (ev.target.closest?.('#msg-alerts-btn')) { switchTab('notifications'); return; }
       if (ev.target.closest?.('#msg-empty-find-btn') || ev.target.closest?.('[data-goto-discover]')) { activateSidebarSearch(true); return; }
@@ -6144,14 +6186,19 @@
         closeAttachMenu();
         if (typeof window !== 'undefined' && typeof window.IponNativePicker?.setSource === 'function') {
           try { window.IponNativePicker.setSource(source); } catch { }
-        } else if (source === 'gdrive' && typeof window !== 'undefined' && !window.Capacitor) {
-          ipon().toast?.('Select Google Drive from your device file picker if available.');
+          const inputId = source === 'gallery'
+            ? 'msg-gallery-input'
+            : source === 'gdrive'
+              ? 'msg-drive-input'
+              : 'msg-file-input';
+          document.getElementById(inputId)?.click();
+          return;
         }
-        const inputId = source === 'gallery'
-          ? 'msg-gallery-input'
-          : source === 'gdrive'
-            ? 'msg-drive-input'
-            : 'msg-file-input';
+        if (source === 'gdrive') {
+          openWebGoogleDriveDialog();
+          return;
+        }
+        const inputId = source === 'gallery' ? 'msg-gallery-input' : 'msg-file-input';
         document.getElementById(inputId)?.click();
         return;
       }
@@ -6331,6 +6378,35 @@
         submitComposer(ev);
         return;
       }
+      if (ev.target?.id === 'msg-gdrive-link-form') {
+        ev.preventDefault();
+        const linkInput = document.getElementById('msg-gdrive-link-input');
+        const check = validateGoogleDriveUrl(linkInput?.value, { live: false });
+        if (check.error) {
+          setGdriveLinkError(check.error);
+          linkInput?.focus?.();
+          return;
+        }
+        const composerInput = document.getElementById('msg-composer-input');
+        const existing = String(composerInput?.value || '').trimEnd();
+        const nextText = existing ? `${existing}\n${check.url}` : check.url;
+        if (nextText.length > 500) {
+          setGdriveLinkError('Message exceeds 500 characters; shorten your text or send this link separately.');
+          linkInput?.focus?.();
+          return;
+        }
+        setGdriveLinkError('');
+        if (composerInput) {
+          composerInput.value = nextText;
+          autoResizeTextarea(composerInput);
+          syncComposerCharCounter(nextText.length);
+          if (state.activeConvId) state.draftsByConv.set(state.activeConvId, nextText);
+          composerInput.focus?.();
+        }
+        document.getElementById('msg-gdrive-dialog')?.close?.();
+        ipon().toast?.('Google Drive link added to message.');
+        return;
+      }
       if (ev.target?.id === 'msg-group-edit-form' && state.activeConvId) {
         ev.preventDefault();
         const titleInput = document.getElementById('msg-group-edit-title');
@@ -6422,6 +6498,9 @@
         }
         ev.target.setAttribute?.('aria-invalid', err ? 'true' : 'false');
         syncGroupEditDirtyState();
+      } else if (ev.target?.id === 'msg-gdrive-link-input') {
+        const check = validateGoogleDriveUrl(ev.target.value, { live: true });
+        setGdriveLinkError(check.error);
       } else if (ev.target?.id === 'msg-group-edit-desc') {
         syncGroupEditDirtyState();
       } else if (ev.target?.classList?.contains('msg-video-seek')) {
@@ -7225,7 +7304,81 @@
     return dismissed;
   }
 
+  function validateGoogleDriveUrl(raw, { live = false } = {}) {
+    const value = String(raw || '').trim();
+    if (!value) return { url: '', error: live ? '' : 'Paste a Google Drive or Google Docs link.' };
+    if (value.length > 500 || /[\s<>"'`\\\u0000-\u001f\u007f]/.test(value)) {
+      return { url: '', error: 'Enter a valid Google Drive link without spaces or invalid characters.' };
+    }
+    if (/^(?:javascript|data|vbscript|file|blob):/i.test(value)) {
+      return { url: '', error: 'Enter an official drive.google.com or docs.google.com link.' };
+    }
+    let candidate = value;
+    if (/^https?:\/\//i.test(candidate)) {
+      candidate = candidate.replace(/^https?:\/\//i, 'https://');
+    } else if (/^(?:drive|docs)\.google\.com\b/i.test(candidate)) {
+      candidate = `https://${candidate}`;
+    } else if (live && /^(?:h(?:t(?:t(?:p(?:s?(?::(?:\/(?:\/)?)?)?)?)?)?)?|d(?:r(?:i(?:v(?:e)?)?)?|o(?:c(?:s)?)?)?(?:\.[a-z.]*)?)$/i.test(candidate)) {
+      return { url: '', error: '' };
+    } else {
+      return { url: '', error: 'Link must use drive.google.com or docs.google.com.' };
+    }
+    let parsed;
+    try {
+      parsed = new URL(candidate);
+    } catch (_) {
+      return { url: '', error: 'Enter a valid Google Drive or Google Docs URL.' };
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.port) {
+      return { url: '', error: 'Enter a valid HTTPS Google Drive link.' };
+    }
+    if (host !== 'drive.google.com' && host !== 'docs.google.com') {
+      return { url: '', error: 'Link must use drive.google.com or docs.google.com.' };
+    }
+    if (!parsed.pathname || parsed.pathname === '/') {
+      if (live) return { url: '', error: '' };
+      return { url: '', error: 'Paste a specific Google Drive file, folder, or document link.' };
+    }
+    return { url: `https://${host}${parsed.pathname}${parsed.search}${parsed.hash}`, error: '' };
+  }
+
+  function setGdriveLinkError(error = '') {
+    const input = document.getElementById('msg-gdrive-link-input');
+    const errEl = document.getElementById('msg-gdrive-link-error');
+    const msgText = String(error || '');
+    input?.setAttribute?.('aria-invalid', msgText ? 'true' : 'false');
+    if (errEl) {
+      errEl.textContent = msgText;
+      errEl.title = msgText;
+      errEl.classList?.toggle?.('is-visible', Boolean(msgText));
+      errEl.setAttribute?.('aria-hidden', msgText ? 'false' : 'true');
+    }
+  }
+
+  function openWebGoogleDriveDialog() {
+    const dialog = document.getElementById('msg-gdrive-dialog');
+    const input = document.getElementById('msg-gdrive-link-input');
+    if (!dialog) {
+      document.getElementById('msg-drive-input')?.click();
+      return;
+    }
+    if (input) input.value = '';
+    setGdriveLinkError('');
+    if (typeof dialog.showModal === 'function' && !dialog.open) {
+      dialog.showModal();
+    } else {
+      dialog.open = true;
+    }
+    document.getElementById('msg-gdrive-open-web')?.focus?.();
+  }
+
   function handleBackNavigation() {
+    const gdriveDlg = document.getElementById('msg-gdrive-dialog');
+    if (gdriveDlg?.open) {
+      gdriveDlg.close();
+      return true;
+    }
     const groupDlg = document.getElementById('msg-group-dialog');
     if (groupDlg?.open) {
       groupDlg.close();

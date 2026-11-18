@@ -21,6 +21,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -110,6 +111,19 @@ public class MainActivity extends BridgeActivity {
         return (!src.isEmpty() && age >= 0 && age <= 10_000L) ? src : "";
     }
 
+    private boolean isPackageInstalled(String packageName) {
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                getPackageManager().getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0));
+            } else {
+                getPackageManager().getPackageInfo(packageName, 0);
+            }
+            return true;
+        } catch (PackageManager.NameNotFoundException ignored) {
+            return false;
+        }
+    }
+
     private Intent buildIntentForAttachmentSource(String source, boolean allowMultiple) {
         if ("gallery".equals(source)) {
             if (Build.VERSION.SDK_INT >= 33) {
@@ -135,15 +149,42 @@ public class MainActivity extends BridgeActivity {
             driveIntent.addCategory(Intent.CATEGORY_OPENABLE);
             driveIntent.setType("*/*");
             driveIntent.setPackage("com.google.android.apps.docs");
+            driveIntent.putExtra(Intent.EXTRA_LOCAL_ONLY, false);
             if (allowMultiple) driveIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
             if (driveIntent.resolveActivity(getPackageManager()) != null) {
                 return driveIntent;
             }
+            final Intent driveDocsIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            driveDocsIntent.addCategory(Intent.CATEGORY_OPENABLE);
+            driveDocsIntent.setType("*/*");
+            driveDocsIntent.putExtra("android.content.extra.SHOW_ADVANCED", true);
+            driveDocsIntent.putExtra(Intent.EXTRA_LOCAL_ONLY, false);
+            if (Build.VERSION.SDK_INT >= 26) {
+                driveDocsIntent.putExtra(
+                    DocumentsContract.EXTRA_INITIAL_URI,
+                    DocumentsContract.buildRootUri("com.google.android.apps.docs.storage", "root")
+                );
+            }
+            if (allowMultiple) driveDocsIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            final String driveHint = isPackageInstalled("com.google.android.apps.docs")
+                ? "Open Google Drive from the storage menu to pick your files."
+                : "Google Drive app is not installed on this device.";
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, driveHint, Toast.LENGTH_LONG).show());
+            if (driveDocsIntent.resolveActivity(getPackageManager()) != null) {
+                return driveDocsIntent;
+            }
+            return null;
         }
-        if ("files".equals(source) || "gdrive".equals(source)) {
+        if ("files".equals(source)) {
             final Intent docsIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             docsIntent.addCategory(Intent.CATEGORY_OPENABLE);
             docsIntent.setType("*/*");
+            if (Build.VERSION.SDK_INT >= 26) {
+                docsIntent.putExtra(
+                    DocumentsContract.EXTRA_INITIAL_URI,
+                    DocumentsContract.buildRootUri("com.android.externalstorage.documents", "primary")
+                );
+            }
             if (allowMultiple) docsIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
             if (docsIntent.resolveActivity(getPackageManager()) != null) {
                 return docsIntent;

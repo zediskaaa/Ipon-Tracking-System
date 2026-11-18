@@ -850,6 +850,7 @@ test('Migration 122-124, Connect Apps X (Twitter) + drag reorder UI, uniform SVG
   assert.match(mig124, /when 'x' then v_host in \('x\.com', 'www\.x\.com', 'mobile\.x\.com', 'twitter\.com', 'www\.twitter\.com', 'mobile\.twitter\.com'\)/i);
 
   // 2. UI markup, drag preview, messaging bio slots & uniform squircle CSS
+  assert.match(coreJs, /id="quick-effects-open"[^>]*>Browse effects<\/button><\/div><div class="account-card-effects-row account-card-connect-row" id="quick-connect-apps-card"[\s\S]*?<form id="quick-profile-form"/);
   assert.match(coreJs, /id="quick-connect-apps-card"/);
   assert.match(coreJs, /id="quick-connect-apps-open"/);
   assert.match(coreJs, /id="connect-apps-dialog"/);
@@ -875,6 +876,7 @@ test('Migration 122-124, Connect Apps X (Twitter) + drag reorder UI, uniform SVG
   assert.match(appCss, /button\.social-app-tile\.is-draggable\s*\{[^}]*touch-action:\s*none;/);
   assert.match(appCss, /button\.social-app-tile\.is-draggable\.is-dragging\s*\{[^}]*cursor:\s*grabbing;/);
   assert.match(appCss, /\.account-connect-drag-hint\s*\{/);
+  assert.match(appCss, /\.account-card-effects-row\.account-card-connect-row\s*\{/);
   assert.match(appCss, /\.social-app-tile\.is-telegram\s*\{/);
   assert.match(appCss, /\.social-app-tile\.is-instagram\s*\{/);
   assert.match(appCss, /\.social-app-tile\.is-facebook\s*\{/);
