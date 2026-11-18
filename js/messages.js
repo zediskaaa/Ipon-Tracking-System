@@ -181,6 +181,13 @@
     return String(conv.peer?.full_name || conv.full_name || 'User');
   }
 
+  function userBadgesHtml(userOrId) {
+    if (!userOrId) return '';
+    return typeof ipon === 'function' && typeof ipon().verifiedBadgesHtml === 'function'
+      ? ipon().verifiedBadgesHtml(userOrId)
+      : '';
+  }
+
   function findGroupMember(conv, userId) {
     if (!conv || !userId) return null;
     const target = String(userId);
@@ -1600,12 +1607,14 @@
       <div class="msg-conv-avatar">${convAvatarHtml(conv, 'avatar-md')}</div>
       <button type="button" class="msg-conv-main" data-open-conv="${escapeHtml(conv.id)}">
         <div class="msg-conv-top">
-          <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${groupPill}${pinIcon}${muteIcon}</strong>
-          <time class="msg-conv-time">${escapeHtml(formatShortDate(conv.last_message_at))}</time>
+          <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp ? '' : userBadgesHtml(conv.peer || conv)}${groupPill}</strong>
         </div>
         <div class="msg-conv-bottom">
           <span class="msg-conv-preview">${previewText}</span>
-          ${hasUnread ? `<b class="msg-unread-pill">${conv.unread_count > 0 ? (conv.unread_count > 99 ? '99+' : conv.unread_count) : '•'}</b>` : ''}
+          <span class="msg-conv-bottom-meta">
+            ${pinIcon}${muteIcon}<time class="msg-conv-time">${escapeHtml(formatShortDate(conv.last_message_at))}</time>
+            ${hasUnread ? `<b class="msg-unread-pill">${conv.unread_count > 0 ? (conv.unread_count > 99 ? '99+' : conv.unread_count) : '•'}</b>` : ''}
+          </span>
         </div>
       </button>
       <div class="msg-conv-more-wrap">
@@ -1639,7 +1648,7 @@
     return `<article class="msg-search-person-row" role="listitem">
       <div class="msg-conv-avatar">${userAvatarHtml(u, 'avatar-md')}</div>
       <button type="button" class="msg-search-person-main" data-social-action="message" data-target-id="${escapeHtml(u.id)}">
-        <strong class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}</strong>
+        <strong class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}${userBadgesHtml(u)}</strong>
         <span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>
       </button>
       <div class="msg-search-person-act">${relChip}</div>
@@ -1989,7 +1998,7 @@
             ${isGrp ? groupAvatarHtml(peer, 'avatar-md') : userAvatarHtml(peer, 'avatar-md')}
             <div class="msg-thread-peer-meta">
               <div class="msg-thread-peer-title">
-                <strong>${escapeHtml(convDisplayTitle(peer))}</strong>
+                <strong>${escapeHtml(convDisplayTitle(peer))}${isGrp ? '' : userBadgesHtml(peer)}</strong>
               </div>
               <div class="msg-thread-peer-sub">
                 ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : (peer.username ? `<span class="msg-handle-chip">@${escapeHtml(peer.username)}</span>` : '')}
@@ -2244,7 +2253,7 @@
         ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md')}
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
-            <strong>${escapeHtml(convDisplayTitle(conv))}</strong>
+            <strong>${escapeHtml(convDisplayTitle(conv))}${isGrp ? '' : userBadgesHtml(conv)}</strong>
           </div>
           <div class="msg-thread-peer-sub">
             ${!isGrp && conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
@@ -2681,7 +2690,7 @@
           }
         : conv;
       const senderNameHtml = isGrp && !mine && !groupedWithPrev && !isDeleted
-        ? `<span class="msg-sender-name">${escapeHtml(senderUser.full_name)}</span>`
+        ? `<span class="msg-sender-name">${escapeHtml(senderUser.full_name)}${userBadgesHtml(senderUser)}</span>`
         : '';
 
       const attHtml = !isDeleted && Array.isArray(m.attachments) && m.attachments.length
@@ -3022,7 +3031,7 @@
         </div>`
       : `<div class="msg-drawer-profile">
           ${userAvatarHtml(conv, 'avatar-lg', { showPresence: false })}
-          <strong>${escapeHtml(conv.full_name || 'User')}</strong>
+          <strong>${escapeHtml(conv.full_name || 'User')}${iponApi?.verifiedBadgesHtml?.(conv) || ''}</strong>
           ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
           ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
         </div>`;
@@ -3058,7 +3067,7 @@
               return `<li class="msg-group-member-row">
                 ${userAvatarHtml(m, 'avatar-sm', { clickable: !isMe, showPresence: !isMe })}
                 <div class="msg-group-member-meta">
-                  <strong><span>${escapeHtml(m.full_name || 'Member')}</span>${isMe ? ' <em>(You)</em>' : ''}${roleBadge}</strong>
+                  <strong><span>${escapeHtml(m.full_name || 'Member')}${iponApi?.verifiedBadgesHtml?.(m) || ''}</span>${isMe ? ' <em>(You)</em>' : ''}${roleBadge}</strong>
                   ${m.username ? `<small>@${escapeHtml(m.username)}</small>` : `<small>${escapeHtml(m.is_friend ? 'Friend' : 'Group member')}</small>`}
                 </div>
                 ${!isMe ? `<button type="button" class="msg-conv-more-btn msg-group-member-more" data-group-member-menu="${escapeHtml(m.id)}" aria-label="Member options for ${escapeHtml(m.full_name || 'Member')}" title="Member options">${moreDotsSvg}</button>` : ''}
@@ -3184,7 +3193,7 @@
               <div class="msg-person-head">
                 ${userAvatarHtml({ id: r.user_id, full_name: r.full_name, avatar_url: r.avatar_url, allow_online_status: false }, 'avatar-md', { showPresence: false })}
                 <div>
-                  <strong>${escapeHtml(r.full_name)}</strong>
+                  <strong>${escapeHtml(r.full_name)}${userBadgesHtml(r.user_id)}</strong>
                   <small>${escapeHtml(metaParts.join(' · '))}</small>
                 </div>
               </div>
@@ -3208,7 +3217,7 @@
               <div class="msg-person-head">
                 ${userAvatarHtml({ id: r.user_id, full_name: r.full_name, avatar_url: r.avatar_url, allow_online_status: false }, 'avatar-md', { showPresence: false })}
                 <div>
-                  <strong>${escapeHtml(r.full_name)}</strong>
+                  <strong>${escapeHtml(r.full_name)}${userBadgesHtml(r.user_id)}</strong>
                   <small>${escapeHtml(metaParts.join(' · '))}</small>
                 </div>
               </div>
@@ -3234,7 +3243,7 @@
       <div class="msg-person-head">
         ${userAvatarHtml(f, 'avatar-md')}
         <div>
-          <strong>${escapeHtml(f.full_name)}</strong>
+          <strong>${escapeHtml(f.full_name)}${userBadgesHtml(f)}</strong>
           ${metaParts.length ? `<small>${escapeHtml(metaParts.join(' · '))}</small>` : ''}
           <small>${escapeHtml(formatStatusLine(f))}</small>
         </div>
@@ -3396,7 +3405,7 @@
               <button type="button" class="msg-mutual-pop-item" role="listitem" data-social-user-dp="${escapeHtml(m.id)}">
                 ${userAvatarHtml({ id: m.id, full_name: m.full_name, avatar_url: m.avatar_url, allow_online_status: false }, 'avatar-sm', { clickable: false, showPresence: false })}
                 <span class="msg-mutual-pop-copy">
-                  <strong>${escapeHtml(m.full_name)}</strong>
+                  <strong>${escapeHtml(m.full_name)}${userBadgesHtml(m)}</strong>
                   ${m.username ? `<small>@${escapeHtml(m.username)}</small>` : ''}
                 </span>
               </button>`).join('')}
@@ -3512,7 +3521,7 @@
         <div class="msg-pop-head">
           ${userAvatarHtml(initializedProfile, 'avatar-lg', { clickable: false, showPresence: false })}
           <div class="msg-pop-title">
-            <strong id="msg-pop-name">${escapeHtml(initializedProfile?.full_name || 'Your profile')}</strong>
+            <strong id="msg-pop-name">${escapeHtml(initializedProfile?.full_name || 'Your profile')}${userBadgesHtml(initializedProfile)}</strong>
             <div class="msg-pop-status-row"><span class="msg-rel-badge">You</span>${selfParts.length ? `<small class="msg-pop-status">${escapeHtml(selfParts.join(' · '))}</small>` : ''}</div>
           </div>
         </div>
@@ -3572,7 +3581,7 @@
         <div class="msg-pop-head">
           ${userAvatarHtml(profile, 'avatar-lg', { clickable: false, showPresence: false })}
           <div class="msg-pop-title">
-            <strong id="msg-pop-name">${escapeHtml(profile.full_name)}</strong>
+            <strong id="msg-pop-name">${escapeHtml(profile.full_name)}${userBadgesHtml(profile)}</strong>
             ${statusRowHtml}
           </div>
         </div>

@@ -7,7 +7,23 @@
   const featureRequestsBody = document.getElementById('feature-requests-body');
   const bugReportsBody = document.getElementById('bug-reports-body');
   const administratorsBody = document.getElementById('administrators-body');
+  const badgesBody = document.getElementById('badges-body');
   const activityBody = document.getElementById('activity-body');
+  const badgeGrantDialog = document.getElementById('badge-grant-dialog');
+  const badgeGrantForm = document.getElementById('badge-grant-form');
+  const badgeGrantTitle = document.getElementById('badge-grant-title');
+  const badgeGrantCopy = document.getElementById('badge-grant-copy');
+  const badgeGrantPreview = document.getElementById('badge-grant-preview');
+  const badgeDurationPreset = document.getElementById('badge-duration-preset');
+  const badgeCustomExpiryWrap = document.getElementById('badge-custom-expiry-wrap');
+  const badgeCustomExpiry = document.getElementById('badge-custom-expiry');
+  const badgeCreatorMessage = document.getElementById('badge-creator-message');
+  const badgeGrantSubmit = document.getElementById('badge-grant-submit');
+  const badgeRemoveDialog = document.getElementById('badge-remove-dialog');
+  const badgeRemoveForm = document.getElementById('badge-remove-form');
+  const badgeRemoveCopy = document.getElementById('badge-remove-copy');
+  const badgeRemoveReason = document.getElementById('badge-remove-reason');
+  const badgeRemoveSubmit = document.getElementById('badge-remove-submit');
   const administratorDialog = document.getElementById('administrator-dialog');
   const administratorForm = document.getElementById('administrator-form');
   const userGroupsDialog = document.getElementById('user-groups-dialog');
@@ -109,7 +125,7 @@
   let activeFeatureStatusFilter = 'ALL';
   let activeBugStatusFilter = 'OPEN';
   const PAGE_SIZE = 10;
-  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, activity: 0 };
+  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, badges: 0, activity: 0 };
   Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
   Ipon.bindPasswordStrength(userPasswordForm.elements.password, () => {
     const target = profiles.find((item) => item.id === userPasswordForm.elements.user_id.value);
@@ -120,6 +136,7 @@
     'feature-requests': ['Feature requests', 'Review improvements suggested by active IPON users.'],
     'bug-reports': ['Bug reports', 'Review reported problems, error details, and attached screenshots from IPON users.'],
     administrators: ['Users', 'Manage registered users, passwords, and assigned savings groups.'],
+    badges: ['Verified badges', 'Assign blue verified badges, set temporary or permanent durations, and send a creator note.'],
     activity: ['Platform activity', 'Review recent user and savings-group access changes recorded by the database.']
   };
 
@@ -128,6 +145,7 @@
     'feature-requests': 'feature-requests-title',
     'bug-reports': 'bug-reports-title',
     administrators: 'users-title',
+    badges: 'badges-title',
     activity: 'activity-title'
   };
 
@@ -223,9 +241,15 @@
     const pendingFeatures = featureRequests.filter((request) => (request?.status || 'PENDING') === 'PENDING');
     const reclaimableReceipts = Number(storageOverview?.reclaimable_rejected_count || 0);
 
+    const verifiedUsersCount = registeredUsers.filter((p) => {
+      const tier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(p) : 'NONE';
+      return tier !== 'NONE';
+    }).length;
+
     setShortcutBadge('shortcut-count-features', pendingFeatures.length ? `${pendingFeatures.length} pending` : 'All reviewed', pendingFeatures.length > 0);
     setShortcutBadge('shortcut-count-bugs', openBugs.length ? `${openBugs.length} open` : '0 open', openBugs.length > 0);
     setShortcutBadge('shortcut-count-users', `${registeredUsers.length} registered`, false);
+    setShortcutBadge('shortcut-count-badges', `${verifiedUsersCount} verified`, false);
     setShortcutBadge('shortcut-count-activity', `${activityLogs.length} events`, false);
 
     const attention = [];
@@ -453,7 +477,7 @@
           <div class="table-user-cell">
             ${Ipon.avatarMarkup(profile.avatar_url, profile.full_name, 'table-user-avatar', profile.id)}
             <div>
-              <strong>${Ipon.escapeHtml(profile.full_name)}</strong>
+              <strong>${Ipon.escapeHtml(profile.full_name)}${Ipon.verifiedBadgesHtml ? Ipon.verifiedBadgesHtml(profile) : ''}</strong>
               ${profile.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}
             </div>
           </div>
@@ -468,6 +492,233 @@
     Ipon.bindAvatarFallbacks(administratorsBody);
     Ipon.syncPresenceDots(administratorsBody);
   }
+
+  function formatBadgeDurationCell(profile, tier) {
+    if (tier === 'NONE') return '<span class="field-help">No active badge</span>';
+    if (!profile.verified_badge_expires_at) {
+      return `<span class="badge-duration-pill is-permanent">Permanent</span>${tier === 'BLUE' ? '<small class="field-help">Auto-removes if inactive 2 months</small>' : ''}`;
+    }
+    const expMs = Date.parse(profile.verified_badge_expires_at);
+    const daysLeft = Number.isNaN(expMs) ? 0 : Math.max(0, Math.ceil((expMs - Date.now()) / 86400000));
+    const dateStr = Ipon.dateLabel(profile.verified_badge_expires_at, { dateStyle: 'medium', timeStyle: 'short' });
+    return `<strong>${Ipon.escapeHtml(dateStr)}</strong><small class="field-help">${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining · 2-mo inactivity rule</small>`;
+  }
+
+  function renderBadges() {
+    if (!badgesBody) return;
+    const query = filterValue('badges-search');
+    const filter = filterValue('badges-status-filter');
+    const tierOrder = { CREATOR_GREEN: 0, BLUE: 1, NONE: 2 };
+    const candidates = profiles
+      .filter((profile) => {
+        if (!profile || profile.role === 'SUPER_ADMIN') return false;
+        const tier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(profile) : 'NONE';
+        if (filter === 'VERIFIED' && tier === 'NONE') return false;
+        if (filter === 'CREATOR_GREEN' && tier !== 'CREATOR_GREEN') return false;
+        if (filter === 'NONE' && tier !== 'NONE') return false;
+        return matchesQuery(query, [profile.full_name, profile.email, tier, profile.verified_badge_message, profile.status]);
+      })
+      .sort((a, b) => {
+        const ta = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(a) : 'NONE';
+        const tb = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(b) : 'NONE';
+        const diff = (tierOrder[ta] ?? 2) - (tierOrder[tb] ?? 2);
+        if (diff !== 0) return diff;
+        return String(a.full_name || '').localeCompare(String(b.full_name || ''));
+      });
+    const visible = paginateRows('badges', candidates);
+    badgesBody.innerHTML = visible.length ? visible.map((profile) => {
+      const tier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(profile) : 'NONE';
+      const active = profile.status === 'ACTIVE';
+      const tierPill = tier === 'CREATOR_GREEN'
+        ? '<span class="badge-tier-pill is-creator">Creator &amp; verified</span>'
+        : (tier === 'BLUE'
+          ? '<span class="badge-tier-pill is-blue">Verified blue</span>'
+          : '<span class="badge-tier-pill is-none">Unverified</span>');
+      const sinceIso = profile.verified_badge_granted_at || profile.created_at;
+      const sinceLine = tier !== 'NONE' && sinceIso
+        ? `<small class="field-help">Since ${Ipon.escapeHtml(Ipon.dateLabel(sinceIso, { dateStyle: 'medium' }))}</small>`
+        : '';
+      const creatorNote = profile.verified_badge_message
+        ? `<span class="badge-note-preview">${Ipon.escapeHtml(profile.verified_badge_message)}</span>`
+        : '<span class="field-help">No message</span>';
+      let actions = '';
+      if (tier !== 'NONE') {
+        actions = `<button class="icon-action" type="button" data-badge-grant="${profile.id}">Edit</button><button class="icon-action danger-action" type="button" data-badge-remove="${profile.id}">Remove</button>`;
+      } else if (active) {
+        actions = `<button class="icon-action" type="button" data-badge-grant="${profile.id}">Award badge</button>`;
+      } else {
+        actions = `<span class="field-help">${Ipon.escapeHtml(statusLabel(profile.status))} account</span>`;
+      }
+      return `<tr data-badge-user-id="${profile.id}">
+        <td>
+          <div class="table-user-cell">
+            ${Ipon.avatarMarkup(profile.avatar_url, profile.full_name, 'table-user-avatar', profile.id)}
+            <div>
+              <strong>${Ipon.escapeHtml(profile.full_name)}${Ipon.verifiedBadgesHtml ? Ipon.verifiedBadgesHtml(profile) : ''}</strong>
+              ${profile.email ? `<small class="field-help">${Ipon.escapeHtml(profile.email)}</small>` : ''}
+            </div>
+          </div>
+        </td>
+        <td>${tierPill}${sinceLine}</td>
+        <td>${formatBadgeDurationCell(profile, tier)}</td>
+        <td>${creatorNote}</td>
+        <td><div class="table-actions">${actions}</div></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5" class="empty-state">${query || filter ? 'No matching users.' : 'No user accounts available.'}</td></tr>`;
+    Ipon.bindAvatarFallbacks(badgesBody);
+    Ipon.syncPresenceDots(badgesBody);
+  }
+
+  function toDatetimeLocalValue(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function syncBadgeCustomExpiryVisibility() {
+    const isCustom = badgeDurationPreset?.value === 'custom';
+    if (badgeCustomExpiryWrap) badgeCustomExpiryWrap.hidden = !isCustom;
+    if (badgeCustomExpiry) {
+      badgeCustomExpiry.required = Boolean(isCustom);
+      Ipon.setFieldError(badgeCustomExpiry, '');
+      if (isCustom && !badgeCustomExpiry.value) {
+        badgeCustomExpiry.value = toDatetimeLocalValue(new Date(Date.now() + 7 * 86400000).toISOString());
+      }
+    }
+  }
+
+  function openBadgeGrantDialog(profile) {
+    if (!profile || !badgeGrantDialog || !badgeGrantForm) return;
+    const targetEmail = String(profile.email || '').trim().toLowerCase();
+    const targetTier = targetEmail === 'breadspanish231@gmail.com' ? 'CREATOR_GREEN' : 'BLUE';
+    const currentTier = Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(profile) : 'NONE';
+    badgeGrantForm.reset();
+    badgeGrantForm.elements.user_id.value = profile.id;
+    if (badgeGrantTitle) {
+      badgeGrantTitle.textContent = currentTier !== 'NONE' ? 'Update verified badge' : 'Award verified badge';
+    }
+    if (badgeGrantCopy) {
+      badgeGrantCopy.textContent = `Assign ${targetTier === 'CREATOR_GREEN' ? 'Owner Verified & Creator Crown badges' : 'the blue verified badge'} to ${profile.full_name}${profile.email ? ` (${profile.email})` : ''}.`;
+    }
+    if (badgeGrantPreview) {
+      const previewSvg = Ipon.verifiedBadgesHtml ? Ipon.verifiedBadgesHtml(profile, { tier: targetTier }) : '';
+      badgeGrantPreview.innerHTML = `<span class="badge-preview-name">${Ipon.escapeHtml(profile.full_name)}${previewSvg}</span><small class="field-help">${targetTier === 'CREATOR_GREEN' ? 'Green check seal & minimalist creator crown' : 'Verified user blue seal'}</small>`;
+    }
+    if (badgeDurationPreset) {
+      if (currentTier !== 'NONE' && !profile.verified_badge_expires_at) {
+        badgeDurationPreset.value = 'permanent';
+      } else if (profile.verified_badge_expires_at) {
+        badgeDurationPreset.value = 'custom';
+        if (badgeCustomExpiry) badgeCustomExpiry.value = toDatetimeLocalValue(profile.verified_badge_expires_at);
+      } else {
+        badgeDurationPreset.value = '30';
+      }
+    }
+    if (badgeCreatorMessage) {
+      badgeCreatorMessage.value = profile.verified_badge_message || '';
+      Ipon.setFieldError(badgeCreatorMessage, '');
+    }
+    if (badgeGrantSubmit) {
+      badgeGrantSubmit.textContent = currentTier !== 'NONE' ? 'Save badge' : 'Award badge';
+    }
+    syncBadgeCustomExpiryVisibility();
+    badgeGrantDialog.showModal();
+  }
+
+  function openBadgeRemoveDialog(profile) {
+    if (!profile || !badgeRemoveDialog || !badgeRemoveForm) return;
+    badgeRemoveForm.reset();
+    badgeRemoveForm.elements.user_id.value = profile.id;
+    if (badgeRemoveCopy) {
+      badgeRemoveCopy.textContent = `Remove ${profile.full_name}'s verified badge. They will receive a silent notification with your reason.`;
+    }
+    if (badgeRemoveReason) Ipon.setFieldError(badgeRemoveReason, '');
+    badgeRemoveDialog.showModal();
+    badgeRemoveReason?.focus();
+  }
+
+  badgeDurationPreset?.addEventListener('change', syncBadgeCustomExpiryVisibility);
+  document.getElementById('badge-grant-close')?.addEventListener('click', () => badgeGrantDialog?.close());
+  document.getElementById('badge-grant-cancel')?.addEventListener('click', () => badgeGrantDialog?.close());
+  document.getElementById('badge-remove-close')?.addEventListener('click', () => badgeRemoveDialog?.close());
+  document.getElementById('badge-remove-cancel')?.addEventListener('click', () => badgeRemoveDialog?.close());
+
+  badgesBody?.addEventListener('click', (event) => {
+    const grantBtn = event.target.closest('[data-badge-grant]');
+    const removeBtn = event.target.closest('[data-badge-remove]');
+    const id = grantBtn?.dataset.badgeGrant || removeBtn?.dataset.badgeRemove;
+    if (!id) return;
+    const profile = profiles.find((item) => item.id === id);
+    if (!profile) return;
+    if (grantBtn) openBadgeGrantDialog(profile);
+    else if (removeBtn) openBadgeRemoveDialog(profile);
+  });
+
+  badgeGrantForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const userId = badgeGrantForm.elements.user_id.value;
+    const preset = badgeDurationPreset?.value || 'permanent';
+    let durationDays = null;
+    let expiresAt = null;
+    if (preset === 'custom') {
+      const raw = String(badgeCustomExpiry?.value || '').trim();
+      const dt = raw ? new Date(raw) : null;
+      if (!dt || Number.isNaN(dt.getTime()) || dt.getTime() <= Date.now() + 60000) {
+        Ipon.setFieldError(badgeCustomExpiry, 'Select an expiration date and time at least 1 minute in the future.');
+        badgeCustomExpiry?.focus();
+        return;
+      }
+      expiresAt = dt.toISOString();
+    } else if (preset !== 'permanent') {
+      durationDays = Number(preset);
+    }
+    const creatorMsg = String(badgeCreatorMessage?.value || '').trim();
+    Ipon.setBusy(badgeGrantSubmit, true, 'Saving…');
+    try {
+      await Ipon.rpc('super_admin_grant_verified_badge', {
+        p_user_id: userId,
+        p_duration_days: durationDays,
+        p_expires_at: expiresAt,
+        p_creator_message: creatorMsg
+      });
+      await Ipon.refreshVerifiedBadgesCache?.({ force: true });
+      badgeGrantDialog?.close();
+      Ipon.toast('Verified badge saved and recipient notified.');
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(badgeGrantSubmit, false);
+    }
+  });
+
+  badgeRemoveForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const userId = badgeRemoveForm.elements.user_id.value;
+    const reason = String(badgeRemoveReason?.value || '').trim();
+    if (reason.length < 2) {
+      Ipon.setFieldError(badgeRemoveReason, 'Enter a reason explaining why the verified badge is being removed.');
+      badgeRemoveReason?.focus();
+      return;
+    }
+    Ipon.setBusy(badgeRemoveSubmit, true, 'Removing…');
+    try {
+      await Ipon.rpc('super_admin_remove_verified_badge', {
+        p_user_id: userId,
+        p_reason: reason
+      });
+      await Ipon.refreshVerifiedBadgesCache?.({ force: true });
+      badgeRemoveDialog?.close();
+      Ipon.toast('Verified badge removed. User notified.');
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(badgeRemoveSubmit, false);
+    }
+  });
 
   function updateFeatureCounts() {
     const counts = { ALL: featureRequests.length, PENDING: 0, IMPLEMENTED: 0, REJECTED: 0 };
@@ -685,9 +936,10 @@
   async function load() {
     overviewError.hidden = true;
     overviewError.replaceChildren();
+    await Ipon.rpc('cleanup_inactive_verified_badges').catch(() => {});
     const safeQuery = (query) => (Ipon.withTimeout ? Ipon.withTimeout(query) : Promise.resolve(query)).catch((err) => ({ data: [], error: err }));
     const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult] = await Promise.all([
-      safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at').order('created_at', { ascending: false })),
+      safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,last_seen_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,workspace_mode,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('group_memberships').select('group_id,user_id,role,status')),
       safeQuery(Ipon.client.from('feature_requests').select('id,requester_id,allow_credit,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
@@ -714,11 +966,13 @@
     }
     activityLogs = logResult.data || [];
     storageOverview = storageResult?.error ? null : (storageResult?.data || null);
+    Ipon.registerVerifiedBadges?.(profiles);
     renderOverview();
     renderStorageOverview();
     renderFeatureRequests();
     renderBugReports();
     renderUsers();
+    renderBadges();
     renderActivity();
   }
 
@@ -2146,6 +2400,7 @@
     ['feature-requests', ['feature-requests-search'], renderFeatureRequests],
     ['bug-reports', ['bug-reports-search'], renderBugReports],
     ['users', ['users-search', 'users-status-filter'], renderUsers],
+    ['badges', ['badges-search', 'badges-status-filter'], renderBadges],
     ['activity', ['activity-search'], renderActivity]
   ].forEach(([key, controlIds, render]) => {
     controlIds.forEach((id) => {
@@ -2177,6 +2432,7 @@
       Ipon.showInlineError(featureRequestsBody, error, refresh, 5);
       if (bugReportsBody) Ipon.showInlineError(bugReportsBody, error, refresh, 8);
       Ipon.showInlineError(administratorsBody, error, refresh, 6);
+      if (badgesBody) Ipon.showInlineError(badgesBody, error, refresh, 5);
       Ipon.showInlineError(activityBody, error, refresh, 3);
     }
   }

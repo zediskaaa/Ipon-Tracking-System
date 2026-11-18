@@ -1164,7 +1164,7 @@ test('Super Admin feature requests display requester avatars and system tracks r
   assert.match(script, /feature-card-avatar/);
   assert.match(script, /table-user-cell/);
   assert.match(script, /table-user-avatar/);
-  assert.match(script, /select\('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at'\)/);
+  assert.match(script, /select\('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at(?:,[^']*)?'\)/);
 
   assert.match(core, /ipon-active-presence/);
   assert.match(core, /isUserOnline/);
@@ -3460,7 +3460,7 @@ test('sidebar profile card, account modal, and announcement reactions omit group
   const settingsJs = read('js/settings.js');
   const appCss = read('css/app.css');
 
-  assert.match(coreJs, /sidebarUser\.innerHTML = `<strong>\$\{escapeHtml\(profile\.full_name\)\}<\/strong><small>\$\{escapeHtml\(profile\.role === 'SUPER_ADMIN' \? 'Owner' : 'My account'\)\}<\/small>`/);
+  assert.match(coreJs, /sidebarUser\.innerHTML = `<strong class="sidebar-user-name"><span>\$\{escapeHtml\(profile\.full_name\)\}<\/span>\$\{verifiedBadgesHtml\(profile\)\}<\/strong><small>\$\{escapeHtml\(profile\.role === 'SUPER_ADMIN' \? 'Owner' : 'My account'\)\}<\/small>`/);
   assert.match(coreJs, /getElementById\('quick-account-role'\)\.textContent = currentProfile\.role === 'SUPER_ADMIN' \? 'Owner' : \(data\.email \|\| 'My account'\)/);
   assert.match(appCss, /\.account-profile-identity\s+small\s*\{[^}]*border-radius\s*:\s*999px[^}]*background\s*:\s*#dceee3[^}]*color\s*:\s*#16553e/);
   assert.match(coreJs, /\$\{isOwner \? '<span class="reaction-user-role-badge is-owner">Owner<\/span>' : ''\}/);

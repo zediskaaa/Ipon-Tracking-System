@@ -164,7 +164,7 @@
   }
 
   if (!document.querySelector('link[rel="manifest"]')) {
-    document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#0b3428"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="IPON"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/icon-192.png">');
+    document.head?.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#0b3428"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="IPON"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/icon-192.png">');
   }
   setTheme(readStoredTheme(), { persist: false, notify: false });
   document.addEventListener('click', (event) => {
@@ -302,6 +302,7 @@
     ['feature-requests', 'super-admin.html#feature-requests', 'Feature requests', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 22h4M8.5 14.5A7 7 0 1 1 15.5 14.5C14.5 15.2 14 16 14 17h-4c0-1-.5-1.8-1.5-2.5Z"/></svg>'],
     ['bug-reports', 'super-admin.html#bug-reports', 'Bug reports', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6V5a4 4 0 0 1 8 0v1m-9 4h10a2 2 0 0 1 2 2v3a7 7 0 0 1-14 0v-3a2 2 0 0 1 2-2Zm-3 3H3m18 0h-1M6 9 4 7m14 2 2-2M6 17l-2 2m14-2 2 2"/></svg>'],
     ['administrators', 'super-admin.html#administrators', 'Users', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-1 2 2 4-4"/></svg>'],
+    ['badges', 'super-admin.html#badges', 'Badges', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 14.9 4.2l3.6-.3 1.1 3.4 2.9 2-1.1 3.4 1.1 3.4-2.9 2-1.1 3.4-3.6-.3L12 22l-2.9-2.2-3.6.3-1.1-3.4-2.9-2 1.1-3.4-1.1-3.4 2.9-2 1.1-3.4 3.6.3L12 2Z"/><path d="m8.7 12.2 2.2 2.3 4.6-4.8"/></svg>'],
     ['activity', 'super-admin.html#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2Z"/></svg>']
   ];
   const userNavItems = [
@@ -2010,6 +2011,372 @@
       console.warn('Realtime presence init:', presenceErr);
     }
   }
+
+  const VERIFIED_BADGE_MAP = new Map();
+  let verifiedBadgesLoadedAt = 0;
+
+  const SCALLOP_SEAL_PATH = 'M8.67 3.96Q8.76 0.76 12.00 0.55Q15.24 0.76 15.33 3.96Q17.66 1.76 20.10 3.90Q22.24 6.34 20.04 8.67Q23.24 8.76 23.45 12.00Q23.24 15.24 20.04 15.33Q22.24 17.66 20.10 20.10Q17.66 22.24 15.33 20.04Q15.24 23.24 12.00 23.45Q8.76 23.24 8.67 20.04Q6.34 22.24 3.90 20.10Q1.76 17.66 3.96 15.33Q0.76 15.24 0.55 12.00Q0.76 8.76 3.96 8.67Q1.76 6.34 3.90 3.90Q6.34 1.76 8.67 3.96Z';
+
+  function isTwoMonthsInactive(lastActiveIso, grantedAtIso) {
+    const t1 = lastActiveIso ? Date.parse(lastActiveIso) : NaN;
+    const t2 = grantedAtIso ? Date.parse(grantedAtIso) : NaN;
+    const latest = Math.max(Number.isNaN(t1) ? -Infinity : t1, Number.isNaN(t2) ? -Infinity : t2);
+    if (!Number.isFinite(latest)) return false;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 2);
+    return latest <= cutoff.getTime();
+  }
+
+  function resolveVerifiedBadgeInfo(userOrId, explicitTier = '') {
+    const uid = typeof userOrId === 'object' && userOrId ? (userOrId.id || userOrId.user_id || '') : String(userOrId || '');
+    const cached = uid ? VERIFIED_BADGE_MAP.get(String(uid)) : null;
+    const direct = String(explicitTier || (typeof userOrId === 'object' && userOrId ? (userOrId.verified_badge || userOrId.verified_badge_tier) : '') || '').trim().toUpperCase();
+    const expiresAt = (typeof userOrId === 'object' && userOrId ? (userOrId.verified_badge_expires_at || userOrId.expires_at) : null) || cached?.expires_at || null;
+    const grantedAt = (typeof userOrId === 'object' && userOrId ? (userOrId.verified_badge_granted_at || userOrId.granted_at || userOrId.created_at) : null) || cached?.granted_at || null;
+    const tier = (direct === 'BLUE' || direct === 'CREATOR_GREEN') ? direct : (direct === 'NONE' ? 'NONE' : (cached?.tier || 'NONE'));
+
+    if (tier !== 'BLUE' && tier !== 'CREATOR_GREEN') {
+      return { tier: 'NONE', granted_at: null, expires_at: null };
+    }
+    if (expiresAt) {
+      const expMs = Date.parse(expiresAt);
+      if (!Number.isNaN(expMs) && expMs <= Date.now()) {
+        if (uid) VERIFIED_BADGE_MAP.delete(String(uid));
+        return { tier: 'NONE', granted_at: null, expires_at: null };
+      }
+    }
+    if (tier === 'BLUE' && typeof userOrId === 'object' && userOrId && (userOrId.last_seen_at || userOrId.verified_badge_granted_at)) {
+      if (isTwoMonthsInactive(userOrId.last_seen_at, userOrId.verified_badge_granted_at || userOrId.created_at)) {
+        if (uid) VERIFIED_BADGE_MAP.delete(String(uid));
+        return { tier: 'NONE', granted_at: null, expires_at: null };
+      }
+    }
+    return { tier, granted_at: grantedAt, expires_at: expiresAt };
+  }
+
+  function effectiveVerifiedBadgeTier(userOrId, explicitTier = '') {
+    return resolveVerifiedBadgeInfo(userOrId, explicitTier).tier;
+  }
+
+  function registerVerifiedBadges(rows = []) {
+    if (!Array.isArray(rows)) return;
+    rows.forEach((row) => {
+      const uid = row?.user_id || row?.id;
+      const tier = String(row?.verified_badge || row?.verified_badge_tier || '').trim().toUpperCase();
+      if (!uid || (tier !== 'BLUE' && tier !== 'CREATOR_GREEN')) return;
+      VERIFIED_BADGE_MAP.set(String(uid), {
+        tier,
+        granted_at: row?.granted_at || row?.verified_badge_granted_at || row?.created_at || null,
+        expires_at: row?.expires_at || row?.verified_badge_expires_at || null
+      });
+    });
+  }
+
+  function badgeSealSvgMarkup(color, title) {
+    return `<svg class="verified-badge-svg" viewBox="0 0 24 24" shape-rendering="geometricPrecision" role="img" aria-label="${escapeHtml(title)}"><path fill="${color}" d="${SCALLOP_SEAL_PATH}"/><path d="M7.6 12.35l2.85 2.9 6.05-6.25" fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+
+  function creatorCrownBadgeSvgMarkup(title = 'Creator badge') {
+    return `<svg class="verified-badge-svg verified-badge-creator-crown" viewBox="0 0 24 24" shape-rendering="geometricPrecision" role="img" aria-label="${escapeHtml(title)}"><circle cx="12" cy="12" r="11.3" fill="#4f46e5"/><path d="M6.2 15.6L5.3 8.9L9.3 11.7L12 7.1L14.7 11.7L18.7 8.9L17.8 15.6Z" fill="#ffffff"/><rect x="6.4" y="16.65" width="11.2" height="1.55" rx="0.78" fill="#ffffff"/></svg>`;
+  }
+
+  function verifiedBadgesHtml(userOrId, opts = {}) {
+    const info = resolveVerifiedBadgeInfo(userOrId, opts?.tier);
+    const tier = info.tier;
+    if (tier !== 'BLUE' && tier !== 'CREATOR_GREEN') return '';
+    const extraClass = opts?.showcase ? ' is-showcase' : '';
+    const sinceIso = info.granted_at ? String(info.granted_at) : '';
+    const expiresIso = info.expires_at ? String(info.expires_at) : '';
+    const dataAttrs = `data-verified-tier="${tier}" data-verified-since="${escapeHtml(sinceIso)}" data-verified-expires="${escapeHtml(expiresIso)}" tabindex="0" role="button"`;
+    if (tier === 'CREATOR_GREEN') {
+      return `<span class="verified-badges-inline is-tooltip-enabled${extraClass}" ${dataAttrs} aria-label="Founder & Creator · Since November 12, 2026">${badgeSealSvgMarkup('#15a025', 'Owner green badge')}${creatorCrownBadgeSvgMarkup('Founder & Creator')}</span>`;
+    }
+    const sinceText = sinceIso ? `Verified since ${dateLabel(sinceIso, { dateStyle: 'medium' })}` : 'Verified account';
+    return `<span class="verified-badges-inline is-tooltip-enabled${extraClass}" ${dataAttrs} aria-label="${escapeHtml(sinceText)}">${badgeSealSvgMarkup('#1d9bf0', 'Verified user')}</span>`;
+  }
+
+  let badgeTooltipEl = null;
+  let badgeTooltipTarget = null;
+  let badgeTooltipPinned = false;
+  let badgeTooltipHideTimer = null;
+  let badgeTooltipBound = false;
+
+  function hideVerifiedBadgeTooltip({ force = true } = {}) {
+    if (!force && badgeTooltipPinned) return;
+    if (badgeTooltipHideTimer) {
+      clearTimeout(badgeTooltipHideTimer);
+      badgeTooltipHideTimer = null;
+    }
+    badgeTooltipTarget = null;
+    badgeTooltipPinned = false;
+    if (badgeTooltipEl) {
+      badgeTooltipEl.hidden = true;
+    }
+  }
+
+  function positionVerifiedBadgeTooltip(anchorEl, tipEl) {
+    if (!anchorEl?.getBoundingClientRect || !tipEl) return;
+    const rect = anchorEl.getBoundingClientRect();
+    const vw = window.innerWidth || 1280;
+    const vh = window.innerHeight || 720;
+    const tipRect = tipEl.getBoundingClientRect();
+    const w = tipRect.width || 240;
+    const h = tipRect.height || 80;
+    let left = rect.left + (rect.width / 2) - (w / 2);
+    left = Math.max(10, Math.min(vw - w - 10, left));
+    let top = rect.bottom + 8;
+    let placeBelow = true;
+    if (top + h > vh - 10) {
+      top = Math.max(10, rect.top - h - 8);
+      placeBelow = false;
+    }
+    tipEl.style.left = `${Math.round(left)}px`;
+    tipEl.style.top = `${Math.round(top)}px`;
+    tipEl.classList.toggle('is-below', placeBelow);
+  }
+
+  function showVerifiedBadgeTooltip(anchorEl, { pinned = false } = {}) {
+    if (!anchorEl) return;
+    const tier = String(anchorEl.dataset?.verifiedTier || '').toUpperCase();
+    if (tier !== 'BLUE' && tier !== 'CREATOR_GREEN') return;
+    if (badgeTooltipHideTimer) {
+      clearTimeout(badgeTooltipHideTimer);
+      badgeTooltipHideTimer = null;
+    }
+    const sinceIso = anchorEl.dataset?.verifiedSince || '';
+    const expiresIso = anchorEl.dataset?.verifiedExpires || '';
+    const sinceDate = sinceIso ? dateLabel(sinceIso, { dateStyle: 'medium' }) : '';
+    const openDialogs = [...document.querySelectorAll('dialog[open]')];
+    const host = openDialogs.length ? openDialogs[openDialogs.length - 1] : document.body;
+    if (!host?.appendChild) return;
+
+    if (!badgeTooltipEl) {
+      badgeTooltipEl = document.createElement('div');
+      badgeTooltipEl.id = 'ipon-verified-badge-tooltip';
+      badgeTooltipEl.className = 'verified-badge-tooltip';
+      badgeTooltipEl.setAttribute('role', 'tooltip');
+      badgeTooltipEl.hidden = true;
+    }
+    if (badgeTooltipEl.parentElement !== host) host.appendChild(badgeTooltipEl);
+
+    const isCreator = tier === 'CREATOR_GREEN';
+    const iconHtml = isCreator ? creatorCrownBadgeSvgMarkup('Creator') : badgeSealSvgMarkup('#1d9bf0', 'Verified');
+    const heading = isCreator ? 'Founder & Creator' : 'Verified Account';
+    const subHeadline = isCreator
+      ? 'Since November 12, 2026'
+      : (sinceDate ? `Verified since ${sinceDate}` : 'Verified on myIPON');
+    let subNote = '';
+    if (!isCreator) {
+      if (expiresIso) {
+        subNote = `Valid until ${dateLabel(expiresIso, { dateStyle: 'medium' })} · Auto-removes after 2 months inactive.`;
+      } else {
+        subNote = 'Permanent · Auto-removes after 2 months inactive.';
+      }
+    }
+
+    badgeTooltipEl.classList.toggle('is-creator', isCreator);
+    badgeTooltipEl.innerHTML = `
+      <span class="verified-badge-tooltip-icon" aria-hidden="true">${iconHtml}</span>
+      <span class="verified-badge-tooltip-copy">
+        <strong>${escapeHtml(heading)}</strong>
+        <span class="verified-badge-tooltip-date${isCreator ? ' is-creator' : ''}">${escapeHtml(subHeadline)}</span>
+        ${subNote ? `<small>${escapeHtml(subNote)}</small>` : ''}
+      </span>`;
+    badgeTooltipTarget = anchorEl;
+    badgeTooltipPinned = Boolean(pinned);
+    badgeTooltipEl.hidden = false;
+    positionVerifiedBadgeTooltip(anchorEl, badgeTooltipEl);
+  }
+
+  function initVerifiedBadgeTooltip() {
+    if (badgeTooltipBound || typeof document?.addEventListener !== 'function') return;
+    badgeTooltipBound = true;
+    document.addEventListener('mouseover', (event) => {
+      const target = event.target?.closest?.('.verified-badges-inline[data-verified-tier]');
+      if (!target || badgeTooltipPinned) return;
+      if (target !== badgeTooltipTarget) showVerifiedBadgeTooltip(target);
+    });
+    document.addEventListener('mouseout', (event) => {
+      if (badgeTooltipPinned) return;
+      const target = event.target?.closest?.('.verified-badges-inline[data-verified-tier]');
+      if (!target) return;
+      const related = event.relatedTarget;
+      if (related && (target.contains?.(related) || badgeTooltipEl?.contains?.(related))) return;
+      badgeTooltipHideTimer = setTimeout(() => hideVerifiedBadgeTooltip({ force: false }), 90);
+    });
+    document.addEventListener('click', (event) => {
+      const target = event.target?.closest?.('.verified-badges-inline[data-verified-tier]');
+      if (target) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (badgeTooltipPinned && badgeTooltipTarget === target && badgeTooltipEl && !badgeTooltipEl.hidden) {
+          hideVerifiedBadgeTooltip({ force: true });
+        } else {
+          showVerifiedBadgeTooltip(target, { pinned: true });
+        }
+        return;
+      }
+      if (badgeTooltipEl && !badgeTooltipEl.hidden && !badgeTooltipEl.contains?.(event.target)) {
+        hideVerifiedBadgeTooltip({ force: true });
+      }
+    }, true);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        const target = event.target?.closest?.('.verified-badges-inline[data-verified-tier]');
+        if (target) {
+          event.preventDefault();
+          event.stopPropagation();
+          showVerifiedBadgeTooltip(target, { pinned: true });
+        }
+      } else if (event.key === 'Escape') {
+        hideVerifiedBadgeTooltip({ force: true });
+      }
+    });
+    document.addEventListener('focusin', (event) => {
+      const target = event.target?.closest?.('.verified-badges-inline[data-verified-tier]');
+      if (target && !badgeTooltipPinned) showVerifiedBadgeTooltip(target);
+    });
+    document.addEventListener('focusout', (event) => {
+      if (!badgeTooltipPinned && event.target?.closest?.('.verified-badges-inline[data-verified-tier]')) {
+        hideVerifiedBadgeTooltip({ force: false });
+      }
+    });
+    window.addEventListener('scroll', () => hideVerifiedBadgeTooltip({ force: true }), true);
+    window.addEventListener('resize', () => hideVerifiedBadgeTooltip({ force: true }));
+  }
+
+  function renderSidebarUser(profile = currentProfile) {
+    const sidebarUser = document.getElementById('sidebar-user');
+    if (!sidebarUser || !profile) return;
+    sidebarUser.innerHTML = `<strong class="sidebar-user-name"><span>${escapeHtml(profile.full_name)}</span>${verifiedBadgesHtml(profile)}</strong><small>${escapeHtml(profile.role === 'SUPER_ADMIN' ? 'Owner' : 'My account')}</small>`;
+  }
+
+  async function refreshVerifiedBadgesCache({ force = false, refreshOwnProfile = false } = {}) {
+    const client = getClient();
+    if (!client) return VERIFIED_BADGE_MAP;
+    if (!force && verifiedBadgesLoadedAt && (Date.now() - verifiedBadgesLoadedAt < 15000)) {
+      return VERIFIED_BADGE_MAP;
+    }
+    try {
+      const { data, error } = await withTimeout(client.rpc('get_active_verified_badges'), 5000);
+      if (!error && Array.isArray(data)) {
+        VERIFIED_BADGE_MAP.clear();
+        registerVerifiedBadges(data);
+        verifiedBadgesLoadedAt = Date.now();
+      }
+      if (refreshOwnProfile && currentProfile?.id) {
+        const { data: freshProfile } = await withTimeout(
+          client.from('profiles')
+            .select('verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,last_seen_at')
+            .eq('id', currentProfile.id)
+            .single(),
+          5000
+        );
+        if (freshProfile) {
+          Object.assign(currentProfile, freshProfile);
+          renderSidebarUser(currentProfile);
+        }
+      }
+    } catch (_) { /* keep existing cache */ }
+    return VERIFIED_BADGE_MAP;
+  }
+
+  function badgeExpiryText(expiresAt) {
+    if (!expiresAt) return 'Permanent badge';
+    const d = new Date(expiresAt);
+    if (Number.isNaN(d.getTime())) return 'Limited-time badge';
+    return `Effective until ${dateLabel(d.toISOString(), { dateStyle: 'medium' })}`;
+  }
+
+  function buildBadgeConfettiMarkup() {
+    const palette = ['#16a34a', '#1d9bf0', '#f59e0b', '#ec4899', '#10b981', '#fbbf24'];
+    let pieces = '';
+    for (let i = 0; i < 24; i += 1) {
+      const left = ((i * 19 + 7) % 94) + 3;
+      const delay = ((i * 53) % 700) / 1000;
+      const dur = 2.35 + ((i * 31) % 900) / 1000;
+      const rot = (i * 47) % 360;
+      const color = palette[i % palette.length];
+      const w = i % 3 === 0 ? 9 : 7;
+      const h = i % 3 === 0 ? 14 : 11;
+      pieces += `<i class="badge-confetti-piece" style="left:${left}%;width:${w}px;height:${h}px;background:${color};animation-delay:${delay}s;animation-duration:${dur}s;--confetti-rot:${rot}deg"></i>`;
+    }
+    return `<div class="badge-confetti-stage" aria-hidden="true">${pieces}</div>`;
+  }
+
+  function maybeShowBadgeAwardModal(profile = currentProfile) {
+    if (!profile || profile.role === 'SUPER_ADMIN') return false;
+    const tier = effectiveVerifiedBadgeTier(profile);
+    if (tier !== 'BLUE' && tier !== 'CREATOR_GREEN') return false;
+    if (profile.verified_badge_acknowledged_at) return false;
+    if (document.getElementById('ipon-badge-award-dialog')) return false;
+
+    const existingOpen = document.querySelector('dialog[open]:not(#notification-dialog)');
+    if (existingOpen) return false;
+
+    const dialog = document.createElement('dialog');
+    dialog.id = 'ipon-badge-award-dialog';
+    dialog.className = 'badge-celebrate-dialog';
+    dialog.setAttribute('aria-labelledby', 'ipon-badge-award-title');
+    const creatorMsg = String(profile.verified_badge_message || '').trim();
+    const durationCopy = badgeExpiryText(profile.verified_badge_expires_at);
+    const verifiedSince = profile.verified_badge_granted_at
+      ? `Verified on ${dateLabel(profile.verified_badge_granted_at, { dateStyle: 'medium' })}`
+      : '';
+    const statusLine = verifiedSince ? `${durationCopy} · ${verifiedSince}` : durationCopy;
+
+    dialog.innerHTML = `
+      <div class="badge-celebrate-sheet">
+        ${buildBadgeConfettiMarkup()}
+        <div class="badge-celebrate-showcase">${verifiedBadgesHtml(profile, { tier, showcase: true })}</div>
+        <span class="badge-celebrate-eyebrow">Verified Status Unlocked</span>
+        <h2 id="ipon-badge-award-title">Congratulations!</h2>
+        <p class="badge-celebrate-copy">You have been awarded an official verified badge on myIPON. Your badge now appears beside your name across chats and community views.</p>
+        <div class="badge-celebrate-duration">${escapeHtml(statusLine)}</div>
+        ${creatorMsg ? `
+          <div class="badge-celebrate-note">
+            <span class="badge-celebrate-note-label">Message from creator</span>
+            <p>${escapeHtml(creatorMsg)}</p>
+          </div>` : ''}
+        <div class="badge-celebrate-policy-note">
+          <strong>Activity requirement:</strong> Verified badges (including permanent ones) are automatically removed if your account stays inactive for 2 months.
+        </div>
+        <div class="badge-celebrate-actions">
+          <button type="button" class="button button-primary badge-celebrate-btn" id="ipon-badge-award-ack">Thank you</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(dialog);
+    const ackBtn = dialog.querySelector('#ipon-badge-award-ack');
+
+    const acknowledgeAndClose = async () => {
+      if (ackBtn) setBusy(ackBtn, true, 'Saving…');
+      try {
+        const res = await rpc('acknowledge_my_verified_badge');
+        if (currentProfile) {
+          currentProfile.verified_badge_acknowledged_at = res?.acknowledged_at || new Date().toISOString();
+        }
+      } catch (_) {
+        if (currentProfile) {
+          currentProfile.verified_badge_acknowledged_at = new Date().toISOString();
+        }
+      } finally {
+        if (ackBtn) setBusy(ackBtn, false);
+        try { dialog.close(); } catch { }
+        dialog.remove();
+      }
+    };
+
+    ackBtn?.addEventListener('click', acknowledgeAndClose);
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      acknowledgeAndClose();
+    });
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    return true;
+  }
+
+  initVerifiedBadgeTooltip();
 
   function avatarMarkup(avatarUrl, name, className = '', userId = null) {
     const safeUrl = isSafeImageRef(avatarUrl) ? String(avatarUrl).trim() : '';
@@ -5535,6 +5902,13 @@
         if (['ANNOUNCEMENT', 'PLATFORM_ANNOUNCEMENT', 'RELEASE'].includes(incomingType)) {
           activeAnnouncementsController?.load?.().catch(() => { });
         }
+        if (incomingType === 'BADGE_GRANTED' || incomingType === 'BADGE_REMOVED') {
+          refreshVerifiedBadgesCache({ force: true, refreshOwnProfile: true }).then(() => {
+            if (incomingType === 'BADGE_GRANTED' && currentProfile && !currentProfile.verified_badge_acknowledged_at) {
+              maybeShowBadgeAwardModal(currentProfile);
+            }
+          }).catch(() => { });
+        }
         if (typeof activeLiveRefresh === 'function') {
           try { activeLiveRefresh(); } catch { }
         }
@@ -5573,7 +5947,9 @@
         const isInvite = item.type === 'GROUP_INVITE' && !item.read_at;
         notificationItemsById.set(String(item.id), item);
         const safeTarget = isInvite ? '' : resolveNotificationTarget(item);
-        const iconPath = item.type === 'GROUP_INVITE' || item.type === 'SOCIAL_FRIEND_REQUEST' || item.type === 'SOCIAL_FRIEND_ACCEPTED'
+        const iconPath = (item.type === 'BADGE_GRANTED' || item.type === 'BADGE_REMOVED')
+          ? 'M12 2 14.9 4.2l3.6-.3 1.1 3.4 2.9 2-1.1 3.4 1.1 3.4-2.9 2-1.1 3.4-3.6-.3L12 22l-2.9-2.2-3.6.3-1.1-3.4-2.9-2 1.1-3.4-1.1-3.4 2.9-2 1.1-3.4 3.6.3L12 2Zm-3.2 10.3 2.1 2.2 4.4-4.6'
+          : item.type === 'GROUP_INVITE' || item.type === 'SOCIAL_FRIEND_REQUEST' || item.type === 'SOCIAL_FRIEND_ACCEPTED'
           ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'
           : String(item.type || '').startsWith('SOCIAL_')
             ? 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'
@@ -5835,7 +6211,7 @@
       }
 
       const fetchProfile = () => client.from('profiles')
-        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at,policy_accepted_version,policy_accepted_at')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at')
         .eq('id', session.user.id)
         .single();
       let { data: profile, error } = await runWithStartupRetry(fetchProfile);
@@ -5926,10 +6302,10 @@
           return { configured: true, profile: null, session, redirecting: true };
         }
       }
+      await refreshVerifiedBadgesCache({ force: true }).catch(() => { });
       mountShell(profile.role);
       document.querySelector('.app-brand')?.setAttribute('href', homeForRole(profile.role));
-      const sidebarUser = document.getElementById('sidebar-user');
-      if (sidebarUser) sidebarUser.innerHTML = `<strong>${escapeHtml(profile.full_name)}</strong><small>${escapeHtml(profile.role === 'SUPER_ADMIN' ? 'Owner' : 'My account')}</small>`;
+      renderSidebarUser(profile);
       syncProfileAvatars(profile);
       syncShellRoleVisibility(profile.role);
       if (options.requireAuth !== false) watchCrossTabAuth(client, profile.id);
@@ -5947,6 +6323,7 @@
             onAccept: () => {
               if (!options.skipBackgroundPrompt) maybePromptBackgroundUsage(profile).catch(() => { });
               maybeResumePendingJoin(profile);
+              maybeShowBadgeAwardModal(profile);
             }
           })
           : false;
@@ -5958,6 +6335,7 @@
             maybeShowRetentionReminder(profile);
           }
           maybeResumePendingJoin(profile);
+          maybeShowBadgeAwardModal(profile);
         }
       }
       return { configured: true, profile, session };
@@ -13432,6 +13810,7 @@
     canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, bindInviteCodeInput, inviteShareUrl,
     setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
     generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
+    resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal,
     get profile() { return currentProfile; }
   };
 })();

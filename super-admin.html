@@ -95,6 +95,10 @@
               <span class="platform-shortcut-copy"><strong>Users</strong><small>Manage accounts and savings groups</small></span>
               <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-users">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
             </a>
+            <a href="super-admin.html#badges">
+              <span class="platform-shortcut-copy"><strong>Verified badges</strong><small>Award blue badges, duration, and creator notes</small></span>
+              <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-badges">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
+            </a>
             <a href="super-admin.html#activity">
               <span class="platform-shortcut-copy"><strong>Platform activity</strong><small>Inspect recent access changes</small></span>
               <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-activity">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
@@ -308,6 +312,47 @@
               data-page="next">Next</button></nav>
         </section>
       </div>
+
+      <section class="platform-view panel" id="badges" data-platform-view="badges" aria-labelledby="badges-title"
+        hidden>
+        <div class="panel-header">
+          <div>
+            <h2 id="badges-title">Verified badges</h2>
+            <p>Assign blue verified badges to active accounts, choose a temporary duration or permanent status, and include a message from the creator. Even permanent badges automatically expire after 2 months of account inactivity.</p>
+          </div>
+          <div class="table-filters">
+            <input id="badges-search" type="search" placeholder="Search users or badge note"
+              aria-label="Search badge users">
+            <select id="badges-status-filter" aria-label="Filter by badge status">
+              <option value="">All users</option>
+              <option value="VERIFIED">Verified only</option>
+              <option value="CREATOR_GREEN">Creator badge</option>
+              <option value="NONE">No badge</option>
+            </select>
+          </div>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Badge</th>
+                <th>Duration</th>
+                <th>Message from creator</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="badges-body">
+              <tr class="loading-row">
+                <td colspan="5">Loading badge assignments…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <nav class="table-pager" id="badges-pager" aria-label="Badges pages"><button type="button"
+            data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
+            data-page="next">Next</button></nav>
+      </section>
 
       <section class="platform-view panel" id="activity" data-platform-view="activity" aria-labelledby="activity-title"
         hidden>
@@ -600,6 +645,84 @@
       </div>
     </div>
   </dialog>
+
+  <dialog class="form-dialog" id="badge-grant-dialog" aria-labelledby="badge-grant-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="badge-grant-title">Award verified badge</h2>
+          <p id="badge-grant-copy">Grant a verified badge with optional expiration and a personal message from creator.</p>
+        </div>
+        <button class="dialog-close" id="badge-grant-close" type="button" aria-label="Close verified badge dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <form id="badge-grant-form" class="form-grid" novalidate>
+        <input type="hidden" name="user_id">
+        <div class="field field-wide">
+          <label>Badge preview</label>
+          <div class="badge-grant-preview" id="badge-grant-preview"></div>
+        </div>
+        <div class="field field-wide">
+          <label for="badge-duration-preset">Effective duration</label>
+          <select id="badge-duration-preset" name="duration_preset">
+            <option value="permanent">Permanent (until 2 months inactive)</option>
+            <option value="7">7 days</option>
+            <option value="30" selected>30 days</option>
+            <option value="90">90 days</option>
+            <option value="365">1 year</option>
+            <option value="custom">Custom expiration date &amp; time</option>
+          </select>
+          <small class="field-help">Note: Even Permanent badges automatically expire if a user stays inactive for 2 months.</small>
+        </div>
+        <div class="field field-wide" id="badge-custom-expiry-wrap" hidden>
+          <label for="badge-custom-expiry">Expiration date &amp; time</label>
+          <input id="badge-custom-expiry" name="custom_expires_at" type="datetime-local">
+          <small class="field-error" aria-live="polite"></small>
+        </div>
+        <div class="field field-wide">
+          <label for="badge-creator-message">Message from creator (optional)</label>
+          <textarea id="badge-creator-message" name="creator_message" rows="4" maxlength="400"
+            placeholder="Write a congratulations note that will appear inside their badge pop-up…"></textarea>
+          <small class="field-help">Shown inside the recipient's celebration pop-up on their next app open.</small>
+          <small class="field-error" aria-live="polite"></small>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" id="badge-grant-cancel" type="button">Cancel</button>
+          <button class="button button-primary" id="badge-grant-submit" type="submit">Award badge</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog class="form-dialog" id="badge-remove-dialog" aria-labelledby="badge-remove-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="badge-remove-title">Remove verified badge</h2>
+          <p id="badge-remove-copy">Remove this user's verified badge and send the reason to their notifications.</p>
+        </div>
+        <button class="dialog-close" id="badge-remove-close" type="button" aria-label="Close remove badge dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <form id="badge-remove-form" class="form-grid" novalidate>
+        <input type="hidden" name="user_id">
+        <div class="field field-wide">
+          <label for="badge-remove-reason">Reason for removal</label>
+          <textarea id="badge-remove-reason" name="reason" rows="3" maxlength="400" minlength="2" required
+            placeholder="Explain why the verified badge is being removed…"></textarea>
+          <small class="field-help">Sent silently to the user's notification list without a screen pop-up.</small>
+          <small class="field-error" aria-live="polite"></small>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" id="badge-remove-cancel" type="button">Cancel</button>
+          <button class="button button-danger" id="badge-remove-submit" type="submit">Remove badge</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <script src="js/core.js?v=20261117-120"></script><script src="js/policy.js?v=20261117-08"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
