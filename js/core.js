@@ -434,14 +434,14 @@
       label: 'Instagram',
       placeholder: 'https://instagram.com/username or @username',
       hosts: ['instagram.com', 'www.instagram.com', 'm.instagram.com', 'instagr.am', 'www.instagr.am'],
-      svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.2" cy="6.8" r="1.2" fill="currentColor"/></svg>'
+      svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M7.1 1.5H16.9A5.6 5.6 0 0 1 22.5 7.1V16.9A5.6 5.6 0 0 1 16.9 22.5H7.1A5.6 5.6 0 0 1 1.5 16.9V7.1A5.6 5.6 0 0 1 7.1 1.5ZM7.1 3.6H16.9A3.5 3.5 0 0 1 20.4 7.1V16.9A3.5 3.5 0 0 1 16.9 20.4H7.1A3.5 3.5 0 0 1 3.6 16.9V7.1A3.5 3.5 0 0 1 7.1 3.6ZM12 6.8A5.2 5.2 0 1 0 12 17.2A5.2 5.2 0 1 0 12 6.8ZM12 8.9A3.1 3.1 0 1 1 12 15.1A3.1 3.1 0 1 1 12 8.9ZM17.5 5.15A1.35 1.35 0 1 0 17.5 7.85A1.35 1.35 0 1 0 17.5 5.15Z"/></svg>'
     },
     {
       key: 'facebook',
       label: 'Facebook',
       placeholder: 'https://facebook.com/username or @username',
       hosts: ['facebook.com', 'www.facebook.com', 'm.facebook.com', 'mbasic.facebook.com', 'web.facebook.com', 'fb.com', 'www.fb.com', 'fb.me', 'm.me'],
-      svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.68 20.5v-7.55h2.54l.38-2.95h-2.92V8.12c0-.85.24-1.43 1.46-1.43h1.56V4.05c-.27-.04-1.2-.12-2.28-.12-2.25 0-3.79 1.37-3.79 3.9v2.17H8.08v2.95h2.55v7.55h3.05Z"/></svg>'
+      svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14.15 24v-8.95h3l.45-3.5h-3.45V9.32c0-1.01.28-1.7 1.73-1.7h1.85V4.48c-.32-.04-1.42-.14-2.7-.14-2.67 0-4.5 1.63-4.5 4.62v2.59H7.5v3.5h3.03V24h3.62Z"/></svg>'
     },
     {
       key: 'threads',
@@ -582,7 +582,7 @@
     const items = SOCIAL_APPS.filter((app) => Boolean(clean[app.key]));
     if (!items.length) {
       return showEmpty
-        ? '<p class="social-apps-empty">No connected apps yet. Add links below to show icons in your bio.</p>'
+        ? `<p class="social-apps-empty">${variant === 'summary' ? 'No apps connected yet.' : 'No connected apps yet. Paste links below to show icons in your bio.'}</p>`
         : '';
     }
     return `<div class="social-apps-strip is-${escapeHtml(variant)}" role="list" aria-label="Connected social apps">${items.map((app) => `<a class="social-app-tile is-${app.key}" role="listitem" href="${escapeHtml(clean[app.key])}" target="_blank" rel="noopener noreferrer" data-social-app-link="${app.key}" aria-label="${app.label} profile (opens in a new tab)" title="${app.label}: ${escapeHtml(clean[app.key])}">${app.svg}</a>`).join('')}</div>`;
@@ -1961,12 +1961,24 @@
       <dialog class="form-dialog feature-request-dialog bug-report-dialog" id="bug-report-dialog" aria-labelledby="bug-report-title">
         <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="bug-report-title">Report a problem</h2><p>Describe the error or bug you encountered and optionally attach screenshots.</p></div><button class="dialog-close" data-bug-report-close type="button" aria-label="Close bug report form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="bug-report-form" class="form-grid"><div class="field field-wide"><label for="bug-report-name">Title</label><input id="bug-report-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="bug-report-details">Description</label><textarea id="bug-report-details" name="description" minlength="10" maxlength="2000" aria-describedby="bug-report-help" required></textarea><small class="field-help" id="bug-report-help">Explain what happened and how to reproduce it. Do not include passwords or financial account details.</small></div><div class="field field-wide"><label for="bug-report-images">Pictures (optional, up to 5)</label><div class="bug-upload-box"><input id="bug-report-images" type="file" accept="image/*" multiple aria-describedby="bug-report-image-count"><small class="field-help" id="bug-report-image-count">0 of 5 images selected. Any picture format is accepted.</small></div><div class="bug-image-grid" id="bug-report-previews" hidden></div></div><p class="mfa-message field-wide" id="bug-report-message" role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" data-bug-report-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit report</button></div></form><div class="feature-request-success" id="bug-report-success" role="status" aria-live="polite" hidden><span class="feature-request-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><h3>Bug report submitted</h3><p>Your report <strong id="bug-report-submitted-title"></strong> has been sent to the Super Admin for review.</p><div class="form-actions"><button class="button button-secondary" id="bug-report-another" type="button">Submit another</button><button class="button button-primary" data-bug-report-close type="button">Done</button></div></div></div>
       </dialog>
+      <dialog class="form-dialog connect-apps-dialog" id="connect-apps-dialog" aria-labelledby="connect-apps-modal-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div><h2 id="connect-apps-modal-title">Connect your apps</h2><p>Add links or @usernames to display clickable icons in your bio.</p></div>
+            <button class="dialog-close" data-connect-apps-close type="button" aria-label="Close connect apps dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="connect-apps-modal-body">
+            <div class="account-connect-preview" id="connect-apps-modal-preview-wrap"><span class="account-connect-preview-label">Bio preview</span><div class="account-connect-preview-icons" id="connect-apps-modal-preview" aria-live="polite"></div></div>
+            <form id="quick-connect-apps-form" class="account-connect-apps-form">${connectAppsFieldsMarkup()}<div class="form-actions"><button class="button button-secondary" data-connect-apps-close type="button">Cancel</button><button class="button button-primary" id="quick-connect-apps-save" type="submit">Save links</button></div></form>
+          </div>
+        </div>
+      </dialog>
       <dialog class="account-dialog" id="account-dialog" aria-label="My account">
         <div class="account-dialog-sheet">
           <div class="account-dialog-content">
             <section class="account-card account-profile-card"><button class="dialog-close account-dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><div class="account-card-appearance" id="quick-card-appearance" data-card-theme="emerald"><div class="account-cover-preview" id="quick-cover-preview"><img id="quick-cover-image" alt="Your profile cover" hidden><span class="account-cover-label">PROFILE COVER</span><div class="account-cover-actions"><button class="button button-secondary button-sm" id="quick-cover-change" type="button">Change cover</button><button class="button button-secondary button-sm" id="quick-cover-remove" type="button" hidden>Remove</button></div><input id="quick-cover-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="account-card-effects-row"><div class="account-card-effects-copy"><strong>Profile effects</strong><small id="quick-effect-status">Granted permanently by Super Admin</small></div><button class="button button-secondary button-sm" id="quick-effects-open" type="button">Browse effects</button></div><p class="account-card-feedback" id="quick-card-feedback" role="status" aria-live="polite"></p></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Message the creator directly to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-message-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Message creator</span></button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
-            <section class="account-card account-connect-apps-card" id="quick-connect-apps-card" aria-labelledby="quick-connect-apps-title"><header class="account-section-heading"><div><h3 id="quick-connect-apps-title">Connect apps</h3><p>Add links so visitors viewing your bio can tap to visit.</p></div></header><div class="account-connect-preview" id="quick-connect-apps-preview-wrap"><span class="account-connect-preview-label">Bio preview</span><div class="account-connect-preview-icons" id="quick-connect-apps-preview" aria-live="polite"></div></div><form id="quick-connect-apps-form" class="account-connect-apps-form">${connectAppsFieldsMarkup()}<div class="form-actions"><button class="button button-primary" id="quick-connect-apps-save" type="submit">Save links</button></div></form></section>
+            <section class="account-card account-connect-apps-card" id="quick-connect-apps-card" aria-labelledby="quick-connect-apps-title"><header class="account-section-heading"><div><h3 id="quick-connect-apps-title">Connect apps</h3><p>Show clickable social app icons in your bio.</p></div></header><div class="account-connect-summary-row" id="quick-connect-apps-preview-wrap"><div class="account-connect-preview-icons" id="quick-connect-apps-preview" aria-live="polite"></div><button class="button button-primary button-sm" id="quick-connect-apps-open" type="button">Connect your apps</button></div></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Device &amp; in-app alerts</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device permissions for in-app alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div><div class="preference-row preference-workspace-row" data-role="ADMIN"><span><strong>Workspace settings</strong><small>Monthly schedule, payment QR, access, treasurers &amp; cycle reset</small></span><a class="button button-primary button-sm" href="settings.html" data-workspace-settings-open>Manage</a></div><div class="preference-row"><span><strong>Data &amp; storage retention</strong><small>Active savings protected · 30d bin, 90d &amp; 6-month rules</small></span><button class="button button-secondary button-sm" type="button" data-retention-rules-open>View rules</button></div><div class="preference-row"><span><strong>Terms &amp; Privacy policies</strong><small>Non-custodial scope, permissions, and full retention schedule</small></span><div class="header-actions"><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="terms">Terms</button><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="privacy">Privacy</button></div></div></section></div>
             <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
           </div>
@@ -3265,6 +3277,13 @@
 
     const fullName = String(currentProfile.full_name || 'Member').trim();
     const cleanUsername = String(currentProfile.username || '').trim().replace(/^@+/, '');
+    const bioText = String(currentProfile.bio || '').trim();
+    const previewSocialLinks = sanitizeSocialLinks(
+      appearance && typeof appearance === 'object' && 'social_links' in appearance
+        ? appearance.social_links
+        : currentProfile.social_links
+    );
+    const previewSocialHtml = renderSocialAppLinksHtml(previewSocialLinks, { variant: 'effects' });
     const roleText = currentProfile.role === 'SUPER_ADMIN'
       ? 'Platform Owner'
       : currentProfile.role === 'ADMIN'
@@ -3312,6 +3331,8 @@
                 <div class="effects-card-avatar avatar-circle">${avatarInner}</div>
                 <h3 class="effects-card-name">${escapeHtml(fullName)}${verifiedBadgesHtml(currentProfile)}</h3>
                 <p class="effects-card-meta">${cleanUsername ? `@${escapeHtml(cleanUsername)} · ` : ''}${escapeHtml(roleText)}</p>
+                ${bioText ? `<p class="effects-card-bio">${escapeHtml(bioText)}</p>` : ''}
+                ${previewSocialHtml ? `<div class="effects-card-apps">${previewSocialHtml}</div>` : ''}
                 <div class="effects-card-groups"><small>GROUPS</small><b>${escapeHtml(groupText)}</b></div>
               </div>
             </div>
@@ -4507,7 +4528,7 @@
     const emailForm = document.getElementById('quick-email-form');
     dialog.setAttribute('aria-busy', 'true');
     try {
-      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,last_seen_at,social_links').eq('id', currentProfile.id).single();
+      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,username,bio,last_seen_at,social_links').eq('id', currentProfile.id).single();
       if (error) throw error;
       let payoutSource = data;
       if (!data.payout_channel && (data.member_id || currentProfile.member_id)) {
@@ -4534,6 +4555,8 @@
         verified_badge_expires_at: data.verified_badge_expires_at,
         verified_badge_acknowledged_at: data.verified_badge_acknowledged_at,
         verified_badge_message: data.verified_badge_message,
+        username: data.username ?? currentProfile.username,
+        bio: data.bio ?? currentProfile.bio,
         last_seen_at: data.last_seen_at,
         social_links: sanitizeSocialLinks(data.social_links)
       });
@@ -4938,12 +4961,20 @@
     return draft;
   }
 
-  function syncConnectAppsPreview(links) {
-    const preview = document.getElementById('quick-connect-apps-preview');
-    if (!preview) return;
+  function syncConnectAppsPreview(links, { modalOnly = false } = {}) {
     const form = document.getElementById('quick-connect-apps-form');
-    const source = links && typeof links === 'object' ? sanitizeSocialLinks(links) : readConnectAppsDraft(form);
-    preview.innerHTML = renderSocialAppLinksHtml(source, { variant: 'preview', showEmpty: true });
+    const draft = links && typeof links === 'object' ? sanitizeSocialLinks(links) : readConnectAppsDraft(form);
+    const modalPreview = document.getElementById('connect-apps-modal-preview');
+    if (modalPreview) {
+      modalPreview.innerHTML = renderSocialAppLinksHtml(draft, { variant: 'preview', showEmpty: true });
+    }
+    if (!modalOnly) {
+      const summaryPreview = document.getElementById('quick-connect-apps-preview');
+      if (summaryPreview) {
+        const savedSource = links && typeof links === 'object' ? sanitizeSocialLinks(links) : sanitizeSocialLinks(currentProfile?.social_links);
+        summaryPreview.innerHTML = renderSocialAppLinksHtml(savedSource, { variant: 'summary', showEmpty: true });
+      }
+    }
   }
 
   function syncConnectAppsForm(links) {
@@ -5190,13 +5221,29 @@
       catch (error) { notificationToggle.checked = !notificationToggle.checked; toast(friendlyError(error), 'error'); }
       finally { notificationToggle.disabled = false; }
     });
+    const connectAppsDialog = document.getElementById('connect-apps-dialog');
+    const connectAppsOpenBtn = document.getElementById('quick-connect-apps-open');
+    connectAppsOpenBtn?.addEventListener('click', () => {
+      syncConnectAppsForm(currentProfile?.social_links);
+      quickConnectAppsDirty?.reset();
+      if (connectAppsDialog && typeof connectAppsDialog.showModal === 'function' && !connectAppsDialog.open) {
+        connectAppsDialog.showModal();
+        connectAppsDialog.querySelector('input')?.focus();
+      }
+    });
+    document.querySelectorAll('[data-connect-apps-close]').forEach((btn) => {
+      btn.addEventListener('click', () => connectAppsDialog?.close());
+    });
+    connectAppsDialog?.addEventListener('click', (event) => {
+      if (event.target === connectAppsDialog) connectAppsDialog.close();
+    });
     if (connectAppsForm) {
       for (const app of SOCIAL_APPS) {
         const input = connectAppsForm.elements[app.key];
         if (!input) continue;
         input.addEventListener('input', () => {
           validateConnectAppsForm(connectAppsForm, { liveKey: app.key });
-          syncConnectAppsPreview();
+          syncConnectAppsPreview(null, { modalOnly: true });
         });
         input.addEventListener('blur', () => {
           const { url, error } = validateSocialAppInput(app.key, input.value, { live: false });
@@ -5206,7 +5253,7 @@
             input.value = url;
             quickConnectAppsDirty?.sync?.();
           }
-          syncConnectAppsPreview();
+          syncConnectAppsPreview(null, { modalOnly: true });
         });
         input.addEventListener('invalid', (event) => {
           event.preventDefault();
@@ -5229,6 +5276,7 @@
           currentProfile.social_links = clean;
           syncConnectAppsForm(clean);
           quickConnectAppsDirty?.reset();
+          connectAppsDialog?.close();
           window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
           toast('Connected apps updated.');
         } catch (error) {
@@ -11568,7 +11616,7 @@
       }
     }
 
-    for (const id of ['confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog', 'msg-forward-dialog', 'msg-settings-dialog', 'account-dialog']) {
+    for (const id of ['confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog', 'msg-forward-dialog', 'msg-settings-dialog', 'connect-apps-dialog', 'account-dialog']) {
       const dlg = document.getElementById(id);
       if (dlg?.open) {
         dlg.close(id === 'confirm-dialog' || id === 'record-action-dialog' ? 'cancel' : undefined);
