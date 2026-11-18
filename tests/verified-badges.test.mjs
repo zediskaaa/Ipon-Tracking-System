@@ -238,6 +238,7 @@ test('first-open badge celebration modal pops up once with confetti, permanent v
   assert.match(permModal.innerHTML, /is-permanent-card/);
   assert.match(permModal.innerHTML, />Permanent</);
   assert.match(permModal.innerHTML, /permanent verified badge/i);
+  assert.doesNotMatch(permModal.innerHTML, /\bofficial\b/i);
   assert.match(permModal.innerHTML, /badge-celebrate-activity-box/);
   assert.match(permModal.innerHTML, /Permanent badges stay active while you use myIPON, and are automatically removed after <em>2 months<\/em> of inactivity\./);
 

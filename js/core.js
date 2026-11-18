@@ -2298,7 +2298,7 @@
       rowEl.classList.add('is-creator');
       if (emblemEl) emblemEl.innerHTML = badgeSealSvgMarkup('#15a025', 'Owner badge') + creatorCrownBadgeSvgMarkup('Founder & Creator');
       if (titleEl) titleEl.textContent = 'Creator & Founder';
-      if (pillEl) { pillEl.textContent = 'Official'; pillEl.classList.add('is-creator'); }
+      if (pillEl) { pillEl.textContent = 'Active'; pillEl.classList.add('is-creator'); }
       if (copyEl) copyEl.textContent = 'You are signed in on the creator account. Manage badges in Super Admin.';
       if (ctaBtn) { ctaBtn.hidden = true; }
       return;
@@ -2506,7 +2506,7 @@
         </div>
         <span class="badge-celebrate-eyebrow">VERIFIED STATUS UNLOCKED</span>
         <h2 id="ipon-badge-award-title">Congratulations<span class="badge-celebrate-name">${escapeHtml(recipientName)}!</span></h2>
-        <p class="badge-celebrate-copy">You've been awarded an official <b>${isPermanent ? 'permanent verified badge' : 'verified badge'}</b> on myIPON. Tap <b>Thank you</b> to display it beside your name across chats and community views.</p>
+        <p class="badge-celebrate-copy">You've been awarded a <b>${isPermanent ? 'permanent verified badge' : 'verified badge'}</b> on myIPON. Tap <b>Thank you</b> to display it beside your name across chats and community views.</p>
         ${datesGridHtml}
         ${creatorMsg ? `
           <div class="badge-celebrate-quote">
