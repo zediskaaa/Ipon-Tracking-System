@@ -309,8 +309,13 @@ test('2-month inactivity rule and verified-since hover tooltip work across SQL a
   assert.doesNotMatch(tip.innerHTML, /Official|Platform owner|lead developer|Creator of myIPON|Verified since/i);
 
   const heroPlatesCss = read('css/hero-plates.css');
+  const coreJsUpdated = read('js/core.js');
+  assert.doesNotMatch(coreJsUpdated, /class="announcement-view-arrow"/);
+  assert.match(coreJsUpdated, /class="announcement-card-bottom-bar"/);
   assert.match(heroPlatesCss, /\.announcement-owner-dp-btn[\s\S]*?grid-row:\s*1 \/ 3;\s*align-self:\s*center;/);
   assert.match(heroPlatesCss, /\.announcement-panel \.announcement-item-meta time\s*\{[^}]*grid-column:\s*2 \/ 4;[^}]*white-space:\s*nowrap;/);
+  assert.match(heroPlatesCss, /\.announcement-panel \.announcement-view-trigger\s*\{[^}]*width:\s*100%;[^}]*justify-content:\s*center;/);
+  assert.match(heroPlatesCss, /\.announcement-panel \.announcement-avatar img\s*\{[^}]*object-fit:\s*cover;/);
 
   // Dismiss then hover BLUE badge -> shows "Verified since ..."
   (docListeners.get('keydown') || []).forEach((fn) => fn({ key: 'Escape' }));

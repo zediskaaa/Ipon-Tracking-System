@@ -2,6 +2,6 @@ window.MYIPON_APP_VERSION = {
   "version": "1.0.20",
   "build": 20,
   "nativeBuild": 20,
-  "updated_at": "2026-11-18T08:24:14.591Z",
+  "updated_at": "2026-11-18T08:28:17.994Z",
   "isApp": false
 };

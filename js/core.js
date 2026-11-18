@@ -7053,7 +7053,7 @@
       ? '<span class="announcement-role-badge is-owner">Owner</span>'
       : '<span class="announcement-role-badge is-admin">Admin</span>';
     const authorHtml = `<span class="announcement-author${isOwner ? ' is-owner' : ''}">${escapeHtml(name)}</span>`;
-    const dateText = dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' });
+    const dateText = dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' }).replace(/,\s*(\d{1,2}:\d{2}\s*(?:AM|PM))$/i, ' · $1');
     return `${avatarHtml}${roleBadge}${authorHtml}<span class="announcement-meta-dot" aria-hidden="true">&middot;</span><time datetime="${escapeHtml(item.created_at)}">${escapeHtml(dateText)}</time>`;
   }
 
@@ -7596,13 +7596,14 @@
               <div class="announcement-card-action">
                 <button class="announcement-view-trigger" type="button" aria-label="View full announcement details">
                   <span>View details</span>
-                  <svg viewBox="0 0 24 24" aria-hidden="true" class="announcement-view-arrow"><path d="M5 12h14M12 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
-              <div class="announcement-item-meta">${announcementAuthorMeta(item)}</div>
             </div>
-            <div class="announcement-card-footer">
-              ${renderReactionsBarHtml(item.id)}
+            <div class="announcement-card-bottom-bar">
+              <div class="announcement-item-meta">${announcementAuthorMeta(item)}</div>
+              <div class="announcement-card-footer">
+                ${renderReactionsBarHtml(item.id)}
+              </div>
             </div>
           </article>`;
       }).join('');

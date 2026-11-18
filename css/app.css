@@ -18913,3 +18913,49 @@ html[data-theme="dark"] .icon-action.is-reject-cta {
   background: rgba(8, 24, 18, 0.98);
   border-color: rgba(110, 231, 183, 0.22);
 }
+
+/* Shared Unified Announcement Card Footer Row */
+.announcement-card-bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  margin-top: 6px;
+  border-top: 1px solid rgba(20, 45, 43, .10);
+  min-width: 0;
+}
+.announcement-card-bottom-bar .announcement-card-footer {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+}
+.announcement-card-bottom-bar .announcement-reactions-bar {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+  gap: 6px;
+  width: auto;
+}
+.announcement-card-bottom-bar .announcement-react-btn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
+}
+.announcement-card-bottom-bar .announcement-react-btn .react-btn-label {
+  display: none;
+}
+.announcement-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  display: block;
+  border-radius: 50%;
+}
+html[data-theme="dark"] .announcement-card-bottom-bar {
+  border-top-color: rgba(218, 236, 227, .14);
+}
