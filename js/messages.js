@@ -486,7 +486,8 @@
     const dot = showPresence && user.allow_online_status !== false
       ? `<span class="presence-dot${isOnline ? ' is-online' : ''}" data-presence-id="${escapeHtml(user.id)}" aria-label="${isOnline ? 'Active now' : 'Offline'}" title="${isOnline ? 'Active now' : 'Offline'}"></span>`
       : '';
-    const wrap = `<span class="avatar-presence-wrap msg-avatar-wrap">${inner}${dot}</span>`;
+    const wrapCls = cls ? `${cls}-wrap` : '';
+    const wrap = `<span class="avatar-presence-wrap msg-avatar-wrap${wrapCls ? ` ${wrapCls}` : ''}">${inner}${dot}</span>`;
     if (!clickable || !user.id || String(user.id) === String(initializedProfile?.id)) return wrap;
     return `<button type="button" class="msg-dp-btn" data-social-user-dp="${escapeHtml(user.id)}" aria-label="View profile options for ${escapeHtml(name)}" title="Profile & options">${wrap}</button>`;
   }

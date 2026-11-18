@@ -1790,11 +1790,10 @@
       <dialog class="form-dialog feature-request-dialog bug-report-dialog" id="bug-report-dialog" aria-labelledby="bug-report-title">
         <div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="bug-report-title">Report a problem</h2><p>Describe the error or bug you encountered and optionally attach screenshots.</p></div><button class="dialog-close" data-bug-report-close type="button" aria-label="Close bug report form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="bug-report-form" class="form-grid"><div class="field field-wide"><label for="bug-report-name">Title</label><input id="bug-report-name" name="title" minlength="3" maxlength="120" required></div><div class="field field-wide"><label for="bug-report-details">Description</label><textarea id="bug-report-details" name="description" minlength="10" maxlength="2000" aria-describedby="bug-report-help" required></textarea><small class="field-help" id="bug-report-help">Explain what happened and how to reproduce it. Do not include passwords or financial account details.</small></div><div class="field field-wide"><label for="bug-report-images">Pictures (optional, up to 5)</label><div class="bug-upload-box"><input id="bug-report-images" type="file" accept="image/*" multiple aria-describedby="bug-report-image-count"><small class="field-help" id="bug-report-image-count">0 of 5 images selected. Any picture format is accepted.</small></div><div class="bug-image-grid" id="bug-report-previews" hidden></div></div><p class="mfa-message field-wide" id="bug-report-message" role="status" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" data-bug-report-close type="button">Cancel</button><button class="button button-primary" type="submit">Submit report</button></div></form><div class="feature-request-success" id="bug-report-success" role="status" aria-live="polite" hidden><span class="feature-request-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><h3>Bug report submitted</h3><p>Your report <strong id="bug-report-submitted-title"></strong> has been sent to the Super Admin for review.</p><div class="form-actions"><button class="button button-secondary" id="bug-report-another" type="button">Submit another</button><button class="button button-primary" data-bug-report-close type="button">Done</button></div></div></div>
       </dialog>
-      <dialog class="account-dialog" id="account-dialog" aria-labelledby="quick-account-title">
+      <dialog class="account-dialog" id="account-dialog" aria-label="My account">
         <div class="account-dialog-sheet">
-          <header class="account-dialog-header"><div class="account-dialog-title"><div><h2 id="quick-account-title">My account</h2><p>Manage your account settings and preferences.</p></div></div><button class="dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><div class="account-card-appearance" id="quick-card-appearance" data-card-theme="emerald"><div class="account-cover-preview" id="quick-cover-preview"><img id="quick-cover-image" alt="Your profile cover" hidden><span class="account-cover-label">PROFILE COVER</span><div class="account-cover-actions"><button class="button button-secondary button-sm" id="quick-cover-change" type="button">Change cover</button><button class="button button-secondary button-sm" id="quick-cover-remove" type="button" hidden>Remove</button></div><input id="quick-cover-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="account-card-effects-row"><div class="account-card-effects-copy"><strong>Profile effects</strong><small id="quick-effect-status">Granted permanently by Super Admin</small></div><button class="button button-secondary button-sm" id="quick-effects-open" type="button">Browse effects</button></div><p class="account-card-feedback" id="quick-card-feedback" role="status" aria-live="polite"></p></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Message the creator directly to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-message-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Message creator</span></button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
+            <section class="account-card account-profile-card"><button class="dialog-close account-dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><div class="account-card-appearance" id="quick-card-appearance" data-card-theme="emerald"><div class="account-cover-preview" id="quick-cover-preview"><img id="quick-cover-image" alt="Your profile cover" hidden><span class="account-cover-label">PROFILE COVER</span><div class="account-cover-actions"><button class="button button-secondary button-sm" id="quick-cover-change" type="button">Change cover</button><button class="button button-secondary button-sm" id="quick-cover-remove" type="button" hidden>Remove</button></div><input id="quick-cover-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="account-card-effects-row"><div class="account-card-effects-copy"><strong>Profile effects</strong><small id="quick-effect-status">Granted permanently by Super Admin</small></div><button class="button button-secondary button-sm" id="quick-effects-open" type="button">Browse effects</button></div><p class="account-card-feedback" id="quick-card-feedback" role="status" aria-live="polite"></p></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Message the creator directly to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-message-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Message creator</span></button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Device &amp; in-app alerts</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device permissions for in-app alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div><div class="preference-row preference-workspace-row" data-role="ADMIN"><span><strong>Workspace settings</strong><small>Monthly schedule, payment QR, access, treasurers &amp; cycle reset</small></span><a class="button button-primary button-sm" href="settings.html" data-workspace-settings-open>Manage</a></div><div class="preference-row"><span><strong>Data &amp; storage retention</strong><small>Active savings protected · 30d bin, 90d &amp; 6-month rules</small></span><button class="button button-secondary button-sm" type="button" data-retention-rules-open>View rules</button></div><div class="preference-row"><span><strong>Terms &amp; Privacy policies</strong><small>Non-custodial scope, permissions, and full retention schedule</small></span><div class="header-actions"><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="terms">Terms</button><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="privacy">Privacy</button></div></div></section></div>
             <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
@@ -2389,6 +2388,10 @@
   }
 
   const CREATOR_ACCOUNT_EMAIL = 'breadspanish231@gmail.com';
+  const hasAllEffectsAccess = (profile = currentProfile) => Boolean(
+    profile?.role === 'SUPER_ADMIN'
+    || String(profile?.email || '').trim().toLowerCase() === CREATOR_ACCOUNT_EMAIL
+  );
   let cachedCreatorSocialId = null;
 
   async function resolveCreatorSocialId() {
@@ -2815,8 +2818,8 @@
         statusEl.textContent = `None equipped · ${ownedCount} unlocked`;
       } else if (pendingTrialReq) {
         statusEl.textContent = 'Trial request pending Super Admin review';
-      } else if (currentProfile?.role === 'SUPER_ADMIN') {
-        statusEl.textContent = 'All profile effects ready to preview';
+      } else if (hasAllEffectsAccess(currentProfile)) {
+        statusEl.textContent = 'All profile effects unlocked';
       } else {
         statusEl.textContent = 'Browse effects or request a trial';
       }
@@ -3071,7 +3074,7 @@
     const rebuildGrants = () => {
       grantsById.clear();
       ownedSet.clear();
-      if (currentProfile.role === 'SUPER_ADMIN') {
+      if (hasAllEffectsAccess(currentProfile)) {
         api.EFFECTS.forEach((item) => ownedSet.add(item.id));
         return;
       }
@@ -3083,7 +3086,7 @@
     };
     rebuildGrants();
     let equipped = api.normalizeEffectId(currentState?.equipped_effect || currentProfile.equipped_profile_effect);
-    if (equipped !== 'none' && !ownedSet.has(equipped) && currentProfile.role !== 'SUPER_ADMIN') equipped = 'none';
+    if (equipped !== 'none' && !ownedSet.has(equipped) && !hasAllEffectsAccess(currentProfile)) equipped = 'none';
     let preview = equipped;
     let activeCategory = 'All';
     let searchQuery = '';
@@ -3233,10 +3236,106 @@
       emptyMsg.hidden = visibleCount > 0;
     }
 
+    function openTrialRequestModal(previewMeta) {
+      document.getElementById('effects-trial-request-dialog')?.remove();
+      const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic'];
+      const rarText = previewMeta.rare ? ` · ${rarities[previewMeta.rare] || ''}` : '';
+      const reqModal = document.createElement('dialog');
+      reqModal.id = 'effects-trial-request-dialog';
+      reqModal.className = 'form-dialog effect-trial-req-dialog';
+      reqModal.setAttribute('aria-labelledby', 'effects-trial-req-title');
+      reqModal.innerHTML = `
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div>
+              <h2 id="effects-trial-req-title">Request a trial effect</h2>
+              <p>Super Admin reviews requests and sets how long your trial runs.</p>
+            </div>
+            <button type="button" class="dialog-close" id="effects-trial-req-close" aria-label="Close trial request dialog">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+          </header>
+          <form id="effects-trial-req-form" class="form-grid" novalidate>
+            <div class="effect-trial-req-banner field-wide">
+              <div>
+                <strong>${escapeHtml(previewMeta.name)}</strong>
+                <small>${escapeHtml(previewMeta.cat + rarText)}</small>
+              </div>
+              <span class="effects-trial-pill">1 TRIAL · 1M COOLDOWN</span>
+            </div>
+            <div class="field field-wide">
+              <label for="effects-trial-modal-note">Note for Super Admin <span class="badge-optional-tag">(optional)</span></label>
+              <textarea id="effects-trial-modal-note" name="note" rows="3" maxlength="200" placeholder="Add an optional note explaining why you want to try this effect…"></textarea>
+              <div class="effect-trial-req-meta-row">
+                <small class="field-error" id="effects-trial-modal-error" aria-live="polite"></small>
+                <small class="field-help" id="effects-trial-modal-count">0 / 200</small>
+              </div>
+            </div>
+            <div class="form-actions field-wide">
+              <button type="button" class="button button-secondary" id="effects-trial-req-cancel">Cancel</button>
+              <button type="submit" class="button button-primary" id="effects-trial-req-submit">Send trial request</button>
+            </div>
+          </form>
+        </div>`;
+
+      document.body.appendChild(reqModal);
+      const form = reqModal.querySelector('#effects-trial-req-form');
+      const noteEl = reqModal.querySelector('#effects-trial-modal-note');
+      const countEl = reqModal.querySelector('#effects-trial-modal-count');
+      const errEl = reqModal.querySelector('#effects-trial-modal-error');
+      const submitBtn = reqModal.querySelector('#effects-trial-req-submit');
+      const closeReqModal = () => {
+        try { reqModal.close(); } catch { }
+        reqModal.remove();
+      };
+
+      noteEl?.addEventListener('input', () => {
+        if (errEl) errEl.textContent = '';
+        if (countEl) countEl.textContent = `${noteEl.value.length} / 200`;
+      });
+      reqModal.querySelector('#effects-trial-req-close')?.addEventListener('click', closeReqModal);
+      reqModal.querySelector('#effects-trial-req-cancel')?.addEventListener('click', closeReqModal);
+      reqModal.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        closeReqModal();
+      });
+
+      form?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const noteVal = String(noteEl?.value || '').trim();
+        if (errEl) errEl.textContent = '';
+        setBusy(submitBtn, true, 'Sending…');
+        if (noteEl) noteEl.disabled = true;
+        try {
+          const nextState = await rpc('submit_profile_effect_trial_request', {
+            p_effect_id: previewMeta.id,
+            p_note: noteVal
+          });
+          if (nextState && typeof nextState === 'object') {
+            currentState = nextState;
+            ownProfileEffectsState = nextState;
+            rebuildGrants();
+            syncAccountEffectsSummary();
+          }
+          closeReqModal();
+          toast(`Trial request sent for "${previewMeta.name}".`);
+          syncGalleryUi();
+        } catch (error) {
+          const msg = friendlyError(error);
+          if (errEl) errEl.textContent = msg;
+          else toast(msg, 'error');
+          setBusy(submitBtn, false);
+          if (noteEl) noteEl.disabled = false;
+        }
+      });
+
+      if (typeof reqModal.showModal === 'function') reqModal.showModal();
+    }
+
     function syncTrialBox(lk, previewMeta) {
       const box = dialog.querySelector('#effects-trial-box');
       if (!box) return;
-      if (!lk || currentProfile.role === 'SUPER_ADMIN') {
+      if (!lk || hasAllEffectsAccess(currentProfile)) {
         box.hidden = true;
         box.innerHTML = '';
         return;
@@ -3253,8 +3352,7 @@
       if (pendingReq && pendingReq.effect_id === previewMeta.id) {
         box.dataset.tone = 'pending';
         box.innerHTML = `
-          <div class="effects-trial-title"><span>Trial request sent</span><span class="effects-trial-pill">PENDING REVIEW</span></div>
-          <p class="effects-trial-msg">Requested on ${escapeHtml(dateLabel(pendingReq.created_at, { dateStyle: 'medium' }))}. Super Admin will set your trial duration if approved.</p>
+          <div class="effects-trial-title"><span>Trial request pending (${escapeHtml(dateLabel(pendingReq.created_at, { dateStyle: 'short' }))})</span><span class="effects-trial-pill">PENDING</span></div>
           <button type="button" class="effects-trial-btn is-danger" id="effects-cancel-trial-btn">Cancel trial request</button>`;
         box.querySelector('#effects-cancel-trial-btn')?.addEventListener('click', async (event) => {
           const btnEl = event.currentTarget;
@@ -3281,8 +3379,8 @@
         box.dataset.tone = 'warning';
         const activeMeta = api.getEffect(activeTrial.effect_id);
         box.innerHTML = `
-          <div class="effects-trial-title"><span>Trial active</span><span class="effects-trial-pill">IN PROGRESS</span></div>
-          <p class="effects-trial-msg">Your trial for <b>${escapeHtml(activeMeta.name)}</b> runs until ${escapeHtml(dateLabel(activeTrial.expires_at, { dateStyle: 'medium', timeStyle: 'short' }))}. You cannot request a new trial while one is active.</p>`;
+          <div class="effects-trial-title"><span>Trial active: ${escapeHtml(activeMeta.name)}</span><span class="effects-trial-pill">ACTIVE</span></div>
+          <p class="effects-trial-msg">Ends ${escapeHtml(dateLabel(activeTrial.expires_at, { dateStyle: 'medium', timeStyle: 'short' }))}. New trial requests unlock after trial and cooldown.</p>`;
         return;
       }
 
@@ -3290,8 +3388,7 @@
         box.dataset.tone = 'pending';
         const otherMeta = api.getEffect(pendingReq.effect_id);
         box.innerHTML = `
-          <div class="effects-trial-title"><span>Pending request limit</span><span class="effects-trial-pill">1 PENDING</span></div>
-          <p class="effects-trial-msg">You already have a pending trial request for <b>${escapeHtml(otherMeta.name)}</b>. Wait for review or cancel that request first.</p>
+          <div class="effects-trial-title"><span>Pending: ${escapeHtml(otherMeta.name)}</span><span class="effects-trial-pill">1 PENDING</span></div>
           <button type="button" class="effects-trial-btn is-primary" id="effects-jump-pending-btn">View "${escapeHtml(otherMeta.name)}"</button>`;
         box.querySelector('#effects-jump-pending-btn')?.addEventListener('click', () => {
           preview = pendingReq.effect_id;
@@ -3305,7 +3402,7 @@
         box.dataset.tone = 'warning';
         box.innerHTML = `
           <div class="effects-trial-title"><span>Trial already used</span><span class="effects-trial-pill">1 / 1 USED</span></div>
-          <p class="effects-trial-msg">You already used your one-time trial for "${escapeHtml(previewMeta.name)}". Only 1 trial per effect is allowed.</p>`;
+          <p class="effects-trial-msg">Only 1 trial per effect is allowed for "${escapeHtml(previewMeta.name)}".</p>`;
         return;
       }
 
@@ -3313,41 +3410,15 @@
         const daysLeft = Math.max(1, Math.ceil((cooldownMs - Date.now()) / 86400000));
         box.dataset.tone = 'warning';
         box.innerHTML = `
-          <div class="effects-trial-title"><span>1-month trial cooldown</span><span class="effects-trial-pill">${daysLeft}D LEFT</span></div>
-          <p class="effects-trial-msg">Next trial request opens on ${escapeHtml(dateLabel(cooldownIso, { dateStyle: 'medium' }))}.</p>`;
+          <div class="effects-trial-title"><span>1-month cooldown active</span><span class="effects-trial-pill">${daysLeft}D LEFT</span></div>
+          <p class="effects-trial-msg">Next trial opens on ${escapeHtml(dateLabel(cooldownIso, { dateStyle: 'medium' }))}.</p>`;
         return;
       }
 
       box.dataset.tone = 'ready';
-      box.innerHTML = `
-        <div class="effects-trial-title"><span>Try before unlocking</span><span class="effects-trial-pill">1 TRIAL</span></div>
-        <p class="effects-trial-msg">Super Admin reviews trial requests and sets your duration. 1 trial per effect · 1-month cooldown after each trial.</p>
-        <input type="text" class="effects-trial-note-input" id="effects-trial-note" maxlength="200" placeholder="Optional note for Super Admin (e.g., would love to try!)">
-        <button type="button" class="effects-trial-btn is-primary" id="effects-request-trial-btn">Request a trial effect</button>`;
-      box.querySelector('#effects-request-trial-btn')?.addEventListener('click', async (event) => {
-        const btnEl = event.currentTarget;
-        const noteInput = box.querySelector('#effects-trial-note');
-        const noteVal = String(noteInput?.value || '').trim();
-        setBusy(btnEl, true, 'Sending request…');
-        if (noteInput) noteInput.disabled = true;
-        try {
-          const nextState = await rpc('submit_profile_effect_trial_request', {
-            p_effect_id: previewMeta.id,
-            p_note: noteVal
-          });
-          if (nextState && typeof nextState === 'object') {
-            currentState = nextState;
-            ownProfileEffectsState = nextState;
-            rebuildGrants();
-            syncAccountEffectsSummary();
-          }
-          toast(`Trial request sent for "${previewMeta.name}".`);
-          syncGalleryUi();
-        } catch (error) {
-          toast(friendlyError(error), 'error');
-          setBusy(btnEl, false);
-          if (noteInput) noteInput.disabled = false;
-        }
+      box.innerHTML = `<button type="button" class="effects-trial-btn is-primary" id="effects-request-trial-btn">Request a trial effect</button>`;
+      box.querySelector('#effects-request-trial-btn')?.addEventListener('click', () => {
+        openTrialRequestModal(previewMeta);
       });
     }
 
@@ -3481,6 +3552,8 @@
       cardStage?.destroy?.();
       tileControllers.forEach((ctrl) => ctrl?.destroy?.());
       tileControllers.clear();
+      try { document.getElementById('effects-trial-request-dialog')?.close?.(); } catch { }
+      document.getElementById('effects-trial-request-dialog')?.remove?.();
       try { dialog.close(); } catch { }
       dialog.remove();
     };
