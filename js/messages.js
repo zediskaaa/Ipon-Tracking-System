@@ -721,7 +721,7 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg>
                 <b id="msg-alerts-badge" hidden>0</b>
               </button>
-              <button class="msg-icon-btn" id="msg-privacy-btn" type="button" aria-label="Privacy & handle settings" title="Messaging privacy & blocked users">
+              <button class="msg-icon-btn" id="msg-privacy-btn" type="button" aria-label="Messaging & privacy settings" title="Messaging privacy & blocked users">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.66 0-1.25.4-1.51 1Z"/></svg>
               </button>
               <button class="dialog-close" id="msg-workspace-close" type="button" aria-label="Close messaging">
@@ -892,7 +892,7 @@
           <header class="form-dialog-header">
             <div>
               <h2 id="msg-settings-title">Messaging &amp; Privacy</h2>
-              <p>Manage your handle, visibility, request controls, and blocked accounts.</p>
+              <p>Manage message requests, visibility preferences, and blocked accounts.</p>
             </div>
             <button class="dialog-close" type="button" data-msg-settings-close aria-label="Close privacy settings"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
@@ -934,7 +934,7 @@
           <header class="form-dialog-header">
             <div>
               <h2 id="msg-gdrive-title">Google Drive</h2>
-              <p>Open your Google Drive files or folders, share a link, or browse Drive storage synced on this device.</p>
+              <p>Open your Google Drive files or folders, or browse Drive storage synced on this device.</p>
             </div>
             <button class="dialog-close" type="button" data-msg-gdrive-close aria-label="Close Google Drive dialog"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
@@ -942,20 +942,10 @@
             <div class="msg-gdrive-launch-card">
               <div class="msg-gdrive-launch-meta">
                 <span class="msg-attach-option-icon is-gdrive" aria-hidden="true"><svg viewBox="0 0 24 24"><polygon fill="#0F9D58" stroke="none" points="9 4 12 9.2 6 19.6 3 14.4"/><polygon fill="#FFCD40" stroke="none" points="9 4 15 4 21 14.4 15 14.4"/><polygon fill="#4285F4" stroke="none" points="9 14.4 21 14.4 18 19.6 6 19.6"/></svg></span>
-                <span><strong>My Drive files &amp; folders</strong><small>Opens drive.google.com directly to your Drive folders so you can copy or save a file.</small></span>
+                <span><strong>My Drive files &amp; folders</strong><small>Opens drive.google.com directly to your Drive folders so you can pick or download a file.</small></span>
               </div>
               <a class="button button-primary button-sm" id="msg-gdrive-open-web" href="https://drive.google.com/drive/my-drive" target="_blank" rel="noopener noreferrer">Open Google Drive</a>
             </div>
-            <form id="msg-gdrive-link-form" class="msg-gdrive-link-form" novalidate>
-              <div class="field">
-                <label for="msg-gdrive-link-input">Paste Google Drive file or folder link</label>
-                <div class="msg-gdrive-input-row">
-                  <input id="msg-gdrive-link-input" name="drive_url" type="url" inputmode="url" maxlength="500" autocomplete="off" spellcheck="false" placeholder="https://drive.google.com/file/d/... or /drive/folders/..." aria-describedby="msg-gdrive-link-error">
-                  <button class="button button-primary button-sm" id="msg-gdrive-insert-btn" type="submit">Add to chat</button>
-                </div>
-                <small class="field-error msg-gdrive-error" id="msg-gdrive-link-error" role="alert" aria-hidden="true"></small>
-              </div>
-            </form>
             <div class="msg-gdrive-local-row">
               <span><strong>Synced Drive folder on this device?</strong><small>Browse local files or mounted Drive folders directly.</small></span>
               <button class="button button-secondary button-sm" id="msg-gdrive-browse-local" type="button">Browse device</button>
@@ -4835,12 +4825,6 @@
     body.innerHTML = `
       <form id="msg-privacy-form" class="form-grid msg-privacy-form" novalidate>
         <div class="field">
-          <label for="msg-set-username">Username handle (optional)</label>
-          <input id="msg-set-username" name="username" type="text" maxlength="24" value="${escAttr(me.username || '')}" placeholder="e.g. juan_delacruz" autocomplete="off">
-          <small class="field-help msg-field-help" id="msg-set-username-help">3–24 lowercase letters, numbers, or underscores.</small>
-          <small class="field-error msg-field-help" id="msg-set-username-error" role="alert" hidden></small>
-        </div>
-        <div class="field">
           <label for="msg-set-friend-req">Who can send friend requests</label>
           <select id="msg-set-friend-req" name="allow_friend_requests">
             <option value="EVERYONE"${(priv.allow_friend_requests || 'EVERYONE') === 'EVERYONE' ? ' selected' : ''}>Everyone</option>
@@ -4848,12 +4832,7 @@
             <option value="NOBODY"${priv.allow_friend_requests === 'NOBODY' ? ' selected' : ''}>No one</option>
           </select>
         </div>
-        <div class="field field-wide">
-          <label for="msg-set-bio">Short bio (optional)</label>
-          <textarea id="msg-set-bio" name="bio" rows="3" maxlength="240" placeholder="Share a short intro visible when people view your profile…">${escapeHtml(me.bio || '')}</textarea>
-          <small class="field-help msg-bio-counter" id="msg-set-bio-count">${(me.bio || '').length} / 240 characters</small>
-        </div>
-        <div class="field field-wide">
+        <div class="field">
           <label for="msg-set-msg-req">Who can message you (non-friends)</label>
           <select id="msg-set-msg-req" name="allow_message_requests">
             <option value="EVERYONE"${(priv.allow_message_requests || 'EVERYONE') === 'EVERYONE' ? ' selected' : ''}>Deliver to Message Requests (recommended)</option>
@@ -4878,33 +4857,9 @@
       </section>`;
 
     const form = document.getElementById('msg-privacy-form');
-    const unameInput = document.getElementById('msg-set-username');
-    const unameHelp = document.getElementById('msg-set-username-help');
-    const unameErr = document.getElementById('msg-set-username-error');
-    const bioInput = document.getElementById('msg-set-bio');
-    const bioCounter = document.getElementById('msg-set-bio-count');
     const saveBtn = document.getElementById('msg-settings-save');
-    const initialUsername = String(me.username || '').trim().toLowerCase();
-    let usernameCheckTimer = null;
-    let usernameCheckSeq = 0;
-    let takenUsername = '';
-
-    const setUsernameInlineError = (message = '') => {
-      const msg = String(message || '').trim();
-      if (unameHelp) unameHelp.hidden = Boolean(msg);
-      if (typeof ipon().setFieldError === 'function' && unameInput) {
-        ipon().setFieldError(unameInput, msg);
-      } else if (unameErr) {
-        unameInput?.toggleAttribute?.('aria-invalid', Boolean(msg));
-        unameErr.textContent = msg;
-        unameErr.hidden = !msg;
-      }
-      unameInput?.setCustomValidity?.(msg);
-    };
 
     const readPrivacySnapshot = () => JSON.stringify({
-      u: String(unameInput?.value || '').trim().toLowerCase(),
-      b: String(bioInput?.value || ''),
       fr: String(form.elements?.allow_friend_requests?.value || 'EVERYONE'),
       mr: String(form.elements?.allow_message_requests?.value || 'EVERYONE'),
       on: Boolean(form.elements?.show_online?.checked),
@@ -4915,72 +4870,17 @@
 
     const syncPrivacySaveState = () => {
       const dirty = readPrivacySnapshot() !== baselineSnapshot;
-      const val = String(unameInput?.value || '').trim().toLowerCase();
-      const formatOk = !val || /^[a-z0-9_]{3,24}$/.test(val);
-      const isKnownTaken = Boolean(val && takenUsername === val);
-      const canSave = dirty && formatOk && !isKnownTaken;
       if (saveBtn) {
         if (saveBtn.dataset) {
-          if (canSave) delete saveBtn.dataset.dirtyLocked;
+          if (dirty) delete saveBtn.dataset.dirtyLocked;
           else saveBtn.dataset.dirtyLocked = 'true';
         }
-        if (!saveBtn.classList?.contains?.('is-busy')) saveBtn.disabled = !canSave;
-        saveBtn.title = !dirty
-          ? 'Make a change before saving.'
-          : (isKnownTaken ? 'Choose an available username before saving.' : (!formatOk ? 'Fix the username format first.' : ''));
+        if (!saveBtn.classList?.contains?.('is-busy')) saveBtn.disabled = !dirty;
+        saveBtn.title = !dirty ? 'Make a change before saving.' : '';
       }
       return dirty;
     };
 
-    const checkUsernameAvailability = async (val, seq) => {
-      if (!val || val === initialUsername || !/^[a-z0-9_]{3,24}$/.test(val)) return;
-      try {
-        const hits = await ipon().rpc('search_social_users', { p_query: `@${val}`, p_limit: 5 });
-        if (seq !== usernameCheckSeq) return;
-        const currentVal = String(unameInput?.value || '').trim().toLowerCase();
-        if (currentVal !== val) return;
-        const matchedOther = Array.isArray(hits) && hits.some(
-          (u) => String(u?.username || '').trim().toLowerCase() === val && String(u?.id || '') !== String(me.id || '')
-        );
-        if (matchedOther) {
-          takenUsername = val;
-          setUsernameInlineError('That username is already taken.');
-          syncPrivacySaveState();
-        }
-      } catch {
-        // Non-blocking pre-check; authoritative validation remains on submit
-      }
-    };
-
-    const validateUsernameLive = ({ checkAvailability = false } = {}) => {
-      if (!unameInput) return true;
-      const val = unameInput.value.trim().toLowerCase();
-      unameInput.value = val;
-      clearTimeout(usernameCheckTimer);
-      if (takenUsername && takenUsername !== val) takenUsername = '';
-      const ok = !val || /^[a-z0-9_]{3,24}$/.test(val);
-      if (!ok) {
-        setUsernameInlineError('Use 3–24 lowercase letters, numbers, or underscores.');
-      } else if (val && takenUsername === val) {
-        setUsernameInlineError('That username is already taken.');
-      } else {
-        setUsernameInlineError('');
-        if (checkAvailability && val && val !== initialUsername) {
-          const seq = ++usernameCheckSeq;
-          usernameCheckTimer = setTimeout(() => checkUsernameAvailability(val, seq), 260);
-        } else {
-          usernameCheckSeq += 1;
-        }
-      }
-      syncPrivacySaveState();
-      return ok && takenUsername !== val;
-    };
-
-    unameInput?.addEventListener('input', () => validateUsernameLive({ checkAvailability: true }));
-    unameInput?.addEventListener('blur', () => validateUsernameLive({ checkAvailability: true }));
-    bioInput?.addEventListener('input', () => {
-      if (bioCounter) bioCounter.textContent = `${bioInput.value.length} / 240 characters`;
-    });
     form?.addEventListener('input', syncPrivacySaveState);
     form?.addEventListener('change', syncPrivacySaveState);
     syncPrivacySaveState();
@@ -4988,10 +4888,6 @@
     form.onsubmit = async (ev) => {
       ev.preventDefault();
       if (!syncPrivacySaveState()) return;
-      if (!validateUsernameLive()) {
-        unameInput?.focus();
-        return;
-      }
       const errEl = document.getElementById('msg-settings-error');
       if (errEl) {
         errEl.hidden = true;
@@ -5009,27 +4905,17 @@
       ipon().setBusy(saveBtn, true, 'Saving…');
       try {
         const res = await ipon().rpc('update_social_profile_and_privacy', {
-          p_username: String(fd.get('username') || ''),
-          p_bio: String(fd.get('bio') || ''),
           p_chat_privacy: nextPrivacy
         });
-        ipon().updateLocalProfile?.({ username: res.username, bio: res.bio, chat_privacy: res.chat_privacy });
+        ipon().updateLocalProfile?.({ chat_privacy: res.chat_privacy });
         ipon().setOnlineVisibility?.(nextPrivacy.show_online);
         ipon().toast('Messaging settings saved.');
         await refreshOverview();
         dialog.close();
       } catch (err) {
-        const msg = ipon().friendlyError(err);
-        const isUsernameErr = err?.code === '23505' || /username|taken/i.test(msg);
-        if (isUsernameErr && unameInput) {
-          const val = unameInput.value.trim().toLowerCase();
-          if (/taken|already/i.test(msg) && val) takenUsername = val;
-          setUsernameInlineError(msg);
-          syncPrivacySaveState();
-          unameInput.focus();
-        } else if (errEl) {
+        if (errEl) {
           errEl.dataset.tone = 'error';
-          errEl.textContent = msg;
+          errEl.textContent = ipon().friendlyError(err);
           errEl.hidden = false;
         }
       } finally {
@@ -6378,35 +6264,6 @@
         submitComposer(ev);
         return;
       }
-      if (ev.target?.id === 'msg-gdrive-link-form') {
-        ev.preventDefault();
-        const linkInput = document.getElementById('msg-gdrive-link-input');
-        const check = validateGoogleDriveUrl(linkInput?.value, { live: false });
-        if (check.error) {
-          setGdriveLinkError(check.error);
-          linkInput?.focus?.();
-          return;
-        }
-        const composerInput = document.getElementById('msg-composer-input');
-        const existing = String(composerInput?.value || '').trimEnd();
-        const nextText = existing ? `${existing}\n${check.url}` : check.url;
-        if (nextText.length > 500) {
-          setGdriveLinkError('Message exceeds 500 characters; shorten your text or send this link separately.');
-          linkInput?.focus?.();
-          return;
-        }
-        setGdriveLinkError('');
-        if (composerInput) {
-          composerInput.value = nextText;
-          autoResizeTextarea(composerInput);
-          syncComposerCharCounter(nextText.length);
-          if (state.activeConvId) state.draftsByConv.set(state.activeConvId, nextText);
-          composerInput.focus?.();
-        }
-        document.getElementById('msg-gdrive-dialog')?.close?.();
-        ipon().toast?.('Google Drive link added to message.');
-        return;
-      }
       if (ev.target?.id === 'msg-group-edit-form' && state.activeConvId) {
         ev.preventDefault();
         const titleInput = document.getElementById('msg-group-edit-title');
@@ -6498,9 +6355,6 @@
         }
         ev.target.setAttribute?.('aria-invalid', err ? 'true' : 'false');
         syncGroupEditDirtyState();
-      } else if (ev.target?.id === 'msg-gdrive-link-input') {
-        const check = validateGoogleDriveUrl(ev.target.value, { live: true });
-        setGdriveLinkError(check.error);
       } else if (ev.target?.id === 'msg-group-edit-desc') {
         syncGroupEditDirtyState();
       } else if (ev.target?.classList?.contains('msg-video-seek')) {
@@ -7236,6 +7090,10 @@
           if (initializedProfile && String(updated.id || '') === String(initializedProfile.id || '')) {
             initializedProfile = { ...initializedProfile, ...updated };
           }
+          if (state.overview?.me && String(updated.id || '') === String(state.overview.me.id || '')) {
+            if ('username' in updated) state.overview.me.username = updated.username;
+            if ('bio' in updated) state.overview.me.bio = updated.bio;
+          }
           const uid = updated.id || initializedProfile?.id;
           if (uid) {
             const norm = cacheProfileAppearance(uid, {
@@ -7304,67 +7162,12 @@
     return dismissed;
   }
 
-  function validateGoogleDriveUrl(raw, { live = false } = {}) {
-    const value = String(raw || '').trim();
-    if (!value) return { url: '', error: live ? '' : 'Paste a Google Drive or Google Docs link.' };
-    if (value.length > 500 || /[\s<>"'`\\\u0000-\u001f\u007f]/.test(value)) {
-      return { url: '', error: 'Enter a valid Google Drive link without spaces or invalid characters.' };
-    }
-    if (/^(?:javascript|data|vbscript|file|blob):/i.test(value)) {
-      return { url: '', error: 'Enter an official drive.google.com or docs.google.com link.' };
-    }
-    let candidate = value;
-    if (/^https?:\/\//i.test(candidate)) {
-      candidate = candidate.replace(/^https?:\/\//i, 'https://');
-    } else if (/^(?:drive|docs)\.google\.com\b/i.test(candidate)) {
-      candidate = `https://${candidate}`;
-    } else if (live && /^(?:h(?:t(?:t(?:p(?:s?(?::(?:\/(?:\/)?)?)?)?)?)?)?|d(?:r(?:i(?:v(?:e)?)?)?|o(?:c(?:s)?)?)?(?:\.[a-z.]*)?)$/i.test(candidate)) {
-      return { url: '', error: '' };
-    } else {
-      return { url: '', error: 'Link must use drive.google.com or docs.google.com.' };
-    }
-    let parsed;
-    try {
-      parsed = new URL(candidate);
-    } catch (_) {
-      return { url: '', error: 'Enter a valid Google Drive or Google Docs URL.' };
-    }
-    const host = parsed.hostname.toLowerCase();
-    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.port) {
-      return { url: '', error: 'Enter a valid HTTPS Google Drive link.' };
-    }
-    if (host !== 'drive.google.com' && host !== 'docs.google.com') {
-      return { url: '', error: 'Link must use drive.google.com or docs.google.com.' };
-    }
-    if (!parsed.pathname || parsed.pathname === '/') {
-      if (live) return { url: '', error: '' };
-      return { url: '', error: 'Paste a specific Google Drive file, folder, or document link.' };
-    }
-    return { url: `https://${host}${parsed.pathname}${parsed.search}${parsed.hash}`, error: '' };
-  }
-
-  function setGdriveLinkError(error = '') {
-    const input = document.getElementById('msg-gdrive-link-input');
-    const errEl = document.getElementById('msg-gdrive-link-error');
-    const msgText = String(error || '');
-    input?.setAttribute?.('aria-invalid', msgText ? 'true' : 'false');
-    if (errEl) {
-      errEl.textContent = msgText;
-      errEl.title = msgText;
-      errEl.classList?.toggle?.('is-visible', Boolean(msgText));
-      errEl.setAttribute?.('aria-hidden', msgText ? 'false' : 'true');
-    }
-  }
-
   function openWebGoogleDriveDialog() {
     const dialog = document.getElementById('msg-gdrive-dialog');
-    const input = document.getElementById('msg-gdrive-link-input');
     if (!dialog) {
       document.getElementById('msg-drive-input')?.click();
       return;
     }
-    if (input) input.value = '';
-    setGdriveLinkError('');
     if (typeof dialog.showModal === 'function' && !dialog.open) {
       dialog.showModal();
     } else {

@@ -8380,7 +8380,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   assert.equal(getMsgEl('msg-thread-stage').dataset.chatTheme, 'midnight');
   assert.match(getMsgEl('msg-thread-drawer').innerHTML, /class="msg-theme-chip is-active" data-conv-theme="midnight"/);
 
-  // Pic 2: Open Messaging & Privacy modal -> verify form grid, bio counter, right-aligned toggle switches, dark save CTA, and blocked accounts section
+  // Pic 2: Open Messaging & Privacy modal -> verify form grid (without moved username/bio), right-aligned toggle switches, dark save CTA, and blocked accounts section
   await Promise.all(clickHandlers.map((fn) => fn({
     stopPropagation: () => { },
     target: { closest: (s) => (s === '#msg-privacy-btn' ? { dataset: {} } : null) }
@@ -8389,7 +8389,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   assert.equal(settingsDialog.open, true);
   const settingsHtml = getMsgEl('msg-settings-body').innerHTML;
   assert.match(settingsHtml, /<form id="msg-privacy-form" class="form-grid msg-privacy-form"/);
-  assert.match(settingsHtml, /class="field-help msg-bio-counter" id="msg-set-bio-count">0 \/ 240 characters<\/small>/);
+  assert.doesNotMatch(settingsHtml, /msg-set-username|msg-set-bio/);
   assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Show active status[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="show_online"/);
   assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Show last seen timestamp[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="show_last_seen"/);
   assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Send &amp; receive read receipts[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="read_receipts"/);
@@ -8400,6 +8400,34 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   getMsgEl('msg-workspace-dialog').close();
   assert.equal(getMsgEl('msg-thread-pane').dataset.chatTheme, 'paper');
   assert.equal(getMsgEl('msg-thread-stage').dataset.chatTheme, 'paper');
+});
+
+test('username handle & bio live inside My Account profile form across all roles with privacy-safe RPC defaults', () => {
+  const coreJs = read('js/core.js');
+  const messagesJs = read('js/messages.js');
+  const appCss = read('css/app.css');
+  const mig126 = read('database/migrations/20261118_126_profile_username_and_bio.sql');
+
+  assert.match(coreJs, /id="quick-username" name="username" type="text" maxlength="24"/);
+  assert.match(coreJs, /id="quick-username-error" role="alert" hidden/);
+  const mig127 = read('database/migrations/20261118_127_bio_max_58_chars.sql');
+  assert.match(coreJs, /id="quick-bio" name="bio" rows="2" maxlength="58"/);
+  assert.match(coreJs, /id="quick-bio-count">0 \/ 58 characters<\/small>/);
+  assert.match(coreJs, /Bio must be 58 characters or fewer\./);
+  assert.match(mig127, /profiles_bio_length_check/);
+  assert.match(mig127, /char_length\(btrim\(bio\)\) <= 58/);
+  assert.match(mig127, /char_length\(v_bio\) > 58/);
+  assert.match(coreJs, /check_username_available/);
+  assert.match(coreJs, /update_own_social_identity/);
+  assert.doesNotMatch(messagesJs, /msg-set-username|msg-set-bio/);
+  assert.match(messagesJs, /update_social_profile_and_privacy',\s*\{\s*p_chat_privacy:\s*nextPrivacy\s*\}/);
+  assert.match(appCss, /\.account-dialog \.field textarea/);
+  assert.match(appCss, /\.account-bio-counter/);
+  assert.match(appCss, /html\[data-theme="dark"\] \.account-password-disclosure summary strong,\s*html\[data-theme="dark"\] \.account-summary-pill strong\s*\{\s*color:\s*var\(--ink\);/);
+  assert.match(mig126, /function public\.check_username_available\(/);
+  assert.match(mig126, /function public\.update_own_social_identity\(/);
+  assert.match(mig126, /p_username text default '__KEEP__'/);
+  assert.match(mig126, /p_bio text default '__KEEP__'/);
 });
 
 test('chat drawer, messaging privacy dialog, and full-column chat themes declare cohesive light & dark CSS tokens', () => {
@@ -11228,7 +11256,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261118-139/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261118-141/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

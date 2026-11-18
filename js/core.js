@@ -2052,7 +2052,7 @@
       <dialog class="account-dialog" id="account-dialog" aria-label="My account">
         <div class="account-dialog-sheet">
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><button class="dialog-close account-dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><div class="account-card-appearance" id="quick-card-appearance" data-card-theme="emerald"><div class="account-cover-preview" id="quick-cover-preview"><img id="quick-cover-image" alt="Your profile cover" hidden><span class="account-cover-label">PROFILE COVER</span><div class="account-cover-actions"><button class="button button-secondary button-sm" id="quick-cover-change" type="button">Change cover</button><button class="button button-secondary button-sm" id="quick-cover-remove" type="button" hidden>Remove</button></div><input id="quick-cover-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="account-card-effects-row"><div class="account-card-effects-copy"><strong>Profile effects</strong><small id="quick-effect-status">Granted permanently by Super Admin</small></div><button class="button button-secondary button-sm" id="quick-effects-open" type="button">Browse effects</button></div><div class="account-card-effects-row account-card-connect-row" id="quick-connect-apps-card" aria-labelledby="quick-connect-apps-title"><div class="account-card-connect-head"><div class="account-card-effects-copy"><strong id="quick-connect-apps-title">Connected apps</strong><small>Show clickable icons in your bio</small></div><button class="button button-secondary button-sm" id="quick-connect-apps-open" type="button">Connect apps</button></div><div class="account-connect-preview-icons" id="quick-connect-apps-preview" aria-live="polite"></div></div><p class="account-card-feedback" id="quick-card-feedback" role="status" aria-live="polite"></p></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Message the creator directly to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-message-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Message creator</span></button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
+            <section class="account-card account-profile-card"><button class="dialog-close account-dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><div class="account-card-appearance" id="quick-card-appearance" data-card-theme="emerald"><div class="account-cover-preview" id="quick-cover-preview"><img id="quick-cover-image" alt="Your profile cover" hidden><span class="account-cover-label">PROFILE COVER</span><div class="account-cover-actions"><button class="button button-secondary button-sm" id="quick-cover-change" type="button">Change cover</button><button class="button button-secondary button-sm" id="quick-cover-remove" type="button" hidden>Remove</button></div><input id="quick-cover-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="account-card-effects-row"><div class="account-card-effects-copy"><strong>Profile effects</strong><small id="quick-effect-status">Granted permanently by Super Admin</small></div><button class="button button-secondary button-sm" id="quick-effects-open" type="button">Browse effects</button></div><div class="account-card-effects-row account-card-connect-row" id="quick-connect-apps-card" aria-labelledby="quick-connect-apps-title"><div class="account-card-connect-head"><div class="account-card-effects-copy"><strong id="quick-connect-apps-title">Connected apps</strong><small>Show clickable icons in your bio</small></div><button class="button button-secondary button-sm" id="quick-connect-apps-open" type="button">Connect apps</button></div><div class="account-connect-preview-icons" id="quick-connect-apps-preview" aria-live="polite"></div></div><p class="account-card-feedback" id="quick-card-feedback" role="status" aria-live="polite"></p></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-username">Username handle (optional)</label><input id="quick-username" name="username" type="text" maxlength="24" autocomplete="off" spellcheck="false" placeholder="e.g. juan_delacruz" aria-describedby="quick-username-help quick-username-error"><small class="field-help account-username-help" id="quick-username-help">3–24 lowercase letters, numbers, or underscores.</small><small class="field-error account-username-help" id="quick-username-error" role="alert" hidden></small></div><div class="field field-wide"><label for="quick-bio">Short bio (optional)</label><textarea id="quick-bio" name="bio" rows="2" maxlength="58" placeholder="Share a short intro visible when people view your profile…" aria-describedby="quick-bio-count quick-bio-error"></textarea><small class="field-help account-bio-counter" id="quick-bio-count">0 / 58 characters</small><small class="field-error" id="quick-bio-error" role="alert" hidden></small></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Message the creator directly to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-message-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Message creator</span></button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Device &amp; in-app alerts</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device permissions for in-app alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div><div class="preference-row preference-workspace-row" data-role="ADMIN"><span><strong>Workspace settings</strong><small>Monthly schedule, payment QR, access, treasurers &amp; cycle reset</small></span><a class="button button-primary button-sm" href="settings.html" data-workspace-settings-open>Manage</a></div><div class="preference-row"><span><strong>Data &amp; storage retention</strong><small>Active savings protected · 30d bin, 90d &amp; 6-month rules</small></span><button class="button button-secondary button-sm" type="button" data-retention-rules-open>View rules</button></div><div class="preference-row"><span><strong>Terms &amp; Privacy policies</strong><small>Non-custodial scope, permissions, and full retention schedule</small></span><div class="header-actions"><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="terms">Terms</button><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="privacy">Privacy</button></div></div></section></div>
             <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
@@ -4617,6 +4617,22 @@
       profileForm.elements.first_name.value = data.first_name || splitLegacy[0] || '';
       profileForm.elements.middle_name.value = data.middle_name || '';
       profileForm.elements.last_name.value = data.last_name || (splitLegacy.length > 1 ? splitLegacy.slice(1).join(' ') : '');
+      const uVal = String(data.username || '').trim().toLowerCase();
+      const bVal = String(data.bio || '');
+      if (profileForm.elements.username) {
+        profileForm.elements.username.value = uVal;
+        profileForm.elements.username.setCustomValidity('');
+        setFieldError(profileForm.elements.username, '');
+        const uHelp = document.getElementById('quick-username-help');
+        if (uHelp) uHelp.hidden = false;
+      }
+      if (profileForm.elements.bio) {
+        profileForm.elements.bio.value = bVal;
+        profileForm.elements.bio.setCustomValidity('');
+        setFieldError(profileForm.elements.bio, '');
+        const bioCount = document.getElementById('quick-bio-count');
+        if (bioCount) bioCount.textContent = `${bVal.length} / 58 characters`;
+      }
       profileForm.elements.contact_number.value = data.contact_number || '';
       setPayoutFields(profileForm, payoutSource);
       emailForm.elements.email.value = data.email || '';
@@ -5355,16 +5371,125 @@
         btn.setAttribute('title', `${visible ? 'Hide' : 'Show'} password`);
       });
     });
+    const quickUsernameInput = document.getElementById('quick-username');
+    const quickUsernameHelp = document.getElementById('quick-username-help');
+    const quickBioInput = document.getElementById('quick-bio');
+    const quickBioCounter = document.getElementById('quick-bio-count');
+    const quickProfileSubmitBtn = profileForm.querySelector('[type="submit"]');
+    let quickTakenUsername = '';
+    let quickUsernameCheckTimer = null;
+    let quickUsernameCheckSeq = 0;
+
+    const setQuickUsernameError = (message = '') => {
+      const msg = String(message || '').trim();
+      if (quickUsernameHelp) quickUsernameHelp.hidden = Boolean(msg);
+      if (quickUsernameInput) {
+        quickUsernameInput.setCustomValidity(msg);
+        setFieldError(quickUsernameInput, msg);
+      }
+    };
+
+    const syncQuickProfileSaveLock = () => {
+      quickProfileDirty?.sync?.();
+      if (!quickProfileSubmitBtn || !quickUsernameInput) return;
+      const val = quickUsernameInput.value.trim().toLowerCase();
+      const formatOk = !val || /^[a-z0-9_]{3,24}$/.test(val);
+      const isTaken = Boolean(val && quickTakenUsername === val);
+      const bioLen = String(quickBioInput?.value || '').trim().length;
+      if (!formatOk || isTaken || bioLen > 58) {
+        if (quickProfileSubmitBtn.dataset) quickProfileSubmitBtn.dataset.dirtyLocked = 'true';
+        if (!quickProfileSubmitBtn.classList?.contains?.('is-busy')) quickProfileSubmitBtn.disabled = true;
+        quickProfileSubmitBtn.title = isTaken ? 'Choose an available username before saving.' : (!formatOk ? 'Fix the username format first.' : 'Shorten bio to 58 characters or fewer.');
+      }
+    };
+    profileForm.addEventListener('input', syncQuickProfileSaveLock);
+    profileForm.addEventListener('change', syncQuickProfileSaveLock);
+    document.getElementById('account-dialog')?.addEventListener('close', () => { quickTakenUsername = ''; });
+
+    const checkQuickUsernameAvailability = async (val, seq) => {
+      const savedUsername = String(currentProfile?.username || '').trim().toLowerCase();
+      if (!val || val === savedUsername || !/^[a-z0-9_]{3,24}$/.test(val)) return;
+      try {
+        const available = await rpc('check_username_available', { p_username: val });
+        if (seq !== quickUsernameCheckSeq) return;
+        const currentVal = String(quickUsernameInput?.value || '').trim().toLowerCase();
+        if (currentVal !== val) return;
+        if (available === false) {
+          quickTakenUsername = val;
+          setQuickUsernameError('That username is already taken.');
+          syncQuickProfileSaveLock();
+        }
+      } catch {
+        // Non-blocking pre-check; authoritative validation remains on submit
+      }
+    };
+
+    const validateQuickUsername = ({ checkAvailability = false } = {}) => {
+      if (!quickUsernameInput) return true;
+      const val = quickUsernameInput.value.trim().toLowerCase();
+      quickUsernameInput.value = val;
+      clearTimeout(quickUsernameCheckTimer);
+      if (quickTakenUsername && quickTakenUsername !== val) quickTakenUsername = '';
+      const ok = !val || /^[a-z0-9_]{3,24}$/.test(val);
+      const savedUsername = String(currentProfile?.username || '').trim().toLowerCase();
+      if (!ok) {
+        setQuickUsernameError('Use 3–24 lowercase letters, numbers, or underscores.');
+      } else if (val && quickTakenUsername === val) {
+        setQuickUsernameError('That username is already taken.');
+      } else {
+        setQuickUsernameError('');
+        if (checkAvailability && val && val !== savedUsername) {
+          const seq = ++quickUsernameCheckSeq;
+          quickUsernameCheckTimer = setTimeout(() => checkQuickUsernameAvailability(val, seq), 260);
+        } else {
+          quickUsernameCheckSeq += 1;
+        }
+      }
+      syncQuickProfileSaveLock();
+      return ok && quickTakenUsername !== val;
+    };
+
+    const validateQuickBio = () => {
+      if (!quickBioInput) return true;
+      const rawLen = quickBioInput.value.length;
+      if (quickBioCounter) quickBioCounter.textContent = `${rawLen} / 58 characters`;
+      const trimmedLen = quickBioInput.value.trim().length;
+      const msg = trimmedLen > 58 ? 'Bio must be 58 characters or fewer.' : '';
+      quickBioInput.setCustomValidity(msg);
+      setFieldError(quickBioInput, msg);
+      syncQuickProfileSaveLock();
+      return !msg;
+    };
+
+    quickUsernameInput?.addEventListener('input', () => validateQuickUsername({ checkAvailability: true }));
+    quickUsernameInput?.addEventListener('blur', () => validateQuickUsername({ checkAvailability: true }));
+    quickBioInput?.addEventListener('input', validateQuickBio);
+    quickBioInput?.addEventListener('blur', validateQuickBio);
+
     profileForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!validateNameFields(profileForm)) return;
+      if (!validateQuickUsername()) return quickUsernameInput?.focus();
+      if (!validateQuickBio()) return quickBioInput?.focus();
       if (!validatePhoneInput(profileForm.elements.contact_number)) return profileForm.elements.contact_number.focus();
       if (!validatePayoutFields(profileForm)) return;
-      const button = event.submitter;
+      const button = event.submitter || quickProfileSubmitBtn;
       const values = new FormData(profileForm);
       const payoutPayload = readPayoutPayload(profileForm);
+      const nextUsername = String(values.get('username') || '').trim().toLowerCase();
+      const nextBio = String(values.get('bio') || '').trim();
+      const prevUsername = String(currentProfile?.username || '').trim().toLowerCase();
+      const prevBio = String(currentProfile?.bio || '').trim();
+      const socialChanged = nextUsername !== prevUsername || nextBio !== prevBio;
       setBusy(button, true);
       try {
+        let savedSocial = null;
+        if (socialChanged) {
+          savedSocial = await rpc('update_own_social_identity', {
+            p_username: nextUsername || null,
+            p_bio: nextBio || null
+          });
+        }
         await rpc('update_own_profile', {
           p_first_name: values.get('first_name'),
           p_middle_name: values.get('middle_name') || null,
@@ -5376,6 +5501,10 @@
           first_name: normalizeNamePart(values.get('first_name')),
           middle_name: normalizeNamePart(values.get('middle_name')) || null,
           last_name: normalizeNamePart(values.get('last_name')) || null,
+          ...(socialChanged ? {
+            username: savedSocial?.username ?? (nextUsername || null),
+            bio: savedSocial?.bio ?? (nextBio || null)
+          } : {}),
           name_setup_required: false,
           payout_channel: payoutPayload.p_payout_channel,
           payout_account_number: payoutPayload.p_payout_account_number,
@@ -5390,8 +5519,22 @@
         }
         window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
         toast('Profile updated.');
-      } catch (error) { toast(friendlyError(error), 'error'); }
-      finally { setBusy(button, false); }
+      } catch (error) {
+        const errMsg = friendlyError(error);
+        if ((error?.code === '23505' || /username|taken/i.test(errMsg)) && quickUsernameInput) {
+          const val = quickUsernameInput.value.trim().toLowerCase();
+          if (/taken|already/i.test(errMsg) && val) quickTakenUsername = val;
+          setQuickUsernameError(errMsg);
+          syncQuickProfileSaveLock();
+          quickUsernameInput.focus();
+        } else {
+          toast(errMsg, 'error');
+        }
+      }
+      finally {
+        setBusy(button, false);
+        syncQuickProfileSaveLock();
+      }
     });
     emailForm.addEventListener('submit', async (event) => {
       event.preventDefault();

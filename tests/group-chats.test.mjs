@@ -58,7 +58,7 @@ test('migration 20261117_105 adds group chats, preserves 90-day retention & secu
   // Policy copy & service worker cache bump
   assert.match(policyJs, /Direct &amp; group messages, chat files/i);
   assert.match(loginHtml, /Direct &amp; group messages, chat files/i);
-  assert.match(sw, /ipon-shell-v61/);
+  assert.match(sw, /ipon-shell-v66/);
 });
 
 test('group chats runtime renders composite avatars, multi-sender bubbles, typing sender, drawer, forward & creation VM flow', async () => {
@@ -688,15 +688,17 @@ test('group chat avatar upload, preview, replace & clear work end-to-end in crea
   const css = read('css/app.css');
   assert.match(css, /\.msg-sidebar\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s);
   assert.match(css, /\.msg-scroll-wrap\s*\{[^}]*min-width:\s*0;[^}]*overflow-x:\s*hidden;/s);
+  assert.match(css, /\.msg-messages-list\s*\{[^}]*flex:\s*0 0 auto;[^}]*overflow-x:\s*clip;[^}]*overflow-y:\s*visible;/s);
+  assert.match(css, /\.msg-typing-live\s*\{[^}]*flex-shrink:\s*0;/s);
+  assert.match(css, /\.msg-typing-live-inner\s*\{[^}]*min-height:\s*0;[^}]*padding:\s*0;/s);
   assert.match(css, /\.msg-text,\s*\.msg-deleted-note\s*\{[^}]*overflow-wrap:\s*anywhere;/s);
   assert.match(css, /\.msg-conv-preview\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s);
 });
 
-test('messaging privacy username error shows inline under input in red & save buttons stay disabled until modified', async () => {
+test('messaging privacy form excludes moved handle/bio fields & save button stays disabled until modified', async () => {
   const messagesJs = read('js/messages.js');
   const coreJs = read('js/core.js');
   const meId = '11111111-1111-4111-8111-111111111111';
-  const anaId = '44444444-4444-4444-8444-444444444444';
 
   const makeEl = (tag = 'div') => {
     const attrs = new Map();
@@ -764,12 +766,9 @@ test('messaging privacy username error shows inline under input in red & save bu
     return els.get(id);
   };
   const docListeners = new Map();
+  const rpcCalls = [];
+  let localPatch = null;
 
-  // Prepare privacy form controls inside VM
-  const unameInput = getEl('msg-set-username');
-  unameInput.value = 'alex_r';
-  const bioInput = getEl('msg-set-bio');
-  bioInput.value = '';
   const friendReq = getEl('msg-set-friend-req');
   friendReq.value = 'EVERYONE';
   const msgReq = getEl('msg-set-msg-req');
@@ -779,8 +778,6 @@ test('messaging privacy username error shows inline under input in red & save bu
   const readReceipts = makeEl('input'); readReceipts.checked = true;
   const privacyForm = getEl('msg-privacy-form');
   privacyForm.elements = {
-    username: unameInput,
-    bio: bioInput,
     allow_friend_requests: friendReq,
     allow_message_requests: msgReq,
     show_online: showOnline,
@@ -829,39 +826,31 @@ test('messaging privacy username error shows inline under input in red & save bu
       bindAvatarFallbacks() { },
       syncPresenceDots() { },
       syncMessagesBadges() { },
+      updateLocalProfile(patch) { localPatch = patch; },
+      setOnlineVisibility() { },
       setBusy(btn, busy) {
         if (!btn) return;
         btn.classList.toggle('is-busy', Boolean(busy));
         btn.disabled = busy ? true : btn.dataset?.dirtyLocked === 'true';
       },
-      setFieldError(ctrl, msg) {
-        ctrl?.toggleAttribute?.('aria-invalid', Boolean(msg));
-        const err = getEl(`${ctrl.id}-error`);
-        err.textContent = msg;
-        err.hidden = !msg;
-      },
       toast() { },
       confirmAction: async () => true,
       friendlyError: (e) => String(e?.message || e || 'Error'),
       dateLabel: (d) => String(d || ''),
-      rpc: async (name) => {
+      rpc: async (name, args) => {
+        rpcCalls.push({ name, args });
         if (name === 'get_conversations') return [];
         if (name === 'get_social_overview') {
           return {
-            me: { id: meId, full_name: 'Alex Rivera', username: 'alex_r', bio: '', chat_privacy: { show_online: true, show_last_seen: true, read_receipts: true } },
+            me: { id: meId, full_name: 'Alex Rivera', username: 'alex_r', bio: 'Saver', chat_privacy: { show_online: true, show_last_seen: true, read_receipts: true } },
             friends: [],
             incoming_requests: [],
             sent_requests: [],
             blocked_users: []
           };
         }
-        if (name === 'search_social_users') {
-          return [{ id: anaId, full_name: 'Ana Cruz', username: 'zediskaaa' }];
-        }
         if (name === 'update_social_profile_and_privacy') {
-          const err = new Error('That username is already taken.');
-          err.code = '23505';
-          throw err;
+          return { username: 'alex_r', bio: 'Saver', chat_privacy: args.p_chat_privacy };
         }
         return {};
       },
@@ -876,33 +865,297 @@ test('messaging privacy username error shows inline under input in red & save bu
   vm.runInNewContext(messagesJs, ctx);
   await ctx.window.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', full_name: 'Alex Rivera' });
 
-  // Open privacy settings modal -> Save button starts disabled until a change is made
+  // Open privacy settings modal -> username & bio are absent; Save button starts disabled
   await Promise.all((docListeners.get('click') || []).map((fn) => fn({
     target: { closest: (sel) => (sel === '#msg-privacy-btn' ? getEl('msg-privacy-btn') : null) }
   })));
+  assert.doesNotMatch(getEl('msg-settings-body').innerHTML, /msg-set-username|msg-set-bio/);
   assert.equal(saveBtn.disabled, true, 'Save messaging settings button must be disabled when nothing changed');
   assert.match(getEl('msg-settings-body').innerHTML, /id="msg-settings-save"[^>]*disabled/);
 
-  // Changing a field enables Save; reverting disables Save again
-  bioInput.value = 'Updated bio';
-  await privacyForm._emit('input');
-  assert.equal(saveBtn.disabled, false, 'Save button enables when bio changes');
-  bioInput.value = '';
-  await privacyForm._emit('input');
+  // Toggling a privacy switch enables Save; reverting disables Save again
+  showOnline.checked = false;
+  await privacyForm._emit('change');
+  assert.equal(saveBtn.disabled, false, 'Save button enables when privacy setting changes');
+  showOnline.checked = true;
+  await privacyForm._emit('change');
   assert.equal(saveBtn.disabled, true, 'Save button disables again when reverted');
 
-  // Submitting a taken username shows RED inline error under #msg-set-username, NOT at bottom #msg-settings-error
-  unameInput.value = 'zediskaaa';
-  await privacyForm._emit('input');
-  await privacyForm.onsubmit({ preventDefault() { } });
-  assert.equal(getEl('msg-set-username-error').hidden, false);
-  assert.equal(getEl('msg-set-username-error').textContent, 'That username is already taken.');
-  assert.equal(unameInput.hasAttribute('aria-invalid'), true);
-  assert.equal(getEl('msg-set-username-help').hidden, true);
-  assert.equal(getEl('msg-settings-error').hidden, true, 'Taken username error must not be pushed to bottom green box');
-  assert.equal(saveBtn.disabled, true, 'Save button stays locked while known taken username is entered');
-
-  // Shared helper bindDirtySaveForm exists and works in core.js
+  // Submitting sends only p_chat_privacy (never overwriting username or bio)
+  friendReq.value = 'MUTUAL_GROUPS';
+  await privacyForm._emit('change');
+  await privacyForm.onsubmit({ preventDefault() { }, submitter: saveBtn });
+  const privCall = rpcCalls.find((c) => c.name === 'update_social_profile_and_privacy');
+  assert.ok(privCall, 'Expected update_social_profile_and_privacy RPC call');
+  assert.equal('p_username' in (privCall.args || {}), false);
+  assert.equal('p_bio' in (privCall.args || {}), false);
+  assert.equal(privCall.args.p_chat_privacy.allow_friend_requests, 'MUTUAL_GROUPS');
+  assert.equal(localPatch?.chat_privacy?.allow_friend_requests, 'MUTUAL_GROUPS');
   assert.match(coreJs, /function bindDirtySaveForm\(/);
-  assert.match(coreJs, /bindDirtySaveForm/);
+});
+
+test('My Account profile form validates username availability and bio live for all roles including Super Admin', async () => {
+  const coreJs = read('js/core.js');
+  const noop = () => {};
+  const els = new Map();
+  const makeEl = (tag = 'div', props = {}) => {
+    const attrs = new Map();
+    const classes = new Set();
+    const listeners = new Map();
+    const el = {
+      tagName: String(tag).toUpperCase(),
+      type: props.type || '',
+      name: props.name || '',
+      id: props.id || '',
+      value: props.value || '',
+      textContent: props.textContent || '',
+      innerHTML: '',
+      title: '',
+      hidden: Boolean(props.hidden),
+      disabled: Boolean(props.disabled),
+      required: Boolean(props.required),
+      readOnly: Boolean(props.readOnly),
+      dataset: {},
+      style: { setProperty: noop, removeProperty: noop },
+      classList: {
+        add: (...c) => c.forEach((x) => classes.add(x)),
+        remove: (...c) => c.forEach((x) => classes.delete(x)),
+        toggle: (c, f) => (f === undefined ? (classes.has(c) ? classes.delete(c) : classes.add(c)) : (f ? classes.add(c) : classes.delete(c))),
+        contains: (c) => classes.has(c)
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k) ?? null,
+      removeAttribute: (k) => attrs.delete(k),
+      toggleAttribute: (k, force) => {
+        if (force === undefined) { if (attrs.has(k)) attrs.delete(k); else attrs.set(k, ''); }
+        else if (force) attrs.set(k, '');
+        else attrs.delete(k);
+      },
+      hasAttribute: (k) => attrs.has(k),
+      setCustomValidity(m) { this._validity = String(m || ''); },
+      checkValidity() { return !this._validity; },
+      focus: noop,
+      select: noop,
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      matches: () => false,
+      closest: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      insertAdjacentElement(_pos, node) { return node; },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      removeEventListener: noop,
+      async _emit(ev, evObj = {}) {
+        const event = { target: el, preventDefault: noop, submitter: saveBtn, ...evObj };
+        for (const fn of (listeners.get(ev) || [])) await fn(event);
+      }
+    };
+    el.elements = new Proxy([], {
+      get(target, prop) {
+        if (prop in target) return target[prop];
+        if (typeof prop === 'string' && !Number.isInteger(Number(prop))) {
+          target[prop] = makeEl('input');
+          target.push(target[prop]);
+          return target[prop];
+        }
+        return target[prop];
+      }
+    });
+    if (props.id) els.set(props.id, el);
+    return el;
+  };
+  const getEl = (id) => {
+    if (!els.has(id)) makeEl(id.includes('dialog') ? 'dialog' : 'div', { id });
+    return els.get(id);
+  };
+
+  const firstName = makeEl('input', { id: 'quick-first-name', name: 'first_name', value: 'Zedrick' });
+  const middleName = makeEl('input', { id: 'quick-middle-name', name: 'middle_name', value: '' });
+  const lastName = makeEl('input', { id: 'quick-last-name', name: 'last_name', value: '' });
+  const usernameInput = makeEl('input', { id: 'quick-username', name: 'username', value: '' });
+  const usernameHelp = makeEl('small', { id: 'quick-username-help', textContent: '3–24 lowercase letters, numbers, or underscores.' });
+  const usernameError = makeEl('small', { id: 'quick-username-error', hidden: true });
+  const bioInput = makeEl('textarea', { id: 'quick-bio', name: 'bio', value: '' });
+  const bioCounter = makeEl('small', { id: 'quick-bio-count', textContent: '0 / 58 characters' });
+  const bioError = makeEl('small', { id: 'quick-bio-error', hidden: true });
+  const contactInput = makeEl('input', { id: 'quick-contact', name: 'contact_number', value: '09171234567' });
+  const saveBtn = makeEl('button', { id: 'quick-profile-save', type: 'submit', textContent: 'Save changes' });
+
+  const attachErrorEl = (input, errEl) => {
+    errEl.classList.add('field-error');
+    input.closest = (sel) => (String(sel || '').includes('.field')
+      ? { querySelector: (q) => (q === '.field-error' ? errEl : (String(q || '').includes('label') ? makeEl('label') : null)), appendChild: (n) => n, append: noop }
+      : null);
+  };
+  attachErrorEl(usernameInput, usernameError);
+  attachErrorEl(bioInput, bioError);
+
+  const profileForm = makeEl('form', { id: 'quick-profile-form' });
+  profileForm.elements = Object.assign(
+    [firstName, middleName, lastName, usernameInput, bioInput, contactInput],
+    { first_name: firstName, middle_name: middleName, last_name: lastName, username: usernameInput, bio: bioInput, contact_number: contactInput }
+  );
+  profileForm.querySelector = (sel) => (sel === '[type="submit"]' ? saveBtn : null);
+  profileForm.querySelectorAll = (sel) => (sel.includes('first_name') ? [firstName, middleName, lastName] : []);
+
+  const appLoader = makeEl('div', { id: 'app-loader' });
+  const superAdmin = {
+    id: '99999999-9999-4999-8999-999999999999',
+    role: 'SUPER_ADMIN',
+    status: 'ACTIVE',
+    first_name: 'Zedrick',
+    middle_name: null,
+    last_name: null,
+    full_name: 'Zedrick',
+    contact_number: '09171234567',
+    username: null,
+    bio: null,
+    email: 'owner@myipon.example',
+    notifications_enabled: true,
+    social_links: {}
+  };
+  const rpcCalls = [];
+  const toasts = [];
+  let rejectTakenNext = true;
+
+  const clientMock = {
+    rpc: async (name, args) => {
+      rpcCalls.push({ name, args });
+      if (name === 'check_username_available') {
+        return { data: String(args?.p_username || '').toLowerCase() !== 'taken_handle', error: null };
+      }
+      if (name === 'update_own_social_identity') {
+        if (args?.p_username === 'taken_handle' && rejectTakenNext) {
+          return { data: null, error: { code: '23505', message: 'That username is already taken.' } };
+        }
+        superAdmin.username = args?.p_username ?? null;
+        superAdmin.bio = args?.p_bio ?? null;
+        return { data: { username: superAdmin.username, bio: superAdmin.bio }, error: null };
+      }
+      if (name === 'update_own_profile') {
+        return { data: null, error: null };
+      }
+      if (name === 'get_profile_card_appearance') {
+        return { data: { card_theme: 'emerald', cover_url: null, profile_effect: 'none' }, error: null };
+      }
+      return { data: null, error: null };
+    },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: async () => ({ data: { ...superAdmin }, error: null })
+        })
+      })
+    }),
+    storage: null,
+    channel: () => ({ on() { return this; }, subscribe: () => ({}) }),
+    getChannels: () => [],
+    removeChannel: noop
+  };
+
+  const ctx = {
+    window: null,
+    FormData: class {
+      constructor(form) { this._form = form; }
+      get(k) { return this._form?.elements?.[k]?.value ?? ''; }
+    },
+    CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    Event: class Event { constructor(type) { this.type = type; } },
+    document: {
+      hidden: false,
+      getElementById: (id) => (id === 'app-loader' ? appLoader : getEl(id)),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      createElement: (t) => makeEl(t),
+      addEventListener: noop,
+      removeEventListener: noop,
+      body: Object.assign(makeEl('body'), { dataset: {} }),
+      documentElement: makeEl('html')
+    },
+    location: { href: 'http://localhost/super-admin.html', pathname: '/super-admin.html', origin: 'http://localhost', search: '', replace: noop },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    navigator: {},
+    supabase: { createClient: () => clientMock },
+    matchMedia: () => ({ matches: false, addEventListener: noop, removeEventListener: noop }),
+    requestAnimationFrame: noop,
+    cancelAnimationFrame: noop,
+    dispatchEvent: noop,
+    addEventListener: noop,
+    removeEventListener: noop,
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    setTimeout, clearTimeout, console
+  };
+  ctx.window = ctx;
+  ctx.globalThis = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+
+  const patchedCore = coreJs.replace(
+    '  window.Ipon = {',
+    `  window.__testMountAccount = async (profile) => {
+    currentProfile = profile;
+    ensureClient();
+    bindAccountDialog();
+    await loadAccountDialog();
+  };
+  window.__testToasts = [];
+  window.Ipon = {`
+  ).replace(
+    '  function toast(message, tone = \'success\') {',
+    '  function toast(message, tone = \'success\') { toastsPush(message, tone);'
+  );
+  ctx.toastsPush = (m, t) => toasts.push({ m, t });
+
+  vm.runInNewContext(patchedCore, ctx, { filename: 'js/core.js', timeout: 5000 });
+  await ctx.window.__testMountAccount({ ...superAdmin });
+
+  assert.equal(saveBtn.disabled, true, 'Profile Save button starts disabled until a field changes');
+
+  // Invalid handle locks Save and renders inline error
+  usernameInput.value = 'ab';
+  await usernameInput._emit('input');
+  await profileForm._emit('input');
+  assert.equal(usernameError.hidden, false);
+  assert.match(usernameError.textContent, /3–24 lowercase/);
+  assert.equal(usernameHelp.hidden, true);
+  assert.equal(saveBtn.disabled, true);
+
+  // Submitting a colliding handle catches 23505 inline under #quick-username & locks Save
+  usernameInput.value = 'taken_handle';
+  await usernameInput._emit('input');
+  await profileForm._emit('input');
+  await profileForm._emit('submit');
+  assert.equal(usernameError.hidden, false);
+  assert.equal(usernameError.textContent, 'That username is already taken.');
+  assert.equal(saveBtn.disabled, true);
+
+  // Bio over 58 chars shows inline error and locks Save; <= 58 chars unlocks Save & updates counter
+  bioInput.value = 'A'.repeat(59);
+  await bioInput._emit('input');
+  await profileForm._emit('input');
+  assert.equal(bioCounter.textContent, '59 / 58 characters');
+  assert.equal(bioError.hidden, false);
+  assert.match(bioError.textContent, /58 characters/);
+  assert.equal(saveBtn.disabled, true);
+
+  // Typing available handle + bio updates counter and Super Admin saves cleanly via update_own_social_identity
+  usernameInput.value = 'zedrick_owner';
+  await usernameInput._emit('input');
+  bioInput.value = 'Building My Ipon Group';
+  await bioInput._emit('input');
+  await profileForm._emit('input');
+  assert.equal(bioCounter.textContent, '22 / 58 characters');
+  assert.equal(saveBtn.disabled, false);
+
+  await profileForm._emit('submit');
+  const socialSave = rpcCalls.find((c) => c.name === 'update_own_social_identity' && c.args.p_username === 'zedrick_owner');
+  assert.ok(socialSave, 'Expected update_own_social_identity RPC call');
+  assert.equal(socialSave.args.p_bio, 'Building My Ipon Group');
+  assert.equal(ctx.window.Ipon.profile.username, 'zedrick_owner');
+  assert.equal(ctx.window.Ipon.profile.bio, 'Building My Ipon Group');
+  assert.ok(toasts.some((x) => x.m === 'Profile updated.'));
 });

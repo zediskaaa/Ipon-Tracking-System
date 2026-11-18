@@ -91,7 +91,7 @@ test('Shared files excludes voice notes and voice messages while counting and li
   renderDrawer();
   assert.match(drawerEl.innerHTML, /No shared files yet/);
   assert.match(swJs, /ipon-shell-v(?:2[3-9]|[3-9]\d)/);
-  assert.match(dashboardHtml, /js\/messages\.js\?v=20261118-42/);
+  assert.match(dashboardHtml, /js\/messages\.js\?v=20261118-44/);
 });
 
 test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Manager, Google Drive) work end-to-end', async () => {
@@ -108,13 +108,12 @@ test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Man
   assert.match(messagesJs, /id="msg-gallery-input"[^>]*accept="image\/\*,video\/\*"/);
   assert.match(messagesJs, /id="msg-drive-input"[^>]*accept="\*\/\*"/);
   assert.match(messagesJs, /id="msg-gdrive-dialog"[\s\S]*href="https:\/\/drive\.google\.com\/drive\/my-drive"/);
-  assert.match(messagesJs, /id="msg-gdrive-link-form"[\s\S]*id="msg-gdrive-link-input"/);
+  assert.doesNotMatch(messagesJs, /msg-gdrive-link-form|msg-gdrive-link-input|msg-gdrive-link-error/);
   assert.match(messagesJs, /class="msg-swipe-reply-badge"/);
   assert.match(appCss, /\.msg-row\s*\{[^}]*touch-action:\s*pan-y;/s);
   assert.match(appCss, /\.msg-swipe-reply-badge\s*\{/);
   assert.match(appCss, /\.msg-attach-menu\s*\{/);
   assert.match(appCss, /\.msg-gdrive-dialog\s*\{/);
-  assert.match(appCss, /\.msg-gdrive-error\s*\{[^}]*visibility:\s*hidden;/s);
   assert.match(androidManifest, /<queries>[\s\S]*com\.google\.android\.apps\.docs[\s\S]*com\.google\.android\.apps\.docs\.storage[\s\S]*<\/queries>/);
   assert.match(mainActivity, /addJavascriptInterface\(new PickerSourceBridge\(\),\s*"IponNativePicker"\)/);
   assert.match(mainActivity, /class PickerSourceBridge[\s\S]*@JavascriptInterface[\s\S]*public void setSource/);
@@ -160,8 +159,6 @@ test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Man
   const composerInputEl = { dataset: {}, focused: false, value: '', focus() { this.focused = true; }, style: {} };
   const msgListEl = { innerHTML: '', scrollTop: 0, scrollHeight: 0, clientHeight: 400 };
   const gdriveOpenWebEl = { focused: false, focus() { this.focused = true; } };
-  const gdriveLinkInputEl = { value: '', focused: false, attrs: {}, setAttribute(k, v) { this.attrs[k] = String(v); }, focus() { this.focused = true; } };
-  const gdriveLinkErrEl = { textContent: '', title: '', attrs: {}, classList: makeClassList(), setAttribute(k, v) { this.attrs[k] = String(v); } };
   const gdriveDlgEl = { id: 'msg-gdrive-dialog', open: false, showModal() { this.open = true; }, close() { this.open = false; } };
   const elements = {
     'msg-attach-menu': attachMenuEl,
@@ -172,8 +169,6 @@ test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Man
     'msg-drive-input': driveInputEl,
     'msg-gdrive-dialog': gdriveDlgEl,
     'msg-gdrive-open-web': gdriveOpenWebEl,
-    'msg-gdrive-link-input': gdriveLinkInputEl,
-    'msg-gdrive-link-error': gdriveLinkErrEl,
     'msg-context-bar': contextBarEl,
     'msg-upload-queue': uploadQueueEl,
     'msg-composer-input': composerInputEl,
@@ -322,20 +317,6 @@ test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Man
   assert.equal(gdriveDlgEl.open, true);
   assert.equal(gdriveOpenWebEl.focused, true);
   assert.equal(clickedInputs.length, clicksBeforeWebDrive, 'Web gdrive option opens chooser dialog instead of generic file picker');
-
-  // Foreign non-Drive URL shows inline error; valid Google Drive folder URL inserts into composer
-  gdriveLinkInputEl.value = 'https://evil.example/file/123';
-  await emitDoc('submit', { preventDefault: () => { }, target: { id: 'msg-gdrive-link-form' } });
-  assert.equal(gdriveDlgEl.open, true);
-  assert.equal(gdriveLinkInputEl.attrs['aria-invalid'], 'true');
-  assert.match(gdriveLinkErrEl.textContent, /drive\.google\.com/);
-
-  gdriveLinkInputEl.value = 'drive.google.com/drive/folders/1AbCdEf';
-  await emitDoc('input', { target: { id: 'msg-gdrive-link-input', value: gdriveLinkInputEl.value } });
-  assert.equal(gdriveLinkErrEl.textContent, '');
-  await emitDoc('submit', { preventDefault: () => { }, target: { id: 'msg-gdrive-link-form' } });
-  assert.equal(gdriveDlgEl.open, false);
-  assert.equal(composerInputEl.value, 'https://drive.google.com/drive/folders/1AbCdEf');
 
   // Browse device inside dialog falls back to #msg-drive-input cleanly
   gdriveDlgEl.open = true;
