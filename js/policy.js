@@ -54,7 +54,7 @@
     <h3>Who can access it</h3>
     <p>Access is strictly limited by assigned role and active savings group. Authorized group administrators and treasurers review permitted group workspace activity and payout info. Platform administrators manage system health, storage hygiene, account access, bug reports, and feature requests, and are not intended to view private group savings ledgers.</p>
     <h3>Detailed data retention, ongoing savings protection &amp; automatic deletion</h3>
-    <p>To keep database tables lean and fast while protecting active group savers permanently, scheduled <code>pg_cron</code> jobs execute nightly at <strong>12:00 AM Manila time</strong> (paired with cloud Storage object cleanup and PostgreSQL <code>autovacuum</code> disk reclamation):</p>
+    <p>To keep the app fast and storage clean while protecting active group savers permanently, automated system cleanup runs nightly at <strong>12:00 AM Manila time</strong>:</p>
     <div class="policy-retention-grid">
       <div class="policy-retention-row"><span class="policy-ttl-badge is-keep">Ongoing</span><div class="policy-retention-detail"><strong>Active savings &amp; ongoing goals (Immune)</strong><span>Active goals (<code>savings_goals</code>) and unbinned savings records (<code>contributions</code>, <code>withdrawals</code>, <code>expenses</code>, <code>contribution_periods</code>) are never automatically erased while contributions or goal updates remain active.</span></div></div>
       <div class="policy-retention-row"><span class="policy-ttl-badge is-warn">90d &rarr; 6m</span><div class="policy-retention-detail"><strong>Dormant / forgotten savings (Email + 7d notice)</strong><span>Groups with zero deposits or goal updates receive an email reminder at <strong>90 days</strong> and a final warning <strong>7 days prior to 6 months</strong> before dormant ledgers and untouched goals move into the 30-day Bin.</span></div></div>
@@ -133,7 +133,7 @@
             <button class="dialog-close" type="button" data-retention-dialog-close aria-label="Close retention policy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
           <div class="retention-policy-body">
-            <p class="retention-policy-lead">myIPON runs automated database and cloud storage maintenance every midnight (12:00 AM PHT) via scheduled <code>pg_cron</code> jobs so storage stays clean while keeping ongoing group savings &amp; active goals 100% protected.</p>
+            <p class="retention-policy-lead">myIPON runs automated nightly maintenance every midnight (12:00 AM PHT) so cloud storage stays clean while keeping ongoing group savings &amp; active goals 100% protected.</p>
             <div class="retention-policy-grid">
               <article class="retention-policy-item">
                 <strong>Ongoing · Active savings &amp; goals (Protected)</strong>
@@ -153,7 +153,7 @@
               </article>
               <article class="retention-policy-item">
                 <strong>1+ year · CSV annual roll-up &amp; cloud media storage</strong>
-                <p>Confirmed year-old ledgers can be exported to CSV first in <strong>Reports &rarr; Annual data roll-up</strong> and rolled into permanent totals. Messages &amp; notes are capped at 500 characters, and media lives in cloud Storage alongside PostgreSQL <code>autovacuum</code>.</p>
+                <p>Confirmed year-old ledgers can be exported to CSV first in <strong>Reports &rarr; Annual data roll-up</strong> and rolled into permanent totals. Messages &amp; notes are capped at 500 characters, and media is stored securely in cloud storage with automatic background optimization.</p>
               </article>
               <article class="retention-policy-item">
                 <strong>In-app alerts vs. Email delivery</strong>

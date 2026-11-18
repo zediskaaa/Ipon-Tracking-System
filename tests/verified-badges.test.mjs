@@ -511,4 +511,7 @@ test('My Account verified badge card lets members message the creator directly w
   assert.match(coreJs, /MAX_AVATAR_BYTES\s*=\s*8\s*\*\s*1024\s*\*\s*1024/);
   assert.match(coreJs, /function prepareAvatarDataUrl[\s\S]*?skipCompressBytes:\s*MAX_AVATAR_BYTES/);
   assert.match(coreJs, /nativeCropEdge[\s\S]*?Math\.min\(2400,\s*nativeCropEdge\)/);
+  assert.doesNotMatch(read('js/policy.js'), /pg_cron|autovacuum/i);
+  assert.doesNotMatch(read('login.html'), /pg_cron|autovacuum/i);
+  assert.doesNotMatch(read('super-admin.html'), /pg_cron|autovacuum/i);
 });
