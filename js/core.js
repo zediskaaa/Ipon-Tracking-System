@@ -8357,28 +8357,35 @@
           }
         } catch (_) { }
       }
-      if (profile.group_id && profile.role !== 'SUPER_ADMIN' && !profile.workspace_mode) {
-        try {
-          const { data: gModeRow } = await withTimeout(
-            client.from('groups').select('workspace_mode').eq('id', profile.group_id).maybeSingle(),
-            5000
-          );
-          profile.workspace_mode = gModeRow?.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP';
-        } catch (_) {
-          profile.workspace_mode = 'GROUP';
-        }
-      } else if (!profile.workspace_mode) {
-        profile.workspace_mode = 'GROUP';
-      }
       profile.permissions = defaultPermissionsForRole(profile.role);
-      if (profile.role !== 'SUPER_ADMIN' && profile.group_id && profile.status === 'ACTIVE') {
-        try {
-          const permRes = await withTimeout(client.rpc('get_my_member_permissions'), 5000);
-          if (!permRes?.error && permRes?.data) {
-            profile.permissions = normalizePermissions(permRes.data, profile.role);
+      await Promise.all([
+        (async () => {
+          if (profile.group_id && profile.role !== 'SUPER_ADMIN' && !profile.workspace_mode) {
+            try {
+              const { data: gModeRow } = await withTimeout(
+                client.from('groups').select('workspace_mode').eq('id', profile.group_id).maybeSingle(),
+                5000
+              );
+              profile.workspace_mode = gModeRow?.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP';
+            } catch (_) {
+              profile.workspace_mode = 'GROUP';
+            }
+          } else if (!profile.workspace_mode) {
+            profile.workspace_mode = 'GROUP';
           }
-        } catch (_) { }
-      }
+        })(),
+        (async () => {
+          if (profile.role !== 'SUPER_ADMIN' && profile.group_id && profile.status === 'ACTIVE') {
+            try {
+              const permRes = await withTimeout(client.rpc('get_my_member_permissions'), 5000);
+              if (!permRes?.error && permRes?.data) {
+                profile.permissions = normalizePermissions(permRes.data, profile.role);
+              }
+            } catch (_) { }
+          }
+        })(),
+        refreshVerifiedBadgesCache({ force: true }).catch(() => { })
+      ]);
       currentProfile = profile;
       syncWorkspaceMode(profile.workspace_mode);
       try {
@@ -8408,7 +8415,6 @@
           return { configured: true, profile: null, session, redirecting: true };
         }
       }
-      await refreshVerifiedBadgesCache({ force: true }).catch(() => { });
       mountShell(profile.role);
       document.querySelector('.app-brand')?.setAttribute('href', homeForRole(profile.role));
       renderSidebarUser(profile);

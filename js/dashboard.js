@@ -663,13 +663,12 @@
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { renderEmptySnapshot(); return; }
     try {
-      const [summaryResult, calendarResult, pending, memberResult, progressResult, goalResult, groupsResult, groupProfilesResult, allGoalsResult, walletResult, refreshedPerms] = await Promise.all([
+      const [summaryResult, calendarResult, pending, memberResult, progressResult, groupsResult, groupProfilesResult, allGoalsResult, walletResult, refreshedPerms] = await Promise.all([
         Ipon.client.rpc('get_savings_summary'),
         Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'),
         getPending(),
         Ipon.client.from('members').select('id,full_name,monthly_contribution_amount,payout_channel,payout_account_number,payout_account_name', { count: 'exact' }).eq('status', 'ACTIVE').eq('activation_status', 'ACTIVE').is('deleted_at', null).order('full_name'),
         Ipon.client.from('v_contribution_status').select('member_id,payment_status,paid_amount').eq('period_month', start),
-        Ipon.client.from('savings_goals').select('id,title').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.rpc('get_my_groups'),
         Ipon.client.rpc('get_group_member_identities').then(async (res) => (
           !res.error && Array.isArray(res.data)
@@ -694,7 +693,7 @@
         state.profile.workspace_mode = null;
       }
       if (refreshedPerms) state.profile.permissions = refreshedPerms;
-      if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (goalResult.error) throw goalResult.error;
+      if (summaryResult.error) throw summaryResult.error; if (calendarResult.error) throw calendarResult.error; if (memberResult.error) throw memberResult.error; if (progressResult.error) throw progressResult.error; if (allGoalsResult.error) throw allGoalsResult.error;
       if (!summaryResult.data && (state.profile?.group_id || currentGroup)) {
         throw new Error('Group savings summary is currently unavailable.');
       }
@@ -727,7 +726,7 @@
       const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
       const monthCollected = progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0);
       document.getElementById('dashboard-members').textContent = memberResult.count ?? (memberResult.data?.length || 0); document.getElementById('dashboard-month-collected').textContent = Ipon.money(monthCollected); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid;
-      renderGoalOptions(goalResult.data || []);
+      renderGoalOptions(activeGoalsList);
       if (remindUnpaidBtn) remindUnpaidBtn.hidden = !(unpaid > 0 && ['ADMIN', 'TREASURER'].includes(state.profile?.role));
       populateQuickRecordMembers(memberResult.data || []);
       updateDashboardGoalProgress(summary.tracked_savings ?? 0);

@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v66';
+const CACHE_NAME = 'ipon-shell-v67';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname) && self.location.protocol !== 'https:';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
@@ -41,8 +41,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   const isHtmlRequest = request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html');
+  const isStaticAsset = /\.(?:css|js|json|png|jpe?g|webp|svg|woff2?|ttf|webmanifest)$/i.test(url.pathname);
   event.respondWith(
-    fetch(isHtmlRequest ? new Request(request, { cache: 'no-store' }) : request)
+    (isStaticAsset ? caches.match(request) : Promise.resolve(null))
+      .then((hit) => hit || fetch(isHtmlRequest ? new Request(request, { cache: 'no-store' }) : request))
       .then((response) => {
         if (response && response.ok && (response.type === 'basic' || response.type === 'cors')) {
           const copy = response.clone();

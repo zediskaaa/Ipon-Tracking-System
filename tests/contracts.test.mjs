@@ -832,8 +832,9 @@ test('dashboard lets users choose the calendar tracking goal and uses a bounded 
   assert.match(html, /id="mobile-calendar-goal-select"[^>]*>[\s\S]*?General savings/);
   assert.doesNotMatch(html, /id="dashboard-completion"/);
   assert.match(script, /rpc\('get_pending_review_summary'\)/);
-  assert.match(script, /from\('savings_goals'\)\.select\('id,title'\)[\s\S]*?eq\('status', 'ACTIVE'\)/);
-  assert.match(script, /renderGoalOptions\(goalResult\.data \|\| \[\]\)/);
+  assert.match(script, /from\('savings_goals'\)\.select\('id,title,target_amount,target_date'\)[\s\S]*?eq\('status', 'ACTIVE'\)/);
+  assert.match(script, /renderGoalOptions\(activeGoalsList\)/);
+  assert.doesNotMatch(script, /goalResult/);
   assert.match(script, /goalPrefStorageKey\(groupId\)/);
   assert.match(script, /selectedGoalId = goalOptions\[0\]\.id/);
   assert.match(script, /goalSelects\.forEach\(\(select\) => select\.addEventListener\('change'/);
@@ -4340,6 +4341,7 @@ test('startup initialization auto-recovers transient errors, JWT expiry, and Web
   assert.equal(refreshCalls, 1);
   assert.equal(profileCalls, 2);
   assert.ok(!injectedHtml.some((html) => html.includes('id="startup-error"')));
+  assert.match(core, /await Promise\.all\(\[[\s\S]*?workspace_mode[\s\S]*?get_my_member_permissions[\s\S]*?refreshVerifiedBadgesCache\(\{ force: true \}\)/);
 
   // Background unhandledrejection with NavigatorLockAcquireTimeoutError never renders #startup-error
   (winListeners.get('unhandledrejection') || []).forEach((fn) => fn({
