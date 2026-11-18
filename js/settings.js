@@ -37,7 +37,7 @@
     return;
   }
 
-  document.getElementById('my-name').textContent = state.profile.full_name;
+  document.getElementById('my-name').innerHTML = `${Ipon.escapeHtml(state.profile.full_name)}${Ipon.verifiedBadgesHtml?.(state.profile) || ''}`;
   const roleKey = String(state.profile.role || '').toLowerCase().replace(/_/g, '-');
   const statusKey = String(state.profile.status || '').toLowerCase();
   document.getElementById('my-role').innerHTML = `<span class="role-badge role-${Ipon.escapeHtml(roleKey)}">${Ipon.escapeHtml(state.profile.role)}</span>`;
@@ -138,7 +138,7 @@
                 : ''))
         : '';
       return `<tr>
-      <td data-label="User"><strong>${Ipon.escapeHtml(profile.full_name)}</strong><br><small class="field-help">${Ipon.escapeHtml(profile.email || '')}</small>${memberNote}</td>
+      <td data-label="User"><strong>${Ipon.escapeHtml(profile.full_name)}${Ipon.verifiedBadgesHtml?.(profile.user_id || profile.id) || ''}</strong><br><small class="field-help">${Ipon.escapeHtml(profile.email || '')}</small>${memberNote}</td>
       <td data-label="Role"><select data-field="role" data-id="${profile.user_id}" aria-label="Role for ${Ipon.escapeHtml(profile.full_name)}"><option value="MEMBER" ${profile.role === 'MEMBER' ? 'selected' : ''}>MEMBER</option><option value="TREASURER" ${profile.role === 'TREASURER' ? 'selected' : ''}>TREASURER</option></select></td>
       <td data-label="Status"><select data-field="status" data-id="${profile.user_id}" aria-label="Status for ${Ipon.escapeHtml(profile.full_name)}"><option value="PENDING" ${profile.status === 'PENDING' ? 'selected' : ''}>PENDING</option><option value="ACTIVE" ${profile.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option><option value="DISABLED" ${profile.status === 'DISABLED' ? 'selected' : ''}>DISABLED</option></select></td>
       <td data-label="Actions"><button class="icon-action" type="button" data-save-access="${profile.user_id}">Save</button></td>

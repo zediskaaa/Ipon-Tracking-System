@@ -379,24 +379,33 @@ test('2-month inactivity rule, Thank-you unlock, and verified-since hover toolti
   (docListeners.get('keydown') || []).forEach((fn) => fn({ key: 'Escape' }));
   assert.equal(tip.hidden, true);
 
-  const badgeSpan = {
-    dataset: { verifiedTier: 'BLUE', verifiedSince: '2026-10-05T08:00:00Z', verifiedExpires: '' },
+  // Hovering ANOTHER user's BLUE badge shows ONLY Verified Account + Verified since (hides retention/expiry details)
+  const otherUserSpan = {
+    dataset: { verifiedTier: 'BLUE', verifiedUid: 'other-u', verifiedSince: '2026-10-05T08:00:00Z', verifiedExpires: '' },
     getBoundingClientRect: () => ({ left: 200, top: 200, right: 220, bottom: 218, width: 20, height: 18 }),
     contains: () => false
   };
-  const fakeEvent = { target: { closest: (sel) => (sel.includes('data-verified-tier') ? badgeSpan : null) } };
-  (docListeners.get('mouseover') || []).forEach((fn) => fn(fakeEvent));
+  (docListeners.get('mouseover') || []).forEach((fn) => fn({ target: { closest: (sel) => (sel.includes('data-verified-tier') ? otherUserSpan : null) } }));
 
   tip = appendedNodes.find((n) => n.id === 'ipon-verified-badge-tooltip');
   assert.ok(tip, 'Expected floating badge tooltip to mount on hover');
   assert.equal(tip.hidden, false);
   assert.match(tip.innerHTML, /Verified Account/);
   assert.match(tip.innerHTML, /Verified since Oct 5, 2026/);
+  assert.doesNotMatch(tip.innerHTML, /Permanent|Auto-removes|2 months inactive|Valid until/i);
+
+  // Hovering OWN permanent BLUE badge shows personal "Permanent · Auto-removes after 2 months inactive." note
+  const badgeSpan = {
+    dataset: { verifiedTier: 'BLUE', verifiedUid: 'self-u', verifiedSelf: '1', verifiedSince: '2026-10-05T08:00:00Z', verifiedExpires: '' },
+    getBoundingClientRect: () => ({ left: 200, top: 200, right: 220, bottom: 218, width: 20, height: 18 }),
+    contains: () => false
+  };
+  (docListeners.get('mouseover') || []).forEach((fn) => fn({ target: { closest: (sel) => (sel.includes('data-verified-tier') ? badgeSpan : null) } }));
   assert.match(tip.innerHTML, /Auto-removes after 2 months inactive/i);
 
-  // Hovering a temporary BLUE badge must NOT mention "2 months inactive" and migration 114 limits it to permanent
+  // Hovering OWN temporary BLUE badge shows "Valid until ..." without "2 months inactive"
   const tempBadgeSpan = {
-    dataset: { verifiedTier: 'BLUE', verifiedSince: '2026-10-05T08:00:00Z', verifiedExpires: '2027-01-15T08:00:00Z' },
+    dataset: { verifiedTier: 'BLUE', verifiedUid: 'self-u', verifiedSelf: '1', verifiedSince: '2026-10-05T08:00:00Z', verifiedExpires: '2027-01-15T08:00:00Z' },
     getBoundingClientRect: () => ({ left: 200, top: 200, right: 220, bottom: 218, width: 20, height: 18 }),
     contains: () => false
   };
@@ -435,9 +444,41 @@ test('My Account verified badge card lets members message the creator directly w
   assert.match(messagesJs, /window\.IponMessages = \{[\s\S]*openDirectMessage/);
   assert.match(css, /\.account-support-row\.account-badge-row\s*\{/);
   assert.match(css, /\.account-badge-pill\.is-available\s*\{/);
+  assert.match(coreJs, /is-badge-granted[\s\S]*?badgeSealSvgMarkup\('#1d9bf0'/);
+  assert.match(css, /\.notification-item-icon\.is-badge-granted/);
 
   // Announcement bullet parser handles "Thank you" before isOutro so release bullets keep section cards
   const bulletIdx = coreJs.indexOf("if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {");
   const outroIdx = coreJs.indexOf('if (isOutro(line) && !hasMoreStructuredContent)');
   assert.ok(bulletIdx !== -1 && outroIdx > bulletIdx, 'Bullet detection must precede outro detection');
+
+  // Badges appear everywhere people are viewed (group picker, forward/blocked lists, workspace tables, discussions)
+  assert.match(messagesJs, /msg-group-pick-copy[\s\S]*?userBadgesHtml\(u\)/);
+  assert.match(messagesJs, /msg-group-chip[\s\S]*?userBadgesHtml\(u\)/);
+  assert.match(messagesJs, /msg-forward-meta[\s\S]*?userBadgesHtml\(/);
+  assert.match(messagesJs, /msg-blocked-row[\s\S]*?userBadgesHtml\(b\)/);
+  assert.match(read('js/members.js'), /verifiedBadgesHtml\?\.\(account\?\.id \|\| member\.id\)/);
+  assert.match(read('js/settings.js'), /verifiedBadgesHtml\?\.\(profile\.user_id \|\| profile\.id\)/);
+  assert.match(read('js/requests.js'), /verifiedBadgesHtml\?\.\(item\.requesterId \|\| item\.requesterName\)/);
+  assert.match(read('js/reports.js'), /verifiedBadgesHtml\?\.\(row\.member_id \|\| row\.member_name\)/);
+  assert.match(read('js/dashboard.js'), /verifiedBadgesHtml\?\.\(person\.userId \|\| person\.memberId \|\| person\.name\)/);
+  assert.match(coreJs, /record-thread-msg-meta[\s\S]*?verifiedBadgesHtml\(c\.author_id \|\| authorName\)/);
+
+  const { ipon } = runCoreInVm(async () => ({ data: null, error: null }));
+  ipon.registerVerifiedBadges([{ user_id: 'u-alias-1', verified_badge: 'BLUE', granted_at: '2026-11-18T08:00:00Z' }]);
+  ipon.registerMemberAvatars([{ id: 'u-alias-1', member_id: 'mem-1', full_name: 'Alias Saver', avatar_url: null }]);
+  assert.match(ipon.verifiedBadgesHtml('mem-1'), /data-verified-uid="u-alias-1"/);
+  assert.match(ipon.verifiedBadgesHtml('Alias Saver'), /data-verified-uid="u-alias-1"/);
+
+  // Self-messaging (Saved Messages) SQL + UI contracts
+  const mig115 = read('database/migrations/20261118_115_self_messaging.sql');
+  assert.match(mig115, /user_a <= user_b/i);
+  assert.match(mig115, /start_or_open_direct_chat\(/i);
+  assert.match(mig115, /send_chat_message\(/i);
+  assert.match(mig115, /get_social_user_profile\(/i);
+  assert.match(mig115, /search_social_users\(/i);
+  assert.match(messagesJs, /function isSelfUser\(/);
+  assert.match(messagesJs, /Message yourself/);
+  assert.match(messagesJs, /Saved Messages/);
+  assert.match(css, /\.msg-self-pill\s*\{/);
 });

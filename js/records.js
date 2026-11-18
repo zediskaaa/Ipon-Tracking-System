@@ -557,7 +557,7 @@
       const exemptBtn = canToggleExempt
         ? ` <button class="icon-action" type="button" data-exempt-member="${row.member_id}" data-exempt-month="${row.period_month}" data-exempt-state="${row.is_exempt ? '1' : '0'}" title="${Ipon.escapeHtml(row.exempt_reason || 'Toggle exemption for this month')}">${row.is_exempt ? 'Remove exempt' : 'Exempt'}</button>`
         : '';
-      return `<tr><td>${Ipon.escapeHtml(row.member_name)}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}${exemptBtn}</td></tr>`;
+      return `<tr><td>${Ipon.escapeHtml(row.member_name)}${Ipon.verifiedBadgesHtml?.(row.member_id || row.member_name) || ''}</td><td>${Ipon.dateLabel(row.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td>${statusBadge(row.payment_status)}${exemptBtn}</td></tr>`;
     }).join('') : `<tr><td colspan="6" class="empty-state">${selectedMemberName ? `No contribution status found for ${Ipon.escapeHtml(selectedMemberName)} in this month.` : 'No contribution periods for this month.'}</td></tr>`;
 
     let entriesQuery = Ipon.client.from('contributions')
@@ -583,7 +583,7 @@
       const bulkBox = isAdmin && entry.approval_status === 'PENDING'
         ? `<input type="checkbox" class="bulk-entry-check" value="${entry.id}" aria-label="Select pending addition"> `
         : '';
-      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${bulkBox}${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${reasonNoteHtml(entry)}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td>${Ipon.paymentMethodBadge(entry.payment_method)}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`;
+      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${bulkBox}${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${Ipon.verifiedBadgesHtml?.(entry.contribution_periods.members.id || entry.contribution_periods.members.full_name) || ''}${reasonNoteHtml(entry)}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td>${Ipon.paymentMethodBadge(entry.payment_method)}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`;
     }).join('') : `<tr><td colspan="7" class="empty-state">${selectedMemberName ? `No additions found for ${Ipon.escapeHtml(selectedMemberName)}.` : 'No additions matching this filter yet.'}</td></tr>`;
     updateBulkSelectionUi();
     if (!preserveAmount) await syncSuggestedAmount();
@@ -626,7 +626,7 @@
     updatePager(count);
     tbody.innerHTML = data.length ? data.map((row) => {
       const isCancelled = row.approval_status === 'VOIDED' || row.approval_status === 'REJECTED';
-      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(row.transaction_date)}</td><td>${Ipon.escapeHtml(row.category)}</td><td>${Ipon.escapeHtml(row.description)}${reasonNoteHtml(row)}</td><td>${Ipon.escapeHtml(row.person_responsible)}</td><td>${Ipon.paymentMethodBadge(row.payment_method)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${statusBadge(row.approval_status)}</td><td>${actionButtons(row)}</td></tr>`;
+      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(row.transaction_date)}</td><td>${Ipon.escapeHtml(row.category)}</td><td>${Ipon.escapeHtml(row.description)}${reasonNoteHtml(row)}</td><td>${Ipon.escapeHtml(row.person_responsible)}${Ipon.verifiedBadgesHtml?.(row.person_responsible) || ''}</td><td>${Ipon.paymentMethodBadge(row.payment_method)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${statusBadge(row.approval_status)}</td><td>${actionButtons(row)}</td></tr>`;
     }).join('') : `<tr><td colspan="8" class="empty-state">${selectedMemberName ? `No ${page} found for ${Ipon.escapeHtml(selectedMemberName)}.` : `No ${page} recorded yet.`}</td></tr>`;
   }
 
@@ -767,7 +767,9 @@
       id: row.id,
       type: recordType,
       typeLabel,
-      authorName: memberInfo?.full_name || row.person_responsible || 'Group member',
+      authorUserId: memberInfo?.id || '',
+        memberId: row?.member_id || row?.contribution_periods?.members?.id || '',
+        authorName: memberInfo?.full_name || row.person_responsible || 'Group member',
       submittedByName: submitterProfile?.full_name || '',
       avatarUrl: memberProfile?.avatar_url || submitterProfile?.avatar_url || '',
       amount: row.amount,

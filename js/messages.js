@@ -175,6 +175,15 @@
     return Boolean(conv && String(conv.kind || '').toUpperCase() === 'GROUP');
   }
 
+  function isSelfUser(userOrConv) {
+    const myId = String(initializedProfile?.id || '');
+    if (!myId || !userOrConv) return false;
+    if (typeof userOrConv === 'string') return String(userOrConv) === myId;
+    if (isGroupConv(userOrConv)) return false;
+    const peerId = String(userOrConv.peer?.id || userOrConv.id || '');
+    return Boolean(peerId && peerId === myId);
+  }
+
   function convDisplayTitle(conv) {
     if (!conv) return 'Conversation';
     if (isGroupConv(conv)) return String(conv.title || conv.full_name || 'Group Chat');
@@ -261,6 +270,7 @@
     if (user.is_blocked || user.friendship_status === 'BLOCKED_BY_ME' || user.friendship_status === 'BLOCKED_ME') {
       return 'Messaging restricted';
     }
+    if (isSelfUser(user)) return 'Message yourself · Personal notes';
     if (!user.allow_online_status) return 'Privacy mode';
     if (ipon().isUserOnline(user.id)) return 'Active now';
     const liveTs = user.last_seen_at ? liveLastSeenMap.get(String(user.id || '')) : null;
@@ -1607,7 +1617,7 @@
       <div class="msg-conv-avatar">${convAvatarHtml(conv, 'avatar-md')}</div>
       <button type="button" class="msg-conv-main" data-open-conv="${escapeHtml(conv.id)}">
         <div class="msg-conv-top">
-          <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp ? '' : userBadgesHtml(conv.peer || conv)}${groupPill}</strong>
+          <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp ? '' : userBadgesHtml(conv.peer || conv)}${!isGrp && isSelfUser(conv) ? '<span class="msg-self-pill">You</span>' : ''}${groupPill}</strong>
         </div>
         <div class="msg-conv-bottom">
           <span class="msg-conv-preview">${previewText}</span>
@@ -1626,8 +1636,11 @@
   }
 
   function renderSearchPersonRowHtml(u) {
+    const isSelf = isSelfUser(u) || u.is_self || u.friendship_status === 'SELF';
     let relChip = '';
-    if (u.friendship_status === 'FRIENDS') {
+    if (isSelf) {
+      relChip = '<span class="msg-self-pill">You</span>';
+    } else if (u.friendship_status === 'FRIENDS') {
       relChip = '<span class="msg-rel-badge">Friend</span>';
     } else if (u.friendship_status === 'OUTGOING_REQUEST') {
       relChip = `<button type="button" class="msg-row-chip-btn" data-cancel-req="${escapeHtml(u.friend_request_id)}">Requested</button>`;
@@ -1643,7 +1656,8 @@
     if (friendCountText) subParts.push(friendCountText);
     if (mutualCount > 0) subParts.push(`${mutualCount} mutual`);
     if (u.shared_groups?.length) subParts.push(u.shared_groups[0]);
-    if (!subParts.length) subParts.push('Tap to message');
+    if (isSelf) subParts.unshift('Personal notes & saved messages');
+    else if (!subParts.length) subParts.push('Tap to message');
 
     return `<article class="msg-search-person-row" role="listitem">
       <div class="msg-conv-avatar">${userAvatarHtml(u, 'avatar-md')}</div>
@@ -1707,7 +1721,7 @@
         parts.push(msgHits.map((hit) => `
           <button type="button" class="msg-search-hit-row" data-jump-conv="${escapeHtml(hit.conversation_id)}" data-jump-msg-id="${escapeHtml(hit.message_id)}">
             <div class="msg-conv-top">
-              <strong class="msg-conv-name-text">${escapeHtml(hit.peer_name)}</strong>
+              <strong class="msg-conv-name-text">${escapeHtml(hit.peer_name)}${hit.peer_id ? userBadgesHtml(hit.peer_id) : ''}</strong>
               <time class="msg-conv-time">${escapeHtml(formatShortDate(hit.created_at))}</time>
             </div>
             <span class="msg-search-hit-snippet">${escapeHtml(hit.sender_name)}: ${highlightMatches(escapeHtml(hit.body), q)}</span>
@@ -2253,11 +2267,11 @@
         ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md')}
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
-            <strong>${escapeHtml(convDisplayTitle(conv))}${isGrp ? '' : userBadgesHtml(conv)}</strong>
+            <strong>${escapeHtml(convDisplayTitle(conv))}${isGrp ? '' : userBadgesHtml(conv)}${!isGrp && isSelfUser(conv) ? '<span class="msg-self-pill">You</span>' : ''}</strong>
           </div>
           <div class="msg-thread-peer-sub">
             ${!isGrp && conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
-            ${!isGrp && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
+            ${!isGrp && isSelfUser(conv) ? '<span class="msg-rel-chip">Saved Messages</span>' : (!isGrp && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : '')}
             ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
             <small class="msg-peer-status${isTyping ? ' is-typing' : ''}" id="msg-peer-status-text">${escapeHtml(formatStatusLine(conv, typingEntries))}</small>
           </div>
@@ -2282,7 +2296,9 @@
           .join('');
         senderSelect.innerHTML = `<option value="">All senders</option><option value="${escAttr(initializedProfile?.id)}">You</option>${otherOpts}`;
       } else {
-        senderSelect.innerHTML = `<option value="">All senders</option><option value="${escAttr(initializedProfile?.id)}">You</option><option value="${escAttr(conv.id)}">${escapeHtml(conv.full_name || 'Peer')}</option>`;
+        senderSelect.innerHTML = isSelfUser(conv)
+          ? `<option value="">All messages</option><option value="${escAttr(initializedProfile?.id)}">You</option>`
+          : `<option value="">All senders</option><option value="${escAttr(initializedProfile?.id)}">You</option><option value="${escAttr(conv.id)}">${escapeHtml(conv.full_name || 'Peer')}</option>`;
       }
       senderSelect.value = state.threadSearchSenderId;
     }
@@ -2293,7 +2309,7 @@
         reqBanner.hidden = false;
         reqBanner.innerHTML = `
           <div class="msg-req-banner-copy">
-            <strong>Message Request from ${escapeHtml(conv.full_name || 'User')}</strong>
+            <strong>Message Request from ${escapeHtml(conv.full_name || 'User')}${userBadgesHtml(conv)}</strong>
             <p>Read receipts are disabled until you accept. Accept to move this chat to your Inbox.</p>
           </div>
           <div class="msg-req-banner-actions">
@@ -2318,7 +2334,7 @@
       if (blockedBanner) {
         blockedBanner.hidden = false;
         blockedBanner.innerHTML = conv.friendship_status === 'BLOCKED_BY_ME'
-          ? `<span>You blocked <strong>${escapeHtml(conv.full_name)}</strong>.</span><button type="button" class="button button-secondary button-sm" data-unblock-user="${escapeHtml(conv.id)}">Unblock</button>`
+          ? `<span>You blocked <strong>${escapeHtml(conv.full_name)}${userBadgesHtml(conv)}</strong>.</span><button type="button" class="button button-secondary button-sm" data-unblock-user="${escapeHtml(conv.id)}">Unblock</button>`
           : '<span>You cannot reply to this conversation.</span>';
       }
     } else {
@@ -2641,7 +2657,9 @@
       list.classList.remove('is-thread-entering');
       const welcomeCopy = isGroupConv(conv)
         ? `Say hello in <strong>${escapeHtml(convDisplayTitle(conv))}</strong>. Messages and lossless files stay private to group members.`
-        : `Say hello to <strong>${escapeHtml(conv.full_name || 'your connection')}</strong>. Messages and lossless files stay private between you two.`;
+        : isSelfUser(conv)
+          ? `Save personal notes, reminders, photos, and files for <strong>${escapeHtml(conv.full_name || 'yourself')}${userBadgesHtml(conv)}</strong>. Only you can see this chat.`
+          : `Say hello to <strong>${escapeHtml(conv.full_name || 'your connection')}${userBadgesHtml(conv)}</strong>. Messages and lossless files stay private between you two.`;
       list.innerHTML = `<div class="empty-state msg-thread-welcome"><p>${welcomeCopy}</p></div>`;
       return;
     }
@@ -2699,7 +2717,7 @@
 
       const replyHtml = !isDeleted && m.reply_preview
         ? `<button type="button" class="msg-reply-quote" data-jump-msg="${escapeHtml(m.reply_preview.id)}">
-            <strong>${escapeHtml(m.reply_preview.sender_id === myId ? 'You' : (m.reply_preview.sender_name || 'User'))}</strong>
+            <strong>${escapeHtml(m.reply_preview.sender_id === myId ? 'You' : (m.reply_preview.sender_name || 'User'))}${m.reply_preview.sender_id && m.reply_preview.sender_id !== myId ? userBadgesHtml(m.reply_preview.sender_id) : ''}</strong>
             <span>${escapeHtml(m.reply_preview.body || 'Attachment')}</span>
           </button>`
         : '';
@@ -3031,7 +3049,7 @@
         </div>`
       : `<div class="msg-drawer-profile">
           ${userAvatarHtml(conv, 'avatar-lg', { showPresence: false })}
-          <strong>${escapeHtml(conv.full_name || 'User')}${iponApi?.verifiedBadgesHtml?.(conv) || ''}</strong>
+          <strong>${escapeHtml(conv.full_name || 'User')}${iponApi?.verifiedBadgesHtml?.(conv) || ''}${(typeof isSelfUser === 'function' && isSelfUser(conv)) ? '<span class="msg-self-pill">You</span>' : ''}</strong>
           ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
           ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
         </div>`;
@@ -3049,7 +3067,7 @@
          <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${archiveIconSvg}<span>${conv.is_archived ? 'Unarchive' : 'Archive'}</span></button>
          <button type="button" class="msg-drawer-action-btn" data-conv-act="mark_unread">${mailUnreadIconSvg}<span>Mark unread</span></button>
          <button type="button" class="msg-drawer-action-btn" data-conv-act="delete_for_me">${trashIconSvg}<span>Delete for me</span></button>
-         <button type="button" class="msg-drawer-action-btn is-danger" data-social-action="${isBlockedByMe ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${blockIconSvg}<span>${isBlockedByMe ? 'Unblock user' : 'Block user'}</span></button>`;
+         ${(typeof isSelfUser === 'function' && isSelfUser(conv)) ? '' : `<button type="button" class="msg-drawer-action-btn is-danger" data-social-action="${isBlockedByMe ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${blockIconSvg}<span>${isBlockedByMe ? 'Unblock user' : 'Block user'}</span></button>`}`;
 
     const membersSectionHtml = isGrp
       ? `<div class="msg-drawer-section">
@@ -3516,6 +3534,7 @@
       if (selfUsername) selfParts.push(`@${selfUsername}`);
       if (myFriendsCountText) selfParts.push(myFriendsCountText);
       const bioText = String(initializedProfile?.bio || '').trim();
+      const fromAnnouncement = Boolean(anchorEl?.dataset?.socialHoverDp);
       pop.innerHTML = `
         <button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
         <div class="msg-pop-head">
@@ -3526,7 +3545,10 @@
           </div>
         </div>
         ${bioText ? `<p class="msg-pop-bio">${escapeHtml(bioText)}</p>` : ''}
-        <p class="msg-pop-bio">Connected social profile for announcements</p>`;
+        <p class="msg-pop-bio">${fromAnnouncement ? 'Connected social profile for announcements' : 'Message yourself to keep personal notes and files.'}</p>
+        <div class="msg-pop-actions">
+          <button type="button" class="msg-pop-btn msg-pop-primary-btn" data-social-action="message" data-target-id="${escapeHtml(initializedProfile.id)}">Message yourself</button>
+        </div>`;
       ipon().bindAvatarFallbacks(pop);
       ipon().syncPresenceDots(pop);
       positionPopoverNearAnchor(pop, activePopoverAnchor);
@@ -4183,7 +4205,7 @@
         chipsEl.innerHTML = selected.size
           ? [...selected.values()].map((u) => `
               <span class="msg-group-chip">
-                <span>${escapeHtml(u.full_name || 'User')}</span>
+                <span>${escapeHtml(u.full_name || 'User')}${userBadgesHtml(u)}</span>
                 <button type="button" class="msg-group-chip-x" data-group-unpick="${escAttr(u.id)}" aria-label="Remove ${escapeHtml(u.full_name || 'User')}">&times;</button>
               </span>`).join('')
           : '';
@@ -4211,7 +4233,7 @@
         return `<button type="button" class="msg-group-pick-row${isPicked ? ' is-selected' : ''}" data-group-pick="${escAttr(uid)}" role="option" aria-selected="${isPicked ? 'true' : 'false'}"${allowed ? '' : ' disabled'}>
           ${userAvatarHtml(u, 'avatar-sm', { clickable: false, showPresence: false })}
           <span class="msg-group-pick-copy">
-            <strong>${escapeHtml(u.full_name || 'User')}</strong>
+            <strong>${escapeHtml(u.full_name || 'User')}${userBadgesHtml(u)}</strong>
             <small>${escapeHtml(subBits.join(' · ') || 'Eligible member')}</small>
           </span>
           <span class="msg-group-pick-check" aria-hidden="true">${isPicked ? '✓' : '+'}</span>
@@ -4228,15 +4250,16 @@
           state.overviewLoaded ? Promise.resolve() : refreshOverview({ render: false }).catch(() => { })
         ]);
         const merged = new Map();
-        (state.overview?.friends || []).forEach((f) => {
+            (state.overview?.friends || []).forEach((f) => {
           const fid = String(f?.id || '');
           if (fid && !existingIds.has(fid)) {
             merged.set(fid, { ...f, friendship_status: 'FRIENDS', can_message: true });
           }
         });
+        const selfUid = String(initializedProfile?.id || '');
         (Array.isArray(users) ? users : []).forEach((u) => {
           const uid = String(u?.id || '');
-          if (uid && !existingIds.has(uid)) {
+          if (uid && uid !== selfUid && !existingIds.has(uid)) {
             const prev = merged.get(uid);
             merged.set(uid, prev ? { ...u, ...prev } : u);
           }
@@ -4405,6 +4428,17 @@
     if (!dialog || !body) return;
     const items = [];
     const seenDirectUsers = new Set();
+    if (initializedProfile?.id) {
+      seenDirectUsers.add(initializedProfile.id);
+      items.push({
+        isGroup: false,
+        userId: initializedProfile.id,
+        name: initializedProfile.full_name || 'You',
+        avatar_url: initializedProfile.avatar_url,
+        sub: 'You · Personal notes & saved messages',
+        convId: state.conversations.find((c) => !isGroupConv(c) && String(c.peer?.id || '') === String(initializedProfile.id))?.id || null
+      });
+    }
     state.conversations
       .filter((c) => c.status === 'ACCEPTED' && (isGroupConv(c) || !c.peer?.is_blocked))
       .forEach((c) => {
@@ -4451,7 +4485,7 @@
                ? groupAvatarHtml(item.conv, 'avatar-sm', { clickable: false, showPresence: false })
                : userAvatarHtml({ id: item.userId, full_name: item.name, avatar_url: item.avatar_url, allow_online_status: false }, 'avatar-sm', { clickable: false, showPresence: false })}
              <span class="msg-forward-meta">
-               <strong>${escapeHtml(item.name)}</strong>
+               <strong>${escapeHtml(item.name)}${item.isGroup ? '' : userBadgesHtml({ id: item.userId, full_name: item.name })}</strong>
                ${item.sub ? `<small>${escapeHtml(item.sub)}</small>` : ''}
              </span>
              <span class="button button-secondary button-sm">Send</span>
@@ -4514,7 +4548,7 @@
         <h4><span>Blocked accounts</span><span class="msg-blocked-count">${blocked.length}</span></h4>
         ${blocked.length ? `<div class="msg-blocked-list">${blocked.map((b) => `
           <div class="msg-blocked-row">
-            <span><strong>${escapeHtml(b.full_name)}</strong>${b.username ? ` <small>@${escapeHtml(b.username)}</small>` : ''}</span>
+            <span><strong>${escapeHtml(b.full_name)}${userBadgesHtml(b)}</strong>${b.username ? ` <small>@${escapeHtml(b.username)}</small>` : ''}</span>
             <button type="button" class="button button-secondary button-sm" data-unblock-user="${escapeHtml(b.id)}">Unblock</button>
           </div>`).join('')}</div>` : `<p class="msg-blocked-empty">${shieldSvg}<span>You have not blocked anyone.</span></p>`}
       </section>`;

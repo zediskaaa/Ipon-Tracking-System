@@ -281,10 +281,12 @@
     const monthText = monthFilter.value ? Ipon.dateLabel(`${monthFilter.value}-01`, { month: 'long', year: 'numeric' }) : '';
     const statusText = statusFilter.options[statusFilter.selectedIndex]?.text || 'All statuses';
     monthFilter.closest('.panel-header')?.setAttribute('data-print-meta', [monthText, statusText].filter(Boolean).join(' · '));
-    const [{ data, error }, { data: activeMembers, error: membersError }] = await Promise.all([
+    const [{ data, error }, { data: activeMembers, error: membersError }, accessRows] = await Promise.all([
       Ipon.client.from('v_contribution_status').select('*').eq('period_month', `${monthFilter.value}-01`).order('member_name'),
-      Ipon.client.from('members').select('id,payout_channel,payout_account_number,payout_account_name').eq('status', 'ACTIVE').eq('activation_status', 'ACTIVE').is('deleted_at', null)
+      Ipon.client.from('members').select('id,payout_channel,payout_account_number,payout_account_name').eq('status', 'ACTIVE').eq('activation_status', 'ACTIVE').is('deleted_at', null),
+      typeof Ipon.rpc === 'function' ? Ipon.rpc('get_group_access_list').catch(() => []) : Promise.resolve([])
     ]);
+    if (Array.isArray(accessRows)) Ipon.registerMemberAvatars?.(accessRows);
     if (error) throw error;
     if (membersError) throw membersError;
     const activeById = new Map((activeMembers || []).map((m) => [m.id, m]));
@@ -292,7 +294,7 @@
     if (statusFilter.value) memberRows = memberRows.filter((row) => row.payment_status === statusFilter.value);
     memberBody.innerHTML = memberRows.length ? memberRows.map((row) => {
       const payoutChip = Ipon.payoutSummaryChip(activeById.get(row.member_id), { compact: true, showCopy: true });
-      return `<tr><td><strong>${Ipon.escapeHtml(row.member_name)}</strong>${payoutChip ? `<div class="report-member-payout">${payoutChip}</div>` : ''}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td><span class="status status-${row.payment_status.toLowerCase().replaceAll(' ', '-')}">${Ipon.escapeHtml(row.payment_status)}</span></td></tr>`;
+      return `<tr><td><strong>${Ipon.escapeHtml(row.member_name)}${Ipon.verifiedBadgesHtml?.(row.member_id || row.member_name) || ''}</strong>${payoutChip ? `<div class="report-member-payout">${payoutChip}</div>` : ''}</td><td>${Ipon.money(row.required_amount)}</td><td>${Ipon.money(row.paid_amount)}</td><td>${Ipon.money(row.outstanding_amount)}</td><td><span class="status status-${row.payment_status.toLowerCase().replaceAll(' ', '-')}">${Ipon.escapeHtml(row.payment_status)}</span></td></tr>`;
     }).join('') : '<tr><td colspan="5" class="empty-state">No member periods match this report.</td></tr>';
   }
 

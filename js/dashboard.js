@@ -963,7 +963,7 @@
             return `<article class="day-contributor-row">
               ${Ipon.avatarMarkup(person.avatarUrl, person.name, 'avatar-md')}
               <div class="day-contributor-info">
-                <strong>${Ipon.escapeHtml(person.name)}</strong>
+                <strong>${Ipon.escapeHtml(person.name)}${Ipon.verifiedBadgesHtml?.(person.userId || person.memberId || person.name) || ''}</strong>
                 <small>${person.count} contribution${person.count === 1 ? '' : 's'} · ${Ipon.escapeHtml(statuses)}</small>
                 ${singleEntry ? `<div class="day-contributor-badges">${methodBadges}</div>${notes}${reviewNotes}` : ''}
               </div>
@@ -2054,7 +2054,7 @@
       bulkConfirmList.innerHTML = rows.map((row) => `
         <label class="bulk-review-row">
           <input type="checkbox" class="bulk-dialog-check" value="${row.id}" checked>
-          <span><strong>${Ipon.escapeHtml(row.contribution_periods.members.full_name)}</strong><small>${Ipon.dateLabel(row.payment_date)} · ${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</small></span>
+          <span><strong>${Ipon.escapeHtml(row.contribution_periods.members.full_name)}${Ipon.verifiedBadgesHtml?.(row.contribution_periods.members.full_name) || ''}</strong><small>${Ipon.dateLabel(row.payment_date)} · ${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</small></span>
           <strong>${Ipon.money(row.amount)}</strong>
         </label>
       `).join('');

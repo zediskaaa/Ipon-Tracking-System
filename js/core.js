@@ -2013,7 +2013,34 @@
   }
 
   const VERIFIED_BADGE_MAP = new Map();
+  const BADGE_USER_ALIAS_MAP = new Map();
   let verifiedBadgesLoadedAt = 0;
+
+  function resolveBadgeUserId(userOrId) {
+    if (!userOrId) return '';
+    if (typeof userOrId === 'string') {
+      const s = userOrId.trim();
+      if (!s) return '';
+      if (VERIFIED_BADGE_MAP.has(s)) return s;
+      return BADGE_USER_ALIAS_MAP.get(s) || BADGE_USER_ALIAS_MAP.get(s.toLowerCase()) || s;
+    }
+    if (typeof userOrId === 'object') {
+      const candidates = [userOrId.user_id, userOrId.id, userOrId.member_id]
+        .map((v) => String(v || '').trim())
+        .filter(Boolean);
+      for (const c of candidates) {
+        if (VERIFIED_BADGE_MAP.has(c)) return c;
+      }
+      for (const c of candidates) {
+        const aliased = BADGE_USER_ALIAS_MAP.get(c);
+        if (aliased) return aliased;
+      }
+      const nameKey = String(userOrId.full_name || userOrId.name || '').trim().toLowerCase();
+      if (nameKey && BADGE_USER_ALIAS_MAP.has(nameKey)) return BADGE_USER_ALIAS_MAP.get(nameKey);
+      return candidates[0] || '';
+    }
+    return '';
+  }
 
   const SCALLOP_SEAL_PATH = 'M8.67 3.96Q8.76 0.76 12.00 0.55Q15.24 0.76 15.33 3.96Q17.66 1.76 20.10 3.90Q22.24 6.34 20.04 8.67Q23.24 8.76 23.45 12.00Q23.24 15.24 20.04 15.33Q22.24 17.66 20.10 20.10Q17.66 22.24 15.33 20.04Q15.24 23.24 12.00 23.45Q8.76 23.24 8.67 20.04Q6.34 22.24 3.90 20.10Q1.76 17.66 3.96 15.33Q0.76 15.24 0.55 12.00Q0.76 8.76 3.96 8.67Q1.76 6.34 3.90 3.90Q6.34 1.76 8.67 3.96Z';
 
@@ -2028,7 +2055,7 @@
   }
 
   function resolveVerifiedBadgeInfo(userOrId, explicitTier = '', opts = {}) {
-    const uid = typeof userOrId === 'object' && userOrId ? (userOrId.id || userOrId.user_id || '') : String(userOrId || '');
+    const uid = resolveBadgeUserId(userOrId);
     const cached = uid ? VERIFIED_BADGE_MAP.get(String(uid)) : null;
     const direct = String(explicitTier || (typeof userOrId === 'object' && userOrId ? (userOrId.verified_badge || userOrId.verified_badge_tier) : '') || '').trim().toUpperCase();
     const expiresAt = (typeof userOrId === 'object' && userOrId ? (userOrId.verified_badge_expires_at || userOrId.expires_at) : null) || cached?.expires_at || null;
@@ -2062,7 +2089,7 @@
         return { tier: 'NONE', granted_at: null, expires_at: null };
       }
     }
-    return { tier, granted_at: grantedAt, expires_at: expiresAt };
+    return { tier, granted_at: grantedAt, expires_at: expiresAt, uid };
   }
 
   function effectiveVerifiedBadgeTier(userOrId, explicitTier = '', opts = {}) {
@@ -2095,10 +2122,12 @@
     const info = resolveVerifiedBadgeInfo(userOrId, opts?.tier);
     const tier = info.tier;
     if (tier !== 'BLUE' && tier !== 'CREATOR_GREEN') return '';
+    const badgeUid = info.uid || resolveBadgeUserId(userOrId);
+    const isSelf = Boolean(currentProfile?.id && badgeUid && String(currentProfile.id) === String(badgeUid));
     const extraClass = opts?.showcase ? ' is-showcase' : '';
     const sinceIso = info.granted_at ? String(info.granted_at) : '';
     const expiresIso = info.expires_at ? String(info.expires_at) : '';
-    const dataAttrs = `data-verified-tier="${tier}" data-verified-since="${escapeHtml(sinceIso)}" data-verified-expires="${escapeHtml(expiresIso)}" tabindex="0" role="button"`;
+    const dataAttrs = `data-verified-tier="${tier}" data-verified-uid="${escapeHtml(String(badgeUid || ''))}"${isSelf ? ' data-verified-self="1"' : ''} data-verified-since="${escapeHtml(sinceIso)}" data-verified-expires="${escapeHtml(expiresIso)}" tabindex="0" role="button"`;
     if (tier === 'CREATOR_GREEN') {
       return `<span class="verified-badges-inline is-tooltip-enabled${extraClass}" ${dataAttrs} aria-label="Founder & Creator · Since November 12, 2026">${badgeSealSvgMarkup('#15a025', 'Owner green badge')}${creatorCrownBadgeSvgMarkup('Founder & Creator')}</span>`;
     }
@@ -2176,8 +2205,12 @@
     const subHeadline = isCreator
       ? 'Since November 12, 2026'
       : (sinceDate ? `Verified since ${sinceDate}` : 'Verified on myIPON');
+    const badgeUid = String(anchorEl.dataset?.verifiedUid || '').trim();
+    const isSelfBadge = currentProfile?.id
+      ? Boolean(badgeUid && String(currentProfile.id) === badgeUid)
+      : anchorEl.dataset?.verifiedSelf === '1';
     let subNote = '';
-    if (!isCreator) {
+    if (!isCreator && isSelfBadge) {
       if (expiresIso) {
         subNote = `Valid until ${dateLabel(expiresIso, { dateStyle: 'medium' })}.`;
       } else {
@@ -2732,6 +2765,15 @@
       if (item.member_id) memberAvatarStore.set(String(item.member_id), url);
       if (item.full_name) memberAvatarStore.set(String(item.full_name).trim().toLowerCase(), url);
       if (item.user_id) memberAvatarStore.set(String(item.user_id), url);
+      const userUid = item.user_id
+        ? String(item.user_id).trim()
+        : (item.id && (Object.prototype.hasOwnProperty.call(item, 'member_id') || Object.prototype.hasOwnProperty.call(item, 'role') || VERIFIED_BADGE_MAP.has(String(item.id))))
+          ? String(item.id).trim()
+          : '';
+      if (userUid) {
+        if (item.member_id) BADGE_USER_ALIAS_MAP.set(String(item.member_id), userUid);
+        if (item.full_name) BADGE_USER_ALIAS_MAP.set(String(item.full_name).trim().toLowerCase(), userUid);
+      }
     });
   }
 
@@ -6239,17 +6281,18 @@
         const isInvite = item.type === 'GROUP_INVITE' && !item.read_at;
         notificationItemsById.set(String(item.id), item);
         const safeTarget = isInvite ? '' : resolveNotificationTarget(item);
-        const iconPath = (item.type === 'BADGE_GRANTED' || item.type === 'BADGE_REMOVED')
-          ? 'M12 2 14.9 4.2l3.6-.3 1.1 3.4 2.9 2-1.1 3.4 1.1 3.4-2.9 2-1.1 3.4-3.6-.3L12 22l-2.9-2.2-3.6.3-1.1-3.4-2.9-2 1.1-3.4-1.1-3.4 2.9-2 1.1-3.4 3.6.3L12 2Zm-3.2 10.3 2.1 2.2 4.4-4.6'
-          : item.type === 'GROUP_INVITE' || item.type === 'SOCIAL_FRIEND_REQUEST' || item.type === 'SOCIAL_FRIEND_ACCEPTED'
+        const iconPath = item.type === 'GROUP_INVITE' || item.type === 'SOCIAL_FRIEND_REQUEST' || item.type === 'SOCIAL_FRIEND_ACCEPTED'
           ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'
           : String(item.type || '').startsWith('SOCIAL_')
             ? 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'
             : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
+        const iconHtml = item.type === 'BADGE_GRANTED'
+          ? `<span class="notification-item-icon is-badge-granted" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified badge')}</span>`
+          : item.type === 'BADGE_REMOVED'
+            ? `<span class="notification-item-icon is-badge-removed" aria-hidden="true"><svg class="verified-badge-svg" viewBox="0 0 24 24" shape-rendering="geometricPrecision"><path fill="#dc2626" d="${SCALLOP_SEAL_PATH}"/><path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/></svg></span>`
+            : `<span class="notification-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${iconPath}"/></svg></span>`;
         return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"${safeTarget ? ` data-nav-target="${escapeHtml(safeTarget)}"` : ''}>
-          <span class="notification-item-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="${iconPath}"/></svg>
-          </span>
+          ${iconHtml}
           <div class="notification-item-copy">
             <strong>${escapeHtml(item.title)}</strong>
             <p>${escapeHtml(item.message)}</p>
@@ -6989,7 +7032,7 @@
         <div class="record-review-author">
           ${avatarMarkup(entry.avatarUrl || '', personName, 'avatar-md')}
           <div>
-            <strong>${escapeHtml(personName)}</strong>
+            <strong>${escapeHtml(personName)}${verifiedBadgesHtml(entry.authorUserId || entry.submittedBy || entry.memberId || personName)}</strong>
             ${submitterName ? `<small>Added by ${escapeHtml(submitterName)}</small>` : `<small>${escapeHtml(entryType.label)} contributor</small>`}
           </div>
         </div>
@@ -10948,7 +10991,7 @@
           <div class="record-thread-msg-avatar">${avatarMarkup(c.author_avatar_url || '', authorName, 'avatar-sm')}</div>
           <div class="record-thread-msg-bubble">
             <header class="record-thread-msg-meta">
-              <strong>${escapeHtml(own ? `${c.author_name || 'You'} (You)` : authorName)}</strong>
+              <strong>${escapeHtml(own ? `${c.author_name || 'You'} (You)` : authorName)}${verifiedBadgesHtml(c.author_id || authorName)}</strong>
               <span class="record-thread-role role-${escapeHtml(String(c.author_role || 'MEMBER').toLowerCase())}">${escapeHtml(roleLabel)}</span>
               <time datetime="${escapeHtml(c.created_at || '')}">${escapeHtml(when)}</time>
             </header>

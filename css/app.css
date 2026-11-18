@@ -19253,3 +19253,61 @@ html[data-theme="dark"] .button.button-primary.account-badge-cta:hover {
     width: 100%;
   }
 }
+
+/* Notification verified badge icons */
+.notification-item-icon.is-badge-granted,
+html[data-theme="dark"] .notification-item-icon.is-badge-granted {
+  background: rgba(29, 155, 240, 0.14);
+  border: 1px solid rgba(29, 155, 240, 0.28);
+}
+.notification-item-icon.is-badge-removed,
+html[data-theme="dark"] .notification-item-icon.is-badge-removed {
+  background: rgba(220, 38, 38, 0.14);
+  border: 1px solid rgba(220, 38, 38, 0.28);
+}
+.notification-item-icon.is-badge-granted svg,
+.notification-item-icon.is-badge-removed svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: none;
+  stroke-width: 0;
+}
+
+/* Global inline badge container alignment */
+.msg-group-pick-copy strong,
+.msg-group-chip > span:first-child,
+.msg-forward-meta strong,
+.day-contributor-info > strong,
+.record-review-author strong,
+.record-thread-msg-meta strong,
+#my-name {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.msg-group-pick-copy strong .verified-badges-inline,
+.msg-group-chip > span:first-child .verified-badges-inline,
+.msg-forward-meta strong .verified-badges-inline,
+.day-contributor-info > strong .verified-badges-inline,
+.record-review-author strong .verified-badges-inline,
+.record-thread-msg-meta strong .verified-badges-inline,
+#my-name .verified-badges-inline {
+  margin-left: 0;
+}
+.msg-self-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font: 700 10.5px/1.35 Arial, sans-serif;
+  letter-spacing: 0.03em;
+  background: rgba(29, 155, 240, 0.14);
+  color: #0e6fb3;
+  flex-shrink: 0;
+}
+html[data-theme="dark"] .msg-self-pill {
+  background: rgba(56, 189, 248, 0.18);
+  color: #7dd3fc;
+}

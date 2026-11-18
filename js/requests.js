@@ -395,7 +395,7 @@
           <div class="req-requester-cell">
             ${Ipon.avatarMarkup(item.requesterAvatar || '', item.requesterName || 'Member', 'avatar-sm', item.requesterId || '')}
             <div class="req-requester-copy">
-              <strong>${Ipon.escapeHtml(item.requesterName || 'Group member')}</strong>
+              <strong>${Ipon.escapeHtml(item.requesterName || 'Group member')}${Ipon.verifiedBadgesHtml?.(item.requesterId || item.requesterName) || ''}</strong>
               <small><span class="req-role-tag ${roleCls}">${Ipon.escapeHtml(roleLabel)}</span>${createdText ? ` · ${Ipon.escapeHtml(createdText)}` : ''}</small>
             </div>
           </div>

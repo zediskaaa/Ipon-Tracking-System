@@ -158,7 +158,7 @@
         ? `<div class="member-state-stack"><span class="status status-${account.status.toLowerCase()}">${account.status}</span><small class="field-help">${Ipon.escapeHtml(account.email || '')}</small></div>`
         : '<div class="member-state-stack"><span class="field-help">No sign-in</span></div>';
       return `<tr>
-      <td><strong>${Ipon.escapeHtml(member.full_name)}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.payoutSummaryChip(member, { compact: true, emptyText: 'Not set' })}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
+      <td><strong>${Ipon.escapeHtml(member.full_name)}${Ipon.verifiedBadgesHtml?.(account?.id || member.id) || ''}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.payoutSummaryChip(member, { compact: true, emptyText: 'Not set' })}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
       <td class="amount-cell">${Ipon.money(member.monthly_contribution_amount)}</td><td><div class="member-state-stack"><span class="status status-${statusMeta.tone}">${statusMeta.label}</span><small class="field-help">${Ipon.escapeHtml(statusMeta.hint)}</small></div></td>
       <td>${accountMarkup}</td>
       <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${account?.id && account.role !== 'ADMIN' ? `<button class="icon-action" data-action="permissions" data-id="${member.id}">Permissions</button>` : ''}${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>${canDelete ? `<button class="icon-action icon-action-danger" data-action="delete" data-id="${member.id}">Delete</button>` : ''}</div></td></tr>`;
@@ -323,7 +323,7 @@
           ${Ipon.avatarMarkup(target.avatar_url || '', target.full_name || 'Member', 'avatar-md')}
           <div class="member-perm-identity-copy">
             <div class="member-perm-name-row">
-              <strong>${Ipon.escapeHtml(target.full_name || 'Member')}</strong>
+              <strong>${Ipon.escapeHtml(target.full_name || 'Member')}${Ipon.verifiedBadgesHtml?.(target.user_id || target.id) || ''}</strong>
               <span class="status ${roleCls}">${Ipon.escapeHtml(target.role)}</span>
             </div>
             <small>${Ipon.escapeHtml(target.email || '')}${target.status === 'PENDING' ? ' · Pending login' : ''}</small>
@@ -371,7 +371,7 @@
             <div class="member-perm-user-cell">
               ${Ipon.avatarMarkup(u.avatar_url || '', u.full_name || 'Member', 'avatar-sm')}
               <div class="member-perm-user-meta">
-                <strong>${Ipon.escapeHtml(u.full_name || 'Member')}</strong>
+                <strong>${Ipon.escapeHtml(u.full_name || 'Member')}${Ipon.verifiedBadgesHtml?.(u.user_id || u.id) || ''}</strong>
                 <small class="field-help">${Ipon.escapeHtml(u.email || '')}${u.status === 'PENDING' ? ' · Pending login' : ''}</small>
               </div>
             </div>
@@ -468,6 +468,7 @@
     if (contribResult.error) throw contribResult.error;
     members = data || [];
     memberPermissions = Array.isArray(permRows) ? permRows : [];
+    Ipon.registerMemberAvatars?.(Array.isArray(accessRows) ? accessRows : []);
     accountsByMember = new Map((Array.isArray(accessRows) ? accessRows : []).filter((row) => row.member_id).map((row) => [row.member_id, { id: row.user_id, email: row.email, role: row.role, status: row.status, member_id: row.member_id }]));
     membersWithContributions = new Set((contribResult.data || []).map((row) => row.member_id));
     const summaryRows = summaryRes.data || [];
@@ -651,7 +652,7 @@
     deleteForm.elements.member_id.value = member.id;
     const account = accountsByMember.get(member.id);
     const statusMeta = memberStatusMeta(member);
-    deleteSummary.innerHTML = `<div class="record-review-summary-top"><span class="record-type-pill is-expense">Delete member</span><span class="status status-${statusMeta.tone}">${Ipon.escapeHtml(statusMeta.label)}</span></div><div class="record-review-summary-main"><div class="record-review-author"><div><strong>${Ipon.escapeHtml(member.full_name)}</strong><small>${Ipon.escapeHtml(account?.email || member.contact_number || 'No sign-in account')}</small></div></div><div class="record-review-amount"><small>Monthly target</small><strong>${Ipon.money(member.monthly_contribution_amount)}</strong></div></div><div class="record-review-meta"><span>Registered ${Ipon.escapeHtml(Ipon.dateLabel(member.date_registered))}</span><span>0 recorded contributions</span></div>`;
+    deleteSummary.innerHTML = `<div class="record-review-summary-top"><span class="record-type-pill is-expense">Delete member</span><span class="status status-${statusMeta.tone}">${Ipon.escapeHtml(statusMeta.label)}</span></div><div class="record-review-summary-main"><div class="record-review-author"><div><strong>${Ipon.escapeHtml(member.full_name)}${Ipon.verifiedBadgesHtml?.(account?.id || member.id) || ''}</strong><small>${Ipon.escapeHtml(account?.email || member.contact_number || 'No sign-in account')}</small></div></div><div class="record-review-amount"><small>Monthly target</small><strong>${Ipon.money(member.monthly_contribution_amount)}</strong></div></div><div class="record-review-meta"><span>Registered ${Ipon.escapeHtml(Ipon.dateLabel(member.date_registered))}</span><span>0 recorded contributions</span></div>`;
     deleteDialog.showModal();
     deleteReasonSelect.focus();
   }
