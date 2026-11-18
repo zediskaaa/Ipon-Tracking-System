@@ -3501,7 +3501,11 @@
     pop.hidden = false;
 
     if (isSelfTarget) {
+      const selfUsername = String(initializedProfile?.username || '').trim().replace(/^@+/, '');
       const myFriendsCountText = formatFriendCountText((state.overview?.friends || []).length);
+      const selfParts = [];
+      if (selfUsername) selfParts.push(`@${selfUsername}`);
+      if (myFriendsCountText) selfParts.push(myFriendsCountText);
       const bioText = String(initializedProfile?.bio || '').trim();
       pop.innerHTML = `
         <button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
@@ -3509,7 +3513,7 @@
           ${userAvatarHtml(initializedProfile, 'avatar-lg', { clickable: false, showPresence: false })}
           <div class="msg-pop-title">
             <strong id="msg-pop-name">${escapeHtml(initializedProfile?.full_name || 'Your profile')}</strong>
-            <div class="msg-pop-status-row"><span class="msg-rel-badge">You</span>${myFriendsCountText ? `<small class="msg-pop-status">${escapeHtml(myFriendsCountText)}</small>` : ''}</div>
+            <div class="msg-pop-status-row"><span class="msg-rel-badge">You</span>${selfParts.length ? `<small class="msg-pop-status">${escapeHtml(selfParts.join(' · '))}</small>` : ''}</div>
           </div>
         </div>
         ${bioText ? `<p class="msg-pop-bio">${escapeHtml(bioText)}</p>` : ''}
@@ -3549,8 +3553,10 @@
       const mutualCount = Number(profile.mutual_friends_count || 0);
       const mutualHtml = renderMutualStackHtml(profile.id, profile.mutual_friends, mutualCount);
       const friendCountText = formatFriendCountText(profile.friends_count);
+      const cleanUsername = String(profile.username || '').trim().replace(/^@+/, '');
       const statusLine = statusLabels[fs] || 'Community member';
       const metaParts = [];
+      if (cleanUsername) metaParts.push(`@${cleanUsername}`);
       if (fs !== 'FRIENDS') metaParts.push(statusLine);
       if (friendCountText) metaParts.push(friendCountText);
       if (!mutualHtml && mutualCount > 0) metaParts.push(`${mutualCount} mutual friend${mutualCount === 1 ? '' : 's'}`);

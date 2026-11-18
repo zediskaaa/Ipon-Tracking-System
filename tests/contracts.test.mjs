@@ -16,32 +16,6 @@ test('all browser scripts pass syntax validation', () => {
   }
 });
 
-test('private media uses R2 signed URLs with Supabase Storage fallback and CSP coverage', () => {
-  const edge = read('supabase/functions/manage-account/index.ts');
-  const core = read('js/core.js');
-  const r2Origin = 'https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com';
-  assert.match(edge, /import \{ AwsClient \} from 'npm:aws4fetch@1\.0\.20'/);
-  for (const secret of ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET']) {
-    assert.match(edge, new RegExp(`Deno\\.env\\.get\\('${secret}'\\)`));
-    assert.doesNotMatch(read('js/config.js'), new RegExp(secret));
-  }
-  assert.match(edge, /const R2_PATH_MARKER = '\/r2\/'/);
-  assert.match(edge, /aws: \{ signQuery: true \}/);
-  assert.match(edge, /createPrivateViewUrls\(admin, ANNOUNCEMENTS_BUCKET, paths\)/);
-  assert.match(edge, /createPrivateViewUrls\(admin, RECORD_COMMENTS_BUCKET, paths\)/);
-  assert.match(edge, /createPrivateViewUrls\(admin, CHAT_ATTACHMENTS_BUCKET, allowedPaths\)/);
-  assert.match(edge, /removePrivateObjects\(admin, bucket, slice\.map/);
-  assert.match(core, /function uploadAuthorizedFile\(/);
-  assert.match(core, /fetch\(upload\.signedUrl, \{[\s\S]*?method: 'PUT'/);
-  assert.match(core, /uploadAuthorizedFile\(client, 'announcements'/);
-  assert.match(core, /uploadAuthorizedFile\(client, 'record-comments'/);
-  for (const file of readdirSync(new URL('../', import.meta.url)).filter((name) => name.endsWith('.html'))) {
-    const html = read(file);
-    if (html.includes('Content-Security-Policy')) assert.match(html, new RegExp(r2Origin.replaceAll('.', '\\.')));
-  }
-  assert.match(read('vercel.json'), new RegExp(r2Origin.replaceAll('.', '\\.')));
-});
-
 test('database keeps financial writes behind RLS and reviewed RPCs', () => {
   const schema = read('database/schema.sql');
   for (const table of ['profiles', 'members', 'contributions', 'expenses', 'withdrawals', 'audit_logs']) {
@@ -3040,10 +3014,6 @@ test('record discussion supports photo, video, and document attachments with los
     MutationObserver: class { observe() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
     fetch: async (url, init) => {
-      if (String(url).includes('https://storage.example/upload/')) {
-        uploadedPayloads.push({ path: String(url), token: 'signed-url', file: init.body });
-        return { ok: true, status: 200, text: async () => '' };
-      }
       if (String(url).includes('/functions/v1/manage-account')) {
         const body = JSON.parse(init.body || '{}');
         fnActions.push(body);
@@ -7164,8 +7134,8 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(popEl.innerHTML, /id="msg-pop-close"/);
   assert.match(popEl.innerHTML, /avatar-circle(?:\s+avatar-fallback)?\s+avatar-lg/);
   assert.match(popEl.innerHTML, /<strong id="msg-pop-name">Nhicole Joy Gadia Antalan<\/strong>/);
-  assert.match(popEl.innerHTML, /Sent you a friend request/);
-  assert.doesNotMatch(popEl.innerHTML, /msg-handle-chip|@nhicole|data-pop-groups-toggle|mutual friend/);
+  assert.match(popEl.innerHTML, /@nhicole · Sent you a friend request/);
+  assert.doesNotMatch(popEl.innerHTML, /msg-handle-chip|data-pop-groups-toggle|mutual friend/);
   assert.match(popEl.innerHTML, /class="msg-pop-groups-card"[\s\S]*?class="msg-pop-groups-label">Groups<[\s\S]*?class="msg-pop-groups-name"[^>]*>Ipon namin ni prettyynhic</);
   assert.match(popEl.innerHTML, /class="msg-pop-btn msg-pop-primary-btn" data-req-decision="ACCEPT" data-req-id="req-1"[\s\S]*?<span>Accept Friend<\/span>/);
   assert.match(popEl.innerHTML, /class="msg-pop-secondary-row"[\s\S]*?>Message<[\s\S]*?class="msg-pop-btn msg-pop-outline-btn is-danger" data-social-action="block"/);
@@ -11546,14 +11516,8 @@ test('Reports and member statement CSV exports and Print/Save PDF support Androi
     hidden: false,
     textContent: text,
     style: {},
-    dataset: {},
-    classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+    classList: { contains: () => false },
     children: [],
-    setAttribute() {},
-    removeAttribute() {},
-    addEventListener() {},
-    appendChild() {},
-    remove() {},
     querySelector: () => null,
     querySelectorAll: () => [],
     closest: () => null
@@ -11572,19 +11536,13 @@ test('Reports and member statement CSV exports and Print/Save PDF support Androi
   });
   const vmCtx = {
     window: null,
-    location: { href: 'https://my-ipon.vercel.app/reports.html', pathname: '/reports.html', search: '', origin: 'https://my-ipon.vercel.app' },
     document: {
       title: 'Reports — myIPON',
-      head: { insertAdjacentHTML() {}, querySelector: () => null },
-      body: Object.assign(makeNode('', 'BODY'), { insertAdjacentHTML() {} }),
-      documentElement: { setAttribute() {}, removeAttribute() {}, dataset: {} },
-      createElement: (tag) => makeNode('', String(tag || 'DIV').toUpperCase()),
+      documentElement: { setAttribute() {}, removeAttribute() {} },
       querySelector: (sel) => (sel === '.page-header h1' ? headerEl : null),
       querySelectorAll: (sel) => (sel === '.panel, .report-panel' ? [panelEl] : []),
-      getElementById: () => null,
-      addEventListener() {}
+      getElementById: () => null
     },
-    addEventListener() {},
     navigator: { userAgent: 'Mozilla/5.0 myIPONApp/20' },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },

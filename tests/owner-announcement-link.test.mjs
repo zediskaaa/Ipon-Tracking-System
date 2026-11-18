@@ -253,7 +253,7 @@ test('hovering SUPER_ADMIN announcement DP opens linked profile popover and Mess
   assert.match(profPop.innerHTML, /Zedrick De Monteverde/);
   assert.doesNotMatch(profPop.innerHTML, /class="msg-rel-badge"/);
   assert.doesNotMatch(profPop.innerHTML, /<small class="msg-pop-status">Friends\b/);
-  assert.match(profPop.innerHTML, /<small class="msg-pop-status">2 friends<\/small>/);
+  assert.match(profPop.innerHTML, /<small class="msg-pop-status">@zedrick · 2 friends<\/small>/);
 
   // Mouseout closes unpinned hover popover after delay
   await emitDoc('mouseout', { target: hoverBtn, relatedTarget: null });
