@@ -824,3 +824,150 @@ test('migration 118 and runtime enforce 1-per-effect trials, 1-month cooldown, a
   assert.match(appCss, /\.msg-welcome-avatar \.presence-dot\s*\{[^}]*width:\s*20px;\s*height:\s*20px;/);
   assert.match(msgJs, /avatar-presence-wrap msg-avatar-wrap\$\{wrapCls/);
 });
+
+test('Migration 122, Connect Apps UI, uniform SVG logos, and bio redirect links validate safely', () => {
+  const mig122 = read('database/migrations/20261118_122_social_app_links.sql');
+  const schema = read('database/schema.sql');
+  const coreJs = read('js/core.js');
+  const msgJs = read('js/messages.js');
+  const appCss = read('css/app.css');
+  const effectsJs = read('js/profile-effects.js');
+
+  // 1. SQL schema & RPC contracts
+  assert.match(schema, /add column if not exists social_links jsonb not null default '\{\}'::jsonb/i);
+  assert.match(schema, /profiles_social_links_object_check/i);
+  assert.match(mig122, /create or replace function public\.sanitize_social_app_links\(/i);
+  assert.match(mig122, /create or replace function public\.update_own_social_links\(/i);
+  assert.match(mig122, /'social_links',\s*case\s+when v_profile\.id <> auth\.uid\(\) and public\.is_user_blocked_between\(auth\.uid\(\), v_profile\.id\) then '\{\}'::jsonb/i);
+  assert.match(mig122, /'social_links',\s*case\s+when v_blocked_me then '\{\}'::jsonb else public\.sanitize_social_app_links\(v_target\.social_links, false\) end/i);
+  assert.match(mig122, /grant execute on function public\.update_own_social_links\(jsonb\) to authenticated/i);
+
+  // 2. UI markup, messaging bio slots & uniform squircle CSS
+  assert.match(coreJs, /id="quick-connect-apps-card"/);
+  assert.match(coreJs, /id="quick-connect-apps-form"/);
+  assert.match(coreJs, /id="quick-connect-apps-preview"/);
+  assert.match(coreJs, /id="quick-app-\$\{app\.key\}"/);
+  for (const key of ['telegram', 'instagram', 'facebook', 'threads', 'discord']) {
+    assert.match(coreJs, new RegExp(`key:\\s*'${key}'`));
+  }
+  assert.match(coreJs, /rpc\('update_own_social_links',\s*\{\s*p_links:\s*check\.normalized\s*\}/);
+  assert.match(msgJs, /class="msg-pop-apps-slot"/);
+  assert.match(msgJs, /renderSocialAppLinksHtml\?\.\(conv\.social_links,\s*\{\s*variant:\s*'welcome'\s*\}\)/);
+  assert.match(msgJs, /renderSocialAppLinksHtml\?\.\(conv\.social_links,\s*\{\s*variant:\s*'drawer'\s*\}\)/);
+  assert.match(appCss, /\.social-apps-strip\s*\{[^}]*display:\s*flex;/);
+  assert.match(appCss, /\.social-app-tile\s*\{[^}]*width:\s*28px;\s*height:\s*28px;[^}]*border-radius:\s*8px;/);
+  assert.match(appCss, /\.social-app-tile\.is-telegram\s*\{/);
+  assert.match(appCss, /\.social-app-tile\.is-instagram\s*\{/);
+  assert.match(appCss, /\.social-app-tile\.is-facebook\s*\{/);
+  assert.match(appCss, /\.social-app-tile\.is-threads\s*\{/);
+  assert.match(appCss, /\.social-app-tile\.is-discord\s*\{/);
+  assert.match(appCss, /\.account-app-field \.account-app-error\s*\{[^}]*min-height:\s*16px;[^}]*visibility:\s*hidden;/);
+  assert.doesNotMatch(appCss, /truncated for diff preview/i);
+  assert.match(appCss, /\.budget-category-card\s*\{[^}]*border-radius:\s*22px;[^}]*box-shadow:\s*var\(--budget-shadow\);/s);
+  assert.match(appCss, /\.budget-category-card::before\s*\{[^}]*height:\s*4px;/s);
+  assert.match(appCss, /\.budget-cat-pct-pill\s*\{[^}]*border-radius:\s*999px;/s);
+  assert.match(appCss, /\.budget-add-btn\s*\{[^}]*border-radius:\s*999px;\s*border:\s*1px solid var\(--budget-line\);/s);
+
+  // 3. Runtime VM verification of URL validation, security blocking & HTML rendering
+  const noop = () => {};
+  const makeNode = (tag = 'div') => ({
+    tagName: String(tag).toUpperCase(),
+    id: '',
+    className: '',
+    innerHTML: '',
+    textContent: '',
+    hidden: false,
+    dataset: {},
+    style: {},
+    classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+    setAttribute: noop,
+    getAttribute: () => null,
+    addEventListener: noop,
+    removeEventListener: noop,
+    appendChild: (c) => c,
+    querySelector: () => null,
+    querySelectorAll: () => []
+  });
+  const loaderEl = makeNode('div');
+  const ctx = {
+    window: null,
+    URL,
+    addEventListener: noop,
+    removeEventListener: noop,
+    dispatchEvent: noop,
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    document: {
+      hidden: false,
+      getElementById: (id) => (id === 'app-loader' ? loaderEl : null),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener: noop,
+      removeEventListener: noop,
+      createElement: (tag) => makeNode(tag),
+      body: {
+        dataset: { page: 'dashboard' },
+        classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+        appendChild: (n) => n,
+        insertAdjacentHTML: noop,
+        querySelector: () => null
+      },
+      documentElement: {
+        dataset: {},
+        style: { setProperty: noop, removeProperty: noop },
+        classList: { add: noop, remove: noop, toggle: noop }
+      }
+    },
+    location: { href: 'http://localhost/dashboard.html', pathname: '/dashboard.html', origin: 'http://localhost', search: '', replace: noop },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    navigator: {},
+    supabase: { createClient: () => ({ storage: null }) },
+    CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    Event: class Event { constructor(type) { this.type = type; } },
+    matchMedia: () => ({ matches: false, addEventListener: noop, removeEventListener: noop }),
+    requestAnimationFrame: noop,
+    cancelAnimationFrame: noop,
+    setTimeout,
+    clearTimeout,
+    console
+  };
+  ctx.window = ctx;
+  ctx.globalThis = ctx;
+  vm.runInNewContext(`${effectsJs}\n${coreJs}`, ctx, { timeout: 5000 });
+
+  const ipon = ctx.window.Ipon;
+  assert.equal(ipon.normalizeSocialAppUrl('telegram', '@zediskaaa'), 'https://t.me/zediskaaa');
+  assert.equal(ipon.normalizeSocialAppUrl('instagram', 'http://instagram.com/zediskaaa'), 'https://instagram.com/zediskaaa');
+  assert.equal(ipon.normalizeSocialAppUrl('facebook', 'fb.com/zediskaaa'), 'https://fb.com/zediskaaa');
+  assert.equal(ipon.normalizeSocialAppUrl('threads', '@zed.monteverde'), 'https://www.threads.net/@zed.monteverde');
+  assert.equal(ipon.normalizeSocialAppUrl('discord', '123456789012345678'), 'https://discord.com/users/123456789012345678');
+  assert.equal(ipon.normalizeSocialAppUrl('discord', 'https://discord.gg/iponcommunity'), 'https://discord.gg/iponcommunity');
+
+  // Security rejections
+  assert.equal(ipon.normalizeSocialAppUrl('telegram', 'javascript:alert(1)'), '');
+  assert.equal(ipon.normalizeSocialAppUrl('instagram', 'https://evil.example/zediskaaa'), '');
+  assert.equal(ipon.normalizeSocialAppUrl('facebook', 'https://facebook.com/'), '');
+  assert.ok(ipon.validateSocialAppInput('discord', '@handleonly').error, 'discord handle-only input returns helpful error');
+  assert.ok(ipon.validateSocialAppInput('threads', 'https://evil.com/user').error, 'foreign domain returns error');
+
+  const clean = ipon.sanitizeSocialLinks({
+    telegram: '@zediskaaa',
+    instagram: 'https://www.instagram.com/zediskaaa',
+    facebook: 'https://www.facebook.com/zediskaaa',
+    threads: '@zediskaaa',
+    discord: 'https://discord.gg/myipon',
+    ignored: 'https://evil.com/phish'
+  });
+  assert.deepEqual(Object.keys(clean), ['telegram', 'instagram', 'facebook', 'threads', 'discord']);
+
+  const html = ipon.renderSocialAppLinksHtml(clean, { variant: 'popover' });
+  assert.match(html, /class="social-apps-strip is-popover"/);
+  for (const key of ['telegram', 'instagram', 'facebook', 'threads', 'discord']) {
+    assert.match(html, new RegExp(`<a class="social-app-tile is-${key}"[^>]*target="_blank" rel="noopener noreferrer"`));
+    assert.match(html, new RegExp(`data-social-app-link="${key}"`));
+  }
+  assert.equal((html.match(/<a class="social-app-tile /g) || []).length, 5);
+  assert.equal((html.match(/<svg viewBox="0 0 24 24"/g) || []).length, 5);
+  assert.equal(ipon.renderSocialAppLinksHtml({}, { variant: 'popover' }), '');
+  assert.match(ipon.renderSocialAppLinksHtml({}, { variant: 'preview', showEmpty: true }), /social-apps-empty/);
+});

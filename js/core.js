@@ -421,6 +421,177 @@
 
   const PASSWORD_RULE = 'Use at least 8 characters with uppercase, lowercase, a number, and a symbol.';
 
+  const SOCIAL_APPS = Object.freeze([
+    {
+      key: 'telegram',
+      label: 'Telegram',
+      placeholder: 'https://t.me/username or @username',
+      hosts: ['t.me', 'www.t.me', 'telegram.me', 'www.telegram.me', 'telegram.dog'],
+      svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.665 3.717 2.935 10.554c-1.21.485-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701-.314 4.692c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.785l3.019-14.228c.309-1.239-.473-1.8-1.282-1.434z"/></svg>'
+    },
+    {
+      key: 'instagram',
+      label: 'Instagram',
+      placeholder: 'https://instagram.com/username or @username',
+      hosts: ['instagram.com', 'www.instagram.com', 'm.instagram.com', 'instagr.am', 'www.instagr.am'],
+      svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.2" cy="6.8" r="1.2" fill="currentColor"/></svg>'
+    },
+    {
+      key: 'facebook',
+      label: 'Facebook',
+      placeholder: 'https://facebook.com/username or @username',
+      hosts: ['facebook.com', 'www.facebook.com', 'm.facebook.com', 'mbasic.facebook.com', 'web.facebook.com', 'fb.com', 'www.fb.com', 'fb.me', 'm.me'],
+      svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.68 20.5v-7.55h2.54l.38-2.95h-2.92V8.12c0-.85.24-1.43 1.46-1.43h1.56V4.05c-.27-.04-1.2-.12-2.28-.12-2.25 0-3.79 1.37-3.79 3.9v2.17H8.08v2.95h2.55v7.55h3.05Z"/></svg>'
+    },
+    {
+      key: 'threads',
+      label: 'Threads',
+      placeholder: 'https://threads.net/@username or @username',
+      hosts: ['threads.net', 'www.threads.net', 'threads.com', 'www.threads.com'],
+      svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.86 11.17c-.08-.04-.17-.08-.25-.11-.15-2.77-1.66-4.35-4.2-4.37h-.05c-1.51 0-2.77.65-3.55 1.82l1.42.98c.59-.89 1.5-1.08 2.13-1.08h.03c.84.01 1.47.25 1.88.72.3.34.5.82.6 1.42-.74-.13-1.54-.17-2.4-.12-2.41.14-3.96 1.54-3.86 3.5.05.99.55 1.85 1.4 2.41.72.47 1.64.7 2.6.65 1.27-.07 2.26-.56 2.95-1.45.52-.68.85-1.56.99-2.66.6.36 1.04.84 1.29 1.41.41.95.44 2.51-.85 3.81-1.13 1.13-2.49 1.62-4.55 1.63-2.29-.02-4.01-.75-5.13-2.18-1.05-1.34-1.59-3.28-1.61-5.76.02-2.48.56-4.42 1.61-5.76 1.12-1.43 2.84-2.16 5.13-2.18 2.31.02 4.06.75 5.21 2.19.56.71.99 1.6 1.27 2.64l1.64-.44c-.34-1.28-.88-2.38-1.61-3.3-1.49-1.86-3.68-2.81-6.51-2.83h-.01c-2.82.02-4.98.97-6.44 2.83-1.29 1.65-1.96 3.96-1.99 6.86v.01c.03 2.9.7 5.21 1.99 6.86 1.46 1.86 3.62 2.81 6.44 2.83h.01c2.51-.02 4.29-.67 5.75-2.13 1.91-1.91 1.85-4.31 1.22-5.78-.45-1.05-1.31-1.9-2.48-2.46Zm-4.29 4.08c-1.06.06-2.17-.42-2.23-1.44-.04-.76.54-1.61 2.29-1.71.2-.01.4-.02.59-.02.63 0 1.22.06 1.76.18-.2 2.5-1.37 2.93-2.41 2.99Z"/></svg>'
+    },
+    {
+      key: 'discord',
+      label: 'Discord',
+      placeholder: 'https://discord.com/users/1234567890 or discord.gg/...',
+      hosts: ['discord.com', 'www.discord.com', 'discord.gg', 'www.discord.gg', 'discordapp.com', 'www.discordapp.com'],
+      svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.27 5.33A16.5 16.5 0 0 0 15.14 4a11.3 11.3 0 0 0-.52 1.07 15.2 15.2 0 0 0-5.24 0A11.3 11.3 0 0 0 8.86 4a16.5 16.5 0 0 0-4.13 1.33C2.12 9.25 1.4 13.07 1.76 16.84a16.7 16.7 0 0 0 5.06 2.57c.41-.56.77-1.15 1.08-1.78a10.8 10.8 0 0 1-1.7-.82c.14-.11.28-.22.41-.33a11.9 11.9 0 0 0 10.78 0c.13.11.27.22.41.33-.55.33-1.12.6-1.7.82.31.63.67 1.22 1.08 1.78a16.7 16.7 0 0 0 5.06-2.57c.42-4.37-.72-8.16-2.97-11.51ZM8.68 14.53c-.99 0-1.8-.91-1.8-2.02s.79-2.02 1.8-2.02 1.81.91 1.8 2.02c0 1.11-.79 2.02-1.8 2.02Zm6.64 0c-.99 0-1.8-.91-1.8-2.02s.79-2.02 1.8-2.02 1.81.91 1.8 2.02c0 1.11-.79 2.02-1.8 2.02Z"/></svg>'
+    }
+  ]);
+  const SOCIAL_APP_MAP = new Map(SOCIAL_APPS.map((app) => [app.key, app]));
+  const SOCIAL_HOST_PREFIX_RE = /^(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog|instagram\.com|instagr\.am|m\.instagram\.com|facebook\.com|m\.facebook\.com|mbasic\.facebook\.com|web\.facebook\.com|fb\.com|fb\.me|m\.me|threads\.net|threads\.com|discord\.com|discord\.gg|discordapp\.com)(?:\/|\?|$)/i;
+
+  function validateSocialAppInput(platform, raw, { live = false } = {}) {
+    const meta = SOCIAL_APP_MAP.get(String(platform || '').toLowerCase());
+    if (!meta) return { url: '', error: 'Unsupported social app.' };
+    const value = String(raw || '').trim();
+    if (!value) return { url: '', error: '' };
+    if (value.length > 240 || /[\s<>"'`\\\u0000-\u001f\u007f]/.test(value)) {
+      return { url: '', error: `Enter a valid ${meta.label} link without spaces or invalid characters.` };
+    }
+    if (/^(?:javascript|data|vbscript|file|blob):/i.test(value)) {
+      return { url: '', error: `Enter a valid ${meta.label} link.` };
+    }
+
+    let candidate = '';
+    if (/^https?:\/\//i.test(value)) {
+      candidate = value.replace(/^https?:\/\//i, 'https://');
+    } else if (value.startsWith('//')) {
+      candidate = `https:${value}`;
+    } else if (value.startsWith('@')) {
+      const handle = value.slice(1);
+      if (!handle && live) return { url: '', error: '' };
+      if (meta.key === 'discord') {
+        return { url: '', error: 'For Discord, paste a discord.com/users/... link, discord.gg/... invite, or numeric User ID.' };
+      }
+      if (meta.key === 'telegram') {
+        if (!/^[A-Za-z0-9_]{3,32}$/.test(handle)) {
+          if (live && /^[A-Za-z0-9_]{0,2}$/.test(handle)) return { url: '', error: '' };
+          return { url: '', error: 'Telegram @username must be 3 to 32 letters, numbers, or underscores.' };
+        }
+        candidate = `https://t.me/${handle}`;
+      } else if (meta.key === 'facebook') {
+        if (!/^[A-Za-z0-9.]{3,50}$/.test(handle) || handle.includes('..') || handle.startsWith('.') || handle.endsWith('.')) {
+          if (live && !handle.includes('..') && /^[A-Za-z0-9.]{0,50}$/.test(handle) && !handle.startsWith('.')) return { url: '', error: '' };
+          return { url: '', error: 'Enter a valid Facebook @username or profile link.' };
+        }
+        candidate = `https://www.facebook.com/${handle}`;
+      } else {
+        if (!/^[A-Za-z0-9._]{1,30}$/.test(handle) || handle.includes('..') || handle.startsWith('.') || handle.endsWith('.')) {
+          if (live && !handle.includes('..') && /^[A-Za-z0-9._]{0,30}$/.test(handle) && !handle.startsWith('.')) return { url: '', error: '' };
+          return { url: '', error: `Enter a valid ${meta.label} @username or profile link.` };
+        }
+        candidate = meta.key === 'threads' ? `https://www.threads.net/@${handle}` : `https://www.instagram.com/${handle}`;
+      }
+    } else if (meta.key === 'discord' && /^[0-9]+$/.test(value)) {
+      if (!/^[0-9]{15,22}$/.test(value)) {
+        if (live && value.length < 15) return { url: '', error: '' };
+        return { url: '', error: 'Discord User ID must be 15 to 22 digits, or paste a discord.com/users/... link.' };
+      }
+      candidate = `https://discord.com/users/${value}`;
+    } else if (SOCIAL_HOST_PREFIX_RE.test(value)) {
+      candidate = `https://${value}`;
+    } else if (!/[./:?#]/.test(value)) {
+      if (meta.key === 'discord') {
+        if (live && /^d(?:i(?:s(?:c(?:o(?:r(?:d)?)?)?)?)?)?$/i.test(value)) return { url: '', error: '' };
+        return { url: '', error: 'For Discord, paste a discord.com/users/... link, discord.gg/... invite, or numeric User ID.' };
+      }
+      if (meta.key === 'telegram') {
+        if (!/^[A-Za-z0-9_]{3,32}$/.test(value)) {
+          if (live && /^[A-Za-z0-9_]{0,2}$/.test(value)) return { url: '', error: '' };
+          return { url: '', error: 'Telegram username must be 3 to 32 letters, numbers, or underscores.' };
+        }
+        candidate = `https://t.me/${value}`;
+      } else if (meta.key === 'facebook') {
+        if (!/^[A-Za-z0-9]{3,50}$/.test(value)) {
+          if (live && /^[A-Za-z0-9]{0,2}$/.test(value)) return { url: '', error: '' };
+          return { url: '', error: 'Enter a valid Facebook profile link or @username.' };
+        }
+        candidate = `https://www.facebook.com/${value}`;
+      } else {
+        if (!/^[A-Za-z0-9_]{1,30}$/.test(value)) {
+          return { url: '', error: `Enter a valid ${meta.label} @username or profile link.` };
+        }
+        candidate = meta.key === 'threads' ? `https://www.threads.net/@${value}` : `https://www.instagram.com/${value}`;
+      }
+    } else {
+      if (live && /^(?:h(?:t(?:t(?:p(?:s?(?::(?:\/(?:\/)?)?)?)?)?)?)?|www\.|[a-z]+\.)/i.test(value) && !value.includes('/')) {
+        return { url: '', error: '' };
+      }
+      return { url: '', error: `Enter a valid ${meta.label} link (e.g., ${meta.placeholder}).` };
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(candidate);
+    } catch (_) {
+      if (live && /^https:\/\/[a-z0-9.-]*$/i.test(candidate)) return { url: '', error: '' };
+      return { url: '', error: `Enter a valid ${meta.label} URL.` };
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.port) {
+      return { url: '', error: `Enter a valid ${meta.label} URL.` };
+    }
+    if (!meta.hosts.includes(host)) {
+      return { url: '', error: `Link must use an official ${meta.label} domain.` };
+    }
+    const cleanPath = parsed.pathname.replace(/^\/+|\/+$/g, '');
+    if (!cleanPath) {
+      if (live && /^https?:\/\/[^/]+\/?$/i.test(candidate)) return { url: '', error: '' };
+      return { url: '', error: `Add your ${meta.label} username or path after ${host}/.` };
+    }
+    return { url: `https://${host}${parsed.pathname}${parsed.search}${parsed.hash}`, error: '' };
+  }
+
+  function normalizeSocialAppUrl(platform, raw) {
+    return validateSocialAppInput(platform, raw, { live: false }).url;
+  }
+
+  function sanitizeSocialLinks(links) {
+    const clean = {};
+    if (!links || typeof links !== 'object') return clean;
+    for (const app of SOCIAL_APPS) {
+      const url = normalizeSocialAppUrl(app.key, links[app.key]);
+      if (url) clean[app.key] = url;
+    }
+    return clean;
+  }
+
+  function renderSocialAppLinksHtml(links, { variant = 'bio', showEmpty = false } = {}) {
+    const clean = sanitizeSocialLinks(links);
+    const items = SOCIAL_APPS.filter((app) => Boolean(clean[app.key]));
+    if (!items.length) {
+      return showEmpty
+        ? '<p class="social-apps-empty">No connected apps yet. Add links below to show icons in your bio.</p>'
+        : '';
+    }
+    return `<div class="social-apps-strip is-${escapeHtml(variant)}" role="list" aria-label="Connected social apps">${items.map((app) => `<a class="social-app-tile is-${app.key}" role="listitem" href="${escapeHtml(clean[app.key])}" target="_blank" rel="noopener noreferrer" data-social-app-link="${app.key}" aria-label="${app.label} profile (opens in a new tab)" title="${app.label}: ${escapeHtml(clean[app.key])}">${app.svg}</a>`).join('')}</div>`;
+  }
+
+  function connectAppsFieldsMarkup() {
+    return SOCIAL_APPS.map((app) => `<div class="field account-app-field"><label for="quick-app-${app.key}">${app.label}</label><div class="account-app-input-row"><span class="social-app-tile is-${app.key} is-badge" aria-hidden="true">${app.svg}</span><input id="quick-app-${app.key}" name="${app.key}" type="text" inputmode="url" maxlength="240" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(app.placeholder)}" aria-describedby="quick-app-${app.key}-error"></div><small class="field-error account-app-error" id="quick-app-${app.key}-error" role="alert" hidden></small></div>`).join('');
+  }
+
   function passwordIssue(value, personalValues = []) {
     if (value.length < 8 || value.length > 128) return PASSWORD_RULE;
     if (!/[a-z]/.test(value) || !/[A-Z]/.test(value) || !/[0-9]/.test(value) || !/[^A-Za-z0-9]/.test(value)) return PASSWORD_RULE;
@@ -1795,6 +1966,7 @@
           <div class="account-dialog-content">
             <section class="account-card account-profile-card"><button class="dialog-close account-dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><div class="account-card-appearance" id="quick-card-appearance" data-card-theme="emerald"><div class="account-cover-preview" id="quick-cover-preview"><img id="quick-cover-image" alt="Your profile cover" hidden><span class="account-cover-label">PROFILE COVER</span><div class="account-cover-actions"><button class="button button-secondary button-sm" id="quick-cover-change" type="button">Change cover</button><button class="button button-secondary button-sm" id="quick-cover-remove" type="button" hidden>Remove</button></div><input id="quick-cover-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="account-card-effects-row"><div class="account-card-effects-copy"><strong>Profile effects</strong><small id="quick-effect-status">Granted permanently by Super Admin</small></div><button class="button button-secondary button-sm" id="quick-effects-open" type="button">Browse effects</button></div><p class="account-card-feedback" id="quick-card-feedback" role="status" aria-live="polite"></p></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Message the creator directly to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-message-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Message creator</span></button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
+            <section class="account-card account-connect-apps-card" id="quick-connect-apps-card" aria-labelledby="quick-connect-apps-title"><header class="account-section-heading"><div><h3 id="quick-connect-apps-title">Connect apps</h3><p>Add links so visitors viewing your bio can tap to visit.</p></div></header><div class="account-connect-preview" id="quick-connect-apps-preview-wrap"><span class="account-connect-preview-label">Bio preview</span><div class="account-connect-preview-icons" id="quick-connect-apps-preview" aria-live="polite"></div></div><form id="quick-connect-apps-form" class="account-connect-apps-form">${connectAppsFieldsMarkup()}<div class="form-actions"><button class="button button-primary" id="quick-connect-apps-save" type="submit">Save links</button></div></form></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Device &amp; in-app alerts</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device permissions for in-app alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button></div></div><div class="preference-row preference-workspace-row" data-role="ADMIN"><span><strong>Workspace settings</strong><small>Monthly schedule, payment QR, access, treasurers &amp; cycle reset</small></span><a class="button button-primary button-sm" href="settings.html" data-workspace-settings-open>Manage</a></div><div class="preference-row"><span><strong>Data &amp; storage retention</strong><small>Active savings protected · 30d bin, 90d &amp; 6-month rules</small></span><button class="button button-secondary button-sm" type="button" data-retention-rules-open>View rules</button></div><div class="preference-row"><span><strong>Terms &amp; Privacy policies</strong><small>Non-custodial scope, permissions, and full retention schedule</small></span><div class="header-actions"><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="terms">Terms</button><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="privacy">Privacy</button></div></div></section></div>
             <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
           </div>
@@ -4335,7 +4507,7 @@
     const emailForm = document.getElementById('quick-email-form');
     dialog.setAttribute('aria-busy', 'true');
     try {
-      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,last_seen_at').eq('id', currentProfile.id).single();
+      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,last_seen_at,social_links').eq('id', currentProfile.id).single();
       if (error) throw error;
       let payoutSource = data;
       if (!data.payout_channel && (data.member_id || currentProfile.member_id)) {
@@ -4362,10 +4534,12 @@
         verified_badge_expires_at: data.verified_badge_expires_at,
         verified_badge_acknowledged_at: data.verified_badge_acknowledged_at,
         verified_badge_message: data.verified_badge_message,
-        last_seen_at: data.last_seen_at
+        last_seen_at: data.last_seen_at,
+        social_links: sanitizeSocialLinks(data.social_links)
       });
       await resolveCreatorSocialId().catch(() => null);
       syncAccountBadgeSection(currentProfile);
+      syncConnectAppsForm(currentProfile.social_links);
       document.getElementById('quick-account-role').textContent = currentProfile.role === 'SUPER_ADMIN' ? 'Owner' : (data.email || 'My account');
       syncProfileAvatars({ ...currentProfile, ...data });
       const [appearance] = await Promise.all([
@@ -4377,6 +4551,7 @@
       if (support) support.hidden = currentProfile.role === 'SUPER_ADMIN';
       quickProfileDirty?.reset();
       quickEmailDirty?.reset();
+      quickConnectAppsDirty?.reset();
     } finally {
       dialog.removeAttribute('aria-busy');
     }
@@ -4750,6 +4925,58 @@
 
   let quickProfileDirty = null;
   let quickEmailDirty = null;
+  let quickConnectAppsDirty = null;
+
+  function readConnectAppsDraft(form) {
+    const draft = {};
+    if (!form) return draft;
+    for (const app of SOCIAL_APPS) {
+      const input = form.elements[app.key];
+      const url = normalizeSocialAppUrl(app.key, input?.value);
+      if (url) draft[app.key] = url;
+    }
+    return draft;
+  }
+
+  function syncConnectAppsPreview(links) {
+    const preview = document.getElementById('quick-connect-apps-preview');
+    if (!preview) return;
+    const form = document.getElementById('quick-connect-apps-form');
+    const source = links && typeof links === 'object' ? sanitizeSocialLinks(links) : readConnectAppsDraft(form);
+    preview.innerHTML = renderSocialAppLinksHtml(source, { variant: 'preview', showEmpty: true });
+  }
+
+  function syncConnectAppsForm(links) {
+    const form = document.getElementById('quick-connect-apps-form');
+    const clean = sanitizeSocialLinks(links);
+    if (form) {
+      for (const app of SOCIAL_APPS) {
+        const input = form.elements[app.key];
+        if (!input) continue;
+        input.value = clean[app.key] || '';
+        input.setCustomValidity('');
+        setFieldError(input, '');
+      }
+    }
+    syncConnectAppsPreview(clean);
+  }
+
+  function validateConnectAppsForm(form, { liveKey = '' } = {}) {
+    let firstInvalid = null;
+    const normalized = {};
+    if (!form) return { valid: true, firstInvalid: null, normalized };
+    for (const app of SOCIAL_APPS) {
+      const input = form.elements[app.key];
+      if (!input) continue;
+      if (liveKey && app.key !== liveKey) continue;
+      const { url, error } = validateSocialAppInput(app.key, input.value, { live: Boolean(liveKey) });
+      input.setCustomValidity(error);
+      setFieldError(input, error);
+      if (error && !firstInvalid) firstInvalid = input;
+      if (!error && url) normalized[app.key] = url;
+    }
+    return { valid: !firstInvalid, firstInvalid, normalized };
+  }
 
   function syncProfileCardEditor(appearance) {
     const editor = document.getElementById('quick-card-appearance');
@@ -4780,8 +5007,10 @@
     profileForm.dataset.bound = 'true';
     syncProfileNameMode(profileForm, currentProfile?.role === 'SUPER_ADMIN');
     const emailForm = document.getElementById('quick-email-form');
+    const connectAppsForm = document.getElementById('quick-connect-apps-form');
     quickProfileDirty = bindDirtySaveForm(profileForm, profileForm.querySelector('[type="submit"]'));
     quickEmailDirty = bindDirtySaveForm(emailForm, emailForm?.querySelector('[type="submit"]'));
+    quickConnectAppsDirty = bindDirtySaveForm(connectAppsForm, connectAppsForm?.querySelector('[type="submit"]'));
     const passwordForm = document.getElementById('quick-password-form');
     const notificationToggle = document.getElementById('quick-notifications-enabled');
     const avatarInput = document.getElementById('quick-avatar-input');
@@ -4961,6 +5190,54 @@
       catch (error) { notificationToggle.checked = !notificationToggle.checked; toast(friendlyError(error), 'error'); }
       finally { notificationToggle.disabled = false; }
     });
+    if (connectAppsForm) {
+      for (const app of SOCIAL_APPS) {
+        const input = connectAppsForm.elements[app.key];
+        if (!input) continue;
+        input.addEventListener('input', () => {
+          validateConnectAppsForm(connectAppsForm, { liveKey: app.key });
+          syncConnectAppsPreview();
+        });
+        input.addEventListener('blur', () => {
+          const { url, error } = validateSocialAppInput(app.key, input.value, { live: false });
+          input.setCustomValidity(error);
+          setFieldError(input, error);
+          if (!error && url) {
+            input.value = url;
+            quickConnectAppsDirty?.sync?.();
+          }
+          syncConnectAppsPreview();
+        });
+        input.addEventListener('invalid', (event) => {
+          event.preventDefault();
+          const { error } = validateSocialAppInput(app.key, input.value, { live: false });
+          if (error) setFieldError(input, error);
+        });
+      }
+      connectAppsForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const check = validateConnectAppsForm(connectAppsForm);
+        if (!check.valid) {
+          check.firstInvalid?.focus();
+          return;
+        }
+        const button = event.submitter || document.getElementById('quick-connect-apps-save');
+        setBusy(button, true, 'Saving…');
+        try {
+          const saved = await rpc('update_own_social_links', { p_links: check.normalized });
+          const clean = sanitizeSocialLinks(saved?.social_links ?? check.normalized);
+          currentProfile.social_links = clean;
+          syncConnectAppsForm(clean);
+          quickConnectAppsDirty?.reset();
+          window.dispatchEvent(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
+          toast('Connected apps updated.');
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+        } finally {
+          setBusy(button, false);
+        }
+      });
+    }
   }
 
   function mfaSettingsMarkup() {
@@ -7635,7 +7912,7 @@
       }
 
       const fetchProfile = () => client.from('profiles')
-        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,card_theme,cover_url,equipped_profile_effect')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,card_theme,cover_url,equipped_profile_effect,social_links')
         .eq('id', session.user.id)
         .single();
       let { data: profile, error } = await runWithStartupRetry(fetchProfile);
@@ -15245,6 +15522,7 @@
     generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
     resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal, syncAccountBadgeSection, openCreatorBadgeChat,
     refreshProfileEffectsState, maybeShowEffectAwardModal, openProfileEffectsDialog,
+    SOCIAL_APPS, validateSocialAppInput, normalizeSocialAppUrl, sanitizeSocialLinks, renderSocialAppLinksHtml,
     get profile() { return currentProfile; }
   };
 })();

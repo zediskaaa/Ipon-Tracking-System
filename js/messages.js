@@ -2757,6 +2757,7 @@
             ${isGrpHero ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
           </div>` : ''}
           ${(isGrpHero ? conv.description : conv.bio) ? `<p class="msg-welcome-bio">${escapeHtml(isGrpHero ? conv.description : conv.bio)}</p>` : ''}
+          ${!isGrpHero && conv.social_links ? (ipon().renderSocialAppLinksHtml?.(conv.social_links, { variant: 'welcome' }) || '') : ''}
           <p class="msg-welcome-hint">${escapeHtml(welcomeCopy)}</p>
         </div>`;
       ipon().bindAvatarFallbacks?.(list);
@@ -3160,6 +3161,7 @@
           <strong>${escapeHtml(conv.full_name || 'User')}${iponApi?.verifiedBadgesHtml?.(conv) || ''}${(typeof isSelfUser === 'function' && isSelfUser(conv)) ? '<span class="msg-self-pill">You</span>' : ''}</strong>
           ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
           ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
+          ${iponApi?.renderSocialAppLinksHtml?.(conv.social_links, { variant: 'drawer' }) || ''}
         </div>`;
         })();
 
@@ -3629,13 +3631,20 @@
     const rawEffect = appearance?.profile_effect ?? appearance?.equipped_profile_effect ?? 'none';
     const effectId = effectsApi?.normalizeEffectId ? effectsApi.normalizeEffectId(rawEffect) : 'none';
     const cover = safeDpUrl(appearance?.cover_url);
-    return { card_theme: theme, cover_url: cover || '', profile_effect: effectId };
+    const socialLinks = ipon()?.sanitizeSocialLinks ? ipon().sanitizeSocialLinks(appearance?.social_links) : {};
+    return { card_theme: theme, cover_url: cover || '', profile_effect: effectId, social_links: socialLinks };
   }
 
   function cacheProfileAppearance(targetId, appearance) {
     if (!targetId || !appearance || typeof appearance !== 'object') return null;
-    const norm = normalizeCardAppearance(appearance);
-    profileAppearanceCache.set(String(targetId), { ...norm, updatedAt: Date.now() });
+    const key = String(targetId);
+    const prev = profileAppearanceCache.get(key);
+    const merged = {
+      ...appearance,
+      social_links: ('social_links' in appearance) ? appearance.social_links : (prev?.social_links || {})
+    };
+    const norm = normalizeCardAppearance(merged);
+    profileAppearanceCache.set(key, { ...norm, updatedAt: Date.now() });
     if (norm.cover_url && typeof Image === 'function') {
       try {
         const pre = new Image();
@@ -3652,15 +3661,32 @@
       return cacheProfileAppearance(key || fallbackProfile.id, {
         card_theme: fallbackProfile.card_theme,
         cover_url: fallbackProfile.cover_url,
-        profile_effect: fallbackProfile.equipped_profile_effect || fallbackProfile.profile_effect
+        profile_effect: fallbackProfile.equipped_profile_effect || fallbackProfile.profile_effect,
+        social_links: fallbackProfile.social_links
       });
     }
     return null;
   }
 
+  function syncPopoverSocialAppsSlot(pop, socialLinks) {
+    const appsSlot = pop?.querySelector?.('.msg-pop-apps-slot');
+    if (!appsSlot) return false;
+    const clean = ipon()?.sanitizeSocialLinks ? ipon().sanitizeSocialLinks(socialLinks) : {};
+    const sig = JSON.stringify(clean);
+    if (appsSlot.dataset.appsSig === sig) return false;
+    appsSlot.dataset.appsSig = sig;
+    const appsHtml = ipon()?.renderSocialAppLinksHtml?.(clean, { variant: 'popover' }) || '';
+    appsSlot.innerHTML = appsHtml;
+    appsSlot.hidden = !appsHtml;
+    return true;
+  }
+
   function applyProfileCardAppearance(pop, targetId, appearance) {
     if (!pop || pop.hidden || pop.dataset.targetId !== String(targetId) || !pop.querySelector('.msg-pop-head')) return;
     const norm = cacheProfileAppearance(targetId, appearance) || normalizeCardAppearance(null);
+    if (appearance && typeof appearance === 'object' && 'social_links' in appearance) {
+      syncPopoverSocialAppsSlot(pop, norm.social_links);
+    }
     const prevTheme = pop.dataset.cardTheme || '';
     const prevEffect = pop.dataset.profileEffect || '';
     const existingBanner = pop.querySelector('.msg-pop-cover');
@@ -3715,7 +3741,8 @@
       const norm = cacheProfileAppearance(targetId, appearance);
       const changed = (pop.dataset.cardTheme || '') !== norm.card_theme
         || (pop.dataset.profileEffect || '') !== norm.profile_effect
-        || (pop.querySelector('.msg-pop-cover img')?.getAttribute('src') || '') !== norm.cover_url;
+        || (pop.querySelector('.msg-pop-cover img')?.getAttribute('src') || '') !== norm.cover_url
+        || ('social_links' in appearance && (pop.querySelector('.msg-pop-apps-slot')?.dataset.appsSig || '') !== JSON.stringify(norm.social_links || {}));
       applyProfileCardAppearance(pop, targetId, norm);
       if (changed) positionPopoverNearAnchor(pop, activePopoverAnchor);
     } catch (_) { /* Keep the profile usable if appearance is unavailable. */ }
@@ -3754,6 +3781,11 @@
       if (myFriendsCountText) selfParts.push(myFriendsCountText);
       const bioText = String(initializedProfile?.bio || '').trim();
       const fromAnnouncement = Boolean(anchorEl?.dataset?.socialHoverDp);
+      const selfSocialLinks = (cachedAppearance?.social_links && Object.keys(cachedAppearance.social_links).length)
+        ? cachedAppearance.social_links
+        : (initializedProfile?.social_links || {});
+      const selfSocialAppsHtml = ipon().renderSocialAppLinksHtml?.(selfSocialLinks, { variant: 'popover' }) || '';
+      const selfAppsSig = JSON.stringify(ipon().sanitizeSocialLinks ? ipon().sanitizeSocialLinks(selfSocialLinks) : {});
       pop.innerHTML = `
         <button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
         <div class="msg-pop-head">
@@ -3764,6 +3796,7 @@
           </div>
         </div>
         ${bioText ? `<p class="msg-pop-bio">${escapeHtml(bioText)}</p>` : ''}
+        <div class="msg-pop-apps-slot" data-apps-sig="${escAttr(selfAppsSig)}"${selfSocialAppsHtml ? '' : ' hidden'}>${selfSocialAppsHtml}</div>
         <p class="msg-pop-bio">${fromAnnouncement ? 'Connected social profile for announcements' : 'Message yourself to keep personal notes and files.'}</p>
         <div class="msg-pop-actions">
           <button type="button" class="msg-pop-btn msg-pop-primary-btn" data-social-action="message" data-target-id="${escapeHtml(initializedProfile.id)}">Message yourself</button>
@@ -3820,6 +3853,9 @@
         : '';
       const groupsHtml = renderSharedGroupsCard(profile.shared_groups);
       const bioText = String(profile.bio || '').trim();
+      const peerSocialLinks = ipon().sanitizeSocialLinks ? ipon().sanitizeSocialLinks(profile.social_links) : {};
+      const peerSocialAppsHtml = ipon().renderSocialAppLinksHtml?.(peerSocialLinks, { variant: 'popover' }) || '';
+      const peerAppsSig = JSON.stringify(peerSocialLinks);
       const canMessage = Boolean(profile.can_message);
 
       pop.innerHTML = `
@@ -3833,6 +3869,7 @@
         </div>
         ${mutualHtml}
         ${bioText ? `<p class="msg-pop-bio">${escapeHtml(bioText)}</p>` : ''}
+        <div class="msg-pop-apps-slot" data-apps-sig="${escAttr(peerAppsSig)}"${peerSocialAppsHtml ? '' : ' hidden'}>${peerSocialAppsHtml}</div>
         ${groupsHtml}
         <div class="msg-pop-actions">
           ${friendAction}
@@ -3844,7 +3881,10 @@
 
       ipon().bindAvatarFallbacks(pop);
       ipon().syncPresenceDots(pop);
-      applyProfileCardAppearance(pop, targetUserId, fetchedAppearance || cachedAppearance);
+      applyProfileCardAppearance(pop, targetUserId, {
+        ...(fetchedAppearance || cachedAppearance || {}),
+        social_links: peerSocialLinks
+      });
       positionPopoverNearAnchor(pop, activePopoverAnchor);
     } catch (error) {
       pop.innerHTML = `<button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button><p class="empty-state">${escapeHtml(ipon().friendlyError(error))}</p>`;
@@ -6966,11 +7006,22 @@
           }
           const uid = updated.id || initializedProfile?.id;
           if (uid) {
-            cacheProfileAppearance(uid, {
+            const norm = cacheProfileAppearance(uid, {
               card_theme: updated.card_theme,
               cover_url: updated.cover_url,
-              profile_effect: updated.equipped_profile_effect || updated.profile_effect
+              profile_effect: updated.equipped_profile_effect || updated.profile_effect,
+              ...('social_links' in updated ? { social_links: updated.social_links } : {})
             });
+            const openPop = document.getElementById('msg-profile-popover');
+            if (openPop && !openPop.hidden && openPop.dataset.targetId === String(uid) && norm && 'social_links' in updated) {
+              syncPopoverSocialAppsSlot(openPop, norm.social_links);
+            }
+            const activeConv = state.activeThread?.conversation;
+            if (activeConv && !isGroupConv(activeConv) && String(activeConv.id) === String(uid) && 'social_links' in updated) {
+              activeConv.social_links = norm?.social_links || {};
+              if (state.drawerOpen) renderThreadInfoDrawer();
+              if (!state.activeThread?.messages?.length) renderMessagesList();
+            }
           }
         });
       }
