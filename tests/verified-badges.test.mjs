@@ -240,6 +240,21 @@ test('first-open badge celebration modal pops up once with confetti, permanent v
   assert.match(permModal.innerHTML, /permanent verified badge/i);
   assert.match(permModal.innerHTML, /badge-celebrate-activity-box/);
   assert.match(permModal.innerHTML, /Permanent badges stay active while you use myIPON, and are automatically removed after <em>2 months<\/em> of inactivity\./);
+
+  // Even a 90-day temporary badge must NEVER show the Permanent-only 2-month activity requirement box
+  const longTempVm = runCoreInVm(async () => ({ data: { acknowledged_at: '2026-11-18T12:00:00Z' }, error: null }));
+  const longTempShown = longTempVm.ipon.maybeShowBadgeAwardModal({
+    id: 'u-90d',
+    role: 'MEMBER',
+    full_name: 'Temp Member',
+    verified_badge_tier: 'BLUE',
+    verified_badge_granted_at: '2026-11-18T08:00:00Z',
+    verified_badge_expires_at: new Date(Date.now() + 90 * 86400000).toISOString(),
+    verified_badge_message: 'Enjoy 90 days!',
+    verified_badge_acknowledged_at: null
+  });
+  assert.equal(longTempShown, true);
+  assert.doesNotMatch(longTempVm.appendedNodes[0].innerHTML, /badge-celebrate-activity-box|2 months/i);
 });
 
 test('Super Admin Badges tab, messages integration, and CSS contracts are complete and balanced', () => {
@@ -260,8 +275,8 @@ test('Super Admin Badges tab, messages integration, and CSS contracts are comple
   assert.match(html, /id="badges"[^>]*data-platform-view="badges"/);
   assert.match(html, /id="badge-grant-dialog"/);
   assert.match(html, /id="badge-remove-dialog"/);
-  assert.match(superAdminJs, /super_admin_grant_verified_badge/);
-  assert.match(superAdminJs, /super_admin_remove_verified_badge/);
+  assert.match(superAdminJs, /badgeGrantForm\?\.addEventListener\('submit'[\s\S]*?Ipon\.confirmAction\([\s\S]*?super_admin_grant_verified_badge/);
+  assert.match(superAdminJs, /badgeRemoveForm\?\.addEventListener\('submit'[\s\S]*?Ipon\.confirmAction\([\s\S]*?super_admin_remove_verified_badge/);
   assert.match(superAdminJs, /renderBadges/);
 
   // Messages surface integration & announcement badge exclusion
@@ -377,6 +392,20 @@ test('2-month inactivity rule, Thank-you unlock, and verified-since hover toolti
   assert.match(tip.innerHTML, /Verified Account/);
   assert.match(tip.innerHTML, /Verified since Oct 5, 2026/);
   assert.match(tip.innerHTML, /Auto-removes after 2 months inactive/i);
+
+  // Hovering a temporary BLUE badge must NOT mention "2 months inactive" and migration 114 limits it to permanent
+  const tempBadgeSpan = {
+    dataset: { verifiedTier: 'BLUE', verifiedSince: '2026-10-05T08:00:00Z', verifiedExpires: '2027-01-15T08:00:00Z' },
+    getBoundingClientRect: () => ({ left: 200, top: 200, right: 220, bottom: 218, width: 20, height: 18 }),
+    contains: () => false
+  };
+  (docListeners.get('mouseover') || []).forEach((fn) => fn({ target: { closest: (sel) => (sel.includes('data-verified-tier') ? tempBadgeSpan : null) } }));
+  assert.match(tip.innerHTML, /Valid until Jan 15, 2027\./);
+  assert.doesNotMatch(tip.innerHTML, /2 months inactive/i);
+
+  const mig114 = read('database/migrations/20261118_114_permanent_only_badge_inactivity.sql');
+  assert.match(mig114, /if p_expires_at is not null then/i);
+  assert.match(mig114, /interval '2 months'/i);
 });
 
 test('My Account verified badge card lets members message the creator directly without error', () => {

@@ -677,6 +677,25 @@
       durationDays = Number(preset);
     }
     const creatorMsg = String(badgeCreatorMessage?.value || '').trim();
+    const targetProfile = profiles.find((item) => item.id === userId);
+    const recipientLabel = targetProfile
+      ? `${targetProfile.full_name}${targetProfile.email ? ` (${targetProfile.email})` : ''}`
+      : 'this user';
+    const currentTier = targetProfile
+      ? (Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(targetProfile, '', { allowPendingAck: true }) : 'NONE')
+      : 'NONE';
+    const isUpdate = currentTier !== 'NONE';
+    const durationSummary = preset === 'permanent'
+      ? 'Permanent — auto-removes after 2 months inactive'
+      : (preset === 'custom'
+        ? `Until ${Ipon.dateLabel(expiresAt, { dateStyle: 'medium', timeStyle: 'short' })}`
+        : `${durationDays} days`);
+    const accepted = await Ipon.confirmAction({
+      title: isUpdate ? 'Save verified badge changes?' : 'Award verified badge?',
+      message: `${isUpdate ? 'Update' : 'Award'} the verified badge for ${recipientLabel} (${durationSummary})?${creatorMsg ? ' Your creator message will be shown in their celebration pop-up.' : ''}`,
+      acceptLabel: isUpdate ? 'Save badge' : 'Award badge'
+    });
+    if (!accepted) return;
     Ipon.setBusy(badgeGrantSubmit, true, 'Saving…');
     try {
       await Ipon.rpc('super_admin_grant_verified_badge', {
@@ -705,6 +724,16 @@
       badgeRemoveReason?.focus();
       return;
     }
+    const targetProfile = profiles.find((item) => item.id === userId);
+    const recipientLabel = targetProfile
+      ? `${targetProfile.full_name}${targetProfile.email ? ` (${targetProfile.email})` : ''}`
+      : 'this user';
+    const accepted = await Ipon.confirmAction({
+      title: 'Remove verified badge?',
+      message: `Remove the verified badge from ${recipientLabel}? They will receive a silent notification with your reason.`,
+      acceptLabel: 'Remove badge'
+    });
+    if (!accepted) return;
     Ipon.setBusy(badgeRemoveSubmit, true, 'Removing…');
     try {
       await Ipon.rpc('super_admin_remove_verified_badge', {

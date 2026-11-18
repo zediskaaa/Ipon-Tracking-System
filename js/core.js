@@ -2056,7 +2056,7 @@
         return { tier: 'NONE', granted_at: null, expires_at: null };
       }
     }
-    if (tier === 'BLUE' && typeof userOrId === 'object' && userOrId && (userOrId.last_seen_at || userOrId.verified_badge_granted_at)) {
+    if (tier === 'BLUE' && !expiresAt && typeof userOrId === 'object' && userOrId && (userOrId.last_seen_at || userOrId.verified_badge_granted_at)) {
       if (isTwoMonthsInactive(userOrId.last_seen_at, userOrId.verified_badge_granted_at || userOrId.created_at)) {
         if (uid) VERIFIED_BADGE_MAP.delete(String(uid));
         return { tier: 'NONE', granted_at: null, expires_at: null };
@@ -2179,7 +2179,7 @@
     let subNote = '';
     if (!isCreator) {
       if (expiresIso) {
-        subNote = `Valid until ${dateLabel(expiresIso, { dateStyle: 'medium' })} · Auto-removes after 2 months inactive.`;
+        subNote = `Valid until ${dateLabel(expiresIso, { dateStyle: 'medium' })}.`;
       } else {
         subNote = 'Permanent · Auto-removes after 2 months inactive.';
       }
@@ -2487,8 +2487,6 @@
         </div>`;
     }
 
-    const expMs = profile.verified_badge_expires_at ? Date.parse(profile.verified_badge_expires_at) : NaN;
-    const exceedsTwoMonths = !Number.isNaN(expMs) && (expMs - Date.now()) > (62 * 86400000);
     const activityRequirementHtml = isPermanent
       ? `
         <div class="badge-celebrate-activity-box">
@@ -2498,14 +2496,7 @@
             <span>Permanent badges stay active while you use myIPON, and are automatically removed after <em>2 months</em> of inactivity.</span>
           </div>
         </div>`
-      : (exceedsTwoMonths ? `
-        <div class="badge-celebrate-activity-box">
-          <div class="badge-celebrate-stat"><strong>2</strong><small>MONTHS</small></div>
-          <div class="badge-celebrate-activity-copy">
-            <b>Activity requirement</b>
-            <span>Even during longer badge periods, verification is automatically removed if your account stays inactive for <em>2 months</em>.</span>
-          </div>
-        </div>` : '');
+      : '';
 
     dialog.innerHTML = `
       <div class="badge-celebrate-sheet${isPermanent ? ' is-permanent' : ''}" id="ipon-badge-award-sheet">
