@@ -1414,6 +1414,89 @@
     if (error) throw error;
   }
 
+  async function optimizeUploadImage(file) {
+    if (!file || file.size < 256 * 1024 || file.size > 25 * 1024 * 1024 || file.type !== 'image/jpeg'
+      || typeof createImageBitmap !== 'function' || typeof File !== 'function') return file;
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d');
+      if (!context) return file;
+      context.drawImage(bitmap, 0, 0);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.96));
+      if (!blob || blob.type !== 'image/webp' || blob.size >= file.size * 0.8) return file;
+      const name = String(file.name || 'image').replace(/\.[^.]+$/, '') + '.webp';
+      return new File([blob], name, { type: 'image/webp', lastModified: file.lastModified });
+    } catch {
+      return file;
+    } finally {
+      bitmap?.close?.();
+    }
+  }
+
+  let mediaCodecPromise;
+  let mediaCodecUnavailable = false;
+  let mediaCodecQueue = Promise.resolve();
+
+  async function loadMediaCodec() {
+    if (mediaCodecUnavailable) return null;
+    if (!mediaCodecPromise) mediaCodecPromise = (async () => {
+      if (!window.FFmpegWASM?.FFmpeg) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = '/assets/ffmpeg/ffmpeg.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Media encoder could not be loaded.'));
+          document.head.appendChild(script);
+        });
+      }
+      const codec = new window.FFmpegWASM.FFmpeg();
+      await codec.load({
+        coreURL: '/assets/ffmpeg/ffmpeg-core.js',
+        wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm'
+      });
+      return codec;
+    })().catch(() => {
+      mediaCodecUnavailable = true;
+      return null;
+    });
+    return mediaCodecPromise;
+  }
+
+  async function optimizeUploadMedia(file) {
+    if (file?.type === 'image/jpeg') return optimizeUploadImage(file);
+    const isVideo = file?.type === 'video/mp4' || /\.mp4$/i.test(file?.name || '');
+    const isAudio = file?.type === 'audio/mpeg' || /\.mp3$/i.test(file?.name || '');
+    if ((!isVideo && !isAudio) || file.size < 2 * 1024 * 1024 || file.size > 25 * 1024 * 1024 || typeof File !== 'function') return file;
+    const process = async () => {
+      const codec = await loadMediaCodec();
+      if (!codec) return file;
+      const input = `input-${crypto.randomUUID()}.${isVideo ? 'mp4' : 'mp3'}`;
+      const output = `output-${crypto.randomUUID()}.${isVideo ? 'mp4' : 'mp3'}`;
+      try {
+        await codec.writeFile(input, new Uint8Array(await file.arrayBuffer()));
+        const args = isVideo
+          ? ['-i', input, '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '25', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', output]
+          : ['-i', input, '-map', '0:a:0', '-c:a', 'libmp3lame', '-b:a', '128k', output];
+        if (await codec.exec(args, 120000) !== 0) return file;
+        const data = await codec.readFile(output);
+        if (data.length < 1024 || data.length >= file.size * 0.8) return file;
+        return new File([data], file.name, { type: isVideo ? 'video/mp4' : 'audio/mpeg', lastModified: file.lastModified });
+      } catch {
+        return file;
+      } finally {
+        await codec.deleteFile(input).catch(() => {});
+        await codec.deleteFile(output).catch(() => {});
+      }
+    };
+    const result = mediaCodecQueue.then(process, process);
+    mediaCodecQueue = result.then(() => {}, () => {});
+    return result;
+  }
+
   function readShellAvatar(expectedUserId = '') {
     try {
       const raw = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SHELL_AVATAR_KEY) : null)
@@ -8367,22 +8450,24 @@
       const client = getClient();
       const announcementId = crypto.randomUUID();
       const uploadedPaths = [];
-      setBusy(button, true, 'Publishing…');
+      setBusy(button, true, queuedMedia.some((entry) => /\.(mp4|mp3)$/i.test(entry.file.name)) ? 'Optimizing media…' : 'Publishing…');
       try {
         const attachments = [];
         if (queuedMedia.length) {
+          const media = await Promise.all(queuedMedia.map(async (entry) => ({ ...entry, file: await optimizeUploadMedia(entry.file) })));
+          setBusy(button, true, 'Uploading…');
           const { uploads = [] } = await invokeAccountFunction({
             action: 'announcement-upload-urls',
             announcement_id: announcementId,
-            files: queuedMedia.map((entry) => ({ name: entry.file.name, kind: entry.kind, type: entry.file.type }))
+            files: media.map((entry) => ({ name: entry.file.name, kind: entry.kind, type: entry.file.type }))
           });
-          for (let i = 0; i < queuedMedia.length; i += 1) {
-            const entry = queuedMedia[i];
+          for (let i = 0; i < media.length; i += 1) {
+            const entry = media[i];
             const upload = uploads[i];
             if (!upload?.path || !upload?.token) throw new Error('Upload authorization missing.');
             await uploadAuthorizedFile(client, 'announcements', upload, entry.file);
             uploadedPaths.push(upload.path);
-            attachments.push({ path: upload.path, name: upload.name, kind: entry.kind, type: entry.type || entry.file.type || '' });
+            attachments.push({ path: upload.path, name: upload.name, kind: entry.kind, type: entry.file.type || '' });
           }
         }
         await rpc('create_announcement', {
@@ -11028,7 +11113,7 @@
     function renderMessages() {
       if (!messagesEl) return;
       if (!currentComments.length) {
-        messagesEl.innerHTML = '<div class="record-thread-empty"><strong>No replies yet</strong><small>Start a thread here to ask about a blurry receipt, share original photos, videos, or documents, or clarify a reference number.</small></div>';
+        messagesEl.innerHTML = '<div class="record-thread-empty"><strong>No replies yet</strong><small>Start a thread here to ask about a blurry receipt, share photos, videos, or documents, or clarify a reference number.</small></div>';
         return;
       }
       messagesEl.innerHTML = currentComments.map((c) => {
@@ -11185,24 +11270,25 @@
       const submitBtn = form.querySelector('[type="submit"]');
       const pendingUploads = [...queuedFiles];
       const uploadedPaths = [];
-      setBusy(submitBtn, true, pendingUploads.length ? 'Uploading…' : 'Sending…');
+      setBusy(submitBtn, true, pendingUploads.some((entry) => /\.(mp4|mp3)$/i.test(entry.file.name)) ? 'Optimizing media…' : (pendingUploads.length ? 'Uploading…' : 'Sending…'));
       try {
         const attachments = [];
         if (pendingUploads.length) {
+          const media = await Promise.all(pendingUploads.map(async (entry) => ({ ...entry, file: await optimizeUploadMedia(entry.file) })));
+          setBusy(submitBtn, true, 'Uploading…');
           const { uploads = [] } = await invokeAccountFunction({
             action: 'record-comment-upload-urls',
             record_type: recordType,
             record_id: recordId,
-            files: pendingUploads.map((entry) => ({ name: entry.name, kind: entry.kind, type: entry.type, size: entry.size }))
+            files: media.map((entry) => ({ name: entry.file.name, kind: entry.kind, type: entry.file.type, size: entry.file.size }))
           });
-          for (let i = 0; i < pendingUploads.length; i += 1) {
-            const entry = pendingUploads[i];
+          for (let i = 0; i < media.length; i += 1) {
+            const entry = media[i];
             const upload = uploads[i];
             if (!upload?.path || !upload?.token) throw new Error('Upload authorization missing.');
             await uploadAuthorizedFile(client, 'record-comments', upload, entry.file);
             uploadedPaths.push(upload.path);
-            if (entry.previewUrl) signedUrlCache.set(upload.path, entry.previewUrl);
-            attachments.push({ path: upload.path, name: upload.name, kind: entry.kind, type: upload.type || entry.file.type || '', size: entry.size });
+            attachments.push({ path: upload.path, name: upload.name, kind: entry.kind, type: upload.type || entry.file.type || '', size: entry.file.size });
           }
         }
         const added = await rpc('add_record_comment', {
@@ -14182,7 +14268,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     setOnlineVisibility, syncMessagesBadges,
     updateLocalProfile(patch = {}) {

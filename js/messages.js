@@ -954,7 +954,7 @@
   const missingUrlRetry = new Map(); // path -> { attempts, lastAt }
   let missingUrlTimer = null;
 
-  // Edge Storage helpers (raw lossless upload & XHR byte progress)
+  // Edge Storage helpers with XHR byte progress
   async function ensureSignedViewUrls(conversationId, paths = []) {
     const missing = [...new Set(paths.map((p) => String(p || '').trim()).filter((p) => p && !state.signedUrlCache.has(p)))];
     if (!missing.length || !conversationId) return;
@@ -1020,7 +1020,7 @@
           }
         };
         xhr.onerror = () => reject(new Error('Network error during file upload.'));
-        xhr.send(entry.file); // Exact untouched raw File object (zero compression)
+        xhr.send(entry.file);
       } else {
         ipon().client.storage
           .from('chat-attachments')
@@ -2459,7 +2459,7 @@
     if (bar) bar.style.width = `${pending.progressPct}%`;
     const metaLabel = row.querySelector('.msg-pending-status-text');
     if (metaLabel) {
-      metaLabel.textContent = pending.files?.length && pending.progressPct > 0 && pending.progressPct < 100
+      metaLabel.textContent = pending.optimizing ? 'Optimizing media…' : pending.files?.length && pending.progressPct > 0 && pending.progressPct < 100
         ? `Sending ${pending.progressPct}%…`
         : 'Sending…';
     }
@@ -2522,7 +2522,7 @@
           <span>${escapeHtml(p.replyPreview.body || 'Attachment')}</span>
         </div>`
       : '';
-    const statusLabel = isSending && atts.length && p.progressPct > 0 && p.progressPct < 100
+    const statusLabel = p.optimizing ? 'Optimizing media…' : isSending && atts.length && p.progressPct > 0 && p.progressPct < 100
       ? `Sending ${p.progressPct}%…`
       : 'Sending…';
     const metaRight = isFailed
@@ -2591,6 +2591,16 @@
       const files = pending.files || [];
       const needUpload = files.filter((entry) => !entry.uploaded);
       if (needUpload.length) {
+        pending.optimizing = needUpload.some((entry) => /\.(mp4|mp3)$/i.test(entry.name) && entry.size >= 2 * 1024 * 1024 && entry.size <= 25 * 1024 * 1024);
+        updatePendingProgressDom(pending);
+        for (const entry of needUpload) {
+          if (typeof ipon().optimizeUploadMedia === 'function') entry.file = await ipon().optimizeUploadMedia(entry.file);
+          entry.name = entry.file.name;
+          entry.type = entry.file.type;
+          entry.size = entry.file.size;
+        }
+        pending.optimizing = false;
+        updatePendingProgressDom(pending);
         const { uploads = [] } = await ipon().invokeAccountFunction({
           action: 'chat-upload-urls',
           conversation_id: convId,
@@ -2729,10 +2739,10 @@
         : userAvatarHtml(conv, 'avatar-lg', { clickable: false, showPresence: !isSelfHero });
       const heroAvatarNode = dpPreviewTriggerHtml(conv.avatar_url, heroTitle, heroAvatar);
       const welcomeCopy = isGrpHero
-        ? 'Say hello to the group! Messages and lossless files stay private to members.'
+        ? 'Say hello to the group! Messages and files stay private to members.'
         : isSelfHero
           ? 'Save personal notes, reminders, photos, and files here. Only visible to you.'
-          : 'Say hello! Messages and lossless files stay private between you two.';
+          : 'Say hello! Messages and files stay private between you two.';
       list.innerHTML = `
         <div class="msg-thread-welcome msg-thread-welcome-hero">
           <div class="msg-welcome-avatar">${heroAvatarNode}</div>

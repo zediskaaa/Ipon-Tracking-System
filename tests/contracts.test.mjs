@@ -16,6 +16,77 @@ test('all browser scripts pass syntax validation', () => {
   }
 });
 
+test('large photo uploads keep resolution and use smaller WebP only when it saves space', async () => {
+  const core = read('js/core.js');
+  const messages = read('js/messages.js');
+  const helper = core.match(/  async function optimizeUploadImage\(file\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(helper);
+  function makeFile(parts, name, options) {
+    Object.assign(this, { name, type: options.type, size: parts[0].size, lastModified: options.lastModified });
+  }
+  const input = { name: 'photo.jpg', type: 'image/jpeg', size: 16 * 1024 * 1024, lastModified: 123 };
+  let outputSize = 400 * 1024;
+  let closed = false;
+  const context = {
+    File: makeFile,
+    createImageBitmap: async () => ({ width: 4000, height: 3000, close: () => { closed = true; } }),
+    document: { createElement: () => ({ width: 0, height: 0, getContext: () => ({ drawImage: () => {} }), toBlob: (done) => done({ type: 'image/webp', size: outputSize }) }) }
+  };
+  const optimize = vm.runInNewContext(`(${helper.trim()})`, context);
+  const result = await optimize(input);
+  assert.equal(result.name, 'photo.webp');
+  assert.equal(result.type, 'image/webp');
+  assert.equal(result.size, outputSize);
+  assert.equal(result.lastModified, input.lastModified);
+  assert.equal(closed, true);
+  outputSize = 15 * 1024 * 1024;
+  assert.equal(await optimize(input), input);
+  const gif = { ...input, type: 'image/gif' };
+  assert.equal(await optimize(gif), gif);
+  assert.match(core, /files: media\.map\(\(entry\) => \(\{ name: entry\.file\.name/);
+  assert.match(messages, /entry\.file = await ipon\(\)\.optimizeUploadMedia\(entry\.file\)/);
+});
+
+test('MP4 and MP3 uploads use smaller playable encodes before signing and retain originals on failure', async () => {
+  const core = read('js/core.js');
+  const helper = core.match(/  async function optimizeUploadMedia\(file\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(helper);
+  const commands = [];
+  let encodedSize = 500_000;
+  const codec = {
+    writeFile: async () => {},
+    exec: async (args) => { commands.push(args); return 0; },
+    readFile: async () => new Uint8Array(encodedSize),
+    deleteFile: async () => {}
+  };
+  function MockFile(parts, name, options) {
+    Object.assign(this, { name, type: options.type, size: parts[0].length, lastModified: options.lastModified });
+  }
+  const context = {
+    File: MockFile,
+    crypto: { randomUUID: () => String(commands.length) },
+    optimizeUploadImage: async (file) => file,
+    loadMediaCodec: async () => codec,
+    mediaCodecQueue: Promise.resolve()
+  };
+  const optimize = vm.runInNewContext(`(${helper.trim()})`, context);
+  const mp4 = { name: 'clip.mp4', type: 'video/mp4', size: 5_000_000, lastModified: 1, arrayBuffer: async () => new ArrayBuffer(8) };
+  const video = await optimize(mp4);
+  assert.equal(video.type, 'video/mp4');
+  assert.equal(video.size, encodedSize);
+  assert.ok(commands[0].includes('libx264'));
+  const mp3 = { ...mp4, name: 'song.mp3', type: 'audio/mpeg' };
+  const audio = await optimize(mp3);
+  assert.equal(audio.type, 'audio/mpeg');
+  assert.ok(commands[1].includes('libmp3lame'));
+  encodedSize = 4_500_000;
+  assert.equal(await optimize(mp4), mp4);
+  assert.equal(await optimize({ ...mp4, name: 'notes.pdf', type: 'application/pdf' }).then((file) => file.name), 'notes.pdf');
+  assert.match(core, /files: media\.map\(\(entry\) => \(\{ name: entry\.file\.name/);
+  assert.match(read('js/messages.js'), /entry\.file = await ipon\(\)\.optimizeUploadMedia\(entry\.file\)/);
+  assert.match(read('vercel.json'), /wasm-unsafe-eval/);
+});
+
 test('database keeps financial writes behind RLS and reviewed RPCs', () => {
   const schema = read('database/schema.sql');
   for (const table of ['profiles', 'members', 'contributions', 'expenses', 'withdrawals', 'audit_logs']) {
@@ -2877,7 +2948,7 @@ test('discussion DP circle styling and replaceable phone/panel record-comment no
   assert.match(coreJs, /normalizeRolePageTarget\(event\?\.notification\?\.extra\?\.link\)/);
 });
 
-test('record discussion supports photo, video, and document attachments with lossless signed upload/view URLs', async () => {
+test('record discussion supports photo, video, and document attachments with signed upload/view URLs', async () => {
   const migration061 = read('database/migrations/20261114_061_record_comment_attachments.sql');
   const schema = read('database/schema.sql');
   const edgeFn = read('supabase/functions/manage-account/index.ts');
@@ -3046,6 +3117,9 @@ test('record discussion supports photo, video, and document attachments with los
           };
         }
       }
+      if (String(url).includes('storage.example/upload/')) {
+        uploadedPayloads.push({ file: init.body, contentType: init.headers?.['Content-Type'] });
+      }
       return { ok: true, status: 200, text: async () => '{}' };
     },
     supabase: {
@@ -3165,6 +3239,7 @@ test('record discussion supports photo, video, and document attachments with los
   const addCall = rpcCalls.find(([fn]) => fn === 'add_record_comment');
   assert.ok(addCall);
   assert.equal(addCall[1].p_attachments.length, 3);
+  await new Promise((resolve) => setImmediate(resolve));
   assert.match(messagesEl.innerHTML, /class="record-thread-att-photo"/);
   assert.match(messagesEl.innerHTML, /<video controls playsinline preload="metadata"/);
   assert.match(messagesEl.innerHTML, /class="record-thread-att-file"/);
@@ -6068,7 +6143,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(migration076, /values\s*\('chat-attachments',\s*'chat-attachments',\s*false,\s*52428800/i);
   assert.match(migration076, /when o\.sender_id = v_uid and v_share_receipts then/i);
 
-  // 2. Edge Function lossless attachment signing and cleanup (calls/VC disabled)
+  // 2. Edge Function attachment signing and cleanup (calls/VC disabled)
   for (const action of ['chat-upload-urls', 'chat-view-urls', 'chat-cleanup-media']) {
     assert.match(edge, new RegExp(`body\\.action === '${action}'`));
   }
@@ -6090,7 +6165,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(core, /role !== 'SUPER_ADMIN'[\s\S]*?window\.IponMessages\?\.init\?\.\(profile\)/);
   assert.match(sw, /'js\/messages\.js'/);
 
-  // 4. Frontend messaging features, raw lossless file uploads, & camera/VC removal
+  // 4. Frontend messaging features, direct uploads, & camera/VC removal
   assert.match(messagesJs, /xhr\.send\(entry\.file\)/);
   assert.doesNotMatch(messagesJs, /prepareImageDataUrl|canvas\.toBlob/);
   assert.doesNotMatch(messagesJs, /CallManager|data-start-call|msg-call-dialog|msg-incoming-call-dialog/);
@@ -6366,6 +6441,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
     innerHeight: 800,
     Ipon: {
       escapeHtml: (s) => String(s ?? ''),
+      optimizeUploadImage: async (file) => file,
       initials: () => 'NJ',
       isUserOnline: () => true,
       bindAvatarFallbacks: () => { },
@@ -11110,7 +11186,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261117-\d+/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261118-122/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11520,7 +11596,8 @@ test('Reports and member statement CSV exports and Print/Save PDF support Androi
     children: [],
     querySelector: () => null,
     querySelectorAll: () => [],
-    closest: () => null
+    closest: () => null,
+    setAttribute() {}, addEventListener() {}, remove() {}
   });
   const headerEl = Object.assign(makeNode('Reports', 'H1'));
   const panelEl = Object.assign(makeNode('', 'SECTION'), {
@@ -11538,10 +11615,13 @@ test('Reports and member statement CSV exports and Print/Save PDF support Androi
     window: null,
     document: {
       title: 'Reports — myIPON',
-      documentElement: { setAttribute() {}, removeAttribute() {} },
+      documentElement: { dataset: {}, setAttribute() {}, removeAttribute() {} },
+      body: { dataset: {}, classList: { toggle() {}, add() {}, remove() {} }, appendChild() {} },
+      createElement: () => makeNode(),
       querySelector: (sel) => (sel === '.page-header h1' ? headerEl : null),
       querySelectorAll: (sel) => (sel === '.panel, .report-panel' ? [panelEl] : []),
-      getElementById: () => null
+      getElementById: () => null,
+      addEventListener() {}
     },
     navigator: { userAgent: 'Mozilla/5.0 myIPONApp/20' },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
@@ -11564,6 +11644,8 @@ test('Reports and member statement CSV exports and Print/Save PDF support Androi
     }
   };
   vmCtx.window = vmCtx;
+  vmCtx.addEventListener = () => {};
+  vmCtx.location = { protocol: 'https:', hostname: 'my-ipon.vercel.app', pathname: '/reports.html' };
   vm.runInNewContext(coreJs, vmCtx, { filename: 'js/core.js' });
 
   await vmCtx.window.Ipon.downloadCsv('Month,Amount\n2026-11,₱500.00', 'test-report.csv');

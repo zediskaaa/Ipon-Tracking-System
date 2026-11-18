@@ -50,6 +50,6 @@ Enable **App Authenticator (TOTP)** enrollment and verification in the hosted Au
 
 Password recovery uses Supabase's hosted reset link and redirects back to `reset-password.html`. Add every deployed reset-page URL to the hosted Auth redirect allow list. The local equivalent is tracked in `supabase/templates/recovery.html`. The built-in Supabase mailer is suitable only for limited team-member testing; configure custom SMTP later when a verified sending domain is available.
 
-## Messaging and lossless media
+## Messaging and media
 
-Direct messaging, friends management, message requests, and notifications run on Supabase Postgres RPCs, Row-Level Security (`SUPER_ADMIN` excluded at database, Edge Function, and UI levels), and Supabase Realtime. Lossless file and image attachments use the private `chat-attachments` storage bucket with short-lived signed upload and download URLs issued by the `manage-account` Edge Function.
+Direct messaging, friends management, message requests, and notifications run on Supabase Postgres RPCs, Row-Level Security (`SUPER_ADMIN` excluded at database, Edge Function, and UI levels), and Supabase Realtime. Private chat, announcement, and record-comment attachments use short-lived signed upload and download URLs issued by the `manage-account` Edge Function. New JPEG, MP4, and MP3 uploads are optimized in the browser when the result is at least 20% smaller; unsupported devices or other file types keep the original upload. Existing stored files are not changed.
