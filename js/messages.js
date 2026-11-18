@@ -421,10 +421,50 @@
       </div>`).join('')}</div>`;
   }
 
+  function safeDpUrl(raw) {
+    const s = typeof raw === 'string' ? raw.trim() : '';
+    return (s.startsWith('data:image/') || /^https:\/\//i.test(s)) ? s : '';
+  }
+
+  function openDpViewer(src, alt = 'Display picture') {
+    const raw = String(src || '').trim();
+    const isSafeUrl = raw.startsWith('data:image/') || raw.startsWith('blob:') || /^https?:\/\//i.test(raw);
+    if (!raw || !isSafeUrl) return;
+    let dialog = document.getElementById('ipon-dp-viewer');
+    if (!dialog) {
+      dialog = document.createElement('dialog');
+      dialog.id = 'ipon-dp-viewer';
+      dialog.className = 'dp-viewer-dialog';
+      dialog.setAttribute('aria-label', 'Display picture preview');
+      dialog.innerHTML = '<img id="ipon-dp-img" alt="">';
+      document.body.appendChild(dialog);
+      dialog.addEventListener('click', (event) => {
+        if (event.target?.id !== 'ipon-dp-img') dialog.close();
+      });
+    }
+    const img = dialog.querySelector('#ipon-dp-img');
+    const fitImg = () => {
+      const nw = Number(img.naturalWidth) || 0;
+      const nh = Number(img.naturalHeight) || 0;
+      if (!nw || !nh) return;
+      const maxW = Math.min(Math.max(240, (window.innerWidth || 0) - 16), 720);
+      const maxH = Math.max(240, (window.innerHeight || 0) * 0.86);
+      const ratio = Math.min(maxW / nw, maxH / nh);
+      img.style.width = `${Math.round(nw * ratio)}px`;
+      img.style.height = `${Math.round(nh * ratio)}px`;
+    };
+    img.style.width = '';
+    img.style.height = '';
+    img.onload = fitImg;
+    img.src = raw;
+    img.alt = String(alt || 'Display picture');
+    if (!dialog.open) dialog.showModal();
+    if (img.complete && img.naturalWidth) fitImg();
+  }
+
   function userAvatarHtml(user, sizeClass = 'avatar-md', { clickable = true, showPresence = true } = {}) {
     if (!user) return '';
-    const rawUrl = typeof user.avatar_url === 'string' ? user.avatar_url.trim() : '';
-    const safeUrl = (rawUrl.startsWith('data:image/') || /^https:\/\//i.test(rawUrl)) ? rawUrl : '';
+    const safeUrl = safeDpUrl(user.avatar_url);
     const name = String(user.full_name || 'User');
     const letters = escapeHtml(ipon().initials(name));
     const cls = escapeHtml(sizeClass);
@@ -444,8 +484,7 @@
     if (!conv) return '';
     const title = convDisplayTitle(conv);
     const cls = escapeHtml(sizeClass);
-    const rawUrl = typeof conv.avatar_url === 'string' ? conv.avatar_url.trim() : '';
-    const safeUrl = (rawUrl.startsWith('data:image/') || /^https:\/\//i.test(rawUrl)) ? rawUrl : '';
+    const safeUrl = safeDpUrl(conv.avatar_url);
     const myId = String(initializedProfile?.id || '');
     const pool = (Array.isArray(conv.members_preview) && conv.members_preview.length
       ? conv.members_preview
@@ -2002,6 +2041,7 @@
 
     const headerEl = document.getElementById('msg-thread-header');
     if (headerEl) {
+      headerEl.classList.remove('is-empty-intro');
       if (peer) {
         const isGrp = isGroupConv(peer);
         headerEl.innerHTML = `
@@ -2255,16 +2295,18 @@
     const canInteract = isGrp || (conv.friendship_status !== 'BLOCKED_BY_ME' && conv.friendship_status !== 'BLOCKED_ME');
     const isPendingReq = !isGrp && conv.status === 'PENDING_REQUEST';
     const isIncomingReq = isPendingReq && conv.initiator_id !== initializedProfile?.id;
+    const hasSentMessages = Boolean((Array.isArray(thread.messages) && thread.messages.length) || getPendingList(conv.conversation_id).length);
     const typingEntries = getTypingEntries(conv.conversation_id);
     const isTyping = typingEntries.length > 0;
 
     const headerEl = document.getElementById('msg-thread-header');
+    headerEl.classList.toggle('is-empty-intro', !hasSentMessages);
     headerEl.innerHTML = `
       <div class="msg-thread-header-left">
         <button type="button" class="msg-back-mobile-btn" id="msg-back-to-list" aria-label="Back to conversations">
           <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
         </button>
-        ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md')}
+        ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md', { showPresence: !isSelfUser(conv) })}
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
             <strong>${escapeHtml(convDisplayTitle(conv))}${isGrp ? '' : userBadgesHtml(conv)}${!isGrp && isSelfUser(conv) ? '<span class="msg-self-pill">You</span>' : ''}</strong>
@@ -2317,7 +2359,7 @@
             <button type="button" class="button button-secondary button-sm" data-msg-req-decision="DELETE">Delete</button>
             <button type="button" class="button button-secondary button-sm is-danger" data-msg-req-decision="BLOCK">Block</button>
           </div>`;
-      } else if (isPendingReq) {
+      } else if (isPendingReq && hasSentMessages) {
         reqBanner.hidden = false;
         reqBanner.innerHTML = `<div class="msg-req-banner-copy"><strong>Message request pending</strong><p>Waiting for ${escapeHtml(conv.full_name || 'recipient')} to accept. Read receipts stay hidden until accepted.</p></div>`;
       } else {
@@ -2653,14 +2695,53 @@
     }
     const pendingList = getPendingList(conv.conversation_id);
 
-    if (!msgs.length && !pendingList.length) {
+    const headerEl = document.getElementById('msg-thread-header');
+    const reqBanner = document.getElementById('msg-request-banner');
+    const isEmpty = !msgs.length && !pendingList.length;
+    if (headerEl) headerEl.classList.toggle('is-empty-intro', isEmpty);
+    if (reqBanner && conv && !isGroupConv(conv) && conv.status === 'PENDING_REQUEST' && conv.initiator_id === initializedProfile?.id) {
+      if (!isEmpty) {
+        reqBanner.hidden = false;
+        reqBanner.innerHTML = `<div class="msg-req-banner-copy"><strong>Message request pending</strong><p>Waiting for ${escapeHtml(conv.full_name || 'recipient')} to accept. Read receipts stay hidden until accepted.</p></div>`;
+      } else {
+        reqBanner.hidden = true;
+      }
+    }
+
+    if (isEmpty) {
       list.classList.remove('is-thread-entering');
-      const welcomeCopy = isGroupConv(conv)
-        ? `Say hello in <strong>${escapeHtml(convDisplayTitle(conv))}</strong>. Messages and lossless files stay private to group members.`
-        : isSelfUser(conv)
-          ? `Save personal notes, reminders, photos, and files for <strong>${escapeHtml(conv.full_name || 'yourself')}${userBadgesHtml(conv)}</strong>. Only you can see this chat.`
-          : `Say hello to <strong>${escapeHtml(conv.full_name || 'your connection')}${userBadgesHtml(conv)}</strong>. Messages and lossless files stay private between you two.`;
-      list.innerHTML = `<div class="empty-state msg-thread-welcome"><p>${welcomeCopy}</p></div>`;
+      const isGrpHero = isGroupConv(conv);
+      const isSelfHero = !isGrpHero && isSelfUser(conv);
+      const heroTitle = convDisplayTitle(conv);
+      const statusText = formatStatusLine(conv, getTypingEntries(conv.conversation_id));
+      const isHeroOnline = isSelfHero || (!isGrpHero && conv.allow_online_status !== false && ipon().isUserOnline(conv.id));
+      const heroDpUrl = safeDpUrl(conv.avatar_url);
+      const heroAvatar = isGrpHero
+        ? groupAvatarHtml(conv, 'avatar-lg', { clickable: false })
+        : userAvatarHtml(conv, 'avatar-lg', { clickable: false, showPresence: !isSelfHero });
+      const heroAvatarNode = heroDpUrl
+        ? `<button type="button" class="msg-dp-preview-trigger" data-view-dp-src="${escAttr(heroDpUrl)}" data-view-dp-name="${escAttr(heroTitle)}" aria-label="View photo for ${escAttr(heroTitle)}" title="View photo">${heroAvatar}</button>`
+        : heroAvatar;
+      const welcomeCopy = isGrpHero
+        ? 'Say hello to the group! Messages and lossless files stay private to members.'
+        : isSelfHero
+          ? 'Save personal notes, reminders, photos, and files here. Only visible to you.'
+          : 'Say hello! Messages and lossless files stay private between you two.';
+      list.innerHTML = `
+        <div class="msg-thread-welcome msg-thread-welcome-hero">
+          <div class="msg-welcome-avatar">${heroAvatarNode}</div>
+          <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero ? '' : userBadgesHtml(conv)}${isSelfHero ? '<span class="msg-self-pill">You</span>' : ''}</h3>
+          ${!isGrpHero && conv.username ? `<span class="msg-welcome-username">@${escapeHtml(conv.username)}</span>` : ''}
+          ${!isSelfHero ? `<div class="msg-welcome-meta">
+            ${statusText ? `<span class="msg-welcome-status${isHeroOnline ? ' is-online' : ''}" id="msg-welcome-status-text">${escapeHtml(statusText)}</span>` : ''}
+            ${!isGrpHero && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
+            ${isGrpHero ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
+          </div>` : ''}
+          ${(isGrpHero ? conv.description : conv.bio) ? `<p class="msg-welcome-bio">${escapeHtml(isGrpHero ? conv.description : conv.bio)}</p>` : ''}
+          <p class="msg-welcome-hint">${escapeHtml(welcomeCopy)}</p>
+        </div>`;
+      ipon().bindAvatarFallbacks?.(list);
+      ipon().syncPresenceDots?.(list);
       return;
     }
 
@@ -3047,12 +3128,21 @@
               </div>
             </form>` : ''}
         </div>`
-      : `<div class="msg-drawer-profile">
-          ${userAvatarHtml(conv, 'avatar-lg', { showPresence: false })}
+      : (() => {
+          const peerDpUrl = typeof safeDpUrl === 'function'
+            ? safeDpUrl(conv.avatar_url)
+            : ((typeof conv?.avatar_url === 'string' && /^(?:data:image\/|https:\/\/)/i.test(conv.avatar_url.trim())) ? conv.avatar_url.trim() : '');
+          const peerAv = userAvatarHtml(conv, 'avatar-lg', { clickable: false, showPresence: false });
+          const peerAvNode = peerDpUrl
+            ? `<button type="button" class="msg-dp-preview-trigger msg-drawer-dp-btn" data-view-dp-src="${escAttr(peerDpUrl)}" data-view-dp-name="${escAttr(conv.full_name || 'User')}" aria-label="View profile picture for ${escAttr(conv.full_name || 'User')}" title="View photo">${peerAv}</button>`
+            : peerAv;
+          return `<div class="msg-drawer-profile">
+          ${peerAvNode}
           <strong>${escapeHtml(conv.full_name || 'User')}${iponApi?.verifiedBadgesHtml?.(conv) || ''}${(typeof isSelfUser === 'function' && isSelfUser(conv)) ? '<span class="msg-self-pill">You</span>' : ''}</strong>
           ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
           ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
         </div>`;
+        })();
 
     const actionsGridHtml = isGrp
       ? `<button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}">${MSG_PIN_SVG}<span>${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</span></button>
@@ -3663,6 +3753,7 @@
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(140, Math.max(40, el.scrollHeight))}px`;
+    el.style.overflowY = el.scrollHeight > 140 ? 'auto' : 'hidden';
   }
 
   function renderContextBar() {
@@ -5215,10 +5306,16 @@
         document.getElementById('msg-group-edit-pic-input')?.click();
         return;
       }
+      const dpViewBtn = ev.target.closest?.('[data-view-dp-src]');
+      if (dpViewBtn) {
+        const dpSrc = safeDpUrl(dpViewBtn.dataset.viewDpSrc);
+        if (dpSrc) openDpViewer(dpSrc, dpViewBtn.dataset.viewDpName || 'Display picture');
+        return;
+      }
       if (ev.target.closest?.('#msg-group-drawer-avatar-slot.is-viewable')) {
         const conv = state.activeThread?.conversation;
-        const viewSrc = !state.groupEditAvatarClear ? (state.groupEditAvatarDataUrl || conv?.avatar_url) : null;
-        if (viewSrc) ipon().openImageViewer?.(viewSrc, convDisplayTitle(conv));
+        const viewSrc = !state.groupEditAvatarClear ? safeDpUrl(state.groupEditAvatarDataUrl || conv?.avatar_url) : '';
+        if (viewSrc) openDpViewer(viewSrc, convDisplayTitle(conv));
         return;
       }
       if (ev.target.closest?.('#msg-group-edit-pic-btn')) {
@@ -6681,10 +6778,16 @@
         if (friend && friend.last_seen_at) friend.last_seen_at = at;
       });
       if (state.activeThread?.conversation) {
+        const activeConv = state.activeThread.conversation;
+        const entries = getTypingEntries(activeConv.conversation_id);
+        const liveStatus = formatStatusLine(activeConv, entries);
         const subEl = document.getElementById('msg-peer-status-text');
-        if (subEl) {
-          const entries = getTypingEntries(state.activeThread.conversation.conversation_id);
-          subEl.textContent = formatStatusLine(state.activeThread.conversation, entries);
+        if (subEl) subEl.textContent = liveStatus;
+        const welcomeStatus = document.getElementById('msg-welcome-status-text');
+        if (welcomeStatus) {
+          const isOn = !isGroupConv(activeConv) && (isSelfUser(activeConv) || (activeConv.allow_online_status !== false && ipon().isUserOnline(activeConv.id)));
+          welcomeStatus.classList.toggle('is-online', isOn);
+          welcomeStatus.textContent = liveStatus;
         }
       }
       if (state.tab === 'friends' && state.friendsSubTab === 'all' && document.getElementById('msg-workspace-dialog')?.open) {

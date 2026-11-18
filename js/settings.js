@@ -404,7 +404,7 @@
     const file = paymentQrFile.files?.[0];
     if (!file) return;
     try {
-      const prepared = await Ipon.prepareImageDataUrl(file, { maxEdge: 1200, skipCompressBytes: 120 * 1024, maxBytes: 420 * 1024 });
+      const prepared = await Ipon.prepareImageDataUrl(file, { maxEdge: 2560, skipCompressBytes: 8 * 1024 * 1024, maxBytes: 8 * 1024 * 1024 });
       pendingQrDataUrl = prepared.dataUrl;
       clearQrFlag = false;
       renderSettingsQrPreview();

@@ -481,4 +481,24 @@ test('My Account verified badge card lets members message the creator directly w
   assert.match(messagesJs, /Message yourself/);
   assert.match(messagesJs, /Saved Messages/);
   assert.match(css, /\.msg-self-pill\s*\{/);
+
+  // Empty conversation hero + deferred outgoing request banner until first message sent
+  assert.match(messagesJs, /is-empty-intro/);
+  assert.match(messagesJs, /msg-thread-welcome-hero/);
+  assert.match(messagesJs, /!isSelfHero \? `<div class="msg-welcome-meta">/);
+  assert.match(messagesJs, /isPendingReq && hasSentMessages/);
+  assert.match(css, /\.msg-thread-header\.is-empty-intro\s+\.msg-thread-header-left\s+>\s+:not\(\.msg-back-mobile-btn\)/);
+
+  // Composer hides desktop scrollbar arrows; minimal DP viewer opens only for real DPs and closes on outside click
+  assert.match(messagesJs, /el\.style\.overflowY\s*=\s*el\.scrollHeight\s*>\s*140\s*\?\s*'auto'\s*:\s*'hidden'/);
+  assert.match(messagesJs, /heroDpUrl[\s\S]*data-view-dp-src/);
+  assert.match(messagesJs, /peerDpUrl[\s\S]*data-view-dp-src/);
+  assert.match(css, /#msg-composer-input\s*\{[^}]*overflow-y:\s*hidden;[^}]*scrollbar-width:\s*none;/);
+  assert.match(css, /#msg-composer-input::-webkit-scrollbar\s*\{\s*display:\s*none;\s*\}/);
+  assert.match(css, /\.dp-viewer-dialog\s*\{/);
+  assert.match(css, /\.dp-viewer-dialog\s+img\s*\{[^}]*border-radius:\s*0;/);
+  assert.match(messagesJs, /function openDpViewer\(/);
+  assert.match(coreJs, /MAX_AVATAR_BYTES\s*=\s*8\s*\*\s*1024\s*\*\s*1024/);
+  assert.match(coreJs, /function prepareAvatarDataUrl[\s\S]*?skipCompressBytes:\s*MAX_AVATAR_BYTES/);
+  assert.match(coreJs, /nativeCropEdge[\s\S]*?Math\.min\(2400,\s*nativeCropEdge\)/);
 });

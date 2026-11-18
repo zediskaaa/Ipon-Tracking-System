@@ -1747,8 +1747,8 @@
   }
 
   const MAX_BUG_IMAGES = 5;
-  const MAX_BUG_IMAGE_BYTES = 2 * 1024 * 1024;
-  const MAX_AVATAR_BYTES = 450 * 1024;
+  const MAX_BUG_IMAGE_BYTES = 8 * 1024 * 1024;
+  const MAX_AVATAR_BYTES = 8 * 1024 * 1024;
   const PICTURE_FILE_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif|ico|tiff?|jfif|apng)$/i;
   const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
   const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -3095,7 +3095,7 @@
     });
   }
 
-  async function prepareImageDataUrl(file, { maxEdge = 1440, skipCompressBytes = 350 * 1024, maxBytes = MAX_BUG_IMAGE_BYTES, maxDataUrlLength = 585000 } = {}) {
+  async function prepareImageDataUrl(file, { maxEdge = 2560, skipCompressBytes = MAX_AVATAR_BYTES, maxBytes = MAX_BUG_IMAGE_BYTES, maxDataUrlLength = Math.ceil((maxBytes * 4) / 3) + 256 } = {}) {
     const ext = (file.name || '').match(PICTURE_FILE_RE)?.[1]?.toLowerCase() || '';
     const isImage = file.type.startsWith('image/') || Boolean(ext);
     if (!isImage) throw new Error(`"${file.name}" is not a picture file.`);
@@ -3106,7 +3106,7 @@
     }
     if (!dataUrl.startsWith('data:image/')) throw new Error(`"${file.name}" is not a valid picture format.`);
     if (!/^image\/(gif|svg\+xml)$/i.test(type)) {
-      const passes = [[maxEdge, 0.84], [Math.min(maxEdge, 1000), 0.72], [820, 0.6], [660, 0.5]];
+      const passes = [[maxEdge, 0.94], [Math.min(maxEdge, 2048), 0.88], [1600, 0.8], [1280, 0.72]];
       for (let i = 0; i < passes.length; i += 1) {
         const approxBytes = Math.ceil((dataUrl.length * 3) / 4);
         if (i === 0 && file.size <= skipCompressBytes && approxBytes <= maxBytes && dataUrl.length <= maxDataUrlLength) break;
@@ -3117,17 +3117,17 @@
     }
     const approxBytes = Math.ceil((dataUrl.length * 3) / 4);
     if (approxBytes > maxBytes || dataUrl.length > maxDataUrlLength) {
-      throw new Error(`"${file.name}" is still too large after compression. Please use a clearer screenshot.`);
+      throw new Error(`"${file.name}" exceeds the ${Math.round(maxBytes / (1024 * 1024))} MB upload limit.`);
     }
     return { name: String(file.name || 'picture').slice(0, 120), type, dataUrl };
   }
 
   function prepareBugImage(file) {
-    return prepareImageDataUrl(file, { maxEdge: 1440, skipCompressBytes: 350 * 1024, maxBytes: MAX_BUG_IMAGE_BYTES });
+    return prepareImageDataUrl(file, { maxEdge: 2560, skipCompressBytes: MAX_BUG_IMAGE_BYTES, maxBytes: MAX_BUG_IMAGE_BYTES });
   }
 
   function prepareAvatarDataUrl(file) {
-    return prepareImageDataUrl(file, { maxEdge: 256, skipCompressBytes: 60 * 1024, maxBytes: MAX_AVATAR_BYTES });
+    return prepareImageDataUrl(file, { maxEdge: 2560, skipCompressBytes: MAX_AVATAR_BYTES, maxBytes: MAX_AVATAR_BYTES });
   }
 
   function bindUtilityDialogs() {
@@ -3675,19 +3675,73 @@
       }
 
       async function onSaveClick() {
-        const exportCanvas = document.createElement('canvas');
-        exportCanvas.width = 256;
-        exportCanvas.height = 256;
-        const exportCtx = exportCanvas.getContext('2d');
-        if (!exportCtx) return onCancel();
-        exportCtx.imageSmoothingEnabled = true;
-        exportCtx.imageSmoothingQuality = 'high';
-        exportCtx.drawImage(canvas, CROP_X, CROP_Y, CROP_SIZE, CROP_SIZE, 0, 0, 256, 256);
-        const croppedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.88);
-
         setBusy(saveBtn, true, 'Saving…');
         try {
-          const uploadedUrl = await uploadMediaDataUrl(croppedDataUrl, { category: 'avatars', name: 'avatar.jpg' });
+          const srcType = file instanceof File ? String(file.type || '').toLowerCase() : '';
+          const isUneditedSquare = file instanceof File
+            && file.size <= MAX_AVATAR_BYTES
+            && /^image\/(png|jpeg|webp|gif)$/i.test(srcType)
+            && rotation === 0
+            && zoom === 1
+            && img.naturalWidth > 0
+            && img.naturalWidth === img.naturalHeight
+            && Math.abs(offsetX - (CENTER - imgW / 2)) < 1
+            && Math.abs(offsetY - (CENTER - imgH / 2)) < 1;
+
+          let croppedDataUrl = '';
+          let uploadName = 'avatar.jpg';
+          if (isUneditedSquare) {
+            croppedDataUrl = await readFileAsDataUrl(file);
+            uploadName = srcType === 'image/png' ? 'avatar.png'
+              : srcType === 'image/webp' ? 'avatar.webp'
+              : srcType === 'image/gif' ? 'avatar.gif'
+              : 'avatar.jpg';
+          } else {
+            const exportCanvas = document.createElement('canvas');
+            const nativeCropEdge = Math.max(1, Math.round(CROP_SIZE / scale));
+            const exportSize = Math.min(2400, nativeCropEdge);
+            exportCanvas.width = exportSize;
+            exportCanvas.height = exportSize;
+            const exportCtx = exportCanvas.getContext('2d');
+            if (!exportCtx) return onCancel();
+            exportCtx.imageSmoothingEnabled = true;
+            exportCtx.imageSmoothingQuality = 'high';
+            if (srcType !== 'image/png' && srcType !== 'image/webp') {
+              exportCtx.fillStyle = '#ffffff';
+              exportCtx.fillRect(0, 0, exportSize, exportSize);
+            }
+            const outScale = exportSize / CROP_SIZE;
+            const cx = (offsetX + imgW / 2 - CROP_X) * outScale;
+            const cy = (offsetY + imgH / 2 - CROP_Y) * outScale;
+            exportCtx.save();
+            exportCtx.translate(cx, cy);
+            exportCtx.rotate((rotation * Math.PI) / 180);
+            const drawW = img.naturalWidth * scale * outScale;
+            const drawH = img.naturalHeight * scale * outScale;
+            exportCtx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+            exportCtx.restore();
+
+            if (srcType === 'image/png') {
+              croppedDataUrl = exportCanvas.toDataURL('image/png');
+              uploadName = 'avatar.png';
+              if (Math.ceil((croppedDataUrl.length * 3) / 4) > MAX_AVATAR_BYTES) {
+                croppedDataUrl = exportCanvas.toDataURL('image/webp', 0.96);
+                uploadName = 'avatar.webp';
+              }
+            } else if (srcType === 'image/webp') {
+              croppedDataUrl = exportCanvas.toDataURL('image/webp', 0.96);
+              uploadName = 'avatar.webp';
+            } else {
+              croppedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.96);
+              uploadName = 'avatar.jpg';
+            }
+            if (Math.ceil((croppedDataUrl.length * 3) / 4) > MAX_AVATAR_BYTES) {
+              croppedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.88);
+              uploadName = 'avatar.jpg';
+            }
+          }
+
+          const uploadedUrl = await uploadMediaDataUrl(croppedDataUrl, { category: 'avatars', name: uploadName });
           if (typeof onSave === 'function') {
             await onSave(uploadedUrl);
           } else {
@@ -10264,7 +10318,7 @@
     const handleFile = async (file) => {
       if (!file) return;
       try {
-        const prepared = await prepareImageDataUrl(file, { maxEdge: 1200, skipCompressBytes: 120 * 1024, maxBytes: 420 * 1024 });
+        const prepared = await prepareImageDataUrl(file, { maxEdge: 2560, skipCompressBytes: MAX_AVATAR_BYTES, maxBytes: MAX_AVATAR_BYTES });
         dataUrl = prepared.dataUrl;
         sync(prepared.name);
       } catch (error) {
