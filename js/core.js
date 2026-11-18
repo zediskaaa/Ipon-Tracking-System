@@ -1415,18 +1415,33 @@
   }
 
   async function optimizeUploadImage(file) {
-    if (!file || file.size < 256 * 1024 || file.size > 25 * 1024 * 1024 || file.type !== 'image/jpeg'
+    if (!file || file.size < 256 * 1024 || file.size > 25 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(file.type)
       || typeof createImageBitmap !== 'function' || typeof File !== 'function') return file;
     let bitmap;
     try {
+      if (file.type === 'image/png') {
+        const bytes = new DataView(await file.slice(0, 65536).arrayBuffer());
+        let foundImageData = false;
+        for (let offset = 8; offset + 12 <= bytes.byteLength;) {
+          const length = bytes.getUint32(offset);
+          if (length > bytes.byteLength - offset - 12) break;
+          const chunk = String.fromCharCode(...new Uint8Array(bytes.buffer, offset + 4, 4));
+          if (chunk === 'acTL') return file;
+          if (chunk === 'IDAT') { foundImageData = true; break; }
+          offset += length + 12;
+        }
+        if (!foundImageData) return file;
+      }
       bitmap = await createImageBitmap(file);
       const canvas = document.createElement('canvas');
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
+      const scale = Math.min(1, 2560 / Math.max(bitmap.width, bitmap.height));
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
       const context = canvas.getContext('2d');
       if (!context) return file;
-      context.drawImage(bitmap, 0, 0);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.96));
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.9));
       if (!blob || blob.type !== 'image/webp' || blob.size >= file.size * 0.8) return file;
       const name = String(file.name || 'image').replace(/\.[^.]+$/, '') + '.webp';
       return new File([blob], name, { type: 'image/webp', lastModified: file.lastModified });
@@ -1467,7 +1482,7 @@
   }
 
   async function optimizeUploadMedia(file) {
-    if (file?.type === 'image/jpeg') return optimizeUploadImage(file);
+    if (file?.type === 'image/jpeg' || file?.type === 'image/png') return optimizeUploadImage(file);
     const isVideo = file?.type === 'video/mp4' || /\.mp4$/i.test(file?.name || '');
     const isAudio = file?.type === 'audio/mpeg' || /\.mp3$/i.test(file?.name || '');
     if ((!isVideo && !isAudio) || file.size < 2 * 1024 * 1024 || file.size > 25 * 1024 * 1024 || typeof File !== 'function') return file;

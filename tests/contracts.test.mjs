@@ -16,7 +16,7 @@ test('all browser scripts pass syntax validation', () => {
   }
 });
 
-test('large photo uploads keep resolution and use smaller WebP only when it saves space', async () => {
+test('large JPEG and static PNG uploads use bounded WebP only when it saves space', async () => {
   const core = read('js/core.js');
   const messages = read('js/messages.js');
   const helper = core.match(/  async function optimizeUploadImage\(file\) \{[\s\S]*?\n  \}/)?.[0];
@@ -27,10 +27,15 @@ test('large photo uploads keep resolution and use smaller WebP only when it save
   const input = { name: 'photo.jpg', type: 'image/jpeg', size: 16 * 1024 * 1024, lastModified: 123 };
   let outputSize = 400 * 1024;
   let closed = false;
+  let canvas;
+  let quality;
+  const pngBytes = new Uint8Array(20);
+  pngBytes.set([137, 80, 78, 71, 13, 10, 26, 10]);
+  pngBytes.set([73, 68, 65, 84], 12);
   const context = {
     File: makeFile,
     createImageBitmap: async () => ({ width: 4000, height: 3000, close: () => { closed = true; } }),
-    document: { createElement: () => ({ width: 0, height: 0, getContext: () => ({ drawImage: () => {} }), toBlob: (done) => done({ type: 'image/webp', size: outputSize }) }) }
+    document: { createElement: () => (canvas = { width: 0, height: 0, getContext: () => ({ drawImage: () => {} }), toBlob: (done, _type, q) => { quality = q; done({ type: 'image/webp', size: outputSize }); } }) }
   };
   const optimize = vm.runInNewContext(`(${helper.trim()})`, context);
   const result = await optimize(input);
@@ -38,7 +43,17 @@ test('large photo uploads keep resolution and use smaller WebP only when it save
   assert.equal(result.type, 'image/webp');
   assert.equal(result.size, outputSize);
   assert.equal(result.lastModified, input.lastModified);
+  assert.equal(canvas.width, 2560);
+  assert.equal(canvas.height, 1920);
+  assert.equal(quality, 0.9);
   assert.equal(closed, true);
+  const png = { ...input, name: 'photo.png', type: 'image/png', slice: () => ({ arrayBuffer: async () => pngBytes.buffer }) };
+  assert.equal((await optimize(png)).name, 'photo.webp');
+  assert.equal(canvas.width, 2560);
+  assert.equal(canvas.height, 1920);
+  assert.equal(quality, 0.9);
+  pngBytes.set([97, 99, 84, 76], 12);
+  assert.equal(await optimize(png), png);
   outputSize = 15 * 1024 * 1024;
   assert.equal(await optimize(input), input);
   const gif = { ...input, type: 'image/gif' };
@@ -11186,7 +11201,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261118-122/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261118-123/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
