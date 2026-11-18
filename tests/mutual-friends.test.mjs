@@ -359,8 +359,9 @@ test('messages UI renders max 3 avatars + 4th count badge and opens mutuals popo
   assert.equal(profilePop.hidden, false);
   assert.match(profilePop.innerHTML, /<span class="msg-mutual-more" aria-hidden="true">\+2<\/span>/);
   assert.equal((profilePop.innerHTML.match(/class="msg-mutual-av"/g) || []).length, 3);
-  assert.match(profilePop.innerHTML, /<span class="msg-rel-badge">Friend<\/span>/);
-  assert.match(profilePop.innerHTML, /7 friends/);
+  assert.doesNotMatch(profilePop.innerHTML, /class="msg-rel-badge"/);
+  assert.doesNotMatch(profilePop.innerHTML, /<small class="msg-pop-status">Friends\b/);
+  assert.match(profilePop.innerHTML, /<small class="msg-pop-status">7 friends<\/small>/);
 
   // 7. Inline search person rows show clean inline "1 friend · 4 mutual" text without the mutual avatar pill badge
   const chatsTabBtn = {

@@ -603,6 +603,9 @@ body.is-app .loader-sheet small { margin-top:4px; font-size:12px; }
 .announcement-empty-state small{display:inline-block;padding:3px 12px;border-radius:999px;background:#f5e5c9;color:#7a4f08;font:700 11px/1.2 Arial,sans-serif}
 .announcement-avatar{width:24px;height:24px;border:1.5px solid #fffdf9;font-size:9px}
 .announcement-avatar.is-owner{border-color:#e8b954}
+.announcement-owner-dp-btn{display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;background:transparent;border-radius:50%;cursor:pointer;transition:transform .15s ease;}
+.announcement-owner-dp-btn:hover{transform:scale(1.06);}
+.announcement-owner-dp-btn:focus-visible{outline:2px solid #e4b95b;outline-offset:2px;}
 .announcement-item{display:flex;flex-direction:column;justify-content:space-between;width:100%;max-width:380px;height:260px;min-height:260px;box-sizing:border-box;overflow:hidden;min-width:0;padding:14px 16px 12px;border:1px solid rgba(20,45,43,.12);border-radius:14px;background:#ffffff;color:var(--ink);text-align:left;box-shadow:0 2px 8px rgba(20,45,43,.03);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;position:relative}
 .announcement-list .announcement-item{max-width:100%}
 .announcement-item:hover{border-color:rgba(20,45,43,.28);box-shadow:0 8px 22px rgba(20,45,43,.08);transform:translateY(-2px)}

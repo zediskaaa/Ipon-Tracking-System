@@ -49,6 +49,8 @@
   let activeFloatingMenuAnchor = null;
   let activeMutualAnchor = null;
   let mutualHoverTimer = null;
+  let profileHoverTimer = null;
+  let profileLeaveTimer = null;
   const mutualFriendsCache = new Map();
   const liveLastSeenMap = new Map();
   let suppressBubbleClickId = null;
@@ -3472,15 +3474,52 @@
     }
   }
 
-  async function openProfilePopover(targetUserId, anchorEl) {
+  function clearProfileHoverTimers() {
+    if (profileHoverTimer) {
+      clearTimeout(profileHoverTimer);
+      profileHoverTimer = null;
+    }
+    if (profileLeaveTimer) {
+      clearTimeout(profileLeaveTimer);
+      profileLeaveTimer = null;
+    }
+  }
+
+  async function openProfilePopover(targetUserId, anchorEl, { pinned = true } = {}) {
     const pop = document.getElementById('msg-profile-popover');
-    if (!pop || !targetUserId || String(targetUserId) === String(initializedProfile?.id)) return;
+    if (!pop || !targetUserId) return;
+    const isSelfTarget = String(targetUserId) === String(initializedProfile?.id);
+    if (isSelfTarget && !anchorEl?.dataset?.socialHoverDp) return;
+    clearProfileHoverTimers();
     // Keep the popover inside the top-most open modal dialog so Top Layer stacking never obscures it.
     const activeDialog = document.querySelector('#msg-workspace-dialog[open], #msg-forward-dialog[open], #msg-settings-dialog[open], dialog[open]');
     const targetHost = activeDialog || document.body;
     if (pop.parentElement !== targetHost) targetHost.appendChild(pop);
     activePopoverAnchor = anchorEl || null;
+    pop.dataset.targetId = String(targetUserId);
+    pop.dataset.pinned = pinned ? '1' : '0';
     pop.hidden = false;
+
+    if (isSelfTarget) {
+      const myFriendsCountText = formatFriendCountText((state.overview?.friends || []).length);
+      const bioText = String(initializedProfile?.bio || '').trim();
+      pop.innerHTML = `
+        <button type="button" class="dialog-close msg-pop-close" id="msg-pop-close" aria-label="Close profile popover"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <div class="msg-pop-head">
+          ${userAvatarHtml(initializedProfile, 'avatar-lg', { clickable: false, showPresence: false })}
+          <div class="msg-pop-title">
+            <strong id="msg-pop-name">${escapeHtml(initializedProfile?.full_name || 'Your profile')}</strong>
+            <div class="msg-pop-status-row"><span class="msg-rel-badge">You</span>${myFriendsCountText ? `<small class="msg-pop-status">${escapeHtml(myFriendsCountText)}</small>` : ''}</div>
+          </div>
+        </div>
+        ${bioText ? `<p class="msg-pop-bio">${escapeHtml(bioText)}</p>` : ''}
+        <p class="msg-pop-bio">Connected social profile for announcements</p>`;
+      ipon().bindAvatarFallbacks(pop);
+      ipon().syncPresenceDots(pop);
+      positionPopoverNearAnchor(pop, activePopoverAnchor);
+      return;
+    }
+
     pop.innerHTML = skeletonHtml('popover');
     positionPopoverNearAnchor(pop, activePopoverAnchor);
 
@@ -3515,9 +3554,9 @@
       if (fs !== 'FRIENDS') metaParts.push(statusLine);
       if (friendCountText) metaParts.push(friendCountText);
       if (!mutualHtml && mutualCount > 0) metaParts.push(`${mutualCount} mutual friend${mutualCount === 1 ? '' : 's'}`);
-      const statusRowHtml = fs === 'FRIENDS'
-        ? `<div class="msg-pop-status-row"><span class="msg-rel-badge">Friend</span>${metaParts.length ? `<small class="msg-pop-status">${escapeHtml(metaParts.join(' · '))}</small>` : ''}</div>`
-        : `<small class="msg-pop-status">${escapeHtml(metaParts.join(' · '))}</small>`;
+      const statusRowHtml = metaParts.length
+        ? `<small class="msg-pop-status">${escapeHtml(metaParts.join(' · '))}</small>`
+        : '';
       const groupsHtml = renderSharedGroupsCard(profile.shared_groups);
       const bioText = String(profile.bio || '').trim();
       const canMessage = Boolean(profile.can_message);
@@ -3571,10 +3610,15 @@
   }
 
   function closeProfilePopover() {
+    clearProfileHoverTimers();
     closeMutualPopover();
     activePopoverAnchor = null;
     const pop = document.getElementById('msg-profile-popover');
-    if (pop) pop.hidden = true;
+    if (pop) {
+      pop.hidden = true;
+      pop.dataset.pinned = '0';
+      delete pop.dataset.targetId;
+    }
   }
 
   // Composer Context, Emoji, Upload Queue, Voice Note & Sending
@@ -4807,10 +4851,18 @@
         try {
           const previewPeer = findKnownPeer(null, targetId);
           const conv = await ipon().rpc('start_or_open_direct_chat', { p_target_id: targetId });
-          clearSidebarSearch();
-          await refreshConversations();
-          switchTab(conv.status === 'PENDING_REQUEST' && conv.initiator_id !== initializedProfile?.id ? 'requests' : 'chats');
-          await openConversation(conv.id, { previewPeer });
+          const targetTab = conv.status === 'PENDING_REQUEST' && conv.initiator_id !== initializedProfile?.id ? 'requests' : 'chats';
+          const workspaceDlg = document.getElementById('msg-workspace-dialog');
+          if (!workspaceDlg?.open) {
+            const annViewer = document.getElementById('announcement-viewer');
+            if (annViewer?.open) annViewer.close();
+            await openWorkspace({ tab: targetTab, conversationId: conv.id });
+          } else {
+            clearSidebarSearch();
+            await refreshConversations();
+            switchTab(targetTab);
+            await openConversation(conv.id, { previewPeer });
+          }
         } finally {
           if (openingChatTargetId === targetId) openingChatTargetId = null;
         }
@@ -6127,6 +6179,28 @@
     }, { passive: false });
 
     document.addEventListener('mouseover', (ev) => {
+      if (ev.target?.closest?.('#msg-profile-popover')) {
+        if (profileLeaveTimer) {
+          clearTimeout(profileLeaveTimer);
+          profileLeaveTimer = null;
+        }
+      }
+      const hoverDp = ev.target?.closest?.('[data-social-hover-dp]');
+      if (hoverDp) {
+        if (profileLeaveTimer) {
+          clearTimeout(profileLeaveTimer);
+          profileLeaveTimer = null;
+        }
+        const targetId = String(hoverDp.dataset.socialHoverDp || '').trim();
+        const profPop = document.getElementById('msg-profile-popover');
+        if (targetId && !(profPop && !profPop.hidden && activePopoverAnchor === hoverDp && profPop.dataset.targetId === targetId)) {
+          if (profileHoverTimer) clearTimeout(profileHoverTimer);
+          profileHoverTimer = setTimeout(() => {
+            profileHoverTimer = null;
+            void openProfilePopover(targetId, hoverDp, { pinned: false });
+          }, 110);
+        }
+      }
       if (ev.target?.closest?.('#msg-mutual-popover')) {
         clearMutualHoverTimer();
         return;
@@ -6140,6 +6214,22 @@
     });
 
     document.addEventListener('mouseout', (ev) => {
+      const fromProfileHover = ev.target?.closest?.('[data-social-hover-dp], #msg-profile-popover, #msg-mutual-popover');
+      if (fromProfileHover && !ev.relatedTarget?.closest?.('[data-social-hover-dp], #msg-profile-popover, #msg-mutual-popover')) {
+        if (profileHoverTimer) {
+          clearTimeout(profileHoverTimer);
+          profileHoverTimer = null;
+        }
+        const profPop = document.getElementById('msg-profile-popover');
+        if (profPop && !profPop.hidden && profPop.dataset.pinned !== '1') {
+          if (profileLeaveTimer) clearTimeout(profileLeaveTimer);
+          profileLeaveTimer = setTimeout(() => {
+            profileLeaveTimer = null;
+            const cur = document.getElementById('msg-profile-popover');
+            if (cur && cur.dataset.pinned !== '1') closeProfilePopover();
+          }, 200);
+        }
+      }
       const fromMutual = ev.target?.closest?.('[data-mutual-trigger], #msg-mutual-popover');
       if (!fromMutual) return;
       if (ev.relatedTarget?.closest?.('[data-mutual-trigger], #msg-mutual-popover')) return;

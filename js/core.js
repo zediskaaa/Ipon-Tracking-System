@@ -6664,7 +6664,13 @@
     const isOwnPost = currentProfile?.id && item?.author_id === currentProfile.id;
     const name = (isOwnPost && currentProfile.full_name) || item.author_name || (isOwner ? 'Owner' : 'Administrator');
     const avatarUrl = (isOwnPost && currentProfile.avatar_url !== undefined) ? currentProfile.avatar_url : item.author_avatar_url;
-    const avatarHtml = avatarMarkup(avatarUrl, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`, item.author_id);
+    const rawAvatarHtml = avatarMarkup(avatarUrl, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`, item.author_id);
+    const socialTargetId = (isOwner && item.author_social_user_id && currentProfile?.role !== 'SUPER_ADMIN')
+      ? String(item.author_social_user_id)
+      : '';
+    const avatarHtml = socialTargetId
+      ? `<button type="button" class="msg-dp-btn announcement-owner-dp-btn" data-social-user-dp="${escapeHtml(socialTargetId)}" data-social-hover-dp="${escapeHtml(socialTargetId)}" aria-label="View connected owner profile" title="Hover or click to view connected profile">${rawAvatarHtml}</button>`
+      : rawAvatarHtml;
     const roleBadge = isOwner
       ? '<span class="announcement-role-badge is-owner">Owner</span>'
       : '<span class="announcement-role-badge is-admin">Admin</span>';
@@ -7370,7 +7376,7 @@
       const [announcementsRes, reactionsRes] = await Promise.all([
         client
           .from('v_announcements')
-          .select('id,group_id,author_id,author_name,author_role,author_avatar_url,title,description,attachments,created_at,announcement_type,release_version')
+          .select('id,group_id,author_id,author_name,author_role,author_avatar_url,author_social_user_id,title,description,attachments,created_at,announcement_type,release_version')
           .order('created_at', { ascending: false })
           .limit(200),
         client
@@ -7417,7 +7423,7 @@
           if (announcementId) openReactionsModal(announcementId);
           return;
         }
-        if (event.target.closest('.announcement-reactions-bar')) return;
+        if (event.target.closest('.announcement-reactions-bar, [data-social-user-dp]')) return;
         const trigger = event.target.closest('[data-announcement-id]');
         if (!trigger) return;
         const target = items.find((entry) => entry.id === trigger.dataset.announcementId);
