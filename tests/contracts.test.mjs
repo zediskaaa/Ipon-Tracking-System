@@ -8436,6 +8436,35 @@ test('username handle & bio live inside My Account profile form across all roles
 test('messaging privacy Who can see your profile supports Everyone, Friends of friends, Friends only, and No one across SQL & UI', () => {
   const mig128 = read('database/migrations/20261118_128_profile_visibility_privacy.sql');
   const mig129 = read('database/migrations/20261118_129_profile_connections_and_search_privacy.sql');
+  const mig130 = read('database/migrations/20261118_130_default_dp_and_cover_on_pending_request.sql');
+  for (const token of [
+    'create or replace function public.has_direct_chat_connection(',
+    "and c.status = 'ACCEPTED'",
+    'case when v_can_view then v_target.avatar_url else null end',
+    'case when p.id = v_uid or vis.can_view then p.avatar_url else null end',
+    'case when vis.can_view then p.avatar_url else null end',
+    'case when peer_vis.can_view then peer.avatar_url else null end',
+    'case when gmvis.can_view then mp.avatar_url else null end',
+    "'20261118_130'"
+  ]) {
+    assert.ok(mig130.includes(token), 'migration 130 missing ' + token);
+  }
+  const hasConnBody = mig130.match(/function public\.has_direct_chat_connection\([\s\S]*?\$\$;/);
+  assert.ok(hasConnBody, 'Expected has_direct_chat_connection body in migration 130');
+  assert.doesNotMatch(hasConnBody[0], /initiator_id|public\.messages/i);
+
+  const mig131 = read('database/migrations/20261118_131_announcement_reaction_privacy_and_cover_default.sql');
+  const coreJs = read('js/core.js');
+  for (const token of [
+    'create or replace function public.get_announcement_reactions(',
+    'create or replace function public.announcement_author_avatar(',
+    "'profile_visible', vis.can_view",
+    'case when vis.can_view then p.avatar_url else null end',
+    "'20261118_131'"
+  ]) {
+    assert.ok(mig131.includes(token), 'migration 131 missing ' + token);
+  }
+  assert.match(coreJs, /entry\.profile_visible === false \? null : entry\.avatar_url/);
   for (const token of [
     'create or replace function public.has_direct_chat_connection(',
     'create or replace function public.can_view_social_profile(',
@@ -8465,6 +8494,7 @@ test('messaging privacy Who can see your profile supports Everyone, Friends of f
   ]) {
     assert.ok(mig128.includes(token), 'migration 128 missing ' + token);
   }
+  assert.match(messagesJs, /user\.profile_visible === false \? '' : safeDpUrl\(user\.avatar_url\)/);
   assert.match(messagesJs, /id="msg-set-profile-vis" name="profile_visibility"/);
   assert.match(messagesJs, /profile_visibility:\s*String\(fd\.get\('profile_visibility'\)/);
   assert.match(messagesJs, /class="msg-pop-private-note"/);
@@ -11298,7 +11328,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261118-142/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261118-143/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

@@ -58,7 +58,7 @@ test('migration 20261117_105 adds group chats, preserves 90-day retention & secu
   // Policy copy & service worker cache bump
   assert.match(policyJs, /Direct &amp; group messages, chat files/i);
   assert.match(loginHtml, /Direct &amp; group messages, chat files/i);
-  assert.match(sw, /ipon-shell-v69/);
+  assert.match(sw, /ipon-shell-v71/);
 });
 
 test('group chats runtime renders composite avatars, multi-sender bubbles, typing sender, drawer, forward & creation VM flow', async () => {
@@ -918,6 +918,7 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
         username: null,
         bio: null,
         social_links: {},
+        avatar_url: 'https://cdn.example/secret-dp.jpg',
         verified_badge: 'NONE',
         friendship_status: 'NONE',
         can_message: true,
@@ -945,7 +946,8 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   await Promise.all((docListeners.get('click') || []).map((fn) => fn({ target: dpTrigger, stopPropagation() { } })));
   assert.equal(popEl.hidden, false);
   assert.match(popEl.innerHTML, /class="msg-pop-private-note"[\s\S]*?Only friends and friends of friends can view full profile details\./);
-  assert.doesNotMatch(popEl.innerHTML, /msg-pop-bio|msg-dp-preview-trigger|msg-mutual-wrap|msg-pop-groups-card/);
+  assert.match(popEl.innerHTML, /<span class="avatar-circle avatar-fallback avatar-lg"[^>]*>AR<\/span>/);
+  assert.doesNotMatch(popEl.innerHTML, /secret-dp\.jpg|msg-pop-cover|msg-pop-bio|msg-dp-preview-trigger|msg-mutual-wrap|msg-pop-groups-card/);
   assert.match(popEl.innerHTML, /data-social-action="add_friend"/);
   assert.match(popEl.innerHTML, /data-social-action="message"/);
   assert.equal(popEl.dataset.cardTheme, undefined);

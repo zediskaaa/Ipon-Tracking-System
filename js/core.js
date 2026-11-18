@@ -9650,7 +9650,11 @@
       reactionsList.innerHTML = filtered.map((entry) => {
         const isOwner = entry.role === 'SUPER_ADMIN';
         const name = entry.full_name || 'Member';
-        const avatarHtml = avatarMarkup(entry.avatar_url, name, 'reaction-user-avatar');
+        const avatarHtml = avatarMarkup(
+          entry.profile_visible === false ? null : entry.avatar_url,
+          name,
+          'reaction-user-avatar'
+        );
 
         return `
           <div class="reaction-user-item">

@@ -475,7 +475,7 @@
 
   function userAvatarHtml(user, sizeClass = 'avatar-md', { clickable = true, showPresence = true } = {}) {
     if (!user) return '';
-    const safeUrl = safeDpUrl(user.avatar_url);
+    const safeUrl = user.profile_visible === false ? '' : safeDpUrl(user.avatar_url);
     const name = String(user.full_name || 'User');
     const letters = escapeHtml(ipon().initials(name));
     const cls = escapeHtml(sizeClass);
@@ -502,7 +502,7 @@
       ? conv.members_preview
       : (Array.isArray(conv.members) ? conv.members : [])
     ).filter((m) => m && String(m.id || '') !== myId);
-    const activeOnline = showPresence && pool.some((m) => m.allow_online_status !== false && ipon().isUserOnline(m.id));
+    const activeOnline = showPresence && pool.some((m) => m.profile_visible !== false && m.allow_online_status !== false && ipon().isUserOnline(m.id));
     const dot = showPresence
       ? `<span class="presence-dot${activeOnline ? ' is-online' : ''}" aria-label="${activeOnline ? 'Members online' : 'Offline'}" title="${activeOnline ? 'Members active now' : 'No other members online'}"></span>`
       : '';
@@ -513,8 +513,7 @@
       coreHtml = `<span class="avatar-circle ${cls}" title="${escapeHtml(title)}"><img src="${safeUrl}" alt="${escapeHtml(title)}" data-avatar-img><span class="avatar-fallback-inner" hidden>${letters}</span></span>`;
     } else if (pool.length >= 2) {
       const renderMini = (m, slotCls) => {
-        const mUrl = typeof m?.avatar_url === 'string' ? m.avatar_url.trim() : '';
-        const mSafe = (mUrl.startsWith('data:image/') || /^https:\/\//i.test(mUrl)) ? mUrl : '';
+        const mSafe = m?.profile_visible === false ? '' : safeDpUrl(m?.avatar_url);
         const mName = String(m?.full_name || 'Member');
         const mLetters = escapeHtml(ipon().initials(mName));
         return mSafe
@@ -524,8 +523,7 @@
       coreHtml = `<span class="msg-group-avatar ${cls}" title="${escapeHtml(title)}">${renderMini(pool[1], 'is-back')}${renderMini(pool[0], 'is-front')}</span>`;
     } else if (pool.length === 1) {
       const m = pool[0];
-      const mUrl = typeof m?.avatar_url === 'string' ? m.avatar_url.trim() : '';
-      const mSafe = (mUrl.startsWith('data:image/') || /^https:\/\//i.test(mUrl)) ? mUrl : '';
+      const mSafe = m?.profile_visible === false ? '' : safeDpUrl(m?.avatar_url);
       const mName = String(m?.full_name || 'Member');
       const mLetters = escapeHtml(ipon().initials(mName));
       const gLetters = escapeHtml(ipon().initials(title));
@@ -2360,7 +2358,7 @@
         <button type="button" class="msg-back-mobile-btn" id="msg-back-to-list" aria-label="Back to conversations">
           <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
         </button>
-        ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md', { showPresence: !isSelfUser(conv) })}
+        ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md', { showPresence: !isSelfUser(conv) && conv.profile_visible !== false })}
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
             <strong>${escapeHtml(convDisplayTitle(conv))}${isGrp ? '' : userBadgesHtml(conv)}${!isGrp && isSelfUser(conv) ? '<span class="msg-self-pill">You</span>' : ''}</strong>
@@ -2844,12 +2842,14 @@
         && (Date.parse(next.created_at) - Date.parse(m.created_at) < 120000);
 
       const groupMember = isGrp && !mine ? findGroupMember(conv, m.sender_id) : null;
+      const senderVisible = groupMember ? groupMember.profile_visible !== false : true;
       const senderUser = isGrp && !mine
         ? {
             id: m.sender_id,
+            profile_visible: senderVisible,
             full_name: m.sender_name || groupMember?.full_name || 'Member',
-            avatar_url: m.sender_avatar_url || groupMember?.avatar_url || '',
-            allow_online_status: groupMember ? groupMember.allow_online_status !== false : false
+            avatar_url: senderVisible ? (m.sender_avatar_url || groupMember?.avatar_url || '') : '',
+            allow_online_status: senderVisible && (groupMember ? groupMember.allow_online_status !== false : false)
           }
         : conv;
       const senderNameHtml = isGrp && !mine && !groupedWithPrev && !isDeleted
@@ -3366,9 +3366,9 @@
           return `
             <article class="msg-person-card">
               <div class="msg-person-head">
-                ${userAvatarHtml({ id: r.user_id, full_name: r.full_name, avatar_url: r.avatar_url, allow_online_status: false }, 'avatar-md', { showPresence: false })}
+                ${userAvatarHtml({ id: r.user_id, full_name: r.full_name, avatar_url: r.avatar_url, profile_visible: r.profile_visible, allow_online_status: false }, 'avatar-md', { showPresence: false })}
                 <div>
-                  <strong>${escapeHtml(r.full_name)}${userBadgesHtml(r.user_id)}</strong>
+                  <strong>${escapeHtml(r.full_name)}${r.profile_visible === false ? '' : userBadgesHtml(r.user_id)}</strong>
                   <small>${escapeHtml(metaParts.join(' · '))}</small>
                 </div>
               </div>
@@ -3390,9 +3390,9 @@
           return `
             <article class="msg-person-card">
               <div class="msg-person-head">
-                ${userAvatarHtml({ id: r.user_id, full_name: r.full_name, avatar_url: r.avatar_url, allow_online_status: false }, 'avatar-md', { showPresence: false })}
+                ${userAvatarHtml({ id: r.user_id, full_name: r.full_name, avatar_url: r.avatar_url, profile_visible: r.profile_visible, allow_online_status: false }, 'avatar-md', { showPresence: false })}
                 <div>
-                  <strong>${escapeHtml(r.full_name)}${userBadgesHtml(r.user_id)}</strong>
+                  <strong>${escapeHtml(r.full_name)}${r.profile_visible === false ? '' : userBadgesHtml(r.user_id)}</strong>
                   <small>${escapeHtml(metaParts.join(' · '))}</small>
                 </div>
               </div>
@@ -3670,6 +3670,9 @@
   }
 
   function normalizeCardAppearance(appearance) {
+    if (appearance?.profile_visible === false) {
+      return { profile_visible: false, card_theme: 'emerald', cover_url: '', profile_effect: 'none', social_links: {} };
+    }
     const theme = ['emerald', 'midnight', 'rose', 'amber', 'ocean', 'mono'].includes(appearance?.card_theme)
       ? appearance.card_theme
       : 'emerald';
@@ -3678,7 +3681,7 @@
     const effectId = effectsApi?.normalizeEffectId ? effectsApi.normalizeEffectId(rawEffect) : 'none';
     const cover = safeDpUrl(appearance?.cover_url);
     const socialLinks = ipon()?.sanitizeSocialLinks ? ipon().sanitizeSocialLinks(appearance?.social_links) : {};
-    return { card_theme: theme, cover_url: cover || '', profile_effect: effectId, social_links: socialLinks };
+    return { profile_visible: true, card_theme: theme, cover_url: cover || '', profile_effect: effectId, social_links: socialLinks };
   }
 
   function cacheProfileAppearance(targetId, appearance) {
@@ -3808,8 +3811,9 @@
     if (pop.parentElement !== targetHost) targetHost.appendChild(pop);
     activePopoverAnchor = anchorEl || null;
     pop.dataset.targetId = String(targetUserId);
+    pop.querySelector('.msg-pop-cover')?.remove();
     const cachedAppearance = getCachedProfileAppearance(targetUserId, isSelfTarget ? initializedProfile : null);
-    if (cachedAppearance) {
+    if (cachedAppearance && (isSelfTarget || cachedAppearance.profile_visible !== false)) {
       pop.dataset.cardTheme = cachedAppearance.card_theme;
       pop.dataset.profileEffect = cachedAppearance.profile_effect;
     } else {
@@ -5893,7 +5897,10 @@
           if (!ok) return;
         }
         try {
+          const reqConv = state.conversations.find((c) => c.id === state.activeConvId) || state.activeThread?.conversation;
+          const reqPeerId = reqConv?.peer?.id || (reqConv && !isGroupConv(reqConv) ? reqConv.id : null);
           await ipon().rpc('respond_message_request', { p_conversation_id: state.activeConvId, p_decision: dec });
+          if (reqPeerId) profileAppearanceCache.delete(String(reqPeerId));
           ipon().toast(dec === 'ACCEPT' ? 'Moved to Inbox.' : dec === 'BLOCK' ? 'Sender blocked.' : 'Message request deleted.');
           await refreshConversations();
           if (dec === 'ACCEPT') { switchTab('chats'); await openConversation(state.activeConvId); }
@@ -5918,6 +5925,7 @@
       if (fReqBtn) {
         try {
           await ipon().rpc('respond_friend_request', { p_request_id: fReqBtn.dataset.reqId, p_decision: fReqBtn.dataset.reqDecision });
+          if (fReqBtn.dataset.reqDecision === 'ACCEPT') profileAppearanceCache.clear();
           ipon().toast(fReqBtn.dataset.reqDecision === 'ACCEPT' ? 'Friend request accepted!' : 'Friend request declined.');
           closeProfilePopover();
           await Promise.all([refreshOverview(), refreshConversations()]);
@@ -6990,6 +6998,9 @@
             ))
           )
         );
+        if (metaOrStatusChanged && curConv?.id && !isGroupConv(curConv)) {
+          profileAppearanceCache.delete(String(curConv.id));
+        }
         scheduleRefresh({
           convs: true,
           thread: metaOrStatusChanged,
