@@ -178,7 +178,7 @@ test('Owner and Admins can post and delete unlimited-length announcements with p
   assert.match(superAdminJs, /subscribeToChanges\('super-admin',[\s\S]*?'announcements'/);
   assert.match(core, /id="announcement-media-input"[^>]*accept="image\/\*,video\/\*"/);
   assert.doesNotMatch(core, /id="announcement-(?:title|description)-input"[^>]*maxlength/i);
-  assert.match(core, /announcement-role-badge is-owner/);
+  assert.doesNotMatch(core, /announcement-role-badge/);
   assert.match(core, /announcement-author[\s\S]*?is-owner/);
   assert.match(core, /announcement-empty-state/);
   assert.match(core, /from\('v_announcements'\)/);

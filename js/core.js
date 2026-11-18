@@ -7438,12 +7438,9 @@
     const avatarHtml = socialTargetId
       ? `<button type="button" class="msg-dp-btn announcement-owner-dp-btn" data-social-user-dp="${escapeHtml(socialTargetId)}" data-social-hover-dp="${escapeHtml(socialTargetId)}" aria-label="View connected owner profile" title="Hover or click to view connected profile">${rawAvatarHtml}</button>`
       : rawAvatarHtml;
-    const roleBadge = isOwner
-      ? '<span class="announcement-role-badge is-owner">Owner</span>'
-      : '<span class="announcement-role-badge is-admin">Admin</span>';
     const authorHtml = `<span class="announcement-author${isOwner ? ' is-owner' : ''}">${escapeHtml(name)}</span>`;
     const dateText = dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' }).replace(/,\s*(\d{1,2}:\d{2}\s*(?:AM|PM))$/i, ' · $1');
-    return `${avatarHtml}${roleBadge}${authorHtml}<span class="announcement-meta-dot" aria-hidden="true">&middot;</span><time datetime="${escapeHtml(item.created_at)}">${escapeHtml(dateText)}</time>`;
+    return `${avatarHtml}${authorHtml}<span class="announcement-meta-dot" aria-hidden="true">&middot;</span><time datetime="${escapeHtml(item.created_at)}">${escapeHtml(dateText)}</time>`;
   }
 
   function renderAnnouncementDescriptionHtml(rawText, releaseVersion) {

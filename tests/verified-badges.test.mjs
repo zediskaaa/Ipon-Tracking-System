@@ -371,7 +371,10 @@ test('2-month inactivity rule, Thank-you unlock, and verified-since hover toolti
   assert.doesNotMatch(coreJsUpdated, /class="announcement-view-arrow"/);
   assert.match(coreJsUpdated, /class="announcement-card-bottom-bar"/);
   assert.match(heroPlatesCss, /\.announcement-owner-dp-btn[\s\S]*?grid-row:\s*1 \/ 3;\s*align-self:\s*center;/);
-  assert.match(heroPlatesCss, /\.announcement-panel \.announcement-item-meta time\s*\{[^}]*grid-column:\s*2 \/ 4;[^}]*white-space:\s*nowrap;/);
+  assert.match(heroPlatesCss, /\.announcement-panel \.announcement-item-meta time\s*\{[^}]*grid-column:\s*2;[^}]*white-space:\s*nowrap;/);
+  assert.match(heroPlatesCss, /\.announcement-panel \.announcement-card-bottom-bar\s*\{[^}]*flex-direction:\s*column;/);
+  assert.match(heroPlatesCss, /\.announcement-panel \.announcement-item-meta\s*\{[^}]*width:\s*100%;[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\);/);
+  assert.doesNotMatch(coreJsUpdated, /announcement-role-badge/);
   assert.match(heroPlatesCss, /\.announcement-panel \.announcement-view-trigger\s*\{[^}]*width:\s*100%;[^}]*justify-content:\s*center;/);
   assert.match(heroPlatesCss, /\.announcement-panel \.announcement-avatar img\s*\{[^}]*object-fit:\s*cover;/);
 
@@ -497,6 +500,9 @@ test('My Account verified badge card lets members message the creator directly w
   assert.match(css, /#msg-composer-input::-webkit-scrollbar\s*\{\s*display:\s*none;\s*\}/);
   assert.match(css, /\.dp-viewer-dialog\s*\{/);
   assert.match(css, /\.dp-viewer-dialog\s+img\s*\{[^}]*border-radius:\s*0;/);
+  assert.match(css, /\.sidebar-user-name\s*\{\s*display:\s*block;\s*\}/);
+  assert.match(css, /#quick-account-name\s*\{\s*display:\s*block;\s*\}/);
+  assert.match(css, /\.msg-welcome-name\s*\{[^}]*display:\s*block;/);
   assert.match(messagesJs, /function openDpViewer\(/);
   assert.match(coreJs, /MAX_AVATAR_BYTES\s*=\s*8\s*\*\s*1024\s*\*\s*1024/);
   assert.match(coreJs, /function prepareAvatarDataUrl[\s\S]*?skipCompressBytes:\s*MAX_AVATAR_BYTES/);
