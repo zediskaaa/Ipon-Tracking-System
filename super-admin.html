@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261118-144">
+  <link rel="stylesheet" href="css/app.css?v=20261118-145">
   <script src="js/config.js?v=20261117-76"></script>
 </head>
 
@@ -363,8 +363,53 @@
         <div class="panel-header">
           <div>
             <h2 id="effects-title">Profile effects</h2>
-            <p>Award permanent animated profile effects to active users and send a creator note. Profile effects never expire and have no inactivity retention.</p>
+            <p>Award permanent animated profile effects or review one-time user trial requests and set trial expiration durations.</p>
           </div>
+        </div>
+        <div class="effect-subtabs" id="effects-subtabs" role="tablist" aria-label="Profile effects view">
+          <button type="button" class="effect-subtab" id="effects-tab-requests" data-effects-tab="requests" role="tab" aria-selected="false" aria-controls="effects-requests-wrap">
+            <span>Trial requests</span>
+            <span class="effect-subtab-badge" id="effects-req-badge">0</span>
+          </button>
+          <button type="button" class="effect-subtab" id="effects-tab-rewards" data-effects-tab="rewards" role="tab" aria-selected="true" aria-controls="effects-rewards-wrap">
+            <span>User rewards</span>
+          </button>
+        </div>
+        <div id="effects-requests-wrap" role="tabpanel" aria-labelledby="effects-tab-requests" hidden>
+          <div class="table-filters">
+            <input id="effect-requests-search" type="search" placeholder="Search requester or effect"
+              aria-label="Search trial requests">
+            <select id="effect-requests-status-filter" aria-label="Filter trial requests by status">
+              <option value="PENDING">Pending review</option>
+              <option value="ALL">All requests</option>
+              <option value="APPROVED">Approved trials</option>
+              <option value="REJECTED">Declined</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Requester</th>
+                  <th>Requested effect</th>
+                  <th>User note</th>
+                  <th>Status &amp; duration</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="effect-requests-body">
+                <tr class="loading-row">
+                  <td colspan="5">Loading trial requests…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <nav class="table-pager" id="effect-requests-pager" aria-label="Trial request pages"><button type="button"
+              data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
+              data-page="next">Next</button></nav>
+        </div>
+        <div id="effects-rewards-wrap" role="tabpanel" aria-labelledby="effects-tab-rewards">
           <div class="table-filters">
             <input id="effects-search" type="search" placeholder="Search users or effects"
               aria-label="Search profile effect users">
@@ -372,31 +417,32 @@
               <option value="">All users</option>
               <option value="UNLOCKED">With unlocked effects</option>
               <option value="EQUIPPED">Currently equipped</option>
+              <option value="TRIAL">Active trial</option>
               <option value="NONE">No effects yet</option>
             </select>
           </div>
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Unlocked effects</th>
+                  <th>Active on profile</th>
+                  <th>Latest creator note</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="effects-body">
+                <tr class="loading-row">
+                  <td colspan="5">Loading profile effect assignments…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <nav class="table-pager" id="effects-pager" aria-label="Profile effects pages"><button type="button"
+              data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
+              data-page="next">Next</button></nav>
         </div>
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Unlocked effects</th>
-                <th>Active on profile</th>
-                <th>Latest creator note</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="effects-body">
-              <tr class="loading-row">
-                <td colspan="5">Loading profile effect assignments…</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <nav class="table-pager" id="effects-pager" aria-label="Profile effects pages"><button type="button"
-            data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
-            data-page="next">Next</button></nav>
       </section>
 
       <section class="platform-view panel" id="activity" data-platform-view="activity" aria-labelledby="activity-title"
@@ -799,7 +845,7 @@
           </div>
           <p class="badge-grant-policy-hint effect-grant-policy-hint">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
-            <span>Permanent reward · All profile effects never expire and are exempt from inactivity cleanup.</span>
+            <span>Permanent reward · Grants the selected profile effect(s) permanently to this user.</span>
           </p>
         </div>
         <div class="field field-wide">
@@ -858,12 +904,99 @@
     </div>
   </dialog>
 
+  <dialog class="form-dialog effect-grant-dialog" id="effect-trial-approve-dialog" aria-labelledby="effect-trial-approve-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="effect-trial-approve-title">Approve trial profile effect</h2>
+          <p id="effect-trial-approve-copy">Review this trial request and set when it expires.</p>
+        </div>
+        <button class="dialog-close" id="effect-trial-approve-close" type="button" aria-label="Close trial approval dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <form id="effect-trial-approve-form" class="form-grid" novalidate>
+        <input type="hidden" name="request_id">
+        <div class="effect-grant-top field-wide">
+          <div class="effect-grant-stage" id="effect-trial-preview-stage">
+            <div class="effect-grant-banner"></div>
+            <div class="effect-grant-avatar avatar-circle avatar-lg" id="effect-trial-preview-avatar"></div>
+            <div class="effect-grant-preview-meta">
+              <strong id="effect-trial-preview-name">Effect Preview</strong>
+              <small id="effect-trial-preview-sub">Live card preview</small>
+            </div>
+          </div>
+          <p class="badge-grant-policy-hint" id="effect-trial-req-note" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span id="effect-trial-req-note-text"></span>
+          </p>
+        </div>
+        <div class="field field-wide">
+          <label for="effect-trial-duration-preset">Trial expiration duration</label>
+          <select id="effect-trial-duration-preset" name="duration_preset" required>
+            <option value="1">1 day</option>
+            <option value="3">3 days</option>
+            <option value="7" selected>7 days</option>
+            <option value="14">14 days</option>
+            <option value="30">30 days</option>
+            <option value="custom">Custom expiration date &amp; time…</option>
+          </select>
+          <small class="field-help">1 trial per effect · User enters a 1-month cooldown for their next trial.</small>
+        </div>
+        <div class="field field-wide" id="effect-trial-custom-wrap" hidden>
+          <label for="effect-trial-custom-expiry">Custom expiration date &amp; time</label>
+          <input id="effect-trial-custom-expiry" name="expires_at" type="datetime-local">
+          <small class="field-error" aria-live="polite"></small>
+        </div>
+        <div class="field field-wide">
+          <label for="effect-trial-creator-message">Message from creator <span class="badge-optional-tag">(optional)</span></label>
+          <textarea id="effect-trial-creator-message" name="creator_message" rows="3" maxlength="400"
+            placeholder="Write a note for their celebration pop-up…"></textarea>
+        </div>
+        <div class="badge-grant-footer field-wide">
+          <small class="field-help">User sees the celebration pop-up and can equip this trial until expiration.</small>
+          <div class="form-actions">
+            <button class="button button-secondary" id="effect-trial-approve-cancel" type="button">Cancel</button>
+            <button class="button button-primary" id="effect-trial-approve-submit" type="submit">Approve trial</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog class="form-dialog" id="effect-trial-reject-dialog" aria-labelledby="effect-trial-reject-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="effect-trial-reject-title">Decline trial request</h2>
+          <p id="effect-trial-reject-copy">Provide a brief note explaining why this trial request was declined.</p>
+        </div>
+        <button class="dialog-close" id="effect-trial-reject-close" type="button" aria-label="Close decline trial dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <form id="effect-trial-reject-form" class="form-grid" novalidate>
+        <input type="hidden" name="request_id">
+        <div class="field field-wide">
+          <label for="effect-trial-reject-reason">Reason for declining</label>
+          <textarea id="effect-trial-reject-reason" name="reason" rows="3" maxlength="400" minlength="2" required
+            placeholder="Explain why this trial request could not be approved right now…"></textarea>
+          <small class="field-error" aria-live="polite"></small>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" id="effect-trial-reject-cancel" type="button">Cancel</button>
+          <button class="button button-danger" id="effect-trial-reject-submit" type="submit">Decline request</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <script src="js/profile-effects.js?v=20261118-01"></script>
-  <script src="js/core.js?v=20261118-125"></script><script src="js/policy.js?v=20261117-08"></script>
+  <script src="js/core.js?v=20261118-126"></script><script src="js/policy.js?v=20261117-08"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261118-93"></script>
+  <script src="js/super-admin.js?v=20261118-94"></script>
 </body>
 
 </html>

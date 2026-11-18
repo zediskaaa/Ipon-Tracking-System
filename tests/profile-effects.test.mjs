@@ -185,13 +185,26 @@ test('profile card swatch fix, cover upload hardening, Super Admin effects tab, 
   // Celebration modal & Gallery & Popover runtime
   assert.match(core, /function maybeShowEffectAwardModal\(/);
   assert.match(core, /PROFILE EFFECT UNLOCKED/);
-  assert.match(core, /Permanent · Never expires/);
+  assert.match(core, /TRIAL PROFILE EFFECT APPROVED/);
+  assert.doesNotMatch(core, /Never expires|zero retention expiry|Locked · not unlocked yet/i);
+  assert.doesNotMatch(superAdminJs, /Awaiting claim' : ' · Never expires'|Effects never expire/);
+  assert.doesNotMatch(superAdminHtml, /Never expire|no inactivity retention/i);
   assert.match(core, /function openProfileEffectsDialog\(/);
+  assert.match(core, /Request a trial effect/);
+  assert.match(core, /submit_profile_effect_trial_request/);
+  assert.match(core, /cancel_own_profile_effect_trial_request/);
   assert.match(core, /equip_own_profile_effect/);
   assert.match(messages, /window\.IponProfileEffects/);
   assert.match(messages, /profileEffectStage\?\.destroy/);
   assert.match(css, /\.effects-gallery-dialog\s*\{/);
   assert.match(css, /\.effect-celebrate-hero\s*\{/);
+  assert.match(css, /\.msg-profile-popover\[data-card-theme="midnight"\]/);
+  assert.match(css, /\.msg-profile-popover\[data-card-theme\],\s*html\[data-theme="dark"\]\s+\.msg-profile-popover\[data-card-theme\]\s*\{/);
+  assert.match(superAdminHtml, /id="effects-subtabs"/);
+  assert.match(superAdminHtml, /id="effect-trial-approve-dialog"/);
+  assert.match(superAdminHtml, /id="effect-trial-reject-dialog"/);
+  assert.match(superAdminJs, /super_admin_list_effect_trial_requests/);
+  assert.match(superAdminJs, /super_admin_review_effect_trial_request/);
 
   // Balanced braces across css/app.css
   let depth = 0;
@@ -398,9 +411,9 @@ test('runtime profile effect celebration modal shows permanent award, live previ
   assert.match(modal.innerHTML, /Sample Saver!/);
   assert.match(modal.innerHTML, /PROFILE EFFECT UNLOCKED/);
   assert.match(modal.innerHTML, /Singularity/);
-  assert.match(modal.innerHTML, /Permanent · Never expires/);
+  assert.match(modal.innerHTML, />Permanent<\/b>/);
+  assert.doesNotMatch(modal.innerHTML, /Never expires|zero retention expiry|badge-celebrate-activity-box|2 months/i);
   assert.match(modal.innerHTML, /Earned by top saver!/);
-  assert.doesNotMatch(modal.innerHTML, /badge-celebrate-activity-box|2 months/i);
 
   const equipClick = equipBtn.listeners.get('click');
   assert.equal(typeof equipClick, 'function');
@@ -507,6 +520,10 @@ test('cover photo cropper opens X-style 3:1 editor with corner brackets, no grid
   const noop = () => {};
   const ctx = {
     window: null,
+    addEventListener: noop,
+    removeEventListener: noop,
+    dispatchEvent: noop,
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
     document: {
       getElementById: (id) => elements.get(id) || null,
       querySelector: () => null,
@@ -639,4 +656,140 @@ test('cover photo cropper opens X-style 3:1 editor with corner brackets, no grid
   assert.ok(exportWidth > 0 && exportHeight > 0 && exportWidth === exportHeight * 3, `expected exact 3:1 cover export, got ${exportWidth}x${exportHeight}`);
   assert.equal(dialog.open, false);
   assert.equal(dialog.classList.contains('is-cover'), false);
+});
+
+test('migration 118 and runtime enforce 1-per-effect trials, 1-month cooldown, and trial approval congrats modal', async () => {
+  const mig118 = read('database/migrations/20261118_118_profile_effect_trials.sql');
+  const schema = read('database/schema.sql');
+
+  for (const sql of [mig118, schema]) {
+    assert.match(sql, /create table if not exists public\.profile_effect_trial_requests/i);
+    assert.match(sql, /idx_effect_trial_one_pending_per_user/i);
+    assert.match(sql, /idx_effect_trial_one_approved_per_effect/i);
+    assert.match(sql, /alter table public\.profile_effect_trial_requests enable row level security/i);
+  }
+  assert.match(mig118, /create or replace function public\.cleanup_expired_profile_effect_trials/i);
+  assert.match(mig118, /create or replace function public\.submit_profile_effect_trial_request/i);
+  assert.match(mig118, /create or replace function public\.cancel_own_profile_effect_trial_request/i);
+  assert.match(mig118, /create or replace function public\.super_admin_list_effect_trial_requests/i);
+  assert.match(mig118, /create or replace function public\.super_admin_review_effect_trial_request/i);
+  assert.match(mig118, /interval\s+'1 month'/i);
+  assert.match(mig118, /'EFFECT_TRIAL_REQUESTED'/);
+  assert.match(mig118, /'EFFECT_TRIAL_REJECTED'/);
+
+  // Runtime test for approved trial congrats modal (is_permanent: false)
+  const coreJs = read('js/core.js');
+  const effectsJs = read('js/profile-effects.js');
+  const appendedNodes = [];
+  const createNode = (tag) => {
+    const attrs = new Map();
+    const listeners = new Map();
+    const classSet = new Set();
+    const children = [];
+    const node = {
+      tagName: String(tag || 'div').toUpperCase(),
+      id: '',
+      className: '',
+      innerHTML: '',
+      textContent: '',
+      hidden: false,
+      disabled: false,
+      open: false,
+      dataset: {},
+      style: {},
+      clientWidth: 260,
+      clientHeight: 120,
+      children,
+      classList: {
+        add: (...c) => c.forEach((x) => classSet.add(x)),
+        remove: (...c) => c.forEach((x) => classSet.delete(x)),
+        toggle: (x, f) => (f === undefined ? !classSet.delete(x) && Boolean(classSet.add(x)) : (f ? classSet.add(x) : classSet.delete(x))),
+        contains: (x) => classSet.has(x)
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k) ?? null,
+      addEventListener: (ev, fn) => listeners.set(ev, fn),
+      removeEventListener: (ev) => listeners.delete(ev),
+      appendChild: (ch) => { children.push(ch); return ch; },
+      prepend: noop,
+      querySelector: (sel) => {
+        if (!sel.startsWith('#')) return null;
+        const targetId = sel.slice(1);
+        const match = node.innerHTML.includes(`id="${targetId}"`);
+        if (!match) return null;
+        const found = createNode('button');
+        found.id = targetId;
+        return found;
+      },
+      querySelectorAll: () => [],
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      remove() { this.removed = true; },
+      listeners
+    };
+    return node;
+  };
+  const noop = () => {};
+  const loaderEl = createNode('div');
+  const ctx = {
+    window: null,
+    addEventListener: noop,
+    removeEventListener: noop,
+    dispatchEvent: noop,
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    document: {
+      hidden: false,
+      getElementById: (id) => (id === 'app-loader' ? loaderEl : null),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener: noop,
+      removeEventListener: noop,
+      createElement: (tag) => createNode(tag),
+      body: {
+        dataset: { page: 'dashboard' },
+        classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+        appendChild: (n) => { appendedNodes.push(n); return n; },
+        insertAdjacentHTML: noop,
+        querySelector: () => null
+      },
+      documentElement: {
+        dataset: {},
+        style: { setProperty: noop, removeProperty: noop },
+        classList: { add: noop, remove: noop, toggle: noop }
+      }
+    },
+    location: { href: 'http://localhost/dashboard.html', pathname: '/dashboard.html', origin: 'http://localhost', search: '', replace: noop },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    navigator: {},
+    supabase: { createClient: () => ({ storage: null }) },
+    CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    Event: class Event { constructor(type) { this.type = type; } },
+    matchMedia: () => ({ matches: false, addEventListener: noop, removeEventListener: noop }),
+    requestAnimationFrame: noop,
+    cancelAnimationFrame: noop,
+    setTimeout,
+    clearTimeout,
+    console
+  };
+  ctx.window = ctx;
+  ctx.globalThis = ctx;
+  vm.runInNewContext(`${effectsJs}\n${coreJs}`, ctx, { timeout: 5000 });
+
+  const futureIso = new Date(Date.now() + 7 * 86400000).toISOString();
+  const shown = ctx.window.Ipon.maybeShowEffectAwardModal({
+    profile: { id: 'u1', full_name: 'Trial Saver', role: 'MEMBER', card_theme: 'midnight' },
+    grants: [
+      { effect_id: 'warp', is_permanent: false, expires_at: futureIso, granted_at: new Date().toISOString(), grant_message: 'Enjoy your 7-day trial!', acknowledged_at: null }
+    ]
+  });
+  assert.equal(shown, true);
+  const modal = appendedNodes.find((n) => n.id === 'ipon-effect-award-dialog');
+  assert.ok(modal, 'trial approval should mount same celebration modal');
+  assert.match(modal.innerHTML, /Congratulations/);
+  assert.match(modal.innerHTML, /TRIAL PROFILE EFFECT APPROVED/);
+  assert.match(modal.innerHTML, /Trial expires/);
+  assert.match(modal.innerHTML, /Hyperdrive/);
+  assert.match(modal.innerHTML, /Enjoy your 7-day trial!/);
+  assert.doesNotMatch(modal.innerHTML, /Never expires|zero retention/i);
 });

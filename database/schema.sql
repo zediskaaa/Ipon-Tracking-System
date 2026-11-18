@@ -35468,6 +35468,8 @@ alter table public.profiles add constraint profiles_equipped_profile_effect_chec
 create table if not exists public.profile_effect_grants (
   user_id uuid not null references public.profiles(id) on delete cascade,
   effect_id text not null,
+  is_permanent boolean not null default true,
+  expires_at timestamptz,
   granted_by uuid references public.profiles(id) on delete set null,
   granted_at timestamptz not null default now(),
   grant_message text,
@@ -35480,10 +35482,47 @@ create table if not exists public.profile_effect_grants (
   ))
 );
 
+create table if not exists public.profile_effect_trial_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  effect_id text not null,
+  request_note text,
+  status text not null default 'PENDING' check (status in ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')),
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  reviewed_at timestamptz,
+  review_note text,
+  trial_expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  constraint profile_effect_trial_requests_effect_check check (effect_id in (
+    'stardust', 'orbit', 'butterflies', 'koi', 'robots', 'drones',
+    'holo', 'glitch', 'fireflies', 'petals', 'singularity', 'warp', 'jelly',
+    'astro', 'constellation', 'sigil'
+  ))
+);
+
+create index if not exists idx_effect_trial_requests_user_status
+  on public.profile_effect_trial_requests (user_id, status, created_at desc);
+
+create unique index if not exists idx_effect_trial_one_pending_per_user
+  on public.profile_effect_trial_requests (user_id)
+  where status = 'PENDING';
+
+create unique index if not exists idx_effect_trial_one_approved_per_effect
+  on public.profile_effect_trial_requests (user_id, effect_id)
+  where status = 'APPROVED';
+
 alter table public.profile_effect_grants enable row level security;
 revoke all on public.profile_effect_grants from public, anon, authenticated;
 grant select on public.profile_effect_grants to authenticated;
 drop policy if exists profile_effect_grants_select_own on public.profile_effect_grants;
 create policy profile_effect_grants_select_own on public.profile_effect_grants
+  for select to authenticated
+  using (user_id = auth.uid() or public.is_super_admin());
+
+alter table public.profile_effect_trial_requests enable row level security;
+revoke all on public.profile_effect_trial_requests from public, anon, authenticated;
+grant select on public.profile_effect_trial_requests to authenticated;
+drop policy if exists profile_effect_trial_requests_select_own on public.profile_effect_trial_requests;
+create policy profile_effect_trial_requests_select_own on public.profile_effect_trial_requests
   for select to authenticated
   using (user_id = auth.uid() or public.is_super_admin());

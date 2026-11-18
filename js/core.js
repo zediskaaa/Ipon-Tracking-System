@@ -2780,7 +2780,12 @@
     return true;
   }
 
-  let ownProfileEffectsState = { equipped_effect: 'none', grants: [] };
+  let ownProfileEffectsState = {
+    equipped_effect: 'none',
+    grants: [],
+    trial_requests: [],
+    trial_state: null
+  };
 
   function syncAccountEffectsSummary() {
     const statusEl = document.getElementById('quick-effect-status');
@@ -2792,19 +2797,25 @@
     const grants = Array.isArray(ownProfileEffectsState?.grants) ? ownProfileEffectsState.grants : [];
     const pendingCount = grants.filter((item) => !item?.acknowledged_at).length;
     const ownedCount = grants.length;
+    const activeGrant = grants.find((item) => item?.effect_id === equippedId);
+    const pendingTrialReq = ownProfileEffectsState?.trial_state?.pending_request || null;
     const effectMeta = api?.getEffect ? api.getEffect(equippedId) : { id: equippedId, name: equippedId };
 
     if (statusEl) {
       if (pendingCount > 0) {
-        statusEl.textContent = `${pendingCount} new permanent gift${pendingCount === 1 ? '' : 's'} ready to claim`;
+        statusEl.textContent = `${pendingCount} new effect${pendingCount === 1 ? '' : 's'} ready to claim`;
       } else if (equippedId !== 'none') {
-        statusEl.textContent = `${effectMeta.name} · Active (Permanent)`;
+        statusEl.textContent = activeGrant && activeGrant.is_permanent === false && activeGrant.expires_at
+          ? `${effectMeta.name} · Trial until ${dateLabel(activeGrant.expires_at, { dateStyle: 'medium' })}`
+          : `${effectMeta.name} · Active`;
       } else if (ownedCount > 0) {
-        statusEl.textContent = `None equipped · ${ownedCount} permanent unlocked`;
+        statusEl.textContent = `None equipped · ${ownedCount} unlocked`;
+      } else if (pendingTrialReq) {
+        statusEl.textContent = 'Trial request pending Super Admin review';
       } else if (currentProfile?.role === 'SUPER_ADMIN') {
-        statusEl.textContent = 'All permanent effects ready to preview';
+        statusEl.textContent = 'All profile effects ready to preview';
       } else {
-        statusEl.textContent = 'Granted permanently by Super Admin';
+        statusEl.textContent = 'Browse effects or request a trial';
       }
     }
     if (openBtn) {
@@ -2819,7 +2830,9 @@
       if (res && typeof res === 'object') {
         ownProfileEffectsState = {
           equipped_effect: res.equipped_effect || 'none',
-          grants: Array.isArray(res.grants) ? res.grants : []
+          grants: Array.isArray(res.grants) ? res.grants : [],
+          trial_requests: Array.isArray(res.trial_requests) ? res.trial_requests : [],
+          trial_state: res.trial_state && typeof res.trial_state === 'object' ? res.trial_state : null
         };
         currentProfile.equipped_profile_effect = ownProfileEffectsState.equipped_effect;
         syncAccountEffectsSummary();
@@ -2829,42 +2842,6 @@
       syncAccountEffectsSummary();
     }
     return ownProfileEffectsState;
-  }
-
-  async function openCreatorEffectChat(effectMeta, triggerButton = null) {
-    if (!currentProfile || currentProfile.role === 'SUPER_ADMIN') return false;
-    setBusy(triggerButton, true, 'Opening…');
-    try {
-      const creatorId = await resolveCreatorSocialId();
-      if (!creatorId) {
-        toast('Creator messaging is currently unavailable. Please try again later.', 'error');
-        return false;
-      }
-      if (String(creatorId) === String(currentProfile.id || '')) {
-        toast('Use the Super Admin Profile Effects tab to grant effects.', 'info');
-        return false;
-      }
-      const effectName = effectMeta?.name || 'Profile Effect';
-      const draft = `Hi! I'd like to request the permanent "${effectName}" profile effect for my myIPON account.`;
-      document.getElementById('profile-effects-dialog')?.close?.();
-      const quickDlg = document.getElementById('account-dialog');
-      if (quickDlg?.open) quickDlg.close();
-      if (window.IponMessages?.openDirectMessage) {
-        const opened = await window.IponMessages.openDirectMessage(creatorId, { draft });
-        if (opened) return true;
-      }
-      const conv = await rpc('start_or_open_direct_chat', { p_target_id: creatorId });
-      if (conv?.id) {
-        location.href = `${homeForRole(currentProfile.role)}?chat=${encodeURIComponent(conv.id)}`;
-        return true;
-      }
-      return false;
-    } catch (error) {
-      toast(friendlyError(error), 'error');
-      return false;
-    } finally {
-      setBusy(triggerButton, false);
-    }
   }
 
   function maybeShowEffectAwardModal(opts = {}) {
@@ -2908,8 +2885,24 @@
       ? `<img src="${escapeHtml(targetProfile.avatar_url)}" alt="${escapeHtml(recipientName)}"><span>${escapeHtml(initials(recipientName))}</span>`
       : `<span>${escapeHtml(initials(recipientName))}</span>`;
 
+    const describeGrant = (g, meta) => {
+      const rt = meta.rare ? ` · ${rarities[meta.rare] || ''}` : '';
+      const isTrial = g?.is_permanent === false;
+      return {
+        isTrial,
+        eyebrow: isTrial ? 'TRIAL PROFILE EFFECT APPROVED' : 'PROFILE EFFECT UNLOCKED',
+        copyHtml: isTrial
+          ? `Your <b>${escapeHtml(meta.name)}</b> (${escapeHtml(meta.cat + rt)}) trial profile effect is now active.`
+          : `You received the permanent <b>${escapeHtml(meta.name)}</b> (${escapeHtml(meta.cat + rt)}) profile effect.`,
+        statusLabel: isTrial ? 'Trial expires' : 'Status',
+        statusText: isTrial
+          ? (g?.expires_at ? dateLabel(g.expires_at, { dateStyle: 'medium', timeStyle: 'short' }) : 'Limited trial')
+          : 'Permanent'
+      };
+    };
+
     const initialMsg = String(firstGrant.grant_message || '').trim();
-    const rarText = firstEffect.rare ? ` · ${rarities[firstEffect.rare] || ''}` : '';
+    const initialView = describeGrant(firstGrant, firstEffect);
 
     dialog.innerHTML = `
       <div class="badge-celebrate-sheet is-permanent is-effect" id="ipon-effect-award-sheet">
@@ -2918,13 +2911,13 @@
           <div class="effect-celebrate-banner"></div>
           <div class="effect-celebrate-avatar avatar-circle avatar-lg">${avatarInner}</div>
         </div>
-        <span class="badge-celebrate-eyebrow">PROFILE EFFECT UNLOCKED</span>
+        <span class="badge-celebrate-eyebrow" id="ipon-effect-award-eyebrow">${escapeHtml(initialView.eyebrow)}</span>
         <h2 id="ipon-effect-award-title">Congratulations<span class="badge-celebrate-name">${escapeHtml(recipientName)}!</span></h2>
         ${switchTabsHtml}
-        <p class="badge-celebrate-copy" id="ipon-effect-award-copy">You received the permanent <b>${escapeHtml(firstEffect.name)}</b> (${escapeHtml(firstEffect.cat + rarText)}) profile effect. It stays unlocked forever with zero retention expiry.</p>
+        <p class="badge-celebrate-copy" id="ipon-effect-award-copy">${initialView.copyHtml}</p>
         <div class="badge-celebrate-dates is-permanent">
           <div class="badge-celebrate-date"><small>Unlocked on</small><b id="ipon-effect-award-date">${escapeHtml(unlockedOnText)}</b></div>
-          <div class="badge-celebrate-date is-permanent-card"><small>Status</small><b>Permanent · Never expires</b></div>
+          <div class="badge-celebrate-date ${initialView.isTrial ? 'is-trial-card' : 'is-permanent-card'}" id="ipon-effect-award-status-card"><small id="ipon-effect-award-status-label">${escapeHtml(initialView.statusLabel)}</small><b id="ipon-effect-award-status-value">${escapeHtml(initialView.statusText)}</b></div>
         </div>
         <div class="badge-celebrate-quote" id="ipon-effect-award-quote"${initialMsg ? '' : ' hidden'}>
           <span class="badge-celebrate-quote-mark" aria-hidden="true">“</span>
@@ -2960,13 +2953,21 @@
       activeIdx = Math.max(0, Math.min(pendingGrants.length - 1, idx));
       const g = pendingGrants[activeIdx];
       const meta = api?.getEffect ? api.getEffect(g.effect_id) : { id: g.effect_id, name: g.effect_id, cat: 'Special', rare: 0 };
-      const rt = meta.rare ? ` · ${rarities[meta.rare] || ''}` : '';
+      const view = describeGrant(g, meta);
+      const eyebrowEl = dialog.querySelector('#ipon-effect-award-eyebrow');
       const copyEl = dialog.querySelector('#ipon-effect-award-copy');
       const dateEl = dialog.querySelector('#ipon-effect-award-date');
+      const statusCard = dialog.querySelector('#ipon-effect-award-status-card');
+      const statusLabelEl = dialog.querySelector('#ipon-effect-award-status-label');
+      const statusValEl = dialog.querySelector('#ipon-effect-award-status-value');
       const quoteBox = dialog.querySelector('#ipon-effect-award-quote');
       const quoteText = dialog.querySelector('#ipon-effect-award-quote-text');
-      if (copyEl) copyEl.innerHTML = `You received the permanent <b>${escapeHtml(meta.name)}</b> (${escapeHtml(meta.cat + rt)}) profile effect. It stays unlocked forever with zero retention expiry.`;
+      if (eyebrowEl) eyebrowEl.textContent = view.eyebrow;
+      if (copyEl) copyEl.innerHTML = view.copyHtml;
       if (dateEl) dateEl.textContent = dateLabel(g.granted_at || new Date().toISOString(), { dateStyle: 'medium' });
+      if (statusLabelEl) statusLabelEl.textContent = view.statusLabel;
+      if (statusValEl) statusValEl.textContent = view.statusText;
+      if (statusCard) statusCard.className = `badge-celebrate-date ${view.isTrial ? 'is-trial-card' : 'is-permanent-card'}`;
       const msg = String(g.grant_message || '').trim();
       if (quoteBox && quoteText) {
         quoteBox.hidden = !msg;
@@ -2997,7 +2998,9 @@
         if (res && typeof res === 'object') {
           ownProfileEffectsState = {
             equipped_effect: res.equipped_effect || ownProfileEffectsState.equipped_effect || 'none',
-            grants: Array.isArray(res.grants) ? res.grants : ownProfileEffectsState.grants
+            grants: Array.isArray(res.grants) ? res.grants : ownProfileEffectsState.grants,
+            trial_requests: Array.isArray(res.trial_requests) ? res.trial_requests : ownProfileEffectsState.trial_requests,
+            trial_state: res.trial_state && typeof res.trial_state === 'object' ? res.trial_state : ownProfileEffectsState.trial_state
           };
         } else {
           const nowIso = new Date().toISOString();
@@ -3059,12 +3062,24 @@
     const coverUrl = isSafeImageRef(appearance?.cover_url || currentProfile.cover_url)
       ? (appearance?.cover_url || currentProfile.cover_url)
       : '';
-    const ownedSet = new Set(
-      currentProfile.role === 'SUPER_ADMIN'
-        ? api.EFFECTS.map((item) => item.id)
-        : (effectsState?.grants || []).map((item) => item.effect_id)
-    );
-    let equipped = api.normalizeEffectId(effectsState?.equipped_effect || currentProfile.equipped_profile_effect);
+    let currentState = effectsState && typeof effectsState === 'object' ? effectsState : ownProfileEffectsState;
+    const grantsById = new Map();
+    const ownedSet = new Set();
+    const rebuildGrants = () => {
+      grantsById.clear();
+      ownedSet.clear();
+      if (currentProfile.role === 'SUPER_ADMIN') {
+        api.EFFECTS.forEach((item) => ownedSet.add(item.id));
+        return;
+      }
+      (currentState?.grants || []).forEach((item) => {
+        if (!item?.effect_id) return;
+        grantsById.set(item.effect_id, item);
+        ownedSet.add(item.effect_id);
+      });
+    };
+    rebuildGrants();
+    let equipped = api.normalizeEffectId(currentState?.equipped_effect || currentProfile.equipped_profile_effect);
     if (equipped !== 'none' && !ownedSet.has(equipped) && currentProfile.role !== 'SUPER_ADMIN') equipped = 'none';
     let preview = equipped;
     let activeCategory = 'All';
@@ -3096,7 +3111,7 @@
         <header class="effects-gallery-head">
           <div>
             <h2 id="effects-gallery-title">Profile Effects</h2>
-            <p>Living animations that orbit and drift around your avatar. Pick one to preview it on your profile, then equip it. All unlocked effects are permanent.</p>
+            <p>Living animations that orbit and drift around your avatar. Pick one to preview it on your profile, then equip unlocked effects or request a one-time trial.</p>
           </div>
           <button type="button" class="dialog-close effects-gallery-close" id="effects-gallery-close" aria-label="Close profile effects">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
@@ -3131,7 +3146,7 @@
                 <button type="button" class="effects-btn primary" id="effects-equip-btn">Equip effect</button>
                 <button type="button" class="effects-btn ghost" id="effects-cancel-btn" hidden>Cancel</button>
               </div>
-              <button type="button" class="effects-request-btn" id="effects-request-btn" hidden>Request unlock from creator</button>
+              <div class="effects-trial-box" id="effects-trial-box" hidden></div>
             </div>
             <div class="effects-dock" id="effects-theme-dock" role="group" aria-label="Card theme">
               ${cardThemes.map((t) => `<button type="button" data-t="${t}" aria-label="${escapeHtml(t[0].toUpperCase() + t.slice(1))}" aria-pressed="${t === cardTheme ? 'true' : 'false'}"></button>`).join('')}
@@ -3161,6 +3176,7 @@
         <div class="tstage">
           <div class="mav">${escapeHtml(initials(fullName))}</div>
           <span class="flag">EQUIPPED</span>
+          <span class="trial-flag" hidden>TRIAL</span>
           <span class="lk">LOCKED</span>
         </div>
         <div class="tmeta">
@@ -3214,6 +3230,124 @@
       emptyMsg.hidden = visibleCount > 0;
     }
 
+    function syncTrialBox(lk, previewMeta) {
+      const box = dialog.querySelector('#effects-trial-box');
+      if (!box) return;
+      if (!lk || currentProfile.role === 'SUPER_ADMIN') {
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+      }
+      box.hidden = false;
+      const trialState = currentState?.trial_state || {};
+      const usedEffects = new Set(Array.isArray(trialState.used_effects) ? trialState.used_effects : []);
+      const activeTrial = trialState.active_trial || null;
+      const pendingReq = trialState.pending_request || null;
+      const cooldownIso = trialState.cooldown_until || null;
+      const cooldownMs = cooldownIso ? Date.parse(cooldownIso) : NaN;
+      const hasCooldown = Number.isFinite(cooldownMs) && cooldownMs > Date.now();
+
+      if (pendingReq && pendingReq.effect_id === previewMeta.id) {
+        box.dataset.tone = 'pending';
+        box.innerHTML = `
+          <div class="effects-trial-title"><span>Trial request sent</span><span class="effects-trial-pill">PENDING REVIEW</span></div>
+          <p class="effects-trial-msg">Requested on ${escapeHtml(dateLabel(pendingReq.created_at, { dateStyle: 'medium' }))}. Super Admin will set your trial duration if approved.</p>
+          <button type="button" class="effects-trial-btn is-danger" id="effects-cancel-trial-btn">Cancel trial request</button>`;
+        box.querySelector('#effects-cancel-trial-btn')?.addEventListener('click', async (event) => {
+          const btnEl = event.currentTarget;
+          setBusy(btnEl, true, 'Cancelling…');
+          try {
+            const nextState = await rpc('cancel_own_profile_effect_trial_request', { p_request_id: pendingReq.id });
+            if (nextState && typeof nextState === 'object') {
+              currentState = nextState;
+              ownProfileEffectsState = nextState;
+              rebuildGrants();
+              syncAccountEffectsSummary();
+            }
+            toast(`Cancelled trial request for "${previewMeta.name}".`);
+            syncGalleryUi();
+          } catch (error) {
+            toast(friendlyError(error), 'error');
+            setBusy(btnEl, false);
+          }
+        });
+        return;
+      }
+
+      if (activeTrial) {
+        box.dataset.tone = 'warning';
+        const activeMeta = api.getEffect(activeTrial.effect_id);
+        box.innerHTML = `
+          <div class="effects-trial-title"><span>Trial active</span><span class="effects-trial-pill">IN PROGRESS</span></div>
+          <p class="effects-trial-msg">Your trial for <b>${escapeHtml(activeMeta.name)}</b> runs until ${escapeHtml(dateLabel(activeTrial.expires_at, { dateStyle: 'medium', timeStyle: 'short' }))}. You cannot request a new trial while one is active.</p>`;
+        return;
+      }
+
+      if (pendingReq) {
+        box.dataset.tone = 'pending';
+        const otherMeta = api.getEffect(pendingReq.effect_id);
+        box.innerHTML = `
+          <div class="effects-trial-title"><span>Pending request limit</span><span class="effects-trial-pill">1 PENDING</span></div>
+          <p class="effects-trial-msg">You already have a pending trial request for <b>${escapeHtml(otherMeta.name)}</b>. Wait for review or cancel that request first.</p>
+          <button type="button" class="effects-trial-btn is-primary" id="effects-jump-pending-btn">View "${escapeHtml(otherMeta.name)}"</button>`;
+        box.querySelector('#effects-jump-pending-btn')?.addEventListener('click', () => {
+          preview = pendingReq.effect_id;
+          cardStage.setEffect(preview);
+          syncGalleryUi();
+        });
+        return;
+      }
+
+      if (usedEffects.has(previewMeta.id)) {
+        box.dataset.tone = 'warning';
+        box.innerHTML = `
+          <div class="effects-trial-title"><span>Trial already used</span><span class="effects-trial-pill">1 / 1 USED</span></div>
+          <p class="effects-trial-msg">You already used your one-time trial for "${escapeHtml(previewMeta.name)}". Only 1 trial per effect is allowed.</p>`;
+        return;
+      }
+
+      if (hasCooldown) {
+        const daysLeft = Math.max(1, Math.ceil((cooldownMs - Date.now()) / 86400000));
+        box.dataset.tone = 'warning';
+        box.innerHTML = `
+          <div class="effects-trial-title"><span>1-month trial cooldown</span><span class="effects-trial-pill">${daysLeft}D LEFT</span></div>
+          <p class="effects-trial-msg">Next trial request opens on ${escapeHtml(dateLabel(cooldownIso, { dateStyle: 'medium' }))}.</p>`;
+        return;
+      }
+
+      box.dataset.tone = 'ready';
+      box.innerHTML = `
+        <div class="effects-trial-title"><span>Try before unlocking</span><span class="effects-trial-pill">1 TRIAL</span></div>
+        <p class="effects-trial-msg">Super Admin reviews trial requests and sets your duration. 1 trial per effect · 1-month cooldown after each trial.</p>
+        <input type="text" class="effects-trial-note-input" id="effects-trial-note" maxlength="200" placeholder="Optional note for Super Admin (e.g., would love to try!)">
+        <button type="button" class="effects-trial-btn is-primary" id="effects-request-trial-btn">Request a trial effect</button>`;
+      box.querySelector('#effects-request-trial-btn')?.addEventListener('click', async (event) => {
+        const btnEl = event.currentTarget;
+        const noteInput = box.querySelector('#effects-trial-note');
+        const noteVal = String(noteInput?.value || '').trim();
+        setBusy(btnEl, true, 'Sending request…');
+        if (noteInput) noteInput.disabled = true;
+        try {
+          const nextState = await rpc('submit_profile_effect_trial_request', {
+            p_effect_id: previewMeta.id,
+            p_note: noteVal
+          });
+          if (nextState && typeof nextState === 'object') {
+            currentState = nextState;
+            ownProfileEffectsState = nextState;
+            rebuildGrants();
+            syncAccountEffectsSummary();
+          }
+          toast(`Trial request sent for "${previewMeta.name}".`);
+          syncGalleryUi();
+        } catch (error) {
+          toast(friendlyError(error), 'error');
+          setBusy(btnEl, false);
+          if (noteInput) noteInput.disabled = false;
+        }
+      });
+    }
+
     function syncGalleryUi() {
       for (const e of api.ALL_OPTIONS) {
         const tile = tiles.get(e.id);
@@ -3221,6 +3355,9 @@
         tile.setAttribute('aria-pressed', String(e.id === preview));
         tile.dataset.eq = String(e.id === equipped && equipped !== 'none');
         tile.dataset.lock = String(isLocked(e.id));
+        const gInfo = grantsById.get(e.id);
+        const trialTag = tile.querySelector('.trial-flag');
+        if (trialTag) trialTag.hidden = !(gInfo && gInfo.is_permanent === false);
       }
       const pv = preview !== equipped;
       const lk = isLocked(preview);
@@ -3228,32 +3365,39 @@
       const btn = dialog.querySelector('#effects-equip-btn');
       const cancelBtn = dialog.querySelector('#effects-cancel-btn');
       const pbtns = dialog.querySelector('#effects-pbtns');
-      const reqBtn = dialog.querySelector('#effects-request-btn');
       const stLabel = dialog.querySelector('#effects-st-label');
       const stName = dialog.querySelector('#effects-st-name');
 
       const previewMeta = api.getEffect(preview);
       const equippedMeta = api.getEffect(equipped);
+      const activeGrant = grantsById.get(preview);
+      const isTrialOwned = Boolean(activeGrant && activeGrant.is_permanent === false);
       if (stLabel) stLabel.textContent = pv ? 'PREVIEWING' : 'EQUIPPED';
       if (stName) stName.textContent = pv ? previewMeta.name : equippedMeta.name;
       if (pill) {
-        pill.className = `effects-pill ${lk ? 'lock' : pv ? 'pv' : equipped === 'none' ? 'off' : 'eq'}`;
-        pill.textContent = lk ? 'LOCKED' : pv ? 'NOT SAVED' : equipped === 'none' ? 'NONE' : 'ACTIVE';
+        pill.className = `effects-pill ${lk ? 'lock' : isTrialOwned ? 'trial' : pv ? 'pv' : equipped === 'none' ? 'off' : 'eq'}`;
+        pill.textContent = lk
+          ? 'LOCKED'
+          : isTrialOwned
+            ? (activeGrant.expires_at ? `TRIAL · ${dateLabel(activeGrant.expires_at, { dateStyle: 'short' })}` : 'TRIAL')
+            : pv ? 'NOT SAVED' : equipped === 'none' ? 'NONE' : 'ACTIVE';
       }
       if (btn) {
+        btn.hidden = lk;
         btn.disabled = !pv || lk;
-        btn.textContent = lk
-          ? 'Locked · not unlocked yet'
-          : preview === 'none'
-            ? (equipped === 'none' ? 'No effect equipped' : 'Remove effect')
-            : 'Equip effect';
+        btn.textContent = preview === 'none'
+          ? (equipped === 'none' ? 'No effect equipped' : 'Remove effect')
+          : 'Equip effect';
       }
-      if (cancelBtn) cancelBtn.hidden = !pv;
-      pbtns?.classList.toggle('single', !pv);
-      if (reqBtn) {
-        reqBtn.hidden = !lk || currentProfile.role === 'SUPER_ADMIN';
-        reqBtn.textContent = `Request "${previewMeta.name}" from creator`;
+      if (cancelBtn) {
+        cancelBtn.hidden = !pv;
+        cancelBtn.textContent = lk ? 'Back to equipped' : 'Cancel';
       }
+      if (pbtns) {
+        pbtns.hidden = lk && !pv;
+        pbtns.classList.toggle('single', lk || !pv);
+      }
+      syncTrialBox(lk, previewMeta);
     }
 
     const syncMotionNotice = () => {
@@ -3280,9 +3424,6 @@
       cardStage.setEffect(preview);
       syncGalleryUi();
     });
-    dialog.querySelector('#effects-request-btn')?.addEventListener('click', (event) => {
-      openCreatorEffectChat(api.getEffect(preview), event.currentTarget);
-    });
     dialog.querySelector('#effects-equip-btn')?.addEventListener('click', async () => {
       const targetId = preview;
       if (isLocked(targetId) || targetId === equipped) return;
@@ -3292,8 +3433,12 @@
         const res = await rpc('equip_own_profile_effect', { p_effect_id: targetId });
         ownProfileEffectsState = {
           equipped_effect: res?.equipped_effect || targetId,
-          grants: Array.isArray(res?.grants) ? res.grants : ownProfileEffectsState.grants
+          grants: Array.isArray(res?.grants) ? res.grants : ownProfileEffectsState.grants,
+          trial_requests: Array.isArray(res?.trial_requests) ? res.trial_requests : ownProfileEffectsState.trial_requests,
+          trial_state: res?.trial_state && typeof res.trial_state === 'object' ? res.trial_state : ownProfileEffectsState.trial_state
         };
+        currentState = ownProfileEffectsState;
+        rebuildGrants();
         equipped = api.normalizeEffectId(ownProfileEffectsState.equipped_effect);
         preview = equipped;
         currentProfile.equipped_profile_effect = equipped;
@@ -3301,7 +3446,7 @@
         window.dispatchEvent?.(new CustomEvent('ipon:profile-updated', { detail: currentProfile }));
         toast(equipped === 'none'
           ? 'Effect removed from your profile.'
-          : `${api.getEffect(equipped).name} equipped and saved permanently.`);
+          : `${api.getEffect(equipped).name} equipped.`);
       } catch (error) {
         toast(friendlyError(error), 'error');
       } finally {
@@ -6937,6 +7082,11 @@
       return null;
     }
 
+    if (rawItem?.type === 'EFFECT_TRIAL_REJECTED') {
+      await refreshProfileEffectsState({ checkModal: false });
+      return openNoticeDetailModal(rawItem);
+    }
+
     const target = rawItem
       ? resolveNotificationTarget(rawItem, currentProfile?.role || 'MEMBER')
       : normalizeRolePageTarget(itemOrTarget, currentProfile?.role || 'MEMBER');
@@ -7124,7 +7274,7 @@
             }
           }).catch(() => { });
         }
-        if (incomingType === 'EFFECT_GRANTED' || incomingType === 'EFFECT_REMOVED') {
+        if (incomingType === 'EFFECT_GRANTED' || incomingType === 'EFFECT_REMOVED' || incomingType === 'EFFECT_TRIAL_REJECTED') {
           refreshProfileEffectsState({ checkModal: incomingType === 'EFFECT_GRANTED' }).catch(() => { });
         }
         if (typeof activeLiveRefresh === 'function') {
@@ -7172,9 +7322,9 @@
             : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
         const iconHtml = item.type === 'BADGE_GRANTED'
           ? `<span class="notification-item-icon is-badge-granted" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified badge')}</span>`
-          : item.type === 'BADGE_REMOVED' || item.type === 'EFFECT_REMOVED'
+          : item.type === 'BADGE_REMOVED' || item.type === 'EFFECT_REMOVED' || item.type === 'EFFECT_TRIAL_REJECTED'
             ? `<span class="notification-item-icon is-badge-removed" aria-hidden="true"><svg class="verified-badge-svg" viewBox="0 0 24 24" shape-rendering="geometricPrecision"><path fill="#dc2626" d="${SCALLOP_SEAL_PATH}"/><path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/></svg></span>`
-            : item.type === 'EFFECT_GRANTED'
+            : item.type === 'EFFECT_GRANTED' || item.type === 'EFFECT_TRIAL_REQUESTED'
               ? '<span class="notification-item-icon is-effect-granted" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 2 2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2Z"/></svg></span>'
               : `<span class="notification-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${iconPath}"/></svg></span>`;
         return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"${safeTarget ? ` data-nav-target="${escapeHtml(safeTarget)}"` : ''}>

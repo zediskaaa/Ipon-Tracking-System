@@ -43,6 +43,32 @@
   const effectRemoveSelect = document.getElementById('effect-remove-select');
   const effectRemoveReason = document.getElementById('effect-remove-reason');
   const effectRemoveSubmit = document.getElementById('effect-remove-submit');
+  const effectsSubtabs = document.getElementById('effects-subtabs');
+  const effectsTabRequests = document.getElementById('effects-tab-requests');
+  const effectsTabRewards = document.getElementById('effects-tab-rewards');
+  const effectsReqBadge = document.getElementById('effects-req-badge');
+  const effectsRequestsWrap = document.getElementById('effects-requests-wrap');
+  const effectsRewardsWrap = document.getElementById('effects-rewards-wrap');
+  const effectRequestsBody = document.getElementById('effect-requests-body');
+  const effectTrialApproveDialog = document.getElementById('effect-trial-approve-dialog');
+  const effectTrialApproveForm = document.getElementById('effect-trial-approve-form');
+  const effectTrialApproveCopy = document.getElementById('effect-trial-approve-copy');
+  const effectTrialPreviewStage = document.getElementById('effect-trial-preview-stage');
+  const effectTrialPreviewAvatar = document.getElementById('effect-trial-preview-avatar');
+  const effectTrialPreviewName = document.getElementById('effect-trial-preview-name');
+  const effectTrialPreviewSub = document.getElementById('effect-trial-preview-sub');
+  const effectTrialReqNote = document.getElementById('effect-trial-req-note');
+  const effectTrialReqNoteText = document.getElementById('effect-trial-req-note-text');
+  const effectTrialDurationPreset = document.getElementById('effect-trial-duration-preset');
+  const effectTrialCustomWrap = document.getElementById('effect-trial-custom-wrap');
+  const effectTrialCustomExpiry = document.getElementById('effect-trial-custom-expiry');
+  const effectTrialCreatorMessage = document.getElementById('effect-trial-creator-message');
+  const effectTrialApproveSubmit = document.getElementById('effect-trial-approve-submit');
+  const effectTrialRejectDialog = document.getElementById('effect-trial-reject-dialog');
+  const effectTrialRejectForm = document.getElementById('effect-trial-reject-form');
+  const effectTrialRejectCopy = document.getElementById('effect-trial-reject-copy');
+  const effectTrialRejectReason = document.getElementById('effect-trial-reject-reason');
+  const effectTrialRejectSubmit = document.getElementById('effect-trial-reject-submit');
   const administratorDialog = document.getElementById('administrator-dialog');
   const administratorForm = document.getElementById('administrator-form');
   const userGroupsDialog = document.getElementById('user-groups-dialog');
@@ -142,11 +168,14 @@
   let accountActivities = [];
   let activityLogs = [];
   let profileEffectGrants = [];
+  let profileEffectTrialRequests = [];
   let effectPreviewStageCtrl = null;
+  let effectTrialPreviewStageCtrl = null;
+  let activeEffectsSubtab = null;
   let activeFeatureStatusFilter = 'ALL';
   let activeBugStatusFilter = 'OPEN';
   const PAGE_SIZE = 10;
-  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, badges: 0, effects: 0, activity: 0 };
+  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, badges: 0, effects: 0, 'effect-requests': 0, activity: 0 };
   Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
   Ipon.bindPasswordStrength(userPasswordForm.elements.password, () => {
     const target = profiles.find((item) => item.id === userPasswordForm.elements.user_id.value);
@@ -158,7 +187,7 @@
     'bug-reports': ['Bug reports', 'Review reported problems, error details, and attached screenshots from IPON users.'],
     administrators: ['Users', 'Manage registered users, passwords, and assigned savings groups.'],
     badges: ['Verified badges', 'Assign blue verified badges, set temporary or permanent durations, and send a creator note.'],
-    effects: ['Profile effects', 'Grant permanent animated avatar effects to active users with an optional creator note.'],
+    effects: ['Profile effects', 'Award permanent profile effects or review trial requests with custom expiration durations.'],
     activity: ['Platform activity', 'Review recent user and savings-group access changes recorded by the database.']
   };
 
@@ -274,11 +303,23 @@
     setShortcutBadge('shortcut-count-users', `${registeredUsers.length} registered`, false);
     setShortcutBadge('shortcut-count-badges', `${verifiedUsersCount} verified`, false);
     const grantsList = typeof profileEffectGrants !== 'undefined' && Array.isArray(profileEffectGrants) ? profileEffectGrants : [];
+    const trialReqsList = typeof profileEffectTrialRequests !== 'undefined' && Array.isArray(profileEffectTrialRequests) ? profileEffectTrialRequests : [];
+    const pendingTrialReqs = trialReqsList.filter((item) => item?.status === 'PENDING');
     const unlockedUserCount = new Set(grantsList.map((item) => item?.user_id).filter(Boolean)).size;
-    setShortcutBadge('shortcut-count-effects', `${unlockedUserCount} unlocked`, false);
+    setShortcutBadge(
+      'shortcut-count-effects',
+      pendingTrialReqs.length ? `${pendingTrialReqs.length} trial pending` : `${unlockedUserCount} unlocked`,
+      pendingTrialReqs.length > 0
+    );
     setShortcutBadge('shortcut-count-activity', `${activityLogs.length} events`, false);
 
     const attention = [];
+    if (pendingTrialReqs.length) {
+      attention.push(`<a href="super-admin.html#effects" data-overview-effect-requests="1">
+        <span class="platform-attention-copy"><strong>${pendingTrialReqs.length} profile effect trial request${pendingTrialReqs.length === 1 ? '' : 's'}</strong><small>Review requests and set trial expiration durations.</small></span>
+        <span class="platform-attention-end"><em class="platform-attention-pill is-warn">Pending</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+      </a>`);
+    }
     if (openBugs.length) {
       attention.push(`<a href="super-admin.html#bug-reports" data-overview-bug-status="OPEN">
         <span class="platform-attention-copy"><strong>${openBugs.length} open bug report${openBugs.length === 1 ? '' : 's'}</strong><small>Inspect user-reported issues and attached screenshots.</small></span>
@@ -315,6 +356,15 @@
   }
 
   document.getElementById('platform-attention')?.addEventListener('click', (event) => {
+    const effectTrigger = event.target.closest('[data-overview-effect-requests]');
+    if (effectTrigger) {
+      activeEffectsSubtab = 'requests';
+      const reqFilter = document.getElementById('effect-requests-status-filter');
+      if (reqFilter) reqFilter.value = 'PENDING';
+      pageState['effect-requests'] = 0;
+      renderEffects();
+      return;
+    }
     const bugTrigger = event.target.closest('[data-overview-bug-status]');
     if (bugTrigger) {
       activeBugStatusFilter = bugTrigger.dataset.overviewBugStatus || 'OPEN';
@@ -798,7 +848,80 @@
     return profileEffectGrants.filter((row) => String(row?.user_id || '') === String(userId || ''));
   }
 
+  function syncEffectsSubtabUi() {
+    const pendingCount = profileEffectTrialRequests.filter((row) => row?.status === 'PENDING').length;
+    const resolvedTab = activeEffectsSubtab || (pendingCount > 0 ? 'requests' : 'rewards');
+    if (effectsReqBadge) {
+      effectsReqBadge.textContent = String(pendingCount);
+      effectsReqBadge.hidden = false;
+    }
+    if (effectsTabRequests) effectsTabRequests.setAttribute('aria-selected', String(resolvedTab === 'requests'));
+    if (effectsTabRewards) effectsTabRewards.setAttribute('aria-selected', String(resolvedTab === 'rewards'));
+    if (effectsRequestsWrap) effectsRequestsWrap.hidden = resolvedTab !== 'requests';
+    if (effectsRewardsWrap) effectsRewardsWrap.hidden = resolvedTab !== 'rewards';
+  }
+
+  function renderEffectTrialRequests() {
+    if (!effectRequestsBody) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const query = filterValue('effect-requests-search');
+    const filter = filterValue('effect-requests-status-filter') || 'PENDING';
+    const candidates = profileEffectTrialRequests
+      .filter((req) => {
+        if (!req) return false;
+        const status = String(req.status || 'PENDING').toUpperCase();
+        if (filter !== 'ALL' && status !== filter) return false;
+        const meta = api?.getEffect ? api.getEffect(req.effect_id) : { name: req.effect_id, cat: '' };
+        return matchesQuery(query, [req.full_name, req.email, meta.name, meta.cat, req.request_note, req.review_note, status]);
+      })
+      .sort((a, b) => {
+        const rank = (s) => (s === 'PENDING' ? 0 : s === 'APPROVED' ? 1 : 2);
+        const ra = rank(String(a.status || 'PENDING').toUpperCase());
+        const rb = rank(String(b.status || 'PENDING').toUpperCase());
+        if (ra !== rb) return ra - rb;
+        return Date.parse(b.created_at || '') - Date.parse(a.created_at || '');
+      });
+    const visible = paginateRows('effect-requests', candidates);
+    effectRequestsBody.innerHTML = visible.length ? visible.map((req) => {
+      const status = String(req.status || 'PENDING').toUpperCase();
+      const meta = api?.getEffect ? api.getEffect(req.effect_id) : { name: req.effect_id, cat: 'Special', rare: 0 };
+      const rarLabel = meta.rare && api?.RARITIES?.[meta.rare] ? ` · ${api.RARITIES[meta.rare]}` : '';
+      const statusHtml = status === 'PENDING'
+        ? `<span class="effect-trial-status-pill is-pending">Pending review</span><small class="field-help">Requested ${Ipon.dateLabel(req.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small>`
+        : status === 'APPROVED'
+          ? `<span class="effect-trial-status-pill is-approved">Approved trial</span><small class="field-help">${req.trial_expires_at ? `Expires ${Ipon.dateLabel(req.trial_expires_at, { dateStyle: 'medium', timeStyle: 'short' })}` : 'Approved'}</small>`
+          : status === 'REJECTED'
+            ? `<span class="effect-trial-status-pill is-rejected">Declined</span><small class="field-help">${req.review_note ? Ipon.escapeHtml(req.review_note) : 'Declined by Super Admin'}</small>`
+            : `<span class="effect-trial-status-pill is-cancelled">Cancelled</span><small class="field-help">Withdrawn by user</small>`;
+      const actionsHtml = status === 'PENDING'
+        ? `<button class="icon-action" type="button" data-trial-approve="${Ipon.escapeHtml(req.id)}">Approve</button><button class="icon-action danger-action" type="button" data-trial-reject="${Ipon.escapeHtml(req.id)}">Decline</button>`
+        : `<span class="field-help">${req.reviewed_at ? `Reviewed ${Ipon.dateLabel(req.reviewed_at, { dateStyle: 'medium' })}` : 'Processed'}</span>`;
+      return `<tr data-trial-req-id="${Ipon.escapeHtml(req.id)}">
+        <td>
+          <div class="table-user-cell">
+            ${Ipon.avatarMarkup(req.avatar_url, req.full_name || 'User', 'table-user-avatar', req.user_id)}
+            <div>
+              <strong>${Ipon.escapeHtml(req.full_name || 'User')}</strong>
+              ${req.email ? `<small class="field-help">${Ipon.escapeHtml(req.email)}</small>` : ''}
+            </div>
+          </div>
+        </td>
+        <td>
+          <span class="effect-table-pill${meta.rare === 2 ? ' is-epic' : meta.rare === 1 ? ' is-rare' : ''}">${Ipon.escapeHtml(meta.name)}</span>
+          <small class="field-help">${Ipon.escapeHtml(meta.cat + rarLabel)}</small>
+        </td>
+        <td>${req.request_note ? `<span class="effect-trial-note-preview">${Ipon.escapeHtml(req.request_note)}</span>` : '<span class="field-help">No note attached</span>'}</td>
+        <td>${statusHtml}</td>
+        <td><div class="table-actions">${actionsHtml}</div></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5" class="empty-state">${query || filter !== 'PENDING' ? 'No matching trial requests.' : 'No pending profile effect trial requests.'}</td></tr>`;
+    Ipon.bindAvatarFallbacks(effectRequestsBody);
+    Ipon.syncPresenceDots(effectRequestsBody);
+  }
+
   function renderEffects() {
+    syncEffectsSubtabUi();
+    renderEffectTrialRequests();
     if (!effectsBody) return;
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
     const query = filterValue('effects-search');
@@ -810,6 +933,7 @@
         const equipped = api?.normalizeEffectId ? api.normalizeEffectId(profile.equipped_profile_effect) : (profile.equipped_profile_effect || 'none');
         if (filter === 'UNLOCKED' && !grants.length) return false;
         if (filter === 'EQUIPPED' && equipped === 'none') return false;
+        if (filter === 'TRIAL' && !grants.some((g) => g.is_permanent === false)) return false;
         if (filter === 'NONE' && grants.length > 0) return false;
         const effectNames = grants.map((g) => api?.getEffect ? api.getEffect(g.effect_id).name : g.effect_id).join(' ');
         const latestNote = grants[0]?.grant_message || '';
@@ -827,12 +951,22 @@
       const active = profile.status === 'ACTIVE';
       const equippedId = api?.normalizeEffectId ? api.normalizeEffectId(profile.equipped_profile_effect) : (profile.equipped_profile_effect || 'none');
       const equippedMeta = equippedId !== 'none' && api?.getEffect ? api.getEffect(equippedId) : null;
+      const permCount = grants.filter((g) => g.is_permanent !== false).length;
+      const trialCount = grants.filter((g) => g.is_permanent === false).length;
       const unlockedHtml = grants.length
         ? `<div class="effect-table-pills">${grants.map((g) => {
           const meta = api?.getEffect ? api.getEffect(g.effect_id) : { name: g.effect_id, rare: 0 };
           const isEq = equippedId === g.effect_id;
-          return `<span class="effect-table-pill${isEq ? ' is-equipped' : ''}${meta.rare === 2 ? ' is-epic' : meta.rare === 1 ? ' is-rare' : ''}">${Ipon.escapeHtml(meta.name)}</span>`;
-        }).join('')}</div><small class="field-help">${grants.length} permanent${grants.some((g) => !g.acknowledged_at) ? ' · Awaiting claim' : ' · Never expires'}</small>`
+          const isTrial = g.is_permanent === false;
+          const label = isTrial && g.expires_at
+            ? `${meta.name} (Trial · ${Ipon.dateLabel(g.expires_at, { dateStyle: 'short' })})`
+            : isTrial ? `${meta.name} (Trial)` : meta.name;
+          return `<span class="effect-table-pill${isEq ? ' is-equipped' : ''}${isTrial ? ' is-trial' : meta.rare === 2 ? ' is-epic' : meta.rare === 1 ? ' is-rare' : ''}">${Ipon.escapeHtml(label)}</span>`;
+        }).join('')}</div><small class="field-help">${[
+          permCount ? `${permCount} permanent` : '',
+          trialCount ? `${trialCount} active trial` : '',
+          grants.some((g) => !g.acknowledged_at) ? 'Awaiting claim' : ''
+        ].filter(Boolean).join(' · ')}</small>`
         : '<span class="badge-tier-pill is-none">No effects</span>';
       const activeHtml = equippedMeta
         ? `<span class="badge-duration-pill is-permanent">${Ipon.escapeHtml(equippedMeta.name)}</span><small class="field-help">Active on profile</small>`
@@ -881,7 +1015,9 @@
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
     const allEffects = api?.EFFECTS || [];
     const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic'];
-    const ownedIds = new Set(userEffectGrants(profile.id).map((g) => g.effect_id));
+    const grants = userEffectGrants(profile.id);
+    const ownedIds = new Set(grants.filter((g) => g.is_permanent !== false).map((g) => g.effect_id));
+    const trialIds = new Set(grants.filter((g) => g.is_permanent === false).map((g) => g.effect_id));
     effectGrantForm.reset();
     effectGrantForm.elements.user_id.value = profile.id;
     if (effectGrantError) effectGrantError.textContent = '';
@@ -900,6 +1036,7 @@
     if (effectGrantGrid) {
       effectGrantGrid.innerHTML = allEffects.map((e) => {
         const isOwned = ownedIds.has(e.id);
+        const isTrial = !isOwned && trialIds.has(e.id);
         const rarText = e.rare ? ` · ${rarities[e.rare] || ''}` : '';
         return `<label class="effect-grant-option${isOwned ? ' is-owned' : ''}" data-preview-option="${Ipon.escapeHtml(e.id)}">
           <input type="checkbox" name="effect_ids" value="${Ipon.escapeHtml(e.id)}"${isOwned ? ' disabled' : ''}>
@@ -907,7 +1044,7 @@
             <strong>${Ipon.escapeHtml(e.name)}</strong>
             <small class="rar${e.rare | 0}">${Ipon.escapeHtml(e.cat + rarText)}</small>
           </span>
-          ${isOwned ? '<span class="effect-grant-owned-pill">Owned</span>' : ''}
+          ${isOwned ? '<span class="effect-grant-owned-pill">Owned</span>' : isTrial ? '<span class="effect-table-pill is-trial">Trial</span>' : ''}
         </label>`;
       }).join('');
     }
@@ -963,13 +1100,14 @@
     effectRemoveForm.elements.user_id.value = profile.id;
     Ipon.setFieldError(effectRemoveReason, '');
     if (effectRemoveCopy) {
-      effectRemoveCopy.innerHTML = `Remove a permanent profile effect from <strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? ` (${Ipon.escapeHtml(profile.email)})` : ''}.`;
+      effectRemoveCopy.innerHTML = `Remove an unlocked profile effect from <strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? ` (${Ipon.escapeHtml(profile.email)})` : ''}.`;
     }
     if (effectRemoveSelect) {
       effectRemoveSelect.innerHTML = grants.map((g) => {
         const meta = api?.getEffect ? api.getEffect(g.effect_id) : { name: g.effect_id };
         const isEq = profile.equipped_profile_effect === g.effect_id;
-        return `<option value="${Ipon.escapeHtml(g.effect_id)}">${Ipon.escapeHtml(meta.name)}${isEq ? ' (Currently equipped)' : ''}</option>`;
+        const kind = g.is_permanent === false ? ' · Trial' : '';
+        return `<option value="${Ipon.escapeHtml(g.effect_id)}">${Ipon.escapeHtml(meta.name + kind)}${isEq ? ' (Currently equipped)' : ''}</option>`;
       }).join('');
     }
     effectRemoveDialog.showModal();
@@ -1009,7 +1147,7 @@
       : 'this user';
     const accepted = await Ipon.confirmAction({
       title: `Award permanent profile effect${selectedIds.length > 1 ? 's' : ''}?`,
-      message: `Grant ${selectedNames} permanently to ${recipientLabel}? Effects never expire from inactivity.${creatorMsg ? ' Your creator note will be shown in their celebration pop-up.' : ''}`,
+      message: `Grant ${selectedNames} permanently to ${recipientLabel}?${creatorMsg ? ' Your creator note will be shown in their celebration pop-up.' : ''}`,
       acceptLabel: `Award effect${selectedIds.length > 1 ? 's' : ''}`
     });
     if (!accepted) return;
@@ -1048,7 +1186,7 @@
       : 'this user';
     const accepted = await Ipon.confirmAction({
       title: `Remove "${effectName}"?`,
-      message: `Remove permanent effect "${effectName}" from ${recipientLabel}? They will receive a silent notification with your reason.`,
+      message: `Remove profile effect "${effectName}" from ${recipientLabel}? They will receive a silent notification with your reason.`,
       acceptLabel: 'Remove effect'
     });
     if (!accepted) return;
@@ -1066,6 +1204,189 @@
       Ipon.toast(Ipon.friendlyError(error), 'error');
     } finally {
       Ipon.setBusy(effectRemoveSubmit, false);
+    }
+  });
+
+  function closeEffectTrialApproveDialog() {
+    effectTrialPreviewStageCtrl?.destroy?.();
+    effectTrialPreviewStageCtrl = null;
+    effectTrialApproveDialog?.close?.();
+  }
+
+  function syncEffectTrialCustomVisibility() {
+    const isCustom = effectTrialDurationPreset?.value === 'custom';
+    if (effectTrialCustomWrap) effectTrialCustomWrap.hidden = !isCustom;
+    if (effectTrialCustomExpiry) {
+      effectTrialCustomExpiry.required = Boolean(isCustom);
+      Ipon.setFieldError(effectTrialCustomExpiry, '');
+      if (isCustom && !effectTrialCustomExpiry.value) {
+        effectTrialCustomExpiry.value = toDatetimeLocalValue(new Date(Date.now() + 7 * 86400000).toISOString());
+      }
+    }
+  }
+
+  function openEffectTrialApproveDialog(req) {
+    if (!req || !effectTrialApproveDialog || !effectTrialApproveForm) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const meta = api?.getEffect ? api.getEffect(req.effect_id) : { id: req.effect_id, name: req.effect_id, cat: 'Special', rare: 0 };
+    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic'];
+    const rarText = meta.rare ? ` · ${rarities[meta.rare] || ''}` : '';
+    effectTrialApproveForm.reset();
+    effectTrialApproveForm.elements.request_id.value = req.id;
+    if (effectTrialDurationPreset) effectTrialDurationPreset.value = '7';
+    syncEffectTrialCustomVisibility();
+    if (effectTrialApproveCopy) {
+      effectTrialApproveCopy.innerHTML = `Set a trial duration for <strong>${Ipon.escapeHtml(req.full_name || 'User')}</strong>${req.email ? ` (${Ipon.escapeHtml(req.email)})` : ''}.`;
+    }
+    if (effectTrialPreviewAvatar) {
+      effectTrialPreviewAvatar.innerHTML = Ipon.isSafeImageRef?.(req.avatar_url)
+        ? `<img src="${Ipon.escapeHtml(req.avatar_url)}" alt="${Ipon.escapeHtml(req.full_name || 'User')}"><span>${Ipon.escapeHtml(Ipon.initials(req.full_name || 'User'))}</span>`
+        : `<span>${Ipon.escapeHtml(Ipon.initials(req.full_name || 'User'))}</span>`;
+      Ipon.bindAvatarFallbacks(effectTrialPreviewAvatar);
+    }
+    if (effectTrialPreviewName) effectTrialPreviewName.textContent = meta.name;
+    if (effectTrialPreviewSub) effectTrialPreviewSub.textContent = `${meta.cat}${rarText} · Trial Preview`;
+    if (effectTrialReqNote && effectTrialReqNoteText) {
+      const note = String(req.request_note || '').trim();
+      effectTrialReqNote.hidden = !note;
+      effectTrialReqNoteText.textContent = note ? `User note: "${note}"` : '';
+    }
+    effectTrialPreviewStageCtrl?.destroy?.();
+    effectTrialPreviewStageCtrl = null;
+    if (effectTrialPreviewStage && api?.mountStage) {
+      effectTrialPreviewStageCtrl = api.mountStage(effectTrialPreviewStage, {
+        effectId: req.effect_id,
+        geometryFn: (_W, H) => ({ cx: 44, cy: Math.round(H / 2), ra: 26 }),
+        fps: 60,
+        maxDpr: 2
+      });
+    }
+    effectTrialApproveDialog.showModal();
+    requestAnimationFrame?.(() => effectTrialPreviewStageCtrl?.refreshGeometry?.());
+  }
+
+  function openEffectTrialRejectDialog(req) {
+    if (!req || !effectTrialRejectDialog || !effectTrialRejectForm) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const meta = api?.getEffect ? api.getEffect(req.effect_id) : { name: req.effect_id };
+    effectTrialRejectForm.reset();
+    effectTrialRejectForm.elements.request_id.value = req.id;
+    Ipon.setFieldError(effectTrialRejectReason, '');
+    if (effectTrialRejectCopy) {
+      effectTrialRejectCopy.innerHTML = `Decline the <strong>${Ipon.escapeHtml(meta.name)}</strong> trial request from <strong>${Ipon.escapeHtml(req.full_name || 'User')}</strong>.`;
+    }
+    effectTrialRejectDialog.showModal();
+  }
+
+  effectsSubtabs?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-effects-tab]');
+    if (!btn) return;
+    activeEffectsSubtab = btn.dataset.effectsTab === 'requests' ? 'requests' : 'rewards';
+    syncEffectsSubtabUi();
+  });
+
+  effectRequestsBody?.addEventListener('click', (event) => {
+    const approveBtn = event.target.closest('[data-trial-approve]');
+    const rejectBtn = event.target.closest('[data-trial-reject]');
+    const id = approveBtn?.dataset.trialApprove || rejectBtn?.dataset.trialReject;
+    if (!id) return;
+    const req = profileEffectTrialRequests.find((row) => String(row.id) === String(id));
+    if (!req) return;
+    if (approveBtn) openEffectTrialApproveDialog(req);
+    else if (rejectBtn) openEffectTrialRejectDialog(req);
+  });
+
+  effectTrialDurationPreset?.addEventListener('change', syncEffectTrialCustomVisibility);
+  document.getElementById('effect-trial-approve-close')?.addEventListener('click', closeEffectTrialApproveDialog);
+  document.getElementById('effect-trial-approve-cancel')?.addEventListener('click', closeEffectTrialApproveDialog);
+  effectTrialApproveDialog?.addEventListener('cancel', () => closeEffectTrialApproveDialog());
+  document.getElementById('effect-trial-reject-close')?.addEventListener('click', () => effectTrialRejectDialog?.close());
+  document.getElementById('effect-trial-reject-cancel')?.addEventListener('click', () => effectTrialRejectDialog?.close());
+
+  effectTrialApproveForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const requestId = effectTrialApproveForm.elements.request_id.value;
+    const req = profileEffectTrialRequests.find((row) => String(row.id) === String(requestId));
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const effectName = req ? (api?.getEffect ? api.getEffect(req.effect_id).name : req.effect_id) : 'this profile effect';
+    const preset = String(effectTrialDurationPreset?.value || '7');
+    let durationDays = null;
+    let customExpiresAtIso = null;
+    let expiryDesc = `${preset} day${preset === '1' ? '' : 's'}`;
+    if (preset === 'custom') {
+      const raw = String(effectTrialCustomExpiry?.value || '').trim();
+      const parsedMs = raw ? new Date(raw).getTime() : NaN;
+      if (!raw || !Number.isFinite(parsedMs) || parsedMs <= Date.now() + 5 * 60000) {
+        Ipon.setFieldError(effectTrialCustomExpiry, 'Select an expiration date and time at least 5 minutes in the future.');
+        effectTrialCustomExpiry?.focus();
+        return;
+      }
+      Ipon.setFieldError(effectTrialCustomExpiry, '');
+      customExpiresAtIso = new Date(parsedMs).toISOString();
+      expiryDesc = `until ${Ipon.dateLabel(customExpiresAtIso, { dateStyle: 'medium', timeStyle: 'short' })}`;
+    } else {
+      durationDays = Number.parseInt(preset, 10) || 7;
+    }
+    const creatorMsg = String(effectTrialCreatorMessage?.value || '').trim();
+    const recipientLabel = req ? `${req.full_name || 'User'}${req.email ? ` (${req.email})` : ''}` : 'this user';
+    const accepted = await Ipon.confirmAction({
+      title: `Approve "${effectName}" trial?`,
+      message: `Start a ${expiryDesc} trial of "${effectName}" for ${recipientLabel}? They will see the celebration pop-up and begin a 1-month cooldown.`,
+      acceptLabel: 'Approve trial'
+    });
+    if (!accepted) return;
+    Ipon.setBusy(effectTrialApproveSubmit, true, 'Approving…');
+    try {
+      await Ipon.rpc('super_admin_review_effect_trial_request', {
+        p_request_id: requestId,
+        p_decision: 'APPROVE',
+        p_duration_days: durationDays,
+        p_expires_at: customExpiresAtIso,
+        p_creator_message: creatorMsg
+      });
+      closeEffectTrialApproveDialog();
+      Ipon.toast(`Trial approved for "${effectName}" (${expiryDesc}).`);
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(effectTrialApproveSubmit, false);
+    }
+  });
+
+  effectTrialRejectForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const requestId = effectTrialRejectForm.elements.request_id.value;
+    const reason = String(effectTrialRejectReason?.value || '').trim();
+    if (reason.length < 2) {
+      Ipon.setFieldError(effectTrialRejectReason, 'Enter a brief reason explaining why this trial request was declined.');
+      effectTrialRejectReason?.focus();
+      return;
+    }
+    Ipon.setFieldError(effectTrialRejectReason, '');
+    const req = profileEffectTrialRequests.find((row) => String(row.id) === String(requestId));
+    const accepted = await Ipon.confirmAction({
+      title: 'Decline trial request?',
+      message: `Decline this trial request from ${req?.full_name || 'this user'}? They can still submit another trial request later.`,
+      acceptLabel: 'Decline request'
+    });
+    if (!accepted) return;
+    Ipon.setBusy(effectTrialRejectSubmit, true, 'Declining…');
+    try {
+      await Ipon.rpc('super_admin_review_effect_trial_request', {
+        p_request_id: requestId,
+        p_decision: 'REJECT',
+        p_duration_days: null,
+        p_expires_at: null,
+        p_creator_message: reason
+      });
+      effectTrialRejectDialog?.close();
+      Ipon.toast('Trial request declined and user notified.');
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(effectTrialRejectSubmit, false);
     }
   });
 
@@ -1287,7 +1608,7 @@
     overviewError.replaceChildren();
     await Ipon.rpc('cleanup_inactive_verified_badges').catch(() => {});
     const safeQuery = (query) => (Ipon.withTimeout ? Ipon.withTimeout(query) : Promise.resolve(query)).catch((err) => ({ data: [], error: err }));
-    const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult, effectsResult] = await Promise.all([
+    const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult, effectsResult, effectTrialReqResult] = await Promise.all([
       safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,last_seen_at,equipped_profile_effect').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,workspace_mode,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('group_memberships').select('group_id,user_id,role,status')),
@@ -1297,6 +1618,7 @@
       safeQuery(Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.rpc('super_admin_storage_overview')),
       safeQuery(Ipon.client.rpc('super_admin_list_profile_effects')),
+      safeQuery(Ipon.client.rpc('super_admin_list_effect_trial_requests')),
       announcements ? safeQuery(announcements.load()) : Promise.resolve()
     ]);
     if (profileResult.error) throw profileResult.error;
@@ -1307,6 +1629,7 @@
     featureRequests = featureRequestResult.data || [];
     bugReports = bugReportResult.data || [];
     profileEffectGrants = !effectsResult?.error && Array.isArray(effectsResult?.data) ? effectsResult.data : [];
+    profileEffectTrialRequests = !effectTrialReqResult?.error && Array.isArray(effectTrialReqResult?.data) ? effectTrialReqResult.data : [];
     if (activityResult?.error) {
       const legacyActivity = await safeQuery(
         Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200)
@@ -2754,6 +3077,7 @@
     ['users', ['users-search', 'users-status-filter'], renderUsers],
     ['badges', ['badges-search', 'badges-status-filter'], renderBadges],
     ['effects', ['effects-search', 'effects-status-filter'], renderEffects],
+    ['effect-requests', ['effect-requests-search', 'effect-requests-status-filter'], renderEffectTrialRequests],
     ['activity', ['activity-search'], renderActivity]
   ].forEach(([key, controlIds, render]) => {
     controlIds.forEach((id) => {
@@ -2787,6 +3111,7 @@
       Ipon.showInlineError(administratorsBody, error, refresh, 6);
       if (badgesBody) Ipon.showInlineError(badgesBody, error, refresh, 5);
       if (effectsBody) Ipon.showInlineError(effectsBody, error, refresh, 5);
+      if (effectRequestsBody) Ipon.showInlineError(effectRequestsBody, error, refresh, 5);
       Ipon.showInlineError(activityBody, error, refresh, 3);
     }
   }
@@ -2895,10 +3220,14 @@
     }
 
     if (hash) {
+      if (hash === '#effects' && profileEffectTrialRequests.some((r) => r?.status === 'PENDING')) {
+        activeEffectsSubtab = 'requests';
+        syncEffectsSubtabUi();
+      }
       switchPlatformView(hash);
       return !params.has('notice');
     }
     return false;
   });
-  Ipon.subscribeToChanges('super-admin', ['profiles', 'profile_effect_grants', 'groups', 'group_memberships', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
+  Ipon.subscribeToChanges('super-admin', ['profiles', 'profile_effect_grants', 'profile_effect_trial_requests', 'groups', 'group_memberships', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
 })();
