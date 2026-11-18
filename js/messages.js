@@ -47,6 +47,9 @@
   let pendingMsgSeq = 0;
   let activeVideoMenuPlayer = null;
   let activeFloatingMenuAnchor = null;
+  let activeMutualAnchor = null;
+  let mutualHoverTimer = null;
+  const mutualFriendsCache = new Map();
   let suppressBubbleClickId = null;
   let recentHoldMsgId = null;
   let recentHoldAt = 0;
@@ -762,6 +765,9 @@
 
       <!-- Viewport-aware Profile Quick Action Popover -->
       <div class="msg-profile-popover" id="msg-profile-popover" role="dialog" aria-modal="false" aria-labelledby="msg-pop-name" hidden></div>
+
+      <!-- Mutual Friends Avatar Stack Popover -->
+      <div class="msg-mutual-popover" id="msg-mutual-popover" role="dialog" aria-modal="false" aria-label="Mutual friends" hidden></div>
 
       <!-- Privacy, Handle & Blocked Users Dialog -->
       <dialog class="form-dialog msg-sub-dialog" id="msg-settings-dialog" aria-labelledby="msg-settings-title">
@@ -1588,18 +1594,22 @@
     } else {
       relChip = `<button type="button" class="msg-row-chip-btn" data-social-action="add_friend" data-target-id="${escapeHtml(u.id)}">Add</button>`;
     }
+    const mutualCount = Number(u.mutual_friends_count || 0);
+    const mutualHtml = renderMutualStackHtml(u.id, u.mutual_friends, mutualCount, { compact: true });
     const subParts = [];
     if (u.username) subParts.push(`@${u.username}`);
     if (u.shared_groups?.length) subParts.push(u.shared_groups[0]);
-    else if (u.mutual_friends_count) subParts.push(`${u.mutual_friends_count} mutual`);
-    if (!subParts.length) subParts.push('Tap to message');
+    if (!subParts.length && !mutualHtml) subParts.push('Tap to message');
 
     return `<article class="msg-search-person-row" role="listitem">
       <div class="msg-conv-avatar">${userAvatarHtml(u, 'avatar-md')}</div>
-      <button type="button" class="msg-search-person-main" data-social-action="message" data-target-id="${escapeHtml(u.id)}">
-        <strong class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}</strong>
-        <span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>
-      </button>
+      <div class="msg-search-person-mid">
+        <button type="button" class="msg-search-person-main" data-social-action="message" data-target-id="${escapeHtml(u.id)}">
+          <strong class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}</strong>
+          ${subParts.length ? `<span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>` : ''}
+        </button>
+        ${mutualHtml}
+      </div>
       <div class="msg-search-person-act">${relChip}</div>
     </article>`;
   }
@@ -3142,6 +3152,7 @@
                   ${r.username ? `<small>@${escapeHtml(r.username)}</small>` : `<small>Sent ${escapeHtml(formatShortDate(r.created_at))}</small>`}
                 </div>
               </div>
+              ${renderMutualStackHtml(r.user_id, r.mutual_friends, r.mutual_friends_count)}
               <div class="msg-person-actions">
                 <button type="button" class="button button-primary button-sm" data-req-decision="ACCEPT" data-req-id="${escapeHtml(r.id)}">Accept</button>
                 <button type="button" class="button button-secondary button-sm" data-req-decision="DECLINE" data-req-id="${escapeHtml(r.id)}">Decline</button>
@@ -3160,6 +3171,7 @@
                   <small>Sent ${escapeHtml(formatShortDate(r.created_at))}</small>
                 </div>
               </div>
+              ${renderMutualStackHtml(r.user_id, r.mutual_friends, r.mutual_friends_count)}
               <div class="msg-person-actions">
                 <button type="button" class="button button-secondary button-sm" data-cancel-req="${escapeHtml(r.id)}">Cancel request</button>
               </div>
@@ -3181,6 +3193,7 @@
           <small>${escapeHtml(formatStatusLine(f))}</small>
         </div>
       </div>
+      ${renderMutualStackHtml(f.id, f.mutual_friends, f.mutual_friends_count)}
       <div class="msg-person-actions">
         <button type="button" class="button button-primary button-sm" data-social-action="message" data-target-id="${escapeHtml(f.id)}">Message</button>
         <button type="button" class="button button-secondary button-sm" data-social-action="remove_friend" data-target-id="${escapeHtml(f.id)}">Remove</button>
@@ -3276,6 +3289,145 @@
     </div>`;
   }
 
+  function normalizeMutualFriends(rawList) {
+    if (!Array.isArray(rawList)) return [];
+    const seen = new Set();
+    const out = [];
+    for (const item of rawList) {
+      if (!item || typeof item !== 'object') continue;
+      const id = String(item.id || item.user_id || '').trim();
+      const fullName = String(item.full_name || '').trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push({
+        id,
+        full_name: fullName || 'Community member',
+        username: String(item.username || '').trim(),
+        avatar_url: item.avatar_url || null
+      });
+    }
+    return out;
+  }
+
+  function cacheMutualFriends(userId, mutualFriends, mutualCount) {
+    const key = String(userId || '').trim();
+    if (!key) return { count: 0, friends: [] };
+    const normalized = normalizeMutualFriends(mutualFriends);
+    const existing = mutualFriendsCache.get(key);
+    const friends = normalized.length >= (existing?.friends?.length || 0) ? normalized : existing.friends;
+    const count = Math.max(Number(mutualCount || 0), friends.length);
+    const entry = { count, friends };
+    if (count > 0) mutualFriendsCache.set(key, entry);
+    else mutualFriendsCache.delete(key);
+    return entry;
+  }
+
+  function renderMutualStackHtml(userId, mutualFriends, mutualCount, { compact = false } = {}) {
+    const { count, friends } = cacheMutualFriends(userId, mutualFriends, mutualCount);
+    if (count <= 0) return '';
+    const shown = friends.slice(0, 3);
+    const slotCount = shown.length || Math.min(3, count);
+    const avatarsHtml = shown.length
+      ? shown.map((m) => `<span class="msg-mutual-av">${userAvatarHtml({ id: m.id, full_name: m.full_name, avatar_url: m.avatar_url, allow_online_status: false }, 'avatar-sm', { clickable: false, showPresence: false })}</span>`).join('')
+      : Array.from({ length: slotCount }, () => '<span class="msg-mutual-av is-placeholder" aria-hidden="true">?</span>').join('');
+    const overflowBadge = count > 3 ? `<span class="msg-mutual-more" aria-hidden="true">+${count - 3}</span>` : '';
+    const label = compact ? `${count} mutual` : `${count} mutual friend${count === 1 ? '' : 's'}`;
+    return `<div class="msg-mutual-wrap${compact ? ' is-compact' : ''}">
+      <button type="button" class="msg-mutual-trigger${compact ? ' is-compact' : ''}" data-mutual-trigger="${escapeHtml(userId)}" aria-expanded="false" aria-label="${escapeHtml(`${count} mutual friend${count === 1 ? '' : 's'} — view list`)}">
+        <span class="msg-mutual-stack" aria-hidden="true">${avatarsHtml}${overflowBadge}</span>
+        <span class="msg-mutual-label">${escapeHtml(label)}</span>
+      </button>
+    </div>`;
+  }
+
+  function renderMutualPopoverContent(pop, userId, count, friends, loading = false) {
+    const total = Math.max(Number(count || 0), friends.length);
+    const rowsHtml = loading
+      ? '<p class="msg-mutual-pop-empty">Loading mutual friends…</p>'
+      : (friends.length
+        ? `<div class="msg-mutual-pop-list" role="list">
+            ${friends.map((m) => `
+              <button type="button" class="msg-mutual-pop-item" role="listitem" data-social-user-dp="${escapeHtml(m.id)}">
+                ${userAvatarHtml({ id: m.id, full_name: m.full_name, avatar_url: m.avatar_url, allow_online_status: false }, 'avatar-sm', { clickable: false, showPresence: false })}
+                <span class="msg-mutual-pop-copy">
+                  <strong>${escapeHtml(m.full_name)}</strong>
+                  ${m.username ? `<small>@${escapeHtml(m.username)}</small>` : ''}
+                </span>
+              </button>`).join('')}
+          </div>`
+        : '<p class="msg-mutual-pop-empty">Mutual friend details are unavailable right now.</p>');
+    const footHtml = !loading && friends.length > 0 && total > friends.length
+      ? `<p class="msg-mutual-pop-foot">Showing ${friends.length} of ${total} mutual friends</p>`
+      : '';
+    pop.innerHTML = `
+      <div class="msg-mutual-pop-head">
+        <strong>${total} Mutual Friend${total === 1 ? '' : 's'}</strong>
+        <button type="button" class="dialog-close msg-mutual-pop-close" data-mutual-close aria-label="Close mutual friends">${MSG_CLOSE_X_SVG}</button>
+      </div>
+      ${rowsHtml}
+      ${footHtml}`;
+    ipon().bindAvatarFallbacks?.(pop);
+    ipon().syncPresenceDots?.(pop);
+  }
+
+  function clearMutualHoverTimer() {
+    if (mutualHoverTimer) {
+      clearTimeout(mutualHoverTimer);
+      mutualHoverTimer = null;
+    }
+  }
+
+  function closeMutualPopover() {
+    clearMutualHoverTimer();
+    if (activeMutualAnchor?.setAttribute) activeMutualAnchor.setAttribute('aria-expanded', 'false');
+    activeMutualAnchor = null;
+    const pop = document.getElementById('msg-mutual-popover');
+    if (pop) {
+      pop.hidden = true;
+      pop.dataset.pinned = '0';
+      delete pop.dataset.userId;
+    }
+  }
+
+  async function openMutualPopover(userId, anchorEl, { pinned = false } = {}) {
+    const pop = document.getElementById('msg-mutual-popover');
+    const key = String(userId || '').trim();
+    if (!pop || !key || !anchorEl) return;
+    const cached = mutualFriendsCache.get(key) || { count: 0, friends: [] };
+    if (!cached.count && !cached.friends.length) return;
+    clearMutualHoverTimer();
+    const activeDialog = document.querySelector('#msg-workspace-dialog[open], #msg-forward-dialog[open], #msg-settings-dialog[open], dialog[open]');
+    const targetHost = activeDialog || document.body;
+    if (pop.parentElement !== targetHost) targetHost.appendChild(pop);
+    if (activeMutualAnchor && activeMutualAnchor !== anchorEl) activeMutualAnchor.setAttribute?.('aria-expanded', 'false');
+    activeMutualAnchor = anchorEl;
+    activeMutualAnchor.setAttribute?.('aria-expanded', 'true');
+    pop.dataset.userId = key;
+    if (pinned || pop.hidden || pop.dataset.pinned !== '1') {
+      pop.dataset.pinned = pinned ? '1' : '0';
+    }
+    const needsHydration = cached.count > 0 && cached.friends.length === 0;
+    renderMutualPopoverContent(pop, key, cached.count, cached.friends, needsHydration);
+    pop.hidden = false;
+    positionPopoverNearAnchor(pop, anchorEl);
+
+    if (needsHydration) {
+      try {
+        const profile = await ipon().rpc('get_social_user_profile', { p_target_id: key });
+        const updated = cacheMutualFriends(key, profile?.mutual_friends, profile?.mutual_friends_count ?? cached.count);
+        if (!pop.hidden && pop.dataset.userId === key) {
+          renderMutualPopoverContent(pop, key, updated.count, updated.friends, false);
+          positionPopoverNearAnchor(pop, activeMutualAnchor);
+        }
+      } catch (_) {
+        if (!pop.hidden && pop.dataset.userId === key) {
+          renderMutualPopoverContent(pop, key, cached.count, [], false);
+          positionPopoverNearAnchor(pop, activeMutualAnchor);
+        }
+      }
+    }
+  }
+
   async function openProfilePopover(targetUserId, anchorEl) {
     const pop = document.getElementById('msg-profile-popover');
     if (!pop || !targetUserId || String(targetUserId) === String(initializedProfile?.id)) return;
@@ -3312,8 +3464,9 @@
         NONE: 'Not friends yet'
       };
       const mutualCount = Number(profile.mutual_friends_count || 0);
+      const mutualHtml = renderMutualStackHtml(profile.id, profile.mutual_friends, mutualCount);
       const statusLine = statusLabels[fs] || 'Community member';
-      const subtitle = mutualCount > 0
+      const subtitle = (!mutualHtml && mutualCount > 0)
         ? `${statusLine} · ${mutualCount} mutual friend${mutualCount === 1 ? '' : 's'}`
         : statusLine;
       const groupsHtml = renderSharedGroupsCard(profile.shared_groups);
@@ -3329,6 +3482,7 @@
             <small class="msg-pop-status">${escapeHtml(subtitle)}</small>
           </div>
         </div>
+        ${mutualHtml}
         ${bioText ? `<p class="msg-pop-bio">${escapeHtml(bioText)}</p>` : ''}
         ${groupsHtml}
         <div class="msg-pop-actions">
@@ -3355,8 +3509,8 @@
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const pad = 12;
-    const pw = Math.min(popRect.width || 364, vw - pad * 2);
-    const ph = popRect.height || 260;
+    const pw = Math.min(popRect.width || (pop.id === 'msg-mutual-popover' ? 280 : 364), vw - pad * 2);
+    const ph = popRect.height || (pop.id === 'msg-mutual-popover' ? 220 : 260);
     let left = rect.right + 10;
     if (left + pw > vw - pad) left = rect.left - pw - 10;
     if (left < pad) left = Math.max(pad, Math.min(vw - pw - pad, rect.left));
@@ -3368,6 +3522,7 @@
   }
 
   function closeProfilePopover() {
+    closeMutualPopover();
     activePopoverAnchor = null;
     const pop = document.getElementById('msg-profile-popover');
     if (pop) pop.hidden = true;
@@ -4811,8 +4966,32 @@
         state.showPinnedList = false;
         renderPinnedBanner();
       }
+      const mutualCloseBtn = ev.target.closest?.('[data-mutual-close]');
+      if (mutualCloseBtn) {
+        ev.stopPropagation();
+        closeMutualPopover();
+        return;
+      }
+
+      const mutualBtn = ev.target.closest?.('[data-mutual-trigger]');
+      if (mutualBtn) {
+        ev.stopPropagation();
+        const mutualPop = document.getElementById('msg-mutual-popover');
+        if (mutualPop && !mutualPop.hidden && mutualPop.dataset.pinned === '1' && activeMutualAnchor === mutualBtn) {
+          closeMutualPopover();
+        } else {
+          await openMutualPopover(mutualBtn.dataset.mutualTrigger, mutualBtn, { pinned: true });
+        }
+        return;
+      }
+
+      const mutualPopEl = document.getElementById('msg-mutual-popover');
+      if (mutualPopEl && !mutualPopEl.hidden && !(mutualPopEl.contains?.(ev.target) || ev.target.closest?.('#msg-mutual-popover')) && !ev.target.closest?.('[data-mutual-trigger]')) {
+        closeMutualPopover();
+      }
+
       const pop = document.getElementById('msg-profile-popover');
-      if (pop && !pop.hidden && !(pop.contains?.(ev.target) || ev.target.closest?.('#msg-profile-popover')) && !ev.target.closest('[data-social-user-dp]')) {
+      if (pop && !pop.hidden && !(pop.contains?.(ev.target) || ev.target.closest?.('#msg-profile-popover')) && !ev.target.closest?.('#msg-mutual-popover') && !ev.target.closest('[data-social-user-dp]')) {
         closeProfilePopover();
       }
 
@@ -4826,7 +5005,10 @@
       const dpBtn = ev.target.closest?.('[data-social-user-dp]');
       if (dpBtn) {
         ev.stopPropagation();
-        await openProfilePopover(dpBtn.dataset.socialUserDp, dpBtn);
+        const fromMutualPop = Boolean(dpBtn.closest?.('#msg-mutual-popover'));
+        const anchorEl = fromMutualPop ? (activeMutualAnchor || dpBtn) : dpBtn;
+        closeMutualPopover();
+        await openProfilePopover(dpBtn.dataset.socialUserDp, anchorEl);
         return;
       }
 
@@ -5895,6 +6077,39 @@
       }
     }, { passive: false });
 
+    document.addEventListener('mouseover', (ev) => {
+      if (ev.target?.closest?.('#msg-mutual-popover')) {
+        clearMutualHoverTimer();
+        return;
+      }
+      const trigger = ev.target?.closest?.('[data-mutual-trigger]');
+      if (!trigger) return;
+      clearMutualHoverTimer();
+      const mutualPop = document.getElementById('msg-mutual-popover');
+      if (mutualPop && !mutualPop.hidden && activeMutualAnchor === trigger) return;
+      void openMutualPopover(trigger.dataset.mutualTrigger, trigger, { pinned: false });
+    });
+
+    document.addEventListener('mouseout', (ev) => {
+      const fromMutual = ev.target?.closest?.('[data-mutual-trigger], #msg-mutual-popover');
+      if (!fromMutual) return;
+      if (ev.relatedTarget?.closest?.('[data-mutual-trigger], #msg-mutual-popover')) return;
+      const mutualPop = document.getElementById('msg-mutual-popover');
+      if (!mutualPop || mutualPop.hidden || mutualPop.dataset.pinned === '1') return;
+      clearMutualHoverTimer();
+      mutualHoverTimer = setTimeout(() => {
+        const currentPop = document.getElementById('msg-mutual-popover');
+        if (currentPop && currentPop.dataset.pinned !== '1') closeMutualPopover();
+      }, 160);
+    });
+
+    document.addEventListener('scroll', (ev) => {
+      const mutualPop = document.getElementById('msg-mutual-popover');
+      if (mutualPop && !mutualPop.hidden && !ev.target?.closest?.('#msg-mutual-popover')) {
+        closeMutualPopover();
+      }
+    }, true);
+
     let pressTimer = null;
     let pressStart = null;
     let pressHoldTriggeredId = null;
@@ -6288,6 +6503,11 @@
       .find((node) => !node.classList?.contains?.('is-leaving'));
     if (activeMenu) {
       closeFloatingMenus();
+      dismissed = true;
+    }
+    const mutualPop = document.getElementById('msg-mutual-popover');
+    if (mutualPop && !mutualPop.hidden) {
+      closeMutualPopover();
       dismissed = true;
     }
     const pop = document.getElementById('msg-profile-popover');
