@@ -496,12 +496,13 @@
   function formatBadgeDurationCell(profile, tier) {
     if (tier === 'NONE') return '<span class="field-help">No active badge</span>';
     if (!profile.verified_badge_expires_at) {
-      return `<span class="badge-duration-pill is-permanent">Permanent</span>${tier === 'BLUE' ? '<small class="field-help">Auto-removes if inactive 2 months</small>' : ''}`;
+      const sub = tier === 'CREATOR_GREEN' ? 'Lifetime · Never expires' : 'Auto-removes if inactive 2 months';
+      return `<span class="badge-duration-pill is-permanent">Permanent</span><small class="field-help">${sub}</small>`;
     }
     const expMs = Date.parse(profile.verified_badge_expires_at);
     const daysLeft = Number.isNaN(expMs) ? 0 : Math.max(0, Math.ceil((expMs - Date.now()) / 86400000));
     const dateStr = Ipon.dateLabel(profile.verified_badge_expires_at, { dateStyle: 'medium', timeStyle: 'short' });
-    return `<strong>${Ipon.escapeHtml(dateStr)}</strong><small class="field-help">${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining · 2-mo inactivity rule</small>`;
+    return `<strong>${Ipon.escapeHtml(dateStr)}</strong><small class="field-help">${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining</small>`;
   }
 
   function renderBadges() {
@@ -608,8 +609,23 @@
       const previewSvg = Ipon.verifiedBadgesHtml ? Ipon.verifiedBadgesHtml(profile, { tier: targetTier }) : '';
       badgeGrantPreview.innerHTML = `<span class="badge-preview-name">${Ipon.escapeHtml(profile.full_name)}${previewSvg}</span><small class="field-help">${targetTier === 'CREATOR_GREEN' ? 'Green seal &amp; crown' : 'Blue seal'}</small>`;
     }
+    const isCreatorTarget = targetTier === 'CREATOR_GREEN';
+    const permOpt = badgeDurationPreset?.querySelector('option[value="permanent"]');
+    if (permOpt) {
+      permOpt.textContent = isCreatorTarget
+        ? 'Permanent (Lifetime · Exempt from inactivity)'
+        : 'Permanent (until 2 months inactive)';
+    }
+    const policyHintEl = badgeGrantDialog.querySelector('.badge-grant-policy-hint span');
+    if (policyHintEl) {
+      policyHintEl.textContent = isCreatorTarget
+        ? 'Creator badges are lifetime permanent and exempt from inactivity removal.'
+        : 'Only Permanent badges require activity (auto-removed after 2 months inactive).';
+    }
     if (badgeDurationPreset) {
-      if (currentTier !== 'NONE' && !profile.verified_badge_expires_at) {
+      if (isCreatorTarget) {
+        badgeDurationPreset.value = 'permanent';
+      } else if (currentTier !== 'NONE' && !profile.verified_badge_expires_at) {
         badgeDurationPreset.value = 'permanent';
       } else if (profile.verified_badge_expires_at) {
         badgeDurationPreset.value = 'custom';
@@ -685,8 +701,9 @@
       ? (Ipon.effectiveVerifiedBadgeTier ? Ipon.effectiveVerifiedBadgeTier(targetProfile, '', { allowPendingAck: true }) : 'NONE')
       : 'NONE';
     const isUpdate = currentTier !== 'NONE';
+    const isCreatorTarget = String(targetProfile?.email || '').trim().toLowerCase() === 'breadspanish231@gmail.com';
     const durationSummary = preset === 'permanent'
-      ? 'Permanent — auto-removes after 2 months inactive'
+      ? (isCreatorTarget ? 'Permanent — lifetime, exempt from inactivity' : 'Permanent — auto-removes after 2 months inactive')
       : (preset === 'custom'
         ? `Until ${Ipon.dateLabel(expiresAt, { dateStyle: 'medium', timeStyle: 'short' })}`
         : `${durationDays} days`);

@@ -514,4 +514,6 @@ test('My Account verified badge card lets members message the creator directly w
   assert.doesNotMatch(read('js/policy.js'), /pg_cron|autovacuum/i);
   assert.doesNotMatch(read('login.html'), /pg_cron|autovacuum/i);
   assert.doesNotMatch(read('super-admin.html'), /pg_cron|autovacuum/i);
+  assert.match(read('js/super-admin.js'), /Lifetime · Exempt from inactivity/);
+  assert.match(read('js/super-admin.js'), /Creator badges are lifetime permanent and exempt from inactivity removal/);
 });
