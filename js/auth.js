@@ -9,6 +9,14 @@
   const clerkSignInNode = document.getElementById('clerk-sign-in');
   const clerkSignInLoading = document.getElementById('clerk-signin-loading');
   const clerkSignInMessage = document.getElementById('clerk-signin-message');
+  const socialSignupBlock = document.getElementById('social-signup-block');
+  const socialSignupMessage = document.getElementById('social-signup-message');
+  const socialSignupButtons = Array.from(document.querySelectorAll('[data-clerk-oauth]'));
+  const signupEmailOpenBtn = document.getElementById('signup-email-open');
+  const signupMethodBackBtn = document.getElementById('signup-method-back');
+  const emailSignupFields = document.getElementById('email-signup-fields');
+  const emailChipText = document.getElementById('email-chip-text');
+  const isClerkSsoCallback = new URLSearchParams(window.location.search).get('clerk_sso_callback') === '1';
   const securityNotice = document.getElementById('auth-security-notice');
   const securityTitle = document.getElementById('auth-security-title');
   const securityDetail = document.getElementById('auth-security-detail');
@@ -89,6 +97,7 @@
     if (!input.placeholder && meta.placeholder) input.placeholder = meta.placeholder;
   });
   let mode = 'login';
+  let signupStep = 'choice';
   let clerkLoadPromise = null;
   let clerkSignInMounted = false;
   let clerkExchangeSessionId = '';
@@ -126,6 +135,79 @@
       return 'login.html';
     }
   }
+
+  function setSocialSignupMessage(text = '') {
+    if (!socialSignupMessage) return;
+    socialSignupMessage.textContent = String(text || '').trim();
+  }
+
+  function getClerkSsoCallbackUrl() {
+    try {
+      const url = new URL(getClerkLoginReturnUrl(), window.location.href);
+      url.searchParams.set('clerk_sso_callback', '1');
+      return url.toString();
+    } catch {
+      return 'login.html?clerk_sso_callback=1';
+    }
+  }
+
+  function clearClerkSsoCallbackFromUrl() {
+    try {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('clerk_sso_callback') && !url.hash) return;
+      url.searchParams.delete('clerk_sso_callback');
+      url.hash = '';
+      history.replaceState(null, '', url.pathname + url.search);
+    } catch { }
+  }
+
+  function setSocialSignupBusy(triggerButton, busy) {
+    socialSignupButtons.forEach((btn) => {
+      btn.disabled = Boolean(busy);
+      btn.classList.toggle('is-busy', Boolean(busy) && btn === triggerButton);
+      const label = btn.querySelector('.social-signup-label');
+      if (!label) return;
+      if (busy && btn === triggerButton) {
+        if (!btn.dataset.originalLabel) btn.dataset.originalLabel = label.textContent;
+        label.textContent = 'Connecting…';
+      } else if (btn.dataset.originalLabel) {
+        label.textContent = btn.dataset.originalLabel;
+        delete btn.dataset.originalLabel;
+      }
+    });
+  }
+
+  async function startClerkOAuth(strategy, triggerButton) {
+    if (!strategy) return;
+    setSocialSignupMessage('');
+    setSocialSignupBusy(triggerButton, true);
+    try {
+      const clerk = await loadClerk();
+      if (!clerk?.client?.signUp) {
+        throw new Error('Google and Facebook sign-up is temporarily unavailable. Reload the page or sign up with email below.');
+      }
+      if (clerk.session) {
+        await clerk.signOut().catch(() => null);
+      }
+      await clerk.client.signUp.authenticateWithRedirect({
+        strategy,
+        redirectUrl: getClerkSsoCallbackUrl(),
+        redirectUrlComplete: getClerkLoginReturnUrl()
+      });
+    } catch (error) {
+      setSocialSignupBusy(null, false);
+      setSocialSignupMessage(Ipon.friendlyError(error));
+    }
+  }
+
+  socialSignupButtons.forEach((btn) => {
+    btn.addEventListener('click', () => startClerkOAuth(btn.dataset.clerkOauth, btn));
+  });
+
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    setSocialSignupBusy(null, false);
+  });
 
   function handleClerkRouterNav(to, { windowNavigate } = {}) {
     try {
@@ -294,23 +376,58 @@
     return true;
   }
 
+  if (isClerkSsoCallback) setClerkSignInLoading(true);
+
   loadClerk().then(async (clerk) => {
     let shouldSignOut = false;
     try {
       shouldSignOut = localStorage.getItem('myipon_clerk_signout') === '1';
       if (shouldSignOut) localStorage.removeItem('myipon_clerk_signout');
     } catch { }
-    if (shouldSignOut && clerk?.session) await clerk.signOut().catch(() => null);
+    if (shouldSignOut && !isClerkSsoCallback && clerk?.session) await clerk.signOut().catch(() => null);
     if (!clerk) {
+      setClerkSignInLoading(false);
       setClerkSignInMessage('Sign-in is temporarily unavailable. Reload the page to try again.', 'error');
       return;
+    }
+    if (isClerkSsoCallback) {
+      setMode('login');
+      setClerkSignInLoading(true);
+      const returnUrl = getClerkLoginReturnUrl();
+      try {
+        await clerk.handleRedirectCallback({
+          signInUrl: returnUrl,
+          signUpUrl: returnUrl,
+          signInForceRedirectUrl: returnUrl,
+          signUpForceRedirectUrl: returnUrl,
+          signInFallbackRedirectUrl: returnUrl,
+          signUpFallbackRedirectUrl: returnUrl,
+          continueSignUpUrl: returnUrl,
+          verifyEmailAddressUrl: returnUrl
+        });
+      } catch (error) {
+        setClerkSignInLoading(false);
+        setClerkSignInMessage(Ipon.friendlyError(error), 'error');
+      } finally {
+        clearClerkSsoCallbackFromUrl();
+      }
     }
     clerk.addListener(() => {
       if (clerk.session) exchangeClerkSession(clerk);
       else mountClerkSignIn(clerk);
     });
-    if (clerk.session) await exchangeClerkSession(clerk);
-    else mountClerkSignIn(clerk);
+    if (clerk.session) {
+      await exchangeClerkSession(clerk);
+    } else {
+      if (isClerkSsoCallback && !clerkSignInMessage?.textContent) {
+        const missing = clerk.client?.signUp?.missingFields || [];
+        if (missing.includes('email_address')) {
+          setClerkSignInMessage('Your Google or Facebook account did not share a verified email address. Allow email access or create an account with email.', 'error');
+        }
+      }
+      setClerkSignInLoading(false);
+      mountClerkSignIn(clerk);
+    }
   });
 
   function computeLockoutSeconds(failedAttempts) {
@@ -1138,7 +1255,7 @@
       }
     }
     if (!email.value) setFieldError(email, 'Enter your email address.');
-    else if (!email.validity.valid) setFieldError(email, 'Enter a valid email address.');
+    else if (!email.validity.valid || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) setFieldError(email, 'Enter a valid email address.');
     if (!password.value) setFieldError(password, 'Enter your password.');
     else if (signup && Ipon.passwordIssue(password.value, [firstName.value, middleName.value, lastName.value, email.value])) setFieldError(password, Ipon.passwordIssue(password.value, [firstName.value, middleName.value, lastName.value, email.value]));
     if (signup && !passwordConfirmation.value) setFieldError(passwordConfirmation, 'Confirm your password.');
@@ -1146,7 +1263,10 @@
 
     const inputs = signup ? [...nameInputs, contactNumber, requestReason, email, password, passwordConfirmation] : [email, password];
     const firstInvalid = inputs.find((input) => !input.checkValidity());
-    if (firstInvalid) firstInvalid.focus();
+    if (firstInvalid) {
+      if (signup && firstInvalid === email) setSignupStep('choice', { focusEmail: true });
+      else firstInvalid.focus();
+    }
     return !firstInvalid;
   }
 
@@ -1166,6 +1286,22 @@
     }
   }
 
+  function setSignupStep(step, { focusFirst = false, focusEmail = false } = {}) {
+    signupStep = step === 'email' ? 'email' : 'choice';
+    const inEmailSignup = mode === 'signup' && signupStep === 'email';
+    document.body.classList.toggle('is-email-signup', inEmailSignup);
+    if (socialSignupBlock) socialSignupBlock.hidden = !(mode === 'signup' && !inEmailSignup);
+    if (emailSignupFields) emailSignupFields.hidden = !inEmailSignup;
+    if (emailChipText) emailChipText.textContent = email.value.trim() || 'you@example.com';
+    setSocialSignupMessage('');
+    if (inEmailSignup && focusFirst) {
+      requestAnimationFrame(() => firstName?.focus());
+    } else if (!inEmailSignup && focusEmail && mode === 'signup') {
+      requestAnimationFrame(() => email?.focus());
+    }
+    requestAnimationFrame(() => updateTabIndicator());
+  }
+
   function setMode(next) {
     mode = next;
     const signup = mode === 'signup';
@@ -1178,6 +1314,7 @@
     requestAnimationFrame(() => updateTabIndicator(signup ? signupTab : loginTab));
     form.setAttribute('aria-labelledby', 'auth-title');
     form.hidden = !signup;
+    setSignupStep('choice');
     if (clerkSignInShell) clerkSignInShell.hidden = signup;
     authTitle.hidden = !signup;
     authCopy.hidden = !signup;
@@ -1236,8 +1373,20 @@
   signupTab?.addEventListener('click', () => {
     setMode('signup');
   });
-  if (new URLSearchParams(location.search).get('mode') === 'signup') setMode('signup');
-  else updateTabIndicator(loginTab);
+  signupMethodBackBtn?.addEventListener('click', () => {
+    clearFieldErrors();
+    delete message.dataset.tone;
+    message.textContent = '';
+    setSignupStep('choice', { focusEmail: true });
+  });
+  if (isClerkSsoCallback) {
+    setMode('login');
+    setClerkSignInLoading(true);
+  } else if (new URLSearchParams(location.search).get('mode') === 'signup') {
+    setMode('signup');
+  } else {
+    updateTabIndicator(loginTab);
+  }
   window.addEventListener('resize', () => updateTabIndicator());
   if (document.fonts?.ready) {
     document.fonts.ready.then(() => updateTabIndicator());
@@ -1317,6 +1466,37 @@
     event.preventDefault();
     delete message.dataset.tone;
     message.textContent = '';
+    if (mode === 'signup' && signupStep === 'choice') {
+      clearFieldError(email);
+      const candidate = email.value.trim();
+      email.value = candidate;
+      if (!candidate) {
+        setFieldError(email, 'Enter your email address.');
+        email.focus();
+        return;
+      }
+      if (!email.validity.valid || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)) {
+        setFieldError(email, 'Enter a valid email address.');
+        email.focus();
+        return;
+      }
+      if (signupEmailOpenBtn) Ipon.setBusy(signupEmailOpenBtn, true, 'Checking…');
+      try {
+        await ensureInitReady();
+        const eligibility = await Ipon.rpc('check_admin_request_eligibility', { p_email: candidate.toLowerCase() });
+        if (eligibility && !eligibility.eligible) {
+          const fallbackMsg = eligibility.message || 'This email cannot register.';
+          setFieldError(email, eligibility.reason === 'rejected' ? 'This email was declined and cannot register again.' : fallbackMsg);
+          email.focus();
+          return;
+        }
+      } catch (_) { }
+      finally {
+        if (signupEmailOpenBtn) Ipon.setBusy(signupEmailOpenBtn, false);
+      }
+      setSignupStep('email', { focusFirst: true });
+      return;
+    }
     if (!validateForm()) return;
 
     Ipon.setBusy(submit, true, mode === 'signup' ? 'Creating account…' : 'Signing in...');
@@ -1331,9 +1511,8 @@
         const eligibility = await Ipon.rpc('check_admin_request_eligibility', { p_email: submittedEmail });
         if (eligibility && !eligibility.eligible) {
           const fallbackMsg = eligibility.message || 'This email cannot register.';
+          setSignupStep('choice', { focusEmail: true });
           setFieldError(email, eligibility.reason === 'rejected' ? 'This email was declined and cannot register again.' : fallbackMsg);
-          message.textContent = fallbackMsg;
-          email.focus();
           return;
         }
         pendingSignupPayload = {

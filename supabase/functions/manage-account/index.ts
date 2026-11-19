@@ -2287,19 +2287,116 @@ async function exchangeClerkSession(admin: ReturnType<typeof createClient>, requ
     return json({ error: 'Your Google or Facebook account must provide a verified email address.' }, 400);
   }
 
-  const { data: profile, error: profileError } = await admin
+  let { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('id,email,full_name,status,new_device_email_otp_enabled')
-    .eq('email', email)
+    .ilike('email', email)
     .maybeSingle();
   if (profileError) return json({ error: 'Your myIPON account could not be checked.' }, 500);
-  if (!profile) return json({ error: 'No myIPON account matches this email. Create an account first, then try again.' }, 403);
+
+  let createdNewAccount = false;
+  if (!profile && clerkUser.external_id) {
+    const { data: linkedProfile, error: linkedError } = await admin
+      .from('profiles')
+      .select('id,email,full_name,status,new_device_email_otp_enabled')
+      .eq('id', String(clerkUser.external_id))
+      .maybeSingle();
+    if (linkedError) return json({ error: 'Your myIPON account could not be checked.' }, 500);
+    if (linkedProfile) {
+      if (linkedProfile.status === 'DISABLED') return json({ error: 'Your account is deactivated or disabled.' }, 403);
+      if (String(linkedProfile.email || '').trim().toLowerCase() !== email) {
+        return json({ error: 'This Clerk account is linked to a different myIPON account.' }, 409);
+      }
+      profile = linkedProfile;
+    }
+  }
+
+  if (!profile) {
+    const existingAuthUser = await findAuthUserByEmail(admin, email);
+    let targetUserId = existingAuthUser?.id || '';
+    const rawFirst = normalizeNamePart(clerkUser.first_name);
+    const rawLast = normalizeNamePart(clerkUser.last_name);
+    let useFormalNames = Boolean(rawFirst && rawLast)
+      && `${rawFirst} ${rawLast}`.length <= 150
+      && validFormalNamePart(rawFirst, { required: true })
+      && validFormalNamePart(rawLast, { required: true });
+    const derived = fallbackNamesFromEmail(email);
+    const derivedFull = `${derived.first} ${derived.last}`.trim() || 'New User';
+    const fallbackFull = [rawFirst, rawLast].filter(Boolean).join(' ').slice(0, 150) || derivedFull;
+
+    if (!targetUserId) {
+      const randomBytes = crypto.getRandomValues(new Uint8Array(24));
+      const generatedPassword = `Aa1!${Array.from(randomBytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+      const initialMeta = useFormalNames
+        ? {
+            first_name: rawFirst,
+            last_name: rawLast,
+            full_name: `${rawFirst} ${rawLast}`,
+            account_kind: 'DIRECT_SIGNUP',
+            name_setup_required: false
+          }
+        : {
+            full_name: fallbackFull,
+            account_kind: 'DIRECT_SIGNUP',
+            name_setup_required: true
+          };
+      let { data: newUserData, error: createError } = await admin.auth.admin.createUser({
+        email,
+        password: generatedPassword,
+        email_confirm: true,
+        user_metadata: initialMeta
+      });
+      if (createError && !/already registered|already exists/i.test(createError.message || '')) {
+        useFormalNames = false;
+        ({ data: newUserData, error: createError } = await admin.auth.admin.createUser({
+          email,
+          password: generatedPassword,
+          email_confirm: true,
+          user_metadata: {
+            full_name: derivedFull,
+            account_kind: 'DIRECT_SIGNUP',
+            name_setup_required: true
+          }
+        }));
+      }
+      if (createError) {
+        if (/already registered|already exists/i.test(createError.message || '')) {
+          const matched = await findAuthUserByEmail(admin, email);
+          targetUserId = matched?.id || '';
+        }
+        if (!targetUserId) {
+          return json({ error: 'Your myIPON account could not be created right now. Please try again.' }, 500);
+        }
+      } else {
+        targetUserId = newUserData?.user?.id || '';
+        createdNewAccount = Boolean(targetUserId);
+      }
+    }
+
+    if (!targetUserId) return json({ error: 'Your myIPON account could not be initialized.' }, 500);
+    const fillProfile = useFormalNames
+      ? { first_name: rawFirst, last_name: rawLast, full_name: `${rawFirst} ${rawLast}`, email }
+      : { full_name: fallbackFull, email };
+    const { disabled } = await activateUserAndMembership(admin, targetUserId, fillProfile, { fromLogin: true });
+    if (disabled) return json({ error: 'Your account is deactivated or disabled.' }, 403);
+
+    const { data: reloadedProfile, error: reloadError } = await admin
+      .from('profiles')
+      .select('id,email,full_name,status,new_device_email_otp_enabled')
+      .eq('id', targetUserId)
+      .maybeSingle();
+    if (reloadError || !reloadedProfile) {
+      return json({ error: 'Your myIPON account could not be initialized.' }, 500);
+    }
+    profile = reloadedProfile;
+  }
+
   if (profile.status === 'DISABLED') return json({ error: 'Your account is deactivated or disabled.' }, 403);
-  if (clerkUser.external_id && clerkUser.external_id !== profile.id) {
+  if (!createdNewAccount && clerkUser.external_id && clerkUser.external_id !== profile.id) {
     return json({ error: 'This Clerk account is linked to a different myIPON account.' }, 409);
   }
 
-  if (!clerkUser.external_id) {
+  if (!clerkUser.external_id || (createdNewAccount && clerkUser.external_id !== profile.id)) {
     await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(clerkUserId)}`, {
       method: 'PATCH',
       headers,
@@ -2314,7 +2411,7 @@ async function exchangeClerkSession(admin: ReturnType<typeof createClient>, requ
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
   const tokenHash = String(linkData?.properties?.hashed_token || '').trim();
   if (linkError || !tokenHash) return json({ error: 'The myIPON session could not be created.' }, 500);
-  return json({ ok: true, token_hash: tokenHash, email });
+  return json({ ok: true, token_hash: tokenHash, email, created: createdNewAccount });
 }
 
 Deno.serve(async (request) => {
