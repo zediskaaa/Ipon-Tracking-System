@@ -36,9 +36,12 @@
     try {
       const { error: updateError } = await Ipon.client.auth.updateUser({ password: password.value });
       if (updateError) throw updateError;
-      await Ipon.rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }).catch(() => {});
+      if (!(typeof Ipon.fireKeepaliveRpc === 'function' && Ipon.fireKeepaliveRpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }, session?.access_token))) {
+        Ipon.rpc('record_account_activity', { p_event: 'PASSWORD_CHANGE' }).catch(() => {});
+      }
       sessionStorage.removeItem('iponPasswordRecovery');
-      await Ipon.client.auth.signOut({ scope: 'global' });
+      try { localStorage.setItem('myipon_clerk_signout', '1'); } catch { }
+      await Ipon.client.auth.signOut({ scope: 'global' }).catch(() => {});
       Ipon.broadcastAuthEvent('SIGNED_OUT');
       window.location.replace('login.html?status=password-reset');
     } catch (submitError) { message.textContent = Ipon.friendlyError(submitError); }

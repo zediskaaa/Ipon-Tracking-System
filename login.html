@@ -39,25 +39,19 @@
     .login-card-close svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
     .login-card::before{position:absolute;top:0;bottom:0;left:20px;border-left:1px dashed rgba(20,45,43,.18);content:"";pointer-events:none}
     .login-card h2{margin:0 0 6px;color:#112622;font:800 32px/1.12 Arial,sans-serif;letter-spacing:-.02em}
-    .login-card>p{margin:0 0 22px;color:#5c6863;font:14.5px/1.45 Arial,sans-serif}
+    .login-card>p{margin:0 0 20px;color:#5c6863;font:14.5px/1.45 Arial,sans-serif}
     .clerk-signin-shell{width:100%;min-width:0;margin:0 0 14px}
-    #clerk-sign-in{width:100%;min-height:0}
+    .clerk-signin-shell[hidden]{display:none!important}
     .clerk-signin-message{min-height:18px;margin:8px 0 0;color:#a9382d;font:700 12.5px/1.4 Arial,sans-serif;text-align:center}
     .clerk-signin-message[data-tone="success"]{color:#1f6a43}
     .clerk-signin-message[data-tone="info"]{color:#5c6863}
-    .clerk-signin-message:empty{visibility:hidden}
+    .clerk-signin-message:empty{display:none}
     .clerk-signin-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:156px;padding:24px 12px 14px;text-align:center;--loop:2.6s;--ease:cubic-bezier(.45,0,.2,1);--s:.6}
     .clerk-signin-loading[hidden]{display:none!important}
     .clerk-signin-loading .savings-loader,.clerk-signin-loading .piggy-bank{width:114px;height:80px}
     .clerk-signin-loading .loader-coin{width:24px;height:24px;box-shadow:inset 0 0 0 1.5px rgba(255,240,160,.8),inset 0 -3px 4px rgba(190,110,10,.4),0 4px 10px rgba(20,45,43,.2)}
     .clerk-signin-loading .loader-coin::after{inset:4px}
-    #clerk-sign-in .cl-cardBox{overflow:visible!important;border:0!important;border-radius:0!important;box-shadow:none!important}
-    #clerk-sign-in .cl-card{margin:0!important;border:0!important;border-radius:0!important;overflow:visible!important}
-    #clerk-sign-in .cl-otpCodeField{padding:14px 0 4px!important;overflow:visible!important}
-    #clerk-sign-in .cl-otpCodeFieldInputContainer,#clerk-sign-in [data-input-otp-container],#clerk-sign-in .cl-otpCodeFieldInputs{width:100%!important;overflow:visible!important}
-    #clerk-sign-in .cl-otpCodeFieldInput{width:100%!important;height:auto!important;aspect-ratio:1 / 1!important;border-radius:8px!important;padding:0!important}
-    #clerk-sign-in .cl-buttonArrowIcon{display:none!important}
-    .social-signup-block{display:grid;gap:10px;margin:0}
+    .social-signup-block{display:grid;gap:10px;margin:0 0 12px}
     .social-signup-block[hidden]{display:none!important}
     .social-signup-buttons{display:grid;grid-template-columns:1fr;gap:10px}
     .social-signup-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:44px;padding:10px 14px;border:1px solid rgba(20,45,43,.24);border-radius:10px;background:#fffdf9;color:#112622;font:700 13.5px/1.2 Arial,sans-serif;white-space:nowrap;cursor:pointer;box-sizing:border-box;transition:border-color .18s ease,background-color .18s ease,box-shadow .18s ease,transform .15s ease}
@@ -70,9 +64,8 @@
     .social-signup-message:empty{display:none}
     .social-signup-divider{display:flex;align-items:center;gap:12px;margin:6px 0 2px;color:#5c6863;font:600 12.5px/1.2 Arial,sans-serif}
     .social-signup-divider::before,.social-signup-divider::after{content:"";flex:1;height:1px;background:rgba(20,45,43,.16)}
-    .social-signup-block .button{margin-top:6px}
-    .email-signup-fields[hidden]{display:none!important}
     .signup-step-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 16px}
+    .signup-step-head[hidden]{display:none!important}
     .signup-method-back{display:inline-flex;align-items:center;gap:6px;margin:0;padding:4px 2px;border:0;background:transparent;color:#205e45;font:700 13px/1.2 Arial,sans-serif;cursor:pointer;transition:color .18s ease,transform .15s ease}
     .signup-method-back:hover{color:#112622;transform:translateX(-2px)}
     .signup-method-back:focus-visible{outline:2px solid var(--green);outline-offset:3px;border-radius:6px}
@@ -90,10 +83,13 @@
     .auth-tabs button:hover{color:#112622}
     .auth-tabs button.is-active{border-bottom-color:transparent;background:transparent;color:#112622;font-weight:800}
     .auth-tab-indicator{position:absolute;bottom:-1.5px;left:0;height:3px;width:56px;border-radius:3px 3px 0 0;background:#112622;pointer-events:none;transition:transform .32s cubic-bezier(.22,1,.36,1),width .24s cubic-bezier(.22,1,.36,1);z-index:3;will-change:transform,width}
-    .login-card .form-grid{display:grid;grid-template-columns:1fr;gap:16px}
+    .login-card .form-grid{display:grid;grid-template-columns:1fr;gap:14px}
     .login-card .field{display:grid;gap:6px;min-width:0;align-content:start}
     .login-card .field:not([hidden]){display:grid}
     .login-card .field[hidden]{display:none!important}
+    .field-label-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+    .forgot-link{padding:0;border:0;background:transparent;color:#205e45;cursor:pointer;font:700 12.5px/1.25 Arial,sans-serif;text-decoration:underline;text-underline-offset:3px}
+    .forgot-link[hidden]{display:none!important}
     .login-card .field label{color:#44534d;font:700 13px/1.25 Arial,sans-serif;letter-spacing:-.01em}
     .login-card .field input:not([type="checkbox"]):not([type="radio"]),.login-card .field textarea{width:100%;min-height:44px;padding:10px 14px;border:1px solid rgba(20,45,43,.22);border-radius:8px;background:rgba(255,255,255,.58);color:#112622;font:15px/1.35 Arial,sans-serif;box-shadow:none;transition:border-color .18s ease,background-color .18s ease,box-shadow .18s ease}
     .login-card .field input:hover,.login-card .field textarea:hover{border-color:rgba(20,45,43,.38);background:rgba(255,255,255,.8)}
@@ -109,8 +105,9 @@
     .password-toggle:focus-visible{outline:2px solid var(--green);outline-offset:2px}
     .password-toggle svg{width:19px;height:19px;display:block;pointer-events:none}
     .login-card .button{grid-column:1/-1;width:100%;min-height:48px;margin-top:20px;border:0;border-radius:8px;background:#112622;color:#fff;font:700 15px/1 Arial,sans-serif;box-shadow:0 6px 16px rgba(10,28,23,.2);cursor:pointer;transition:background .2s ease,transform .15s ease,box-shadow .2s ease}
-    .login-card .button:hover{background:#183630;box-shadow:0 8px 20px rgba(10,28,23,.28);transform:translateY(-1px)}
-    .login-card .button:active{transform:translateY(0)}
+    .login-card .button:hover:not(:disabled){background:#183630;box-shadow:0 8px 20px rgba(10,28,23,.28);transform:translateY(-1px)}
+    .login-card .button:active:not(:disabled){transform:translateY(0)}
+    .login-card .button:disabled{opacity:.7;cursor:progress}
     #auth-submit.is-locked{opacity:.72;cursor:not-allowed;transform:none;box-shadow:none;font-variant-numeric:tabular-nums}
     .auth-message{grid-column:1/-1;min-height:18px;margin:10px 0 0!important;color:var(--red)!important;font:13px/1.4 Arial,sans-serif}
     .auth-message:empty{display:none}
@@ -141,6 +138,8 @@
 
     /* Two fields per row for email signup step */
     body.is-request-mode .login-card .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
+    body.is-request-mode:not(.is-email-signup) .login-card .form-grid{grid-template-columns:1fr;gap:14px}
+    body.is-request-mode:not(.is-email-signup) .login-card .button{margin-top:16px}
     body.is-request-mode #request-reason-field{grid-column:1/-1}
     body.is-request-mode .password-strength{grid-column:1/-1;display:block;margin-top:4px}
     body.is-request-mode :is(.development-notice,.login-legal){display:none}
@@ -231,7 +230,7 @@
     body.is-app.is-request-mode:not(.is-email-signup) .login-card{width:min(480px,100%)}
     html,body{background:#0b3428}
     html:has(#app-splash),html:has(#app-splash) body{background:#0b3428}
-    .app-splash{position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;background:#0b3428;opacity:1;visibility:visible;transition:opacity .42s cubic-bezier(.22,1,.36,1),visibility .42s ease}
+    .app-splash{position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;background:#0b3428;opacity:1;visibility:visible;transition:opacity .2s cubic-bezier(.22,1,.36,1),visibility .2s ease}
     .app-splash.is-hidden{opacity:0;visibility:hidden;pointer-events:none}
     .app-splash-logo{width:88px;height:88px;display:block;flex:0 0 auto;border-radius:20px;box-shadow:0 14px 40px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.08);transform-origin:center;animation:splashPulse 1.8s cubic-bezier(.45,0,.55,1) infinite;will-change:transform}
     @keyframes splashPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
@@ -241,7 +240,7 @@
     html[data-theme="dark"] .login-card::before,html[data-theme="dark"] body.is-app .login-card::before{border-left-color:rgba(218,236,227,.16)}
     html[data-theme="dark"] .login-card h2,html[data-theme="dark"] .login-card-brand,html[data-theme="dark"] .auth-tabs button:hover,html[data-theme="dark"] .auth-tabs button.is-active{color:#ffffff}
     html[data-theme="dark"] .login-card>p,html[data-theme="dark"] .auth-tabs button,html[data-theme="dark"] .login-legal,html[data-theme="dark"] .request-summary-list dt,html[data-theme="dark"] .request-summary-hint{color:#9eb3aa}
-    html[data-theme="dark"] .login-card-brand strong,html[data-theme="dark"] .login-card .auth-link,html[data-theme="dark"] .login-legal button{color:#7ee0ab}
+    html[data-theme="dark"] .login-card-brand strong,html[data-theme="dark"] .login-card .auth-link,html[data-theme="dark"] .forgot-link,html[data-theme="dark"] .login-legal button{color:#7ee0ab}
     html[data-theme="dark"] .auth-tabs{border-bottom-color:rgba(218,236,227,.16)}
     html[data-theme="dark"] .auth-tab-indicator{background:#46c382}
     html[data-theme="dark"] .clerk-signin-message{color:#ff9b94}
@@ -391,10 +390,9 @@
           <div class="auth-tabs" aria-label="Account access"><button class="is-active" id="show-login" type="button" aria-controls="auth-form">Sign in</button><button id="show-signup" type="button" aria-controls="auth-form">Create account</button><span class="auth-tab-indicator" id="auth-tab-indicator" aria-hidden="true"></span></div>
         </div>
         <a class="login-card-close" href="index.html" aria-label="Return to home page" title="Return to home page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></a>
-        <h2 id="auth-title" hidden>Welcome back</h2><p id="auth-copy" hidden>Sign in to view your savings records.</p>
+        <h2 id="auth-title">Welcome back</h2><p id="auth-copy">Sign in to myIPON to track and manage your group savings.</p>
         <div class="auth-join-banner" id="auth-join-banner" hidden role="region" aria-live="polite" aria-label="Group invitation"></div>
-        <div class="clerk-signin-shell" id="clerk-signin-shell" aria-label="Sign in with Clerk">
-          <div id="clerk-sign-in"></div>
+        <div class="clerk-signin-shell" id="clerk-signin-shell" aria-label="Completing social sign in" hidden>
           <div class="clerk-signin-loading" id="clerk-signin-loading" role="status" aria-live="polite" aria-label="Signing you in" hidden>
             <div class="savings-loader" aria-hidden="true">
               <span class="coin-gate"><span class="loader-coin"></span></span>
@@ -468,8 +466,8 @@
           </div>
           <p class="clerk-signin-message" id="clerk-signin-message" role="alert" aria-live="polite"></p>
         </div>
-        <form id="auth-form" aria-labelledby="auth-title" novalidate hidden>
-          <div class="social-signup-block" id="social-signup-block" hidden>
+        <form id="auth-form" aria-labelledby="auth-title" novalidate>
+          <div class="social-signup-block" id="social-signup-block">
             <div class="social-signup-buttons">
               <button class="social-signup-btn" id="signup-google-btn" type="button" data-clerk-oauth="oauth_google">
                 <svg class="social-signup-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -489,60 +487,53 @@
             </div>
             <p class="social-signup-message" id="social-signup-message" role="alert" aria-live="polite"></p>
             <div class="social-signup-divider" role="separator"><span>or continue with email</span></div>
-            <div class="field" id="email-field"><label for="email">Email</label><input id="email" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="you@example.com" aria-describedby="email-error" required><small class="field-error" id="email-error" role="alert" hidden></small></div>
-            <button class="button button-primary" id="signup-email-open" type="submit">Continue</button>
           </div>
-          <div class="email-signup-fields" id="email-signup-fields" hidden>
-            <div class="signup-step-head">
-              <button class="signup-method-back" id="signup-method-back" type="button">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-                <span>Back</span>
-              </button>
-              <div class="email-chip" title="Your email">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="2" y="4" width="20" height="16" rx="2"/>
-                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-                </svg>
-                <span id="email-chip-text">you@example.com</span>
+          <div class="signup-step-head" id="signup-step-head" hidden>
+            <button class="signup-method-back" id="signup-method-back" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              <span>Back</span>
+            </button>
+            <div class="email-chip" title="Your email">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+              </svg>
+              <span id="email-chip-text">you@example.com</span>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field" id="first-name-field" hidden><label for="first-name">First name</label><input id="first-name" name="first_name" autocomplete="given-name" maxlength="80" placeholder="e.g., Juan" aria-describedby="first-name-error"><small class="field-error" id="first-name-error" role="alert" hidden></small></div>
+            <div class="field" id="middle-name-field" hidden><label for="middle-name">Middle name<span class="label-extra"> (optional)</span></label><input id="middle-name" name="middle_name" autocomplete="additional-name" maxlength="80" placeholder="e.g., Santos" aria-describedby="middle-name-error"><small class="field-error" id="middle-name-error" role="alert" hidden></small></div>
+            <div class="field" id="last-name-field" hidden><label for="last-name">Last name<span class="label-extra"> / surname</span></label><input id="last-name" name="last_name" autocomplete="family-name" maxlength="80" placeholder="e.g., Dela Cruz" aria-describedby="last-name-error"><small class="field-error" id="last-name-error" role="alert" hidden></small></div>
+            <div class="field" id="contact-number-field" hidden><label for="contact-number">Mobile number</label><input id="contact-number" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" placeholder="09XXXXXXXXX" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="contact-number-error"><small class="field-error" id="contact-number-error" role="alert" hidden></small></div>
+            <div class="field" id="email-field"><label for="email">Email</label><input id="email" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="you@example.com" aria-describedby="email-error" required><small class="field-error" id="email-error" role="alert" hidden></small></div>
+            <div class="field" id="request-reason-field" hidden><label for="request-reason">Account registration note</label><textarea id="request-reason" name="request_reason" minlength="10" maxlength="1000" aria-describedby="request-reason-error"></textarea><small class="field-error" id="request-reason-error" role="alert" hidden></small></div>
+            <div class="field" id="password-field">
+              <div class="field-label-row">
+                <label for="password">Password</label>
+                <button class="forgot-link" id="forgot-password-open" type="button">Forgot password?</button>
               </div>
+              <div class="password-control"><input id="password" name="password" type="password" autocomplete="current-password" aria-describedby="password-error" required><button class="password-toggle" id="password-toggle" type="button" aria-controls="password password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div>
+              <small class="field-error" id="password-error" role="alert" hidden></small>
             </div>
-            <div class="form-grid">
-              <div class="field" id="first-name-field" hidden><label for="first-name">First name</label><input id="first-name" name="first_name" autocomplete="given-name" maxlength="80" placeholder="e.g., Juan" aria-describedby="first-name-error"><small class="field-error" id="first-name-error" role="alert" hidden></small></div>
-              <div class="field" id="middle-name-field" hidden><label for="middle-name">Middle name<span class="label-extra"> (optional)</span></label><input id="middle-name" name="middle_name" autocomplete="additional-name" maxlength="80" placeholder="e.g., Santos" aria-describedby="middle-name-error"><small class="field-error" id="middle-name-error" role="alert" hidden></small></div>
-              <div class="field" id="last-name-field" hidden><label for="last-name">Last name<span class="label-extra"> / surname</span></label><input id="last-name" name="last_name" autocomplete="family-name" maxlength="80" placeholder="e.g., Dela Cruz" aria-describedby="last-name-error"><small class="field-error" id="last-name-error" role="alert" hidden></small></div>
-              <div class="field" id="contact-number-field" hidden><label for="contact-number">Mobile number</label><input id="contact-number" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" placeholder="09XXXXXXXXX" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="contact-number-error"><small class="field-error" id="contact-number-error" role="alert" hidden></small></div>
-              <div class="field" id="request-reason-field" hidden><label for="request-reason">Account registration note</label><textarea id="request-reason" name="request_reason" minlength="10" maxlength="1000" aria-describedby="request-reason-error"></textarea><small class="field-error" id="request-reason-error" role="alert" hidden></small></div>
-              <div class="field" id="password-field"><label for="password">Password</label><div class="password-control"><input id="password" name="password" type="password" autocomplete="current-password" aria-describedby="password-error" required><button class="password-toggle" id="password-toggle" type="button" aria-controls="password password-confirmation" aria-pressed="false" aria-label="Show passwords" title="Show passwords"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-error" id="password-error" role="alert" hidden></small></div>
-              <div class="field" id="password-confirmation-field" hidden><label for="password-confirmation">Confirm password</label><div class="password-control"><input id="password-confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" maxlength="128" aria-describedby="password-confirmation-error"></div><small class="field-error" id="password-confirmation-error" role="alert" hidden></small></div>
-            </div>
-            <button class="button button-primary" id="auth-submit" type="submit">Sign in</button>
-            <p class="auth-message" id="auth-message" role="alert"></p>
-            <div class="auth-security-notice" id="auth-security-notice" role="status" aria-live="polite" hidden>
-              <div class="auth-security-head">
-                <span class="auth-security-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-                </span>
-                <div class="auth-security-copy">
-                  <strong id="auth-security-title">Security notice</strong>
-                  <p id="auth-security-detail"></p>
-                </div>
-                <div class="auth-security-timer" id="auth-security-timer" hidden>03:00</div>
+            <div class="field" id="password-confirmation-field" hidden><label for="password-confirmation">Confirm password</label><div class="password-control"><input id="password-confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" maxlength="128" aria-describedby="password-confirmation-error"></div><small class="field-error" id="password-confirmation-error" role="alert" hidden></small></div>
+          </div>
+          <button class="button button-primary" id="auth-submit" type="submit">Sign in</button>
+          <p class="auth-message" id="auth-message" role="alert"></p>
+          <div class="auth-security-notice" id="auth-security-notice" role="status" aria-live="polite" hidden>
+            <div class="auth-security-head">
+              <span class="auth-security-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+              </span>
+              <div class="auth-security-copy">
+                <strong id="auth-security-title">Security notice</strong>
+                <p id="auth-security-detail"></p>
               </div>
-              <div class="auth-security-bar" id="auth-security-bar-wrap" hidden aria-hidden="true"><span id="auth-security-bar"></span></div>
+              <div class="auth-security-timer" id="auth-security-timer" hidden>03:00</div>
             </div>
+            <div class="auth-security-bar" id="auth-security-bar-wrap" hidden aria-hidden="true"><span id="auth-security-bar"></span></div>
           </div>
         </form>
-        <button class="auth-link" id="forgot-password-open" type="button" hidden>Forgot password?</button>
-        <div class="auth-join-entry" id="auth-join-entry">
-          <button class="auth-link" id="auth-have-code-open" type="button" aria-expanded="false">Have a 6-character group code?</button>
-          <div class="auth-join-code-box" id="auth-join-code-box" hidden>
-            <div class="auth-join-code-row">
-              <input id="auth-join-code-input" type="text" maxlength="240" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. K9M-4PQ" aria-label="6-character group invite code">
-              <button class="auth-join-apply-btn" id="auth-join-apply-btn" type="button">Check code</button>
-            </div>
-            <small class="field-error" id="auth-join-code-error" role="alert" hidden></small>
-          </div>
-        </div>
         <div class="development-notice" role="note"><strong>Development preview</strong><span>IPON is still under active development. Errors, incomplete features, and service changes may occur.</span></div>
         <footer class="login-legal"><button type="button" data-policy-open="terms">Terms of use</button><span aria-hidden="true">&middot;</span><button type="button" data-policy-open="privacy">Privacy policy</button></footer>
       </div>
@@ -651,6 +642,6 @@
     </div>
   </dialog>
   <dialog class="form-dialog request-success-dialog" id="request-success-dialog" aria-labelledby="request-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="request-success-title">Account created successfully</h2><p>Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-request-success-close aria-label="Close request confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p>Your account has been created and verified. You can now sign in to start tracking savings.</p><div class="request-success-email" id="request-success-email"></div><p>Use your registered email and password on the Sign in tab.</p><div class="request-success-actions"><button class="button button-primary" id="request-success-ok" type="button" data-request-success-close>Continue to sign in</button></div></div></div></dialog>
-  <dialog class="form-dialog invite-success-dialog" id="invite-success-dialog" aria-labelledby="invite-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="invite-success-title">Account activated successfully</h2><p id="invite-success-subtitle">Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-invite-success-close aria-label="Close activation confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p id="invite-success-message">Account activation successful! Log in to your account using the provided credentials.</p><div class="request-success-email" id="invite-success-email"></div><p id="invite-success-group-hint">Your savings group workspace has been linked and will open automatically after sign in.</p><div class="request-success-actions"><button class="button button-primary" id="invite-success-ok" type="button" data-invite-success-close>Continue to sign in</button></div></div></div></dialog><script src="js/core.js?v=20261119-146"></script><script src="js/policy.js?v=20261117-08"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script crossorigin="anonymous" src="https://solid-gannet-2021.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js"></script><script crossorigin="anonymous" data-clerk-publishable-key="pk_test_c29saWQtZ2FubmV0LTIwMjEuY2xlcmsuYWNjb3VudHMuZGV2JA==" src="https://solid-gannet-2021.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script><script src="js/auth.js?v=20261119-97"></script>
+  <dialog class="form-dialog invite-success-dialog" id="invite-success-dialog" aria-labelledby="invite-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="invite-success-title">Account activated successfully</h2><p id="invite-success-subtitle">Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-invite-success-close aria-label="Close activation confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p id="invite-success-message">Account activation successful! Log in to your account using the provided credentials.</p><div class="request-success-email" id="invite-success-email"></div><p id="invite-success-group-hint">Your savings group workspace has been linked and will open automatically after sign in.</p><div class="request-success-actions"><button class="button button-primary" id="invite-success-ok" type="button" data-invite-success-close>Continue to sign in</button></div></div></div></dialog><script src="js/core.js?v=20261119-148"></script><script src="js/policy.js?v=20261117-08"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script crossorigin="anonymous" data-clerk-publishable-key="pk_test_c29saWQtZ2FubmV0LTIwMjEuY2xlcmsuYWNjb3VudHMuZGV2JA==" src="https://solid-gannet-2021.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script><script src="js/auth.js?v=20261119-100"></script>
 </body>
 </html>

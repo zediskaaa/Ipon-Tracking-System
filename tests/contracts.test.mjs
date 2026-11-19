@@ -3635,7 +3635,7 @@ test('closed-app Web Push (VAPID), Edge dispatch, and Android instant background
   assert.match(coreJs, /function syncWebPushSubscription/);
   assert.match(coreJs, /function removeWebPushSubscription/);
   assert.match(coreJs, /function sendBackgroundTestNotification/);
-  assert.match(coreJs, /data-device-test-btn/);
+  assert.doesNotMatch(coreJs, /addExtra\('Test alert'|testBtn\.textContent = 'Test alert'/);
   assert.match(css, /\.preference-device-actions/);
 
   assert.match(manifest, /RECEIVE_BOOT_COMPLETED/);
@@ -11336,7 +11336,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261119-146/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261119-148/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11505,8 +11505,7 @@ test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR I
 
   // 2. HTML & JS wiring across Login, Dashboard, Settings, Member Portal
   assert.match(loginHtml, /id="auth-join-banner"/);
-  assert.match(loginHtml, /id="auth-have-code-open"/);
-  assert.match(loginHtml, /id="auth-join-code-input"/);
+  assert.doesNotMatch(loginHtml, /id="auth-have-code-open"|id="auth-join-entry"|Have a 6-character group code\?/);
   assert.match(authJs, /preview_group_invite_code/);
   assert.match(authJs, /function renderAuthJoinBanner/);
 
@@ -11825,36 +11824,22 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
 
   assert.match(configJs, /clerkPublishableKey:\s*'pk_test_/);
   assert.match(loginHtml, /data-clerk-publishable-key="pk_test_/);
-  assert.match(loginHtml, /https:\/\/solid-gannet-2021\.clerk\.accounts\.dev\/npm\/@clerk\/ui@1\/dist\/ui\.browser\.js/);
   assert.match(loginHtml, /https:\/\/solid-gannet-2021\.clerk\.accounts\.dev\/npm\/@clerk\/clerk-js@6\/dist\/clerk\.browser\.js/);
-  assert.match(loginHtml, /id="clerk-sign-in"/);
-  assert.match(loginHtml, /#clerk-sign-in\{width:100%;min-height:0\}/);
   assert.doesNotMatch(loginHtml, /Use existing myIPON password|legacy-signin-toggle/);
+  assert.doesNotMatch(loginHtml, /id="auth-join-apply-btn"|Check code/);
   assert.match(loginHtml, /@media\(max-width:780px\)[\s\S]*?\.login-page\{display:flex/);
   assert.match(authJs, /signInForceRedirectUrl:\s*returnUrl/);
   assert.match(authJs, /signInFallbackRedirectUrl:\s*returnUrl/);
   assert.match(authJs, /routerPush:\s*handleClerkRouterNav/);
   assert.match(authJs, /routerReplace:\s*handleClerkRouterNav/);
-  assert.match(authJs, /forceRedirectUrl:\s*returnUrl/);
-  assert.match(authJs, /fallbackRedirectUrl:\s*returnUrl/);
   assert.match(authJs, /setClerkSignInLoading\(true\)/);
   const clerkExchangeBody = authJs.match(/async function exchangeClerkSession\(clerk\)[\s\S]*?^  \}/m);
   assert.ok(clerkExchangeBody, 'Expected exchangeClerkSession function');
   assert.doesNotMatch(clerkExchangeBody[0], /Ipon\.setLoading\(true/);
   assert.match(loginHtml, /id="clerk-signin-loading"/);
   assert.doesNotMatch(authJs, /Finishing your secure sign in/);
-  assert.match(authJs, /clerk\.mountSignIn\(clerkSignInNode/);
   assert.match(loginHtml, /\.clerk-signin-message\[data-tone="success"\]/);
-  assert.match(authJs, /socialButtonsPlacement:\s*'top'/);
-  assert.match(authJs, /socialButtonsBlockButton:[\s\S]*?border:[\s\S]*?borderRadius:\s*'10px'/);
-  assert.match(authJs, /cardBox:[\s\S]*?overflow:\s*'visible'/);
-  assert.match(authJs, /otpCodeField:[\s\S]*?paddingTop:\s*'14px'/);
-  assert.match(authJs, /otpCodeFieldInputs:[\s\S]*?repeat\(6,\s*minmax\(0,\s*46px\)\)/);
-  assert.match(authJs, /otpCodeFieldInput:[\s\S]*?aspectRatio:\s*'1 \/ 1'[\s\S]*?borderRadius:\s*'8px'[\s\S]*?fontVariantNumeric:\s*'tabular-nums'/);
-  assert.match(authJs, /buttonArrowIcon:\s*\{\s*display:\s*'none'\s*\}/);
-  assert.match(loginHtml, /#clerk-sign-in \.cl-cardBox\{overflow:visible!important/);
-  assert.match(loginHtml, /#clerk-sign-in \.cl-otpCodeFieldInput\{width:100%!important;height:auto!important;aspect-ratio:1 \/ 1!important;border-radius:8px!important/);
-  assert.match(loginHtml, /#clerk-sign-in \.cl-buttonArrowIcon\{display:none!important\}/);
+  assert.match(loginHtml, /class="field-label-row"[\s\S]*?id="forgot-password-open"/);
   assert.match(authJs, /action:\s*'clerk-session-exchange'/);
   assert.match(authJs, /auth\.verifyOtp\(\{ token_hash:\s*exchange\.token_hash, type:\s*'email' \}\)/);
   assert.match(authJs, /async function syncClerkSession\(/);
@@ -11874,19 +11859,25 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(loginHtml, /id="social-signup-block"/);
   assert.match(loginHtml, /id="signup-google-btn"[^>]*data-clerk-oauth="oauth_google"/);
   assert.match(loginHtml, /id="signup-facebook-btn"[^>]*data-clerk-oauth="oauth_facebook"/);
-  assert.match(loginHtml, /id="signup-email-open"/);
-  assert.match(loginHtml, /id="email-signup-fields"/);
+  assert.match(loginHtml, /id="signup-step-head"/);
   assert.match(loginHtml, /id="signup-method-back"/);
   assert.match(loginHtml, /id="email-chip-text"/);
   assert.match(loginHtml, /https:\/\/\*\.protect\.clerk\.com/);
   assert.match(loginHtml, /https:\/\/challenges\.cloudflare\.com/);
   assert.match(loginHtml, /frame-src 'self' https:\/\/\*\.protect\.clerk\.com https:\/\/challenges\.cloudflare\.com/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261119-97/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261119-100/);
+  assert.match(coreJs, /function fireKeepaliveRpc\(/);
+  const signOutBody = coreJs.match(/async function signOut\(\)[\s\S]*?^  \}/m);
+  assert.ok(signOutBody, 'Expected signOut function in js/core.js');
+  assert.match(signOutBody[0], /fireKeepaliveRpc\('delete_push_subscription'/);
+  assert.match(signOutBody[0], /fireKeepaliveRpc\('revoke_notification_feed_token'/);
+  assert.doesNotMatch(signOutBody[0], /await\s+withTimeout\(/);
+  assert.match(signOutBody[0], /window\.location\.replace\('login\.html'\)/);
   assert.match(authJs, /function setSignupStep\(/);
   assert.match(vercel, /https:\/\/\*\.protect\.clerk\.com/);
   assert.match(vercel, /https:\/\/challenges\.cloudflare\.com/);
   assert.match(vercel, /frame-src 'self' https:\/\/\*\.protect\.clerk\.com https:\/\/challenges\.cloudflare\.com/);
-  assert.match(authJs, /clerk\.client\.signUp\.authenticateWithRedirect\(/);
+  assert.match(authJs, /resource\.authenticateWithRedirect\(/);
   assert.match(authJs, /clerk\.handleRedirectCallback\(/);
   assert.match(authJs, /clerk_sso_callback/);
   const clerkServerExchange = accountFunction.match(/async function exchangeClerkSession\([\s\S]*?^}/m);

@@ -236,7 +236,7 @@ test('Migration 102 adds per-member workspace permissions and calendar change-re
   assert.equal(ipon.defaultPermissionsForRole('MEMBER').can_record_expenses, false);
   assert.equal(ipon.defaultPermissionsForRole('TREASURER').can_record_expenses, true);
   assert.equal(ipon.extractInviteCode('https://my-ipon.vercel.app/login.html'), '');
-  assert.match(authJs, /bindInviteCodeInput/);
+  assert.match(authJs, /preview_group_invite_code/);
 
   // Submit calendar entry edit dialog and verify exact p_amount & RPC payload
   const editPromise = ipon.openCalendarEntryEditDialog({

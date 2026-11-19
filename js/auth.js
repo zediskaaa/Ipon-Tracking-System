@@ -6,16 +6,16 @@
   const authTitle = document.getElementById('auth-title');
   const authCopy = document.getElementById('auth-copy');
   const clerkSignInShell = document.getElementById('clerk-signin-shell');
-  const clerkSignInNode = document.getElementById('clerk-sign-in');
   const clerkSignInLoading = document.getElementById('clerk-signin-loading');
   const clerkSignInMessage = document.getElementById('clerk-signin-message');
   const socialSignupBlock = document.getElementById('social-signup-block');
   const socialSignupMessage = document.getElementById('social-signup-message');
   const socialSignupButtons = Array.from(document.querySelectorAll('[data-clerk-oauth]'));
-  const signupEmailOpenBtn = document.getElementById('signup-email-open');
+  const signupStepHead = document.getElementById('signup-step-head');
   const signupMethodBackBtn = document.getElementById('signup-method-back');
-  const emailSignupFields = document.getElementById('email-signup-fields');
   const emailChipText = document.getElementById('email-chip-text');
+  const emailField = document.getElementById('email-field');
+  const passwordField = document.getElementById('password-field');
   const isClerkSsoCallback = new URLSearchParams(window.location.search).get('clerk_sso_callback') === '1';
   const securityNotice = document.getElementById('auth-security-notice');
   const securityTitle = document.getElementById('auth-security-title');
@@ -99,7 +99,6 @@
   let mode = 'login';
   let signupStep = 'choice';
   let clerkLoadPromise = null;
-  let clerkSignInMounted = false;
   let clerkExchangeSessionId = '';
   let clerkExchangeInFlight = false;
   let pendingDeviceOtp = null;
@@ -110,16 +109,25 @@
 
   function setClerkSignInLoading(visible) {
     const active = Boolean(visible);
+    if (clerkSignInShell) clerkSignInShell.hidden = !active;
     if (clerkSignInLoading) clerkSignInLoading.hidden = !active;
-    if (clerkSignInNode) clerkSignInNode.hidden = active;
+    if (form) form.hidden = active;
   }
 
   function setClerkSignInMessage(text = '', tone = 'error') {
-    if (!clerkSignInMessage) return;
     const clean = String(text || '').trim();
-    clerkSignInMessage.textContent = clean;
-    if (clean && tone) clerkSignInMessage.dataset.tone = tone;
-    else delete clerkSignInMessage.dataset.tone;
+    if (clerkSignInMessage) {
+      clerkSignInMessage.textContent = clean;
+      if (clean && tone) clerkSignInMessage.dataset.tone = tone;
+      else delete clerkSignInMessage.dataset.tone;
+    }
+    if (socialSignupMessage) {
+      socialSignupMessage.textContent = tone === 'error' ? clean : '';
+    }
+    if (clean && tone === 'success' && message) {
+      message.dataset.tone = 'success';
+      message.textContent = clean;
+    }
   }
 
   function getClerkLoginReturnUrl() {
@@ -183,13 +191,16 @@
     setSocialSignupBusy(triggerButton, true);
     try {
       const clerk = await loadClerk();
-      if (!clerk?.client?.signUp) {
-        throw new Error('Google and Facebook sign-up is temporarily unavailable. Reload the page or sign up with email below.');
+      const resource = mode === 'login'
+        ? (clerk?.client?.signIn || clerk?.client?.signUp)
+        : (clerk?.client?.signUp || clerk?.client?.signIn);
+      if (!resource?.authenticateWithRedirect) {
+        throw new Error('Google and Facebook sign-in is temporarily unavailable. Reload the page or continue with email below.');
       }
       if (clerk.session) {
         await clerk.signOut().catch(() => null);
       }
-      await clerk.client.signUp.authenticateWithRedirect({
+      await resource.authenticateWithRedirect({
         strategy,
         redirectUrl: getClerkSsoCallbackUrl(),
         redirectUrlComplete: getClerkLoginReturnUrl()
@@ -226,95 +237,23 @@
     else window.location.assign(to);
   }
 
-  function unmountClerkSignIn(clerk) {
-    if (clerk && clerkSignInNode && clerkSignInMounted && typeof clerk.unmountSignIn === 'function') {
-      try { clerk.unmountSignIn(clerkSignInNode); } catch { }
-    }
-    clerkSignInMounted = false;
-  }
-
   function loadClerk() {
     if (!window.Clerk) return Promise.resolve(null);
     const returnUrl = getClerkLoginReturnUrl();
-    clerkLoadPromise ||= window.Clerk.load({
-      ui: { ClerkUI: window.__internal_ClerkUICtor },
+    const loadOpts = {
       signInForceRedirectUrl: returnUrl,
       signInFallbackRedirectUrl: returnUrl,
       signUpForceRedirectUrl: returnUrl,
       signUpFallbackRedirectUrl: returnUrl,
       routerPush: handleClerkRouterNav,
       routerReplace: handleClerkRouterNav
-    }).then(() => window.Clerk).catch((error) => {
+    };
+    if (window.__internal_ClerkUICtor) loadOpts.ui = { ClerkUI: window.__internal_ClerkUICtor };
+    clerkLoadPromise ||= window.Clerk.load(loadOpts).then(() => window.Clerk).catch((error) => {
       console.error('Clerk initialization failed:', error);
       return null;
     });
     return clerkLoadPromise;
-  }
-
-  function mountClerkSignIn(clerk) {
-    if (!clerk || !clerkSignInNode || clerkSignInMounted || clerk.session) return;
-    setClerkSignInLoading(false);
-    const dark = document.documentElement.dataset.theme === 'dark';
-    const returnUrl = getClerkLoginReturnUrl();
-    clerk.mountSignIn(clerkSignInNode, {
-      routing: 'virtual',
-      signUpUrl: 'login.html?mode=signup',
-      forceRedirectUrl: returnUrl,
-      fallbackRedirectUrl: returnUrl,
-      appearance: {
-        variables: {
-          colorPrimary: '#1f6a43',
-          colorBackground: 'transparent',
-          colorText: dark ? '#ffffff' : '#112622',
-          colorTextSecondary: dark ? '#9eb3aa' : '#5c6863',
-          colorInputBackground: dark ? '#0d1f1a' : '#fffdf9',
-          colorInputText: dark ? '#ffffff' : '#112622',
-          borderRadius: '10px',
-          fontFamily: 'Arial, sans-serif'
-        },
-        layout: { socialButtonsVariant: 'blockButton', socialButtonsPlacement: 'top' },
-        elements: {
-          rootBox: { width: '100%' },
-          cardBox: { width: '100%', border: '0', borderRadius: '0', boxShadow: 'none', overflow: 'visible' },
-          card: { width: '100%', padding: '4px 0 0', margin: '0', border: '0', borderRadius: '0', background: 'transparent', boxShadow: 'none' },
-          socialButtons: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '10px', width: '100%' },
-          socialButtonsBlockButton: {
-            width: '100%', minHeight: '44px', boxSizing: 'border-box', margin: '0',
-            border: dark ? '1px solid rgba(168,235,197,.42)' : '1px solid rgba(20,45,43,.24)',
-            borderRadius: '10px', background: dark ? '#0d211b' : '#fffdf9'
-          },
-          formFieldInput: {
-            minHeight: '44px', boxSizing: 'border-box', color: dark ? '#ffffff' : '#112622',
-            border: dark ? '1px solid rgba(168,235,197,.42)' : '1px solid rgba(20,45,43,.24)',
-            background: dark ? '#0d211b' : '#fffdf9'
-          },
-          otpCodeField: {
-            width: '100%', paddingTop: '14px', paddingBottom: '4px', alignItems: 'center', overflow: 'visible'
-          },
-          otpCodeFieldInputContainer: {
-            width: '100%', padding: '4px 0', overflow: 'visible'
-          },
-          otpCodeFieldInputs: {
-            display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 46px))',
-            justifyContent: 'center', alignItems: 'center', gap: '8px', width: '100%', overflow: 'visible'
-          },
-          otpCodeFieldInput: {
-            width: '100%', minWidth: '0', height: 'auto', aspectRatio: '1 / 1', boxSizing: 'border-box',
-            margin: '0', padding: '0', borderRadius: '8px', fontSize: '20px', fontWeight: '700', lineHeight: '1',
-            color: dark ? '#ffffff' : '#112622',
-            border: dark ? '1.5px solid rgba(168,235,197,.48)' : '1.5px solid rgba(20,45,43,.3)',
-            background: dark ? '#0d211b' : '#fffdf9', fontVariantNumeric: 'tabular-nums'
-          },
-          formButtonPrimary: { minHeight: '44px', color: '#ffffff', fontWeight: '700', boxShadow: 'none' },
-          buttonArrowIcon: { display: 'none' },
-          formResendCodeLink: { color: dark ? '#7ee0ab' : '#1f6a43', fontWeight: '700' },
-          formButtonReset: { minHeight: '40px', color: dark ? '#7ee0ab' : '#1f6a43', fontWeight: '700' },
-          header: { display: 'none' },
-          footer: { display: 'none' }
-        }
-      }
-    });
-    clerkSignInMounted = true;
   }
 
   async function exchangeClerkSession(clerk) {
@@ -351,16 +290,14 @@
         return;
       }
       const profile = await resolveActiveProfile(data.user, exchange.email);
-      await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
+      recordLoginActivity(data);
       completeLoginSession(data, profile);
     } catch (error) {
       clerkExchangeInFlight = false;
       clerkExchangeSessionId = '';
       setClerkSignInLoading(false);
       setClerkSignInMessage(Ipon.friendlyError(error), 'error');
-      unmountClerkSignIn(clerk);
       await clerk.signOut().catch(() => null);
-      mountClerkSignIn(clerk);
     }
   }
 
@@ -384,10 +321,15 @@
       shouldSignOut = localStorage.getItem('myipon_clerk_signout') === '1';
       if (shouldSignOut) localStorage.removeItem('myipon_clerk_signout');
     } catch { }
-    if (shouldSignOut && !isClerkSsoCallback && clerk?.session) await clerk.signOut().catch(() => null);
+    const blockedStatus = ['disabled', 'pending', 'password-reset'].includes(new URLSearchParams(window.location.search).get('status') || '');
+    if ((shouldSignOut || blockedStatus) && !isClerkSsoCallback && clerk?.session) {
+      await clerk.signOut().catch(() => null);
+    }
     if (!clerk) {
-      setClerkSignInLoading(false);
-      setClerkSignInMessage('Sign-in is temporarily unavailable. Reload the page to try again.', 'error');
+      if (isClerkSsoCallback) {
+        setClerkSignInLoading(false);
+        setClerkSignInMessage('Social sign-in is temporarily unavailable. Please try again or sign in with email.', 'error');
+      }
       return;
     }
     if (isClerkSsoCallback) {
@@ -413,20 +355,18 @@
       }
     }
     clerk.addListener(() => {
-      if (clerk.session) exchangeClerkSession(clerk);
-      else mountClerkSignIn(clerk);
+      if (clerk.session && !clerkExchangeInFlight && mode === 'login') exchangeClerkSession(clerk);
     });
-    if (clerk.session) {
+    if (clerk.session && (isClerkSsoCallback || (!shouldSignOut && !blockedStatus))) {
       await exchangeClerkSession(clerk);
     } else {
-      if (isClerkSsoCallback && !clerkSignInMessage?.textContent) {
+      if (isClerkSsoCallback && !socialSignupMessage?.textContent) {
         const missing = clerk.client?.signUp?.missingFields || [];
         if (missing.includes('email_address')) {
           setClerkSignInMessage('Your Google or Facebook account did not share a verified email address. Allow email access or create an account with email.', 'error');
         }
       }
       setClerkSignInLoading(false);
-      mountClerkSignIn(clerk);
     }
   });
 
@@ -610,7 +550,7 @@
       submit.classList.remove('is-locked');
       if (!submit.classList.contains('is-busy')) {
         submit.disabled = false;
-        submit.textContent = 'Create account';
+        submit.textContent = signupStep === 'email' ? 'Create account' : 'Continue';
       }
       return false;
     }
@@ -752,15 +692,23 @@
   const statusParam = queryParams.get('status');
   const isAppLaunch = document.body.classList.contains('is-app') || queryParams.has('app');
   const splashStartedAt = Date.now();
-  const splashMinUntil = splashStartedAt + (isAppLaunch ? 950 : 450);
+  const splashMinUntil = splashStartedAt + (isAppLaunch ? 300 : 0);
 
   const dismissSplash = () => {
     const splash = document.getElementById('app-splash');
     if (!splash) return;
     splash.classList.add('is-hidden');
-    setTimeout(() => { try { splash.remove(); } catch (_) { } }, 450);
+    setTimeout(() => { try { splash.remove(); } catch (_) { } }, 240);
   };
   const splashSafetyTimer = setTimeout(dismissSplash, 5000);
+
+  function recordLoginActivity(sessionData) {
+    const token = sessionData?.session?.access_token || '';
+    if (typeof Ipon.fireKeepaliveRpc === 'function' && Ipon.fireKeepaliveRpc('record_account_activity', { p_event: 'LOGIN' }, token)) {
+      return;
+    }
+    Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
+  }
 
   // Start init immediately without delaying synchronous form/tab listener attachment
   const initPromise = Ipon.init({ requireAuth: false, allowPending: true }).catch((error) => ({ failed: true, configured: false, error }));
@@ -858,7 +806,7 @@
       return;
     }
     const profile = await resolveActiveProfile(data.user, accountEmail);
-    await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
+    recordLoginActivity(data);
     deviceOtpDialog.close();
     pendingDeviceOtp = null;
     completeLoginSession(data, profile);
@@ -916,9 +864,7 @@
       clerkExchangeInFlight = false;
       clerkExchangeSessionId = '';
       setClerkSignInLoading(false);
-      unmountClerkSignIn(clerk);
       await clerk.signOut().catch(() => null);
-      mountClerkSignIn(clerk);
     }
   };
   deviceOtpCancel.addEventListener('click', cancelDeviceOtp);
@@ -950,12 +896,6 @@
   let activeJoinPreview = null;
 
   const authJoinBanner = document.getElementById('auth-join-banner');
-  const authJoinEntry = document.getElementById('auth-join-entry');
-  const haveCodeOpenBtn = document.getElementById('auth-have-code-open');
-  const joinCodeBox = document.getElementById('auth-join-code-box');
-  const joinCodeInput = document.getElementById('auth-join-code-input');
-  const joinApplyBtn = document.getElementById('auth-join-apply-btn');
-  const joinCodeError = document.getElementById('auth-join-code-error');
 
   function syncJoinCopy() {
     const authCopyEl = document.getElementById('auth-copy');
@@ -963,7 +903,7 @@
     const signup = mode === 'signup';
     authCopyEl.textContent = activeJoinPreview?.valid
       ? (signup ? `Create an account to join "${activeJoinPreview.group_name}".` : `Sign in to join "${activeJoinPreview.group_name}".`)
-      : (signup ? 'Sign up with myIPON to track and manage your group savings.' : 'Sign in to view your savings records.');
+      : (signup ? 'Sign up with myIPON to track and manage your group savings.' : 'Sign in to myIPON to track and manage your group savings.');
   }
 
   function renderAuthJoinBanner(preview, code) {
@@ -972,7 +912,6 @@
       activeJoinPreview = null;
       authJoinBanner.hidden = true;
       authJoinBanner.innerHTML = '';
-      if (authJoinEntry) authJoinEntry.hidden = false;
       syncJoinCopy();
       return;
     }
@@ -988,7 +927,6 @@
         </div>
         <button class="auth-join-clear-btn" type="button" data-auth-join-clear>Dismiss</button>`;
       authJoinBanner.querySelector('[data-auth-join-clear]')?.addEventListener('click', () => renderAuthJoinBanner(null, ''));
-      if (authJoinEntry) authJoinEntry.hidden = false;
       syncJoinCopy();
       return;
     }
@@ -1014,74 +952,20 @@
       </div>`;
     Ipon.bindAvatarFallbacks?.(authJoinBanner);
     authJoinBanner.querySelector('[data-auth-join-clear]')?.addEventListener('click', () => renderAuthJoinBanner(null, ''));
-    if (joinCodeBox) joinCodeBox.hidden = true;
-    haveCodeOpenBtn?.setAttribute('aria-expanded', 'false');
-    if (authJoinEntry) authJoinEntry.hidden = true;
     syncJoinCopy();
   }
 
-  async function loadLoginJoinPreview(rawCode, { fromManualInput = false } = {}) {
+  async function loadLoginJoinPreview(rawCode) {
     const code = extractJoinCode(rawCode);
-    if (code.length !== 6) {
-      if (fromManualInput && joinCodeError) {
-        joinCodeError.textContent = 'Enter a valid 6-character group code.';
-        joinCodeError.hidden = false;
-        joinCodeInput?.setAttribute('aria-invalid', 'true');
-        joinCodeInput?.focus();
-      }
-      return;
-    }
-    if (joinCodeError) {
-      joinCodeError.textContent = '';
-      joinCodeError.hidden = true;
-    }
-    joinCodeInput?.removeAttribute('aria-invalid');
-    if (joinApplyBtn) Ipon.setBusy(joinApplyBtn, true, 'Checking…');
+    if (code.length !== 6) return;
     try {
       await ensureInitReady();
       const preview = await Ipon.rpc('preview_group_invite_code', { p_code: code });
       renderAuthJoinBanner(preview, code);
-      if (fromManualInput && preview?.valid && joinCodeInput) {
-        joinCodeInput.value = '';
-        joinCodeCtrl?.sync();
-      }
     } catch (err) {
-      if (fromManualInput && joinCodeError) {
-        joinCodeError.textContent = Ipon.friendlyError(err);
-        joinCodeError.hidden = false;
-      } else {
-        renderAuthJoinBanner({ valid: false, message: Ipon.friendlyError(err) }, code);
-      }
-    } finally {
-      if (joinApplyBtn) Ipon.setBusy(joinApplyBtn, false);
+      renderAuthJoinBanner({ valid: false, message: Ipon.friendlyError(err) }, code);
     }
   }
-
-  haveCodeOpenBtn?.addEventListener('click', () => {
-    if (!joinCodeBox) return;
-    const willShow = joinCodeBox.hidden;
-    joinCodeBox.hidden = !willShow;
-    haveCodeOpenBtn.setAttribute('aria-expanded', String(willShow));
-    if (willShow) joinCodeInput?.focus();
-  });
-  const joinCodeCtrl = Ipon.bindInviteCodeInput?.(joinCodeInput);
-  joinCodeInput?.addEventListener('input', () => {
-    if (joinCodeError) {
-      joinCodeError.textContent = '';
-      joinCodeError.hidden = true;
-    }
-    joinCodeInput.removeAttribute('aria-invalid');
-    if (!joinCodeCtrl && joinCodeInput.value.length <= 7) {
-      joinCodeInput.value = fmtJoinCode(joinCodeInput.value);
-    }
-  });
-  joinCodeInput?.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      loadLoginJoinPreview(joinCodeInput.value, { fromManualInput: true });
-    }
-  });
-  joinApplyBtn?.addEventListener('click', () => loadLoginJoinPreview(joinCodeInput?.value || '', { fromManualInput: true }));
 
   void (async () => {
     const state = await initPromise;
@@ -1109,7 +993,9 @@
       return;
     }
     clearTimeout(splashSafetyTimer);
-    setTimeout(dismissSplash, Math.max(350, splashMinUntil - Date.now()));
+    const splashWaitMs = isAppLaunch ? Math.max(0, splashMinUntil - Date.now()) : 0;
+    if (splashWaitMs > 0) setTimeout(dismissSplash, splashWaitMs);
+    else dismissSplash();
     if (!state.configured) {
       message.textContent = 'Add your Supabase URL and anon key in js/config.js before signing in.';
       submit.disabled = true;
@@ -1288,15 +1174,32 @@
 
   function setSignupStep(step, { focusFirst = false, focusEmail = false } = {}) {
     signupStep = step === 'email' ? 'email' : 'choice';
-    const inEmailSignup = mode === 'signup' && signupStep === 'email';
+    const signup = mode === 'signup';
+    const inEmailSignup = signup && signupStep === 'email';
     document.body.classList.toggle('is-email-signup', inEmailSignup);
-    if (socialSignupBlock) socialSignupBlock.hidden = !(mode === 'signup' && !inEmailSignup);
-    if (emailSignupFields) emailSignupFields.hidden = !inEmailSignup;
+    if (socialSignupBlock) socialSignupBlock.hidden = inEmailSignup;
+    if (signupStepHead) signupStepHead.hidden = !inEmailSignup;
+    if (emailField) emailField.hidden = inEmailSignup;
+    if (passwordField) passwordField.hidden = signup && !inEmailSignup;
+    password.required = !signup || inEmailSignup;
+    firstNameField.hidden = !inEmailSignup;
+    middleNameField.hidden = !inEmailSignup;
+    lastNameField.hidden = !inEmailSignup;
+    contactField.hidden = !inEmailSignup;
+    reasonField.hidden = true;
+    firstName.required = inEmailSignup;
+    lastName.required = inEmailSignup;
+    contactNumber.required = inEmailSignup;
+    passwordConfirmationField.hidden = !inEmailSignup;
+    passwordConfirmation.required = inEmailSignup;
+    passwordStrength.element.hidden = !inEmailSignup;
+    if (forgotButton) forgotButton.hidden = signup;
     if (emailChipText) emailChipText.textContent = email.value.trim() || 'you@example.com';
+    submit.textContent = !signup ? 'Sign in' : (inEmailSignup ? 'Create account' : 'Continue');
     setSocialSignupMessage('');
     if (inEmailSignup && focusFirst) {
       requestAnimationFrame(() => firstName?.focus());
-    } else if (!inEmailSignup && focusEmail && mode === 'signup') {
+    } else if (!inEmailSignup && focusEmail && signup) {
       requestAnimationFrame(() => email?.focus());
     }
     requestAnimationFrame(() => updateTabIndicator());
@@ -1313,33 +1216,22 @@
     updateTabIndicator(signup ? signupTab : loginTab);
     requestAnimationFrame(() => updateTabIndicator(signup ? signupTab : loginTab));
     form.setAttribute('aria-labelledby', 'auth-title');
-    form.hidden = !signup;
-    setSignupStep('choice');
-    if (clerkSignInShell) clerkSignInShell.hidden = signup;
-    authTitle.hidden = !signup;
-    authCopy.hidden = !signup;
-    firstNameField.hidden = !signup;
-    middleNameField.hidden = !signup;
-    lastNameField.hidden = !signup;
-    contactField.hidden = !signup;
-    reasonField.hidden = true;
-    firstName.required = signup;
-    lastName.required = signup;
-    contactNumber.required = signup;
+    if (!clerkExchangeInFlight) {
+      if (clerkSignInShell) clerkSignInShell.hidden = true;
+      form.hidden = false;
+    }
+    authTitle.hidden = false;
+    authCopy.hidden = false;
     requestReason.required = false;
-    passwordConfirmationField.hidden = !signup;
-    passwordConfirmation.required = signup;
     if (passwordRequirements) passwordRequirements.hidden = true;
-    passwordStrength.element.hidden = !signup;
-    forgotButton.hidden = true;
     password.autocomplete = signup ? 'new-password' : 'current-password';
     if (signup) { password.minLength = 8; password.maxLength = 128; }
     else { password.removeAttribute('minlength'); password.removeAttribute('maxlength'); }
     authTitle.textContent = signup ? 'Create your account' : 'Welcome back';
     authCopy.textContent = activeJoinPreview?.valid
       ? (signup ? `Create an account to join "${activeJoinPreview.group_name}".` : `Sign in to join "${activeJoinPreview.group_name}".`)
-      : (signup ? 'Sign up with myIPON to track and manage your group savings.' : 'Sign in to view your savings records.');
-    submit.textContent = signup ? 'Create account' : 'Sign in';
+      : (signup ? 'Sign up with myIPON to track and manage your group savings.' : 'Sign in to myIPON to track and manage your group savings.');
+    setSignupStep('choice');
     clearFieldErrors();
     setPasswordVisibility(false);
     delete message.dataset.tone;
@@ -1480,7 +1372,7 @@
         email.focus();
         return;
       }
-      if (signupEmailOpenBtn) Ipon.setBusy(signupEmailOpenBtn, true, 'Checking…');
+      Ipon.setBusy(submit, true, 'Checking…');
       try {
         await ensureInitReady();
         const eligibility = await Ipon.rpc('check_admin_request_eligibility', { p_email: candidate.toLowerCase() });
@@ -1492,7 +1384,7 @@
         }
       } catch (_) { }
       finally {
-        if (signupEmailOpenBtn) Ipon.setBusy(signupEmailOpenBtn, false);
+        Ipon.setBusy(submit, false);
       }
       setSignupStep('email', { focusFirst: true });
       return;
@@ -1597,7 +1489,7 @@
           return;
         }
         const profile = await resolveActiveProfile(data.user, submittedEmail);
-        await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
+        recordLoginActivity(data);
         completeLoginSession(data, profile);
       }
     } catch (error) {
@@ -1671,7 +1563,7 @@
       if (loginError) throw loginError;
       await syncClerkSession(submittedEmail, submittedPassword).catch(() => false);
       const profile = await resolveActiveProfile(data.user, submittedEmail);
-      await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
+      recordLoginActivity(data);
       completeLoginSession(data, profile);
     } catch (err) {
       console.error('Auto login error:', err);

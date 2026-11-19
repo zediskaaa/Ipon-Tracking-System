@@ -6244,9 +6244,6 @@
           button.disabled = true;
           button.hidden = false;
           addExtra('App settings', { 'data-bg-action': 'app-settings' });
-          if (currentProfile?.notifications_enabled !== false) {
-            addExtra('Test alert', { 'data-device-test-btn': '' });
-          }
         } else if (snap.status === 'granted' && !snap.batteryOk) {
           setPill('Restricted', 'warning');
           statusEl.textContent = 'Notifications are enabled while myIPON is open. Tap Allow background usage to reduce interruptions when switching apps.';
@@ -6308,9 +6305,6 @@
         delete button.dataset.bgAction;
         button.disabled = true;
         button.hidden = false;
-        if (currentProfile?.notifications_enabled !== false) {
-          addExtra('Test alert', { 'data-device-test-btn': '' });
-        }
       } else if (snap.status === 'granted' && snap.pushState?.supported) {
         setPill('Finish setup', 'warning');
         statusEl.textContent = 'Notifications are allowed. Tap Finish setup to sync in-app browser alerts.';
@@ -6636,15 +6630,6 @@
           delete button.dataset.actionMode;
           button.disabled = true;
           button.hidden = false;
-        }
-        if ((isApp || pushState.subscribed) && currentProfile?.notifications_enabled !== false) {
-          const testBtn = document.createElement('button');
-          testBtn.type = 'button';
-          testBtn.className = 'button button-secondary button-sm';
-          testBtn.textContent = 'Test alert';
-          testBtn.setAttribute('data-device-test-btn', '');
-          testBtn.setAttribute('data-device-extra-btn', '');
-          actionsWrap.appendChild(testBtn);
         }
       } else if (status === 'denied') {
         const canOpenNativeSettings = isApp && Boolean(getBackgroundNotificationsPlugin()?.openNotificationSettings);
@@ -8360,22 +8345,26 @@
         return { configured: true, profile: null, session: null };
       }
 
-      if (document.body.dataset.page !== 'mfa') {
-        const needsMfa = await runWithStartupRetry(() => requiresMfaChallenge(), { attempts: 2, timeoutMs: 8000 }).catch((mfaErr) => {
-          if (isTransientConnectionError(mfaErr) || isHarmlessLockOrAbortError(mfaErr)) return false;
-          throw mfaErr;
-        });
-        if (needsMfa) {
-          window.location.replace('mfa.html');
-          return { configured: true, profile: null, session, redirecting: true };
-        }
-      }
+      const mfaPromise = document.body.dataset.page !== 'mfa'
+        ? runWithStartupRetry(() => requiresMfaChallenge(), { attempts: 2, timeoutMs: 8000 }).catch((mfaErr) => {
+            if (isTransientConnectionError(mfaErr) || isHarmlessLockOrAbortError(mfaErr)) return false;
+            throw mfaErr;
+          })
+        : Promise.resolve(false);
 
       const fetchProfile = () => client.from('profiles')
         .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,card_theme,cover_url,equipped_profile_effect,social_links')
         .eq('id', session.user.id)
         .single();
-      let { data: profile, error } = await runWithStartupRetry(fetchProfile);
+      const [needsMfa, profileResult] = await Promise.all([
+        mfaPromise,
+        runWithStartupRetry(fetchProfile).catch((fetchErr) => ({ data: null, error: fetchErr }))
+      ]);
+      if (needsMfa) {
+        window.location.replace('mfa.html');
+        return { configured: true, profile: null, session, redirecting: true };
+      }
+      let { data: profile, error } = profileResult;
       if (error && isJwtExpiredError(error)) {
         const refreshed = await withTimeout(client.auth.refreshSession(), 8000).catch(() => null);
         if (refreshed?.error && options.requireAuth !== false && !isTransientConnectionError(refreshed.error)) {
@@ -8617,23 +8606,55 @@
     window.addEventListener('focus', checkSessionConsistency);
   }
 
+  function fireKeepaliveRpc(fnName, body = {}, accessToken = cachedAccessToken) {
+    const token = String(accessToken || cachedAccessToken || '').trim();
+    if (!configured || !token || typeof fetch !== 'function') return false;
+    try {
+      fetch(`${config.supabaseUrl}/rest/v1/rpc/${encodeURIComponent(fnName)}`, {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          apikey: config.supabaseAnonKey,
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body || {})
+      }).catch(() => { });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function signOut() {
     const accepted = await confirmAction({ title: 'Sign out?', message: 'You will need to sign in again to access the system.', acceptLabel: 'Sign out' });
     if (!accepted) return;
-    try {
-      const client = getClient();
-      if (client) {
-        await withTimeout(removeWebPushSubscription()).catch(() => { });
-        await withTimeout(rpc('revoke_notification_feed_token')).catch(() => { });
-        await getBackgroundNotificationsPlugin()?.clear?.().catch?.(() => { });
-        await withTimeout(client.auth.signOut({ scope: 'local' }));
-      }
-    } finally {
-      clearStoredAuthTokens();
-      try { localStorage.setItem('myipon_clerk_signout', '1'); } catch { }
-      broadcastAuthEvent('SIGNED_OUT');
-      window.location.replace('login.html');
+    let endpoint = '';
+    try { endpoint = localStorage.getItem('myipon_webpush_endpoint') || ''; } catch { }
+    // Dispatch server cleanup via keepalive so navigation happens immediately without blocking
+    flushLastSeen({ keepalive: true, force: true });
+    fireKeepaliveRpc('delete_push_subscription', { p_endpoint: endpoint || null });
+    fireKeepaliveRpc('revoke_notification_feed_token', {});
+    if (currentProfile?.id) {
+      try { localStorage.removeItem(`myipon_webpush_synced_${currentProfile.id}`); } catch { }
     }
+    try { localStorage.removeItem('myipon_webpush_endpoint'); } catch { }
+    lastWebPushSyncAt = 0;
+    try {
+      if (!isInstalledAppUser() && !isLocalDevHost && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration('/sw.js')
+          .then((reg) => reg?.pushManager?.getSubscription?.())
+          .then((sub) => sub?.unsubscribe?.())
+          .catch(() => { });
+      }
+    } catch { }
+    try { getBackgroundNotificationsPlugin()?.clear?.().catch?.(() => { }); } catch { }
+    clearStoredAuthTokens();
+    try { localStorage.setItem('myipon_clerk_signout', '1'); } catch { }
+    broadcastAuthEvent('SIGNED_OUT');
+    try { getClient()?.auth?.signOut?.({ scope: 'local' })?.catch?.(() => { }); } catch { }
+    document.documentElement.style.visibility = 'hidden';
+    window.location.replace('login.html');
   }
 
   function toast(message, tone = 'success') {
@@ -16071,7 +16092,7 @@
   }
 
   window.Ipon = {
-    get client() { return getClient(); }, configured, init, rpc, money, dateLabel, isoDate, monthStart,
+    get client() { return getClient(); }, configured, init, rpc, fireKeepaliveRpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     setOnlineVisibility, syncMessagesBadges,

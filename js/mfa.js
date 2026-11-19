@@ -24,7 +24,9 @@
       await Ipon.client.auth.signOut({ scope: 'local' });
       return window.location.replace('login.html?status=pending');
     }
-    await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => {});
+    if (!(typeof Ipon.fireKeepaliveRpc === 'function' && Ipon.fireKeepaliveRpc('record_account_activity', { p_event: 'LOGIN' }, session?.access_token))) {
+      Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => {});
+    }
     Ipon.broadcastAuthEvent('SIGNED_IN', session.user.id);
     window.location.replace(Ipon.homeForRole(profile.role));
   }
@@ -59,11 +61,18 @@
     } finally { Ipon.setBusy(button, false); }
   });
 
-  document.getElementById('mfa-signout').addEventListener('click', async () => {
+  document.getElementById('mfa-signout').addEventListener('click', () => {
     sessionStorage.removeItem('iponMfaNext');
     sessionStorage.removeItem('iponPasswordRecovery');
-    await Ipon.client.auth.signOut({ scope: 'local' });
+    try {
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sb-') && key.endsWith('-auth-token')) localStorage.removeItem(key);
+      });
+      localStorage.setItem('myipon_clerk_signout', '1');
+    } catch { }
+    Ipon.client?.auth?.signOut?.({ scope: 'local' })?.catch?.(() => {});
     Ipon.broadcastAuthEvent('SIGNED_OUT');
+    document.documentElement.style.visibility = 'hidden';
     window.location.replace('login.html');
   });
 })();
