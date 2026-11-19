@@ -1158,6 +1158,7 @@
         takenSignupUsername = clean;
         availableSignupUsername = '';
         setFieldError(usernameInput, 'That username is already taken.');
+        Ipon.playUiSound?.('error');
         return false;
       }
       if (res?.available === true) {
@@ -1165,6 +1166,7 @@
         availableSignupUsername = clean;
         clearFieldError(usernameInput);
         setSignupUsernameStatus(`@${clean} is available.`, 'available');
+        Ipon.playUiSound?.('available');
         return true;
       }
     } catch {
@@ -1400,6 +1402,7 @@
     input.addEventListener('input', () => clearFieldError(input));
   });
   usernameInput?.addEventListener('input', () => {
+    Ipon.playUiSound?.('type');
     validateSignupUsernameInput({ checkAvailability: true, immediate: false });
   });
   usernameInput?.addEventListener('blur', () => {

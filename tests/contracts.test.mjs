@@ -11336,7 +11336,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261119-149/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261119-150/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11865,7 +11865,7 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(loginHtml, /https:\/\/\*\.protect\.clerk\.com/);
   assert.match(loginHtml, /https:\/\/challenges\.cloudflare\.com/);
   assert.match(loginHtml, /frame-src 'self' https:\/\/\*\.protect\.clerk\.com https:\/\/challenges\.cloudflare\.com/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261119-103/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261119-104/);
   assert.match(authJs, /mode === 'signup' \? 'Create with' : 'Continue with'/);
   assert.match(coreJs, /function fireKeepaliveRpc\(/);
   const signOutBody = coreJs.match(/async function signOut\(\)[\s\S]*?^  \}/m);
@@ -12190,8 +12190,13 @@ test('post-login username setup modal prompts legacy users without usernames, pr
   const css = read('css/app.css');
 
   assert.match(coreJs, /function maybeShowUsernameSetupModal\(/);
-  assert.match(coreJs, /maybeShowUsernameSetupModal\(profile,\s*\{\s*onDone:\s*runSecondaryPrompts\s*\}\)/);
+  assert.match(coreJs, /const USERNAME_POST_SAVE_DELAY_MS = 1500;/);
+  assert.match(coreJs, /maybeShowUsernameSetupModal\(profile,\s*\{\s*onDone:\s*\(\) => \{\s*setTimeout\(runSecondaryPrompts,\s*USERNAME_POST_SAVE_DELAY_MS\);/);
   assert.match(coreJs, /suggestUsernamesForProfile,\s*maybeShowUsernameSetupModal/);
+  assert.match(coreJs, /playUiSound,\s*isUiSoundEnabled,\s*setUiSoundEnabled/);
+  assert.match(coreJs, /playUiSound\('celebration',\s*\{\s*retryOnGestureEl:\s*dialog\s*\}\)/);
+  assert.match(coreJs, /playUiSound\('confetti'\)/);
+  assert.match(coreJs, /playUiSound\('type'\)/);
   assert.match(coreJs, /rpc\('update_own_social_identity',\s*\{\s*p_username:\s*clean,\s*p_bio:\s*profile\.bio \?\? null\s*\}\)/);
   assert.match(css, /\.username-setup-dialog\s*\{/);
   assert.match(css, /\.username-setup-control input\[aria-invalid="true"\]/);
@@ -12377,4 +12382,34 @@ test('post-login username setup modal prompts legacy users without usernames, pr
   assert.equal(doneHandle, 'juan_dc');
   const saveCall = rpcCalls.find((c) => c.name === 'update_own_social_identity');
   assert.deepEqual({ ...saveCall?.params }, { p_username: 'juan_dc', p_bio: 'Team saver' });
+
+  // Web Audio UI sound engine renders every named sound cleanly and respects mute preference
+  let oscStarts = 0;
+  let burstStarts = 0;
+  let storedMute = null;
+  const fakeParam = () => ({ setValueAtTime() { }, linearRampToValueAtTime() { }, exponentialRampToValueAtTime() { } });
+  win.localStorage.getItem = (k) => (k === 'myipon_ui_sounds' ? storedMute : null);
+  win.localStorage.setItem = (k, v) => { if (k === 'myipon_ui_sounds') storedMute = String(v); };
+  win.localStorage.removeItem = (k) => { if (k === 'myipon_ui_sounds') storedMute = null; };
+  win.AudioContext = class FakeAudioContext {
+    constructor() { this.state = 'running'; this.currentTime = 0; this.sampleRate = 44100; this.destination = {}; }
+    createGain() { return { gain: fakeParam(), connect() { } }; }
+    createOscillator() { return { type: 'sine', frequency: fakeParam(), connect() { }, start() { oscStarts += 1; }, stop() { } }; }
+    createBiquadFilter() { return { type: 'bandpass', frequency: fakeParam(), Q: fakeParam(), connect() { } }; }
+    createBuffer(_ch, len) { return { sampleRate: 44100, getChannelData: () => new Float32Array(len) }; }
+    createBufferSource() { return { buffer: null, connect() { }, start() { burstStarts += 1; }, stop() { } }; }
+  };
+  assert.equal(Ipon.isUiSoundEnabled(), true);
+  for (const kind of ['type', 'chip', 'available', 'error', 'success', 'confetti', 'unlock', 'celebration']) {
+    assert.equal(Ipon.playUiSound(kind), true, `Expected playUiSound('${kind}') to succeed`);
+  }
+  assert.ok(oscStarts >= 20, `Expected harmonic oscillators to play across all sounds, got ${oscStarts}`);
+  assert.ok(burstStarts >= 5, `Expected tactile/confetti noise bursts to play, got ${burstStarts}`);
+
+  const beforeMuteOsc = oscStarts;
+  Ipon.setUiSoundEnabled(false);
+  assert.equal(Ipon.isUiSoundEnabled(), false);
+  assert.equal(Ipon.playUiSound('celebration'), false);
+  assert.equal(oscStarts, beforeMuteOsc);
+  Ipon.setUiSoundEnabled(true);
 });
