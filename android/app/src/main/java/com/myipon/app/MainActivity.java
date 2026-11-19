@@ -46,6 +46,7 @@ import androidx.core.content.ContextCompat;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
+import org.json.JSONObject;
 
 public class MainActivity extends BridgeActivity {
     private static final long SLOW_CONNECTION_THRESHOLD_MS = 6000L;
@@ -63,6 +64,7 @@ public class MainActivity extends BridgeActivity {
     private boolean userDismissedSlowCard = false;
     private volatile String pendingPickerSource = "";
     private volatile long pendingPickerSetAtMs = 0L;
+    private volatile String pendingAuthCallbackJson = null;
     private ValueCallback<Uri[]> pendingFileCallback = null;
 
     private final ActivityResultLauncher<Intent> sourceFilePickerLauncher = registerForActivityResult(
@@ -100,6 +102,20 @@ public class MainActivity extends BridgeActivity {
                 pendingPickerSource = "";
                 pendingPickerSetAtMs = 0L;
             }
+        }
+    }
+
+    private class AuthCallbackBridge {
+        @JavascriptInterface
+        public boolean isSupported() {
+            return true;
+        }
+
+        @JavascriptInterface
+        public String consumePendingCallback() {
+            final String payload = pendingAuthCallbackJson;
+            pendingAuthCallbackJson = null;
+            return payload != null ? payload : "";
         }
     }
 
@@ -222,6 +238,7 @@ public class MainActivity extends BridgeActivity {
                 ((View) webView.getParent()).setBackgroundColor(emeraldBg);
             }
             webView.addJavascriptInterface(new PickerSourceBridge(), "IponNativePicker");
+            webView.addJavascriptInterface(new AuthCallbackBridge(), "IponNativeAuth");
             if (getBridge() != null) {
                 webView.setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
                     @Override
@@ -278,6 +295,7 @@ public class MainActivity extends BridgeActivity {
         NotificationSyncService.ensureStarted(this);
         NotificationSyncWorker.ensureScheduled(this);
         handleNotificationIntent(getIntent());
+        handleAuthCallbackIntent(getIntent());
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -323,6 +341,7 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleNotificationIntent(intent);
+        handleAuthCallbackIntent(intent);
     }
 
     private void dispatchWindowEvent(final String eventName) {
@@ -346,6 +365,7 @@ public class MainActivity extends BridgeActivity {
         super.onResume();
         NotificationSyncService.ensureStarted(this);
         NotificationSyncWorker.ensureScheduled(this);
+        dispatchWindowEvent("myipon:native-resume");
         if (connectionOverlay != null) {
             updateConnectionOverlay();
             final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
@@ -409,6 +429,57 @@ public class MainActivity extends BridgeActivity {
                     null
                 )
             );
+        }
+    }
+
+    private void handleAuthCallbackIntent(Intent intent) {
+        if (intent == null) return;
+        final Uri data = intent.getData();
+        if (data == null) return;
+        if (!"myipon".equalsIgnoreCase(data.getScheme()) || !"auth-callback".equalsIgnoreCase(data.getHost())) {
+            return;
+        }
+        intent.setData(null);
+        final String rawParams = data.getEncodedFragment() != null && !data.getEncodedFragment().isEmpty()
+            ? data.getEncodedFragment()
+            : (data.getEncodedQuery() != null ? data.getEncodedQuery() : "");
+        String clerkToken = "";
+        String appState = "";
+        String errorMsg = "";
+        if (!rawParams.isEmpty()) {
+            for (String pair : rawParams.split("&")) {
+                int eq = pair.indexOf('=');
+                if (eq <= 0) continue;
+                String key = Uri.decode(pair.substring(0, eq));
+                String val = Uri.decode(pair.substring(eq + 1));
+                if ("clerk_token".equals(key)) clerkToken = val;
+                else if ("app_state".equals(key)) appState = val;
+                else if ("error".equals(key)) errorMsg = val;
+            }
+        }
+        if (clerkToken.isEmpty() && errorMsg.isEmpty()) return;
+        try {
+            final JSONObject payload = new JSONObject();
+            payload.put("clerk_token", clerkToken);
+            payload.put("app_state", appState);
+            payload.put("error", errorMsg);
+            pendingAuthCallbackJson = payload.toString();
+        } catch (Throwable err) {
+            return;
+        }
+        final WebView webView = bridge != null ? bridge.getWebView() : null;
+        if (webView != null) {
+            webView.post(() -> {
+                final String currentUrl = webView.getUrl();
+                if (currentUrl == null || currentUrl.isEmpty() || "about:blank".equals(currentUrl) || currentUrl.endsWith("offline.html")) {
+                    webView.loadUrl(APP_ENTRY_URL);
+                    return;
+                }
+                webView.evaluateJavascript(
+                    "(function(){try{window.dispatchEvent(new Event('myipon:native-oauth-callback'));}catch(e){}})()",
+                    null
+                );
+            });
         }
     }
 

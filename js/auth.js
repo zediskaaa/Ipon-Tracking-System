@@ -7,6 +7,10 @@
   const authCopy = document.getElementById('auth-copy');
   const clerkSignInShell = document.getElementById('clerk-signin-shell');
   const clerkSignInLoading = document.getElementById('clerk-signin-loading');
+  const clerkAppHandoff = document.getElementById('clerk-app-handoff');
+  const clerkAppHandoffTitle = document.getElementById('clerk-app-handoff-title');
+  const clerkAppHandoffCopy = document.getElementById('clerk-app-handoff-copy');
+  const clerkAppHandoffBtn = document.getElementById('clerk-app-handoff-btn');
   const clerkSignInMessage = document.getElementById('clerk-signin-message');
   const socialSignupBlock = document.getElementById('social-signup-block');
   const socialSignupMessage = document.getElementById('social-signup-message');
@@ -17,7 +21,25 @@
   const emailField = document.getElementById('email-field');
   const emailLabel = document.getElementById('email-label');
   const passwordField = document.getElementById('password-field');
-  const isClerkSsoCallback = new URLSearchParams(window.location.search).get('clerk_sso_callback') === '1';
+  const initialUrlParams = new URLSearchParams(window.location.search);
+  const isClerkSsoCallback = initialUrlParams.get('clerk_sso_callback') === '1';
+  const isNativeAuthApp = () => Boolean(
+    typeof window !== 'undefined'
+    && window.IponNativeAuth
+    && typeof window.IponNativeAuth.consumePendingCallback === 'function'
+  );
+  const isCapacitorNativeApp = () => Boolean(
+    typeof window !== 'undefined'
+    && (
+      isNativeAuthApp()
+      || window.Capacitor?.isNativePlatform?.()
+      || window.Capacitor?.Plugins?.BackgroundNotifications
+    )
+  );
+  const appHandoffState = String(initialUrlParams.get('app_state') || '').trim();
+  const isAppHandoff = initialUrlParams.get('app_handoff') === '1' && !isCapacitorNativeApp();
+  const NATIVE_OAUTH_STATE_KEY = 'myipon_app_oauth_state_v1';
+  const NATIVE_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
   const securityNotice = document.getElementById('auth-security-notice');
   const securityTitle = document.getElementById('auth-security-title');
   const securityDetail = document.getElementById('auth-security-detail');
@@ -127,6 +149,13 @@
   let clerkLoadPromise = null;
   let clerkExchangeSessionId = '';
   let clerkExchangeInFlight = false;
+  let socialOAuthInFlight = false;
+  let socialOAuthLeftPage = false;
+  let socialOAuthStartedAt = 0;
+  let socialOAuthResetTimer = null;
+  let socialOAuthSafetyTimer = null;
+  let appHandoffStarted = false;
+  let appHandoffRefreshTimer = null;
   let pendingDeviceOtp = null;
   const LOGIN_THROTTLE_STORAGE_KEY = 'myipon_login_throttle_v1';
   const LOGIN_MAX_ATTEMPTS = 5;
@@ -137,6 +166,7 @@
     const active = Boolean(visible);
     if (clerkSignInShell) clerkSignInShell.hidden = !active;
     if (clerkSignInLoading) clerkSignInLoading.hidden = !active;
+    if (clerkAppHandoff) clerkAppHandoff.hidden = true;
     if (form) form.hidden = active;
   }
 
@@ -156,13 +186,51 @@
     }
   }
 
-  function getClerkLoginReturnUrl() {
+  function createNativeOAuthState() {
+    let state = '';
+    try {
+      const bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      state = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      state = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+    }
+    try {
+      localStorage.setItem(NATIVE_OAUTH_STATE_KEY, JSON.stringify({ state, createdAt: Date.now() }));
+    } catch { }
+    return state;
+  }
+
+  function verifyAndConsumeNativeOAuthState(receivedState) {
+    let raw = null;
+    try {
+      raw = localStorage.getItem(NATIVE_OAUTH_STATE_KEY);
+      localStorage.removeItem(NATIVE_OAUTH_STATE_KEY);
+    } catch { }
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw);
+      const expected = String(parsed?.state || '');
+      const createdAt = Number(parsed?.createdAt || 0);
+      if (!expected || !receivedState || expected !== String(receivedState)) return false;
+      if (createdAt > 0 && Date.now() - createdAt > NATIVE_OAUTH_STATE_TTL_MS) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function getClerkLoginReturnUrl(nativeAppState = '') {
     try {
       const url = new URL('login.html', window.location.href);
       const cur = new URLSearchParams(window.location.search);
-      for (const key of ['app', 'join', 'next']) {
+      for (const key of ['app', 'join', 'next', 'app_handoff', 'app_state']) {
         const val = cur.get(key);
         if (val !== null && val !== '') url.searchParams.set(key, val);
+      }
+      if (nativeAppState) {
+        url.searchParams.set('app_handoff', '1');
+        url.searchParams.set('app_state', nativeAppState);
       }
       return url.toString();
     } catch {
@@ -175,9 +243,9 @@
     socialSignupMessage.textContent = String(text || '').trim();
   }
 
-  function getClerkSsoCallbackUrl() {
+  function getClerkSsoCallbackUrl(nativeAppState = '') {
     try {
-      const url = new URL(getClerkLoginReturnUrl(), window.location.href);
+      const url = new URL(getClerkLoginReturnUrl(nativeAppState), window.location.href);
       url.searchParams.set('clerk_sso_callback', '1');
       return url.toString();
     } catch {
@@ -223,10 +291,130 @@
     });
   }
 
+  function clearSocialOAuthBusy() {
+    clearTimeout(socialOAuthResetTimer);
+    clearTimeout(socialOAuthSafetyTimer);
+    socialOAuthResetTimer = null;
+    socialOAuthSafetyTimer = null;
+    socialOAuthInFlight = false;
+    socialOAuthLeftPage = false;
+    socialOAuthStartedAt = 0;
+    setSocialSignupBusy(null, false);
+    syncSocialAuthLabels();
+  }
+
+  function scheduleResetSocialOAuthBusy() {
+    if (!socialOAuthInFlight) return;
+    if (consumeNativeOAuthCallback()) return;
+    clearTimeout(socialOAuthResetTimer);
+    const elapsed = Date.now() - socialOAuthStartedAt;
+    if (!socialOAuthLeftPage && elapsed < 1200) return;
+    socialOAuthResetTimer = setTimeout(() => {
+      if (consumeNativeOAuthCallback()) return;
+      if (!clerkExchangeInFlight && socialOAuthInFlight) {
+        clearSocialOAuthBusy();
+      }
+    }, 250);
+  }
+
+  function buildNativeAuthDeepLink(params) {
+    const parts = [];
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === '') return;
+      parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+    });
+    return `myipon://auth-callback${parts.length ? `#${parts.join('&')}` : ''}`;
+  }
+
+  function showAppHandoffCard({ title, copy, href, buttonLabel = 'Open myIPON App', tone = '' }) {
+    if (clerkSignInShell) clerkSignInShell.hidden = false;
+    if (clerkSignInLoading) clerkSignInLoading.hidden = true;
+    if (form) form.hidden = true;
+    if (clerkAppHandoff) clerkAppHandoff.hidden = false;
+    if (clerkAppHandoffTitle) clerkAppHandoffTitle.textContent = title || 'Returning to myIPON…';
+    if (clerkAppHandoffCopy) {
+      clerkAppHandoffCopy.textContent = copy || '';
+      if (tone) clerkAppHandoffCopy.dataset.tone = tone;
+      else delete clerkAppHandoffCopy.dataset.tone;
+    }
+    if (clerkAppHandoffBtn) {
+      clerkAppHandoffBtn.href = href || 'myipon://auth-callback';
+      clerkAppHandoffBtn.textContent = buttonLabel;
+    }
+  }
+
+  function handoffErrorToNativeApp(errorMessage) {
+    clearInterval(appHandoffRefreshTimer);
+    appHandoffRefreshTimer = null;
+    const cleanError = String(errorMessage || 'Google sign-in could not be completed. Please try again.').trim();
+    const deepLink = buildNativeAuthDeepLink({ error: cleanError, app_state: appHandoffState });
+    showAppHandoffCard({
+      title: 'Sign-in could not finish',
+      copy: cleanError,
+      href: deepLink,
+      buttonLabel: 'Return to myIPON App',
+      tone: 'error'
+    });
+    try {
+      window.location.replace(deepLink);
+    } catch { }
+  }
+
+  async function handoffClerkSessionToNativeApp(clerk) {
+    if (!clerk?.session || appHandoffStarted) return;
+    appHandoffStarted = true;
+    setClerkSignInMessage('');
+    setClerkSignInLoading(true);
+    try {
+      const token = await clerk.session.getToken({ skipCache: true });
+      if (!token) throw new Error('Your Google sign-in session could not be verified.');
+      const deepLink = buildNativeAuthDeepLink({ clerk_token: token, app_state: appHandoffState });
+      showAppHandoffCard({
+        title: 'Returning to myIPON…',
+        copy: 'Your Google account is verified. If the app did not open automatically, tap below to finish signing in.',
+        href: deepLink,
+        buttonLabel: 'Open myIPON App'
+      });
+      clearInterval(appHandoffRefreshTimer);
+      let refreshCount = 0;
+      appHandoffRefreshTimer = setInterval(async () => {
+        refreshCount += 1;
+        if (refreshCount > 4 || document.visibilityState === 'hidden') {
+          clearInterval(appHandoffRefreshTimer);
+          appHandoffRefreshTimer = null;
+          return;
+        }
+        try {
+          const freshToken = await clerk.session?.getToken?.({ skipCache: true });
+          if (freshToken && clerkAppHandoffBtn) {
+            clerkAppHandoffBtn.href = buildNativeAuthDeepLink({ clerk_token: freshToken, app_state: appHandoffState });
+          }
+        } catch { }
+      }, 30000);
+      window.addEventListener('pagehide', () => {
+        clearInterval(appHandoffRefreshTimer);
+        appHandoffRefreshTimer = null;
+      }, { once: true });
+      window.location.replace(deepLink);
+    } catch (error) {
+      appHandoffStarted = false;
+      handoffErrorToNativeApp(Ipon.friendlyError(error));
+    }
+  }
+
   async function startClerkOAuth(strategy, triggerButton) {
     if (!strategy) return;
     setSocialSignupMessage('');
     setSocialSignupBusy(triggerButton, true);
+    socialOAuthInFlight = true;
+    socialOAuthLeftPage = false;
+    socialOAuthStartedAt = Date.now();
+    clearTimeout(socialOAuthSafetyTimer);
+    socialOAuthSafetyTimer = setTimeout(() => {
+      if (socialOAuthInFlight && !socialOAuthLeftPage && !clerkExchangeInFlight) {
+        clearSocialOAuthBusy();
+      }
+    }, 8000);
     try {
       const clerk = await loadClerk();
       const resource = mode === 'login'
@@ -238,13 +426,14 @@
       if (clerk.session) {
         await clerk.signOut().catch(() => null);
       }
+      const nativeAppState = isNativeAuthApp() ? createNativeOAuthState() : '';
       await resource.authenticateWithRedirect({
         strategy,
-        redirectUrl: getClerkSsoCallbackUrl(),
-        redirectUrlComplete: getClerkLoginReturnUrl()
+        redirectUrl: getClerkSsoCallbackUrl(nativeAppState),
+        redirectUrlComplete: getClerkLoginReturnUrl(nativeAppState)
       });
     } catch (error) {
-      setSocialSignupBusy(null, false);
+      clearSocialOAuthBusy();
       setSocialSignupMessage(Ipon.friendlyError(error));
     }
   }
@@ -253,9 +442,29 @@
     btn.addEventListener('click', () => startClerkOAuth(btn.dataset.clerkOauth, btn));
   });
 
-  window.addEventListener('pageshow', (event) => {
-    if (!event.persisted) return;
-    setSocialSignupBusy(null, false);
+  window.addEventListener('blur', () => {
+    if (socialOAuthInFlight) socialOAuthLeftPage = true;
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      if (socialOAuthInFlight) socialOAuthLeftPage = true;
+    } else if (document.visibilityState === 'visible') {
+      scheduleResetSocialOAuthBusy();
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    scheduleResetSocialOAuthBusy();
+  });
+
+  window.addEventListener('myipon:native-resume', () => {
+    if (socialOAuthInFlight) socialOAuthLeftPage = true;
+    scheduleResetSocialOAuthBusy();
+  });
+
+  window.addEventListener('pageshow', () => {
+    if (!clerkExchangeInFlight) clearSocialOAuthBusy();
   });
 
   function handleClerkRouterNav(to, { windowNavigate } = {}) {
@@ -294,12 +503,13 @@
     return clerkLoadPromise;
   }
 
-  async function exchangeClerkSession(clerk) {
-    if (!clerk?.session || mode !== 'login') return;
-    const sessionId = String(clerk.session.id || '');
-    if (!sessionId || clerkExchangeSessionId === sessionId) return;
-    clerkExchangeSessionId = sessionId;
+  async function exchangeClerkToken(rawToken, { clerk = null, sessionKey = '' } = {}) {
+    const token = String(rawToken || '').trim();
+    const key = String(sessionKey || token.slice(-24));
+    if (!token || !key || clerkExchangeSessionId === key) return;
+    clerkExchangeSessionId = key;
     clerkExchangeInFlight = true;
+    clearSocialOAuthBusy();
     setClerkSignInMessage('');
     setClerkSignInLoading(true);
     try {
@@ -312,8 +522,6 @@
         }
         return;
       }
-      const token = await clerk.session.getToken({ skipCache: true });
-      if (!token) throw new Error('Your Clerk sign-in session is unavailable.');
       const exchange = await Ipon.invokeAccountFunction({ action: 'clerk-session-exchange', clerk_token: token, device_token: Ipon.getDeviceToken() });
       if (exchange.requires_device_otp) {
         clerkExchangeInFlight = false;
@@ -335,9 +543,72 @@
       clerkExchangeSessionId = '';
       setClerkSignInLoading(false);
       setClerkSignInMessage(Ipon.friendlyError(error), 'error');
+      if (clerk?.signOut) await clerk.signOut().catch(() => null);
+    }
+  }
+
+  async function exchangeClerkSession(clerk) {
+    if (!clerk?.session) return;
+    if (isAppHandoff) {
+      await handoffClerkSessionToNativeApp(clerk);
+      return;
+    }
+    if (mode !== 'login') return;
+    const sessionId = String(clerk.session.id || '');
+    if (!sessionId || clerkExchangeSessionId === sessionId) return;
+    setClerkSignInMessage('');
+    setClerkSignInLoading(true);
+    try {
+      const token = await clerk.session.getToken({ skipCache: true });
+      if (!token) throw new Error('Your Clerk sign-in session is unavailable.');
+      await exchangeClerkToken(token, { clerk, sessionKey: sessionId });
+    } catch (error) {
+      clerkExchangeInFlight = false;
+      clerkExchangeSessionId = '';
+      setClerkSignInLoading(false);
+      setClerkSignInMessage(Ipon.friendlyError(error), 'error');
       await clerk.signOut().catch(() => null);
     }
   }
+
+  function consumeNativeOAuthCallback() {
+    if (!isNativeAuthApp()) return false;
+    let raw = '';
+    try {
+      raw = String(window.IponNativeAuth.consumePendingCallback() || '').trim();
+    } catch {
+      return false;
+    }
+    if (!raw) return false;
+    let payload = null;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return false;
+    }
+    clearSocialOAuthBusy();
+    const errText = String(payload?.error || '').trim();
+    const clerkToken = String(payload?.clerk_token || '').trim();
+    const returnedState = String(payload?.app_state || '').trim();
+    if (errText) {
+      verifyAndConsumeNativeOAuthState(returnedState);
+      setClerkSignInLoading(false);
+      setClerkSignInMessage(errText, 'error');
+      return true;
+    }
+    if (!clerkToken) return false;
+    if (!verifyAndConsumeNativeOAuthState(returnedState)) {
+      setClerkSignInLoading(false);
+      setClerkSignInMessage('Your Google sign-in session expired or did not match this request. Please tap Continue with Google again.', 'error');
+      return true;
+    }
+    void exchangeClerkToken(clerkToken, { sessionKey: `native:${returnedState}` });
+    return true;
+  }
+
+  window.addEventListener('myipon:native-oauth-callback', () => {
+    consumeNativeOAuthCallback();
+  });
 
   async function syncClerkSession(emailAddress, accountPassword) {
     const clerk = await loadClerk();
@@ -351,7 +622,8 @@
     return true;
   }
 
-  if (isClerkSsoCallback) setClerkSignInLoading(true);
+  if (isClerkSsoCallback || isAppHandoff) setClerkSignInLoading(true);
+  let handledNativeCallbackAtBoot = false;
 
   loadClerk().then(async (clerk) => {
     let shouldSignOut = false;
@@ -360,11 +632,13 @@
       if (shouldSignOut) localStorage.removeItem('myipon_clerk_signout');
     } catch { }
     const blockedStatus = ['disabled', 'pending', 'password-reset'].includes(new URLSearchParams(window.location.search).get('status') || '');
-    if ((shouldSignOut || blockedStatus) && !isClerkSsoCallback && clerk?.session) {
+    if ((shouldSignOut || blockedStatus) && !isClerkSsoCallback && !isAppHandoff && clerk?.session) {
       await clerk.signOut().catch(() => null);
     }
     if (!clerk) {
-      if (isClerkSsoCallback) {
+      if (isAppHandoff) {
+        handoffErrorToNativeApp('Social sign-in is temporarily unavailable. Please try again in the myIPON app.');
+      } else if (isClerkSsoCallback) {
         setClerkSignInLoading(false);
         setClerkSignInMessage('Social sign-in is temporarily unavailable. Please try again or sign in with email.', 'error');
       }
@@ -386,6 +660,10 @@
           verifyEmailAddressUrl: returnUrl
         });
       } catch (error) {
+        if (isAppHandoff) {
+          handoffErrorToNativeApp(Ipon.friendlyError(error));
+          return;
+        }
         setClerkSignInLoading(false);
         setClerkSignInMessage(Ipon.friendlyError(error), 'error');
       } finally {
@@ -393,18 +671,30 @@
       }
     }
     clerk.addListener(() => {
-      if (clerk.session && !clerkExchangeInFlight && mode === 'login') exchangeClerkSession(clerk);
+      if (!clerk.session) return;
+      if (isAppHandoff) {
+        void handoffClerkSessionToNativeApp(clerk);
+        return;
+      }
+      if (!clerkExchangeInFlight && mode === 'login') exchangeClerkSession(clerk);
     });
-    if (clerk.session && (isClerkSsoCallback || (!shouldSignOut && !blockedStatus))) {
+    if (clerk.session && (isAppHandoff || isClerkSsoCallback || (!shouldSignOut && !blockedStatus && !handledNativeCallbackAtBoot))) {
       await exchangeClerkSession(clerk);
     } else {
+      const missing = clerk.client?.signUp?.missingFields || [];
+      if (isAppHandoff) {
+        const errMsg = missing.includes('email_address')
+          ? 'Your Google account did not share a verified email address. Allow email access or create an account with email.'
+          : 'Google sign-in was cancelled or could not be completed. Please try again in myIPON.';
+        handoffErrorToNativeApp(errMsg);
+        return;
+      }
       if (isClerkSsoCallback && !socialSignupMessage?.textContent) {
-        const missing = clerk.client?.signUp?.missingFields || [];
         if (missing.includes('email_address')) {
           setClerkSignInMessage('Your Google account did not share a verified email address. Allow email access or create an account with email.', 'error');
         }
       }
-      setClerkSignInLoading(false);
+      if (!handledNativeCallbackAtBoot && !clerkExchangeInFlight) setClerkSignInLoading(false);
     }
   });
 
@@ -750,6 +1040,7 @@
 
   // Start init immediately without delaying synchronous form/tab listener attachment
   const initPromise = Ipon.init({ requireAuth: false, allowPending: true }).catch((error) => ({ failed: true, configured: false, error }));
+  handledNativeCallbackAtBoot = consumeNativeOAuthCallback();
 
   async function resolveActiveProfile(user, fallbackEmail) {
     const profileCols = 'id,first_name,middle_name,last_name,contact_number,role,status,name_setup_required';
@@ -895,14 +1186,15 @@
     finally { Ipon.setBusy(button, false); }
   });
   const cancelDeviceOtp = async () => {
+    const method = pendingDeviceOtp?.auth_method;
     const clerk = pendingDeviceOtp?.clerk;
     pendingDeviceOtp = null;
     deviceOtpDialog.close();
-    if (clerk) {
+    if (clerk || method === 'clerk') {
       clerkExchangeInFlight = false;
       clerkExchangeSessionId = '';
       setClerkSignInLoading(false);
-      await clerk.signOut().catch(() => null);
+      await clerk?.signOut?.().catch(() => null);
     }
   };
   deviceOtpCancel.addEventListener('click', cancelDeviceOtp);
@@ -1013,7 +1305,7 @@
       dismissSplash();
       return;
     }
-    if (state.session && state.profile?.status === 'ACTIVE') {
+    if (state.session && state.profile?.status === 'ACTIVE' && !isAppHandoff && !isClerkSsoCallback) {
       if ((requestedPolicy === 'terms' || requestedPolicy === 'privacy') && policyDialog?.open) {
         clearTimeout(splashSafetyTimer);
         dismissSplash();
@@ -1368,7 +1660,8 @@
     updateTabIndicator(signup ? signupTab : loginTab);
     requestAnimationFrame(() => updateTabIndicator(signup ? signupTab : loginTab));
     form.setAttribute('aria-labelledby', 'auth-title');
-    if (!clerkExchangeInFlight) {
+    if (!clerkExchangeInFlight && !isAppHandoff) {
+      if (socialOAuthInFlight) clearSocialOAuthBusy();
       if (clerkSignInShell) clerkSignInShell.hidden = true;
       form.hidden = false;
     }
@@ -1439,7 +1732,7 @@
     message.textContent = '';
     setSignupStep('choice', { focusEmail: true });
   });
-  if (isClerkSsoCallback) {
+  if (isClerkSsoCallback || isAppHandoff) {
     setMode('login');
     setClerkSignInLoading(true);
   } else if (new URLSearchParams(location.search).get('mode') === 'signup') {

@@ -11,8 +11,10 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Environment;
 import android.os.PowerManager;
 import android.print.PrintAttributes;
@@ -42,6 +44,7 @@ import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @CapacitorPlugin(
     name = "BackgroundNotifications",
@@ -53,6 +56,52 @@ import java.util.List;
     }
 )
 public class BackgroundNotificationsPlugin extends Plugin {
+    private static boolean isOAuthHost(String host) {
+        if (TextUtils.isEmpty(host)) return false;
+        String h = host.toLowerCase(Locale.US);
+        return "accounts.google.com".equals(h)
+            || h.endsWith(".clerk.accounts.dev")
+            || "clerk.accounts.dev".equals(h)
+            || h.startsWith("clerk.")
+            || "www.facebook.com".equals(h)
+            || "m.facebook.com".equals(h)
+            || "facebook.com".equals(h);
+    }
+
+    @Override
+    public Boolean shouldOverrideLoad(Uri url) {
+        if (url == null) return null;
+        if (!"https".equalsIgnoreCase(url.getScheme()) || !isOAuthHost(url.getHost())) {
+            return null;
+        }
+        Activity activity = getActivity();
+        Context ctx = activity != null ? activity : getContext();
+        if (ctx == null) return null;
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, url);
+            Bundle customTabsExtras = new Bundle();
+            customTabsExtras.putBinder("android.support.customtabs.extra.SESSION", null);
+            intent.putExtras(customTabsExtras);
+            intent.putExtra("android.support.customtabs.extra.TOOLBAR_COLOR", Color.parseColor("#0b3428"));
+            intent.putExtra("android.support.customtabs.extra.TITLE_VISIBILITY", 1);
+            if (activity != null) {
+                activity.startActivity(intent);
+            } else {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(intent);
+            }
+            return Boolean.TRUE;
+        } catch (Throwable err) {
+            try {
+                Intent fallback = new Intent(Intent.ACTION_VIEW, url);
+                if (activity == null) fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(fallback);
+                return Boolean.TRUE;
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+    }
     @PluginMethod
     public void configure(PluginCall call) {
         String supabaseUrl = call.getString("supabaseUrl");
