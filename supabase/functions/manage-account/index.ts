@@ -2082,17 +2082,55 @@ async function findAuthUserByEmail(admin: AdminClient, email: string) {
   return null;
 }
 
+const USERNAME_RE = /^[a-z0-9_]{3,24}$/;
+
+function normalizeUsername(raw: unknown): string {
+  return String(raw || '').trim().replace(/^@+/, '').toLowerCase();
+}
+
+async function resolveLoginIdentifier(admin: AdminClient, rawIdentifier: unknown): Promise<{
+  raw: string;
+  isUsername: boolean;
+  email: string;
+  throttleKey: string;
+  valid: boolean;
+}> {
+  const trimmed = String(rawIdentifier || '').trim().toLowerCase();
+  if (!trimmed || trimmed.length > 254) {
+    return { raw: trimmed, isUsername: false, email: '', throttleKey: '', valid: false };
+  }
+  if (trimmed.includes('@') && !trimmed.startsWith('@')) {
+    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+    return { raw: trimmed, isUsername: false, email: valid ? trimmed : '', throttleKey: valid ? trimmed : '', valid };
+  }
+  const cleanUsername = normalizeUsername(trimmed);
+  if (!USERNAME_RE.test(cleanUsername)) {
+    return { raw: trimmed, isUsername: true, email: '', throttleKey: '', valid: false };
+  }
+  const { data: matched } = await admin
+    .from('profiles')
+    .select('id, email')
+    .ilike('username', cleanUsername)
+    .limit(1)
+    .maybeSingle();
+  const resolvedEmail = String(matched?.email || '').trim().toLowerCase();
+  if (resolvedEmail && resolvedEmail.includes('@')) {
+    return { raw: cleanUsername, isUsername: true, email: resolvedEmail, throttleKey: resolvedEmail, valid: true };
+  }
+  return { raw: cleanUsername, isUsername: true, email: '', throttleKey: `username:${cleanUsername}`, valid: true };
+}
+
 async function activateUserAndMembership(
   admin: AdminClient,
   userId: string,
-  fill: { first_name?: string | null; middle_name?: string | null; last_name?: string | null; full_name?: string | null; contact_number?: string | null; email?: string | null } = {},
+  fill: { first_name?: string | null; middle_name?: string | null; last_name?: string | null; full_name?: string | null; contact_number?: string | null; email?: string | null; username?: string | null } = {},
   options: { fromLogin?: boolean } = {}
 ) {
-  if (!userId) return { profile: null, disabled: false };
+  if (!userId) return { profile: null, disabled: false, usernameConflict: false };
 
   let { data: prof } = await admin
     .from('profiles')
-    .select('id, status, group_id, role, member_id, first_name, middle_name, last_name, full_name, contact_number, email')
+    .select('id, status, group_id, role, member_id, first_name, middle_name, last_name, full_name, contact_number, email, username')
     .eq('id', userId)
     .maybeSingle();
 
@@ -2107,7 +2145,9 @@ async function activateUserAndMembership(
       const last = String(fill.last_name || meta.last_name || derived.last || '').trim() || null;
       const full = String(fill.full_name || meta.full_name || '').trim() || [first, middle, last].filter(Boolean).join(' ') || derived.full;
       const contact = String(fill.contact_number || meta.contact_number || '').trim() || null;
-      await admin.from('profiles').insert({
+      const cleanUsername = normalizeUsername(fill.username || meta.username);
+      const validUsername = USERNAME_RE.test(cleanUsername) ? cleanUsername : null;
+      const { error: insErr } = await admin.from('profiles').insert({
         id: userId,
         email: String(authUser.email || fill.email || '').trim().toLowerCase(),
         first_name: first,
@@ -2115,20 +2155,24 @@ async function activateUserAndMembership(
         last_name: last,
         full_name: full,
         contact_number: contact,
+        username: validUsername,
         role: 'MEMBER',
         status: 'ACTIVE'
       }).select('id').maybeSingle();
+      if (insErr && insErr.code === '23505' && /username/i.test(String(insErr.message || insErr.details || ''))) {
+        return { profile: null, disabled: false, usernameConflict: true };
+      }
       const reloaded = await admin
         .from('profiles')
-        .select('id, status, group_id, role, member_id, first_name, middle_name, last_name, full_name, contact_number, email')
+        .select('id, status, group_id, role, member_id, first_name, middle_name, last_name, full_name, contact_number, email, username')
         .eq('id', userId)
         .maybeSingle();
       prof = reloaded.data;
     }
   }
 
-  if (!prof) return { profile: null, disabled: false };
-  if (prof.status === 'DISABLED') return { profile: prof, disabled: true };
+  if (!prof) return { profile: null, disabled: false, usernameConflict: false };
+  if (prof.status === 'DISABLED') return { profile: prof, disabled: true, usernameConflict: false };
 
   // Keep group memberships aligned so dashboard/RPC membership checks pass after activation
   await admin
@@ -2157,14 +2201,19 @@ async function activateUserAndMembership(
   if (!prof.last_name && fill.last_name) patch.last_name = fill.last_name;
   if (!prof.full_name && fill.full_name) patch.full_name = fill.full_name;
   if (!prof.contact_number && fill.contact_number) patch.contact_number = fill.contact_number;
+  const fillUsername = normalizeUsername(fill.username);
+  if (!prof.username && USERNAME_RE.test(fillUsername)) patch.username = fillUsername;
 
-  const { data: updated } = await admin
+  const { data: updated, error: updateErr } = await admin
     .from('profiles')
     .update(patch)
     .eq('id', userId)
     .neq('status', 'DISABLED')
-    .select('id, status, group_id, role, member_id, first_name, last_name, contact_number')
+    .select('id, status, group_id, role, member_id, first_name, last_name, contact_number, username')
     .maybeSingle();
+  if (updateErr && updateErr.code === '23505' && /username/i.test(String(updateErr.message || updateErr.details || ''))) {
+    return { profile: prof, disabled: false, usernameConflict: true };
+  }
 
   let hasSignedIn = Boolean(options.fromLogin);
   if (!hasSignedIn) {
@@ -2194,7 +2243,7 @@ async function activateUserAndMembership(
     }
   }
 
-  return { profile: updated || prof, disabled: false };
+  return { profile: updated || prof, disabled: false, usernameConflict: false };
 }
 
 function extractClientIp(request: Request): string {
@@ -2439,14 +2488,30 @@ Deno.serve(async (request) => {
     );
   }
 
+  if (body.action === 'check-signup-username') {
+    const cleanUsername = normalizeUsername(body.username);
+    if (!USERNAME_RE.test(cleanUsername)) {
+      return json({ ok: true, valid: false, available: false });
+    }
+    const excludeEmail = String(body.email || '').trim().toLowerCase();
+    const { data: existing } = await admin
+      .from('profiles')
+      .select('id, email')
+      .ilike('username', cleanUsername)
+      .limit(1)
+      .maybeSingle();
+    const available = !existing || (Boolean(excludeEmail) && String(existing.email || '').trim().toLowerCase() === excludeEmail);
+    return json({ ok: true, valid: true, available });
+  }
+
   if (body.action === 'login-throttle-status') {
-    const email = String(body.email || '').trim().toLowerCase();
+    const resolved = await resolveLoginIdentifier(admin, body.identifier ?? body.email);
     const clientIp = extractClientIp(request) || null;
-    if ((!email || !email.includes('@')) && !clientIp) {
+    if (!resolved.throttleKey && !clientIp) {
       return json({ ok: true, locked: false, retry_after_seconds: 0, threshold: 5 });
     }
     const { data: throttle, error: throttleError } = await admin.rpc('check_login_throttle', {
-      p_email: email || '',
+      p_email: resolved.throttleKey || '',
       p_ip: clientIp
     });
     if (throttleError || !throttle) {
@@ -2466,19 +2531,19 @@ Deno.serve(async (request) => {
   }
 
   if (body.action === 'login-attempt') {
-    const email = String(body.email || '').trim().toLowerCase();
+    const resolved = await resolveLoginIdentifier(admin, body.identifier ?? body.email);
     const password = typeof body.password === 'string' ? body.password : '';
-    if (!email || !email.includes('@') || email.length > 254 || !password || password.length > 1000) {
+    if (!resolved.valid || !password || password.length > 1000) {
       return json({
         ok: false,
         locked: false,
-        error: { code: 'invalid_credentials', message: 'Incorrect email or password.' }
+        error: { code: 'invalid_credentials', message: 'Incorrect email, username, or password.' }
       });
     }
 
     const clientIp = extractClientIp(request) || null;
     const { data: preThrottle } = await admin.rpc('check_login_throttle', {
-      p_email: email,
+      p_email: resolved.throttleKey,
       p_ip: clientIp
     });
     if (preThrottle?.locked && Number(preThrottle.retry_after_seconds || 0) > 0) {
@@ -2490,6 +2555,20 @@ Deno.serve(async (request) => {
       });
     }
 
+    if (!resolved.email) {
+      const { data: postThrottle } = await admin.rpc('record_failed_login_attempt', {
+        p_email: resolved.throttleKey,
+        p_ip: clientIp
+      });
+      return json({
+        ok: false,
+        locked: Boolean(postThrottle?.locked),
+        error: { code: 'invalid_credentials', message: 'Incorrect email, username, or password.' },
+        throttle: postThrottle || null
+      });
+    }
+
+    const email = resolved.email;
     const anonClient = createClient(url, anon, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
     });
@@ -2503,13 +2582,13 @@ Deno.serve(async (request) => {
         });
       }
       const { data: postThrottle } = await admin.rpc('record_failed_login_attempt', {
-        p_email: email,
+        p_email: resolved.throttleKey,
         p_ip: clientIp
       });
       return json({
         ok: false,
         locked: Boolean(postThrottle?.locked),
-        error: { code: 'invalid_credentials', message: 'Incorrect email or password.' },
+        error: { code: 'invalid_credentials', message: 'Incorrect email, username, or password.' },
         throttle: postThrottle || null
       });
     }
@@ -2518,7 +2597,7 @@ Deno.serve(async (request) => {
       return json({
         ok: false,
         locked: false,
-        error: { code: 'invalid_credentials', message: 'Incorrect email or password.' }
+        error: { code: 'invalid_credentials', message: 'Incorrect email, username, or password.' }
       });
     }
 
@@ -2533,11 +2612,12 @@ Deno.serve(async (request) => {
     const deviceOtp = await startDeviceOtpIfNeeded(admin, loginProfile, String(body.device_token || '').trim(), service);
     if (deviceOtp) return json(deviceOtp, Number(('status' in deviceOtp ? deviceOtp.status : 200) || 200));
 
-    await admin.rpc('clear_login_throttle', { p_email: email, p_ip: clientIp }).catch(() => null);
+    await admin.rpc('clear_login_throttle', { p_email: resolved.throttleKey, p_ip: clientIp }).catch(() => null);
     await provisionClerkUser(admin, authData.user, password).catch(() => false);
     return json({
       ok: true,
       locked: false,
+      resolved_email: email,
       session: {
         access_token: authData.session.access_token,
         refresh_token: authData.session.refresh_token
@@ -2590,19 +2670,23 @@ Deno.serve(async (request) => {
       return response;
     }
 
-    const email = String(body.email || '').trim().toLowerCase();
+    const resolved = await resolveLoginIdentifier(admin, body.identifier ?? body.email);
+    const email = resolved.email;
     const password = typeof body.password === 'string' ? body.password : '';
     const verifier = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
-    const { data: authData, error: authError } = await verifier.auth.signInWithPassword({ email, password });
+    const { data: authData, error: authError } = email
+      ? await verifier.auth.signInWithPassword({ email, password })
+      : { data: { user: null, session: null }, error: new Error('Invalid credentials') };
     if (authError || authData.user?.id !== challenge.user_id || !authData.session) {
       await revokeTrust();
-      return json({ error: 'Your sign-in session expired. Enter your email and password again.' }, 401);
+      return json({ error: 'Your sign-in session expired. Enter your email or username and password again.' }, 401);
     }
     await admin.from('account_device_otp_challenges').update({ consumed_at: new Date().toISOString() }).eq('id', challengeId);
-    await admin.rpc('clear_login_throttle', { p_email: email, p_ip: extractClientIp(request) || null }).catch(() => null);
+    await admin.rpc('clear_login_throttle', { p_email: resolved.throttleKey || email, p_ip: extractClientIp(request) || null }).catch(() => null);
     await provisionClerkUser(admin, authData.user, password).catch(() => false);
     return json({
       ok: true,
+      resolved_email: email,
       session: { access_token: authData.session.access_token, refresh_token: authData.session.refresh_token },
       user: authData.user
     });
@@ -2786,12 +2870,29 @@ Deno.serve(async (request) => {
     const full = String(body.full || '').trim() || [first, middle, last].filter(Boolean).join(' ');
     const contact = String(body.contact || '').trim();
     const reason = String(body.reason || '').trim();
+    const username = normalizeUsername(body.username);
+    const requireUsername = body.direct_signup !== false || body.username !== undefined;
 
     if (!email || !email.includes('@')) return json({ error: 'A valid email address is required.' }, 400);
     if (!password || password.length < 8) return json({ error: 'A strong password of at least 8 characters is required.' }, 400);
     if (!first || !last) return json({ error: 'First name and last name are required.' }, 400);
     if (!contact) return json({ error: 'A contact number is required.' }, 400);
+    if (requireUsername && !USERNAME_RE.test(username)) {
+      return json({ error: 'Username must be 3–24 lowercase letters, numbers, or underscores.' }, 400);
+    }
     if (!reason || reason.length < 10) return json({ error: 'A reason of at least 10 characters is required.' }, 400);
+
+    if (username) {
+      const { data: usernameOwner } = await admin
+        .from('profiles')
+        .select('id, email')
+        .ilike('username', username)
+        .limit(1)
+        .maybeSingle();
+      if (usernameOwner && String(usernameOwner.email || '').trim().toLowerCase() !== email) {
+        return json({ error: 'That username is already taken. Please choose another username.' }, 400);
+      }
+    }
 
     const { data: verRecord } = await admin
       .from('email_verifications')
@@ -2813,10 +2914,12 @@ Deno.serve(async (request) => {
       last_name: last,
       full_name: full,
       contact_number: contact,
-      email
+      email,
+      username: username || null
     };
     const syncExistingAccount = async (targetId: string) => {
-      const { profile: existingProf, disabled } = await activateUserAndMembership(admin, targetId, fillProfile);
+      const { profile: existingProf, disabled, usernameConflict } = await activateUserAndMembership(admin, targetId, fillProfile);
+      if (usernameConflict) return json({ error: 'That username is already taken. Please choose another username.' }, 400);
       if (disabled) return json({ error: 'This account is disabled. Please contact support.' }, 400);
       if (!existingProf) return json({ error: 'Existing account could not be initialized.' }, 500);
       const { error: updError } = await admin.auth.admin.updateUserById(targetId, {
@@ -2827,7 +2930,8 @@ Deno.serve(async (request) => {
           middle_name: middle,
           last_name: last,
           full_name: full,
-          contact_number: contact
+          contact_number: contact,
+          username: username || undefined
         }
       });
       if (updError) return json({ error: updError.message || 'Could not update account credentials.' }, 400);
@@ -2859,6 +2963,7 @@ Deno.serve(async (request) => {
         last_name: last,
         full_name: full,
         contact_number: contact,
+        username: username || undefined,
         request_reason: reason,
         account_kind: body.direct_signup !== false ? 'DIRECT_SIGNUP' : 'ADMIN_REQUEST'
       }
@@ -2875,7 +2980,10 @@ Deno.serve(async (request) => {
 
     const userId = newUserData.user?.id;
     if (userId && body.direct_signup !== false) {
-      await activateUserAndMembership(admin, userId, fillProfile);
+      const activated = await activateUserAndMembership(admin, userId, fillProfile);
+      if (activated.usernameConflict) {
+        return json({ error: 'That username is already taken. Please choose another username.' }, 400);
+      }
     }
 
     return json({

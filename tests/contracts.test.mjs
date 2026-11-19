@@ -390,7 +390,7 @@ test('login credential errors mark both fields without revealing account existen
   const loginHtml = read('login.html');
   assert.match(auth, /error\?\.code === 'invalid_credentials'/);
   assert.match(auth, /\[email, password\]\.forEach\(\(input\) => input\.setAttribute\('aria-invalid', 'true'\)\)/);
-  assert.match(auth, /message\.textContent = 'Incorrect email or password\.'/);
+  assert.match(auth, /message\.textContent = 'Incorrect email, username, or password\.'/);
   assert.match(loginHtml, /class="password-toggle"[^>]*><svg/);
   assert.doesNotMatch(loginHtml, /class="password-toggle"[^>]*>Show<\/button>/);
 });
@@ -5137,7 +5137,7 @@ test('Android v31 splash screen and progressive anti-bruteforce login protection
       return {
         ok: false,
         locked: lockSec > 0,
-        error: { code: 'invalid_credentials', message: 'Incorrect email or password.' },
+        error: { code: 'invalid_credentials', message: 'Incorrect email, username, or password.' },
         throttle: {
           locked: lockSec > 0,
           scope: 'EMAIL',
@@ -5211,7 +5211,7 @@ test('Android v31 splash screen and progressive anti-bruteforce login protection
   // Fail 1 & 2: error message shown, no security notice yet
   await els.get('auth-form').dispatch('submit');
   await els.get('auth-form').dispatch('submit');
-  assert.equal(msgEl.textContent, 'Incorrect email or password.');
+  assert.equal(msgEl.textContent, 'Incorrect email, username, or password.');
   assert.equal(noticeEl.hidden, true);
 
   // Fail 3 & 4: amber warning with exact remaining attempts
@@ -11844,7 +11844,7 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(authJs, /auth\.verifyOtp\(\{ token_hash:\s*exchange\.token_hash, type:\s*'email' \}\)/);
   assert.match(authJs, /async function syncClerkSession\(/);
   assert.match(authJs, /clerk\.client\.signIn\.create\(\{ identifier: emailAddress, password: accountPassword \}\)/);
-  assert.match(authJs, /await syncClerkSession\(submittedEmail, password\.value\)\.catch\(\(\) => false\)/);
+  assert.match(authJs, /await syncClerkSession\(resolvedEmail, password\.value\)\.catch\(\(\) => false\)/);
   assert.match(authJs, /action:\s*'login-attempt',[\s\S]*?await syncClerkSession\(submittedEmail, submittedPassword\)\.catch\(\(\) => false\)/);
   assert.match(coreJs, /localStorage\.setItem\('myipon_clerk_signout', '1'\)/);
   assert.match(accountFunction, /async function provisionClerkUser\(/);
@@ -11858,14 +11858,14 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(accountFunction, /admin\.auth\.admin\.generateLink\(\{ type:\s*'magiclink', email \}\)/);
   assert.match(loginHtml, /id="social-signup-block"/);
   assert.match(loginHtml, /id="signup-google-btn"[^>]*data-clerk-oauth="oauth_google"/);
-  assert.match(loginHtml, /id="signup-facebook-btn"[^>]*data-clerk-oauth="oauth_facebook"/);
+  assert.doesNotMatch(loginHtml, /id="signup-facebook-btn"/);
   assert.match(loginHtml, /id="signup-step-head"/);
   assert.match(loginHtml, /id="signup-method-back"/);
   assert.match(loginHtml, /id="email-chip-text"/);
   assert.match(loginHtml, /https:\/\/\*\.protect\.clerk\.com/);
   assert.match(loginHtml, /https:\/\/challenges\.cloudflare\.com/);
   assert.match(loginHtml, /frame-src 'self' https:\/\/\*\.protect\.clerk\.com https:\/\/challenges\.cloudflare\.com/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261119-101/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261119-103/);
   assert.match(authJs, /mode === 'signup' \? 'Create with' : 'Continue with'/);
   assert.match(coreJs, /function fireKeepaliveRpc\(/);
   const signOutBody = coreJs.match(/async function signOut\(\)[\s\S]*?^  \}/m);
@@ -11956,4 +11956,231 @@ test('public privacy, terms, and data-deletion pages stay crawlable with Vercel 
     vercel.headers?.some((rule) => rule.source.includes('data-deletion') && rule.headers?.some((h) => h.key === 'X-Robots-Tag' && h.value === 'index, follow')),
     'vercel.json must allow indexing for public legal pages'
   );
+});
+
+test('username sign-in and required signup username enforce format, uniqueness, and non-enumeration end-to-end', async () => {
+  const loginHtml = read('login.html');
+  const authJs = read('js/auth.js');
+  const edge = read('supabase/functions/manage-account/index.ts');
+
+  assert.match(loginHtml, /id="email-label">Email or username<\/label>/);
+  assert.match(loginHtml, /id="username-field"[\s\S]*?id="username"[^>]*minlength="3"[^>]*maxlength="24"[^>]*pattern="\[a-z0-9_\]\{3,24\}"/);
+  assert.match(loginHtml, /id="username-status"/);
+  assert.match(loginHtml, /id="username-error"/);
+  assert.match(loginHtml, /id="summary-username"/);
+
+  assert.match(edge, /async function resolveLoginIdentifier\(/);
+  assert.match(edge, /body\.action === 'check-signup-username'/);
+  assert.match(edge, /throttleKey:\s*`username:\$\{cleanUsername\}`/);
+  assert.match(edge, /const requireUsername = body\.direct_signup !== false \|\| body\.username !== undefined/);
+  assert.match(edge, /That username is already taken\. Please choose another username\./);
+  assert.match(edge, /if \(!prof\.username && USERNAME_RE\.test\(fillUsername\)\) patch\.username = fillUsername/);
+
+  const makeEl = (id = '') => {
+    const listeners = new Map();
+    const attrs = new Map();
+    const classes = new Set();
+    let customValidity = '';
+    return {
+      id,
+      value: '',
+      name: id.replace(/-/g, '_'),
+      type: 'text',
+      inputMode: 'text',
+      autocomplete: '',
+      placeholder: '',
+      textContent: '',
+      innerHTML: '',
+      title: '',
+      hidden: false,
+      required: false,
+      disabled: false,
+      open: false,
+      dataset: {},
+      style: {},
+      classList: {
+        add: (...names) => names.forEach((n) => classes.add(n)),
+        remove: (...names) => names.forEach((n) => classes.delete(n)),
+        toggle: (n, force) => (force === undefined ? (classes.has(n) ? (classes.delete(n), false) : (classes.add(n), true)) : (force ? (classes.add(n), true) : (classes.delete(n), false))),
+        contains: (n) => classes.has(n)
+      },
+      validity: { get valid() { return !customValidity; } },
+      setCustomValidity(v) { customValidity = String(v || ''); },
+      checkValidity() { return !customValidity; },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.get(k) ?? null; },
+      removeAttribute(k) { attrs.delete(k); },
+      addEventListener(type, fn) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push(fn);
+      },
+      async dispatch(type, extra = {}) {
+        const list = listeners.get(type) || [];
+        const ev = { preventDefault() { }, ...extra };
+        for (const fn of list) await fn(ev);
+      },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      after() { },
+      focus() { },
+      select() { },
+      close() { this.open = false; },
+      showModal() { this.open = true; },
+      reset() { this.value = ''; },
+      offsetLeft: 0,
+      offsetWidth: 80
+    };
+  };
+
+  const els = new Map([
+    'auth-form', 'auth-message', 'auth-submit', 'email-label', 'email-field', 'password-field',
+    'auth-security-notice', 'auth-security-title', 'auth-security-detail',
+    'auth-security-timer', 'auth-security-bar-wrap', 'auth-security-bar',
+    'first-name-field', 'middle-name-field', 'last-name-field',
+    'first-name', 'middle-name', 'last-name', 'email',
+    'username-field', 'username', 'username-status', 'username-error',
+    'contact-number-field', 'contact-number', 'request-reason-field', 'request-reason',
+    'password', 'password-confirmation-field', 'password-confirmation',
+    'password-toggle', 'password-confirmation-toggle', 'forgot-password-open',
+    'recovery-dialog', 'recovery-request-form', 'recovery-message',
+    'device-otp-dialog', 'device-otp-form', 'device-otp-code', 'device-otp-copy', 'device-otp-message', 'device-otp-resend', 'device-otp-cancel',
+    'request-confirm-dialog', 'summary-full-name', 'summary-username', 'summary-contact-number', 'summary-email', 'summary-request-reason',
+    'show-login', 'show-signup', 'auth-tab-indicator', 'auth-title', 'auth-copy',
+    'first-name-error', 'middle-name-error', 'last-name-error', 'email-error', 'contact-number-error', 'request-reason-error', 'password-error', 'password-confirmation-error'
+  ].map((id) => [id, makeEl(id)]));
+  els.get('recovery-request-form').elements = { email: makeEl('recovery-email') };
+
+  const loginPayloads = [];
+  const checkedUsernames = [];
+  let redirectedTo = '';
+  const storage = new Map();
+  const doc = {
+    body: makeEl('body'),
+    getElementById: (id) => els.get(id) || makeEl(id),
+    querySelectorAll: () => [],
+    addEventListener() { }
+  };
+  const IponMock = {
+    init: async () => ({ configured: true, session: null, profile: null }),
+    setLoading() { },
+    setBusy(btn, busy, text) { if (btn) { btn.disabled = Boolean(busy); if (busy && text) btn.textContent = text; } },
+    bindPasswordStrength: () => ({ element: makeEl('pw-strength'), update() { } }),
+    nameRuleForField: () => ({ ruleMsg: '', placeholder: '' }),
+    normalizeNamePart: (v) => String(v || '').trim(),
+    nameValidationError: () => '',
+    passwordIssue: () => '',
+    friendlyError: (e) => String(e?.message || e || 'Error'),
+    broadcastAuthEvent() { },
+    requiresMfaChallenge: async () => false,
+    rpc: async (name) => (name === 'check_admin_request_eligibility' ? { eligible: true } : null),
+    fireKeepaliveRpc: () => true,
+    homeForRole: () => 'dashboard.html',
+    accountSetupUrl: () => null,
+    getDeviceToken: () => '00000000-0000-4000-8000-000000000002',
+    invokeAccountFunction: async (body) => {
+      if (body.action === 'check-signup-username') {
+        checkedUsernames.push(body.username);
+        return { ok: true, valid: true, available: body.username !== 'taken_user' };
+      }
+      if (body.action === 'login-attempt') {
+        loginPayloads.push(body);
+        return {
+          ok: true,
+          locked: false,
+          resolved_email: 'zed@example.com',
+          session: { access_token: 'tok', refresh_token: 'ref' },
+          user: { id: 'u1', email: 'zed@example.com' }
+        };
+      }
+      return { ok: true };
+    },
+    client: {
+      auth: {
+        setSession: async () => ({ data: { user: { id: 'u1', email: 'zed@example.com' }, session: { access_token: 'tok' } }, error: null }),
+        signOut: async () => ({})
+      },
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: { id: 'u1', first_name: 'Zed', last_name: 'User', contact_number: '09171234567', role: 'MEMBER', status: 'ACTIVE', name_setup_required: false },
+              error: null
+            })
+          })
+        })
+      })
+    }
+  };
+  const win = {
+    Ipon: IponMock,
+    location: { search: '', href: 'https://my-ipon.vercel.app/login.html', pathname: '/login.html', replace(u) { redirectedTo = u; } },
+    matchMedia: () => ({ matches: false }),
+    addEventListener() { },
+    localStorage: { getItem: (k) => (storage.has(k) ? storage.get(k) : null), setItem: (k, v) => storage.set(k, String(v)), removeItem: (k) => storage.delete(k) },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    requestAnimationFrame: (fn) => fn(),
+    history: { replaceState() { } },
+    navigator: {},
+    setTimeout,
+    clearTimeout,
+    setInterval: () => 1,
+    clearInterval: () => { },
+    URL,
+    URLSearchParams
+  };
+  vm.runInNewContext(authJs, {
+    ...win,
+    window: win,
+    document: doc,
+    location: win.location,
+    localStorage: win.localStorage,
+    sessionStorage: win.sessionStorage,
+    history: win.history,
+    navigator: win.navigator,
+    console
+  });
+  await new Promise((r) => setTimeout(r, 15));
+
+  // 1. Login with @username strips leading @ and resolves login cleanly
+  els.get('email').value = '@Zed_User';
+  els.get('password').value = 'StrongPass!1';
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(loginPayloads.length, 1);
+  assert.equal(loginPayloads[0].email, 'zed_user');
+  assert.equal(redirectedTo, 'dashboard.html');
+
+  // 2. Create account Step 1 -> Step 2 requires valid available username
+  await els.get('show-signup').dispatch('click');
+  assert.equal(els.get('email-label').textContent, 'Email');
+  assert.equal(els.get('email').type, 'email');
+  els.get('email').value = 'newmember@example.com';
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(els.get('username-field').hidden, false);
+  assert.equal(els.get('username').required, true);
+
+  els.get('first-name').value = 'Juan';
+  els.get('last-name').value = 'Dela Cruz';
+  els.get('contact-number').value = '09171234567';
+  els.get('password').value = 'StrongPass!1';
+  els.get('password-confirmation').value = 'StrongPass!1';
+
+  // Missing username blocks confirmation dialog
+  els.get('username').value = '';
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(els.get('request-confirm-dialog').open, false);
+  assert.equal(els.get('username-error').textContent, 'Enter a username.');
+
+  // Taken username blocks confirmation dialog
+  els.get('username').value = '@taken_user';
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(els.get('request-confirm-dialog').open, false);
+  assert.equal(els.get('username-error').textContent, 'That username is already taken.');
+
+  // Available username passes and renders @juan_dc in confirmation summary
+  els.get('username').value = '@Juan_DC';
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(els.get('request-confirm-dialog').open, true);
+  assert.equal(els.get('summary-username').textContent, '@juan_dc');
+  assert.ok(checkedUsernames.includes('taken_user'));
+  assert.ok(checkedUsernames.includes('juan_dc'));
 });

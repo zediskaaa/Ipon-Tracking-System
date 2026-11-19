@@ -15,6 +15,7 @@
   const signupMethodBackBtn = document.getElementById('signup-method-back');
   const emailChipText = document.getElementById('email-chip-text');
   const emailField = document.getElementById('email-field');
+  const emailLabel = document.getElementById('email-label');
   const passwordField = document.getElementById('password-field');
   const isClerkSsoCallback = new URLSearchParams(window.location.search).get('clerk_sso_callback') === '1';
   const securityNotice = document.getElementById('auth-security-notice');
@@ -30,6 +31,9 @@
   const middleName = document.getElementById('middle-name');
   const lastName = document.getElementById('last-name');
   const email = document.getElementById('email');
+  const usernameField = document.getElementById('username-field');
+  const usernameInput = document.getElementById('username');
+  const usernameStatus = document.getElementById('username-status');
   const contactField = document.getElementById('contact-number-field');
   const contactNumber = document.getElementById('contact-number');
   const reasonField = document.getElementById('request-reason-field');
@@ -62,6 +66,7 @@
   const requestConfirmEdit = document.getElementById('request-confirm-edit');
   const requestConfirmProceed = document.getElementById('request-confirm-proceed');
   const summaryFullName = document.getElementById('summary-full-name');
+  const summaryUsername = document.getElementById('summary-username');
   const summaryContactNumber = document.getElementById('summary-contact-number');
   const summaryEmail = document.getElementById('summary-email');
   const summaryRequestReason = document.getElementById('summary-request-reason');
@@ -83,12 +88,33 @@
     [firstName, document.getElementById('first-name-error')],
     [middleName, document.getElementById('middle-name-error')],
     [lastName, document.getElementById('last-name-error')],
+    ...(usernameInput ? [[usernameInput, document.getElementById('username-error')]] : []),
     [email, document.getElementById('email-error')],
     [contactNumber, document.getElementById('contact-number-error')],
     [requestReason, document.getElementById('request-reason-error')],
     [password, document.getElementById('password-error')],
     [passwordConfirmation, document.getElementById('password-confirmation-error')]
   ]);
+  const USERNAME_RE = /^[a-z0-9_]{3,24}$/;
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const USERNAME_RULE = 'Use 3–24 lowercase letters, numbers, or underscores.';
+  let signupUsernameCheckTimer = null;
+  let signupUsernameCheckSeq = 0;
+  let takenSignupUsername = '';
+  let availableSignupUsername = '';
+  const normalizeSignupUsername = (raw) => String(raw || '').trim().replace(/^@+/, '').toLowerCase();
+  const normalizeLoginIdentifier = (raw) => {
+    const trimmed = String(raw || '').trim().toLowerCase();
+    if (!trimmed) return '';
+    if (trimmed.includes('@') && !trimmed.startsWith('@')) return trimmed;
+    return trimmed.replace(/^@+/, '');
+  };
+  const isValidLoginIdentifier = (raw) => {
+    const trimmed = String(raw || '').trim().toLowerCase();
+    if (!trimmed || trimmed.length > 254) return false;
+    if (trimmed.includes('@') && !trimmed.startsWith('@')) return EMAIL_RE.test(trimmed);
+    return USERNAME_RE.test(trimmed.replace(/^@+/, ''));
+  };
   const passwordRule = 'Use at least 8 characters with uppercase, lowercase, a number, and a symbol.';
   [firstName, middleName, lastName].forEach((input) => {
     if (!input || !Ipon.nameRuleForField) return;
@@ -207,7 +233,7 @@
         ? (clerk?.client?.signIn || clerk?.client?.signUp)
         : (clerk?.client?.signUp || clerk?.client?.signIn);
       if (!resource?.authenticateWithRedirect) {
-        throw new Error('Google and Facebook sign-in is temporarily unavailable. Reload the page or continue with email below.');
+        throw new Error('Google sign-in is temporarily unavailable. Reload the page or continue with email below.');
       }
       if (clerk.session) {
         await clerk.signOut().catch(() => null);
@@ -375,7 +401,7 @@
       if (isClerkSsoCallback && !socialSignupMessage?.textContent) {
         const missing = clerk.client?.signUp?.missingFields || [];
         if (missing.includes('email_address')) {
-          setClerkSignInMessage('Your Google or Facebook account did not share a verified email address. Allow email access or create an account with email.', 'error');
+          setClerkSignInMessage('Your Google account did not share a verified email address. Allow email access or create an account with email.', 'error');
         }
       }
       setClerkSignInLoading(false);
@@ -432,7 +458,7 @@
   }
 
   function normalizeThrottleEmail(rawEmail) {
-    return String(rawEmail || '').trim().toLowerCase();
+    return normalizeLoginIdentifier(rawEmail);
   }
 
   function pruneThrottleEntry(entry, nowMs) {
@@ -680,7 +706,7 @@
   async function syncServerThrottleStatus(rawEmail) {
     if (mode !== 'login') return;
     const normEmail = normalizeThrottleEmail(rawEmail);
-    if (!normEmail || !normEmail.includes('@')) return;
+    if (!normEmail || !isValidLoginIdentifier(normEmail)) return;
     try {
       await ensureInitReady();
       const res = await Ipon.invokeAccountFunction({
@@ -797,7 +823,7 @@
 
   async function finishDeviceOtpSignIn(outcome) {
     let data;
-    const accountEmail = pendingDeviceOtp.email || outcome.email;
+    const accountEmail = outcome.resolved_email || outcome.email || pendingDeviceOtp.email;
     if (pendingDeviceOtp.auth_method === 'clerk') {
       const result = await Ipon.client.auth.verifyOtp({ token_hash: outcome.token_hash, type: 'email' });
       if (result.error || !result.data?.user) throw result.error || new Error('The myIPON session could not be created.');
@@ -809,7 +835,7 @@
       });
       if (result.error || !result.data?.user) throw result.error || new Error('The myIPON session could not be created.');
       data = result.data;
-      await syncClerkSession(pendingDeviceOtp.email, pendingDeviceOtp.password).catch(() => false);
+      await syncClerkSession(accountEmail, pendingDeviceOtp.password).catch(() => false);
     }
     if (await Ipon.requiresMfaChallenge()) {
       deviceOtpDialog.close();
@@ -1083,24 +1109,116 @@
     }
   })();
 
+  function setSignupUsernameStatus(text = '3–24 lowercase letters, numbers, or underscores.', state = '') {
+    if (!usernameStatus) return;
+    usernameStatus.textContent = text;
+    if (state) usernameStatus.dataset.state = state;
+    else delete usernameStatus.dataset.state;
+  }
+
   function setFieldError(input, errorMessage) {
     const error = fieldErrors.get(input);
     input.setCustomValidity(errorMessage);
     input.setAttribute('aria-invalid', 'true');
-    error.textContent = errorMessage;
-    error.hidden = false;
+    if (error) {
+      error.textContent = errorMessage;
+      error.hidden = false;
+    }
+    if (input === usernameInput && usernameStatus) usernameStatus.hidden = true;
   }
 
   function clearFieldError(input) {
     const error = fieldErrors.get(input);
     input.setCustomValidity('');
     input.removeAttribute('aria-invalid');
-    error.textContent = '';
-    error.hidden = true;
+    if (error) {
+      error.textContent = '';
+      error.hidden = true;
+    }
+    if (input === usernameInput && usernameStatus) usernameStatus.hidden = false;
   }
 
   function clearFieldErrors() {
     fieldErrors.forEach((_, input) => clearFieldError(input));
+  }
+
+  async function verifySignupUsernameAvailability(rawVal, seq) {
+    const clean = normalizeSignupUsername(rawVal);
+    if (!clean || !USERNAME_RE.test(clean)) return null;
+    try {
+      await ensureInitReady();
+      const res = await Ipon.invokeAccountFunction({
+        action: 'check-signup-username',
+        username: clean,
+        email: email.value.trim().toLowerCase()
+      });
+      if (seq !== signupUsernameCheckSeq) return null;
+      if (normalizeSignupUsername(usernameInput?.value) !== clean) return null;
+      if (res?.available === false) {
+        takenSignupUsername = clean;
+        availableSignupUsername = '';
+        setFieldError(usernameInput, 'That username is already taken.');
+        return false;
+      }
+      if (res?.available === true) {
+        takenSignupUsername = '';
+        availableSignupUsername = clean;
+        clearFieldError(usernameInput);
+        setSignupUsernameStatus(`@${clean} is available.`, 'available');
+        return true;
+      }
+    } catch {
+      if (seq === signupUsernameCheckSeq && normalizeSignupUsername(usernameInput?.value) === clean) {
+        setSignupUsernameStatus('3–24 lowercase letters, numbers, or underscores.');
+      }
+    }
+    return null;
+  }
+
+  function validateSignupUsernameInput({ checkAvailability = false, immediate = false } = {}) {
+    if (!usernameInput || mode !== 'signup' || signupStep !== 'email') return true;
+    const raw = String(usernameInput.value || '');
+    const normalized = raw.replace(/^@+/, '').toLowerCase();
+    if (normalized !== raw) usernameInput.value = normalized;
+    const clean = normalized.trim();
+    clearTimeout(signupUsernameCheckTimer);
+    if (takenSignupUsername && takenSignupUsername !== clean) takenSignupUsername = '';
+    if (availableSignupUsername && availableSignupUsername !== clean) availableSignupUsername = '';
+    if (!clean) {
+      if (immediate) setFieldError(usernameInput, 'Enter a username.');
+      else {
+        clearFieldError(usernameInput);
+        setSignupUsernameStatus('3–24 lowercase letters, numbers, or underscores.');
+      }
+      return false;
+    }
+    if (!USERNAME_RE.test(clean)) {
+      setFieldError(usernameInput, USERNAME_RULE);
+      return false;
+    }
+    if (takenSignupUsername === clean) {
+      setFieldError(usernameInput, 'That username is already taken.');
+      return false;
+    }
+    clearFieldError(usernameInput);
+    if (availableSignupUsername === clean) {
+      setSignupUsernameStatus(`@${clean} is available.`, 'available');
+      return true;
+    }
+    if (checkAvailability) {
+      setSignupUsernameStatus('Checking availability…', 'checking');
+      const seq = ++signupUsernameCheckSeq;
+      if (immediate) {
+        void verifySignupUsernameAvailability(clean, seq);
+      } else {
+        signupUsernameCheckTimer = setTimeout(() => {
+          void verifySignupUsernameAvailability(clean, seq);
+        }, 320);
+      }
+    } else {
+      setSignupUsernameStatus('3–24 lowercase letters, numbers, or underscores.');
+    }
+    return true;
   }
 
   const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
@@ -1122,7 +1240,7 @@
     });
   }
 
-  const passwordStrength = Ipon.bindPasswordStrength(password, () => [firstName.value, middleName.value, lastName.value, email.value]);
+  const passwordStrength = Ipon.bindPasswordStrength(password, () => [firstName.value, middleName.value, lastName.value, email.value, usernameInput?.value || '']);
   passwordConfirmationField?.after(passwordStrength.element);
   passwordStrength.element.hidden = true;
 
@@ -1148,18 +1266,32 @@
         setFieldError(lastName, 'Combined full name must not exceed 150 characters.');
       }
       if (!/^(?:09\d{9}|\+639\d{9})$/.test(contactNumber.value.trim())) setFieldError(contactNumber, 'Enter 09XXXXXXXXX or +639XXXXXXXXX.');
+      if (usernameInput) {
+        const cleanUsername = normalizeSignupUsername(usernameInput.value);
+        usernameInput.value = cleanUsername;
+        if (!cleanUsername) setFieldError(usernameInput, 'Enter a username.');
+        else if (!USERNAME_RE.test(cleanUsername)) setFieldError(usernameInput, USERNAME_RULE);
+        else if (takenSignupUsername === cleanUsername) setFieldError(usernameInput, 'That username is already taken.');
+      }
       if (!requestReason.value.trim() || requestReason.value.trim().length < 10) {
         requestReason.value = 'Personal group savings account registration';
       }
+      if (!email.value) setFieldError(email, 'Enter your email address.');
+      else if (!EMAIL_RE.test(email.value)) setFieldError(email, 'Enter a valid email address.');
+    } else {
+      if (!email.value) setFieldError(email, 'Enter your email address or username.');
+      else if (!isValidLoginIdentifier(email.value)) setFieldError(email, 'Enter a valid email address or username.');
     }
-    if (!email.value) setFieldError(email, 'Enter your email address.');
-    else if (!email.validity.valid || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) setFieldError(email, 'Enter a valid email address.');
     if (!password.value) setFieldError(password, 'Enter your password.');
-    else if (signup && Ipon.passwordIssue(password.value, [firstName.value, middleName.value, lastName.value, email.value])) setFieldError(password, Ipon.passwordIssue(password.value, [firstName.value, middleName.value, lastName.value, email.value]));
+    else if (signup && Ipon.passwordIssue(password.value, [firstName.value, middleName.value, lastName.value, email.value, usernameInput?.value || ''])) {
+      setFieldError(password, Ipon.passwordIssue(password.value, [firstName.value, middleName.value, lastName.value, email.value, usernameInput?.value || '']));
+    }
     if (signup && !passwordConfirmation.value) setFieldError(passwordConfirmation, 'Confirm your password.');
     else if (signup && passwordConfirmation.value !== password.value) setFieldError(passwordConfirmation, 'Passwords do not match.');
 
-    const inputs = signup ? [...nameInputs, contactNumber, requestReason, email, password, passwordConfirmation] : [email, password];
+    const inputs = signup
+      ? [...nameInputs, contactNumber, ...(usernameInput ? [usernameInput] : []), requestReason, email, password, passwordConfirmation]
+      : [email, password];
     const firstInvalid = inputs.find((input) => !input.checkValidity());
     if (firstInvalid) {
       if (signup && firstInvalid === email) setSignupStep('choice', { focusEmail: true });
@@ -1198,15 +1330,21 @@
     middleNameField.hidden = !inEmailSignup;
     lastNameField.hidden = !inEmailSignup;
     contactField.hidden = !inEmailSignup;
+    if (usernameField) usernameField.hidden = !inEmailSignup;
     reasonField.hidden = true;
     firstName.required = inEmailSignup;
     lastName.required = inEmailSignup;
     contactNumber.required = inEmailSignup;
+    if (usernameInput) usernameInput.required = inEmailSignup;
     passwordConfirmationField.hidden = !inEmailSignup;
     passwordConfirmation.required = inEmailSignup;
     passwordStrength.element.hidden = !inEmailSignup;
     if (forgotButton) forgotButton.hidden = signup;
     if (emailChipText) emailChipText.textContent = email.value.trim() || 'you@example.com';
+    if (!inEmailSignup) {
+      clearTimeout(signupUsernameCheckTimer);
+      setSignupUsernameStatus('3–24 lowercase letters, numbers, or underscores.');
+    }
     submit.textContent = !signup ? 'Sign in' : (inEmailSignup ? 'Create account' : 'Continue');
     setSocialSignupMessage('');
     if (inEmailSignup && focusFirst) {
@@ -1236,6 +1374,11 @@
     authCopy.hidden = false;
     requestReason.required = false;
     if (passwordRequirements) passwordRequirements.hidden = true;
+    if (emailLabel) emailLabel.textContent = signup ? 'Email' : 'Email or username';
+    email.type = signup ? 'email' : 'text';
+    email.inputMode = signup ? 'email' : 'text';
+    email.autocomplete = signup ? 'email' : 'username';
+    email.placeholder = signup ? 'you@example.com' : 'you@example.com or username';
     password.autocomplete = signup ? 'new-password' : 'current-password';
     if (signup) { password.minLength = 8; password.maxLength = 128; }
     else { password.removeAttribute('minlength'); password.removeAttribute('maxlength'); }
@@ -1252,9 +1395,18 @@
     renderSecurityNotice();
   }
 
-  fieldErrors.forEach((_, input) => input.addEventListener('input', () => clearFieldError(input)));
+  fieldErrors.forEach((_, input) => {
+    if (input === usernameInput) return;
+    input.addEventListener('input', () => clearFieldError(input));
+  });
+  usernameInput?.addEventListener('input', () => {
+    validateSignupUsernameInput({ checkAvailability: true, immediate: false });
+  });
+  usernameInput?.addEventListener('blur', () => {
+    validateSignupUsernameInput({ checkAvailability: true, immediate: true });
+  });
   const clearCredentialError = () => {
-    if (mode !== 'login' || message.textContent !== 'Incorrect email or password.') return;
+    if (mode !== 'login' || message.textContent !== 'Incorrect email, username, or password.') return;
     [email, password].forEach((input) => input.removeAttribute('aria-invalid'));
     message.textContent = '';
   };
@@ -1320,7 +1472,8 @@
   };
   forgotButton.addEventListener('click', () => {
     resetRecoveryDialog();
-    recoveryRequestForm.elements.email.value = email.value.trim();
+    const candidate = email.value.trim();
+    recoveryRequestForm.elements.email.value = EMAIL_RE.test(candidate) ? candidate : '';
     recoveryDialog.showModal();
     recoveryRequestForm.elements.email.focus();
   });
@@ -1413,6 +1566,26 @@
         const last = Ipon.normalizeNamePart(lastName.value);
         const full = [first, middle, last].filter(Boolean).join(' ');
         const submittedEmail = email.value.trim().toLowerCase();
+        const submittedUsername = normalizeSignupUsername(usernameInput?.value);
+        if (usernameInput && availableSignupUsername !== submittedUsername) {
+          const checkRes = await Ipon.invokeAccountFunction({
+            action: 'check-signup-username',
+            username: submittedUsername,
+            email: submittedEmail
+          }).catch(() => null);
+          if (checkRes?.available === false) {
+            takenSignupUsername = submittedUsername;
+            availableSignupUsername = '';
+            setFieldError(usernameInput, 'That username is already taken.');
+            usernameInput.focus();
+            return;
+          }
+          if (checkRes?.available === true) {
+            takenSignupUsername = '';
+            availableSignupUsername = submittedUsername;
+            setSignupUsernameStatus(`@${submittedUsername} is available.`, 'available');
+          }
+        }
         const eligibility = await Ipon.rpc('check_admin_request_eligibility', { p_email: submittedEmail });
         if (eligibility && !eligibility.eligible) {
           const fallbackMsg = eligibility.message || 'This email cannot register.';
@@ -1422,6 +1595,7 @@
         }
         pendingSignupPayload = {
           email: submittedEmail,
+          username: submittedUsername,
           password: password.value,
           first,
           middle,
@@ -1432,6 +1606,7 @@
         };
 
         if (summaryFullName) summaryFullName.textContent = full;
+        if (summaryUsername) summaryUsername.textContent = submittedUsername ? `@${submittedUsername}` : '—';
         if (summaryContactNumber) summaryContactNumber.textContent = contactNumber.value.trim();
         if (summaryEmail) summaryEmail.textContent = submittedEmail;
         if (summaryRequestReason) summaryRequestReason.textContent = requestReason.value.trim();
@@ -1439,9 +1614,9 @@
         requestConfirmDialog?.showModal();
         return;
       } else {
-        const submittedEmail = email.value.trim().toLowerCase();
-        email.value = submittedEmail;
-        const activeLock = getActiveThrottleState(submittedEmail).entry;
+        const submittedIdentifier = normalizeLoginIdentifier(email.value);
+        email.value = submittedIdentifier;
+        const activeLock = getActiveThrottleState(submittedIdentifier).entry;
         if (activeLock && activeLock.lockedUntilMs > Date.now()) {
           renderSecurityNotice();
           message.dataset.tone = 'error';
@@ -1452,7 +1627,7 @@
         try {
           edgeRes = await Ipon.invokeAccountFunction({
             action: 'login-attempt',
-            email: submittedEmail,
+            email: submittedIdentifier,
             password: password.value,
             device_token: Ipon.getDeviceToken()
           });
@@ -1464,7 +1639,7 @@
         if (edgeRes?.requires_device_otp) {
           openDeviceOtpChallenge(edgeRes, {
             auth_method: 'password',
-            email: submittedEmail,
+            email: submittedIdentifier,
             password: password.value
           });
           return;
@@ -1476,11 +1651,11 @@
               refresh_token: edgeRes.session.refresh_token
             });
             if (sessionError) throw sessionError;
-            clearLocalThrottle(submittedEmail);
+            clearLocalThrottle(submittedIdentifier);
             renderSecurityNotice();
             data = sessionData?.user ? sessionData : { user: edgeRes.user, session: edgeRes.session };
           } else if (edgeRes.error?.code === 'login_locked') {
-            if (edgeRes.throttle) syncThrottleFromServer(submittedEmail, edgeRes.throttle);
+            if (edgeRes.throttle) syncThrottleFromServer(submittedIdentifier, edgeRes.throttle);
             throw Object.assign(new Error(edgeRes.error.message || 'Too many incorrect sign-in attempts. Please wait before trying again.'), {
               code: 'login_locked',
               throttle: edgeRes.throttle || null
@@ -1488,37 +1663,38 @@
           } else if (edgeRes.error?.code === 'email_not_confirmed') {
             throw Object.assign(new Error(edgeRes.error.message || 'Email not confirmed.'), { code: 'email_not_confirmed' });
           } else {
-            if (edgeRes.throttle) syncThrottleFromServer(submittedEmail, edgeRes.throttle);
-            throw Object.assign(new Error(edgeRes.error?.message || 'Incorrect email or password.'), {
+            if (edgeRes.throttle) syncThrottleFromServer(submittedIdentifier, edgeRes.throttle);
+            throw Object.assign(new Error(edgeRes.error?.message || 'Incorrect email, username, or password.'), {
               code: edgeRes.error?.code || 'invalid_credentials',
               throttle: edgeRes.throttle || null
             });
           }
         } else throw new Error('Secure sign-in is temporarily unavailable. Please try again.');
 
-        await syncClerkSession(submittedEmail, password.value).catch(() => false);
+        const resolvedEmail = String(edgeRes.resolved_email || data.user?.email || submittedIdentifier).trim().toLowerCase();
+        await syncClerkSession(resolvedEmail, password.value).catch(() => false);
         if (await Ipon.requiresMfaChallenge()) {
           window.location.replace('mfa.html');
           return;
         }
-        const profile = await resolveActiveProfile(data.user, submittedEmail);
+        const profile = await resolveActiveProfile(data.user, resolvedEmail);
         recordLoginActivity(data);
         completeLoginSession(data, profile);
       }
     } catch (error) {
       message.dataset.tone = 'error';
       if (mode === 'login' && error?.code === 'login_locked') {
-        if (error?.throttle) syncThrottleFromServer(email.value.trim().toLowerCase(), error.throttle);
+        if (error?.throttle) syncThrottleFromServer(normalizeLoginIdentifier(email.value), error.throttle);
         renderSecurityNotice();
         message.textContent = 'Too many incorrect sign-in attempts. Please wait for the countdown to finish.';
       } else if (mode === 'login' && (error?.code === 'invalid_credentials' || /invalid login credentials/i.test(error?.message || ''))) {
-        const failedEmail = email.value.trim().toLowerCase();
+        const failedIdentifier = normalizeLoginIdentifier(email.value);
         [email, password].forEach((input) => input.setAttribute('aria-invalid', 'true'));
-        message.textContent = 'Incorrect email or password.';
-        if (error?.throttle) syncThrottleFromServer(failedEmail, error.throttle);
-        else recordLocalFailedAttempt(failedEmail);
+        message.textContent = 'Incorrect email, username, or password.';
+        if (error?.throttle) syncThrottleFromServer(failedIdentifier, error.throttle);
+        else recordLocalFailedAttempt(failedIdentifier);
         renderSecurityNotice();
-        const lockEntry = getActiveThrottleState(failedEmail).entry;
+        const lockEntry = getActiveThrottleState(failedIdentifier).entry;
         if (!lockEntry || lockEntry.lockedUntilMs <= Date.now()) password.focus();
       } else if (mode === 'login' && (error?.code === 'email_not_confirmed' || /email not confirmed/i.test(error?.message || ''))) {
         message.textContent = 'Your email address is not confirmed yet. Please open your activation email or ask your administrator to update your password.';
@@ -1540,6 +1716,7 @@
     await ensureInitReady();
     const res = await Ipon.submitAdminRequest({
       email: payload.email,
+      username: payload.username,
       password: payload.password,
       first: payload.first,
       middle: payload.middle,
@@ -1583,7 +1760,7 @@
       Ipon.setLoading(false);
       form.reset();
       setMode('login');
-      setClerkSignInMessage('Account created and verified. Sign in with Google, Facebook, or your email.', 'success');
+      setClerkSignInMessage('Account created and verified. Sign in with Google, your email, or your username.', 'success');
       Ipon.toast('Account verified. Sign in to continue.');
       if (requestSuccessEmail) requestSuccessEmail.textContent = `Account created for ${submittedEmail}. Sign in to continue.`;
       requestSuccessDialog?.showModal();
