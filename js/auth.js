@@ -3,6 +3,11 @@
   const form = document.getElementById('auth-form');
   const message = document.getElementById('auth-message');
   const submit = document.getElementById('auth-submit');
+  const authTitle = document.getElementById('auth-title');
+  const authCopy = document.getElementById('auth-copy');
+  const clerkSignInShell = document.getElementById('clerk-signin-shell');
+  const clerkSignInNode = document.getElementById('clerk-sign-in');
+  const clerkSignInMessage = document.getElementById('clerk-signin-message');
   const securityNotice = document.getElementById('auth-security-notice');
   const securityTitle = document.getElementById('auth-security-title');
   const securityDetail = document.getElementById('auth-security-detail');
@@ -30,6 +35,13 @@
   const recoveryDialog = document.getElementById('recovery-dialog');
   const recoveryRequestForm = document.getElementById('recovery-request-form');
   const recoveryMessage = document.getElementById('recovery-message');
+  const deviceOtpDialog = document.getElementById('device-otp-dialog');
+  const deviceOtpForm = document.getElementById('device-otp-form');
+  const deviceOtpCode = document.getElementById('device-otp-code');
+  const deviceOtpCopy = document.getElementById('device-otp-copy');
+  const deviceOtpMessage = document.getElementById('device-otp-message');
+  const deviceOtpResend = document.getElementById('device-otp-resend');
+  const deviceOtpCancel = document.getElementById('device-otp-cancel');
   const requestSuccessDialog = document.getElementById('request-success-dialog');
   const requestSuccessEmail = document.getElementById('request-success-email');
   const inviteSuccessDialog = document.getElementById('invite-success-dialog');
@@ -76,10 +88,152 @@
     if (!input.placeholder && meta.placeholder) input.placeholder = meta.placeholder;
   });
   let mode = 'login';
+  let clerkLoadPromise = null;
+  let clerkSignInMounted = false;
+  let clerkExchangeSessionId = '';
+  let pendingDeviceOtp = null;
   const LOGIN_THROTTLE_STORAGE_KEY = 'myipon_login_throttle_v1';
   const LOGIN_MAX_ATTEMPTS = 5;
   const LOGIN_STALE_WINDOW_MS = 24 * 60 * 60 * 1000;
   let lockCountdownTimer = null;
+
+  function loadClerk() {
+    if (!window.Clerk) return Promise.resolve(null);
+    clerkLoadPromise ||= window.Clerk.load({
+      ui: { ClerkUI: window.__internal_ClerkUICtor }
+    }).then(() => window.Clerk).catch((error) => {
+      console.error('Clerk initialization failed:', error);
+      return null;
+    });
+    return clerkLoadPromise;
+  }
+
+  function mountClerkSignIn(clerk) {
+    if (!clerk || !clerkSignInNode || clerkSignInMounted || clerk.session) return;
+    const dark = document.documentElement.dataset.theme === 'dark';
+    clerk.mountSignIn(clerkSignInNode, {
+      routing: 'virtual',
+      signUpUrl: 'login.html?mode=signup',
+      appearance: {
+        variables: {
+          colorPrimary: '#1f6a43',
+          colorBackground: 'transparent',
+          colorText: dark ? '#ffffff' : '#112622',
+          colorTextSecondary: dark ? '#9eb3aa' : '#5c6863',
+          colorInputBackground: dark ? '#0d1f1a' : '#fffdf9',
+          colorInputText: dark ? '#ffffff' : '#112622',
+          borderRadius: '10px',
+          fontFamily: 'Arial, sans-serif'
+        },
+        layout: { socialButtonsVariant: 'blockButton', socialButtonsPlacement: 'top' },
+        elements: {
+          rootBox: { width: '100%' },
+          cardBox: { width: '100%', border: '0', borderRadius: '0', boxShadow: 'none', overflow: 'visible' },
+          card: { width: '100%', padding: '4px 0 0', margin: '0', border: '0', borderRadius: '0', background: 'transparent', boxShadow: 'none' },
+          socialButtons: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '10px', width: '100%' },
+          socialButtonsBlockButton: {
+            width: '100%', minHeight: '44px', boxSizing: 'border-box', margin: '0',
+            border: dark ? '1px solid rgba(168,235,197,.42)' : '1px solid rgba(20,45,43,.24)',
+            borderRadius: '10px', background: dark ? '#0d211b' : '#fffdf9'
+          },
+          formFieldInput: {
+            minHeight: '44px', boxSizing: 'border-box', color: dark ? '#ffffff' : '#112622',
+            border: dark ? '1px solid rgba(168,235,197,.42)' : '1px solid rgba(20,45,43,.24)',
+            background: dark ? '#0d211b' : '#fffdf9'
+          },
+          otpCodeField: {
+            width: '100%', paddingTop: '14px', paddingBottom: '4px', alignItems: 'center', overflow: 'visible'
+          },
+          otpCodeFieldInputContainer: {
+            width: '100%', padding: '4px 0', overflow: 'visible'
+          },
+          otpCodeFieldInputs: {
+            display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 46px))',
+            justifyContent: 'center', alignItems: 'center', gap: '8px', width: '100%', overflow: 'visible'
+          },
+          otpCodeFieldInput: {
+            width: '100%', minWidth: '0', height: 'auto', aspectRatio: '1 / 1', boxSizing: 'border-box',
+            margin: '0', padding: '0', borderRadius: '8px', fontSize: '20px', fontWeight: '700', lineHeight: '1',
+            color: dark ? '#ffffff' : '#112622',
+            border: dark ? '1.5px solid rgba(168,235,197,.48)' : '1.5px solid rgba(20,45,43,.3)',
+            background: dark ? '#0d211b' : '#fffdf9', fontVariantNumeric: 'tabular-nums'
+          },
+          formButtonPrimary: { minHeight: '44px', color: '#ffffff', fontWeight: '700', boxShadow: 'none' },
+          buttonArrowIcon: { display: 'none' },
+          formResendCodeLink: { color: dark ? '#7ee0ab' : '#1f6a43', fontWeight: '700' },
+          formButtonReset: { minHeight: '40px', color: dark ? '#7ee0ab' : '#1f6a43', fontWeight: '700' },
+          header: { display: 'none' },
+          footer: { display: 'none' }
+        }
+      }
+    });
+    clerkSignInMounted = true;
+  }
+
+  async function exchangeClerkSession(clerk) {
+    if (!clerk?.session || mode !== 'login') return;
+    const sessionId = String(clerk.session.id || '');
+    if (!sessionId || clerkExchangeSessionId === sessionId) return;
+    clerkExchangeSessionId = sessionId;
+    if (clerkSignInMessage) clerkSignInMessage.textContent = 'Finishing your secure sign in...';
+    try {
+      await ensureInitReady();
+      const { data: { session: existingSession } } = await Ipon.client.auth.getSession();
+      if (existingSession) return;
+      const token = await clerk.session.getToken({ skipCache: true });
+      if (!token) throw new Error('Your Clerk sign-in session is unavailable.');
+      const exchange = await Ipon.invokeAccountFunction({ action: 'clerk-session-exchange', clerk_token: token, device_token: Ipon.getDeviceToken() });
+      if (exchange.requires_device_otp) {
+        openDeviceOtpChallenge(exchange, { auth_method: 'clerk', clerk_token: token, clerk });
+        return;
+      }
+      const { data, error } = await Ipon.client.auth.verifyOtp({ token_hash: exchange.token_hash, type: 'email' });
+      if (error || !data?.user) throw error || new Error('The myIPON session could not be created.');
+      if (await Ipon.requiresMfaChallenge()) {
+        window.location.replace('mfa.html');
+        return;
+      }
+      const profile = await resolveActiveProfile(data.user, exchange.email);
+      await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
+      completeLoginSession(data, profile);
+    } catch (error) {
+      clerkExchangeSessionId = '';
+      if (clerkSignInMessage) clerkSignInMessage.textContent = Ipon.friendlyError(error);
+      await clerk.signOut().catch(() => null);
+      mountClerkSignIn(clerk);
+    }
+  }
+
+  async function syncClerkSession(emailAddress, accountPassword) {
+    const clerk = await loadClerk();
+    if (!clerk) return false;
+    const activeEmail = clerk.user?.primaryEmailAddress?.emailAddress?.toLowerCase();
+    if (clerk.session && activeEmail === emailAddress) return true;
+    if (clerk.session) await clerk.signOut();
+    const attempt = await clerk.client.signIn.create({ identifier: emailAddress, password: accountPassword });
+    if (attempt.status !== 'complete' || !attempt.createdSessionId) return false;
+    await clerk.setActive({ session: attempt.createdSessionId });
+    return true;
+  }
+
+  loadClerk().then(async (clerk) => {
+    let shouldSignOut = false;
+    try {
+      shouldSignOut = localStorage.getItem('myipon_clerk_signout') === '1';
+      if (shouldSignOut) localStorage.removeItem('myipon_clerk_signout');
+    } catch { }
+    if (shouldSignOut && clerk?.session) await clerk.signOut().catch(() => null);
+    if (!clerk) {
+      if (clerkSignInMessage) clerkSignInMessage.textContent = 'Clerk sign-in is temporarily unavailable. Reload the page to try again.';
+      return;
+    }
+    clerk.addListener(() => {
+      if (clerk.session) exchangeClerkSession(clerk);
+      else mountClerkSignIn(clerk);
+    });
+    if (clerk.session) await exchangeClerkSession(clerk);
+    else mountClerkSignIn(clerk);
+  });
 
   function computeLockoutSeconds(failedAttempts) {
     if (failedAttempts < LOGIN_MAX_ATTEMPTS) return 0;
@@ -466,6 +620,112 @@
     window.location.replace(Ipon.accountSetupUrl(profile, data.user) || Ipon.homeForRole(role));
   }
 
+  function openDeviceOtpChallenge(outcome, context) {
+    pendingDeviceOtp = { ...context, challenge_id: outcome.challenge_id };
+    deviceOtpForm.reset();
+    deviceOtpMessage.textContent = '';
+    deviceOtpCopy.textContent = `Enter the 6-digit code sent to ${outcome.email_hint || 'your email address'}.`;
+    if (!deviceOtpDialog.open) deviceOtpDialog.showModal();
+    requestAnimationFrame(() => deviceOtpCode.focus());
+  }
+
+  async function requestPendingDeviceOtp() {
+    if (!pendingDeviceOtp) throw new Error('Start signing in again to request a new code.');
+    const base = { device_token: Ipon.getDeviceToken() };
+    const outcome = pendingDeviceOtp.auth_method === 'clerk'
+      ? await Ipon.invokeAccountFunction({ action: 'clerk-session-exchange', clerk_token: pendingDeviceOtp.clerk_token, ...base })
+      : await Ipon.invokeAccountFunction({ action: 'login-attempt', email: pendingDeviceOtp.email, password: pendingDeviceOtp.password, ...base });
+    if (!outcome?.requires_device_otp) throw new Error('New-device verification is no longer required. Sign in again.');
+    pendingDeviceOtp.challenge_id = outcome.challenge_id;
+    deviceOtpCopy.textContent = `Enter the 6-digit code sent to ${outcome.email_hint || 'your email address'}.`;
+  }
+
+  async function finishDeviceOtpSignIn(outcome) {
+    let data;
+    const accountEmail = pendingDeviceOtp.email || outcome.email;
+    if (pendingDeviceOtp.auth_method === 'clerk') {
+      const result = await Ipon.client.auth.verifyOtp({ token_hash: outcome.token_hash, type: 'email' });
+      if (result.error || !result.data?.user) throw result.error || new Error('The myIPON session could not be created.');
+      data = result.data;
+    } else {
+      const result = await Ipon.client.auth.setSession({
+        access_token: outcome.session?.access_token,
+        refresh_token: outcome.session?.refresh_token
+      });
+      if (result.error || !result.data?.user) throw result.error || new Error('The myIPON session could not be created.');
+      data = result.data;
+      await syncClerkSession(pendingDeviceOtp.email, pendingDeviceOtp.password).catch(() => false);
+    }
+    if (await Ipon.requiresMfaChallenge()) {
+      deviceOtpDialog.close();
+      pendingDeviceOtp = null;
+      window.location.replace('mfa.html');
+      return;
+    }
+    const profile = await resolveActiveProfile(data.user, accountEmail);
+    await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
+    deviceOtpDialog.close();
+    pendingDeviceOtp = null;
+    completeLoginSession(data, profile);
+  }
+
+  deviceOtpCode.addEventListener('input', () => {
+    deviceOtpCode.value = deviceOtpCode.value.replace(/\D/g, '').slice(0, 6);
+    deviceOtpCode.setCustomValidity('');
+    deviceOtpMessage.textContent = '';
+  });
+  deviceOtpForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const code = deviceOtpCode.value.trim();
+    if (!/^\d{6}$/.test(code)) {
+      deviceOtpCode.setCustomValidity('Enter the 6-digit code sent to your email.');
+      deviceOtpMessage.textContent = deviceOtpCode.validationMessage;
+      return deviceOtpCode.focus();
+    }
+    const button = event.submitter;
+    Ipon.setBusy(button, true, 'Verifying…');
+    deviceOtpMessage.textContent = '';
+    try {
+      const outcome = await Ipon.invokeAccountFunction({
+        action: 'verify-device-otp',
+        challenge_id: pendingDeviceOtp?.challenge_id,
+        code,
+        device_token: Ipon.getDeviceToken(),
+        auth_method: pendingDeviceOtp?.auth_method,
+        email: pendingDeviceOtp?.email,
+        password: pendingDeviceOtp?.password,
+        clerk_token: pendingDeviceOtp?.clerk_token
+      });
+      await finishDeviceOtpSignIn(outcome);
+    } catch (error) {
+      deviceOtpMessage.textContent = Ipon.friendlyError(error);
+      deviceOtpCode.select();
+    } finally { Ipon.setBusy(button, false); }
+  });
+  deviceOtpResend.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    Ipon.setBusy(button, true, 'Sending…');
+    deviceOtpMessage.textContent = '';
+    try {
+      await requestPendingDeviceOtp();
+      deviceOtpMessage.textContent = 'Check your email for the latest code.';
+      deviceOtpCode.focus();
+    } catch (error) { deviceOtpMessage.textContent = Ipon.friendlyError(error); }
+    finally { Ipon.setBusy(button, false); }
+  });
+  const cancelDeviceOtp = async () => {
+    const clerk = pendingDeviceOtp?.clerk;
+    pendingDeviceOtp = null;
+    deviceOtpDialog.close();
+    if (clerk) {
+      clerkExchangeSessionId = '';
+      await clerk.signOut().catch(() => null);
+      mountClerkSignIn(clerk);
+    }
+  };
+  deviceOtpCancel.addEventListener('click', cancelDeviceOtp);
+  deviceOtpDialog.addEventListener('cancel', (event) => { event.preventDefault(); cancelDeviceOtp(); });
+
   async function ensureInitReady() {
     const state = await initPromise;
     if (state?.failed) throw state.error || new Error('Connection failed. Please reload and try again.');
@@ -836,6 +1096,10 @@
     updateTabIndicator(signup ? signupTab : loginTab);
     requestAnimationFrame(() => updateTabIndicator(signup ? signupTab : loginTab));
     form.setAttribute('aria-labelledby', 'auth-title');
+    form.hidden = !signup;
+    if (clerkSignInShell) clerkSignInShell.hidden = signup;
+    authTitle.hidden = !signup;
+    authCopy.hidden = !signup;
     firstNameField.hidden = !signup;
     middleNameField.hidden = !signup;
     lastNameField.hidden = !signup;
@@ -849,12 +1113,12 @@
     passwordConfirmation.required = signup;
     if (passwordRequirements) passwordRequirements.hidden = true;
     passwordStrength.element.hidden = !signup;
-    forgotButton.hidden = signup;
+    forgotButton.hidden = true;
     password.autocomplete = signup ? 'new-password' : 'current-password';
     if (signup) { password.minLength = 8; password.maxLength = 128; }
     else { password.removeAttribute('minlength'); password.removeAttribute('maxlength'); }
-    document.getElementById('auth-title').textContent = signup ? 'Create your account' : 'Welcome back';
-    document.getElementById('auth-copy').textContent = activeJoinPreview?.valid
+    authTitle.textContent = signup ? 'Create your account' : 'Welcome back';
+    authCopy.textContent = activeJoinPreview?.valid
       ? (signup ? `Create an account to join "${activeJoinPreview.group_name}".` : `Sign in to join "${activeJoinPreview.group_name}".`)
       : (signup ? 'Sign up with myIPON to track and manage your group savings.' : 'Sign in to view your savings records.');
     submit.textContent = signup ? 'Create account' : 'Sign in';
@@ -885,8 +1149,12 @@
   });
   passwordToggle?.addEventListener('click', () => setPasswordVisibility(password.type === 'password'));
   passwordConfirmationToggle?.addEventListener('click', () => setPasswordVisibility(passwordConfirmation.type === 'password'));
-  loginTab?.addEventListener('click', () => setMode('login'));
-  signupTab?.addEventListener('click', () => setMode('signup'));
+  loginTab?.addEventListener('click', () => {
+    setMode('login');
+  });
+  signupTab?.addEventListener('click', () => {
+    setMode('signup');
+  });
   if (new URLSearchParams(location.search).get('mode') === 'signup') setMode('signup');
   else updateTabIndicator(loginTab);
   window.addEventListener('resize', () => updateTabIndicator());
@@ -1016,23 +1284,27 @@
           return;
         }
         let edgeRes = null;
-        let edgeFallback = false;
         try {
           edgeRes = await Ipon.invokeAccountFunction({
             action: 'login-attempt',
             email: submittedEmail,
-            password: password.value
+            password: password.value,
+            device_token: Ipon.getDeviceToken()
           });
         } catch (edgeError) {
-          const edgeMsg = String(edgeError?.message || '');
-          if (navigator.onLine === false || /failed to fetch|network|timeout|aborted|load failed/i.test(edgeMsg)) {
-            throw edgeError;
-          }
-          edgeFallback = true;
+          throw edgeError;
         }
 
         let data;
-        if (!edgeFallback && edgeRes && typeof edgeRes === 'object' && ('ok' in edgeRes || 'locked' in edgeRes || 'error' in edgeRes)) {
+        if (edgeRes?.requires_device_otp) {
+          openDeviceOtpChallenge(edgeRes, {
+            auth_method: 'password',
+            email: submittedEmail,
+            password: password.value
+          });
+          return;
+        }
+        if (edgeRes && typeof edgeRes === 'object' && ('ok' in edgeRes || 'locked' in edgeRes || 'error' in edgeRes)) {
           if (edgeRes.ok && edgeRes.session?.access_token && edgeRes.session?.refresh_token) {
             const { data: sessionData, error: sessionError } = await Ipon.client.auth.setSession({
               access_token: edgeRes.session.access_token,
@@ -1057,14 +1329,9 @@
               throttle: edgeRes.throttle || null
             });
           }
-        } else {
-          const signInRes = await Ipon.client.auth.signInWithPassword({ email: submittedEmail, password: password.value });
-          if (signInRes.error) throw signInRes.error;
-          clearLocalThrottle(submittedEmail);
-          renderSecurityNotice();
-          data = signInRes.data;
-        }
+        } else throw new Error('Secure sign-in is temporarily unavailable. Please try again.');
 
+        await syncClerkSession(submittedEmail, password.value).catch(() => false);
         if (await Ipon.requiresMfaChallenge()) {
           window.location.replace('mfa.html');
           return;
@@ -1129,11 +1396,20 @@
     try {
       Ipon.setLoading(true, 'Signing you in…');
       Ipon.toast('Account verified! Signing you in…');
-      const { data, error: loginError } = await Ipon.client.auth.signInWithPassword({
+      const edgeRes = await Ipon.invokeAccountFunction({
+        action: 'login-attempt',
         email: submittedEmail,
         password: submittedPassword
       });
+      if (!edgeRes?.ok || !edgeRes.session?.access_token || !edgeRes.session?.refresh_token) {
+        throw new Error(edgeRes?.error?.message || 'Your account was created, but automatic sign in failed.');
+      }
+      const { data, error: loginError } = await Ipon.client.auth.setSession({
+        access_token: edgeRes.session.access_token,
+        refresh_token: edgeRes.session.refresh_token
+      });
       if (loginError) throw loginError;
+      await syncClerkSession(submittedEmail, submittedPassword).catch(() => false);
       const profile = await resolveActiveProfile(data.user, submittedEmail);
       await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
       completeLoginSession(data, profile);
@@ -1142,13 +1418,10 @@
       Ipon.setLoading(false);
       form.reset();
       setMode('login');
-      email.value = submittedEmail;
-      message.dataset.tone = 'success';
-      message.textContent = 'Account created and verified! Please sign in with your password.';
-      Ipon.toast('Account verified. Please sign in.');
+      if (clerkSignInMessage) clerkSignInMessage.textContent = 'Account created and verified. Sign in with Google, Facebook, or your email.';
+      Ipon.toast('Account verified. Sign in to continue.');
       if (requestSuccessEmail) requestSuccessEmail.textContent = `Account created for ${submittedEmail}. Sign in to continue.`;
       requestSuccessDialog?.showModal();
-      password.focus();
     }
   }
 

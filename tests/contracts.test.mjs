@@ -894,7 +894,7 @@ test('password recovery uses a hosted reset link before accepting a new password
   assert.match(login, /Email reset link/);
   assert.doesNotMatch(login, /id="recovery-code"/);
   assert.match(auth, /resetPasswordForEmail\(recoveryEmail, \{ redirectTo \}\)/);
-  assert.doesNotMatch(auth, /verifyOtp/);
+  assert.doesNotMatch(auth, /verifyOtp\(\{\s*email:\s*recoveryEmail/);
   assert.match(reset, /auth\.updateUser\(\{ password: password\.value \}\)/);
   assert.match(config, /\[auth\.email\.template\.recovery\][\s\S]*?content_path = "\.\/supabase\/templates\/recovery\.html"/);
   assert.match(template, /\{\{ \.ConfirmationURL \}\}/);
@@ -1103,6 +1103,11 @@ test('multi-group workspaces support editable group name/DP, admin contributor t
   assert.match(core, /unblockAdminRequest/);
   assert.match(authJs, /sendAdminRequestVerificationCode/);
   assert.match(authJs, /verifyAdminRequestVerificationCode/);
+  const clerkEmailWebhook = read('supabase/functions/clerk-email-webhook/index.ts');
+  assert.match(clerkEmailWebhook, /new Webhook\(secret\)/);
+  assert.match(clerkEmailWebhook, /event\.type !== 'email\.created'/);
+  assert.match(clerkEmailWebhook, /messageData\.otp_code/);
+  assert.match(clerkEmailWebhook, /api\.brevo\.com\/v3\/smtp\/email/);
   assert.match(dashboardJs, /activeIds\.has\(item\.member_id\)/);
   assert.match(schema, /delete from public\.contribution_periods cp[\s\S]*cp\.member_id = v_member_id[\s\S]*not exists \([\s\S]*select 1 from public\.contributions c/);
   const migration033 = read('database/migrations/20261113_033_clean_unpaid_periods_on_admin_contributor_toggle.sql');
@@ -5109,6 +5114,7 @@ test('Android v31 splash screen and progressive anti-bruteforce login protection
     rpc: async () => null,
     homeForRole: () => 'dashboard.html',
     accountSetupUrl: () => null,
+    getDeviceToken: () => '00000000-0000-4000-8000-000000000001',
     invokeAccountFunction: async (body) => {
       if (body.action === 'login-throttle-status') return { ok: true, locked: false, retry_after_seconds: 0 };
       if (body.action !== 'login-attempt') return {};
@@ -11328,7 +11334,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261118-143/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261119-145/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11805,4 +11811,85 @@ test('Reports and member statement CSV exports and Print/Save PDF support Androi
   assert.match(decodedPdf, /Monthly report/);
   assert.match(decodedPdf, /PHP 500\.00/);
   assert.equal(decodedPdf.endsWith('%%EOF'), true);
+});
+
+test('Clerk social sign-in preserves Supabase authorization and mobile-safe login contracts', () => {
+  const loginHtml = read('login.html');
+  const authJs = read('js/auth.js');
+  const coreJs = read('js/core.js');
+  const configJs = read('js/config.js');
+  const accountFunction = read('supabase/functions/manage-account/index.ts');
+  const vercel = read('vercel.json');
+
+  assert.match(configJs, /clerkPublishableKey:\s*'pk_test_/);
+  assert.match(loginHtml, /data-clerk-publishable-key="pk_test_/);
+  assert.match(loginHtml, /https:\/\/solid-gannet-2021\.clerk\.accounts\.dev\/npm\/@clerk\/ui@1\/dist\/ui\.browser\.js/);
+  assert.match(loginHtml, /https:\/\/solid-gannet-2021\.clerk\.accounts\.dev\/npm\/@clerk\/clerk-js@6\/dist\/clerk\.browser\.js/);
+  assert.match(loginHtml, /id="clerk-sign-in"/);
+  assert.match(loginHtml, /#clerk-sign-in\{width:100%;min-height:0\}/);
+  assert.doesNotMatch(loginHtml, /Use existing myIPON password|legacy-signin-toggle/);
+  assert.match(loginHtml, /@media\(max-width:780px\)[\s\S]*?\.login-page\{display:flex/);
+  assert.match(authJs, /clerk\.mountSignIn\(clerkSignInNode/);
+  assert.match(authJs, /socialButtonsPlacement:\s*'top'/);
+  assert.match(authJs, /socialButtonsBlockButton:[\s\S]*?border:[\s\S]*?borderRadius:\s*'10px'/);
+  assert.match(authJs, /cardBox:[\s\S]*?overflow:\s*'visible'/);
+  assert.match(authJs, /otpCodeField:[\s\S]*?paddingTop:\s*'14px'/);
+  assert.match(authJs, /otpCodeFieldInputs:[\s\S]*?repeat\(6,\s*minmax\(0,\s*46px\)\)/);
+  assert.match(authJs, /otpCodeFieldInput:[\s\S]*?aspectRatio:\s*'1 \/ 1'[\s\S]*?borderRadius:\s*'8px'[\s\S]*?fontVariantNumeric:\s*'tabular-nums'/);
+  assert.match(authJs, /buttonArrowIcon:\s*\{\s*display:\s*'none'\s*\}/);
+  assert.match(loginHtml, /#clerk-sign-in \.cl-cardBox\{overflow:visible!important/);
+  assert.match(loginHtml, /#clerk-sign-in \.cl-otpCodeFieldInput\{width:100%!important;height:auto!important;aspect-ratio:1 \/ 1!important;border-radius:8px!important/);
+  assert.match(loginHtml, /#clerk-sign-in \.cl-buttonArrowIcon\{display:none!important\}/);
+  assert.match(authJs, /action:\s*'clerk-session-exchange'/);
+  assert.match(authJs, /auth\.verifyOtp\(\{ token_hash:\s*exchange\.token_hash, type:\s*'email' \}\)/);
+  assert.match(authJs, /async function syncClerkSession\(/);
+  assert.match(authJs, /clerk\.client\.signIn\.create\(\{ identifier: emailAddress, password: accountPassword \}\)/);
+  assert.match(authJs, /await syncClerkSession\(submittedEmail, password\.value\)\.catch\(\(\) => false\)/);
+  assert.match(authJs, /action:\s*'login-attempt',[\s\S]*?await syncClerkSession\(submittedEmail, submittedPassword\)\.catch\(\(\) => false\)/);
+  assert.match(coreJs, /localStorage\.setItem\('myipon_clerk_signout', '1'\)/);
+  assert.match(accountFunction, /async function provisionClerkUser\(/);
+  assert.match(accountFunction, /await provisionClerkUser\(admin, authData\.user, password\)\.catch\(\(\) => false\)/);
+  assert.match(accountFunction, /external_id:\s*user\.id/);
+  assert.match(accountFunction, /skip_password_checks:\s*true/);
+  assert.match(accountFunction, /method:\s*'PATCH'[\s\S]*?body:\s*JSON\.stringify\(\{ password, skip_password_checks:\s*true \}\)/);
+  assert.match(accountFunction, /async function exchangeClerkSession\(/);
+  assert.match(accountFunction, /jwtVerify\(token, clerkJwks, \{ issuer:\s*CLERK_ISSUER \}\)/);
+  assert.match(accountFunction, /body\.action === 'clerk-session-exchange'/);
+  assert.match(accountFunction, /admin\.auth\.admin\.generateLink\(\{ type:\s*'magiclink', email \}\)/);
+  assert.match(vercel, /https:\/\/solid-gannet-2021\.clerk\.accounts\.dev/);
+  assert.match(vercel, /worker-src 'self' blob:/);
+  assert.match(vercel, /https:\/\/clerk-telemetry\.com/);
+});
+
+test('new-device email OTP is opt-in, server-enforced, and responsive across password and Clerk sign-in', () => {
+  const migration = read('database/migrations/20261119_132_new_device_email_otp.sql');
+  const accountHtml = read('account.html');
+  const loginHtml = read('login.html');
+  const accountJs = read('js/account.js');
+  const authJs = read('js/auth.js');
+  const coreJs = read('js/core.js');
+  const edge = read('supabase/functions/manage-account/index.ts');
+
+  assert.match(migration, /new_device_email_otp_enabled boolean not null default false/);
+  assert.match(migration, /create table if not exists public\.account_trusted_devices/);
+  assert.match(migration, /create table if not exists public\.account_device_otp_challenges/);
+  assert.match(migration, /revoke all on public\.account_trusted_devices, public\.account_device_otp_challenges from public, anon, authenticated/);
+  assert.match(coreJs, /function getDeviceToken\(\)/);
+  assert.match(coreJs, /Email verification for new devices/);
+  assert.match(coreJs, /getDeviceToken, mfaSettingsMarkup/);
+  assert.match(accountJs, /new_device_email_otp_enabled/);
+  assert.match(accountJs, /action: 'device-otp-settings'/);
+  assert.match(accountHtml, /js\/account\.js\?v=20261119-50/);
+  assert.match(loginHtml, /id="device-otp-dialog"/);
+  assert.match(loginHtml, /autocomplete="one-time-code"/);
+  assert.match(authJs, /action: 'verify-device-otp'/);
+  assert.match(authJs, /action: 'clerk-session-exchange', clerk_token: token, device_token: Ipon\.getDeviceToken\(\)/);
+  assert.match(authJs, /action: 'login-attempt',[\s\S]*?device_token: Ipon\.getDeviceToken\(\)/);
+  assert.doesNotMatch(authJs, /edgeFallback/);
+  assert.match(edge, /startDeviceOtpIfNeeded/);
+  assert.match(edge, /body\.action === 'verify-device-otp'/);
+  assert.match(edge, /body\.action === 'device-otp-settings'/);
+  assert.match(edge, /sendNewDeviceOtpEmail/);
+  assert.match(edge, /attempts >= 5/);
+  assert.match(edge, /TRUSTED_DEVICE_TTL_MS = 90 \* 24 \* 60 \* 60 \* 1000/);
 });

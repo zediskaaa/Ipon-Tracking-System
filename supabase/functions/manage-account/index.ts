@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import { AwsClient } from 'npm:aws4fetch@1.0.20';
+import { createRemoteJWKSet, jwtVerify } from 'npm:jose@6.1.2';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
@@ -7,6 +8,8 @@ const SYSTEM_NAME = 'IPON Group Savings Tracker';
 const EMAIL_LOGO_URL = 'https://my-ipon.vercel.app/assets/icon-192.png';
 const R2_PATH_MARKER = '/r2/';
 let r2Client: AwsClient | null = null;
+const CLERK_ISSUER = 'https://solid-gannet-2021.clerk.accounts.dev';
+const clerkJwks = createRemoteJWKSet(new URL(`${CLERK_ISSUER}/.well-known/jwks.json`));
 
 function r2Storage() {
   const accountId = String(Deno.env.get('R2_ACCOUNT_ID') || '').trim();
@@ -105,6 +108,29 @@ const tokenAal = (token: string) => {
     return String(JSON.parse(atob(part.padEnd(Math.ceil(part.length / 4) * 4, '='))).aal || 'aal1');
   } catch { return 'aal1'; }
 };
+
+const DEVICE_TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DEVICE_OTP_TTL_MS = 10 * 60 * 1000;
+const TRUSTED_DEVICE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
+async function sha256(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function secureSixDigitCode() {
+  const values = new Uint32Array(1);
+  const ceiling = 0x100000000 - (0x100000000 % 1000000);
+  do crypto.getRandomValues(values); while (values[0] >= ceiling);
+  return String(values[0] % 1000000).padStart(6, '0');
+}
+
+function maskEmail(email: string) {
+  const [local, domain] = email.split('@');
+  if (!local || !domain) return 'your email address';
+  return `${local.slice(0, 2)}${'*'.repeat(Math.min(6, Math.max(2, local.length - 2)))}@${domain}`;
+}
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch));
@@ -908,6 +934,108 @@ async function sendAdminRequestOtpEmail({
     plainText,
     fallbackEmail: senderEmail || 'breadspanish231@gmail.com'
   });
+}
+
+async function sendNewDeviceOtpEmail({
+  toEmail,
+  recipientName,
+  code
+}: {
+  toEmail: string;
+  recipientName: string;
+  code: string;
+}) {
+  const safeName = String(recipientName || '').trim() || 'Saver';
+  const subject = `${code} is your myIPON new-device code`;
+  const plainText = [
+    `Hello ${safeName},`,
+    '',
+    'A sign-in attempt was detected from a new browser or device.',
+    `Your verification code is: ${code}`,
+    '',
+    'This code expires in 10 minutes. If this was not you, do not share the code and change your password.'
+  ].join('\n');
+  const html = `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#163029;line-height:1.55;max-width:540px;margin:0 auto;padding:24px;background:#fbf9f2;border:1px solid #d9d6c8;border-radius:14px">
+      ${emailBrandHeaderMarkup()}
+      <h2 style="margin:0 0 12px;font-size:20px;color:#163029">New device sign-in</h2>
+      <p style="margin:0 0 14px">Hello <strong>${escapeHtml(safeName)}</strong>,</p>
+      <p style="margin:0 0 18px">A sign-in attempt was detected from a new browser or device. Enter this code to continue:</p>
+      <div style="margin:0 0 18px;padding:16px 20px;background:#fff;border:1px solid #c9c5b5;border-radius:12px;text-align:center">
+        <span style="font-family:Consolas,monospace;font-size:32px;font-weight:700;letter-spacing:.35em;color:#163029">${escapeHtml(code)}</span>
+      </div>
+      <p style="margin:0 0 12px;font-size:13px;color:#5c5749">This code expires in <strong>10 minutes</strong>.</p>
+      <p style="margin:0;padding-top:14px;border-top:1px solid #e0ddd0;font-size:12px;color:#7a7566">If this was not you, do not share this code and change your password.</p>
+    </div>
+  `.trim();
+  return deliverEmail({ toEmail, recipientName: safeName, subject, html, plainText });
+}
+
+async function deviceTokenHash(userId: string, deviceToken: string, serviceSecret: string) {
+  return sha256(`${userId}:${deviceToken}:${serviceSecret}`);
+}
+
+async function deviceCodeHash(challengeId: string, code: string, serviceSecret: string) {
+  return sha256(`${challengeId}:${code}:${serviceSecret}`);
+}
+
+async function startDeviceOtpIfNeeded(
+  admin: ReturnType<typeof createClient>,
+  profile: { id: string; email?: string | null; full_name?: string | null; new_device_email_otp_enabled?: boolean | null },
+  deviceToken: string,
+  serviceSecret: string
+) {
+  if (!profile.new_device_email_otp_enabled) return null;
+  if (!DEVICE_TOKEN_RE.test(deviceToken)) {
+    return { error: 'This browser could not be identified securely. Reload the page and try again.', status: 400 };
+  }
+  const tokenHash = await deviceTokenHash(profile.id, deviceToken, serviceSecret);
+  const now = new Date();
+  const { data: trusted } = await admin
+    .from('account_trusted_devices')
+    .select('id')
+    .eq('user_id', profile.id)
+    .eq('token_hash', tokenHash)
+    .gt('expires_at', now.toISOString())
+    .maybeSingle();
+  if (trusted?.id) {
+    await admin.from('account_trusted_devices').update({ last_used_at: now.toISOString() }).eq('id', trusted.id);
+    return null;
+  }
+
+  const { data: recent } = await admin
+    .from('account_device_otp_challenges')
+    .select('id,created_at,expires_at')
+    .eq('user_id', profile.id)
+    .is('consumed_at', null)
+    .gt('expires_at', now.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (recent && Date.parse(recent.created_at) > Date.now() - 60_000) {
+    return { requires_device_otp: true, challenge_id: recent.id, email_hint: maskEmail(String(profile.email || '')) };
+  }
+
+  const email = String(profile.email || '').trim().toLowerCase();
+  if (!email) return { error: 'No verified email address is available for this account.', status: 400 };
+  const challengeId = crypto.randomUUID();
+  const code = secureSixDigitCode();
+  const codeHash = await deviceCodeHash(challengeId, code, serviceSecret);
+  const expiresAt = new Date(Date.now() + DEVICE_OTP_TTL_MS).toISOString();
+  await admin.from('account_device_otp_challenges').delete().eq('user_id', profile.id).is('consumed_at', null);
+  const { error: insertError } = await admin.from('account_device_otp_challenges').insert({
+    id: challengeId,
+    user_id: profile.id,
+    code_hash: codeHash,
+    expires_at: expiresAt
+  });
+  if (insertError) return { error: 'Could not prepare new-device verification.', status: 500 };
+  const delivery = await sendNewDeviceOtpEmail({ toEmail: email, recipientName: String(profile.full_name || ''), code });
+  if (!delivery.email_sent) {
+    await admin.from('account_device_otp_challenges').delete().eq('id', challengeId);
+    return { error: delivery.email_error || 'Could not send the verification email.', status: 503 };
+  }
+  return { requires_device_otp: true, challenge_id: challengeId, email_hint: maskEmail(email) };
 }
 
 const GEMINI_RELEASE_MODELS = [
@@ -2082,6 +2210,113 @@ function extractClientIp(request: Request): string {
   return '';
 }
 
+async function provisionClerkUser(admin: ReturnType<typeof createClient>, user: { id: string; email?: string | null }, password: string) {
+  const secretKey = String(Deno.env.get('CLERK_SECRET_KEY') || '').trim();
+  const email = String(user.email || '').trim().toLowerCase();
+  if (!secretKey || !email || !password) return false;
+
+  const headers = { Authorization: `Bearer ${secretKey}`, 'Content-Type': 'application/json' };
+  const lookup = await fetch(`https://api.clerk.com/v1/users?email_address=${encodeURIComponent(email)}&limit=1`, {
+    headers,
+    signal: AbortSignal.timeout(5000)
+  });
+  if (!lookup.ok) return false;
+  const existing = await lookup.json().catch(() => []);
+  const existingId = Array.isArray(existing) ? String(existing[0]?.id || '') : '';
+  if (existingId) {
+    const response = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(existingId)}`, {
+      method: 'PATCH',
+      headers,
+      signal: AbortSignal.timeout(5000),
+      body: JSON.stringify({ password, skip_password_checks: true })
+    });
+    return response.ok;
+  }
+
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('first_name,last_name')
+    .eq('id', user.id)
+    .maybeSingle();
+  const response = await fetch('https://api.clerk.com/v1/users', {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(5000),
+    body: JSON.stringify({
+      email_address: [email],
+      password,
+      external_id: user.id,
+      first_name: profile?.first_name || undefined,
+      last_name: profile?.last_name || undefined,
+      skip_password_checks: true,
+      skip_legal_checks: true
+    })
+  });
+  if (response.ok) return true;
+  const failure = await response.json().catch(() => null);
+  return response.status === 422 && /already exists|taken/i.test(JSON.stringify(failure || ''));
+}
+
+async function exchangeClerkSession(admin: ReturnType<typeof createClient>, request: Request, token: string, deviceToken: string, serviceSecret: string) {
+  const secretKey = String(Deno.env.get('CLERK_SECRET_KEY') || '').trim();
+  const origin = String(request.headers.get('origin') || '').trim();
+  if (!secretKey || !token || !origin) return json({ error: 'Social sign-in is unavailable.' }, 401);
+
+  let payload: Record<string, unknown>;
+  try {
+    ({ payload } = await jwtVerify(token, clerkJwks, { issuer: CLERK_ISSUER }));
+  } catch {
+    return json({ error: 'Your Clerk sign-in session is invalid or expired.' }, 401);
+  }
+  if (payload.azp && payload.azp !== origin) return json({ error: 'This sign-in session belongs to another site.' }, 401);
+
+  const clerkUserId = String(payload.sub || '').trim();
+  if (!/^user_[A-Za-z0-9]+$/.test(clerkUserId)) return json({ error: 'Your Clerk account could not be verified.' }, 401);
+  const headers = { Authorization: `Bearer ${secretKey}`, 'Content-Type': 'application/json' };
+  const userResponse = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(clerkUserId)}`, {
+    headers,
+    signal: AbortSignal.timeout(5000)
+  });
+  if (!userResponse.ok) return json({ error: 'Your Clerk account could not be loaded.' }, 401);
+  const clerkUser = await userResponse.json();
+  const primaryEmail = Array.isArray(clerkUser?.email_addresses)
+    ? clerkUser.email_addresses.find((entry: { id?: string }) => entry?.id === clerkUser.primary_email_address_id)
+    : null;
+  const email = String(primaryEmail?.email_address || '').trim().toLowerCase();
+  if (!email || primaryEmail?.verification?.status !== 'verified') {
+    return json({ error: 'Your Google or Facebook account must provide a verified email address.' }, 400);
+  }
+
+  const { data: profile, error: profileError } = await admin
+    .from('profiles')
+    .select('id,email,full_name,status,new_device_email_otp_enabled')
+    .eq('email', email)
+    .maybeSingle();
+  if (profileError) return json({ error: 'Your myIPON account could not be checked.' }, 500);
+  if (!profile) return json({ error: 'No myIPON account matches this email. Create an account first, then try again.' }, 403);
+  if (profile.status === 'DISABLED') return json({ error: 'Your account is deactivated or disabled.' }, 403);
+  if (clerkUser.external_id && clerkUser.external_id !== profile.id) {
+    return json({ error: 'This Clerk account is linked to a different myIPON account.' }, 409);
+  }
+
+  if (!clerkUser.external_id) {
+    await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(clerkUserId)}`, {
+      method: 'PATCH',
+      headers,
+      signal: AbortSignal.timeout(5000),
+      body: JSON.stringify({ external_id: profile.id })
+    }).catch(() => null);
+  }
+
+  const deviceOtp = await startDeviceOtpIfNeeded(admin, profile, deviceToken, serviceSecret);
+  if (deviceOtp) return json(deviceOtp, Number(('status' in deviceOtp ? deviceOtp.status : 200) || 200));
+
+  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+  const tokenHash = String(linkData?.properties?.hashed_token || '').trim();
+  if (linkError || !tokenHash) return json({ error: 'The myIPON session could not be created.' }, 500);
+  return json({ ok: true, token_hash: tokenHash, email });
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -2096,6 +2331,16 @@ Deno.serve(async (request) => {
   let body: Record<string, unknown>;
   try { body = await request.json(); }
   catch { return json({ error: 'A valid JSON request body is required.' }, 400); }
+
+  if (body.action === 'clerk-session-exchange') {
+    return await exchangeClerkSession(
+      admin,
+      request,
+      String(body.clerk_token || '').trim(),
+      String(body.device_token || '').trim(),
+      service
+    );
+  }
 
   if (body.action === 'login-throttle-status') {
     const email = String(body.email || '').trim().toLowerCase();
@@ -2180,7 +2425,19 @@ Deno.serve(async (request) => {
       });
     }
 
+    const { data: loginProfile, error: loginProfileError } = await admin
+      .from('profiles')
+      .select('id,email,full_name,new_device_email_otp_enabled')
+      .eq('id', authData.user.id)
+      .maybeSingle();
+    if (loginProfileError || !loginProfile) {
+      return json({ error: 'Your account profile could not be checked.' }, 500);
+    }
+    const deviceOtp = await startDeviceOtpIfNeeded(admin, loginProfile, String(body.device_token || '').trim(), service);
+    if (deviceOtp) return json(deviceOtp, Number(('status' in deviceOtp ? deviceOtp.status : 200) || 200));
+
     await admin.rpc('clear_login_throttle', { p_email: email, p_ip: clientIp }).catch(() => null);
+    await provisionClerkUser(admin, authData.user, password).catch(() => false);
     return json({
       ok: true,
       locked: false,
@@ -2188,6 +2445,68 @@ Deno.serve(async (request) => {
         access_token: authData.session.access_token,
         refresh_token: authData.session.refresh_token
       },
+      user: authData.user
+    });
+  }
+
+  if (body.action === 'verify-device-otp') {
+    const challengeId = String(body.challenge_id || '').trim();
+    const code = String(body.code || '').trim();
+    const deviceToken = String(body.device_token || '').trim();
+    const authMethod = String(body.auth_method || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(challengeId) || !/^\d{6}$/.test(code) || !DEVICE_TOKEN_RE.test(deviceToken)) {
+      return json({ error: 'Enter the valid 6-digit code sent to your email.' }, 400);
+    }
+    const { data: challenge } = await admin
+      .from('account_device_otp_challenges')
+      .select('id,user_id,code_hash,attempts,expires_at,consumed_at')
+      .eq('id', challengeId)
+      .maybeSingle();
+    if (!challenge || challenge.consumed_at || Date.parse(challenge.expires_at) <= Date.now() || Number(challenge.attempts || 0) >= 5) {
+      return json({ error: 'This verification code is expired. Sign in again to request a new code.' }, 400);
+    }
+    const expectedHash = await deviceCodeHash(challengeId, code, service);
+    if (!timingSafeSecretEqual(expectedHash, String(challenge.code_hash || ''))) {
+      const attempts = Math.min(5, Number(challenge.attempts || 0) + 1);
+      await admin.from('account_device_otp_challenges').update({ attempts }).eq('id', challengeId);
+      return json({ error: attempts >= 5 ? 'Too many incorrect codes. Sign in again to request a new code.' : 'That verification code is incorrect.' }, 400);
+    }
+
+    const tokenHash = await deviceTokenHash(challenge.user_id, deviceToken, service);
+    const trustedUntil = new Date(Date.now() + TRUSTED_DEVICE_TTL_MS).toISOString();
+    const { error: trustError } = await admin.from('account_trusted_devices').upsert({
+      user_id: challenge.user_id,
+      token_hash: tokenHash,
+      last_used_at: new Date().toISOString(),
+      expires_at: trustedUntil
+    }, { onConflict: 'user_id,token_hash' });
+    if (trustError) return json({ error: 'Could not remember this device securely.' }, 500);
+
+    const revokeTrust = () => admin.from('account_trusted_devices').delete().eq('user_id', challenge.user_id).eq('token_hash', tokenHash);
+    if (authMethod === 'clerk') {
+      const response = await exchangeClerkSession(admin, request, String(body.clerk_token || '').trim(), deviceToken, service);
+      if (!response.ok) {
+        await revokeTrust();
+        return response;
+      }
+      await admin.from('account_device_otp_challenges').update({ consumed_at: new Date().toISOString() }).eq('id', challengeId);
+      return response;
+    }
+
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = typeof body.password === 'string' ? body.password : '';
+    const verifier = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+    const { data: authData, error: authError } = await verifier.auth.signInWithPassword({ email, password });
+    if (authError || authData.user?.id !== challenge.user_id || !authData.session) {
+      await revokeTrust();
+      return json({ error: 'Your sign-in session expired. Enter your email and password again.' }, 401);
+    }
+    await admin.from('account_device_otp_challenges').update({ consumed_at: new Date().toISOString() }).eq('id', challengeId);
+    await admin.rpc('clear_login_throttle', { p_email: email, p_ip: extractClientIp(request) || null }).catch(() => null);
+    await provisionClerkUser(admin, authData.user, password).catch(() => false);
+    return json({
+      ok: true,
+      session: { access_token: authData.session.access_token, refresh_token: authData.session.refresh_token },
       user: authData.user
     });
   }
@@ -2528,6 +2847,38 @@ Deno.serve(async (request) => {
 
   const MEDIA_BUCKET = 'ipon-media';
   const MEDIA_CATEGORIES = new Set(['avatars', 'covers', 'group-avatars', 'group-qr', 'receipts', 'bug-reports']);
+
+  if (body.action === 'device-otp-settings') {
+    const enabled = body.enabled === true;
+    const deviceToken = String(body.device_token || '').trim();
+    if (enabled && !DEVICE_TOKEN_RE.test(deviceToken)) {
+      return json({ error: 'This browser could not be identified securely. Reload the page and try again.' }, 400);
+    }
+    const { error: updateError } = await admin
+      .from('profiles')
+      .update({ new_device_email_otp_enabled: enabled })
+      .eq('id', userResult.user.id);
+    if (updateError) return json({ error: 'Could not update new-device verification.' }, 500);
+    if (enabled) {
+      const tokenHash = await deviceTokenHash(userResult.user.id, deviceToken, service);
+      const { error: trustError } = await admin.from('account_trusted_devices').upsert({
+        user_id: userResult.user.id,
+        token_hash: tokenHash,
+        last_used_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + TRUSTED_DEVICE_TTL_MS).toISOString()
+      }, { onConflict: 'user_id,token_hash' });
+      if (trustError) {
+        await admin.from('profiles').update({ new_device_email_otp_enabled: false }).eq('id', userResult.user.id);
+        return json({ error: 'Could not remember this device securely.' }, 500);
+      }
+    } else {
+      await Promise.all([
+        admin.from('account_trusted_devices').delete().eq('user_id', userResult.user.id),
+        admin.from('account_device_otp_challenges').delete().eq('user_id', userResult.user.id)
+      ]);
+    }
+    return json({ success: true, enabled });
+  }
 
   if (body.action === 'media-upload-url') {
     const category = String(body.category || 'misc').trim();

@@ -9,6 +9,8 @@
   const emailDirty = Ipon.bindDirtySaveForm?.(emailForm, emailForm?.querySelector('[type="submit"]'));
   passwordForm.closest('.panel').insertAdjacentHTML('beforeend', Ipon.mfaSettingsMarkup());
   const mfaController = Ipon.bindMfaSettings(passwordForm.closest('.panel').querySelector('[data-mfa-settings]'));
+  const deviceOtpToggle = passwordForm.closest('.panel').querySelector('[data-device-otp-toggle]');
+  const deviceOtpMessage = passwordForm.closest('.panel').querySelector('[data-device-otp-message]');
   const activityBody = document.getElementById('account-activity-body');
   const notificationToggle = document.getElementById('notifications-enabled');
   const pageDialog = document.getElementById('account-page-dialog');
@@ -41,7 +43,7 @@
 
   async function load() {
     const [profileResult, activityResult] = await Promise.all([
-      Ipon.client.from('profiles').select('role,first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,last_seen_at').eq('id', state.profile.id).single(),
+      Ipon.client.from('profiles').select('role,first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,new_device_email_otp_enabled,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,last_seen_at').eq('id', state.profile.id).single(),
       Ipon.client.from('account_activity').select('id,event,created_at').order('created_at', { ascending: false }).limit(20)
     ]);
     if (profileResult.error) throw profileResult.error;
@@ -92,6 +94,7 @@
     }
     emailForm.elements.email.value = profile.email || state.session.user.email || '';
     notificationToggle.checked = profile.notifications_enabled !== false;
+    deviceOtpToggle.checked = profile.new_device_email_otp_enabled === true;
     const badgePrefRow = document.getElementById('account-verified-badge-row');
     if (badgePrefRow) {
       badgePrefRow.hidden = onboarding || isSuperAdmin;
@@ -176,6 +179,24 @@
     try { await Ipon.setNotificationPreference(notificationToggle.checked); Ipon.toast('Notification preference saved.'); }
     catch (error) { notificationToggle.checked = !notificationToggle.checked; Ipon.toast(Ipon.friendlyError(error), 'error'); }
     finally { notificationToggle.disabled = false; }
+  });
+
+  deviceOtpToggle.addEventListener('change', async () => {
+    const enabled = deviceOtpToggle.checked;
+    deviceOtpToggle.disabled = true;
+    deviceOtpMessage.textContent = enabled ? 'Enabling new-device verification…' : 'Disabling new-device verification…';
+    delete deviceOtpMessage.dataset.tone;
+    try {
+      await Ipon.invokeAccountFunction({ action: 'device-otp-settings', enabled, device_token: Ipon.getDeviceToken() });
+      deviceOtpMessage.dataset.tone = 'success';
+      deviceOtpMessage.textContent = enabled
+        ? 'Enabled. This browser is trusted for 90 days.'
+        : 'Disabled. Saved trusted devices were removed.';
+    } catch (error) {
+      deviceOtpToggle.checked = !enabled;
+      deviceOtpMessage.dataset.tone = 'error';
+      deviceOtpMessage.textContent = Ipon.friendlyError(error);
+    } finally { deviceOtpToggle.disabled = false; }
   });
 
   pageDialog.showModal();

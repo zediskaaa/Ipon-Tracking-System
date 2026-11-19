@@ -21608,3 +21608,18 @@ html[data-theme="dark"] .account-dialog .account-app-field input[aria-invalid="t
     white-space: normal;
   }
 }
+
+.mfa-settings > .toggle-switch-row {
+  margin-bottom: 14px;
+}
+
+.device-otp-message {
+  min-height: 19px;
+  margin: 0;
+  color: var(--red);
+  font: 13px/19px Arial, sans-serif;
+}
+
+.device-otp-message:empty {
+  visibility: hidden;
+}

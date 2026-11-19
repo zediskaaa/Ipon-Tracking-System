@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com; connect-src 'self' https://cdn.jsdelivr.net https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://solid-gannet-2021.clerk.accounts.dev 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://img.clerk.com https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com; connect-src 'self' https://cdn.jsdelivr.net https://solid-gannet-2021.clerk.accounts.dev https://clerk-telemetry.com https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="description" content="IPON Group Savings Tracker — Private non-custodial record-keeping web application for tracking group contributions, expenses, and withdrawals.">
   <meta name="application-name" content="IPON Group Savings Tracker">
@@ -17,7 +17,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261118-169">
+  <link rel="stylesheet" href="css/app.css?v=20261119-170">
   <style>
     .login-page{display:grid;min-height:100vh;grid-template-columns:minmax(380px,1.1fr) minmax(380px,.9fr);align-items:stretch;background:radial-gradient(circle at 30% 62%,rgba(48,104,74,.36) 0%,rgba(19,48,39,.2) 38%,transparent 66%),linear-gradient(135deg,#0d221d 0%,#081714 100%);color:#f4efe6}
     .login-story{display:flex;width:100%;max-width:820px;min-height:100vh;justify-self:end;flex-direction:column;justify-content:flex-start;gap:0;padding:clamp(28px,4vw,52px) clamp(16px,2.5vw,36px) clamp(24px,3.5vw,42px) clamp(28px,5vw,72px);background:transparent;color:#f4efe6}
@@ -40,6 +40,16 @@
     .login-card::before{position:absolute;top:0;bottom:0;left:20px;border-left:1px dashed rgba(20,45,43,.18);content:"";pointer-events:none}
     .login-card h2{margin:0 0 6px;color:#112622;font:800 32px/1.12 Arial,sans-serif;letter-spacing:-.02em}
     .login-card>p{margin:0 0 22px;color:#5c6863;font:14.5px/1.45 Arial,sans-serif}
+    .clerk-signin-shell{width:100%;min-width:0;margin:0 0 14px}
+    #clerk-sign-in{width:100%;min-height:0}
+    .clerk-signin-message{min-height:18px;margin:8px 0 0;color:#a9382d;font:700 12.5px/1.4 Arial,sans-serif;text-align:center}
+    .clerk-signin-message:empty{visibility:hidden}
+    #clerk-sign-in .cl-cardBox{overflow:visible!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+    #clerk-sign-in .cl-card{margin:0!important;border:0!important;border-radius:0!important;overflow:visible!important}
+    #clerk-sign-in .cl-otpCodeField{padding:14px 0 4px!important;overflow:visible!important}
+    #clerk-sign-in .cl-otpCodeFieldInputContainer,#clerk-sign-in [data-input-otp-container],#clerk-sign-in .cl-otpCodeFieldInputs{width:100%!important;overflow:visible!important}
+    #clerk-sign-in .cl-otpCodeFieldInput{width:100%!important;height:auto!important;aspect-ratio:1 / 1!important;border-radius:8px!important;padding:0!important}
+    #clerk-sign-in .cl-buttonArrowIcon{display:none!important}
     .login-card-top{display:flex;align-items:center;gap:clamp(12px,2.5vw,22px);margin:0 0 22px;flex-wrap:wrap}
     .login-card-brand{display:none;align-items:center;gap:10px;margin:0;color:#112622;font:800 21px/1 Arial,sans-serif;letter-spacing:-.02em;line-height:1}
     .login-card-brand img{width:34px;height:34px;border-radius:9px;box-shadow:0 4px 12px rgba(0,0,0,.16);display:block}
@@ -332,9 +342,13 @@
           <div class="auth-tabs" aria-label="Account access"><button class="is-active" id="show-login" type="button" aria-controls="auth-form">Sign in</button><button id="show-signup" type="button" aria-controls="auth-form">Create account</button><span class="auth-tab-indicator" id="auth-tab-indicator" aria-hidden="true"></span></div>
         </div>
         <a class="login-card-close" href="index.html" aria-label="Return to home page" title="Return to home page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></a>
-        <h2 id="auth-title">Welcome back</h2><p id="auth-copy">Sign in to view your savings records.</p>
+        <h2 id="auth-title" hidden>Welcome back</h2><p id="auth-copy" hidden>Sign in to view your savings records.</p>
         <div class="auth-join-banner" id="auth-join-banner" hidden role="region" aria-live="polite" aria-label="Group invitation"></div>
-        <form id="auth-form" aria-labelledby="auth-title" novalidate>
+        <div class="clerk-signin-shell" id="clerk-signin-shell" aria-label="Sign in with Clerk">
+          <div id="clerk-sign-in"></div>
+          <p class="clerk-signin-message" id="clerk-signin-message" role="alert" aria-live="polite"></p>
+        </div>
+        <form id="auth-form" aria-labelledby="auth-title" novalidate hidden>
           <div class="form-grid">
             <div class="field" id="first-name-field" hidden><label for="first-name">First name</label><input id="first-name" name="first_name" autocomplete="given-name" maxlength="80" aria-describedby="first-name-error"><small class="field-error" id="first-name-error" role="alert" hidden></small></div>
             <div class="field" id="middle-name-field" hidden><label for="middle-name">Middle name (optional)</label><input id="middle-name" name="middle_name" autocomplete="additional-name" maxlength="80" aria-describedby="middle-name-error"><small class="field-error" id="middle-name-error" role="alert" hidden></small></div>
@@ -361,7 +375,7 @@
             <div class="auth-security-bar" id="auth-security-bar-wrap" hidden aria-hidden="true"><span id="auth-security-bar"></span></div>
           </div>
         </form>
-        <button class="auth-link" id="forgot-password-open" type="button">Forgot password?</button>
+        <button class="auth-link" id="forgot-password-open" type="button" hidden>Forgot password?</button>
         <div class="auth-join-entry" id="auth-join-entry">
           <button class="auth-link" id="auth-have-code-open" type="button" aria-expanded="false">Have a 6-character group code?</button>
           <div class="auth-join-code-box" id="auth-join-code-box" hidden>
@@ -378,6 +392,7 @@
     </section>
   </main>
   <dialog class="form-dialog recovery-dialog" id="recovery-dialog" aria-labelledby="recovery-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="recovery-title">Reset your password</h2><p id="recovery-copy">We will email a secure reset link to your account.</p></div><button class="dialog-close" type="button" data-recovery-close aria-label="Close password recovery"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><form id="recovery-request-form" class="form-grid" novalidate><div class="field field-wide"><label for="recovery-email">Email address</label><input id="recovery-email" name="email" type="email" autocomplete="email" maxlength="254" required></div><div class="form-actions field-wide"><button class="button button-secondary" type="button" data-recovery-close>Cancel</button><button class="button button-primary" type="submit">Email reset link</button></div></form><p class="recovery-message" id="recovery-message" role="status" aria-live="polite"></p></div></dialog>
+  <dialog class="form-dialog" id="device-otp-dialog" aria-labelledby="device-otp-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="device-otp-title">Verify this new device</h2><p id="device-otp-copy">Enter the 6-digit code sent to your email.</p></div><button class="dialog-close" id="device-otp-cancel" type="button" data-device-otp-cancel aria-label="Cancel new-device verification"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><form id="device-otp-form" class="form-grid" novalidate><div class="field field-wide"><label for="device-otp-code">6-digit email code</label><input id="device-otp-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required aria-describedby="device-otp-message"><small class="field-help">This browser will be remembered for 90 days after verification.</small></div><p class="device-otp-message field-wide" id="device-otp-message" role="alert" aria-live="polite"></p><div class="form-actions field-wide"><button class="button button-secondary" id="device-otp-resend" type="button" data-device-otp-resend>Resend code</button><button class="button button-primary" type="submit">Verify and continue</button></div></form></div></dialog>
   <dialog class="policy-dialog" id="policy-dialog" aria-labelledby="policy-title"><div class="policy-sheet"><header class="policy-header"><div><h2 id="policy-title">Terms of use</h2><p>Last updated: November 16, 2026</p></div><form method="dialog"><button class="dialog-close" type="submit" aria-label="Close policy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></form></header><div class="policy-content">
     <section data-policy-content="terms">
       <h3>Purpose &amp; non-custodial scope</h3>
@@ -479,6 +494,6 @@
     </div>
   </dialog>
   <dialog class="form-dialog request-success-dialog" id="request-success-dialog" aria-labelledby="request-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="request-success-title">Account created successfully</h2><p>Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-request-success-close aria-label="Close request confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p>Your account has been created and verified. You can now sign in to start tracking savings.</p><div class="request-success-email" id="request-success-email"></div><p>Use your registered email and password on the Sign in tab.</p><div class="request-success-actions"><button class="button button-primary" id="request-success-ok" type="button" data-request-success-close>Continue to sign in</button></div></div></div></dialog>
-  <dialog class="form-dialog invite-success-dialog" id="invite-success-dialog" aria-labelledby="invite-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="invite-success-title">Account activated successfully</h2><p id="invite-success-subtitle">Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-invite-success-close aria-label="Close activation confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p id="invite-success-message">Account activation successful! Log in to your account using the provided credentials.</p><div class="request-success-email" id="invite-success-email"></div><p id="invite-success-group-hint">Your savings group workspace has been linked and will open automatically after sign in.</p><div class="request-success-actions"><button class="button button-primary" id="invite-success-ok" type="button" data-invite-success-close>Continue to sign in</button></div></div></div></dialog><script src="js/core.js?v=20261118-143"></script><script src="js/policy.js?v=20261117-08"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/auth.js?v=20261117-85"></script>
+  <dialog class="form-dialog invite-success-dialog" id="invite-success-dialog" aria-labelledby="invite-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="invite-success-title">Account activated successfully</h2><p id="invite-success-subtitle">Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-invite-success-close aria-label="Close activation confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p id="invite-success-message">Account activation successful! Log in to your account using the provided credentials.</p><div class="request-success-email" id="invite-success-email"></div><p id="invite-success-group-hint">Your savings group workspace has been linked and will open automatically after sign in.</p><div class="request-success-actions"><button class="button button-primary" id="invite-success-ok" type="button" data-invite-success-close>Continue to sign in</button></div></div></div></dialog><script src="js/core.js?v=20261119-145"></script><script src="js/policy.js?v=20261117-08"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script crossorigin="anonymous" src="https://solid-gannet-2021.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js"></script><script crossorigin="anonymous" data-clerk-publishable-key="pk_test_c29saWQtZ2FubmV0LTIwMjEuY2xlcmsuYWNjb3VudHMuZGV2JA==" src="https://solid-gannet-2021.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script><script src="js/auth.js?v=20261119-91"></script>
 </body>
 </html>
