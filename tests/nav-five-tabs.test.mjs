@@ -224,6 +224,7 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
   const settingsHtml = read('settings.html');
   const accountHtml = read('account.html');
   const css = read('css/app.css');
+  const heroPlatesCss = read('css/hero-plates.css');
   const swJs = read('sw.js');
 
   // 1. Static dashboard fallback nav exposes strictly <=5 primary links per role (no Audit log or Settings)
@@ -267,6 +268,13 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
   assert.match(css, /html\[data-theme="dark"\]\s+\.subview-back-link\s*\{/);
   assert.match(css, /\.sidebar-user-card\.is-active\s*\{/);
   assert.match(css, /\.preference-workspace-row\s*\{/);
+  assert.match(css, /\/\* Mobile Curved Emerald Header & Floating Pill Navigation Dock \*\/[\s\S]*?\.app-sidebar::before\s*\{[\s\S]*?border-radius:\s*0 0 32px 32px/);
+  assert.match(css, /\/\* Mobile Curved Emerald Header & Floating Pill Navigation Dock \*\/[\s\S]*?\.app-nav\s*\{[\s\S]*?border-radius:\s*26px[\s\S]*?background:\s*#FBF8F0/);
+  assert.match(css, /\/\* Mobile Curved Emerald Header & Floating Pill Navigation Dock \*\/[\s\S]*?\.app-nav a\.is-active\s*\{[\s\S]*?color:\s*#F2C14E/);
+  assert.match(heroPlatesCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar::before\s*\{[\s\S]*?border-radius:\s*0 0 32px 32px/);
+  assert.match(heroPlatesCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar \.sidebar-nav\s*\{[\s\S]*?border-radius:\s*26px[\s\S]*?background:\s*#FBF8F0/);
+  assert.match(dashHtml, /<svg class="brand-coins"[\s\S]*?<span class="brand-divider"[\s\S]*?<span class="brand-text">\s*<strong><span class="brand-prefix">my<\/span>IPON<\/strong>\s*<\/span>/);
+  assert.match(adminNav.hostEl.innerHTML, /<svg class="brand-coins"[\s\S]*?<span class="brand-divider"[\s\S]*?<span class="brand-text">\s*<strong><span class="brand-prefix">my<\/span>IPON<\/strong>\s*<\/span>/);
   assert.match(swJs, /ipon-shell-v(?:2[4-9]|[3-9]\d)/);
 
   for (const file of ['dashboard.html', 'reports.html', 'audit.html', 'settings.html', 'account.html']) {
