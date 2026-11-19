@@ -108,14 +108,14 @@
             <li>Authenticate accounts (including email OTP verification, OAuth social sign-in, password recovery, and optional TOTP two-factor authentication) and enforce database row-level isolation per group and role.</li>
             <li>Calculate monthly summaries, calendar progress, wallet balances, CSV/print reports, annual roll-up summaries, and audit logs.</li>
             <li>Store uploaded images, voice notes, documents, and receipts inside dedicated cloud object storage buckets (<code>ipon-media</code>, <code>chat-attachments</code>, <code>announcements</code>, <code>record-comments</code>) referenced by URL rather than storing raw binary blobs or Base64 strings inside database tables.</li>
-            <li>Deliver <strong>in-app notifications</strong> (and device banners while myIPON stays open) for payment reviews, chat messages, discussion replies, account status changes, and announcements. Activity alerts are <strong>not sent to your email</strong>; email is reserved strictly for OTP verification codes, password recovery links, dormant savings reminders (90 days idle), and 7-day inactivity/retention warnings.</li>
+            <li>Deliver <strong>real-time device and in-app notifications</strong> (arriving on your phone as long as myIPON is kept in Recent Apps and not swiped away) for payment reviews, chat messages, discussion replies, account status changes, and announcements. Activity alerts are <strong>not sent to your email</strong>; email is reserved strictly for OTP verification codes, password recovery links, dormant savings reminders (90 days idle), and 7-day inactivity/retention warnings.</li>
             <li>Summarize high-level platform updates in Super Admin release notes without exposing private group financial balances, and display optional requester credit on implemented feature requests when attribution is enabled.</li>
           </ul>
         </section>
 
         <section id="browser-storage">
           <h2>4. Browser storage &amp; device alerts</h2>
-          <p>The app stores session credentials, cross-tab sync keys, your light or dark theme selection, per-account policy consent cache keys, periodic data-retention reminder timestamps, and optional Web Push subscription tokens locally on your browser or Android app so settings stay consistent. Open myIPON directly to check incoming messages and activity notifications (alerts are in-app only and not emailed). Device alerts can be disabled anytime in your device settings or Account preferences.</p>
+          <p>The app stores session credentials, cross-tab sync keys, your light or dark theme selection, per-account policy consent cache keys, periodic data-retention reminder timestamps, and optional Web Push subscription tokens locally on your browser or Android app so settings stay consistent. Keep myIPON in your phone's Recent Apps (do not remove it from Recent Apps) to receive incoming messages and activity notifications in real time (activity alerts are not emailed). Device alerts can be disabled anytime in your device settings or Account preferences.</p>
         </section>
 
         <section id="who-can-access">
@@ -160,6 +160,6 @@
     <span>&copy; 2026 myIPON &middot; Non-custodial group savings record tracker.</span>
     <span><a href="privacy.html">Privacy Policy</a> &middot; <a href="terms.html">Terms of Service</a> &middot; <a href="data-deletion.html">Data Deletion</a> &middot; <a href="index.html">Home</a></span>
   </footer>
-  <script src="js/core.js?v=20261119-156"></script>
+  <script src="js/core.js?v=20261119-157"></script>
 </body>
 </html>

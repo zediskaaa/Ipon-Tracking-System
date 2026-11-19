@@ -5299,7 +5299,7 @@ test('all notification types route to exact destination modals or highlighted ta
 
   // 2. Edge functions & service worker & Android MainActivity preserve deep links & group context
   assert.match(manageAccount, /link:\s*`dashboard\.html\?invite=\$\{encodeURIComponent\(actor\.group_id\)\}`/);
-  assert.match(sendPush, /select\('id, recipient_id, group_id, type, title, message, link, dedupe_key, read_at, created_at'\)/);
+  assert.match(sendPush, /select\('id, recipient_id, group_id, type, title, message, link, dedupe_key, (?:actor_id, actor_avatar_url, )?read_at, created_at'\)/);
   assert.match(sendPush, /notif\.type === 'RELEASE' && \/\^https\?:/);
   assert.match(sw, /const CACHE_NAME = 'ipon-shell-v(?:11|12|\d+)'/);
   assert.match(sw, /group_id:\s*payload\.group_id \?\? null/);
@@ -10041,8 +10041,13 @@ test('migration 084, ongoing savings protection, 30-day completion bin, print bo
   assert.match(loginHtml, /30-day Recycle Bin/i);
   assert.match(policyJs, /Ongoing savings &amp; active goals are never deleted while you keep saving/i);
   assert.match(policyJs, /30-day Recycle Bin/i);
-  assert.match(loginHtml, /Notifications and direct chat messages are delivered in-app only/i);
-  assert.match(policyJs, /Notifications and direct chat messages are delivered in-app only/i);
+  assert.match(loginHtml, /Notifications and direct chat messages arrive in real time on your device as long as myIPON stays in your phone's Recent Apps/i);
+  assert.match(policyJs, /Notifications and direct chat messages arrive in real time on your device as long as myIPON stays in your phone's Recent Apps/i);
+  assert.match(read('terms.html'), /Notifications and direct chat messages arrive in real time on your device as long as myIPON stays in your phone's Recent Apps/i);
+  assert.doesNotMatch(loginHtml, /delivered in-app only|not guaranteed to arrive when the app is completely closed/i);
+  assert.doesNotMatch(policyJs, /delivered in-app only|not guaranteed to arrive when the app is completely closed/i);
+  assert.doesNotMatch(read('terms.html'), /delivered in-app only|not guaranteed to arrive when the app is completely closed/i);
+  assert.doesNotMatch(read('privacy.html'), /alerts are in-app only/i);
   assert.match(coreJs, /<h2 id="donate-title">Support myIPON<\/h2>/);
   assert.doesNotMatch(coreJs, /Support IPON/);
   assert.doesNotMatch(coreJs, /even when myIPON is closed/);
@@ -11336,7 +11341,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261119-156/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261119-157/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

@@ -6566,7 +6566,7 @@
           button.hidden = false;
         } else if (snap.status === 'granted' && snap.batteryKnown && snap.batteryOk) {
           setPill('Active', 'success');
-          statusEl.textContent = 'Device alerts are enabled while myIPON is open. Stay in the app or check myIPON regularly for new messages and alerts (in-app only, not sent via email).';
+          statusEl.textContent = 'Device alerts are active. Keep myIPON in your phone\'s Recent Apps (do not swipe it away) to receive real-time messages and notifications.';
           button.textContent = 'Granted';
           button.className = 'button button-secondary button-sm';
           delete button.dataset.bgAction;
@@ -6575,7 +6575,7 @@
           addExtra('App settings', { 'data-bg-action': 'app-settings' });
         } else if (snap.status === 'granted' && !snap.batteryOk) {
           setPill('Restricted', 'warning');
-          statusEl.textContent = 'Notifications are enabled while myIPON is open. Tap Allow background usage to reduce interruptions when switching apps.';
+          statusEl.textContent = 'Notifications are enabled. Tap Allow background usage and keep myIPON in Recent Apps to receive real-time alerts.';
           button.textContent = 'Allow background usage';
           button.className = 'button button-primary button-sm';
           button.dataset.bgAction = 'allow-background';
@@ -6584,7 +6584,7 @@
           addExtra('App settings', { 'data-bg-action': 'app-settings' });
         } else if (snap.status === 'granted') {
           setPill('Check access', 'neutral');
-          statusEl.textContent = 'Device notifications are enabled. Open myIPON directly to view new messages and in-app alerts (not sent via email).';
+          statusEl.textContent = 'Device notifications are enabled. Keep myIPON in Recent Apps (do not remove it from Recent Apps) to receive new messages and alerts.';
           button.textContent = 'App settings';
           button.className = 'button button-secondary button-sm';
           button.dataset.bgAction = 'app-settings';
@@ -6594,8 +6594,8 @@
         } else if (snap.status === 'default') {
           setPill('Needs access', 'warning');
           statusEl.textContent = snap.batteryOk
-            ? 'Device notifications are off. Allow alerts so banners appear while using myIPON (notifications are in-app only, not sent via email).'
-            : 'Allow device alerts so message banners and updates appear while using myIPON (notifications are in-app only, not sent via email).';
+            ? 'Device notifications are off. Allow alerts and keep myIPON in Recent Apps to receive real-time message banners and updates.'
+            : 'Allow device alerts and keep myIPON in Recent Apps so message banners and updates arrive in real time.';
           button.textContent = snap.batteryOk ? 'Turn on alerts' : 'Allow background usage';
           button.className = 'button button-primary button-sm';
           button.dataset.bgAction = 'allow-all';
@@ -6628,7 +6628,7 @@
         button.hidden = true;
       } else if (snap.status === 'granted' && snap.pushState?.subscribed) {
         setPill('Active', 'success');
-        statusEl.textContent = 'Browser alerts are enabled. Open myIPON to view messages and alerts (in-app only, not sent via email).';
+        statusEl.textContent = 'Browser alerts are enabled for real-time messages and notifications.';
         button.textContent = 'On';
         button.className = 'button button-secondary button-sm';
         delete button.dataset.bgAction;
@@ -6636,7 +6636,7 @@
         button.hidden = false;
       } else if (snap.status === 'granted' && snap.pushState?.supported) {
         setPill('Finish setup', 'warning');
-        statusEl.textContent = 'Notifications are allowed. Tap Finish setup to sync in-app browser alerts.';
+        statusEl.textContent = 'Notifications are allowed. Tap Finish setup to sync real-time browser alerts.';
         button.textContent = 'Finish setup';
         button.className = 'button button-primary button-sm';
         button.dataset.bgAction = 'sync-push';
@@ -6653,7 +6653,7 @@
         addExtra('Recheck', { 'data-bg-action': 'recheck' });
       } else {
         setPill('Off', 'warning');
-        statusEl.textContent = 'Turn on browser notifications so banners appear while using myIPON (notifications are in-app only).';
+        statusEl.textContent = 'Turn on browser notifications to receive real-time message and activity banners.';
         button.textContent = 'Turn on';
         button.className = 'button button-primary button-sm';
         button.dataset.bgAction = 'enable-notif';
@@ -6738,7 +6738,7 @@
         <header class="form-dialog-header bg-usage-header">
           <div>
             <h2 id="bg-usage-prompt-title">Enable app alerts</h2>
-            <p>Allow notification alerts on this device. Open myIPON regularly for new messages and updates (alerts are in-app only, not emailed).</p>
+            <p>Allow notification alerts on this device and keep myIPON in your phone's Recent Apps (do not remove it from Recent Apps) to receive real-time messages and updates.</p>
           </div>
           <button class="dialog-close" type="button" data-bg-prompt-close aria-label="Close alert permission prompt">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
@@ -6749,14 +6749,14 @@
             <div class="bg-usage-item">
               <div>
                 <strong>Device notifications</strong>
-                <small>Show banners for chat messages, approvals, and payment reminders while myIPON is open.</small>
+                <small>Show real-time banners for chat messages, approvals, and payment updates while myIPON stays in Recent Apps.</small>
               </div>
               <span class="bg-access-pill" data-bg-prompt-notif-badge data-tone="warning">Required</span>
             </div>
             <div class="bg-usage-item">
               <div>
                 <strong>App session permission</strong>
-                <small>Helps reduce interruptions when switching between apps (keep myIPON open to receive real-time alerts).</small>
+                <small>Keeps alerts active in the background as long as myIPON is not swiped away from Recent Apps.</small>
               </div>
               <span class="bg-access-pill" data-bg-prompt-battery-badge data-tone="warning">Required</span>
             </div>
@@ -6859,7 +6859,7 @@
       }
       if (Date.now() - lastBgGrantedToastAt > 1200) {
         lastBgGrantedToastAt = Date.now();
-        toast('Device alerts enabled while myIPON stays open (in-app only).');
+        toast('Device alerts enabled. Keep myIPON in Recent Apps to receive notifications.');
       }
     }
     return {
@@ -6930,31 +6930,31 @@
         button.hidden = false;
       } else if (status === 'granted') {
         if (isApp && nativeBgStatus && nativeBgStatus.batteryOptimizationIgnored === false) {
-          label.textContent = 'Notification permission: On — keep myIPON open in recent apps to receive new messages and alerts (in-app only).';
+          label.textContent = 'Notification permission: On — keep myIPON in Recent Apps (do not remove it) and allow background usage for reliable alerts.';
           button.textContent = 'Allow always-on';
           button.dataset.actionMode = 'battery';
           button.disabled = false;
           button.hidden = false;
         } else if (isApp) {
-          label.textContent = 'Notification permission: On — alerts arrive while myIPON is open (in-app only, not emailed).';
+          label.textContent = 'Notification permission: On — alerts arrive on your phone as long as myIPON stays in Recent Apps.';
           button.textContent = 'On';
           delete button.dataset.actionMode;
           button.disabled = true;
           button.hidden = false;
         } else if (pushState.subscribed) {
-          label.textContent = 'Notification permission: On — alerts appear while myIPON is open (not sent via email).';
+          label.textContent = 'Notification permission: On — real-time browser alerts are active.';
           button.textContent = 'On';
           delete button.dataset.actionMode;
           button.disabled = true;
           button.hidden = false;
         } else if (pushState.supported) {
-          label.textContent = 'Notification permission: On — tap Finish setup to sync in-app browser alerts.';
+          label.textContent = 'Notification permission: On — tap Finish setup to sync real-time browser alerts.';
           button.textContent = 'Finish setup';
           button.dataset.actionMode = 'sync-push';
           button.disabled = false;
           button.hidden = false;
         } else {
-          label.textContent = 'Notification permission: On — active while open (notifications are in-app only).';
+          label.textContent = 'Notification permission: On — keep myIPON in Recent Apps to receive real-time alerts.';
           button.textContent = 'On';
           delete button.dataset.actionMode;
           button.disabled = true;
@@ -6978,7 +6978,7 @@
         actionsWrap.appendChild(recheckBtn);
       } else if (status === 'default') {
         label.textContent = isApp
-          ? 'Device permission: Off — tap Turn on for in-app banner alerts while myIPON is open.'
+          ? 'Device permission: Off — tap Turn on to receive real-time alerts while myIPON stays in Recent Apps.'
           : 'Browser site permission: Off — click Turn on and choose Allow (PC settings alone keep this site Off).';
         button.textContent = 'Turn on';
         delete button.dataset.actionMode;
@@ -7004,11 +7004,11 @@
       } else if (status === 'default') {
         bar.hidden = false;
         bar.innerHTML = isApp
-          ? '<span>Device notifications are off. Tap Turn on for alerts while myIPON is open (in-app only).</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Turn on</button>'
+          ? '<span>Device notifications are off. Tap Turn on to receive alerts while myIPON stays in Recent Apps.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Turn on</button>'
           : '<span>Browser notifications for this site are off. Click Turn on, then allow notifications for this site.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn>Turn on</button>';
       } else if (status === 'granted' && isApp && nativeBgStatus && nativeBgStatus.batteryOptimizationIgnored === false) {
         bar.hidden = false;
-        bar.innerHTML = '<span>Notification permission is On — keep myIPON open in recent apps to receive new messages and alerts reliably.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="battery">Allow always-on</button>';
+        bar.innerHTML = '<span>Notification permission is On — keep myIPON in Recent Apps and allow background usage for reliable alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="battery">Allow always-on</button>';
       } else if (status === 'denied') {
         const canOpenNativeSettings = isApp && Boolean(bgPlugin?.openNotificationSettings);
         bar.hidden = false;
@@ -7164,7 +7164,7 @@
             lastBgPollSyncAt = 0;
             await syncBackgroundNotificationPolling(currentProfile).catch(() => { });
           }
-          toast('Device alerts enabled while myIPON stays open (in-app only).');
+          toast('Device alerts enabled. Keep myIPON in Recent Apps to receive notifications.');
         } else if (snap?.isApp && snap.status === 'granted' && !snap.batteryOk) {
           toast('Battery restriction is still active. Set Battery to Unrestricted in App settings.', 'error');
         } else {
@@ -7246,7 +7246,7 @@
           if (Date.now() - lastBgGrantedToastAt > 1200) {
             lastBgGrantedToastAt = Date.now();
             toast(snap?.isApp
-              ? 'Device alerts enabled while myIPON stays open (in-app only).'
+              ? 'Device alerts enabled. Keep myIPON in Recent Apps to receive notifications.'
               : 'Device notification alerts enabled.');
           }
         } else if (shouldSyncBgService) {
@@ -7283,7 +7283,7 @@
                 toast('Test alert requested. Check your notification drawer.');
               }
             } else if (result?.web_sent > 0) {
-              toast('Test alert sent. Keep myIPON open to receive real-time alerts (in-app only).');
+              toast('Test alert sent. Keep myIPON in Recent Apps to receive real-time alerts.');
             } else {
               toast('Background push registered. Retry test if the banner did not appear.', 'error');
             }
