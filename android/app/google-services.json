@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "634579038551",
+    "project_id": "myipon-29788",
+    "storage_bucket": "myipon-29788.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:634579038551:android:f271c07f822c25eb42ce12",
+        "android_client_info": {
+          "package_name": "com.myipon.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC3HEi-_hzDLEuE32TNAJb6fYn-N6Jy3Ek"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
