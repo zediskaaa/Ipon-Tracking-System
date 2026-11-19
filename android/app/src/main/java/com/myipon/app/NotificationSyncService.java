@@ -48,7 +48,8 @@ public class NotificationSyncService extends Service {
     private final AtomicInteger refSeq = new AtomicInteger(1);
 
     private OkHttpClient wsClient;
-    private WebSocket activeSocket;
+    private volatile WebSocket activeSocket;
+    private PowerManager.WakeLock syncWakeLock;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
     private long retryDelayMs = INITIAL_RETRY_MS;
@@ -123,6 +124,11 @@ public class NotificationSyncService extends Service {
         public void run() {
             if (destroyed) return;
             Context appContext = getApplicationContext();
+            if (!NotificationPollReceiver.shouldRunInstantSync(appContext)) {
+                stopSelf();
+                return;
+            }
+            renewSyncWakeLock();
             WebSocket socket = activeSocket;
             if (socket != null) {
                 try {
@@ -149,6 +155,21 @@ public class NotificationSyncService extends Service {
             connectSocket(true);
         }
     };
+
+    private void renewSyncWakeLock() {
+        if (!NotificationPollReceiver.isBatteryOptimizationIgnored(this)) {
+            if (syncWakeLock != null && syncWakeLock.isHeld()) syncWakeLock.release();
+            return;
+        }
+        if (syncWakeLock == null) {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm == null) return;
+            syncWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "myipon:instant-sync");
+            syncWakeLock.setReferenceCounted(false);
+        }
+        // shortcut: non-FCM delivery needs CPU time while locked; replace with push when FCM is configured.
+        syncWakeLock.acquire(90_000L);
+    }
 
     @Override
     public void onCreate() {
@@ -217,6 +238,10 @@ public class NotificationSyncService extends Service {
         }
         stoppedIntentionally = false;
 
+        renewSyncWakeLock();
+        handler.removeCallbacks(heartbeatRunnable);
+        handler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS);
+
         SharedPreferences prefs = appContext.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, MODE_PRIVATE);
         String nextToken = prefs.getString("feed_token", "");
         boolean tokenChanged = !TextUtils.equals(currentFeedToken, nextToken);
@@ -253,6 +278,7 @@ public class NotificationSyncService extends Service {
         }
         handler.removeCallbacks(heartbeatRunnable);
         handler.removeCallbacks(reconnectRunnable);
+        if (syncWakeLock != null && syncWakeLock.isHeld()) syncWakeLock.release();
         unregisterNetworkObserver();
         closeActiveSocket();
         if (wsClient != null) {
@@ -277,6 +303,8 @@ public class NotificationSyncService extends Service {
     private void closeActiveSocket() {
         WebSocket socket = activeSocket;
         activeSocket = null;
+        wsConnected = false;
+        lastWsActivityElapsedMs = 0L;
         if (socket != null) {
             try {
                 socket.close(1000, "reconnect");
@@ -295,6 +323,7 @@ public class NotificationSyncService extends Service {
 
     private void connectSocket(boolean alsoPoll) {
         if (destroyed || wsClient == null) return;
+        handler.removeCallbacks(reconnectRunnable);
         Context appContext = getApplicationContext();
         if (!NotificationPollReceiver.shouldRunInstantSync(appContext)) {
             stopSelf();
@@ -312,7 +341,6 @@ public class NotificationSyncService extends Service {
 
         currentFeedToken = feedToken;
         closeActiveSocket();
-        handler.removeCallbacks(heartbeatRunnable);
 
         String wsBase = supabaseUrl
             .replaceFirst("^https://", "wss://")
@@ -325,6 +353,10 @@ public class NotificationSyncService extends Service {
         activeSocket = wsClient.newWebSocket(request, new WebSocketListener() {
             @Override
             public void onOpen(@NonNull WebSocket webSocket, @NonNull Response response) {
+                if (destroyed || activeSocket != webSocket) {
+                    webSocket.close(1000, "superseded");
+                    return;
+                }
                 retryDelayMs = INITIAL_RETRY_MS;
                 wsConnected = true;
                 lastWsActivityElapsedMs = SystemClock.elapsedRealtime();
@@ -353,7 +385,6 @@ public class NotificationSyncService extends Service {
                 } catch (Exception ignored) {
                 }
 
-                handler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS);
                 NotificationPollReceiver.scheduleNext(appContext, NotificationPollReceiver.recommendedPollIntervalMs(appContext));
                 if (alsoPoll) {
                     NotificationPollReceiver.pollAsync(appContext);
@@ -362,6 +393,7 @@ public class NotificationSyncService extends Service {
 
             @Override
             public void onMessage(@NonNull WebSocket webSocket, @NonNull String text) {
+                if (destroyed || activeSocket != webSocket) return;
                 lastWsActivityElapsedMs = SystemClock.elapsedRealtime();
                 try {
                     JSONObject frame = new JSONObject(text);
@@ -370,7 +402,6 @@ public class NotificationSyncService extends Service {
                     if ("phx_error".equals(event) || "phx_close".equals(event)
                         || ("phx_reply".equals(event) && payload != null && "error".equals(payload.optString("status", "")))) {
                         wsConnected = false;
-                        handler.removeCallbacks(heartbeatRunnable);
                         if (activeSocket == webSocket) activeSocket = null;
                         try {
                             webSocket.close(1000, "reconnect");
@@ -428,9 +459,9 @@ public class NotificationSyncService extends Service {
 
             @Override
             public void onFailure(@NonNull WebSocket webSocket, @NonNull Throwable t, @Nullable Response response) {
+                if (destroyed || activeSocket != webSocket) return;
                 wsConnected = false;
                 if (activeSocket == webSocket) activeSocket = null;
-                handler.removeCallbacks(heartbeatRunnable);
                 appContext.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, MODE_PRIVATE)
                     .edit()
                     .putString("last_ws_error", t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName())
@@ -440,10 +471,10 @@ public class NotificationSyncService extends Service {
 
             @Override
             public void onClosed(@NonNull WebSocket webSocket, int code, @NonNull String reason) {
+                if (destroyed || activeSocket != webSocket) return;
                 wsConnected = false;
                 if (activeSocket == webSocket) activeSocket = null;
-                handler.removeCallbacks(heartbeatRunnable);
-                if (!destroyed && code != 1000) {
+                if (!destroyed) {
                     scheduleReconnect();
                 }
             }
