@@ -11336,7 +11336,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261119-150/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261119-151/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -12187,6 +12187,7 @@ test('username sign-in and required signup username enforce format, uniqueness, 
 
 test('post-login username setup modal prompts legacy users without usernames, preserves bio, and chains secondary prompts', async () => {
   const coreJs = read('js/core.js');
+  const messagesJs = read('js/messages.js');
   const css = read('css/app.css');
 
   assert.match(coreJs, /function maybeShowUsernameSetupModal\(/);
@@ -12197,6 +12198,12 @@ test('post-login username setup modal prompts legacy users without usernames, pr
   assert.match(coreJs, /playUiSound\('celebration',\s*\{\s*retryOnGestureEl:\s*dialog\s*\}\)/);
   assert.match(coreJs, /playUiSound\('confetti'\)/);
   assert.match(coreJs, /playUiSound\('type'\)/);
+  assert.match(coreJs, /record_contribution:\s*'record-addition'/);
+  assert.match(coreJs, /record_withdrawal:\s*'record-deduction'/);
+  assert.match(coreJs, /record_expense:\s*'record-expense'/);
+  assert.match(coreJs, /send_chat_message:\s*'msg-send'/);
+  assert.match(messagesJs, /playUiSound\?\.\('msg-typing'\)/);
+  assert.match(messagesJs, /playUiSound\?\.\('msg-receive'\)/);
   assert.match(coreJs, /rpc\('update_own_social_identity',\s*\{\s*p_username:\s*clean,\s*p_bio:\s*profile\.bio \?\? null\s*\}\)/);
   assert.match(css, /\.username-setup-dialog\s*\{/);
   assert.match(css, /\.username-setup-control input\[aria-invalid="true"\]/);
@@ -12400,11 +12407,21 @@ test('post-login username setup modal prompts legacy users without usernames, pr
     createBufferSource() { return { buffer: null, connect() { }, start() { burstStarts += 1; }, stop() { } }; }
   };
   assert.equal(Ipon.isUiSoundEnabled(), true);
-  for (const kind of ['type', 'chip', 'available', 'error', 'success', 'confetti', 'unlock', 'celebration']) {
+  for (const kind of [
+    'type', 'chip', 'available', 'error', 'success', 'confetti', 'unlock', 'celebration',
+    'msg-send', 'msg-typing', 'msg-receive', 'record-addition', 'record-deduction', 'record-expense'
+  ]) {
     assert.equal(Ipon.playUiSound(kind), true, `Expected playUiSound('${kind}') to succeed`);
   }
-  assert.ok(oscStarts >= 20, `Expected harmonic oscillators to play across all sounds, got ${oscStarts}`);
-  assert.ok(burstStarts >= 5, `Expected tactile/confetti noise bursts to play, got ${burstStarts}`);
+  assert.ok(oscStarts >= 35, `Expected harmonic oscillators to play across all sounds, got ${oscStarts}`);
+  assert.ok(burstStarts >= 7, `Expected tactile/confetti noise bursts to play, got ${burstStarts}`);
+
+  // Successful financial & chat RPCs automatically trigger their respective UI sounds
+  const beforeRpcOsc = oscStarts;
+  await Ipon.rpc('record_contribution', {});
+  await Ipon.rpc('record_withdrawal', {});
+  await Ipon.rpc('record_expense', {});
+  assert.ok(oscStarts > beforeRpcOsc, 'Expected record save RPCs to trigger UI sounds');
 
   const beforeMuteOsc = oscStarts;
   Ipon.setUiSoundEnabled(false);

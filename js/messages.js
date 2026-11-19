@@ -2186,6 +2186,9 @@
         }
         const nextCount = bucket.size;
         updateTypingIndicators({ listChanged: (prevCount > 0) !== (nextCount > 0) });
+        if (payload.typing && conversationId === state.activeConvId && isThreadActivelyVisible()) {
+          ipon().playUiSound?.('msg-typing');
+        }
       })
       .subscribe();
   }
@@ -6945,6 +6948,7 @@
           if (!threadActiveHere) {
             ipon().rpc('mark_messages_delivered', { p_conversation_id: cId }).catch(() => { });
           }
+          ipon().playUiSound?.('msg-receive');
         }
         const markIncomingReadHere = Boolean(isForActive && isInsert && fromPeer && isThreadActivelyVisible());
         scheduleRefresh({

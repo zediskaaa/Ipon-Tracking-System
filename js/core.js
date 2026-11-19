@@ -39,7 +39,20 @@
   const USERNAME_POST_SAVE_DELAY_MS = 1500;
   let uiAudioCtx = null;
   let uiNoiseBuffer = null;
-  let lastTypeSoundAt = 0;
+  const uiSoundLastAt = Object.create(null);
+  const UI_SOUND_COOLDOWN_MS = {
+    type: 38,
+    'msg-typing': 2200,
+    'msg-receive': 240,
+    'msg-send': 120
+  };
+  const RPC_SUCCESS_SOUNDS = {
+    record_contribution: 'record-addition',
+    record_contribution_with_carryover: 'record-addition',
+    record_withdrawal: 'record-deduction',
+    record_expense: 'record-expense',
+    send_chat_message: 'msg-send'
+  };
 
   function isUiSoundEnabled() {
     try {
@@ -162,6 +175,43 @@
       });
       return;
     }
+    if (kind === 'msg-send') {
+      scheduleUiTone(ctx, master, { freq: 340, endFreq: 740, type: 'sine', start: 0, duration: 0.078, gain: 0.058, attack: 0.005 });
+      scheduleUiBurst(ctx, master, { start: 0.01, duration: 0.018, gain: 0.022, filterFreq: 2800, q: 1.5 });
+      return;
+    }
+    if (kind === 'msg-typing') {
+      scheduleUiTone(ctx, master, { freq: 520, endFreq: 610, type: 'sine', start: 0, duration: 0.055, gain: 0.028, attack: 0.005 });
+      scheduleUiTone(ctx, master, { freq: 440, endFreq: 500, type: 'sine', start: 0.095, duration: 0.06, gain: 0.024, attack: 0.005 });
+      return;
+    }
+    if (kind === 'msg-receive') {
+      scheduleUiTone(ctx, master, { freq: 659.25, type: 'sine', start: 0, duration: 0.14, gain: 0.062, attack: 0.006 });
+      scheduleUiTone(ctx, master, { freq: 880.0, type: 'sine', start: 0.075, duration: 0.24, gain: 0.068, attack: 0.006 });
+      scheduleUiTone(ctx, master, { freq: 1760.0, type: 'triangle', start: 0.075, duration: 0.16, gain: 0.014, attack: 0.006 });
+      return;
+    }
+    if (kind === 'record-addition') {
+      scheduleUiTone(ctx, master, { freq: 987.77, type: 'sine', start: 0, duration: 0.14, gain: 0.062, attack: 0.004 });
+      scheduleUiTone(ctx, master, { freq: 1318.51, type: 'sine', start: 0.07, duration: 0.34, gain: 0.068, attack: 0.004 });
+      scheduleUiTone(ctx, master, { freq: 2637.02, type: 'triangle', start: 0.07, duration: 0.22, gain: 0.016, attack: 0.004 });
+      return;
+    }
+    if (kind === 'record-deduction') {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(1600, ctx.currentTime);
+      lp.connect(master);
+      scheduleUiTone(ctx, lp, { freq: 783.99, type: 'sine', start: 0, duration: 0.15, gain: 0.056, attack: 0.006 });
+      scheduleUiTone(ctx, lp, { freq: 587.33, type: 'triangle', start: 0.085, duration: 0.28, gain: 0.06, attack: 0.006 });
+      return;
+    }
+    if (kind === 'record-expense') {
+      scheduleUiBurst(ctx, master, { start: 0, duration: 0.024, gain: 0.032, filterFreq: 2200, q: 1.5 });
+      scheduleUiTone(ctx, master, { freq: 698.46, type: 'sine', start: 0.015, duration: 0.12, gain: 0.052, attack: 0.005 });
+      scheduleUiTone(ctx, master, { freq: 880.0, type: 'triangle', start: 0.095, duration: 0.22, gain: 0.05, attack: 0.005 });
+      return;
+    }
     if (kind === 'confetti') {
       scheduleUiBurst(ctx, master, { start: 0, duration: 0.032, gain: 0.062, filterFreq: 3400, q: 1.3 });
       scheduleUiTone(ctx, master, { freq: 1318.51, type: 'sine', start: 0.02, duration: 0.16, gain: 0.042 });
@@ -201,10 +251,11 @@
 
   function playUiSound(kind, { retryOnGestureEl = null } = {}) {
     if (!kind || !isUiSoundEnabled()) return false;
-    if (kind === 'type') {
+    const cooldownMs = UI_SOUND_COOLDOWN_MS[kind] || 0;
+    if (cooldownMs > 0) {
       const now = Date.now();
-      if (now - lastTypeSoundAt < 38) return false;
-      lastTypeSoundAt = now;
+      if (now - (uiSoundLastAt[kind] || 0) < cooldownMs) return false;
+      uiSoundLastAt[kind] = now;
     }
     const ctx = getUiAudioContext();
     if (!ctx) return false;
@@ -9332,8 +9383,12 @@
     if (!client) throw new Error('Supabase is not connected.');
     const { data, error } = await client.rpc(name, params);
     if (error) throw error;
-    if (!READ_ONLY_RPC_RE.test(String(name || ''))) {
+    const rpcName = String(name || '');
+    if (!READ_ONLY_RPC_RE.test(rpcName)) {
       notifyLiveSync('data');
+    }
+    if (RPC_SUCCESS_SOUNDS[rpcName]) {
+      playUiSound(RPC_SUCCESS_SOUNDS[rpcName]);
     }
     return data;
   }
@@ -9906,57 +9961,4 @@
       const triggerLabel = myReaction ? `Reacted ${REACTION_LABELS[myReaction] || myReaction}` : 'React';
       const triggerHtml = `
         <div class="announcement-react-container">
-          <button class="announcement-react-btn${myReaction ? ' is-active' : ''}" type="button" data-react-trigger="${escapeHtml(announcementId)}" aria-label="${escapeHtml(triggerLabel)}" aria-haspopup="dialog" aria-expanded="${isPickerOpen ? 'true' : 'false'}" title="${escapeHtml(triggerLabel)}">
-            ${myReaction
-          ? `<span class="my-reaction-emoji" aria-hidden="true">${myReaction}</span><span class="react-btn-label">${escapeHtml(REACTION_LABELS[myReaction] || myReaction)}</span>`
-          : `<svg class="react-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm-3.5-9a1.5 1.5 0 1 0-1.5-1.5A1.5 1.5 0 0 0 8.5 11zm7 0a1.5 1.5 0 1 0-1.5-1.5A1.5 1.5 0 0 0 15.5 11zm-7 3.5a4.5 4.5 0 0 0 7 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="react-btn-label">React</span>`}
-          </button>
-          ${isPickerOpen ? `
-            <div class="announcement-reaction-picker" role="menu" aria-label="Choose reaction">
-              ${ANNOUNCEMENT_REACTIONS.map((emoji) => `
-                <button class="reaction-choice-btn${emoji === myReaction ? ' is-selected' : ''}" type="button" data-react-choice="${emoji}" data-announcement-id="${escapeHtml(announcementId)}" aria-label="${escapeHtml(REACTION_LABELS[emoji] || emoji)}" title="${escapeHtml(REACTION_LABELS[emoji] || emoji)}">
-                  <span class="reaction-emoji-symbol" aria-hidden="true">${emoji}</span>
-                </button>`).join('')}
-            </div>` : ''}
-        </div>`;
-
-      return `
-        <div class="announcement-reactions-bar">
-          ${pillHtml}
-          ${triggerHtml}
-        </div>`;
-    };
-
-    const renderReactionsModalContent = () => {
-      if (!reactionsTabs || !reactionsList) return;
-      const total = modalReactionsData.length;
-      if (reactionsTitle) {
-        reactionsTitle.textContent = total ? `Reactions (${total})` : 'Reactions';
-      }
-      const counts = {};
-      modalReactionsData.forEach((entry) => {
-        counts[entry.reaction] = (counts[entry.reaction] || 0) + 1;
-      });
-
-      const availableEmojis = ANNOUNCEMENT_REACTIONS.filter((emoji) => counts[emoji] > 0);
-      if (activeReactionTab !== 'all' && !counts[activeReactionTab]) {
-        activeReactionTab = 'all';
-      }
-
-      const tabs = [
-        { id: 'all', label: `All ${total}` },
-        ...availableEmojis.map((emoji) => ({ id: emoji, label: `${emoji} ${counts[emoji]}` }))
-      ];
-
-      reactionsTabs.innerHTML = tabs.map((tab) => `
-        <button class="reaction-tab-btn${tab.id === activeReactionTab ? ' is-active' : ''}" type="button" data-reaction-tab="${escapeHtml(tab.id)}">
-          ${escapeHtml(tab.label)}
-        </button>`).join('');
-
-      const filtered = activeReactionTab === 'all'
-        ? modalReactionsData
-        : modalReactionsData.filter((entry) => entry.reaction === activeReactionTab);
-
-      if (!filtered.length) {
-        reactionsList.innerHTML = '<p class="empty-state">No reactions yet.</p>';
 ... [truncated for diff preview]
