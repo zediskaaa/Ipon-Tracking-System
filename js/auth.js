@@ -169,6 +169,18 @@
     } catch { }
   }
 
+  function syncSocialAuthLabels() {
+    const prefix = mode === 'signup' ? 'Create with' : 'Continue with';
+    socialSignupButtons.forEach((btn) => {
+      const label = btn.querySelector('.social-signup-label');
+      if (!label) return;
+      const provider = btn.dataset.clerkOauth === 'oauth_facebook' ? 'Facebook' : 'Google';
+      const text = `${prefix} ${provider}`;
+      if (btn.classList.contains('is-busy')) btn.dataset.originalLabel = text;
+      else label.textContent = text;
+    });
+  }
+
   function setSocialSignupBusy(triggerButton, busy) {
     socialSignupButtons.forEach((btn) => {
       btn.disabled = Boolean(busy);
@@ -1231,6 +1243,7 @@
     authCopy.textContent = activeJoinPreview?.valid
       ? (signup ? `Create an account to join "${activeJoinPreview.group_name}".` : `Sign in to join "${activeJoinPreview.group_name}".`)
       : (signup ? 'Sign up with myIPON to track and manage your group savings.' : 'Sign in to myIPON to track and manage your group savings.');
+    syncSocialAuthLabels();
     setSignupStep('choice');
     clearFieldErrors();
     setPasswordVisibility(false);
