@@ -4686,8 +4686,11 @@
       const compactHeader = window.matchMedia('(max-width:720px)').matches
         || (button.closest('.dashboard-sidebar') && window.matchMedia('(max-width:860px)').matches);
       if (compactHeader) {
+        const sidebarEl = button.closest('.app-sidebar');
+        const navTop = sidebarEl?.querySelector?.('.app-nav, .sidebar-nav')?.getBoundingClientRect?.().top;
         const headerBottom = button.closest('.app-sidebar')?.getBoundingClientRect().bottom || 68;
-        notifications.style.setProperty('--notification-top', `${Math.round(headerBottom + 8)}px`);
+        const notifTop = Number.isFinite(navTop) && navTop > 0 ? navTop : Math.max(58, headerBottom - 72);
+        notifications.style.setProperty('--notification-top', `${Math.round(notifTop)}px`);
       } else notifications.style.removeProperty('--notification-top');
       notifications.show();
     });
@@ -4753,6 +4756,43 @@
           openPolicyDialog(policyTrigger.dataset?.policyOpenInapp || 'terms');
         }
       });
+    }
+    if (document.body?.dataset && !document.body.dataset.mobileHeaderScrollBound) {
+      document.body.dataset.mobileHeaderScrollBound = '1';
+      const getCurrentScrollY = () => Math.max(0, Number(window.scrollY ?? window.pageYOffset ?? document.documentElement?.scrollTop ?? document.body?.scrollTop ?? 0) || 0);
+      let lastScrollY = getCurrentScrollY();
+      let headerOffset = 0;
+      const getSidebar = () => document.getElementById('app-sidebar') || document.querySelector?.('.app-sidebar');
+      const isCompactHeaderActive = (sidebar) => {
+        if (!sidebar) return false;
+        if (window.matchMedia?.('(max-width:720px)')?.matches) return true;
+        const isDashboardSidebar = Boolean(sidebar.classList?.contains?.('dashboard-sidebar') || document.body?.dataset?.page === 'dashboard');
+        return isDashboardSidebar && Boolean(window.matchMedia?.('(max-width:860px)')?.matches);
+      };
+      const applyHeaderOffset = (sidebar, nextOffset, maxOffset) => {
+        const clamped = Math.max(0, Math.min(maxOffset, nextOffset));
+        headerOffset = clamped;
+        sidebar.style?.setProperty?.('--header-scroll-y', `${Math.round(clamped)}px`);
+        sidebar.classList.toggle('is-scroll-hidden', maxOffset > 0 && clamped >= maxOffset - 2);
+      };
+      const syncHeaderOnScroll = () => {
+        const sidebar = getSidebar();
+        if (!sidebar?.classList) return;
+        const currentY = getCurrentScrollY();
+        const maxOffset = Math.max(120, Math.ceil((Number(sidebar.offsetHeight) || 136) + 18));
+        const ptrActive = Boolean(document.body?.classList?.contains?.('is-ptr-pulling') || document.body?.classList?.contains?.('is-ptr-refreshing') || document.body?.classList?.contains?.('is-ptr-settling'));
+        if (!isCompactHeaderActive(sidebar) || currentY <= 0 || notifications?.open || ptrActive) {
+          applyHeaderOffset(sidebar, 0, maxOffset);
+          lastScrollY = currentY;
+          return;
+        }
+        const delta = currentY - lastScrollY;
+        lastScrollY = currentY;
+        const nextOffset = Math.min(currentY, Math.max(0, Math.min(maxOffset, headerOffset + delta)));
+        applyHeaderOffset(sidebar, nextOffset, maxOffset);
+      };
+      window.addEventListener?.('scroll', syncHeaderOnScroll, { passive: true });
+      window.addEventListener?.('resize', syncHeaderOnScroll, { passive: true });
     }
     if (bugImageInput) bugImageInput.onchange = async () => {
       const files = Array.from(bugImageInput.files || []);
@@ -12984,6 +13024,77 @@
       return false;
     }
 
+    let settleTimer = 0;
+    let activePtrInMessages = false;
+    function syncPtrHeaderAnchor(sidebar) {
+      const msgDialog = activePtrInMessages ? document.getElementById('msg-workspace-dialog') : null;
+      if (msgDialog?.open) {
+        if (indicator.parentElement !== msgDialog) msgDialog.appendChild?.(indicator);
+        const chatsView = msgDialog.querySelector?.('#msg-view-chats');
+        const sidebarSearch = (chatsView && !chatsView.hidden) ? msgDialog.querySelector?.('.msg-sidebar-search') : null;
+        const anchorEl = (sidebarSearch && (Number(sidebarSearch.offsetHeight) > 0 || typeof sidebarSearch.getBoundingClientRect === 'function'))
+          ? sidebarSearch
+          : msgDialog.querySelector?.('.msg-topbar');
+        const rect = typeof anchorEl?.getBoundingClientRect === 'function' ? anchorEl.getBoundingClientRect() : null;
+        const bottom = rect && Number.isFinite(rect.bottom) && rect.bottom > 0 ? Math.round(rect.bottom) : 228;
+        indicator.style.setProperty('--ptr-top', `${bottom}px`);
+        if (rect && Number.isFinite(rect.left) && Number.isFinite(rect.width) && rect.width > 0) {
+          indicator.style.setProperty('--ptr-left', `${Math.round(rect.left + rect.width / 2)}px`);
+        } else {
+          indicator.style.removeProperty?.('--ptr-left');
+        }
+        return;
+      }
+      if (indicator.parentElement !== document.body) document.body?.appendChild?.(indicator);
+      indicator.style.removeProperty?.('--ptr-left');
+      const isCompact = Boolean(
+        window.matchMedia?.('(max-width:720px)')?.matches
+        || ((sidebar?.classList?.contains?.('dashboard-sidebar') || document.body?.dataset?.page === 'dashboard')
+          && window.matchMedia?.('(max-width:860px)')?.matches)
+      );
+      if (isCompact && sidebar) {
+        sidebar.classList?.remove?.('is-scroll-hidden');
+        sidebar.style?.setProperty?.('--header-scroll-y', '0px');
+        const rect = typeof sidebar.getBoundingClientRect === 'function' ? sidebar.getBoundingClientRect() : null;
+        const bottom = rect && Number.isFinite(rect.bottom) && rect.bottom > 0 ? Math.round(rect.bottom) : 134;
+        indicator.style.setProperty('--ptr-top', `${bottom}px`);
+      } else {
+        indicator.style.removeProperty?.('--ptr-top');
+      }
+    }
+    function syncBodyPull(pullPx, mode) {
+      const body = document.body;
+      if (!body?.classList) return;
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+        settleTimer = 0;
+      }
+      const sidebar = document.getElementById('app-sidebar') || document.querySelector?.('.app-sidebar');
+      if (mode === 'pulling') {
+        syncPtrHeaderAnchor(sidebar);
+        body.classList.remove('is-ptr-refreshing', 'is-ptr-settling');
+        body.classList.add('is-ptr-pulling');
+        body.style?.setProperty?.('--ptr-pull', `${Math.round(pullPx)}px`);
+      } else if (mode === 'refreshing') {
+        syncPtrHeaderAnchor(sidebar);
+        body.classList.remove('is-ptr-pulling', 'is-ptr-settling');
+        body.classList.add('is-ptr-refreshing');
+        body.style?.setProperty?.('--ptr-pull', `${Math.round(pullPx)}px`);
+      } else if (mode === 'settling') {
+        body.classList.remove('is-ptr-pulling', 'is-ptr-refreshing');
+        body.classList.add('is-ptr-settling');
+        body.style?.setProperty?.('--ptr-pull', '0px');
+        settleTimer = setTimeout(() => {
+          body.classList.remove('is-ptr-settling');
+          body.style?.removeProperty?.('--ptr-pull');
+          settleTimer = 0;
+        }, 280);
+      } else {
+        body.classList.remove('is-ptr-pulling', 'is-ptr-refreshing', 'is-ptr-settling');
+        body.style?.removeProperty?.('--ptr-pull');
+      }
+    }
+
     function setPullState(pull) {
       currentPull = pull;
       const clamped = Math.max(0, Math.min(MAX_PULL, pull));
@@ -12992,16 +13103,27 @@
       indicator.style.setProperty('--ptr-progress', progress.toFixed(3));
       indicator.classList.toggle('is-pulling', clamped > 0);
       indicator.classList.toggle('is-ready', clamped >= THRESHOLD);
+      if (clamped > 0) {
+        syncBodyPull(clamped * 0.62, 'pulling');
+      } else if (!refreshing) {
+        const wasTransformed = Boolean(document.body?.classList?.contains?.('is-ptr-pulling') || document.body?.classList?.contains?.('is-ptr-refreshing'));
+        syncBodyPull(0, wasTransformed ? 'settling' : 'idle');
+      }
     }
 
     document.addEventListener('touchstart', (event) => {
       if (refreshing || event.touches.length !== 1) return;
-      if (document.querySelector('dialog[open]')) return;
-      if ((window.scrollY || document.documentElement.scrollTop || 0) > 1) return;
+      const openDialogs = Array.from(document.querySelectorAll?.('dialog[open]') || []);
+      const msgDialog = document.getElementById('msg-workspace-dialog');
+      const inMsgWorkspace = Boolean(msgDialog?.open && openDialogs.length === 1 && openDialogs[0] === msgDialog);
+      if (openDialogs.length > 0 && !inMsgWorkspace) return;
+      if (!inMsgWorkspace && (window.scrollY || document.documentElement.scrollTop || 0) > 1) return;
       const target = event.target;
+      if (inMsgWorkspace && target?.closest?.('#msg-thread-active, .msg-composer-wrap')) return;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'OPTION') return;
       if (hasScrolledAncestor(target)) return;
+      activePtrInMessages = inMsgWorkspace;
       startX = event.touches[0].clientX;
       startY = event.touches[0].clientY;
       tracking = true;
@@ -13012,7 +13134,7 @@
       if (!tracking || refreshing || event.touches.length !== 1) return;
       const dx = event.touches[0].clientX - startX;
       const dy = event.touches[0].clientY - startY;
-      if (dy <= 0 || (window.scrollY || document.documentElement.scrollTop || 0) > 1) {
+      if (dy <= 0 || (!activePtrInMessages && (window.scrollY || document.documentElement.scrollTop || 0) > 1)) {
         if (currentPull > 0) setPullState(0);
         tracking = false;
         return;
@@ -13038,15 +13160,19 @@
       indicator.classList.remove('is-pulling', 'is-ready');
       indicator.classList.add('is-refreshing');
       indicator.style.setProperty('--ptr-y', '12px');
+      syncBodyPull(46, 'refreshing');
       try {
+        const refreshAction = activePtrInMessages && typeof window.IponMessages?.refreshWorkspace === 'function'
+          ? window.IponMessages.refreshWorkspace()
+          : triggerManualRefresh();
         await Promise.all([
-          triggerManualRefresh().catch(() => { }),
+          Promise.resolve(refreshAction).catch(() => { }),
           new Promise((resolve) => setTimeout(resolve, 550))
         ]);
       } finally {
         indicator.classList.remove('is-refreshing');
-        setPullState(0);
         refreshing = false;
+        setPullState(0);
       }
     }
 

@@ -39,7 +39,7 @@ function makeStubNode(tag = 'div') {
   return {
     tagName: tag.toUpperCase(),
     dataset: {},
-    style: {},
+    style: { setProperty() { }, removeProperty() { } },
     classList: makeClassList(),
     attributes: {},
     hidden: false,
@@ -62,12 +62,19 @@ function makeStubNode(tag = 'div') {
   };
 }
 
-function runCoreShell({ page = 'dashboard', role = 'ADMIN', workspaceMode = 'GROUP', renderedRole = '' } = {}) {
+function runCoreShell({ page = 'dashboard', role = 'ADMIN', workspaceMode = 'GROUP', renderedRole = '', compactViewport = false } = {}) {
   const coreJs = read('js/core.js');
   const rootEl = { dataset: {}, classList: makeClassList(), style: { setProperty() { } }, scrollTop: 0 };
+  const bodyStyleProps = {};
   const bodyEl = {
     dataset: { page },
     classList: makeClassList(),
+    scrollTop: 0,
+    style: {
+      setProperty(k, v) { bodyStyleProps[k] = String(v); },
+      removeProperty(k) { delete bodyStyleProps[k]; },
+      getPropertyValue(k) { return bodyStyleProps[k] || ''; }
+    },
     insertAdjacentHTML(_pos, html) {
       if (String(html).includes('id="app-loader"')) {
         appLoaderEl = makeStubNode('div');
@@ -98,10 +105,19 @@ function runCoreShell({ page = 'dashboard', role = 'ADMIN', workspaceMode = 'GRO
   };
   let accountDialogCloseCount = 0;
   const clickHandlers = [];
+  const docEventHandlers = { touchstart: [], touchmove: [], touchend: [] };
   const clickHandler = (ev) => { for (const fn of clickHandlers) fn(ev); };
   let appLoaderEl = null;
 
+  const hostStyleProps = {};
   const hostEl = {
+    offsetHeight: 136,
+    style: {
+      setProperty(k, v) { hostStyleProps[k] = String(v); },
+      removeProperty(k) { delete hostStyleProps[k]; },
+      getPropertyValue(k) { return hostStyleProps[k] || ''; }
+    },
+    classList: makeClassList('app-sidebar'),
     dataset: renderedRole ? { renderedRole } : {},
     _html: '',
     get innerHTML() { return this._html; },
@@ -154,10 +170,12 @@ function runCoreShell({ page = 'dashboard', role = 'ADMIN', workspaceMode = 'GRO
     },
     addEventListener(type, fn) {
       if (type === 'click' && typeof fn === 'function') clickHandlers.push(fn);
+      if (docEventHandlers[type] && typeof fn === 'function') docEventHandlers[type].push(fn);
     }
   };
 
   const historyCalls = [];
+  const windowScrollHandlers = [];
   const ctx = {
     URL,
     URLSearchParams,
@@ -181,6 +199,8 @@ function runCoreShell({ page = 'dashboard', role = 'ADMIN', workspaceMode = 'GRO
     navigator: { userAgent: 'Mozilla/5.0', onLine: true },
     setTimeout: () => 1,
     clearTimeout() { },
+    scrollY: 0,
+    pageYOffset: 0,
     history: {
       length: 3,
       back() { historyCalls.push('back'); }
@@ -194,8 +214,10 @@ function runCoreShell({ page = 'dashboard', role = 'ADMIN', workspaceMode = 'GRO
       search: '',
       hash: ''
     },
-    matchMedia: () => ({ matches: false, addEventListener() { } }),
-    addEventListener() { },
+    matchMedia: (q) => ({ matches: Boolean(compactViewport && /max-width:(?:720|860)px/.test(q)), addEventListener() { } }),
+    addEventListener(type, fn) {
+      if (type === 'scroll' && typeof fn === 'function') windowScrollHandlers.push(fn);
+    },
     document: doc,
     window: null,
     console
@@ -212,6 +234,20 @@ function runCoreShell({ page = 'dashboard', role = 'ADMIN', workspaceMode = 'GRO
     workspacePrefRow,
     getAccountDialogCloseCount: () => accountDialogCloseCount,
     getClickHandler: () => clickHandler,
+    fireScroll: (y) => {
+      ctx.scrollY = y;
+      ctx.pageYOffset = y;
+      for (const fn of windowScrollHandlers) fn();
+    },
+    fireDocTouch: (type, clientY, clientX = 120) => {
+      const ev = {
+        touches: type === 'touchend' ? [] : [{ clientX, clientY }],
+        target: { tagName: 'DIV', nodeType: 1, scrollTop: 0, scrollHeight: 100, clientHeight: 100, parentElement: bodyEl }
+      };
+      for (const fn of (docEventHandlers[type] || [])) fn(ev);
+    },
+    bodyStyleProps,
+    hostStyleProps,
     historyCalls
   };
 }
@@ -269,9 +305,15 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
   assert.match(css, /\.sidebar-user-card\.is-active\s*\{/);
   assert.match(css, /\.preference-workspace-row\s*\{/);
   assert.match(css, /\/\* Mobile Curved Emerald Header & Floating Pill Navigation Dock \*\/[\s\S]*?\.app-sidebar::before\s*\{[\s\S]*?border-radius:\s*0 0 32px 32px/);
+  assert.match(css, /\/\* Mobile Curved Emerald Header & Floating Pill Navigation Dock \*\/[\s\S]*?\.app-sidebar\.is-scroll-hidden[\s\S]*?transform:\s*translate3d\(0,\s*calc\(-100% - 18px\),\s*0\)/);
   assert.match(css, /\/\* Mobile Curved Emerald Header & Floating Pill Navigation Dock \*\/[\s\S]*?\.app-nav\s*\{[\s\S]*?border-radius:\s*26px[\s\S]*?background:\s*#FBF8F0/);
   assert.match(css, /\/\* Mobile Curved Emerald Header & Floating Pill Navigation Dock \*\/[\s\S]*?\.app-nav a\.is-active\s*\{[\s\S]*?color:\s*#F2C14E/);
+  assert.match(css, /\/\* Messages & Connections — Navigation Bar Style Preset & Pull-to-Refresh \*\/[\s\S]*?\.msg-tabs\s*\{[\s\S]*?border-radius:\s*26px[\s\S]*?background:\s*#FBF8F0/);
+  assert.match(css, /\/\* Messages & Connections — Navigation Bar Style Preset & Pull-to-Refresh \*\/[\s\S]*?\.msg-tab\.is-active\s*\{[\s\S]*?color:\s*#F2C14E/);
+  assert.match(css, /\/\* Messages & Connections — Navigation Bar Style Preset & Pull-to-Refresh \*\/[\s\S]*?\.msg-topbar::before\s*\{[\s\S]*?border-radius:\s*0 0 32px 32px/);
+  assert.match(read('js/messages.js'), /async function refreshWorkspace\(\)[\s\S]*?window\.IponMessages = \{[\s\S]*?refreshWorkspace,/);
   assert.match(heroPlatesCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar::before\s*\{[\s\S]*?border-radius:\s*0 0 32px 32px/);
+  assert.match(heroPlatesCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar\.is-scroll-hidden[\s\S]*?transform:\s*translate3d\(0,calc\(-100% - 18px\),0\)/);
   assert.match(heroPlatesCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar \.sidebar-nav\s*\{[\s\S]*?border-radius:\s*26px[\s\S]*?background:\s*#FBF8F0/);
   assert.match(dashHtml, /<svg class="brand-coins"[\s\S]*?<span class="brand-divider"[\s\S]*?<span class="brand-text">\s*<strong><span class="brand-prefix">my<\/span>IPON<\/strong>\s*<\/span>/);
   assert.match(adminNav.hostEl.innerHTML, /<svg class="brand-coins"[\s\S]*?<span class="brand-divider"[\s\S]*?<span class="brand-text">\s*<strong><span class="brand-prefix">my<\/span>IPON<\/strong>\s*<\/span>/);
@@ -279,8 +321,8 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
 
   for (const file of ['dashboard.html', 'reports.html', 'audit.html', 'settings.html', 'account.html']) {
     const html = read(file);
-    assert.match(html, /css\/app\.css\?v=20261119-175/);
-    assert.match(html, /js\/core\.js\?v=20261119-153/);
+    assert.match(html, /css\/app\.css\?v=20261119-179/);
+    assert.match(html, /js\/core\.js\?v=20261119-155/);
     const opens = (html.match(/<dialog\b/g) || []).length;
     const closes = (html.match(/<\/dialog>/g) || []).length;
     assert.equal(opens, closes, `${file} has unbalanced <dialog> tags`);
@@ -342,4 +384,29 @@ test('audit highlights Reports, settings/account highlight My account, and subvi
     assert.equal(blocked, false, `referrer "${ref}" should fall back to href`);
     assert.equal(handlerShell.historyCalls.length, before);
   }
+
+  // Mobile sticky header tracks user scroll 1:1 (--header-scroll-y) without auto-snapping and stays fixed during pull-to-refresh
+  const mobileShell = runCoreShell({ page: 'contributions', role: 'ADMIN', compactViewport: true });
+  assert.equal(mobileShell.hostEl.classList.contains('is-scroll-hidden'), false);
+  mobileShell.fireScroll(40);
+  assert.equal(mobileShell.hostStyleProps['--header-scroll-y'], '40px', 'tracks 40px downward scroll 1:1 without auto-hiding');
+  assert.equal(mobileShell.hostEl.classList.contains('is-scroll-hidden'), false, 'does not auto-hide when only partially scrolled');
+  mobileShell.fireScroll(180);
+  assert.equal(mobileShell.hostStyleProps['--header-scroll-y'], '154px', 'clamps to full header height when scrolled all the way down');
+  assert.equal(mobileShell.hostEl.classList.contains('is-scroll-hidden'), true);
+  mobileShell.fireScroll(150);
+  assert.equal(mobileShell.hostStyleProps['--header-scroll-y'], '124px', 'moves back down 1:1 by 30px when user scrolls up 30px');
+  assert.equal(mobileShell.hostEl.classList.contains('is-scroll-hidden'), false);
+  mobileShell.fireScroll(0);
+  assert.equal(mobileShell.hostStyleProps['--header-scroll-y'], '0px');
+  assert.equal(mobileShell.hostEl.classList.contains('is-scroll-hidden'), false, 'fully visible at top of page');
+
+  // Swipe-down pull-to-refresh keeps header/nav bar fixed (0px) and translates only the workspace below the nav bar
+  mobileShell.fireDocTouch('touchstart', 20);
+  mobileShell.fireDocTouch('touchmove', 110);
+  assert.equal(mobileShell.doc.body.classList.contains('is-ptr-pulling'), true);
+  assert.ok(parseInt(mobileShell.bodyStyleProps['--ptr-pull'] || '0', 10) > 15, 'translates workspace below nav bar during swipe-down refresh');
+  assert.equal(mobileShell.hostStyleProps['--header-scroll-y'], '0px', 'header and navigation bar remain locked at 0px');
+  assert.equal(mobileShell.hostEl.classList.contains('is-scroll-hidden'), false, 'header and navigation bar stay fixed at the top');
+  mobileShell.fireDocTouch('touchend', 110);
 });

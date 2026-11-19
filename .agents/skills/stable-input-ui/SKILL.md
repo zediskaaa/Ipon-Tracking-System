@@ -32,6 +32,12 @@ Follow every standard below when building or modifying any UI surface so compone
 - **Circular `X` close & remove buttons (fixed standard):** Every close/remove `X` icon button (`.dialog-close`, `.announcement-modal-close`, `.notification-sheet .dialog-close`, `.calendar-jump-close`, `.login-card-close`, `.account-avatar-remove`, `.bug-image-remove`, `.invite-row-remove`, `.record-thread-queued-remove`, `.calc-plan-remove`, `.day-detail-panel header button`) MUST be a true circle (`border-radius: 50%`, `aspect-ratio: 1 / 1`, `padding: 0`) with equal `width`, `height`, and `flex: 0 0 <size>` so it never stretches or squishes into an oblong oval.
 - Scope contextual pills accurately (e.g., show group `ADMIN` badges strictly inside group contexts, never on global profile cards or reaction lists).
 - Keep uploaded photos, receipts, avatars, and videos crisp and lossless with clean aspect-ratio previews and full-size viewer support.
+- **Navigation Bar Style Preset (Strictly Opt-In Only):**
+  - **Only when the user explicitly asks to match the navigation bar style** (e.g., *"parang sa navigation bar ang style"*, *"gayahin yung style sa navigation bar"*, *"like the navigation bar"*), use the **Floating Emerald-Gold Pill Dock** style:
+    - Pill container: `border-radius: 26px; padding: 6px; gap: 4px;` with `#FBF8F0` background, `1px solid rgba(12, 64, 48, .08)`, and `0 14px 28px -12px rgba(7, 40, 30, .4), 0 1px 0 #ffffff inset` shadow in light mode (`#132820` background, `1px solid rgba(242, 193, 78, .18)` gold border, and `0 14px 28px -12px rgba(0, 0, 0, .68), 0 1px 0 rgba(255, 255, 255, .06) inset` in dark mode).
+    - Active pill item: `border-radius: 20px; background: linear-gradient(160deg, #10503D, #093226); color: #F2C14E; stroke: #F2C14E; box-shadow: 0 8px 16px -8px rgba(7, 40, 30, .75), 0 1px 0 rgba(255, 255, 255, .14) inset` (`linear-gradient(160deg, #17664d, #0c3b2c)` with `0 1px 0 rgba(242, 193, 78, .22) inset` in dark mode).
+    - Inactive items: `background: transparent; color: #52645A` (`#93aba0` in dark mode).
+  - **When the user does NOT explicitly ask for the navigation bar style:** Do **NOT** apply or copy the navigation bar floating pill dock style to other components, tabs, cards, or controls—keep the default warm-paper & forest-emerald component styles.
 
 ## 4. Complete Interactive States (Fully Functional)
 Every panel, list, table, and flow must handle all four states:
@@ -53,3 +59,4 @@ Every panel, list, table, and flow must handle all four states:
 2. Confirm any shared helper called as `Ipon.<fn>()` is exported on `window.Ipon` in `js/core.js`.
 3. Add or update contract tests in `tests/contracts.test.mjs` covering new UI states, validation rules, and layout guards.
 4. Run `npm test` after final edits and verify **100% pass, 0 failures, 0 skipped**.
+5. **Always provide Git Title & Description:** At the end of every response that modifies files, include a ready-to-paste **Git Title & Description** summarizing all changes.

@@ -7306,9 +7306,23 @@
     return true;
   }
 
+  async function refreshWorkspace() {
+    if (!isEligible()) return false;
+    await Promise.all([refreshConversations(), refreshOverview(), refreshSocialNotifications()]);
+    if (document.getElementById('msg-workspace-dialog')?.open) {
+      syncTabUi();
+      syncMobilePaneState();
+      if (state.tab === 'friends') renderFriendsView();
+      else if (state.tab === 'notifications') renderAlertsView();
+      else renderConversationList();
+    }
+    return true;
+  }
+
   window.IponMessages = {
     init,
     openWorkspace,
+    refreshWorkspace,
     openFromNotification,
     openDirectMessage,
     openProfilePopover,

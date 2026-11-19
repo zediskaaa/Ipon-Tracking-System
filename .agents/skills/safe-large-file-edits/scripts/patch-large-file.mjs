@@ -13,6 +13,10 @@ function readSpec() {
     if (!specPath) throw new Error('Missing path after --spec');
     return JSON.parse(fs.readFileSync(specPath, 'utf8'));
   }
+  const positionalPath = process.argv[2];
+  if (positionalPath && positionalPath !== '-' && !positionalPath.startsWith('-')) {
+    return JSON.parse(fs.readFileSync(positionalPath, 'utf8'));
+  }
   const raw = fs.readFileSync(0, 'utf8').trim();
   if (!raw) {
     throw new Error('Provide JSON spec via stdin or --spec <path>');
@@ -38,7 +42,8 @@ function main() {
   if (!spec || typeof spec.file !== 'string' || !spec.file.trim()) {
     throw new Error('Spec requires a non-empty "file" string.');
   }
-  if (!Array.isArray(spec.replacements) || spec.replacements.length === 0) {
+  const replacements = Array.isArray(spec.replacements) ? spec.replacements : (Array.isArray(spec.patches) ? spec.patches : null);
+  if (!replacements || replacements.length === 0) {
     throw new Error('Spec requires a non-empty "replacements" array.');
   }
 
@@ -57,7 +62,7 @@ function main() {
   let next = original;
   let totalApplied = 0;
 
-  spec.replacements.forEach((item, idx) => {
+  replacements.forEach((item, idx) => {
     if (!item || typeof item.target !== 'string' || item.target.length === 0) {
       throw new Error(`Replacement #${idx + 1} requires a non-empty "target" string.`);
     }
