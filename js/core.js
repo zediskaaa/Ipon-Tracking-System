@@ -12594,11 +12594,23 @@
     if (existingUsername && !force) return false;
     if (document.getElementById('ipon-username-setup-dialog')) return true;
 
+    const DEFAULT_HINT = '3–24 characters. Lowercase letters, numbers, and underscores.';
     const suggestions = suggestUsernamesForProfile(profile);
     const firstDisplay = String(profile.first_name || String(profile.full_name || '').split(/\s+/)[0] || '').trim();
-    const greeting = firstDisplay ? `Welcome, ${escapeHtml(firstDisplay)}` : 'Account update';
+    const fullNameDisplay = String(
+      profile.full_name
+      || [profile.first_name, profile.last_name].filter(Boolean).join(' ')
+      || firstDisplay
+      || 'myIPON member'
+    ).trim();
+    const greeting = firstDisplay ? `Welcome, ${escapeHtml(firstDisplay)}` : 'Welcome back';
+    const avatarInitials = initials(fullNameDisplay) || 'IP';
+    const safeAvatarUrl = isSafeImageRef(profile.avatar_url) ? String(profile.avatar_url).trim() : '';
+    const avatarInner = safeAvatarUrl
+      ? `<img src="${escapeHtml(safeAvatarUrl)}" alt="${escapeHtml(fullNameDisplay)}" width="40" height="40">`
+      : `<span>${escapeHtml(avatarInitials)}</span>`;
     const suggestionsHtml = suggestions.length
-      ? `<div class="username-suggest-wrap">
+      ? `<div class="username-suggest-wrap username-rise" style="--i:4">
           <span class="username-suggest-label">Quick suggestions</span>
           <div class="username-suggest-list" role="group" aria-label="Suggested usernames">
             ${suggestions.map((handle) => `<button type="button" class="username-suggest-chip" data-suggest-username="${escapeHtml(handle)}" aria-pressed="false">@${escapeHtml(handle)}</button>`).join('')}
@@ -12613,40 +12625,51 @@
     dialog.setAttribute('aria-describedby', 'ipon-username-setup-desc');
     dialog.innerHTML = `
       <div class="username-setup-sheet">
-        <header class="username-setup-hero">
-          <div class="username-setup-badge-row">
-            <span class="username-setup-icon" aria-hidden="true">@</span>
-            <span class="username-setup-eyebrow">${greeting}</span>
+        <header class="username-setup-head username-rise" style="--i:0">
+          <div class="username-setup-logo" aria-hidden="true">@</div>
+          <div class="username-setup-masthead">
+            <span class="username-setup-welcome">${greeting}</span>
           </div>
-          <h2 id="ipon-username-setup-title">Set up your username</h2>
-          <p id="ipon-username-setup-desc">Choose a unique username so you can sign in faster with your username or email and connect easily across myIPON.</p>
         </header>
+        <h2 id="ipon-username-setup-title" class="username-setup-title username-rise" style="--i:1">Set up your <em>username</em></h2>
+        <p id="ipon-username-setup-desc" class="username-setup-lead username-rise" style="--i:2">Choose a unique username so you can sign in faster with your username or email and connect easily across myIPON.</p>
         <form id="ipon-username-setup-form" class="username-setup-body" novalidate>
-          <div class="username-setup-field">
-            <label for="ipon-username-setup-input">Username</label>
-            <div class="username-setup-control">
+          <div class="username-setup-field username-rise" id="ipon-username-setup-field" data-state="idle" style="--i:3">
+            <div class="username-setup-label-row">
+              <label for="ipon-username-setup-input">Username</label>
+              <span class="username-setup-count" aria-live="off"><b id="ipon-username-setup-count">0</b>/24</span>
+            </div>
+            <div class="username-setup-control" id="ipon-username-setup-box">
               <span class="username-setup-at" aria-hidden="true">@</span>
               <input id="ipon-username-setup-input" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="24" pattern="[a-z0-9_]{3,24}" placeholder="e.g., juan_dc" aria-describedby="ipon-username-setup-feedback" required>
               <span class="username-setup-indicator" id="ipon-username-setup-indicator" data-state="idle" aria-hidden="true"></span>
             </div>
-            <p class="username-setup-feedback" id="ipon-username-setup-feedback" role="status" aria-live="polite">Use 3–24 lowercase letters, numbers, or underscores.</p>
+            <p class="username-setup-feedback" id="ipon-username-setup-feedback" role="status" aria-live="polite">${DEFAULT_HINT}</p>
           </div>
           ${suggestionsHtml}
-          <div class="username-setup-note" role="note">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            <span>Once saved, you can sign in using <strong>@username</strong> or your email anytime, and update it later in My account.</span>
+          <div class="username-setup-preview username-rise" style="--i:5" aria-label="Live profile preview">
+            <div class="username-preview-avatar" aria-hidden="true">${avatarInner}</div>
+            <div class="username-preview-meta">
+              <strong class="username-preview-name">${escapeHtml(fullNameDisplay)}</strong>
+              <span class="username-preview-handle" id="ipon-username-setup-preview-handle">@username</span>
+            </div>
+            <small class="username-preview-tag">Preview</small>
           </div>
-          <div class="username-setup-actions">
+          <p class="username-setup-note username-rise" style="--i:6" role="note">Once saved, you can sign in using <strong>@username</strong> or your email anytime, and update it later in <strong>My account</strong>.</p>
+          <div class="username-setup-actions username-rise" style="--i:7">
             <button type="button" class="username-setup-signout" id="ipon-username-setup-signout">Sign out</button>
-            <button type="submit" class="button button-primary" id="ipon-username-setup-save" disabled>Save username</button>
+            <button type="submit" class="button button-primary username-setup-save" id="ipon-username-setup-save" disabled>Save username</button>
           </div>
         </form>
       </div>`;
 
-    const CHECK_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-    const ALERT_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>';
+    const CHECKING_DOTS_HTML = '<span class="username-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
 
     const form = dialog.querySelector('#ipon-username-setup-form');
+    const field = dialog.querySelector('#ipon-username-setup-field');
+    const box = dialog.querySelector('#ipon-username-setup-box');
+    const countEl = dialog.querySelector('#ipon-username-setup-count');
+    const previewHandleEl = dialog.querySelector('#ipon-username-setup-preview-handle');
     const input = dialog.querySelector('#ipon-username-setup-input');
     const indicator = dialog.querySelector('#ipon-username-setup-indicator');
     const feedback = dialog.querySelector('#ipon-username-setup-feedback');
@@ -12660,31 +12683,48 @@
     let verifiedUsername = '';
     let checkingUsername = '';
 
-    const syncChipStates = (val) => {
+    const triggerShake = () => {
+      if (!box?.classList) return;
+      box.classList.remove('is-shaking');
+      void box.offsetWidth;
+      box.classList.add('is-shaking');
+    };
+
+    const syncMeta = (val) => {
+      if (countEl) countEl.textContent = String(val.length);
+      if (previewHandleEl) {
+        previewHandleEl.textContent = `@${val || 'username'}`;
+        previewHandleEl.classList?.toggle?.('is-active', Boolean(val));
+      }
       chips.forEach((chip) => {
         chip.setAttribute('aria-pressed', String(chip.dataset.suggestUsername === val));
       });
     };
 
-    const setStatus = (state, text) => {
+    const setStatus = (state, text, tagLabel = '') => {
+      const nextState = state || 'idle';
+      if (field?.dataset) field.dataset.state = nextState;
       if (feedback) {
         feedback.textContent = text;
-        if (state && state !== 'idle') feedback.dataset.state = state;
+        if (nextState !== 'idle') feedback.dataset.state = nextState;
         else delete feedback.dataset.state;
       }
       if (indicator) {
-        indicator.dataset.state = state || 'idle';
-        indicator.innerHTML = state === 'available' ? CHECK_SVG : (state === 'error' ? ALERT_SVG : '');
+        indicator.dataset.state = nextState;
+        if (nextState === 'checking') indicator.innerHTML = CHECKING_DOTS_HTML;
+        else if (nextState === 'available') indicator.textContent = tagLabel || 'AVAILABLE';
+        else if (nextState === 'error') indicator.textContent = tagLabel || 'INVALID';
+        else indicator.textContent = '';
       }
       if (input) {
-        if (state === 'error') {
+        if (nextState === 'error') {
           input.setAttribute('aria-invalid', 'true');
           input.setCustomValidity(text);
           delete input.dataset.state;
         } else {
           input.removeAttribute('aria-invalid');
           input.setCustomValidity('');
-          if (state === 'available') input.dataset.state = 'available';
+          if (nextState === 'available') input.dataset.state = 'available';
           else delete input.dataset.state;
         }
       }
@@ -12692,6 +12732,11 @@
         const clean = String(input?.value || '').trim().toLowerCase();
         saveBtn.disabled = !USERNAME_SETUP_RE.test(clean) || takenUsername === clean || checkingUsername === clean;
       }
+    };
+
+    const describeValidationError = (val) => {
+      if (val.length < 3) return { msg: 'Too short. Use at least 3 characters.', tag: 'TOO SHORT' };
+      return { msg: 'Only lowercase letters, numbers, and underscores are allowed.', tag: 'INVALID' };
     };
 
     const runAvailabilityCheck = async (val, seq) => {
@@ -12703,19 +12748,19 @@
         if (available === false) {
           takenUsername = val;
           verifiedUsername = '';
-          setStatus('error', 'That username is already taken.');
+          setStatus('error', 'That username is already taken.', 'TAKEN');
           playUiSound('error');
           return false;
         }
         takenUsername = '';
         verifiedUsername = val;
-        setStatus('available', `@${val} is available — ready to claim.`);
+        setStatus('available', `@${val} is available — ready to claim.`, 'AVAILABLE');
         playUiSound('available');
         return true;
       } catch {
         if (seq === checkSeq && String(input?.value || '').trim().toLowerCase() === val) {
           checkingUsername = '';
-          setStatus('idle', 'Use 3–24 lowercase letters, numbers, or underscores.');
+          setStatus('idle', DEFAULT_HINT);
         }
         return null;
       }
@@ -12723,28 +12768,29 @@
 
     const handleInput = ({ immediate = false } = {}) => {
       const raw = String(input?.value || '');
-      const normalized = raw.replace(/^@+/, '').toLowerCase();
+      const normalized = raw.replace(/^@+/, '').replace(/\s+/g, '').toLowerCase();
       if (normalized !== raw && input) input.value = normalized;
       const clean = normalized.trim();
       clearTimeout(checkTimer);
-      syncChipStates(clean);
+      syncMeta(clean);
       if (takenUsername && takenUsername !== clean) takenUsername = '';
       if (verifiedUsername && verifiedUsername !== clean) verifiedUsername = '';
       checkingUsername = '';
       if (!clean) {
-        setStatus('idle', 'Use 3–24 lowercase letters, numbers, or underscores.');
+        setStatus('idle', DEFAULT_HINT);
         return false;
       }
       if (!USERNAME_SETUP_RE.test(clean)) {
-        setStatus('error', 'Use 3–24 lowercase letters, numbers, or underscores.');
+        const errInfo = describeValidationError(clean);
+        setStatus('error', errInfo.msg, errInfo.tag);
         return false;
       }
       if (takenUsername === clean) {
-        setStatus('error', 'That username is already taken.');
+        setStatus('error', 'That username is already taken.', 'TAKEN');
         return false;
       }
       if (verifiedUsername === clean) {
-        setStatus('available', `@${clean} is available — ready to claim.`);
+        setStatus('available', `@${clean} is available — ready to claim.`, 'AVAILABLE');
         return true;
       }
       checkingUsername = clean;
@@ -12760,11 +12806,14 @@
       return true;
     };
 
+    box?.addEventListener?.('click', () => input?.focus?.());
     input?.addEventListener('input', () => {
       playUiSound('type');
       handleInput({ immediate: false });
     });
-    input?.addEventListener('blur', () => handleInput({ immediate: true }));
+    input?.addEventListener('blur', () => {
+      if (String(input?.value || '').trim()) handleInput({ immediate: true });
+    });
     chips.forEach((chip) => {
       chip.addEventListener('click', () => {
         if (!input) return;
@@ -12786,8 +12835,9 @@
       if (dialog.dataset?.completed !== '1') {
         event.preventDefault?.();
         if (!String(input?.value || '').trim()) {
-          setStatus('error', 'Choose a username to continue using myIPON.');
+          setStatus('error', 'Choose a username to continue using myIPON.', 'REQUIRED');
         }
+        triggerShake();
         input?.focus?.();
       }
     });
@@ -12809,20 +12859,28 @@
     form?.addEventListener('submit', async (event) => {
       event.preventDefault();
       clearTimeout(checkTimer);
-      const clean = String(input?.value || '').trim().replace(/^@+/, '').toLowerCase();
+      const clean = String(input?.value || '').trim().replace(/^@+/, '').replace(/\s+/g, '').toLowerCase();
       if (input) input.value = clean;
+      syncMeta(clean);
       if (!clean) {
-        setStatus('error', 'Enter a username to continue.');
+        setStatus('error', 'Enter a username to continue.', 'REQUIRED');
+        triggerShake();
+        playUiSound('error');
         input?.focus?.();
         return;
       }
       if (!USERNAME_SETUP_RE.test(clean)) {
-        setStatus('error', 'Use 3–24 lowercase letters, numbers, or underscores.');
+        const errInfo = describeValidationError(clean);
+        setStatus('error', errInfo.msg, errInfo.tag);
+        triggerShake();
+        playUiSound('error');
         input?.focus?.();
         return;
       }
       if (takenUsername === clean) {
-        setStatus('error', 'That username is already taken.');
+        setStatus('error', 'That username is already taken.', 'TAKEN');
+        triggerShake();
+        playUiSound('error');
         input?.focus?.();
         return;
       }
@@ -12835,7 +12893,9 @@
             takenUsername = clean;
             verifiedUsername = '';
             setBusy(saveBtn, false);
-            setStatus('error', 'That username is already taken.');
+            setStatus('error', 'That username is already taken.', 'TAKEN');
+            triggerShake();
+            playUiSound('error');
             input?.focus?.();
             return;
           }
@@ -12860,13 +12920,14 @@
       } catch (err) {
         setBusy(saveBtn, false);
         playUiSound('error');
+        triggerShake();
         const msg = friendlyError(err);
         if (/already taken|23505|unique/i.test(String(err?.message || msg))) {
           takenUsername = clean;
           verifiedUsername = '';
-          setStatus('error', 'That username is already taken.');
+          setStatus('error', 'That username is already taken.', 'TAKEN');
         } else {
-          setStatus('error', msg);
+          setStatus('error', msg, 'ERROR');
         }
         input?.focus?.();
       }
