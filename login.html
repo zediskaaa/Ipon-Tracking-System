@@ -17,7 +17,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261119-170">
+  <link rel="stylesheet" href="css/app.css?v=20261119-171">
   <style>
     .login-page{display:grid;min-height:100vh;grid-template-columns:minmax(380px,1.1fr) minmax(380px,.9fr);align-items:stretch;background:radial-gradient(circle at 30% 62%,rgba(48,104,74,.36) 0%,rgba(19,48,39,.2) 38%,transparent 66%),linear-gradient(135deg,#0d221d 0%,#081714 100%);color:#f4efe6}
     .login-story{display:flex;width:100%;max-width:820px;min-height:100vh;justify-self:end;flex-direction:column;justify-content:flex-start;gap:0;padding:clamp(28px,4vw,52px) clamp(16px,2.5vw,36px) clamp(24px,3.5vw,42px) clamp(28px,5vw,72px);background:transparent;color:#f4efe6}
@@ -43,7 +43,14 @@
     .clerk-signin-shell{width:100%;min-width:0;margin:0 0 14px}
     #clerk-sign-in{width:100%;min-height:0}
     .clerk-signin-message{min-height:18px;margin:8px 0 0;color:#a9382d;font:700 12.5px/1.4 Arial,sans-serif;text-align:center}
+    .clerk-signin-message[data-tone="success"]{color:#1f6a43}
+    .clerk-signin-message[data-tone="info"]{color:#5c6863}
     .clerk-signin-message:empty{visibility:hidden}
+    .clerk-signin-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:156px;padding:24px 12px 14px;text-align:center;--loop:2.6s;--ease:cubic-bezier(.45,0,.2,1);--s:.6}
+    .clerk-signin-loading[hidden]{display:none!important}
+    .clerk-signin-loading .savings-loader,.clerk-signin-loading .piggy-bank{width:114px;height:80px}
+    .clerk-signin-loading .loader-coin{width:24px;height:24px;box-shadow:inset 0 0 0 1.5px rgba(255,240,160,.8),inset 0 -3px 4px rgba(190,110,10,.4),0 4px 10px rgba(20,45,43,.2)}
+    .clerk-signin-loading .loader-coin::after{inset:4px}
     #clerk-sign-in .cl-cardBox{overflow:visible!important;border:0!important;border-radius:0!important;box-shadow:none!important}
     #clerk-sign-in .cl-card{margin:0!important;border:0!important;border-radius:0!important;overflow:visible!important}
     #clerk-sign-in .cl-otpCodeField{padding:14px 0 4px!important;overflow:visible!important}
@@ -207,6 +214,10 @@
     html[data-theme="dark"] .login-card-brand strong,html[data-theme="dark"] .login-card .auth-link,html[data-theme="dark"] .login-legal button{color:#7ee0ab}
     html[data-theme="dark"] .auth-tabs{border-bottom-color:rgba(218,236,227,.16)}
     html[data-theme="dark"] .auth-tab-indicator{background:#46c382}
+    html[data-theme="dark"] .clerk-signin-message{color:#ff9b94}
+    html[data-theme="dark"] .clerk-signin-message[data-tone="success"]{color:#7ee0ab}
+    html[data-theme="dark"] .clerk-signin-message[data-tone="info"]{color:#9eb3aa}
+
     html[data-theme="dark"] .login-card-close{border-color:rgba(218,236,227,.22);background:#1a3029;color:#ecf3ef}
     html[data-theme="dark"] .login-card-close:hover{background:#244138;border-color:rgba(143,210,174,.5);color:#ffffff}
     html[data-theme="dark"] .login-card .field label{color:#cad9d2}
@@ -346,6 +357,77 @@
         <div class="auth-join-banner" id="auth-join-banner" hidden role="region" aria-live="polite" aria-label="Group invitation"></div>
         <div class="clerk-signin-shell" id="clerk-signin-shell" aria-label="Sign in with Clerk">
           <div id="clerk-sign-in"></div>
+          <div class="clerk-signin-loading" id="clerk-signin-loading" role="status" aria-live="polite" aria-label="Signing you in" hidden>
+            <div class="savings-loader" aria-hidden="true">
+              <span class="coin-gate"><span class="loader-coin"></span></span>
+              <svg class="piggy-bank" viewBox="0 0 190 132">
+                <defs>
+                  <linearGradient id="clerk-pig-body-g" gradientUnits="userSpaceOnUse" x1="50" y1="28" x2="140" y2="114">
+                    <stop offset="0" stop-color="#94dcb0"/>
+                    <stop offset=".42" stop-color="#4fb182"/>
+                    <stop offset="1" stop-color="#1f6f50"/>
+                  </linearGradient>
+                  <radialGradient id="clerk-pig-edge-shade" gradientUnits="userSpaceOnUse" cx="78" cy="52" r="84">
+                    <stop offset=".6" stop-color="#0a3c2c" stop-opacity="0"/>
+                    <stop offset="1" stop-color="#0a3c2c" stop-opacity=".34"/>
+                  </radialGradient>
+                  <linearGradient id="clerk-pig-belly-shade" gradientUnits="userSpaceOnUse" x1="0" y1="82" x2="0" y2="112">
+                    <stop offset="0" stop-color="#05261c" stop-opacity="0"/>
+                    <stop offset="1" stop-color="#05261c" stop-opacity=".22"/>
+                  </linearGradient>
+                  <linearGradient id="clerk-pig-ear-g" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#86d8a5"/>
+                    <stop offset="1" stop-color="#3b9f72"/>
+                  </linearGradient>
+                  <linearGradient id="clerk-pig-limb-g" gradientUnits="userSpaceOnUse" x1="0" y1="96" x2="0" y2="120">
+                    <stop offset="0" stop-color="#2f9068"/>
+                    <stop offset="1" stop-color="#1b6249"/>
+                  </linearGradient>
+                  <linearGradient id="clerk-pig-snout-side" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#6ccb9a"/>
+                    <stop offset="1" stop-color="#2f9068"/>
+                  </linearGradient>
+                  <linearGradient id="clerk-pig-snout-face" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#a6e6c0"/>
+                    <stop offset="1" stop-color="#5cbc8d"/>
+                  </linearGradient>
+                  <linearGradient id="clerk-pig-slot-rim" gradientUnits="userSpaceOnUse" x1="80" y1="0" x2="113" y2="0">
+                    <stop offset="0" stop-color="#d9b04a"/>
+                    <stop offset="1" stop-color="#f6df8f"/>
+                  </linearGradient>
+                  <radialGradient id="clerk-pig-shadow-g">
+                    <stop offset="0" stop-color="#0a2c24" stop-opacity=".3"/>
+                    <stop offset="1" stop-color="#0a2c24" stop-opacity="0"/>
+                  </radialGradient>
+                </defs>
+                <ellipse class="piggy-shadow" cx="96" cy="122" rx="66" ry="8" fill="url(#clerk-pig-shadow-g)"/>
+                <path class="fall-line" d="M88 8v9"/>
+                <path class="fall-line fall-line-b" d="M97 12v11"/>
+                <path class="piggy-tail" d="M39 75C30 80 21 74 24 65c3-7 13-6 11 1-1 4-6 4-6 0"/>
+                <rect x="64" y="96" width="19" height="23" rx="9.5" fill="url(#clerk-pig-limb-g)"/>
+                <rect x="113" y="96" width="19" height="23" rx="9.5" fill="url(#clerk-pig-limb-g)"/>
+                <path d="M96 27C128 27 157 42 157 67 158 92 134 111 100 111 66 111 36 96 36 69 36 44 62 27 96 27Z" fill="url(#clerk-pig-body-g)"/>
+                <path d="M96 27C128 27 157 42 157 67 158 92 134 111 100 111 66 111 36 96 36 69 36 44 62 27 96 27Z" fill="url(#clerk-pig-edge-shade)"/>
+                <path d="M96 27C128 27 157 42 157 67 158 92 134 111 100 111 66 111 36 96 36 69 36 44 62 27 96 27Z" fill="url(#clerk-pig-belly-shade)"/>
+                <path class="piggy-shine" d="M49 66C50 50 61 40 78 36 70 43 63 53 61 68 57 70 52 69 49 66Z"/>
+                <path d="M134 37C136 23 144 16 151 20 156 24 155 35 150 47Z" fill="url(#clerk-pig-ear-g)"/>
+                <path d="M141 38C142 30 146 26 149 28 151 30 150 36 147 43Z" fill="#1f6f50" opacity=".55"/>
+                <path d="M110 32C108 18 114 9 122 10 129 11 133 20 134 35Z" fill="url(#clerk-pig-ear-g)"/>
+                <path d="M116 31C115 22 118 17 122 17 126 18 128 24 128 32Z" fill="#1f6f50" opacity=".55"/>
+                <ellipse class="piggy-slot" cx="96.5" cy="34" rx="15" ry="4.2" stroke="url(#clerk-pig-slot-rim)"/>
+                <ellipse class="piggy-slot-glow" cx="96.5" cy="34" rx="13" ry="3.2"/>
+                <rect x="148" y="62" width="25" height="22" rx="10" fill="url(#clerk-pig-snout-side)"/>
+                <ellipse cx="169" cy="73" rx="7.5" ry="10.5" fill="url(#clerk-pig-snout-face)"/>
+                <ellipse cx="166.5" cy="73.5" rx="1.3" ry="2.5" fill="#1f6f50"/>
+                <ellipse cx="171.5" cy="73.5" rx="1.3" ry="2.5" fill="#1f6f50"/>
+                <ellipse cx="142" cy="58" rx="3.6" ry="4.4" fill="#073a2c"/>
+                <circle cx="143.2" cy="56.5" r="1.2" fill="#fff"/>
+                <path class="impact-mark" d="M164 41l5-9"/>
+                <path class="impact-mark" d="M171 45l9-5"/>
+              </svg>
+            </div>
+            <span class="sr-only">Signing you in…</span>
+          </div>
           <p class="clerk-signin-message" id="clerk-signin-message" role="alert" aria-live="polite"></p>
         </div>
         <form id="auth-form" aria-labelledby="auth-title" novalidate hidden>
@@ -494,6 +576,6 @@
     </div>
   </dialog>
   <dialog class="form-dialog request-success-dialog" id="request-success-dialog" aria-labelledby="request-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="request-success-title">Account created successfully</h2><p>Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-request-success-close aria-label="Close request confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p>Your account has been created and verified. You can now sign in to start tracking savings.</p><div class="request-success-email" id="request-success-email"></div><p>Use your registered email and password on the Sign in tab.</p><div class="request-success-actions"><button class="button button-primary" id="request-success-ok" type="button" data-request-success-close>Continue to sign in</button></div></div></div></dialog>
-  <dialog class="form-dialog invite-success-dialog" id="invite-success-dialog" aria-labelledby="invite-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="invite-success-title">Account activated successfully</h2><p id="invite-success-subtitle">Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-invite-success-close aria-label="Close activation confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p id="invite-success-message">Account activation successful! Log in to your account using the provided credentials.</p><div class="request-success-email" id="invite-success-email"></div><p id="invite-success-group-hint">Your savings group workspace has been linked and will open automatically after sign in.</p><div class="request-success-actions"><button class="button button-primary" id="invite-success-ok" type="button" data-invite-success-close>Continue to sign in</button></div></div></div></dialog><script src="js/core.js?v=20261119-145"></script><script src="js/policy.js?v=20261117-08"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script crossorigin="anonymous" src="https://solid-gannet-2021.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js"></script><script crossorigin="anonymous" data-clerk-publishable-key="pk_test_c29saWQtZ2FubmV0LTIwMjEuY2xlcmsuYWNjb3VudHMuZGV2JA==" src="https://solid-gannet-2021.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script><script src="js/auth.js?v=20261119-91"></script>
+  <dialog class="form-dialog invite-success-dialog" id="invite-success-dialog" aria-labelledby="invite-success-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="invite-success-title">Account activated successfully</h2><p id="invite-success-subtitle">Your myIPON account is ready.</p></div><button class="dialog-close" type="button" data-invite-success-close aria-label="Close activation confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></header><div class="request-success-body"><span class="request-success-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p id="invite-success-message">Account activation successful! Log in to your account using the provided credentials.</p><div class="request-success-email" id="invite-success-email"></div><p id="invite-success-group-hint">Your savings group workspace has been linked and will open automatically after sign in.</p><div class="request-success-actions"><button class="button button-primary" id="invite-success-ok" type="button" data-invite-success-close>Continue to sign in</button></div></div></div></dialog><script src="js/core.js?v=20261119-146"></script><script src="js/policy.js?v=20261117-08"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script crossorigin="anonymous" src="https://solid-gannet-2021.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js"></script><script crossorigin="anonymous" data-clerk-publishable-key="pk_test_c29saWQtZ2FubmV0LTIwMjEuY2xlcmsuYWNjb3VudHMuZGV2JA==" src="https://solid-gannet-2021.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script><script src="js/auth.js?v=20261119-93"></script>
 </body>
 </html>

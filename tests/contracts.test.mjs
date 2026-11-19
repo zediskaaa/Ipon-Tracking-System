@@ -802,7 +802,9 @@ test('loading feedback uses savings motion with reduced-motion support', () => {
   assert.match(core, /class="piggy-bank"/);
   assert.match(core, /class="loader-coin"/);
   assert.match(core, /classList\.toggle\('is-busy', busy\)/);
-  assert.match(css, /@keyframes coin-spin/);
+  assert.match(core, /class="coin-gate"/);
+  assert.match(css, /@keyframes coin-drop/);
+  assert.match(css, /@keyframes piggy-settle/);
   assert.match(css, /@keyframes coin-pulse/);
   assert.doesNotMatch(css, /\.loader-sheet::before/);
   assert.match(css, /@keyframes coin-flip/);
@@ -11334,7 +11336,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261119-145/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261119-146/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11829,7 +11831,20 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(loginHtml, /#clerk-sign-in\{width:100%;min-height:0\}/);
   assert.doesNotMatch(loginHtml, /Use existing myIPON password|legacy-signin-toggle/);
   assert.match(loginHtml, /@media\(max-width:780px\)[\s\S]*?\.login-page\{display:flex/);
+  assert.match(authJs, /signInForceRedirectUrl:\s*returnUrl/);
+  assert.match(authJs, /signInFallbackRedirectUrl:\s*returnUrl/);
+  assert.match(authJs, /routerPush:\s*handleClerkRouterNav/);
+  assert.match(authJs, /routerReplace:\s*handleClerkRouterNav/);
+  assert.match(authJs, /forceRedirectUrl:\s*returnUrl/);
+  assert.match(authJs, /fallbackRedirectUrl:\s*returnUrl/);
+  assert.match(authJs, /setClerkSignInLoading\(true\)/);
+  const clerkExchangeBody = authJs.match(/async function exchangeClerkSession\(clerk\)[\s\S]*?^  \}/m);
+  assert.ok(clerkExchangeBody, 'Expected exchangeClerkSession function');
+  assert.doesNotMatch(clerkExchangeBody[0], /Ipon\.setLoading\(true/);
+  assert.match(loginHtml, /id="clerk-signin-loading"/);
+  assert.doesNotMatch(authJs, /Finishing your secure sign in/);
   assert.match(authJs, /clerk\.mountSignIn\(clerkSignInNode/);
+  assert.match(loginHtml, /\.clerk-signin-message\[data-tone="success"\]/);
   assert.match(authJs, /socialButtonsPlacement:\s*'top'/);
   assert.match(authJs, /socialButtonsBlockButton:[\s\S]*?border:[\s\S]*?borderRadius:\s*'10px'/);
   assert.match(authJs, /cardBox:[\s\S]*?overflow:\s*'visible'/);

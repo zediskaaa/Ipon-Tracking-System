@@ -7,6 +7,7 @@
   const authCopy = document.getElementById('auth-copy');
   const clerkSignInShell = document.getElementById('clerk-signin-shell');
   const clerkSignInNode = document.getElementById('clerk-sign-in');
+  const clerkSignInLoading = document.getElementById('clerk-signin-loading');
   const clerkSignInMessage = document.getElementById('clerk-signin-message');
   const securityNotice = document.getElementById('auth-security-notice');
   const securityTitle = document.getElementById('auth-security-title');
@@ -91,16 +92,76 @@
   let clerkLoadPromise = null;
   let clerkSignInMounted = false;
   let clerkExchangeSessionId = '';
+  let clerkExchangeInFlight = false;
   let pendingDeviceOtp = null;
   const LOGIN_THROTTLE_STORAGE_KEY = 'myipon_login_throttle_v1';
   const LOGIN_MAX_ATTEMPTS = 5;
   const LOGIN_STALE_WINDOW_MS = 24 * 60 * 60 * 1000;
   let lockCountdownTimer = null;
 
+  function setClerkSignInLoading(visible) {
+    const active = Boolean(visible);
+    if (clerkSignInLoading) clerkSignInLoading.hidden = !active;
+    if (clerkSignInNode) clerkSignInNode.hidden = active;
+  }
+
+  function setClerkSignInMessage(text = '', tone = 'error') {
+    if (!clerkSignInMessage) return;
+    const clean = String(text || '').trim();
+    clerkSignInMessage.textContent = clean;
+    if (clean && tone) clerkSignInMessage.dataset.tone = tone;
+    else delete clerkSignInMessage.dataset.tone;
+  }
+
+  function getClerkLoginReturnUrl() {
+    try {
+      const url = new URL('login.html', window.location.href);
+      const cur = new URLSearchParams(window.location.search);
+      for (const key of ['app', 'join', 'next']) {
+        const val = cur.get(key);
+        if (val !== null && val !== '') url.searchParams.set(key, val);
+      }
+      return url.toString();
+    } catch {
+      return 'login.html';
+    }
+  }
+
+  function handleClerkRouterNav(to, { windowNavigate } = {}) {
+    try {
+      const target = new URL(to, window.location.href);
+      if (target.origin === window.location.origin) {
+        if (/\/login(?:\.html)?$/i.test(target.pathname)) {
+          if (target.searchParams.get('mode') === 'signup') setMode('signup');
+          return;
+        }
+        if (target.pathname === '/' || /\/index(?:\.html)?$/i.test(target.pathname)) {
+          return;
+        }
+      }
+    } catch { }
+    if (typeof windowNavigate === 'function') windowNavigate(to);
+    else window.location.assign(to);
+  }
+
+  function unmountClerkSignIn(clerk) {
+    if (clerk && clerkSignInNode && clerkSignInMounted && typeof clerk.unmountSignIn === 'function') {
+      try { clerk.unmountSignIn(clerkSignInNode); } catch { }
+    }
+    clerkSignInMounted = false;
+  }
+
   function loadClerk() {
     if (!window.Clerk) return Promise.resolve(null);
+    const returnUrl = getClerkLoginReturnUrl();
     clerkLoadPromise ||= window.Clerk.load({
-      ui: { ClerkUI: window.__internal_ClerkUICtor }
+      ui: { ClerkUI: window.__internal_ClerkUICtor },
+      signInForceRedirectUrl: returnUrl,
+      signInFallbackRedirectUrl: returnUrl,
+      signUpForceRedirectUrl: returnUrl,
+      signUpFallbackRedirectUrl: returnUrl,
+      routerPush: handleClerkRouterNav,
+      routerReplace: handleClerkRouterNav
     }).then(() => window.Clerk).catch((error) => {
       console.error('Clerk initialization failed:', error);
       return null;
@@ -110,10 +171,14 @@
 
   function mountClerkSignIn(clerk) {
     if (!clerk || !clerkSignInNode || clerkSignInMounted || clerk.session) return;
+    setClerkSignInLoading(false);
     const dark = document.documentElement.dataset.theme === 'dark';
+    const returnUrl = getClerkLoginReturnUrl();
     clerk.mountSignIn(clerkSignInNode, {
       routing: 'virtual',
       signUpUrl: 'login.html?mode=signup',
+      forceRedirectUrl: returnUrl,
+      fallbackRedirectUrl: returnUrl,
       appearance: {
         variables: {
           colorPrimary: '#1f6a43',
@@ -175,15 +240,25 @@
     const sessionId = String(clerk.session.id || '');
     if (!sessionId || clerkExchangeSessionId === sessionId) return;
     clerkExchangeSessionId = sessionId;
-    if (clerkSignInMessage) clerkSignInMessage.textContent = 'Finishing your secure sign in...';
+    clerkExchangeInFlight = true;
+    setClerkSignInMessage('');
+    setClerkSignInLoading(true);
     try {
-      await ensureInitReady();
+      const initState = await ensureInitReady();
       const { data: { session: existingSession } } = await Ipon.client.auth.getSession();
-      if (existingSession) return;
+      if (existingSession) {
+        if (initState?.profile?.status !== 'ACTIVE') {
+          clerkExchangeInFlight = false;
+          setClerkSignInLoading(false);
+        }
+        return;
+      }
       const token = await clerk.session.getToken({ skipCache: true });
       if (!token) throw new Error('Your Clerk sign-in session is unavailable.');
       const exchange = await Ipon.invokeAccountFunction({ action: 'clerk-session-exchange', clerk_token: token, device_token: Ipon.getDeviceToken() });
       if (exchange.requires_device_otp) {
+        clerkExchangeInFlight = false;
+        setClerkSignInLoading(false);
         openDeviceOtpChallenge(exchange, { auth_method: 'clerk', clerk_token: token, clerk });
         return;
       }
@@ -197,8 +272,11 @@
       await Ipon.rpc('record_account_activity', { p_event: 'LOGIN' }).catch(() => null);
       completeLoginSession(data, profile);
     } catch (error) {
+      clerkExchangeInFlight = false;
       clerkExchangeSessionId = '';
-      if (clerkSignInMessage) clerkSignInMessage.textContent = Ipon.friendlyError(error);
+      setClerkSignInLoading(false);
+      setClerkSignInMessage(Ipon.friendlyError(error), 'error');
+      unmountClerkSignIn(clerk);
       await clerk.signOut().catch(() => null);
       mountClerkSignIn(clerk);
     }
@@ -224,7 +302,7 @@
     } catch { }
     if (shouldSignOut && clerk?.session) await clerk.signOut().catch(() => null);
     if (!clerk) {
-      if (clerkSignInMessage) clerkSignInMessage.textContent = 'Clerk sign-in is temporarily unavailable. Reload the page to try again.';
+      setClerkSignInMessage('Sign-in is temporarily unavailable. Reload the page to try again.', 'error');
       return;
     }
     clerk.addListener(() => {
@@ -718,7 +796,10 @@
     pendingDeviceOtp = null;
     deviceOtpDialog.close();
     if (clerk) {
+      clerkExchangeInFlight = false;
       clerkExchangeSessionId = '';
+      setClerkSignInLoading(false);
+      unmountClerkSignIn(clerk);
       await clerk.signOut().catch(() => null);
       mountClerkSignIn(clerk);
     }
@@ -887,7 +968,7 @@
 
   void (async () => {
     const state = await initPromise;
-    Ipon.setLoading(false);
+    if (!clerkExchangeInFlight) Ipon.setLoading(false);
     if (state.failed) {
       clearTimeout(splashSafetyTimer);
       dismissSplash();
@@ -1418,7 +1499,7 @@
       Ipon.setLoading(false);
       form.reset();
       setMode('login');
-      if (clerkSignInMessage) clerkSignInMessage.textContent = 'Account created and verified. Sign in with Google, Facebook, or your email.';
+      setClerkSignInMessage('Account created and verified. Sign in with Google, Facebook, or your email.', 'success');
       Ipon.toast('Account verified. Sign in to continue.');
       if (requestSuccessEmail) requestSuccessEmail.textContent = `Account created for ${submittedEmail}. Sign in to continue.`;
       requestSuccessDialog?.showModal();

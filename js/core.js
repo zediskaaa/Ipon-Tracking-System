@@ -339,38 +339,77 @@
     let loader = document.getElementById('app-loader');
     if (!loader) {
       document.body.insertAdjacentHTML('beforeend', `
-        <div class="app-loader" id="app-loader" role="status" aria-live="polite" hidden>
+        <div class="app-loader" id="app-loader" role="status" aria-live="polite" aria-label="Loading" hidden>
           <div class="loader-sheet">
-            <strong class="loader-brand"><span class="brand-prefix">my</span>IPON</strong>
             <div class="savings-loader" aria-hidden="true">
-              <span class="loader-coin"><b>₱</b></span>
+              <span class="coin-gate"><span class="loader-coin"></span></span>
               <svg class="piggy-bank" viewBox="0 0 190 132">
                 <defs>
-                  <linearGradient id="piggy-green" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0" stop-color="#4fa778"/>
-                    <stop offset=".55" stop-color="#287552"/>
-                    <stop offset="1" stop-color="#164b3d"/>
+                  <linearGradient id="ipon-pig-body-g" gradientUnits="userSpaceOnUse" x1="50" y1="28" x2="140" y2="114">
+                    <stop offset="0" stop-color="#94dcb0"/>
+                    <stop offset=".42" stop-color="#4fb182"/>
+                    <stop offset="1" stop-color="#1f6f50"/>
                   </linearGradient>
-                  <linearGradient id="snout-green" x1="0" y1="0" x2="0" y2="1">
-                    <stop stop-color="#68bc8e"/>
-                    <stop offset="1" stop-color="#31805c"/>
+                  <radialGradient id="ipon-pig-edge-shade" gradientUnits="userSpaceOnUse" cx="78" cy="52" r="84">
+                    <stop offset=".6" stop-color="#0a3c2c" stop-opacity="0"/>
+                    <stop offset="1" stop-color="#0a3c2c" stop-opacity=".34"/>
+                  </radialGradient>
+                  <linearGradient id="ipon-pig-belly-shade" gradientUnits="userSpaceOnUse" x1="0" y1="82" x2="0" y2="112">
+                    <stop offset="0" stop-color="#05261c" stop-opacity="0"/>
+                    <stop offset="1" stop-color="#05261c" stop-opacity=".22"/>
                   </linearGradient>
+                  <linearGradient id="ipon-pig-ear-g" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#86d8a5"/>
+                    <stop offset="1" stop-color="#3b9f72"/>
+                  </linearGradient>
+                  <linearGradient id="ipon-pig-limb-g" gradientUnits="userSpaceOnUse" x1="0" y1="96" x2="0" y2="120">
+                    <stop offset="0" stop-color="#2f9068"/>
+                    <stop offset="1" stop-color="#1b6249"/>
+                  </linearGradient>
+                  <linearGradient id="ipon-pig-snout-side" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#6ccb9a"/>
+                    <stop offset="1" stop-color="#2f9068"/>
+                  </linearGradient>
+                  <linearGradient id="ipon-pig-snout-face" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#a6e6c0"/>
+                    <stop offset="1" stop-color="#5cbc8d"/>
+                  </linearGradient>
+                  <linearGradient id="ipon-pig-slot-rim" gradientUnits="userSpaceOnUse" x1="80" y1="0" x2="113" y2="0">
+                    <stop offset="0" stop-color="#d9b04a"/>
+                    <stop offset="1" stop-color="#f6df8f"/>
+                  </linearGradient>
+                  <radialGradient id="ipon-pig-shadow-g">
+                    <stop offset="0" stop-color="#0a2c24" stop-opacity=".3"/>
+                    <stop offset="1" stop-color="#0a2c24" stop-opacity="0"/>
+                  </radialGradient>
                 </defs>
-                <ellipse class="piggy-shadow" cx="96" cy="123" rx="61" ry="7"/>
-                <path class="piggy-tail" d="M39 72c-20 1-22-20-9-23 10-2 14 11 6 16"/>
-                <path class="piggy-ear" d="M66 38c-1-17 7-27 22-10"/>
-                <path class="piggy-body" d="M40 74c0-31 24-49 62-49 24 0 42 10 51 27l15 3c7 1 10 8 6 14l-10 14c-5 16-20 27-40 31l-3 12h-19l-3-10H74l-4 10H51l-1-20c-10-8-15-19-15-32Z"/>
-                <path class="piggy-shine" d="M58 61c8-15 23-23 44-24"/>
-                <ellipse class="piggy-slot" cx="96.5" cy="34" rx="16" ry="5"/>
-                <ellipse class="piggy-snout" cx="158" cy="69" rx="13" ry="11"/>
-                <circle class="piggy-eye" cx="139" cy="57" r="4"/>
-                <circle class="piggy-eye-glint" cx="140" cy="56" r="1.3"/>
-                <circle class="piggy-nostril" cx="154" cy="69" r="2"/>
-                <circle class="piggy-nostril" cx="162" cy="69" r="2"/>
+                <ellipse class="piggy-shadow" cx="96" cy="122" rx="66" ry="8" fill="url(#ipon-pig-shadow-g)"/>
+                <path class="fall-line" d="M88 8v9"/>
+                <path class="fall-line fall-line-b" d="M97 12v11"/>
+                <path class="piggy-tail" d="M39 75C30 80 21 74 24 65c3-7 13-6 11 1-1 4-6 4-6 0"/>
+                <rect x="64" y="96" width="19" height="23" rx="9.5" fill="url(#ipon-pig-limb-g)"/>
+                <rect x="113" y="96" width="19" height="23" rx="9.5" fill="url(#ipon-pig-limb-g)"/>
+                <path d="M96 27C128 27 157 42 157 67 158 92 134 111 100 111 66 111 36 96 36 69 36 44 62 27 96 27Z" fill="url(#ipon-pig-body-g)"/>
+                <path d="M96 27C128 27 157 42 157 67 158 92 134 111 100 111 66 111 36 96 36 69 36 44 62 27 96 27Z" fill="url(#ipon-pig-edge-shade)"/>
+                <path d="M96 27C128 27 157 42 157 67 158 92 134 111 100 111 66 111 36 96 36 69 36 44 62 27 96 27Z" fill="url(#ipon-pig-belly-shade)"/>
+                <path class="piggy-shine" d="M49 66C50 50 61 40 78 36 70 43 63 53 61 68 57 70 52 69 49 66Z"/>
+                <path d="M134 37C136 23 144 16 151 20 156 24 155 35 150 47Z" fill="url(#ipon-pig-ear-g)"/>
+                <path d="M141 38C142 30 146 26 149 28 151 30 150 36 147 43Z" fill="#1f6f50" opacity=".55"/>
+                <path d="M110 32C108 18 114 9 122 10 129 11 133 20 134 35Z" fill="url(#ipon-pig-ear-g)"/>
+                <path d="M116 31C115 22 118 17 122 17 126 18 128 24 128 32Z" fill="#1f6f50" opacity=".55"/>
+                <ellipse class="piggy-slot" cx="96.5" cy="34" rx="15" ry="4.2" stroke="url(#ipon-pig-slot-rim)"/>
+                <ellipse class="piggy-slot-glow" cx="96.5" cy="34" rx="13" ry="3.2"/>
+                <rect x="148" y="62" width="25" height="22" rx="10" fill="url(#ipon-pig-snout-side)"/>
+                <ellipse cx="169" cy="73" rx="7.5" ry="10.5" fill="url(#ipon-pig-snout-face)"/>
+                <ellipse cx="166.5" cy="73.5" rx="1.3" ry="2.5" fill="#1f6f50"/>
+                <ellipse cx="171.5" cy="73.5" rx="1.3" ry="2.5" fill="#1f6f50"/>
+                <ellipse cx="142" cy="58" rx="3.6" ry="4.4" fill="#073a2c"/>
+                <circle cx="143.2" cy="56.5" r="1.2" fill="#fff"/>
+                <path class="impact-mark" d="M164 41l5-9"/>
+                <path class="impact-mark" d="M171 45l9-5"/>
               </svg>
             </div>
-            <p id="loader-label">Opening your records…</p>
-            <small>Counting your latest savings activity.</small>
+            <span class="sr-only" id="loader-label">Opening your records…</span>
             <div class="loader-slow-box" id="app-loader-slow-box" hidden>
               <small class="loader-slow-hint" id="app-loader-slow-hint">Slow internet detected. Still connecting to your records…</small>
               <button class="button button-secondary button-sm" id="app-loader-retry" type="button">Retry</button>
@@ -386,6 +425,7 @@
     if (!visible) document.body.classList.add('is-ready');
     const labelEl = document.getElementById('loader-label');
     if (labelEl) labelEl.textContent = label;
+    loader.setAttribute('aria-label', label || 'Loading');
     loader.hidden = !visible;
     loader.setAttribute('aria-busy', String(visible));
     if (visible) {
