@@ -9384,7 +9384,7 @@ test('voice waveform fills full width, background prompt buttons avoid vertical 
   assert.equal(viewUrlCalls, callsBeforeOwnSend);
 });
 
-test('non-FCM Android background sync uses vector icon, JWT-safe REST polling, exact/restart wakeups, and multi-key Edge broadcast', () => {
+test('Android background sync uses vector icon, JWT-safe REST polling, exact/restart wakeups, and multi-key Edge broadcast', () => {
   const migration079 = read('database/migrations/20261116_079_fix_background_push_dispatch.sql');
   const schema = read('database/schema.sql');
   const sendPush = read('supabase/functions/send-push/index.ts');
@@ -9403,7 +9403,7 @@ test('non-FCM Android background sync uses vector icon, JWT-safe REST polling, e
 
   assert.match(sendPush, /Deno\.env\.get\('SUPABASE_ANON_KEY'\)/);
   assert.match(sendPush, /apiKey\.split\('\.'\)\.length === 3/);
-  assert.match(sendPush, /httpSend\('wake'/);
+  assert.ok(sendPush.includes('/realtime/v1/api/broadcast'));
   assert.match(sendPush, /native_has_token:/);
 
   assert.match(statIcon, /<vector[^>]*android:width="24dp"/);

@@ -36,6 +36,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+import com.google.firebase.messaging.FirebaseMessaging;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
@@ -66,6 +67,7 @@ public class BackgroundNotificationsPlugin extends Plugin {
         NotificationPollReceiver.ensureChannel(context);
 
         SharedPreferences prefs = context.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, Context.MODE_PRIVATE);
+        String previousFeedToken = prefs.getString("feed_token", "");
         SharedPreferences.Editor editor = prefs.edit()
             .putString("supabase_url", supabaseUrl)
             .putString("anon_key", anonKey)
@@ -74,6 +76,10 @@ public class BackgroundNotificationsPlugin extends Plugin {
             editor.putBoolean("instant_sync_enabled", Boolean.TRUE.equals(call.getBoolean("instantSync", true)));
         }
         editor.apply();
+        if (!TextUtils.equals(previousFeedToken, feedToken) && !TextUtils.isEmpty(previousFeedToken)) {
+            FirebaseMessaging.getInstance().unsubscribeFromTopic("notif-" + previousFeedToken);
+        }
+        FirebaseMessaging.getInstance().subscribeToTopic("notif-" + feedToken);
 
         JSArray shownArray = call.getArray("shownIds");
         if (shownArray != null) {
@@ -106,6 +112,9 @@ public class BackgroundNotificationsPlugin extends Plugin {
     @PluginMethod
     public void clear(PluginCall call) {
         Context context = getContext();
+        String feedToken = context.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, Context.MODE_PRIVATE)
+            .getString("feed_token", "");
+        if (!TextUtils.isEmpty(feedToken)) FirebaseMessaging.getInstance().unsubscribeFromTopic("notif-" + feedToken);
         NotificationSyncService.stop(context);
         NotificationSyncWorker.cancel(context);
         NotificationPollReceiver.cancel(context);

@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import webpush from 'npm:web-push@3.6.7';
+import { importPKCS8, SignJWT } from 'npm:jose@5.10.0';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -212,6 +213,7 @@ Deno.serve(async (req) => {
   let nativeHasToken = false;
   let nativePingSent = false;
   let nativePingStatus = 0;
+  let fcmSent = false;
   try {
     const { data: feedRow } = await admin
       .from('notification_feed_tokens')
@@ -221,6 +223,44 @@ Deno.serve(async (req) => {
 
     if (feedRow?.token) {
       nativeHasToken = true;
+      const serviceAccountJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON');
+      if (serviceAccountJson) {
+        try {
+          const account = JSON.parse(serviceAccountJson);
+          if (account.project_id !== 'myipon-29788' || !account.client_email || !account.private_key) {
+            throw new Error('Invalid Firebase service account configuration.');
+          }
+          const key = await importPKCS8(account.private_key, 'RS256');
+          const assertion = await new SignJWT({ scope: 'https://www.googleapis.com/auth/firebase.messaging' })
+            .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
+            .setIssuer(account.client_email)
+            .setSubject(account.client_email)
+            .setAudience('https://oauth2.googleapis.com/token')
+            .setIssuedAt()
+            .setExpirationTime('1h')
+            .sign(key);
+          const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion })
+          });
+          if (!tokenResponse.ok) throw new Error(`Firebase OAuth HTTP ${tokenResponse.status}`);
+          const { access_token } = await tokenResponse.json();
+          const fcmResponse = await fetch(`https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: {
+              topic: `notif-${feedRow.token}`,
+              data: { notification_id: String(notifId), test: isTest ? 'true' : 'false' },
+              android: { priority: 'HIGH', ttl: '86400s' }
+            } })
+          });
+          fcmSent = fcmResponse.ok;
+          if (!fcmSent) console.error('send-push FCM error', fcmResponse.status, await fcmResponse.text());
+        } catch (fcmError) {
+          console.error('send-push FCM error', fcmError);
+        }
+      }
       const wakeBody = JSON.stringify({
         messages: [
           {
@@ -254,18 +294,6 @@ Deno.serve(async (req) => {
         const errText = await broadcastRes.text().catch(() => '');
         console.error('send-push broadcast attempt failed', broadcastRes.status, errText);
       }
-      if (!nativePingSent) {
-        try {
-          const ch = admin.channel(`notif-wake:${feedRow.token}`);
-          const httpRes = await ch.httpSend('wake', isTest
-            ? { ts: Date.now(), test: true, title, message, link }
-            : { ts: Date.now(), notification_id: notifId });
-          nativePingSent = Boolean(httpRes?.success);
-          await admin.removeChannel(ch).catch(() => { });
-        } catch (chErr) {
-          console.error('send-push httpSend fallback failed', chErr);
-        }
-      }
     }
   } catch (err) {
     console.error('send-push native wake error', err);
@@ -279,7 +307,8 @@ Deno.serve(async (req) => {
     web_failed: webFailed,
     native_has_token: nativeHasToken,
     native_ping_sent: nativePingSent,
-    native_ping_status: nativePingStatus
+    native_ping_status: nativePingStatus,
+    fcm_sent: fcmSent
   });
 });
 
