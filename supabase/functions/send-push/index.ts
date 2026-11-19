@@ -64,6 +64,8 @@ Deno.serve(async (req) => {
   let recipientId = '';
   let notifId: number | string | null = null;
   let notifGroupId: string | null = null;
+  let notifType = '';
+  let actorAvatarUrl: string | null = null;
   let title = 'myIPON';
   let message = '';
   let link = 'dashboard.html';
@@ -78,7 +80,7 @@ Deno.serve(async (req) => {
     }
     const { data: notif, error: notifErr } = await admin
       .from('notifications')
-      .select('id, recipient_id, group_id, type, title, message, link, dedupe_key, read_at, created_at')
+      .select('id, recipient_id, group_id, type, title, message, link, dedupe_key, actor_id, actor_avatar_url, read_at, created_at')
       .eq('id', rawId)
       .maybeSingle();
 
@@ -99,8 +101,21 @@ Deno.serve(async (req) => {
 
     notifId = notif.id;
     notifGroupId = notif.group_id ? String(notif.group_id) : null;
+    notifType = String(notif.type || '');
     recipientId = String(notif.recipient_id);
     title = String(notif.title || 'myIPON');
+    if (['SOCIAL_NEW_MESSAGE', 'SOCIAL_MESSAGE_REPLY', 'SOCIAL_MESSAGE_REQUEST'].includes(notifType)) {
+      title = title.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || 'User';
+    }
+    actorAvatarUrl = notif.actor_avatar_url ? String(notif.actor_avatar_url) : null;
+    if (!actorAvatarUrl && notif.actor_id) {
+      const { data: actorProf } = await admin
+        .from('profiles')
+        .select('avatar_url')
+        .eq('id', notif.actor_id)
+        .maybeSingle();
+      if (actorProf?.avatar_url) actorAvatarUrl = String(actorProf.avatar_url);
+    }
     message = String(notif.message || 'You have a new notification.');
     link = String(notif.link || 'dashboard.html');
     if (notif.type === 'RELEASE' && /^https?:/i.test(link)) {
@@ -157,9 +172,12 @@ Deno.serve(async (req) => {
       const payload = JSON.stringify({
         id: notifId,
         group_id: notifGroupId,
+        type: notifType,
         title,
         body: message,
         message,
+        icon: actorAvatarUrl || '/assets/icon-192.png',
+        actor_avatar_url: actorAvatarUrl,
         link,
         url: link,
         dedupe_key: dedupeKey,

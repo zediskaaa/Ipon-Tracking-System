@@ -1629,12 +1629,20 @@
 
   async function refreshSocialNotifications({ render = true } = {}) {
     if (!isEligible()) return [];
-    const { data, error } = await ipon().client
+    let { data, error } = await ipon().client
       .from('notifications')
-      .select('id,type,title,message,link,dedupe_key,read_at,created_at')
+      .select('id,type,title,message,link,dedupe_key,actor_id,actor_avatar_url,read_at,created_at')
       .like('type', 'SOCIAL_%')
       .order('created_at', { ascending: false })
       .limit(50);
+    if (error) {
+      ({ data, error } = await ipon().client
+        .from('notifications')
+        .select('id,type,title,message,link,dedupe_key,read_at,created_at')
+        .like('type', 'SOCIAL_%')
+        .order('created_at', { ascending: false })
+        .limit(50));
+    }
     if (!error) {
       state.socialNotifications = data || [];
       computeTotalBadgeCount();
@@ -3478,16 +3486,24 @@
         ${hasUnread ? '<button type="button" class="button button-secondary button-sm" id="msg-mark-alerts-read">Mark all read</button>' : ''}
       </div>
       <div class="msg-alerts-list">
-        ${rows.length ? rows.map((n) => `
-          <button type="button" class="msg-alert-row${n.read_at ? '' : ' is-unread'}" data-social-alert-id="${escapeHtml(n.id)}" data-social-link="${escAttr(n.link || '')}" data-social-type="${escAttr(n.type || '')}">
+        ${rows.length ? rows.map((n) => {
+          const rawTitle = String(n.title || 'User').trim();
+          const cleanTitle = rawTitle.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || rawTitle;
+          const peerFromConv = (state.conversations || []).find((c) => c.peer && (c.peer.id === n.actor_id || String(c.peer.full_name || '').toLowerCase() === cleanTitle.toLowerCase()))?.peer;
+          const avatarUrl = n.actor_avatar_url || peerFromConv?.avatar_url || ipon().getMemberAvatar?.(n.actor_id || cleanTitle) || null;
+          return `
+          <button type="button" class="msg-alert-row has-sender-avatar${n.read_at ? '' : ' is-unread'}" data-social-alert-id="${escapeHtml(n.id)}" data-social-link="${escAttr(n.link || '')}" data-social-type="${escAttr(n.type || '')}">
+            <span class="msg-alert-avatar" aria-hidden="true">${ipon().avatarMarkup ? ipon().avatarMarkup(avatarUrl, cleanTitle, 'avatar-md', n.actor_id || peerFromConv?.id || '') : ''}</span>
             <div class="msg-alert-copy">
-              <strong>${escapeHtml(n.title)}</strong>
+              <strong>${escapeHtml(cleanTitle)}</strong>
               <p>${escapeHtml(n.message)}</p>
               <small>${escapeHtml(ipon().dateLabel(n.created_at, { dateStyle: 'medium', timeStyle: 'short' }))}</small>
             </div>
             ${n.read_at ? '' : '<i class="notification-unread" aria-label="Unread"></i>'}
-          </button>`).join('') : '<div class="empty-state"><strong>No messaging notifications yet</strong><p>Friend requests, replies, and message requests will show up here in real time.</p></div>'}
+          </button>`;
+        }).join('') : '<div class="empty-state"><strong>No messaging notifications yet</strong><p>Friend requests, replies, and message requests will show up here in real time.</p></div>'}
       </div>`;
+    ipon().bindAvatarFallbacks?.(view);
   }
 
   // Profile Quick Action Popover (anchored near clicked DP with automatic edge clamping)

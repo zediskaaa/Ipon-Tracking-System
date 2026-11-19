@@ -22926,3 +22926,30 @@ body.is-ptr-refreshing .msg-dialog[open] :is(.msg-conv-list, .msg-panel-view),
 body.is-ptr-settling .msg-dialog[open] :is(.msg-conv-list, .msg-panel-view) {
   transition: transform .28s cubic-bezier(.22, 1, .36, 1) !important;
 }
+
+.notification-item-icon.has-sender-avatar {
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.notification-item-icon.has-sender-avatar .avatar-circle,
+.notification-item-icon.has-sender-avatar .avatar-presence-wrap {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+}
+
+.msg-alert-row.has-sender-avatar {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.msg-alert-avatar {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+}

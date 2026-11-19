@@ -7444,6 +7444,38 @@
     await syncDevicePermissionUI().catch(() => { });
   }
 
+  function isMessageNotificationItem(item) {
+    if (!item) return false;
+    const type = String(item.type || '').toUpperCase();
+    if (['SOCIAL_NEW_MESSAGE', 'SOCIAL_MESSAGE_REPLY', 'SOCIAL_MESSAGE_REQUEST'].includes(type)) return true;
+    const dedupe = String(item.dedupe_key || '').toUpperCase();
+    if (dedupe.startsWith('SOCIAL_MSG')) return true;
+    return /^(?:New message from|New reply from|Message request from)\s+/i.test(String(item.title || ''));
+  }
+
+  function formatNotificationTitle(item) {
+    const raw = String(item?.title || 'myIPON').trim();
+    if (isMessageNotificationItem(item)) {
+      return raw.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || 'User';
+    }
+    return raw || 'myIPON';
+  }
+
+  function resolveNotificationAvatarUrl(item) {
+    if (!item) return '';
+    if (item.actor_avatar_url) return String(item.actor_avatar_url);
+    if (item.actor_id) {
+      const byId = getMemberAvatar(item.actor_id);
+      if (byId) return byId;
+    }
+    if (isMessageNotificationItem(item)) {
+      const senderName = formatNotificationTitle(item);
+      const byName = getMemberAvatar(senderName);
+      if (byName) return byName;
+    }
+    return '';
+  }
+
   async function dispatchDeviceNotification(item, userId) {
     if (!isMobileDeviceNotifClient() || !item || item.read_at || currentProfile?.notifications_enabled === false) return;
     const notifKey = notifShownKey(item) || String(item.id);
@@ -7453,8 +7485,10 @@
     if (permission !== 'granted') return;
     markDeviceNotificationShown(userId, notifKey);
 
-    const title = item.title || 'myIPON';
+    const title = formatNotificationTitle(item);
     const body = item.message || '';
+    const avatarUrl = resolveNotificationAvatarUrl(item);
+    const iconUrl = avatarUrl || '/assets/icon-192.png';
     const target = resolveNotificationTarget(item) || safeNotificationTarget(item.link) || 'dashboard.html';
     const plugin = getLocalNotificationsPlugin();
     if (plugin?.schedule) {
@@ -7466,7 +7500,8 @@
             title,
             body,
             channelId: 'myipon_alerts',
-            extra: { link: target }
+            ...(avatarUrl ? { largeIcon: avatarUrl } : {}),
+            extra: { link: target, avatar_url: avatarUrl || '' }
           }]
         });
         return;
@@ -7478,16 +7513,16 @@
         if (reg?.showNotification) {
           await reg.showNotification(title, {
             body,
-            icon: '/assets/icon-192.png',
+            icon: iconUrl,
             badge: '/assets/icon-192.png',
             tag: `myipon-${trayKey}`,
             renotify: Boolean(item.dedupe_key),
             vibrate: [180, 70, 180],
-            data: { url: target }
+            data: { url: target, avatar_url: avatarUrl || '' }
           });
           return;
         }
-        const n = new Notification(title, { body, icon: '/assets/icon-192.png', tag: `myipon-${trayKey}` });
+        const n = new Notification(title, { body, icon: iconUrl, tag: `myipon-${trayKey}` });
         n.onclick = () => {
           window.focus();
           if (target) window.location.href = target;
@@ -8356,7 +8391,10 @@
     let lastSeenMs = storedLastSeen ? Number(storedLastSeen) : null;
 
     const load = async (realtimePayload) => {
-      const { data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,dedupe_key,read_at,created_at').order('created_at', { ascending: false }).limit(40);
+      let { data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,dedupe_key,actor_id,actor_avatar_url,read_at,created_at').order('created_at', { ascending: false }).limit(40);
+      if (error) {
+        ({ data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,dedupe_key,read_at,created_at').order('created_at', { ascending: false }).limit(40));
+      }
       if (error) {
         syncBackgroundNotificationPolling(profile).catch(() => { });
         showInlineError(list, error, load);
@@ -8424,17 +8462,22 @@
           : String(item.type || '').startsWith('SOCIAL_')
             ? 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'
             : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
-        const iconHtml = item.type === 'BADGE_GRANTED'
-          ? `<span class="notification-item-icon is-badge-granted" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified badge')}</span>`
-          : item.type === 'BADGE_REMOVED' || item.type === 'EFFECT_REMOVED' || item.type === 'EFFECT_TRIAL_REJECTED'
-            ? `<span class="notification-item-icon is-badge-removed" aria-hidden="true"><svg class="verified-badge-svg" viewBox="0 0 24 24" shape-rendering="geometricPrecision"><path fill="#dc2626" d="${SCALLOP_SEAL_PATH}"/><path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/></svg></span>`
-            : item.type === 'EFFECT_GRANTED' || item.type === 'EFFECT_TRIAL_REQUESTED'
-              ? '<span class="notification-item-icon is-effect-granted" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 2 2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2Z"/></svg></span>'
-              : `<span class="notification-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${iconPath}"/></svg></span>`;
+        const displayTitle = formatNotificationTitle(item);
+        const senderAvatarUrl = resolveNotificationAvatarUrl(item);
+        const useSenderAvatar = isMessageNotificationItem(item) || Boolean(senderAvatarUrl);
+        const iconHtml = useSenderAvatar
+          ? `<span class="notification-item-icon has-sender-avatar" aria-hidden="true">${avatarMarkup(senderAvatarUrl || null, displayTitle, 'notification-sender-avatar', item.actor_id || '')}</span>`
+          : item.type === 'BADGE_GRANTED'
+            ? `<span class="notification-item-icon is-badge-granted" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified badge')}</span>`
+            : item.type === 'BADGE_REMOVED' || item.type === 'EFFECT_REMOVED' || item.type === 'EFFECT_TRIAL_REJECTED'
+              ? `<span class="notification-item-icon is-badge-removed" aria-hidden="true"><svg class="verified-badge-svg" viewBox="0 0 24 24" shape-rendering="geometricPrecision"><path fill="#dc2626" d="${SCALLOP_SEAL_PATH}"/><path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/></svg></span>`
+              : item.type === 'EFFECT_GRANTED' || item.type === 'EFFECT_TRIAL_REQUESTED'
+                ? '<span class="notification-item-icon is-effect-granted" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 2 2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2Z"/></svg></span>'
+                : `<span class="notification-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${iconPath}"/></svg></span>`;
         return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"${safeTarget ? ` data-nav-target="${escapeHtml(safeTarget)}"` : ''}>
           ${iconHtml}
           <div class="notification-item-copy">
-            <strong>${escapeHtml(item.title)}</strong>
+            <strong>${escapeHtml(displayTitle)}</strong>
             <p>${escapeHtml(item.message)}</p>
             <small>${dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small>
             ${isInvite ? `
@@ -8448,6 +8491,7 @@
           ${item.read_at ? '' : '<i class="notification-unread" aria-label="Unread"></i>'}
         </article>`;
       }).join('') : '<p class="empty-state">You have no notifications yet.</p>';
+      bindAvatarFallbacks(list);
     };
     list.onclick = async (event) => {
       const inviteBtn = event.target.closest('[data-invite-action]');

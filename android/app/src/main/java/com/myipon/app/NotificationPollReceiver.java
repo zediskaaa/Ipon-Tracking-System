@@ -11,14 +11,26 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.Rect;
+import android.graphics.Typeface;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.text.TextUtils;
+import android.util.Base64;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.app.Person;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.drawable.IconCompat;
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -223,6 +235,124 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         }
     }
 
+    private static boolean isMessageNotification(String type, String dedupeKey, String title) {
+        if (!TextUtils.isEmpty(type)) {
+            String upper = type.trim().toUpperCase();
+            if ("SOCIAL_NEW_MESSAGE".equals(upper)
+                || "SOCIAL_MESSAGE_REPLY".equals(upper)
+                || "SOCIAL_MESSAGE_REQUEST".equals(upper)) {
+                return true;
+            }
+        }
+        if (!TextUtils.isEmpty(dedupeKey) && dedupeKey.trim().toUpperCase().startsWith("SOCIAL_MSG")) {
+            return true;
+        }
+        if (!TextUtils.isEmpty(title)) {
+            String t = title.trim().toLowerCase();
+            return t.startsWith("new message from ")
+                || t.startsWith("new reply from ")
+                || t.startsWith("message request from ");
+        }
+        return false;
+    }
+
+    public static String cleanMessageNotificationTitle(String type, String dedupeKey, String rawTitle) {
+        String base = TextUtils.isEmpty(rawTitle) ? "myIPON" : rawTitle.trim();
+        if (isMessageNotification(type, dedupeKey, base)) {
+            base = base.replaceFirst("(?i)^(?:New message from|New reply from|Message request from)\\s+", "").trim();
+            if (TextUtils.isEmpty(base)) base = "User";
+        }
+        return base;
+    }
+
+    private static Bitmap toCircularBitmap(Bitmap source) {
+        if (source == null) return null;
+        int size = 128;
+        int minEdge = Math.min(source.getWidth(), source.getHeight());
+        if (minEdge <= 0) return null;
+        int x = (source.getWidth() - minEdge) / 2;
+        int y = (source.getHeight() - minEdge) / 2;
+        Bitmap output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(output);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        float radius = size / 2f;
+        canvas.drawCircle(radius, radius, radius, paint);
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        Rect srcRect = new Rect(x, y, x + minEdge, y + minEdge);
+        Rect dstRect = new Rect(0, 0, size, size);
+        canvas.drawBitmap(source, srcRect, dstRect, paint);
+        return output;
+    }
+
+    private static Bitmap createInitialsAvatarBitmap(String senderName) {
+        int size = 128;
+        Bitmap output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(output);
+        Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        bgPaint.setColor(0xFF0F5240);
+        float radius = size / 2f;
+        canvas.drawCircle(radius, radius, radius, bgPaint);
+
+        String initials = "U";
+        if (!TextUtils.isEmpty(senderName)) {
+            String[] parts = senderName.trim().split("\\s+");
+            StringBuilder sb = new StringBuilder();
+            for (String part : parts) {
+                if (!part.isEmpty()) {
+                    sb.append(Character.toUpperCase(part.charAt(0)));
+                    if (sb.length() == 2) break;
+                }
+            }
+            if (sb.length() > 0) initials = sb.toString();
+        }
+
+        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setColor(0xFFF6F1E4);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setTypeface(Typeface.create(Typeface.SERIF, Typeface.BOLD));
+        textPaint.setTextSize(46f);
+        Paint.FontMetrics fm = textPaint.getFontMetrics();
+        float textY = radius - (fm.ascent + fm.descent) / 2f;
+        canvas.drawText(initials, radius, textY, textPaint);
+        return output;
+    }
+
+    private static Bitmap loadCircularAvatarBitmap(String avatarUrl, String senderName, boolean fallbackToInitials) {
+        if (!TextUtils.isEmpty(avatarUrl)) {
+            String trimmed = avatarUrl.trim();
+            try {
+                if (trimmed.startsWith("data:image/")) {
+                    int comma = trimmed.indexOf(',');
+                    if (comma > 0) {
+                        byte[] decoded = Base64.decode(trimmed.substring(comma + 1), Base64.DEFAULT);
+                        Bitmap raw = BitmapFactory.decodeByteArray(decoded, 0, decoded.length);
+                        Bitmap circle = toCircularBitmap(raw);
+                        if (circle != null) return circle;
+                    }
+                } else if (trimmed.startsWith("https://") || trimmed.startsWith("http://")) {
+                    HttpURLConnection avatarConn = null;
+                    try {
+                        avatarConn = (HttpURLConnection) new URL(trimmed).openConnection();
+                        avatarConn.setConnectTimeout(4_000);
+                        avatarConn.setReadTimeout(4_000);
+                        avatarConn.setInstanceFollowRedirects(true);
+                        if (avatarConn.getResponseCode() >= 200 && avatarConn.getResponseCode() < 300) {
+                            try (InputStream is = avatarConn.getInputStream()) {
+                                Bitmap raw = BitmapFactory.decodeStream(is);
+                                Bitmap circle = toCircularBitmap(raw);
+                                if (circle != null) return circle;
+                            }
+                        }
+                    } finally {
+                        if (avatarConn != null) avatarConn.disconnect();
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return fallbackToInitials ? createInitialsAvatarBitmap(senderName) : null;
+    }
+
     public static void showDirectNotification(
         Context appContext,
         String id,
@@ -231,8 +361,25 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         String body,
         String link
     ) {
+        showDirectNotification(appContext, id, dedupeKey, "", title, body, link, "");
+    }
+
+    public static void showDirectNotification(
+        Context appContext,
+        String id,
+        String dedupeKey,
+        String type,
+        String title,
+        String body,
+        String link,
+        String avatarUrl
+    ) {
         if (!hasNotificationPermission(appContext)) return;
         ensureChannel(appContext);
+
+        boolean isMsg = isMessageNotification(type, dedupeKey, title);
+        String cleanTitle = cleanMessageNotificationTitle(type, dedupeKey, title);
+        String cleanBody = body == null ? "" : body;
 
         Intent launchIntent = new Intent(appContext, MainActivity.class);
         launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -251,9 +398,9 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_myipon)
             .setColor(0xFF0B3428)
-            .setContentTitle(TextUtils.isEmpty(title) ? "myIPON" : title)
-            .setContentText(body == null ? "" : body)
-            .setStyle(new NotificationCompat.BigTextStyle().bigText(body == null ? "" : body))
+            .setContentTitle(cleanTitle)
+            .setContentText(cleanBody)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(cleanBody))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -263,6 +410,22 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(tapPending);
+
+        if (isMsg || !TextUtils.isEmpty(avatarUrl)) {
+            Bitmap avatarBitmap = loadCircularAvatarBitmap(avatarUrl, cleanTitle, isMsg);
+            if (avatarBitmap != null) {
+                builder.setLargeIcon(avatarBitmap);
+                if (isMsg) {
+                    Person sender = new Person.Builder()
+                        .setName(cleanTitle)
+                        .setIcon(IconCompat.createWithBitmap(avatarBitmap))
+                        .build();
+                    NotificationCompat.MessagingStyle msgStyle = new NotificationCompat.MessagingStyle(sender)
+                        .addMessage(cleanBody, System.currentTimeMillis(), sender);
+                    builder.setStyle(msgStyle);
+                }
+            }
+        }
 
         NotificationManagerCompat.from(appContext).notify(notifId, builder.build());
     }
@@ -390,9 +553,11 @@ public class NotificationPollReceiver extends BroadcastReceiver {
 
                         String dedupeKey = row.optString("dedupe_key", "");
                         String createdAt = row.optString("created_at", "");
+                        String type = row.optString("type", "");
                         String title = row.optString("title", "myIPON");
                         String body = row.optString("message", "");
                         String link = row.optString("link", "");
+                        String avatarUrl = row.optString("actor_avatar_url", "");
                         String shownKey = !TextUtils.isEmpty(dedupeKey)
                             ? (id + ":" + (!TextUtils.isEmpty(createdAt) ? createdAt : body))
                             : id;
@@ -401,7 +566,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
                             continue;
                         }
 
-                        showDirectNotification(appContext, id, dedupeKey, title, body, link);
+                        showDirectNotification(appContext, id, dedupeKey, type, title, body, link, avatarUrl);
                         shown.add(shownKey);
                         if (TextUtils.isEmpty(dedupeKey)) {
                             shown.add(id);

@@ -312,6 +312,9 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
   assert.match(css, /\/\* Messages & Connections — Navigation Bar Style Preset & Pull-to-Refresh \*\/[\s\S]*?\.msg-tab\.is-active\s*\{[\s\S]*?color:\s*#F2C14E/);
   assert.match(css, /\/\* Messages & Connections — Navigation Bar Style Preset & Pull-to-Refresh \*\/[\s\S]*?\.msg-topbar::before\s*\{[\s\S]*?border-radius:\s*0 0 32px 32px/);
   assert.match(read('js/messages.js'), /async function refreshWorkspace\(\)[\s\S]*?window\.IponMessages = \{[\s\S]*?refreshWorkspace,/);
+  assert.match(read('database/migrations/20261119_133_message_notification_sender_avatar_and_title.sql'), /actor_avatar_url text[\s\S]*?v_notif_title := coalesce\(nullif\(btrim\(v_sender\.full_name\), ''\), 'User'\)/);
+  assert.match(read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java'), /cleanMessageNotificationTitle[\s\S]*?loadCircularAvatarBitmap[\s\S]*?IconCompat\.createWithBitmap\(avatarBitmap\)[\s\S]*?NotificationCompat\.MessagingStyle/);
+  assert.match(coreJs, /function formatNotificationTitle\(item\)[\s\S]*?function resolveNotificationAvatarUrl\(item\)/);
   assert.match(heroPlatesCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar::before\s*\{[\s\S]*?border-radius:\s*0 0 32px 32px/);
   assert.match(heroPlatesCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar\.is-scroll-hidden[\s\S]*?transform:\s*translate3d\(0,calc\(-100% - 18px\),0\)/);
   assert.match(heroPlatesCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar \.sidebar-nav\s*\{[\s\S]*?border-radius:\s*26px[\s\S]*?background:\s*#FBF8F0/);
@@ -321,8 +324,8 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
 
   for (const file of ['dashboard.html', 'reports.html', 'audit.html', 'settings.html', 'account.html']) {
     const html = read(file);
-    assert.match(html, /css\/app\.css\?v=20261119-179/);
-    assert.match(html, /js\/core\.js\?v=20261119-155/);
+    assert.match(html, /css\/app\.css\?v=20261119-180/);
+    assert.match(html, /js\/core\.js\?v=20261119-156/);
     const opens = (html.match(/<dialog\b/g) || []).length;
     const closes = (html.match(/<\/dialog>/g) || []).length;
     assert.equal(opens, closes, `${file} has unbalanced <dialog> tags`);
