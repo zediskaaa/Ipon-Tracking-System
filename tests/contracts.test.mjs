@@ -11930,6 +11930,7 @@ test('public privacy, terms, and data-deletion pages stay crawlable with Vercel 
   const privacy = read('privacy.html');
   const terms = read('terms.html');
   const deletion = read('data-deletion.html');
+  const robots = read('robots.txt');
   const vercel = JSON.parse(read('vercel.json'));
 
   assert.match(privacy, /<h1>Privacy Policy<\/h1>/);
@@ -11940,8 +11941,12 @@ test('public privacy, terms, and data-deletion pages stay crawlable with Vercel 
   assert.match(deletion, /<h1>User Data Deletion Instructions<\/h1>/);
   assert.match(deletion, /myIPON Data Deletion Request/);
   assert.match(deletion, /Apps and Websites/);
+  assert.match(robots, /Allow:\s*\/privacy\b/);
+  assert.match(robots, /Allow:\s*\/terms\b/);
+  assert.match(robots, /Allow:\s*\/data-deletion\b/);
+  assert.match(robots, /Allow:\s*\/deletion\b/);
 
-  for (const [slug, html] of [['/privacy', '/privacy.html'], ['/terms', '/terms.html'], ['/data-deletion', '/data-deletion.html']]) {
+  for (const [slug, html] of [['/privacy', '/privacy.html'], ['/terms', '/terms.html'], ['/data-deletion', '/data-deletion.html'], ['/deletion', '/data-deletion.html']]) {
     assert.ok(
       vercel.rewrites?.some((rule) => rule.source === slug && rule.destination === html),
       `vercel.json must rewrite ${slug} to ${html}`

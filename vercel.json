@@ -27,7 +27,7 @@
       ]
     },
     {
-      "source": "/(privacy|terms|data-deletion)",
+      "source": "/(privacy|terms|data-deletion|deletion)",
       "headers": [
         { "key": "X-Robots-Tag", "value": "index, follow" }
       ]
@@ -42,7 +42,8 @@
   "rewrites": [
     { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/terms", "destination": "/terms.html" },
-    { "source": "/data-deletion", "destination": "/data-deletion.html" }
+    { "source": "/data-deletion", "destination": "/data-deletion.html" },
+    { "source": "/deletion", "destination": "/data-deletion.html" }
   ],
   "redirects": [
     {

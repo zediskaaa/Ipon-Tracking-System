@@ -1,3 +1,9 @@
 User-agent: *
+Allow: /privacy
+Allow: /privacy.html
+Allow: /terms
+Allow: /terms.html
+Allow: /data-deletion
+Allow: /data-deletion.html
+Allow: /deletion
 Disallow: /
-
