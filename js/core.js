@@ -8478,16 +8478,7 @@
           const shownBadge = maybeShowBadgeAwardModal(profile);
           refreshProfileEffectsState({ checkModal: !shownBadge }).catch(() => { });
         };
-        const shownConsent = !options.skipPolicyConsent && !setupUrl
-          ? maybeShowPolicyConsentModal(profile, {
-            onAccept: () => {
-              if (!options.skipBackgroundPrompt) maybePromptBackgroundUsage(profile).catch(() => { });
-              maybeResumePendingJoin(profile);
-              checkRewards();
-            }
-          })
-          : false;
-        if (!shownConsent) {
+        const runSecondaryPrompts = () => {
           if (!options.skipBackgroundPrompt) {
             maybePromptBackgroundUsage(profile).catch(() => { });
           }
@@ -8496,7 +8487,17 @@
           }
           maybeResumePendingJoin(profile);
           checkRewards();
-        }
+        };
+        const runAfterPolicy = () => {
+          const shownUsername = !options.skipUsernamePrompt && !setupUrl
+            ? maybeShowUsernameSetupModal(profile, { onDone: runSecondaryPrompts })
+            : false;
+          if (!shownUsername) runSecondaryPrompts();
+        };
+        const shownConsent = !options.skipPolicyConsent && !setupUrl
+          ? maybeShowPolicyConsentModal(profile, { onAccept: runAfterPolicy })
+          : false;
+        if (!shownConsent) runAfterPolicy();
       }
       return { configured: true, profile, session };
     } catch (error) {
@@ -12270,6 +12271,314 @@
   const maybeShowRetentionReminder = (...args) => window.IponPolicy?.maybeShowRetentionReminder?.(...args) ?? false;
   const hasAcceptedCurrentPolicy = (...args) => window.IponPolicy?.hasAcceptedCurrentPolicy?.(...args) ?? true;
   const maybeShowPolicyConsentModal = (...args) => window.IponPolicy?.maybeShowPolicyConsentModal?.(...args) ?? false;
+
+  const USERNAME_SETUP_RE = /^[a-z0-9_]{3,24}$/;
+
+  function suggestUsernamesForProfile(profile = currentProfile) {
+    const sanitize = (raw) => String(raw || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .replace(/_+/g, '_');
+    const first = sanitize(profile?.first_name || String(profile?.full_name || '').split(/\s+/)[0] || '');
+    const last = sanitize(profile?.last_name || String(profile?.full_name || '').split(/\s+/).slice(1).join('_') || '');
+    const lastInitials = String(profile?.last_name || '')
+      .trim()
+      .split(/\s+/)
+      .map((part) => part.replace(/[^a-z0-9]/gi, '').slice(0, 1).toLowerCase())
+      .join('');
+    const candidates = [
+      first && lastInitials ? `${first}_${lastInitials}` : '',
+      first && last ? `${first}_${last}` : '',
+      first ? `${first}_ipon` : '',
+      first && last ? `${first}${last}` : ''
+    ]
+      .map((item) => sanitize(item).slice(0, 24).replace(/_+$/g, ''))
+      .filter((item) => USERNAME_SETUP_RE.test(item));
+    return [...new Set(candidates)].slice(0, 3);
+  }
+
+  function maybeShowUsernameSetupModal(profile = currentProfile, { onDone = null, force = false } = {}) {
+    if (!profile || !profile.id || profile.status !== 'ACTIVE') return false;
+    const existingUsername = String(profile.username || '').trim();
+    if (existingUsername && !force) return false;
+    if (document.getElementById('ipon-username-setup-dialog')) return true;
+
+    const suggestions = suggestUsernamesForProfile(profile);
+    const firstDisplay = String(profile.first_name || String(profile.full_name || '').split(/\s+/)[0] || '').trim();
+    const greeting = firstDisplay ? `Welcome, ${escapeHtml(firstDisplay)}` : 'Account update';
+    const suggestionsHtml = suggestions.length
+      ? `<div class="username-suggest-wrap">
+          <span class="username-suggest-label">Quick suggestions</span>
+          <div class="username-suggest-list" role="group" aria-label="Suggested usernames">
+            ${suggestions.map((handle) => `<button type="button" class="username-suggest-chip" data-suggest-username="${escapeHtml(handle)}" aria-pressed="false">@${escapeHtml(handle)}</button>`).join('')}
+          </div>
+        </div>`
+      : '';
+
+    const dialog = document.createElement('dialog');
+    dialog.id = 'ipon-username-setup-dialog';
+    dialog.className = 'form-dialog username-setup-dialog';
+    dialog.setAttribute('aria-labelledby', 'ipon-username-setup-title');
+    dialog.setAttribute('aria-describedby', 'ipon-username-setup-desc');
+    dialog.innerHTML = `
+      <div class="username-setup-sheet">
+        <header class="username-setup-hero">
+          <div class="username-setup-badge-row">
+            <span class="username-setup-icon" aria-hidden="true">@</span>
+            <span class="username-setup-eyebrow">${greeting}</span>
+          </div>
+          <h2 id="ipon-username-setup-title">Set up your username</h2>
+          <p id="ipon-username-setup-desc">Choose a unique username so you can sign in faster with your username or email and connect easily across myIPON.</p>
+        </header>
+        <form id="ipon-username-setup-form" class="username-setup-body" novalidate>
+          <div class="username-setup-field">
+            <label for="ipon-username-setup-input">Username</label>
+            <div class="username-setup-control">
+              <span class="username-setup-at" aria-hidden="true">@</span>
+              <input id="ipon-username-setup-input" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="24" pattern="[a-z0-9_]{3,24}" placeholder="e.g., juan_dc" aria-describedby="ipon-username-setup-feedback" required>
+              <span class="username-setup-indicator" id="ipon-username-setup-indicator" data-state="idle" aria-hidden="true"></span>
+            </div>
+            <p class="username-setup-feedback" id="ipon-username-setup-feedback" role="status" aria-live="polite">Use 3–24 lowercase letters, numbers, or underscores.</p>
+          </div>
+          ${suggestionsHtml}
+          <div class="username-setup-note" role="note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <span>Once saved, you can sign in using <strong>@username</strong> or your email anytime, and update it later in My account.</span>
+          </div>
+          <div class="username-setup-actions">
+            <button type="button" class="username-setup-signout" id="ipon-username-setup-signout">Sign out</button>
+            <button type="submit" class="button button-primary" id="ipon-username-setup-save" disabled>Save username</button>
+          </div>
+        </form>
+      </div>`;
+
+    const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+    const ALERT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>';
+
+    const form = dialog.querySelector('#ipon-username-setup-form');
+    const input = dialog.querySelector('#ipon-username-setup-input');
+    const indicator = dialog.querySelector('#ipon-username-setup-indicator');
+    const feedback = dialog.querySelector('#ipon-username-setup-feedback');
+    const saveBtn = dialog.querySelector('#ipon-username-setup-save');
+    const signOutBtn = dialog.querySelector('#ipon-username-setup-signout');
+    const chips = Array.from(dialog.querySelectorAll?.('[data-suggest-username]') || []);
+
+    let checkTimer = null;
+    let checkSeq = 0;
+    let takenUsername = '';
+    let verifiedUsername = '';
+    let checkingUsername = '';
+
+    const syncChipStates = (val) => {
+      chips.forEach((chip) => {
+        chip.setAttribute('aria-pressed', String(chip.dataset.suggestUsername === val));
+      });
+    };
+
+    const setStatus = (state, text) => {
+      if (feedback) {
+        feedback.textContent = text;
+        if (state && state !== 'idle') feedback.dataset.state = state;
+        else delete feedback.dataset.state;
+      }
+      if (indicator) {
+        indicator.dataset.state = state || 'idle';
+        indicator.innerHTML = state === 'available' ? CHECK_SVG : (state === 'error' ? ALERT_SVG : '');
+      }
+      if (input) {
+        if (state === 'error') {
+          input.setAttribute('aria-invalid', 'true');
+          input.setCustomValidity(text);
+          delete input.dataset.state;
+        } else {
+          input.removeAttribute('aria-invalid');
+          input.setCustomValidity('');
+          if (state === 'available') input.dataset.state = 'available';
+          else delete input.dataset.state;
+        }
+      }
+      if (saveBtn && !saveBtn.classList?.contains?.('is-busy')) {
+        const clean = String(input?.value || '').trim().toLowerCase();
+        saveBtn.disabled = !USERNAME_SETUP_RE.test(clean) || takenUsername === clean || checkingUsername === clean;
+      }
+    };
+
+    const runAvailabilityCheck = async (val, seq) => {
+      try {
+        const available = await rpc('check_username_available', { p_username: val });
+        if (seq !== checkSeq) return null;
+        if (String(input?.value || '').trim().toLowerCase() !== val) return null;
+        checkingUsername = '';
+        if (available === false) {
+          takenUsername = val;
+          verifiedUsername = '';
+          setStatus('error', 'That username is already taken.');
+          return false;
+        }
+        takenUsername = '';
+        verifiedUsername = val;
+        setStatus('available', `@${val} is available — ready to claim.`);
+        return true;
+      } catch {
+        if (seq === checkSeq && String(input?.value || '').trim().toLowerCase() === val) {
+          checkingUsername = '';
+          setStatus('idle', 'Use 3–24 lowercase letters, numbers, or underscores.');
+        }
+        return null;
+      }
+    };
+
+    const handleInput = ({ immediate = false } = {}) => {
+      const raw = String(input?.value || '');
+      const normalized = raw.replace(/^@+/, '').toLowerCase();
+      if (normalized !== raw && input) input.value = normalized;
+      const clean = normalized.trim();
+      clearTimeout(checkTimer);
+      syncChipStates(clean);
+      if (takenUsername && takenUsername !== clean) takenUsername = '';
+      if (verifiedUsername && verifiedUsername !== clean) verifiedUsername = '';
+      checkingUsername = '';
+      if (!clean) {
+        setStatus(immediate ? 'error' : 'idle', immediate ? 'Enter a username to continue.' : 'Use 3–24 lowercase letters, numbers, or underscores.');
+        return false;
+      }
+      if (!USERNAME_SETUP_RE.test(clean)) {
+        setStatus('error', 'Use 3–24 lowercase letters, numbers, or underscores.');
+        return false;
+      }
+      if (takenUsername === clean) {
+        setStatus('error', 'That username is already taken.');
+        return false;
+      }
+      if (verifiedUsername === clean) {
+        setStatus('available', `@${clean} is available — ready to claim.`);
+        return true;
+      }
+      checkingUsername = clean;
+      setStatus('checking', 'Checking availability…');
+      const seq = ++checkSeq;
+      if (immediate) {
+        void runAvailabilityCheck(clean, seq);
+      } else {
+        checkTimer = setTimeout(() => {
+          void runAvailabilityCheck(clean, seq);
+        }, 280);
+      }
+      return true;
+    };
+
+    input?.addEventListener('input', () => handleInput({ immediate: false }));
+    input?.addEventListener('blur', () => handleInput({ immediate: true }));
+    chips.forEach((chip) => {
+      chip.addEventListener('click', () => {
+        if (!input) return;
+        input.value = chip.dataset.suggestUsername || '';
+        handleInput({ immediate: true });
+        input.focus();
+      });
+    });
+
+    const ensureModalLocked = () => {
+      if (dialog.dataset?.completed === '1') return;
+      if (dialog.isConnected !== false && !dialog.open && typeof dialog.showModal === 'function') {
+        try { dialog.showModal(); } catch { }
+      }
+    };
+
+    dialog.addEventListener('cancel', (event) => {
+      if (dialog.dataset?.completed !== '1') {
+        event.preventDefault?.();
+        if (!String(input?.value || '').trim()) {
+          setStatus('error', 'Choose a username to continue using myIPON.');
+        }
+        input?.focus?.();
+      }
+    });
+
+    dialog.addEventListener('close', () => {
+      if (dialog.dataset?.completed !== '1' && dialog.isConnected !== false) {
+        queueMicrotask(ensureModalLocked);
+      }
+    });
+
+    signOutBtn?.addEventListener('click', () => {
+      clearTimeout(checkTimer);
+      if (dialog.dataset) dialog.dataset.completed = '1';
+      dialog.close?.();
+      dialog.remove?.();
+      signOut().catch(() => { });
+    });
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearTimeout(checkTimer);
+      const clean = String(input?.value || '').trim().replace(/^@+/, '').toLowerCase();
+      if (input) input.value = clean;
+      if (!clean) {
+        setStatus('error', 'Enter a username to continue.');
+        input?.focus?.();
+        return;
+      }
+      if (!USERNAME_SETUP_RE.test(clean)) {
+        setStatus('error', 'Use 3–24 lowercase letters, numbers, or underscores.');
+        input?.focus?.();
+        return;
+      }
+      if (takenUsername === clean) {
+        setStatus('error', 'That username is already taken.');
+        input?.focus?.();
+        return;
+      }
+
+      setBusy(saveBtn, true, 'Saving…');
+      try {
+        if (verifiedUsername !== clean) {
+          const available = await rpc('check_username_available', { p_username: clean });
+          if (available === false) {
+            takenUsername = clean;
+            verifiedUsername = '';
+            setBusy(saveBtn, false);
+            setStatus('error', 'That username is already taken.');
+            input?.focus?.();
+            return;
+          }
+        }
+        const saved = await rpc('update_own_social_identity', {
+          p_username: clean,
+          p_bio: profile.bio ?? null
+        });
+        const finalUsername = String(saved?.username || clean).trim().toLowerCase();
+        profile.username = finalUsername;
+        if (currentProfile && currentProfile.id === profile.id) {
+          currentProfile.username = finalUsername;
+        }
+        const quickUsernameEl = document.getElementById('quick-username');
+        if (quickUsernameEl) quickUsernameEl.value = finalUsername;
+        if (dialog.dataset) dialog.dataset.completed = '1';
+        dialog.close?.();
+        dialog.remove?.();
+        toast(`Username @${finalUsername} saved! You can now sign in with it anytime.`, 'success');
+        if (typeof onDone === 'function') onDone(finalUsername);
+      } catch (err) {
+        setBusy(saveBtn, false);
+        const msg = friendlyError(err);
+        if (/already taken|23505|unique/i.test(String(err?.message || msg))) {
+          takenUsername = clean;
+          verifiedUsername = '';
+          setStatus('error', 'That username is already taken.');
+        } else {
+          setStatus('error', msg);
+        }
+        input?.focus?.();
+      }
+    });
+
+    document.body.appendChild(dialog);
+    if (typeof dialog.showModal === 'function' && !dialog.open) dialog.showModal();
+    requestAnimationFrame(() => input?.focus?.());
+    return true;
+  }
 
   async function triggerManualRefresh() {
     if ('serviceWorker' in navigator && !window.Capacitor) {
@@ -16107,7 +16416,7 @@
     resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink, openCalendarEntryEditDialog, openChangeRequestReviewDialog,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
-    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload, maybeShowRetentionReminder, openRetentionPolicyDialog, CURRENT_POLICY_VERSION, openPolicyDialog, hasAcceptedCurrentPolicy, maybeShowPolicyConsentModal,
+    getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload, maybeShowRetentionReminder, openRetentionPolicyDialog, CURRENT_POLICY_VERSION, openPolicyDialog, hasAcceptedCurrentPolicy, maybeShowPolicyConsentModal, suggestUsernamesForProfile, maybeShowUsernameSetupModal,
     auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry, createRealtimeChannel,
     canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, bindInviteCodeInput, inviteShareUrl,
     setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,

@@ -11336,7 +11336,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261119-148/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261119-149/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -12183,4 +12183,198 @@ test('username sign-in and required signup username enforce format, uniqueness, 
   assert.equal(els.get('summary-username').textContent, '@juan_dc');
   assert.ok(checkedUsernames.includes('taken_user'));
   assert.ok(checkedUsernames.includes('juan_dc'));
+});
+
+test('post-login username setup modal prompts legacy users without usernames, preserves bio, and chains secondary prompts', async () => {
+  const coreJs = read('js/core.js');
+  const css = read('css/app.css');
+
+  assert.match(coreJs, /function maybeShowUsernameSetupModal\(/);
+  assert.match(coreJs, /maybeShowUsernameSetupModal\(profile,\s*\{\s*onDone:\s*runSecondaryPrompts\s*\}\)/);
+  assert.match(coreJs, /suggestUsernamesForProfile,\s*maybeShowUsernameSetupModal/);
+  assert.match(coreJs, /rpc\('update_own_social_identity',\s*\{\s*p_username:\s*clean,\s*p_bio:\s*profile\.bio \?\? null\s*\}\)/);
+  assert.match(css, /\.username-setup-dialog\s*\{/);
+  assert.match(css, /\.username-setup-control input\[aria-invalid="true"\]/);
+  assert.match(css, /html\[data-theme="dark"\] \.username-setup-dialog/);
+
+  const makeEl = (tag = 'div', id = '') => {
+    const listeners = new Map();
+    const attrs = new Map();
+    const classes = new Set();
+    let customValidity = '';
+    const el = {
+      tagName: tag.toUpperCase(),
+      id,
+      className: '',
+      value: '',
+      textContent: '',
+      innerHTML: '',
+      disabled: false,
+      open: false,
+      isConnected: true,
+      dataset: {},
+      style: {},
+      children: [],
+      classList: {
+        add: (...names) => names.forEach((n) => classes.add(n)),
+        remove: (...names) => names.forEach((n) => classes.delete(n)),
+        toggle: (n, f) => (f ? (classes.add(n), true) : (classes.delete(n), false)),
+        contains: (n) => classes.has(n)
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.get(k) ?? null; },
+      removeAttribute(k) { attrs.delete(k); },
+      setCustomValidity(v) { customValidity = String(v || ''); },
+      checkValidity() { return !customValidity; },
+      addEventListener(type, fn) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push(fn);
+      },
+      async dispatch(type, extra = {}) {
+        const list = listeners.get(type) || [];
+        const ev = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra };
+        for (const fn of list) await fn(ev);
+        return ev;
+      },
+      focus() { },
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      remove() { this.isConnected = false; appended.delete(this.id); },
+      querySelector(sel) { return el._bySelector?.get(sel) || null; },
+      querySelectorAll(sel) { return el._allBySelector?.get(sel) || []; }
+    };
+    return el;
+  };
+
+  const appended = new Map([
+    ['app-loader', makeEl('div', 'app-loader')],
+    ['toast-region', makeEl('div', 'toast-region')]
+  ]);
+  const rpcCalls = [];
+  const toasts = [];
+  const doc = {
+    documentElement: makeEl('html'),
+    body: Object.assign(makeEl('body'), {
+      dataset: { page: 'dashboard' },
+      insertAdjacentHTML() { },
+      appendChild(node) {
+        if (node.id) appended.set(node.id, node);
+        return node;
+      }
+    }),
+    getElementById: (id) => appended.get(id) || null,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener() { },
+    createElement(tag) {
+      const node = makeEl(tag);
+      if (tag === 'dialog') {
+        const form = makeEl('form', 'ipon-username-setup-form');
+        const input = makeEl('input', 'ipon-username-setup-input');
+        const indicator = makeEl('span', 'ipon-username-setup-indicator');
+        const feedback = makeEl('p', 'ipon-username-setup-feedback');
+        const saveBtn = makeEl('button', 'ipon-username-setup-save');
+        saveBtn.disabled = true;
+        const signOutBtn = makeEl('button', 'ipon-username-setup-signout');
+        const chip1 = makeEl('button');
+        chip1.dataset.suggestUsername = 'juan_dc';
+        node._bySelector = new Map([
+          ['#ipon-username-setup-form', form],
+          ['#ipon-username-setup-input', input],
+          ['#ipon-username-setup-indicator', indicator],
+          ['#ipon-username-setup-feedback', feedback],
+          ['#ipon-username-setup-save', saveBtn],
+          ['#ipon-username-setup-signout', signOutBtn]
+        ]);
+        node._allBySelector = new Map([
+          ['[data-suggest-username]', [chip1]]
+        ]);
+      }
+      return node;
+    }
+  };
+  const win = {
+    IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key-value' },
+    supabase: {
+      createClient: () => ({
+        rpc: async (name, params) => {
+          rpcCalls.push({ name, params });
+          if (name === 'check_username_available') {
+            return { data: params.p_username !== 'taken_handle', error: null };
+          }
+          if (name === 'update_own_social_identity') {
+            return { data: { username: params.p_username, bio: params.p_bio }, error: null };
+          }
+          return { data: null, error: null };
+        },
+        auth: { getSession: async () => ({ data: { session: null }, error: null }) }
+      })
+    },
+    location: { href: 'https://my-ipon.vercel.app/dashboard.html', pathname: '/dashboard.html', search: '', replace() { } },
+    matchMedia: () => ({ matches: false }),
+    addEventListener() { },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    requestAnimationFrame: (fn) => fn(),
+    navigator: {},
+    setTimeout: () => 1,
+    clearTimeout: () => { },
+    setInterval: () => 1,
+    clearInterval: () => { },
+    URL,
+    URLSearchParams,
+    console
+  };
+  vm.runInNewContext(coreJs, {
+    ...win,
+    window: win,
+    document: doc,
+    location: win.location,
+    localStorage: win.localStorage,
+    sessionStorage: win.sessionStorage,
+    navigator: win.navigator,
+    queueMicrotask
+  });
+  const Ipon = win.Ipon;
+  assert.equal(typeof Ipon.maybeShowUsernameSetupModal, 'function');
+  assert.equal(typeof Ipon.suggestUsernamesForProfile, 'function');
+
+  // Existing users with a username are never prompted
+  const withUsername = { id: 'u-ok', status: 'ACTIVE', first_name: 'Ana', last_name: 'Reyes', username: 'ana_reyes' };
+  assert.equal(Ipon.maybeShowUsernameSetupModal(withUsername), false);
+
+  // Suggestions are valid lowercase handles
+  const suggestions = Ipon.suggestUsernamesForProfile({ first_name: 'Juan', last_name: 'Dela Cruz' });
+  assert.ok(suggestions.length >= 2 && suggestions.every((s) => /^[a-z0-9_]{3,24}$/.test(s)));
+
+  // Legacy user without username gets prompted cleanly
+  const legacyProfile = { id: 'u-old', status: 'ACTIVE', first_name: 'Juan', last_name: 'Dela Cruz', bio: 'Team saver', username: null };
+  let doneHandle = '';
+  const shown = Ipon.maybeShowUsernameSetupModal(legacyProfile, { onDone: (u) => { doneHandle = u; } });
+  assert.equal(shown, true);
+  const dialog = doc.getElementById('ipon-username-setup-dialog');
+  assert.ok(dialog && dialog.open === true);
+
+  // Escape key is prevented while username is not yet saved
+  const cancelEv = await dialog.dispatch('cancel');
+  assert.equal(cancelEv.defaultPrevented, true);
+
+  const form = dialog.querySelector('#ipon-username-setup-form');
+  const input = dialog.querySelector('#ipon-username-setup-input');
+  const feedback = dialog.querySelector('#ipon-username-setup-feedback');
+
+  // Taken username is blocked cleanly
+  input.value = '@taken_handle';
+  await form.dispatch('submit');
+  assert.equal(dialog.open, true);
+  assert.equal(feedback.textContent, 'That username is already taken.');
+
+  // Valid available username saves via update_own_social_identity preserving bio and invokes onDone
+  input.value = '@Juan_DC';
+  await form.dispatch('submit');
+  assert.equal(dialog.open, false);
+  assert.equal(legacyProfile.username, 'juan_dc');
+  assert.equal(doneHandle, 'juan_dc');
+  const saveCall = rpcCalls.find((c) => c.name === 'update_own_social_identity');
+  assert.deepEqual({ ...saveCall?.params }, { p_username: 'juan_dc', p_bio: 'Team saver' });
 });
