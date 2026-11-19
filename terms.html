@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="description" content="Terms of Service and Terms of Use for myIPON — Group Savings Record Tracker.">
+  <meta name="application-name" content="IPON Group Savings Tracker">
+  <title>Terms of Service — myIPON</title>
+  <meta name="theme-color" content="#0b3428">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/icon-192.png">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css?v=20261119-171">
+  <script src="js/config.js?v=20261117-76"></script>
+  <style>
+    body.legal-page{margin:0;min-height:100vh;background:linear-gradient(180deg,#0b3428 0,#0b3428 220px,#f5eee0 220px,#f5eee0 100%);color:#112622;font-family:Arial,sans-serif;overflow-x:hidden}
+    .legal-topbar{max-width:860px;margin:0 auto;padding:20px 20px 14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px}
+    .legal-brand{display:inline-flex;align-items:center;gap:12px;color:#fff;font:800 24px/1 Arial,sans-serif;letter-spacing:-.02em;text-decoration:none}
+    .legal-brand img{width:38px;height:38px;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.28)}
+    .legal-brand span{padding-left:12px;border-left:2px solid rgba(255,255,255,.32);line-height:1}
+    .legal-brand small{font-weight:600;font-size:inherit;opacity:.92}
+    .legal-nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+    .legal-nav a{display:inline-flex;align-items:center;min-height:38px;padding:7px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.22);color:#eef5f0;font:700 13.5px/1.2 Arial,sans-serif;text-decoration:none;transition:background-color .16s ease,border-color .16s ease}
+    .legal-nav a:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.42)}
+    .legal-nav a[aria-current="page"]{background:#fffdf9;color:#0b3428;border-color:#fffdf9}
+    .legal-nav a:focus-visible{outline:2px solid #9be3ab;outline-offset:2px}
+    .legal-shell{max-width:860px;margin:0 auto;padding:8px 20px 56px}
+    .legal-card{background:#fffdf9;border:1px solid rgba(20,45,43,.14);border-radius:16px;padding:clamp(24px,4vw,44px);box-shadow:0 18px 44px rgba(11,52,40,.12)}
+    .legal-kicker{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#e8f4ec;color:#145233;font:700 12px/1.2 Arial,sans-serif;letter-spacing:.03em;text-transform:uppercase;margin:0 0 12px}
+    .legal-card h1{margin:0 0 8px;color:#0b3428;font:800 clamp(28px,3.6vw,38px)/1.14 Arial,sans-serif;letter-spacing:-.02em}
+    .legal-meta{margin:0 0 24px;padding-bottom:18px;border-bottom:1px solid rgba(20,45,43,.12);color:#4a5c55;font:14.5px/1.5 Arial,sans-serif}
+    .legal-body{font:16px/1.68 Arial,sans-serif;color:#1d332d}
+    .legal-body h2{margin:28px 0 10px;color:#0b3428;font:800 20px/1.3 Arial,sans-serif;letter-spacing:-.01em}
+    .legal-body p{margin:0 0 14px}
+    .legal-body ul{margin:0 0 16px;padding-left:22px}
+    .legal-body li{margin:0 0 8px}
+    .legal-body a{color:#175c3a;font-weight:700;text-underline-offset:3px}
+    .legal-body code{padding:2px 6px;border-radius:6px;background:rgba(11,52,40,.08);color:#0b3428;font:600 13.5px/1.3 Consolas,monospace}
+    .legal-footer{max-width:860px;margin:0 auto;padding:0 20px 40px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;color:#4a5c55;font:13.5px/1.5 Arial,sans-serif}
+    .legal-footer a{color:#145233;font-weight:700;text-decoration:none}
+    .legal-footer a:hover{text-decoration:underline}
+    html[data-theme="dark"] body.legal-page{background:linear-gradient(180deg,#081d17 0,#081d17 220px,#0d1b17 220px,#0d1b17 100%);color:#e9f2ed}
+    html[data-theme="dark"] .legal-card{background:#12241f;border-color:rgba(218,236,227,.14);box-shadow:0 18px 44px rgba(0,0,0,.36)}
+    html[data-theme="dark"] .legal-kicker{background:rgba(70,195,130,.18);color:#8ee8b5}
+    html[data-theme="dark"] .legal-card h1,html[data-theme="dark"] .legal-body h2{color:#f3f8f5}
+    html[data-theme="dark"] .legal-meta,html[data-theme="dark"] .legal-footer{color:#9cb2a8;border-color:rgba(218,236,227,.14)}
+    html[data-theme="dark"] .legal-body{color:#d9e7e0}
+    html[data-theme="dark"] .legal-body a,html[data-theme="dark"] .legal-footer a{color:#8ee8b5}
+    html[data-theme="dark"] .legal-body code{background:rgba(218,236,227,.12);color:#e9f2ed}
+    @media (max-width:640px){
+      .legal-topbar{padding:16px 14px 12px}
+      .legal-shell{padding:6px 14px 40px}
+      .legal-footer{padding:0 14px 32px}
+    }
+  </style>
+</head>
+<body class="legal-page">
+  <header class="legal-topbar">
+    <a class="legal-brand" href="index.html" aria-label="myIPON home">
+      <img src="assets/favicon.svg" alt="">
+      <span><small>my</small>IPON</span>
+    </a>
+    <nav class="legal-nav" aria-label="Legal navigation">
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="terms.html" aria-current="page">Terms of Service</a>
+      <a href="data-deletion.html">Data Deletion</a>
+      <a href="login.html">Sign in</a>
+    </nav>
+  </header>
+
+  <main class="legal-shell">
+    <article class="legal-card" id="terms-of-service-document">
+      <p class="legal-kicker">Legal &amp; Terms</p>
+      <h1>Terms of Service</h1>
+      <p class="legal-meta">Effective &amp; last updated: November 19, 2026 &middot; Applies to myIPON Web (<code>my-ipon.vercel.app</code>) and the myIPON Android app.</p>
+
+      <div class="legal-body">
+        <section id="purpose-scope">
+          <h2>1. Purpose &amp; non-custodial scope</h2>
+          <p>myIPON records savings-related activity entered by authorized users. It is a tracking system only and does not hold, transfer, receive, or safeguard money.</p>
+          <p>Recording payment methods (such as GCash, Maya, Bank, or Cash), reference numbers, optional payout receiving accounts, or wallet reconciliation balances helps your group track where funds sit offline; myIPON never initiates or processes real financial transfers.</p>
+        </section>
+
+        <section id="accounts-responsibilities">
+          <h2>2. Accounts, social sign-in &amp; your responsibilities</h2>
+          <ul>
+            <li>Verify your email with a one-time code or sign in with an authorized Google or Facebook account, use accurate formal profile information, and keep your sign-in credentials and optional two-factor authenticator (TOTP) codes private.</li>
+            <li>Use only accounts, workspaces, and savings-group records you are authorized to access.</li>
+            <li>Verify important balances, member payouts, and excess carry-over entries against physical or e-wallet receipts.</li>
+            <li>Accept the current Terms of Service and <a href="privacy.html">Privacy Policy</a> upon your first sign-in or after major policy updates.</li>
+          </ul>
+        </section>
+
+        <section id="notifications-scope">
+          <h2>3. Notifications &amp; email delivery scope</h2>
+          <p><strong>Notifications and direct chat messages are delivered in-app only.</strong> You must open or keep myIPON running on your device or browser to view and receive real-time alerts for new messages, payment reviews, contribution updates, replies, and announcements. Activity notifications are <strong>not sent via email</strong> and are not guaranteed to arrive when the app is completely closed on a phone.</p>
+          <p>Automated <strong>emails</strong> are reserved strictly for account security and retention notices: 6-digit email verification (OTP) codes, password recovery links, dormant savings check-in reminders (90 days idle), and 7-day prior warnings before 6-month inactive account or abandoned savings retention.</p>
+        </section>
+
+        <section id="approvals-retention">
+          <h2>4. Approvals, ongoing savings protection &amp; dormant retention</h2>
+          <p>Only confirmed entries affect tracked savings totals. Rejected and voided entries carry mandatory reasons and remain recorded in the group audit trail (retained for <strong>90 days</strong>) for accountability.</p>
+          <p><strong>Ongoing savings &amp; active goals are never deleted while you keep saving</strong>, no matter how many months or years it takes your group to reach a target. Active savings records, confirmed ledgers, and ongoing goals stay intact as long as contributions or goal activity continue.</p>
+          <p><strong>Forgotten or abandoned savings policy:</strong> To prevent completely abandoned workspaces from filling storage indefinitely while giving fair notice, groups with <strong>zero contributions, transactions, or goal updates</strong> receive a friendly <strong>email reminder at 90 days</strong>, and if still untouched by <strong>6 months</strong> receive a <strong>7-day prior email notice</strong> before dormant records and untouched goals move into the <strong>30-day Recycle Bin</strong> (still recoverable for 30 days before permanent database &amp; cloud storage removal).</p>
+          <p>Group Owners and Administrators manage invitations, role assignments, ownership transfers, the <strong>30-day soft-delete member recovery bin</strong>, completed goals, finished batch resets, and permanent group deletions. When a goal or finished savings batch is marked <strong>Done / Removed</strong>, it moves into the <strong>30-day Recycle Bin</strong> with a visible remaining-days countdown before automatic removal from the database and cloud storage. Completed financial years older than <strong>1 year</strong> can also be exported to CSV first and rolled up into permanent annual net-savings summaries (<code>financial_annual_archives</code>).</p>
+        </section>
+
+        <section id="uploads-cleanup">
+          <h2>5. Uploads, character limits &amp; automatic cleanup</h2>
+          <p>Profile photos, group QR codes, receipts, announcement media, record discussion replies, and chat attachments must stay lawful and relevant to group tracking. Never post PINs, OTP codes, passwords, or private banking credentials. Chat messages, transaction notes, and record replies are capped at <strong>500 characters</strong> (Group Announcements remain unlimited so full notices stay complete).</p>
+          <p>To keep database and cloud storage responsive without disturbing active savers, automated nightly maintenance runs every midnight (<strong>12:00 AM Manila time</strong>) strictly on expired temporary/binned data:</p>
+          <div class="policy-retention-grid">
+            <div class="policy-retention-row"><span class="policy-ttl-badge is-keep">Ongoing</span><div class="policy-retention-detail"><strong>Active savings &amp; ongoing goals (Protected)</strong><span>Confirmed group savings ledgers and active goals are <strong>never auto-deleted</strong> while deposits or goal updates stay active, regardless of duration.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge is-warn">90d &rarr; 6m</span><div class="policy-retention-detail"><strong>Forgotten savings &amp; goals (Email reminder + 7d notice)</strong><span>If a group stops depositing or updating goals: an email check-in goes out at <strong>90 days</strong> and a final warning <strong>7 days prior to 6 months</strong> before dormant data moves into the 30-day Bin.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge">30-day Bin</span><div class="policy-retention-detail"><strong>Completed goals, finished batches &amp; removed items</strong><span>Goals or savings batches marked Done / Reset, soft-deleted members, and deleted announcements stay recoverable in the Bin for <strong>30 days</strong> with a live days-left countdown, then auto-delete permanently from the database and Storage.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge">30 days</span><div class="policy-retention-detail"><strong>Call logs &amp; read notifications</strong><span>Voice/video call logs and read notifications clear automatically after 30 days.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge">90 days</span><div class="policy-retention-detail"><strong>Direct &amp; group messages, chat files, logs &amp; rejected receipts</strong><span>Chat messages, chat attachments, audit logs, security activity events, unread notifications, and rejected or voided receipt files are deleted automatically after 90 days.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge is-warn">6 months</span><div class="policy-retention-detail"><strong>Truly inactive accounts (7-day prior notice)</strong><span>Abandoned accounts with zero logins, member contributions, or active group savings activity for 6 months receive an email warning <strong>7 days prior</strong> before permanent account removal.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge is-keep">1+ year</span><div class="policy-retention-detail"><strong>CSV export &amp; permanent annual roll-ups</strong><span>Confirmed transactions older than 1 year remain preserved until Group Admins download CSV backups and create permanent annual net-savings summaries.</span></div></div>
+          </div>
+        </section>
+
+        <section id="development-availability">
+          <h2>6. Development availability &amp; contact</h2>
+          <p>The system is under active development. Features, release notes, and automated alerts may be updated, incomplete, or temporarily unavailable. Do not treat myIPON as a bank, wallet, or the sole official financial record.</p>
+          <p>To request account removal, review our <a href="data-deletion.html">User Data Deletion Instructions</a> or email <a href="mailto:zedrickdemonteverde1@gmail.com?subject=myIPON%20Terms%20Inquiry">zedrickdemonteverde1@gmail.com</a>.</p>
+        </section>
+      </div>
+    </article>
+  </main>
+
+  <footer class="legal-footer">
+    <span>&copy; 2026 myIPON &middot; Non-custodial group savings record tracker.</span>
+    <span><a href="privacy.html">Privacy Policy</a> &middot; <a href="terms.html">Terms of Service</a> &middot; <a href="data-deletion.html">Data Deletion</a> &middot; <a href="index.html">Home</a></span>
+  </footer>
+  <script src="js/core.js?v=20261119-148"></script>
+</body>
+</html>

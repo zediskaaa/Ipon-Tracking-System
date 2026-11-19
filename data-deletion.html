@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="description" content="Step-by-step instructions to delete your myIPON account, workspace records, and Facebook or Google Sign-In data.">
+  <meta name="application-name" content="IPON Group Savings Tracker">
+  <title>User Data Deletion Instructions — myIPON</title>
+  <meta name="theme-color" content="#0b3428">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/icon-192.png">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css?v=20261119-171">
+  <script src="js/config.js?v=20261117-76"></script>
+  <style>
+    body.legal-page{margin:0;min-height:100vh;background:linear-gradient(180deg,#0b3428 0,#0b3428 220px,#f5eee0 220px,#f5eee0 100%);color:#112622;font-family:Arial,sans-serif;overflow-x:hidden}
+    .legal-topbar{max-width:860px;margin:0 auto;padding:20px 20px 14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px}
+    .legal-brand{display:inline-flex;align-items:center;gap:12px;color:#fff;font:800 24px/1 Arial,sans-serif;letter-spacing:-.02em;text-decoration:none}
+    .legal-brand img{width:38px;height:38px;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.28)}
+    .legal-brand span{padding-left:12px;border-left:2px solid rgba(255,255,255,.32);line-height:1}
+    .legal-brand small{font-weight:600;font-size:inherit;opacity:.92}
+    .legal-nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+    .legal-nav a{display:inline-flex;align-items:center;min-height:38px;padding:7px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.22);color:#eef5f0;font:700 13.5px/1.2 Arial,sans-serif;text-decoration:none;transition:background-color .16s ease,border-color .16s ease}
+    .legal-nav a:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.42)}
+    .legal-nav a[aria-current="page"]{background:#fffdf9;color:#0b3428;border-color:#fffdf9}
+    .legal-nav a:focus-visible{outline:2px solid #9be3ab;outline-offset:2px}
+    .legal-shell{max-width:860px;margin:0 auto;padding:8px 20px 56px}
+    .legal-card{background:#fffdf9;border:1px solid rgba(20,45,43,.14);border-radius:16px;padding:clamp(24px,4vw,44px);box-shadow:0 18px 44px rgba(11,52,40,.12)}
+    .legal-kicker{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#e8f4ec;color:#145233;font:700 12px/1.2 Arial,sans-serif;letter-spacing:.03em;text-transform:uppercase;margin:0 0 12px}
+    .legal-card h1{margin:0 0 8px;color:#0b3428;font:800 clamp(28px,3.6vw,38px)/1.14 Arial,sans-serif;letter-spacing:-.02em}
+    .legal-meta{margin:0 0 24px;padding-bottom:18px;border-bottom:1px solid rgba(20,45,43,.12);color:#4a5c55;font:14.5px/1.5 Arial,sans-serif}
+    .legal-body{font:16px/1.68 Arial,sans-serif;color:#1d332d}
+    .legal-body h2{margin:28px 0 10px;color:#0b3428;font:800 20px/1.3 Arial,sans-serif;letter-spacing:-.01em}
+    .legal-body p{margin:0 0 14px}
+    .legal-body ol,.legal-body ul{margin:0 0 16px;padding-left:22px}
+    .legal-body li{margin:0 0 8px}
+    .legal-body a{color:#175c3a;font-weight:700;text-underline-offset:3px}
+    .legal-body code{padding:2px 6px;border-radius:6px;background:rgba(11,52,40,.08);color:#0b3428;font:600 13.5px/1.3 Consolas,monospace}
+    .deletion-action-box{margin:18px 0 22px;padding:18px 20px;border-radius:12px;border:1px solid rgba(23,92,58,.24);background:#eef7f1;color:#112622}
+    .deletion-action-box strong{display:block;margin:0 0 6px;color:#0b3428;font-size:16px}
+    .deletion-cta{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:10px;padding:10px 18px;border-radius:10px;background:#0b3428;color:#fff!important;font:700 14.5px/1.2 Arial,sans-serif;text-decoration:none}
+    .deletion-cta:hover{background:#145233}
+    .deletion-cta:focus-visible{outline:2px solid #0b3428;outline-offset:2px}
+    .legal-footer{max-width:860px;margin:0 auto;padding:0 20px 40px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;color:#4a5c55;font:13.5px/1.5 Arial,sans-serif}
+    .legal-footer a{color:#145233;font-weight:700;text-decoration:none}
+    .legal-footer a:hover{text-decoration:underline}
+    html[data-theme="dark"] body.legal-page{background:linear-gradient(180deg,#081d17 0,#081d17 220px,#0d1b17 220px,#0d1b17 100%);color:#e9f2ed}
+    html[data-theme="dark"] .legal-card{background:#12241f;border-color:rgba(218,236,227,.14);box-shadow:0 18px 44px rgba(0,0,0,.36)}
+    html[data-theme="dark"] .legal-kicker{background:rgba(70,195,130,.18);color:#8ee8b5}
+    html[data-theme="dark"] .legal-card h1,html[data-theme="dark"] .legal-body h2{color:#f3f8f5}
+    html[data-theme="dark"] .legal-meta,html[data-theme="dark"] .legal-footer{color:#9cb2a8;border-color:rgba(218,236,227,.14)}
+    html[data-theme="dark"] .legal-body{color:#d9e7e0}
+    html[data-theme="dark"] .legal-body a,html[data-theme="dark"] .legal-footer a{color:#8ee8b5}
+    html[data-theme="dark"] .legal-body code{background:rgba(218,236,227,.12);color:#e9f2ed}
+    html[data-theme="dark"] .deletion-action-box{background:#162e27;border-color:rgba(142,232,181,.28);color:#d9e7e0}
+    html[data-theme="dark"] .deletion-action-box strong{color:#f3f8f5}
+    html[data-theme="dark"] .deletion-cta{background:#1f6a43;color:#fff!important}
+    @media (max-width:640px){
+      .legal-topbar{padding:16px 14px 12px}
+      .legal-shell{padding:6px 14px 40px}
+      .legal-footer{padding:0 14px 32px}
+    }
+  </style>
+</head>
+<body class="legal-page">
+  <header class="legal-topbar">
+    <a class="legal-brand" href="index.html" aria-label="myIPON home">
+      <img src="assets/favicon.svg" alt="">
+      <span><small>my</small>IPON</span>
+    </a>
+    <nav class="legal-nav" aria-label="Legal navigation">
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="terms.html">Terms of Service</a>
+      <a href="data-deletion.html" aria-current="page">Data Deletion</a>
+      <a href="login.html">Sign in</a>
+    </nav>
+  </header>
+
+  <main class="legal-shell">
+    <article class="legal-card" id="data-deletion-document">
+      <p class="legal-kicker">User Data Rights</p>
+      <h1>User Data Deletion Instructions</h1>
+      <p class="legal-meta">Last updated: November 19, 2026 &middot; Applies to myIPON accounts, Google Sign-In, and Facebook Login.</p>
+
+      <div class="legal-body">
+        <p>You can delete your myIPON data and disconnect your Facebook or Google Sign-In link at any time using the methods below.</p>
+
+        <section id="request-email-deletion">
+          <h2>1. Request full account &amp; OAuth data deletion</h2>
+          <p>To permanently delete your entire myIPON account, profile, connected Google/Facebook sign-in identity, uploaded profile photo, and personal records:</p>
+          <ol>
+            <li>Send an email from your registered account email address to <a href="mailto:zedrickdemonteverde1@gmail.com?subject=myIPON%20Data%20Deletion%20Request">zedrickdemonteverde1@gmail.com</a>.</li>
+            <li>Use the subject line <code>myIPON Data Deletion Request</code>.</li>
+            <li>Include your full name and the email address used to sign in to myIPON (including Google or Facebook Sign-In).</li>
+          </ol>
+          <div class="deletion-action-box">
+            <strong>Direct deletion request email</strong>
+            We verify account ownership and permanently remove your profile, OAuth connection, notifications, and uploaded personal files within <strong>7 business days</strong>, then send a confirmation reply.
+            <div><a class="deletion-cta" href="mailto:zedrickdemonteverde1@gmail.com?subject=myIPON%20Data%20Deletion%20Request&amp;body=Please%20permanently%20delete%20my%20myIPON%20account%20and%20associated%20personal%20data.%0A%0ARegistered%20email%3A%20%0AFull%20name%3A%20">Email Data Deletion Request</a></div>
+          </div>
+        </section>
+
+        <section id="in-app-deletion">
+          <h2>2. Delete workspace or profile data inside myIPON</h2>
+          <ul>
+            <li><strong>Profile details &amp; media:</strong> Sign in at <a href="login.html">myIPON</a>, open <strong>Account</strong>, and clear optional payout receiving details, profile photo, or social links immediately.</li>
+            <li><strong>Savings group workspaces:</strong> Group Owners and Administrators can open <strong>Settings</strong> and confirm permanent group deletion to immediately erase that group's savings workspace data.</li>
+          </ul>
+        </section>
+
+        <section id="revoke-social-access">
+          <h2>3. Revoke Facebook Login or Google Sign-In access</h2>
+          <p>You can also revoke myIPON's sign-in access directly from your Facebook or Google account settings:</p>
+          <ul>
+            <li><strong>Facebook:</strong> Go to <strong>Facebook Settings &amp; Privacy</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Apps and Websites</strong> &rarr; select <strong>myIPON</strong> &rarr; click <strong>Remove</strong>.</li>
+            <li><strong>Google:</strong> Visit <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">Google Account Third-Party Connections</a> &rarr; select <strong>myIPON</strong> &rarr; click <strong>Delete all connections you have with myIPON</strong>.</li>
+          </ul>
+        </section>
+
+        <section id="what-is-deleted">
+          <h2>4. What data is deleted &amp; timeline</h2>
+          <ul>
+            <li><strong>Deleted upon account removal:</strong> Your user profile (name, email, phone number, payout details), authentication &amp; OAuth links, profile avatar/cover media, notification tokens, direct message records, and personal security logs.</li>
+            <li><strong>Shared group accounting integrity:</strong> If you belong to an active shared savings group, group-owned ledger totals remain intact for the other active members while your personal account identity is removed or reassigned according to group ownership rules.</li>
+            <li><strong>Processing timeline:</strong> Active records are removed within <strong>7 business days</strong> of verification; any items previously placed in the 30-day Recycle Bin purge automatically within <strong>30 days</strong>.</li>
+          </ul>
+          <p>For complete retention schedules, see our <a href="privacy.html">Privacy Policy</a> and <a href="terms.html">Terms of Service</a>.</p>
+        </section>
+      </div>
+    </article>
+  </main>
+
+  <footer class="legal-footer">
+    <span>&copy; 2026 myIPON &middot; Non-custodial group savings record tracker.</span>
+    <span><a href="privacy.html">Privacy Policy</a> &middot; <a href="terms.html">Terms of Service</a> &middot; <a href="data-deletion.html">Data Deletion</a> &middot; <a href="index.html">Home</a></span>
+  </footer>
+  <script src="js/core.js?v=20261119-148"></script>
+</body>
+</html>

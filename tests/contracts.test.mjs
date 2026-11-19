@@ -11925,3 +11925,30 @@ test('new-device email OTP is opt-in, server-enforced, and responsive across pas
   assert.match(edge, /attempts >= 5/);
   assert.match(edge, /TRUSTED_DEVICE_TTL_MS = 90 \* 24 \* 60 \* 60 \* 1000/);
 });
+
+test('public privacy, terms, and data-deletion pages stay crawlable with Vercel clean-URL rewrites', () => {
+  const privacy = read('privacy.html');
+  const terms = read('terms.html');
+  const deletion = read('data-deletion.html');
+  const vercel = JSON.parse(read('vercel.json'));
+
+  assert.match(privacy, /<h1>Privacy Policy<\/h1>/);
+  assert.match(privacy, /Google &amp; Facebook Sign-In \(OAuth\)/);
+  assert.match(privacy, /href="data-deletion\.html"/);
+  assert.match(terms, /<h1>Terms of Service<\/h1>/);
+  assert.match(terms, /Purpose &amp; non-custodial scope/);
+  assert.match(deletion, /<h1>User Data Deletion Instructions<\/h1>/);
+  assert.match(deletion, /myIPON Data Deletion Request/);
+  assert.match(deletion, /Apps and Websites/);
+
+  for (const [slug, html] of [['/privacy', '/privacy.html'], ['/terms', '/terms.html'], ['/data-deletion', '/data-deletion.html']]) {
+    assert.ok(
+      vercel.rewrites?.some((rule) => rule.source === slug && rule.destination === html),
+      `vercel.json must rewrite ${slug} to ${html}`
+    );
+  }
+  assert.ok(
+    vercel.headers?.some((rule) => rule.source.includes('data-deletion') && rule.headers?.some((h) => h.key === 'X-Robots-Tag' && h.value === 'index, follow')),
+    'vercel.json must allow indexing for public legal pages'
+  );
+});
