@@ -20223,6 +20223,7 @@ html[data-theme="dark"] .notification-item-icon.is-effect-granted {
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
   border-radius: 50%;
+  overflow: hidden;
   display: grid;
   place-items: center;
   font-family: "IPON Serif", "Source Serif Pro", Georgia, serif;
@@ -20231,6 +20232,16 @@ html[data-theme="dark"] .notification-item-icon.is-effect-granted {
   color: #fff;
   background: linear-gradient(135deg, #2e8a64, #17463a);
   box-shadow: 0 0 0 3px #0e1a15;
+}
+.effects-tile .tstage .mav img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
+}
+.effects-tile .tstage .mav > span[hidden] {
+  display: none;
 }
 .effects-tile .tstage .fxf { z-index: 3; }
 .effects-tile .flag {

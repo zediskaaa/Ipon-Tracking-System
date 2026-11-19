@@ -1095,7 +1095,7 @@
     }
     if (effectGrantPreviewAvatar) {
       effectGrantPreviewAvatar.innerHTML = Ipon.isSafeImageRef?.(profile.avatar_url)
-        ? `<img src="${Ipon.escapeHtml(profile.avatar_url)}" alt="${Ipon.escapeHtml(profile.full_name)}"><span>${Ipon.escapeHtml(Ipon.initials(profile.full_name))}</span>`
+        ? `<img src="${Ipon.escapeHtml(profile.avatar_url)}" alt="${Ipon.escapeHtml(profile.full_name)}" data-avatar-img><span class="avatar-fallback-inner" hidden>${Ipon.escapeHtml(Ipon.initials(profile.full_name))}</span>`
         : `<span>${Ipon.escapeHtml(Ipon.initials(profile.full_name))}</span>`;
       Ipon.bindAvatarFallbacks(effectGrantPreviewAvatar);
     }
@@ -1317,7 +1317,7 @@
     }
     if (effectTrialPreviewAvatar) {
       effectTrialPreviewAvatar.innerHTML = Ipon.isSafeImageRef?.(req.avatar_url)
-        ? `<img src="${Ipon.escapeHtml(req.avatar_url)}" alt="${Ipon.escapeHtml(req.full_name || 'User')}"><span>${Ipon.escapeHtml(Ipon.initials(req.full_name || 'User'))}</span>`
+        ? `<img src="${Ipon.escapeHtml(req.avatar_url)}" alt="${Ipon.escapeHtml(req.full_name || 'User')}" data-avatar-img><span class="avatar-fallback-inner" hidden>${Ipon.escapeHtml(Ipon.initials(req.full_name || 'User'))}</span>`
         : `<span>${Ipon.escapeHtml(Ipon.initials(req.full_name || 'User'))}</span>`;
       Ipon.bindAvatarFallbacks(effectTrialPreviewAvatar);
     }

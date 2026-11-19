@@ -3458,8 +3458,11 @@
       }).join('')}</div>`
       : '';
 
-    const avatarInner = isSafeImageRef(targetProfile.avatar_url)
-      ? `<img src="${escapeHtml(targetProfile.avatar_url)}" alt="${escapeHtml(recipientName)}"><span>${escapeHtml(initials(recipientName))}</span>`
+    const awardAvatarUrl = isSafeImageRef(targetProfile.avatar_url || readShellAvatar(targetProfile.id))
+      ? String(targetProfile.avatar_url || readShellAvatar(targetProfile.id)).trim()
+      : '';
+    const avatarInner = awardAvatarUrl
+      ? `<img src="${escapeHtml(awardAvatarUrl)}" alt="${escapeHtml(recipientName)}" data-avatar-img><span class="avatar-fallback-inner" hidden>${escapeHtml(initials(recipientName))}</span>`
       : `<span>${escapeHtml(initials(recipientName))}</span>`;
 
     const describeGrant = (g, meta) => {
@@ -3686,8 +3689,11 @@
     const groupText = Array.isArray(myGroups) && myGroups.length
       ? myGroups.map((g) => g?.group_name || g?.name).filter(Boolean).slice(0, 2).join(' · ')
       : (currentProfile.role === 'SUPER_ADMIN' ? 'System Administrator' : 'Personal workspace');
-    const avatarInner = isSafeImageRef(currentProfile.avatar_url)
-      ? `<img src="${escapeHtml(currentProfile.avatar_url)}" alt="${escapeHtml(fullName)}"><span>${escapeHtml(initials(fullName))}</span>`
+    const galleryAvatarUrl = isSafeImageRef(currentProfile.avatar_url || readShellAvatar(currentProfile.id))
+      ? String(currentProfile.avatar_url || readShellAvatar(currentProfile.id)).trim()
+      : '';
+    const avatarInner = galleryAvatarUrl
+      ? `<img src="${escapeHtml(galleryAvatarUrl)}" alt="${escapeHtml(fullName)}" data-avatar-img><span class="avatar-fallback-inner" hidden>${escapeHtml(initials(fullName))}</span>`
       : `<span>${escapeHtml(initials(fullName))}</span>`;
 
     const dialog = document.createElement('dialog');
@@ -3747,7 +3753,6 @@
       </div>`;
 
     document.body.appendChild(dialog);
-    bindAvatarFallbacks(dialog);
 
     const grid = dialog.querySelector('#effects-grid');
     const previewCard = dialog.querySelector('#effects-preview-card');
@@ -3765,7 +3770,7 @@
       const rarLabel = e.rare ? ` · ${api.RARITIES[e.rare] || ''}` : '';
       btn.innerHTML = `
         <div class="tstage">
-          <div class="mav">${escapeHtml(initials(fullName))}</div>
+          <div class="mav">${avatarInner}</div>
           <span class="flag">EQUIPPED</span>
           <span class="trial-flag" hidden>TRIAL</span>
           <span class="lk">LOCKED</span>
@@ -3791,6 +3796,8 @@
         syncGalleryUi();
       });
     }
+
+    bindAvatarFallbacks(dialog);
 
     const emptyMsg = document.createElement('p');
     emptyMsg.className = 'effects-empty';

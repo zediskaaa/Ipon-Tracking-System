@@ -1053,3 +1053,18 @@ test('Migration 122-124, Connect Apps X (Twitter) + drag reorder UI, uniform SVG
   const popoverOrder = Array.from(popoverHtml.matchAll(/data-social-app-link="([^"]+)"/g), (m) => m[1]);
   assert.deepEqual(popoverOrder, ['x', 'threads', 'discord', 'telegram', 'instagram', 'facebook']);
 });
+
+test('Profile Effects gallery tiles and award/admin previews display actual user DP with hidden initials fallback', () => {
+  const coreJs = read('js/core.js');
+  const appCss = read('css/app.css');
+  const superAdminJs = read('js/super-admin.js');
+
+  assert.match(coreJs, /<div class="mav">\$\{avatarInner\}<\/div>/);
+  assert.match(coreJs, /galleryAvatarUrl[\s\S]*data-avatar-img><span class="avatar-fallback-inner" hidden>/);
+  assert.match(coreJs, /awardAvatarUrl[\s\S]*data-avatar-img><span class="avatar-fallback-inner" hidden>/);
+  assert.match(coreJs, /<div class="mav">\$\{avatarInner\}<\/div>[\s\S]*bindAvatarFallbacks\(dialog\);/);
+  assert.match(appCss, /\.effects-tile \.tstage \.mav\s*\{[^}]*overflow:\s*hidden;/s);
+  assert.match(appCss, /\.effects-tile \.tstage \.mav img\s*\{[^}]*object-fit:\s*cover;/s);
+  assert.match(superAdminJs, /effectGrantPreviewAvatar\.innerHTML[\s\S]*data-avatar-img><span class="avatar-fallback-inner" hidden>/);
+  assert.match(superAdminJs, /effectTrialPreviewAvatar\.innerHTML[\s\S]*data-avatar-img><span class="avatar-fallback-inner" hidden>/);
+});
