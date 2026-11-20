@@ -2388,6 +2388,8 @@
     const entries = Array.isArray(typingEntriesOrBool) ? typingEntriesOrBool : getTypingEntries(conv?.conversation_id);
     const typing = Array.isArray(typingEntriesOrBool) ? entries.length > 0 : Boolean(typingEntriesOrBool);
     const wasVisible = liveRow.classList.contains('is-visible');
+    const wrap = document.getElementById('msg-scroll-wrap');
+    const wasNearBottom = wrap && wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 140;
     const avatarHost = document.getElementById('msg-typing-avatar');
     const senderLabel = document.getElementById('msg-typing-sender');
     const liveTxt = document.getElementById('msg-typing-live-text');
@@ -2437,8 +2439,7 @@
     if (!wasVisible && typing) {
       requestAnimationFrame(() => {
         syncThreadScrollLock();
-        const wrap = document.getElementById('msg-scroll-wrap');
-        if (wrap && !wrap.classList?.contains('is-no-scroll') && (wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 140)) {
+        if (wasNearBottom && wrap && !wrap.classList?.contains('is-no-scroll')) {
           wrap.scrollTop = wrap.scrollHeight;
         }
       });
@@ -2934,6 +2935,16 @@
     state.pendingByConv.get(conversationId).push(pending);
     if (!deferProcess) processPendingMessage(pending);
     return pending;
+  }
+
+  function scrollActiveThreadToBottom() {
+    if (!state.activeConvId || !document.getElementById('msg-workspace-dialog')?.open) return;
+    requestAnimationFrame(() => {
+      const wrap = document.getElementById('msg-scroll-wrap');
+      if (!wrap) return;
+      syncThreadScrollLock();
+      if (!wrap.classList.contains('is-no-scroll')) wrap.scrollTop = wrap.scrollHeight;
+    });
   }
 
   function syncThreadScrollLock() {
@@ -6619,6 +6630,10 @@
       }
     });
 
+    document.addEventListener('focusin', (ev) => {
+      if (ev.target?.id === 'msg-composer-input') scrollActiveThreadToBottom();
+    });
+
     document.addEventListener('focusout', (ev) => {
       if (ev.target?.id === 'msg-composer-input') {
         sendTypingBroadcast(false);
@@ -7006,8 +7021,12 @@
       closeFloatingMenus({ immediate: true });
       closeAttachMenu();
       syncThreadScrollLock();
+      if (document.activeElement?.id === 'msg-composer-input') scrollActiveThreadToBottom();
     });
-    window.visualViewport?.addEventListener?.('resize', () => syncThreadScrollLock());
+    window.visualViewport?.addEventListener?.('resize', () => {
+      syncThreadScrollLock();
+      if (document.activeElement?.id === 'msg-composer-input') scrollActiveThreadToBottom();
+    });
   }
 
   async function openWorkspace({ tab = null, conversationId = null, messageId = null } = {}) {
