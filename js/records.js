@@ -56,6 +56,10 @@
     Ipon.setLoading(false);
     return;
   }
+  if (page === 'expenses' && state.profile.workspace_mode === 'SOLO') {
+    window.location.replace('withdrawals.html');
+    return;
+  }
   const perms = state.profile.permissions || Ipon.defaultPermissionsForRole(state.profile.role);
   const canRecordExpenses = state.profile.role === 'ADMIN' || perms.can_record_expenses === true;
   const canRecordWithdrawals = state.profile.role === 'ADMIN' || perms.can_record_withdrawals === true;

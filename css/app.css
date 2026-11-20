@@ -80,6 +80,7 @@ a { color:inherit; }
 .record-tabs a svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .record-tabs a:hover { background:#fffdf9; border-color:rgba(20,45,43,.25); }
 .record-tabs a.is-active { border-color:var(--rail); background:var(--rail); color:#fff; box-shadow:0 2px 6px rgba(20,45,43,.16); }
+.record-tabs a[hidden],html[data-workspace-mode="SOLO"] .record-tabs a[data-group-only] { display:none !important; }
 .stats-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:20px; }
 .platform-overview { margin-bottom:20px; padding:24px 24px 22px; border:1px solid rgba(20,45,43,.11); border-top:3px solid #0b3428; border-radius:18px; background:linear-gradient(180deg, rgba(255,253,249,.97) 0%, rgba(250,245,236,.92) 100%); box-shadow:0 10px 28px rgba(20,45,43,.06), 0 1px 2px rgba(20,45,43,.04); }
 .platform-view { animation:platform-view-in .22s cubic-bezier(.2,.7,.2,1) both; }
@@ -407,6 +408,7 @@ body.is-app .loader-coin::after { inset:4px; }
   .page-header h1 { font-size:clamp(30px,10vw,40px); }.page-header p:not(.eyebrow),.panel-header > div > p:not(#audit-count),.platform-overview-heading p,.account-dialog-title p,.account-section-heading p,.account-session-copy p,.settings-session-copy p,.review-subtitle,.msg-brand p,.msg-friends-hero-copy p,.msg-panel-header p:not([id]),.form-dialog:not(.bg-usage-dialog):not(.recovery-dialog) .form-dialog-header:not(.bg-usage-header) > div > p:not(.eyebrow):not(#audit-detail-meta):not(#bug-viewer-meta):not(#day-modal-subtitle):not(#account-action-subtitle):not(#app-update-subtitle):not(#ipon-iv-subtitle):not(#ipon-vv-subtitle):not(#request-verify-subtitle){display:none}.page-header>.button,.page-header>.header-actions{width:100%}.page-header>.button{min-height:48px}.panel { padding:20px 16px; }
   .platform-overview { padding:18px 14px 16px; border-radius:16px; }.platform-overview-heading { align-items:flex-start; flex-direction:column; gap:10px; padding:0 0 14px; }.platform-overview-heading h2 { font-size:24px; }.platform-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:14px 0; }.platform-metric-card { padding:13px 14px; }.platform-metrics dd { font-size:28px; }.platform-briefing { grid-template-columns:1fr; gap:12px; padding-top:14px; }.platform-briefing > section,.platform-shortcuts { padding:14px; }
   .record-tabs { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; margin-bottom:20px; padding-bottom:12px; }
+  html[data-workspace-mode="SOLO"] .record-tabs { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .record-tabs a { min-width:0; min-height:44px; justify-content:center; padding:8px; }.record-tabs a svg { width:21px; height:21px; }.record-tabs a span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
   .stats-grid,.form-grid,.form-grid-3 { grid-template-columns:1fr; }.field-wide { grid-column:auto; }
   .field input:not([type="checkbox"]):not([type="radio"]),.field select,.field textarea { font-size:16px; }.form-actions .button { flex:1 1 140px; }
@@ -826,7 +828,8 @@ button.record-entry-action:focus-visible{outline:2px solid #fff;outline-offset:2
 .quick-record-dialog{width:min(560px,calc(100vw - 28px))}
 .quick-record-dialog .form-dialog-header{padding:16px 22px 12px}
 .quick-record-dialog .form-dialog-header h2{font-size:25px}
-.quick-record-type-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px;background:rgba(20,45,43,.07);border-radius:12px;margin:12px 22px 0}
+.quick-record-type-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;padding:4px;background:rgba(20,45,43,.07);border-radius:12px;margin:12px 22px 0}
+.quick-record-type-tabs[hidden],.quick-type-tab[hidden]{display:none!important}
 .quick-record-dialog form{padding:14px 22px 20px;gap:12px 14px}
 .quick-record-dialog .field{gap:5px}
 .quick-record-dialog .field input:not([type="checkbox"]):not([type="radio"]),.quick-record-dialog .field select{min-height:40px;padding:8px 11px}

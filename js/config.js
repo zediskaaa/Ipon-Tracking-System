@@ -15,6 +15,10 @@ try {
     if (activeRole === 'SUPER_ADMIN' || activeRole === 'ADMIN' || activeRole === 'TREASURER' || activeRole === 'MEMBER') {
       root.dataset.shellRole = activeRole;
     }
+    var workspaceMode = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('ipon_workspace_mode')) || (typeof localStorage !== 'undefined' && localStorage.getItem('ipon_workspace_mode'));
+    if (workspaceMode === 'SOLO' || workspaceMode === 'GROUP') {
+      root.dataset.workspaceMode = workspaceMode;
+    }
   }
 } catch { }
 

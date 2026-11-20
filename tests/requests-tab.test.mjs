@@ -20,7 +20,7 @@ test('Requests tab sits cleanly beside Additions, Deductions, Expenses, and Goal
 
   const reqHtml = read('requests.html');
   assert.match(reqHtml, /<body data-page="requests">/);
-  assert.match(reqHtml, /<a class="is-active" href="requests\.html">/);
+  assert.match(reqHtml, /<a class="is-active" href="requests\.html"(?:\s+data-group-only="1")?>/);
   assert.match(reqHtml, /js\/requests\.js/);
 
   const coreJs = read('js/core.js');

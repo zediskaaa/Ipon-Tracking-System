@@ -1821,9 +1821,10 @@
 
     const perms = state.profile?.permissions || Ipon.defaultPermissionsForRole(state.profile?.role);
     const isMemberRole = state.profile?.role === 'MEMBER';
-    const isSoloSelf = currentGroup?.workspace_mode === 'SOLO' && Boolean(state.profile?.member_id || cachedMembers[0]?.id);
+    const isSoloMode = currentGroup?.workspace_mode === 'SOLO';
+    const isSoloSelf = isSoloMode && Boolean(state.profile?.member_id || cachedMembers[0]?.id);
     const canDeduction = state.profile?.role === 'ADMIN' || perms.can_record_withdrawals === true;
-    const canExpense = state.profile?.role === 'ADMIN' || perms.can_record_expenses === true;
+    const canExpense = !isSoloMode && (state.profile?.role === 'ADMIN' || perms.can_record_expenses === true);
     if (quickTabDeduction) quickTabDeduction.hidden = !canDeduction;
     if (quickTabExpense) quickTabExpense.hidden = !canExpense;
     if (quickRecordTypeTabs) quickRecordTypeTabs.hidden = !(canDeduction || canExpense);

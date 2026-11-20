@@ -57,6 +57,10 @@
     Ipon.setLoading(false);
     return;
   }
+  if (state.profile.workspace_mode === 'SOLO') {
+    window.location.replace('contributions.html');
+    return;
+  }
 
   const isAdmin = state.profile.role === 'ADMIN';
   const myUserId = String(state.profile.id || '');
