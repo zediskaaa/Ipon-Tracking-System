@@ -8101,7 +8101,7 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
   border-radius: inherit;
   padding: 2px;
   background: conic-gradient(
-    from -90deg,
+    from 225deg,
     #4aaeff 0deg var(--vanish-angle),
     rgba(74, 174, 255, .16) var(--vanish-angle) 360deg
   );
@@ -8112,6 +8112,13 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
   filter: drop-shadow(0 0 2.5px rgba(74, 174, 255, .42));
   pointer-events: none;
   animation: msgVanishRing var(--vanish-remaining) linear forwards;
+}
+.msg-row.is-mine .msg-bubble.is-vanishing::after {
+  background: conic-gradient(
+    from 135deg,
+    #4aaeff 0deg var(--vanish-angle),
+    rgba(74, 174, 255, .16) var(--vanish-angle) 360deg
+  );
 }
 .msg-bubble.has-audio-only.is-vanishing::after {
   border-radius: 16px;
@@ -8126,8 +8133,8 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
 }
 @keyframes msgVanishExit {
   0% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-  40% { opacity: .78; transform: translateY(-3px) scale(.985); filter: blur(1.5px); }
-  100% { opacity: 0; transform: translateY(-10px) scale(.94); filter: blur(6px); }
+  40% { opacity: .8; transform: translateY(4px) scale(.99); filter: blur(1.5px); }
+  100% { opacity: 0; transform: translateY(18px) scale(.96); filter: blur(6px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .msg-bubble.is-vanishing::after, .msg-row.is-vanish-exit { animation: none; }

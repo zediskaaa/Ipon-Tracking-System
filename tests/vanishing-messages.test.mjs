@@ -106,3 +106,16 @@ test('active conversation removes an expired bubble after its exit animation', (
   assert.equal(pending.shift().delay, 360);
   assert.equal(renders, 0);
 });
+
+test('vanishing messages hide notification and list previews while the ring and exit move from the requested corners', () => {
+  const migration = read('database/migrations/20261121_149_vanishing_message_private_notification.sql');
+  const css = read('css/app.css');
+  assert.match(migration, /when v_msg\.vanish_after_seconds is not null then coalesce\(nullif\(btrim\(v_sender\.full_name\), ''\), 'Someone'\) \|\| ' set a message\.'/);
+  assert.match(migration, /last_message_preview = v_notification_preview/);
+  assert.equal((migration.match(/v_notif_type, v_notif_title, v_notification_preview/g) || []).length, 2);
+  assert.match(migration, /coalesce\(v_conv\.title, 'Group Chat'\),\s*v_notification_preview/);
+  assert.match(migration, /when latest\.vanish_after_seconds is not null then coalesce\(sender_p\.full_name, 'Someone'\) \|\| ' set a message\.'/);
+  assert.match(css, /\.msg-bubble\.is-vanishing::after\s*\{[^}]*from 225deg/s);
+  assert.match(css, /\.msg-row\.is-mine \.msg-bubble\.is-vanishing::after\s*\{[^}]*from 135deg/s);
+  assert.match(css, /@keyframes msgVanishExit\s*\{[\s\S]*?100% \{ opacity: 0; transform: translateY\(18px\)/);
+});
