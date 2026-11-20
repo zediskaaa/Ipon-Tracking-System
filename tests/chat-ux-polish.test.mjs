@@ -20,7 +20,10 @@ test('migration 140 exposes savings workspace roles for group chat members and m
 
 test('CSS aligns voice bar height to composer input, maximizes group modal space, extends notification panel to bottom, and styles compact role badges', () => {
   const css = read('css/app.css');
-  // Voice recording pill matches 40px single-row composer input height
+  // Voice recording pill and composer tool cluster lock to exact 40px single-row height so tool buttons never shift
+  assert.match(css, /\.msg-composer-form\s*\{[^}]*min-height:\s*40px;/s);
+  assert.match(css, /\.msg-composer-tools\s*\{[^}]*align-items:\s*center;[^}]*align-self:\s*flex-end;[^}]*height:\s*40px;[^}]*min-height:\s*40px;/s);
+  assert.match(css, /#msg-composer-input\s*\{[^}]*height:\s*40px;[^}]*min-height:\s*40px;[^}]*font-family:\s*inherit;[^}]*font-size:\s*14px;[^}]*line-height:\s*20px;/s);
   assert.match(css, /\.msg-voice-recording\s*\{[^}]*height:\s*40px;[^}]*min-height:\s*40px;[^}]*max-height:\s*40px;/s);
   assert.match(css, /\.msg-voice-recording \.msg-voice-send\s*\{[^}]*flex-direction:\s*row;/s);
   // New Group Chat dialog overrides UA max-width/max-height to maximize space
