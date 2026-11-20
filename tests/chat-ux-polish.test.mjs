@@ -367,3 +367,214 @@ test('runtime typing sound plays once per typing appearance, voice recording pla
   assert.match(messagesJs, /if \(!send\) ipon\(\)\.playUiSound\?\.\('msg-voice-cancel'\);/);
   assert.equal(recorderStopped, false);
 });
+
+test('in-conversation DP ripple activates only when peer is actively in the same convo and clears immediately on leave or blur', async () => {
+  const messagesJs = read('js/messages.js');
+  const css = read('css/app.css');
+
+  assert.match(css, /\.msg-thread-header \.msg-avatar-wrap\.is-in-convo-ripple::before/);
+  assert.match(css, /@keyframes msgConvoAvatarRipple/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?is-in-convo-ripple::before/);
+
+  const meId = '11111111-1111-4111-8111-111111111111';
+  const peerId = '22222222-2222-4222-8222-222222222222';
+  const convId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+  let presenceStateObj = {};
+  let presenceSyncCb = null;
+  let subscribeCb = null;
+  const trackCalls = [];
+  let untrackCount = 0;
+  const winListeners = new Map();
+
+  const makeEl = (id = '') => {
+    const classes = new Set();
+    const attrs = new Map();
+    const childAvatarWrap = {
+      classList: {
+        add: (...c) => c.forEach((x) => classes.add(x)),
+        remove: (...c) => c.forEach((x) => classes.delete(x)),
+        toggle: (c, f) => {
+          const on = f === undefined ? !classes.has(c) : Boolean(f);
+          if (on) classes.add(c); else classes.delete(c);
+          return on;
+        },
+        contains: (c) => classes.has(c)
+      }
+    };
+    return {
+      id,
+      tagName: 'DIV',
+      open: false,
+      hidden: false,
+      disabled: false,
+      value: '',
+      textContent: '',
+      innerHTML: '',
+      scrollTop: 0,
+      scrollHeight: 200,
+      clientHeight: 500,
+      style: {},
+      dataset: {},
+      _avatarWrap: childAvatarWrap,
+      classList: {
+        add() { },
+        remove() { },
+        toggle() { return false; },
+        contains: () => false
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k) ?? null,
+      removeAttribute: (k) => attrs.delete(k),
+      addEventListener() { },
+      removeEventListener() { },
+      querySelector: (sel) => (sel.includes('.msg-avatar-wrap') ? childAvatarWrap : null),
+      querySelectorAll: () => [],
+      closest: () => null,
+      focus() { },
+      showModal() { this.open = true; },
+      close() { this.open = false; }
+    };
+  };
+  const els = new Map();
+  const getEl = (id) => {
+    if (!els.has(id)) els.set(id, makeEl(id));
+    return els.get(id);
+  };
+  const docListeners = new Map();
+  const doc = {
+    visibilityState: 'visible',
+    hasFocus: () => true,
+    documentElement: { dataset: {}, style: { setProperty() { } } },
+    body: { insertAdjacentHTML() { }, classList: makeEl().classList },
+    getElementById: getEl,
+    querySelector: (sel) => (sel.startsWith('#') ? getEl(sel.slice(1)) : null),
+    querySelectorAll: () => [],
+    addEventListener(ev, fn) {
+      if (!docListeners.has(ev)) docListeners.set(ev, []);
+      docListeners.get(ev).push(fn);
+    },
+    removeEventListener() { }
+  };
+
+  const makeChannel = (chanName = '') => {
+    const isTypingChan = String(chanName).startsWith('chat-typing:');
+    const ch = {
+      on(type, filter, cb) {
+        if (isTypingChan && type === 'presence' && filter?.event === 'sync') presenceSyncCb = cb;
+        return ch;
+      },
+      presenceState: () => presenceStateObj,
+      track: async (payload) => { trackCalls.push(payload); return 'ok'; },
+      untrack: async () => { untrackCount++; return 'ok'; },
+      subscribe(cb) { if (isTypingChan && typeof cb === 'function') subscribeCb = cb; return ch; },
+      send: async () => 'ok'
+    };
+    return ch;
+  };
+
+  const ctx = {
+    console, Date, Math, Map, Set, Array, Object, Promise, JSON, URL, URLSearchParams,
+    setTimeout: () => 1,
+    clearTimeout() { },
+    setInterval: () => 1,
+    clearInterval() { },
+    requestAnimationFrame: (fn) => { fn(); return 1; },
+    matchMedia: () => ({ matches: false }),
+    innerWidth: 1200,
+    document: doc,
+    location: { search: '', href: 'https://example.test/dashboard.html', pathname: '/dashboard.html', origin: 'https://example.test' },
+    navigator: { userAgent: 'Mozilla/5.0' },
+    addEventListener(ev, fn) {
+      if (!winListeners.has(ev)) winListeners.set(ev, []);
+      winListeners.get(ev).push(fn);
+    },
+    removeEventListener() { },
+    Ipon: {
+      profile: { id: meId, full_name: 'Edna Fruto', role: 'MEMBER', status: 'ACTIVE', chat_privacy: { show_online: true } },
+      escapeHtml: (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+      initials: (n) => String(n || 'U').slice(0, 2).toUpperCase(),
+      avatarMarkup: () => '<span class="avatar-circle">ZM</span>',
+      bindAvatarFallbacks() { },
+      syncPresenceDots() { },
+      syncMessagesBadges() { },
+      isUserOnline: () => true,
+      verifiedBadgesHtml: () => '',
+      renderSocialAppLinksHtml: () => '',
+      playUiSound() { },
+      toast() { },
+      friendlyError: (e) => String(e?.message || e || ''),
+      client: {
+        channel: (name) => makeChannel(name),
+        removeChannel() { },
+        from: () => {
+          const q = new Proxy({}, {
+            get(_t, prop) {
+              if (prop === 'then') return (res) => Promise.resolve({ data: [], error: null }).then(res);
+              return () => q;
+            }
+          });
+          return q;
+        }
+      },
+      rpc: async (name) => {
+        if (name === 'get_conversations') {
+          return [{ id: convId, kind: 'DIRECT', peer: { id: peerId, full_name: 'Zedrick De Monteverde', username: 'zediskaaa', allow_online_status: true }, last_message_at: '2026-11-20T12:00:00Z', unread_count: 0 }];
+        }
+        if (name === 'get_social_overview') return { me: { id: meId, full_name: 'Edna Fruto' }, friends: [], incoming_requests: [], outgoing_requests: [], blocked: [] };
+        if (name === 'get_social_notifications') return [];
+        if (name === 'get_conversation_messages') {
+          return {
+            conversation: { id: peerId, conversation_id: convId, kind: 'DIRECT', full_name: 'Zedrick De Monteverde', username: 'zediskaaa', allow_online_status: true, profile_visible: true, friendship_status: 'FRIENDS' },
+            has_older: false,
+            unread_first_id: null,
+            pinned_messages: [],
+            messages: []
+          };
+        }
+        return {};
+      }
+    }
+  };
+  ctx.window = ctx;
+  ctx.globalThis = ctx;
+
+  vm.runInNewContext(messagesJs, ctx, { filename: 'js/messages.js' });
+  await ctx.IponMessages.init(ctx.Ipon.profile);
+  await ctx.IponMessages.openWorkspace({ conversationId: convId });
+
+  const headerWrap = getEl('msg-thread-header')._avatarWrap;
+  const heroWrap = getEl('msg-messages-list')._avatarWrap;
+
+  // Initially no peer in convo -> ripple OFF
+  assert.equal(headerWrap.classList.contains('is-in-convo-ripple'), false);
+  assert.equal(heroWrap.classList.contains('is-in-convo-ripple'), false);
+
+  // Channel subscribes -> tracks own in_convo presence
+  assert.equal(typeof subscribeCb, 'function');
+  subscribeCb('SUBSCRIBED');
+  assert.equal(trackCalls.length, 1);
+  assert.equal(trackCalls[0].user_id, meId);
+  assert.equal(trackCalls[0].in_convo, true);
+
+  // Peer enters the exact same conversation -> ripple ON smoothly on header & intro DP
+  presenceStateObj = { [peerId]: [{ user_id: peerId, in_convo: true }] };
+  presenceSyncCb();
+  assert.equal(headerWrap.classList.contains('is-in-convo-ripple'), true);
+  assert.equal(heroWrap.classList.contains('is-in-convo-ripple'), true);
+
+  // Peer leaves convo (switches convo or exits Messages) -> ripple OFF immediately
+  presenceStateObj = {};
+  presenceSyncCb();
+  assert.equal(headerWrap.classList.contains('is-in-convo-ripple'), false);
+  assert.equal(heroWrap.classList.contains('is-in-convo-ripple'), false);
+
+  // Side-by-side window blur (tab still visible) keeps presence active
+  (winListeners.get('blur') || []).forEach((fn) => fn());
+  assert.equal(untrackCount, 0);
+
+  // Switching tab or minimizing app (visibilityState = hidden) untracks own presence immediately
+  doc.visibilityState = 'hidden';
+  (docListeners.get('visibilitychange') || []).forEach((fn) => fn());
+  assert.equal(untrackCount, 1);
+});

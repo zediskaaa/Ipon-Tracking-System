@@ -39,6 +39,8 @@
   let rootMounted = false;
   let realtimeChannel = null;
   let typingChannel = null;
+  let typingChannelSubscribed = false;
+  let myTrackedConvoId = null;
   let typingIdleTimer = null;
   let lastSeenTimer = null;
   let searchDebounce = null;
@@ -103,6 +105,7 @@
     draftsByConv: new Map(),
     signedUrlCache: new Map(), // path -> signedUrl
     typingPeers: new Map(), // convId -> { timer, at }
+    convoPresencePeers: new Map(), // convId -> Set<userId>
     lastTypingSentAt: 0,
     lastTypingState: false,
     typingChannelConvId: null,
@@ -1026,12 +1029,74 @@
     scrollWrapEl?.addEventListener('load', () => syncThreadScrollLock(), true);
   }
 
+  function isPeerInActiveConvo(conv) {
+    if (!conv?.conversation_id || isSelfUser(conv)) return false;
+    if (!isGroupConv(conv) && conv.allow_online_status === false) return false;
+    const peers = state.convoPresencePeers.get(conv.conversation_id);
+    if (!(peers instanceof Set) || !peers.size) return false;
+    return isGroupConv(conv) ? peers.size > 0 : peers.has(String(conv.id || ''));
+  }
+
+  function syncThreadPresenceRipple() {
+    const conv = state.activeThread?.conversation;
+    const active = Boolean(conv && isPeerInActiveConvo(conv));
+    const headerAvatar = document.getElementById('msg-thread-header')?.querySelector?.('.msg-avatar-wrap');
+    headerAvatar?.classList?.toggle('is-in-convo-ripple', active);
+    const heroAvatar = document.getElementById('msg-messages-list')?.querySelector?.('.msg-welcome-avatar .msg-avatar-wrap');
+    heroAvatar?.classList?.toggle('is-in-convo-ripple', active);
+  }
+
+  function isThreadOpenForPresence() {
+    const dialog = document.getElementById('msg-workspace-dialog');
+    if (!dialog?.open || !state.activeConvId) return false;
+    if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
+    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
+    if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
+    if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
+      return false;
+    }
+    const isCompact = (typeof window.matchMedia === 'function' && (window.matchMedia('(max-width: 820px)').matches || window.matchMedia('(max-width: 720px)').matches))
+      || (Number(window.innerWidth) > 0 && Number(window.innerWidth) <= 820);
+    if (isCompact && (!state.mobileShowThread || state.showThreadInfo || state.searchActive)) {
+      return false;
+    }
+    return state.tab === 'chats' || state.tab === 'requests';
+  }
+
+  function syncMyThreadPresence() {
+    const myId = String(initializedProfile?.id || '');
+    const shouldTrack = Boolean(
+      myId &&
+      typingChannel &&
+      typingChannelSubscribed &&
+      state.typingChannelConvId &&
+      state.typingChannelConvId === state.activeConvId &&
+      initializedProfile?.chat_privacy?.show_online !== false &&
+      isThreadOpenForPresence()
+    );
+    if (shouldTrack) {
+      if (myTrackedConvoId !== state.typingChannelConvId) {
+        myTrackedConvoId = state.typingChannelConvId;
+        try { Promise.resolve(typingChannel.track?.({ user_id: myId, in_convo: true })).catch(() => { }); } catch { }
+      }
+    } else if (myTrackedConvoId) {
+      myTrackedConvoId = null;
+      try { Promise.resolve(typingChannel?.untrack?.()).catch(() => { }); } catch { }
+    }
+  }
+
   function disconnectTypingChannel() {
+    const prevConvId = state.typingChannelConvId;
+    typingChannelSubscribed = false;
+    myTrackedConvoId = null;
     if (typingChannel) {
+      try { Promise.resolve(typingChannel.untrack?.()).catch(() => { }); } catch { }
       try { ipon().client?.removeChannel(typingChannel); } catch { }
       typingChannel = null;
       state.typingChannelConvId = null;
     }
+    if (prevConvId) state.convoPresencePeers.delete(prevConvId);
+    syncThreadPresenceRipple();
   }
 
   const missingUrlRetry = new Map(); // path -> { attempts, lastAt }
@@ -2202,18 +2267,42 @@
   function bindTypingChannel(conversationId) {
     const client = ipon().client;
     if (!client || !conversationId) return;
-    if (typingChannel && state.typingChannelConvId === conversationId) return;
+    if (typingChannel && state.typingChannelConvId === conversationId) {
+      syncMyThreadPresence();
+      syncThreadPresenceRipple();
+      return;
+    }
     clearTimeout(typingIdleTimer);
     typingIdleTimer = null;
     state.lastTypingState = false;
     state.lastTypingSentAt = 0;
+    const prevConvId = state.typingChannelConvId;
+    typingChannelSubscribed = false;
+    myTrackedConvoId = null;
     if (typingChannel) {
+      try { Promise.resolve(typingChannel.untrack?.()).catch(() => { }); } catch { }
       try { client.removeChannel(typingChannel); } catch { }
       typingChannel = null;
       state.typingChannelConvId = null;
     }
+    if (prevConvId) state.convoPresencePeers.delete(prevConvId);
     state.typingChannelConvId = conversationId;
-    typingChannel = client.channel(`chat-typing:${conversationId}`)
+    const myId = String(initializedProfile?.id || '');
+    const ch = client.channel(`chat-typing:${conversationId}`, { config: { presence: { key: myId || 'anon' } } });
+    typingChannel = ch;
+    ch.on('presence', { event: 'sync' }, () => {
+      if (ch !== typingChannel) return;
+      const rawState = ch.presenceState?.() || {};
+      const nextPeers = new Set();
+      Object.entries(rawState).forEach(([key, entries]) => {
+        (Array.isArray(entries) ? entries : []).forEach((entry) => {
+          const uid = String(entry?.user_id || key || '');
+          if (uid && uid !== myId && entry?.in_convo !== false) nextPeers.add(uid);
+        });
+      });
+      state.convoPresencePeers.set(conversationId, nextPeers);
+      syncThreadPresenceRipple();
+    })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         const senderUid = String(payload?.user_id || '');
         if (!senderUid || senderUid === String(initializedProfile?.id || '')) return;
@@ -2253,7 +2342,11 @@
           ipon().playUiSound?.('msg-typing');
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (ch !== typingChannel) return;
+        typingChannelSubscribed = (status === 'SUBSCRIBED');
+        syncMyThreadPresence();
+      });
   }
 
   function syncLiveTypingBubble(typingEntriesOrBool) {
@@ -2515,6 +2608,8 @@
 
     ipon().bindAvatarFallbacks(headerEl);
     ipon().syncPresenceDots(headerEl);
+    syncThreadPresenceRipple();
+    syncMyThreadPresence();
 
     if (highlightMessageId) {
       requestAnimationFrame(() => jumpToMessageElement(highlightMessageId));
@@ -3037,6 +3132,7 @@
     list.classList.toggle('is-thread-entering', Boolean(animate && !isEmpty));
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);
+    syncThreadPresenceRipple();
     syncThreadScrollLock();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => syncThreadScrollLock());
     if (conv.conversation_id) {
@@ -5181,6 +5277,7 @@
       }
     }
     syncTabUi();
+    syncMyThreadPresence();
 
     if (nextTab === 'chats' || nextTab === 'requests') {
       renderConversationList();
@@ -5196,6 +5293,7 @@
   function syncMobilePaneState() {
     const view = document.getElementById('msg-view-chats');
     if (view) view.classList.toggle('is-mobile-thread', state.mobileShowThread);
+    syncMyThreadPresence();
   }
 
   async function runThreadSearch() {
@@ -7205,19 +7303,23 @@
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         sendTypingBroadcast(false);
+        syncMyThreadPresence();
       } else if (document.visibilityState === 'visible') {
         syncForegroundReceipts();
+        syncMyThreadPresence();
       }
     };
     const onWindowBlur = () => {
       isWindowFocused = false;
       sendTypingBroadcast(false);
+      syncMyThreadPresence();
     };
     const onWindowFocus = () => {
       isWindowFocused = true;
       if (document.visibilityState === 'visible') {
         syncForegroundReceipts();
       }
+      syncMyThreadPresence();
     };
     const onPresenceChange = (ev) => {
       const detail = ev?.detail || {};
