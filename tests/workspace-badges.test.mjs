@@ -31,25 +31,47 @@ test('dashboard.js syncs SOLO, GROUP + role, and active GOAL badges cleanly', ()
   assert.match(js, /activeGoalsList = allGoalsResult\?\.data \|\| \[\];\r?\n\s*syncWorkspaceGoalBadges\(\);/);
 });
 
-test('workspace switcher dropdown labels GROUP workspaces alongside role', () => {
+test('workspace switcher dropdown labels GROUP workspaces alongside role and applies consistent SOLO/GROUP badge variants', () => {
   const core = read('js/core.js');
   assert.match(
     core,
     /opt\.dataset\.badge = group\.workspace_mode === 'SOLO' \? 'SOLO' : \(group\.role \? `GROUP · \$\{group\.role\}` : 'GROUP'\);/
   );
+  assert.match(
+    core,
+    /opt\.dataset\.badgeVariant = group\.workspace_mode === 'SOLO' \? 'solo' : 'group';/
+  );
+  assert.match(
+    core,
+    /triggerBadge\.className = `custom-select-badge\$\{badgeVariant \? ` is-\$\{badgeVariant\}` : ''\}`;/
+  );
+  assert.match(
+    core,
+    /<span class="custom-select-badge\$\{badgeVariant \? ` is-\$\{escapeHtml\(badgeVariant\)\}` : ''\}">\$\{escapeHtml\(badge\)\}<\/span>/
+  );
+  assert.match(
+    core,
+    /stroke="currentColor" stroke-width="2\.2"/
+  );
 });
 
-test('SOLO, GROUP, and GOAL badge pills have light/dark contrast rules and nowrap guards', () => {
+test('SOLO, GROUP, and GOAL badge pills keep consistent light/dark styles across header and switcher dropdown', () => {
   const heroCss = read('css/hero-plates.css');
   const appCss = read('css/app.css');
   assert.match(heroCss, /\.group-bar-badge\s*\{[^}]*white-space:nowrap;[^}]*flex-shrink:0;/s);
   assert.match(heroCss, /\.group-bar-badge\.is-solo\s*\{[^}]*background:linear-gradient\(180deg,#cda54c 0%,#b38933 100%\);[^}]*color:#ffffff;/s);
   assert.match(heroCss, /\.group-bar-badge\.is-group\s*\{[^}]*background:#dceee1;[^}]*color:#0e4b33;/s);
   assert.match(heroCss, /\.group-bar-badge\.is-goal\s*\{[^}]*background:linear-gradient\(180deg,#4384aa 0%,#316c91 100%\);[^}]*color:#ffffff;/s);
-  assert.match(heroCss, /html\[data-theme="dark"\] \.group-bar-badge\.is-solo\s*\{/);
-  assert.match(heroCss, /html\[data-theme="dark"\] \.group-bar-badge\.is-group\s*\{/);
-  assert.match(heroCss, /html\[data-theme="dark"\] \.group-bar-badge\.is-goal\s*\{/);
+  assert.match(heroCss, /html\[data-theme="dark"\] \.group-bar-badge\s*\{[^}]*background:#145c41;[^}]*color:#ffffff;/s);
+  assert.match(heroCss, /html\[data-theme="dark"\] \.group-bar-badge\.is-solo\s*\{[^}]*background:linear-gradient\(180deg,#cda54c 0%,#b38933 100%\);[^}]*color:#ffffff;/s);
+  assert.match(heroCss, /html\[data-theme="dark"\] \.group-bar-badge\.is-group\s*\{[^}]*background:#dceee1;[^}]*color:#0e4b33;/s);
+  assert.match(heroCss, /html\[data-theme="dark"\] \.group-bar-badge\.is-goal\s*\{[^}]*background:linear-gradient\(180deg,#4384aa 0%,#316c91 100%\);[^}]*color:#ffffff;/s);
   assert.match(appCss, /\.group-hub-role\.is-solo\s*\{/);
   assert.match(appCss, /\.group-hub-role\.is-group\s*\{/);
   assert.match(appCss, /\.group-hub-role\.is-goal\s*\{/);
+  assert.match(appCss, /\.custom-select-badge\.is-solo[^{]*\{[^}]*background:linear-gradient\(180deg,#cda54c 0%,#b38933 100%\);[^}]*color:#ffffff;?/s);
+  assert.match(appCss, /\.custom-select-badge\.is-group[^{]*\{[^}]*background:#dceee1;[^}]*color:#0e4b33;?/s);
+  assert.match(appCss, /html\[data-theme="dark"\] \.custom-select-option\.is-selected \.custom-select-badge\s*\{[^}]*color:\s*#d8fbe6;/s);
+  assert.match(appCss, /html\[data-theme="dark"\] \.custom-select-option\.is-selected \.custom-select-badge\.is-solo\s*\{[^}]*color:\s*#ffffff;/s);
+  assert.match(appCss, /html\[data-theme="dark"\] \.custom-select-option\.is-selected \.custom-select-badge\.is-group\s*\{[^}]*background:\s*#dceee1;[^}]*color:\s*#0e4b33;/s);
 });

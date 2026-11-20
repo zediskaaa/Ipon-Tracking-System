@@ -4456,6 +4456,7 @@
       const val = opt ? opt.value : '';
       const text = opt ? opt.textContent.trim() : fallbackLabel;
       const badge = opt?.dataset?.badge || '';
+      const badgeVariant = opt?.dataset?.badgeVariant || '';
       const isPlaceholder = !val || (opt && opt.disabled);
 
       triggerLabel.textContent = text;
@@ -4463,6 +4464,7 @@
       if (triggerBadge) {
         triggerBadge.textContent = badge;
         triggerBadge.hidden = !badge || isPlaceholder;
+        triggerBadge.className = `custom-select-badge${badgeVariant ? ` is-${badgeVariant}` : ''}`;
       }
       if (triggerGraphic) {
         triggerGraphic.innerHTML = renderGraphic({ opt, val, text, isPlaceholder, inTrigger: true });
@@ -4479,6 +4481,7 @@
         const val = opt.value;
         const text = opt.textContent.trim();
         const badge = opt.dataset?.badge || '';
+        const badgeVariant = opt.dataset?.badgeVariant || '';
         const isPlaceholder = !val;
         const isSelected = opt.selected;
 
@@ -4494,11 +4497,11 @@
           <div class="custom-select-option-main">
             <span class="${escapeHtml(slotClass)}">${graphicHtml}</span>
             <span class="custom-select-option-name">${escapeHtml(text)}</span>
-            ${badge && !isPlaceholder ? `<span class="custom-select-badge">${escapeHtml(badge)}</span>` : ''}
+            ${badge && !isPlaceholder ? `<span class="custom-select-badge${badgeVariant ? ` is-${escapeHtml(badgeVariant)}` : ''}">${escapeHtml(badge)}</span>` : ''}
           </div>
           ${isSelected && !isPlaceholder ? `
             <span class="custom-select-check" aria-hidden="true">
-              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4L16 6.5" stroke="#15803d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4L16 6.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>` : ''}
         `;
 
@@ -4634,6 +4637,7 @@
       const opt = new Option(group.name || 'Savings Group', group.group_id);
       opt.dataset.avatar = group.avatar_url || '';
       opt.dataset.badge = group.workspace_mode === 'SOLO' ? 'SOLO' : (group.role ? `GROUP · ${group.role}` : 'GROUP');
+      opt.dataset.badgeVariant = group.workspace_mode === 'SOLO' ? 'solo' : 'group';
       return opt;
     }));
     if (selectedGroupId) selectEl.value = selectedGroupId;

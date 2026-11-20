@@ -1622,20 +1622,21 @@ html[data-theme="dark"] .summary-card .dashboard-goal-box {
   background:rgba(40,122,76,.1);
 }
 html[data-theme="dark"] .group-bar-badge {
-  border-color:rgba(70,195,130,.36);
-  background:rgba(40,122,76,.24);
-  color:#8ee8b5;
+  border-color:#2b7f5d;
+  background:#145c41;
+  color:#ffffff;
+  box-shadow:0 2px 8px rgba(0,0,0,.26);
 }
 html[data-theme="dark"] .group-bar-badge.is-solo {
   border-color:#c9a14a;
-  background:linear-gradient(180deg,#cda54c 0%,#b08631 100%);
+  background:linear-gradient(180deg,#cda54c 0%,#b38933 100%);
   color:#ffffff;
   box-shadow:0 2px 8px rgba(0,0,0,.3);
 }
 html[data-theme="dark"] .group-bar-badge.is-group {
   border-color:#5cb688;
-  background:rgba(169,224,189,.18);
-  color:#b5f0ce;
+  background:#dceee1;
+  color:#0e4b33;
 }
 html[data-theme="dark"] .group-bar-badge.is-goal {
   border-color:#5399c2;
