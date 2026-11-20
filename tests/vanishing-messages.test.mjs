@@ -115,7 +115,26 @@ test('vanishing messages hide notification and list previews while the ring and 
   assert.equal((migration.match(/v_notif_type, v_notif_title, v_notification_preview/g) || []).length, 2);
   assert.match(migration, /coalesce\(v_conv\.title, 'Group Chat'\),\s*v_notification_preview/);
   assert.match(migration, /when latest\.vanish_after_seconds is not null then coalesce\(sender_p\.full_name, 'Someone'\) \|\| ' set a message\.'/);
-  assert.match(css, /\.msg-bubble\.is-vanishing::after\s*\{[^}]*from 225deg/s);
-  assert.match(css, /\.msg-row\.is-mine \.msg-bubble\.is-vanishing::after\s*\{[^}]*from 135deg/s);
+  assert.match(css, /\.msg-bubble\.is-vanishing::after\s*\{[^}]*from var\(--vanish-start, 225deg\)/s);
+  assert.match(css, /\.msg-row\.is-mine \.msg-bubble\.is-vanishing\s*\{ --vanish-start: 135deg; \}/);
   assert.match(css, /@keyframes msgVanishExit\s*\{[\s\S]*?100% \{ opacity: 0; transform: translateY\(18px\)/);
+});
+
+test('vanish countdown starts at the actual lower bubble corner at different aspect ratios', () => {
+  const source = read('js/messages.js');
+  const fn = source.match(/function positionVanishRing\(bubble, width = bubble\.offsetWidth, height = bubble\.offsetHeight\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(fn);
+  const positionVanishRing = new Function(`${fn}; return positionVanishRing;`)();
+  for (const [mine, expected] of [[false, '255.96deg'], [true, '104.04deg']]) {
+    let actual;
+    const bubble = {
+      offsetWidth: 200,
+      offsetHeight: 50,
+      closest: () => mine,
+      style: { setProperty: (name, value) => { assert.equal(name, '--vanish-start'); actual = value; } }
+    };
+    positionVanishRing(bubble);
+    assert.equal(actual, expected);
+  }
+  assert.match(source, /vanishRingObserver\?\.disconnect\(\);[\s\S]*?vanishRingObserver\?\.observe\(bubble\)/);
 });

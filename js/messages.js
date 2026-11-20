@@ -44,6 +44,9 @@
   let typingIdleTimer = null;
   let lastSeenTimer = null;
   let vanishUiTimer = null;
+  const vanishRingObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver((entries) => entries.forEach(({ target }) => positionVanishRing(target)))
+    : null;
   let searchDebounce = null;
   let threadSearchDebounce = null;
   let openingChatTargetId = null;
@@ -3128,6 +3131,13 @@
     }, Math.max(0, nextExpiry - Date.now()));
   }
 
+  function positionVanishRing(bubble, width = bubble.offsetWidth, height = bubble.offsetHeight) {
+    if (!width || !height) return;
+    const corner = Math.atan2(width, height) * 180 / Math.PI;
+    const angle = bubble.closest('.msg-row.is-mine') ? 180 - corner : 180 + corner;
+    bubble.style.setProperty('--vanish-start', `${angle.toFixed(2)}deg`);
+  }
+
   function renderMessagesList({ animate = false } = {}) {
     const list = document.getElementById('msg-messages-list');
     if (!list || !state.activeThread) return;
@@ -3328,7 +3338,12 @@
 
     const pendingClockState = { lastKey: lastShownClockKey };
     const pendingHtml = pendingList.map((p) => renderPendingRowHtml(p, pendingClockState)).join('');
+    vanishRingObserver?.disconnect();
     list.innerHTML = `${welcomeHtml}${html}${pendingHtml}`;
+    list.querySelectorAll('.msg-bubble.is-vanishing').forEach((bubble) => {
+      positionVanishRing(bubble);
+      vanishRingObserver?.observe(bubble);
+    });
     list.classList.toggle('is-thread-entering', Boolean(animate && !isEmpty));
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);

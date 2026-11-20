@@ -8101,7 +8101,7 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
   border-radius: inherit;
   padding: 2px;
   background: conic-gradient(
-    from 225deg,
+    from var(--vanish-start, 225deg),
     #4aaeff 0deg var(--vanish-angle),
     rgba(74, 174, 255, .16) var(--vanish-angle) 360deg
   );
@@ -8113,13 +8113,7 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
   pointer-events: none;
   animation: msgVanishRing var(--vanish-remaining) linear forwards;
 }
-.msg-row.is-mine .msg-bubble.is-vanishing::after {
-  background: conic-gradient(
-    from 135deg,
-    #4aaeff 0deg var(--vanish-angle),
-    rgba(74, 174, 255, .16) var(--vanish-angle) 360deg
-  );
-}
+.msg-row.is-mine .msg-bubble.is-vanishing { --vanish-start: 135deg; }
 .msg-bubble.has-audio-only.is-vanishing::after {
   border-radius: 16px;
 }
