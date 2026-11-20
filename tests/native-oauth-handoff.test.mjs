@@ -15,7 +15,10 @@ function createAuthVmHarness({
   initialProfile = { id: 'u-old', role: 'MEMBER', status: 'ACTIVE' },
   clerkToken = 'clerk.jwt.test-token',
   clerkSession = null,
-  clerkRedirectError = null
+  clerkRedirectError = null,
+  clerkRedirectNavigates = false,
+  clerkCallbackNoSession = false,
+  clerkSessionAtLoad = false
 } = {}) {
   const listeners = new Map();
   const docListeners = new Map();
@@ -122,7 +125,7 @@ function createAuthVmHarness({
   };
 
   const clerkMock = {
-    session: null,
+    session: clerkSessionAtLoad ? activeSession : null,
     client: {
       signIn: {
         authenticateWithRedirect: async (opts) => {
@@ -142,6 +145,11 @@ function createAuthVmHarness({
     handleRedirectCallback: async (opts) => {
       calls.handleRedirectCallback.push(opts);
       if (clerkRedirectError) throw clerkRedirectError;
+      if (clerkRedirectNavigates) {
+        calls.clerkLoadOpts[0].routerReplace(opts.signInForceRedirectUrl);
+        return;
+      }
+      if (clerkCallbackNoSession) return;
       clerkMock.session = activeSession;
     }
   };
@@ -287,7 +295,7 @@ test('Android native Google OAuth deep-link handoff contracts stay intact across
   assert.match(mainActivity, /pendingAuthCallbackJson != null\) dispatchWindowEvent\("myipon:native-oauth-callback"\)/);
   assert.match(loginHtml, /id="clerk-app-handoff"/);
   assert.match(loginHtml, /id="clerk-app-handoff-btn"/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261120-109/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261120-110/);
 });
 
 test('Android app Google login resets Connecting state when user backs out without finishing OAuth', async () => {
@@ -434,6 +442,40 @@ test('Create with Google in Android app hands off from phone browser back to app
   assert.equal(appHarness.calls.verifyOtp.length, 1);
   assert.equal(appHarness.calls.verifyOtp[0].token_hash, 'sb-hash-123');
   assert.deepEqual(appHarness.calls.locationReplace, ['dashboard.html']);
+});
+
+test('Clerk OAuth callback navigates to app handoff instead of reporting a false cancellation', async () => {
+  const browser = createAuthVmHarness({
+    search: '?app=1&app_handoff=1&app_state=abc123&clerk_sso_callback=1',
+    clerkRedirectNavigates: true
+  });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(browser.calls.locationReplace.length, 1);
+  const returnUrl = browser.calls.locationReplace[0];
+  assert.equal(new URL(returnUrl).searchParams.get('app_handoff'), '1');
+  assert.equal(new URL(returnUrl).searchParams.get('clerk_sso_callback'), null);
+  assert.equal(browser.els.get('clerk-app-handoff').hidden, true);
+
+  const returned = createAuthVmHarness({
+    search: new URL(returnUrl).search,
+    clerkSessionAtLoad: true
+  });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(returned.calls.locationReplace.length, 1);
+  assert.match(returned.calls.locationReplace[0], /^myipon:\/\/auth-callback#/);
+});
+
+test('Browser refreshes handoff after Clerk callback if session activation is deferred', async () => {
+  const browser = createAuthVmHarness({
+    search: '?app=1&app_handoff=1&app_state=abc123&clerk_sso_callback=1',
+    clerkCallbackNoSession: true
+  });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(browser.calls.locationReplace.length, 1);
+  const url = new URL(browser.calls.locationReplace[0]);
+  assert.equal(url.searchParams.get('app_handoff'), '1');
+  assert.equal(url.searchParams.get('clerk_sso_callback'), null);
+  assert.equal(browser.els.get('clerk-app-handoff').hidden, true);
 });
 
 test('Native OAuth callback rejects mismatched or replayed app_state tokens', async () => {

@@ -157,6 +157,7 @@
   let socialOAuthSafetyTimer = null;
   let appHandoffStarted = false;
   let appHandoffRefreshTimer = null;
+  let clerkOAuthRedirecting = false;
   let pendingDeviceOtp = null;
   const LOGIN_THROTTLE_STORAGE_KEY = 'myipon_login_throttle_v1';
   const LOGIN_MAX_ATTEMPTS = 5;
@@ -476,6 +477,11 @@
       const target = new URL(to, window.location.href);
       if (target.origin === window.location.origin) {
         if (/\/login(?:\.html)?$/i.test(target.pathname)) {
+          if (isClerkSsoCallback && (target.search !== window.location.search || target.hash !== window.location.hash)) {
+            clerkOAuthRedirecting = true;
+            window.location.replace(target.href);
+            return;
+          }
           if (target.searchParams.get('mode') === 'signup') setMode('signup');
           return;
         }
@@ -672,6 +678,12 @@
       } finally {
         clearClerkSsoCallbackFromUrl();
       }
+    }
+    if (clerkOAuthRedirecting) return;
+    if (isAppHandoff && isClerkSsoCallback && !clerk.session
+      && !(clerk.client?.signUp?.missingFields || []).length) {
+      window.location.replace(getClerkLoginReturnUrl());
+      return;
     }
     clerk.addListener(() => {
       if (!clerk.session) return;
