@@ -11830,7 +11830,7 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(authJs, /action:\s*'login-attempt',[\s\S]*?await syncClerkSession\(submittedEmail, submittedPassword\)\.catch\(\(\) => false\)/);
   assert.match(coreJs, /localStorage\.setItem\('myipon_clerk_signout', '1'\)/);
   assert.match(accountFunction, /async function provisionClerkUser\(/);
-  assert.match(accountFunction, /await provisionClerkUser\(admin, authData\.user, password\)\.catch\(\(\) => false\)/);
+  assert.match(accountFunction, /EdgeRuntime\.waitUntil\(provisionClerkUser\(admin, authData\.user, password\)\.catch\(\(\) => false\)\)/);
   assert.match(accountFunction, /external_id:\s*user\.id/);
   assert.match(accountFunction, /skip_password_checks:\s*true/);
   assert.match(accountFunction, /method:\s*'PATCH'[\s\S]*?body:\s*JSON\.stringify\(\{ password, skip_password_checks:\s*true \}\)/);

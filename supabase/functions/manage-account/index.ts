@@ -2613,7 +2613,7 @@ Deno.serve(async (request) => {
     if (deviceOtp) return json(deviceOtp, Number(('status' in deviceOtp ? deviceOtp.status : 200) || 200));
 
     await admin.rpc('clear_login_throttle', { p_email: resolved.throttleKey, p_ip: clientIp }).catch(() => null);
-    await provisionClerkUser(admin, authData.user, password).catch(() => false);
+    EdgeRuntime.waitUntil(provisionClerkUser(admin, authData.user, password).catch(() => false));
     return json({
       ok: true,
       locked: false,
@@ -2683,7 +2683,7 @@ Deno.serve(async (request) => {
     }
     await admin.from('account_device_otp_challenges').update({ consumed_at: new Date().toISOString() }).eq('id', challengeId);
     await admin.rpc('clear_login_throttle', { p_email: resolved.throttleKey || email, p_ip: extractClientIp(request) || null }).catch(() => null);
-    await provisionClerkUser(admin, authData.user, password).catch(() => false);
+    EdgeRuntime.waitUntil(provisionClerkUser(admin, authData.user, password).catch(() => false));
     return json({
       ok: true,
       resolved_email: email,

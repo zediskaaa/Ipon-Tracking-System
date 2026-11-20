@@ -24,3 +24,9 @@ test('password sign-in retries a transient post-auth network failure once withou
   assert.match(source, /retryTransientLoginRequest\(\(\) => Ipon\.requiresMfaChallenge\(\)\)/);
   assert.match(source, /retryTransientLoginRequest\(\(\) => resolveActiveProfile\(data\.user, resolvedEmail\)\)/);
 });
+
+test('manual login returns its session without waiting for Clerk password synchronization', () => {
+  const edge = fs.readFileSync('supabase/functions/manage-account/index.ts', 'utf8');
+  assert.equal((edge.match(/EdgeRuntime\.waitUntil\(provisionClerkUser\(admin, authData\.user, password\)\.catch\(\(\) => false\)\)/g) || []).length, 2);
+  assert.doesNotMatch(edge, /await provisionClerkUser\(admin, authData\.user, password\)/);
+});
