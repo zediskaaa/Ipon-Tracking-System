@@ -8079,6 +8079,52 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
   color: #ffffff;
   border-bottom-right-radius: 6px;
 }
+@property --vanish-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 360deg;
+}
+.msg-bubble.is-vanishing { position: relative; }
+.msg-bubble.is-vanishing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from -90deg,
+    #4aaeff 0deg var(--vanish-angle),
+    rgba(74, 174, 255, .16) var(--vanish-angle) 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  filter: drop-shadow(0 0 2.5px rgba(74, 174, 255, .42));
+  pointer-events: none;
+  animation: msgVanishRing var(--vanish-remaining) linear forwards;
+}
+.msg-bubble.has-audio-only.is-vanishing::after {
+  border-radius: 16px;
+}
+@keyframes msgVanishRing { to { --vanish-angle: 0deg; } }
+.msg-row.is-vanish-exit {
+  pointer-events: none;
+  animation: msgVanishExit .34s cubic-bezier(.32, 0, .67, 0) forwards;
+}
+.msg-row.is-vanish-exit .msg-bubble {
+  box-shadow: 0 0 14px rgba(74, 174, 255, .32);
+}
+@keyframes msgVanishExit {
+  0% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  40% { opacity: .78; transform: translateY(-3px) scale(.985); filter: blur(1.5px); }
+  100% { opacity: 0; transform: translateY(-10px) scale(.94); filter: blur(6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-bubble.is-vanishing::after, .msg-row.is-vanish-exit { animation: none; }
+  .msg-row.is-vanish-exit { opacity: 0; }
+}
 .msg-bubble.has-top-media {
   position: relative;
   padding: 0;
@@ -9265,6 +9311,441 @@ html[data-theme="dark"] .msg-privacy-card {
 .msg-privacy-switch[aria-checked="true"]::after { transform: translateX(18px); background: #fff; }
 .msg-privacy-switch:focus-visible { outline: 2px solid #2a9a70; outline-offset: 1px; border-radius: 999px; }
 .msg-privacy-switch:disabled { opacity: .55; cursor: not-allowed; }
+.msg-vanish-section { padding: 16px; }
+.msg-vanish-panel,
+.msg-vanish-modal {
+  --vm-bg: linear-gradient(180deg, #fbf8f3, #f6f0e6);
+  --vm-card: linear-gradient(180deg, #ffffff, #fcfaf6);
+  --vm-card-border: rgba(20, 45, 43, .13);
+  --vm-divider: rgba(20, 45, 43, .1);
+  --vm-ink: #122823;
+  --vm-muted: #5a6d67;
+  --vm-tile-bg: linear-gradient(145deg, #1a5a45, #0b3428);
+  --vm-tile-ink: #f5eadb;
+  --vm-tile-ring: rgba(255, 255, 255, .18);
+  --vm-head-icon: #1e5a44;
+  --vm-track: #e7e1d4;
+  --vm-track-ring: rgba(20, 45, 43, .2);
+  --vm-knob: #ffffff;
+  --vm-chip-bg: #ffffff;
+  --vm-chip-hover: #f4efe4;
+  --vm-chip-border: rgba(20, 45, 43, .18);
+  --vm-field-bg: #ffffff;
+  --vm-accent: #0e2620;
+  --vm-accent-2: #1e5a44;
+  --vm-accent-ink: #ffffff;
+  --vm-link: #1e5a44;
+  --vm-danger: #9f2922;
+  --vm-hi: rgba(255, 255, 255, .9);
+}
+html[data-theme="dark"] .msg-vanish-panel,
+html[data-theme="dark"] .msg-vanish-modal {
+  --vm-bg: linear-gradient(180deg, #112620, #0c1a16);
+  --vm-card: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02));
+  --vm-card-border: rgba(218, 236, 227, .13);
+  --vm-divider: rgba(218, 236, 227, .09);
+  --vm-ink: #ecf6f2;
+  --vm-muted: #93ada3;
+  --vm-tile-bg: linear-gradient(145deg, rgba(52, 211, 153, .20), rgba(52, 211, 153, .06));
+  --vm-tile-ink: #7fe0b8;
+  --vm-tile-ring: rgba(127, 224, 184, .25);
+  --vm-head-icon: #7fe0b8;
+  --vm-track: rgba(255, 255, 255, .08);
+  --vm-track-ring: rgba(218, 236, 227, .2);
+  --vm-knob: #b9cdc5;
+  --vm-chip-bg: rgba(255, 255, 255, .055);
+  --vm-chip-hover: rgba(255, 255, 255, .1);
+  --vm-chip-border: rgba(218, 236, 227, .16);
+  --vm-field-bg: rgba(0, 0, 0, .22);
+  --vm-accent: #1f7a58;
+  --vm-accent-2: #2a9a70;
+  --vm-accent-ink: #ffffff;
+  --vm-link: #7fe0b8;
+  --vm-danger: #f8938b;
+  --vm-hi: rgba(255, 255, 255, .06);
+}
+.msg-vanish-panel {
+  padding: 18px 14px 16px;
+  border-radius: 20px;
+  background: var(--vm-bg);
+  color: var(--vm-ink);
+  border: 1px solid var(--vm-card-border);
+  box-shadow: 0 18px 34px -24px rgba(10, 43, 31, .45);
+}
+html[data-theme="dark"] .msg-vanish-panel {
+  box-shadow: 0 22px 38px -22px rgba(0, 0, 0, .62);
+}
+.msg-vanish-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 4px 10px;
+}
+.msg-vanish-head svg {
+  flex: none;
+  color: var(--vm-head-icon);
+}
+.msg-vanish-panel .msg-vanish-head h4 {
+  margin: 0;
+  color: var(--vm-ink);
+  font: 700 18px/1.2 "IPON Serif", Georgia, serif;
+  letter-spacing: -.01em;
+  text-transform: none;
+}
+.msg-vanish-note-copy {
+  margin: 0 4px 14px;
+  color: var(--vm-muted);
+  font: 12.5px/1.55 Arial, sans-serif;
+}
+.msg-vanish-info-note {
+  margin: 0 4px 12px;
+  color: var(--vm-link);
+  font: 600 12px/1.45 Arial, sans-serif;
+}
+.msg-vanish-unavail {
+  margin: 8px 4px 10px;
+  color: var(--vm-danger);
+  font: 600 12px/1.45 Arial, sans-serif;
+}
+.msg-vanish-unavail .msg-vanish-link {
+  margin-left: 6px;
+}
+.msg-vanish-card {
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--vm-card);
+  border: 1px solid var(--vm-card-border);
+  box-shadow: inset 0 1px 0 var(--vm-hi), 0 10px 24px -16px rgba(0, 0, 0, .35);
+}
+.msg-vanish-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+}
+.msg-vanish-tile {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--vm-tile-bg);
+  color: var(--vm-tile-ink);
+  box-shadow: 0 0 0 1px var(--vm-tile-ring) inset;
+}
+.msg-vanish-copy {
+  flex: 1;
+  min-width: 0;
+}
+.msg-vanish-card-title {
+  font: 700 15px/1.25 "IPON Serif", Georgia, serif;
+  color: var(--vm-ink);
+  letter-spacing: -.005em;
+}
+.msg-vanish-status {
+  margin: 3px 0 0;
+  font: 12px/1.35 Arial, sans-serif;
+  color: var(--vm-muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.msg-vanish-status b {
+  color: var(--vm-link);
+  font-weight: 700;
+}
+.msg-vanish-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: 700 12px/1.2 Arial, sans-serif;
+  color: var(--vm-link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.msg-vanish-link:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+.msg-vanish-switch {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 27px;
+  padding: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid var(--vm-track-ring);
+  background: var(--vm-track);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .18);
+  transition: background .2s ease, border-color .2s ease;
+}
+.msg-vanish-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--vm-knob);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, .35);
+  transition: transform .22s cubic-bezier(.3, .7, .2, 1), background .2s ease;
+}
+.msg-vanish-switch[aria-checked="true"] {
+  background: #1f7a58;
+  border-color: #2a9a70;
+}
+.msg-vanish-switch[aria-checked="true"]::after {
+  transform: translateX(19px);
+  background: #fff;
+}
+.msg-vanish-switch:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+/* Vanishing messages set-duration modal */
+dialog.msg-vanish-modal {
+  width: min(368px, calc(100vw - 28px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 0;
+  margin: auto;
+  border: 1px solid var(--vm-card-border);
+  border-radius: 22px;
+  background: var(--vm-bg);
+  color: var(--vm-ink);
+  box-shadow: 0 40px 80px -24px rgba(0, 0, 0, .72), inset 0 1px 0 var(--vm-hi);
+}
+dialog.msg-vanish-modal[open] {
+  animation: msgVanishModalPop .24s cubic-bezier(.3, .7, .2, 1);
+}
+dialog.msg-vanish-modal[open]::backdrop {
+  animation: msgVanishBackdropFade .22s ease;
+}
+dialog.msg-vanish-modal::backdrop {
+  background: rgba(3, 10, 8, .62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+@keyframes msgVanishModalPop {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes msgVanishBackdropFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.msg-vanish-modal-in {
+  padding: 20px 18px 18px;
+}
+.msg-vanish-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.msg-vanish-modal-head h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: 700 19px/1.2 "IPON Serif", Georgia, serif;
+  color: var(--vm-ink);
+  letter-spacing: -.01em;
+}
+.msg-vanish-modal .msg-vanish-close {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--vm-muted);
+  background: var(--vm-chip-bg);
+  border: 1px solid var(--vm-chip-border);
+  transition: background .15s ease, color .15s ease;
+}
+.msg-vanish-modal .msg-vanish-close:hover {
+  background: var(--vm-chip-hover);
+  color: var(--vm-ink);
+}
+.msg-vanish-explain {
+  margin: 0 0 15px;
+  font: 12.5px/1.55 Arial, sans-serif;
+  color: var(--vm-muted);
+}
+.msg-vanish-label {
+  display: block;
+  margin: 0 0 8px;
+  font: 700 12px/1.2 Arial, sans-serif;
+  color: var(--vm-ink);
+}
+.msg-vanish-chips {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.msg-vanish-chip {
+  min-width: 0;
+  padding: 10px 4px;
+  border-radius: 11px;
+  font: 700 12.5px/1.15 Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--vm-ink);
+  cursor: pointer;
+  background: var(--vm-chip-bg);
+  border: 1px solid var(--vm-chip-border);
+  white-space: nowrap;
+  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.msg-vanish-chip:hover:not(:disabled) {
+  background: var(--vm-chip-hover);
+}
+.msg-vanish-chip[aria-checked="true"] {
+  color: var(--vm-accent-ink);
+  border-color: var(--vm-accent-2);
+  background-color: var(--vm-accent);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0) 60%);
+  box-shadow: 0 8px 16px -8px rgba(11, 38, 30, .75);
+}
+.msg-vanish-chip:disabled,
+.msg-vanish-custom.is-off {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.msg-vanish-custom {
+  padding-top: 14px;
+  border-top: 1px dashed var(--vm-divider);
+}
+.msg-vanish-custom-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+}
+.msg-vanish-field {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 11px;
+  font: 600 14px/1 Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--vm-ink);
+  background: var(--vm-field-bg);
+  border: 1px solid var(--vm-chip-border);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.msg-vanish-field::placeholder {
+  color: var(--vm-muted);
+  opacity: .8;
+}
+.msg-vanish-field:focus {
+  border-color: #1f7a58;
+  box-shadow: 0 0 0 3px rgba(31, 122, 88, .25);
+}
+.msg-vanish-field.is-active {
+  border-color: var(--vm-accent-2);
+}
+.msg-vanish-field.is-bad {
+  border-color: var(--vm-danger);
+}
+.msg-vanish-seg {
+  display: inline-flex;
+  flex: none;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--vm-field-bg);
+  border: 1px solid var(--vm-chip-border);
+}
+.msg-vanish-seg button {
+  border: 0;
+  background: transparent;
+  color: var(--vm-muted);
+  font: 700 12px/1 Arial, sans-serif;
+  padding: 0 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.msg-vanish-seg button[aria-pressed="true"] {
+  background: var(--vm-accent);
+  color: var(--vm-accent-ink);
+}
+.msg-vanish-hint {
+  margin: 8px 2px 0;
+  min-height: 16px;
+  font: 500 11.5px/1.35 Arial, sans-serif;
+  color: var(--vm-muted);
+}
+.msg-vanish-hint.is-bad {
+  color: var(--vm-danger);
+  font-weight: 600;
+}
+.msg-vanish-foot {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+.msg-vanish-btn,
+.msg-vanish-btn-ghost {
+  flex: 1;
+  height: 42px;
+  border-radius: 12px;
+  font: 700 13.5px/1 Arial, sans-serif;
+  letter-spacing: .01em;
+  cursor: pointer;
+  transition: transform .14s ease, filter .14s ease, background .15s ease;
+}
+.msg-vanish-btn {
+  border: 0;
+  color: var(--vm-accent-ink);
+  background-color: var(--vm-accent);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0) 60%);
+  box-shadow: 0 8px 18px -8px rgba(11, 38, 30, .7), 0 0 0 1px rgba(255, 255, 255, .08) inset;
+}
+.msg-vanish-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+.msg-vanish-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.msg-vanish-btn-ghost {
+  color: var(--vm-ink);
+  background: var(--vm-chip-bg);
+  border: 1px solid var(--vm-chip-border);
+}
+.msg-vanish-btn-ghost:hover {
+  background: var(--vm-chip-hover);
+}
+:is(.msg-vanish-switch, .msg-vanish-chip, .msg-vanish-btn, .msg-vanish-btn-ghost, .msg-vanish-seg button, .msg-vanish-link, .msg-vanish-field, .msg-vanish-close):focus-visible {
+  outline: 2px solid #34d399;
+  outline-offset: 2px;
+}
+@media (max-width: 360px) {
+  .msg-vanish-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog.msg-vanish-modal[open],
+  dialog.msg-vanish-modal[open]::backdrop,
+  .msg-vanish-switch::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 @media (prefers-reduced-motion: reduce) { .msg-privacy-switch::before, .msg-privacy-switch::after { transition: none; } }
 .msg-drawer-profile {
   display: grid;

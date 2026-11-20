@@ -43,6 +43,7 @@
   let myTrackedConvoId = null;
   let typingIdleTimer = null;
   let lastSeenTimer = null;
+  let vanishUiTimer = null;
   let searchDebounce = null;
   let threadSearchDebounce = null;
   let openingChatTargetId = null;
@@ -93,6 +94,12 @@
     mobileShowThread: false,
     showThreadInfo: false,
     savingProtection: false,
+    savingVanish: false,
+    vanishError: '',
+    vanishDraftSeconds: 300,
+    vanishDraftCustom: false,
+    vanishCustomValue: '',
+    vanishCustomUnit: 'seconds',
     threadInfoView: 'root', // root | media | files
     showThreadSearch: false,
     threadSearchQuery: '',
@@ -133,6 +140,35 @@
   function isEligible() {
     const p = initializedProfile || ipon()?.profile;
     return Boolean(p && p.role && p.role !== 'SUPER_ADMIN' && p.status === 'ACTIVE');
+  }
+
+  const VANISH_PRESETS = [10, 30, 60, 300, 900, 1800, 3600];
+  const VANISH_HINT_TEXT = '1–3600 seconds or 1–60 minutes';
+
+  function formatVanishDuration(seconds) {
+    const value = Number(seconds) || 0;
+    if (!value) return 'Off';
+    if (value < 60) return `${value} ${value === 1 ? 'second' : 'seconds'}`;
+    if (value % 60 === 0) return `${value / 60} ${value === 60 ? 'minute' : 'minutes'}`;
+    return `${Math.floor(value / 60)}m ${value % 60}s`;
+  }
+
+  function formatVanishShort(seconds) {
+    const value = Number(seconds) || 0;
+    if (!value) return 'Off';
+    if (value === 3600) return '60 min';
+    if (value >= 60 && value % 60 === 0) return `${value / 60} min`;
+    if (value < 60) return `${value} sec`;
+    return `${Math.floor(value / 60)}m ${value % 60}s`;
+  }
+
+  function vanishBubbleStyle(message, now = Date.now()) {
+    const expiresAt = Date.parse(message?.vanish_at || '');
+    const duration = Number(message?.vanish_after_seconds) * 1000;
+    if (!Number.isFinite(expiresAt) || !duration || expiresAt <= now) return '';
+    const remaining = expiresAt - now;
+    const angle = Math.min(360, Math.max(0, remaining / duration * 360));
+    return `--vanish-angle:${angle.toFixed(2)}deg;--vanish-remaining:${Math.ceil(remaining)}ms`;
   }
 
   function formatBytes(bytes) {
@@ -993,6 +1029,11 @@
           </div>
         </div>
       </dialog>
+
+      <!-- Vanishing Messages Set-Duration Modal -->
+      <dialog class="msg-vanish-modal" id="msg-vanish-dialog" aria-labelledby="msg-vanish-modal-title">
+        <div class="msg-vanish-modal-in" id="msg-vanish-modal-body"></div>
+      </dialog>
     `);
 
     document.getElementById('msg-workspace-dialog')?.addEventListener('close', () => {
@@ -1096,7 +1137,7 @@
     const dialog = document.getElementById('msg-workspace-dialog');
     if (!dialog?.open || !state.activeConvId) return false;
     if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
-    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
+    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
     if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
     if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
       return false;
@@ -1437,7 +1478,7 @@
     if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
     if (!isWindowFocused) return false;
     if (typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
-    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
+    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
     if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
     if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
       return false;
@@ -1545,6 +1586,8 @@
       || Boolean(pc.block_screenshots) !== Boolean(nc.block_screenshots)
       || Boolean(pc.block_forwarding) !== Boolean(nc.block_forwarding)
       || Boolean(pc.protection_unavailable) !== Boolean(nc.protection_unavailable)
+      || Boolean(pc.vanish_unavailable) !== Boolean(nc.vanish_unavailable)
+      || pc.vanish_after_seconds !== nc.vanish_after_seconds
       || pc.friendship_status !== nc.friendship_status
       || (pc.members?.length || 0) !== (nc.members?.length || 0)
       || Boolean(prevThread.has_older) !== Boolean(nextThread.has_older)
@@ -1570,6 +1613,8 @@
         || a.body !== b.body
         || a.edited_at !== b.edited_at
         || a.deleted_for_everyone_at !== b.deleted_for_everyone_at
+        || a.vanish_at !== b.vanish_at
+        || a.vanish_after_seconds !== b.vanish_after_seconds
         || JSON.stringify(a.attachments || []) !== JSON.stringify(b.attachments || [])
       ) {
         return false;
@@ -2085,6 +2130,12 @@
     if (state.activeConvId && isSwitchingConv) {
       sendTypingBroadcast(false);
       state.threadInfoView = 'root';
+      state.vanishError = '';
+      state.vanishDraftSeconds = 300;
+      state.vanishDraftCustom = false;
+      state.vanishCustomValue = '';
+      state.vanishCustomUnit = 'seconds';
+      closeVanishModal();
       state.activePinnedId = null;
       state.unreadAnchorConvId = null;
       state.unreadAnchorFirstId = null;
@@ -2133,6 +2184,7 @@
       if (data?.conversation) {
         if (protection) Object.assign(data.conversation, protection);
         data.conversation.protection_unavailable = !protection;
+        data.conversation.vanish_unavailable = !protection || !Object.prototype.hasOwnProperty.call(protection, 'vanish_after_seconds');
       }
       if (state.activeConvId !== conversationId || reqSeq !== state.openConvSeq) return;
 
@@ -2185,6 +2237,9 @@
       );
 
       if (shouldMarkRead) {
+        const hasPendingIncomingVanish = nextMsgs.some(
+          (m) => m.sender_id !== initializedProfile?.id && m.vanish_after_seconds && !m.vanish_at
+        );
         state.recentMarkReadAt.set(conversationId, Date.now());
         await ipon().rpc('mark_conversation_read', { p_conversation_id: conversationId }).catch(() => { });
         state.recentMarkReadAt.set(conversationId, Date.now());
@@ -2198,6 +2253,18 @@
         });
         computeTotalBadgeCount();
         renderConversationList();
+        if (hasPendingIncomingVanish && state.activeConvId === conversationId && reqSeq === state.openConvSeq) {
+          const refreshed = await ipon().rpc('get_conversation_messages', {
+            p_conversation_id: conversationId,
+            p_before: null,
+            p_limit: 60,
+            p_around_message_id: aroundMessageId || null
+          }).catch(() => null);
+          if (refreshed?.messages && state.activeConvId === conversationId && reqSeq === state.openConvSeq) {
+            data.messages = refreshed.messages;
+            state.activeThread = data;
+          }
+        }
       }
 
       const nextFingerprint = computeThreadFingerprint(data);
@@ -2987,10 +3054,38 @@
     if (!needsScroll) wrap.scrollTop = 0;
   }
 
+  function scheduleVanishExpiry() {
+    clearTimeout(vanishUiTimer);
+    const conversationId = state.activeConvId;
+    const active = (state.activeThread?.messages || []).filter((m) => m.vanish_at && Number.isFinite(Date.parse(m.vanish_at)));
+    if (!active.length) return;
+    const nextExpiry = Math.min(...active.map((m) => Date.parse(m.vanish_at)));
+    vanishUiTimer = setTimeout(() => {
+      if (state.activeConvId !== conversationId || !state.activeThread) return;
+      const now = Date.now();
+      const expired = (state.activeThread.messages || []).filter((m) => m.vanish_at && Date.parse(m.vanish_at) <= now);
+      if (!expired.length) { scheduleVanishExpiry(); return; }
+      const expiredIds = new Set(expired.map((m) => m.id));
+      const list = document.getElementById('msg-messages-list');
+      expired.forEach((m) => list?.querySelector(`[data-msg-id="${m.id}"]`)?.classList.add('is-vanish-exit'));
+      state.activeThread.messages = state.activeThread.messages.filter((m) => !expiredIds.has(m.id));
+      setTimeout(() => {
+        if (state.activeConvId !== conversationId) return;
+        const wrap = document.getElementById('msg-scroll-wrap');
+        const previousTop = wrap?.scrollTop || 0;
+        const nearBottom = !wrap || wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 96;
+        renderMessagesList();
+        if (wrap) wrap.scrollTop = nearBottom ? wrap.scrollHeight : previousTop;
+        if (typeof loadConversations === 'function') loadConversations({ silent: true });
+      }, 360);
+    }, Math.max(0, nextExpiry - Date.now()));
+  }
+
   function renderMessagesList({ animate = false } = {}) {
     const list = document.getElementById('msg-messages-list');
     if (!list || !state.activeThread) return;
-    const msgs = state.activeThread.messages || [];
+    const msgs = (state.activeThread.messages || []).filter((m) => !m.vanish_at || Date.parse(m.vanish_at) > Date.now());
+    state.activeThread.messages = msgs;
     const conv = state.activeThread.conversation || {};
     const myId = initializedProfile?.id;
     const searchQuery = state.showThreadSearch ? state.threadSearchQuery.trim() : '';
@@ -3077,6 +3172,7 @@
 
       const mine = m.sender_id === myId;
       const isDeleted = Boolean(m.deleted_for_everyone_at);
+      const vanishStyle = isDeleted ? '' : vanishBubbleStyle(m);
       const prev = msgs[idx - 1];
       const next = msgs[idx + 1];
       const groupedWithPrev = !isNewDate && !unreadDivider && prev && !prev.deleted_for_everyone_at && prev.sender_id === m.sender_id
@@ -3167,7 +3263,7 @@
             ${senderNameHtml}
             ${replyHtml}
             <div class="msg-bubble-wrap">
-              <div class="msg-bubble${isDeleted ? ' is-deleted' : ''}${isActivePinned ? ' is-pinned' : ''}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}">
+              <div class="msg-bubble${isDeleted ? ' is-deleted' : ''}${isActivePinned ? ' is-pinned' : ''}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}${vanishStyle ? ' is-vanishing' : ''}"${vanishStyle ? ` style="${vanishStyle}" title="Vanishing message"` : ''}>
                 ${bubbleContent}
               </div>
               ${!isDeleted ? `
@@ -3190,6 +3286,7 @@
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);
     syncThreadScrollLock();
+    scheduleVanishExpiry();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => syncThreadScrollLock());
     if (conv.conversation_id) {
       const missingAttPaths = [];
@@ -3269,6 +3366,189 @@
       el.classList.remove('is-highlight-focus');
       el._focusTimer = null;
     }, 3600);
+  }
+
+  function setVanishHint(msg = '', isBad = false) {
+    const hintEl = document.getElementById('msg-vanish-hint');
+    const input = document.getElementById('msg-vanish-custom-value');
+    if (hintEl) {
+      hintEl.textContent = msg || VANISH_HINT_TEXT;
+      hintEl.classList.toggle('is-bad', Boolean(isBad));
+    }
+    if (input) {
+      input.classList.toggle('is-bad', Boolean(isBad));
+      input.setAttribute('aria-invalid', isBad ? 'true' : 'false');
+    }
+  }
+
+  function syncVanishModalControls() {
+    const conv = state.activeThread?.conversation;
+    const unavailable = Boolean(conv?.vanish_unavailable);
+    const disabled = unavailable || state.savingVanish;
+    const isCurrentlyOn = Boolean(Number(conv?.vanish_after_seconds) || 0);
+    const input = document.getElementById('msg-vanish-custom-value');
+    const secBtn = document.getElementById('msg-vanish-unit-sec');
+    const minBtn = document.getElementById('msg-vanish-unit-min');
+    const confirmBtn = document.getElementById('msg-vanish-confirm');
+    const customWrap = document.getElementById('msg-vanish-custom-wrap');
+    document.querySelectorAll('#msg-vanish-chips [data-vanish-preset]').forEach((btn) => {
+      const sec = Number(btn.dataset.vanishPreset);
+      const selected = !state.vanishDraftCustom && sec === state.vanishDraftSeconds;
+      btn.setAttribute('aria-checked', selected ? 'true' : 'false');
+      btn.disabled = disabled;
+      btn.tabIndex = (selected || (state.vanishDraftCustom && sec === VANISH_PRESETS[0])) ? 0 : -1;
+    });
+    if (customWrap) customWrap.classList.toggle('is-off', disabled);
+    if (input) {
+      input.max = String(state.vanishCustomUnit === 'minutes' ? 60 : 3600);
+      input.classList.toggle('is-active', Boolean(state.vanishDraftCustom));
+      input.disabled = disabled;
+    }
+    if (secBtn) {
+      secBtn.setAttribute('aria-pressed', state.vanishCustomUnit === 'seconds' ? 'true' : 'false');
+      secBtn.disabled = disabled;
+    }
+    if (minBtn) {
+      minBtn.setAttribute('aria-pressed', state.vanishCustomUnit === 'minutes' ? 'true' : 'false');
+      minBtn.disabled = disabled;
+    }
+    if (confirmBtn) {
+      confirmBtn.disabled = disabled;
+      confirmBtn.textContent = state.savingVanish ? 'Saving…' : (isCurrentlyOn ? 'Save' : 'Turn on');
+    }
+  }
+
+  function validateVanishCustomInput(showError = false) {
+    const input = document.getElementById('msg-vanish-custom-value');
+    if (!input) return state.vanishDraftCustom ? null : state.vanishDraftSeconds;
+    const unit = state.vanishCustomUnit === 'minutes' ? 'minutes' : 'seconds';
+    const max = unit === 'minutes' ? 60 : 3600;
+    input.max = String(max);
+    if (!state.vanishDraftCustom) {
+      input.setCustomValidity('');
+      setVanishHint('', false);
+      return state.vanishDraftSeconds;
+    }
+    const raw = String(input.value || '').trim();
+    const value = Number(raw);
+    const error = !/^\d+$/.test(raw) || !Number.isInteger(value) || value < 1 || value > max
+      ? `Enter a whole number from 1 to ${max} ${unit}.` : '';
+    input.setCustomValidity(error);
+    if (showError && error) {
+      setVanishHint(error, true);
+    } else {
+      setVanishHint('', false);
+    }
+    return error ? null : value * (unit === 'minutes' ? 60 : 1);
+  }
+
+  function renderVanishModal() {
+    const body = document.getElementById('msg-vanish-modal-body');
+    const conv = state.activeThread?.conversation;
+    if (!body || !conv) return;
+    const isGrp = isGroupConv(conv);
+    const vanishSeconds = Number(conv.vanish_after_seconds) || 0;
+    const unavailable = Boolean(conv.vanish_unavailable);
+    const disabled = unavailable || state.savingVanish;
+    const clockSvg = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="7.5" stroke-dasharray="3 2.6"/><path d="M12 9.5V13l2.4 1.6"/><path d="M9.5 3h5"/></svg>';
+    const statusLine = unavailable
+      ? '<p class="msg-vanish-unavail" id="msg-vanish-unavail" role="status">Timer unavailable.<button type="button" class="msg-vanish-link" data-vanish-retry>Try again</button></p>'
+      : (state.vanishError
+          ? `<p class="msg-vanish-unavail" id="msg-vanish-unavail" role="status">${escapeHtml(state.vanishError)}</p>`
+          : '');
+    body.innerHTML = `
+      <form id="msg-vanish-custom-form" novalidate>
+        <div class="msg-vanish-modal-head">
+          <span class="msg-vanish-tile" aria-hidden="true">${clockSvg}</span>
+          <h3 id="msg-vanish-modal-title">Set vanish timer</h3>
+          <button type="button" class="dialog-close msg-vanish-close" data-vanish-close aria-label="Close">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg>
+          </button>
+        </div>
+        <p class="msg-vanish-explain">Messages vanish this long after ${isGrp ? 'every recipient' : 'the other person'} sees them.</p>
+        ${statusLine}
+        <span class="msg-vanish-label" id="msg-vanish-dur-label">Vanish after</span>
+        <div class="msg-vanish-chips" id="msg-vanish-chips" role="radiogroup" aria-labelledby="msg-vanish-dur-label">
+          ${VANISH_PRESETS.map((sec) => {
+            const selected = !state.vanishDraftCustom && sec === state.vanishDraftSeconds;
+            const tabIdx = (selected || (state.vanishDraftCustom && sec === VANISH_PRESETS[0])) ? 0 : -1;
+            return `<button type="button" class="msg-vanish-chip" data-vanish-preset="${sec}" role="radio" aria-checked="${selected ? 'true' : 'false'}" tabindex="${tabIdx}"${disabled ? ' disabled' : ''}>${escapeHtml(formatVanishShort(sec))}</button>`;
+          }).join('')}
+        </div>
+        <div class="msg-vanish-custom${disabled ? ' is-off' : ''}" id="msg-vanish-custom-wrap">
+          <label class="msg-vanish-label" for="msg-vanish-custom-value">Custom duration</label>
+          <div class="msg-vanish-custom-row">
+            <input class="msg-vanish-field${state.vanishDraftCustom ? ' is-active' : ''}" id="msg-vanish-custom-value" type="number" inputmode="numeric" min="1" max="${state.vanishCustomUnit === 'minutes' ? 60 : 3600}" step="1" placeholder="e.g. 90" value="${escAttr(state.vanishCustomValue)}" aria-describedby="msg-vanish-hint"${disabled ? ' disabled' : ''}>
+            <div class="msg-vanish-seg" role="group" aria-label="Duration unit">
+              <button type="button" id="msg-vanish-unit-sec" data-vanish-unit="seconds" aria-pressed="${state.vanishCustomUnit === 'seconds' ? 'true' : 'false'}"${disabled ? ' disabled' : ''}>Sec</button>
+              <button type="button" id="msg-vanish-unit-min" data-vanish-unit="minutes" aria-pressed="${state.vanishCustomUnit === 'minutes' ? 'true' : 'false'}"${disabled ? ' disabled' : ''}>Min</button>
+            </div>
+          </div>
+          <p class="msg-vanish-hint" id="msg-vanish-hint" role="status" aria-live="polite">${VANISH_HINT_TEXT}</p>
+        </div>
+        <div class="msg-vanish-foot">
+          <button type="button" class="msg-vanish-btn-ghost" data-vanish-close>Cancel</button>
+          <button type="submit" class="msg-vanish-btn" id="msg-vanish-confirm"${disabled ? ' disabled' : ''}>${state.savingVanish ? 'Saving…' : (vanishSeconds > 0 ? 'Save' : 'Turn on')}</button>
+        </div>
+      </form>`;
+  }
+
+  function openVanishModal() {
+    const conv = state.activeThread?.conversation;
+    const dlg = document.getElementById('msg-vanish-dialog');
+    if (!conv || !dlg) return;
+    const current = Number(conv.vanish_after_seconds) || 0;
+    state.vanishError = '';
+    if (current > 0 && !VANISH_PRESETS.includes(current)) {
+      state.vanishDraftSeconds = current;
+      state.vanishDraftCustom = true;
+      state.vanishCustomUnit = current >= 60 && current % 60 === 0 ? 'minutes' : 'seconds';
+      state.vanishCustomValue = String(state.vanishCustomUnit === 'minutes' ? current / 60 : current);
+    } else {
+      state.vanishDraftSeconds = current > 0 ? current : 300;
+      state.vanishDraftCustom = false;
+      state.vanishCustomValue = '';
+      state.vanishCustomUnit = 'seconds';
+    }
+    renderVanishModal();
+    if (!dlg.open) dlg.showModal();
+  }
+
+  function closeVanishModal() {
+    const dlg = document.getElementById('msg-vanish-dialog');
+    if (dlg?.open) dlg.close();
+  }
+
+  async function saveVanishSetting(seconds, { closeModalOnSuccess = false } = {}) {
+    if (state.savingVanish || !state.activeConvId || !Number.isInteger(seconds) || seconds < 0 || seconds > 3600) return false;
+    const conversationId = state.activeConvId;
+    state.savingVanish = true;
+    state.vanishError = '';
+    renderThreadInfoDrawer();
+    if (document.getElementById('msg-vanish-dialog')?.open) syncVanishModalControls();
+    let ok = false;
+    try {
+      const next = await ipon().rpc('set_conversation_vanish', {
+        p_conversation_id: conversationId,
+        p_seconds: seconds || null
+      });
+      if (state.activeConvId === conversationId && state.activeThread?.conversation) {
+        Object.assign(state.activeThread.conversation, next);
+        state.vanishCustomValue = '';
+        state.vanishDraftCustom = false;
+      }
+      ok = true;
+    } catch (error) {
+      if (state.activeConvId === conversationId) state.vanishError = ipon().friendlyError(error);
+    } finally {
+      state.savingVanish = false;
+      if (state.activeConvId === conversationId) {
+        if (ok && closeModalOnSuccess) closeVanishModal();
+        renderThreadInfoDrawer();
+        if (document.getElementById('msg-vanish-dialog')?.open) renderVanishModal();
+      }
+    }
+    return ok;
   }
 
   function renderThreadInfoDrawer() {
@@ -3503,6 +3783,44 @@
         </div>
       </div></section></div>`;
 
+    const vanishSeconds = Number(conv.vanish_after_seconds) || 0;
+    const isSelfConv = !isGrp && typeof isSelfUser === 'function' && isSelfUser(conv);
+    const canManageVanish = !conv.vanish_unavailable && !state.savingVanish && conv.status === 'ACCEPTED'
+      && (!isGrp || canManageGroup) && !isSelfConv;
+    const vanishHourglassSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3h11M6.5 21h11"/><path d="M7.5 3c0 4.2 2.6 5.6 4.5 7.5C14 8.6 16.5 7.2 16.5 3"/><path d="M7.5 21c0-4.2 2.6-5.6 4.5-7.5 2 1.9 4.5 3.3 4.5 7.5"/></svg>';
+    const vanishClockSvg = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="7.5" stroke-dasharray="3 2.6"/><path d="M12 9.5V13l2.4 1.6"/><path d="M9.5 3h5"/></svg>';
+    const vanishShortLabel = typeof formatVanishShort === 'function'
+      ? formatVanishShort(vanishSeconds)
+      : formatVanishDuration(vanishSeconds);
+    const vanishRestrictionNote = conv.vanish_unavailable
+      ? '<p class="msg-vanish-unavail" role="status">Timer unavailable.<button type="button" class="msg-vanish-link" data-vanish-retry>Try again</button></p>'
+      : (isSelfConv
+          ? '<p class="msg-vanish-info-note">Unavailable for saved messages.</p>'
+          : (conv.status !== 'ACCEPTED'
+              ? '<p class="msg-vanish-info-note">Available once this message request is accepted.</p>'
+              : (isGrp && !canManageGroup
+                  ? '<p class="msg-vanish-info-note">Only group owners and admins can change this timer.</p>'
+                  : '')));
+    const vanishDialogOpen = typeof document !== 'undefined' && Boolean(document.getElementById('msg-vanish-dialog')?.open);
+    const vanishHtml = `<div class="msg-drawer-section msg-vanish-section"><section class="msg-vanish-panel" aria-labelledby="msg-vanish-title">
+      <div class="msg-vanish-head">${vanishHourglassSvg}<h4 id="msg-vanish-title">Vanishing messages</h4></div>
+      <p class="msg-vanish-note-copy">New messages vanish after ${isGrp ? 'every recipient' : 'the other person'} sees them. The blue border shows the time left.</p>
+      ${vanishRestrictionNote}
+      <div class="msg-vanish-card">
+        <div class="msg-vanish-top">
+          <span class="msg-vanish-tile" aria-hidden="true">${vanishClockSvg}</span>
+          <div class="msg-vanish-copy">
+            <div class="msg-vanish-card-title" id="msg-vanish-card-label">Vanishing messages</div>
+            <p class="msg-vanish-status">${vanishSeconds > 0
+              ? `On · vanish after <b>${escapeHtml(vanishShortLabel)}</b>${canManageVanish ? '<button type="button" class="msg-vanish-link" data-vanish-open-modal>Change</button>' : ''}`
+              : 'Off'}</p>
+          </div>
+          <button type="button" class="msg-vanish-switch" data-vanish-switch role="switch" aria-checked="${vanishSeconds > 0 ? 'true' : 'false'}" aria-labelledby="msg-vanish-card-label"${canManageVanish ? '' : ' disabled'}></button>
+        </div>
+      </div>
+      ${state.vanishError && !vanishDialogOpen ? `<p class="msg-vanish-unavail" role="status">${escapeHtml(state.vanishError)}</p>` : ''}
+    </section></div>`;
+
     const membersSectionHtml = isGrp
       ? `<div class="msg-drawer-section">
           <div class="msg-drawer-sec-head">
@@ -3546,6 +3864,7 @@
         </div>
         ${membersSectionHtml}
         ${protectionHtml}
+        ${vanishHtml}
         <div class="msg-drawer-section">
           <h4>Theme</h4>
           <div class="msg-theme-swatches">
@@ -5292,6 +5611,8 @@
     disconnectTypingChannel();
     state.activeConvId = null;
     state.activeThread = null;
+    clearTimeout(vanishUiTimer);
+    closeVanishModal();
     state.unreadAnchorConvId = null;
     state.unreadAnchorFirstId = null;
     state.replyToMsg = null;
@@ -6030,6 +6351,54 @@
         return;
       }
 
+      const vanishDlg = document.getElementById('msg-vanish-dialog');
+      if (vanishDlg?.open && ev.target === vanishDlg) {
+        closeVanishModal();
+        return;
+      }
+      if (ev.target.closest?.('[data-vanish-close]')) {
+        closeVanishModal();
+        return;
+      }
+      if (ev.target.closest?.('[data-vanish-open-modal]') && state.activeConvId) {
+        openVanishModal();
+        return;
+      }
+      const vanishSwitch = ev.target.closest?.('[data-vanish-switch]');
+      if (vanishSwitch && state.activeConvId && !state.savingVanish) {
+        const current = Number(state.activeThread?.conversation?.vanish_after_seconds) || 0;
+        if (current > 0) await saveVanishSetting(0);
+        else openVanishModal();
+        return;
+      }
+      const vanishPresetBtn = ev.target.closest?.('[data-vanish-preset]');
+      if (vanishPresetBtn && state.activeConvId) {
+        state.vanishDraftSeconds = Number(vanishPresetBtn.dataset.vanishPreset);
+        state.vanishDraftCustom = false;
+        state.vanishCustomValue = '';
+        const input = document.getElementById('msg-vanish-custom-value');
+        if (input) { input.value = ''; input.setCustomValidity(''); }
+        setVanishHint('', false);
+        syncVanishModalControls();
+        return;
+      }
+      const vanishUnitBtn = ev.target.closest?.('[data-vanish-unit]');
+      if (vanishUnitBtn) {
+        state.vanishCustomUnit = vanishUnitBtn.dataset.vanishUnit === 'minutes' ? 'minutes' : 'seconds';
+        syncVanishModalControls();
+        if (state.vanishDraftCustom) validateVanishCustomInput(true);
+        else setVanishHint('', false);
+        return;
+      }
+      const vanishRetry = ev.target.closest?.('[data-vanish-retry]');
+      if (vanishRetry && state.activeConvId) {
+        vanishRetry.disabled = true;
+        await openConversation(state.activeConvId, { markRead: false, silent: true });
+        renderThreadInfoDrawer();
+        if (document.getElementById('msg-vanish-dialog')?.open) renderVanishModal();
+        return;
+      }
+
       const protectionRetry = ev.target.closest?.('[data-chat-protection-retry]');
       if (protectionRetry && state.activeConvId) {
         protectionRetry.disabled = true;
@@ -6598,6 +6967,15 @@
     });
 
     document.addEventListener('submit', async (ev) => {
+      if (ev.target?.id === 'msg-vanish-custom-form') {
+        ev.preventDefault();
+        const seconds = state.vanishDraftCustom
+          ? validateVanishCustomInput(true)
+          : state.vanishDraftSeconds;
+        if (seconds === null) { document.getElementById('msg-vanish-custom-value')?.focus(); return; }
+        await saveVanishSetting(seconds, { closeModalOnSuccess: true });
+        return;
+      }
       if (ev.target?.id === 'msg-composer-form') {
         submitComposer(ev);
         return;
@@ -6650,6 +7028,16 @@
     });
 
     document.addEventListener('input', (ev) => {
+      if (ev.target?.id === 'msg-vanish-custom-value') {
+        const cleaned = String(ev.target.value || '').replace(/[^0-9]/g, '');
+        if (cleaned !== ev.target.value) ev.target.value = cleaned;
+        state.vanishCustomValue = cleaned;
+        state.vanishDraftCustom = cleaned !== '';
+        state.vanishError = '';
+        syncVanishModalControls();
+        validateVanishCustomInput(Boolean(cleaned));
+        return;
+      }
       if (ev.target?.id === 'msg-list-search') {
         const q = ev.target.value;
         state.chatListQuery = q;
@@ -6715,12 +7103,23 @@
     });
 
     document.addEventListener('focusout', (ev) => {
+      if (ev.target?.id === 'msg-vanish-custom-value') validateVanishCustomInput(true);
       if (ev.target?.id === 'msg-composer-input') {
         sendTypingBroadcast(false);
       }
     });
 
+    document.addEventListener('invalid', (ev) => {
+      if (ev.target?.id === 'msg-vanish-custom-value') validateVanishCustomInput(true);
+    }, true);
+
     document.addEventListener('change', async (ev) => {
+      if (ev.target?.id === 'msg-vanish-custom-unit') {
+        state.vanishCustomUnit = ev.target.value === 'minutes' ? 'minutes' : 'seconds';
+        syncVanishModalControls();
+        validateVanishCustomInput(Boolean(document.getElementById('msg-vanish-custom-value')?.value));
+        return;
+      }
       if (ev.target?.id === 'msg-file-input' || ev.target?.id === 'msg-gallery-input' || ev.target?.id === 'msg-drive-input') {
         queuePickedFiles(ev.target.files);
         ev.target.value = '';
@@ -6803,7 +7202,31 @@
           }
         }
       }
+      if (ev.target?.closest?.('#msg-vanish-chips') && ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(ev.key)) {
+        ev.preventDefault();
+        const curIdx = VANISH_PRESETS.indexOf(state.vanishDraftSeconds);
+        const dir = (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') ? 1 : -1;
+        state.vanishDraftSeconds = VANISH_PRESETS[(Math.max(curIdx, 0) + dir + VANISH_PRESETS.length) % VANISH_PRESETS.length];
+        state.vanishDraftCustom = false;
+        state.vanishCustomValue = '';
+        const input = document.getElementById('msg-vanish-custom-value');
+        if (input) { input.value = ''; input.setCustomValidity(''); }
+        setVanishHint('', false);
+        syncVanishModalControls();
+        document.querySelector('#msg-vanish-chips [aria-checked="true"]')?.focus();
+        return;
+      }
+      if (ev.target?.id === 'msg-vanish-custom-value' && ['e', 'E', '+', '-', '.'].includes(ev.key)) {
+        ev.preventDefault();
+        return;
+      }
       if (ev.key === 'Escape') {
+        const vanishDlg = document.getElementById('msg-vanish-dialog');
+        if (vanishDlg?.open) {
+          ev.preventDefault();
+          closeVanishModal();
+          return;
+        }
         const dpDlg = document.getElementById('ipon-dp-viewer');
         if (dpDlg?.open) {
           ev.preventDefault();
@@ -7302,6 +7725,7 @@
             (row.status && curConv.status && row.status !== curConv.status) ||
             (row.block_screenshots !== undefined && row.block_screenshots !== curConv.block_screenshots) ||
             (row.block_forwarding !== undefined && row.block_forwarding !== curConv.block_forwarding) ||
+            (row.vanish_after_seconds !== undefined && row.vanish_after_seconds !== curConv.vanish_after_seconds) ||
             (isGroupConv(curConv) && (
               (row.title && row.title !== curConv.title) ||
               (row.description !== undefined && row.description !== curConv.description) ||

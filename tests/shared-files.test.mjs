@@ -68,7 +68,7 @@ test('Shared files excludes voice notes and voice messages while counting and li
     }
   };
   const renderDrawer = new Function(
-    'state', 'document', 'escapeHtml', 'escAttr', 'formatBytes', 'formatShortDate', 'userAvatarHtml',
+    'state', 'document', 'escapeHtml', 'escAttr', 'formatBytes', 'formatShortDate', 'userAvatarHtml', 'formatVanishDuration', 'isSelfUser',
     'MSG_CLOSE_X_SVG', 'MSG_PIN_SVG', 'BACK_ARROW_ICON_SVG', 'VIDEO_PLAY_SVG', 'VIDEO_POSTER_FALLBACK', 'IMAGE_EXT_RE',
     `${isVoiceMatch[0]}; ${badgeMatch[0]}; ${drawerMatch[0]}; return renderThreadInfoDrawer;`
   )(
@@ -79,6 +79,8 @@ test('Shared files excludes voice notes and voice messages while counting and li
     (b) => `${b} B`,
     () => 'Nov 15',
     () => '<div>avatar</div>',
+    (seconds) => seconds ? `${seconds} seconds` : 'Off',
+    () => false,
     '', '', '', '', '', /\.(png|jpe?g|gif|webp)$/i
   );
 
@@ -104,7 +106,7 @@ test('Shared files excludes voice notes and voice messages while counting and li
   renderDrawer();
   assert.match(drawerEl.innerHTML, /No shared files yet/);
   assert.match(swJs, /ipon-shell-v(?:2[3-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashboardHtml, /js\/messages\.js\?v=20261121-03/);
+  assert.match(dashboardHtml, /js\/messages\.js\?v=20261121-04/);
 });
 
 test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Manager, Google Drive) work end-to-end', async () => {
