@@ -8719,8 +8719,9 @@ test('presence dot size, Chat Info drawer overlay over pinned banner, inline Fri
   assert.match(css, /@media\s*\(max-width:\s*980px\)\s*\{\s*\.msg-thread-drawer\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0 0 0 auto;[^}]*z-index:\s*30;/s);
   assert.match(css, /@media\s*\(max-width:\s*820px\)\s*\{\s*\.msg-thread-drawer\s*\{[^}]*width:\s*100%;/s);
 
-  // Pic 3: Active now sits inline to the right of Friend badge inside .msg-thread-peer-sub
-  assert.match(messagesJs, /<div class="msg-thread-peer-sub">[\s\S]*?<span class="msg-rel-chip">Friend<\/span>[\s\S]*?<small class="msg-peer-status[\s\S]*?id="msg-peer-status-text"/);
+  // Pic 3: Status sits cleanly inline beside @username inside .msg-thread-peer-sub (no Friend chip)
+  assert.match(messagesJs, /<div class="msg-thread-peer-sub">[\s\S]*?<small class="msg-peer-status" id="msg-peer-status-text"/);
+  assert.doesNotMatch(messagesJs, /<span class="msg-rel-chip">Friend<\/span>/);
   assert.match(css, /\.msg-thread-peer-sub\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*flex-wrap:\s*wrap;/s);
   assert.match(css, /\.msg-peer-status\s*\{[^}]*display:\s*inline-flex;/s);
 

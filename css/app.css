@@ -7300,23 +7300,18 @@ html[data-theme="dark"] .msg-thread-pane[data-chat-theme="midnight"] {
 .msg-thread-header .presence-dot {
   border-color: var(--thread-chrome-bg, var(--surface, #fff));
 }
-.msg-thread-header .msg-avatar-wrap,
-.msg-welcome-avatar .msg-avatar-wrap {
+.msg-thread-header .msg-avatar-wrap {
   isolation: isolate;
 }
 .msg-thread-header .msg-avatar-wrap > .avatar-circle,
 .msg-thread-header .msg-avatar-wrap > .msg-group-avatar,
-.msg-thread-header .msg-avatar-wrap > .msg-dp-btn,
-.msg-welcome-avatar .msg-avatar-wrap > .avatar-circle,
-.msg-welcome-avatar .msg-avatar-wrap > .msg-group-avatar {
+.msg-thread-header .msg-avatar-wrap > .msg-dp-btn {
   position: relative;
   z-index: 1;
   transition: box-shadow .32s ease;
 }
 .msg-thread-header .msg-avatar-wrap::before,
-.msg-thread-header .msg-avatar-wrap::after,
-.msg-welcome-avatar .msg-avatar-wrap::before,
-.msg-welcome-avatar .msg-avatar-wrap::after {
+.msg-thread-header .msg-avatar-wrap::after {
   content: "";
   position: absolute;
   inset: -1px;
@@ -7332,33 +7327,25 @@ html[data-theme="dark"] .msg-thread-pane[data-chat-theme="midnight"] {
 }
 .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple > .avatar-circle,
 .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple > .msg-group-avatar,
-.msg-thread-header .msg-avatar-wrap.is-in-convo-ripple > .msg-dp-btn .avatar-circle,
-.msg-welcome-avatar .msg-avatar-wrap.is-in-convo-ripple > .avatar-circle,
-.msg-welcome-avatar .msg-avatar-wrap.is-in-convo-ripple > .msg-group-avatar {
+.msg-thread-header .msg-avatar-wrap.is-in-convo-ripple > .msg-dp-btn .avatar-circle {
   box-shadow: 0 0 0 2.5px rgba(34, 197, 94, .38);
 }
-.msg-thread-header .msg-avatar-wrap.is-in-convo-ripple::before,
-.msg-welcome-avatar .msg-avatar-wrap.is-in-convo-ripple::before {
+.msg-thread-header .msg-avatar-wrap.is-in-convo-ripple::before {
   animation: msgConvoAvatarRipple 2.2s cubic-bezier(.22, .61, .36, 1) infinite;
 }
-.msg-thread-header .msg-avatar-wrap.is-in-convo-ripple::after,
-.msg-welcome-avatar .msg-avatar-wrap.is-in-convo-ripple::after {
+.msg-thread-header .msg-avatar-wrap.is-in-convo-ripple::after {
   animation: msgConvoAvatarRipple 2.2s cubic-bezier(.22, .61, .36, 1) 1.1s infinite;
 }
 html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap::before,
 html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap::after,
-html[data-theme="dark"] .msg-welcome-avatar .msg-avatar-wrap::before,
-html[data-theme="dark"] .msg-welcome-avatar .msg-avatar-wrap::after,
-.msg-thread-pane[data-chat-theme="midnight"] .msg-avatar-wrap::before,
-.msg-thread-pane[data-chat-theme="midnight"] .msg-avatar-wrap::after {
+.msg-thread-pane[data-chat-theme="midnight"] .msg-thread-header .msg-avatar-wrap::before,
+.msg-thread-pane[data-chat-theme="midnight"] .msg-thread-header .msg-avatar-wrap::after {
   border-color: rgba(74, 222, 128, .8);
   background: radial-gradient(circle, rgba(74, 222, 128, 0) 54%, rgba(74, 222, 128, .28) 100%);
 }
 html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple > .avatar-circle,
 html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple > .msg-group-avatar,
-html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple > .msg-dp-btn .avatar-circle,
-html[data-theme="dark"] .msg-welcome-avatar .msg-avatar-wrap.is-in-convo-ripple > .avatar-circle,
-html[data-theme="dark"] .msg-welcome-avatar .msg-avatar-wrap.is-in-convo-ripple > .msg-group-avatar {
+html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple > .msg-dp-btn .avatar-circle {
   box-shadow: 0 0 0 2.5px rgba(74, 222, 128, .44);
 }
 @keyframes msgConvoAvatarRipple {
@@ -7376,9 +7363,7 @@ html[data-theme="dark"] .msg-welcome-avatar .msg-avatar-wrap.is-in-convo-ripple 
 }
 @media (prefers-reduced-motion: reduce) {
   .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple::before,
-  .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple::after,
-  .msg-welcome-avatar .msg-avatar-wrap.is-in-convo-ripple::before,
-  .msg-welcome-avatar .msg-avatar-wrap.is-in-convo-ripple::after {
+  .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple::after {
     animation: none;
     opacity: 0;
   }

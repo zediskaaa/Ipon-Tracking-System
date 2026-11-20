@@ -58,6 +58,7 @@ test('conversation intro stays in the thread, header status excludes typing, and
   assert.match(messagesJs, /function syncThreadScrollLock\(\)/);
   assert.match(messagesJs, /wrap\.classList\?\.toggle\('is-no-scroll', !needsScroll\)/);
   assert.doesNotMatch(messagesJs, /<span class="msg-self-pill">You<\/span>/);
+  assert.doesNotMatch(messagesJs, /<span class="msg-rel-chip">Friend<\/span>/);
   assert.doesNotMatch(messagesJs, /<span class="msg-rel-chip">Saved Messages<\/span>/);
   assert.doesNotMatch(messagesJs, /Message yourself · Personal notes/);
   assert.match(css, /\.msg-thread-welcome-hero\s*\{[^}]*margin:\s*0 auto 12px;[^}]*padding:\s*14px 10px 12px;/s);
@@ -373,6 +374,7 @@ test('in-conversation DP ripple activates only when peer is actively in the same
   const css = read('css/app.css');
 
   assert.match(css, /\.msg-thread-header \.msg-avatar-wrap\.is-in-convo-ripple::before/);
+  assert.doesNotMatch(css, /\.msg-welcome-avatar \.msg-avatar-wrap\.is-in-convo-ripple/);
   assert.match(css, /@keyframes msgConvoAvatarRipple/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?is-in-convo-ripple::before/);
 
@@ -557,11 +559,11 @@ test('in-conversation DP ripple activates only when peer is actively in the same
   assert.equal(trackCalls[0].user_id, meId);
   assert.equal(trackCalls[0].in_convo, true);
 
-  // Peer enters the exact same conversation -> ripple ON smoothly on header & intro DP
+  // Peer enters the exact same conversation -> ripple ON smoothly on header DP only (not redundant intro hero DP)
   presenceStateObj = { [peerId]: [{ user_id: peerId, in_convo: true }] };
   presenceSyncCb();
   assert.equal(headerWrap.classList.contains('is-in-convo-ripple'), true);
-  assert.equal(heroWrap.classList.contains('is-in-convo-ripple'), true);
+  assert.equal(heroWrap.classList.contains('is-in-convo-ripple'), false);
 
   // Peer leaves convo (switches convo or exits Messages) -> ripple OFF immediately
   presenceStateObj = {};

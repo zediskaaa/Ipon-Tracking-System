@@ -1042,8 +1042,6 @@
     const active = Boolean(conv && isPeerInActiveConvo(conv));
     const headerAvatar = document.getElementById('msg-thread-header')?.querySelector?.('.msg-avatar-wrap');
     headerAvatar?.classList?.toggle('is-in-convo-ripple', active);
-    const heroAvatar = document.getElementById('msg-messages-list')?.querySelector?.('.msg-welcome-avatar .msg-avatar-wrap');
-    heroAvatar?.classList?.toggle('is-in-convo-ripple', active);
   }
 
   function isThreadOpenForPresence() {
@@ -2528,7 +2526,6 @@
           </div>
           <div class="msg-thread-peer-sub">
             ${!isGrp && conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
-            ${!isGrp && !isSelfUser(conv) && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
             ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
             <small class="msg-peer-status" id="msg-peer-status-text"${peerStatus ? '' : ' hidden'}>${escapeHtml(peerStatus)}</small>
           </div>
@@ -2985,9 +2982,8 @@
         <div class="msg-welcome-avatar">${renderedHeroAvatar}</div>
         <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero ? '' : userBadgesHtml(conv)}</h3>
         ${!isGrpHero && heroProfileVisible && conv.username ? `<span class="msg-welcome-username">@${escapeHtml(conv.username)}</span>` : ''}
-        ${!isSelfHero ? `<div class="msg-welcome-meta" id="msg-welcome-meta"${statusText || (!isGrpHero && conv.friendship_status === 'FRIENDS') || isGrpHero ? '' : ' hidden'}>
+        ${!isSelfHero ? `<div class="msg-welcome-meta" id="msg-welcome-meta"${statusText || isGrpHero ? '' : ' hidden'}>
           <span class="msg-welcome-status${isHeroOnline ? ' is-online' : ''}" id="msg-welcome-status-text"${statusText ? '' : ' hidden'}>${escapeHtml(statusText)}</span>
-          ${!isGrpHero && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
           ${isGrpHero ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
         </div>` : ''}
         ${heroProfileVisible && (isGrpHero ? conv.description : conv.bio) ? `<p class="msg-welcome-bio">${escapeHtml(isGrpHero ? conv.description : conv.bio)}</p>` : ''}
@@ -3132,7 +3128,6 @@
     list.classList.toggle('is-thread-entering', Boolean(animate && !isEmpty));
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);
-    syncThreadPresenceRipple();
     syncThreadScrollLock();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => syncThreadScrollLock());
     if (conv.conversation_id) {
@@ -7351,7 +7346,7 @@
           welcomeStatus.hidden = !liveStatus;
           const welcomeMeta = document.getElementById('msg-welcome-meta');
           if (welcomeMeta) {
-            welcomeMeta.hidden = !liveStatus && !isGroupConv(activeConv) && activeConv.friendship_status !== 'FRIENDS';
+            welcomeMeta.hidden = !liveStatus && !isGroupConv(activeConv);
           }
         }
       }
