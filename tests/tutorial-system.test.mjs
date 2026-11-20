@@ -184,11 +184,14 @@ test('all authenticated pages load tutorial stylesheet/script and expose entry b
   const dashHtml = read('dashboard.html');
   assert.match(dashHtml, /id="dashboard-tutorial-btn"[^>]*data-tutorial-open/);
   assert.match(dashHtml, /id="no-group-tutorial-btn"[^>]*data-tutorial-open/);
-  assert.match(dashHtml, /class="sidebar-tutorial-btn"[^>]*data-tutorial-open/);
+  assert.doesNotMatch(dashHtml, /class="sidebar-tutorial-btn"/, 'Top/sidebar navbar must not crowd the myIPON brand with a tutorial button');
+
+  const accountHtml = read('account.html');
+  assert.match(accountHtml, /Interactive tutorial &amp; user guide[\s\S]*?data-tutorial-open/);
 
   const coreJs = read('js/core.js');
-  assert.match(coreJs, /class="sidebar-tutorial-btn" data-tutorial-open/);
-  assert.match(coreJs, /Interactive tutorial &amp; user guide[\s\S]*?data-tutorial-open/);
+  assert.doesNotMatch(coreJs, /class="sidebar-tutorial-btn"/, 'mountShell must keep Tutorial inside My Account instead of the mobile top navbar');
+  assert.match(coreJs, /account-tutorial-row[\s\S]*?Interactive tutorial &amp; user guide[\s\S]*?data-tutorial-open/);
   assert.match(coreJs, /openTutorial:\s*\(\.\.\.args\) => window\.IponTutorial\?\.open\?\.\(\.\.\.args\)/);
 
   const swJs = read('sw.js');
@@ -259,14 +262,17 @@ test('tutorial UI supports library search, category filtering, step navigation, 
   assert.match(tutorialBody.innerHTML, /No matching tutorials found/);
   assert.match(tutorialBody.innerHTML, /Reset search &amp; filters/);
 
-  // Reset search and search for "budget"
-  dialog.dispatch('input', { target: { closest: (sel) => (sel === '#ipon-tutorial-search' ? { value: 'budget' } : null) } });
+  // Reset search and filter via compact mobile category dropdown
+  dialog.dispatch('input', { target: { closest: (sel) => (sel === '#ipon-tutorial-search' ? { value: '' } : null) } });
+  dialog.dispatch('change', { target: { closest: (sel) => (sel === '#ipon-tutorial-cat-select' ? { value: 'budget-reports' } : null) } });
   assert.match(tutorialBody.innerHTML, /How to Plan Your 50\/30\/20 Budget/);
+  assert.doesNotMatch(tutorialBody.innerHTML, /Welcome &amp; Introduction to myIPON/);
 
   // Open a specific tutorial detail view and step through to completion
   win.IponTutorial.open('record-addition', 0);
   assert.match(tutorialBody.innerHTML, /Step 1 of 5/);
-  assert.match(tutorialBody.innerHTML, /Back to tutorial library/);
+  assert.match(tutorialBody.innerHTML, /Back to library/);
+  assert.match(tutorialBody.innerHTML, /class="tutorial-step-nav-pair"/);
 
   // Mark complete and confirm persistence
   win.IponTutorial.setTutorialCompleted('record-addition', true);
@@ -293,10 +299,12 @@ test('tutorial UI supports library search, category filtering, step navigation, 
   assert.match(session.get('myipon_tutorial_handoff_v1') || '', /"tutorialId":"budget-planner"/);
 });
 
-test('tutorial stylesheet maintains circular close button, dark-mode tokens, and reduced-motion guards', () => {
+test('tutorial stylesheet maintains circular close button, responsive dropdown/buttons, dark-mode tokens, and reduced-motion guards', () => {
   const css = read('css/tutorial.css');
   assert.match(css, /\.tutorial-dialog \.tutorial-close-btn\s*\{[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%;/s);
   assert.match(css, /\.tutorial-coachmark-close\s*\{[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%;/s);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*?\.tutorial-cat-select-wrap\s*\{\s*display:\s*block;\s*\}[\s\S]*?\.tutorial-cat-pills\s*\{\s*display:\s*none;\s*\}/);
+  assert.match(css, /\.tutorial-step-nav-pair\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(css, /html\[data-theme="dark"\] \.tutorial-dialog/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });

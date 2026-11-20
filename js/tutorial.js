@@ -1195,6 +1195,14 @@
       }
     });
 
+    dialogEl.addEventListener('change', (event) => {
+      const catSelect = event.target.closest('#ipon-tutorial-cat-select');
+      if (catSelect) {
+        activeCategory = catSelect.value || 'all';
+        renderLibrary();
+      }
+    });
+
     return dialogEl;
   }
 
@@ -1215,8 +1223,8 @@
     });
 
     const contextText = ctx.mode === 'SOLO'
-      ? 'Solo Savings workspace'
-      : `Group workspace · ${ctx.role}`;
+      ? 'Solo · Personal'
+      : `Group · ${ctx.role}`;
 
     const groupedHtml = visible.length
       ? CATEGORIES.map((cat) => {
@@ -1285,13 +1293,23 @@
         <div class="tutorial-search-row">
           <div class="tutorial-search-wrap">
             <span class="tutorial-search-icon" aria-hidden="true">${ICONS.search}</span>
-            <input id="ipon-tutorial-search" class="tutorial-search-input" type="search" value="${escapeHtml(searchQuery)}" placeholder="Search tutorials (e.g., record addition, budget, void, QR code, goal)…" aria-label="Search tutorials" autocomplete="off">
+            <input id="ipon-tutorial-search" class="tutorial-search-input" type="search" value="${escapeHtml(searchQuery)}" placeholder="Search tutorials (addition, budget, void, QR, goal)…" aria-label="Search tutorials" autocomplete="off">
             <button class="tutorial-search-clear" type="button" data-tut-clear-search aria-label="Clear search"${searchQuery ? '' : ' hidden'}>${ICONS.close}</button>
           </div>
-          <span class="tutorial-context-pill" title="Current active workspace">
-            <i class="tutorial-context-dot" aria-hidden="true"></i>
-            <span>${escapeHtml(contextText)}</span>
-          </span>
+          <div class="tutorial-filter-bar-compact">
+            <label class="tutorial-cat-select-wrap" for="ipon-tutorial-cat-select">
+              <span class="sr-only">Filter tutorials by category</span>
+              <select id="ipon-tutorial-cat-select" class="tutorial-cat-select" aria-label="Filter tutorials by category">
+                <option value="all"${activeCategory === 'all' ? ' selected' : ''}>All guides (${catCounts.get('all') || 0})</option>
+                ${CATEGORIES.map((cat) => `<option value="${escapeHtml(cat.id)}"${activeCategory === cat.id ? ' selected' : ''}>${escapeHtml(cat.label)} (${catCounts.get(cat.id) || 0})</option>`).join('')}
+              </select>
+              <svg class="tutorial-cat-select-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 7.5 10 12.5 15 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <span class="tutorial-context-pill" title="Current active workspace">
+              <i class="tutorial-context-dot" aria-hidden="true"></i>
+              <span>${escapeHtml(contextText)}</span>
+            </span>
+          </div>
         </div>
         <div class="tutorial-cat-pills" role="tablist" aria-label="Filter tutorials by category">
           <button class="tutorial-cat-pill${activeCategory === 'all' ? ' is-active' : ''}" type="button" role="tab" aria-selected="${activeCategory === 'all'}" data-tut-cat="all">All guides <b>${catCounts.get('all') || 0}</b></button>
@@ -1361,11 +1379,11 @@
       <div class="tutorial-detail-top">
         <button class="tutorial-back-btn" type="button" data-tut-back>
           ${ICONS.back}
-          <span>Back to tutorial library</span>
+          <span>Back to library</span>
         </button>
         <div class="tutorial-detail-actions">
-          <button class="button button-secondary button-sm" type="button" data-tut-toggle-done>
-            ${isDone ? '✓ Completed (undo)' : 'Mark as complete'}
+          <button class="button button-secondary button-sm" type="button" data-tut-toggle-done title="${isDone ? 'Click to mark incomplete' : 'Mark this tutorial as completed'}">
+            ${isDone ? '✓ Completed' : 'Mark complete'}
           </button>
           <button class="button button-primary button-sm" type="button" data-tut-try="${escapeHtml(tut.id)}">
             ${escapeHtml(tut.tryLabel || 'Try it now')} →
@@ -1438,17 +1456,17 @@
                       ${step.result ? `<div class="tutorial-callout is-result"><span><strong>Expected result:</strong> ${escapeHtml(step.result)}</span></div>` : ''}
                     </div>
                   ` : ''}
-                  ${isActive ? `
-                    <div class="tutorial-step-inline-actions">
-                      <div class="tutorial-nav-group">
-                        <button class="button button-secondary button-sm" type="button" data-tut-prev-step${idx === 0 ? ' disabled' : ''}>← Previous step</button>
-                        <button class="button button-primary button-sm" type="button" data-tut-next-step>${isLastStep ? (isDone ? '✓ Tutorial completed' : 'Finish tutorial ✓') : 'Next step →'}</button>
-                      </div>
-                      ${canHighlight ? `<button class="button button-secondary button-sm" type="button" data-tut-try="${escapeHtml(tut.id)}" data-tut-try-step="${idx}">${samePage ? 'Highlight on screen' : 'Go & highlight →'}</button>` : ''}
-                    </div>
-                  ` : ''}
                 </div>
               </div>
+              ${isActive ? `
+                <div class="tutorial-step-inline-actions">
+                  <div class="tutorial-step-nav-pair">
+                    <button class="button button-secondary button-sm" type="button" data-tut-prev-step${idx === 0 ? ' disabled' : ''}>← Previous</button>
+                    <button class="button button-primary button-sm" type="button" data-tut-next-step>${isLastStep ? (isDone ? '✓ Completed' : 'Finish ✓') : 'Next →'}</button>
+                  </div>
+                  ${canHighlight ? `<button class="button button-secondary button-sm tutorial-highlight-btn" type="button" data-tut-try="${escapeHtml(tut.id)}" data-tut-try-step="${idx}">${samePage ? 'Highlight on screen' : 'Go & highlight →'}</button>` : ''}
+                </div>
+              ` : ''}
             </article>
           `;
         }).join('')}
@@ -1465,12 +1483,10 @@
       ` : ''}
 
       <footer class="tutorial-detail-footer">
-        <div class="tutorial-nav-group">
-          <button class="button button-secondary" type="button" data-tut-back>← All tutorials</button>
-        </div>
-        <div class="tutorial-nav-group">
-          ${prevTut ? `<button class="button button-secondary" type="button" data-tut-open="${escapeHtml(prevTut.id)}">← Previous: ${escapeHtml(prevTut.title.length > 26 ? `${prevTut.title.slice(0, 24)}…` : prevTut.title)}</button>` : ''}
-          ${nextTut ? `<button class="button button-primary" type="button" data-tut-open="${escapeHtml(nextTut.id)}">Next: ${escapeHtml(nextTut.title.length > 26 ? `${nextTut.title.slice(0, 24)}…` : nextTut.title)} →</button>` : ''}
+        <button class="button button-secondary button-sm tutorial-footer-library-btn" type="button" data-tut-back>← All tutorials</button>
+        <div class="tutorial-footer-pager">
+          ${prevTut ? `<button class="button button-secondary button-sm" type="button" data-tut-open="${escapeHtml(prevTut.id)}" title="${escapeHtml(prevTut.title)}">← Prev guide</button>` : ''}
+          ${nextTut ? `<button class="button button-primary button-sm" type="button" data-tut-open="${escapeHtml(nextTut.id)}" title="${escapeHtml(nextTut.title)}">Next guide →</button>` : ''}
         </div>
       </footer>
     `;
