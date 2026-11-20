@@ -9575,6 +9575,41 @@
   }
 
   const ANNOUNCEMENT_PIN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+  const ANNOUNCEMENT_EDIT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+
+  async function uploadAnnouncementAttachments(announcementId, queuedFiles = [], { onStatus = null } = {}) {
+    const list = Array.isArray(queuedFiles) ? queuedFiles : [];
+    if (!list.length) return { attachments: [], uploadedPaths: [] };
+    const client = getClient();
+    const uploadedPaths = [];
+    const attachments = [];
+    try {
+      if (typeof onStatus === 'function' && list.some((entry) => /\.(mp4|mp3)$/i.test(entry?.file?.name || ''))) {
+        onStatus('Optimizing media…');
+      }
+      const media = await Promise.all(list.map(async (entry) => ({ ...entry, file: await optimizeUploadMedia(entry.file) })));
+      if (typeof onStatus === 'function') onStatus('Uploading…');
+      const { uploads = [] } = await invokeAccountFunction({
+        action: 'announcement-upload-urls',
+        announcement_id: announcementId,
+        files: media.map((entry) => ({ name: entry.file.name, kind: entry.kind, type: entry.file.type }))
+      });
+      for (let i = 0; i < media.length; i += 1) {
+        const entry = media[i];
+        const upload = uploads[i];
+        if (!upload?.path || !upload?.token) throw new Error('Upload authorization missing.');
+        await uploadAuthorizedFile(client, 'announcements', upload, entry.file);
+        uploadedPaths.push(upload.path);
+        attachments.push({ path: upload.path, name: upload.name, kind: entry.kind, type: entry.file.type || '' });
+      }
+      return { attachments, uploadedPaths };
+    } catch (error) {
+      if (uploadedPaths.length) {
+        invokeAccountFunction({ action: 'announcement-cleanup-media', paths: uploadedPaths }).catch(() => { });
+      }
+      throw error;
+    }
+  }
 
   function sortAnnouncementsList(list) {
     const parseMs = (val) => {
@@ -9620,6 +9655,7 @@
           <div class="announcement-viewer-actions">
             <div class="announcement-viewer-owner-actions">
               <button class="button button-danger" id="announcement-viewer-delete" type="button" hidden>Delete announcement</button>
+              <button class="button button-secondary announcement-viewer-edit-btn" id="announcement-viewer-edit" type="button" hidden>${ANNOUNCEMENT_EDIT_SVG}<span>Edit</span></button>
               <button class="button button-secondary announcement-viewer-pin-btn" id="announcement-viewer-pin" type="button" aria-pressed="false" hidden>${ANNOUNCEMENT_PIN_SVG}<span>Pin</span></button>
             </div>
             <div class="announcement-viewer-reactions-wrap" id="announcement-viewer-reactions"></div>
@@ -9969,7 +10005,7 @@
     }).join('');
   }
 
-  function bindAnnouncements({ listElement, addButton, allowPin = false, emptyTitle = 'No announcements yet', emptyNote = 'Stay tuned for updates' } = {}) {
+  function bindAnnouncements({ listElement, addButton, allowPin = false, onEditRelease = null, emptyTitle = 'No announcements yet', emptyNote = 'Stay tuned for updates' } = {}) {
     if (!listElement) return null;
     ensureAnnouncementDialogs();
     const viewerDialog = document.getElementById('announcement-viewer-dialog');
@@ -9979,6 +10015,7 @@
     const viewerDescription = document.getElementById('announcement-viewer-description');
     const viewerMedia = document.getElementById('announcement-viewer-media');
     const viewerDelete = document.getElementById('announcement-viewer-delete');
+    const viewerEditBtn = document.getElementById('announcement-viewer-edit');
     const viewerPinBtn = document.getElementById('announcement-viewer-pin');
     const viewerPinnedBadge = document.getElementById('announcement-viewer-pinned');
     const viewerReactions = document.getElementById('announcement-viewer-reactions');
@@ -9988,12 +10025,17 @@
     const reactionsTitle = document.getElementById('announcement-reactions-title');
     const composeDialog = document.getElementById('announcement-compose-dialog');
     const composeForm = document.getElementById('announcement-compose-form');
+    const composeHeading = document.getElementById('announcement-compose-title');
     const mediaInput = document.getElementById('announcement-media-input');
     const mediaHelp = document.getElementById('announcement-media-help');
     const mediaPreviews = document.getElementById('announcement-media-previews');
     let items = [];
     let reactions = [];
     let queuedMedia = [];
+    let editingItem = null;
+    let existingAttachments = [];
+    let existingPreviewUrls = {};
+    let removedAttachmentPaths = [];
     let openItemId = null;
     let activePickerAnnouncementId = null;
     let currentModalAnnouncementId = null;
@@ -10230,33 +10272,91 @@
       }
     };
 
-    const clearQueuedMedia = () => {
+    const resetComposeState = () => {
       queuedMedia.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
       queuedMedia = [];
+      editingItem = null;
+      existingAttachments = [];
+      existingPreviewUrls = {};
+      removedAttachmentPaths = [];
       if (mediaInput) mediaInput.value = '';
+      if (composeHeading) composeHeading.textContent = 'Add announcement';
+      const submitBtn = composeForm?.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.textContent = 'Publish announcement';
       renderQueuedMedia();
     };
 
+    const clearQueuedMedia = resetComposeState;
+
     const renderQueuedMedia = () => {
+      const totalCount = existingAttachments.length + queuedMedia.length;
       if (mediaHelp) {
-        mediaHelp.textContent = queuedMedia.length
-          ? `${queuedMedia.length} file${queuedMedia.length === 1 ? '' : 's'} ready to upload (pictures or videos up to 50 MB each).`
+        mediaHelp.textContent = totalCount
+          ? `${totalCount} file${totalCount === 1 ? '' : 's'} attached${queuedMedia.length ? ` (${queuedMedia.length} new to upload)` : ''} — pictures or videos up to 50 MB each.`
           : 'No files selected. Any picture or video format up to 50 MB each.';
       }
       if (!mediaPreviews) return;
-      if (!queuedMedia.length) {
+      if (!totalCount) {
         mediaPreviews.hidden = true;
         mediaPreviews.replaceChildren();
         return;
       }
       mediaPreviews.hidden = false;
-      mediaPreviews.innerHTML = queuedMedia.map((entry, index) => `
+      const existingHtml = existingAttachments.map((media, index) => {
+        const url = existingPreviewUrls[media.path] || '';
+        const label = escapeHtml(media.name || (media.kind === 'video' ? 'video' : 'picture'));
+        const previewMarkup = url
+          ? (media.kind === 'video'
+            ? `<video src="${escapeHtml(url)}" muted playsinline preload="metadata"></video>`
+            : `<img src="${escapeHtml(url)}" alt="${label}">`)
+          : `<div class="announcement-preview-placeholder">${label}</div>`;
+        return `
+          <figure class="bug-image-card announcement-preview-card">
+            ${previewMarkup}
+            <button class="bug-image-remove" type="button" data-remove-existing-announcement-media="${index}" aria-label="Remove ${label}">&times;</button>
+          </figure>`;
+      }).join('');
+      const newHtml = queuedMedia.map((entry, index) => `
         <figure class="bug-image-card announcement-preview-card">
           ${entry.kind === 'video'
           ? `<video src="${escapeHtml(entry.previewUrl)}" muted playsinline preload="metadata"></video>`
           : `<img src="${escapeHtml(entry.previewUrl)}" alt="${escapeHtml(entry.file.name)}">`}
           <button class="bug-image-remove" type="button" data-remove-announcement-media="${index}" aria-label="Remove ${escapeHtml(entry.file.name)}">&times;</button>
         </figure>`).join('');
+      mediaPreviews.innerHTML = `${existingHtml}${newHtml}`;
+    };
+
+    const openEditor = async (item) => {
+      if (!item || !canDelete(item)) return;
+      const isRelease = item.announcement_type === 'RELEASE' || Boolean(item.release_version);
+      if (viewerDialog?.open) viewerDialog.close();
+      if (isRelease && typeof onEditRelease === 'function') {
+        onEditRelease(item);
+        return;
+      }
+      composeForm?.reset();
+      resetComposeState();
+      editingItem = item;
+      existingAttachments = Array.isArray(item.attachments) ? item.attachments.map((entry) => ({ ...entry })) : [];
+      if (composeHeading) composeHeading.textContent = 'Edit announcement';
+      const submitBtn = composeForm?.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.textContent = 'Save changes';
+      const titleEl = document.getElementById('announcement-title-input');
+      const descEl = document.getElementById('announcement-description-input');
+      if (titleEl) titleEl.value = item.title || '';
+      if (descEl) descEl.value = item.description || '';
+      renderQueuedMedia();
+      composeDialog.showModal();
+      titleEl?.focus();
+      if (existingAttachments.length) {
+        try {
+          const { urls = {} } = await invokeAccountFunction({ action: 'announcement-view-urls', announcement_id: item.id });
+          if (editingItem?.id === item.id && composeDialog.open) {
+            existingPreviewUrls = urls;
+            renderQueuedMedia();
+          }
+        } catch (_) { }
+      }
     };
 
     const renderList = () => {
@@ -10277,7 +10377,8 @@
         const isRelease = item.announcement_type === 'RELEASE' || Boolean(item.release_version);
         const isPinned = Boolean(item.is_pinned || item.pinned_at);
         const showVersion = isRelease && Boolean(item.release_version);
-        const showTopRow = isPinned || showVersion || canPin();
+        const allowEdit = canDelete(item);
+        const showTopRow = isPinned || showVersion || canPin() || allowEdit;
         const media = Array.isArray(item.attachments) ? item.attachments : [];
         return `
           <article class="announcement-item${isOwner ? ' is-owner' : ''}${isRelease ? ' is-release-update' : ''}${isPinned ? ' is-pinned' : ''}" data-announcement-id="${escapeHtml(item.id)}">
@@ -10288,7 +10389,7 @@
                     ${isPinned ? `<span class="announcement-pinned-badge" title="Pinned by Super Admin">${ANNOUNCEMENT_PIN_SVG}<span>Pinned</span></span>` : ''}
                     ${showVersion ? `<span class="announcement-version-chip">${escapeHtml(item.release_version)}</span>` : ''}
                   </div>
-                  ${canPin() ? `<button class="announcement-pin-btn${isPinned ? ' is-pinned' : ''}" type="button" data-announcement-pin="${escapeHtml(item.id)}" aria-pressed="${isPinned ? 'true' : 'false'}" aria-label="${isPinned ? 'Unpin announcement' : 'Pin announcement'}" title="${isPinned ? 'Pinned — click to unpin' : 'Pin announcement to top'}">${ANNOUNCEMENT_PIN_SVG}</button>` : ''}
+                  ${(allowEdit || canPin()) ? `<div class="announcement-card-icon-actions">${allowEdit ? `<button class="announcement-pin-btn announcement-edit-btn" type="button" data-announcement-edit="${escapeHtml(item.id)}" aria-label="Edit announcement" title="Edit announcement">${ANNOUNCEMENT_EDIT_SVG}</button>` : ''}${canPin() ? `<button class="announcement-pin-btn${isPinned ? ' is-pinned' : ''}" type="button" data-announcement-pin="${escapeHtml(item.id)}" aria-pressed="${isPinned ? 'true' : 'false'}" aria-label="${isPinned ? 'Unpin announcement' : 'Pin announcement'}" title="${isPinned ? 'Pinned — click to unpin' : 'Pin announcement to top'}">${ANNOUNCEMENT_PIN_SVG}</button>` : ''}</div>` : ''}
                 </div>` : ''}
               <div class="announcement-item-head">
                 <strong class="announcement-item-title">${escapeHtml(item.title)}</strong>
@@ -10341,7 +10442,9 @@
       }
       viewerDescription.innerHTML = renderAnnouncementDescriptionHtml(item.description, item.release_version);
       syncViewerPinUi(item);
-      viewerDelete.hidden = !canDelete(item);
+      const allowManage = canDelete(item);
+      viewerDelete.hidden = !allowManage;
+      if (viewerEditBtn) viewerEditBtn.hidden = !allowManage;
       if (viewerReactions) viewerReactions.innerHTML = renderReactionsBarHtml(item.id);
       const viewerReleaseFeatures = document.getElementById('announcement-viewer-release-features');
       if (viewerReleaseFeatures) viewerReleaseFeatures.replaceChildren();
@@ -10505,6 +10608,13 @@
           if (announcementId) openReactionsModal(announcementId);
           return;
         }
+        const editBtn = event.target.closest('[data-announcement-edit]');
+        if (editBtn) {
+          event.stopPropagation();
+          const target = items.find((entry) => entry.id === editBtn.dataset.announcementEdit);
+          if (target) openEditor(target);
+          return;
+        }
         const pinBtn = event.target.closest('[data-announcement-pin]');
         if (pinBtn) {
           event.stopPropagation();
@@ -10512,7 +10622,7 @@
           if (announcementId) handlePinToggle(announcementId, pinBtn);
           return;
         }
-        if (event.target.closest('.announcement-reactions-bar, [data-social-user-dp], [data-announcement-pin]')) return;
+        if (event.target.closest('.announcement-reactions-bar, [data-social-user-dp], [data-announcement-pin], [data-announcement-edit]')) return;
         const trigger = event.target.closest('[data-announcement-id]');
         if (!trigger) return;
         const target = items.find((entry) => entry.id === trigger.dataset.announcementId);
@@ -10626,7 +10736,7 @@
         const chosen = [...(mediaInput.files || [])];
         mediaInput.value = '';
         for (const file of chosen) {
-          if (queuedMedia.length >= MAX_ANNOUNCEMENT_FILES) {
+          if (existingAttachments.length + queuedMedia.length >= MAX_ANNOUNCEMENT_FILES) {
             toast(`You can attach up to ${MAX_ANNOUNCEMENT_FILES} files per announcement.`, 'error');
             break;
           }
@@ -10641,6 +10751,14 @@
       });
 
       mediaPreviews?.addEventListener('click', (event) => {
+        const existingBtn = event.target.closest('[data-remove-existing-announcement-media]');
+        if (existingBtn) {
+          const index = Number(existingBtn.dataset.removeExistingAnnouncementMedia);
+          const [removed] = existingAttachments.splice(index, 1);
+          if (removed?.path) removedAttachmentPaths.push(removed.path);
+          renderQueuedMedia();
+          return;
+        }
         const button = event.target.closest('[data-remove-announcement-media]');
         if (!button) return;
         const index = Number(button.dataset.removeAnnouncementMedia);
@@ -10648,6 +10766,13 @@
         if (removed) URL.revokeObjectURL(removed.previewUrl);
         renderQueuedMedia();
       });
+    }
+
+    if (viewerEditBtn) {
+      viewerEditBtn.onclick = () => {
+        const target = items.find((entry) => entry.id === openItemId);
+        if (target) openEditor(target);
+      };
     }
 
     if (viewerPinBtn) {
@@ -10691,43 +10816,42 @@
       const description = document.getElementById('announcement-description-input')?.value.trim() || '';
       if (!title || !description) return;
       const button = composeForm.querySelector('button[type="submit"]');
-      const client = getClient();
-      const announcementId = crypto.randomUUID();
-      const uploadedPaths = [];
-      setBusy(button, true, queuedMedia.some((entry) => /\.(mp4|mp3)$/i.test(entry.file.name)) ? 'Optimizing media…' : 'Publishing…');
+      const isEditing = Boolean(editingItem?.id);
+      const announcementId = isEditing ? editingItem.id : crypto.randomUUID();
+      const pendingRemovals = isEditing ? [...removedAttachmentPaths] : [];
+      let uploadedPaths = [];
+      setBusy(button, true, isEditing ? 'Saving…' : 'Publishing…');
       try {
-        const attachments = [];
-        if (queuedMedia.length) {
-          const media = await Promise.all(queuedMedia.map(async (entry) => ({ ...entry, file: await optimizeUploadMedia(entry.file) })));
-          setBusy(button, true, 'Uploading…');
-          const { uploads = [] } = await invokeAccountFunction({
-            action: 'announcement-upload-urls',
-            announcement_id: announcementId,
-            files: media.map((entry) => ({ name: entry.file.name, kind: entry.kind, type: entry.file.type }))
-          });
-          for (let i = 0; i < media.length; i += 1) {
-            const entry = media[i];
-            const upload = uploads[i];
-            if (!upload?.path || !upload?.token) throw new Error('Upload authorization missing.');
-            await uploadAuthorizedFile(client, 'announcements', upload, entry.file);
-            uploadedPaths.push(upload.path);
-            attachments.push({ path: upload.path, name: upload.name, kind: entry.kind, type: entry.file.type || '' });
-          }
-        }
-        await rpc('create_announcement', {
-          p_id: announcementId,
-          p_title: title,
-          p_description: description,
-          p_attachments: attachments,
-          p_announcement_type: 'GENERAL',
-          p_release_version: null
+        const uploaded = await uploadAnnouncementAttachments(announcementId, queuedMedia, {
+          onStatus: (label) => setBusy(button, true, label)
         });
+        uploadedPaths = uploaded.uploadedPaths;
+        if (isEditing) {
+          await rpc('update_announcement', {
+            p_announcement_id: announcementId,
+            p_title: title,
+            p_description: description,
+            p_attachments: [...existingAttachments, ...uploaded.attachments]
+          });
+          if (pendingRemovals.length) {
+            invokeAccountFunction({ action: 'announcement-cleanup-media', paths: pendingRemovals }).catch(() => { });
+          }
+        } else {
+          await rpc('create_announcement', {
+            p_id: announcementId,
+            p_title: title,
+            p_description: description,
+            p_attachments: uploaded.attachments,
+            p_announcement_type: 'GENERAL',
+            p_release_version: null
+          });
+        }
         composeDialog.close();
         composeForm.reset();
-        clearQueuedMedia();
+        resetComposeState();
         await load();
         notifyLiveSync('announcements');
-        toast('Announcement published.');
+        toast(isEditing ? 'Announcement updated.' : 'Announcement published.');
       } catch (error) {
         if (uploadedPaths.length) invokeAccountFunction({ action: 'announcement-cleanup-media', paths: uploadedPaths }).catch(() => { });
         toast(friendlyError(error), 'error');
@@ -16981,6 +17105,7 @@
     setOnlineVisibility, syncMessagesBadges,
     openTutorial: (...args) => window.IponTutorial?.open?.(...args),
     getCurrentUserId: () => currentProfile?.id || readShellSnapshot()?.userId || '',
+    classifyAnnouncementFile, uploadAnnouncementAttachments, MAX_ANNOUNCEMENT_FILES,
     updateLocalProfile(patch = {}) {
       if (currentProfile && patch && typeof patch === 'object') Object.assign(currentProfile, patch);
       return currentProfile;

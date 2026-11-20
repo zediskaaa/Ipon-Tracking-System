@@ -26,7 +26,7 @@ test('migration 20261118_109 permanently exempts breadspanish231@gmail.com from 
   assert.match(coreJs, /author_social_user_id/);
   assert.match(coreJs, /data-social-hover-dp=/);
   assert.match(coreJs, /announcement-owner-dp-btn/);
-  assert.match(coreJs, /event\.target\.closest\('\.announcement-reactions-bar, \[data-social-user-dp\](?:, \[data-announcement-pin\])?'\)/);
+  assert.match(coreJs, /event\.target\.closest\('\.announcement-reactions-bar, \[data-social-user-dp\](?:, \[data-announcement-pin\])?(?:, \[data-announcement-edit\])?'\)/);
   assert.match(css, /\.announcement-owner-dp-btn\s*\{/);
 
   const sql110 = read('database/migrations/20261118_110_exempt_additional_protected_account.sql');

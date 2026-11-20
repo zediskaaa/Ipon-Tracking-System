@@ -1251,7 +1251,7 @@ test('Super Admin can manage feature request statuses and publish release update
   assert.match(script, /review_feature_request/);
   assert.match(script, /openReleaseUpdateDialog/);
   assert.match(script, /req\.status === 'IMPLEMENTED' && !req\.release_version/);
-  assert.match(script, /confirmAction\(\{[\s\S]*?title:\s*'Publish release update\?'/);
+  assert.match(script, /confirmAction\(\{[\s\S]*?title:[\s\S]*?'Publish release update\?'/);
   assert.match(script, /p_announcement_type:\s*'RELEASE'/);
   assert.doesNotMatch(script, /RELEASE_INTROS|RELEASE_OUTROS|composeReleaseNotes|humanizeReleaseUpdate/);
   assert.match(script, /release-update-ai-btn/);
@@ -11297,7 +11297,7 @@ test('Write with AI keeps release announcements strictly factual without AI embe
   assert.doesNotMatch(edgeTs, /function pickUniqueDomainOutcome/);
   assert.match(saJs, /RELEASE_STYLE_ANGLES\s*=\s*\[[\s\S]*Strictly factual/);
   assert.doesNotMatch(saJs, /product story|high-energy|celebrating cleaner workflows/i);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261119-97/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261120-01/);
 
   // 2. Fallback composer produces crisp factual sentences with zero fabricated outcome padding
   const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
@@ -11342,7 +11342,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261120-163/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261120-164/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11369,7 +11369,7 @@ test('Migration 099 and Super Admin Users surface each user actual latest specif
   assert.doesNotMatch(saJs, /from\(['"](?:contributions|withdrawals|expenses|members|messages|budget_configs|budget_expenses)['"]\)/);
   assert.match(saJs, /Ipon\.client\.rpc\('super_admin_user_last_activities'\)/);
   assert.match(saJs, /function formatUserActivityLabel\(activity\)/);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261119-97/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261120-01/);
 
   // Verify formatUserActivityLabel handles both new specific RPC rows and legacy fallback events
   const fnMatch = saJs.match(/function formatUserActivityLabel\(activity\)\s*\{[\s\S]*?\n  \}/);

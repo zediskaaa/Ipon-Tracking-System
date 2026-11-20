@@ -163,7 +163,8 @@
   const announcements = Ipon.bindAnnouncements({
     listElement: document.getElementById('sa-announcement-list'),
     addButton: document.getElementById('sa-add-announcement'),
-    allowPin: true
+    allowPin: true,
+    onEditRelease: (item) => openEditReleaseUpdateDialog(item)
   });
   let profiles = [];
   let groups = [];
@@ -2750,8 +2751,153 @@
     }
   }
 
+  const releaseMediaInput = document.getElementById('release-update-media-input');
+  const releaseMediaHelp = document.getElementById('release-update-media-help');
+  const releaseMediaPreviews = document.getElementById('release-update-media-previews');
+  const releaseDialogTitleEl = document.getElementById('release-update-title');
+  const releaseDialogCopyEl = document.getElementById('release-update-copy');
+  const releaseSubmitBtn = document.getElementById('release-update-submit');
+  let editingReleaseAnnouncement = null;
+  let releaseQueuedMedia = [];
+  let releaseExistingAttachments = [];
+  let releaseExistingPreviewUrls = {};
+  let releaseRemovedPaths = [];
+
+  function renderReleaseMediaPreviews() {
+    const totalCount = releaseExistingAttachments.length + releaseQueuedMedia.length;
+    if (releaseMediaHelp) {
+      releaseMediaHelp.textContent = totalCount
+        ? `${totalCount} file${totalCount === 1 ? '' : 's'} attached${releaseQueuedMedia.length ? ` (${releaseQueuedMedia.length} new to upload)` : ''} — pictures or videos up to 50 MB each.`
+        : 'No files selected. Any picture or video format up to 50 MB each.';
+    }
+    if (!releaseMediaPreviews) return;
+    if (!totalCount) {
+      releaseMediaPreviews.hidden = true;
+      releaseMediaPreviews.replaceChildren();
+      return;
+    }
+    releaseMediaPreviews.hidden = false;
+    const existingHtml = releaseExistingAttachments.map((media, index) => {
+      const url = releaseExistingPreviewUrls[media.path] || '';
+      const label = Ipon.escapeHtml(media.name || (media.kind === 'video' ? 'video' : 'picture'));
+      const preview = url
+        ? (media.kind === 'video'
+          ? `<video src="${Ipon.escapeHtml(url)}" muted playsinline preload="metadata"></video>`
+          : `<img src="${Ipon.escapeHtml(url)}" alt="${label}">`)
+        : `<div class="announcement-preview-placeholder">${label}</div>`;
+      return `
+        <figure class="bug-image-card announcement-preview-card">
+          ${preview}
+          <button class="bug-image-remove" type="button" data-remove-release-existing="${index}" aria-label="Remove ${label}">&times;</button>
+        </figure>`;
+    }).join('');
+    const queuedHtml = releaseQueuedMedia.map((entry, index) => `
+      <figure class="bug-image-card announcement-preview-card">
+        ${entry.kind === 'video'
+        ? `<video src="${Ipon.escapeHtml(entry.previewUrl)}" muted playsinline preload="metadata"></video>`
+        : `<img src="${Ipon.escapeHtml(entry.previewUrl)}" alt="${Ipon.escapeHtml(entry.file.name)}">`}
+        <button class="bug-image-remove" type="button" data-remove-release-queued="${index}" aria-label="Remove ${Ipon.escapeHtml(entry.file.name)}">&times;</button>
+      </figure>`).join('');
+    releaseMediaPreviews.innerHTML = `${existingHtml}${queuedHtml}`;
+  }
+
+  function resetReleaseMediaState() {
+    releaseQueuedMedia.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+    releaseQueuedMedia = [];
+    releaseExistingAttachments = [];
+    releaseExistingPreviewUrls = {};
+    releaseRemovedPaths = [];
+    editingReleaseAnnouncement = null;
+    if (releaseMediaInput) releaseMediaInput.value = '';
+    if (releaseDialogTitleEl) releaseDialogTitleEl.textContent = 'Publish release update';
+    if (releaseDialogCopyEl) releaseDialogCopyEl.textContent = 'Announce a new system version and automatically link implemented requests.';
+    if (releaseSubmitBtn) releaseSubmitBtn.textContent = 'Publish release update';
+    renderReleaseMediaPreviews();
+  }
+
+  releaseMediaInput?.addEventListener('change', () => {
+    const maxFiles = Ipon.MAX_ANNOUNCEMENT_FILES || 20;
+    const chosen = [...(releaseMediaInput.files || [])];
+    releaseMediaInput.value = '';
+    for (const file of chosen) {
+      if (releaseExistingAttachments.length + releaseQueuedMedia.length >= maxFiles) {
+        Ipon.toast(`You can attach up to ${maxFiles} files per release update.`, 'error');
+        break;
+      }
+      try {
+        const kind = Ipon.classifyAnnouncementFile(file);
+        releaseQueuedMedia.push({ file, kind, previewUrl: URL.createObjectURL(file) });
+      } catch (error) {
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      }
+    }
+    renderReleaseMediaPreviews();
+  });
+
+  releaseMediaPreviews?.addEventListener('click', (event) => {
+    const existingBtn = event.target.closest('[data-remove-release-existing]');
+    if (existingBtn) {
+      const idx = Number(existingBtn.dataset.removeReleaseExisting);
+      const [removed] = releaseExistingAttachments.splice(idx, 1);
+      if (removed?.path) releaseRemovedPaths.push(removed.path);
+      renderReleaseMediaPreviews();
+      return;
+    }
+    const queuedBtn = event.target.closest('[data-remove-release-queued]');
+    if (queuedBtn) {
+      const idx = Number(queuedBtn.dataset.removeReleaseQueued);
+      const [removed] = releaseQueuedMedia.splice(idx, 1);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      renderReleaseMediaPreviews();
+    }
+  });
+
+  async function openEditReleaseUpdateDialog(item) {
+    if (!item || !releaseUpdateDialog || !releaseUpdateForm) return;
+    releaseUpdateForm.reset();
+    resetReleaseMediaState();
+    editingReleaseAnnouncement = item;
+    releaseExistingAttachments = Array.isArray(item.attachments) ? item.attachments.map((entry) => ({ ...entry })) : [];
+
+    const notice = document.getElementById('release-update-change-notice');
+    if (notice) notice.hidden = true;
+    const aiErrorEl = document.getElementById('release-update-ai-error');
+    if (aiErrorEl) {
+      aiErrorEl.hidden = true;
+      aiErrorEl.replaceChildren();
+    }
+    if (releaseDialogTitleEl) releaseDialogTitleEl.textContent = 'Edit release update';
+    if (releaseDialogCopyEl) releaseDialogCopyEl.textContent = 'Update the release version, announcement text, or attached pictures and videos.';
+    if (releaseSubmitBtn) releaseSubmitBtn.textContent = 'Save changes';
+
+    const versionInput = document.getElementById('release-update-version');
+    const dateInput = document.getElementById('release-update-date');
+    const titleInput = document.getElementById('release-update-heading');
+    const detailsInput = document.getElementById('release-update-details');
+
+    hasAiDraftInEditor = false;
+    if (versionInput) versionInput.value = item.release_version || '';
+    if (dateInput) dateInput.value = String(item.created_at || new Date().toISOString()).slice(0, 10);
+    if (titleInput) titleInput.value = item.title || '';
+    if (detailsInput) detailsInput.value = item.description || '';
+    renderReleaseMediaPreviews();
+    releaseUpdateDialog.showModal();
+    titleInput?.focus();
+
+    if (releaseExistingAttachments.length) {
+      try {
+        const { urls = {} } = await Ipon.invokeAccountFunction({ action: 'announcement-view-urls', announcement_id: item.id });
+        if (editingReleaseAnnouncement?.id === item.id && releaseUpdateDialog.open) {
+          releaseExistingPreviewUrls = urls;
+          renderReleaseMediaPreviews();
+        }
+      } catch (_) { }
+    }
+  }
+
   async function openReleaseUpdateDialog() {
     if (!releaseUpdateDialog || !releaseUpdateForm) return;
+    resetReleaseMediaState();
 
     const aiErrorEl = document.getElementById('release-update-ai-error');
     if (aiErrorEl) {
@@ -3048,6 +3194,7 @@
   document.getElementById('release-update-cancel')?.addEventListener('click', () => releaseUpdateDialog?.close());
   releaseUpdateDialog?.addEventListener('close', () => {
     releaseUpdateForm?.reset();
+    resetReleaseMediaState();
     hasAiDraftInEditor = false;
     const notice = document.getElementById('release-update-change-notice');
     if (notice) notice.hidden = true;
@@ -3088,39 +3235,76 @@
       return;
     }
 
+    const isEditing = Boolean(editingReleaseAnnouncement?.id);
     const confirmed = await Ipon.confirmAction({
-      title: 'Publish release update?',
-      message: `Publish "${title}" as a system release announcement to all users ? `,
-      acceptLabel: 'Publish update'
+      title: isEditing ? 'Save release update changes?' : 'Publish release update?',
+      message: isEditing
+        ? `Save your edits to "${title}"?`
+        : `Publish "${title}" as a system release announcement to all users?`,
+      acceptLabel: isEditing ? 'Save changes' : 'Publish update'
     });
     if (!confirmed) return;
 
-    const button = releaseUpdateForm.querySelector('[type="submit"]');
-    Ipon.setBusy(button, true, 'Publishing…');
+    const button = releaseSubmitBtn || releaseUpdateForm.querySelector('[type="submit"]');
+    const announcementId = isEditing ? editingReleaseAnnouncement.id : crypto.randomUUID();
+    const pendingRemovals = isEditing ? [...releaseRemovedPaths] : [];
+    let uploadedPaths = [];
+    Ipon.setBusy(button, true, isEditing ? 'Saving…' : 'Publishing…');
     try {
-      await Ipon.rpc('create_announcement', {
-        p_title: title,
-        p_description: details,
-        p_attachments: [],
-        p_announcement_type: 'RELEASE',
-        p_release_version: version
+      const uploaded = await Ipon.uploadAnnouncementAttachments(announcementId, releaseQueuedMedia, {
+        onStatus: (label) => Ipon.setBusy(button, true, label)
       });
-      // Mark all currently unreleased implemented requests & fixed bugs locally with this version
-      featureRequests.forEach((req) => {
-        if (req.status === 'IMPLEMENTED' && !req.release_version) {
-          req.release_version = version;
+      uploadedPaths = uploaded.uploadedPaths;
+      if (isEditing) {
+        const previousVersion = editingReleaseAnnouncement.release_version;
+        await Ipon.rpc('update_announcement', {
+          p_announcement_id: announcementId,
+          p_title: title,
+          p_description: details,
+          p_attachments: [...releaseExistingAttachments, ...uploaded.attachments],
+          p_release_version: version
+        });
+        if (pendingRemovals.length) {
+          Ipon.invokeAccountFunction({ action: 'announcement-cleanup-media', paths: pendingRemovals }).catch(() => { });
         }
-      });
-      bugReports.forEach((bug) => {
-        if ((bug.status || 'OPEN') === 'FIXED' && !bug.release_version) {
-          bug.release_version = version;
+        if (previousVersion && previousVersion !== version) {
+          featureRequests.forEach((req) => {
+            if (req.release_version === previousVersion) req.release_version = version;
+          });
+          bugReports.forEach((bug) => {
+            if (bug.release_version === previousVersion) bug.release_version = version;
+          });
         }
-      });
+      } else {
+        await Ipon.rpc('create_announcement', {
+          p_id: announcementId,
+          p_title: title,
+          p_description: details,
+          p_attachments: uploaded.attachments,
+          p_announcement_type: 'RELEASE',
+          p_release_version: version
+        });
+        // Mark all currently unreleased implemented requests & fixed bugs locally with this version
+        featureRequests.forEach((req) => {
+          if (req.status === 'IMPLEMENTED' && !req.release_version) {
+            req.release_version = version;
+          }
+        });
+        bugReports.forEach((bug) => {
+          if ((bug.status || 'OPEN') === 'FIXED' && !bug.release_version) {
+            bug.release_version = version;
+          }
+        });
+      }
       releaseUpdateDialog.close();
       releaseUpdateForm.reset();
-      Ipon.toast('Release update published successfully.');
+      resetReleaseMediaState();
+      Ipon.toast(isEditing ? 'Release update saved.' : 'Release update published successfully.');
       await load();
     } catch (error) {
+      if (uploadedPaths.length) {
+        Ipon.invokeAccountFunction({ action: 'announcement-cleanup-media', paths: uploadedPaths }).catch(() => { });
+      }
       if (String(error?.message || '').toLowerCase().includes('already been published')) {
         Ipon.setFieldError(versionInput, 'Release version already exists. Please choose a unique version.');
         versionInput.focus();
