@@ -1,47 +1,47 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com; connect-src 'self' https://cdn.jsdelivr.net https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Savings Goals — myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261120-19"><link rel="stylesheet" href="css/tutorial.css?v=20261120-05">  <script src="js/config.js?v=20261120-77"></script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com; media-src 'self' data: blob: https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com; connect-src 'self' https://cdn.jsdelivr.net https://woslmwokhhyszkgevnli.supabase.co https://4b0fc7ef59cd45a047da632eba75d8af.r2.cloudflarestorage.com wss://woslmwokhhyszkgevnli.supabase.co https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Savings Goals — myIPON</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/app.css?v=20261120-22"><link rel="stylesheet" href="css/tutorial.css?v=20261120-05">  <script src="js/config.js?v=20261120-77"></script>
 </head>
 <body data-page="savings"><div class="app-layout"><aside class="app-sidebar" id="app-sidebar"></aside><main class="workspace">
-  <header class="page-header"><div><h1>Savings goals</h1><p>Set shared targets against the confirmed tracked-savings total. Goals guide the group; they do not reserve or move money.</p></div><div class="header-actions" data-role="ADMIN"><button class="button button-secondary" id="open-savings-bin" type="button">Recycle bin</button><button class="button button-primary" id="finish-savings-cycle" type="button" data-requires-data>Finish &amp; reset batch</button></div></header>
+  <header class="page-header"><div><h1>Savings goals</h1><p id="savings-page-subtitle">Set shared targets against the confirmed tracked-savings total. Goals guide the group; they do not reserve or move money.</p></div><div class="header-actions" data-role="ADMIN"><button class="button button-secondary" id="open-savings-bin" type="button">Recycle bin</button><button class="button button-primary" id="finish-savings-cycle" type="button" data-requires-data>Finish &amp; reset batch</button></div></header>
   <nav class="record-tabs" aria-label="Record types"><a href="contributions.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg><span>Additions</span></a><a href="withdrawals.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg><span>Deductions</span></a><a href="expenses.html" data-group-only="1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg><span>Expenses</span></a><a class="is-active" href="savings.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg><span>Goals</span></a><a href="requests.html" data-group-only="1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>Requests</span></a></nav>
   <section class="stats-grid"><article class="stat-card"><span>Tracked savings</span><strong id="tracked-savings">—</strong></article><article class="stat-card"><span>Active goals</span><strong id="active-goals">—</strong></article><article class="stat-card"><span>Combined targets</span><strong id="goal-targets">—</strong></article><article class="stat-card"><span>Nearest target date</span><strong id="nearest-date">—</strong></article></section>
   <div class="savings-layout">
-    <section class="panel savings-goals-panel"><div class="panel-header"><div><h2>Shared targets<button class="info-tip-btn" type="button" data-info-tip="Goals track how close the whole group's savings are to a target amount. Active goals never auto-expire during retention—only goals marked done or removed go to the 30-day Recycle Bin." aria-label="About shared targets" aria-expanded="false">i</button></h2><p>Progress uses the same confirmed tracked total for transparency.</p></div><div class="goal-header-actions"><button class="button button-primary" id="add-goal" type="button" data-role="ADMIN">+ Add goal</button></div></div><p class="savings-protection-note"><strong>Long-term savings protected while active:</strong> Ongoing goals and active savings ledgers never auto-expire while your group saves—even across years. If savings &amp; goals sit completely untouched (0 deposits or goal updates), we email reminders at <strong>90 days</strong> and a final <strong>7-day warning at 6 months</strong> before moving dormant data to the <strong>30-day Bin</strong>.</p><div class="goal-list" id="goal-list"><div class="empty-state">Loading goals…</div></div></section>
+    <section class="panel savings-goals-panel"><div class="panel-header"><div><h2><span id="savings-targets-heading">Shared targets</span><button class="info-tip-btn" type="button" data-info-tip="Goals track how close your savings are to a target amount. Active goals never auto-expire during retention—only goals marked done or removed go to the 30-day Recycle Bin." aria-label="About savings targets" aria-expanded="false">i</button></h2><p>Progress uses the same confirmed tracked total for transparency.</p></div><div class="goal-header-actions"><button class="button button-primary" id="add-goal" type="button" data-role="ADMIN">+ Add goal</button></div></div><p class="savings-protection-note"><strong>Long-term savings protected while active:</strong> Ongoing goals and active savings ledgers never auto-expire while you save—even across years. If savings &amp; goals sit completely untouched (0 deposits or goal updates), we email reminders at <strong>90 days</strong> and a final <strong>7-day warning at 6 months</strong> before moving dormant data to the <strong>30-day Bin</strong>.</p><div class="goal-list" id="goal-list"><div class="empty-state">Loading goals…</div></div></section>
     <section class="panel goal-calc-panel" aria-labelledby="goal-calc-title">
       <div class="panel-header">
         <div>
           <span class="calc-eyebrow">What-if planner</span>
-          <h2 id="goal-calc-title">Goal calculator<button class="info-tip-btn" type="button" data-info-tip="A planning tool to test how much everyone needs to save per day, week, or month to hit a target date. You can save plans across devices without changing real funds." aria-label="About goal calculator" aria-expanded="false">i</button></h2>
-          <p>Simulate any custom scenario, save plans to compare later, or promote one into a shared goal.</p>
+          <h2 id="goal-calc-title">Goal calculator<button class="info-tip-btn" type="button" data-info-tip="A planning tool to test how much you need to save per day, week, or month to hit a target date. You can save plans across devices without changing real funds." aria-label="About goal calculator" aria-expanded="false">i</button></h2>
+          <p id="calc-panel-subtitle">Simulate any custom scenario, save plans to compare later, or promote one into a shared goal.</p>
         </div>
       </div>
       <div class="calc-saved-plans" id="calc-saved-plans" hidden></div>
       <div class="form-grid calc-form-grid">
-        <div class="field field-wide">
+        <div class="field field-wide" id="calc-preset-field" hidden>
           <label for="calc-goal-preset">Scenario / saved plan</label>
-          <select id="calc-goal-preset"><option value="">Custom plan (edit fields below)</option></select>
+          <select id="calc-goal-preset"><option value="">New blank plan</option></select>
         </div>
         <div class="field field-wide">
           <label for="calc-plan-name">Plan title</label>
-          <input id="calc-plan-name" type="text" maxlength="150" placeholder="e.g. Emergency Fund or Outing Budget">
+          <input id="calc-plan-name" type="text" maxlength="150" autocomplete="off" placeholder="e.g. Emergency Fund or Outing Budget">
         </div>
         <div class="field">
           <label for="calc-target">Target amount (₱)</label>
-          <input id="calc-target" type="number" min="1" max="999999999999.99" step="0.01" inputmode="decimal" value="50000">
+          <input id="calc-target" type="number" min="1" max="999999999999.99" step="0.01" inputmode="decimal" autocomplete="off" placeholder="0.00">
         </div>
         <div class="field">
           <label for="calc-current">Current savings (₱)</label>
           <div class="calc-input-with-btn">
-            <input id="calc-current" type="number" min="0" max="999999999999.99" step="0.01" inputmode="decimal" value="0">
-            <button class="button button-secondary button-sm" id="calc-sync-balance" type="button" title="Use group tracked savings">Sync</button>
+            <input id="calc-current" type="number" min="0" max="999999999999.99" step="0.01" inputmode="decimal" autocomplete="off" placeholder="0.00">
+            <button class="button button-secondary button-sm" id="calc-sync-balance" type="button" title="Use tracked savings">Sync</button>
           </div>
         </div>
         <div class="field">
           <label for="calc-date">Target date</label>
-          <input id="calc-date" type="date" min="2000-01-01" max="2100-12-31">
+          <input id="calc-date" type="date" min="2000-01-01" max="2100-12-31" autocomplete="off">
         </div>
-        <div class="field">
+        <div class="field" data-group-only="1">
           <label for="calc-members">Split among members</label>
-          <input id="calc-members" type="number" min="1" max="500" step="1" value="1">
+          <input id="calc-members" type="number" min="1" max="500" step="1" inputmode="numeric" autocomplete="off" placeholder="1">
         </div>
       </div>
       <div class="calc-plan-actions">
@@ -52,30 +52,64 @@
         </div>
       </div>
       <div class="calc-summary-banner" id="calc-timeline-note">Adjust the fields above to simulate your savings pace.</div>
-      <div class="calc-results-grid" aria-live="polite">
-        <article class="calc-kpi"><span>Remaining needed</span><strong id="calc-remaining">—</strong><small id="calc-remaining-sub">To reach target</small></article>
-        <article class="calc-kpi is-accent"><span>Per day</span><strong id="calc-daily">—</strong><small id="calc-daily-sub">Group pace</small></article>
-        <article class="calc-kpi"><span>Per week</span><strong id="calc-weekly">—</strong><small id="calc-weekly-sub">Group pace</small></article>
-        <article class="calc-kpi"><span>Per month</span><strong id="calc-monthly">—</strong><small id="calc-monthly-sub">Group pace</small></article>
+      <div class="calc-remaining-summary" aria-live="polite">
+        <div class="calc-remaining-copy">
+          <span class="calc-remaining-label">Remaining needed</span>
+          <small id="calc-remaining-sub">To reach target</small>
+        </div>
+        <strong class="calc-remaining-value" id="calc-remaining">—</strong>
       </div>
-      <div class="calc-footer-actions" data-role="ADMIN">
-        <button class="button button-secondary" id="calc-update-goal" type="button" hidden>Update shared goal</button>
-        <button class="button button-primary" id="calc-create-goal" type="button">Create goal from plan</button>
+      <div class="calc-pace-section-head">
+        <span>Choose a saving pace</span>
+        <small>Tap one to select</small>
+      </div>
+      <div class="calc-results-grid calc-pace-grid" aria-live="polite">
+        <button class="calc-kpi is-selectable" type="button" data-calc-pace="DAILY" aria-pressed="false" title="Use Daily deposit pace when creating a goal"><div class="calc-kpi-top"><span>Per day</span><i class="calc-pace-radio" aria-hidden="true"></i></div><strong id="calc-daily">—</strong><small id="calc-daily-sub">Deposit / day</small></button>
+        <button class="calc-kpi is-selectable" type="button" data-calc-pace="WEEKLY" aria-pressed="false" title="Use Weekly deposit pace when creating a goal"><div class="calc-kpi-top"><span>Per week</span><i class="calc-pace-radio" aria-hidden="true"></i></div><strong id="calc-weekly">—</strong><small id="calc-weekly-sub">Deposit / week</small></button>
+        <button class="calc-kpi is-selectable" type="button" data-calc-pace="MONTHLY" aria-pressed="false" title="Use Monthly deposit pace when creating a goal"><div class="calc-kpi-top"><span>Per month</span><i class="calc-pace-radio" aria-hidden="true"></i></div><strong id="calc-monthly">—</strong><small id="calc-monthly-sub">Deposit / month</small></button>
+      </div>
+      <div class="calc-footer-actions">
+        <button class="button button-primary" id="calc-start-workspace" type="button" hidden disabled>Activate solo tracker &amp; goal</button>
+        <button class="button button-secondary" id="calc-update-goal" type="button" data-role="ADMIN" hidden disabled>Update shared goal</button>
+        <button class="button button-primary" id="calc-create-goal" type="button" data-role="ADMIN" disabled>Create goal from plan</button>
       </div>
     </section>
   </div>
   <dialog class="form-dialog" id="goal-dialog" aria-labelledby="goal-form-title" data-role="ADMIN">
     <div class="form-dialog-sheet">
       <header class="form-dialog-header"><div><h2 id="goal-form-title">Add goal</h2><p id="goal-form-copy">Create a shared savings target.</p></div><button class="dialog-close" id="close-goal-dialog" type="button" aria-label="Close goal form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
-      <form id="goal-form" class="form-grid"><input type="hidden" name="goal_id">
-        <div class="field field-wide"><label for="goal-title">Goal title</label><input id="goal-title" name="title" minlength="2" maxlength="150" required></div>
-        <div class="field"><label for="target-amount">Target amount</label><input id="target-amount" name="target_amount" type="number" min="0.01" max="999999999999.99" step="0.01" required></div>
-        <div class="field"><label for="target-date">Target date</label><input id="target-date" name="target_date" type="date" min="2000-01-01" max="2100-12-31"></div>
+      <form id="goal-form" class="form-grid" autocomplete="off"><input type="hidden" name="goal_id">
+        <div class="field field-wide"><label for="goal-title">Goal title</label><input id="goal-title" name="title" minlength="2" maxlength="150" autocomplete="off" required></div>
+        <div class="field"><label for="target-amount">Target amount (₱)</label><input id="target-amount" name="target_amount" type="number" min="0.01" max="999999999999.99" step="0.01" inputmode="decimal" autocomplete="off" placeholder="0.00" required></div>
         <div class="field"><label for="goal-status">Status</label><select id="goal-status" name="status"><option>ACTIVE</option><option>COMPLETED</option><option>CANCELLED</option></select></div>
+        <div class="field"><label for="goal-duration-count">Reach in (optional)</label><div class="goal-duration-row"><input id="goal-duration-count" type="number" min="1" max="3650" step="1" inputmode="numeric" autocomplete="off" placeholder="e.g. 30" aria-label="Target duration count"><select id="goal-duration-unit" aria-label="Target duration unit"><option value="DAYS">Days</option><option value="WEEKS">Weeks</option><option value="MONTHS">Months</option></select></div></div>
+        <div class="field"><label for="target-date">Target date</label><input id="target-date" name="target_date" type="date" min="2000-01-01" max="2100-12-31" autocomplete="off"></div>
+        <div class="field field-wide goal-schedule-section">
+          <div class="goal-schedule-head">
+            <label for="goal-saving-frequency">Saving schedule &amp; reminders</label>
+            <small id="goal-suggest-note">Pick a suggested pace below or enter your own deposit.</small>
+          </div>
+          <select id="goal-saving-frequency" name="saving_frequency">
+            <option value="NONE">Flexible (no reminder schedule)</option>
+            <option value="DAILY">Daily deposits</option>
+            <option value="WEEKLY">Weekly deposits</option>
+            <option value="MONTHLY">Monthly deposits</option>
+          </select>
+          <div class="goal-suggestion-grid" id="goal-suggestion-grid" role="group" aria-label="Suggested deposit schedules">
+            <button class="goal-suggest-card" type="button" data-suggest-freq="DAILY" aria-pressed="false"><span>Daily</span><strong id="goal-suggest-daily">—</strong><small id="goal-suggest-daily-sub">Per day</small></button>
+            <button class="goal-suggest-card" type="button" data-suggest-freq="WEEKLY" aria-pressed="false"><span>Weekly</span><strong id="goal-suggest-weekly">—</strong><small id="goal-suggest-weekly-sub">Per week</small></button>
+            <button class="goal-suggest-card" type="button" data-suggest-freq="MONTHLY" aria-pressed="false"><span>Monthly</span><strong id="goal-suggest-monthly">—</strong><small id="goal-suggest-monthly-sub">Per month</small></button>
+          </div>
+          <div class="goal-schedule-fields" id="goal-schedule-fields" hidden>
+            <div class="field"><label for="goal-scheduled-amount">Scheduled deposit (₱)</label><input id="goal-scheduled-amount" name="scheduled_amount" type="number" min="0.01" max="999999999999.99" step="0.01" inputmode="decimal" autocomplete="off" placeholder="0.00"></div>
+            <div class="field"><label for="goal-schedule-start">Schedule starts</label><input id="goal-schedule-start" name="schedule_start_date" type="date" min="2000-01-01" max="2100-12-31" autocomplete="off"></div>
+            <p class="goal-schedule-help field-wide" id="goal-schedule-help">Missed deposits trigger an unpaid notification and carry over to auto-fill your next deposit. Paying extra automatically reduces your next deposit.</p>
+          </div>
+        </div>
         <div class="field field-wide"><label for="goal-notes">Notes</label><textarea id="goal-notes" name="notes" maxlength="500"></textarea></div>
         <div class="form-actions field-wide"><button class="button button-secondary" id="cancel-goal-edit" type="button">Cancel</button><button class="button button-primary" type="submit" data-requires-data>Save goal</button></div>
       </form>
     </div>
   </dialog>
-</main></div><script src="js/profile-effects.js?v=20261118-01"></script><script src="js/core.js?v=20261120-168"></script><script src="js/tutorial.js?v=20261120-07"></script><script src="js/policy.js?v=20261119-09"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/messages.js?v=20261120-14"></script><script src="js/savings.js?v=20261116-84"></script></body></html>
+</main></div><script src="js/profile-effects.js?v=20261118-01"></script><script src="js/core.js?v=20261120-169"></script><script src="js/tutorial.js?v=20261120-07"></script><script src="js/policy.js?v=20261119-09"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script><script src="js/messages.js?v=20261120-14"></script><script src="js/savings.js?v=20261120-93"></script></body></html>
 

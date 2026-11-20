@@ -834,7 +834,7 @@ test('dashboard lets users choose the calendar tracking goal and uses a bounded 
   assert.match(html, /id="mobile-calendar-goal-select"[^>]*>[\s\S]*?General savings/);
   assert.doesNotMatch(html, /id="dashboard-completion"/);
   assert.match(script, /rpc\('get_pending_review_summary'\)/);
-  assert.match(script, /from\('savings_goals'\)\.select\('id,title,target_amount,target_date'\)[\s\S]*?eq\('status', 'ACTIVE'\)/);
+  assert.match(script, /from\('savings_goals'\)\.select\('id,title,target_amount,target_date[^']*'\)[\s\S]*?eq\('status', 'ACTIVE'\)/);
   assert.match(script, /renderGoalOptions\(activeGoalsList\)/);
   assert.doesNotMatch(script, /goalResult/);
   assert.match(script, /goalPrefStorageKey\(groupId\)/);
@@ -11317,7 +11317,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261120-168/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261120-169/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

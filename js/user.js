@@ -26,6 +26,8 @@
   });
   let groupPaymentInfo = null;
   let ownMonthlyAmount = 0;
+  let activeScheduledGoals = [];
+  let groupTrackedSavings = 0;
   const statusRowsByMonth = new Map();
   let historyRowsById = new Map();
   let commentCounts = new Map();
@@ -115,15 +117,25 @@
       body.innerHTML = '<tr><td colspan="7" class="empty-state">No member profile is linked to this account.</td></tr>';
       return;
     }
-    const [summaryResult, historyResult, paymentInfo, ownMemberResult] = await Promise.all([
+    const [summaryResult, historyResult, paymentInfo, ownMemberResult, groupSummaryResult, activeGoalsResult] = await Promise.all([
       Ipon.client.rpc('get_user_dashboard'),
       (() => { let query = Ipon.client.from('contributions').select('id,amount,payment_date,transaction_reference,payment_method,notes,approval_status,review_note,void_reason,receipt_url,contribution_periods!inner(period_month,member_id)', { count: 'exact' }).eq('contribution_periods.member_id', state.profile.member_id).order('payment_date', { ascending: false }); if (statusFilter.value) query = query.eq('approval_status', statusFilter.value); return query.range(historyPage * pageSize, (historyPage + 1) * pageSize - 1); })(),
       Ipon.rpc('get_group_payment_info').catch(() => null),
-      Ipon.client.from('members').select('monthly_contribution_amount,payout_channel,payout_account_number,payout_account_name').eq('id', state.profile.member_id).maybeSingle()
+      Ipon.client.from('members').select('monthly_contribution_amount,payout_channel,payout_account_number,payout_account_name').eq('id', state.profile.member_id).maybeSingle(),
+      Ipon.rpc('get_savings_summary').catch(() => null),
+      (async () => {
+        try {
+          return await Ipon.client.from('savings_goals').select('id,title,target_amount,target_date,saving_frequency,scheduled_amount,schedule_start_date,schedule_baseline_amount,status,created_at').eq('status', 'ACTIVE').order('created_at', { ascending: false });
+        } catch {
+          return { data: [] };
+        }
+      })()
     ]);
     if (summaryResult.error) throw summaryResult.error;
     if (historyResult.error) throw historyResult.error;
     ownMonthlyAmount = Number(ownMemberResult?.data?.monthly_contribution_amount || 0);
+    groupTrackedSavings = Number(groupSummaryResult?.tracked_savings || 0);
+    activeScheduledGoals = Array.isArray(activeGoalsResult?.data) ? activeGoalsResult.data : [];
     statusRowsByMonth.clear();
     renderPaymentCard(paymentInfo);
     renderOwnPayoutStrip(ownMemberResult?.data || state.profile);
@@ -178,15 +190,42 @@
     await load();
   }
 
-  document.getElementById('submit-contribution').addEventListener('click', () => {
+  function openContributionModalWithGoal(preferredGoalId = '') {
     if (!state.profile.group_id || !state.profile.member_id) {
       Ipon.showGroupRequiredDialog({ hasGroup: Boolean(state.profile.group_id) });
       return;
     }
     form.reset(); receiptPicker.clear(); form.elements.contribution_month.value = Ipon.monthStart().slice(0, 7); form.elements.payment_date.value = Ipon.isoDate();
     Ipon.setPaymentMethod(form, Ipon.guessPaymentMethodFromLabel(groupPaymentInfo?.payment_method_label, 'CASH'));
+    const goalHintEl = document.getElementById('user-goal-autofill-hint');
+    const picked = typeof Ipon.pickActiveScheduledGoal === 'function'
+      ? Ipon.pickActiveScheduledGoal(activeScheduledGoals, { preferredGoalId, trackedSavings: groupTrackedSavings })
+      : null;
+    if (picked && picked.status.nextAutoFillAmount > 0) {
+      const { status } = picked;
+      form.elements.amount.value = status.nextAutoFillAmount.toFixed(2);
+      if (goalHintEl) {
+        const tone = status.status === 'OVERDUE_CARRYOVER'
+          ? 'is-overdue'
+          : status.status === 'DUE_NOW'
+            ? 'is-unpaid'
+            : status.status === 'AHEAD_CREDIT'
+              ? 'is-ahead'
+              : 'is-ontrack';
+        goalHintEl.className = `goal-autofill-hint ${tone}`;
+        goalHintEl.textContent = status.autofillHint;
+        goalHintEl.hidden = !status.autofillHint;
+      }
+    } else if (goalHintEl) {
+      goalHintEl.hidden = true;
+      goalHintEl.textContent = '';
+    }
     syncUserExcessToggle().catch(() => {});
     dialog.showModal(); form.elements.amount.focus();
+  }
+
+  document.getElementById('submit-contribution').addEventListener('click', () => {
+    openContributionModalWithGoal('');
   });
   document.getElementById('close-contribution-dialog').addEventListener('click', () => dialog.close());
   document.getElementById('cancel-contribution').addEventListener('click', () => dialog.close());
@@ -406,6 +445,11 @@
   };
   try { await refresh(); } catch (error) { Ipon.showInlineError(body, error, refresh, 7); } finally { Ipon.setLoading(false); }
   Ipon.consumeDeepLink(async (params) => {
+    const goalDueId = params.get('goal_due') || '';
+    if (goalDueId) {
+      openContributionModalWithGoal(goalDueId);
+      return true;
+    }
     const threadRef = parseTypedRef(params.get('thread'));
     if (threadRef) {
       await focusUserRow(threadRef.id);

@@ -100,6 +100,9 @@
   const profilesByMemberId = new Map();
   const profilesByName = new Map();
   const statusRowsByMonth = new Map();
+  let activeScheduledGoals = [];
+  let trackedSavingsTotal = 0;
+  let preferredGoalDueId = new URLSearchParams(window.location.search).get('goal_due') || '';
   let pendingSubmissionKey = null;
   let recordRows = [];
 
@@ -190,12 +193,64 @@
     })
     : async () => {};
 
-  async function syncSuggestedAmount() {
+  async function loadScheduledGoalContext() {
+    if (page !== 'contributions' || !state.profile?.group_id) return;
+    try {
+      const [summaryRes, goalsRes] = await Promise.all([
+        Ipon.client.rpc('get_savings_summary'),
+        Ipon.client
+          .from('savings_goals')
+          .select('id,title,target_amount,target_date,saving_frequency,scheduled_amount,schedule_start_date,schedule_baseline_amount,status,created_at')
+          .eq('status', 'ACTIVE')
+          .order('created_at', { ascending: false })
+      ]);
+      if (!summaryRes.error && summaryRes.data) {
+        trackedSavingsTotal = Number(summaryRes.data.tracked_savings || 0);
+      }
+      if (!goalsRes.error) {
+        activeScheduledGoals = goalsRes.data || [];
+      }
+    } catch { /* fallback gracefully to member dues */ }
+  }
+
+  async function syncSuggestedAmount({ preferGoal = false } = {}) {
     if (page !== 'contributions') return;
     const memberSelect = document.getElementById('member-id');
     const monthInput = document.getElementById('contribution-month');
     const amountInput = document.getElementById('amount');
+    const goalHintEl = document.getElementById('record-goal-autofill-hint');
     if (!memberSelect || !monthInput || !amountInput) return;
+
+    const pickedGoal = typeof Ipon.pickActiveScheduledGoal === 'function'
+      ? Ipon.pickActiveScheduledGoal(activeScheduledGoals, {
+        preferredGoalId: preferredGoalDueId,
+        trackedSavings: trackedSavingsTotal
+      })
+      : null;
+
+    if (pickedGoal && pickedGoal.status.nextAutoFillAmount > 0 && (preferGoal || preferredGoalDueId || pickedGoal.status.enabled)) {
+      const { status } = pickedGoal;
+      amountInput.value = status.nextAutoFillAmount.toFixed(2);
+      if (goalHintEl) {
+        const tone = status.status === 'OVERDUE_CARRYOVER'
+          ? 'is-overdue'
+          : status.status === 'DUE_NOW'
+            ? 'is-unpaid'
+            : status.status === 'AHEAD_CREDIT'
+              ? 'is-ahead'
+              : 'is-ontrack';
+        goalHintEl.className = `goal-autofill-hint ${tone}`;
+        goalHintEl.textContent = status.autofillHint;
+        goalHintEl.hidden = !status.autofillHint;
+      }
+      await syncExcessToggle();
+      return;
+    }
+
+    if (goalHintEl) {
+      goalHintEl.hidden = true;
+      goalHintEl.textContent = '';
+    }
 
     const { statusRow, fallbackMonthlyAmount } = await resolveMemberMonthStatus(memberSelect.value, monthInput.value);
     if (statusRow) {
@@ -665,7 +720,7 @@
 
   async function load(preserveAmount = false) {
     try {
-      await loadMembers();
+      await Promise.all([loadMembers(), loadScheduledGoalContext()]);
       await renderMemberSpotlight();
       if (page === 'contributions') await loadContributions(preserveAmount);
       else await loadTransactions();
@@ -1025,6 +1080,14 @@
       });
       return true;
     }
+    const goalDueId = params.get('goal_due') || '';
+    if (goalDueId && page === 'contributions') {
+      preferredGoalDueId = goalDueId;
+      await syncSuggestedAmount({ preferGoal: true });
+      Ipon.highlightFocus('#record-form');
+      document.getElementById('amount')?.focus();
+      return true;
+    }
     const reminderMonth = params.get('reminder') || '';
     const exemptionMonth = params.get('exemption') || '';
     if (reminderMonth || exemptionMonth) {
@@ -1048,7 +1111,7 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges(page, ['members', 'group_memberships', 'financial_change_requests', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'record_comments'], async () => {
+  Ipon.subscribeToChanges(page, ['members', 'group_memberships', 'financial_change_requests', 'contribution_periods', 'contributions', 'withdrawals', 'expenses', 'savings_goals', 'record_comments'], async () => {
     await Ipon.refreshMyPermissions?.().catch(() => { });
     return load(true);
   });

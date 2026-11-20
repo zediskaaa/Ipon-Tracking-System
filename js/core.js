@@ -7733,11 +7733,20 @@
     }
 
     const safe = safeNotificationTarget(rawLink);
+    const dedupe = String(item.dedupe_key || '');
+    if (type === 'GOAL_REMINDER') {
+      const idFromLink = safe.match(/[?&](?:record_goal|goal_due)=([0-9a-f-]+)/i);
+      const idFromDedupe = dedupe.match(/^GOAL_REMINDER:([0-9a-f-]+):/i);
+      const goalId = (idFromLink && idFromLink[1]) || (idFromDedupe && idFromDedupe[1]) || '';
+      if (role === 'MEMBER') {
+        return goalId ? `user.html?goal_due=${encodeQueryValue(goalId)}` : 'user.html';
+      }
+      return goalId ? `dashboard.html?record_goal=${encodeQueryValue(goalId)}` : 'dashboard.html';
+    }
+
     if (safe && !/^https?:\/\//i.test(safe) && safe.includes('?')) {
       return normalizeRolePageTarget(safe, role);
     }
-
-    const dedupe = String(item.dedupe_key || '');
     if (type === 'ANNOUNCEMENT_REACTION') {
       const match = dedupe.match(/^ANNOUNCEMENT_REACTION:([0-9a-f-]+):/i);
       if (match) return `${annPage}?announcement=${encodeQueryValue(match[1])}${annHash}`;
@@ -8467,6 +8476,21 @@
       if (!row?.due_date || nextId >= 900038) continue;
       const dueDay = new Date(`${row.due_date}T09:00:00+08:00`);
       if (Number.isNaN(dueDay.getTime())) continue;
+      if (row.kind === 'GOAL') {
+        const amountCopy = row.outstanding_amount ? ` (PHP ${Number(row.outstanding_amount).toFixed(2)} due)` : '';
+        const freqLabel = String(row.saving_frequency || 'scheduled').toLowerCase();
+        if (dueDay.getTime() > nowMs + 60000 && nextId < 900040) {
+          notifications.push({
+            id: nextId++,
+            title: 'Savings goal deposit due',
+            body: `Your ${freqLabel} deposit for "${row.goal_title || 'your savings goal'}" is due on ${row.due_date}${amountCopy}.`,
+            channelId: 'myipon_alerts',
+            schedule: { at: dueDay, allowWhileIdle: true },
+            extra: { link: row.link || 'dashboard.html' }
+          });
+        }
+        continue;
+      }
       const threeDaysBefore = new Date(dueDay.getTime() - (3 * 86400000));
       const amountCopy = row.outstanding_amount ? ` (PHP ${Number(row.outstanding_amount).toFixed(2)} remaining)` : '';
       const monthIso = row.period_month ? String(row.period_month).slice(0, 7) : '';
@@ -8581,9 +8605,11 @@
         const safeTarget = isInvite ? '' : resolveNotificationTarget(item);
         const iconPath = item.type === 'GROUP_INVITE' || item.type === 'SOCIAL_FRIEND_REQUEST' || item.type === 'SOCIAL_FRIEND_ACCEPTED'
           ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'
-          : String(item.type || '').startsWith('SOCIAL_')
-            ? 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'
-            : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
+          : item.type === 'GOAL_REMINDER'
+            ? 'm19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z'
+            : String(item.type || '').startsWith('SOCIAL_')
+              ? 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'
+              : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
         const displayTitle = formatNotificationTitle(item);
         const senderAvatarUrl = resolveNotificationAvatarUrl(item);
         const useSenderAvatar = isMessageNotificationItem(item) || Boolean(senderAvatarUrl);
@@ -14583,6 +14609,279 @@
     }
   }
 
+  const GOAL_SCHEDULE_META = Object.freeze({
+    DAILY: Object.freeze({ key: 'DAILY', label: 'Daily', unit: 'day', plural: 'days' }),
+    WEEKLY: Object.freeze({ key: 'WEEKLY', label: 'Weekly', unit: 'week', plural: 'weeks' }),
+    MONTHLY: Object.freeze({ key: 'MONTHLY', label: 'Monthly', unit: 'month', plural: 'months' })
+  });
+
+  function roundMoney(value) {
+    const num = Number(value || 0);
+    if (!Number.isFinite(num)) return 0;
+    return Math.round(num * 100) / 100;
+  }
+
+  function roundMoneyUp(value, cap = MAX_MONEY_AMOUNT) {
+    const num = Number(value || 0);
+    if (!Number.isFinite(num) || num <= 0) return 0;
+    const ceiled = Math.ceil(num * 100 - 1e-9) / 100;
+    return Math.min(cap, Math.max(0.01, ceiled));
+  }
+
+  function parseIsoDayUtc(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    if (!m) return null;
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    return { y, mo, d, ms: Date.UTC(y, mo - 1, d) };
+  }
+
+  function formatUtcIsoDate(ms) {
+    const d = new Date(ms);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  function addGoalSchedulePeriods(startParts, frequency, count) {
+    const n = Math.max(0, Math.floor(Number(count) || 0));
+    if (frequency === 'DAILY') return formatUtcIsoDate(startParts.ms + n * 86400000);
+    if (frequency === 'WEEKLY') return formatUtcIsoDate(startParts.ms + n * 7 * 86400000);
+    const totalMonths = (startParts.y * 12) + (startParts.mo - 1) + n;
+    const targetYear = Math.floor(totalMonths / 12);
+    const targetMonth = (totalMonths % 12) + 1;
+    const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+    const clampedDay = Math.min(startParts.d, lastDay);
+    return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
+  }
+
+  function computeGoalScheduleSuggestions({ targetAmount = 0, currentSavings = 0, targetDate = '', todayIso = '', memberCount = 1 } = {}) {
+    const target = roundMoney(Math.max(0, Number(targetAmount) || 0));
+    const current = roundMoney(Math.max(0, Number(currentSavings) || 0));
+    const remaining = roundMoney(Math.max(0, target - current));
+    const members = Math.max(1, Math.floor(Number(memberCount) || 1));
+    const todayParts = parseIsoDayUtc(todayIso || isoDate());
+    const endParts = parseIsoDayUtc(targetDate);
+    const diffDays = (todayParts && endParts) ? Math.round((endParts.ms - todayParts.ms) / 86400000) : null;
+    const hasFutureDate = diffDays !== null && diffDays > 0;
+    const effectiveDays = hasFutureDate ? diffDays : 30;
+    const weeks = Math.max(1, effectiveDays / 7);
+    const months = Math.max(1, effectiveDays / 30.4375);
+
+    const buildPace = (divisor) => {
+      if (!(remaining > 0)) return { amount: 0, perMember: 0, periods: divisor };
+      const amount = Math.min(remaining, roundMoneyUp(remaining / divisor, MAX_MONEY_AMOUNT));
+      return {
+        amount,
+        perMember: roundMoney(amount / members),
+        periods: divisor
+      };
+    };
+
+    return {
+      target,
+      current,
+      remaining,
+      diffDays,
+      effectiveDays,
+      hasFutureDate,
+      estimatedHorizon: !hasFutureDate,
+      members,
+      daily: buildPace(effectiveDays),
+      weekly: buildPace(weeks),
+      monthly: buildPace(months)
+    };
+  }
+
+  function computeGoalScheduleStatus(goal, { trackedSavings = 0, todayIso = '' } = {}) {
+    const frequency = String(goal?.saving_frequency || 'NONE').trim().toUpperCase();
+    const meta = GOAL_SCHEDULE_META[frequency] || null;
+    const scheduledAmount = roundMoney(Number(goal?.scheduled_amount || 0));
+    const targetAmount = roundMoney(Number(goal?.target_amount || 0));
+    const tracked = roundMoney(Math.max(0, Number(trackedSavings || 0)));
+    const remainingToTarget = roundMoney(Math.max(0, targetAmount - tracked));
+    const isReached = targetAmount > 0 && remainingToTarget <= 0;
+
+    if (!goal || !meta || !(scheduledAmount > 0)) {
+      return {
+        enabled: false,
+        frequency: 'NONE',
+        frequencyLabel: 'Flexible',
+        unitLabel: '',
+        scheduledAmount: 0,
+        targetAmount,
+        trackedSavings: tracked,
+        remainingToTarget,
+        elapsedPeriods: 0,
+        expectedCumulative: 0,
+        paidSinceStart: 0,
+        dueNow: 0,
+        carryOver: 0,
+        missedPeriods: 0,
+        credit: 0,
+        periodsAhead: 0,
+        remainderCredit: 0,
+        nextPeriodDue: 0,
+        nextAutoFillAmount: 0,
+        nextDueDate: null,
+        startDate: null,
+        status: isReached ? 'REACHED' : 'FLEXIBLE',
+        isUnpaid: false,
+        isReached,
+        summaryLabel: '',
+        autofillHint: ''
+      };
+    }
+
+    const today = (todayIso && parseIsoDayUtc(todayIso)) ? String(todayIso).slice(0, 10) : isoDate();
+    const startRaw = String(goal.schedule_start_date || (goal.created_at ? String(goal.created_at).slice(0, 10) : today)).slice(0, 10);
+    const todayParts = parseIsoDayUtc(today);
+    const startParts = parseIsoDayUtc(startRaw) || todayParts;
+    const startDate = formatUtcIsoDate(startParts.ms);
+    const diffDays = Math.round((todayParts.ms - startParts.ms) / 86400000);
+
+    let elapsedPeriods = 0;
+    if (diffDays >= 0) {
+      if (frequency === 'DAILY') {
+        elapsedPeriods = diffDays + 1;
+      } else if (frequency === 'WEEKLY') {
+        elapsedPeriods = Math.floor(diffDays / 7) + 1;
+      } else {
+        const lastDay = new Date(Date.UTC(todayParts.y, todayParts.mo, 0)).getUTCDate();
+        const clampedStartDay = Math.min(startParts.d, lastDay);
+        elapsedPeriods = Math.max(
+          1,
+          (todayParts.y - startParts.y) * 12
+            + (todayParts.mo - startParts.mo)
+            + (todayParts.d >= clampedStartDay ? 1 : 0)
+        );
+      }
+    }
+
+    const baseline = roundMoney(Math.max(0, Number(goal.schedule_baseline_amount || 0)));
+    const paidSinceStart = roundMoney(Math.max(0, tracked - baseline));
+    const totalScheduledNeed = roundMoney(Math.max(0, targetAmount - baseline));
+    const expectedCumulative = roundMoney(Math.min(totalScheduledNeed, elapsedPeriods * scheduledAmount));
+    const netBalance = roundMoney(paidSinceStart - expectedCumulative);
+
+    let dueNow = 0;
+    let carryOver = 0;
+    let missedPeriods = 0;
+    let credit = 0;
+    let periodsAhead = 0;
+    let remainderCredit = 0;
+    let nextPeriodDue = 0;
+    let nextAutoFillAmount = 0;
+    let nextDueDate = null;
+    let status = 'ON_TRACK';
+
+    if (isReached) {
+      credit = Math.max(0, netBalance);
+      status = 'REACHED';
+    } else if (elapsedPeriods === 0) {
+      credit = paidSinceStart;
+      periodsAhead = Math.floor(credit / scheduledAmount);
+      remainderCredit = roundMoney(credit - (periodsAhead * scheduledAmount));
+      const reduced = roundMoney(scheduledAmount - remainderCredit);
+      nextPeriodDue = roundMoney(Math.min(remainingToTarget, reduced > 0 ? reduced : scheduledAmount));
+      nextAutoFillAmount = nextPeriodDue;
+      nextDueDate = addGoalSchedulePeriods(startParts, frequency, periodsAhead);
+      status = credit > 0 ? 'AHEAD_CREDIT' : 'UPCOMING';
+    } else if (netBalance < 0) {
+      dueNow = roundMoney(Math.min(remainingToTarget, -netBalance));
+      carryOver = roundMoney(Math.max(0, dueNow - scheduledAmount));
+      missedPeriods = carryOver > 0 ? Math.ceil(carryOver / scheduledAmount) : 0;
+      nextPeriodDue = dueNow;
+      nextAutoFillAmount = dueNow;
+      nextDueDate = today;
+      status = carryOver > 0 ? 'OVERDUE_CARRYOVER' : 'DUE_NOW';
+    } else {
+      credit = roundMoney(netBalance);
+      periodsAhead = Math.floor(credit / scheduledAmount);
+      remainderCredit = roundMoney(credit - (periodsAhead * scheduledAmount));
+      const reduced = roundMoney(scheduledAmount - remainderCredit);
+      nextPeriodDue = roundMoney(Math.min(remainingToTarget, reduced > 0 ? reduced : scheduledAmount));
+      nextAutoFillAmount = nextPeriodDue;
+      nextDueDate = addGoalSchedulePeriods(startParts, frequency, elapsedPeriods + periodsAhead);
+      status = credit > 0 ? 'AHEAD_CREDIT' : 'ON_TRACK';
+    }
+
+    const goalTitle = String(goal.title || 'Savings goal').trim() || 'Savings goal';
+    const nextDateStr = nextDueDate ? dateLabel(nextDueDate, { month: 'short', day: 'numeric' }) : '';
+    let summaryLabel = '';
+    let autofillHint = '';
+
+    if (status === 'REACHED') {
+      summaryLabel = 'Target reached';
+    } else if (status === 'OVERDUE_CARRYOVER') {
+      summaryLabel = `Unpaid · ${money(dueNow)} due (includes ${money(carryOver)} carry-over)`;
+      autofillHint = `Goal "${goalTitle}" · ${money(dueNow)} due (${money(scheduledAmount)}/${meta.unit} + ${money(carryOver)} unpaid carry-over)`;
+    } else if (status === 'DUE_NOW') {
+      summaryLabel = `Unpaid this ${meta.unit} · ${money(dueNow)} due`;
+      autofillHint = `Goal "${goalTitle}" · ${money(dueNow)} due this ${meta.unit}`;
+    } else if (status === 'AHEAD_CREDIT') {
+      if (periodsAhead >= 1 && remainderCredit > 0) {
+        const coveredWord = periodsAhead === 1 ? meta.unit : meta.plural;
+        summaryLabel = `Paid ahead (+${money(credit)} · ${periodsAhead} ${coveredWord} covered) · Next: ${money(nextPeriodDue)}`;
+        autofillHint = `Goal "${goalTitle}" · Next deposit ${money(nextPeriodDue)} (${money(credit)} excess applied)`;
+      } else if (periodsAhead >= 1) {
+        const coveredWord = periodsAhead === 1 ? meta.unit : meta.plural;
+        summaryLabel = `Paid ahead (+${money(credit)} · ${periodsAhead} ${coveredWord} covered) · Next ${nextDateStr}`;
+        autofillHint = `Goal "${goalTitle}" · Next deposit ${money(nextPeriodDue)} (${periodsAhead} ${coveredWord} already covered)`;
+      } else {
+        summaryLabel = `Paid ahead (+${money(credit)} excess) · Next ${meta.unit}: ${money(nextPeriodDue)}`;
+        autofillHint = `Goal "${goalTitle}" · Next ${meta.unit} ${money(nextPeriodDue)} (${money(credit)} excess deducted from ${money(scheduledAmount)})`;
+      }
+    } else if (status === 'UPCOMING') {
+      summaryLabel = `Starts ${dateLabel(startDate, { month: 'short', day: 'numeric' })} · ${money(scheduledAmount)}/${meta.unit}`;
+      autofillHint = `Goal "${goalTitle}" · ${money(nextPeriodDue)}/${meta.unit} scheduled deposit`;
+    } else {
+      summaryLabel = `Paid for this ${meta.unit} · Next ${money(nextPeriodDue)} on ${nextDateStr}`;
+      autofillHint = `Goal "${goalTitle}" · ${money(nextPeriodDue)}/${meta.unit} scheduled deposit`;
+    }
+
+    return {
+      enabled: true,
+      frequency,
+      frequencyLabel: meta.label,
+      unitLabel: meta.unit,
+      scheduledAmount,
+      targetAmount,
+      trackedSavings: tracked,
+      remainingToTarget,
+      elapsedPeriods,
+      expectedCumulative,
+      paidSinceStart,
+      dueNow,
+      carryOver,
+      missedPeriods,
+      credit,
+      periodsAhead,
+      remainderCredit,
+      nextPeriodDue,
+      nextAutoFillAmount,
+      nextDueDate,
+      startDate,
+      status,
+      isUnpaid: dueNow > 0,
+      isReached,
+      summaryLabel,
+      autofillHint
+    };
+  }
+
+  function pickActiveScheduledGoal(goals = [], { preferredGoalId = '', trackedSavings = 0, todayIso = '' } = {}) {
+    const candidates = (Array.isArray(goals) ? goals : [])
+      .filter((g) => g && (!g.status || g.status === 'ACTIVE') && GOAL_SCHEDULE_META[String(g.saving_frequency || '').toUpperCase()] && Number(g.scheduled_amount) > 0)
+      .map((goal) => ({ goal, status: computeGoalScheduleStatus(goal, { trackedSavings, todayIso }) }))
+      .filter((entry) => entry.status.enabled && !entry.status.isReached);
+    if (!candidates.length) return null;
+    if (preferredGoalId) {
+      const preferred = candidates.find((entry) => String(entry.goal.id) === String(preferredGoalId));
+      if (preferred) return preferred;
+    }
+    return candidates.find((entry) => entry.status.isUnpaid) || candidates[0];
+  }
+
   function computeContributionExcess({ amount = 0, statusRow = null, fallbackMonthlyAmount = 0 } = {}) {
     const cleanAmount = Math.round(Number(amount || 0) * 100);
     if (!(cleanAmount > 0)) return { show: false, excess: 0, remainingDue: 0 };
@@ -17198,7 +17497,7 @@
     PAYMENT_METHODS, normalizePaymentMethod, guessPaymentMethodFromLabel, paymentMethodMeta, paymentMethodIconHtml, paymentMethodBadge, paymentMethodPickerHtml, mountPaymentMethodPickers, setPaymentMethod, paymentMethodOptionsHtml,
     CATEGORY_PRESETS, mountCategoryControls, setCategoryPresetGroup, syncCategoryControl,
     payoutChannelOptionsHtml, payoutFieldsetMarkup, mountPayoutFieldsets, setPayoutFields, validatePayoutFields, readPayoutPayload, payoutSummaryChip, renderPayoutDestinationBox,
-    computeContributionExcess, bindExcessContributionToggle,
+    computeContributionExcess, bindExcessContributionToggle, computeGoalScheduleSuggestions, computeGoalScheduleStatus, pickActiveScheduledGoal,
     resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink, openCalendarEntryEditDialog, openChangeRequestReviewDialog,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
     checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,

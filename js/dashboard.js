@@ -703,6 +703,36 @@
     remEl.textContent = isReached ? '✓ Target achieved!' : `${Ipon.money(remaining)} remaining`;
     remEl.classList.toggle('is-reached', isReached);
     document.getElementById('dashboard-goal-pct').textContent = `${pctFormatted} reached`;
+
+    const schedEl = document.getElementById('dashboard-goal-schedule');
+    if (schedEl && typeof Ipon.computeGoalScheduleStatus === 'function') {
+      const sched = Ipon.computeGoalScheduleStatus(targetGoal, { trackedSavings: tracked });
+      if (sched.enabled) {
+        const tone = sched.status === 'OVERDUE_CARRYOVER'
+          ? 'is-overdue'
+          : sched.status === 'DUE_NOW'
+            ? 'is-unpaid'
+            : sched.status === 'AHEAD_CREDIT'
+              ? 'is-ahead'
+              : sched.status === 'REACHED'
+                ? 'is-reached'
+                : 'is-ontrack';
+        schedEl.className = `goal-schedule-strip dashboard-goal-schedule ${tone}`;
+        const flagHtml = sched.isUnpaid
+          ? '<span class="goal-schedule-flag">Unpaid</span>'
+          : sched.status === 'AHEAD_CREDIT'
+            ? '<span class="goal-schedule-flag">Paid ahead</span>'
+            : '';
+        const actionHtml = !sched.isReached && sched.nextAutoFillAmount > 0
+          ? `<button class="icon-action is-deposit" type="button" data-record-goal-due="${Ipon.escapeHtml(targetGoal.id)}">+ Deposit ${Ipon.money(sched.nextAutoFillAmount)}</button>`
+          : '';
+        schedEl.innerHTML = `<div class="goal-schedule-strip-top"><span class="goal-schedule-pill">${Ipon.escapeHtml(sched.frequencyLabel)} · ${Ipon.money(sched.scheduledAmount)}/${Ipon.escapeHtml(sched.unitLabel)}</span>${flagHtml}${actionHtml}</div><p class="goal-schedule-summary">${Ipon.escapeHtml(sched.summaryLabel)}</p>`;
+        schedEl.hidden = false;
+      } else {
+        schedEl.hidden = true;
+        schedEl.innerHTML = '';
+      }
+    }
   }
   async function load() {
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
@@ -720,7 +750,7 @@
             ? res
             : await Ipon.client.from('profiles').select('id,member_id,full_name,avatar_url').eq('status', 'ACTIVE')
         )),
-        Ipon.client.from('savings_goals').select('id,title,target_amount,target_date').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
+        Ipon.client.from('savings_goals').select('id,title,target_amount,target_date,saving_frequency,scheduled_amount,schedule_start_date,schedule_baseline_amount,created_at').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.client.rpc('get_wallet_reconciliation'),
         Ipon.refreshMyPermissions?.().catch(() => null),
         announcements ? announcements.load().catch((err) => console.warn('Announcement load error:', err)) : Promise.resolve()
@@ -1479,6 +1509,20 @@
     groupDirty?.sync();
   });
 
+  function readPreWorkspaceCalculatorPlan() {
+    if (!state?.profile?.id || state.profile.group_id) return null;
+    try {
+      const raw = localStorage.getItem(`ipon:calc-plans:group:${state.profile.id}`);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed) || !parsed.length) return null;
+      const first = parsed[0];
+      if (!first || !(Number(first.targetAmount) > 0)) return null;
+      return first;
+    } catch {
+      return null;
+    }
+  }
+
   function openGroupDialog(mode, presetWorkspaceMode = null) {
     if (!groupDialog || !groupForm) return;
     groupForm.reset();
@@ -1492,7 +1536,7 @@
     groupForm.elements.name.value = isCreate ? '' : (currentGroup?.name || '');
     const initialIncludeSelf = isCreate || initialWorkspaceMode === 'SOLO' ? true : Boolean(currentGroup?.is_contributor);
     groupSelfToggle.checked = initialIncludeSelf;
-    groupMonthlyInput.value = String(currentAdminMonthlyAmount || 100);
+    groupMonthlyInput.value = isCreate ? '' : String(currentAdminMonthlyAmount || '');
     groupInviteRows.replaceChildren();
     if (isCreate) syncInviteRemoveButtons(groupInviteRows, false);
     syncGroupFormWorkspaceMode(initialWorkspaceMode, isCreate);
@@ -1603,6 +1647,7 @@
         ? await Ipon.uploadMediaDataUrl(pendingGroupAvatarUrl, { category: 'group-avatars', name: 'group-avatar.jpg' })
         : pendingGroupAvatarUrl;
       if (isCreate) {
+        const pendingCalcPlan = isSolo ? readPreWorkspaceCalculatorPlan() : null;
         await Ipon.rpc('admin_create_group', {
           p_name: name,
           p_avatar_url: resolvedGroupAvatarUrl,
@@ -1611,6 +1656,30 @@
           p_workspace_mode: workspaceMode
         });
         Ipon.syncWorkspaceMode?.(workspaceMode);
+        if (pendingCalcPlan && Number(pendingCalcPlan.targetAmount) > 0) {
+          const goalTitle = String(pendingCalcPlan.title || name || 'Savings Goal').trim().slice(0, 150);
+          const planFreq = ['DAILY', 'WEEKLY', 'MONTHLY'].includes(String(pendingCalcPlan.savingFrequency || '').toUpperCase())
+            ? String(pendingCalcPlan.savingFrequency).toUpperCase()
+            : 'NONE';
+          const planSchedAmt = planFreq !== 'NONE' && Number(pendingCalcPlan.scheduledAmount) > 0
+            ? Number(pendingCalcPlan.scheduledAmount)
+            : null;
+          try {
+            await Ipon.rpc('save_savings_goal', {
+              p_goal_id: null,
+              p_title: goalTitle.length >= 2 ? goalTitle : name,
+              p_target_amount: Number(pendingCalcPlan.targetAmount),
+              p_target_date: pendingCalcPlan.targetDate || null,
+              p_status: 'ACTIVE',
+              p_notes: null,
+              p_saving_frequency: planFreq,
+              p_scheduled_amount: planSchedAmt,
+              p_schedule_start_date: planFreq !== 'NONE' ? Ipon.isoDate() : null
+            });
+            try { localStorage.removeItem(`ipon:calc-plans:group:${state.profile.id}`); } catch { }
+            if (planFreq !== 'NONE') Ipon.rpc('sync_my_due_reminders').catch(() => {});
+          } catch { /* non-blocking if goal creation needs manual follow-up */ }
+        }
         const inviteResults = invitePayloads.length ? await dispatchInvites(invitePayloads) : [];
         groupDialog.close();
         Ipon.toast(isSolo ? 'Solo savings tracker created.' : 'Savings group created.');
@@ -1846,9 +1915,54 @@
     if (quickFieldDescription) quickFieldDescription.hidden = isAddition;
     if (quickDescriptionInput) quickDescriptionInput.required = !isAddition;
     syncQuickPayoutDestination(false);
+    if (isAddition) {
+      applyQuickGoalAutofill(quickPreferredGoalId, { force: false });
+    } else {
+      const hintEl = document.getElementById('quick-goal-autofill-hint');
+      if (hintEl) {
+        hintEl.hidden = true;
+        hintEl.textContent = '';
+      }
+    }
   }
 
-  function openQuickRecordDialog(presetDate = null, presetType = 'addition') {
+  let quickPreferredGoalId = '';
+
+  function applyQuickGoalAutofill(preferredGoalId = '', { force = false } = {}) {
+    const hintEl = document.getElementById('quick-goal-autofill-hint');
+    if (!quickAmountInput) return;
+    const isAddition = (quickEntryTypeInput?.value || 'addition') === 'addition';
+    if (!isAddition || typeof Ipon.pickActiveScheduledGoal !== 'function') {
+      if (hintEl) { hintEl.hidden = true; hintEl.textContent = ''; }
+      return;
+    }
+    const picked = Ipon.pickActiveScheduledGoal(activeGoalsList, {
+      preferredGoalId: preferredGoalId || selectedGoalId,
+      trackedSavings: lastTrackedSavings
+    });
+    if (!picked || !(picked.status.nextAutoFillAmount > 0)) {
+      if (hintEl) { hintEl.hidden = true; hintEl.textContent = ''; }
+      return;
+    }
+    const { status } = picked;
+    if (force || (!quickAmountInput.dataset.userEdited && !quickAmountInput.value)) {
+      quickAmountInput.value = status.nextAutoFillAmount.toFixed(2);
+    }
+    if (hintEl) {
+      const tone = status.status === 'OVERDUE_CARRYOVER'
+        ? 'is-overdue'
+        : status.status === 'DUE_NOW'
+          ? 'is-unpaid'
+          : status.status === 'AHEAD_CREDIT'
+            ? 'is-ahead'
+            : 'is-ontrack';
+      hintEl.className = `goal-autofill-hint ${tone}`;
+      hintEl.textContent = status.autofillHint;
+      hintEl.hidden = !status.autofillHint;
+    }
+  }
+
+  function openQuickRecordDialog(presetDate = null, presetType = 'addition', options = {}) {
     if (!quickRecordDialog) return;
     const hasGroup = Boolean(currentGroup && state.profile?.group_id);
     if (!hasGroup || (state.profile?.role === 'MEMBER' && !state.profile?.member_id)) {
@@ -1856,7 +1970,9 @@
       return;
     }
     quickPendingKey = null;
+    quickPreferredGoalId = options?.goalId || '';
     quickRecordForm.reset();
+    if (quickAmountInput) delete quickAmountInput.dataset.userEdited;
     Ipon.syncCategoryControl(quickCategoryInput, '');
     Ipon.setPaymentMethod(quickRecordForm, 'CASH');
 
@@ -1890,9 +2006,23 @@
       }
     }
 
+    if (initialType === 'addition') {
+      applyQuickGoalAutofill(quickPreferredGoalId, { force: true });
+    }
+
     quickRecordDialog.showModal();
     quickAmountInput?.focus();
   }
+
+  document.getElementById('dashboard-goal-box')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-record-goal-due]');
+    if (!btn) return;
+    openQuickRecordDialog(null, 'addition', { goalId: btn.dataset.recordGoalDue || '' });
+  });
+
+  quickAmountInput?.addEventListener('input', () => {
+    if (quickAmountInput) quickAmountInput.dataset.userEdited = '1';
+  });
 
   dashboardRecordEntryBtn?.addEventListener('click', () => {
     openQuickRecordDialog();
@@ -2147,6 +2277,16 @@
     return idx > 0 ? { type: raw.slice(0, idx), id: raw.slice(idx + 1) } : null;
   };
   Ipon.consumeDeepLink(async (params, hash) => {
+    const recordGoalId = params.get('record_goal') || '';
+    if (recordGoalId) {
+      if (activeGoalsList.some((g) => String(g.id) === String(recordGoalId))) {
+        selectedGoalId = recordGoalId;
+        renderGoalOptions(activeGoalsList);
+        updateDashboardGoalProgress(lastTrackedSavings);
+      }
+      openQuickRecordDialog(null, 'addition', { goalId: recordGoalId });
+      return true;
+    }
     if (params.get('create_group') === '1') {
       const presetMode = params.get('workspace_mode') === 'SOLO' ? 'SOLO' : 'GROUP';
       try { history.replaceState({}, '', location.pathname); } catch { }

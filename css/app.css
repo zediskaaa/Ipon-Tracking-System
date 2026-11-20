@@ -23446,3 +23446,457 @@ html[data-theme="dark"] .compact-bulk-toggle[aria-pressed="true"] {
   color: #fff;
 }
 @media print { .data-table td.compact-row-summary { display: none !important; } }
+/* Savings goal schedules, suggested deposit cards, carry-over / overpayment status strips & autofill hints */
+.goal-duration-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.goal-duration-row select {
+  min-width: 102px;
+}
+.goal-schedule-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: rgba(11, 52, 40, .035);
+}
+.goal-schedule-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+.goal-schedule-head label {
+  margin: 0;
+}
+.goal-schedule-head small {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: var(--muted);
+}
+.goal-suggestion-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.goal-suggest-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid rgba(20, 45, 43, .16);
+  border-radius: 10px;
+  background: #fffdf9;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .14s ease;
+}
+.goal-suggest-card:hover {
+  border-color: rgba(11, 52, 40, .42);
+  background: #f6f8f1;
+}
+.goal-suggest-card:focus-visible {
+  outline: 3px solid #d9b75f;
+  outline-offset: 2px;
+}
+.goal-suggest-card span {
+  font: 700 11px/1.2 Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+.goal-suggest-card strong {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+.goal-suggest-card small {
+  font: 500 11px/1.25 Arial, sans-serif;
+  color: var(--muted);
+}
+.goal-suggest-card.is-selected {
+  border-color: var(--green);
+  background: linear-gradient(145deg, #0e3d2f 0%, #174c3b 100%);
+  color: #f5eadb;
+  box-shadow: 0 8px 18px -10px rgba(11, 52, 40, .55);
+}
+.goal-suggest-card.is-selected span,
+.goal-suggest-card.is-selected small {
+  color: rgba(245, 234, 219, .82);
+}
+.goal-schedule-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  padding-top: 4px;
+}
+.goal-schedule-fields[hidden] {
+  display: none !important;
+}
+.goal-schedule-help {
+  margin: 0;
+  font: 500 12px/1.45 Arial, sans-serif;
+  color: var(--muted);
+}
+.calc-remaining-summary {
+  margin-top: 14px;
+  padding: 12px 2px 13px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  background: transparent;
+}
+.calc-remaining-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.calc-remaining-label {
+  font: 700 11.5px/1.25 Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+}
+.calc-remaining-copy small {
+  font: 500 12px/1.3 Arial, sans-serif;
+  color: var(--muted);
+}
+.calc-remaining-value {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.calc-pace-section-head {
+  margin-top: 14px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.calc-pace-section-head span {
+  font: 700 12px/1.2 Arial, sans-serif;
+  color: var(--ink);
+}
+.calc-pace-section-head small {
+  font: 500 11.5px/1.2 Arial, sans-serif;
+  color: var(--muted);
+}
+.calc-results-grid.calc-pace-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 8px;
+}
+.calc-kpi-top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.calc-pace-radio {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(20, 45, 43, .32);
+  background: transparent;
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease;
+}
+.calc-kpi.is-selectable.is-chosen .calc-pace-radio {
+  border-color: #f2c14e;
+  background: #f2c14e;
+  box-shadow: inset 0 0 0 3px #124433;
+}
+.calc-kpi.is-selectable {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.calc-kpi.is-selectable:hover {
+  transform: translateY(-1px);
+  border-color: rgba(11, 52, 40, .44);
+  background: #f5f8f0;
+  box-shadow: 0 8px 18px -12px rgba(11, 52, 40, .28);
+}
+.calc-kpi.is-selectable:active {
+  transform: translateY(0);
+}
+.calc-kpi.is-selectable:focus-visible {
+  outline: 3px solid #d9b75f;
+  outline-offset: 2px;
+}
+.calc-kpi.is-selectable.is-chosen {
+  border-color: #deb152;
+  background: linear-gradient(145deg, #0e3d2f 0%, #174c3b 100%);
+  color: #f5eadb;
+  box-shadow: 0 0 0 2px rgba(222, 177, 82, .45), 0 10px 22px -10px rgba(11, 52, 40, .55);
+}
+.calc-kpi.is-selectable.is-chosen span,
+.calc-kpi.is-selectable.is-chosen small {
+  color: rgba(245, 234, 219, .84);
+}
+.calc-kpi.is-selectable.is-chosen strong {
+  color: #fff8e7;
+}
+.calc-kpi.is-selectable.is-chosen::after {
+  content: 'Selected';
+  margin-top: 4px;
+  align-self: flex-start;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(242, 193, 78, .22);
+  border: 1px solid rgba(242, 193, 78, .55);
+  color: #f8d984;
+  font: 700 10px/1.2 Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.goal-schedule-strip {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(11, 52, 40, .14);
+  background: rgba(255, 253, 249, .82);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.goal-schedule-strip[hidden] {
+  display: none !important;
+}
+.goal-schedule-strip-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.goal-schedule-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(11, 52, 40, .1);
+  color: var(--green);
+  font: 700 11.5px/1.25 Arial, sans-serif;
+}
+.goal-schedule-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font: 700 11px/1.2 Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.goal-schedule-strip.is-unpaid {
+  border-color: rgba(180, 120, 20, .34);
+  background: rgba(247, 232, 194, .42);
+}
+.goal-schedule-strip.is-unpaid .goal-schedule-flag {
+  background: rgba(180, 120, 20, .16);
+  color: #8a5607;
+}
+.goal-schedule-strip.is-overdue {
+  border-color: rgba(186, 48, 48, .34);
+  background: rgba(248, 222, 222, .45);
+}
+.goal-schedule-strip.is-overdue .goal-schedule-flag {
+  background: rgba(186, 48, 48, .16);
+  color: #9b1c1c;
+}
+.goal-schedule-strip.is-ahead,
+.goal-schedule-strip.is-reached {
+  border-color: rgba(22, 121, 78, .28);
+  background: rgba(224, 244, 232, .52);
+}
+.goal-schedule-strip.is-ahead .goal-schedule-flag {
+  background: rgba(22, 121, 78, .15);
+  color: #0e5a39;
+}
+.goal-schedule-summary {
+  margin: 0 !important;
+  font: 600 12.5px/1.38 Arial, sans-serif;
+  color: var(--ink) !important;
+}
+.dashboard-goal-schedule .icon-action.is-deposit {
+  margin-left: auto;
+}
+.goal-card .icon-action.is-deposit,
+.dashboard-goal-schedule .icon-action.is-deposit {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fffdf9;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+.goal-card .icon-action.is-deposit:hover,
+.dashboard-goal-schedule .icon-action.is-deposit:hover {
+  background: #144d3b;
+  border-color: #144d3b;
+  color: #fffdf9;
+}
+.goal-autofill-hint {
+  display: block;
+  margin-top: 5px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(11, 52, 40, .16);
+  background: rgba(11, 52, 40, .05);
+  color: var(--ink);
+  font: 600 11.5px/1.35 Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.goal-autofill-hint[hidden] {
+  display: none !important;
+}
+.goal-autofill-hint.is-unpaid {
+  border-color: rgba(180, 120, 20, .34);
+  background: rgba(247, 232, 194, .48);
+  color: #7c4c05;
+}
+.goal-autofill-hint.is-overdue {
+  border-color: rgba(186, 48, 48, .34);
+  background: rgba(248, 222, 222, .48);
+  color: #8c1a1a;
+}
+.goal-autofill-hint.is-ahead {
+  border-color: rgba(22, 121, 78, .28);
+  background: rgba(224, 244, 232, .56);
+  color: #0e5a39;
+}
+html[data-theme="dark"] .goal-schedule-section {
+  background: rgba(255, 255, 255, .03);
+}
+html[data-theme="dark"] .goal-suggest-card {
+  background: #142820;
+  border-color: rgba(154, 198, 174, .2);
+  color: #eef5f0;
+}
+html[data-theme="dark"] .goal-suggest-card:hover {
+  background: #1b362b;
+  border-color: rgba(154, 198, 174, .42);
+}
+html[data-theme="dark"] .goal-suggest-card.is-selected {
+  background: linear-gradient(145deg, #1b5c45 0%, #0f3b2c 100%);
+  border-color: #deb152;
+  color: #fff8e7;
+}
+html[data-theme="dark"] .calc-pace-radio {
+  border-color: rgba(154, 198, 174, .42);
+}
+html[data-theme="dark"] .calc-kpi.is-selectable:hover {
+  background: #1b362b;
+  border-color: rgba(154, 198, 174, .46);
+}
+html[data-theme="dark"] .calc-kpi.is-selectable.is-chosen {
+  background: linear-gradient(145deg, #1b5c45 0%, #0f3b2c 100%);
+  border-color: #f2c14e;
+  color: #fff8e7;
+  box-shadow: 0 0 0 2px rgba(242, 193, 78, .38), 0 12px 24px -10px rgba(0, 0, 0, .65);
+}
+html[data-theme="dark"] .calc-kpi.is-selectable.is-chosen span,
+html[data-theme="dark"] .calc-kpi.is-selectable.is-chosen small {
+  color: rgba(255, 248, 231, .82);
+}
+html[data-theme="dark"] .goal-schedule-strip {
+  background: rgba(16, 33, 26, .78);
+  border-color: rgba(154, 198, 174, .2);
+}
+html[data-theme="dark"] .goal-schedule-pill {
+  background: rgba(133, 204, 159, .14);
+  color: #bfe8ce;
+}
+html[data-theme="dark"] .goal-schedule-strip.is-unpaid {
+  border-color: rgba(242, 193, 78, .36);
+  background: rgba(242, 193, 78, .12);
+}
+html[data-theme="dark"] .goal-schedule-strip.is-unpaid .goal-schedule-flag {
+  background: rgba(242, 193, 78, .2);
+  color: #f8d47b;
+}
+html[data-theme="dark"] .goal-schedule-strip.is-overdue {
+  border-color: rgba(248, 113, 113, .38);
+  background: rgba(220, 38, 38, .14);
+}
+html[data-theme="dark"] .goal-schedule-strip.is-overdue .goal-schedule-flag {
+  background: rgba(248, 113, 113, .22);
+  color: #fca5a5;
+}
+html[data-theme="dark"] .goal-schedule-strip.is-ahead,
+html[data-theme="dark"] .goal-schedule-strip.is-reached {
+  border-color: rgba(74, 222, 128, .3);
+  background: rgba(34, 197, 94, .12);
+}
+html[data-theme="dark"] .goal-schedule-strip.is-ahead .goal-schedule-flag {
+  background: rgba(74, 222, 128, .18);
+  color: #86efac;
+}
+html[data-theme="dark"] .goal-card .icon-action.is-deposit,
+html[data-theme="dark"] .dashboard-goal-schedule .icon-action.is-deposit {
+  background: #1f6b50;
+  border-color: rgba(133, 204, 159, .36);
+  color: #fff;
+}
+html[data-theme="dark"] .goal-autofill-hint {
+  background: rgba(133, 204, 159, .1);
+  border-color: rgba(133, 204, 159, .24);
+  color: #d7eee0;
+}
+html[data-theme="dark"] .goal-autofill-hint.is-unpaid {
+  background: rgba(242, 193, 78, .14);
+  border-color: rgba(242, 193, 78, .34);
+  color: #f8d47b;
+}
+html[data-theme="dark"] .goal-autofill-hint.is-overdue {
+  background: rgba(220, 38, 38, .16);
+  border-color: rgba(248, 113, 113, .38);
+  color: #fca5a5;
+}
+html[data-theme="dark"] .goal-autofill-hint.is-ahead {
+  background: rgba(34, 197, 94, .14);
+  border-color: rgba(74, 222, 128, .3);
+  color: #86efac;
+}
+@media (max-width: 640px) {
+  .calc-results-grid.calc-pace-grid {
+    grid-template-columns: 1fr;
+  }
+  .calc-remaining-summary {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .goal-suggestion-grid {
+    grid-template-columns: 1fr;
+  }
+  .goal-schedule-fields {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-goal-schedule .icon-action.is-deposit {
+    margin-left: 0;
+  }
+}

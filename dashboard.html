@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261120-19">
+  <link rel="stylesheet" href="css/app.css?v=20261120-22">
   <link rel="stylesheet" href="css/hero-plates.css?v=20261120-96">
   <link rel="stylesheet" href="css/tutorial.css?v=20261120-05">
   <script src="js/config.js?v=20261120-77"></script>
@@ -301,6 +301,7 @@
             <span class="dashboard-goal-remaining" id="dashboard-goal-remaining">—</span>
             <span class="dashboard-goal-pct" id="dashboard-goal-pct">—</span>
           </div>
+          <div class="goal-schedule-strip dashboard-goal-schedule" id="dashboard-goal-schedule" hidden></div>
         </div>
       </section>
 
@@ -704,7 +705,7 @@
         <div class="field field-wide" id="group-monthly-wrap">
           <label for="group-default-amount" id="group-monthly-label">Monthly contribution amount</label>
           <input id="group-default-amount" name="monthly_amount" type="number" min="1" max="1000000" step="0.01"
-            value="100" required>
+            autocomplete="off" placeholder="0.00" required>
         </div>
         <div class="field field-wide" id="group-invite-section">
           <div class="invite-section-head">
@@ -915,6 +916,7 @@
           <label for="quick-amount">Amount</label>
           <input id="quick-amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01"
             inputmode="decimal" placeholder="0.00" required>
+          <small class="goal-autofill-hint" id="quick-goal-autofill-hint" hidden></small>
         </div>
         <div class="field" id="quick-field-category" hidden>
           <label for="quick-category">Category</label>
@@ -976,12 +978,12 @@
       </div>
     </div>
   </dialog>
-  <script src="js/profile-effects.js?v=20261118-01"></script><script src="js/core.js?v=20261120-168"></script><script src="js/tutorial.js?v=20261120-07"></script><script src="js/policy.js?v=20261119-09"></script>
+  <script src="js/profile-effects.js?v=20261118-01"></script><script src="js/core.js?v=20261120-169"></script><script src="js/tutorial.js?v=20261120-07"></script><script src="js/policy.js?v=20261119-09"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
   <script src="js/messages.js?v=20261120-14"></script>
-  <script src="js/dashboard.js?v=20261120-96"></script>
+  <script src="js/dashboard.js?v=20261120-99"></script>
 </body>
 
 </html>
