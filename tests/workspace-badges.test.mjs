@@ -43,9 +43,9 @@ test('SOLO, GROUP, and GOAL badge pills have light/dark contrast rules and nowra
   const heroCss = read('css/hero-plates.css');
   const appCss = read('css/app.css');
   assert.match(heroCss, /\.group-bar-badge\s*\{[^}]*white-space:nowrap;[^}]*flex-shrink:0;/s);
-  assert.match(heroCss, /\.group-bar-badge\.is-solo\s*\{[^}]*color:#78500a;/s);
-  assert.match(heroCss, /\.group-bar-badge\.is-group\s*\{[^}]*color:#114c36;/s);
-  assert.match(heroCss, /\.group-bar-badge\.is-goal\s*\{[^}]*color:#1c5b78;/s);
+  assert.match(heroCss, /\.group-bar-badge\.is-solo\s*\{[^}]*background:linear-gradient\(180deg,#cda54c 0%,#b38933 100%\);[^}]*color:#ffffff;/s);
+  assert.match(heroCss, /\.group-bar-badge\.is-group\s*\{[^}]*background:#dceee1;[^}]*color:#0e4b33;/s);
+  assert.match(heroCss, /\.group-bar-badge\.is-goal\s*\{[^}]*background:linear-gradient\(180deg,#4384aa 0%,#316c91 100%\);[^}]*color:#ffffff;/s);
   assert.match(heroCss, /html\[data-theme="dark"\] \.group-bar-badge\.is-solo\s*\{/);
   assert.match(heroCss, /html\[data-theme="dark"\] \.group-bar-badge\.is-group\s*\{/);
   assert.match(heroCss, /html\[data-theme="dark"\] \.group-bar-badge\.is-goal\s*\{/);
