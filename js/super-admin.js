@@ -259,7 +259,8 @@
     const pendingUsers = registeredUsers.filter((profile) => profile.status === 'PENDING');
 
     const nowMs = Date.now();
-    const recent24hCount = registeredUsers.filter((profile) => {
+    const recent24hCount = activeUsers.filter((profile) => {
+      if (Ipon.isUserOnline?.(profile.id)) return true;
       const act = accountActivities.find((item) => item?.user_id === profile.id);
       const latestMs = Math.max(
         Date.parse(act?.occurred_at || act?.created_at || '') || 0,
@@ -281,7 +282,7 @@
     setText('metric-total-users-meta', pendingUsers.length
       ? `${activeUsers.length} active · ${pendingUsers.length} pending`
       : 'Total registered accounts');
-    setText('metric-active-users', activeUsers.length);
+    setText('metric-active-users', recent24hCount);
     setText('metric-active-users-meta', `${recent24hCount} active in last 24h`);
     setText('metric-suspended-users', suspendedUsers.length);
     setText('metric-suspended-users-meta', suspendedUsers.length
