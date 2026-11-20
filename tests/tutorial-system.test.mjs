@@ -306,8 +306,37 @@ test('tutorial stylesheet maintains circular close button, visible account butto
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*?\.account-tutorial-meta\s*\{[^}]*flex:\s*0 0 auto;/s);
   assert.match(css, /\.tutorial-dialog \.tutorial-close-btn\s*\{[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%;/s);
   assert.match(css, /\.tutorial-coachmark-close\s*\{[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%;/s);
+  assert.match(css, /\.tutorial-coachmark-toggle\s*\{[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%;/s);
+  assert.match(css, /\.tutorial-coachmark\.is-collapsed \.tutorial-coachmark-body\s*\{\s*display:\s*none;\s*\}/);
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*?\.tutorial-cat-select-wrap\s*\{\s*display:\s*block;\s*\}[\s\S]*?\.tutorial-cat-pills\s*\{\s*display:\s*none;\s*\}/);
   assert.match(css, /\.tutorial-step-nav-pair\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(css, /html\[data-theme="dark"\] \.tutorial-dialog/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
+test('spotlight auto-places coachmark without overlapping target across all 4 sides, handles clean URLs & role/workspace guards, and docks with collapse toggle for large targets', () => {
+  const js = read('js/tutorial.js');
+  assert.match(js, /spaceBelow >= cardH \+ gap \+ edge[\s\S]*?spaceAbove >= cardH \+ gap \+ edge[\s\S]*?spaceRight >= cardW \+ gap \+ edge[\s\S]*?spaceLeft >= cardW \+ gap \+ edge/);
+  assert.match(js, /data-spot-collapse/);
+  assert.match(js, /classList\?\.toggle\?\.\('is-docked', placement === 'docked'\)/);
+  assert.match(js, /classList\?\.toggle\?\.\('is-collapsed'\)/);
+  assert.match(js, /const maxAttempts = 18;/);
+  assert.match(js, /navigateSpotlightStep\(/);
+  assert.match(js, /data-spot-finish/);
+  assert.match(js, /function normalizePageFile\(/);
+  assert.match(js, /function canAccessPage\(/);
+  assert.match(js, /el\.closest\?\.\('\[hidden\]'\)/);
+  assert.match(js, /selector:\s*'\.announcement-panel, #announcement-heading'/);
+  assert.match(js, /const canHighlight = Boolean\(step\.selector\) && !blockedBySolo && !blockedByRole && \(!samePage \|\| Boolean\(findVisibleTarget\(step\.selector\)\)\);/);
+
+  // Runtime: clean URL (/dashboard) & MEMBER role must hide Go & highlight on adminOnly workspace-settings
+  const { win, tutorialBody } = createTutorialVm({ pageFile: 'dashboard', pageName: 'dashboard', workspaceMode: 'GROUP', role: 'MEMBER' });
+  win.IponTutorial.open('workspace-settings', 0);
+  assert.doesNotMatch(tutorialBody.innerHTML, /Go &(?:amp;)? highlight|Try it now/);
+  assert.match(tutorialBody.innerHTML, /Admin screen/);
+
+  // Runtime: ADMIN role on clean URL (/dashboard) sees Go & highlight on workspace-settings
+  const adminVm = createTutorialVm({ pageFile: 'dashboard', pageName: 'dashboard', workspaceMode: 'GROUP', role: 'ADMIN' });
+  adminVm.win.IponTutorial.open('workspace-settings', 0);
+  assert.match(adminVm.tutorialBody.innerHTML, /Go &(?:amp;)? highlight/);
 });

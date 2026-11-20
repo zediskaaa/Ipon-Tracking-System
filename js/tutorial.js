@@ -295,7 +295,7 @@
           title: 'Pick the Person responsible & Date',
           body: 'Select the member receiving or handling the funds (auto-filled in Solo mode). If that member saved a payout account (like GCash or Bank details), myIPON displays their payout destination right below the picker for convenience.',
           uiRefs: ['Field: Person responsible', 'Field: Date'],
-          selector: '#responsible',
+          selector: '#responsible, #date',
           page: 'withdrawals.html'
         },
         {
@@ -380,7 +380,7 @@
       keywords: ['goal', 'target', 'calculator', 'what-if', 'plan', 'mark done', 'edit goal', 'recycle bin', 'progress'],
       tryPage: 'savings.html',
       tryLabel: 'Open Savings Goals',
-      trySelector: '#add-goal',
+      trySelector: '#add-goal, .savings-goals-panel',
       visual: {
         bar: 'Savings Goals & What-If Calculator',
         rows: [
@@ -402,7 +402,7 @@
           title: 'Create a new Savings Goal',
           body: 'Click + Add goal. Fill in Goal title (2–150 characters), Target amount (₱0.01+), optional Target date, Status (keep ACTIVE for ongoing goals), and optional Notes, then click Save goal.',
           uiRefs: ['Button: + Add goal', 'Fields: Goal title · Target amount · Target date · Status'],
-          selector: '#add-goal',
+          selector: '#add-goal, .savings-goals-panel',
           page: 'savings.html'
         },
         {
@@ -435,7 +435,7 @@
       keywords: ['history', 'transactions', 'filter', 'member spotlight', 'chart', 'receipt', 'status', 'pagination'],
       tryPage: 'contributions.html',
       tryLabel: 'Open Record History',
-      trySelector: '#record-member-filter',
+      trySelector: '#record-member-filter, #record-status-filter',
       visual: {
         bar: 'Transaction History & Member Spotlight',
         rows: [
@@ -455,7 +455,7 @@
           title: 'Use Filter by member to open the Member Spotlight',
           body: 'In Group workspaces, select any member in Filter by member. A spotlight card appears showing their photo, Total additions, Total deductions, Total expenses, Net standing, and a Monthly financial activity chart, while filtering the tables below to that member.',
           uiRefs: ['Dropdown: Filter by member', 'Button: View all members'],
-          selector: '#record-member-filter',
+          selector: '#record-member-filter, .record-tabs',
           page: 'contributions.html'
         },
         {
@@ -709,6 +709,7 @@
       tryLabel: 'Open Members',
       trySelector: '#add-member',
       groupOnly: true,
+      adminOnly: true,
       visual: {
         bar: 'Member Directory & Permissions',
         rows: [
@@ -757,11 +758,12 @@
       title: 'How to Configure Settings, Payment QR & Yearly Cycles',
       summary: 'Set monthly contribution defaults, upload your group payment QR code, delegate a Treasurer, or reset a finished savings cycle.',
       duration: '3 min',
-      scope: 'Group Admin & All Users',
+      scope: 'Group & Solo Admin',
       keywords: ['settings', 'qr code', 'gcash', 'contribution default', 'deadline', 'treasurer', 'cycle', 'finish batch', 'reset'],
       tryPage: 'settings.html',
       tryLabel: 'Open Settings',
-      trySelector: '#contribution-setting-form',
+      trySelector: '#contribution-setting-form, .settings-layout',
+      adminOnly: true,
       visual: {
         bar: 'Workspace Settings & Cycles',
         rows: [
@@ -840,7 +842,7 @@
           title: 'Read & react to Announcements on the Dashboard',
           body: 'The right-hand rail of the Dashboard displays pinned platform updates and group announcements (including images or videos). Tap any announcement to read it in full or add a reaction. Admins can post new group announcements right from the panel.',
           uiRefs: ['Dashboard right rail: Announcements'],
-          selector: '.announcements-panel, .announcement-rail, aside[aria-label*="Announcement" i]',
+          selector: '.announcement-panel, #announcement-heading',
           page: 'dashboard.html'
         },
         {
@@ -889,10 +891,10 @@
         },
         {
           title: 'Switch between Warm Paper Light & Forest Dark mode',
-          body: 'Open Settings → Appearance (or the Preferences section inside My Account) and toggle Dark mode on or off. Your chosen theme persists automatically across every screen and device reload.',
-          uiRefs: ['Settings → Appearance → Dark mode toggle'],
-          selector: '#settings-theme-dark',
-          page: 'settings.html'
+          body: 'Open My Account (your profile card) or Settings → Appearance and toggle Dark mode on or off. Your chosen theme persists automatically across every screen and device reload.',
+          uiRefs: ['My Account → Preferences → Dark mode', 'Settings → Appearance'],
+          selector: '[data-account-open]',
+          page: 'dashboard.html'
         },
         {
           title: 'Explore Profile Effects, Connected Apps, Feedback & Sign Out',
@@ -987,7 +989,23 @@
     return prog;
   }
 
+  const ADMIN_ONLY_PAGES = new Set(['settings.html', 'members.html', 'audit.html']);
+  const SOLO_HIDDEN_PAGES = new Set(['expenses.html', 'requests.html', 'members.html']);
+  const WORKSPACE_REQUIRED_PAGES = new Set([
+    'contributions.html', 'withdrawals.html', 'expenses.html', 'savings.html',
+    'requests.html', 'budget.html', 'reports.html', 'members.html', 'settings.html'
+  ]);
+
+  function normalizePageFile(pageName) {
+    let raw = String(pageName || '').trim().toLowerCase();
+    if (!raw || raw === '/' || raw === 'index' || raw === 'index.html') return 'dashboard.html';
+    raw = raw.split('?')[0].split('#')[0].split('/').pop() || '';
+    if (!raw) return 'dashboard.html';
+    return raw.endsWith('.html') ? raw : `${raw}.html`;
+  }
+
   function getWorkspaceContext() {
+    const profile = window.Ipon?.profile || null;
     const domMode = document.documentElement?.dataset?.workspaceMode;
     let savedMode = '';
     let savedRole = '';
@@ -995,15 +1013,29 @@
       savedMode = sessionStorage.getItem('ipon_workspace_mode') || localStorage.getItem('ipon_workspace_mode') || '';
       savedRole = sessionStorage.getItem('ipon_active_role') || localStorage.getItem('ipon_active_role') || '';
     } catch { /* ignore */ }
-    const mode = (domMode || savedMode || 'GROUP').toUpperCase() === 'SOLO' ? 'SOLO' : 'GROUP';
-    const role = (savedRole || 'ADMIN').toUpperCase();
+    const mode = String(profile?.workspace_mode || domMode || savedMode || 'GROUP').toUpperCase() === 'SOLO' ? 'SOLO' : 'GROUP';
+    const role = String(profile?.role || document.body?.dataset?.role || savedRole || 'ADMIN').toUpperCase();
     const page = document.body?.dataset?.page || '';
-    return { mode, role, page };
+    const noGroupCard = document.getElementById('dashboard-no-group-card');
+    const noGroupVisible = Boolean(noGroupCard && !noGroupCard.hidden);
+    const hasWorkspace = noGroupVisible
+      ? false
+      : (profile ? Boolean(profile.group_id || profile.role === 'SUPER_ADMIN') : true);
+    return { mode, role, page, hasWorkspace };
   }
 
   function currentPageFile() {
-    const file = (location.pathname.split('/').pop() || 'dashboard.html').toLowerCase();
-    return file || 'dashboard.html';
+    const bodyPage = String(document.body?.dataset?.page || '').trim().toLowerCase();
+    if (bodyPage) return normalizePageFile(bodyPage);
+    return normalizePageFile(location.pathname);
+  }
+
+  function canAccessPage(targetPage, ctx = getWorkspaceContext()) {
+    const norm = normalizePageFile(targetPage);
+    if (ADMIN_ONLY_PAGES.has(norm) && ctx.role !== 'ADMIN') return false;
+    if (SOLO_HIDDEN_PAGES.has(norm) && ctx.mode === 'SOLO') return false;
+    if (WORKSPACE_REQUIRED_PAGES.has(norm) && !ctx.hasWorkspace) return false;
+    return true;
   }
 
   function findTutorial(id) {
@@ -1359,10 +1391,21 @@
     const tutIndex = TUTORIALS.findIndex((t) => t.id === tut.id);
     const prevTut = tutIndex > 0 ? TUTORIALS[tutIndex - 1] : null;
     const nextTut = tutIndex >= 0 && tutIndex < TUTORIALS.length - 1 ? TUTORIALS[tutIndex + 1] : null;
-    const { mode } = getWorkspaceContext();
+    const ctx = getWorkspaceContext();
+    const { mode, role, hasWorkspace } = ctx;
     const soloNotice = mode === 'SOLO' && tut.groupOnly
       ? '<div class="tutorial-callout is-warn" style="margin-bottom:14px;"><span><strong>Group workspace feature:</strong> You are currently in a Solo Savings workspace. Create or switch to a Group workspace to use this feature live.</span></div>'
-      : '';
+      : (tut.adminOnly && role !== 'ADMIN'
+        ? '<div class="tutorial-callout is-warn" style="margin-bottom:14px;"><span><strong>Admin screen:</strong> This section is managed by the workspace Administrator. You can read every step here anytime.</span></div>'
+        : (!hasWorkspace && WORKSPACE_REQUIRED_PAGES.has(normalizePageFile(tut.tryPage || 'dashboard.html'))
+          ? '<div class="tutorial-callout is-warn" style="margin-bottom:14px;"><span><strong>Workspace required:</strong> Create a Solo tracker or join a Savings Group first to highlight this screen live.</span></div>'
+          : ''));
+
+    const tryPageNorm = normalizePageFile(tut.tryPage || 'dashboard.html');
+    const canTryGuide = !(mode === 'SOLO' && tut.groupOnly)
+      && !(tut.adminOnly && role !== 'ADMIN')
+      && canAccessPage(tryPageNorm, ctx)
+      && (tryPageNorm !== currentPageFile() || !tut.trySelector || Boolean(findVisibleTarget(tut.trySelector)));
 
     const isLastStep = activeStepIndex === totalSteps - 1;
 
@@ -1376,9 +1419,7 @@
           <button class="button button-secondary button-sm" type="button" data-tut-toggle-done title="${isDone ? 'Click to mark incomplete' : 'Mark this tutorial as completed'}">
             ${isDone ? '✓ Completed' : 'Mark complete'}
           </button>
-          <button class="button button-primary button-sm" type="button" data-tut-try="${escapeHtml(tut.id)}">
-            ${escapeHtml(tut.tryLabel || 'Try it now')} →
-          </button>
+          ${canTryGuide ? `<button class="button button-primary button-sm" type="button" data-tut-try="${escapeHtml(tut.id)}">${escapeHtml(tut.tryLabel || 'Try it now')} →</button>` : ''}
         </div>
       </div>
 
@@ -1394,7 +1435,7 @@
           <h3>${escapeHtml(tut.title)}</h3>
           <p>${escapeHtml(tut.summary)}</p>
           <div class="tutorial-hero-cta-row">
-            <button class="button button-primary" type="button" data-tut-try="${escapeHtml(tut.id)}">Try it now →</button>
+            ${canTryGuide ? `<button class="button button-primary" type="button" data-tut-try="${escapeHtml(tut.id)}">Try it now →</button>` : ''}
             <button class="button button-secondary" type="button" data-tut-step="${activeStepIndex}">Step ${activeStepIndex + 1} of ${totalSteps}</button>
           </div>
         </div>
@@ -1426,8 +1467,11 @@
         ${tut.steps.map((step, idx) => {
           const isActive = idx === activeStepIndex;
           const isVisited = visited.has(idx);
-          const canHighlight = Boolean(step.selector);
-          const samePage = !step.page || step.page.toLowerCase() === currentPageFile();
+          const stepPage = normalizePageFile(step.page || tut.tryPage || currentPageFile());
+          const samePage = !step.page || stepPage === currentPageFile();
+          const blockedBySolo = mode === 'SOLO' && Boolean(tut.groupOnly);
+          const blockedByRole = Boolean(tut.adminOnly && role !== 'ADMIN') || !canAccessPage(stepPage, ctx);
+          const canHighlight = Boolean(step.selector) && !blockedBySolo && !blockedByRole && (!samePage || Boolean(findVisibleTarget(step.selector)));
           return `
             <article class="tutorial-step-card${isActive ? ' is-active' : ''}${isVisited ? ' is-visited' : ''}" id="ipon-tut-step-card-${idx}">
               <div class="tutorial-step-head" data-tut-step-card="${idx}">
@@ -1500,7 +1544,7 @@
         continue;
       }
       for (const el of candidates) {
-        if (!el || el.hidden) continue;
+        if (!el || el.hidden || el.closest?.('[hidden]')) continue;
         const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
         if (style && (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0)) continue;
         const rect = el.getBoundingClientRect?.();
@@ -1532,49 +1576,115 @@
   }
 
   function positionSpotlight(targetEl) {
-    if (!targetEl || !spotlightRingEl || !spotlightCardEl) return;
+    if (!spotlightCardEl) return;
+    const vwW = window.innerWidth || 1024;
+    const vwH = window.innerHeight || 768;
+    const cardRect = spotlightCardEl.getBoundingClientRect();
+    const cardW = cardRect.width || Math.min(360, vwW - 24);
+    const cardH = cardRect.height || 170;
+    const gap = 12;
+    const edge = 12;
+
+    if (!targetEl) {
+      if (spotlightRingEl) spotlightRingEl.style.display = 'none';
+      const cardTop = Math.max(edge, vwH - cardH - edge);
+      const cardLeft = vwW >= 640
+        ? Math.max(edge, vwW - cardW - edge)
+        : Math.max(edge, Math.round((vwW - cardW) / 2));
+      spotlightCardEl.dataset.placement = 'docked';
+      spotlightCardEl.classList?.toggle?.('is-docked', true);
+      spotlightCardEl.style.top = `${Math.round(cardTop)}px`;
+      spotlightCardEl.style.left = `${Math.round(cardLeft)}px`;
+      return;
+    }
+
+    if (spotlightRingEl) spotlightRingEl.style.display = '';
     const rect = targetEl.getBoundingClientRect();
     const pad = 6;
-    const top = Math.max(4, rect.top - pad);
-    const left = Math.max(4, rect.left - pad);
-    const width = Math.min(window.innerWidth - left - 4, rect.width + pad * 2);
-    const height = Math.max(24, rect.height + pad * 2);
+    const rawTop = rect.top - pad;
+    const rawBottom = rect.bottom + pad;
+    const rawLeft = rect.left - pad;
+    const rawRight = rect.right + pad;
 
-    spotlightRingEl.style.top = `${top}px`;
-    spotlightRingEl.style.left = `${left}px`;
-    spotlightRingEl.style.width = `${width}px`;
-    spotlightRingEl.style.height = `${height}px`;
+    const top = Math.max(4, Math.min(vwH - 28, rawTop));
+    const bottom = Math.min(vwH - 4, Math.max(top + 24, rawBottom));
+    const left = Math.max(4, Math.min(vwW - 28, rawLeft));
+    const right = Math.min(vwW - 4, Math.max(left + 24, rawRight));
+    const width = Math.max(24, right - left);
+    const height = Math.max(24, bottom - top);
 
-    const cardRect = spotlightCardEl.getBoundingClientRect();
-    const cardW = cardRect.width || 340;
-    const cardH = cardRect.height || 170;
-    const spaceBelow = window.innerHeight - (top + height);
-    let cardTop = spaceBelow >= cardH + 18 ? (top + height + 12) : Math.max(12, top - cardH - 12);
-    if (cardTop + cardH > window.innerHeight - 12) {
-      cardTop = Math.max(12, window.innerHeight - cardH - 12);
+    if (spotlightRingEl) {
+      spotlightRingEl.style.top = `${top}px`;
+      spotlightRingEl.style.left = `${left}px`;
+      spotlightRingEl.style.width = `${width}px`;
+      spotlightRingEl.style.height = `${height}px`;
     }
-    let cardLeft = Math.min(Math.max(12, left), window.innerWidth - cardW - 12);
-    spotlightCardEl.style.top = `${cardTop}px`;
-    spotlightCardEl.style.left = `${cardLeft}px`;
+
+    const spaceBelow = vwH - bottom;
+    const spaceAbove = top;
+    const spaceRight = vwW - right;
+    const spaceLeft = left;
+
+    let placement = 'docked';
+    let cardTop = edge;
+    let cardLeft = edge;
+
+    const clampLeftToTarget = () => {
+      const centered = left + (width - cardW) / 2;
+      return Math.min(Math.max(edge, centered), Math.max(edge, vwW - cardW - edge));
+    };
+    const clampTopToTarget = () => {
+      const aligned = top + Math.min(24, Math.max(0, (height - cardH) / 2));
+      return Math.min(Math.max(edge, aligned), Math.max(edge, vwH - cardH - edge));
+    };
+
+    if (spaceBelow >= cardH + gap + edge) {
+      placement = 'bottom';
+      cardTop = bottom + gap;
+      cardLeft = clampLeftToTarget();
+    } else if (spaceAbove >= cardH + gap + edge) {
+      placement = 'top';
+      cardTop = top - cardH - gap;
+      cardLeft = clampLeftToTarget();
+    } else if (spaceRight >= cardW + gap + edge) {
+      placement = 'right';
+      cardLeft = right + gap;
+      cardTop = clampTopToTarget();
+    } else if (spaceLeft >= cardW + gap + edge) {
+      placement = 'left';
+      cardLeft = left - cardW - gap;
+      cardTop = clampTopToTarget();
+    } else {
+      // Target is too large for any collision-free side: dock cleanly at bottom-right (desktop) or bottom-center (mobile)
+      placement = 'docked';
+      cardTop = Math.max(edge, vwH - cardH - edge);
+      cardLeft = vwW >= 640
+        ? Math.max(edge, vwW - cardW - edge)
+        : Math.max(edge, Math.round((vwW - cardW) / 2));
+    }
+
+    spotlightCardEl.dataset.placement = placement;
+    spotlightCardEl.classList?.toggle?.('is-docked', placement === 'docked');
+    spotlightCardEl.style.top = `${Math.round(cardTop)}px`;
+    spotlightCardEl.style.left = `${Math.round(cardLeft)}px`;
   }
 
-  function showSpotlight(tutorialId, stepIndex = -1) {
+  function showSpotlight(tutorialId, stepIndex = -1, { silent = false, allowDockedFallback = false } = {}) {
     clearSpotlight();
     const tut = findTutorial(tutorialId);
     if (!tut) return false;
     const page = currentPageFile();
     const pageSteps = tut.steps
       .map((step, idx) => ({ step, idx }))
-      .filter(({ step }) => Boolean(step.selector) && (!step.page || step.page.toLowerCase() === page));
+      .filter(({ step }) => Boolean(step.selector) && (!step.page || normalizePageFile(step.page) === page));
 
-    let chosenIndex = -1;
+    let chosenIndex = stepIndex >= 0 && stepIndex < tut.steps.length ? stepIndex : -1;
     let targetEl = null;
 
-    if (stepIndex >= 0 && tut.steps[stepIndex]?.selector) {
-      targetEl = findVisibleTarget(tut.steps[stepIndex].selector);
-      if (targetEl) chosenIndex = stepIndex;
+    if (chosenIndex >= 0 && tut.steps[chosenIndex]?.selector) {
+      targetEl = findVisibleTarget(tut.steps[chosenIndex].selector);
     }
-    if (!targetEl && pageSteps.length) {
+    if (!targetEl && chosenIndex < 0 && pageSteps.length) {
       for (const entry of pageSteps) {
         const el = findVisibleTarget(entry.step.selector);
         if (el) {
@@ -1584,31 +1694,35 @@
         }
       }
     }
-    if (!targetEl && tut.trySelector) {
+    if (!targetEl && tut.trySelector && (chosenIndex < 0 || !tut.steps[chosenIndex]?.selector)) {
       targetEl = findVisibleTarget(tut.trySelector);
-      chosenIndex = Math.max(0, stepIndex);
+      if (chosenIndex < 0) chosenIndex = 0;
     }
-    if (!targetEl) {
-      const { mode } = getWorkspaceContext();
-      if (mode === 'SOLO' && tut.groupOnly) {
-        window.Ipon?.toast?.('Switch to or create a Group workspace to try this feature live.');
+    if (!targetEl && !allowDockedFallback) {
+      if (!silent) {
+        // Still keep the guided coachmark open in docked mode instead of abruptly stopping the tutorial
+        if (chosenIndex < 0) chosenIndex = 0;
       } else {
-        window.Ipon?.toast?.('Feature area opened. Follow the steps in the Tutorial guide anytime.');
+        return false;
       }
-      return false;
     }
+    if (chosenIndex < 0) chosenIndex = 0;
 
+    markStepVisited(tut.id, chosenIndex);
     spotlightState = { tutorialId: tut.id, stepIndex: chosenIndex, pageSteps };
-    targetEl.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    if (targetEl) {
+      targetEl.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    }
 
     spotlightRingEl = document.createElement('div');
     spotlightRingEl.className = 'tutorial-spotlight-ring';
     spotlightRingEl.setAttribute('aria-hidden', 'true');
 
     const stepObj = tut.steps[chosenIndex] || tut.steps[0];
-    const currentPos = pageSteps.findIndex((p) => p.idx === chosenIndex);
-    const hasPrevStop = currentPos > 0;
-    const hasNextStop = currentPos >= 0 && currentPos < pageSteps.length - 1;
+    const hasPrevStop = chosenIndex > 0;
+    const hasNextStop = chosenIndex < tut.steps.length - 1;
+    const nextStep = hasNextStop ? tut.steps[chosenIndex + 1] : null;
+    const nextIsOtherPage = Boolean(nextStep?.page && normalizePageFile(nextStep.page) !== page && canAccessPage(nextStep.page));
 
     spotlightCardEl = document.createElement('aside');
     spotlightCardEl.className = 'tutorial-coachmark';
@@ -1617,15 +1731,22 @@
     spotlightCardEl.innerHTML = `
       <div class="tutorial-coachmark-head">
         <span class="tutorial-coachmark-eyebrow">Step ${chosenIndex + 1} of ${tut.steps.length} · ${escapeHtml(tut.title)}</span>
-        <button class="tutorial-coachmark-close" type="button" data-spot-close aria-label="Close spotlight">${ICONS.close}</button>
+        <div class="tutorial-coachmark-head-controls">
+          <button class="tutorial-coachmark-toggle" type="button" data-spot-collapse aria-label="Minimize guide card" aria-expanded="true" title="Minimize / expand info">−</button>
+          <button class="tutorial-coachmark-close" type="button" data-spot-close aria-label="Close spotlight">${ICONS.close}</button>
+        </div>
       </div>
-      <h4>${escapeHtml(stepObj.title)}</h4>
-      <p>${escapeHtml(stepObj.body)}</p>
+      <div class="tutorial-coachmark-body">
+        <h4>${escapeHtml(stepObj.title)}</h4>
+        <p>${escapeHtml(stepObj.body)}</p>
+      </div>
       <div class="tutorial-coachmark-actions">
         <button class="tutorial-coachmark-btn" type="button" data-spot-guide>Back to guide</button>
         <div style="display:flex;gap:6px;">
           ${hasPrevStop ? '<button class="tutorial-coachmark-btn" type="button" data-spot-prev>← Prev</button>' : ''}
-          ${hasNextStop ? '<button class="tutorial-coachmark-btn is-gold" type="button" data-spot-next>Next highlight →</button>' : '<button class="tutorial-coachmark-btn is-gold" type="button" data-spot-close>Got it ✓</button>'}
+          ${hasNextStop
+            ? `<button class="tutorial-coachmark-btn is-gold" type="button" data-spot-next>${nextIsOtherPage ? 'Next page →' : 'Next highlight →'}</button>`
+            : '<button class="tutorial-coachmark-btn is-gold" type="button" data-spot-finish>Finish ✓</button>'}
         </div>
       </div>
     `;
@@ -1633,7 +1754,34 @@
     document.body.appendChild(spotlightRingEl);
     document.body.appendChild(spotlightCardEl);
 
+    const navigateSpotlightStep = (targetIdx) => {
+      if (targetIdx < 0 || targetIdx >= tut.steps.length) return;
+      const destStep = tut.steps[targetIdx];
+      if (destStep?.page && normalizePageFile(destStep.page) !== currentPageFile() && canAccessPage(destStep.page)) {
+        launchTryItNow(tut.id, targetIdx);
+        return;
+      }
+      showSpotlight(tut.id, targetIdx, { allowDockedFallback: true });
+    };
+
     spotlightCardEl.addEventListener('click', (event) => {
+      if (event.target.closest('[data-spot-collapse]')) {
+        const collapsed = spotlightCardEl.classList?.toggle?.('is-collapsed');
+        const toggleBtn = spotlightCardEl.querySelector?.('[data-spot-collapse]');
+        if (toggleBtn) {
+          toggleBtn.textContent = collapsed ? '+' : '−';
+          toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+          toggleBtn.setAttribute('aria-label', collapsed ? 'Expand guide card' : 'Minimize guide card');
+        }
+        positionSpotlight(targetEl);
+        return;
+      }
+      if (event.target.closest('[data-spot-finish]')) {
+        setTutorialCompleted(tut.id, true);
+        clearSpotlight();
+        window.Ipon?.toast?.(`Completed: ${tut.title}`);
+        return;
+      }
       if (event.target.closest('[data-spot-close]')) {
         clearSpotlight();
         return;
@@ -1646,22 +1794,17 @@
         return;
       }
       if (event.target.closest('[data-spot-prev]') && spotlightState) {
-        const idx = spotlightState.pageSteps.findIndex((p) => p.idx === spotlightState.stepIndex);
-        if (idx > 0) showSpotlight(spotlightState.tutorialId, spotlightState.pageSteps[idx - 1].idx);
+        navigateSpotlightStep(spotlightState.stepIndex - 1);
         return;
       }
       if (event.target.closest('[data-spot-next]') && spotlightState) {
-        const idx = spotlightState.pageSteps.findIndex((p) => p.idx === spotlightState.stepIndex);
-        if (idx >= 0 && idx < spotlightState.pageSteps.length - 1) {
-          showSpotlight(spotlightState.tutorialId, spotlightState.pageSteps[idx + 1].idx);
-        }
+        navigateSpotlightStep(spotlightState.stepIndex + 1);
       }
     });
 
     spotlightResizeHandler = () => {
-      if (!document.body.contains(targetEl)) {
-        clearSpotlight();
-        return;
+      if (targetEl && !document.body.contains(targetEl)) {
+        targetEl = stepObj?.selector ? findVisibleTarget(stepObj.selector) : null;
       }
       positionSpotlight(targetEl);
     };
@@ -1675,28 +1818,38 @@
 
     positionSpotlight(targetEl);
     setTimeout(() => positionSpotlight(targetEl), 260);
+    setTimeout(() => positionSpotlight(targetEl), 560);
     return true;
   }
 
   function launchTryItNow(tutorialId, stepIndex = -1) {
     const tut = findTutorial(tutorialId);
     if (!tut) return;
-    const { mode } = getWorkspaceContext();
-    if (mode === 'SOLO' && tut.groupOnly) {
+    const ctx = getWorkspaceContext();
+    if (ctx.mode === 'SOLO' && tut.groupOnly) {
       window.Ipon?.toast?.('This feature is for Group workspaces. Switch to or create a Group workspace to try it.');
       return;
     }
-    const targetPage = (stepIndex >= 0 && tut.steps[stepIndex]?.page) || tut.tryPage || 'dashboard.html';
+    const rawTargetPage = (stepIndex >= 0 && tut.steps[stepIndex]?.page) || tut.tryPage || 'dashboard.html';
+    const targetPage = normalizePageFile(rawTargetPage);
+    if ((tut.adminOnly && ctx.role !== 'ADMIN') || !canAccessPage(targetPage, ctx)) {
+      window.Ipon?.toast?.(
+        !ctx.hasWorkspace
+          ? 'Create or join a workspace first to highlight this screen live.'
+          : 'This screen is available to workspace Administrators.'
+      );
+      return;
+    }
     if (dialogEl?.open) dialogEl.close();
-    if (targetPage.toLowerCase() === currentPageFile()) {
-      showSpotlight(tut.id, stepIndex);
+    if (targetPage === currentPageFile()) {
+      showSpotlight(tut.id, stepIndex, { allowDockedFallback: true });
       return;
     }
     try {
       sessionStorage.setItem(HANDOFF_KEY, JSON.stringify({
         tutorialId: tut.id,
         stepIndex,
-        targetPage: targetPage.toLowerCase(),
+        targetPage,
         ts: Date.now()
       }));
     } catch { /* ignore */ }
@@ -1713,16 +1866,25 @@
         sessionStorage.removeItem(HANDOFF_KEY);
         return;
       }
-      if (payload.targetPage && payload.targetPage !== currentPageFile()) return;
+      if (payload.targetPage && normalizePageFile(payload.targetPage) !== currentPageFile()) return;
       sessionStorage.removeItem(HANDOFF_KEY);
     } catch {
       return;
     }
     if (!payload?.tutorialId) return;
-    // Wait briefly so async workspace panels finish rendering before highlighting
-    setTimeout(() => {
-      showSpotlight(payload.tutorialId, Number.isFinite(payload.stepIndex) ? payload.stepIndex : -1);
-    }, 550);
+    // Retry while async workspace panels finish rendering before highlighting
+    const stepIdx = Number.isFinite(payload.stepIndex) ? payload.stepIndex : -1;
+    let attempts = 0;
+    const maxAttempts = 18;
+    const tryShow = () => {
+      attempts += 1;
+      const isFinal = attempts >= maxAttempts;
+      const shown = showSpotlight(payload.tutorialId, stepIdx, { silent: !isFinal, allowDockedFallback: isFinal });
+      if (!shown && !isFinal) {
+        setTimeout(tryShow, 250);
+      }
+    };
+    setTimeout(tryShow, 250);
   }
 
   function open(tutorialId = null, stepIndex = 0) {

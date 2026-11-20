@@ -1228,6 +1228,55 @@ html[data-theme="dark"] .no-group-tutorial-btn:hover {
   gap: 10px;
 }
 
+.tutorial-coachmark-head-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tutorial-coachmark-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .08);
+  color: #f9f5eb;
+  font: 700 15px/1 Arial, sans-serif;
+  cursor: pointer;
+}
+
+.tutorial-coachmark-toggle:hover {
+  background: rgba(255, 255, 255, .18);
+}
+
+.tutorial-coachmark-body {
+  display: grid;
+  gap: 6px;
+}
+
+.tutorial-coachmark.is-docked {
+  box-shadow: 0 16px 42px rgba(4, 18, 14, .52), 0 0 0 1px rgba(235, 208, 137, .32);
+}
+
+.tutorial-coachmark.is-collapsed {
+  padding: 10px 14px;
+  gap: 8px;
+}
+
+.tutorial-coachmark.is-collapsed .tutorial-coachmark-body {
+  display: none;
+}
+
+.tutorial-coachmark.is-collapsed .tutorial-coachmark-actions {
+  padding-top: 0;
+}
+
 .tutorial-coachmark-eyebrow {
   color: #ebd089;
   font: 800 10.5px/1.2 Arial, sans-serif;
