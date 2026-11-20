@@ -1222,6 +1222,19 @@
     return state;
   }
 
+  function isTransientLoginNetworkError(error) {
+    return /failed to fetch|fetch failed|load failed|networkerror|network request failed|failed to send a request to the edge function|functionsfetcherror|econnreset|err_network_changed/i.test(`${error?.name || ''} ${error?.message || ''}`);
+  }
+
+  async function retryTransientLoginRequest(request) {
+    try { return await request(); }
+    catch (error) {
+      if (!isTransientLoginNetworkError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return request();
+    }
+  }
+
   const normJoinCode = (raw) => (typeof Ipon.normalizeInviteCode === 'function'
     ? Ipon.normalizeInviteCode(raw)
     : String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6));
@@ -1869,6 +1882,7 @@
     if (!validateForm()) return;
 
     Ipon.setBusy(submit, true, mode === 'signup' ? 'Creating account…' : 'Signing in...');
+    let credentialsAccepted = false;
     try {
       await ensureInitReady();
       if (mode === 'signup') {
@@ -1957,11 +1971,15 @@
         }
         if (edgeRes && typeof edgeRes === 'object' && ('ok' in edgeRes || 'locked' in edgeRes || 'error' in edgeRes)) {
           if (edgeRes.ok && edgeRes.session?.access_token && edgeRes.session?.refresh_token) {
-            const { data: sessionData, error: sessionError } = await Ipon.client.auth.setSession({
-              access_token: edgeRes.session.access_token,
-              refresh_token: edgeRes.session.refresh_token
+            credentialsAccepted = true;
+            const sessionData = await retryTransientLoginRequest(async () => {
+              const { data, error } = await Ipon.client.auth.setSession({
+                access_token: edgeRes.session.access_token,
+                refresh_token: edgeRes.session.refresh_token
+              });
+              if (error) throw error;
+              return data;
             });
-            if (sessionError) throw sessionError;
             clearLocalThrottle(submittedIdentifier);
             renderSecurityNotice();
             data = sessionData?.user ? sessionData : { user: edgeRes.user, session: edgeRes.session };
@@ -1984,17 +2002,19 @@
 
         const resolvedEmail = String(edgeRes.resolved_email || data.user?.email || submittedIdentifier).trim().toLowerCase();
         await syncClerkSession(resolvedEmail, password.value).catch(() => false);
-        if (await Ipon.requiresMfaChallenge()) {
+        if (await retryTransientLoginRequest(() => Ipon.requiresMfaChallenge())) {
           window.location.replace('mfa.html');
           return;
         }
-        const profile = await resolveActiveProfile(data.user, resolvedEmail);
+        const profile = await retryTransientLoginRequest(() => resolveActiveProfile(data.user, resolvedEmail));
         recordLoginActivity(data);
         completeLoginSession(data, profile);
       }
     } catch (error) {
       message.dataset.tone = 'error';
-      if (mode === 'login' && error?.code === 'login_locked') {
+      if (mode === 'login' && credentialsAccepted && isTransientLoginNetworkError(error)) {
+        message.textContent = 'Your password was accepted, but the connection was interrupted while opening your account. Please try again.';
+      } else if (mode === 'login' && error?.code === 'login_locked') {
         if (error?.throttle) syncThrottleFromServer(normalizeLoginIdentifier(email.value), error.throttle);
         renderSecurityNotice();
         message.textContent = 'Too many incorrect sign-in attempts. Please wait for the countdown to finish.';
