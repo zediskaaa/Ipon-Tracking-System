@@ -12,6 +12,7 @@ function createAuthVmHarness({
   nativeAuth = null,
   capacitor = null,
   existingSession = null,
+  initialProfile = { id: 'u-old', role: 'MEMBER', status: 'ACTIVE' },
   clerkToken = 'clerk.jwt.test-token',
   clerkSession = null,
   clerkRedirectError = null
@@ -27,7 +28,8 @@ function createAuthVmHarness({
     accountFn: [],
     verifyOtp: [],
     locationReplace: [],
-    locationAssign: []
+    locationAssign: [],
+    supabaseSignOut: []
   };
 
   const makeEl = (id = '', tag = 'div') => {
@@ -210,7 +212,7 @@ function createAuthVmHarness({
       init: async () => ({
         configured: true,
         session: existingSession,
-        profile: existingSession ? { id: 'u-old', role: 'MEMBER', status: 'ACTIVE' } : null
+          profile: existingSession ? initialProfile : null
       }),
       client: {
         auth: {
@@ -219,7 +221,7 @@ function createAuthVmHarness({
             calls.verifyOtp.push(opts);
             return { data: { user: { id: 'u-new', email: 'user@example.com' }, session: { access_token: 'sb-tok' } }, error: null };
           },
-          signOut: async () => ({})
+          signOut: async () => { calls.supabaseSignOut.push(true); return {}; }
         },
         from: () => ({
           select: () => ({
@@ -279,9 +281,10 @@ test('Android native Google OAuth deep-link handoff contracts stay intact across
   assert.match(mainActivity, /handleAuthCallbackIntent\(intent\)/);
   assert.match(mainActivity, /dispatchWindowEvent\("myipon:native-resume"\)/);
   assert.match(mainActivity, /myipon:native-oauth-callback/);
+  assert.match(mainActivity, /pendingAuthCallbackJson != null\) dispatchWindowEvent\("myipon:native-oauth-callback"\)/);
   assert.match(loginHtml, /id="clerk-app-handoff"/);
   assert.match(loginHtml, /id="clerk-app-handoff-btn"/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261120-105/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261120-106/);
 });
 
 test('Android app Google login resets Connecting state when user backs out without finishing OAuth', async () => {
@@ -420,4 +423,53 @@ test('Native OAuth callback rejects mismatched or replayed app_state tokens', as
   assert.equal(appHarness.calls.accountFn.length, 0);
   assert.equal(appHarness.calls.verifyOtp.length, 0);
   assert.match(appHarness.els.get('clerk-signin-message').textContent, /expired or did not match/i);
+});
+
+test('Android resume consumes a pending Google callback and opens the app dashboard', async () => {
+  let pendingCallback = '';
+  const app = createAuthVmHarness({
+    nativeAuth: {
+      isSupported: () => true,
+      consumePendingCallback: () => {
+        const value = pendingCallback;
+        pendingCallback = '';
+        return value;
+      }
+    },
+    capacitor: { isNativePlatform: () => true }
+  });
+  app.googleBtn.click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const state = new URL(app.calls.signInRedirect[0].redirectUrl).searchParams.get('app_state');
+  pendingCallback = JSON.stringify({ clerk_token: 'clerk.jwt.google', app_state: state });
+  app.ctx.dispatchWindowEvent('myipon:native-resume');
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(app.calls.accountFn[0].action, 'clerk-session-exchange');
+  assert.deepEqual(app.calls.locationReplace, ['dashboard.html']);
+});
+
+test('Google sign-in replaces a stale app session before opening the selected account', async () => {
+  let pendingCallback = '';
+  const app = createAuthVmHarness({
+    existingSession: { user: { id: 'u-old' }, access_token: 'old-token' },
+    initialProfile: null,
+    nativeAuth: {
+      isSupported: () => true,
+      consumePendingCallback: () => {
+        const value = pendingCallback;
+        pendingCallback = '';
+        return value;
+      }
+    },
+    capacitor: { isNativePlatform: () => true }
+  });
+  app.googleBtn.click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const state = new URL(app.calls.signInRedirect[0].redirectUrl).searchParams.get('app_state');
+  pendingCallback = JSON.stringify({ clerk_token: 'clerk.jwt.new-google', app_state: state });
+  app.ctx.dispatchWindowEvent('myipon:native-oauth-callback');
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(app.calls.supabaseSignOut.length, 1);
+  assert.equal(app.calls.accountFn[0].clerk_token, 'clerk.jwt.new-google');
+  assert.deepEqual(app.calls.locationReplace, ['dashboard.html']);
 });

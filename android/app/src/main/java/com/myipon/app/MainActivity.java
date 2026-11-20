@@ -366,6 +366,7 @@ public class MainActivity extends BridgeActivity {
         NotificationSyncService.ensureStarted(this);
         NotificationSyncWorker.ensureScheduled(this);
         dispatchWindowEvent("myipon:native-resume");
+        if (pendingAuthCallbackJson != null) dispatchWindowEvent("myipon:native-oauth-callback");
         if (connectionOverlay != null) {
             updateConnectionOverlay();
             final WebView webView = getBridge() != null ? getBridge().getWebView() : null;

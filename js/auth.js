@@ -513,14 +513,10 @@
     setClerkSignInMessage('');
     setClerkSignInLoading(true);
     try {
-      const initState = await ensureInitReady();
+      await ensureInitReady();
       const { data: { session: existingSession } } = await Ipon.client.auth.getSession();
       if (existingSession) {
-        if (initState?.profile?.status !== 'ACTIVE') {
-          clerkExchangeInFlight = false;
-          setClerkSignInLoading(false);
-        }
-        return;
+        await Ipon.client.auth.signOut();
       }
       const exchange = await Ipon.invokeAccountFunction({ action: 'clerk-session-exchange', clerk_token: token, device_token: Ipon.getDeviceToken() });
       if (exchange.requires_device_otp) {
