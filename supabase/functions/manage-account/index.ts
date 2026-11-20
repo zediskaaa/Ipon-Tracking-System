@@ -2612,7 +2612,7 @@ Deno.serve(async (request) => {
     const deviceOtp = await startDeviceOtpIfNeeded(admin, loginProfile, String(body.device_token || '').trim(), service);
     if (deviceOtp) return json(deviceOtp, Number(('status' in deviceOtp ? deviceOtp.status : 200) || 200));
 
-    await admin.rpc('clear_login_throttle', { p_email: resolved.throttleKey, p_ip: clientIp }).catch(() => null);
+    await Promise.resolve(admin.rpc('clear_login_throttle', { p_email: resolved.throttleKey, p_ip: clientIp })).catch(() => null);
     EdgeRuntime.waitUntil(provisionClerkUser(admin, authData.user, password).catch(() => false));
     return json({
       ok: true,
@@ -2682,7 +2682,7 @@ Deno.serve(async (request) => {
       return json({ error: 'Your sign-in session expired. Enter your email or username and password again.' }, 401);
     }
     await admin.from('account_device_otp_challenges').update({ consumed_at: new Date().toISOString() }).eq('id', challengeId);
-    await admin.rpc('clear_login_throttle', { p_email: resolved.throttleKey || email, p_ip: extractClientIp(request) || null }).catch(() => null);
+    await Promise.resolve(admin.rpc('clear_login_throttle', { p_email: resolved.throttleKey || email, p_ip: extractClientIp(request) || null })).catch(() => null);
     EdgeRuntime.waitUntil(provisionClerkUser(admin, authData.user, password).catch(() => false));
     return json({
       ok: true,
