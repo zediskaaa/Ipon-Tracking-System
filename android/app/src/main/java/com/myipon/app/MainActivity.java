@@ -237,6 +237,7 @@ public class MainActivity extends BridgeActivity {
         getWindow().getDecorView().setBackgroundColor(emeraldBg);
         final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
         if (webView != null) {
+            webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
             webView.setBackgroundColor(Color.parseColor("#0b3428"));
             if (webView.getParent() instanceof View) {
                 ((View) webView.getParent()).setBackgroundColor(emeraldBg);

@@ -20,6 +20,8 @@ import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.Typeface;
+import android.media.AudioAttributes;
+import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
@@ -52,6 +54,7 @@ import org.json.JSONObject;
 public class NotificationPollReceiver extends BroadcastReceiver {
     public static final String PREFS_NAME = "myipon_bg_notifs";
     public static final String CHANNEL_ID = "myipon_alerts";
+    public static final String MESSAGE_CHANNEL_ID = "myipon_messages_v2";
     public static final String SYNC_CHANNEL_ID = "myipon_bg_sync";
     public static final String ACTION_POLL = "com.myipon.app.ACTION_POLL_NOTIFICATIONS";
     private static final int ALARM_REQUEST_CODE = 4419;
@@ -93,6 +96,18 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             channel.enableVibration(true);
             manager.createNotificationChannel(channel);
         }
+        if (manager.getNotificationChannel(MESSAGE_CHANNEL_ID) == null) {
+            NotificationChannel messageChannel = new NotificationChannel(
+                MESSAGE_CHANNEL_ID, "Messages", NotificationManager.IMPORTANCE_HIGH
+            );
+            messageChannel.setDescription("Chat messages and replies");
+            messageChannel.enableVibration(true);
+            messageChannel.setSound(messageSoundUri(context), new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build());
+            manager.createNotificationChannel(messageChannel);
+        }
         if (manager.getNotificationChannel(SYNC_CHANNEL_ID) == null) {
             NotificationChannel syncChannel = new NotificationChannel(
                 SYNC_CHANNEL_ID,
@@ -106,6 +121,10 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             syncChannel.setSound(null, null);
             manager.createNotificationChannel(syncChannel);
         }
+    }
+
+    private static Uri messageSoundUri(Context context) {
+        return Uri.parse("android.resource://" + context.getPackageName() + "/raw/myipon_message");
     }
 
     public static boolean hasFeedConfig(Context context) {
@@ -198,7 +217,11 @@ public class NotificationPollReceiver extends BroadcastReceiver {
     }
 
     private static Set<String> readShownSet(SharedPreferences prefs) {
-        String raw = prefs.getString("shown_ids", "");
+        return readTrackedSet(prefs, "shown_ids");
+    }
+
+    private static Set<String> readTrackedSet(SharedPreferences prefs, String key) {
+        String raw = prefs.getString(key, "");
         Set<String> set = new LinkedHashSet<>();
         if (!TextUtils.isEmpty(raw)) {
             set.addAll(Arrays.asList(raw.split(",")));
@@ -208,11 +231,15 @@ public class NotificationPollReceiver extends BroadcastReceiver {
     }
 
     private static void saveShownSet(SharedPreferences prefs, Set<String> set) {
+        saveTrackedSet(prefs, "shown_ids", set);
+    }
+
+    private static void saveTrackedSet(SharedPreferences prefs, String key, Set<String> set) {
         List<String> list = new ArrayList<>(set);
         if (list.size() > 120) {
             list = list.subList(list.size() - 120, list.size());
         }
-        prefs.edit().putString("shown_ids", TextUtils.join(",", list)).apply();
+        prefs.edit().putString(key, TextUtils.join(",", list)).apply();
     }
 
     public static boolean hasNotificationPermission(Context context) {
@@ -397,7 +424,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(appContext, CHANNEL_ID)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(appContext, isMsg ? MESSAGE_CHANNEL_ID : CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_myipon)
             .setColor(0xFF0B3428)
             .setContentTitle(cleanTitle)
@@ -406,12 +433,16 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setDefaults(isMsg ? NotificationCompat.DEFAULT_LIGHTS | NotificationCompat.DEFAULT_VIBRATE : NotificationCompat.DEFAULT_ALL)
             .setWhen(System.currentTimeMillis())
             .setShowWhen(true)
             .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(tapPending);
+
+        if (isMsg && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            builder.setSound(messageSoundUri(appContext));
+        }
 
         if (isMsg || !TextUtils.isEmpty(avatarUrl)) {
             Bitmap avatarBitmap = loadCircularAvatarBitmap(avatarUrl, cleanTitle, isMsg);
@@ -505,6 +536,34 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         }
     }
 
+    private static boolean acknowledgeMessageDelivery(String supabaseUrl, String anonKey, String feedToken, JSONArray ids) {
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL(supabaseUrl + "/rest/v1/rpc/ack_message_notifications_by_token").openConnection();
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(5_000);
+            conn.setReadTimeout(5_000);
+            conn.setDoOutput(true);
+            conn.setRequestProperty("apikey", anonKey);
+            if (anonKey.startsWith("eyJ")) {
+                conn.setRequestProperty("Authorization", "Bearer " + anonKey);
+            }
+            conn.setRequestProperty("Content-Type", "application/json");
+            JSONObject payload = new JSONObject();
+            payload.put("p_token", feedToken);
+            payload.put("p_notification_ids", ids);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(payload.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            int statusCode = conn.getResponseCode();
+            return statusCode >= 200 && statusCode < 300;
+        } catch (Exception ignored) {
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
     public static synchronized void pollSync(Context appContext) {
         SharedPreferences prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String supabaseUrl = prefs.getString("supabase_url", null);
@@ -561,6 +620,9 @@ public class NotificationPollReceiver extends BroadcastReceiver {
                 lastPollSuccessElapsedMs = SystemClock.elapsedRealtime();
                 if (rows.length() > 0) {
                     Set<String> shown = readShownSet(prefs);
+                    Set<String> acked = readTrackedSet(prefs, "delivery_acks");
+                    JSONArray ackIds = new JSONArray();
+                    List<String> ackKeys = new ArrayList<>();
                     boolean changed = false;
 
                     for (int i = rows.length() - 1; i >= 0; i--) {
@@ -579,24 +641,37 @@ public class NotificationPollReceiver extends BroadcastReceiver {
                         String shownKey = !TextUtils.isEmpty(dedupeKey)
                             ? (id + ":" + (!TextUtils.isEmpty(createdAt) ? createdAt : body))
                             : id;
-
-                        if (shown.contains(shownKey) || (TextUtils.isEmpty(dedupeKey) && shown.contains(id))) {
-                            continue;
+                        boolean isMsg = isMessageNotification(type, dedupeKey, title);
+                        if (isMsg && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            ensureChannel(appContext);
+                            NotificationManager manager = appContext.getSystemService(NotificationManager.class);
+                            NotificationChannel channel = manager != null ? manager.getNotificationChannel(MESSAGE_CHANNEL_ID) : null;
+                            if (channel == null || channel.getImportance() == NotificationManager.IMPORTANCE_NONE) continue;
                         }
 
-                        if (!isAlreadyInTray(appContext, id, dedupeKey,
-                            cleanMessageNotificationTitle(type, dedupeKey, title), body)) {
-                            showDirectNotification(appContext, id, dedupeKey, type, title, body, link, avatarUrl);
+                        if (!shown.contains(shownKey) && !(TextUtils.isEmpty(dedupeKey) && shown.contains(id))) {
+                            if (!isAlreadyInTray(appContext, id, dedupeKey,
+                                cleanMessageNotificationTitle(type, dedupeKey, title), body)) {
+                                showDirectNotification(appContext, id, dedupeKey, type, title, body, link, avatarUrl);
+                            }
+                            shown.add(shownKey);
+                            if (TextUtils.isEmpty(dedupeKey)) shown.add(id);
+                            changed = true;
                         }
-                        shown.add(shownKey);
-                        if (TextUtils.isEmpty(dedupeKey)) {
-                            shown.add(id);
+                        if (isMsg && !acked.contains(shownKey)) {
+                            try {
+                                ackIds.put(Long.parseLong(id));
+                                ackKeys.add(shownKey);
+                            } catch (NumberFormatException ignored) { }
                         }
-                        changed = true;
                     }
 
                     if (changed) {
                         saveShownSet(prefs, shown);
+                    }
+                    if (ackIds.length() > 0 && acknowledgeMessageDelivery(supabaseUrl, anonKey, feedToken, ackIds)) {
+                        acked.addAll(ackKeys);
+                        saveTrackedSet(prefs, "delivery_acks", acked);
                     }
                 }
             }

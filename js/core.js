@@ -181,8 +181,9 @@
       return;
     }
     if (kind === 'msg-typing') {
-      scheduleUiTone(ctx, master, { freq: 520, endFreq: 610, type: 'sine', start: 0, duration: 0.055, gain: 0.028, attack: 0.005 });
-      scheduleUiTone(ctx, master, { freq: 440, endFreq: 500, type: 'sine', start: 0.095, duration: 0.06, gain: 0.024, attack: 0.005 });
+      scheduleUiTone(ctx, master, { freq: 520, endFreq: 580, type: 'sine', start: 0, duration: 0.24, gain: 0.055, attack: 0.012 });
+      scheduleUiTone(ctx, master, { freq: 590, endFreq: 650, type: 'sine', start: 0.19, duration: 0.27, gain: 0.052, attack: 0.012 });
+      scheduleUiTone(ctx, master, { freq: 670, endFreq: 740, type: 'sine', start: 0.39, duration: 0.34, gain: 0.048, attack: 0.012 });
       return;
     }
     if (kind === 'msg-receive') {
