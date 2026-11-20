@@ -2274,8 +2274,8 @@
           </div>
           <button class="sidebar-user-card${isAccountSubview ? ' is-active' : ''}" data-account-open type="button" aria-label="Open my account"${isAccountSubview ? ' aria-current="page"' : ''}>
             <span class="avatar-presence-wrap">
-              <span class="sidebar-user-avatar" aria-hidden="true">
-                ${DEFAULT_SIDEBAR_AVATAR_SVG}
+              <span class="sidebar-user-avatar${cachedName && !cachedAvatar ? ' has-initials' : ''}" aria-hidden="true">
+                ${sidebarAvatarFallbackHtml(cachedName)}
               </span>
               <span class="presence-dot is-online" data-presence-id="${escapeHtml(cachedUserId)}" aria-label="Active now" title="Active now"></span>
             </span>
@@ -2290,7 +2290,7 @@
     syncNotificationBadges(cachedUnread, { persist: false });
     syncMessagesBadges(cachedMsgUnread, { persist: false });
     if (cachedName) syncSidebarUserInfo(cachedName, cachedRole);
-    if (cachedAvatar) {
+    if (cachedAvatar || cachedName) {
       syncProfileAvatars({ id: cachedUserId, full_name: cachedName, role: cachedRole, avatar_url: cachedAvatar }, { persist: false });
     }
     document.querySelectorAll('.record-tabs a').forEach((link) => {
@@ -4236,9 +4236,20 @@
     });
   }
 
+  function sidebarAvatarFallbackHtml(name, { hidden = false } = {}) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) {
+      return hidden
+        ? DEFAULT_SIDEBAR_AVATAR_SVG.replace('<svg ', '<svg hidden ')
+        : DEFAULT_SIDEBAR_AVATAR_SVG;
+    }
+    return `<span class="sidebar-user-initials"${hidden ? ' hidden' : ''}>${escapeHtml(initials(trimmed))}</span>`;
+  }
+
   function syncProfileAvatars(profile = currentProfile, { persist = true } = {}) {
     if (!profile) return;
     const safeUrl = isSafeImageRef(profile.avatar_url) ? String(profile.avatar_url).trim() : '';
+    const hasName = Boolean(String(profile.full_name || '').trim());
     if (persist && profile.id) {
       writeShellAvatar(profile.id, safeUrl);
       writeShellSnapshot({
@@ -4256,18 +4267,24 @@
       }
       const existingImg = slot.querySelector('img[data-avatar-img]');
       if (safeUrl) {
+        slot.classList?.remove?.('has-initials');
         if (existingImg && existingImg.getAttribute('src') === safeUrl && !existingImg.hidden) {
           return;
         }
-        slot.innerHTML = `<img src="${safeUrl}" alt="${escapeHtml(profile.full_name || 'Profile picture')}" data-avatar-img><svg viewBox="0 0 24 24" hidden><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>`;
+        slot.innerHTML = `<img src="${safeUrl}" alt="${escapeHtml(profile.full_name || 'Profile picture')}" data-avatar-img>${sidebarAvatarFallbackHtml(profile.full_name, { hidden: true })}`;
         const img = slot.querySelector('img');
         img?.addEventListener('error', () => {
           img.hidden = true;
-          const svg = img.nextElementSibling;
-          if (svg) svg.removeAttribute('hidden');
+          slot.classList?.toggle?.('has-initials', hasName);
+          const fallback = img.nextElementSibling;
+          if (fallback) fallback.removeAttribute('hidden');
         });
-      } else if (existingImg || !slot.querySelector('svg')) {
-        slot.innerHTML = DEFAULT_SIDEBAR_AVATAR_SVG;
+      } else {
+        slot.classList?.toggle?.('has-initials', hasName);
+        const nextMarkup = sidebarAvatarFallbackHtml(profile.full_name);
+        if (existingImg || slot.innerHTML !== nextMarkup) {
+          slot.innerHTML = nextMarkup;
+        }
       }
     });
     const quickPreview = document.getElementById('quick-avatar-preview');

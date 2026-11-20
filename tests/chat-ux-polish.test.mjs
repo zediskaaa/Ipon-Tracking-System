@@ -60,6 +60,71 @@ test('conversation intro stays in the thread, header status excludes typing, and
   assert.match(css, /\.msg-thread-welcome-hero\s*\{[^}]*margin:\s*0 auto 12px;[^}]*padding:\s*14px 10px 12px;/s);
 });
 
+test('navbar avatar renders user initials matching avatar-circle when user has no DP', () => {
+  const coreJs = read('js/core.js');
+  const css = read('css/app.css');
+  const heroCss = read('css/hero-plates.css');
+
+  assert.match(coreJs, /function sidebarAvatarFallbackHtml\(name/);
+  assert.match(css, /\.sidebar-user-avatar \.sidebar-user-initials\s*\{[^}]*color:#f5eadb;/);
+  assert.match(css, /\.sidebar-user-card \.sidebar-user-avatar\.has-initials\s*\{[^}]*background:\s*#1e5a44;[^}]*color:\s*#f5eadb;/s);
+  assert.match(css, /\.sidebar-user-card \.avatar-presence-wrap\s*\{[^}]*grid-template-columns:\s*100%;[^}]*grid-template-rows:\s*100%;/s);
+  assert.match(heroCss, /\.dashboard-sidebar \.sidebar-user-card \.sidebar-user-avatar\.has-initials\s*\{[^}]*background:#1e5a44;[^}]*color:#f5eadb;/s);
+  assert.match(heroCss, /\.dashboard-sidebar \.sidebar-user-card \.avatar-presence-wrap\s*\{[^}]*grid-template-columns:100%;[^}]*grid-template-rows:100%;/s);
+
+  const classes = new Set();
+  const avatarSlot = {
+    innerHTML: '<svg></svg>',
+    classList: {
+      add: (c) => classes.add(c),
+      remove: (c) => classes.delete(c),
+      toggle: (c, f) => (f ? classes.add(c) : classes.delete(c)),
+      contains: (c) => classes.has(c)
+    },
+    closest: () => ({ querySelector: () => ({ dataset: {}, classList: { add() { } } }) }),
+    querySelector: () => null
+  };
+  const storageMap = new Map([
+    ['ipon_shell_snapshot', JSON.stringify({ userId: 'u-edna', role: 'MEMBER', fullName: 'Edna Fruto', unreadCount: 0, unreadMessagesCount: 0 })]
+  ]);
+  const storage = {
+    getItem: (k) => storageMap.get(k) ?? null,
+    setItem: (k, v) => storageMap.set(k, String(v)),
+    removeItem: (k) => storageMap.delete(k)
+  };
+  const loaderStub = { hidden: false, setAttribute() { }, dataset: {} };
+  const stubEl = () => ({ dataset: {}, style: {}, classList: { add() { }, remove() { }, toggle() { }, contains: () => false }, setAttribute() { }, addEventListener() { }, querySelector: () => null, querySelectorAll: () => [] });
+  const doc = {
+    body: { dataset: { page: 'dashboard' }, classList: { contains: () => false, add() { }, remove() { }, toggle() { } }, insertAdjacentHTML() { }, prepend() { }, append() { }, appendChild() { } },
+    head: { insertAdjacentHTML() { }, append() { } },
+    documentElement: { dataset: { shellRole: 'MEMBER' }, style: { setProperty() { }, removeProperty() { } } },
+    createElement: stubEl,
+    querySelector: (sel) => (sel === 'link[rel="manifest"]' ? {} : null),
+    querySelectorAll: (sel) => (sel === '.sidebar-user-avatar' ? [avatarSlot] : []),
+    getElementById: (id) => (id === 'app-loader' ? loaderStub : null),
+    addEventListener() { }
+  };
+  const ctx = {
+    URL, URLSearchParams, CustomEvent: class { }, Intl, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error,
+    sessionStorage: storage,
+    localStorage: storage,
+    navigator: { userAgent: 'Mozilla/5.0', onLine: true },
+    setTimeout: () => 1,
+    clearTimeout() { },
+    location: { protocol: 'https:', hostname: 'my-ipon.vercel.app', href: 'https://my-ipon.vercel.app/dashboard.html', pathname: '/dashboard.html', search: '', hash: '' },
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    addEventListener() { },
+    document: doc,
+    window: null,
+    console
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  assert.equal(avatarSlot.innerHTML, '<span class="sidebar-user-initials">EF</span>');
+  assert.equal(avatarSlot.classList.contains('has-initials'), true);
+});
+
 test('runtime typing sound plays once per typing appearance, voice recording plays start/cancel sounds, unread divider stays anchored, and group chats show Admin & Treasurer badges', async () => {
   const messagesJs = read('js/messages.js');
   const meId = '11111111-1111-4111-8111-111111111111';
