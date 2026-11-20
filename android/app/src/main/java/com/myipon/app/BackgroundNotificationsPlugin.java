@@ -56,6 +56,14 @@ import java.util.Locale;
     }
 )
 public class BackgroundNotificationsPlugin extends Plugin {
+    @PluginMethod
+    public void consumeAuthCallback(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("payload", getActivity() instanceof MainActivity
+            ? ((MainActivity) getActivity()).consumePendingAuthCallback() : "");
+        call.resolve(result);
+    }
+
     private static boolean isOAuthHost(String host) {
         if (TextUtils.isEmpty(host)) return false;
         String h = host.toLowerCase(Locale.US);

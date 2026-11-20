@@ -278,7 +278,8 @@ test('Android native Google OAuth deep-link handoff contracts stay intact across
   assert.match(bgPlugin, /android\.support\.customtabs\.extra\.SESSION/);
   assert.match(bgPlugin, /accounts\.google\.com/);
   assert.match(mainActivity, /addJavascriptInterface\(new AuthCallbackBridge\(\), "IponNativeAuth"\)/);
-  assert.match(mainActivity, /addJavascriptInterface\(new AuthCallbackBridge\(\), "IponNativeAuth"\);\s*webView\.reload\(\)/);
+  assert.match(mainActivity, /public synchronized String consumePendingAuthCallback\(\)/);
+  assert.match(bgPlugin, /public void consumeAuthCallback\(PluginCall call\)/);
   assert.match(mainActivity, /handleAuthCallbackIntent\(getIntent\(\)\)/);
   assert.match(mainActivity, /handleAuthCallbackIntent\(intent\)/);
   assert.match(mainActivity, /dispatchWindowEvent\("myipon:native-resume"\)/);
@@ -286,7 +287,7 @@ test('Android native Google OAuth deep-link handoff contracts stay intact across
   assert.match(mainActivity, /pendingAuthCallbackJson != null\) dispatchWindowEvent\("myipon:native-oauth-callback"\)/);
   assert.match(loginHtml, /id="clerk-app-handoff"/);
   assert.match(loginHtml, /id="clerk-app-handoff-btn"/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261120-108/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261120-109/);
 });
 
 test('Android app Google login resets Connecting state when user backs out without finishing OAuth', async () => {
@@ -338,6 +339,33 @@ test('Android Google sign-in waits for the native callback bridge instead of sig
   assert.equal(app.calls.signInRedirect.length, 0);
   assert.match(app.els.get('social-signup-message').textContent, /App sign-in is still loading/);
   assert.equal(app.googleBtn.disabled, false);
+});
+
+test('Capacitor OAuth bridge completes Google login when WebView JavaScript interface is unavailable', async () => {
+  let pendingCallback = '';
+  const app = createAuthVmHarness({
+    capacitor: {
+      isNativePlatform: () => true,
+      Plugins: {
+        BackgroundNotifications: {
+          consumeAuthCallback: async () => {
+            const payload = pendingCallback;
+            pendingCallback = '';
+            return { payload };
+          }
+        }
+      }
+    }
+  });
+  app.googleBtn.click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(app.calls.signInRedirect.length, 1);
+  const state = new URL(app.calls.signInRedirect[0].redirectUrl).searchParams.get('app_state');
+  pendingCallback = JSON.stringify({ clerk_token: 'clerk.jwt.google', app_state: state });
+  app.ctx.dispatchWindowEvent('myipon:native-oauth-callback');
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(app.calls.accountFn[0].clerk_token, 'clerk.jwt.google');
+  assert.deepEqual(app.calls.locationReplace, ['dashboard.html']);
 });
 
 test('Create with Google in Android app hands off from phone browser back to app and signs in inside the app', async () => {

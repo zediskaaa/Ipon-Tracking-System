@@ -25,8 +25,9 @@
   const isClerkSsoCallback = initialUrlParams.get('clerk_sso_callback') === '1';
   const isNativeAuthApp = () => Boolean(
     typeof window !== 'undefined'
-    && window.IponNativeAuth
-    && typeof window.IponNativeAuth.consumePendingCallback === 'function'
+    && (typeof window.IponNativeAuth?.consumePendingCallback === 'function'
+      || (window.Capacitor?.isNativePlatform?.()
+        && typeof window.Capacitor?.Plugins?.BackgroundNotifications?.consumeAuthCallback === 'function'))
   );
   const isCapacitorNativeApp = () => Boolean(
     typeof window !== 'undefined'
@@ -303,14 +304,14 @@
     syncSocialAuthLabels();
   }
 
-  function scheduleResetSocialOAuthBusy() {
+  async function scheduleResetSocialOAuthBusy() {
     if (!socialOAuthInFlight) return;
-    if (consumeNativeOAuthCallback()) return;
+    if (await consumeNativeOAuthCallback()) return;
     clearTimeout(socialOAuthResetTimer);
     const elapsed = Date.now() - socialOAuthStartedAt;
     if (!socialOAuthLeftPage && elapsed < 1200) return;
-    socialOAuthResetTimer = setTimeout(() => {
-      if (consumeNativeOAuthCallback()) return;
+    socialOAuthResetTimer = setTimeout(async () => {
+      if (await consumeNativeOAuthCallback()) return;
       if (!clerkExchangeInFlight && socialOAuthInFlight) {
         clearSocialOAuthBusy();
       }
@@ -568,11 +569,15 @@
     }
   }
 
-  function consumeNativeOAuthCallback() {
+  async function consumeNativeOAuthCallback() {
     if (!isNativeAuthApp()) return false;
     let raw = '';
     try {
-      raw = String(window.IponNativeAuth.consumePendingCallback() || '').trim();
+      raw = String(window.IponNativeAuth?.consumePendingCallback?.() || '').trim();
+      if (!raw) {
+        const result = await window.Capacitor?.Plugins?.BackgroundNotifications?.consumeAuthCallback?.();
+        raw = String(result?.payload || '').trim();
+      }
     } catch {
       return false;
     }
@@ -604,7 +609,7 @@
   }
 
   window.addEventListener('myipon:native-oauth-callback', () => {
-    consumeNativeOAuthCallback();
+    void consumeNativeOAuthCallback();
   });
 
   async function syncClerkSession(emailAddress, accountPassword) {
@@ -623,6 +628,7 @@
   let handledNativeCallbackAtBoot = false;
 
   loadClerk().then(async (clerk) => {
+    handledNativeCallbackAtBoot = await bootNativeCallbackPromise;
     let shouldSignOut = false;
     try {
       shouldSignOut = localStorage.getItem('myipon_clerk_signout') === '1';
@@ -1037,7 +1043,7 @@
 
   // Start init immediately without delaying synchronous form/tab listener attachment
   const initPromise = Ipon.init({ requireAuth: false, allowPending: true }).catch((error) => ({ failed: true, configured: false, error }));
-  handledNativeCallbackAtBoot = consumeNativeOAuthCallback();
+  const bootNativeCallbackPromise = consumeNativeOAuthCallback();
 
   async function resolveActiveProfile(user, fallbackEmail) {
     const profileCols = 'id,first_name,middle_name,last_name,contact_number,role,status,name_setup_required';

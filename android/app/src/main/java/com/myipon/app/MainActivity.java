@@ -113,10 +113,14 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public String consumePendingCallback() {
-            final String payload = pendingAuthCallbackJson;
-            pendingAuthCallbackJson = null;
-            return payload != null ? payload : "";
+            return consumePendingAuthCallback();
         }
+    }
+
+    public synchronized String consumePendingAuthCallback() {
+        final String payload = pendingAuthCallbackJson;
+        pendingAuthCallbackJson = null;
+        return payload != null ? payload : "";
     }
 
     private String consumePendingPickerSource() {
@@ -239,7 +243,6 @@ public class MainActivity extends BridgeActivity {
             }
             webView.addJavascriptInterface(new PickerSourceBridge(), "IponNativePicker");
             webView.addJavascriptInterface(new AuthCallbackBridge(), "IponNativeAuth");
-            webView.reload();
             if (getBridge() != null) {
                 webView.setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
                     @Override
