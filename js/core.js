@@ -2545,6 +2545,67 @@
     } catch (_) { }
   }
 
+  const onlineClientPlatforms = new Map();
+  let clientPlatformReportPromise = null;
+  let lastReportedClientPlatform = '';
+  let lastReportedClientPlatformAt = 0;
+
+  function supportsNativeScreenshotProtection() {
+    return typeof window !== 'undefined'
+      && typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function';
+  }
+
+  function getClientPlatform() {
+    return supportsNativeScreenshotProtection() ? 'android_app' : 'browser';
+  }
+
+  function hasLiveBrowserSession(userId) {
+    if (!userId) return false;
+    const plats = onlineClientPlatforms.get(String(userId));
+    return Boolean(plats && plats.has('browser'));
+  }
+
+  function syncPresencePlatforms(stateObj) {
+    onlineClientPlatforms.clear();
+    if (presenceShowOnline && document.visibilityState !== 'hidden' && currentProfile?.id) {
+      onlineClientPlatforms.set(String(currentProfile.id), new Set([getClientPlatform()]));
+    }
+    Object.keys(stateObj || {}).forEach((key) => {
+      const entries = stateObj[key];
+      if (!Array.isArray(entries) || !entries.length) return;
+      entries.forEach((entry) => {
+        const uid = String(entry?.user_id || key || '');
+        if (!uid) return;
+        const plat = entry?.client_platform === 'android_app' ? 'android_app' : 'browser';
+        if (!onlineClientPlatforms.has(uid)) onlineClientPlatforms.set(uid, new Set());
+        onlineClientPlatforms.get(uid).add(plat);
+      });
+    });
+  }
+
+  function reportClientPlatform({ force = false } = {}) {
+    const platform = getClientPlatform();
+    const client = getClient();
+    if (!currentProfile?.id || !configured || !client?.rpc) {
+      return Promise.resolve(platform);
+    }
+    const nowMs = Date.now();
+    if (!force && lastReportedClientPlatform === platform && nowMs - lastReportedClientPlatformAt < 60000) {
+      return clientPlatformReportPromise || Promise.resolve(platform);
+    }
+    lastReportedClientPlatform = platform;
+    lastReportedClientPlatformAt = nowMs;
+    clientPlatformReportPromise = (async () => {
+      try {
+        await client.rpc('report_client_platform', { p_platform: platform });
+      } catch (_) {
+        lastReportedClientPlatformAt = 0;
+      }
+      return platform;
+    })();
+    return clientPlatformReportPromise;
+  }
+
   let presenceShowOnline = true;
   let presenceLifecycleBound = false;
 
@@ -2558,6 +2619,7 @@
         user_id: currentProfile.id,
         full_name: currentProfile.full_name,
         role: currentProfile.role,
+        client_platform: getClientPlatform(),
         online_at: new Date().toISOString()
       }).catch?.(() => { });
     } else {
@@ -2572,6 +2634,7 @@
   function initPresence(profile) {
     const client = getClient();
     if (!client || !profile?.id) return;
+    reportClientPlatform();
     presenceShowOnline = profile?.chat_privacy?.show_online !== false;
     if (presenceChannel) return;
 
@@ -2655,6 +2718,7 @@
               if (entry?.user_id) onlineUserIds.add(String(entry.user_id));
             });
           });
+          syncPresencePlatforms(state);
           const leftIds = Array.from(prev).filter((id) => !onlineUserIds.has(id));
           const joinedIds = Array.from(onlineUserIds).filter((id) => !prev.has(id));
           syncPresenceDots();
@@ -2668,6 +2732,7 @@
         .on('presence', { event: 'join' }, ({ key, newPresences }) => {
           if (key) onlineUserIds.add(String(key));
           (newPresences || []).forEach((p) => { if (p?.user_id) onlineUserIds.add(String(p.user_id)); });
+          syncPresencePlatforms(presenceChannel.presenceState());
           syncPresenceDots();
           broadcastLocalPresence();
           emitPresenceChange([]);
@@ -2685,6 +2750,7 @@
               if (onlineUserIds.delete(uid)) leftIds.push(uid);
             }
           });
+          syncPresencePlatforms(state);
           syncPresenceDots();
           broadcastLocalPresence();
           if (leftIds.length) emitPresenceChange(leftIds);
@@ -2696,6 +2762,7 @@
                 user_id: profile.id,
                 full_name: profile.full_name,
                 role: profile.role,
+                client_platform: getClientPlatform(),
                 online_at: new Date().toISOString()
               });
             } catch (_) { }
@@ -2712,6 +2779,7 @@
         flushLastSeen({ keepalive: true });
       };
       const handleAppActive = () => {
+        reportClientPlatform();
         if (!presenceShowOnline) return;
         onlineUserIds.add(String(profile.id));
         try {
@@ -2719,6 +2787,7 @@
             user_id: profile.id,
             full_name: profile.full_name,
             role: profile.role,
+            client_platform: getClientPlatform(),
             online_at: new Date().toISOString()
           }).catch?.(() => { });
         } catch (_) { }
@@ -17493,7 +17562,7 @@
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     playUiSound, isUiSoundEnabled, setUiSoundEnabled,
-    setOnlineVisibility, syncMessagesBadges,
+    setOnlineVisibility, syncMessagesBadges, supportsNativeScreenshotProtection, getClientPlatform, reportClientPlatform, hasLiveBrowserSession,
     openTutorial: (...args) => window.IponTutorial?.open?.(...args),
     getCurrentUserId: () => currentProfile?.id || readShellSnapshot()?.userId || '',
     classifyAnnouncementFile, uploadAnnouncementAttachments, MAX_ANNOUNCEMENT_FILES,

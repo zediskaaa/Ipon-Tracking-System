@@ -45,3 +45,145 @@ test('Android capture callback and secure flag are scoped to the active chat', (
   assert.match(css, /html\[data-theme="dark"\] \.msg-privacy-card \{/);
   assert.match(css, /\.msg-privacy-switch:focus-visible/);
 });
+
+test('migration 146 requires all participants to use the mobile app for Block screenshots and tracks client platform', () => {
+  const sql = read('database/migrations/20261121_146_screenshot_protection_app_requirement.sql');
+  const schema = read('database/schema.sql');
+  for (const source of [sql, schema]) {
+    assert.match(source, /last_client_platform text not null default 'browser'/);
+    assert.match(source, /check \(last_client_platform in \('browser', 'android_app'\)\)/);
+    assert.match(source, /create or replace function public\.conversation_supports_screenshot_block\(/);
+    assert.match(source, /create or replace function public\.report_client_platform\(/);
+    assert.match(source, /if v_platform = 'browser' then[\s\S]*set block_screenshots = false/);
+    assert.match(source, /'screenshot_block_eligible', v_eligible/);
+    assert.match(source, /if coalesce\(p_enabled, false\) and not public\.conversation_supports_screenshot_block\(v_conv\.id\) then/);
+    assert.match(source, /Block screenshots requires both people in this chat to use the mobile app\./);
+    assert.match(source, /Block screenshots requires all members in this chat to use the mobile app\./);
+  }
+  const core = read('js/core.js');
+  assert.match(core, /function supportsNativeScreenshotProtection\(\)/);
+  assert.match(core, /function getClientPlatform\(\)/);
+  assert.match(core, /function reportClientPlatform\(/);
+  assert.match(core, /function hasLiveBrowserSession\(/);
+  assert.match(core, /client_platform: getClientPlatform\(\)/);
+  assert.match(core, /supportsNativeScreenshotProtection, getClientPlatform, reportClientPlatform, hasLiveBrowserSession/);
+});
+
+test('Block screenshots is hidden in browsers and disabled in the mobile app when the peer uses a browser', () => {
+  const src = read('js/messages.js').replace(/\r\n/g, '\n');
+  const isVoiceMatch = src.match(/function isVoiceAttachment\(att, msg = null\)\s*\{[\s\S]*?\n  \}/);
+  const badgeMatch = src.match(/function formatBadgeLabel\(att\)\s*\{[\s\S]*?\n  \}/);
+  const drawerMatch = src.match(/function renderThreadInfoDrawer\(\)\s*\{[\s\S]*?\n  \}/);
+  const hasLiveMatch = src.match(/function hasLiveBrowserParticipant\(conv\)\s*\{[\s\S]*?\n  \}/);
+  const supportsMatch = src.match(/function supportsNativeScreenshotProtection\(\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(isVoiceMatch && badgeMatch && drawerMatch && hasLiveMatch && supportsMatch, 'Expected drawer & screenshot helpers');
+
+  const bodyEl = { scrollTop: 0 };
+  const drawerEl = {
+    hidden: true,
+    dataset: {},
+    _html: '',
+    get innerHTML() { return this._html; },
+    set innerHTML(value) { this._html = value; },
+    querySelector(selector) {
+      return selector === '.msg-drawer-body.is-root' ? bodyEl : null;
+    }
+  };
+  let mockWin = {};
+  let browserPeers = new Set();
+  const state = {
+    showThreadInfo: true,
+    threadInfoView: 'root',
+    activeConvId: 'c1',
+    savingProtection: false,
+    signedUrlCache: new Map(),
+    activeThread: {
+      conversation: {
+        conversation_id: 'c1',
+        id: 'u2',
+        kind: 'DIRECT',
+        status: 'ACCEPTED',
+        full_name: 'Friend',
+        chat_theme: 'paper',
+        block_screenshots: false,
+        block_forwarding: false,
+        screenshot_block_eligible: false
+      },
+      messages: []
+    }
+  };
+
+  const buildRunner = () => new Function(
+    'window', 'state', 'document', 'ipon', 'isGroupConv', 'initializedProfile',
+    'escapeHtml', 'escAttr', 'formatBytes', 'formatShortDate', 'userAvatarHtml', 'groupAvatarHtml',
+    'groupPicPreviewMarkup', 'renderRoleBadges', 'formatVanishDuration', 'isSelfUser', 'CAMERA_ICON_SVG',
+    'MSG_CLOSE_X_SVG', 'MSG_PIN_SVG', 'BACK_ARROW_ICON_SVG', 'VIDEO_PLAY_SVG', 'VIDEO_POSTER_FALLBACK', 'IMAGE_EXT_RE',
+    `${supportsMatch[0]}; ${hasLiveMatch[0]}; ${isVoiceMatch[0]}; ${badgeMatch[0]}; ${drawerMatch[0]}; return renderThreadInfoDrawer;`
+  )(
+    mockWin,
+    state,
+    { getElementById: (id) => (id === 'msg-thread-drawer' ? drawerEl : null) },
+    () => ({ hasLiveBrowserSession: (uid) => browserPeers.has(String(uid)) }),
+    (c) => c?.kind === 'GROUP',
+    { id: 'u1' },
+    (s) => String(s ?? ''),
+    (s) => String(s ?? ''),
+    (b) => `${b} B`,
+    () => 'Nov 21',
+    () => '<div>avatar</div>',
+    () => '<div>group</div>',
+    () => '<div>preview</div>',
+    () => '',
+    (seconds) => (seconds ? `${seconds} seconds` : 'Off'),
+    () => false,
+    '', '', '', '', '', '', /\.(png|jpe?g|gif|webp)$/i
+  );
+
+  // 1. Browser user (no IponNativePrivacy bridge) -> Block screenshots does NOT appear at all
+  mockWin = {};
+  buildRunner()();
+  assert.doesNotMatch(drawerEl.innerHTML, /Block screenshots/);
+  assert.doesNotMatch(drawerEl.innerHTML, /data-chat-protection="screenshots"/);
+  assert.match(drawerEl.innerHTML, /Block forwarding/);
+  assert.match(drawerEl.innerHTML, /data-chat-protection="forwarding"/);
+
+  // 2. Mobile app user + peer on browser -> shown but disabled with clear explanation
+  mockWin = { IponNativePrivacy: { setScreenshotBlocked() {} } };
+  state.activeThread.conversation.screenshot_block_eligible = false;
+  buildRunner()();
+  assert.match(drawerEl.innerHTML, /Block screenshots/);
+  assert.match(drawerEl.innerHTML, /Requires both people to use the mobile app/);
+  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]* disabled>/);
+
+  // 3. Mobile app user + peer has active browser tab in live presence -> still disabled even if DB says eligible
+  state.activeThread.conversation.screenshot_block_eligible = true;
+  browserPeers = new Set(['u2']);
+  buildRunner()();
+  assert.match(drawerEl.innerHTML, /Requires both people to use the mobile app/);
+  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]* disabled>/);
+
+  // 4. Both users on mobile app (no live browser session) -> switch enabled
+  browserPeers = new Set();
+  state.activeThread.conversation.screenshot_block_eligible = true;
+  buildRunner()();
+  assert.match(drawerEl.innerHTML, /Protect this chat on Android devices/);
+  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false" aria-labelledby="msg-privacy-shot-title" aria-describedby="msg-privacy-shot-desc"><\/button>/);
+
+  // 5. Group chat on mobile app with a browser member -> group-specific copy & disabled switch
+  state.activeThread.conversation = {
+    conversation_id: 'g1',
+    id: 'g1',
+    kind: 'GROUP',
+    my_role: 'OWNER',
+    status: 'ACCEPTED',
+    title: 'Team',
+    chat_theme: 'paper',
+    block_screenshots: false,
+    block_forwarding: false,
+    screenshot_block_eligible: false,
+    members: [{ user_id: 'u1', full_name: 'Me' }, { user_id: 'u2', full_name: 'Peer' }]
+  };
+  buildRunner()();
+  assert.match(drawerEl.innerHTML, /Requires all members to use the mobile app/);
+  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]* disabled>/);
+});

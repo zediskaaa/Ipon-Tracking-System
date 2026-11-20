@@ -1584,6 +1584,7 @@
       || Boolean(pc.marked_unread) !== Boolean(nc.marked_unread)
       || Boolean(pc.receipts_enabled) !== Boolean(nc.receipts_enabled)
       || Boolean(pc.block_screenshots) !== Boolean(nc.block_screenshots)
+      || Boolean(pc.screenshot_block_eligible) !== Boolean(nc.screenshot_block_eligible)
       || Boolean(pc.block_forwarding) !== Boolean(nc.block_forwarding)
       || Boolean(pc.protection_unavailable) !== Boolean(nc.protection_unavailable)
       || Boolean(pc.vanish_unavailable) !== Boolean(nc.vanish_unavailable)
@@ -2115,6 +2116,49 @@
     });
   }
 
+  function supportsNativeScreenshotProtection() {
+    if (typeof ipon()?.supportsNativeScreenshotProtection === 'function') {
+      return Boolean(ipon().supportsNativeScreenshotProtection());
+    }
+    return typeof window !== 'undefined' && typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function';
+  }
+
+  function hasLiveBrowserParticipant(conv) {
+    const check = ipon()?.hasLiveBrowserSession;
+    if (typeof check !== 'function' || !conv) return false;
+    if (isGroupConv(conv)) {
+      return (conv.members || []).some((m) => check(m?.user_id || m?.id));
+    }
+    return Boolean(check(conv.id) || (initializedProfile?.id && check(initializedProfile.id)));
+  }
+
+  function isScreenshotBlockEffective(conv) {
+    return Boolean(conv && supportsNativeScreenshotProtection() && conv.screenshot_block_eligible && !hasLiveBrowserParticipant(conv));
+  }
+
+  function syncNativeScreenshotLock(conv = state.activeThread?.conversation) {
+    window.IponNativePrivacy?.setScreenshotBlocked?.(Boolean(conv?.block_screenshots && isScreenshotBlockEffective(conv)));
+  }
+
+  async function refreshActiveConversationProtection(convId = state.activeConvId) {
+    if (!convId || !state.activeThread?.conversation || state.activeThread.conversation.conversation_id !== convId || state.savingProtection) return;
+    try {
+      await ipon().reportClientPlatform?.()?.catch?.(() => { });
+      const protection = await ipon().rpc('get_conversation_protection', { p_conversation_id: convId });
+      if (!protection || state.activeConvId !== convId || state.activeThread?.conversation?.conversation_id !== convId) return;
+      const conv = state.activeThread.conversation;
+      const changed = Boolean(conv.block_screenshots) !== Boolean(protection.block_screenshots)
+        || Boolean(conv.block_forwarding) !== Boolean(protection.block_forwarding)
+        || Boolean(conv.screenshot_block_eligible) !== Boolean(protection.screenshot_block_eligible)
+        || conv.vanish_after_seconds !== protection.vanish_after_seconds;
+      Object.assign(conv, protection);
+      conv.protection_unavailable = false;
+      syncNativeScreenshotLock(conv);
+      const editForm = document.getElementById('msg-group-edit-form');
+      if (changed && state.showThreadInfo && (!editForm || editForm.hidden)) renderThreadInfoDrawer();
+    } catch (_) { }
+  }
+
   // Conversation opening & thread loading
   async function openConversation(conversationId, { aroundMessageId = null, markRead = true, silent = false, scrollToBottom = null, forceMarkRead = false, previewPeer = null } = {}) {
     if (!conversationId || !isEligible()) return;
@@ -2176,10 +2220,13 @@
           p_limit: 60,
           p_around_message_id: aroundMessageId || null
         }),
-        ipon().rpc('get_conversation_protection', { p_conversation_id: conversationId }).catch((error) => {
-          if (error?.code === 'PGRST202') return null;
-          throw error;
-        })
+        (async () => {
+          await ipon().reportClientPlatform?.()?.catch?.(() => { });
+          return ipon().rpc('get_conversation_protection', { p_conversation_id: conversationId }).catch((error) => {
+            if (error?.code === 'PGRST202') return null;
+            throw error;
+          });
+        })()
       ]);
       if (data?.conversation) {
         if (protection) Object.assign(data.conversation, protection);
@@ -2212,7 +2259,7 @@
       if (data) data.unread_first_id = state.unreadAnchorFirstId;
 
       state.activeThread = data;
-      window.IponNativePrivacy?.setScreenshotBlocked?.(Boolean(data?.conversation?.block_screenshots));
+      syncNativeScreenshotLock(data?.conversation);
       state.loadingThread = false;
 
       const attPaths = [];
@@ -3788,18 +3835,30 @@
          ${(typeof isSelfUser === 'function' && isSelfUser(conv)) ? '' : `<button type="button" class="msg-drawer-action-btn is-danger" data-social-action="${isBlockedByMe ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${blockIconSvg}<span>${isBlockedByMe ? 'Unblock user' : 'Block user'}</span></button>`}`;
 
     const canManageProtection = !conv.protection_unavailable && !state.savingProtection && (!isGrp || canManageGroup);
-    const nativePrivacy = typeof window !== 'undefined' && Boolean(window.IponNativePrivacy);
+    const nativePrivacy = typeof supportsNativeScreenshotProtection === 'function'
+      ? supportsNativeScreenshotProtection()
+      : (typeof window !== 'undefined' && typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function');
+    const screenshotEligible = Boolean(conv.screenshot_block_eligible) && !(typeof hasLiveBrowserParticipant === 'function' && hasLiveBrowserParticipant(conv));
+    conv._renderedScreenshotEligible = screenshotEligible;
+    const screenshotActive = Boolean(conv.block_screenshots && screenshotEligible);
+    const canToggleScreenshots = canManageProtection && nativePrivacy && (screenshotEligible || Boolean(conv.block_screenshots));
+    const screenshotDesc = screenshotEligible
+      ? 'Protect this chat on Android devices'
+      : (isGrp ? 'Requires all members to use the mobile app' : 'Requires both people to use the mobile app');
     const phoneSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10.5 18.5h3"/></svg>';
     const forwardBlockSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5 6 5-6 5v-3.2c-4.2 0-7 1.2-9 4.2.4-4.6 3.2-7.8 9-8.4V5Z"/><path d="M4 4 20 20"/></svg>';
+    const screenshotRowHtml = nativePrivacy
+      ? `<div class="msg-privacy-row${canToggleScreenshots ? '' : ' is-disabled'}">
+          <span class="msg-privacy-icon">${phoneSvg}</span>
+          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-shot-title">Block screenshots</strong><span class="msg-privacy-chip">Android</span></div><small id="msg-privacy-shot-desc">${screenshotDesc}</small></div>
+          <div class="msg-privacy-control"><button type="button" class="msg-privacy-switch" role="switch" data-chat-protection="screenshots" aria-checked="${screenshotActive}" aria-labelledby="msg-privacy-shot-title" aria-describedby="msg-privacy-shot-desc"${canToggleScreenshots ? '' : ' disabled'}></button><span>${screenshotActive ? 'On' : 'Off'}</span></div>
+        </div>`
+      : '';
     const protectionHtml = `<div class="msg-drawer-section msg-privacy-section"><section class="msg-privacy-card" aria-labelledby="msg-privacy-title">
       <div class="msg-privacy-head"><h4 id="msg-privacy-title">Chat privacy</h4></div>
       ${conv.protection_unavailable ? '<div class="msg-privacy-note" role="status"><span>Chat privacy is temporarily unavailable. Messages still work.</span><button type="button" data-chat-protection-retry>Try again</button></div>' : ''}
       <div class="msg-privacy-list">
-        <div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
-          <span class="msg-privacy-icon">${phoneSvg}</span>
-          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-shot-title">Block screenshots</strong><span class="msg-privacy-chip">Android</span></div><small id="msg-privacy-shot-desc">${nativePrivacy ? 'Protect this chat on Android devices' : 'Available in the Android app'}</small></div>
-          <div class="msg-privacy-control"><button type="button" class="msg-privacy-switch" role="switch" data-chat-protection="screenshots" aria-checked="${Boolean(conv.block_screenshots)}" aria-labelledby="msg-privacy-shot-title" aria-describedby="msg-privacy-shot-desc"${canManageProtection ? '' : ' disabled'}></button><span>${conv.block_screenshots ? 'On' : 'Off'}</span></div>
-        </div>
+        ${screenshotRowHtml}
         <div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
           <span class="msg-privacy-icon">${forwardBlockSvg}</span>
           <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-forward-title">Block forwarding</strong></div><small id="msg-privacy-forward-desc">Messages from this chat cannot be forwarded in myIPON</small></div>
@@ -6481,6 +6540,19 @@
         const convId = state.activeConvId;
         const conv = state.activeThread?.conversation;
         if (!conv || conv.protection_unavailable) return;
+        if (setting === 'screenshots') {
+          if (!supportsNativeScreenshotProtection()) return;
+          const nextEnabled = !conv.block_screenshots;
+          if (nextEnabled && (!conv.screenshot_block_eligible || hasLiveBrowserParticipant(conv))) {
+            ipon().toast(
+              isGroupConv(conv)
+                ? 'Block screenshots requires all members in this chat to use the mobile app.'
+                : 'Block screenshots requires both people in this chat to use the mobile app.',
+              'error'
+            );
+            return;
+          }
+        }
         state.savingProtection = true;
         document.querySelectorAll('[data-chat-protection]').forEach((button) => { button.disabled = true; });
         try {
@@ -6489,7 +6561,7 @@
             p_enabled: !conv[setting === 'screenshots' ? 'block_screenshots' : 'block_forwarding']
           });
           Object.assign(conv, next);
-          if (state.activeConvId === convId) window.IponNativePrivacy?.setScreenshotBlocked?.(Boolean(conv.block_screenshots));
+          if (state.activeConvId === convId) syncNativeScreenshotLock(conv);
         } catch (err) {
           ipon().toast(ipon().friendlyError(err), 'error');
         } finally {
@@ -6561,6 +6633,9 @@
         state.showThreadInfo = !state.showThreadInfo;
         state.threadInfoView = 'root';
         renderThreadInfoDrawer();
+        if (state.showThreadInfo && supportsNativeScreenshotProtection()) {
+          refreshActiveConversationProtection();
+        }
         return;
       }
 
@@ -7595,7 +7670,8 @@
     });
 
     window.addEventListener('myipon:screen-captured', async () => {
-      if (!isThreadActivelyVisible() || state.activeThread?.conversation?.protection_unavailable || state.activeThread?.conversation?.block_screenshots) return;
+      const activeConv = state.activeThread?.conversation;
+      if (!supportsNativeScreenshotProtection() || !isThreadActivelyVisible() || activeConv?.protection_unavailable || (activeConv?.block_screenshots && isScreenshotBlockEffective(activeConv))) return;
       try {
         await ipon().rpc('record_conversation_screenshot', { p_conversation_id: state.activeConvId });
         await openConversation(state.activeConvId, { markRead: false, silent: true, scrollToBottom: true });
@@ -7932,6 +8008,20 @@
         if (discoverUser && discoverUser.last_seen_at) discoverUser.last_seen_at = at;
       });
       syncActiveThreadPresenceUi(state.activeThread?.conversation);
+      const activeConv = state.activeThread?.conversation;
+      syncNativeScreenshotLock(activeConv);
+      if (state.showThreadInfo && activeConv && supportsNativeScreenshotProtection()) {
+        const nextEligible = Boolean(activeConv.screenshot_block_eligible) && !hasLiveBrowserParticipant(activeConv);
+        const editForm = document.getElementById('msg-group-edit-form');
+        if (nextEligible !== activeConv._renderedScreenshotEligible && (!editForm || editForm.hidden)) {
+          renderThreadInfoDrawer();
+        }
+        const nowMs = Date.now();
+        if (!activeConv._lastProtectionRefreshAt || nowMs - activeConv._lastProtectionRefreshAt > 4000) {
+          activeConv._lastProtectionRefreshAt = nowMs;
+          refreshActiveConversationProtection();
+        }
+      }
       if (leftIds.length) syncThreadPresenceRipple();
       if (state.tab === 'friends' && state.friendsSubTab === 'all' && document.getElementById('msg-workspace-dialog')?.open) {
         renderFriendsView();
