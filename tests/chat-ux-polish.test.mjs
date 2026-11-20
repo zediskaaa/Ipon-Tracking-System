@@ -580,3 +580,21 @@ test('in-conversation DP ripple activates only when peer is actively in the same
   (docListeners.get('visibilitychange') || []).forEach((fn) => fn());
   assert.equal(untrackCount, 1);
 });
+
+test('account onboarding notice banner uses step pill, clean uniform border, and omits icon badge and left accent bar', () => {
+  const accountHtml = read('account.html');
+  const accountJs = read('js/account.js');
+  const css = read('css/app.css');
+
+  assert.match(accountHtml, /class="inline-notice onboarding-notice" id="profile-setup-notice"/);
+  assert.doesNotMatch(accountHtml, /class="onboarding-notice-icon"/);
+  assert.match(accountHtml, /class="onboarding-notice-eyebrow">Action required</);
+  assert.match(accountHtml, /id="profile-setup-step">Step 1 of 2</);
+  assert.match(accountJs, /getElementById\('profile-setup-copy'\)/);
+  assert.match(accountJs, /getElementById\('profile-setup-step'\)/);
+  assert.match(css, /\.inline-notice\.onboarding-notice\{[^}]*border:1px solid #d9b86c;border-radius:16px;/);
+  assert.doesNotMatch(css, /\.inline-notice\.onboarding-notice[^}]*border-left:/);
+  assert.doesNotMatch(css, /\.onboarding-notice-icon/);
+  assert.match(css, /@media \(max-width:620px\)\{\.inline-notice\.onboarding-notice\{flex-wrap:nowrap;align-items:flex-start;gap:14px;padding:16px\}\.onboarding-notice-body\{flex:1 1 auto\}\.onboarding-notice-step\{display:none\}\}/);
+  assert.match(css, /html\[data-theme="dark"\] \.inline-notice\.onboarding-notice\s*\{/);
+});

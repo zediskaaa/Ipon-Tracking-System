@@ -43,7 +43,7 @@
 
   async function load() {
     const [profileResult, activityResult] = await Promise.all([
-      Ipon.client.from('profiles').select('role,first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,new_device_email_otp_enabled,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,last_seen_at').eq('id', state.profile.id).single(),
+      Ipon.client.from('profiles').select('role,first_name,middle_name,last_name,full_name,username,email,contact_number,notifications_enabled,new_device_email_otp_enabled,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,last_seen_at').eq('id', state.profile.id).single(),
       Ipon.client.from('account_activity').select('id,event,created_at').order('created_at', { ascending: false }).limit(20)
     ]);
     if (profileResult.error) throw profileResult.error;
@@ -78,7 +78,7 @@
     updateDialogMode();
     const setupNotice = document.getElementById('profile-setup-notice');
     setupNotice.hidden = profileComplete;
-    const setupNoticeCopy = setupNotice.querySelector('span');
+    const setupNoticeCopy = document.getElementById('profile-setup-copy') || setupNotice.querySelector('span');
     if (setupNoticeCopy) {
       setupNoticeCopy.textContent = mustCompleteName
         ? (isSuperAdmin
@@ -92,6 +92,12 @@
             ? 'Add your first name and mobile number before continuing to your panel.'
             : 'Add your first name, last name, and mobile number before continuing to your panel.');
     }
+    const needsUsername = !String(profile.username || state.profile?.username || '').trim();
+    const totalOnboardingSteps = (passwordChangeRequired || needsUsername) ? 2 : 1;
+    const profileStepEl = document.getElementById('profile-setup-step');
+    if (profileStepEl) profileStepEl.textContent = `Step 1 of ${totalOnboardingSteps}`;
+    const pwdStepEl = document.getElementById('temporary-password-step');
+    if (pwdStepEl) pwdStepEl.textContent = profileComplete ? 'Step 1 of 1' : 'Step 2 of 2';
     emailForm.elements.email.value = profile.email || state.session.user.email || '';
     notificationToggle.checked = profile.notifications_enabled !== false;
     deviceOtpToggle.checked = profile.new_device_email_otp_enabled === true;

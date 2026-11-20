@@ -11892,7 +11892,7 @@ test('new-device email OTP is opt-in, server-enforced, and responsive across pas
   assert.match(coreJs, /getDeviceToken, mfaSettingsMarkup/);
   assert.match(accountJs, /new_device_email_otp_enabled/);
   assert.match(accountJs, /action: 'device-otp-settings'/);
-  assert.match(accountHtml, /js\/account\.js\?v=20261119-50/);
+  assert.match(accountHtml, /js\/account\.js\?v=20261120-51/);
   assert.match(loginHtml, /id="device-otp-dialog"/);
   assert.match(loginHtml, /autocomplete="one-time-code"/);
   assert.match(authJs, /action: 'verify-device-otp'/);
