@@ -7591,8 +7591,9 @@ test('mobile APK background usage controls render in My account and auto-prompt 
   const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
 
   assert.match(accountHtml, /data-device-background-row/);
+  assert.match(accountHtml, /data-device-test-btn/);
   assert.match(accountJs, /syncDevicePermissionUI/);
-  assert.match(coreJs, /id="account-dialog"[\s\S]*?data-device-background-row/);
+  assert.match(coreJs, /id="account-dialog"[\s\S]*?data-device-background-row[\s\S]*?data-device-test-btn/);
   assert.match(coreJs, /function maybePromptBackgroundUsage/);
   assert.match(coreJs, /function requestBackgroundUsageAccess/);
   assert.match(css, /\.preference-background-row\[hidden\]\s*\{\s*display:\s*none\s*!important/);

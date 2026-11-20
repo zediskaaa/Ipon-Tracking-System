@@ -145,10 +145,15 @@ public class BackgroundNotificationsPlugin extends Plugin {
         NotificationSyncWorker.ensureScheduled(context);
         NotificationPollReceiver.scheduleNext(context, 20_000L);
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
-            JSObject result = new JSObject();
-            if (task.isSuccessful() && !TextUtils.isEmpty(task.getResult())) {
-                result.put("fcmToken", task.getResult());
+            if (!task.isSuccessful() || TextUtils.isEmpty(task.getResult())) {
+                Exception error = task.getException();
+                call.reject(error != null && !TextUtils.isEmpty(error.getMessage())
+                    ? "Firebase registration failed: " + error.getMessage()
+                    : "Firebase did not provide a device token. Check Google Play services and retry.");
+                return;
             }
+            JSObject result = new JSObject();
+            result.put("fcmToken", task.getResult());
             call.resolve(result);
         });
     }

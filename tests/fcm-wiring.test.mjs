@@ -12,7 +12,10 @@ test('Android registers direct FCM tokens and sends visible alerts with topic fa
   const migration = read('database/migrations/20261120_134_fcm_device_tokens.sql');
   const sender = read('supabase/functions/send-push/index.ts');
   assert.match(plugin, /FirebaseMessaging\.getInstance\(\)\.getToken\(\)/);
+  assert.match(plugin, /call\.reject\(error != null/);
   assert.match(core, /rpc\('register_notification_device_token'/);
+  assert.match(core, /if \(!native\?\.fcmToken\) throw new Error/);
+  assert.match(core, /if \(!registered\) throw new Error/);
   assert.match(migration, /references public\.notification_feed_tokens\(token\) on delete cascade/);
   assert.match(migration, /where user_id = auth\.uid\(\)/);
   assert.match(sender, /\.from\('notification_device_tokens'\)/);
