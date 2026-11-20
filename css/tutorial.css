@@ -1,8 +1,8 @@
 /* myIPON Interactive Tutorial & Learning Center */
 
-/* My Account, Dashboard & Welcome Entry Controls */
+/* My Account & Welcome Entry Controls */
 .account-tutorial-row {
-  gap: 12px;
+  gap: 12px 16px;
 }
 
 .account-tutorial-meta {
@@ -10,7 +10,7 @@
   align-items: center;
   gap: 11px;
   min-width: 0;
-  flex: 1 1 200px;
+  flex: 1 1 auto;
 }
 
 .account-tutorial-meta > span:last-child {
@@ -41,32 +41,48 @@
   stroke-linejoin: round;
 }
 
+.account-support .account-tutorial-btn {
+  border-color: #0f3d2e;
+  background: #0f3d2e;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.account-support .account-tutorial-btn:hover {
+  border-color: #165540;
+  background: #165540;
+  color: #ffffff;
+}
+
 html[data-theme="dark"] .account-tutorial-icon {
   border-color: rgba(226, 183, 92, .34);
   background: rgba(212, 168, 79, .14);
   color: #f4d68c;
 }
 
-.group-bar-tutorial-btn {
-  border-color: rgba(20, 92, 65, .24);
-  background: rgba(20, 92, 65, .07);
-  color: #114c36;
+html[data-theme="dark"] .account-support .account-tutorial-btn {
+  border-color: #3cb37c;
+  background: #1f7453;
+  color: #ffffff;
 }
 
-.group-bar-tutorial-btn:hover {
-  background: rgba(20, 92, 65, .14);
-  border-color: rgba(20, 92, 65, .38);
+html[data-theme="dark"] .account-support .account-tutorial-btn:hover {
+  border-color: #55c892;
+  background: #258962;
+  color: #ffffff;
 }
 
-html[data-theme="dark"] .group-bar-tutorial-btn {
-  border-color: rgba(226, 183, 92, .34);
-  background: rgba(212, 168, 79, .14);
-  color: #f4d68c;
-}
+@media (max-width: 620px) {
+  .account-support-row.account-tutorial-row {
+    gap: 12px;
+    padding: 14px 0;
+  }
 
-html[data-theme="dark"] .group-bar-tutorial-btn:hover {
-  background: rgba(212, 168, 79, .22);
-  border-color: rgba(226, 183, 92, .52);
+  .account-tutorial-meta {
+    flex: 0 0 auto;
+    width: 100%;
+    align-items: flex-start;
+  }
 }
 
 .no-group-tutorial-btn {
@@ -365,28 +381,26 @@ html[data-theme="dark"] .no-group-tutorial-btn:hover {
 }
 
 .tutorial-filter-bar-compact {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  display: none;
 }
 
 .tutorial-cat-select-wrap {
   position: relative;
-  display: none;
-  flex: 1 1 auto;
+  display: block;
+  width: 100%;
   min-width: 0;
 }
 
 .tutorial-cat-select {
   width: 100%;
-  min-height: 42px;
-  padding: 8px 34px 8px 13px;
+  min-height: 44px;
+  padding: 9px 38px 9px 14px;
   border: 1px solid rgba(20, 45, 43, .16);
   border-radius: 12px;
-  background: #ffffff;
+  background-color: #ffffff;
+  background-image: none;
   color: var(--ink, #142d2b);
-  font: 700 13px/1.25 Arial, sans-serif;
+  font: 700 13.5px/1.25 Arial, sans-serif;
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
@@ -402,37 +416,13 @@ html[data-theme="dark"] .no-group-tutorial-btn:hover {
 
 .tutorial-cat-select-chevron {
   position: absolute;
-  right: 11px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   color: #466057;
   pointer-events: none;
-}
-
-.tutorial-context-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 42px;
-  padding: 7px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(20, 92, 65, .2);
-  background: rgba(20, 92, 65, .07);
-  color: #124d36;
-  font: 700 12px/1.2 Arial, sans-serif;
-  white-space: nowrap;
-  flex-shrink: 0;
-  box-sizing: border-box;
-}
-
-.tutorial-context-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #1a8754;
-  flex-shrink: 0;
 }
 
 .tutorial-cat-pills {
@@ -1360,12 +1350,6 @@ html[data-theme="dark"] .tutorial-search-clear {
   color: #dcebe3;
 }
 
-html[data-theme="dark"] .tutorial-context-pill {
-  border-color: rgba(126, 224, 173, .3);
-  background: rgba(40, 122, 76, .2);
-  color: #a6ecc5;
-}
-
 html[data-theme="dark"] .tutorial-cat-pill:hover {
   background: #193229;
   border-color: rgba(142, 232, 181, .36);
@@ -1559,9 +1543,7 @@ html[data-theme="dark"] .tutorial-complete-banner p {
   }
 
   .tutorial-filter-bar-compact {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: block;
     width: 100%;
     min-width: 0;
   }

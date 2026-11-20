@@ -182,7 +182,7 @@ test('all authenticated pages load tutorial stylesheet/script and expose entry b
   }
 
   const dashHtml = read('dashboard.html');
-  assert.match(dashHtml, /id="dashboard-tutorial-btn"[^>]*data-tutorial-open/);
+  assert.doesNotMatch(dashHtml, /id="dashboard-tutorial-btn"/, 'Dashboard group bar must not show a redundant Tutorial button');
   assert.match(dashHtml, /id="no-group-tutorial-btn"[^>]*data-tutorial-open/);
   assert.doesNotMatch(dashHtml, /class="sidebar-tutorial-btn"/, 'Top/sidebar navbar must not crowd the myIPON brand with a tutorial button');
 
@@ -191,7 +191,7 @@ test('all authenticated pages load tutorial stylesheet/script and expose entry b
 
   const coreJs = read('js/core.js');
   assert.doesNotMatch(coreJs, /class="sidebar-tutorial-btn"/, 'mountShell must keep Tutorial inside My Account instead of the mobile top navbar');
-  assert.match(coreJs, /account-tutorial-row[\s\S]*?Interactive tutorial &amp; user guide[\s\S]*?data-tutorial-open/);
+  assert.match(coreJs, /account-tutorial-row[\s\S]*?account-tutorial-btn[\s\S]*?data-tutorial-open/);
   assert.match(coreJs, /openTutorial:\s*\(\.\.\.args\) => window\.IponTutorial\?\.open\?\.\(\.\.\.args\)/);
 
   const swJs = read('sw.js');
@@ -299,8 +299,11 @@ test('tutorial UI supports library search, category filtering, step navigation, 
   assert.match(session.get('myipon_tutorial_handoff_v1') || '', /"tutorialId":"budget-planner"/);
 });
 
-test('tutorial stylesheet maintains circular close button, responsive dropdown/buttons, dark-mode tokens, and reduced-motion guards', () => {
+test('tutorial stylesheet maintains circular close button, visible account button, compact spacing, responsive dropdown/buttons, dark-mode tokens, and reduced-motion guards', () => {
   const css = read('css/tutorial.css');
+  assert.match(css, /\.account-support \.account-tutorial-btn\s*\{[^}]*background:\s*#0f3d2e;[^}]*color:\s*#ffffff;/s);
+  assert.match(css, /\.account-tutorial-meta\s*\{[^}]*flex:\s*1 1 auto;/s);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*?\.account-tutorial-meta\s*\{[^}]*flex:\s*0 0 auto;/s);
   assert.match(css, /\.tutorial-dialog \.tutorial-close-btn\s*\{[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%;/s);
   assert.match(css, /\.tutorial-coachmark-close\s*\{[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%;/s);
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*?\.tutorial-cat-select-wrap\s*\{\s*display:\s*block;\s*\}[\s\S]*?\.tutorial-cat-pills\s*\{\s*display:\s*none;\s*\}/);

@@ -1210,7 +1210,6 @@
     if (!bodyEl) return;
     updateHeaderProgress();
     const prog = readProgress();
-    const ctx = getWorkspaceContext();
     const allSearchMatches = filterTutorials(searchQuery, 'all');
     const visible = filterTutorials(searchQuery, activeCategory);
     const recId = getRecommendedTutorialId();
@@ -1221,10 +1220,6 @@
     CATEGORIES.forEach((cat) => {
       catCounts.set(cat.id, allSearchMatches.filter((t) => t.category === cat.id).length);
     });
-
-    const contextText = ctx.mode === 'SOLO'
-      ? 'Solo · Personal'
-      : `Group · ${ctx.role}`;
 
     const groupedHtml = visible.length
       ? CATEGORIES.map((cat) => {
@@ -1305,10 +1300,6 @@
               </select>
               <svg class="tutorial-cat-select-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 7.5 10 12.5 15 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
-            <span class="tutorial-context-pill" title="Current active workspace">
-              <i class="tutorial-context-dot" aria-hidden="true"></i>
-              <span>${escapeHtml(contextText)}</span>
-            </span>
           </div>
         </div>
         <div class="tutorial-cat-pills" role="tablist" aria-label="Filter tutorials by category">
