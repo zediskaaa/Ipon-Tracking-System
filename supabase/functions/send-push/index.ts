@@ -272,11 +272,13 @@ Deno.serve(async (req) => {
           const deviceTokens = (devices || []).map((row) => String(row.fcm_token || '')).filter(Boolean);
           const staleTokens: string[] = [];
           const notificationTag = `myipon-${dedupeKey || notifId}`;
+          // Message data wakes the Android poller, which renders the sender avatar.
+          const isMessage = ['SOCIAL_NEW_MESSAGE', 'SOCIAL_MESSAGE_REPLY', 'SOCIAL_MESSAGE_REQUEST'].includes(notifType);
           const fcmMessage = {
-            notification: {
+            ...(isMessage ? {} : { notification: {
               title: title.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '') || 'myIPON',
               body: message
-            },
+            } }),
             data: {
               notification_id: String(notifId),
               notification_link: link,
@@ -287,7 +289,7 @@ Deno.serve(async (req) => {
             android: {
               priority: 'HIGH',
               ttl: '86400s',
-              notification: { channel_id: 'myipon_alerts', icon: 'ic_stat_myipon', tag: notificationTag }
+              ...(isMessage ? {} : { notification: { channel_id: 'myipon_alerts', icon: 'ic_stat_myipon', tag: notificationTag } })
             }
           };
           const sendFcm = async (target: { token?: string; topic?: string }) => {
