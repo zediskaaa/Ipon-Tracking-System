@@ -22,6 +22,7 @@ function createAuthVmHarness({
   const storage = new Map();
   const sessionStore = new Map();
   const calls = {
+    clerkLoadOpts: [],
     signInRedirect: [],
     signUpRedirect: [],
     handleRedirectCallback: [],
@@ -135,7 +136,7 @@ function createAuthVmHarness({
         }
       }
     },
-    load: async () => clerkMock,
+    load: async (opts) => { calls.clerkLoadOpts.push(opts); return clerkMock; },
     signOut: async () => { clerkMock.session = null; },
     addListener: (fn) => { clerkListeners.push(fn); },
     handleRedirectCallback: async (opts) => {
@@ -284,7 +285,7 @@ test('Android native Google OAuth deep-link handoff contracts stay intact across
   assert.match(mainActivity, /pendingAuthCallbackJson != null\) dispatchWindowEvent\("myipon:native-oauth-callback"\)/);
   assert.match(loginHtml, /id="clerk-app-handoff"/);
   assert.match(loginHtml, /id="clerk-app-handoff-btn"/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261120-106/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261120-107/);
 });
 
 test('Android app Google login resets Connecting state when user backs out without finishing OAuth', async () => {
@@ -307,6 +308,8 @@ test('Android app Google login resets Connecting state when user backs out witho
   assert.equal(harness.googleBtn.disabled, true);
   assert.equal(harness.googleLabel.textContent, 'Connecting…');
   assert.equal(harness.calls.signInRedirect.length, 1);
+  assert.equal(harness.calls.clerkLoadOpts[0].signInForceRedirectUrl, undefined);
+  assert.equal(harness.calls.clerkLoadOpts[0].signUpForceRedirectUrl, undefined);
 
   const redirectUrl = new URL(harness.calls.signInRedirect[0].redirectUrl);
   assert.equal(redirectUrl.searchParams.get('app_handoff'), '1');
@@ -366,6 +369,7 @@ test('Create with Google in Android app hands off from phone browser back to app
 
   // Browser MUST NOT log into web dashboard or call Supabase exchange/verifyOtp
   assert.equal(browserHarness.calls.accountFn.length, 0, 'Phone browser must NOT exchange Clerk token in browser');
+  assert.equal(new URL(browserHarness.calls.handleRedirectCallback[0].signInForceRedirectUrl).searchParams.get('app_handoff'), '1');
   assert.equal(browserHarness.calls.verifyOtp.length, 0, 'Phone browser must NOT sign in via verifyOtp in browser');
   assert.equal(browserHarness.calls.locationReplace.length, 1);
   const deepLink = browserHarness.calls.locationReplace[0];

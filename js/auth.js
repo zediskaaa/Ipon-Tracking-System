@@ -488,9 +488,7 @@
     if (!window.Clerk) return Promise.resolve(null);
     const returnUrl = getClerkLoginReturnUrl();
     const loadOpts = {
-      signInForceRedirectUrl: returnUrl,
       signInFallbackRedirectUrl: returnUrl,
-      signUpForceRedirectUrl: returnUrl,
       signUpFallbackRedirectUrl: returnUrl,
       routerPush: handleClerkRouterNav,
       routerReplace: handleClerkRouterNav
