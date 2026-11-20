@@ -118,7 +118,9 @@
     activePinnedId: null,
     groupEditAvatarDataUrl: null,
     groupEditAvatarClear: false,
-    groupEditAvatarConvId: null
+    groupEditAvatarConvId: null,
+    unreadAnchorConvId: null,
+    unreadAnchorFirstId: null
   };
 
   function ipon() { return window.Ipon; }
@@ -190,6 +192,18 @@
     if (!conv) return 'Conversation';
     if (isGroupConv(conv)) return String(conv.title || conv.full_name || 'Group Chat');
     return String(conv.peer?.full_name || conv.full_name || 'User');
+  }
+
+  function groupSenderRoleBadgeHtml(appRole, chatRole) {
+    const sys = String(appRole || '').toUpperCase();
+    const grp = String(chatRole || '').toUpperCase();
+    if (sys === 'ADMIN' || grp === 'ADMIN') {
+      return '<span class="msg-sender-role is-admin">Admin</span>';
+    }
+    if (sys === 'TREASURER') {
+      return '<span class="msg-sender-role is-treasurer">Treasurer</span>';
+    }
+    return '';
   }
 
   function userBadgesHtml(userOrId) {
@@ -301,7 +315,7 @@
     }
     if (isSelfUser(user)) return 'Message yourself · Personal notes';
     if (!user.allow_online_status) return 'Privacy mode';
-    if (ipon().isUserOnline(user.id)) return 'Active now';
+    if (ipon().isUserOnline(user.id)) return user.profile_visible === false ? 'Active now' : '';
     const lastSeenAt = visibleLastSeenAt(user);
     if (lastSeenAt) {
       return formatLastSeenTime(lastSeenAt) || 'Offline';
@@ -1782,12 +1796,13 @@
     if (isSelf) subParts.unshift('Personal notes & saved messages');
     else if (!subParts.length) subParts.push('Tap to message');
 
+    const presenceText = isSelf || personIsOnline(u) ? '' : formatStatusLine(u);
     return `<article class="msg-search-person-row" role="listitem">
       <div class="msg-conv-avatar">${userAvatarHtml(u, 'avatar-md')}</div>
       <button type="button" class="msg-search-person-main" data-social-action="message" data-target-id="${escapeHtml(u.id)}">
         <strong class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}${userBadgesHtml(u)}</strong>
         <span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>
-        ${isSelf ? '' : `<span class="msg-search-person-presence${personIsOnline(u) ? ' is-online' : ''}">${escapeHtml(formatStatusLine(u))}</span>`}
+        ${presenceText ? `<span class="msg-search-person-presence">${escapeHtml(presenceText)}</span>` : ''}
       </button>
       <div class="msg-search-person-act">${relChip}</div>
     </article>`;
@@ -1955,6 +1970,8 @@
       sendTypingBroadcast(false);
       state.threadInfoView = 'root';
       state.activePinnedId = null;
+      state.unreadAnchorConvId = null;
+      state.unreadAnchorFirstId = null;
       state.groupEditAvatarDataUrl = null;
       state.groupEditAvatarClear = false;
       state.groupEditAvatarConvId = conversationId;
@@ -2002,6 +2019,19 @@
       const nextMsgs = data?.messages || [];
       const nextLastId = nextMsgs.length ? nextMsgs[nextMsgs.length - 1]?.id : null;
       const hasNewBottomMsg = Boolean(nextLastId && nextLastId !== prevLastId);
+      const serverUnreadFirstId = data?.unread_first_id || null;
+
+      if (!isSameLoadedThread || state.unreadAnchorConvId !== conversationId) {
+        state.unreadAnchorConvId = conversationId;
+        state.unreadAnchorFirstId = serverUnreadFirstId;
+      } else if (state.unreadAnchorFirstId) {
+        if (!nextMsgs.some((m) => m.id === state.unreadAnchorFirstId)) {
+          state.unreadAnchorFirstId = null;
+        }
+      } else if (!wasNearBottom && serverUnreadFirstId) {
+        state.unreadAnchorFirstId = serverUnreadFirstId;
+      }
+      if (data) data.unread_first_id = state.unreadAnchorFirstId;
 
       state.activeThread = data;
       state.loadingThread = false;
@@ -2019,7 +2049,7 @@
       const shouldMarkRead = Boolean(
         markRead && dialogOpen && isThreadActivelyVisible() && (
           forceMarkRead ||
-          data?.unread_first_id ||
+          serverUnreadFirstId ||
           convItem?.unread_count > 0 ||
           convItem?.marked_unread ||
           hasUnreadSocialNotif ||
@@ -2057,7 +2087,9 @@
           if (subEl && data?.conversation) {
             const typingEntries = getTypingEntries(conversationId);
             const typing = typingEntries.length > 0;
-            subEl.textContent = formatStatusLine(data.conversation, typingEntries);
+            const nextStatus = formatStatusLine(data.conversation, typingEntries);
+            subEl.textContent = nextStatus;
+            subEl.hidden = !nextStatus;
             subEl.classList.toggle('is-typing', typing);
           }
         } else {
@@ -2219,7 +2251,7 @@
         }
         const nextCount = bucket.size;
         updateTypingIndicators({ listChanged: (prevCount > 0) !== (nextCount > 0) });
-        if (payload.typing && conversationId === state.activeConvId && isThreadActivelyVisible()) {
+        if (payload.typing && prevCount === 0 && nextCount > 0 && conversationId === state.activeConvId && isThreadActivelyVisible()) {
           ipon().playUiSound?.('msg-typing');
         }
       })
@@ -2295,7 +2327,9 @@
     const typing = entries.length > 0;
     const subEl = document.getElementById('msg-peer-status-text');
     if (subEl) {
-      subEl.textContent = formatStatusLine(state.activeThread.conversation, entries);
+      const nextStatus = formatStatusLine(state.activeThread.conversation, entries);
+      subEl.textContent = nextStatus;
+      subEl.hidden = !nextStatus;
       subEl.classList.toggle('is-typing', typing);
     }
     syncLiveTypingBubble(entries);
@@ -2386,6 +2420,7 @@
     const hasSentMessages = Boolean((Array.isArray(thread.messages) && thread.messages.length) || getPendingList(conv.conversation_id).length);
     const typingEntries = getTypingEntries(conv.conversation_id);
     const isTyping = typingEntries.length > 0;
+    const peerStatus = formatStatusLine(conv, typingEntries);
 
     const headerEl = document.getElementById('msg-thread-header');
     headerEl.classList.toggle('is-empty-intro', !hasSentMessages);
@@ -2403,7 +2438,7 @@
             ${!isGrp && conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
             ${!isGrp && isSelfUser(conv) ? '<span class="msg-rel-chip">Saved Messages</span>' : (!isGrp && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : '')}
             ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
-            <small class="msg-peer-status${isTyping ? ' is-typing' : ''}" id="msg-peer-status-text">${escapeHtml(formatStatusLine(conv, typingEntries))}</small>
+            <small class="msg-peer-status${isTyping ? ' is-typing' : ''}" id="msg-peer-status-text"${peerStatus ? '' : ' hidden'}>${escapeHtml(peerStatus)}</small>
           </div>
         </div>
       </div>
@@ -2829,8 +2864,8 @@
           <div class="msg-welcome-avatar">${renderedHeroAvatar}</div>
           <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero ? '' : userBadgesHtml(conv)}${isSelfHero ? '<span class="msg-self-pill">You</span>' : ''}</h3>
           ${!isGrpHero && heroProfileVisible && conv.username ? `<span class="msg-welcome-username">@${escapeHtml(conv.username)}</span>` : ''}
-          ${!isSelfHero ? `<div class="msg-welcome-meta">
-            ${statusText ? `<span class="msg-welcome-status${isHeroOnline ? ' is-online' : ''}" id="msg-welcome-status-text">${escapeHtml(statusText)}</span>` : ''}
+          ${!isSelfHero ? `<div class="msg-welcome-meta" id="msg-welcome-meta"${statusText || (!isGrpHero && conv.friendship_status === 'FRIENDS') || isGrpHero ? '' : ' hidden'}>
+            <span class="msg-welcome-status${isHeroOnline ? ' is-online' : ''}" id="msg-welcome-status-text"${statusText ? '' : ' hidden'}>${escapeHtml(statusText)}</span>
             ${!isGrpHero && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
             ${isGrpHero ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
           </div>` : ''}
@@ -2870,14 +2905,14 @@
       const isDeleted = Boolean(m.deleted_for_everyone_at);
       const prev = msgs[idx - 1];
       const next = msgs[idx + 1];
-      const groupedWithPrev = prev && !prev.deleted_for_everyone_at && prev.sender_id === m.sender_id
+      const groupedWithPrev = !isNewDate && !unreadDivider && prev && !prev.deleted_for_everyone_at && prev.sender_id === m.sender_id
         && prev.message_type !== 'CALL_EVENT' && prev.message_type !== 'SYSTEM'
         && (Date.parse(m.created_at) - Date.parse(prev.created_at) < 120000);
       const groupedWithNext = next && !next.deleted_for_everyone_at && next.sender_id === m.sender_id
         && next.message_type !== 'CALL_EVENT' && next.message_type !== 'SYSTEM'
         && (Date.parse(next.created_at) - Date.parse(m.created_at) < 120000);
 
-      const groupMember = isGrp && !mine ? findGroupMember(conv, m.sender_id) : null;
+      const groupMember = isGrp ? findGroupMember(conv, m.sender_id) : null;
       const senderVisible = groupMember ? groupMember.profile_visible !== false : true;
       const senderUser = isGrp && !mine
         ? {
@@ -2888,8 +2923,16 @@
             allow_online_status: senderVisible && (groupMember ? groupMember.allow_online_status !== false : false)
           }
         : conv;
-      const senderNameHtml = isGrp && !mine && !groupedWithPrev && !isDeleted
-        ? `<span class="msg-sender-name">${escapeHtml(senderUser.full_name)}${userBadgesHtml(senderUser)}</span>`
+      const senderRoleBadge = isGrp
+        ? groupSenderRoleBadgeHtml(
+            m.sender_app_role || groupMember?.app_role || (mine ? initializedProfile?.role : ''),
+            groupMember?.role
+          )
+        : '';
+      const senderNameHtml = isGrp && !groupedWithPrev && !isDeleted
+        ? (mine
+            ? `<span class="msg-sender-name is-mine">${escapeHtml(initializedProfile?.full_name || m.sender_name || 'You')}${senderRoleBadge}</span>`
+            : `<span class="msg-sender-name">${escapeHtml(senderUser.full_name)}${userBadgesHtml(senderUser)}${senderRoleBadge}</span>`)
         : '';
 
       const attHtml = !isDeleted && Array.isArray(m.attachments) && m.attachments.length
@@ -3450,13 +3493,14 @@
     const metaParts = [];
     if (f.username) metaParts.push(`@${f.username}`);
     if (fcText) metaParts.push(fcText);
+    const friendStatus = formatStatusLine(f);
     return `<article class="msg-person-card" data-friend-card data-search-blob="${escAttr(`${f.full_name} ${f.username || ''}`.toLowerCase())}">
       <div class="msg-person-head">
         ${userAvatarHtml(f, 'avatar-md')}
         <div>
           <strong>${escapeHtml(f.full_name)}${userBadgesHtml(f)}</strong>
           ${metaParts.length ? `<small>${escapeHtml(metaParts.join(' · '))}</small>` : ''}
-          <small>${escapeHtml(formatStatusLine(f))}</small>
+          ${friendStatus ? `<small>${escapeHtml(friendStatus)}</small>` : ''}
         </div>
       </div>
       ${renderMutualStackHtml(f.id, f.mutual_friends, f.mutual_friends_count)}
@@ -4389,6 +4433,7 @@
       state.voiceChunks = [];
       state.voiceStartedAt = Date.now();
       rec.ondataavailable = (ev) => { if (ev.data?.size) state.voiceChunks.push(ev.data); };
+      ipon().playUiSound?.('msg-voice-start');
       rec.start();
 
       syncVoiceRecordingUi(true);
@@ -4418,6 +4463,7 @@
     const rec = state.voiceRecorder;
     if (!rec) return;
     state.voiceRecorder = null;
+    if (!send) ipon().playUiSound?.('msg-voice-cancel');
 
     rec.onstop = () => {
       rec.stream?.getTracks?.().forEach((t) => t.stop());
@@ -5071,6 +5117,8 @@
     disconnectTypingChannel();
     state.activeConvId = null;
     state.activeThread = null;
+    state.unreadAnchorConvId = null;
+    state.unreadAnchorFirstId = null;
     state.replyToMsg = null;
     state.editingMsg = null;
     state.groupEditAvatarDataUrl = null;
@@ -7164,12 +7212,20 @@
         const entries = getTypingEntries(activeConv.conversation_id);
         const liveStatus = formatStatusLine(activeConv, entries);
         const subEl = document.getElementById('msg-peer-status-text');
-        if (subEl) subEl.textContent = liveStatus;
+        if (subEl) {
+          subEl.textContent = liveStatus;
+          subEl.hidden = !liveStatus;
+        }
         const welcomeStatus = document.getElementById('msg-welcome-status-text');
         if (welcomeStatus) {
           const isOn = !isGroupConv(activeConv) && (isSelfUser(activeConv) || (activeConv.allow_online_status !== false && ipon().isUserOnline(activeConv.id)));
           welcomeStatus.classList.toggle('is-online', isOn);
           welcomeStatus.textContent = liveStatus;
+          welcomeStatus.hidden = !liveStatus;
+          const welcomeMeta = document.getElementById('msg-welcome-meta');
+          if (welcomeMeta) {
+            welcomeMeta.hidden = !liveStatus && !isGroupConv(activeConv) && activeConv.friendship_status !== 'FRIENDS';
+          }
         }
       }
       if (state.tab === 'friends' && state.friendsSubTab === 'all' && document.getElementById('msg-workspace-dialog')?.open) {

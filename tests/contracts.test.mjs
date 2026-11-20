@@ -559,7 +559,7 @@ test('notifications use a responsive non-blocking activity panel', () => {
   assert.match(core, /headerBottom = button\.closest\('\.app-sidebar'\)/);
   assert.match(core, /dashboard-sidebar'[\s\S]*?max-width:860px/);
   assert.match(css, /\.sidebar-utility\[data-notifications-open\]\{position:fixed;[^}]*inset:16px 16px auto auto;[^}]*width:44px/);
-  assert.match(css, /\.notification-dialog\{position:fixed;[^}]*inset:68px 16px auto auto;[^}]*height:min\(620px/);
+  assert.match(css, /\.notification-dialog\{position:fixed;[^}]*inset:68px 16px 0 auto;[^}]*height:calc\(100dvh - 68px\)/);
   assert.match(css, /\.notification-list\{[^}]*flex:1;[^}]*overflow-y:auto/);
   assert.match(css, /@media\(max-width:720px\)\{\.app-sidebar-footer \.sidebar-utilities\{order:1\}[\s\S]*?\.notification-dialog/);
 });
@@ -9469,7 +9469,7 @@ test('voice recording bar uses forest-emerald capsule, gold RECORDING label, ser
   assert.match(css, /\.msg-voice-rec-label\s*\{[\s\S]*?letter-spacing:\s*\.12em;[\s\S]*?color:\s*#e4c378;/);
   assert.match(css, /#msg-voice-timer\s*\{[\s\S]*?"IPON Serif"[\s\S]*?font-variant-numeric:\s*tabular-nums;[\s\S]*?color:\s*#f6f2e8;/);
   assert.match(css, /\.msg-voice-recording \.msg-voice-cancel\s*\{[\s\S]*?border-radius:\s*18px;/);
-  assert.match(css, /\.msg-voice-recording \.msg-voice-send\s*\{[\s\S]*?flex-direction:\s*column;[\s\S]*?background:\s*#e4c378;[\s\S]*?color:\s*#0e221b;/);
+  assert.match(css, /\.msg-voice-recording \.msg-voice-send\s*\{[\s\S]*?flex-direction:\s*row;[\s\S]*?background:\s*#e4c378;[\s\S]*?color:\s*#0e221b;/);
   assert.match(css, /@media\s*\(max-width:\s*640px\)[\s\S]*?\.msg-tool-btn\s*\{\s*width:\s*34px;\s*height:\s*34px;/);
   assert.match(css, /@media\s*\(max-width:\s*380px\)[\s\S]*?\.msg-tool-btn\s*\{\s*width:\s*30px;\s*height:\s*30px;/);
   assert.match(css, /\.msg-thread-pane\[data-chat-theme="midnight"\] \.msg-voice-recording[\s\S]*?#122921/);
@@ -11342,7 +11342,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261120-165/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261120-166/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -12418,7 +12418,7 @@ test('post-login username setup modal prompts legacy users without usernames, pr
   assert.equal(Ipon.isUiSoundEnabled(), true);
   for (const kind of [
     'type', 'chip', 'available', 'error', 'success', 'confetti', 'unlock', 'celebration',
-    'msg-send', 'msg-typing', 'msg-receive', 'record-addition', 'record-deduction', 'record-expense'
+    'msg-send', 'msg-typing', 'msg-receive', 'msg-voice-start', 'msg-voice-cancel', 'record-addition', 'record-deduction', 'record-expense'
   ]) {
     assert.equal(Ipon.playUiSound(kind), true, `Expected playUiSound('${kind}') to succeed`);
   }

@@ -206,7 +206,8 @@ test('js/messages.js formats exact same-day and previous-day last seen timestamp
   await ctx.IponMessages.openWorkspace({ tab: 'friends', subTab: 'all' });
 
   const friendsHost = getEl('msg-friends-list-host');
-  assert.match(friendsHost.innerHTML, /Active now/);
+  assert.match(friendsHost.innerHTML, /presence-dot is-online/);
+  assert.doesNotMatch(friendsHost.innerHTML, /<small>Active now<\/small>/);
   assert.match(friendsHost.innerHTML, new RegExp(`Offline since ${prevDayDatePart.replace('/', '\\/')} · ${prevDayClock}`));
   assert.match(friendsHost.innerHTML, new RegExp(`Offline since 11\\/09\\/${now.getFullYear() - 1} · ${prevYearClock}`));
   assert.doesNotMatch(friendsHost.innerHTML, /moments ago|\dm ago|\dh ago/i);
@@ -220,7 +221,8 @@ test('js/messages.js formats exact same-day and previous-day last seen timestamp
   }
 
   assert.match(friendsHost.innerHTML, new RegExp(`Offline since ${leaveClock}`));
-  assert.doesNotMatch(friendsHost.innerHTML, /Active now/);
+  assert.doesNotMatch(friendsHost.innerHTML, /presence-dot is-online/);
+  assert.doesNotMatch(friendsHost.innerHTML, /<small>Active now<\/small>/);
 
   // Same-day initial timestamp sanity check (if clock had shifted backward, newer timestamp wins; verify no relative ago)
   assert.doesNotMatch(friendsHost.innerHTML, new RegExp(`Offline since ${sameDayClock}`));

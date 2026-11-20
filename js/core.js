@@ -45,9 +45,11 @@
   const uiSoundLastAt = Object.create(null);
   const UI_SOUND_COOLDOWN_MS = {
     type: 38,
-    'msg-typing': 2200,
+    'msg-typing': 450,
     'msg-receive': 240,
-    'msg-send': 120
+    'msg-send': 120,
+    'msg-voice-start': 180,
+    'msg-voice-cancel': 180
   };
   const RPC_SUCCESS_SOUNDS = {
     record_contribution: 'record-addition',
@@ -214,6 +216,16 @@
       scheduleUiTone(ctx, master, { freq: 659.25, type: 'sine', start: 0, duration: 0.14, gain: 0.062, attack: 0.006 });
       scheduleUiTone(ctx, master, { freq: 880.0, type: 'sine', start: 0.075, duration: 0.24, gain: 0.068, attack: 0.006 });
       scheduleUiTone(ctx, master, { freq: 1760.0, type: 'triangle', start: 0.075, duration: 0.16, gain: 0.014, attack: 0.006 });
+      return;
+    }
+    if (kind === 'msg-voice-start') {
+      scheduleUiTone(ctx, master, { freq: 587.33, type: 'sine', start: 0, duration: 0.085, gain: 0.062, attack: 0.004 });
+      scheduleUiTone(ctx, master, { freq: 880.0, type: 'sine', start: 0.055, duration: 0.14, gain: 0.068, attack: 0.004 });
+      scheduleUiTone(ctx, master, { freq: 1760.0, type: 'triangle', start: 0.055, duration: 0.09, gain: 0.014, attack: 0.004 });
+      return;
+    }
+    if (kind === 'msg-voice-cancel') {
+      scheduleUiTone(ctx, master, { freq: 493.88, endFreq: 329.63, type: 'sine', start: 0, duration: 0.11, gain: 0.056, attack: 0.005 });
       return;
     }
     if (kind === 'record-addition') {

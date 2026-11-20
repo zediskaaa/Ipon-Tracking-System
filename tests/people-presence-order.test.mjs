@@ -45,7 +45,7 @@ test('people rows show last online on a separate line without exposing self acti
     escapeHtml: (value) => String(value),
   });
   assert.match(render({ id: 'offline', full_name: 'Offline user' }), /msg-search-person-presence[^>]*>Offline since 10:30 AM/);
-  assert.match(render({ id: 'online', full_name: 'Online user' }), /msg-search-person-presence is-online[^>]*>Active now/);
+  assert.doesNotMatch(render({ id: 'online', full_name: 'Online user' }), /msg-search-person-presence|Active now/);
   assert.doesNotMatch(render({ id: 'self', full_name: 'Me', is_self: true }), /msg-search-person-presence/);
   assert.match(source, /state\.tab === 'chats' && \(state\.searchActive \|\| state\.chatListQuery\.trim\(\)\)[\s\S]*?renderConversationList\(\)/);
 });

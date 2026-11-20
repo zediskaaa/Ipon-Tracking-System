@@ -488,7 +488,7 @@ test('My Account verified badge card lets members message the creator directly w
   // Empty conversation hero + deferred outgoing request banner until first message sent
   assert.match(messagesJs, /is-empty-intro/);
   assert.match(messagesJs, /msg-thread-welcome-hero/);
-  assert.match(messagesJs, /!isSelfHero \? `<div class="msg-welcome-meta">/);
+  assert.match(messagesJs, /!isSelfHero \? `<div class="msg-welcome-meta"/);
   assert.match(messagesJs, /isPendingReq && hasSentMessages/);
   assert.match(css, /\.msg-thread-header\.is-empty-intro\s+\.msg-thread-header-left\s+>\s+:not\(\.msg-back-mobile-btn\)/);
 
