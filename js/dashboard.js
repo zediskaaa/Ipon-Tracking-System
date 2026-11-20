@@ -231,7 +231,7 @@
   function renderGroupHeader(groups) {
     myGroups = Array.isArray(groups) ? groups : [];
     currentGroup = myGroups.find((group) => group.is_current) || myGroups[0] || null;
-    Ipon.syncWorkspaceMode?.(currentGroup?.workspace_mode || 'GROUP');
+    Ipon.syncWorkspaceMode?.(currentGroup ? (currentGroup.workspace_mode || 'GROUP') : 'NONE');
     const noGroupCard = document.getElementById('dashboard-no-group-card');
     if (noGroupCard) noGroupCard.hidden = Boolean(currentGroup);
     const summaryCard = document.querySelector('.summary-card');

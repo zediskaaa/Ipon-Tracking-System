@@ -16,7 +16,7 @@ try {
       root.dataset.shellRole = activeRole;
     }
     var workspaceMode = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('ipon_workspace_mode')) || (typeof localStorage !== 'undefined' && localStorage.getItem('ipon_workspace_mode'));
-    if (workspaceMode === 'SOLO' || workspaceMode === 'GROUP') {
+    if (workspaceMode === 'SOLO' || workspaceMode === 'GROUP' || workspaceMode === 'NONE') {
       root.dataset.workspaceMode = workspaceMode;
     }
   }

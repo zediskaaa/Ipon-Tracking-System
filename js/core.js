@@ -2164,17 +2164,19 @@
 
   function readStoredWorkspaceMode() {
     const domMode = document?.documentElement?.dataset?.workspaceMode;
-    if (domMode === 'SOLO' || domMode === 'GROUP') return domMode;
+    if (domMode === 'SOLO' || domMode === 'GROUP' || domMode === 'NONE') return domMode;
     try {
       const saved = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(ACTIVE_WORKSPACE_MODE_KEY))
         || (typeof localStorage !== 'undefined' && localStorage.getItem(ACTIVE_WORKSPACE_MODE_KEY));
-      if (saved === 'SOLO' || saved === 'GROUP') return saved;
+      if (saved === 'SOLO' || saved === 'GROUP' || saved === 'NONE') return saved;
     } catch { }
     return 'GROUP';
   }
 
   function syncWorkspaceMode(mode, { persist = true } = {}) {
-    const normalized = String(mode || '').toUpperCase() === 'SOLO' ? 'SOLO' : 'GROUP';
+    const rawMode = String(mode || '').toUpperCase();
+    const normalized = rawMode === 'SOLO' ? 'SOLO' : (rawMode === 'NONE' ? 'NONE' : 'GROUP');
+    const hideGroupOnly = normalized === 'SOLO' || normalized === 'NONE';
     if (document?.documentElement?.dataset) {
       document.documentElement.dataset.workspaceMode = normalized;
     }
@@ -2188,7 +2190,7 @@
     document.querySelectorAll('a[href="members.html"], [data-group-only]').forEach((el) => {
       const roles = el.dataset?.role ? String(el.dataset.role).split(',') : null;
       const roleHidden = roles ? !roles.includes(effectiveRole) : false;
-      el.hidden = roleHidden || normalized === 'SOLO';
+      el.hidden = roleHidden || hideGroupOnly;
     });
     return normalized;
   }
@@ -2198,9 +2200,10 @@
       document.documentElement.dataset.shellRole = effectiveRole;
     }
     const workspaceMode = effectiveRole === 'SUPER_ADMIN' ? 'GROUP' : readStoredWorkspaceMode();
+    const hideGroupOnly = workspaceMode === 'SOLO' || workspaceMode === 'NONE';
     document.querySelectorAll('[data-role]').forEach((element) => {
       const roles = String(element.dataset?.role || '').split(',');
-      const groupOnlyHidden = workspaceMode === 'SOLO' && (element.hasAttribute('data-group-only') || element.getAttribute('href') === 'members.html');
+      const groupOnlyHidden = hideGroupOnly && (element.hasAttribute('data-group-only') || element.getAttribute('href') === 'members.html');
       element.hidden = !roles.includes(effectiveRole) || groupOnlyHidden;
     });
     if (effectiveRole === 'SUPER_ADMIN') {
@@ -8936,7 +8939,7 @@
               profile.workspace_mode = 'GROUP';
             }
           } else if (!profile.workspace_mode) {
-            profile.workspace_mode = 'GROUP';
+            profile.workspace_mode = profile.group_id || profile.role === 'SUPER_ADMIN' ? 'GROUP' : 'NONE';
           }
         })(),
         (async () => {

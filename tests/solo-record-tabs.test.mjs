@@ -18,12 +18,19 @@ test('Solo savings hides Expenses and Requests record tabs, balances mobile 3-co
 
   const css = read('css/app.css');
   assert.match(css, /html\[data-workspace-mode="SOLO"\] \.record-tabs a\[data-group-only\]\s*\{\s*display:\s*none\s*!important;/);
+  assert.match(css, /html\[data-workspace-mode="NONE"\] \.record-tabs a\[data-group-only\]\s*\{\s*display:\s*none\s*!important;/);
   assert.match(css, /html\[data-workspace-mode="SOLO"\] \.record-tabs\s*\{\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(css, /html\[data-workspace-mode="NONE"\] \.record-tabs\s*\{\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(css, /\.quick-record-type-tabs\{display:grid;grid-auto-flow:column;grid-auto-columns:minmax\(0,1fr\);/);
   assert.match(css, /\.quick-record-type-tabs\[hidden\],\.quick-type-tab\[hidden\]\{display:none!important\}/);
 
   const configJs = read('js/config.js');
   assert.match(configJs, /root\.dataset\.workspaceMode = workspaceMode;/);
+  assert.match(configJs, /workspaceMode === 'NONE'/);
+
+  const coreJs = read('js/core.js');
+  assert.match(coreJs, /const hideGroupOnly = normalized === 'SOLO' \|\| normalized === 'NONE';/);
+  assert.match(coreJs, /profile\.workspace_mode = profile\.group_id \|\| profile\.role === 'SUPER_ADMIN' \? 'GROUP' : 'NONE';/);
 
   const dashboardJs = read('js/dashboard.js');
   assert.match(dashboardJs, /const isSoloMode = currentGroup\?\.workspace_mode === 'SOLO';[\s\S]*?const canExpense = !isSoloMode && \(state\.profile\?\.role === 'ADMIN' \|\| perms\.can_record_expenses === true\);/);
@@ -35,9 +42,17 @@ test('Solo savings hides Expenses and Requests record tabs, balances mobile 3-co
   assert.match(requestsJs, /if \(state\.profile\.workspace_mode === 'SOLO'\)\s*\{\s*window\.location\.replace\('contributions\.html'\);\s*return;\s*\}/);
 
   const mig137 = read('database/migrations/20261120_137_suppress_solo_member_registered_notification.sql');
+  const mig142 = read('database/migrations/20261121_142_fix_notify_new_member_created_by.sql');
   const schema = read('database/schema.sql');
   for (const sql of [mig137, schema]) {
-    assert.match(sql, /create or replace function public\.notify_new_member\(\)[\s\S]*?if v_workspace_mode = 'SOLO' then\s*return new;\s*end if;[\s\S]*?if new\.user_id is not null and v_admin\.id = new\.user_id then\s*continue;\s*end if;/i);
+    assert.match(sql, /create or replace function public\.notify_new_member\(\)[\s\S]*?if v_workspace_mode = 'SOLO' then\s*return new;\s*end if;/i);
     assert.match(sql, /'20261120_137'/);
   }
+  for (const sql of [mig142, schema]) {
+    assert.match(sql, /v_actor_id uuid := coalesce\(new\.created_by, auth\.uid\(\)\);[\s\S]*?if v_actor_id is not null and v_admin\.id = v_actor_id then\s*continue;\s*end if;/i);
+    assert.match(sql, /'20261121_142'/);
+  }
+  const mig142Fn = mig142.match(/create or replace function public\.notify_new_member\(\)[\s\S]*?\$\$;/i);
+  assert.ok(mig142Fn, 'migration 142 must redefine public.notify_new_member()');
+  assert.doesNotMatch(mig142Fn[0], /\bnew\.user_id\b/i);
 });
