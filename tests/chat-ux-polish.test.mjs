@@ -38,6 +38,18 @@ test('CSS aligns voice bar height to composer input, maximizes group modal space
   assert.match(css, /\.msg-sender-role\.is-treasurer\s*\{/);
 });
 
+test('conversation intro stays in the thread, header status excludes typing, and empty threads cannot ghost-scroll', () => {
+  const messagesJs = read('js/messages.js');
+  const css = read('css/app.css');
+
+  assert.match(messagesJs, /list\.innerHTML = `\$\{welcomeHtml\}\$\{html\}\$\{pendingHtml\}`/);
+  assert.match(messagesJs, /scrollWrap\?\.classList\.toggle\('is-empty-thread', isEmpty\)/);
+  assert.match(messagesJs, /const peerStatus = formatStatusLine\(conv\);/);
+  assert.doesNotMatch(messagesJs, /msg-peer-status\$\{isTyping/);
+  assert.match(css, /\.msg-scroll-wrap\.is-empty-thread\s*\{[^}]*overflow-y:\s*hidden;[^}]*overscroll-behavior-y:\s*none;/s);
+  assert.match(css, /\.msg-thread-welcome-hero\s*\{[^}]*margin:\s*0 auto 12px;[^}]*padding:\s*14px 10px 12px;/s);
+});
+
 test('runtime typing sound plays once per typing appearance, voice recording plays start/cancel sounds, unread divider stays anchored, and group chats show Admin & Treasurer badges', async () => {
   const messagesJs = read('js/messages.js');
   const meId = '11111111-1111-4111-8111-111111111111';

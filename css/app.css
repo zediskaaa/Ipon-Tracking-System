@@ -7756,6 +7756,14 @@ html[data-theme="dark"] .msg-thread-pane[data-chat-theme="midnight"] {
   display: flex;
   flex-direction: column;
 }
+.msg-scroll-wrap.is-empty-thread {
+  overflow-y: hidden;
+  overscroll-behavior-y: none;
+  justify-content: center;
+}
+.msg-scroll-wrap.is-empty-thread .msg-messages-list {
+  flex: 0 1 auto;
+}
 .msg-load-older-wrap {
   text-align: center;
   margin-bottom: 14px;
@@ -19886,10 +19894,13 @@ html[data-theme="dark"] .msg-self-pill {
   align-items: center;
   justify-content: center;
   text-align: center;
-  margin: auto;
-  padding: 28px 20px 20px;
+  margin: 0 auto 12px;
+  padding: 14px 10px 12px;
   max-width: 390px;
-  gap: 6px;
+  gap: 4px;
+}
+.msg-scroll-wrap.is-empty-thread .msg-thread-welcome-hero {
+  margin-bottom: 0;
 }
 .msg-welcome-avatar {
   margin-bottom: 6px;

@@ -2085,12 +2085,9 @@
           ipon().syncPresenceDots(activeWrap);
           const subEl = document.getElementById('msg-peer-status-text');
           if (subEl && data?.conversation) {
-            const typingEntries = getTypingEntries(conversationId);
-            const typing = typingEntries.length > 0;
-            const nextStatus = formatStatusLine(data.conversation, typingEntries);
+            const nextStatus = formatStatusLine(data.conversation);
             subEl.textContent = nextStatus;
             subEl.hidden = !nextStatus;
-            subEl.classList.toggle('is-typing', typing);
           }
         } else {
           renderActiveThread({
@@ -2105,10 +2102,7 @@
         ipon().syncPresenceDots(activeWrap);
         const subEl = document.getElementById('msg-peer-status-text');
         if (subEl && data?.conversation) {
-          const typingEntries = getTypingEntries(conversationId);
-          const typing = typingEntries.length > 0;
-          subEl.textContent = formatStatusLine(data.conversation, typingEntries);
-          subEl.classList.toggle('is-typing', typing);
+          subEl.textContent = formatStatusLine(data.conversation);
         }
       }
 
@@ -2188,6 +2182,7 @@
       }
     }
 
+    document.getElementById('msg-scroll-wrap')?.classList.remove('is-empty-thread');
     const list = document.getElementById('msg-messages-list');
     if (list) {
       list.classList.remove('is-thread-entering');
@@ -2196,6 +2191,7 @@
   }
 
   function renderThreadErrorState() {
+    document.getElementById('msg-scroll-wrap')?.classList.remove('is-empty-thread');
     const list = document.getElementById('msg-messages-list');
     if (!list) return;
     list.innerHTML = `<div class="empty-state"><p>${escapeHtml(state.threadError || 'Unable to load messages.')}</p><button type="button" class="button button-secondary button-sm" id="msg-retry-thread-btn">Try again</button></div>`;
@@ -2324,13 +2320,11 @@
     if (listChanged) renderConversationList();
     if (!state.activeConvId || !state.activeThread?.conversation) return;
     const entries = getTypingEntries(state.activeConvId);
-    const typing = entries.length > 0;
     const subEl = document.getElementById('msg-peer-status-text');
     if (subEl) {
-      const nextStatus = formatStatusLine(state.activeThread.conversation, entries);
+      const nextStatus = formatStatusLine(state.activeThread.conversation);
       subEl.textContent = nextStatus;
       subEl.hidden = !nextStatus;
-      subEl.classList.toggle('is-typing', typing);
     }
     syncLiveTypingBubble(entries);
   }
@@ -2419,8 +2413,7 @@
     const isIncomingReq = isPendingReq && conv.initiator_id !== initializedProfile?.id;
     const hasSentMessages = Boolean((Array.isArray(thread.messages) && thread.messages.length) || getPendingList(conv.conversation_id).length);
     const typingEntries = getTypingEntries(conv.conversation_id);
-    const isTyping = typingEntries.length > 0;
-    const peerStatus = formatStatusLine(conv, typingEntries);
+    const peerStatus = formatStatusLine(conv);
 
     const headerEl = document.getElementById('msg-thread-header');
     headerEl.classList.toggle('is-empty-intro', !hasSentMessages);
@@ -2438,7 +2431,7 @@
             ${!isGrp && conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
             ${!isGrp && isSelfUser(conv) ? '<span class="msg-rel-chip">Saved Messages</span>' : (!isGrp && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : '')}
             ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
-            <small class="msg-peer-status${isTyping ? ' is-typing' : ''}" id="msg-peer-status-text"${peerStatus ? '' : ' hidden'}>${escapeHtml(peerStatus)}</small>
+            <small class="msg-peer-status" id="msg-peer-status-text"${peerStatus ? '' : ' hidden'}>${escapeHtml(peerStatus)}</small>
           </div>
         </div>
       </div>
@@ -2841,42 +2834,38 @@
       }
     }
 
-    if (isEmpty) {
-      list.classList.remove('is-thread-entering');
-      const isGrpHero = isGroupConv(conv);
-      const isSelfHero = !isGrpHero && isSelfUser(conv);
-      const heroProfileVisible = isGrpHero || isSelfHero || conv.profile_visible !== false;
-      const heroTitle = convDisplayTitle(conv);
-      const statusText = formatStatusLine(conv, getTypingEntries(conv.conversation_id));
-      const isHeroOnline = isSelfHero || (!isGrpHero && heroProfileVisible && conv.allow_online_status !== false && ipon().isUserOnline(conv.id));
-      const heroAvatar = isGrpHero
-        ? groupAvatarHtml(conv, 'avatar-lg', { clickable: false })
-        : userAvatarHtml(conv, 'avatar-lg', { clickable: false, showPresence: !isSelfHero && heroProfileVisible });
-      const heroAvatarNode = dpPreviewTriggerHtml(conv.avatar_url, heroTitle, heroAvatar);
-      const renderedHeroAvatar = heroProfileVisible ? heroAvatarNode : heroAvatar;
-      const welcomeCopy = isGrpHero
-        ? 'Say hello to the group! Messages and files stay private to members.'
-        : isSelfHero
-          ? 'Save personal notes, reminders, photos, and files here. Only visible to you.'
-          : 'Say hello! Messages and files stay private between you two.';
-      list.innerHTML = `
-        <div class="msg-thread-welcome msg-thread-welcome-hero">
-          <div class="msg-welcome-avatar">${renderedHeroAvatar}</div>
-          <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero ? '' : userBadgesHtml(conv)}${isSelfHero ? '<span class="msg-self-pill">You</span>' : ''}</h3>
-          ${!isGrpHero && heroProfileVisible && conv.username ? `<span class="msg-welcome-username">@${escapeHtml(conv.username)}</span>` : ''}
-          ${!isSelfHero ? `<div class="msg-welcome-meta" id="msg-welcome-meta"${statusText || (!isGrpHero && conv.friendship_status === 'FRIENDS') || isGrpHero ? '' : ' hidden'}>
-            <span class="msg-welcome-status${isHeroOnline ? ' is-online' : ''}" id="msg-welcome-status-text"${statusText ? '' : ' hidden'}>${escapeHtml(statusText)}</span>
-            ${!isGrpHero && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
-            ${isGrpHero ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
-          </div>` : ''}
-          ${heroProfileVisible && (isGrpHero ? conv.description : conv.bio) ? `<p class="msg-welcome-bio">${escapeHtml(isGrpHero ? conv.description : conv.bio)}</p>` : ''}
-          ${!isGrpHero && heroProfileVisible && conv.social_links ? (ipon().renderSocialAppLinksHtml?.(conv.social_links, { variant: 'welcome' }) || '') : ''}
-          <p class="msg-welcome-hint">${escapeHtml(welcomeCopy)}</p>
-        </div>`;
-      ipon().bindAvatarFallbacks?.(list);
-      ipon().syncPresenceDots?.(list);
-      return;
-    }
+    const scrollWrap = document.getElementById('msg-scroll-wrap');
+    scrollWrap?.classList.toggle('is-empty-thread', isEmpty);
+    const isGrpHero = isGroupConv(conv);
+    const isSelfHero = !isGrpHero && isSelfUser(conv);
+    const heroProfileVisible = isGrpHero || isSelfHero || conv.profile_visible !== false;
+    const heroTitle = convDisplayTitle(conv);
+    const statusText = formatStatusLine(conv);
+    const isHeroOnline = isSelfHero || (!isGrpHero && heroProfileVisible && conv.allow_online_status !== false && ipon().isUserOnline(conv.id));
+    const heroAvatar = isGrpHero
+      ? groupAvatarHtml(conv, 'avatar-lg', { clickable: false })
+      : userAvatarHtml(conv, 'avatar-lg', { clickable: false, showPresence: !isSelfHero && heroProfileVisible });
+    const heroAvatarNode = dpPreviewTriggerHtml(conv.avatar_url, heroTitle, heroAvatar);
+    const renderedHeroAvatar = heroProfileVisible ? heroAvatarNode : heroAvatar;
+    const welcomeCopy = isGrpHero
+      ? 'Messages and files stay private to group members.'
+      : isSelfHero
+        ? 'Personal notes, reminders, photos, and files saved here are visible only to you.'
+        : 'Messages and files in this conversation stay private between you two.';
+    const welcomeHtml = `
+      <div class="msg-thread-welcome msg-thread-welcome-hero">
+        <div class="msg-welcome-avatar">${renderedHeroAvatar}</div>
+        <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero ? '' : userBadgesHtml(conv)}${isSelfHero ? '<span class="msg-self-pill">You</span>' : ''}</h3>
+        ${!isGrpHero && heroProfileVisible && conv.username ? `<span class="msg-welcome-username">@${escapeHtml(conv.username)}</span>` : ''}
+        ${!isSelfHero ? `<div class="msg-welcome-meta" id="msg-welcome-meta"${statusText || (!isGrpHero && conv.friendship_status === 'FRIENDS') || isGrpHero ? '' : ' hidden'}>
+          <span class="msg-welcome-status${isHeroOnline ? ' is-online' : ''}" id="msg-welcome-status-text"${statusText ? '' : ' hidden'}>${escapeHtml(statusText)}</span>
+          ${!isGrpHero && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
+          ${isGrpHero ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
+        </div>` : ''}
+        ${heroProfileVisible && (isGrpHero ? conv.description : conv.bio) ? `<p class="msg-welcome-bio">${escapeHtml(isGrpHero ? conv.description : conv.bio)}</p>` : ''}
+        ${!isGrpHero && heroProfileVisible && conv.social_links ? (ipon().renderSocialAppLinksHtml?.(conv.social_links, { variant: 'welcome' }) || '') : ''}
+        <p class="msg-welcome-hint">${escapeHtml(welcomeCopy)}</p>
+      </div>`;
 
     const isGrp = isGroupConv(conv);
     let lastDateStr = '';
@@ -3011,8 +3000,8 @@
 
     const pendingClockState = { lastKey: lastShownClockKey };
     const pendingHtml = pendingList.map((p) => renderPendingRowHtml(p, pendingClockState)).join('');
-    list.innerHTML = `${html}${pendingHtml}`;
-    list.classList.toggle('is-thread-entering', Boolean(animate));
+    list.innerHTML = `${welcomeHtml}${html}${pendingHtml}`;
+    list.classList.toggle('is-thread-entering', Boolean(animate && !isEmpty));
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);
     if (conv.conversation_id) {
@@ -7209,8 +7198,7 @@
       });
       if (state.activeThread?.conversation) {
         const activeConv = state.activeThread.conversation;
-        const entries = getTypingEntries(activeConv.conversation_id);
-        const liveStatus = formatStatusLine(activeConv, entries);
+        const liveStatus = formatStatusLine(activeConv);
         const subEl = document.getElementById('msg-peer-status-text');
         if (subEl) {
           subEl.textContent = liveStatus;

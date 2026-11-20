@@ -58,7 +58,7 @@ test('migration 20261117_105 adds group chats, preserves 90-day retention & secu
   // Policy copy & service worker cache bump
   assert.match(policyJs, /Direct &amp; group messages, chat files/i);
   assert.match(loginHtml, /Direct &amp; group messages, chat files/i);
-  assert.match(sw, /ipon-shell-v103/);
+  assert.match(sw, /ipon-shell-v104/);
 });
 
 test('group chats runtime renders composite avatars, multi-sender bubbles, typing sender, drawer, forward & creation VM flow', async () => {
@@ -335,7 +335,7 @@ test('group chats runtime renders composite avatars, multi-sender bubbles, typin
   typingHandlers.at(-1)({ payload: { user_id: mariaId, user_name: 'Maria Santos', typing: true } });
   assert.equal(getEl('msg-typing-sender').hidden, false);
   assert.equal(getEl('msg-typing-sender').textContent, 'Maria');
-  assert.equal(getEl('msg-peer-status-text').textContent, 'Maria is typing…');
+  assert.doesNotMatch(getEl('msg-peer-status-text').textContent, /typing/i);
 
   // 4. Thread info drawer displays Group Info, edit link, Add members, Leave group & Members list
   await Promise.all((docListeners.get('click') || []).map((fn) => fn({
