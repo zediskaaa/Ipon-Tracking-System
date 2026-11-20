@@ -5320,7 +5320,7 @@ test('all notification types route to exact destination modals or highlighted ta
   for (const script of [dashboardJs, recordsJs, userJs, membersJs, settingsJs, superAdminJs]) {
     assert.match(script, /Ipon\.consumeDeepLink\(/);
   }
-  assert.match(userJs, /<tr data-row-id="\$\{row\.id\}">/);
+  assert.match(userJs, /<tr class="compact-history-row" data-row-id="\$\{row\.id\}">/);
   assert.match(superAdminJs, /<tr data-user-id="\$\{profile\.id\}">/);
   assert.match(css, /\.is-highlight-focus\b/);
   assert.match(css, /\.notice-detail-dialog\b/);

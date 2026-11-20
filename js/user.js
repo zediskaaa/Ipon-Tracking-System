@@ -3,6 +3,9 @@
   const state = await Ipon.init({ allowedRoles: ['MEMBER'] });
   if (state.failed || !state.configured || !state.profile) return;
   const body = document.getElementById('user-history-body');
+  const historyDetailDialog = document.getElementById('user-history-detail-dialog');
+  const historyDetailFields = document.getElementById('user-history-detail-fields');
+  const historyDetailActions = document.getElementById('user-history-detail-actions');
   const statusFilter = document.getElementById('user-history-status');
   const dialog = document.getElementById('contribution-dialog');
   const form = document.getElementById('user-contribution-form');
@@ -163,7 +166,7 @@
       const resubmitBtn = row.approval_status === 'REJECTED'
         ? ` <button class="icon-action" type="button" data-resubmit="${row.id}">Resubmit</button>`
         : '';
-      return `<tr data-row-id="${row.id}"><td>${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.dateLabel(row.payment_date)}</td><td>${Ipon.paymentMethodBadge(row.payment_method)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${badge(row.approval_status)}</td><td>${row.receipt_url ? `<button class="icon-action receipt-pill-btn" type="button" data-view-receipt="${row.id}">View receipt</button>` : '<span class="field-help">—</span>'}</td><td><div class="user-note-actions"><span>${Ipon.escapeHtml(noteText)}</span>${discussBtn ? ` ${discussBtn}` : ''}${resubmitBtn}</div></td></tr>`;
+      return `<tr class="compact-history-row" data-row-id="${row.id}"><td>${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' })}</td><td>${Ipon.dateLabel(row.payment_date)}</td><td>${Ipon.paymentMethodBadge(row.payment_method)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${badge(row.approval_status)}</td><td>${row.receipt_url ? `<button class="icon-action receipt-pill-btn" type="button" data-view-receipt="${row.id}">View receipt</button>` : '<span class="field-help">—</span>'}</td><td><div class="user-note-actions"><span>${Ipon.escapeHtml(noteText)}</span>${discussBtn ? ` ${discussBtn}` : ''}${resubmitBtn}</div></td><td class="compact-row-summary"><div class="compact-summary-head"><strong>${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' })}</strong><b>${Ipon.money(row.amount)}</b></div><div class="compact-summary-meta"><span>${Ipon.dateLabel(row.payment_date)}</span>${badge(row.approval_status)}</div><button class="compact-detail-trigger" type="button" data-history-details="${row.id}" aria-label="View contribution details for ${Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' })}">View details <span aria-hidden="true">↗</span></button></td></tr>`;
     }).join('') : '<tr><td colspan="7" class="empty-state">No contribution records match this filter.</td></tr>';
   }
 
@@ -204,7 +207,24 @@
     try { await navigator.clipboard.writeText(btn.dataset.copyAccount || ''); Ipon.toast('Account number copied.'); }
     catch { Ipon.toast('Unable to copy automatically.', 'error'); }
   });
+  function openUserHistoryDetails(detailBtn) {
+    const row = historyRowsById.get(detailBtn.dataset.historyDetails);
+    if (!row) return;
+    const cells = [...detailBtn.closest('tr').querySelectorAll('td:not(.compact-row-summary)')];
+    const labels = ['Month', 'Date', 'Method', 'Amount', 'Status'];
+    historyDetailFields.innerHTML = labels.map((label, index) => `<div class="compact-detail-field"><dt>${label}</dt><dd>${cells[index].innerHTML}</dd></div>`).join('')
+      + `<div class="compact-detail-field"><dt>Review note</dt><dd>${Ipon.escapeHtml(row.review_note || row.void_reason || '—')}</dd></div>`
+      + (row.transaction_reference ? `<div class="compact-detail-field"><dt>Reference</dt><dd>${Ipon.escapeHtml(row.transaction_reference)}</dd></div>` : '')
+      + (row.notes ? `<div class="compact-detail-field"><dt>Notes</dt><dd>${Ipon.escapeHtml(row.notes)}</dd></div>` : '');
+    historyDetailActions.innerHTML = [cells[5].querySelector('button'), ...cells[6].querySelectorAll('button')].filter(Boolean).map((button) => button.outerHTML).join('');
+    historyDetailActions.hidden = !historyDetailActions.innerHTML;
+    document.getElementById('user-history-detail-title').textContent = Ipon.dateLabel(row.contribution_periods.period_month, { month: 'long', year: 'numeric' });
+    historyDetailDialog.showModal();
+  }
+
   body.addEventListener('click', (event) => {
+    const detailBtn = event.target.closest('[data-history-details]');
+    if (detailBtn) { openUserHistoryDetails(detailBtn); return; }
     const discussBtn = event.target.closest('[data-action="discuss"]');
     if (discussBtn) {
       Ipon.openRecordDiscussion('contribution', discussBtn.dataset.id, { onUpdated: () => load() });
@@ -232,6 +252,16 @@
       dialog.showModal();
       form.elements.amount.focus();
     }
+  });
+  document.getElementById('close-user-history-detail')?.addEventListener('click', () => historyDetailDialog.close());
+  historyDetailActions?.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    const id = button.dataset.viewReceipt || button.dataset.resubmit || button.dataset.id;
+    const selector = button.hasAttribute('data-view-receipt') ? '[data-view-receipt]' : button.hasAttribute('data-resubmit') ? '[data-resubmit]' : '[data-action="discuss"]';
+    const original = [...body.querySelectorAll(selector)].find((item) => (item.dataset.viewReceipt || item.dataset.resubmit || item.dataset.id) === id);
+    historyDetailDialog.close();
+    original?.click();
   });
   statusFilter.addEventListener('change', () => { historyPage = 0; load().catch((error) => Ipon.showInlineError(body, error, load, 7)); });
   pager?.addEventListener('click', (event) => {

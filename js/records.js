@@ -104,7 +104,11 @@
     Ipon.enhancePaymentSelect?.(methodFilter, { compact: true });
   }
   document.body.insertAdjacentHTML('beforeend', `<dialog class="form-dialog" id="record-edit-dialog" aria-labelledby="record-edit-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-edit-title">Edit pending record</h2><p>Only pending records can be corrected. Confirmed records must be voided and replaced.</p></div><button class="dialog-close" id="record-edit-close" type="button" aria-label="Close edit form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="record-edit-form" class="form-grid"><input type="hidden" name="record_id"><div class="field"><label for="edit-date">Date</label><input id="edit-date" name="date" type="date" min="2000-01-01" data-max-today required></div><div class="field"><label for="edit-amount">Amount</label><input id="edit-amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" required></div><div class="field transaction-edit-field"><label for="edit-category">Category</label><input id="edit-category" name="category" maxlength="80" data-category-presets="${page === 'withdrawals' ? 'deduction' : 'expense'}"></div><div class="field transaction-edit-field"><label for="edit-responsible">Person responsible</label><select id="edit-responsible" name="person_responsible"><option value="">Select member</option></select></div><div class="field field-wide transaction-edit-field"><label for="edit-description">Description</label><textarea id="edit-description" name="description" maxlength="500"></textarea></div><div class="field"><label for="edit-payment-method">${page === 'contributions' ? 'Payment method' : 'Paid from wallet'}</label><select id="edit-payment-method" name="payment_method"><option value="">Untagged (legacy)</option>${Ipon.paymentMethodOptionsHtml()}</select></div><div class="field"><label for="edit-reference">Reference</label><input id="edit-reference" name="reference" maxlength="100"></div><div class="field field-wide"><label for="edit-notes">Notes</label><textarea id="edit-notes" name="notes" maxlength="1000"></textarea></div><div class="form-actions field-wide"><button class="button button-secondary" id="record-edit-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save correction</button></div></form></div></dialog>`);
+  document.body.insertAdjacentHTML('beforeend', `<dialog class="form-dialog compact-detail-dialog" id="record-detail-dialog" aria-labelledby="record-detail-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><span class="compact-detail-eyebrow">Record history</span><h2 id="record-detail-title">Record details</h2><p id="record-detail-subtitle"></p></div><button class="dialog-close" id="record-detail-close" type="button" aria-label="Close record details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><dl class="compact-detail-grid" id="record-detail-fields"></dl><div class="compact-detail-actions" id="record-detail-actions"></div></div></dialog>`);
   const editDialog = document.getElementById('record-edit-dialog');
+  const detailDialog = document.getElementById('record-detail-dialog');
+  const detailFields = document.getElementById('record-detail-fields');
+  const detailActions = document.getElementById('record-detail-actions');
   const editForm = document.getElementById('record-edit-form');
   Ipon.enhancePaymentSelect?.(editForm?.elements?.payment_method);
   Ipon.prepareNumericInputs();
@@ -583,7 +587,7 @@
       const bulkBox = isAdmin && entry.approval_status === 'PENDING'
         ? `<input type="checkbox" class="bulk-entry-check" value="${entry.id}" aria-label="Select pending addition"> `
         : '';
-      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${bulkBox}${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${Ipon.verifiedBadgesHtml?.(entry.contribution_periods.members.id || entry.contribution_periods.members.full_name) || ''}${reasonNoteHtml(entry)}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td>${Ipon.paymentMethodBadge(entry.payment_method)}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td></tr>`;
+      return `<tr class="compact-history-row ${isCancelled ? 'row-voided' : ''}"><td>${bulkBox}${Ipon.dateLabel(entry.payment_date)}</td><td>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${Ipon.verifiedBadgesHtml?.(entry.contribution_periods.members.id || entry.contribution_periods.members.full_name) || ''}${reasonNoteHtml(entry)}</td><td>${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</td><td>${Ipon.paymentMethodBadge(entry.payment_method)}</td><td class="amount-cell">${Ipon.money(entry.amount)}</td><td>${statusBadge(entry.approval_status)}</td><td>${actionButtons(entry)}</td><td class="compact-row-summary"><div class="compact-summary-head"><strong>${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}${Ipon.verifiedBadgesHtml?.(entry.contribution_periods.members.id || entry.contribution_periods.members.full_name) || ''}</strong><b>${Ipon.money(entry.amount)}</b></div><div class="compact-summary-meta"><span>${Ipon.dateLabel(entry.payment_date)} · ${Ipon.dateLabel(entry.contribution_periods.period_month, { month: 'short', year: 'numeric' })}</span>${statusBadge(entry.approval_status)}</div><div class="compact-summary-footer">${bulkBox ? `<button class="compact-bulk-toggle" type="button" data-bulk-toggle="${entry.id}" aria-pressed="false">Select for review</button>` : ''}<button class="compact-detail-trigger" type="button" data-action="details" data-id="${entry.id}" aria-label="View addition details for ${Ipon.escapeHtml(entry.contribution_periods.members.full_name)}">View details <span aria-hidden="true">↗</span></button></div></td></tr>`;
     }).join('') : `<tr><td colspan="7" class="empty-state">${selectedMemberName ? `No additions found for ${Ipon.escapeHtml(selectedMemberName)}.` : 'No additions matching this filter yet.'}</td></tr>`;
     updateBulkSelectionUi();
     if (!preserveAmount) await syncSuggestedAmount();
@@ -599,6 +603,31 @@
     if (countEl) countEl.textContent = String(selected.length);
     if (confirmBtn) confirmBtn.disabled = selected.length === 0;
     if (selectAll) selectAll.checked = checkboxes.length > 0 && selected.length === checkboxes.length;
+    contributionEntriesBody?.querySelectorAll('[data-bulk-toggle]').forEach((button) => {
+      const checked = checkboxes.some((box) => box.value === button.dataset.bulkToggle && box.checked);
+      button.setAttribute('aria-pressed', String(checked));
+      button.textContent = checked ? 'Selected for review' : 'Select for review';
+    });
+  }
+
+  function openRecordDetails(button) {
+    const cells = [...button.closest('tr').querySelectorAll('td:not(.compact-row-summary)')];
+    const record = recordRows.find((item) => String(item.id) === button.dataset.id);
+    const labels = page === 'contributions'
+      ? ['Date', 'Member', 'Month', 'Method', 'Amount', 'Status']
+      : ['Date', 'Category', 'Description', 'Person responsible', 'Method', 'Amount', 'Status'];
+    detailFields.innerHTML = labels.map((label, index) => {
+      const cell = cells[index].cloneNode(true);
+      cell.querySelectorAll('input[type="checkbox"]').forEach((input) => input.remove());
+      return `<div class="compact-detail-field"><dt>${label}</dt><dd>${cell.innerHTML}</dd></div>`;
+    }).join('')
+      + (record?.transaction_reference || record?.reference_number ? `<div class="compact-detail-field"><dt>Reference</dt><dd>${Ipon.escapeHtml(record.transaction_reference || record.reference_number)}</dd></div>` : '')
+      + (record?.notes ? `<div class="compact-detail-field"><dt>Notes</dt><dd>${Ipon.escapeHtml(record.notes)}</dd></div>` : '');
+    detailActions.innerHTML = cells.at(-1).querySelector('.table-actions')?.innerHTML || '';
+    detailActions.hidden = !detailActions.innerHTML;
+    document.getElementById('record-detail-title').textContent = page === 'contributions' ? 'Addition details' : page === 'withdrawals' ? 'Deduction details' : 'Expense details';
+    document.getElementById('record-detail-subtitle').textContent = cells[1].textContent.trim();
+    detailDialog.showModal();
   }
 
   function actionButtons(row) {
@@ -626,7 +655,7 @@
     updatePager(count);
     tbody.innerHTML = data.length ? data.map((row) => {
       const isCancelled = row.approval_status === 'VOIDED' || row.approval_status === 'REJECTED';
-      return `<tr class="${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(row.transaction_date)}</td><td>${Ipon.escapeHtml(row.category)}</td><td>${Ipon.escapeHtml(row.description)}${reasonNoteHtml(row)}</td><td>${Ipon.escapeHtml(row.person_responsible)}${Ipon.verifiedBadgesHtml?.(row.person_responsible) || ''}</td><td>${Ipon.paymentMethodBadge(row.payment_method)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${statusBadge(row.approval_status)}</td><td>${actionButtons(row)}</td></tr>`;
+      return `<tr class="compact-history-row ${isCancelled ? 'row-voided' : ''}"><td>${Ipon.dateLabel(row.transaction_date)}</td><td>${Ipon.escapeHtml(row.category)}</td><td>${Ipon.escapeHtml(row.description)}${reasonNoteHtml(row)}</td><td>${Ipon.escapeHtml(row.person_responsible)}${Ipon.verifiedBadgesHtml?.(row.person_responsible) || ''}</td><td>${Ipon.paymentMethodBadge(row.payment_method)}</td><td class="amount-cell">${Ipon.money(row.amount)}</td><td>${statusBadge(row.approval_status)}</td><td>${actionButtons(row)}</td><td class="compact-row-summary"><div class="compact-summary-head"><strong>${Ipon.escapeHtml(row.category)}</strong><b>${Ipon.money(row.amount)}</b></div><div class="compact-summary-meta"><span>${Ipon.dateLabel(row.transaction_date)} · ${Ipon.escapeHtml(row.person_responsible)}</span>${statusBadge(row.approval_status)}</div><button class="compact-detail-trigger" type="button" data-action="details" data-id="${row.id}" aria-label="View ${page === 'withdrawals' ? 'deduction' : 'expense'} details for ${Ipon.escapeHtml(row.category)}">View details <span aria-hidden="true">↗</span></button></td></tr>`;
     }).join('') : `<tr><td colspan="8" class="empty-state">${selectedMemberName ? `No ${page} found for ${Ipon.escapeHtml(selectedMemberName)}.` : `No ${page} recorded yet.`}</td></tr>`;
   }
 
@@ -735,6 +764,10 @@
     const button = event.target.closest('[data-action]');
     if (!button) return;
     const action = button.dataset.action;
+    if (action === 'details') {
+      openRecordDetails(button);
+      return;
+    }
     if (action === 'discuss') {
       const discussType = page === 'contributions' ? 'contribution' : page === 'withdrawals' ? 'withdrawal' : 'expense';
       Ipon.openRecordDiscussion(discussType, button.dataset.id, { onUpdated: () => load(true) });
@@ -796,6 +829,15 @@
     });
   }
   document.getElementById('record-edit-close').addEventListener('click', () => editDialog.close());
+  document.getElementById('record-detail-close').addEventListener('click', () => detailDialog.close());
+  detailActions.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    const source = page === 'contributions' ? contributionEntriesBody : tbody;
+    const original = [...source.querySelectorAll('button[data-action]')].find((item) => item.dataset.action === button.dataset.action && item.dataset.id === button.dataset.id);
+    detailDialog.close();
+    original?.click();
+  });
   document.getElementById('record-edit-cancel').addEventListener('click', () => editDialog.close());
   editForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -848,7 +890,16 @@
     }
     handleRecordAction(event);
   });
-  contributionEntriesBody?.addEventListener('click', handleRecordAction);
+  contributionEntriesBody?.addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-bulk-toggle]');
+    if (toggle) {
+      const checkbox = [...contributionEntriesBody.querySelectorAll('.bulk-entry-check')].find((item) => item.value === toggle.dataset.bulkToggle);
+      if (checkbox) checkbox.checked = !checkbox.checked;
+      updateBulkSelectionUi();
+      return;
+    }
+    handleRecordAction(event);
+  });
   contributionEntriesBody?.addEventListener('change', (event) => {
     if (event.target.classList.contains('bulk-entry-check')) updateBulkSelectionUi();
   });

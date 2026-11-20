@@ -9,6 +9,9 @@
   const accountForm = document.getElementById('member-account-form');
   const historyDialog = document.getElementById('member-history-dialog');
   const historyBody = document.getElementById('member-history-body');
+  const detailDialog = document.getElementById('member-detail-dialog');
+  const detailFields = document.getElementById('member-detail-fields');
+  const detailActions = document.getElementById('member-detail-actions');
   const search = document.getElementById('member-search');
   const statusFilter = document.getElementById('member-status-filter');
   const pager = document.getElementById('member-pager');
@@ -157,12 +160,33 @@
       const accountMarkup = account
         ? `<div class="member-state-stack"><span class="status status-${account.status.toLowerCase()}">${account.status}</span><small class="field-help">${Ipon.escapeHtml(account.email || '')}</small></div>`
         : '<div class="member-state-stack"><span class="field-help">No sign-in</span></div>';
-      return `<tr>
+      return `<tr class="compact-history-row">
       <td><strong>${Ipon.escapeHtml(member.full_name)}${Ipon.verifiedBadgesHtml?.(account?.id || member.id) || ''}</strong></td><td>${Ipon.escapeHtml(member.contact_number || '—')}</td><td>${Ipon.payoutSummaryChip(member, { compact: true, emptyText: 'Not set' })}</td><td>${Ipon.dateLabel(member.date_registered)}</td>
       <td class="amount-cell">${Ipon.money(member.monthly_contribution_amount)}</td><td><div class="member-state-stack"><span class="status status-${statusMeta.tone}">${statusMeta.label}</span><small class="field-help">${Ipon.escapeHtml(statusMeta.hint)}</small></div></td>
       <td>${accountMarkup}</td>
-      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${account?.id && account.role !== 'ADMIN' ? `<button class="icon-action" data-action="permissions" data-id="${member.id}">Permissions</button>` : ''}${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>${canDelete ? `<button class="icon-action icon-action-danger" data-action="delete" data-id="${member.id}">Delete</button>` : ''}</div></td></tr>`;
+      <td><div class="table-actions"><button class="icon-action" data-action="history" data-id="${member.id}">History</button><button class="icon-action" data-action="edit" data-id="${member.id}">Edit</button>${account?.id && account.role !== 'ADMIN' ? `<button class="icon-action" data-action="permissions" data-id="${member.id}">Permissions</button>` : ''}${!account && member.status === 'ACTIVE' && member.first_name && member.last_name ? `<button class="icon-action" data-action="account" data-id="${member.id}">Create account</button>` : ''}${account?.email ? `<button class="icon-action" data-action="reset" data-id="${member.id}">Reset password</button>` : ''}<button class="icon-action" data-action="${member.status === 'ACTIVE' ? 'deactivate' : 'reactivate'}" data-id="${member.id}">${member.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>${canDelete ? `<button class="icon-action icon-action-danger" data-action="delete" data-id="${member.id}">Delete</button>` : ''}</div></td><td class="compact-row-summary"><div class="compact-summary-head is-member"><strong>${Ipon.escapeHtml(member.full_name)}${Ipon.verifiedBadgesHtml?.(account?.id || member.id) || ''}</strong><span class="status status-${statusMeta.tone}">${statusMeta.label}</span></div><div class="compact-summary-meta"><span>Monthly ${Ipon.money(member.monthly_contribution_amount)}</span><span>${Ipon.escapeHtml(member.contact_number || 'No contact')}</span></div><button class="compact-detail-trigger" type="button" data-action="details" data-id="${member.id}" aria-label="View details for ${Ipon.escapeHtml(member.full_name)}">View details <span aria-hidden="true">↗</span></button></td></tr>`;
     }).join('') : '<tr><td colspan="8" class="empty-state">No matching members.</td></tr>';
+  }
+
+  function openMemberDetails(button, member) {
+    const cells = [...button.closest('tr').querySelectorAll('td:not(.compact-row-summary)')];
+    const labels = ['Name', 'Contact', 'Payout account', 'Registered', 'Monthly amount', 'Member status', 'Account'];
+    detailFields.innerHTML = labels.map((label, index) => `<div class="compact-detail-field"><dt>${label}</dt><dd>${cells[index].innerHTML}</dd></div>`).join('')
+      + (member.notes ? `<div class="compact-detail-field"><dt>Notes</dt><dd>${Ipon.escapeHtml(member.notes)}</dd></div>` : '');
+    detailActions.innerHTML = cells[7].querySelector('.table-actions')?.innerHTML || '';
+    detailDialog.querySelector('.compact-detail-eyebrow').textContent = 'Member profile';
+    document.getElementById('member-detail-title').textContent = member.full_name;
+    detailDialog.showModal();
+  }
+
+  function openPermissionDetails(button) {
+    const cells = [...button.closest('tr').querySelectorAll('td:not(.compact-row-summary)')];
+    const labels = ['Member', 'Role', 'Profile', 'Active rules'];
+    detailFields.innerHTML = labels.map((label, index) => `<div class="compact-detail-field"><dt>${label}</dt><dd>${cells[index].innerHTML}</dd></div>`).join('');
+    detailActions.innerHTML = cells[4].querySelector('.table-actions')?.innerHTML || '';
+    detailDialog.querySelector('.compact-detail-eyebrow').textContent = 'Workspace permissions';
+    document.getElementById('member-detail-title').textContent = button.dataset.name || 'Member permissions';
+    detailDialog.showModal();
   }
 
   function permissionPresetMatch(u) {
@@ -366,7 +390,7 @@
       const profileMeta = permissionProfileMeta(preset);
       const roleCls = u.role === 'TREASURER' ? 'status-pending' : 'status-confirmed';
       return `
-        <tr data-perm-user="${Ipon.escapeHtml(u.user_id)}">
+        <tr class="compact-history-row" data-perm-user="${Ipon.escapeHtml(u.user_id)}">
           <td data-label="Member">
             <div class="member-perm-user-cell">
               ${Ipon.avatarMarkup(u.avatar_url || '', u.full_name || 'Member', 'avatar-sm')}
@@ -384,6 +408,7 @@
               <button class="icon-action" type="button" data-action="edit-permissions" data-user-id="${Ipon.escapeHtml(u.user_id)}">Edit permissions</button>
             </div>
           </td>
+          <td class="compact-row-summary"><div class="compact-summary-head is-member"><strong>${Ipon.escapeHtml(u.full_name || 'Member')}${Ipon.verifiedBadgesHtml?.(u.user_id || u.id) || ''}</strong><span class="status ${roleCls}">${Ipon.escapeHtml(u.role)}</span></div><div class="compact-summary-meta"><span>${Ipon.escapeHtml(profileMeta.label)}</span><span>${Ipon.escapeHtml(u.email || '')}</span></div><button class="compact-detail-trigger" type="button" data-action="permission-details" data-name="${Ipon.escapeHtml(u.full_name || 'Member')}" aria-label="View permissions for ${Ipon.escapeHtml(u.full_name || 'Member')}">View details <span aria-hidden="true">↗</span></button></td>
         </tr>`;
     }).join('');
     Ipon.bindAvatarFallbacks(permissionsList);
@@ -583,7 +608,9 @@
   });
   tbody.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-action]'); if (!button) return; const member = members.find((item) => item.id === button.dataset.id); if (!member) return;
-    if (button.dataset.action === 'history') {
+    if (button.dataset.action === 'details') {
+      openMemberDetails(button, member);
+    } else if (button.dataset.action === 'history') {
       document.getElementById('member-history-title').textContent = `${member.full_name} — contribution history`;
       historyBody.innerHTML = '<tr><td colspan="5">Loading history…</td></tr>'; historyDialog.showModal();
       const { data, error } = await Ipon.client.from('contributions').select('amount,payment_date,approval_status,review_note,void_reason,contribution_periods!inner(period_month,member_id)').eq('contribution_periods.member_id', member.id).order('payment_date', { ascending: false }).limit(100);
@@ -802,6 +829,15 @@
     }
   });
   document.getElementById('add-member')?.addEventListener('click', () => { resetForm(); dialog.showModal(); firstName.focus(); });
+  document.getElementById('close-member-detail')?.addEventListener('click', () => detailDialog.close());
+  detailActions.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    const source = button.dataset.action === 'edit-permissions' ? permissionsList : tbody;
+    const original = [...source.querySelectorAll('button[data-action]')].find((item) => item.dataset.action === button.dataset.action && (item.dataset.id || item.dataset.userId) === (button.dataset.id || button.dataset.userId));
+    detailDialog.close();
+    original?.click();
+  });
   document.getElementById('cancel-edit')?.addEventListener('click', () => dialog.close());
   document.getElementById('close-member-dialog')?.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', resetForm);
@@ -839,6 +875,8 @@
     renderPermissions();
   });
   permissionsList?.addEventListener('click', (event) => {
+    const detailBtn = event.target.closest('[data-action="permission-details"]');
+    if (detailBtn) { openPermissionDetails(detailBtn); return; }
     const editBtn = event.target.closest('[data-action="edit-permissions"]');
     if (!editBtn) return;
     openMemberPermissionsModal(editBtn.dataset.userId);

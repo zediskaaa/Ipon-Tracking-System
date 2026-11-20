@@ -72,6 +72,9 @@
   const expenseSearchInput = document.getElementById('budget-expense-search');
   const expenseFilterSelect = document.getElementById('budget-expense-filter');
   const expensesBody = document.getElementById('budget-expenses-body');
+  const expenseDetailDialog = document.getElementById('budget-history-detail-dialog');
+  const expenseDetailFields = document.getElementById('budget-history-detail-fields');
+  const expenseDetailActions = document.getElementById('budget-history-detail-actions');
   const historyPager = document.getElementById('budget-history-pager');
 
   const itemDialog = document.getElementById('budget-item-dialog');
@@ -437,7 +440,7 @@
       const syncStatus = String(row.savings_sync_status || '').toUpperCase();
       const lockedForTreasurer = data?.role !== 'ADMIN' && syncStatus === 'CONFIRMED';
       return `
-        <tr data-expense-id="${row.id}">
+        <tr class="compact-history-row" data-expense-id="${row.id}">
           <td data-label="Date">${Ipon.dateLabel(row.expense_date)}</td>
           <td data-label="Category"><span class="budget-history-chip ${meta.tone}">${meta.label}</span></td>
           <td data-label="Budget item"><strong>${Ipon.escapeHtml(row.item_name)}</strong></td>
@@ -450,6 +453,7 @@
               <button class="icon-action danger-action" type="button" data-budget-delete-expense="${row.id}" ${lockedForTreasurer ? 'disabled title="Confirmed deductions can only be voided by an administrator"' : ''}>Delete</button>
             </div>
           </td>
+          <td class="compact-row-summary"><div class="compact-summary-head"><strong>${Ipon.escapeHtml(row.item_name)}</strong><b>${Ipon.money(row.amount)}</b></div><div class="compact-summary-meta"><span>${Ipon.dateLabel(row.expense_date)} · ${Ipon.escapeHtml(meta.label)}</span>${renderSyncPill(row)}</div><button class="compact-detail-trigger" type="button" data-budget-details="${row.id}" aria-label="View budget expense details for ${Ipon.escapeHtml(row.item_name)}">View details <span aria-hidden="true">↗</span></button></td>
         </tr>`;
     }).join('') : `<tr><td colspan="7" class="empty-state budget-empty-history"><div class="budget-empty-history-inner">${BUDGET_COIN_SVG}<strong>${term || catFilter ? 'No matching expenses' : 'No budget expenses recorded yet'}</strong><small>${term || catFilter ? 'Try a different search or category.' : 'Click + Add expense to start monitoring or deducting from IPON savings.'}</small></div></td></tr>`;
   }
@@ -999,6 +1003,16 @@
   });
 
   expensesBody?.addEventListener('click', async (event) => {
+    const detailBtn = event.target.closest('[data-budget-details]');
+    if (detailBtn) {
+      const cells = [...detailBtn.closest('tr').querySelectorAll('td:not(.compact-row-summary)')];
+      const labels = ['Date', 'Category', 'Budget item', 'Amount', 'Savings impact', 'Note'];
+      expenseDetailFields.innerHTML = labels.map((label, index) => `<div class="compact-detail-field"><dt>${label}</dt><dd>${cells[index].innerHTML}</dd></div>`).join('');
+      expenseDetailActions.innerHTML = cells[6].querySelector('.table-actions')?.innerHTML || '';
+      document.getElementById('budget-history-detail-title').textContent = cells[2].textContent;
+      expenseDetailDialog.showModal();
+      return;
+    }
     const editBtn = event.target.closest('[data-budget-edit-expense]');
     if (editBtn) {
       const target = (overview?.expenses || []).find((e) => e.id === editBtn.dataset.budgetEditExpense);
@@ -1033,6 +1047,16 @@
         Ipon.setBusy(deleteBtn, false);
       }
     }
+  });
+  document.getElementById('close-budget-history-detail')?.addEventListener('click', () => expenseDetailDialog.close());
+  expenseDetailActions?.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button || button.disabled) return;
+    const id = button.dataset.budgetEditExpense || button.dataset.budgetDeleteExpense;
+    const selector = button.hasAttribute('data-budget-edit-expense') ? '[data-budget-edit-expense]' : '[data-budget-delete-expense]';
+    const original = [...expensesBody.querySelectorAll(selector)].find((item) => (item.dataset.budgetEditExpense || item.dataset.budgetDeleteExpense) === id);
+    expenseDetailDialog.close();
+    original?.click();
   });
 
   itemForm?.addEventListener('submit', async (event) => {
