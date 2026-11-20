@@ -613,18 +613,6 @@
     void consumeNativeOAuthCallback();
   });
 
-  async function syncClerkSession(emailAddress, accountPassword) {
-    const clerk = await loadClerk();
-    if (!clerk) return false;
-    const activeEmail = clerk.user?.primaryEmailAddress?.emailAddress?.toLowerCase();
-    if (clerk.session && activeEmail === emailAddress) return true;
-    if (clerk.session) await clerk.signOut();
-    const attempt = await clerk.client.signIn.create({ identifier: emailAddress, password: accountPassword });
-    if (attempt.status !== 'complete' || !attempt.createdSessionId) return false;
-    await clerk.setActive({ session: attempt.createdSessionId });
-    return true;
-  }
-
   if (isClerkSsoCallback || isAppHandoff) setClerkSignInLoading(true);
   let handledNativeCallbackAtBoot = false;
 
@@ -1141,7 +1129,6 @@
       });
       if (result.error || !result.data?.user) throw result.error || new Error('The myIPON session could not be created.');
       data = result.data;
-      await syncClerkSession(accountEmail, pendingDeviceOtp.password).catch(() => false);
     }
     if (await Ipon.requiresMfaChallenge()) {
       deviceOtpDialog.close();
@@ -2001,7 +1988,6 @@
         } else throw new Error('Secure sign-in is temporarily unavailable. Please try again.');
 
         const resolvedEmail = String(edgeRes.resolved_email || data.user?.email || submittedIdentifier).trim().toLowerCase();
-        await syncClerkSession(resolvedEmail, password.value).catch(() => false);
         if (await retryTransientLoginRequest(() => Ipon.requiresMfaChallenge())) {
           window.location.replace('mfa.html');
           return;
@@ -2082,7 +2068,6 @@
         refresh_token: edgeRes.session.refresh_token
       });
       if (loginError) throw loginError;
-      await syncClerkSession(submittedEmail, submittedPassword).catch(() => false);
       const profile = await resolveActiveProfile(data.user, submittedEmail);
       recordLoginActivity(data);
       completeLoginSession(data, profile);

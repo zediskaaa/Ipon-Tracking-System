@@ -29,4 +29,6 @@ test('manual login returns its session without waiting for Clerk password synchr
   const edge = fs.readFileSync('supabase/functions/manage-account/index.ts', 'utf8');
   assert.equal((edge.match(/EdgeRuntime\.waitUntil\(provisionClerkUser\(admin, authData\.user, password\)\.catch\(\(\) => false\)\)/g) || []).length, 2);
   assert.doesNotMatch(edge, /await provisionClerkUser\(admin, authData\.user, password\)/);
+  assert.match(source, /if \(existingSession\) \{\s*await Ipon\.client\.auth\.signOut\(\)/);
+  assert.doesNotMatch(source, /syncClerkSession/);
 });

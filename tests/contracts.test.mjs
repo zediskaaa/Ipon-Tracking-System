@@ -11824,10 +11824,8 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(loginHtml, /class="field-label-row"[\s\S]*?id="forgot-password-open"/);
   assert.match(authJs, /action:\s*'clerk-session-exchange'/);
   assert.match(authJs, /auth\.verifyOtp\(\{ token_hash:\s*exchange\.token_hash, type:\s*'email' \}\)/);
-  assert.match(authJs, /async function syncClerkSession\(/);
-  assert.match(authJs, /clerk\.client\.signIn\.create\(\{ identifier: emailAddress, password: accountPassword \}\)/);
-  assert.match(authJs, /await syncClerkSession\(resolvedEmail, password\.value\)\.catch\(\(\) => false\)/);
-  assert.match(authJs, /action:\s*'login-attempt',[\s\S]*?await syncClerkSession\(submittedEmail, submittedPassword\)\.catch\(\(\) => false\)/);
+  assert.doesNotMatch(authJs, /syncClerkSession|clerk\.client\.signIn\.create\(\{ identifier: emailAddress, password: accountPassword \}\)/);
+  assert.match(authJs, /action:\s*'login-attempt'/);
   assert.match(coreJs, /localStorage\.setItem\('myipon_clerk_signout', '1'\)/);
   assert.match(accountFunction, /async function provisionClerkUser\(/);
   assert.match(accountFunction, /EdgeRuntime\.waitUntil\(provisionClerkUser\(admin, authData\.user, password\)\.catch\(\(\) => false\)\)/);
@@ -11847,7 +11845,7 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(loginHtml, /https:\/\/\*\.protect\.clerk\.com/);
   assert.match(loginHtml, /https:\/\/challenges\.cloudflare\.com/);
   assert.match(loginHtml, /frame-src 'self' https:\/\/\*\.protect\.clerk\.com https:\/\/challenges\.cloudflare\.com/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261121-01/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261121-02/);
   assert.match(authJs, /mode === 'signup' \? 'Create with' : 'Continue with'/);
   assert.match(coreJs, /function fireKeepaliveRpc\(/);
   const signOutBody = coreJs.match(/async function signOut\(\)[\s\S]*?^  \}/m);
