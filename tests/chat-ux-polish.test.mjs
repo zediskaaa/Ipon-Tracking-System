@@ -26,9 +26,12 @@ test('CSS aligns voice bar height to composer input, maximizes group modal space
   // New Group Chat dialog overrides UA max-width/max-height to maximize space
   assert.match(css, /\.msg-group-dialog\s*\{[^}]*width:\s*min\(520px,\s*calc\(100vw - 20px\)\);[^}]*max-width:\s*calc\(100vw - 20px\);/s);
   assert.match(css, /@media\s*\(max-width:\s*720px\)\s*\{\s*\.msg-group-dialog\s*\{[^}]*width:\s*calc\(100vw - 12px\);[^}]*max-width:\s*calc\(100vw - 12px\);/s);
-  // Notification panel reaches bottom edge cleanly on desktop and mobile
+  // Notification panel reaches bottom edge cleanly on desktop and mobile (both app.css & hero-plates.css)
+  const heroCss = read('css/hero-plates.css');
   assert.match(css, /\.notification-dialog\{[^}]*inset:68px 16px 0 auto;[^}]*height:calc\(100dvh - 68px\);[^}]*border-radius:16px 16px 0 0/);
-  assert.match(css, /\.notification-dialog\s*\{[^}]*inset:\s*var\(--notification-top,\s*70px\)[^}]*\s0\s[^}]*height:\s*calc\(100dvh - var\(--notification-top,\s*70px\)\);[^}]*max-height:\s*none;/s);
+  assert.match(css, /\.notification-dialog\s*\{[^}]*inset:\s*var\(--notification-top,\s*70px\)[^}]*\s0\s[^}]*height:\s*auto;[^}]*max-height:\s*none;/s);
+  assert.match(heroCss, /\.notification-dialog\s*\{[^}]*inset:var\(--notification-top,70px\)[^}]*\s0\s[^}]*height:auto;[^}]*max-height:none;/s);
+  assert.doesNotMatch(heroCss, /\.notification-dialog\s*\{[^}]*height:min\(560px/s);
   // Compact Admin / Treasurer group chat sender badges
   assert.match(css, /\.msg-sender-role\s*\{[^}]*border-radius:\s*999px;[^}]*font-size:\s*9\.5px;/s);
   assert.match(css, /\.msg-sender-role\.is-admin\s*\{/);
