@@ -33,4 +33,11 @@ test('Solo savings hides Expenses and Requests record tabs, balances mobile 3-co
 
   const requestsJs = read('js/requests.js');
   assert.match(requestsJs, /if \(state\.profile\.workspace_mode === 'SOLO'\)\s*\{\s*window\.location\.replace\('contributions\.html'\);\s*return;\s*\}/);
+
+  const mig137 = read('database/migrations/20261120_137_suppress_solo_member_registered_notification.sql');
+  const schema = read('database/schema.sql');
+  for (const sql of [mig137, schema]) {
+    assert.match(sql, /create or replace function public\.notify_new_member\(\)[\s\S]*?if v_workspace_mode = 'SOLO' then\s*return new;\s*end if;[\s\S]*?if new\.user_id is not null and v_admin\.id = new\.user_id then\s*continue;\s*end if;/i);
+    assert.match(sql, /'20261120_137'/);
+  }
 });
