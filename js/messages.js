@@ -1903,7 +1903,6 @@
     if (u.username) subParts.push(`@${u.username}`);
     if (friendCountText) subParts.push(friendCountText);
     if (mutualCount > 0) subParts.push(`${mutualCount} mutual`);
-    if (u.shared_groups?.length) subParts.push(u.shared_groups[0]);
     if (isSelf) subParts.unshift('Personal notes & saved messages');
     else if (!subParts.length) subParts.push('Tap to message');
 
@@ -3729,35 +3728,6 @@
   // Profile Quick Action Popover (anchored near clicked DP with automatic edge clamping)
   let activePopoverAnchor = null;
 
-  function renderSharedGroupsCard(rawGroups) {
-    const groups = Array.isArray(rawGroups)
-      ? rawGroups.map((g) => String(g || '').trim()).filter(Boolean)
-      : [];
-    if (!groups.length) return '';
-    if (groups.length === 1) {
-      return `<div class="msg-pop-groups-card">
-        <div class="msg-pop-groups-bar">
-          <span class="msg-pop-groups-label">Groups</span>
-          <span class="msg-pop-groups-name" title="${escapeHtml(groups[0])}">${escapeHtml(groups[0])}</span>
-        </div>
-      </div>`;
-    }
-    const extra = groups.length - 1;
-    const firstGroup = groups[0];
-    return `<div class="msg-pop-groups-card" data-pop-groups-card>
-      <button type="button" class="msg-pop-groups-bar msg-pop-groups-toggle" data-pop-groups-toggle aria-expanded="false" aria-label="Show all ${groups.length} shared groups">
-        <span class="msg-pop-groups-label">Groups</span>
-        <span class="msg-pop-groups-name" title="${escapeHtml(firstGroup)}">${escapeHtml(firstGroup)}</span>
-        <span class="msg-pop-groups-more">+${extra}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
-      </button>
-      <div class="msg-pop-groups-list" hidden>
-        <div class="msg-pop-groups-chips" role="list" aria-label="Shared groups">
-          ${groups.map((name) => `<span class="msg-pop-group-chip" role="listitem">${escapeHtml(name)}</span>`).join('')}
-        </div>
-      </div>
-    </div>`;
-  }
-
   function normalizeMutualFriends(rawList) {
     if (!Array.isArray(rawList)) return [];
     const seen = new Set();
@@ -4141,7 +4111,6 @@
       const statusRowHtml = metaParts.length
         ? `<small class="msg-pop-status">${escapeHtml(metaParts.join(' · '))}</small>`
         : '';
-      const groupsHtml = isProfilePrivate ? '' : renderSharedGroupsCard(profile.shared_groups);
       const bioText = isProfilePrivate ? '' : String(profile.bio || '').trim();
       const peerSocialLinks = !isProfilePrivate && ipon().sanitizeSocialLinks ? ipon().sanitizeSocialLinks(profile.social_links) : {};
       const peerSocialAppsHtml = !isProfilePrivate ? (ipon().renderSocialAppLinksHtml?.(peerSocialLinks, { variant: 'popover' }) || '') : '';
@@ -4177,7 +4146,6 @@
         ${mutualHtml}
         ${bioText ? `<p class="msg-pop-bio">${escapeHtml(bioText)}</p>` : ''}
         <div class="msg-pop-apps-slot" data-apps-sig="${escAttr(peerAppsSig)}"${peerSocialAppsHtml ? '' : ' hidden'}>${peerSocialAppsHtml}</div>
-        ${groupsHtml}
         <div class="msg-pop-actions">
           ${friendAction}
           <div class="msg-pop-secondary-row${canMessage ? '' : ' is-single'}">
@@ -4816,7 +4784,6 @@
         const subBits = [];
         if (u.username) subBits.push(`@${u.username}`);
         if (u.friendship_status === 'FRIENDS') subBits.push('Friend');
-        else if (u.shared_groups?.length) subBits.push(u.shared_groups[0]);
         if (!allowed) subBits.push('Friends only privacy');
         return `<button type="button" class="msg-group-pick-row${isPicked ? ' is-selected' : ''}" data-group-pick="${escAttr(uid)}" role="option" aria-selected="${isPicked ? 'true' : 'false'}"${allowed ? '' : ' disabled'}>
           ${userAvatarHtml(u, 'avatar-sm', { clickable: false, showPresence: false })}
@@ -5675,22 +5642,6 @@
       }
 
       if (ev.target.closest?.('#msg-pop-close')) { closeProfilePopover(); return; }
-      const groupsToggle = ev.target.closest?.('[data-pop-groups-toggle]');
-      if (groupsToggle) {
-        ev.stopPropagation();
-        const card = groupsToggle.closest('[data-pop-groups-card]');
-        const list = card?.querySelector('.msg-pop-groups-list');
-        if (card && list) {
-          const open = list.hidden;
-          list.hidden = !open;
-          card.classList.toggle('is-open', open);
-          groupsToggle.setAttribute?.('aria-expanded', String(open));
-          if (pop && !pop.hidden && activePopoverAnchor) {
-            positionPopoverNearAnchor(pop, activePopoverAnchor);
-          }
-        }
-        return;
-      }
       if (ev.target.closest?.('#msg-workspace-close')) { document.getElementById('msg-workspace-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-settings-close]')) { document.getElementById('msg-settings-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-forward-close]')) { document.getElementById('msg-forward-dialog')?.close(); return; }

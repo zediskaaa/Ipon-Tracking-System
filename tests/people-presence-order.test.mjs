@@ -48,13 +48,13 @@ test('people rows show last online on a separate line without exposing self acti
     formatStatusLine: (user) => user.id === 'online' ? 'Active now' : 'Offline since 10:30 AM',
     escapeHtml: (value) => String(value),
   });
-  const offlineHtml = render({ id: 'offline', full_name: 'Offline user' });
-  const onlineHtml = render({ id: 'online', full_name: 'Online user' });
+  const offlineHtml = render({ id: 'offline', full_name: 'Offline user', shared_groups: ['Secret Savings Group'] });
+  const onlineHtml = render({ id: 'online', full_name: 'Online user', shared_groups: ['Ipon namin ni pretty'] });
   const selfHtml = render({ id: 'self', full_name: 'Me', is_self: true });
   assert.match(offlineHtml, /msg-search-person-presence[^>]*>Offline since 10:30 AM/);
-  assert.doesNotMatch(offlineHtml, /presence-dot/);
+  assert.doesNotMatch(offlineHtml, /presence-dot|Secret Savings Group/);
   assert.equal(avatarOpts.get('offline')?.showPresence, false);
-  assert.doesNotMatch(onlineHtml, /msg-search-person-presence|Active now/);
+  assert.doesNotMatch(onlineHtml, /msg-search-person-presence|Active now|Ipon namin ni pretty/);
   assert.equal(avatarOpts.get('online')?.showPresence, true);
   assert.doesNotMatch(selfHtml, /msg-search-person-presence/);
   assert.equal(avatarOpts.get('self')?.showPresence, true);

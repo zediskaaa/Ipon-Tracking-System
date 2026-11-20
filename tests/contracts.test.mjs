@@ -7263,12 +7263,11 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(popEl.innerHTML, /avatar-circle(?:\s+avatar-fallback)?\s+avatar-lg/);
   assert.match(popEl.innerHTML, /<strong id="msg-pop-name">Nhicole Joy Gadia Antalan<\/strong>/);
   assert.match(popEl.innerHTML, /@nhicole · Sent you a friend request/);
-  assert.doesNotMatch(popEl.innerHTML, /msg-handle-chip|data-pop-groups-toggle|mutual friend/);
-  assert.match(popEl.innerHTML, /class="msg-pop-groups-card"[\s\S]*?class="msg-pop-groups-label">Groups<[\s\S]*?class="msg-pop-groups-name"[^>]*>Ipon namin ni prettyynhic</);
+  assert.doesNotMatch(popEl.innerHTML, /msg-handle-chip|msg-pop-groups-card|data-pop-groups-toggle|Ipon namin ni prettyynhic|mutual friend/);
   assert.match(popEl.innerHTML, /class="msg-pop-btn msg-pop-primary-btn" data-req-decision="ACCEPT" data-req-id="req-1"[\s\S]*?<span>Accept Friend<\/span>/);
   assert.match(popEl.innerHTML, /class="msg-pop-secondary-row"[\s\S]*?>Message<[\s\S]*?class="msg-pop-btn msg-pop-outline-btn is-danger" data-social-action="block"/);
 
-  // Many shared groups -> compact +N bar by default, expanding drawer reveals all groups without closing popover
+  // Shared savings group names stay hidden on profile popover even when profile has shared groups
   mockSocialProfile = {
     id: peerId,
     full_name: 'Nhicole Joy Gadia Antalan',
@@ -7285,28 +7284,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   await dispatchClick('[data-social-user-dp]', dpAnchor);
   await new Promise((r) => setTimeout(r, 20));
   assert.match(popEl.innerHTML, /3 mutual friends/);
-  assert.match(popEl.innerHTML, /data-pop-groups-toggle aria-expanded="false"[\s\S]*?>Alpha Savers<[\s\S]*?class="msg-pop-groups-more">\+4<svg/);
-  assert.match(popEl.innerHTML, /class="msg-pop-groups-list" hidden/);
-  for (const g of mockSocialProfile.shared_groups) {
-    assert.match(popEl.innerHTML, new RegExp(`class="msg-pop-group-chip"[^>]*>${g}<`));
-  }
-
-  const mockGroupsCard = makeEl('mock-pop-groups-card');
-  const mockGroupsList = makeEl('mock-pop-groups-list');
-  mockGroupsList.hidden = true;
-  mockGroupsCard.querySelector = (s) => (s === '.msg-pop-groups-list' ? mockGroupsList : null);
-  const mockGroupsToggle = makeEl('mock-pop-groups-toggle');
-  mockGroupsToggle.closest = (s) => {
-    if (s === '[data-pop-groups-toggle]') return mockGroupsToggle;
-    if (s === '[data-pop-groups-card]') return mockGroupsCard;
-    if (s === '#msg-profile-popover') return popEl;
-    return null;
-  };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: mockGroupsToggle })));
-  assert.equal(popEl.hidden, false, 'expanding shared groups must not trigger outside-click close');
-  assert.equal(mockGroupsList.hidden, false);
-  assert.equal(mockGroupsCard.classList.contains('is-open'), true);
-  assert.equal(mockGroupsToggle.getAttribute('aria-expanded'), 'true');
+  assert.doesNotMatch(popEl.innerHTML, /msg-pop-groups-card|data-pop-groups-toggle|Alpha Savers|Barkada Fund/);
 
   // Close popover via close X button
   await dispatchClick('#msg-pop-close', { dataset: {} });
@@ -7438,17 +7416,13 @@ test('chat captionless media overlay and audit log calendar date-range chips mee
   assert.match(css, /\.msg-drawer-back\s*\{[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%;/s);
   assert.match(css, /\.msg-drawer-nav-btn\s*\{[\s\S]*?\.msg-drawer-file-badge\s*\{/s);
 
-  // User profile popover card & scalable multi-group drawer
-  assert.match(msgJs, /function renderSharedGroupsCard\(/);
+  // User profile popover card omits shared savings groups section
+  assert.doesNotMatch(msgJs, /function renderSharedGroupsCard\(|msg-pop-groups-card|data-pop-groups-toggle/);
   assert.doesNotMatch(msgJs, /shared_groups\.slice\(0,\s*2\)/);
-  assert.match(msgJs, /data-pop-groups-toggle/);
   assert.match(css, /\.msg-profile-popover\s*\{[^}]*border-radius:\s*22px;[^}]*background:\s*#faf7ef;/s);
   assert.match(css, /\.msg-profile-popover\s+\.msg-pop-close\s*\{[^}]*width:\s*34px\s*!important;[^}]*height:\s*34px\s*!important;/s);
-  assert.match(css, /\.msg-pop-groups-card\s*\{[^}]*border-radius:\s*14px;[^}]*background:\s*#f2ede0;/s);
-  assert.match(css, /\.msg-pop-groups-list\s*\{[^}]*max-height:\s*128px;[^}]*overflow-y:\s*auto;/s);
   assert.match(css, /\.msg-pop-primary-btn\s*\{[^}]*background:\s*#142620;/s);
   assert.match(css, /\.msg-pop-secondary-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
-  assert.match(css, /html\[data-theme="dark"\]\s+\.msg-pop-groups-card\s*\{/);
 });
 
 test('friendlyError offline mapping, edge-to-edge pinch-zoom image viewer, native downloads, and microphone permission runtime contracts', async () => {
