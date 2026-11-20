@@ -1021,7 +1021,9 @@
       state.lastTypingState = false;
       state.lastTypingSentAt = 0;
     });
-    document.getElementById('msg-scroll-wrap')?.addEventListener('scroll', closeFloatingMenus, { passive: true });
+    const scrollWrapEl = document.getElementById('msg-scroll-wrap');
+    scrollWrapEl?.addEventListener('scroll', closeFloatingMenus, { passive: true });
+    scrollWrapEl?.addEventListener('load', () => syncThreadScrollLock(), true);
   }
 
   function disconnectTypingChannel() {
@@ -2306,13 +2308,17 @@
     }
     liveRow.classList.toggle('is-visible', Boolean(typing));
     liveRow.setAttribute('aria-hidden', typing ? 'false' : 'true');
+    syncThreadScrollLock();
     if (!wasVisible && typing) {
       requestAnimationFrame(() => {
+        syncThreadScrollLock();
         const wrap = document.getElementById('msg-scroll-wrap');
-        if (wrap && (wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 140)) {
+        if (wrap && !wrap.classList?.contains('is-no-scroll') && (wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 140)) {
           wrap.scrollTop = wrap.scrollHeight;
         }
       });
+    } else if (wasVisible && !typing) {
+      requestAnimationFrame(() => syncThreadScrollLock());
     }
   }
 
@@ -2515,7 +2521,10 @@
     } else if (scrollToBottom) {
       requestAnimationFrame(() => {
         const wrap = document.getElementById('msg-scroll-wrap');
-        if (wrap) wrap.scrollTop = wrap.scrollHeight;
+        if (wrap) {
+          syncThreadScrollLock();
+          if (!wrap.classList?.contains('is-no-scroll')) wrap.scrollTop = wrap.scrollHeight;
+        }
       });
     } else if (typeof preserveScrollTop === 'number') {
       requestAnimationFrame(() => {
@@ -2801,6 +2810,30 @@
     return pending;
   }
 
+  function syncThreadScrollLock() {
+    const wrap = document.getElementById('msg-scroll-wrap');
+    if (!wrap) return;
+    if (wrap.classList?.contains('is-empty-thread')) {
+      wrap.classList.add('is-no-scroll');
+      wrap.scrollTop = 0;
+      return;
+    }
+    const clientH = Number(wrap.clientHeight || 0);
+    if (clientH <= 0) return;
+    const list = document.getElementById('msg-messages-list');
+    const older = document.getElementById('msg-load-older-wrap');
+    const typing = document.getElementById('msg-typing-live');
+    const cs = typeof window !== 'undefined' && typeof window.getComputedStyle === 'function' ? window.getComputedStyle(wrap) : null;
+    const padY = (parseFloat(cs?.paddingTop) || 0) + (parseFloat(cs?.paddingBottom) || 0);
+    const olderH = older && !older.hidden ? (Number(older.offsetHeight || 0) + 14) : 0;
+    const listH = Number(list?.offsetHeight || 0);
+    const typingH = typing && typing.classList?.contains('is-visible') ? (Number(typing.offsetHeight || 0) + 8) : 0;
+    const contentH = listH > 0 ? (padY + olderH + listH + typingH) : Number(wrap.scrollHeight || 0);
+    const needsScroll = contentH > clientH + 2;
+    wrap.classList?.toggle('is-no-scroll', !needsScroll);
+    if (!needsScroll) wrap.scrollTop = 0;
+  }
+
   function renderMessagesList({ animate = false } = {}) {
     const list = document.getElementById('msg-messages-list');
     if (!list || !state.activeThread) return;
@@ -3004,6 +3037,8 @@
     list.classList.toggle('is-thread-entering', Boolean(animate && !isEmpty));
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);
+    syncThreadScrollLock();
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => syncThreadScrollLock());
     if (conv.conversation_id) {
       const missingAttPaths = [];
       msgs.forEach((m) => {
@@ -6890,7 +6925,9 @@
       closeProfilePopover();
       closeFloatingMenus({ immediate: true });
       closeAttachMenu();
+      syncThreadScrollLock();
     });
+    window.visualViewport?.addEventListener?.('resize', () => syncThreadScrollLock());
   }
 
   async function openWorkspace({ tab = null, conversationId = null, messageId = null } = {}) {

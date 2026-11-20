@@ -26,6 +26,10 @@ test('CSS aligns voice bar height to composer input, maximizes group modal space
   // New Group Chat dialog overrides UA max-width/max-height to maximize space
   assert.match(css, /\.msg-group-dialog\s*\{[^}]*width:\s*min\(520px,\s*calc\(100vw - 20px\)\);[^}]*max-width:\s*calc\(100vw - 20px\);/s);
   assert.match(css, /@media\s*\(max-width:\s*720px\)\s*\{\s*\.msg-group-dialog\s*\{[^}]*width:\s*calc\(100vw - 12px\);[^}]*max-width:\s*calc\(100vw - 12px\);/s);
+  assert.match(css, /\.msg-group-form\s*\{[^}]*gap:\s*8px;/s);
+  assert.match(css, /\.msg-group-picker-block\s*\{[^}]*gap:\s*6px;/s);
+  assert.match(css, /\.msg-group-form-actions\s*\{[^}]*padding:\s*6px 0 10px;/s);
+  assert.match(css, /@media\s*\(max-width:\s*720px\)[\s\S]*?\.msg-group-form-actions\s*\{[^}]*padding:\s*4px 0 8px;/s);
   // Notification panel reaches bottom edge cleanly on desktop and mobile (both app.css & hero-plates.css)
   const heroCss = read('css/hero-plates.css');
   assert.match(css, /\.notification-dialog\{[^}]*inset:68px 16px 0 auto;[^}]*height:calc\(100dvh - 68px\);[^}]*border-radius:16px 16px 0 0/);
@@ -47,6 +51,12 @@ test('conversation intro stays in the thread, header status excludes typing, and
   assert.match(messagesJs, /const peerStatus = formatStatusLine\(conv\);/);
   assert.doesNotMatch(messagesJs, /msg-peer-status\$\{isTyping/);
   assert.match(css, /\.msg-scroll-wrap\.is-empty-thread\s*\{[^}]*overflow-y:\s*hidden;[^}]*overscroll-behavior-y:\s*none;/s);
+  assert.match(css, /\.msg-scroll-wrap\.is-no-scroll\s*\{[^}]*overflow-y:\s*hidden;[^}]*overscroll-behavior-y:\s*none;[^}]*scrollbar-width:\s*none;/s);
+  assert.match(css, /html:has\(\.msg-dialog\[open\]\),\s*body:has\(\.msg-dialog\[open\]\)\s*\{[^}]*overflow:\s*hidden;/s);
+  assert.match(css, /@media \(max-width: 820px\)\s*\{\s*\.msg-dialog\[open\]\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*margin:\s*0;[^}]*overflow:\s*hidden;/s);
+  assert.match(css, /\.msg-typing-live\s*\{[^}]*overflow:\s*hidden;[^}]*visibility:\s*hidden;/s);
+  assert.match(messagesJs, /function syncThreadScrollLock\(\)/);
+  assert.match(messagesJs, /wrap\.classList\?\.toggle\('is-no-scroll', !needsScroll\)/);
   assert.match(css, /\.msg-thread-welcome-hero\s*\{[^}]*margin:\s*0 auto 12px;[^}]*padding:\s*14px 10px 12px;/s);
 });
 
