@@ -3101,6 +3101,13 @@
     profile?.role === 'SUPER_ADMIN'
     || String(profile?.email || '').trim().toLowerCase() === CREATOR_ACCOUNT_EMAIL
   );
+  const isSuperAdminAnnouncement = (item) => Boolean(
+    item && (item.group_id == null || item.author_role === 'SUPER_ADMIN')
+  );
+  const canViewAnnouncementReactors = (item, profile = currentProfile) => {
+    if (!item || !isSuperAdminAnnouncement(item)) return true;
+    return String(profile?.email || '').trim().toLowerCase() === CREATOR_ACCOUNT_EMAIL;
+  };
   let cachedCreatorSocialId = null;
 
   async function resolveCreatorSocialId() {
@@ -9027,6 +9034,7 @@
         })(),
         refreshVerifiedBadgesCache({ force: true }).catch(() => { })
       ]);
+      if (!profile.email && session?.user?.email) profile.email = session.user.email;
       currentProfile = profile;
       syncWorkspaceMode(profile.workspace_mode);
       try {
@@ -10288,13 +10296,57 @@
       }
     };
 
+    const normalizeReactionRows = (rows) => {
+      const byKey = new Map();
+      (Array.isArray(rows) ? rows : []).forEach((entry) => {
+        if (!entry?.announcement_id || !entry?.reaction) return;
+        const key = `${entry.announcement_id}|${entry.reaction}`;
+        const existing = byKey.get(key) || {
+          announcement_id: entry.announcement_id,
+          reaction: entry.reaction,
+          count: 0,
+          reacted_by_me: false
+        };
+        if (typeof entry.count === 'number') {
+          existing.count += Math.max(0, entry.count);
+          if (entry.reacted_by_me) existing.reacted_by_me = true;
+        } else {
+          existing.count += 1;
+          if (currentProfile && entry.user_id === currentProfile.id) existing.reacted_by_me = true;
+        }
+        byKey.set(key, existing);
+      });
+      return Array.from(byKey.values()).filter((entry) => entry.count > 0);
+    };
+
+    const adjustLocalReactionCount = (announcementId, emoji, delta, reactedByMe) => {
+      if (!emoji) return;
+      const idx = reactions.findIndex((entry) => entry.announcement_id === announcementId && entry.reaction === emoji);
+      if (idx >= 0) {
+        reactions[idx].count = Math.max(0, Number(reactions[idx].count || 0) + delta);
+        if (typeof reactedByMe === 'boolean') reactions[idx].reacted_by_me = reactedByMe;
+        if (reactions[idx].count <= 0) reactions.splice(idx, 1);
+      } else if (delta > 0) {
+        reactions.push({
+          announcement_id: announcementId,
+          reaction: emoji,
+          count: delta,
+          reacted_by_me: Boolean(reactedByMe)
+        });
+      }
+    };
+
     const getReactionSummary = (announcementId) => {
-      const list = reactions.filter((entry) => entry.announcement_id === announcementId);
-      const count = list.length;
-      const myReaction = currentProfile ? list.find((entry) => entry.user_id === currentProfile.id)?.reaction : null;
+      const list = reactions.filter((entry) => entry.announcement_id === announcementId && Number(entry.count || 0) > 0);
+      let count = 0;
+      let myReaction = null;
       const countsByEmoji = {};
       list.forEach((entry) => {
-        countsByEmoji[entry.reaction] = (countsByEmoji[entry.reaction] || 0) + 1;
+        const n = Number(entry.count || 0);
+        if (n <= 0) return;
+        count += n;
+        countsByEmoji[entry.reaction] = (countsByEmoji[entry.reaction] || 0) + n;
+        if (entry.reacted_by_me) myReaction = entry.reaction;
       });
       const topEmojis = Object.keys(countsByEmoji).sort((a, b) => {
         const diff = countsByEmoji[b] - countsByEmoji[a];
@@ -10307,13 +10359,25 @@
     const renderReactionsBarHtml = (announcementId) => {
       const { count, myReaction, topEmojis } = getReactionSummary(announcementId);
       const isPickerOpen = activePickerAnnouncementId === announcementId;
-      const pillHtml = count > 0 ? `
+      const targetItem = items.find((entry) => entry.id === announcementId) || null;
+      const allowReactorList = canViewAnnouncementReactors(targetItem);
+      const pillHtml = count > 0
+        ? (allowReactorList
+          ? `
         <button class="announcement-reactions-pill" type="button" data-reactions-view="${escapeHtml(announcementId)}" aria-label="View reactions (${count})" title="View reactions">
           <span class="reactions-stack" aria-hidden="true">
             ${topEmojis.map((emoji) => `<span class="reaction-stack-emoji">${emoji}</span>`).join('')}
           </span>
           <span class="reactions-count">${count}</span>
-        </button>` : '';
+        </button>`
+          : `
+        <span class="announcement-reactions-pill is-readonly" aria-label="${count} ${count === 1 ? 'reaction' : 'reactions'}">
+          <span class="reactions-stack" aria-hidden="true">
+            ${topEmojis.map((emoji) => `<span class="reaction-stack-emoji">${emoji}</span>`).join('')}
+          </span>
+          <span class="reactions-count">${count}</span>
+        </span>`)
+        : '';
 
       const triggerLabel = myReaction ? `Reacted ${REACTION_LABELS[myReaction] || myReaction}` : 'React';
       const triggerHtml = `
@@ -10399,7 +10463,8 @@
     };
 
     const openReactionsModal = async (announcementId) => {
-      if (!reactionsDialog) return;
+      const targetItem = items.find((entry) => entry.id === announcementId) || null;
+      if (!reactionsDialog || (targetItem && !canViewAnnouncementReactors(targetItem))) return;
       currentModalAnnouncementId = announcementId;
       activeReactionTab = 'all';
       if (reactionsTabs) reactionsTabs.replaceChildren();
@@ -10419,17 +10484,15 @@
     const handleReactionToggle = async (announcementId, chosenEmoji) => {
       if (!currentProfile) return;
       activePickerAnnouncementId = null;
-      const existingIdx = reactions.findIndex(
-        (entry) => entry.announcement_id === announcementId && entry.user_id === currentProfile.id
-      );
-      const prevEmoji = existingIdx >= 0 ? reactions[existingIdx].reaction : null;
+      const prevEmoji = getReactionSummary(announcementId).myReaction;
 
       if (prevEmoji === chosenEmoji) {
-        reactions.splice(existingIdx, 1);
+        adjustLocalReactionCount(announcementId, prevEmoji, -1, false);
       } else if (prevEmoji) {
-        reactions[existingIdx].reaction = chosenEmoji;
+        adjustLocalReactionCount(announcementId, prevEmoji, -1, false);
+        adjustLocalReactionCount(announcementId, chosenEmoji, 1, true);
       } else {
-        reactions.push({ announcement_id: announcementId, user_id: currentProfile.id, reaction: chosenEmoji });
+        adjustLocalReactionCount(announcementId, chosenEmoji, 1, true);
       }
 
       renderList();
@@ -10444,12 +10507,12 @@
         await rpc('toggle_announcement_reaction', { p_announcement_id: announcementId, p_reaction: chosenEmoji });
       } catch (error) {
         if (prevEmoji === chosenEmoji) {
-          reactions.push({ announcement_id: announcementId, user_id: currentProfile.id, reaction: prevEmoji });
+          adjustLocalReactionCount(announcementId, prevEmoji, 1, true);
         } else if (prevEmoji) {
-          reactions[existingIdx].reaction = prevEmoji;
+          adjustLocalReactionCount(announcementId, chosenEmoji, -1, false);
+          adjustLocalReactionCount(announcementId, prevEmoji, 1, true);
         } else {
-          const idx = reactions.findIndex((entry) => entry.announcement_id === announcementId && entry.user_id === currentProfile.id);
-          if (idx >= 0) reactions.splice(idx, 1);
+          adjustLocalReactionCount(announcementId, chosenEmoji, -1, false);
         }
         renderList();
         if (viewerDialog?.open && openItemId === announcementId) {
@@ -10751,13 +10814,19 @@
           .order('pinned_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false })
           .limit(200),
-        client
-          .from('announcement_reactions')
-          .select('announcement_id,user_id,reaction')
+        (async () => {
+          try {
+            const summaryRows = await rpc('get_announcement_reaction_summaries');
+            if (Array.isArray(summaryRows)) return { data: summaryRows, error: null };
+          } catch (_) { }
+          return client
+            .from('announcement_reactions')
+            .select('announcement_id,user_id,reaction');
+        })()
       ]);
       if (announcementsRes.error) throw announcementsRes.error;
       items = sortAnnouncementsList(announcementsRes.data || []);
-      reactions = (!reactionsRes.error && Array.isArray(reactionsRes.data)) ? reactionsRes.data : [];
+      reactions = (!reactionsRes.error && Array.isArray(reactionsRes.data)) ? normalizeReactionRows(reactionsRes.data) : [];
       renderList();
       if (viewerDialog?.open && openItemId) {
         if (!items.some((entry) => entry.id === openItemId)) {
@@ -17562,7 +17631,7 @@
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     playUiSound, isUiSoundEnabled, setUiSoundEnabled,
-    setOnlineVisibility, syncMessagesBadges, supportsNativeScreenshotProtection, getClientPlatform, reportClientPlatform, hasLiveBrowserSession,
+    setOnlineVisibility, syncMessagesBadges, canViewAnnouncementReactors, supportsNativeScreenshotProtection, getClientPlatform, reportClientPlatform, hasLiveBrowserSession,
     openTutorial: (...args) => window.IponTutorial?.open?.(...args),
     getCurrentUserId: () => currentProfile?.id || readShellSnapshot()?.userId || '',
     classifyAnnouncementFile, uploadAnnouncementAttachments, MAX_ANNOUNCEMENT_FILES,

@@ -106,7 +106,7 @@ test('Shared files excludes voice notes and voice messages while counting and li
   renderDrawer();
   assert.match(drawerEl.innerHTML, /No shared files yet/);
   assert.match(swJs, /ipon-shell-v(?:2[3-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashboardHtml, /js\/messages\.js\?v=20261121-07/);
+  assert.match(dashboardHtml, /js\/messages\.js\?v=20261121-09/);
 });
 
 test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Manager, Google Drive) work end-to-end', async () => {
@@ -330,6 +330,92 @@ test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Man
   await emitDoc('pointerup', { pointerType: 'touch', pointerId: 4, clientX: 80, clientY: 200 });
   await emitDoc('click', { target: imageTarget });
   assert.equal(openedImages.at(-1), 'https://example.test/photo.jpg', 'a tap still opens the photo');
+
+  // Multi-picture carousel (.msg-attachments.is-carousel):
+  // 0) CSS enforces touch-action: pan-y so Chromium/WebView cannot steal horizontal swipes
+  assert.match(appCss, /\.msg-attachments\.is-carousel\s*\{[^}]*touch-action:\s*pan-y;/s);
+  assert.match(appCss, /\.msg-attachments\.is-carousel\.is-dragging\s*\{[^}]*scroll-snap-type:\s*none;/s);
+
+  // 1) At scrollLeft = 0, swiping RIGHT immediately replies and suppresses ghost photo click
+  const snappedTo = [];
+  const carouselEl = {
+    scrollLeft: 0,
+    scrollWidth: 660,
+    clientWidth: 260,
+    clientHeight: 220,
+    classList: makeClassList(['msg-attachments', 'is-carousel']),
+    children: [{ offsetLeft: 0 }, { offsetLeft: 210 }, { offsetLeft: 420 }],
+    scrollTo: (opts) => { snappedTo.push(opts?.left); carouselEl.scrollLeft = opts?.left ?? carouselEl.scrollLeft; }
+  };
+  const carouselPhotoTarget = { closest: (sel) => {
+    if (sel.includes('.msg-attachments.is-carousel')) return carouselEl;
+    if (sel.includes('.msg-row')) return msgRowEl;
+    if (sel.includes('.msg-img-open-btn')) return imageButton;
+    if (sel.startsWith('button, a')) return imageButton;
+    if (sel.startsWith('[data-msg-id=')) return msgRowEl;
+    if (sel === '[data-open-img]') return imageButton;
+    return null;
+  } };
+  msgRowEl.dataset.msgId = 'm-multi-photo';
+  winStub.IponMessages.__setStateForTest(
+    { conversation_id: 'c1', id: 'u2', full_name: 'Alice', kind: 'DIRECT', status: 'ACCEPTED', is_blocked: false },
+    [{ id: 'm-multi-photo', sender_id: 'u2', sender_name: 'Alice', body: '', message_type: 'MEDIA', attachments: [{ kind: 'image' }, { kind: 'image' }, { kind: 'image' }] }]
+  );
+  let preventedCount = 0;
+  await emitDoc('pointerdown', { pointerType: 'touch', pointerId: 10, clientX: 80, clientY: 200, target: carouselPhotoTarget });
+  await emitDoc('pointermove', { pointerType: 'touch', pointerId: 10, clientX: 140, clientY: 202, target: carouselPhotoTarget });
+  await emitDoc('touchmove', { cancelable: true, preventDefault() { preventedCount += 1; }, touches: [{ identifier: 10, clientX: 140, clientY: 202 }], target: carouselPhotoTarget });
+  assert.ok(preventedCount >= 1, 'touchmove prevents native horizontal overscroll during carousel reply swipe');
+  assert.equal(msgRowEl.classList.contains('is-swipe-ready'), true, 'carousel rightward swipe locks into reply mode');
+  await emitDoc('pointerup', { pointerType: 'touch', pointerId: 10, clientX: 140, clientY: 202 });
+  assert.equal(winStub.IponMessages.__getStateForTest().replyToMsg?.id, 'm-multi-photo');
+  const openedBeforeSwipeClick = openedImages.length;
+  await emitDoc('click', { target: carouselPhotoTarget });
+  assert.equal(openedImages.length, openedBeforeSwipeClick, 'carousel swipe suppresses ghost photo click');
+
+  // 2) At scrollLeft = 0, swiping LEFT scrolls the carousel smoothly to next photos & snaps on release
+  await emitDoc('pointerdown', { pointerType: 'touch', pointerId: 11, clientX: 240, clientY: 200, target: carouselPhotoTarget });
+  await emitDoc('pointermove', { pointerType: 'touch', pointerId: 11, clientX: 100, clientY: 200, target: carouselPhotoTarget });
+  assert.equal(carouselEl.classList.contains('is-dragging'), true);
+  assert.equal(carouselEl.scrollLeft, 140, 'leftward drag moves carousel scrollLeft 1:1 with finger');
+  assert.equal(msgRowEl.classList.contains('is-swipe-ready'), false);
+  await emitDoc('pointerup', { pointerType: 'touch', pointerId: 11, clientX: 100, clientY: 200 });
+  assert.equal(carouselEl.classList.contains('is-dragging'), false);
+  assert.equal(snappedTo.at(-1), 210, 'carousel snaps cleanly to picture 2');
+
+  // 3) When scrolled mid-carousel (scrollLeft = 180), swiping RIGHT scrolls back to photo 1 and pulling past photo 1 seamlessly triggers reply
+  carouselEl.scrollLeft = 180;
+  winStub.IponMessages.__setStateForTest(
+    { conversation_id: 'c1', id: 'u2', full_name: 'Alice', kind: 'DIRECT', status: 'ACCEPTED', is_blocked: false },
+    [{ id: 'm-multi-photo', sender_id: 'u2', sender_name: 'Alice', body: '', message_type: 'MEDIA', attachments: [{ kind: 'image' }, { kind: 'image' }, { kind: 'image' }] }]
+  );
+  await emitDoc('pointerdown', { pointerType: 'touch', pointerId: 12, clientX: 60, clientY: 200, target: carouselPhotoTarget });
+  await emitDoc('pointermove', { pointerType: 'touch', pointerId: 12, clientX: 160, clientY: 200, target: carouselPhotoTarget });
+  assert.equal(carouselEl.scrollLeft, 80, 'rightward drag from photo 2 scrolls smoothly back toward photo 1');
+  await emitDoc('pointermove', { pointerType: 'touch', pointerId: 12, clientX: 300, clientY: 200, target: carouselPhotoTarget });
+  assert.equal(carouselEl.scrollLeft, 0, 'continuing right past photo 1 clamps scrollLeft at 0');
+  assert.equal(msgRowEl.classList.contains('is-swipe-ready'), true, 'continuing right past photo 1 transitions into reply swipe');
+  await emitDoc('pointerup', { pointerType: 'touch', pointerId: 12, clientX: 300, clientY: 200 });
+  assert.equal(winStub.IponMessages.__getStateForTest().replyToMsg?.id, 'm-multi-photo');
+  carouselEl.scrollLeft = 0;
+
+  // 4) Document card (.msg-att-doc-btn) also supports swipe-right-to-reply
+  const docBtn = {};
+  const docTarget = { closest: (sel) => {
+    if (sel.includes('.msg-row')) return msgRowEl;
+    if (sel.includes('.msg-att-doc-btn')) return docBtn;
+    if (sel.startsWith('button, a')) return docBtn;
+    return null;
+  } };
+  msgRowEl.dataset.msgId = 'm-doc';
+  winStub.IponMessages.__setStateForTest(
+    { conversation_id: 'c1', id: 'u2', full_name: 'Alice', kind: 'DIRECT', status: 'ACCEPTED', is_blocked: false },
+    [{ id: 'm-doc', sender_id: 'u2', sender_name: 'Alice', body: '', message_type: 'FILE', attachments: [{ kind: 'file', name: 'budget.pdf' }] }]
+  );
+  await emitDoc('pointerdown', { pointerType: 'touch', pointerId: 13, clientX: 80, clientY: 200, target: docTarget });
+  await emitDoc('pointermove', { pointerType: 'touch', pointerId: 13, clientX: 140, clientY: 202, target: docTarget });
+  await emitDoc('pointerup', { pointerType: 'touch', pointerId: 13, clientX: 140, clientY: 202 });
+  assert.equal(winStub.IponMessages.__getStateForTest().replyToMsg?.id, 'm-doc');
 
   const videoControl = {};
   const videoTarget = { closest: (sel) => {

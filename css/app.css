@@ -656,6 +656,8 @@ body.is-app .loader-coin::after { inset:4px; }
 .announcement-reactions-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding-top:8px;margin-top:2px;border-top:1px solid rgba(20,45,43,.08);flex-wrap:wrap;min-width:0}
 .announcement-reactions-pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px 0 5px;border-radius:999px;border:1px solid rgba(20,45,43,.12);background:#fff;color:var(--ink);font:700 12px/1 Arial,sans-serif;cursor:pointer;transition:all .16s ease;user-select:none}
 .announcement-reactions-pill:hover{background:#f4f7f5;border-color:rgba(20,45,43,.24);transform:translateY(-1px);box-shadow:0 2px 6px rgba(20,45,43,.06)}
+.announcement-reactions-pill.is-readonly{cursor:default}
+.announcement-reactions-pill.is-readonly:hover{background:#fff;border-color:rgba(20,45,43,.12);transform:none;box-shadow:none}
 .reactions-stack{display:inline-flex;align-items:center}
 .reaction-stack-emoji{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:11px;line-height:1;background:#fff;box-shadow:0 0 0 1.5px #fff,0 1px 2px rgba(0,0,0,.12);margin-left:-5px;position:relative}
 .reaction-stack-emoji:first-child{margin-left:0;z-index:3}
@@ -4411,6 +4413,12 @@ html[data-theme="dark"] .announcement-reactions-pill:hover,
 html[data-theme="dark"] .announcement-react-btn:hover {
   background: #213a33;
   border-color: rgba(143, 210, 174, .45);
+}
+html[data-theme="dark"] .announcement-reactions-pill.is-readonly:hover {
+  background: var(--surface);
+  border-color: rgba(218, 236, 227, .2);
+  transform: none;
+  box-shadow: none;
 }
 html[data-theme="dark"] .announcement-react-btn.is-active {
   background: rgba(185, 121, 18, .24);
@@ -8534,12 +8542,16 @@ mark.msg-search-hit {
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
+  touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, .34) transparent;
   padding-bottom: 6px;
   min-width: 0;
   max-width: 100%;
+}
+.msg-attachments.is-carousel.is-dragging {
+  scroll-snap-type: none;
 }
 .msg-row.is-peer .msg-attachments.is-carousel {
   scrollbar-color: rgba(20, 62, 48, .28) transparent;

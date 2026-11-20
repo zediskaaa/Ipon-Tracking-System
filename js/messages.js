@@ -7541,24 +7541,137 @@
       if (!row || row.classList?.contains?.('is-pending')) return null;
       if (row.querySelector?.('.msg-bubble.is-deleted')) return null;
       if (state.activeThread?.conversation?.is_blocked) return null;
-      const mediaSurface = target?.closest?.('.msg-img-open-btn, .msg-att-video, .msg-video-center-play');
+      const mediaSurface = target?.closest?.('.msg-img-open-btn, .msg-att-video, .msg-video-center-play, .msg-att-doc-btn');
       if (target?.closest?.('button, a, input, textarea, select, [role="button"], .msg-video-controls, .msg-voice-play-btn') && !mediaSurface) return null;
       if (pointerType === 'mouse' && target?.closest?.('.msg-text, .msg-reply-quote, .msg-sender-name')) return null;
       const msgId = row.dataset?.msgId;
       if (!msgId) return null;
       const msgObj = (state.activeThread?.messages || []).find((m) => String(m.id) === String(msgId));
-      return msgObj ? { row, msgId, msgObj } : null;
+      if (!msgObj) return null;
+      const carousel = target?.closest?.('.msg-attachments.is-carousel') || null;
+      return { row, msgId, msgObj, carousel };
+    };
+    const snapCarouselAfterDrag = (carousel, velocityX = 0) => {
+      if (!carousel) return;
+      carousel.classList?.remove?.('is-dragging');
+      const cards = Array.from(carousel.children || []);
+      if (!cards.length || typeof carousel.scrollTo !== 'function') return;
+      const curLeft = Number(carousel.scrollLeft || 0);
+      const maxScroll = Math.max(0, Number(carousel.scrollWidth || 0) - Number(carousel.clientWidth || 0));
+      if (maxScroll <= 0) return;
+      const offsets = cards.map((el) => Math.min(maxScroll, Math.max(0, Number(el.offsetLeft || 0))));
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      offsets.forEach((off, idx) => {
+        const dist = Math.abs(off - curLeft);
+        if (dist < bestDist) { bestDist = dist; bestIdx = idx; }
+      });
+      if (velocityX < -0.35 && bestIdx < offsets.length - 1 && offsets[bestIdx] <= curLeft + 12) {
+        bestIdx += 1;
+      } else if (velocityX > 0.35 && bestIdx > 0 && offsets[bestIdx] >= curLeft - 12) {
+        bestIdx -= 1;
+      }
+      carousel.scrollTo({ left: offsets[bestIdx], behavior: 'smooth' });
+    };
+    const advanceSwipe = (clientX, clientY, pointerType) => {
+      if (!swipeState || swipeState.cancelledVertical) return;
+      const curX = clientX || 0;
+      const curY = clientY || 0;
+      const nowTs = Date.now();
+      const dt = Math.max(1, nowTs - (swipeState.lastTs || nowTs));
+      if (curX !== swipeState.lastX) {
+        swipeState.velocityX = (curX - swipeState.lastX) / dt;
+        swipeState.lastX = curX;
+        swipeState.lastTs = nowTs;
+      }
+      const dx = curX - swipeState.startX;
+      const dy = curY - swipeState.startY;
+      if (!swipeState.mode) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) {
+          swipeState.cancelledVertical = true;
+          clearSwipeVisuals(swipeState.row);
+          return;
+        }
+        if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+          if (!swipeState.carousel) {
+            if (dx <= 8) return;
+            swipeState.mode = 'reply';
+            swipeState.lockedHorizontal = true;
+            swipeState.movedFar = true;
+            swipeState.replyOriginX = swipeState.startX;
+            cancelLongPress();
+            if (pointerType !== 'mouse') window.getSelection?.()?.removeAllRanges?.();
+            swipeState.row.classList?.add?.('is-swiping');
+          } else if (dx > 0 && swipeState.startScrollLeft <= 2) {
+            swipeState.mode = 'reply';
+            swipeState.lockedHorizontal = true;
+            swipeState.movedFar = true;
+            swipeState.replyOriginX = swipeState.startX;
+            cancelLongPress();
+            if (pointerType !== 'mouse') window.getSelection?.()?.removeAllRanges?.();
+            swipeState.row.classList?.add?.('is-swiping');
+          } else {
+            swipeState.mode = 'carousel-scroll';
+            swipeState.movedFar = true;
+            cancelLongPress();
+            if (pointerType !== 'mouse') window.getSelection?.()?.removeAllRanges?.();
+            swipeState.carousel.classList?.add?.('is-dragging');
+          }
+        }
+      }
+      if (swipeState.mode === 'carousel-scroll' && swipeState.carousel) {
+        const rawScroll = swipeState.startScrollLeft - dx;
+        if (rawScroll < -10) {
+          swipeState.carousel.scrollLeft = 0;
+          swipeState.carousel.classList?.remove?.('is-dragging');
+          swipeState.mode = 'reply';
+          swipeState.lockedHorizontal = true;
+          swipeState.replyOriginX = swipeState.startX + swipeState.startScrollLeft;
+          swipeState.row.classList?.add?.('is-swiping');
+        } else {
+          const hasDims = Number(swipeState.carousel.scrollWidth || 0) > 0 && Number(swipeState.carousel.clientWidth || 0) > 0;
+          const maxScroll = hasDims
+            ? Math.max(0, Number(swipeState.carousel.scrollWidth) - Number(swipeState.carousel.clientWidth))
+            : Math.max(0, rawScroll);
+          swipeState.carousel.scrollLeft = Math.max(0, Math.min(maxScroll, rawScroll));
+          return;
+        }
+      }
+      if (swipeState.mode === 'reply' && swipeState.lockedHorizontal) {
+        const replyDx = curX - (swipeState.replyOriginX ?? swipeState.startX);
+        const clampedRaw = Math.max(0, replyDx);
+        const visualX = clampedRaw <= SWIPE_REPLY_THRESHOLD
+          ? clampedRaw
+          : SWIPE_REPLY_THRESHOLD + Math.min(24, (clampedRaw - SWIPE_REPLY_THRESHOLD) * 0.38);
+        const progress = Math.min(1, clampedRaw / SWIPE_REPLY_THRESHOLD);
+        const isReady = clampedRaw >= SWIPE_REPLY_THRESHOLD;
+        swipeState.ready = isReady;
+        swipeState.row.style?.setProperty?.('--swipe-x', `${visualX.toFixed(1)}px`);
+        swipeState.row.style?.setProperty?.('--swipe-progress', progress.toFixed(2));
+        swipeState.row.classList?.toggle?.('is-swipe-ready', isReady);
+        if (isReady && !swipeState.vibrated) {
+          swipeState.vibrated = true;
+          if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+            try { navigator.vibrate(12); } catch { }
+          }
+        }
+      }
     };
     const resetSwipe = ({ triggerReply = false } = {}) => {
       const active = swipeState;
       swipeState = null;
       if (!active) return;
+      if (active.mode === 'carousel-scroll' && active.carousel) {
+        snapCarouselAfterDrag(active.carousel, active.velocityX);
+      } else {
+        active.carousel?.classList?.remove?.('is-dragging');
+      }
       clearSwipeVisuals(active.row);
       if (active.movedFar) {
         suppressBubbleClickId = active.msgId;
         clearSuppressedClickSoon(active.msgId);
       }
-      if (active.lockedHorizontal && active.ready && triggerReply && active.msgObj) {
+      if (active.mode === 'reply' && active.lockedHorizontal && active.ready && triggerReply && active.msgObj) {
         startReplyToMessage(active.msgObj);
       }
     };
@@ -7567,12 +7680,27 @@
       if (ev.pointerType === 'mouse' && typeof ev.button === 'number' && ev.button !== 0) return;
       resetSwipe({ triggerReply: false });
       const swipeTarget = resolveSwipeTarget(ev.target, ev.pointerType);
-      if (swipeTarget) {
+      const isMouseScrollbar = Boolean(
+        swipeTarget?.carousel
+        && ev.pointerType === 'mouse'
+        && ev.target === swipeTarget.carousel
+        && Number(swipeTarget.carousel.clientHeight || 0) > 0
+        && Number(ev.offsetY || 0) >= Number(swipeTarget.carousel.clientHeight)
+      );
+      if (swipeTarget && !isMouseScrollbar) {
+        const sx = ev.clientX || 0;
+        const sy = ev.clientY || 0;
         swipeState = {
           ...swipeTarget,
           pointerId: ev.pointerId,
-          startX: ev.clientX || 0,
-          startY: ev.clientY || 0,
+          startX: sx,
+          startY: sy,
+          lastX: sx,
+          lastTs: Date.now(),
+          velocityX: 0,
+          replyOriginX: null,
+          startScrollLeft: swipeTarget.carousel ? Math.round(swipeTarget.carousel.scrollLeft || 0) : 0,
+          mode: null,
           lockedHorizontal: false,
           cancelledVertical: false,
           ready: false,
@@ -7602,46 +7730,25 @@
         showReactionFloatingMenu(target.msgId, target.anchor, { toggle: false });
       }, MSG_HOLD_DELAY_MS);
     });
+    document.addEventListener('touchmove', (ev) => {
+      if (!swipeState || swipeState.cancelledVertical || !swipeState.carousel || !ev.cancelable) return;
+      const touch = ev.touches?.[0];
+      if (!touch) return;
+      if (swipeState.mode === 'reply' || swipeState.mode === 'carousel-scroll') {
+        ev.preventDefault();
+        return;
+      }
+      const dx = Math.abs((touch.clientX || 0) - swipeState.startX);
+      const dy = Math.abs((touch.clientY || 0) - swipeState.startY);
+      if (dx > 2 && dx >= dy) ev.preventDefault();
+    }, { passive: false });
     document.addEventListener('pointermove', (ev) => {
       if (pressStart && Math.hypot((ev.clientX || 0) - pressStart.x, (ev.clientY || 0) - pressStart.y) > 10) {
         cancelLongPress();
       }
       if (!swipeState || swipeState.cancelledVertical) return;
       if (swipeState.pointerId !== undefined && ev.pointerId !== undefined && ev.pointerId !== swipeState.pointerId) return;
-      const dx = (ev.clientX || 0) - swipeState.startX;
-      const dy = (ev.clientY || 0) - swipeState.startY;
-      if (!swipeState.lockedHorizontal) {
-        if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) {
-          swipeState.cancelledVertical = true;
-          clearSwipeVisuals(swipeState.row);
-          return;
-        }
-        if (dx > 8 && dx > Math.abs(dy) * 1.15) {
-          swipeState.lockedHorizontal = true;
-          swipeState.movedFar = true;
-          cancelLongPress();
-          if (ev.pointerType !== 'mouse') window.getSelection?.()?.removeAllRanges?.();
-          swipeState.row.classList?.add?.('is-swiping');
-        }
-      }
-      if (swipeState.lockedHorizontal) {
-        const clampedRaw = Math.max(0, dx);
-        const visualX = clampedRaw <= SWIPE_REPLY_THRESHOLD
-          ? clampedRaw
-          : SWIPE_REPLY_THRESHOLD + Math.min(24, (clampedRaw - SWIPE_REPLY_THRESHOLD) * 0.38);
-        const progress = Math.min(1, clampedRaw / SWIPE_REPLY_THRESHOLD);
-        const isReady = clampedRaw >= SWIPE_REPLY_THRESHOLD;
-        swipeState.ready = isReady;
-        swipeState.row.style?.setProperty?.('--swipe-x', `${visualX.toFixed(1)}px`);
-        swipeState.row.style?.setProperty?.('--swipe-progress', progress.toFixed(2));
-        swipeState.row.classList?.toggle?.('is-swipe-ready', isReady);
-        if (isReady && !swipeState.vibrated) {
-          swipeState.vibrated = true;
-          if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-            try { navigator.vibrate(12); } catch { }
-          }
-        }
-      }
+      advanceSwipe(ev.clientX, ev.clientY, ev.pointerType);
     });
     document.addEventListener('pointerup', () => {
       cancelLongPress();
