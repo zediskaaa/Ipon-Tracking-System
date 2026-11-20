@@ -11491,14 +11491,14 @@ test('Migration 100, Invite Links / 6-Char Group Codes, Approval Queue, and QR I
   assert.match(authJs, /preview_group_invite_code/);
   assert.match(authJs, /function renderAuthJoinBanner/);
 
-  assert.match(dashHtml, /id="no-group-join-btn"/);
+  assert.match(dashHtml, /id="no-group-create-goal-btn"/);
   assert.match(dashHtml, /id="group-mode-join-tab"/);
   assert.match(dashHtml, /id="group-create-join-mount"/);
   assert.doesNotMatch(dashHtml, /id="group-hub-join-another"/);
   assert.match(dashHtml, /id="invite-tab-link"/);
   assert.match(dashHtml, /id="invite-tab-email"/);
   assert.match(dashHtml, /id="invite-link-code-mount"/);
-  assert.match(dashJs, /no-group-join-btn/);
+  assert.match(dashJs, /no-group-create-goal-btn/);
   assert.match(dashJs, /mountJoinGroupPanel/);
   assert.match(dashJs, /mountInviteCodePanel/);
   assert.match(dashJs, /group_join_requests/);

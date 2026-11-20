@@ -356,8 +356,11 @@ test('migration 141, schema.sql, and UI files satisfy savings goal schedule & au
   assert.match(savingsJs, /p_saving_frequency/);
   assert.match(savingsJs, /sync_my_due_reminders/);
 
+  assert.match(dashboardHtml, /id="no-group-create-goal-btn"/);
+  assert.match(dashboardHtml, /id="dashboard-create-goal-dialog"/);
   assert.match(dashboardHtml, /id="dashboard-goal-schedule"/);
   assert.match(dashboardHtml, /id="quick-goal-autofill-hint"/);
+  assert.match(dashboardJs, /function openDashboardCreateGoalDialog\(/);
   assert.match(dashboardJs, /computeGoalScheduleStatus/);
   assert.match(dashboardJs, /pickActiveScheduledGoal/);
   assert.match(dashboardJs, /params\.get\('record_goal'\)/);

@@ -1597,16 +1597,258 @@
   document.getElementById('dashboard-create-group')?.addEventListener('click', () => openGroupDialog('create', 'GROUP'));
   document.getElementById('no-group-solo-btn')?.addEventListener('click', () => openGroupDialog('create', 'SOLO'));
   document.getElementById('no-group-create-btn')?.addEventListener('click', () => openGroupDialog('create', 'GROUP'));
-  document.getElementById('no-group-join-btn')?.addEventListener('click', () => {
-    Ipon.openJoinGroupDialog({
-      onJoined: async (res) => {
-        if (res?.status === 'JOINED') {
-          window.location.href = Ipon.homeForRole(res.role || 'MEMBER');
-        } else {
-          await load();
-        }
+  const dashGoalDialog = document.getElementById('dashboard-create-goal-dialog');
+  const dashGoalForm = document.getElementById('dashboard-create-goal-form');
+  const dashGoalTitleInput = document.getElementById('dash-goal-title');
+  const dashGoalTargetInput = document.getElementById('dash-goal-target');
+  const dashGoalDurationCount = document.getElementById('dash-goal-duration-count');
+  const dashGoalDurationUnit = document.getElementById('dash-goal-duration-unit');
+  const dashGoalDateInput = document.getElementById('dash-goal-date');
+  const dashGoalFreqSelect = document.getElementById('dash-goal-frequency');
+  const dashGoalSuggestGrid = document.getElementById('dash-goal-suggestion-grid');
+  const dashGoalSuggestNote = document.getElementById('dash-goal-suggest-note');
+  const dashGoalSchedFields = document.getElementById('dash-goal-schedule-fields');
+  const dashGoalSchedAmount = document.getElementById('dash-goal-scheduled-amount');
+  const dashGoalSchedStart = document.getElementById('dash-goal-schedule-start');
+  let dashGoalSuggestions = null;
+
+  Ipon.guardMoneyInput?.(dashGoalTargetInput, { min: 0.01, required: true, label: 'Target amount' });
+  Ipon.guardMoneyInput?.(dashGoalSchedAmount, { min: 0.01, required: false, label: 'Scheduled deposit' });
+
+  function validateDashGoalDuration() {
+    if (!dashGoalDurationCount) return { valid: true, value: null, error: '' };
+    const raw = String(dashGoalDurationCount.value ?? '').trim();
+    if (!raw) { dashGoalDurationCount.setCustomValidity?.(''); Ipon.setFieldError?.(dashGoalDurationCount, ''); return { valid: true, value: null, error: '' }; }
+    if (!/^[1-9]\d*$/.test(raw) || raw.length > 4 || Number(raw) < 1 || Number(raw) > 3650) {
+      const error = 'Enter a whole number between 1 and 3,650 (no leading zeros).';
+      dashGoalDurationCount.setCustomValidity?.(error);
+      Ipon.setFieldError?.(dashGoalDurationCount, error);
+      return { valid: false, value: null, error };
+    }
+    dashGoalDurationCount.setCustomValidity?.('');
+    Ipon.setFieldError?.(dashGoalDurationCount, '');
+    return { valid: true, value: Number(raw), error: '' };
+  }
+
+  dashGoalDurationCount?.addEventListener('keydown', (event) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (['e', 'E', '+', '-', '.', ','].includes(event.key)) event.preventDefault();
+  });
+
+  function syncDashGoalScheduleVisibility() {
+    const freq = String(dashGoalFreqSelect?.value || 'NONE').toUpperCase();
+    const enabled = ['DAILY', 'WEEKLY', 'MONTHLY'].includes(freq);
+    if (dashGoalSchedFields) dashGoalSchedFields.hidden = !enabled;
+    if (dashGoalSchedAmount) {
+      dashGoalSchedAmount.required = enabled;
+      if (!enabled) {
+        dashGoalSchedAmount.value = '';
+        Ipon.setFieldError?.(dashGoalSchedAmount, '');
       }
+    }
+    dashGoalSuggestGrid?.querySelectorAll('[data-dash-suggest-freq]').forEach((btn) => {
+      const active = enabled && btn.dataset.dashSuggestFreq === freq;
+      btn.classList.toggle('is-selected', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+  }
+
+  function syncDashGoalSuggestions() {
+    const parsed = Ipon.parseMoneyAmount(dashGoalTargetInput?.value, { min: 0.01, required: false, label: 'Target amount', badInput: Boolean(dashGoalTargetInput?.validity?.badInput) });
+    const targetVal = parsed.valid ? Number(parsed.value || 0) : 0;
+    const targetDateVal = dashGoalDateInput?.value || '';
+    const suggestions = Ipon.computeGoalScheduleSuggestions({
+      targetAmount: targetVal,
+      currentSavings: currentGroup ? Number(lastTrackedSavings || 0) : 0,
+      targetDate: targetDateVal,
+      memberCount: 1
+    });
+    dashGoalSuggestions = suggestions;
+    const dEl = document.getElementById('dash-goal-suggest-daily');
+    const wEl = document.getElementById('dash-goal-suggest-weekly');
+    const mEl = document.getElementById('dash-goal-suggest-monthly');
+    if (!(targetVal > 0)) {
+      if (dEl) dEl.textContent = '—';
+      if (wEl) wEl.textContent = '—';
+      if (mEl) mEl.textContent = '—';
+      if (dashGoalSuggestNote) dashGoalSuggestNote.textContent = 'Enter a target amount to see suggested daily, weekly, and monthly deposits.';
+      return;
+    }
+    if (dEl) dEl.textContent = Ipon.money(suggestions.daily.amount);
+    if (wEl) wEl.textContent = Ipon.money(suggestions.weekly.amount);
+    if (mEl) mEl.textContent = Ipon.money(suggestions.monthly.amount);
+    if (dashGoalSuggestNote) {
+      dashGoalSuggestNote.textContent = suggestions.hasFutureDate
+        ? `Based on ${Ipon.money(suggestions.remaining)} over ${suggestions.effectiveDays} day${suggestions.effectiveDays === 1 ? '' : 's'}. Tap a pace to select it.`
+        : `Estimated over 30 days (${Ipon.money(suggestions.remaining)}). Set a timeframe or target date to refine.`;
+    }
+  }
+
+  function applyDashGoalDuration() {
+    const dur = validateDashGoalDuration();
+    if (!dur.valid || !(dur.value > 0)) return;
+    const unit = String(dashGoalDurationUnit?.value || 'DAYS').toUpperCase();
+    const d = new Date();
+    if (unit === 'WEEKS') d.setDate(d.getDate() + (dur.value * 7));
+    else if (unit === 'MONTHS') d.setMonth(d.getMonth() + dur.value);
+    else d.setDate(d.getDate() + dur.value);
+    if (dashGoalDateInput) dashGoalDateInput.value = Ipon.isoDate(d);
+    syncDashGoalSuggestions();
+    const activeFreq = String(dashGoalFreqSelect?.value || 'NONE').toUpperCase();
+    if (['DAILY', 'WEEKLY', 'MONTHLY'].includes(activeFreq) && dashGoalSuggestions?.[activeFreq.toLowerCase()]?.amount > 0 && dashGoalSchedAmount && !dashGoalSchedAmount.dataset.userEdited) {
+      dashGoalSchedAmount.value = dashGoalSuggestions[activeFreq.toLowerCase()].amount.toFixed(2);
+    }
+  }
+
+  function openDashboardCreateGoalDialog() {
+    if (!dashGoalDialog || !dashGoalForm) return;
+    dashGoalForm.reset();
+    [dashGoalTitleInput, dashGoalTargetInput, dashGoalDurationCount, dashGoalDateInput, dashGoalSchedAmount, dashGoalSchedStart].forEach((el) => {
+      if (!el) return;
+      el.value = '';
+      el.setCustomValidity?.('');
+      Ipon.setFieldError?.(el, '');
+    });
+    if (dashGoalDurationUnit) dashGoalDurationUnit.value = 'DAYS';
+    if (dashGoalFreqSelect) dashGoalFreqSelect.value = 'NONE';
+    if (dashGoalSchedAmount) delete dashGoalSchedAmount.dataset.userEdited;
+    syncDashGoalScheduleVisibility();
+    syncDashGoalSuggestions();
+    dashGoalDialog.showModal();
+    dashGoalTitleInput?.focus();
+  }
+
+  dashGoalTitleInput?.addEventListener('input', () => {
+    const val = String(dashGoalTitleInput.value || '').trim();
+    const err = val && (val.length < 2 || val.length > 150) ? 'Goal title must be between 2 and 150 characters.' : '';
+    dashGoalTitleInput.setCustomValidity?.(err);
+    Ipon.setFieldError?.(dashGoalTitleInput, err);
+  });
+  dashGoalTargetInput?.addEventListener('input', syncDashGoalSuggestions);
+  dashGoalDurationCount?.addEventListener('input', applyDashGoalDuration);
+  dashGoalDurationUnit?.addEventListener('change', applyDashGoalDuration);
+  dashGoalDateInput?.addEventListener('input', () => {
+    if (dashGoalDurationCount) { dashGoalDurationCount.value = ''; Ipon.setFieldError?.(dashGoalDurationCount, ''); }
+    syncDashGoalSuggestions();
+  });
+  dashGoalSchedAmount?.addEventListener('input', () => { if (dashGoalSchedAmount) dashGoalSchedAmount.dataset.userEdited = '1'; });
+  dashGoalFreqSelect?.addEventListener('change', () => {
+    syncDashGoalScheduleVisibility();
+    const freq = String(dashGoalFreqSelect.value || 'NONE').toUpperCase();
+    const suggested = dashGoalSuggestions?.[freq.toLowerCase()]?.amount || 0;
+    if (['DAILY', 'WEEKLY', 'MONTHLY'].includes(freq) && suggested > 0 && dashGoalSchedAmount && !dashGoalSchedAmount.value) {
+      dashGoalSchedAmount.value = suggested.toFixed(2);
+    }
+  });
+  dashGoalSuggestGrid?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-dash-suggest-freq]');
+    if (!btn) return;
+    const freq = String(btn.dataset.dashSuggestFreq || '').toUpperCase();
+    if (!['DAILY', 'WEEKLY', 'MONTHLY'].includes(freq)) return;
+    if (dashGoalFreqSelect) dashGoalFreqSelect.value = freq;
+    syncDashGoalSuggestions();
+    const suggested = dashGoalSuggestions?.[freq.toLowerCase()]?.amount || 0;
+    if (dashGoalSchedAmount && suggested > 0) {
+      dashGoalSchedAmount.value = suggested.toFixed(2);
+      delete dashGoalSchedAmount.dataset.userEdited;
+      Ipon.setFieldError?.(dashGoalSchedAmount, '');
+    }
+    syncDashGoalScheduleVisibility();
+  });
+  document.getElementById('close-dash-goal-dialog')?.addEventListener('click', () => dashGoalDialog?.close());
+  document.getElementById('cancel-dash-goal-dialog')?.addEventListener('click', () => dashGoalDialog?.close());
+  dashGoalDialog?.addEventListener('click', (event) => { if (event.target === dashGoalDialog) dashGoalDialog.close(); });
+  dashGoalForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const title = String(dashGoalTitleInput?.value || '').trim();
+    if (title.length < 2 || title.length > 150) {
+      Ipon.setFieldError?.(dashGoalTitleInput, 'Goal title must be between 2 and 150 characters.');
+      dashGoalTitleInput?.focus();
+      Ipon.toast('Goal title must be between 2 and 150 characters.', 'error');
+      return;
+    }
+    const targetCheck = Ipon.parseMoneyAmount(dashGoalTargetInput?.value, { min: 0.01, required: true, label: 'Target amount', badInput: Boolean(dashGoalTargetInput?.validity?.badInput) });
+    if (!targetCheck.valid) {
+      Ipon.setFieldError?.(dashGoalTargetInput, targetCheck.error);
+      dashGoalTargetInput?.focus();
+      Ipon.toast(targetCheck.error, 'error');
+      return;
+    }
+    const durCheck = validateDashGoalDuration();
+    if (!durCheck.valid) { dashGoalDurationCount?.focus(); Ipon.toast(durCheck.error, 'error'); return; }
+    const targetDate = String(dashGoalDateInput?.value || '').trim() || null;
+    if (targetDate && (targetDate < '2000-01-01' || targetDate > '2100-12-31')) {
+      Ipon.setFieldError?.(dashGoalDateInput, 'Target date must be between 2000-01-01 and 2100-12-31.');
+      dashGoalDateInput?.focus();
+      return;
+    }
+    const savingFrequency = String(dashGoalFreqSelect?.value || 'NONE').toUpperCase();
+    let scheduledAmount = null;
+    let scheduleStartDate = null;
+    if (['DAILY', 'WEEKLY', 'MONTHLY'].includes(savingFrequency)) {
+      const schedCheck = Ipon.parseMoneyAmount(dashGoalSchedAmount?.value, { min: 0.01, required: true, label: 'Scheduled deposit', badInput: Boolean(dashGoalSchedAmount?.validity?.badInput) });
+      if (!schedCheck.valid) {
+        Ipon.setFieldError?.(dashGoalSchedAmount, schedCheck.error);
+        dashGoalSchedAmount?.focus();
+        Ipon.toast(schedCheck.error, 'error');
+        return;
+      }
+      scheduledAmount = schedCheck.value;
+      scheduleStartDate = String(dashGoalSchedStart?.value || '').trim() || Ipon.isoDate();
+    }
+    const notes = String(dashGoalForm.elements.notes?.value || '').trim() || null;
+    const needsSolo = !currentGroup && !state.profile?.group_id;
+    const unitMap = { DAILY: 'day', WEEKLY: 'week', MONTHLY: 'month' };
+    const scheduleCopy = scheduledAmount ? ` · ${savingFrequency.charAt(0) + savingFrequency.slice(1).toLowerCase()} deposit: ${Ipon.money(scheduledAmount)}/${unitMap[savingFrequency] || 'period'}` : '';
+    const confirmed = await Ipon.confirmAction({
+      title: needsSolo ? 'Create solo tracker & savings goal?' : 'Create savings goal?',
+      message: needsSolo
+        ? `Create your personal Solo tracker "${title}" and activate this goal (${Ipon.money(targetCheck.value)}${scheduleCopy})?`
+        : `Create "${title}" with target ${Ipon.money(targetCheck.value)}${scheduleCopy}?`,
+      acceptLabel: 'Create goal'
+    });
+    if (!confirmed) return;
+
+    const saveBtn = document.getElementById('save-dash-goal-dialog');
+    Ipon.setBusy(saveBtn, true, 'Creating…');
+    try {
+      if (needsSolo) {
+        const rawMonthly = Number(dashGoalSuggestions?.monthly?.amount || scheduledAmount || targetCheck.value || 100);
+        const monthlyBaseline = Math.min(1000000, Math.max(1, Math.round(rawMonthly * 100) / 100));
+        await Ipon.rpc('admin_create_group', {
+          p_name: title,
+          p_avatar_url: null,
+          p_include_self: true,
+          p_monthly_amount: monthlyBaseline,
+          p_workspace_mode: 'SOLO'
+        });
+        Ipon.syncWorkspaceMode?.('SOLO');
+      }
+      await Ipon.rpc('save_savings_goal', {
+        p_goal_id: null,
+        p_title: title,
+        p_target_amount: targetCheck.value,
+        p_target_date: targetDate,
+        p_status: 'ACTIVE',
+        p_notes: notes,
+        p_saving_frequency: savingFrequency,
+        p_scheduled_amount: scheduledAmount,
+        p_schedule_start_date: scheduleStartDate
+      });
+      if (savingFrequency !== 'NONE') Ipon.rpc('sync_my_due_reminders').catch(() => {});
+      dashGoalDialog.close();
+      Ipon.toast(needsSolo ? 'Solo tracker and savings goal created.' : 'Savings goal created.');
+      if (needsSolo) location.reload();
+      else await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(saveBtn, false);
+    }
+  });
+
+  document.getElementById('no-group-create-goal-btn')?.addEventListener('click', () => {
+    openDashboardCreateGoalDialog();
   });
   document.getElementById('close-group-dialog')?.addEventListener('click', () => groupDialog?.close());
   document.getElementById('cancel-group-dialog')?.addEventListener('click', () => groupDialog?.close());

@@ -180,7 +180,7 @@
           <div class="no-group-content">
             <div class="no-group-copy">
               <h2>Welcome to myIPON!</h2>
-              <p>Start a personal Solo tracker with no invitations needed, create a Savings group to pool funds with others, or wait for a group invitation.</p>
+              <p>Start a personal Solo tracker, create a Savings group to pool funds with others, or create your first Savings goal right away.</p>
             </div>
             <div class="no-group-actions">
               <button class="button button-primary" id="no-group-solo-btn" type="button">
@@ -191,9 +191,9 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;margin-right:6px;"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 Create savings group
               </button>
-              <button class="button button-secondary" id="no-group-join-btn" type="button">
-                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;margin-right:6px;"><rect x="3" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="15" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="15" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15h6v6h-6z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-                Join with code
+              <button class="button button-secondary" id="no-group-create-goal-btn" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;margin-right:6px;"><path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Create goal
               </button>
               <button class="button button-secondary no-group-tutorial-btn" id="no-group-tutorial-btn" data-tutorial-open type="button">
                 <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;margin-right:6px;"><path d="M2 4.5A2.5 2.5 0 0 1 4.5 2H11a3 3 0 0 1 3 3v16.5a2 2 0 0 0-2-2H4.5A2.5 2.5 0 0 1 2 17V4.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 4.5A2.5 2.5 0 0 0 19.5 2H13a3 3 0 0 0-3 3v16.5a2 2 0 0 1 2-2h7.5A2.5 2.5 0 0 0 22 17V4.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -978,12 +978,86 @@
       </div>
     </div>
   </dialog>
+  <dialog class="form-dialog" id="dashboard-create-goal-dialog" aria-labelledby="dash-goal-title-heading">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="dash-goal-title-heading">Create savings goal</h2>
+          <p id="dash-goal-subtitle">Set your target amount, timeframe, and saving pace to start tracking.</p>
+        </div>
+        <button class="dialog-close" id="close-dash-goal-dialog" type="button" aria-label="Close create goal form">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <form id="dashboard-create-goal-form" class="form-grid" autocomplete="off" novalidate>
+        <div class="field field-wide">
+          <label for="dash-goal-title">Goal title</label>
+          <input id="dash-goal-title" name="title" minlength="2" maxlength="150" autocomplete="off" placeholder="e.g., Emergency Fund or New Phone" required>
+        </div>
+        <div class="field">
+          <label for="dash-goal-target">Target amount (₱)</label>
+          <input id="dash-goal-target" name="target_amount" type="number" min="0.01" max="999999999999.99" step="0.01" inputmode="decimal" autocomplete="off" placeholder="0.00" required>
+        </div>
+        <div class="field">
+          <label for="dash-goal-duration-count">Reach in (optional)</label>
+          <div class="goal-duration-row">
+            <input id="dash-goal-duration-count" type="number" min="1" max="3650" step="1" inputmode="numeric" autocomplete="off" placeholder="e.g. 30" aria-label="Target duration count">
+            <select id="dash-goal-duration-unit" aria-label="Target duration unit">
+              <option value="DAYS">Days</option>
+              <option value="WEEKS">Weeks</option>
+              <option value="MONTHS">Months</option>
+            </select>
+          </div>
+        </div>
+        <div class="field field-wide">
+          <label for="dash-goal-date">Target date</label>
+          <input id="dash-goal-date" name="target_date" type="date" min="2000-01-01" max="2100-12-31" autocomplete="off">
+        </div>
+        <div class="field field-wide goal-schedule-section">
+          <div class="goal-schedule-head">
+            <label for="dash-goal-frequency">Saving schedule &amp; reminders</label>
+            <small id="dash-goal-suggest-note">Enter a target amount to see suggested daily, weekly, and monthly deposits.</small>
+          </div>
+          <select id="dash-goal-frequency" name="saving_frequency">
+            <option value="NONE">Flexible (no reminder schedule)</option>
+            <option value="DAILY">Daily deposits</option>
+            <option value="WEEKLY">Weekly deposits</option>
+            <option value="MONTHLY">Monthly deposits</option>
+          </select>
+          <div class="goal-suggestion-grid" id="dash-goal-suggestion-grid" role="group" aria-label="Suggested deposit schedules">
+            <button class="goal-suggest-card" type="button" data-dash-suggest-freq="DAILY" aria-pressed="false"><span>Daily</span><strong id="dash-goal-suggest-daily">—</strong><small>Your deposit / day</small></button>
+            <button class="goal-suggest-card" type="button" data-dash-suggest-freq="WEEKLY" aria-pressed="false"><span>Weekly</span><strong id="dash-goal-suggest-weekly">—</strong><small>Your deposit / week</small></button>
+            <button class="goal-suggest-card" type="button" data-dash-suggest-freq="MONTHLY" aria-pressed="false"><span>Monthly</span><strong id="dash-goal-suggest-monthly">—</strong><small>Your deposit / month</small></button>
+          </div>
+          <div class="goal-schedule-fields" id="dash-goal-schedule-fields" hidden>
+            <div class="field">
+              <label for="dash-goal-scheduled-amount">Scheduled deposit (₱)</label>
+              <input id="dash-goal-scheduled-amount" name="scheduled_amount" type="number" min="0.01" max="999999999999.99" step="0.01" inputmode="decimal" autocomplete="off" placeholder="0.00">
+            </div>
+            <div class="field">
+              <label for="dash-goal-schedule-start">Schedule starts</label>
+              <input id="dash-goal-schedule-start" name="schedule_start_date" type="date" min="2000-01-01" max="2100-12-31" autocomplete="off">
+            </div>
+            <p class="goal-schedule-help field-wide">Missed deposits trigger an unpaid notification and carry over to auto-fill your next deposit. Paying extra automatically reduces your next deposit.</p>
+          </div>
+        </div>
+        <div class="field field-wide">
+          <label for="dash-goal-notes">Notes (optional)</label>
+          <textarea id="dash-goal-notes" name="notes" maxlength="500" rows="2"></textarea>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" id="cancel-dash-goal-dialog" type="button">Cancel</button>
+          <button class="button button-primary" id="save-dash-goal-dialog" type="submit" data-requires-data>Create goal</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
   <script src="js/profile-effects.js?v=20261118-01"></script><script src="js/core.js?v=20261120-169"></script><script src="js/tutorial.js?v=20261120-07"></script><script src="js/policy.js?v=20261119-09"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
   <script src="js/messages.js?v=20261120-14"></script>
-  <script src="js/dashboard.js?v=20261120-99"></script>
+  <script src="js/dashboard.js?v=20261120-100"></script>
 </body>
 
 </html>
