@@ -239,6 +239,7 @@ public class MainActivity extends BridgeActivity {
             }
             webView.addJavascriptInterface(new PickerSourceBridge(), "IponNativePicker");
             webView.addJavascriptInterface(new AuthCallbackBridge(), "IponNativeAuth");
+            webView.reload();
             if (getBridge() != null) {
                 webView.setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
                     @Override

@@ -278,6 +278,7 @@ test('Android native Google OAuth deep-link handoff contracts stay intact across
   assert.match(bgPlugin, /android\.support\.customtabs\.extra\.SESSION/);
   assert.match(bgPlugin, /accounts\.google\.com/);
   assert.match(mainActivity, /addJavascriptInterface\(new AuthCallbackBridge\(\), "IponNativeAuth"\)/);
+  assert.match(mainActivity, /addJavascriptInterface\(new AuthCallbackBridge\(\), "IponNativeAuth"\);\s*webView\.reload\(\)/);
   assert.match(mainActivity, /handleAuthCallbackIntent\(getIntent\(\)\)/);
   assert.match(mainActivity, /handleAuthCallbackIntent\(intent\)/);
   assert.match(mainActivity, /dispatchWindowEvent\("myipon:native-resume"\)/);
@@ -285,7 +286,7 @@ test('Android native Google OAuth deep-link handoff contracts stay intact across
   assert.match(mainActivity, /pendingAuthCallbackJson != null\) dispatchWindowEvent\("myipon:native-oauth-callback"\)/);
   assert.match(loginHtml, /id="clerk-app-handoff"/);
   assert.match(loginHtml, /id="clerk-app-handoff-btn"/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261120-107/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261120-108/);
 });
 
 test('Android app Google login resets Connecting state when user backs out without finishing OAuth', async () => {
@@ -328,6 +329,15 @@ test('Android app Google login resets Connecting state when user backs out witho
   await new Promise((r) => setTimeout(r, 320));
   assert.equal(harness.googleBtn.disabled, false, 'Google button must re-enable after returning via Back');
   assert.equal(harness.googleLabel.textContent, 'Continue with Google');
+});
+
+test('Android Google sign-in waits for the native callback bridge instead of signing into Chrome', async () => {
+  const app = createAuthVmHarness({ capacitor: { isNativePlatform: () => true } });
+  app.googleBtn.click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(app.calls.signInRedirect.length, 0);
+  assert.match(app.els.get('social-signup-message').textContent, /App sign-in is still loading/);
+  assert.equal(app.googleBtn.disabled, false);
 });
 
 test('Create with Google in Android app hands off from phone browser back to app and signs in inside the app', async () => {

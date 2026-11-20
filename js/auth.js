@@ -416,6 +416,9 @@
       }
     }, 8000);
     try {
+      if (isCapacitorNativeApp() && !isNativeAuthApp()) {
+        throw new Error('App sign-in is still loading. Reopen myIPON and try Google again.');
+      }
       const clerk = await loadClerk();
       const resource = mode === 'login'
         ? (clerk?.client?.signIn || clerk?.client?.signUp)
