@@ -4,7 +4,6 @@ import android.text.TextUtils;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 import androidx.annotation.NonNull;
-import java.util.Collections;
 
 public class MyIponMessagingService extends FirebaseMessagingService {
     @Override
@@ -30,13 +29,10 @@ public class MyIponMessagingService extends FirebaseMessagingService {
                 return;
             }
             String shownKey = message.getData().get("shown_key");
-            NotificationPollReceiver.showDirectNotification(this, id,
-                dedupeKey, notifType, title,
+            NotificationPollReceiver.showDirectNotificationIfNew(this, id,
+                dedupeKey, shownKey, notifType, title,
                 notification.getBody(), message.getData().get("notification_link"),
                 message.getData().get("actor_avatar_url"));
-            if (!TextUtils.isEmpty(shownKey)) {
-                NotificationPollReceiver.mergeShownIds(this, Collections.singletonList(shownKey));
-            }
             return;
         }
         NotificationPollReceiver.pollWithWakeLock(this);

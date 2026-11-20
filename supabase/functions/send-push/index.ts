@@ -103,9 +103,18 @@ Deno.serve(async (req) => {
     notifGroupId = notif.group_id ? String(notif.group_id) : null;
     notifType = String(notif.type || '');
     recipientId = String(notif.recipient_id);
-    title = String(notif.title || 'myIPON');
+    title = String(notif.title || 'myIPON').trim();
     if (['SOCIAL_NEW_MESSAGE', 'SOCIAL_MESSAGE_REPLY', 'SOCIAL_MESSAGE_REQUEST'].includes(notifType)) {
       title = title.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || 'User';
+    } else {
+      title = title.replace(/^Update\s+Update\s+/i, 'Update ');
+      const relMatch = title.match(/^Update\s+v?(\d+(?:\.\d+)*)\s*:\s*(.+)$/i);
+      if (relMatch) {
+        title = relMatch[2].toLowerCase().includes(relMatch[1].toLowerCase())
+          ? relMatch[2].trim()
+          : `v${relMatch[1]}: ${relMatch[2].trim()}`;
+      }
+      if (!title) title = 'myIPON';
     }
     actorAvatarUrl = notif.actor_avatar_url ? String(notif.actor_avatar_url) : null;
     if (!actorAvatarUrl && notif.actor_id) {

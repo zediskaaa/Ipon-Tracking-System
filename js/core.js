@@ -7460,12 +7460,21 @@
     return /^(?:New message from|New reply from|Message request from)\s+/i.test(String(item.title || ''));
   }
 
+  function cleanNotificationDisplayTitle(rawTitle) {
+    let clean = String(rawTitle || '').trim().replace(/^Update\s+Update\s+/i, 'Update ');
+    const m = clean.match(/^Update\s+v?(\d+(?:\.\d+)*)\s*:\s*(.+)$/i);
+    if (m) {
+      clean = m[2].toLowerCase().includes(m[1].toLowerCase()) ? m[2].trim() : `v${m[1]}: ${m[2].trim()}`;
+    }
+    return clean || 'myIPON';
+  }
+
   function formatNotificationTitle(item) {
     const raw = String(item?.title || 'myIPON').trim();
     if (isMessageNotificationItem(item)) {
       return raw.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || 'User';
     }
-    return raw || 'myIPON';
+    return cleanNotificationDisplayTitle(raw);
   }
 
   function resolveNotificationAvatarUrl(item) {
@@ -7513,8 +7522,8 @@
         return;
       } catch { /* fall through */ }
     }
-    if (isMsgNotif && hasNativeNotificationBridge()) {
-      // Older APK without showNotification: let NotificationPollReceiver render circular sender DP & MessagingStyle instead of LocalNotifications app-logo duplicate.
+    if (hasNativeNotificationBridge()) {
+      // Native Android pipeline (FCM + NotificationPollReceiver) delivers all alerts once with shared tag/tray deduplication; never emit a second LocalNotifications.schedule copy.
       return;
     }
     markDeviceNotificationShown(userId, notifKey);

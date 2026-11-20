@@ -290,8 +290,22 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         if (isMessageNotification(type, dedupeKey, base)) {
             base = base.replaceFirst("(?i)^(?:New message from|New reply from|Message request from)\\s+", "").trim();
             if (TextUtils.isEmpty(base)) base = "User";
+            return base;
         }
-        return base;
+        base = base.replaceFirst("(?i)^Update\\s+Update\\s+", "Update ");
+        java.util.regex.Matcher relMatcher = java.util.regex.Pattern
+            .compile("(?i)^Update\\s+v?(\\d+(?:\\.\\d+)*)\\s*:\\s*(.+)$")
+            .matcher(base);
+        if (relMatcher.matches()) {
+            String ver = relMatcher.group(1);
+            String rest = relMatcher.group(2) == null ? "" : relMatcher.group(2).trim();
+            if (!TextUtils.isEmpty(ver) && rest.toLowerCase(java.util.Locale.US).contains(ver.toLowerCase(java.util.Locale.US))) {
+                base = rest;
+            } else if (!TextUtils.isEmpty(ver) && !TextUtils.isEmpty(rest)) {
+                base = "v" + ver + ": " + rest;
+            }
+        }
+        return TextUtils.isEmpty(base) ? "myIPON" : base;
     }
 
     private static Bitmap toCircularBitmap(Bitmap source) {
@@ -464,6 +478,35 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         NotificationManagerCompat.from(appContext).notify(tag, 0, builder.build());
     }
 
+    public static synchronized void showDirectNotificationIfNew(
+        Context context,
+        String id,
+        String dedupeKey,
+        String shownKey,
+        String type,
+        String title,
+        String body,
+        String link,
+        String avatarUrl
+    ) {
+        if (context == null) return;
+        final Context appContext = context.getApplicationContext();
+        if (!hasNotificationPermission(appContext)) return;
+        SharedPreferences prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        Set<String> shown = readShownSet(prefs);
+        String key = !TextUtils.isEmpty(shownKey) ? shownKey : id;
+        if (!TextUtils.isEmpty(key) && shown.contains(key)) return;
+        if (TextUtils.isEmpty(dedupeKey) && !TextUtils.isEmpty(id) && shown.contains(id)) return;
+        String cleanTitle = cleanMessageNotificationTitle(type, dedupeKey, title);
+        String cleanBody = body == null ? "" : body;
+        if (!isAlreadyInTray(appContext, id, dedupeKey, cleanTitle, cleanBody)) {
+            showDirectNotification(appContext, id, dedupeKey, type, title, cleanBody, link, avatarUrl);
+        }
+        if (!TextUtils.isEmpty(key)) shown.add(key);
+        if (TextUtils.isEmpty(dedupeKey) && !TextUtils.isEmpty(id)) shown.add(id);
+        saveShownSet(prefs, shown);
+    }
+
     public static void showDirectNotificationAsync(
         Context context,
         String id,
@@ -478,21 +521,9 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         if (context == null) return;
         final Context appContext = context.getApplicationContext();
         if (!hasNotificationPermission(appContext)) return;
-        POLL_EXECUTOR.execute(() -> {
-            SharedPreferences prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-            Set<String> shown = readShownSet(prefs);
-            String key = !TextUtils.isEmpty(shownKey) ? shownKey : id;
-            if (!TextUtils.isEmpty(key) && shown.contains(key)) return;
-            if (TextUtils.isEmpty(dedupeKey) && !TextUtils.isEmpty(id) && shown.contains(id)) return;
-            String cleanTitle = cleanMessageNotificationTitle(type, dedupeKey, title);
-            String cleanBody = body == null ? "" : body;
-            if (!isAlreadyInTray(appContext, id, dedupeKey, cleanTitle, cleanBody)) {
-                showDirectNotification(appContext, id, dedupeKey, type, title, cleanBody, link, avatarUrl);
-            }
-            if (!TextUtils.isEmpty(key)) shown.add(key);
-            if (TextUtils.isEmpty(dedupeKey) && !TextUtils.isEmpty(id)) shown.add(id);
-            saveShownSet(prefs, shown);
-        });
+        POLL_EXECUTOR.execute(() -> showDirectNotificationIfNew(
+            appContext, id, dedupeKey, shownKey, type, title, body, link, avatarUrl
+        ));
     }
 
     private static boolean isAlreadyInTray(Context context, String id, String dedupeKey, String title, String body) {
@@ -500,12 +531,23 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return false;
         String tag = "myipon-" + (!TextUtils.isEmpty(dedupeKey) ? dedupeKey : id);
+        String normTitle = title == null ? "" : title.trim();
+        String normBody = body == null ? "" : body.trim();
         for (StatusBarNotification active : manager.getActiveNotifications()) {
-            if (!tag.equals(active.getTag())) continue;
+            boolean sameTag = tag.equals(active.getTag());
+            if (sameTag && TextUtils.isEmpty(dedupeKey)) {
+                return true;
+            }
             Notification notification = active.getNotification();
-            if (notification.extras == null) continue;
-            if (TextUtils.equals(title, notification.extras.getCharSequence(Notification.EXTRA_TITLE))
-                && TextUtils.equals(body, notification.extras.getCharSequence(Notification.EXTRA_TEXT))) return true;
+            if (notification == null || notification.extras == null) continue;
+            CharSequence activeTitleCs = notification.extras.getCharSequence(Notification.EXTRA_TITLE);
+            CharSequence activeBodyCs = notification.extras.getCharSequence(Notification.EXTRA_TEXT);
+            String activeTitle = activeTitleCs == null ? "" : activeTitleCs.toString().trim();
+            String activeBody = activeBodyCs == null ? "" : activeBodyCs.toString().trim();
+            if (!TextUtils.isEmpty(normTitle) && !TextUtils.isEmpty(normBody)
+                && normTitle.equals(activeTitle) && normBody.equals(activeBody)) {
+                return true;
+            }
         }
         return false;
     }

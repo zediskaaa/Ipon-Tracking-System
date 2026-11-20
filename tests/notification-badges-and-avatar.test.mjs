@@ -37,20 +37,41 @@ test('Android chat notifications never emit app-logo LocalNotifications duplicat
   const fcmService = read('android/app/src/main/java/com/myipon/app/MyIponMessagingService.java');
   const sendPush = read('supabase/functions/send-push/index.ts');
 
-  // core.js prefers BackgroundNotifications.showNotification and never falls back to LocalNotifications.schedule for chat messages on Android
+  // core.js prefers BackgroundNotifications.showNotification and never falls back to LocalNotifications.schedule on Android
   const dispatchBlock = coreJs.match(/async function dispatchDeviceNotification[\s\S]*?^  \}/m)?.[0] || '';
   assert.ok(dispatchBlock, 'Expected dispatchDeviceNotification in js/core.js');
   assert.match(dispatchBlock, /if \(bgPlugin\?\.showNotification\)/);
   assert.match(dispatchBlock, /markDeviceNotificationShown\(userId, notifKey, \{ syncNative: false \}\)/);
   assert.match(dispatchBlock, /await bgPlugin\.showNotification\(\{/);
-  assert.match(dispatchBlock, /if \(isMsgNotif && hasNativeNotificationBridge\(\)\)\s*\{[\s\S]*?return;/);
+  assert.match(dispatchBlock, /if \(hasNativeNotificationBridge\(\)\)\s*\{[\s\S]*?return;/);
 
-  // Native Java serializes direct alerts with pollSync on POLL_EXECUTOR and routes FCM message alerts through sender avatar pipeline
+  // Native Java serializes direct alerts with pollSync and checks both tag and content in tray to prevent duplicates
   assert.match(pollJava, /public static boolean isMessageNotification\(/);
+  assert.match(pollJava, /public static synchronized void showDirectNotificationIfNew\(/);
   assert.match(pollJava, /public static void showDirectNotificationAsync\(/);
+  assert.match(pollJava, /if \(sameTag && TextUtils\.isEmpty\(dedupeKey\)\)\s*\{\s*return true;\s*\}/);
+  assert.match(pollJava, /normTitle\.equals\(activeTitle\) && normBody\.equals\(activeBody\)/);
   assert.match(pluginJava, /public void showNotification\(PluginCall call\)/);
   assert.match(pluginJava, /NotificationPollReceiver\.showDirectNotificationAsync\(/);
   assert.match(fcmService, /if \(NotificationPollReceiver\.isMessageNotification\(notifType, dedupeKey, title\)\)\s*\{\s*NotificationPollReceiver\.pollWithWakeLock\(this\);/);
+  assert.match(fcmService, /NotificationPollReceiver\.showDirectNotificationIfNew\(/);
   assert.match(sendPush, /notification_type:\s*notifType/);
   assert.match(sendPush, /actor_avatar_url:\s*actorAvatarUrl \|\| ''/);
+});
+
+test('release and platform notification titles strip redundant Update prefixes across SQL, Edge, JS, and Android', () => {
+  const migration = read('database/migrations/20261120_138_clean_release_notification_titles.sql');
+  const coreJs = read('js/core.js');
+  const sendPush = read('supabase/functions/send-push/index.ts');
+  const pollJava = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
+
+  assert.match(migration, /create or replace function public\.notify_announcement_created\(\)/i);
+  assert.match(migration, /position\(lower\(v_ver_num\) in lower\(v_clean_title\)\) > 0/);
+  assert.match(migration, /'v' \|\| v_ver_num/);
+  assert.match(migration, /20261120_138/);
+
+  assert.match(coreJs, /function cleanNotificationDisplayTitle\(rawTitle\)/);
+  assert.match(coreJs, /return cleanNotificationDisplayTitle\(raw\);/);
+  assert.match(sendPush, /title = title\.replace\(\/\^Update\\s\+Update\\s\+\/i, 'Update '\);/);
+  assert.match(pollJava, /base = base\.replaceFirst\("\(\?i\)\^Update\\\\s\+Update\\\\s\+", "Update "\);/);
 });
