@@ -11341,8 +11341,8 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   const dashHtml = read('dashboard.html');
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
-  assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d)/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261120-164/);
+  assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261120-165/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -12399,14 +12399,17 @@ test('post-login username setup modal prompts legacy users without usernames, pr
   // Web Audio UI sound engine renders every named sound cleanly and respects mute preference
   let oscStarts = 0;
   let burstStarts = 0;
+  let compressorCount = 0;
+  let maxGainValue = 0;
   let storedMute = null;
-  const fakeParam = () => ({ setValueAtTime() { }, linearRampToValueAtTime() { }, exponentialRampToValueAtTime() { } });
+  const fakeParam = (onSet) => ({ setValueAtTime(v) { if (onSet) onSet(v); }, linearRampToValueAtTime() { }, exponentialRampToValueAtTime() { } });
   win.localStorage.getItem = (k) => (k === 'myipon_ui_sounds' ? storedMute : null);
   win.localStorage.setItem = (k, v) => { if (k === 'myipon_ui_sounds') storedMute = String(v); };
   win.localStorage.removeItem = (k) => { if (k === 'myipon_ui_sounds') storedMute = null; };
   win.AudioContext = class FakeAudioContext {
     constructor() { this.state = 'running'; this.currentTime = 0; this.sampleRate = 44100; this.destination = {}; }
-    createGain() { return { gain: fakeParam(), connect() { } }; }
+    createGain() { return { gain: fakeParam((v) => { if (v > maxGainValue) maxGainValue = v; }), connect() { } }; }
+    createDynamicsCompressor() { compressorCount += 1; return { threshold: fakeParam(), knee: fakeParam(), ratio: fakeParam(), attack: fakeParam(), release: fakeParam(), connect() { } }; }
     createOscillator() { return { type: 'sine', frequency: fakeParam(), connect() { }, start() { oscStarts += 1; }, stop() { } }; }
     createBiquadFilter() { return { type: 'bandpass', frequency: fakeParam(), Q: fakeParam(), connect() { } }; }
     createBuffer(_ch, len) { return { sampleRate: 44100, getChannelData: () => new Float32Array(len) }; }
@@ -12421,6 +12424,8 @@ test('post-login username setup modal prompts legacy users without usernames, pr
   }
   assert.ok(oscStarts >= 35, `Expected harmonic oscillators to play across all sounds, got ${oscStarts}`);
   assert.ok(burstStarts >= 7, `Expected tactile/confetti noise bursts to play, got ${burstStarts}`);
+  assert.ok(maxGainValue >= 4.0, `Expected boosted UI sound master gain >= 4.0, got ${maxGainValue}`);
+  assert.equal(compressorCount, 1, 'Expected a single cached output soft-limiter compressor per AudioContext');
 
   // Successful financial & chat RPCs automatically trigger their respective UI sounds
   const beforeRpcOsc = oscStarts;

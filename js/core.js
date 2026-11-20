@@ -36,8 +36,11 @@
 
   const THEME_STORAGE_KEY = 'myipon_theme';
   const UI_SOUND_STORAGE_KEY = 'myipon_ui_sounds';
+  const UI_SOUND_MASTER_GAIN = 5.0;
   const USERNAME_POST_SAVE_DELAY_MS = 1500;
   let uiAudioCtx = null;
+  let uiAudioOutput = null;
+  let uiAudioOutputCtx = null;
   let uiNoiseBuffer = null;
   const uiSoundLastAt = Object.create(null);
   const UI_SOUND_COOLDOWN_MS = {
@@ -136,10 +139,31 @@
     src.stop(tEnd + 0.01);
   }
 
+  function getUiAudioOutput(ctx) {
+    if (uiAudioOutput && uiAudioOutputCtx === ctx) return uiAudioOutput;
+    uiAudioOutputCtx = ctx;
+    if (typeof ctx.createDynamicsCompressor === 'function') {
+      try {
+        const comp = ctx.createDynamicsCompressor();
+        const t = ctx.currentTime || 0;
+        comp.threshold.setValueAtTime(-6, t);
+        comp.knee.setValueAtTime(12, t);
+        comp.ratio.setValueAtTime(8, t);
+        comp.attack.setValueAtTime(0.002, t);
+        comp.release.setValueAtTime(0.12, t);
+        comp.connect(ctx.destination);
+        uiAudioOutput = comp;
+        return comp;
+      } catch { }
+    }
+    uiAudioOutput = ctx.destination;
+    return ctx.destination;
+  }
+
   function renderUiSound(ctx, kind) {
     const master = ctx.createGain();
-    master.gain.setValueAtTime(0.9, ctx.currentTime);
-    master.connect(ctx.destination);
+    master.gain.setValueAtTime(UI_SOUND_MASTER_GAIN, ctx.currentTime);
+    master.connect(getUiAudioOutput(ctx));
 
     if (kind === 'type') {
       const jitter = 0.94 + Math.random() * 0.12;

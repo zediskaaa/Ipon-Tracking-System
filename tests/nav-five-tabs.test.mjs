@@ -320,12 +320,12 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
   assert.match(heroPlatesCss, /@media \(max-width:860px\)[\s\S]*?\.dashboard-sidebar \.sidebar-nav\s*\{[\s\S]*?border-radius:\s*26px[\s\S]*?background:\s*#FBF8F0/);
   assert.match(dashHtml, /<svg class="brand-coins"[\s\S]*?<span class="brand-divider"[\s\S]*?<span class="brand-text">\s*<strong><span class="brand-prefix">my<\/span>IPON<\/strong>\s*<\/span>/);
   assert.match(adminNav.hostEl.innerHTML, /<svg class="brand-coins"[\s\S]*?<span class="brand-divider"[\s\S]*?<span class="brand-text">\s*<strong><span class="brand-prefix">my<\/span>IPON<\/strong>\s*<\/span>/);
-  assert.match(swJs, /ipon-shell-v(?:2[4-9]|[3-9]\d)/);
+  assert.match(swJs, /ipon-shell-v(?:2[4-9]|[3-9]\d|[1-9]\d{2,})/);
 
   for (const file of ['dashboard.html', 'reports.html', 'audit.html', 'settings.html', 'account.html']) {
     const html = read(file);
     assert.match(html, /css\/app\.css\?v=20261120-08/);
-    assert.match(html, /js\/core\.js\?v=20261120-164/);
+    assert.match(html, /js\/core\.js\?v=20261120-165/);
     const opens = (html.match(/<dialog\b/g) || []).length;
     const closes = (html.match(/<\/dialog>/g) || []).length;
     assert.equal(opens, closes, `${file} has unbalanced <dialog> tags`);
