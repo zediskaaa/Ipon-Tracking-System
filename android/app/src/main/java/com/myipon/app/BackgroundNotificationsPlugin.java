@@ -57,6 +57,30 @@ import java.util.Locale;
 )
 public class BackgroundNotificationsPlugin extends Plugin {
     @PluginMethod
+    public void openAuthBrowser(PluginCall call) {
+        String state = call.getString("appState", "");
+        Activity activity = getActivity();
+        if (activity == null || !state.matches("[a-f0-9]{32}")) {
+            call.reject("App sign-in is not ready. Reopen myIPON and try again.");
+            return;
+        }
+        Uri.Builder url = Uri.parse("https://my-ipon.vercel.app/login.html").buildUpon()
+            .appendQueryParameter("app", "1")
+            .appendQueryParameter("app_handoff", "1")
+            .appendQueryParameter("app_state", state)
+            .appendQueryParameter("start_google", "1");
+        if (Boolean.TRUE.equals(call.getBoolean("signup", false))) {
+            url.appendQueryParameter("mode", "signup");
+        }
+        try {
+            activity.startActivity(new Intent(Intent.ACTION_VIEW, url.build()));
+            call.resolve();
+        } catch (Throwable error) {
+            call.reject("Could not open Google sign-in in your browser.");
+        }
+    }
+
+    @PluginMethod
     public void consumeAuthCallback(PluginCall call) {
         JSObject result = new JSObject();
         result.put("payload", getActivity() instanceof MainActivity

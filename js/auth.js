@@ -39,6 +39,7 @@
   );
   const appHandoffState = String(initialUrlParams.get('app_state') || '').trim();
   const isAppHandoff = initialUrlParams.get('app_handoff') === '1' && !isCapacitorNativeApp();
+  const isExternalGoogleStart = isAppHandoff && initialUrlParams.get('start_google') === '1';
   const NATIVE_OAUTH_STATE_KEY = 'myipon_app_oauth_state_v1';
   const NATIVE_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
   const securityNotice = document.getElementById('auth-security-notice');
@@ -189,17 +190,10 @@
   }
 
   function createNativeOAuthState() {
-    let state = '';
-    try {
-      const bytes = new Uint8Array(16);
-      window.crypto.getRandomValues(bytes);
-      state = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-    } catch {
-      state = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
-    }
-    try {
-      localStorage.setItem(NATIVE_OAUTH_STATE_KEY, JSON.stringify({ state, createdAt: Date.now() }));
-    } catch { }
+    const bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    const state = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem(NATIVE_OAUTH_STATE_KEY, JSON.stringify({ state, createdAt: Date.now() }));
     return state;
   }
 
@@ -222,17 +216,13 @@
     }
   }
 
-  function getClerkLoginReturnUrl(nativeAppState = '') {
+  function getClerkLoginReturnUrl() {
     try {
       const url = new URL('login.html', window.location.href);
       const cur = new URLSearchParams(window.location.search);
       for (const key of ['app', 'join', 'next', 'app_handoff', 'app_state']) {
         const val = cur.get(key);
         if (val !== null && val !== '') url.searchParams.set(key, val);
-      }
-      if (nativeAppState) {
-        url.searchParams.set('app_handoff', '1');
-        url.searchParams.set('app_state', nativeAppState);
       }
       return url.toString();
     } catch {
@@ -245,9 +235,9 @@
     socialSignupMessage.textContent = String(text || '').trim();
   }
 
-  function getClerkSsoCallbackUrl(nativeAppState = '') {
+  function getClerkSsoCallbackUrl() {
     try {
-      const url = new URL(getClerkLoginReturnUrl(nativeAppState), window.location.href);
+      const url = new URL(getClerkLoginReturnUrl(), window.location.href);
       url.searchParams.set('clerk_sso_callback', '1');
       return url.toString();
     } catch {
@@ -421,6 +411,12 @@
       if (isCapacitorNativeApp() && !isNativeAuthApp()) {
         throw new Error('App sign-in is still loading. Reopen myIPON and try Google again.');
       }
+      if (isNativeAuthApp()) {
+        const openBrowser = window.Capacitor?.Plugins?.BackgroundNotifications?.openAuthBrowser;
+        if (!openBrowser) throw new Error('Update myIPON to the latest APK to use Google sign-in.');
+        await openBrowser({ appState: createNativeOAuthState(), signup: mode === 'signup' });
+        return;
+      }
       const clerk = await loadClerk();
       const resource = mode === 'login'
         ? (clerk?.client?.signIn || clerk?.client?.signUp)
@@ -431,11 +427,10 @@
       if (clerk.session) {
         await clerk.signOut().catch(() => null);
       }
-      const nativeAppState = isNativeAuthApp() ? createNativeOAuthState() : '';
       await resource.authenticateWithRedirect({
         strategy,
-        redirectUrl: getClerkSsoCallbackUrl(nativeAppState),
-        redirectUrlComplete: getClerkLoginReturnUrl(nativeAppState)
+        redirectUrl: getClerkSsoCallbackUrl(),
+        redirectUrlComplete: getClerkLoginReturnUrl()
       });
     } catch (error) {
       clearSocialOAuthBusy();
@@ -651,6 +646,11 @@
         setClerkSignInLoading(false);
         setClerkSignInMessage('Social sign-in is temporarily unavailable. Please try again or sign in with email.', 'error');
       }
+      return;
+    }
+    if (isExternalGoogleStart) {
+      if (initialUrlParams.get('mode') === 'signup') setMode('signup');
+      await startClerkOAuth('oauth_google', document.getElementById('signup-google-btn'));
       return;
     }
     if (isClerkSsoCallback) {

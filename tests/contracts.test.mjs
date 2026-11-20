@@ -11871,7 +11871,7 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(loginHtml, /https:\/\/\*\.protect\.clerk\.com/);
   assert.match(loginHtml, /https:\/\/challenges\.cloudflare\.com/);
   assert.match(loginHtml, /frame-src 'self' https:\/\/\*\.protect\.clerk\.com https:\/\/challenges\.cloudflare\.com/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261120-110/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261120-111/);
   assert.match(authJs, /mode === 'signup' \? 'Create with' : 'Continue with'/);
   assert.match(coreJs, /function fireKeepaliveRpc\(/);
   const signOutBody = coreJs.match(/async function signOut\(\)[\s\S]*?^  \}/m);

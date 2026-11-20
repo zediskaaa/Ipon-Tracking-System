@@ -33,8 +33,22 @@ function createAuthVmHarness({
     verifyOtp: [],
     locationReplace: [],
     locationAssign: [],
+    openAuthBrowser: [],
     supabaseSignOut: []
   };
+  if (capacitor && (nativeAuth || capacitor.Plugins?.BackgroundNotifications)) {
+    const bg = capacitor.Plugins?.BackgroundNotifications || {};
+    capacitor = {
+      ...capacitor,
+      Plugins: {
+        ...capacitor.Plugins,
+        BackgroundNotifications: {
+          ...bg,
+          openAuthBrowser: bg.openAuthBrowser || (async (opts) => { calls.openAuthBrowser.push(opts); })
+        }
+      }
+    };
+  }
 
   const makeEl = (id = '', tag = 'div') => {
     const elListeners = new Map();
@@ -288,6 +302,7 @@ test('Android native Google OAuth deep-link handoff contracts stay intact across
   assert.match(mainActivity, /addJavascriptInterface\(new AuthCallbackBridge\(\), "IponNativeAuth"\)/);
   assert.match(mainActivity, /public synchronized String consumePendingAuthCallback\(\)/);
   assert.match(bgPlugin, /public void consumeAuthCallback\(PluginCall call\)/);
+  assert.match(bgPlugin, /public void openAuthBrowser\(PluginCall call\)/);
   assert.match(mainActivity, /handleAuthCallbackIntent\(getIntent\(\)\)/);
   assert.match(mainActivity, /handleAuthCallbackIntent\(intent\)/);
   assert.match(mainActivity, /dispatchWindowEvent\("myipon:native-resume"\)/);
@@ -295,7 +310,7 @@ test('Android native Google OAuth deep-link handoff contracts stay intact across
   assert.match(mainActivity, /pendingAuthCallbackJson != null\) dispatchWindowEvent\("myipon:native-oauth-callback"\)/);
   assert.match(loginHtml, /id="clerk-app-handoff"/);
   assert.match(loginHtml, /id="clerk-app-handoff-btn"/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261120-110/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261120-111/);
 });
 
 test('Android app Google login resets Connecting state when user backs out without finishing OAuth', async () => {
@@ -317,14 +332,12 @@ test('Android app Google login resets Connecting state when user backs out witho
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(harness.googleBtn.disabled, true);
   assert.equal(harness.googleLabel.textContent, 'Connecting…');
-  assert.equal(harness.calls.signInRedirect.length, 1);
+  assert.equal(harness.calls.openAuthBrowser.length, 1);
+  assert.equal(harness.calls.signInRedirect.length, 0);
   assert.equal(harness.calls.clerkLoadOpts[0].signInForceRedirectUrl, undefined);
   assert.equal(harness.calls.clerkLoadOpts[0].signUpForceRedirectUrl, undefined);
-
-  const redirectUrl = new URL(harness.calls.signInRedirect[0].redirectUrl);
-  assert.equal(redirectUrl.searchParams.get('app_handoff'), '1');
-  assert.equal(redirectUrl.searchParams.get('clerk_sso_callback'), '1');
-  assert.ok(redirectUrl.searchParams.get('app_state'), 'Expected native app_state nonce');
+  assert.match(harness.calls.openAuthBrowser[0].appState, /^[a-f0-9]{32}$/);
+  assert.equal(harness.calls.openAuthBrowser[0].signup, false);
 
   // Simulate Android launching Custom Tab (blur/hidden), then user pressing Back (native-resume + visible + focus)
   harness.ctx.dispatchWindowEvent('blur');
@@ -349,6 +362,18 @@ test('Android Google sign-in waits for the native callback bridge instead of sig
   assert.equal(app.googleBtn.disabled, false);
 });
 
+test('External browser starts Google sign-in with the app handoff state', async () => {
+  const browser = createAuthVmHarness({
+    search: '?app=1&app_handoff=1&app_state=0123456789abcdef0123456789abcdef&start_google=1'
+  });
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(browser.calls.signInRedirect.length, 1);
+  const callbackUrl = new URL(browser.calls.signInRedirect[0].redirectUrl);
+  assert.equal(callbackUrl.searchParams.get('app_handoff'), '1');
+  assert.equal(callbackUrl.searchParams.get('app_state'), '0123456789abcdef0123456789abcdef');
+  assert.equal(callbackUrl.searchParams.get('start_google'), null);
+});
+
 test('Capacitor OAuth bridge completes Google login when WebView JavaScript interface is unavailable', async () => {
   let pendingCallback = '';
   const app = createAuthVmHarness({
@@ -367,8 +392,8 @@ test('Capacitor OAuth bridge completes Google login when WebView JavaScript inte
   });
   app.googleBtn.click();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(app.calls.signInRedirect.length, 1);
-  const state = new URL(app.calls.signInRedirect[0].redirectUrl).searchParams.get('app_state');
+  assert.equal(app.calls.openAuthBrowser.length, 1);
+  const state = app.calls.openAuthBrowser[0].appState;
   pendingCallback = JSON.stringify({ clerk_token: 'clerk.jwt.google', app_state: state });
   app.ctx.dispatchWindowEvent('myipon:native-oauth-callback');
   await new Promise((resolve) => setTimeout(resolve, 40));
@@ -397,11 +422,17 @@ test('Create with Google in Android app hands off from phone browser back to app
   appHarness.googleBtn.click();
   await new Promise((r) => setTimeout(r, 20));
 
-  assert.equal(appHarness.calls.signUpRedirect.length, 1);
-  const ssoUrl = new URL(appHarness.calls.signUpRedirect[0].redirectUrl);
-  const appState = ssoUrl.searchParams.get('app_state');
+  assert.equal(appHarness.calls.openAuthBrowser.length, 1);
+  const appState = appHarness.calls.openAuthBrowser[0].appState;
+  assert.equal(appHarness.calls.openAuthBrowser[0].signup, true);
+  const startSearch = `?app=1&app_handoff=1&app_state=${appState}&start_google=1&mode=signup`;
+  const browserStart = createAuthVmHarness({ search: startSearch });
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(browserStart.calls.signUpRedirect.length, 1);
+  const ssoUrl = new URL(browserStart.calls.signUpRedirect[0].redirectUrl);
   assert.equal(ssoUrl.searchParams.get('app_handoff'), '1');
-  assert.ok(appState && appState.length >= 16);
+  assert.equal(ssoUrl.searchParams.get('app_state'), appState);
+  assert.equal(ssoUrl.searchParams.get('start_google'), null);
 
   // Now simulate Chrome Custom Tab completing OAuth (even if Chrome had an old Supabase session!)
   const browserHarness = createAuthVmHarness({
@@ -524,7 +555,7 @@ test('Android resume consumes a pending Google callback and opens the app dashbo
   });
   app.googleBtn.click();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  const state = new URL(app.calls.signInRedirect[0].redirectUrl).searchParams.get('app_state');
+  const state = app.calls.openAuthBrowser[0].appState;
   pendingCallback = JSON.stringify({ clerk_token: 'clerk.jwt.google', app_state: state });
   app.ctx.dispatchWindowEvent('myipon:native-resume');
   await new Promise((resolve) => setTimeout(resolve, 40));
@@ -549,7 +580,7 @@ test('Google sign-in replaces a stale app session before opening the selected ac
   });
   app.googleBtn.click();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  const state = new URL(app.calls.signInRedirect[0].redirectUrl).searchParams.get('app_state');
+  const state = app.calls.openAuthBrowser[0].appState;
   pendingCallback = JSON.stringify({ clerk_token: 'clerk.jwt.new-google', app_state: state });
   app.ctx.dispatchWindowEvent('myipon:native-oauth-callback');
   await new Promise((resolve) => setTimeout(resolve, 40));
