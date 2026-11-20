@@ -14034,11 +14034,20 @@ html[data-theme="dark"] .batch-reset-check {
   font: 12.5px/1.4 Arial, sans-serif;
   color: #7c5617;
 }
-.group-bar-badge.is-solo,
 .group-hub-role.is-solo {
   border-color: rgba(212, 168, 79, .45);
   background: rgba(212, 168, 79, .2);
   color: #f4d68c;
+}
+.group-hub-role.is-group {
+  border-color: rgba(126, 224, 173, .38);
+  background: rgba(70, 195, 130, .18);
+  color: #a9f0c8;
+}
+.group-hub-role.is-goal {
+  border-color: rgba(120, 200, 236, .42);
+  background: rgba(88, 178, 220, .2);
+  color: #b4e2f8;
 }
 
 html[data-theme="dark"] .sa-group-chip {

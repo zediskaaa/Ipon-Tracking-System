@@ -90,7 +90,9 @@
   const heroMoney = (value) => Ipon.money(value);
   const groupAvatarEl = document.getElementById('dashboard-group-avatar');
   const groupNameEl = document.getElementById('dashboard-group-name');
+  const groupModeEl = document.getElementById('dashboard-group-mode');
   const groupRoleEl = document.getElementById('dashboard-group-role');
+  const groupGoalBadgeEl = document.getElementById('dashboard-group-goal-badge');
   const groupMetaEl = document.getElementById('dashboard-group-meta');
   const groupSelect = document.getElementById('dashboard-group-select');
   const groupSwitcherWrap = document.getElementById('dashboard-group-switcher-wrap');
@@ -99,7 +101,9 @@
   const groupHubDialog = document.getElementById('group-manage-hub-dialog');
   const groupHubAvatar = document.getElementById('group-hub-avatar');
   const groupHubTitle = document.getElementById('group-hub-title');
+  const groupHubMode = document.getElementById('group-hub-mode');
   const groupHubRole = document.getElementById('group-hub-role');
+  const groupHubGoalBadge = document.getElementById('group-hub-goal-badge');
   const groupHubMeta = document.getElementById('group-hub-meta');
   const groupHubSwitcherWrap = document.getElementById('group-hub-switcher-wrap');
   const groupHubSelect = document.getElementById('group-hub-select');
@@ -152,6 +156,20 @@
   const inviteForm = document.getElementById('group-invite-form');
   const inviteOnlyRows = document.getElementById('invite-only-rows');
 
+  function syncWorkspaceGoalBadges() {
+    const goalCount = currentGroup ? activeGoalsList.length : 0;
+    const hasGoal = goalCount > 0;
+    const goalTitle = goalCount === 1
+      ? `Active goal: ${activeGoalsList[0]?.title || 'Savings goal'}`
+      : (goalCount > 1 ? `${goalCount} active savings goals` : '');
+    [groupGoalBadgeEl, groupHubGoalBadge].forEach((badge) => {
+      if (!badge) return;
+      badge.hidden = !hasGoal;
+      badge.textContent = 'GOAL';
+      badge.title = goalTitle;
+    });
+  }
+
   function syncGroupHub() {
     if (!currentGroup) return;
     const isSolo = currentGroup.workspace_mode === 'SOLO';
@@ -162,10 +180,18 @@
     }
     if (groupHubEyebrow) groupHubEyebrow.textContent = isSolo ? 'Solo workspace' : 'Group workspace';
     if (groupHubTitle) groupHubTitle.textContent = safeName;
-    if (groupHubRole) {
-      groupHubRole.textContent = isSolo ? 'SOLO' : (currentGroup.role || state?.profile?.role || 'ADMIN');
-      groupHubRole.classList.toggle('is-solo', isSolo);
+    if (groupHubMode) {
+      groupHubMode.hidden = false;
+      groupHubMode.textContent = isSolo ? 'SOLO' : 'GROUP';
+      groupHubMode.classList.toggle('is-solo', isSolo);
+      groupHubMode.classList.toggle('is-group', !isSolo);
     }
+    if (groupHubRole) {
+      groupHubRole.hidden = isSolo;
+      groupHubRole.textContent = currentGroup.role || state?.profile?.role || 'ADMIN';
+      groupHubRole.classList.remove('is-solo');
+    }
+    syncWorkspaceGoalBadges();
     const contributorCount = Number(currentGroup.active_member_count || 0);
     if (groupHubMeta) {
       groupHubMeta.textContent = isSolo
@@ -214,10 +240,20 @@
     if (manageBtn) manageBtn.hidden = !(currentGroup && currentGroup.role === 'ADMIN');
     if (!currentGroup) {
       if (groupNameEl) groupNameEl.textContent = 'No workspace selected';
+      if (groupModeEl) {
+        groupModeEl.hidden = true;
+        groupModeEl.classList.remove('is-solo', 'is-group');
+      }
       if (groupRoleEl) {
+        groupRoleEl.hidden = false;
         groupRoleEl.textContent = state?.profile?.role || '—';
         groupRoleEl.classList.remove('is-solo');
       }
+      if (groupHubMode) {
+        groupHubMode.hidden = true;
+        groupHubMode.classList.remove('is-solo', 'is-group');
+      }
+      syncWorkspaceGoalBadges();
       if (groupMetaEl) groupMetaEl.textContent = 'Start solo savings or create a savings group';
       if (groupSwitcherWrap) groupSwitcherWrap.hidden = true;
       groupIdentityEl?.classList.remove('is-switchable');
@@ -230,10 +266,18 @@
       Ipon.bindAvatarFallbacks(groupAvatarEl);
     }
     if (groupNameEl) groupNameEl.textContent = safeName;
-    if (groupRoleEl) {
-      groupRoleEl.textContent = isSolo ? 'SOLO' : (currentGroup.role || state?.profile?.role || 'MEMBER');
-      groupRoleEl.classList.toggle('is-solo', isSolo);
+    if (groupModeEl) {
+      groupModeEl.hidden = false;
+      groupModeEl.textContent = isSolo ? 'SOLO' : 'GROUP';
+      groupModeEl.classList.toggle('is-solo', isSolo);
+      groupModeEl.classList.toggle('is-group', !isSolo);
     }
+    if (groupRoleEl) {
+      groupRoleEl.hidden = isSolo;
+      groupRoleEl.textContent = currentGroup.role || state?.profile?.role || 'MEMBER';
+      groupRoleEl.classList.remove('is-solo');
+    }
+    syncWorkspaceGoalBadges();
     const contributorCount = Number(currentGroup.active_member_count || 0);
     const metaParts = isSolo
       ? ['Solo savings', 'Personal tracker']
@@ -606,6 +650,7 @@
     ['dashboard-members', 'dashboard-paid', 'dashboard-unpaid'].forEach((id) => { document.getElementById(id).textContent = '0'; });
     document.getElementById('dashboard-month-collected').textContent = Ipon.money(0);
     activeGoalsList = [];
+    syncWorkspaceGoalBadges();
     updateDashboardGoalProgress(0);
     renderGoalOptions([]);
     renderCalendar([]);
@@ -708,6 +753,7 @@
       });
       Ipon.registerMemberAvatars(memberResult.data || []);
       activeGoalsList = allGoalsResult?.data || [];
+      syncWorkspaceGoalBadges();
       const adminMember = (memberResult.data || []).find((m) => m.id === currentGroup?.member_id || m.id === state?.profile?.member_id);
       if (adminMember && Number(adminMember.monthly_contribution_amount) > 0) {
         currentAdminMonthlyAmount = Number(adminMember.monthly_contribution_amount);

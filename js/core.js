@@ -4545,7 +4545,7 @@
     selectEl.replaceChildren(...rows.map((group) => {
       const opt = new Option(group.name || 'Savings Group', group.group_id);
       opt.dataset.avatar = group.avatar_url || '';
-      opt.dataset.badge = group.workspace_mode === 'SOLO' ? 'SOLO' : (group.role || '');
+      opt.dataset.badge = group.workspace_mode === 'SOLO' ? 'SOLO' : (group.role ? `GROUP · ${group.role}` : 'GROUP');
       return opt;
     }));
     if (selectedGroupId) selectEl.value = selectedGroupId;

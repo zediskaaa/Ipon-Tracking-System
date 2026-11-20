@@ -182,13 +182,33 @@ html[data-shell-role="SUPER_ADMIN"] .dashboard-sidebar .nav-link[data-role] { di
   display:inline-flex;
   align-items:center;
   padding:3px 9px;
-  border:0;
+  border:1px solid transparent;
   border-radius:999px;
   background:#145c41;
   color:#ffffff;
   font:800 10px/1.2 Arial,sans-serif;
   letter-spacing:.06em;
   text-transform:uppercase;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+
+.group-bar-badge.is-solo {
+  border-color:rgba(180,130,32,.38);
+  background:rgba(212,168,79,.22);
+  color:#78500a;
+}
+
+.group-bar-badge.is-group {
+  border-color:rgba(20,92,65,.28);
+  background:rgba(20,92,65,.11);
+  color:#114c36;
+}
+
+.group-bar-badge.is-goal {
+  border-color:rgba(45,114,148,.32);
+  background:rgba(60,134,168,.14);
+  color:#1c5b78;
 }
 
 .group-bar-meta {
@@ -1603,6 +1623,21 @@ html[data-theme="dark"] .group-bar-badge {
   border-color:rgba(70,195,130,.36);
   background:rgba(40,122,76,.24);
   color:#8ee8b5;
+}
+html[data-theme="dark"] .group-bar-badge.is-solo {
+  border-color:rgba(226,183,92,.42);
+  background:rgba(212,168,79,.18);
+  color:#f4d68c;
+}
+html[data-theme="dark"] .group-bar-badge.is-group {
+  border-color:rgba(126,224,173,.34);
+  background:rgba(70,195,130,.12);
+  color:#9decc1;
+}
+html[data-theme="dark"] .group-bar-badge.is-goal {
+  border-color:rgba(120,200,236,.38);
+  background:rgba(88,178,220,.18);
+  color:#9ed9f5;
 }
 html[data-theme="dark"] .group-bar-identity.is-switchable:hover {
   background:rgba(218,236,227,.07);

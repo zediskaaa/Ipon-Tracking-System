@@ -16,8 +16,8 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261120-05">
-  <link rel="stylesheet" href="css/hero-plates.css?v=20261120-92">
+  <link rel="stylesheet" href="css/app.css?v=20261120-06">
+  <link rel="stylesheet" href="css/hero-plates.css?v=20261120-93">
   <script src="js/config.js?v=20261120-77"></script>
 </head>
 
@@ -130,7 +130,9 @@
             <div class="group-bar-copy">
               <div class="group-bar-title-row">
                 <strong class="group-bar-name" id="dashboard-group-name">Loading group…</strong>
+                <span class="group-bar-badge" id="dashboard-group-mode" hidden>GROUP</span>
                 <span class="group-bar-badge" id="dashboard-group-role">—</span>
+                <span class="group-bar-badge is-goal" id="dashboard-group-goal-badge" hidden>GOAL</span>
                 <div class="group-switcher-wrap" id="dashboard-group-switcher-wrap" hidden>
                   <span class="sr-only">Select savings group</span>
                   <select class="group-switcher-select" id="dashboard-group-select"
@@ -511,7 +513,9 @@
             <span class="group-hub-eyebrow" id="group-hub-eyebrow">Group workspace</span>
             <div class="group-hub-name-row">
               <h2 id="group-hub-title">Savings Group</h2>
+              <span class="group-hub-role" id="group-hub-mode" hidden>GROUP</span>
               <span class="group-hub-role" id="group-hub-role">ADMIN</span>
+              <span class="group-hub-role is-goal" id="group-hub-goal-badge" hidden>GOAL</span>
             </div>
             <p id="group-hub-meta">Manage members, appearance, and contributor access.</p>
           </div>
@@ -970,12 +974,12 @@
       </div>
     </div>
   </dialog>
-  <script src="js/profile-effects.js?v=20261118-01"></script><script src="js/core.js?v=20261120-158"></script><script src="js/policy.js?v=20261119-09"></script>
+  <script src="js/profile-effects.js?v=20261118-01"></script><script src="js/core.js?v=20261120-159"></script><script src="js/policy.js?v=20261119-09"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
   <script src="js/messages.js?v=20261120-02"></script>
-  <script src="js/dashboard.js?v=20261120-95"></script>
+  <script src="js/dashboard.js?v=20261120-96"></script>
 </body>
 
 </html>
