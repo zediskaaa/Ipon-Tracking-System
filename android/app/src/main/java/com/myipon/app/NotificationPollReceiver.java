@@ -264,7 +264,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         }
     }
 
-    private static boolean isMessageNotification(String type, String dedupeKey, String title) {
+    public static boolean isMessageNotification(String type, String dedupeKey, String title) {
         if (!TextUtils.isEmpty(type)) {
             String upper = type.trim().toUpperCase();
             if ("SOCIAL_NEW_MESSAGE".equals(upper)
@@ -462,6 +462,37 @@ public class NotificationPollReceiver extends BroadcastReceiver {
 
         String tag = "myipon-" + (!TextUtils.isEmpty(dedupeKey) ? dedupeKey : id);
         NotificationManagerCompat.from(appContext).notify(tag, 0, builder.build());
+    }
+
+    public static void showDirectNotificationAsync(
+        Context context,
+        String id,
+        String dedupeKey,
+        String shownKey,
+        String type,
+        String title,
+        String body,
+        String link,
+        String avatarUrl
+    ) {
+        if (context == null) return;
+        final Context appContext = context.getApplicationContext();
+        if (!hasNotificationPermission(appContext)) return;
+        POLL_EXECUTOR.execute(() -> {
+            SharedPreferences prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            Set<String> shown = readShownSet(prefs);
+            String key = !TextUtils.isEmpty(shownKey) ? shownKey : id;
+            if (!TextUtils.isEmpty(key) && shown.contains(key)) return;
+            if (TextUtils.isEmpty(dedupeKey) && !TextUtils.isEmpty(id) && shown.contains(id)) return;
+            String cleanTitle = cleanMessageNotificationTitle(type, dedupeKey, title);
+            String cleanBody = body == null ? "" : body;
+            if (!isAlreadyInTray(appContext, id, dedupeKey, cleanTitle, cleanBody)) {
+                showDirectNotification(appContext, id, dedupeKey, type, title, cleanBody, link, avatarUrl);
+            }
+            if (!TextUtils.isEmpty(key)) shown.add(key);
+            if (TextUtils.isEmpty(dedupeKey) && !TextUtils.isEmpty(id)) shown.add(id);
+            saveShownSet(prefs, shown);
+        });
     }
 
     private static boolean isAlreadyInTray(Context context, String id, String dedupeKey, String title, String body) {

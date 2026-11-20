@@ -2109,7 +2109,7 @@
   function syncNotificationBadges(unread, { persist = true } = {}) {
     const count = Math.max(0, Math.floor(Number(unread) || 0));
     document.querySelectorAll('[data-notification-count]').forEach((badge) => {
-      badge.textContent = String(count);
+      badge.textContent = count > 99 ? '99+' : String(count);
       badge.hidden = count === 0;
     });
     if (persist) writeShellSnapshot({ unreadCount: count });
@@ -2234,7 +2234,7 @@
         ${sidebarArtHtml}
         <div class="app-sidebar-footer">
           <div class="sidebar-utilities">
-            ${msgUtilityHtml}<button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><b data-notification-count${cachedUnread > 0 ? '' : ' hidden'}>${cachedUnread}</b></button>
+            ${msgUtilityHtml}<button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><b data-notification-count${cachedUnread > 0 ? '' : ' hidden'}>${cachedUnread > 99 ? '99+' : cachedUnread}</b></button>
           </div>
           <button class="sidebar-user-card${isAccountSubview ? ' is-active' : ''}" data-account-open type="button" aria-label="Open my account"${isAccountSubview ? ' aria-current="page"' : ''}>
             <span class="avatar-presence-wrap">
@@ -7389,14 +7389,14 @@
     return item.dedupe_key ? `${item.id}:${item.created_at || item.message || ''}` : String(item.id);
   }
 
-  function markDeviceNotificationShown(userId, id) {
+  function markDeviceNotificationShown(userId, id, { syncNative = true } = {}) {
     const key = String(id);
     const list = readShownNotificationIds(userId).filter((item) => item !== key);
     list.push(key);
     try {
       localStorage.setItem(`myipon_shown_notifs_${userId}`, JSON.stringify(list.slice(-80)));
     } catch { /* ignore storage quota errors */ }
-    getBackgroundNotificationsPlugin()?.markShown?.({ id: key }).catch?.(() => { });
+    if (syncNative) getBackgroundNotificationsPlugin()?.markShown?.({ id: key }).catch?.(() => { });
   }
 
   async function syncBackgroundNotificationPolling(profile, rows = [], { force = false } = {}) {
@@ -7490,13 +7490,34 @@
     if (readShownNotificationIds(userId).includes(notifKey)) return;
     const permission = await getDeviceNotificationPermission();
     if (permission !== 'granted') return;
-    markDeviceNotificationShown(userId, notifKey);
-
     const title = formatNotificationTitle(item);
     const body = item.message || '';
     const avatarUrl = resolveNotificationAvatarUrl(item);
     const iconUrl = avatarUrl || '/assets/icon-192.png';
     const target = resolveNotificationTarget(item) || safeNotificationTarget(item.link) || 'dashboard.html';
+    const isMsgNotif = isMessageNotificationItem(item);
+    const bgPlugin = getBackgroundNotificationsPlugin();
+    if (bgPlugin?.showNotification) {
+      markDeviceNotificationShown(userId, notifKey, { syncNative: false });
+      try {
+        await bgPlugin.showNotification({
+          id: String(item.id || ''),
+          dedupeKey: item.dedupe_key ? String(item.dedupe_key) : '',
+          shownKey: notifKey,
+          type: String(item.type || ''),
+          title,
+          body,
+          link: target,
+          avatarUrl: avatarUrl || ''
+        });
+        return;
+      } catch { /* fall through */ }
+    }
+    if (isMsgNotif && hasNativeNotificationBridge()) {
+      // Older APK without showNotification: let NotificationPollReceiver render circular sender DP & MessagingStyle instead of LocalNotifications app-logo duplicate.
+      return;
+    }
+    markDeviceNotificationShown(userId, notifKey);
     const plugin = getLocalNotificationsPlugin();
     if (plugin?.schedule) {
       await ensureAndroidNotificationChannel();

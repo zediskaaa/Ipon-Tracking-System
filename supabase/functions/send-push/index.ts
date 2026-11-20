@@ -281,7 +281,9 @@ Deno.serve(async (req) => {
             } }),
             data: {
               notification_id: String(notifId),
+              notification_type: notifType,
               notification_link: link,
+              actor_avatar_url: actorAvatarUrl || '',
               shown_key: dedupeKey ? `${notifId}:${createdAt}` : String(notifId),
               dedupe_key: dedupeKey || '',
               test: isTest ? 'true' : 'false'

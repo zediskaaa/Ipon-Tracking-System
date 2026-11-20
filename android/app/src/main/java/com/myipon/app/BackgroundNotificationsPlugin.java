@@ -202,6 +202,36 @@ public class BackgroundNotificationsPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void showNotification(PluginCall call) {
+        String id = call.getString("id", "");
+        String dedupeKey = call.getString("dedupeKey", "");
+        String shownKey = call.getString("shownKey", "");
+        String type = call.getString("type", "");
+        String title = call.getString("title", "myIPON");
+        String body = call.getString("body", "");
+        String link = call.getString("link", "dashboard.html");
+        String avatarUrl = call.getString("avatarUrl", "");
+        if (TextUtils.isEmpty(id) && TextUtils.isEmpty(dedupeKey)) {
+            call.reject("Missing notification identifier.");
+            return;
+        }
+        NotificationPollReceiver.showDirectNotificationAsync(
+            getContext(),
+            id,
+            dedupeKey,
+            shownKey,
+            type,
+            title,
+            body,
+            link,
+            avatarUrl
+        );
+        JSObject result = new JSObject();
+        result.put("shown", true);
+        call.resolve(result);
+    }
+
+    @PluginMethod
     public void clear(PluginCall call) {
         Context context = getContext();
         String feedToken = context.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, Context.MODE_PRIVATE)
