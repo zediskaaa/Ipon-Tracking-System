@@ -1,8 +1,10 @@
 package com.myipon.app;
 
+import android.text.TextUtils;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 import androidx.annotation.NonNull;
+import java.util.Collections;
 
 public class MyIponMessagingService extends FirebaseMessagingService {
     @Override
@@ -16,6 +18,27 @@ public class MyIponMessagingService extends FirebaseMessagingService {
                 "Notifications arrive on this device even when myIPON is closed.", "account.html");
             return;
         }
+        RemoteMessage.Notification notification = message.getNotification();
+        if (notification != null) {
+            String id = message.getData().get("notification_id");
+            if (TextUtils.isEmpty(id)) return;
+            String shownKey = message.getData().get("shown_key");
+            NotificationPollReceiver.showDirectNotification(this, id,
+                message.getData().get("dedupe_key"), notification.getTitle(),
+                notification.getBody(), message.getData().get("notification_link"));
+            if (!TextUtils.isEmpty(shownKey)) {
+                NotificationPollReceiver.mergeShownIds(this, Collections.singletonList(shownKey));
+            }
+            return;
+        }
         NotificationPollReceiver.pollWithWakeLock(this);
+    }
+
+    @Override
+    public void onDeletedMessages() {
+        if (NotificationPollReceiver.hasFeedConfig(this)
+            && NotificationPollReceiver.hasNotificationPermission(this)) {
+            NotificationPollReceiver.pollWithWakeLock(this);
+        }
     }
 }

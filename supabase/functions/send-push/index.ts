@@ -264,20 +264,62 @@ Deno.serve(async (req) => {
           });
           if (!tokenResponse.ok) throw new Error(`Firebase OAuth HTTP ${tokenResponse.status}`);
           const { access_token } = await tokenResponse.json();
-          const fcmResponse = await fetch(`https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: {
-              topic: `notif-${feedRow.token}`,
-              data: { notification_id: String(notifId), test: isTest ? 'true' : 'false' },
-              android: { priority: 'HIGH', ttl: '86400s' }
-            } })
-          });
-          fcmSent = fcmResponse.ok;
-          if (!fcmSent) console.error('send-push FCM error', fcmResponse.status, await fcmResponse.text());
+          const { data: devices, error: deviceError } = await admin
+            .from('notification_device_tokens')
+            .select('fcm_token')
+            .eq('feed_token', feedRow.token);
+          if (deviceError) console.error('send-push device lookup error', deviceError.message);
+          const deviceTokens = (devices || []).map((row) => String(row.fcm_token || '')).filter(Boolean);
+          const staleTokens: string[] = [];
+          const notificationTag = `myipon-${dedupeKey || notifId}`;
+          const fcmMessage = {
+            notification: {
+              title: title.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '') || 'myIPON',
+              body: message
+            },
+            data: {
+              notification_id: String(notifId),
+              notification_link: link,
+              shown_key: dedupeKey ? `${notifId}:${createdAt}` : String(notifId),
+              dedupe_key: dedupeKey || '',
+              test: isTest ? 'true' : 'false'
+            },
+            android: {
+              priority: 'HIGH',
+              ttl: '86400s',
+              notification: { channel_id: 'myipon_alerts', icon: 'ic_stat_myipon', tag: notificationTag }
+            }
+          };
+          const sendFcm = async (target: { token?: string; topic?: string }) => {
+            try {
+              const response = await fetch(`https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: { ...fcmMessage, ...target } })
+              });
+              if (response.ok) return true;
+              const errorBody = await response.json().catch(() => ({}));
+              const errorStatus = errorBody?.error?.status || 'unknown';
+              console.error('send-push FCM error', response.status, errorStatus);
+              if (target.token && (response.status === 404 || errorStatus === 'UNREGISTERED')) {
+                staleTokens.push(target.token);
+              }
+            } catch (sendError) {
+              console.error('send-push FCM network error', sendError);
+            }
+            return false;
+          };
+          const sentToDevices = await Promise.all(deviceTokens.map((token) => sendFcm({ token })));
+          fcmSent = sentToDevices.some(Boolean);
+          if (staleTokens.length > 0) {
+            await admin.from('notification_device_tokens').delete().in('fcm_token', staleTokens);
+          }
+          if (!fcmSent) fcmSent = await sendFcm({ topic: `notif-${feedRow.token}` });
         } catch (fcmError) {
           console.error('send-push FCM error', fcmError);
         }
+      } else {
+        console.error('send-push FCM service account missing');
       }
       const wakeBody = JSON.stringify({
         messages: [

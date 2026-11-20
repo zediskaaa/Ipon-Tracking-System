@@ -144,7 +144,13 @@ public class BackgroundNotificationsPlugin extends Plugin {
         NotificationSyncService.pokeOrReconnect(context);
         NotificationSyncWorker.ensureScheduled(context);
         NotificationPollReceiver.scheduleNext(context, 20_000L);
-        call.resolve();
+        FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
+            JSObject result = new JSObject();
+            if (task.isSuccessful() && !TextUtils.isEmpty(task.getResult())) {
+                result.put("fcmToken", task.getResult());
+            }
+            call.resolve(result);
+        });
     }
 
     @PluginMethod

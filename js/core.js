@@ -7275,12 +7275,12 @@
           try {
             const result = await sendBackgroundTestNotification();
             if (isInstalledAppUser()) {
-              if (result?.native_ping_sent) {
-                toast('Test alert sent to your Android notification drawer.');
+              if (result?.fcm_sent) {
+                toast('Firebase accepted the test alert. Check your notification drawer.');
               } else if (result?.native_has_token === false) {
                 toast('Background feed token is not registered yet. Reopen My account or sign in again.', 'error');
               } else {
-                toast('Test alert requested. Check your notification drawer.');
+                toast('Firebase did not accept the test alert. Reopen myIPON and retry.', 'error');
               }
             } else if (result?.web_sent > 0) {
               toast('Test alert sent. Keep myIPON in Recent Apps to receive real-time alerts.');
@@ -7417,12 +7417,15 @@
           if (key) shownIds.add(key);
         }
       });
-      await bgPlugin.configure({
+      const native = await bgPlugin.configure({
         supabaseUrl: config.supabaseUrl,
         anonKey: config.supabaseAnonKey,
         feedToken: String(feedToken),
         shownIds: [...shownIds].slice(-80)
       });
+      if (native?.fcmToken) {
+        await rpc('register_notification_device_token', { p_fcm_token: native.fcmToken });
+      }
     } catch {
       lastBgPollSyncAt = 0;
     }

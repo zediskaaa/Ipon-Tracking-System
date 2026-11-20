@@ -3,6 +3,7 @@ package com.myipon.app;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlarmManager;
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -22,6 +23,7 @@ import android.graphics.Typeface;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
 import android.util.Base64;
 import androidx.core.app.NotificationCompat;
@@ -427,7 +429,23 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             }
         }
 
-        NotificationManagerCompat.from(appContext).notify(notifId, builder.build());
+        String tag = "myipon-" + (!TextUtils.isEmpty(dedupeKey) ? dedupeKey : id);
+        NotificationManagerCompat.from(appContext).notify(tag, 0, builder.build());
+    }
+
+    private static boolean isAlreadyInTray(Context context, String id, String dedupeKey, String title, String body) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        if (manager == null) return false;
+        String tag = "myipon-" + (!TextUtils.isEmpty(dedupeKey) ? dedupeKey : id);
+        for (StatusBarNotification active : manager.getActiveNotifications()) {
+            if (!tag.equals(active.getTag())) continue;
+            Notification notification = active.getNotification();
+            if (notification.extras == null) continue;
+            if (TextUtils.equals(title, notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+                && TextUtils.equals(body, notification.extras.getCharSequence(Notification.EXTRA_TEXT))) return true;
+        }
+        return false;
     }
 
     public static void pollAsync(Context context) {
@@ -566,7 +584,10 @@ public class NotificationPollReceiver extends BroadcastReceiver {
                             continue;
                         }
 
-                        showDirectNotification(appContext, id, dedupeKey, type, title, body, link, avatarUrl);
+                        if (!isAlreadyInTray(appContext, id, dedupeKey,
+                            cleanMessageNotificationTitle(type, dedupeKey, title), body)) {
+                            showDirectNotification(appContext, id, dedupeKey, type, title, body, link, avatarUrl);
+                        }
                         shown.add(shownKey);
                         if (TextUtils.isEmpty(dedupeKey)) {
                             shown.add(id);
