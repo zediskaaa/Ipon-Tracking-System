@@ -3514,9 +3514,25 @@
     if (!dlg.open) dlg.showModal();
   }
 
+  function restoreDrawerScrollInstant(scrollTop) {
+    if (scrollTop == null) return;
+    const bodyEl = document.querySelector?.('#msg-thread-drawer .msg-drawer-body.is-root');
+    if (!bodyEl) return;
+    const prevBehavior = bodyEl.style ? bodyEl.style.scrollBehavior : '';
+    if (bodyEl.style) bodyEl.style.scrollBehavior = 'auto';
+    bodyEl.scrollTop = scrollTop;
+    if (bodyEl.style) bodyEl.style.scrollBehavior = prevBehavior;
+  }
+
   function closeVanishModal() {
     const dlg = document.getElementById('msg-vanish-dialog');
-    if (dlg?.open) dlg.close();
+    if (!dlg?.open) return;
+    const bodyEl = document.querySelector?.('#msg-thread-drawer .msg-drawer-body.is-root');
+    const savedScrollTop = bodyEl ? bodyEl.scrollTop : null;
+    dlg.close();
+    restoreDrawerScrollInstant(savedScrollTop);
+    document.querySelector?.('[data-vanish-switch]')?.focus?.({ preventScroll: true });
+    restoreDrawerScrollInstant(savedScrollTop);
   }
 
   async function saveVanishSetting(seconds, { closeModalOnSuccess = false } = {}) {
@@ -3524,7 +3540,7 @@
     const conversationId = state.activeConvId;
     state.savingVanish = true;
     state.vanishError = '';
-    renderThreadInfoDrawer();
+    document.querySelectorAll?.('[data-vanish-switch], [data-vanish-open-modal]').forEach((el) => { el.disabled = true; });
     if (document.getElementById('msg-vanish-dialog')?.open) syncVanishModalControls();
     let ok = false;
     try {
@@ -3543,9 +3559,17 @@
     } finally {
       state.savingVanish = false;
       if (state.activeConvId === conversationId) {
+        const bodyBefore = document.querySelector?.('#msg-thread-drawer .msg-drawer-body.is-root');
+        const savedScrollTop = bodyBefore ? bodyBefore.scrollTop : null;
         if (ok && closeModalOnSuccess) closeVanishModal();
         renderThreadInfoDrawer();
-        if (document.getElementById('msg-vanish-dialog')?.open) renderVanishModal();
+        restoreDrawerScrollInstant(savedScrollTop);
+        if (document.getElementById('msg-vanish-dialog')?.open) {
+          renderVanishModal();
+        } else {
+          document.querySelector?.('[data-vanish-switch]')?.focus?.({ preventScroll: true });
+          restoreDrawerScrollInstant(savedScrollTop);
+        }
       }
     }
     return ok;
@@ -3903,7 +3927,15 @@
         </div>
       </div>`;
     drawer.dataset.conversationId = conv.conversation_id;
-    if (previousScrollTop != null) drawer.querySelector('.msg-drawer-body.is-root').scrollTop = previousScrollTop;
+    if (previousScrollTop != null) {
+      const bodyEl = drawer.querySelector('.msg-drawer-body.is-root');
+      if (bodyEl) {
+        const prevBehavior = bodyEl.style ? bodyEl.style.scrollBehavior : '';
+        if (bodyEl.style) bodyEl.style.scrollBehavior = 'auto';
+        bodyEl.scrollTop = previousScrollTop;
+        if (bodyEl.style) bodyEl.style.scrollBehavior = prevBehavior;
+      }
+    }
     iponApi?.bindAvatarFallbacks?.(drawer);
     iponApi?.syncPresenceDots?.(drawer);
   }

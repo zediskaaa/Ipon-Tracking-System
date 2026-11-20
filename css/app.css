@@ -9227,7 +9227,7 @@ html[data-theme="dark"] .msg-row.is-failed .msg-bubble.has-audio-only .msg-tick.
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   padding: 14px;
   display: flex;
   flex-direction: column;

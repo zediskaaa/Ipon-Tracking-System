@@ -57,9 +57,12 @@ test('message ring starts at full blue outline, shrinks with time, uses premium 
   assert.match(source, /data-vanish-unit="seconds"/);
   assert.match(source, /data-vanish-unit="minutes"/);
   assert.match(source, /hasPendingIncomingVanish/);
+  assert.match(source, /function restoreDrawerScrollInstant\(scrollTop\)/);
+  assert.match(source, /focus\?\.\(\{\s*preventScroll:\s*true\s*\}\)/);
   assert.doesNotMatch(source, /1\?3600|1\?\$\{max\}/);
   assert.match(css, /@property --vanish-angle/);
   assert.match(css, /#4aaeff/);
+  assert.match(css, /\.msg-drawer-body\s*\{[^}]*scroll-behavior:\s*auto;/s);
   assert.match(css, /mask:\s*linear-gradient\(#000 0 0\) content-box,\s*linear-gradient\(#000 0 0\);/);
   assert.match(css, /dialog\.msg-vanish-modal\s*\{/);
   assert.match(css, /\.msg-vanish-modal \.msg-vanish-close\s*\{[^}]*border-radius:\s*50%;/s);
