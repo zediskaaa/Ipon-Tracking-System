@@ -621,3 +621,65 @@ test('account onboarding notice banner uses step pill, clean uniform border, and
   assert.match(css, /@media \(max-width:620px\)\{\.inline-notice\.onboarding-notice\{flex-wrap:nowrap;align-items:flex-start;gap:14px;padding:16px\}\.onboarding-notice-body\{flex:1 1 auto\}\.onboarding-notice-step\{display:none\}\}/);
   assert.match(css, /html\[data-theme="dark"\] \.inline-notice\.onboarding-notice\s*\{/);
 });
+
+test('editing a chat message clears the composer input and draft immediately without leaking edit text back', async () => {
+  const src = read('js/messages.js');
+  assert.match(src, /if \(prevInput && !state\.editingMsg\) state\.draftsByConv\.set\(state\.activeConvId, prevInput\.value\);/);
+  assert.match(src, /if \(state\.activeConvId && !state\.editingMsg\) state\.draftsByConv\.set\(state\.activeConvId, ev\.target\.value\);/);
+  assert.match(src, /function restoreDraftAfterEdit\(\)[\s\S]*?state\.draftsByConv\.get\(state\.activeConvId\)/);
+  assert.match(src, /function startReplyToMessage\(msgObj\)[\s\S]*?if \(wasEditing\) restoreDraftAfterEdit\(\);/);
+  assert.match(src, /#msg-cancel-context[\s\S]*?if \(wasEditing\) restoreDraftAfterEdit\(\);/);
+
+  const submitSrc = src.match(/async function submitComposer\(event\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(submitSrc, 'submitComposer must exist');
+
+  const inputEl = { value: 'edited message text', style: {}, scrollHeight: 40 };
+  const sendBtn = { disabled: false, classList: { add() {}, remove() {} } };
+  const state = {
+    activeConvId: 'conv-1',
+    editingMsg: { id: 'msg-1', body: 'old text' },
+    draftsByConv: new Map([['conv-1', 'stale edited text']]),
+    uploadQueue: [],
+    replyToMsg: null
+  };
+  let rpcArgs = null;
+  let counterVal = -1;
+  let contextRenders = 0;
+
+  const submitComposer = new Function(
+    'state', 'document', 'isEligible', 'ipon', 'sendTypingBroadcast',
+    'autoResizeTextarea', 'syncComposerCharCounter', 'renderContextBar',
+    'openConversation', 'refreshConversations', 'clearUploadQueue', 'enqueuePendingMessage', 'MAX_ATTACHMENTS_PER_MSG',
+    `${submitSrc}; return submitComposer;`
+  )(
+    state,
+    { getElementById: (id) => (id === 'msg-composer-input' ? inputEl : (id === 'msg-send-btn' ? sendBtn : null)) },
+    () => true,
+    () => ({
+      rpc: async (name, args) => { rpcArgs = { name, args }; return { id: args.p_message_id, body: args.p_body }; },
+      toast: () => {},
+      friendlyError: (e) => String(e)
+    }),
+    () => {},
+    (el) => { el.style.height = '40px'; },
+    (n) => { counterVal = n; },
+    () => { contextRenders += 1; },
+    async () => {},
+    async () => {},
+    () => {},
+    () => {},
+    5
+  );
+
+  await submitComposer({ preventDefault() {} });
+  assert.equal(rpcArgs.name, 'edit_chat_message');
+  assert.equal(rpcArgs.args.p_message_id, 'msg-1');
+  assert.equal(rpcArgs.args.p_body, 'edited message text');
+  assert.equal(state.editingMsg, null);
+  assert.equal(inputEl.value, '');
+  assert.equal(inputEl.style.height, '40px');
+  assert.equal(counterVal, 0);
+  assert.equal(state.draftsByConv.has('conv-1'), false);
+  assert.equal(contextRenders, 1);
+  assert.equal(sendBtn.disabled, false);
+});

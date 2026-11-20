@@ -2143,7 +2143,7 @@
       state.groupEditAvatarClear = false;
       state.groupEditAvatarConvId = conversationId;
       const prevInput = document.getElementById('msg-composer-input');
-      if (prevInput) state.draftsByConv.set(state.activeConvId, prevInput.value);
+      if (prevInput && !state.editingMsg) state.draftsByConv.set(state.activeConvId, prevInput.value);
     }
 
     state.activeConvId = conversationId;
@@ -4622,6 +4622,16 @@
     el.style.overflowY = el.scrollHeight > 140 ? 'auto' : 'hidden';
   }
 
+  function restoreDraftAfterEdit() {
+    const inp = document.getElementById('msg-composer-input');
+    const restoredDraft = state.activeConvId ? (state.draftsByConv.get(state.activeConvId) || '') : '';
+    if (inp) {
+      inp.value = restoredDraft;
+      autoResizeTextarea(inp);
+      syncComposerCharCounter(inp.value.length);
+    }
+  }
+
   function renderContextBar() {
     const bar = document.getElementById('msg-context-bar');
     if (!bar) return;
@@ -4733,14 +4743,38 @@
         ipon().toast('Message cannot be empty.', 'error');
         return;
       }
+      if (sendBtn?.disabled) return;
+      const convId = state.activeConvId;
+      const editingTarget = state.editingMsg;
+      const rawBeforeSubmit = input ? input.value : body;
+      state.editingMsg = null;
+      sendTypingBroadcast(false);
+      state.draftsByConv.delete(convId);
+      if (input) { input.value = ''; autoResizeTextarea(input); }
+      syncComposerCharCounter(0);
+      renderContextBar();
       if (sendBtn) { sendBtn.disabled = true; sendBtn.classList.add('is-submitting'); }
       try {
-        await ipon().rpc('edit_chat_message', { p_message_id: state.editingMsg.id, p_body: body });
-        state.editingMsg = null;
-        if (input) { input.value = ''; autoResizeTextarea(input); }
-        renderContextBar();
-        await Promise.all([openConversation(state.activeConvId, { markRead: false, silent: true }), refreshConversations()]);
+        await ipon().rpc('edit_chat_message', { p_message_id: editingTarget.id, p_body: body });
+        state.draftsByConv.delete(convId);
+        const liveInput = document.getElementById('msg-composer-input');
+        if (liveInput && !state.editingMsg && liveInput.value.trim() === body) {
+          liveInput.value = '';
+          autoResizeTextarea(liveInput);
+          syncComposerCharCounter(0);
+        }
+        await Promise.all([openConversation(convId, { markRead: false, silent: true }), refreshConversations()]);
       } catch (err) {
+        if (state.activeConvId === convId) {
+          state.editingMsg = editingTarget;
+          renderContextBar();
+          const liveInput = document.getElementById('msg-composer-input');
+          if (liveInput && !liveInput.value) {
+            liveInput.value = rawBeforeSubmit;
+            autoResizeTextarea(liveInput);
+            syncComposerCharCounter(liveInput.value.length);
+          }
+        }
         ipon().toast(ipon().friendlyError(err), 'error');
       } finally {
         if (sendBtn) { sendBtn.disabled = false; sendBtn.classList.remove('is-submitting'); }
@@ -5928,7 +5962,9 @@
   function startReplyToMessage(msgObj) {
     if (!msgObj) return;
     closeFloatingMenus();
+    const wasEditing = Boolean(state.editingMsg);
     state.editingMsg = null;
+    if (wasEditing) restoreDraftAfterEdit();
     state.replyToMsg = msgObj;
     renderContextBar();
     document.getElementById('msg-composer-input')?.focus();
@@ -6729,7 +6765,7 @@
         } else if (op === 'edit') {
           state.replyToMsg = null; state.editingMsg = msgObj; renderContextBar();
           const inp = document.getElementById('msg-composer-input');
-          if (inp) { inp.value = msgObj.body || ''; autoResizeTextarea(inp); inp.focus(); }
+          if (inp) { inp.value = msgObj.body || ''; autoResizeTextarea(inp); syncComposerCharCounter(inp.value.length); inp.focus(); }
         } else if (op === 'forward') {
           await openForwardDialog(msgObj);
         } else if (op === 'pin') {
@@ -6790,7 +6826,14 @@
         removePendingItem(state.activeConvId, deletePendingBtn.dataset.pendingDelete, { revokeUrls: true, cleanupRemote: true });
         return;
       }
-      if (ev.target.closest?.('#msg-cancel-context')) { state.replyToMsg = null; state.editingMsg = null; renderContextBar(); return; }
+      if (ev.target.closest?.('#msg-cancel-context')) {
+        const wasEditing = Boolean(state.editingMsg);
+        state.replyToMsg = null;
+        state.editingMsg = null;
+        if (wasEditing) restoreDraftAfterEdit();
+        renderContextBar();
+        return;
+      }
       const attachTrigger = ev.target.closest?.('#msg-attach-btn');
       if (attachTrigger) {
         closeFloatingMenus();
@@ -7099,7 +7142,7 @@
       } else if (ev.target?.id === 'msg-composer-input') {
         autoResizeTextarea(ev.target);
         syncComposerCharCounter(ev.target.value.length);
-        if (state.activeConvId) state.draftsByConv.set(state.activeConvId, ev.target.value);
+        if (state.activeConvId && !state.editingMsg) state.draftsByConv.set(state.activeConvId, ev.target.value);
         sendTypingBroadcast(Boolean(ev.target.value.trim()));
       } else if (ev.target?.id === 'msg-group-edit-title') {
         const val = String(ev.target.value || '').trim().replace(/\s+/g, ' ');
