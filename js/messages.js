@@ -247,6 +247,33 @@
     return count > 0 ? `${count} friend${count === 1 ? '' : 's'}` : '';
   }
 
+  function personIsOnline(user) {
+    return isSelfUser(user) || user?.is_self === true || (user?.allow_online_status !== false && ipon().isUserOnline(user?.id));
+  }
+
+  function visibleLastSeenAt(user) {
+    if (!user?.last_seen_at || user.allow_online_status === false) return '';
+    const liveTs = liveLastSeenMap.get(String(user.id || ''));
+    return (Date.parse(liveTs || '') || 0) > (Date.parse(user.last_seen_at) || 0) ? liveTs : user.last_seen_at;
+  }
+
+  function sortPeopleByPresence(people) {
+    return [...people].sort((a, b) => {
+      const aOnline = personIsOnline(a);
+      const bOnline = personIsOnline(b);
+      if (aOnline !== bOnline) return aOnline ? -1 : 1;
+      if (aOnline) {
+        const aSelf = isSelfUser(a) || a?.is_self === true;
+        const bSelf = isSelfUser(b) || b?.is_self === true;
+        if (aSelf !== bSelf) return aSelf ? -1 : 1;
+      } else {
+        const byLastSeen = (Date.parse(visibleLastSeenAt(b)) || 0) - (Date.parse(visibleLastSeenAt(a)) || 0);
+        if (byLastSeen) return byLastSeen;
+      }
+      return String(a?.full_name || '').localeCompare(String(b?.full_name || ''));
+    });
+  }
+
   function formatStatusLine(user, isTyping = false) {
     const typingList = Array.isArray(isTyping) ? isTyping : [];
     const typingOn = Array.isArray(isTyping) ? typingList.length > 0 : Boolean(isTyping);
@@ -275,12 +302,9 @@
     if (isSelfUser(user)) return 'Message yourself · Personal notes';
     if (!user.allow_online_status) return 'Privacy mode';
     if (ipon().isUserOnline(user.id)) return 'Active now';
-    const liveTs = user.last_seen_at ? liveLastSeenMap.get(String(user.id || '')) : null;
-    const serverMs = user.last_seen_at ? (Date.parse(user.last_seen_at) || 0) : 0;
-    const liveMs = liveTs ? (Date.parse(liveTs) || 0) : 0;
-    const bestTs = liveMs > serverMs ? liveTs : user.last_seen_at;
-    if (bestTs) {
-      return formatLastSeenTime(bestTs) || 'Offline';
+    const lastSeenAt = visibleLastSeenAt(user);
+    if (lastSeenAt) {
+      return formatLastSeenTime(lastSeenAt) || 'Offline';
     }
     return 'Offline';
   }
@@ -1763,6 +1787,7 @@
       <button type="button" class="msg-search-person-main" data-social-action="message" data-target-id="${escapeHtml(u.id)}">
         <strong class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}${userBadgesHtml(u)}</strong>
         <span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>
+        ${isSelf ? '' : `<span class="msg-search-person-presence${personIsOnline(u) ? ' is-online' : ''}">${escapeHtml(formatStatusLine(u))}</span>`}
       </button>
       <div class="msg-search-person-act">${relChip}</div>
     </article>`;
@@ -1771,7 +1796,7 @@
   function renderInlineSearchResults(listEl, rawQuery) {
     const q = rawQuery.trim();
     const convHits = q ? getFilteredConversations({ ignoreFilter: true }) : [];
-    const peopleHits = state.discoverUsers || [];
+    const peopleHits = sortPeopleByPresence(state.discoverUsers || []);
     const msgHits = q.length >= 2 ? (state.discoverMessages || []) : [];
 
     if (!q && state.searchActive) {
@@ -3454,7 +3479,7 @@
     }
     try {
       const [users, msgHits] = await Promise.all([
-        ipon().rpc('search_social_users', { p_query: q, p_limit: 30 }).catch(() => []),
+        ipon().rpc('search_social_users', { p_query: q, p_limit: 50 }).catch(() => []),
         q.trim().length >= 2
           ? ipon().rpc('search_conversation_messages', { p_conversation_id: null, p_query: q, p_sender_id: null, p_limit: 30 }).catch(() => [])
           : Promise.resolve([])
@@ -7148,6 +7173,9 @@
       }
       if (state.tab === 'friends' && state.friendsSubTab === 'all' && document.getElementById('msg-workspace-dialog')?.open) {
         renderFriendsView();
+      }
+      if (state.tab === 'chats' && (state.searchActive || state.chatListQuery.trim()) && document.getElementById('msg-workspace-dialog')?.open) {
+        renderConversationList();
       }
     };
     pingLastSeen();
