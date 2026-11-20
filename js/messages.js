@@ -6721,7 +6721,8 @@
       if (!row || row.classList?.contains?.('is-pending')) return null;
       if (row.querySelector?.('.msg-bubble.is-deleted')) return null;
       if (state.activeThread?.conversation?.is_blocked) return null;
-      if (target?.closest?.('button, a, input, textarea, select, [role="button"], .msg-video-controls, .msg-voice-play-btn')) return null;
+      const mediaSurface = target?.closest?.('.msg-img-open-btn, .msg-att-video, .msg-video-center-play');
+      if (target?.closest?.('button, a, input, textarea, select, [role="button"], .msg-video-controls, .msg-voice-play-btn') && !mediaSurface) return null;
       if (pointerType === 'mouse' && target?.closest?.('.msg-text, .msg-reply-quote, .msg-sender-name')) return null;
       const msgId = row.dataset?.msgId;
       if (!msgId) return null;

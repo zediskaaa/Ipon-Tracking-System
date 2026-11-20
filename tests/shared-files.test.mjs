@@ -91,7 +91,7 @@ test('Shared files excludes voice notes and voice messages while counting and li
   renderDrawer();
   assert.match(drawerEl.innerHTML, /No shared files yet/);
   assert.match(swJs, /ipon-shell-v(?:2[3-9]|[3-9]\d)/);
-  assert.match(dashboardHtml, /js\/messages\.js\?v=20261120-01/);
+  assert.match(dashboardHtml, /js\/messages\.js\?v=20261120-02/);
 });
 
 test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Manager, Google Drive) work end-to-end', async () => {
@@ -137,6 +137,7 @@ test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Man
   };
   const clickedInputs = [];
   const nativeSources = [];
+  const openedImages = [];
   const styleProps = new Map();
   const msgRowEl = {
     dataset: { msgId: 'm-peer-1' },
@@ -184,6 +185,7 @@ test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Man
       toast: (msg) => toasts.push(msg),
       bindAvatarFallbacks: () => { },
       syncPresenceDots: () => { },
+      openImageViewer: (url) => openedImages.push(url),
       isUserOnline: () => false,
       rpc: async () => [],
       client: null
@@ -287,6 +289,54 @@ test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Man
   assert.match(contextBarEl.innerHTML, /Replying to Alice/);
   assert.match(contextBarEl.innerHTML, /Hello swipe test!/);
   assert.equal(composerInputEl.focused, true);
+
+  // A photo button and the video play surface also start the existing reply gesture.
+  const imageButton = { dataset: { openImg: 'https://example.test/photo.jpg', imgName: 'photo.jpg' } };
+  const imageTarget = { closest: (sel) => {
+    if (sel.includes('.msg-row')) return msgRowEl;
+    if (sel.includes('.msg-img-open-btn')) return imageButton;
+    if (sel.startsWith('button, a')) return imageButton;
+    if (sel.startsWith('[data-msg-id=')) return msgRowEl;
+    if (sel === '[data-open-img]') return imageButton;
+    return null;
+  } };
+  msgRowEl.dataset.msgId = 'm-photo';
+  winStub.IponMessages.__setStateForTest(
+    { conversation_id: 'c1', id: 'u2', full_name: 'Alice', kind: 'DIRECT', status: 'ACCEPTED', is_blocked: false },
+    [{ id: 'm-photo', sender_id: 'u2', sender_name: 'Alice', body: '', message_type: 'IMAGE', attachments: [{ kind: 'image' }] }]
+  );
+  await emitDoc('pointerdown', { pointerType: 'touch', pointerId: 3, clientX: 80, clientY: 200, target: imageTarget });
+  await emitDoc('pointermove', { pointerType: 'touch', pointerId: 3, clientX: 136, clientY: 204, target: imageTarget });
+  await emitDoc('pointerup', { pointerType: 'touch', pointerId: 3, clientX: 136, clientY: 204 });
+  assert.equal(winStub.IponMessages.__getStateForTest().replyToMsg?.id, 'm-photo');
+  await emitDoc('click', { target: imageTarget });
+  assert.equal(openedImages.length, 0, 'a swipe does not open the photo');
+  await emitDoc('pointerdown', { pointerType: 'touch', pointerId: 4, clientX: 80, clientY: 200, target: imageTarget });
+  await emitDoc('pointerup', { pointerType: 'touch', pointerId: 4, clientX: 80, clientY: 200 });
+  await emitDoc('click', { target: imageTarget });
+  assert.equal(openedImages.at(-1), 'https://example.test/photo.jpg', 'a tap still opens the photo');
+
+  const videoControl = {};
+  const videoTarget = { closest: (sel) => {
+    if (sel.includes('.msg-row')) return msgRowEl;
+    if (sel.includes('.msg-video-center-play')) return videoControl;
+    if (sel.startsWith('button, a')) return videoControl;
+    return null;
+  } };
+  msgRowEl.dataset.msgId = 'm-video';
+  winStub.IponMessages.__setStateForTest(
+    { conversation_id: 'c1', id: 'u2', full_name: 'Alice', kind: 'DIRECT', status: 'ACCEPTED', is_blocked: false },
+    [{ id: 'm-video', sender_id: 'u2', sender_name: 'Alice', body: '', message_type: 'VIDEO', attachments: [{ kind: 'video' }] }]
+  );
+  await emitDoc('pointerdown', { pointerType: 'touch', pointerId: 5, clientX: 80, clientY: 200, target: videoTarget });
+  await emitDoc('pointermove', { pointerType: 'touch', pointerId: 5, clientX: 136, clientY: 204, target: videoTarget });
+  await emitDoc('pointerup', { pointerType: 'touch', pointerId: 5, clientX: 136, clientY: 204 });
+  assert.equal(winStub.IponMessages.__getStateForTest().replyToMsg?.id, 'm-video');
+  const seekTarget = { closest: (sel) => sel.includes('.msg-row') ? msgRowEl : (sel.startsWith('button, a') ? videoControl : null) };
+  await emitDoc('pointerdown', { pointerType: 'touch', pointerId: 6, clientX: 80, clientY: 200, target: seekTarget });
+  await emitDoc('pointermove', { pointerType: 'touch', pointerId: 6, clientX: 136, clientY: 204, target: seekTarget });
+  await emitDoc('pointerup', { pointerType: 'touch', pointerId: 6, clientX: 136, clientY: 204 });
+  assert.equal(msgRowEl.classList.contains('is-swipe-ready'), false, 'video controls stay dedicated to playback');
 
   // Small jitter / vertical scroll does NOT change replyToMsg
   winStub.IponMessages.__setStateForTest(
