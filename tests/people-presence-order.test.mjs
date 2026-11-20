@@ -31,21 +31,32 @@ test('people directory ranks online users first, then latest visible offline act
   assert.equal(visibleLastSeenAt(people[4]), '');
 });
 
-test('people rows show last online on a separate line without exposing self activity', () => {
+test('people rows show last online on a separate line without exposing self activity and omit online dot when offline', () => {
   const start = source.indexOf('  function renderSearchPersonRowHtml(');
   const end = source.indexOf('  function renderInlineSearchResults(', start);
   assert.ok(start >= 0 && end > start);
+  const avatarOpts = new Map();
   const render = runInNewContext(`${source.slice(start, end)} renderSearchPersonRowHtml`, {
     isSelfUser: (user) => user.is_self === true,
     formatFriendCountText: () => '',
-    userAvatarHtml: () => '<span>Avatar</span>',
+    userAvatarHtml: (user, _size, opts = {}) => {
+      avatarOpts.set(user.id, opts);
+      return opts.showPresence === false ? '<span>Avatar</span>' : '<span>Avatar<i class="presence-dot is-online"></i></span>';
+    },
     userBadgesHtml: () => '',
     personIsOnline: (user) => user.id === 'online',
     formatStatusLine: (user) => user.id === 'online' ? 'Active now' : 'Offline since 10:30 AM',
     escapeHtml: (value) => String(value),
   });
-  assert.match(render({ id: 'offline', full_name: 'Offline user' }), /msg-search-person-presence[^>]*>Offline since 10:30 AM/);
-  assert.doesNotMatch(render({ id: 'online', full_name: 'Online user' }), /msg-search-person-presence|Active now/);
-  assert.doesNotMatch(render({ id: 'self', full_name: 'Me', is_self: true }), /msg-search-person-presence/);
+  const offlineHtml = render({ id: 'offline', full_name: 'Offline user' });
+  const onlineHtml = render({ id: 'online', full_name: 'Online user' });
+  const selfHtml = render({ id: 'self', full_name: 'Me', is_self: true });
+  assert.match(offlineHtml, /msg-search-person-presence[^>]*>Offline since 10:30 AM/);
+  assert.doesNotMatch(offlineHtml, /presence-dot/);
+  assert.equal(avatarOpts.get('offline')?.showPresence, false);
+  assert.doesNotMatch(onlineHtml, /msg-search-person-presence|Active now/);
+  assert.equal(avatarOpts.get('online')?.showPresence, true);
+  assert.doesNotMatch(selfHtml, /msg-search-person-presence/);
+  assert.equal(avatarOpts.get('self')?.showPresence, true);
   assert.match(source, /state\.tab === 'chats' && \(state\.searchActive \|\| state\.chatListQuery\.trim\(\)\)[\s\S]*?renderConversationList\(\)/);
 });

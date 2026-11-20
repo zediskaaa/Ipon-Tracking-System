@@ -2473,6 +2473,7 @@
   }
 
   function syncPresenceDots(root = document) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
     root.querySelectorAll('[data-presence-id]').forEach((dot) => {
       const uid = dot.dataset.presenceId;
       if (!uid) return;
@@ -2520,15 +2521,24 @@
     }
   }
 
+  let lastPresenceUpdateAt = 0;
+
   function broadcastLocalPresence() {
     try {
-      const ids = Array.from(onlineUserIds);
+      const at = Date.now();
+      lastPresenceUpdateAt = Math.max(lastPresenceUpdateAt, at);
+      const payload = {
+        type: 'SYNC',
+        userId: String(currentProfile?.id || ''),
+        ids: Array.from(onlineUserIds),
+        at
+      };
       if ('BroadcastChannel' in window) {
         const bc = new BroadcastChannel(PRESENCE_SYNC_CHANNEL);
-        bc.postMessage({ type: 'SYNC', ids, at: Date.now() });
+        bc.postMessage(payload);
         bc.close();
       }
-      localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify({ ids, at: Date.now() }));
+      localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify(payload));
     } catch (_) { }
   }
 
@@ -2538,8 +2548,9 @@
   function setOnlineVisibility(showOnline) {
     presenceShowOnline = showOnline !== false;
     if (!currentProfile?.id) return;
+    const myId = String(currentProfile.id);
     if (presenceShowOnline) {
-      onlineUserIds.add(String(currentProfile.id));
+      onlineUserIds.add(myId);
       presenceChannel?.track?.({
         user_id: currentProfile.id,
         full_name: currentProfile.full_name,
@@ -2547,11 +2558,12 @@
         online_at: new Date().toISOString()
       }).catch?.(() => { });
     } else {
-      onlineUserIds.delete(String(currentProfile.id));
+      onlineUserIds.delete(myId);
       presenceChannel?.untrack?.().catch?.(() => { });
     }
     syncPresenceDots();
     broadcastLocalPresence();
+    emitPresenceChange(presenceShowOnline ? [] : [myId]);
   }
 
   function initPresence(profile) {
@@ -2564,26 +2576,34 @@
     else onlineUserIds.delete(String(profile.id));
     syncPresenceDots();
 
+    const applyLocalPresenceSnapshot = (data) => {
+      if (!data || !Array.isArray(data.ids)) return;
+      if (data.userId && String(data.userId) !== String(profile.id)) return;
+      const ts = Number(data.at) || 0;
+      if (ts && ts <= lastPresenceUpdateAt) return;
+      if (ts) lastPresenceUpdateAt = ts;
+      const prev = new Set(onlineUserIds);
+      onlineUserIds.clear();
+      data.ids.forEach((id) => { if (id) onlineUserIds.add(String(id)); });
+      if (presenceShowOnline && document.visibilityState !== 'hidden') onlineUserIds.add(String(profile.id));
+      else onlineUserIds.delete(String(profile.id));
+      const leftIds = Array.from(prev).filter((id) => !onlineUserIds.has(id));
+      const joinedIds = Array.from(onlineUserIds).filter((id) => !prev.has(id));
+      syncPresenceDots();
+      if (leftIds.length || joinedIds.length) emitPresenceChange(leftIds);
+    };
+
     try {
       if ('BroadcastChannel' in window) {
         const bc = new BroadcastChannel(PRESENCE_SYNC_CHANNEL);
         bc.addEventListener('message', (event) => {
-          if (event.data?.ids && Array.isArray(event.data.ids)) {
-            event.data.ids.forEach((id) => onlineUserIds.add(String(id)));
-            if (!presenceShowOnline) onlineUserIds.delete(String(profile.id));
-            syncPresenceDots();
-          }
+          applyLocalPresenceSnapshot(event.data);
         });
       }
       window.addEventListener('storage', (event) => {
         if (event.key === PRESENCE_STORAGE_KEY && event.newValue) {
           try {
-            const data = JSON.parse(event.newValue);
-            if (Array.isArray(data?.ids)) {
-              data.ids.forEach((id) => onlineUserIds.add(String(id)));
-              if (!presenceShowOnline) onlineUserIds.delete(String(profile.id));
-              syncPresenceDots();
-            }
+            applyLocalPresenceSnapshot(JSON.parse(event.newValue));
           } catch (_) { }
         }
       });
@@ -2609,6 +2629,15 @@
         }
       });
 
+      const hasActivePresence = (stateObj, uid) => {
+        if (!uid || !stateObj) return false;
+        const direct = stateObj[uid];
+        if (Array.isArray(direct) && direct.length > 0) return true;
+        return Object.values(stateObj).some(
+          (entries) => Array.isArray(entries) && entries.some((entry) => String(entry?.user_id || '') === uid)
+        );
+      };
+
       const handleSync = () => {
         try {
           const prev = new Set(onlineUserIds);
@@ -2616,16 +2645,18 @@
           onlineUserIds.clear();
           if (presenceShowOnline && document.visibilityState !== 'hidden') onlineUserIds.add(String(profile.id));
           Object.keys(state || {}).forEach((key) => {
+            const presences = state[key];
+            if (!Array.isArray(presences) || !presences.length) return;
             if (key) onlineUserIds.add(String(key));
-            const presences = state[key] || [];
             presences.forEach((entry) => {
               if (entry?.user_id) onlineUserIds.add(String(entry.user_id));
             });
           });
           const leftIds = Array.from(prev).filter((id) => !onlineUserIds.has(id));
+          const joinedIds = Array.from(onlineUserIds).filter((id) => !prev.has(id));
           syncPresenceDots();
           broadcastLocalPresence();
-          if (leftIds.length) emitPresenceChange(leftIds);
+          if (leftIds.length || joinedIds.length) emitPresenceChange(leftIds);
         } catch (_) { }
       };
 
@@ -2641,12 +2672,13 @@
         .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
           const state = presenceChannel.presenceState();
           const leftIds = [];
-          if (key && !state[key] && (key !== String(profile.id) || !presenceShowOnline || document.visibilityState === 'hidden')) {
-            if (onlineUserIds.delete(String(key))) leftIds.push(String(key));
+          const keyId = key ? String(key) : '';
+          if (keyId && !hasActivePresence(state, keyId) && (keyId !== String(profile.id) || !presenceShowOnline || document.visibilityState === 'hidden')) {
+            if (onlineUserIds.delete(keyId)) leftIds.push(keyId);
           }
           (leftPresences || []).forEach((p) => {
             const uid = p?.user_id ? String(p.user_id) : '';
-            if (uid && (uid !== String(profile.id) || !presenceShowOnline || document.visibilityState === 'hidden') && !state[uid]) {
+            if (uid && (uid !== String(profile.id) || !presenceShowOnline || document.visibilityState === 'hidden') && !hasActivePresence(state, uid)) {
               if (onlineUserIds.delete(uid)) leftIds.push(uid);
             }
           });

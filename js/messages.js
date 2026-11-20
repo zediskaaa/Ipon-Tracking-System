@@ -1037,6 +1037,52 @@
     return isGroupConv(conv) ? peers.size > 0 : peers.has(String(conv.id || ''));
   }
 
+  function syncActiveThreadPresenceUi(conv = state.activeThread?.conversation) {
+    const dialog = document.getElementById('msg-workspace-dialog');
+    if (dialog) ipon().syncPresenceDots?.(dialog);
+    const activeWrap = document.getElementById('msg-thread-active');
+    if (activeWrap && activeWrap !== dialog) ipon().syncPresenceDots?.(activeWrap);
+    if (!conv) return;
+    const liveStatus = formatStatusLine(conv);
+    const subEl = document.getElementById('msg-peer-status-text');
+    if (subEl) {
+      subEl.textContent = liveStatus;
+      subEl.hidden = !liveStatus;
+    }
+    const isGrp = isGroupConv(conv);
+    let dotOnline = false;
+    if (isGrp) {
+      const myId = String(initializedProfile?.id || '');
+      const pool = (Array.isArray(conv.members_preview) && conv.members_preview.length
+        ? conv.members_preview
+        : (Array.isArray(conv.members) ? conv.members : [])
+      ).filter((m) => m && String(m.id || '') !== myId);
+      dotOnline = pool.some((m) => m.profile_visible !== false && m.allow_online_status !== false && ipon().isUserOnline(m.id));
+    } else if (!isSelfUser(conv) && conv.profile_visible !== false && conv.allow_online_status !== false && !conv.is_blocked && conv.friendship_status !== 'BLOCKED_BY_ME' && conv.friendship_status !== 'BLOCKED_ME') {
+      dotOnline = Boolean(ipon().isUserOnline(conv.id));
+    }
+    const applyDot = (dot) => {
+      if (!dot) return;
+      dot.classList.toggle('is-online', dotOnline);
+      const label = dotOnline ? (isGrp ? 'Members online' : 'Active now') : 'Offline';
+      dot.setAttribute?.('aria-label', label);
+      dot.title = label;
+    };
+    applyDot(document.getElementById('msg-thread-header')?.querySelector?.('.presence-dot'));
+    applyDot(document.getElementById('msg-messages-list')?.querySelector?.('.msg-welcome-avatar .presence-dot'));
+    const welcomeStatus = document.getElementById('msg-welcome-status-text');
+    if (welcomeStatus) {
+      const isOn = !isGrp && (isSelfUser(conv) || dotOnline);
+      welcomeStatus.classList.toggle('is-online', isOn);
+      welcomeStatus.textContent = liveStatus;
+      welcomeStatus.hidden = !liveStatus;
+      const welcomeMeta = document.getElementById('msg-welcome-meta');
+      if (welcomeMeta) {
+        welcomeMeta.hidden = !liveStatus && !isGrp;
+      }
+    }
+  }
+
   function syncThreadPresenceRipple() {
     const conv = state.activeThread?.conversation;
     const active = Boolean(conv && isPeerInActiveConvo(conv));
@@ -1862,8 +1908,9 @@
     else if (!subParts.length) subParts.push('Tap to message');
 
     const presenceText = isSelf || personIsOnline(u) ? '' : formatStatusLine(u);
+    const showPresenceDot = !presenceText && (isSelf || (u.profile_visible !== false && u.allow_online_status !== false && !u.is_blocked && u.friendship_status !== 'BLOCKED_BY_ME' && u.friendship_status !== 'BLOCKED_ME'));
     return `<article class="msg-search-person-row" role="listitem">
-      <div class="msg-conv-avatar">${userAvatarHtml(u, 'avatar-md')}</div>
+      <div class="msg-conv-avatar">${userAvatarHtml(u, 'avatar-md', { showPresence: showPresenceDot })}</div>
       <button type="button" class="msg-search-person-main" data-social-action="message" data-target-id="${escapeHtml(u.id)}">
         <strong class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}${userBadgesHtml(u)}</strong>
         <span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>
@@ -2146,14 +2193,7 @@
       if (!backgroundRefresh || nextFingerprint !== state.lastThreadFingerprint) {
         state.lastThreadFingerprint = nextFingerprint;
         if (backgroundRefresh && !aroundMessageId && tryPatchActiveThreadInPlace(prevThreadSnapshot, data)) {
-          const activeWrap = document.getElementById('msg-thread-active');
-          ipon().syncPresenceDots(activeWrap);
-          const subEl = document.getElementById('msg-peer-status-text');
-          if (subEl && data?.conversation) {
-            const nextStatus = formatStatusLine(data.conversation);
-            subEl.textContent = nextStatus;
-            subEl.hidden = !nextStatus;
-          }
+          syncActiveThreadPresenceUi(data?.conversation);
         } else {
           renderActiveThread({
             scrollToBottom: shouldScrollBottom,
@@ -2163,12 +2203,7 @@
           });
         }
       } else {
-        const activeWrap = document.getElementById('msg-thread-active');
-        ipon().syncPresenceDots(activeWrap);
-        const subEl = document.getElementById('msg-peer-status-text');
-        if (subEl && data?.conversation) {
-          subEl.textContent = formatStatusLine(data.conversation);
-        }
+        syncActiveThreadPresenceUi(data?.conversation);
       }
 
       bindTypingChannel(conversationId);
@@ -3609,9 +3644,10 @@
     if (f.username) metaParts.push(`@${f.username}`);
     if (fcText) metaParts.push(fcText);
     const friendStatus = formatStatusLine(f);
+    const showPresenceDot = !friendStatus && f.profile_visible !== false && f.allow_online_status !== false && !f.is_blocked && f.friendship_status !== 'BLOCKED_BY_ME' && f.friendship_status !== 'BLOCKED_ME';
     return `<article class="msg-person-card" data-friend-card data-search-blob="${escAttr(`${f.full_name} ${f.username || ''}`.toLowerCase())}">
       <div class="msg-person-head">
-        ${userAvatarHtml(f, 'avatar-md')}
+        ${userAvatarHtml(f, 'avatar-md', { showPresence: showPresenceDot })}
         <div>
           <strong>${escapeHtml(f.full_name)}${userBadgesHtml(f)}</strong>
           ${metaParts.length ? `<small>${escapeHtml(metaParts.join(' · '))}</small>` : ''}
@@ -7321,35 +7357,21 @@
       const at = detail.at || new Date().toISOString();
       const leftIds = Array.isArray(detail.leftIds) ? detail.leftIds : [];
       leftIds.forEach((uid) => {
-        recordLastSeen(uid, at);
-        const conv = state.conversations.find((c) => !isGroupConv(c) && String(c.peer?.id || '') === String(uid));
+        const idStr = String(uid);
+        recordLastSeen(idStr, at);
+        state.convoPresencePeers.forEach((peers) => { peers.delete(idStr); });
+        const conv = state.conversations.find((c) => !isGroupConv(c) && String(c.peer?.id || '') === idStr);
         if (conv?.peer && conv.peer.last_seen_at) conv.peer.last_seen_at = at;
-        if (state.activeThread?.conversation && !isGroupConv(state.activeThread.conversation) && String(state.activeThread.conversation.id || '') === String(uid)) {
+        if (state.activeThread?.conversation && !isGroupConv(state.activeThread.conversation) && String(state.activeThread.conversation.id || '') === idStr) {
           if (state.activeThread.conversation.last_seen_at) state.activeThread.conversation.last_seen_at = at;
         }
-        const friend = (state.overview?.friends || []).find((f) => String(f.id || '') === String(uid));
+        const friend = (state.overview?.friends || []).find((f) => String(f.id || '') === idStr);
         if (friend && friend.last_seen_at) friend.last_seen_at = at;
+        const discoverUser = (state.discoverUsers || []).find((u) => String(u.id || '') === idStr);
+        if (discoverUser && discoverUser.last_seen_at) discoverUser.last_seen_at = at;
       });
-      if (state.activeThread?.conversation) {
-        const activeConv = state.activeThread.conversation;
-        const liveStatus = formatStatusLine(activeConv);
-        const subEl = document.getElementById('msg-peer-status-text');
-        if (subEl) {
-          subEl.textContent = liveStatus;
-          subEl.hidden = !liveStatus;
-        }
-        const welcomeStatus = document.getElementById('msg-welcome-status-text');
-        if (welcomeStatus) {
-          const isOn = !isGroupConv(activeConv) && (isSelfUser(activeConv) || (activeConv.allow_online_status !== false && ipon().isUserOnline(activeConv.id)));
-          welcomeStatus.classList.toggle('is-online', isOn);
-          welcomeStatus.textContent = liveStatus;
-          welcomeStatus.hidden = !liveStatus;
-          const welcomeMeta = document.getElementById('msg-welcome-meta');
-          if (welcomeMeta) {
-            welcomeMeta.hidden = !liveStatus && !isGroupConv(activeConv);
-          }
-        }
-      }
+      syncActiveThreadPresenceUi(state.activeThread?.conversation);
+      if (leftIds.length) syncThreadPresenceRipple();
       if (state.tab === 'friends' && state.friendsSubTab === 'all' && document.getElementById('msg-workspace-dialog')?.open) {
         renderFriendsView();
       }
