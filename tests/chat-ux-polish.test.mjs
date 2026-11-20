@@ -57,6 +57,9 @@ test('conversation intro stays in the thread, header status excludes typing, and
   assert.match(css, /\.msg-typing-live\s*\{[^}]*overflow:\s*hidden;[^}]*visibility:\s*hidden;/s);
   assert.match(messagesJs, /function syncThreadScrollLock\(\)/);
   assert.match(messagesJs, /wrap\.classList\?\.toggle\('is-no-scroll', !needsScroll\)/);
+  assert.doesNotMatch(messagesJs, /<span class="msg-self-pill">You<\/span>/);
+  assert.doesNotMatch(messagesJs, /<span class="msg-rel-chip">Saved Messages<\/span>/);
+  assert.doesNotMatch(messagesJs, /Message yourself · Personal notes/);
   assert.match(css, /\.msg-thread-welcome-hero\s*\{[^}]*margin:\s*0 auto 12px;[^}]*padding:\s*14px 10px 12px;/s);
 });
 

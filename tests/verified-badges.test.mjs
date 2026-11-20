@@ -482,7 +482,7 @@ test('My Account verified badge card lets members message the creator directly w
   assert.match(mig115, /search_social_users\(/i);
   assert.match(messagesJs, /function isSelfUser\(/);
   assert.match(messagesJs, /Message yourself/);
-  assert.match(messagesJs, /Saved Messages/);
+  assert.match(messagesJs, /Personal notes, reminders, photos, and files saved here/);
   assert.match(css, /\.msg-self-pill\s*\{/);
 
   // Empty conversation hero + deferred outgoing request banner until first message sent

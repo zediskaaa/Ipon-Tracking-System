@@ -313,7 +313,7 @@
     if (user.is_blocked || user.friendship_status === 'BLOCKED_BY_ME' || user.friendship_status === 'BLOCKED_ME') {
       return 'Messaging restricted';
     }
-    if (isSelfUser(user)) return 'Message yourself · Personal notes';
+    if (isSelfUser(user)) return '';
     if (!user.allow_online_status) return 'Privacy mode';
     if (ipon().isUserOnline(user.id)) return user.profile_visible === false ? 'Active now' : '';
     const lastSeenAt = visibleLastSeenAt(user);
@@ -1756,7 +1756,7 @@
       <div class="msg-conv-avatar">${convAvatarHtml(conv, 'avatar-md')}</div>
       <button type="button" class="msg-conv-main" data-open-conv="${escapeHtml(conv.id)}">
         <div class="msg-conv-top">
-          <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp ? '' : userBadgesHtml(conv.peer || conv)}${!isGrp && isSelfUser(conv) ? '<span class="msg-self-pill">You</span>' : ''}${groupPill}</strong>
+          <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp ? '' : userBadgesHtml(conv.peer || conv)}${groupPill}</strong>
         </div>
         <div class="msg-conv-bottom">
           <span class="msg-conv-preview">${previewText}</span>
@@ -1778,7 +1778,7 @@
     const isSelf = isSelfUser(u) || u.is_self || u.friendship_status === 'SELF';
     let relChip = '';
     if (isSelf) {
-      relChip = '<span class="msg-self-pill">You</span>';
+      relChip = '';
     } else if (u.friendship_status === 'FRIENDS') {
       relChip = '<span class="msg-rel-badge">Friend</span>';
     } else if (u.friendship_status === 'OUTGOING_REQUEST') {
@@ -2431,11 +2431,11 @@
         ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md', { showPresence: !isSelfUser(conv) && conv.profile_visible !== false })}
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
-            <strong>${escapeHtml(convDisplayTitle(conv))}${isGrp ? '' : userBadgesHtml(conv)}${!isGrp && isSelfUser(conv) ? '<span class="msg-self-pill">You</span>' : ''}</strong>
+            <strong>${escapeHtml(convDisplayTitle(conv))}${isGrp ? '' : userBadgesHtml(conv)}</strong>
           </div>
           <div class="msg-thread-peer-sub">
             ${!isGrp && conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
-            ${!isGrp && isSelfUser(conv) ? '<span class="msg-rel-chip">Saved Messages</span>' : (!isGrp && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : '')}
+            ${!isGrp && !isSelfUser(conv) && conv.friendship_status === 'FRIENDS' ? '<span class="msg-rel-chip">Friend</span>' : ''}
             ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
             <small class="msg-peer-status" id="msg-peer-status-text"${peerStatus ? '' : ' hidden'}>${escapeHtml(peerStatus)}</small>
           </div>
@@ -2888,7 +2888,7 @@
     const welcomeHtml = `
       <div class="msg-thread-welcome msg-thread-welcome-hero">
         <div class="msg-welcome-avatar">${renderedHeroAvatar}</div>
-        <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero ? '' : userBadgesHtml(conv)}${isSelfHero ? '<span class="msg-self-pill">You</span>' : ''}</h3>
+        <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero ? '' : userBadgesHtml(conv)}</h3>
         ${!isGrpHero && heroProfileVisible && conv.username ? `<span class="msg-welcome-username">@${escapeHtml(conv.username)}</span>` : ''}
         ${!isSelfHero ? `<div class="msg-welcome-meta" id="msg-welcome-meta"${statusText || (!isGrpHero && conv.friendship_status === 'FRIENDS') || isGrpHero ? '' : ' hidden'}>
           <span class="msg-welcome-status${isHeroOnline ? ' is-online' : ''}" id="msg-welcome-status-text"${statusText ? '' : ' hidden'}>${escapeHtml(statusText)}</span>
@@ -3307,7 +3307,7 @@
             : peerAv;
           return `<div class="msg-drawer-profile">
           ${peerAvNode}
-          <strong>${escapeHtml(conv.full_name || 'User')}${iponApi?.verifiedBadgesHtml?.(conv) || ''}${(typeof isSelfUser === 'function' && isSelfUser(conv)) ? '<span class="msg-self-pill">You</span>' : ''}</strong>
+          <strong>${escapeHtml(conv.full_name || 'User')}${iponApi?.verifiedBadgesHtml?.(conv) || ''}</strong>
           ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
           ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
           ${iponApi?.renderSocialAppLinksHtml?.(conv.social_links, { variant: 'drawer' }) || ''}
