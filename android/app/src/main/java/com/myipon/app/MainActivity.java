@@ -27,6 +27,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
@@ -65,6 +66,7 @@ public class MainActivity extends BridgeActivity {
     private volatile String pendingPickerSource = "";
     private volatile long pendingPickerSetAtMs = 0L;
     private volatile String pendingAuthCallbackJson = null;
+    private Activity.ScreenCaptureCallback screenCaptureCallback;
     private ValueCallback<Uri[]> pendingFileCallback = null;
 
     private final ActivityResultLauncher<Intent> sourceFilePickerLauncher = registerForActivityResult(
@@ -91,6 +93,16 @@ public class MainActivity extends BridgeActivity {
             callback.onReceiveValue(uris);
         }
     );
+
+    private class PrivacyBridge {
+        @JavascriptInterface
+        public void setScreenshotBlocked(boolean blocked) {
+            runOnUiThread(() -> {
+                if (blocked) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            });
+        }
+    }
 
     private class PickerSourceBridge {
         @JavascriptInterface
@@ -243,6 +255,7 @@ public class MainActivity extends BridgeActivity {
                 ((View) webView.getParent()).setBackgroundColor(emeraldBg);
             }
             webView.addJavascriptInterface(new PickerSourceBridge(), "IponNativePicker");
+            webView.addJavascriptInterface(new PrivacyBridge(), "IponNativePrivacy");
             webView.addJavascriptInterface(new AuthCallbackBridge(), "IponNativeAuth");
             if (getBridge() != null) {
                 webView.setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
@@ -389,7 +402,20 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onStart() {
+        super.onStart();
+        if (Build.VERSION.SDK_INT >= 34) {
+            screenCaptureCallback = () -> dispatchWindowEvent("myipon:screen-captured");
+            registerScreenCaptureCallback(getMainExecutor(), screenCaptureCallback);
+        }
+    }
+
+    @Override
     public void onStop() {
+        if (Build.VERSION.SDK_INT >= 34 && screenCaptureCallback != null) {
+            unregisterScreenCaptureCallback(screenCaptureCallback);
+            screenCaptureCallback = null;
+        }
         super.onStop();
         if (NotificationSyncService.canStartFromBackground(this)) {
             NotificationSyncService.ensureStarted(this);

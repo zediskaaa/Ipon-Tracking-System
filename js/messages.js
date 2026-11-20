@@ -92,6 +92,7 @@
     threadError: '',
     mobileShowThread: false,
     showThreadInfo: false,
+    savingProtection: false,
     threadInfoView: 'root', // root | media | files
     showThreadSearch: false,
     threadSearchQuery: '',
@@ -1023,6 +1024,7 @@
       syncMobilePaneState();
       state.lastTypingState = false;
       state.lastTypingSentAt = 0;
+      window.IponNativePrivacy?.setScreenshotBlocked?.(false);
     });
     const scrollWrapEl = document.getElementById('msg-scroll-wrap');
     scrollWrapEl?.addEventListener('scroll', closeFloatingMenus, { passive: true });
@@ -1540,6 +1542,9 @@
       || Boolean(pc.is_archived) !== Boolean(nc.is_archived)
       || Boolean(pc.marked_unread) !== Boolean(nc.marked_unread)
       || Boolean(pc.receipts_enabled) !== Boolean(nc.receipts_enabled)
+      || Boolean(pc.block_screenshots) !== Boolean(nc.block_screenshots)
+      || Boolean(pc.block_forwarding) !== Boolean(nc.block_forwarding)
+      || Boolean(pc.protection_unavailable) !== Boolean(nc.protection_unavailable)
       || pc.friendship_status !== nc.friendship_status
       || (pc.members?.length || 0) !== (nc.members?.length || 0)
       || Boolean(prevThread.has_older) !== Boolean(nextThread.has_older)
@@ -2113,12 +2118,22 @@
     }
 
     try {
-      const data = await ipon().rpc('get_conversation_messages', {
-        p_conversation_id: conversationId,
-        p_before: null,
-        p_limit: 60,
-        p_around_message_id: aroundMessageId || null
-      });
+      const [data, protection] = await Promise.all([
+        ipon().rpc('get_conversation_messages', {
+          p_conversation_id: conversationId,
+          p_before: null,
+          p_limit: 60,
+          p_around_message_id: aroundMessageId || null
+        }),
+        ipon().rpc('get_conversation_protection', { p_conversation_id: conversationId }).catch((error) => {
+          if (error?.code === 'PGRST202') return null;
+          throw error;
+        })
+      ]);
+      if (data?.conversation) {
+        if (protection) Object.assign(data.conversation, protection);
+        data.conversation.protection_unavailable = !protection;
+      }
       if (state.activeConvId !== conversationId || reqSeq !== state.openConvSeq) return;
 
       const scrollWrap = document.getElementById('msg-scroll-wrap');
@@ -2145,6 +2160,7 @@
       if (data) data.unread_first_id = state.unreadAnchorFirstId;
 
       state.activeThread = data;
+      window.IponNativePrivacy?.setScreenshotBlocked?.(Boolean(data?.conversation?.block_screenshots));
       state.loadingThread = false;
 
       const attPaths = [];
@@ -3264,6 +3280,8 @@
     const conv = state.activeThread.conversation;
     const msgs = state.activeThread.messages || [];
     const view = (state.threadInfoView === 'media' || state.threadInfoView === 'files') ? state.threadInfoView : 'root';
+    const previousScrollTop = drawer.dataset.conversationId === conv.conversation_id
+      ? drawer.querySelector('.msg-drawer-body.is-root')?.scrollTop : null;
     state.threadInfoView = view;
     const media = [];
     const docs = [];
@@ -3465,6 +3483,26 @@
          <button type="button" class="msg-drawer-action-btn" data-conv-act="delete_for_me">${trashIconSvg}<span>Delete for me</span></button>
          ${(typeof isSelfUser === 'function' && isSelfUser(conv)) ? '' : `<button type="button" class="msg-drawer-action-btn is-danger" data-social-action="${isBlockedByMe ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${blockIconSvg}<span>${isBlockedByMe ? 'Unblock user' : 'Block user'}</span></button>`}`;
 
+    const canManageProtection = !conv.protection_unavailable && !state.savingProtection && (!isGrp || canManageGroup);
+    const nativePrivacy = typeof window !== 'undefined' && Boolean(window.IponNativePrivacy);
+    const phoneSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10.5 18.5h3"/></svg>';
+    const forwardBlockSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5 6 5-6 5v-3.2c-4.2 0-7 1.2-9 4.2.4-4.6 3.2-7.8 9-8.4V5Z"/><path d="M4 4 20 20"/></svg>';
+    const protectionHtml = `<div class="msg-drawer-section msg-privacy-section"><section class="msg-privacy-card" aria-labelledby="msg-privacy-title">
+      <div class="msg-privacy-head"><h4 id="msg-privacy-title">Chat privacy</h4></div>
+      ${conv.protection_unavailable ? '<div class="msg-privacy-note" role="status"><span>Chat privacy is temporarily unavailable. Messages still work.</span><button type="button" data-chat-protection-retry>Try again</button></div>' : ''}
+      <div class="msg-privacy-list">
+        <div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
+          <span class="msg-privacy-icon">${phoneSvg}</span>
+          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-shot-title">Block screenshots</strong><span class="msg-privacy-chip">Android</span></div><small id="msg-privacy-shot-desc">${nativePrivacy ? 'Protect this chat on Android devices' : 'Available in the Android app'}</small></div>
+          <div class="msg-privacy-control"><button type="button" class="msg-privacy-switch" role="switch" data-chat-protection="screenshots" aria-checked="${Boolean(conv.block_screenshots)}" aria-labelledby="msg-privacy-shot-title" aria-describedby="msg-privacy-shot-desc"${canManageProtection ? '' : ' disabled'}></button><span>${conv.block_screenshots ? 'On' : 'Off'}</span></div>
+        </div>
+        <div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
+          <span class="msg-privacy-icon">${forwardBlockSvg}</span>
+          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-forward-title">Block forwarding</strong></div><small id="msg-privacy-forward-desc">Messages from this chat cannot be forwarded in myIPON</small></div>
+          <div class="msg-privacy-control"><button type="button" class="msg-privacy-switch" role="switch" data-chat-protection="forwarding" aria-checked="${Boolean(conv.block_forwarding)}" aria-labelledby="msg-privacy-forward-title" aria-describedby="msg-privacy-forward-desc"${canManageProtection ? '' : ' disabled'}></button><span>${conv.block_forwarding ? 'On' : 'Off'}</span></div>
+        </div>
+      </div></section></div>`;
+
     const membersSectionHtml = isGrp
       ? `<div class="msg-drawer-section">
           <div class="msg-drawer-sec-head">
@@ -3507,6 +3545,7 @@
           </div>
         </div>
         ${membersSectionHtml}
+        ${protectionHtml}
         <div class="msg-drawer-section">
           <h4>Theme</h4>
           <div class="msg-theme-swatches">
@@ -3544,6 +3583,8 @@
           </div>
         </div>
       </div>`;
+    drawer.dataset.conversationId = conv.conversation_id;
+    if (previousScrollTop != null) drawer.querySelector('.msg-drawer-body.is-root').scrollTop = previousScrollTop;
     iponApi?.bindAvatarFallbacks?.(drawer);
     iponApi?.syncPresenceDots?.(drawer);
   }
@@ -4989,6 +5030,10 @@
   }
 
   async function openForwardDialog(messageObj) {
+    if (state.activeThread?.conversation?.block_forwarding) {
+      ipon().toast('Forwarding is disabled in this chat.', 'error');
+      return;
+    }
     const dialog = document.getElementById('msg-forward-dialog');
     const body = document.getElementById('msg-forward-body');
     if (!dialog || !body) return;
@@ -5243,6 +5288,7 @@
   }
 
   function clearActiveThreadSelection() {
+    window.IponNativePrivacy?.setScreenshotBlocked?.(false);
     disconnectTypingChannel();
     state.activeConvId = null;
     state.activeThread = null;
@@ -5276,6 +5322,7 @@
       return;
     }
     state.tab = nextTab;
+    if (nextTab !== 'chats' && nextTab !== 'requests') window.IponNativePrivacy?.setScreenshotBlocked?.(false);
     if (nextTab === 'chats' || nextTab === 'requests') {
       state.mobileShowThread = false;
       syncMobilePaneState();
@@ -5548,7 +5595,7 @@
       <button type="button" data-ctx-do="reply" data-msg-id="${escAttr(msgId)}">Reply</button>
       ${atts.length ? `<button type="button" data-ctx-do="download" data-msg-id="${escAttr(msgId)}">${atts.length > 1 ? `Download all (${atts.length})` : 'Download'}</button>` : ''}
       ${msg.body ? `<button type="button" data-ctx-do="copy" data-msg-id="${escAttr(msgId)}">Copy text</button>` : ''}
-      <button type="button" data-ctx-do="forward" data-msg-id="${escAttr(msgId)}">Forward</button>
+      ${state.activeThread?.conversation?.block_forwarding ? '' : `<button type="button" data-ctx-do="forward" data-msg-id="${escAttr(msgId)}">Forward</button>`}
       ${state.activeThread?.conversation?.status === 'ACCEPTED' ? `<button type="button" data-ctx-do="pin" data-msg-id="${escAttr(msgId)}">${msg.pinned_at ? 'Unpin' : 'Pin message'}</button>` : ''}
       ${mine ? `<button type="button" data-ctx-do="edit" data-msg-id="${escAttr(msgId)}">Edit message</button>` : ''}
       <button type="button" data-ctx-do="del_me" data-msg-id="${escAttr(msgId)}">Delete for me</button>
@@ -5980,6 +6027,39 @@
           if (!ok) return;
         }
         await runConvMemberAction(state.activeConvId, act, convActBtn);
+        return;
+      }
+
+      const protectionRetry = ev.target.closest?.('[data-chat-protection-retry]');
+      if (protectionRetry && state.activeConvId) {
+        protectionRetry.disabled = true;
+        await openConversation(state.activeConvId, { markRead: false, silent: true });
+        renderThreadInfoDrawer();
+        return;
+      }
+
+      const protectionBtn = ev.target.closest?.('[data-chat-protection]');
+      if (protectionBtn && state.activeConvId && !state.savingProtection) {
+        const setting = protectionBtn.dataset.chatProtection;
+        const convId = state.activeConvId;
+        const conv = state.activeThread?.conversation;
+        if (!conv || conv.protection_unavailable) return;
+        state.savingProtection = true;
+        document.querySelectorAll('[data-chat-protection]').forEach((button) => { button.disabled = true; });
+        try {
+          const next = await ipon().rpc('set_conversation_protection', {
+            p_conversation_id: convId, p_setting: setting,
+            p_enabled: !conv[setting === 'screenshots' ? 'block_screenshots' : 'block_forwarding']
+          });
+          Object.assign(conv, next);
+          if (state.activeConvId === convId) window.IponNativePrivacy?.setScreenshotBlocked?.(Boolean(conv.block_screenshots));
+        } catch (err) {
+          ipon().toast(ipon().friendlyError(err), 'error');
+        } finally {
+          state.savingProtection = false;
+          renderThreadInfoDrawer();
+          if (state.activeConvId === convId) document.querySelector(`[data-chat-protection="${setting}"]`)?.focus({ preventScroll: true });
+        }
         return;
       }
 
@@ -7016,6 +7096,16 @@
       showReactionFloatingMenu(target.msgId, target.anchor, { toggle: false });
     });
 
+    window.addEventListener('myipon:screen-captured', async () => {
+      if (!isThreadActivelyVisible() || state.activeThread?.conversation?.protection_unavailable || state.activeThread?.conversation?.block_screenshots) return;
+      try {
+        await ipon().rpc('record_conversation_screenshot', { p_conversation_id: state.activeConvId });
+        await openConversation(state.activeConvId, { markRead: false, silent: true, scrollToBottom: true });
+      } catch (err) {
+        ipon().toast(ipon().friendlyError(err), 'error');
+      }
+    });
+
     window.addEventListener('resize', () => {
       closeProfilePopover();
       closeFloatingMenus({ immediate: true });
@@ -7210,6 +7300,8 @@
           cId === state.activeConvId &&
           curConv && (
             (row.status && curConv.status && row.status !== curConv.status) ||
+            (row.block_screenshots !== undefined && row.block_screenshots !== curConv.block_screenshots) ||
+            (row.block_forwarding !== undefined && row.block_forwarding !== curConv.block_forwarding) ||
             (isGroupConv(curConv) && (
               (row.title && row.title !== curConv.title) ||
               (row.description !== undefined && row.description !== curConv.description) ||

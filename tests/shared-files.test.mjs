@@ -41,7 +41,17 @@ test('Shared files excludes voice notes and voice messages while counting and li
   const drawerMatch = messagesJs.match(/function renderThreadInfoDrawer\(\)\s*\{[\s\S]*?\n  \}/);
   assert.ok(isVoiceMatch && badgeMatch && drawerMatch);
 
-  const drawerEl = { hidden: true, innerHTML: '' };
+  const bodyEl = { scrollTop: 0 };
+  const drawerEl = {
+    hidden: true,
+    dataset: {},
+    _html: '',
+    get innerHTML() { return this._html; },
+    set innerHTML(value) { this._html = value; bodyEl.scrollTop = 0; },
+    querySelector(selector) {
+      return selector === '.msg-drawer-body.is-root' && this._html.includes('data-drawer-screen="root"') ? bodyEl : null;
+    }
+  };
   const state = {
     showThreadInfo: true,
     threadInfoView: 'root',
@@ -75,6 +85,9 @@ test('Shared files excludes voice notes and voice messages while counting and li
   renderDrawer();
   assert.match(drawerEl.innerHTML, /Shared media[\s\S]*?<span class="msg-drawer-nav-count">1<\/span>/);
   assert.match(drawerEl.innerHTML, /Shared files[\s\S]*?<span class="msg-drawer-nav-count">1<\/span>/);
+  bodyEl.scrollTop = 240;
+  renderDrawer();
+  assert.equal(bodyEl.scrollTop, 240, 'refreshing the same conversation keeps the details scroll position');
 
   state.threadInfoView = 'files';
   renderDrawer();
@@ -91,7 +104,7 @@ test('Shared files excludes voice notes and voice messages while counting and li
   renderDrawer();
   assert.match(drawerEl.innerHTML, /No shared files yet/);
   assert.match(swJs, /ipon-shell-v(?:2[3-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashboardHtml, /js\/messages\.js\?v=20261121-01/);
+  assert.match(dashboardHtml, /js\/messages\.js\?v=20261121-03/);
 });
 
 test('Swipe-right-to-reply gesture and attachment source menu (Gallery, File Manager, Google Drive) work end-to-end', async () => {
