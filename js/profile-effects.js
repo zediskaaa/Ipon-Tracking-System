@@ -516,8 +516,8 @@
   }
 
   def('stardust', 'Stardust', 'Cosmic', 'Twinkling stars and passing comets drift across your profile.', 0, (S) => {
-    const { W, H, cx, cy, ra, s, b, f } = S;
-    const stars = Array.from({ length: Math.max(10, Math.round((W * H) / 2400)) }, () => ({
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const stars = Array.from({ length: Math.max(12, Math.round((W * H) / 2400)) }, () => ({
       x: R(0, W), y: R(0, H), z: R(0.35, 1), p: R(0, TAU), v: R(0.8, 2.4),
       c: Math.random() < 0.25 ? '170,200,255' : '255,255,255'
     }));
@@ -527,16 +527,29 @@
     let sh = null;
     let next = 1.5;
     return (t, dt) => {
+      if (full) {
+        // Soft diagonal Milky Way stardust veil across full profile height
+        const neb = b.createLinearGradient(W, 0, 0, H);
+        neb.addColorStop(0, 'rgba(170,205,255,.06)');
+        neb.addColorStop(0.5, 'rgba(130,175,255,.03)');
+        neb.addColorStop(1, 'rgba(200,220,255,.05)');
+        b.fillStyle = neb;
+        b.fillRect(0, 0, W, H);
+        for (const [qx, qy] of [[11 * s, 11 * s], [W - 11 * s, 11 * s], [W - 11 * s, H - 11 * s], [11 * s, H - 11 * s]]) {
+          sparkle(f, qx, qy, 2.4 * s * (0.75 + 0.25 * Math.sin(t * 1.4 + qx)), '185,215,255', 0.62);
+        }
+      }
       for (const q of stars) {
         const x = (q.x + t * 5 * q.z * s) % W;
         const a = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * q.v + q.p));
-        b.fillStyle = `rgba(${q.c},${a * q.z})`;
+        const dim = full && q.y > cy + ra * 1.4 ? 0.65 : 1;
+        b.fillStyle = `rgba(${q.c},${a * q.z * dim})`;
         b.beginPath();
         b.arc(x, q.y, (0.5 + q.z * 0.9) * s, 0, TAU);
         b.fill();
       }
       if (!sh && t > next) {
-        sh = { x: R(W * 0.5, W), y: R(0, H * 0.3), vx: -R(240, 320) * s, vy: R(90, 140) * s, l: 0 };
+        sh = { x: R(W * 0.5, W), y: R(0, H * 0.35), vx: -R(240, 320) * s, vy: R(90, 140) * s, l: 0 };
       }
       if (sh) {
         sh.l += dt;
@@ -569,15 +582,40 @@
       }
       f.globalAlpha = 1;
     };
-  });
+  }, { fullCard: true, cardFrame: ['180,210,255', '255,255,255', 'arc'] });
 
   def('orbit', 'Orbit', 'Cosmic', 'A ringed planet and its moon circle your avatar.', 0, (S) => {
-    const { cx, cy, ra, s, b, f } = S;
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
     const P = [
       { a: 1.62, e: 0.36, tilt: -0.38, sp: 0.55, r: 9, c1: '#9cc8ff', c2: '#2a3f9c', ring: 1, moon: 1, ph: 0 },
       { a: 2.0, e: 0.3, tilt: 0.3, sp: -0.33, r: 5.6, c1: '#ffc08a', c2: '#8a3a1f', ring: 0, moon: 0, ph: 2 }
     ];
+    const dust = full ? Array.from({ length: 18 }, (_, i) => ({
+      x: ((i * 0.37 + 0.11) % 1) * W, y: ((i * 0.61 + 0.08) % 1) * H, p: R(0, TAU), r: R(0.6, 1.3)
+    })) : [];
     return (t) => {
+      if (full) {
+        for (const q of dust) {
+          const a = 0.18 + 0.32 * (0.5 + 0.5 * Math.sin(t * 1.1 + q.p));
+          b.fillStyle = `rgba(190,215,255,${a})`;
+          b.beginPath();
+          b.arc(q.x, q.y, q.r * s, 0, TAU);
+          b.fill();
+        }
+        // Sweeping distant planetary orbit arc across lower-right card corner
+        b.strokeStyle = 'rgba(156,192,255,.16)';
+        b.lineWidth = 0.9 * s;
+        b.setLineDash([3 * s, 5 * s]);
+        b.beginPath();
+        b.ellipse(W * 0.92, H * 0.96, W * 0.42, H * 0.22, -0.32, Math.PI * 0.95, Math.PI * 1.68);
+        b.stroke();
+        b.setLineDash([]);
+        const ma = Math.PI * 1.05 + frac(t * 0.06) * 0.55 * Math.PI;
+        const mox = W * 0.92 + Math.cos(ma) * W * 0.42 * Math.cos(-0.32) - Math.sin(ma) * H * 0.22 * Math.sin(-0.32);
+        const moy = H * 0.96 + Math.cos(ma) * W * 0.42 * Math.sin(-0.32) + Math.sin(ma) * H * 0.22 * Math.cos(-0.32);
+        glow(b, mox, moy, 9 * s, '255,196,140', 0.35);
+        planet(b, mox, moy, 3.2 * s, '#ffe1bf', '#96542b');
+      }
       for (const p of P) {
         const A = ra * p.a;
         const B = A * p.e;
@@ -634,62 +672,113 @@
         if (p.moon && !mb) planet(g, mx, my, r * 0.34, '#fff', '#8a93a8');
       }
     };
-  });
+  }, { fullCard: true, cardFrame: ['156,192,255', '255,192,138', 'arc'] });
 
   def('butterflies', 'Neon Butterflies', 'Animal', 'Glowing butterflies flutter in loose loops around you.', 0, (S) => {
-    const { cx, cy, ra, s, f } = S;
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
     const B = [
       { ph: 0, sp: 0.55, c: '90,230,255', c2: '60,120,255', k: 1 },
       { ph: 2.1, sp: 0.43, c: '255,120,220', c2: '150,80,255', k: 0.85 },
       { ph: 4.2, sp: 0.5, c: '150,255,190', c2: '60,200,170', k: 0.72 }
     ];
+    const ambientB = full ? [
+      { cx0: W * 0.8, cy0: H * 0.74, ax: W * 0.14, ay: H * 0.12, ph: 1.1, sp: 0.36, c: '255,130,225', c2: '150,90,255', k: 0.64 },
+      { cx0: W * 0.18, cy0: H * 0.82, ax: W * 0.12, ay: H * 0.09, ph: 3.7, sp: 0.32, c: '130,245,215', c2: '70,190,220', k: 0.56 }
+    ] : [];
+    const pollen = full ? Array.from({ length: 12 }, (_, i) => ({
+      x: ((i + 0.3) / 12) * W, y0: R(0, 1), v: R(0.032, 0.065), ph: R(0, TAU), c: i % 2 ? '255,140,225' : '110,240,255'
+    })) : [];
+    const drawWing = (g, x, y, ang, fl, z, c, c2, alpha) => {
+      glow(g, x, y, z * 2.2, c, 0.35 * alpha);
+      g.save();
+      g.globalAlpha = alpha;
+      g.translate(x, y);
+      g.rotate(ang);
+      for (const sd of [-1, 1]) {
+        g.save();
+        g.scale(sd * fl, 1);
+        g.strokeStyle = 'rgba(255,255,255,.65)';
+        g.lineWidth = 0.7 * s;
+        g.fillStyle = `rgba(${c},.8)`;
+        g.beginPath();
+        g.ellipse(z * 0.55, -z * 0.35, z * 0.55, z * 0.85, -0.5, 0, TAU);
+        g.fill();
+        g.stroke();
+        g.fillStyle = `rgba(${c2},.75)`;
+        g.beginPath();
+        g.ellipse(z * 0.4, z * 0.55, z * 0.38, z * 0.55, 0.5, 0, TAU);
+        g.fill();
+        g.stroke();
+        g.restore();
+      }
+      g.fillStyle = '#fff';
+      g.beginPath();
+      g.ellipse(0, 0, z * 0.1, z * 0.55, 0, 0, TAU);
+      g.fill();
+      g.restore();
+    };
     const pos = (u, q) => [cx + ra * 1.55 * Math.sin(u) + ra * 0.35 * Math.sin(u * 2.7 + q), cy - ra * 0.1 + ra * 0.9 * Math.sin(u * 1.3 + q)];
     return (t) => {
+      if (full) {
+        for (const p of pollen) {
+          const prog = frac(p.y0 + t * p.v);
+          const y = H * (1.03 - prog * 1.08);
+          const x = p.x + Math.sin(t * 0.7 + p.ph) * 8 * s;
+          glow(b, x, y, 4.2 * s, p.c, Math.sin(prog * Math.PI) * 0.42);
+        }
+        for (const q of ambientB) {
+          const u = t * q.sp + q.ph;
+          const x = q.cx0 + Math.sin(u) * q.ax;
+          const y = q.cy0 + Math.sin(u * 1.5 + q.ph) * q.ay;
+          const x2 = q.cx0 + Math.sin(u + 0.04) * q.ax;
+          const y2 = q.cy0 + Math.sin((u + 0.04) * 1.5 + q.ph) * q.ay;
+          const ang = Math.atan2(y2 - y, x2 - x) + Math.PI / 2;
+          const fl = Math.abs(Math.cos(t * (8.5 + q.ph))) * 0.85 + 0.15;
+          drawWing(b, x, y, ang, fl, q.k * s * 11, q.c, q.c2, 0.46);
+        }
+      }
       for (const q of B) {
         const u = t * q.sp + q.ph;
         const [x, y] = pos(u, q.ph);
         const [x2, y2] = pos(u + 0.03, q.ph);
         const ang = Math.atan2(y2 - y, x2 - x) + Math.PI / 2;
         const fl = Math.abs(Math.cos(t * (9 + q.ph))) * 0.85 + 0.15;
-        const z = q.k * s * 11;
-        glow(f, x, y, z * 2.2, q.c, 0.35);
-        f.save();
-        f.translate(x, y);
-        f.rotate(ang);
-        for (const sd of [-1, 1]) {
-          f.save();
-          f.scale(sd * fl, 1);
-          f.strokeStyle = 'rgba(255,255,255,.65)';
-          f.lineWidth = 0.7 * s;
-          f.fillStyle = `rgba(${q.c},.8)`;
-          f.beginPath();
-          f.ellipse(z * 0.55, -z * 0.35, z * 0.55, z * 0.85, -0.5, 0, TAU);
-          f.fill();
-          f.stroke();
-          f.fillStyle = `rgba(${q.c2},.75)`;
-          f.beginPath();
-          f.ellipse(z * 0.4, z * 0.55, z * 0.38, z * 0.55, 0.5, 0, TAU);
-          f.fill();
-          f.stroke();
-          f.restore();
-        }
-        f.fillStyle = '#fff';
-        f.beginPath();
-        f.ellipse(0, 0, z * 0.1, z * 0.55, 0, 0, TAU);
-        f.fill();
-        f.restore();
+        drawWing(f, x, y, ang, fl, q.k * s * 11, q.c, q.c2, 1);
       }
     };
-  });
+  }, { fullCard: true, cardFrame: ['90,230,255', '255,120,220', 'arc'] });
 
   def('koi', 'Aurora Koi', 'Animal', 'Two glowing koi glide through ripples around your avatar.', 0, (S) => {
-    const { cx, cy, ra, s, b } = S;
+    const { W, H, cx, cy, ra, s, full, b } = S;
     const N = 16;
     const K = [
       { d: 1, ph: 0, c: '255,160,90', a: 1.62, e: 0.78 },
       { d: -1, ph: 3.4, c: '120,210,255', a: 1.95, e: 0.7 }
     ];
+    const pondDrops = full ? [
+      { x: W * 0.84, y: H * 0.82, ph: 0.15, c: '120,210,255' },
+      { x: W * 0.18, y: H * 0.88, ph: 0.62, c: '255,175,110' }
+    ] : [];
+    const glints = full ? Array.from({ length: 10 }, (_, i) => ({
+      x: ((i + 0.3) / 10) * W, y0: R(0, 1), v: R(0.025, 0.05), ph: R(0, TAU)
+    })) : [];
     return (t) => {
+      if (full) {
+        for (const d of pondDrops) {
+          const r = frac(t * 0.24 + d.ph);
+          b.strokeStyle = `rgba(${d.c},${0.26 * (1 - r)})`;
+          b.lineWidth = 1.0 * s;
+          b.beginPath();
+          b.ellipse(d.x, d.y, (8 + r * 36) * s, (5 + r * 22) * s, 0, 0, TAU);
+          b.stroke();
+        }
+        for (const gl of glints) {
+          const prog = frac(gl.y0 + t * gl.v);
+          const y = H * (0.3 + prog * 0.7);
+          const x = gl.x + Math.sin(t * 0.5 + gl.ph) * 9 * s;
+          glow(b, x, y, 4.5 * s, '140,215,255', Math.sin(prog * Math.PI) * 0.26);
+        }
+      }
       for (let i = 0; i < 2; i += 1) {
         const r = (t * 0.5 + i * 0.5) % 1;
         b.strokeStyle = `rgba(150,210,255,${0.35 * (1 - r)})`;
@@ -745,20 +834,86 @@
         b.fill();
       }
     };
-  });
+  }, { fullCard: true, cardFrame: ['120,210,255', '255,160,90', 'double'] });
 
   def('robots', 'Mini Bots', 'Robot & Cyber', 'Two tiny hover-bots wave, blink and bob beside your avatar.', 0, (S) => {
-    const { cx, cy, ra, s, f } = S;
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const ions = full ? Array.from({ length: 12 }, (_, i) => ({
+      x: ((i + 0.35) / 12) * W, y0: R(0, 1), v: R(0.035, 0.068), ph: R(0, TAU)
+    })) : [];
     return (t) => {
+      if (full) {
+        // Subtle cyber-chassis telemetry ticks & floating thruster-ion sparkles across full height
+        b.strokeStyle = 'rgba(91,224,255,.22)';
+        b.lineWidth = 0.9 * s;
+        b.beginPath();
+        for (let y = 36 * s; y < H - 30 * s; y += 26 * s) {
+          b.moveTo(8 * s, y);
+          b.lineTo(13 * s, y);
+          b.moveTo(W - 8 * s, y);
+          b.lineTo(W - 13 * s, y);
+        }
+        b.stroke();
+        for (const p of ions) {
+          const prog = frac(p.y0 + t * p.v);
+          const y = H * (1.03 - prog * 1.08);
+          const x = p.x + Math.sin(t * 0.8 + p.ph) * 6 * s;
+          glow(b, x, y, 4.2 * s, '91,224,255', Math.sin(prog * Math.PI) * 0.34);
+        }
+        // Corner LED status indicators
+        for (let i = 0; i < 2; i += 1) {
+          const on = 0.45 + 0.55 * Math.sin(t * 2.4 + i * 2);
+          glow(f, W - 14 * s - i * 8 * s, 12 * s, 4 * s, i ? '255,107,142' : '91,224,255', on * 0.75);
+        }
+        // Mini background scout bot gently patrolling lower-right card corner
+        b.save();
+        b.globalAlpha = 0.58;
+        bot(b, W - 28 * s + Math.sin(t * 0.6) * 6 * s, H - 30 * s + Math.sin(t * 1.3) * 3.5 * s, 0.72 * s, t, 3.1, -1);
+        b.restore();
+      }
       bot(f, cx + ra * 1.55 + Math.sin(t * 0.9) * 3 * s, cy - ra * 0.8 + Math.sin(t * 1.7) * 4 * s, 1.4 * s, t, 0, 1);
       bot(f, cx - ra * 1.42 + Math.sin(t * 0.7 + 1) * 3 * s, cy + ra * 0.5 + Math.sin(t * 1.4 + 2) * 3.5 * s, 0.95 * s, t, 1.7, -1);
     };
-  });
+  }, { fullCard: true, cardFrame: ['91,224,255', '255,107,142', 'chamfer'] });
 
   def('drones', 'Patrol Drones', 'Robot & Cyber', 'Scout drones circle and sweep your avatar with scan beams.', 0, (S) => {
-    const { cx, cy, ra, s, b, f } = S;
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
     const D = [{ ph: 0, c: '90,230,255' }, { ph: Math.PI, c: '255,140,120' }];
     return (t) => {
+      if (full) {
+        // Subtle tactical radar sweep nestled in lower-right card corner
+        const rx = W - 34 * s;
+        const ry = H - 34 * s;
+        const rr0 = 22 * s;
+        b.strokeStyle = 'rgba(90,230,255,.15)';
+        b.lineWidth = 0.85 * s;
+        for (const rk of [0.55, 1]) {
+          b.beginPath();
+          b.arc(rx, ry, rr0 * rk, 0, TAU);
+          b.stroke();
+        }
+        const swA = t * 0.9;
+        const rg = b.createRadialGradient(rx, ry, 0, rx, ry, rr0);
+        rg.addColorStop(0, 'rgba(90,230,255,.22)');
+        rg.addColorStop(1, 'rgba(90,230,255,0)');
+        b.fillStyle = rg;
+        b.beginPath();
+        b.moveTo(rx, ry);
+        b.arc(rx, ry, rr0, swA - 0.55, swA);
+        b.closePath();
+        b.fill();
+        // Telemetry ping blips along outer margins
+        for (let i = 0; i < 3; i += 1) {
+          const p = frac(t * 0.35 + i * 0.33);
+          const bx = i === 1 ? 16 * s : W - 18 * s;
+          const by = H * (0.48 + i * 0.18);
+          b.strokeStyle = `rgba(90,230,255,${0.28 * (1 - p)})`;
+          b.lineWidth = 0.9 * s;
+          b.beginPath();
+          b.arc(bx, by, (2 + p * 8) * s, 0, TAU);
+          b.stroke();
+        }
+      }
       const sc = 0.5 + 0.5 * Math.sin(t * 2);
       b.strokeStyle = `rgba(90,230,255,${0.12 + 0.2 * sc})`;
       b.lineWidth = 1.2 * s;
@@ -808,16 +963,45 @@
         f.restore();
       }
     };
-  });
+  }, { fullCard: true, cardFrame: ['90,230,255', '255,140,120', 'bracket'] });
 
   def('holo', 'Holo Rings', 'Sci-Fi', 'Tilted holographic rings with data nodes rotate around you.', 0, (S) => {
-    const { cx, cy, ra, s, b, f } = S;
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
     const rings = [
       { k: 1.5, ax: 1.15, rz: -0.4, sp: 0.6, c: '90,230,255', dash: [2, 5] },
       { k: 1.85, ax: 1.28, rz: 0.5, sp: -0.4, c: '255,110,230', dash: [8, 4] },
       { k: 2.15, ax: 1.38, rz: -1.1, sp: 0.3, c: '120,255,200', dash: [1, 6] }
     ];
+    const nodes = full ? Array.from({ length: 10 }, (_, i) => ({
+      x: ((i + 0.3) / 10) * W, y0: R(0, 1), v: R(0.03, 0.06), ph: R(0, TAU), c: rings[i % 3].c
+    })) : [];
     return (t) => {
+      if (full) {
+        // Silky full-card horizontal holo-projector shimmer sweeping top-to-bottom
+        const hy = frac(t * 0.14) * H;
+        const hg = b.createLinearGradient(0, hy - 18 * s, 0, hy + 18 * s);
+        hg.addColorStop(0, 'rgba(90,230,255,0)');
+        hg.addColorStop(0.5, 'rgba(120,245,255,.07)');
+        hg.addColorStop(1, 'rgba(255,110,230,0)');
+        b.fillStyle = hg;
+        b.fillRect(0, hy - 18 * s, W, 36 * s);
+        for (const nd of nodes) {
+          const prog = frac(nd.y0 + t * nd.v);
+          const y = H * (1.03 - prog * 1.08);
+          const x = nd.x + Math.sin(t * 0.7 + nd.ph) * 8 * s;
+          const a = Math.sin(prog * Math.PI) * 0.44;
+          b.strokeStyle = `rgba(${nd.c},${a})`;
+          b.lineWidth = 0.85 * s;
+          const d = 2.6 * s;
+          b.beginPath();
+          b.moveTo(x, y - d);
+          b.lineTo(x + d, y);
+          b.lineTo(x, y + d);
+          b.lineTo(x - d, y);
+          b.closePath();
+          b.stroke();
+        }
+      }
       for (const r of rings) {
         const A = ra * r.k;
         const Bk = A * Math.abs(Math.cos(r.ax + Math.sin(t * 0.5 + r.k) * 0.12));
@@ -852,12 +1036,12 @@
       f.lineTo(cx + hw, sy);
       f.stroke();
     };
-  });
+  }, { fullCard: true, cardFrame: ['90,230,255', '255,110,230', 'chamfer'] });
 
-  def('glitch', 'Glitch Stream', 'Sci-Fi', 'Digital rain and signal glitches ripple through the banner.', 0, (S) => {
-    const { W, H, cx, cy, ra, s, b, f } = S;
+  def('glitch', 'Glitch Stream', 'Sci-Fi', 'Digital rain and signal glitches ripple through your profile.', 0, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
     const cols = Array.from({ length: Math.max(8, Math.floor(W / (9 * s))) }, (_, i) => ({
-      x: i * 9 * s + 4 * s, y: R(-H, H * 0.6), v: R(18, 48) * s, len: Math.floor(R(3, 8)),
+      x: i * 9 * s + 4 * s, y: R(-H, H * 0.9), v: R(18, 48) * s, len: Math.floor(R(3, 8)),
       c: Math.random() < 0.3 ? '255,90,220' : '90,240,230'
     }));
     let gl = 0;
@@ -867,11 +1051,13 @@
       b.font = `${7 * s}px ui-monospace,Menlo,monospace`;
       for (const c of cols) {
         c.y += c.v * dt;
-        if (c.y - c.len * 8 * s > H * 0.95) c.y = R(-40, 0) * s;
+        if (c.y - c.len * 8 * s > H * 0.98) c.y = R(-40, 0) * s;
+        const centerCol = full && c.x > W * 0.16 && c.x < W * 0.84;
         for (let j = 0; j < c.len; j += 1) {
           const y = c.y - j * 8 * s;
           if (y < 0 || y > H) continue;
-          b.fillStyle = `rgba(${c.c},${(1 - j / c.len) * 0.55})`;
+          const dim = centerCol && y > cy + ra * 1.35 ? 0.24 : 0.55;
+          b.fillStyle = `rgba(${c.c},${(1 - j / c.len) * dim})`;
           b.fillText(Math.sin(c.x * 13 + j * 7 + Math.floor(t * 3 + c.x)) > 0 ? '1' : '0', c.x, y);
         }
       }
@@ -883,12 +1069,13 @@
       if (gl > 0) {
         gl -= dt;
         for (let i = 0; i < 4; i += 1) {
-          const y = frac(seed * 7 + i * 0.29) * H * 0.8;
+          const y = frac(seed * 7 + i * 0.29) * H * 0.92;
           const h = (3 + frac(seed * 13 + i) * 8) * s;
           const o = (frac(seed * 31 + i) - 0.5) * 14 * s;
-          f.fillStyle = 'rgba(255,60,200,.26)';
+          const al = full && y > cy + ra * 1.3 ? 0.14 : 0.26;
+          f.fillStyle = `rgba(255,60,200,${al})`;
           f.fillRect(o, y, W * 0.6, h);
-          f.fillStyle = 'rgba(60,240,255,.26)';
+          f.fillStyle = `rgba(60,240,255,${al})`;
           f.fillRect(W * 0.4 - o, y + h * 0.6, W * 0.6, h * 0.7);
         }
       }
@@ -906,20 +1093,31 @@
         f.stroke();
       }
     };
-  });
+  }, { fullCard: true, cardFrame: ['90,240,230', '255,90,220', 'double'] });
 
-  def('fireflies', 'Firefly Grove', 'Nature', 'Soft fireflies wander and blink in the dark.', 0, (S) => {
-    const { W, H, s, b, f } = S;
-    const F = Array.from({ length: Math.max(10, Math.round((W * H) / 2600) + 6) }, () => ({
-      x: R(0, W), y: R(0, H * 0.95), ax: R(8, 26), ay: R(6, 18), fx: R(0.2, 0.6), fy: R(0.2, 0.6),
+  def('fireflies', 'Firefly Grove', 'Nature', 'Soft fireflies wander and blink across your full profile.', 0, (S) => {
+    const { W, H, s, full, b, f } = S;
+    const F = Array.from({ length: Math.max(12, Math.round((W * H) / 2600) + 6) }, () => ({
+      x: R(0, W), y: R(0, H * 0.96), ax: R(8, 26), ay: R(6, 18), fx: R(0.2, 0.6), fy: R(0.2, 0.6),
       p: R(0, TAU), bl: R(0.8, 1.8), z: Math.random() < 0.35
     }));
     return (t) => {
+      if (full) {
+        // Serene woodland twilight glow & delicate swaying fern sprigs along bottom corners
+        const mist = b.createLinearGradient(0, H * 0.78, 0, H);
+        mist.addColorStop(0, 'rgba(130,210,120,0)');
+        mist.addColorStop(1, 'rgba(140,220,125,.08)');
+        b.fillStyle = mist;
+        b.fillRect(0, H * 0.78, W, H * 0.22);
+        const sw = Math.sin(t * 0.95) * 0.06;
+        leaf(f, 11 * s, H - 11 * s, 14 * s, 4 * s, -0.5 + sw, '#b4e888', '#3c7a48', 0.32);
+        leaf(f, W - 11 * s, H - 11 * s, 14 * s, 4 * s, Math.PI + 0.5 - sw, '#b4e888', '#3c7a48', 0.32);
+      }
       for (const q of F) {
         const x = q.x + Math.sin(t * q.fx + q.p) * q.ax * s + Math.sin(t * q.fy * 2.3 + q.p) * 6 * s;
         const y = q.y + Math.cos(t * q.fy + q.p) * q.ay * s;
         const a = Math.pow(0.5 + 0.5 * Math.sin(t * q.bl + q.p), 2.2);
-        const g = q.z ? f : b;
+        const g = q.z && !full ? f : b;
         glow(g, x, y, 9 * s, '210,255,120', 0.75 * a);
         g.fillStyle = `rgba(255,255,210,${0.3 + 0.7 * a})`;
         g.beginPath();
@@ -927,29 +1125,54 @@
         g.fill();
       }
     };
-  });
+  }, { fullCard: true, cardFrame: ['210,255,120', '120,220,165', 'arc'] });
 
   def('petals', 'Sakura Drift', 'Nature', 'Petals tumble through a gentle breeze around a glowing bloom.', 0, (S) => {
-    const { W, H, cx, cy, ra, s, b, f } = S;
-    const P = Array.from({ length: Math.max(8, Math.round((W * H) / 3200) + 4) }, () => ({
-      x: R(0, W), y: R(-H * 0.2, H * 0.9), v: R(12, 24), sw: R(0, TAU), swf: R(0.6, 1.4),
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const P = Array.from({ length: Math.max(10, Math.round((W * H) / 3200) + 5) }, () => ({
+      x: R(0, W), y: R(-H * 0.2, H * 0.95), v: R(12, 24), sw: R(0, TAU), swf: R(0.6, 1.4),
       amp: R(8, 20), rot: R(0, TAU), rs: R(0.6, 1.8), sz: R(3.4, 5.6),
-      c: Math.random() < 0.5 ? '255,190,210' : '255,225,235', z: Math.random() < 0.4
+      c: Math.random() < 0.5 ? '255,190,210' : '255,225,235', z: Math.random() < 0.35
     }));
+    const drawBloom = (g, bx, by, br, t, alpha) => {
+      glow(g, bx, by, br * 2.6, '255,150,200', (0.45 + 0.2 * Math.sin(t * 1.5)) * alpha);
+      g.save();
+      g.globalAlpha = alpha;
+      for (let i = 0; i < 8; i += 1) {
+        g.save();
+        g.translate(bx, by);
+        g.rotate((i / 8) * TAU + t * 0.15);
+        g.fillStyle = `rgba(255,${170 + i * 6},215,.88)`;
+        g.beginPath();
+        g.ellipse(0, -br * 0.62, br * 0.28, br * 0.62, 0, 0, TAU);
+        g.fill();
+        g.restore();
+      }
+      g.fillStyle = '#ffe9a0';
+      g.beginPath();
+      g.arc(bx, by, br * 0.24, 0, TAU);
+      g.fill();
+      g.restore();
+    };
     return (t, dt) => {
+      if (full) {
+        // Secondary calm sakura bloom nestled in bottom-right corner behind content
+        drawBloom(b, W - 22 * s, H - 22 * s, (7.5 + 0.8 * Math.sin(t * 1.2 + 1)) * s, t, 0.42);
+      }
       for (const p of P) {
         p.y += p.v * dt * s;
-        if (p.y > H * 0.95) {
+        if (p.y > H * 0.98) {
           p.y = -6 * s;
           p.x = R(0, W);
         }
         const x = (p.x + Math.sin(t * p.swf + p.sw) * p.amp * s + t * 5 * s) % W;
-        const g = p.z ? f : b;
+        const g = p.z && (!full || p.y < cy + ra * 1.2) ? f : b;
+        const dim = full && p.y > cy + ra * 1.3 && x > W * 0.18 && x < W * 0.82 ? 0.5 : 0.85;
         g.save();
         g.translate(x, p.y);
         g.rotate(p.rot + t * p.rs);
         g.scale(1, Math.abs(Math.cos(t * p.rs * 1.7 + p.sw)) * 0.8 + 0.2);
-        g.fillStyle = `rgba(${p.c},.85)`;
+        g.fillStyle = `rgba(${p.c},${dim})`;
         g.beginPath();
         g.ellipse(0, 0, p.sz * s, p.sz * s * 0.62, 0, 0, TAU);
         g.fill();
@@ -958,31 +1181,41 @@
       const bx = cx + ra * 0.88;
       const by = cy + ra * 0.78;
       const br = (8 + 1.2 * Math.sin(t * 1.5)) * s;
-      glow(f, bx, by, br * 2.6, '255,150,200', 0.45 + 0.2 * Math.sin(t * 1.5));
-      for (let i = 0; i < 8; i += 1) {
-        f.save();
-        f.translate(bx, by);
-        f.rotate((i / 8) * TAU + t * 0.15);
-        f.fillStyle = `rgba(255,${170 + i * 6},215,.88)`;
-        f.beginPath();
-        f.ellipse(0, -br * 0.62, br * 0.28, br * 0.62, 0, 0, TAU);
-        f.fill();
-        f.restore();
-      }
-      f.fillStyle = '#ffe9a0';
-      f.beginPath();
-      f.arc(bx, by, br * 0.24, 0, TAU);
-      f.fill();
+      drawBloom(f, bx, by, br, t, 1);
     };
-  });
+  }, { fullCard: true, cardFrame: ['255,190,210', '255,233,160', 'arc'] });
 
   def('singularity', 'Singularity', 'Special', 'A gravitational lens bends light as matter spirals into your avatar.', 2, (S) => {
-    const { cx, cy, ra, s, b, f } = S;
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
     const P = Array.from({ length: 110 }, () => ({
       r: R(1.12, 2.5), th: R(0, TAU), sp: R(0.7, 1.3),
       c: Math.random() < 0.5 ? '255,170,90' : '255,230,190'
     }));
+    const outerInfall = full ? Array.from({ length: 18 }, (_, i) => ({
+      a: (i / 18) * TAU + R(0, 0.3), d0: R(0, 1), v: R(0.06, 0.12), c: i % 2 ? '255,170,90' : '255,225,180'
+    })) : [];
+    const maxD = Math.hypot(W, H) * 0.82;
     return (t, dt) => {
+      if (full) {
+        // Subtle outer spacetime curvature arcs & distant infalling ember streams across full card
+        for (const rK of [3.2, 4.8]) {
+          b.strokeStyle = 'rgba(255,180,105,.075)';
+          b.lineWidth = 0.9 * s;
+          b.beginPath();
+          b.arc(cx, cy, ra * rK, 0, TAU);
+          b.stroke();
+        }
+        for (const q of outerInfall) {
+          const prog = frac(q.d0 + t * q.v);
+          const dist = maxD * (1 - prog * 0.76) + ra * 1.6;
+          const ang = q.a + prog * 1.1;
+          const x = cx + Math.cos(ang) * dist;
+          const y = cy + Math.sin(ang) * dist;
+          if (x < 0 || x > W || y < 0 || y > H) continue;
+          const al = Math.sin(prog * Math.PI) * 0.42;
+          glow(b, x, y, 4.5 * s, q.c, al);
+        }
+      }
       b.globalCompositeOperation = 'lighter';
       f.globalCompositeOperation = 'lighter';
       for (const p of P) {
@@ -1015,13 +1248,13 @@
       b.globalCompositeOperation = 'source-over';
       f.globalCompositeOperation = 'source-over';
     };
-  });
+  }, { fullCard: true, cardFrame: ['255,170,90', '255,230,190', 'arc'] });
 
   def('warp', 'Hyperdrive', 'Special', 'Starlines streak outward as your profile jumps to lightspeed.', 1, (S) => {
-    const { W, H, cx, cy, ra, s, b } = S;
+    const { W, H, cx, cy, ra, s, full, b } = S;
     const mx = Math.hypot(W, H);
-    const Q = Array.from({ length: 70 }, () => ({
-      a: R(0, TAU), d: R(ra * 1.05, Math.max(ra * 1.2, mx * 0.6)), v: R(0.2, 1),
+    const Q = Array.from({ length: full ? 90 : 70 }, () => ({
+      a: R(0, TAU), d: R(ra * 1.05, Math.max(ra * 1.2, mx * 0.85)), v: R(0.2, 1),
       c: Math.random() < 0.3 ? '160,200,255' : '255,255,255'
     }));
     return (t, dt) => {
@@ -1029,18 +1262,21 @@
       b.lineCap = 'round';
       for (const q of Q) {
         q.d += dt * (40 + q.v * 160) * s * (0.4 + boost * 2.2) * (q.d / (ra * 3) + 0.3);
-        if (q.d > mx * 0.62) {
+        if (q.d > mx * 0.92) {
           q.d = R(ra * 1.05, ra * 1.8);
           q.a = R(0, TAU);
         }
         const len = Math.max(1, (4 + q.v * 26 * boost) * s * (q.d / (ra * 2)) * 0.8);
         const ca = Math.cos(q.a);
         const sa = Math.sin(q.a);
-        const al = Math.min(1, (q.d - ra) / (ra * 0.9)) * 0.9;
+        const x1 = cx + ca * q.d;
+        const y1 = cy + sa * q.d;
+        const dim = full && y1 > cy + ra * 1.5 && x1 > W * 0.14 && x1 < W * 0.86 ? 0.5 : 0.9;
+        const al = Math.min(1, (q.d - ra) / (ra * 0.9)) * dim;
         b.strokeStyle = `rgba(${q.c},${Math.max(0, al)})`;
         b.lineWidth = (0.6 + q.v * 0.9) * s;
         b.beginPath();
-        b.moveTo(cx + ca * q.d, cy + sa * q.d);
+        b.moveTo(x1, y1);
         b.lineTo(cx + ca * (q.d + len), cy + sa * (q.d + len));
         b.stroke();
       }
@@ -1051,17 +1287,31 @@
       b.arc(cx, cy, ra * (1.1 + r * 2.2), 0, TAU);
       b.stroke();
     };
-  });
+  }, { fullCard: true, cardFrame: ['160,200,255', '255,255,255', 'chamfer'] });
 
-  def('jelly', 'Lumen Jelly', 'Animal', 'Two bioluminescent jellyfish pulse and trail glowing tentacles.', 1, (S) => {
-    const { W, H, cx, cy, ra, s, b, f } = S;
+  def('jelly', 'Lumen Jelly', 'Animal', 'Bioluminescent jellyfish pulse and trail glowing tentacles across your full profile.', 1, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
     const ocx = Math.max(cx, ra * 1.8 + 16 * s);
     const J = [
       { ph: 0, sp: 0.32, c: '110,220,255', k: 1.25, ax: 1.8, ay: 0.85 },
       { ph: 2.6, sp: 0.24, c: '255,140,230', k: 0.85, ax: 1.7, ay: 0.7 }
     ];
-    const M = Array.from({ length: 18 }, () => ({ x: R(0, W), y: R(0, H), v: R(3, 8), p: R(0, TAU) }));
+    const M = Array.from({ length: full ? 26 : 18 }, () => ({ x: R(0, W), y: R(0, H), v: R(3, 8), p: R(0, TAU) }));
     return (t, dt) => {
+      if (full) {
+        // Soft deep-sea vertical caustic shimmer + serene lower-right miniature abyss jellyfish
+        const bx = ((t * 7 * s) % (W + 80 * s)) - 40 * s;
+        const cg = b.createLinearGradient(bx - 30 * s, 0, bx + 30 * s, 0);
+        cg.addColorStop(0, 'rgba(110,220,255,0)');
+        cg.addColorStop(0.5, 'rgba(110,220,255,.055)');
+        cg.addColorStop(1, 'rgba(110,220,255,0)');
+        b.fillStyle = cg;
+        b.fillRect(bx - 30 * s, 0, 60 * s, H);
+        b.save();
+        b.globalAlpha = 0.45;
+        jelly(b, W * 0.82 + Math.sin(t * 0.28) * 18 * s, H * 0.78 + Math.cos(t * 0.42) * 14 * s, s * 0.72, t, 4.4, '140,235,255', Math.cos(t * 0.28) * 0.14);
+        b.restore();
+      }
       for (const m of M) {
         m.y -= m.v * dt * s;
         if (m.y < -4) m.y = H + 4;
@@ -1072,13 +1322,26 @@
         jelly(i ? b : f, ocx + Math.cos(th) * ra * j.ax, cy - ra * 0.15 + Math.sin(th * 1.4) * ra * j.ay, s * j.k, t, j.ph, j.c, -Math.sin(th) * j.sp * 0.5);
       });
     };
-  });
+  }, { fullCard: true, cardFrame: ['110,220,255', '255,140,230', 'arc'] });
 
   def('astro', 'Drift Astronaut', 'Cosmic', 'A tethered astronaut tumbles slowly through zero gravity.', 1, (S) => {
-    const { W, H, cx, cy, ra, s, b, f } = S;
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
     const ocx = Math.max(cx, ra * 1.7 + 16 * s);
-    const st = Array.from({ length: Math.max(8, Math.round((W * H) / 3000)) }, () => ({ x: R(0, W), y: R(0, H), p: R(0, TAU), z: R(0.3, 1) }));
+    const st = Array.from({ length: Math.max(10, Math.round((W * H) / 3000)) }, () => ({ x: R(0, W), y: R(0, H), p: R(0, TAU), z: R(0.3, 1) }));
     return (t) => {
+      if (full) {
+        // Gentle orbital planetary atmosphere limb curve glowing softly along the bottom edge
+        const hor = b.createRadialGradient(W * 0.5, H * 1.38, H * 0.26, W * 0.5, H * 1.38, H * 0.52);
+        hor.addColorStop(0, 'rgba(90,175,255,.18)');
+        hor.addColorStop(0.55, 'rgba(90,165,255,.06)');
+        hor.addColorStop(1, 'rgba(90,165,255,0)');
+        b.fillStyle = hor;
+        b.fillRect(0, H * 0.62, W, H * 0.38);
+        // Subtle distant satellite glint drifting across lower orbit
+        const sx = frac(t * 0.045) * W;
+        const sy = H * 0.84 - Math.sin(frac(t * 0.045) * Math.PI) * 16 * s;
+        sparkle(b, sx, sy, 2.2 * s, '255,175,110', 0.6);
+      }
       for (const q of st) {
         b.fillStyle = `rgba(255,255,255,${(0.2 + 0.5 * (0.5 + 0.5 * Math.sin(t * 1.3 + q.p))) * q.z})`;
         b.beginPath();
@@ -1096,30 +1359,25 @@
       b.stroke();
       astro(f, x, y, s * 1.5, t, rot, Math.pow(Math.max(0, Math.sin(t * 1.1)), 10));
     };
-  });
+  }, { fullCard: true, cardFrame: ['200,220,245', '255,138,76', 'bracket'] });
 
-  def('constellation', 'Lyra Chart', 'Cosmic', 'A star chart draws itself line by line, then dissolves into the dark.', 0, (S) => {
-    const { W, H, s, b } = S;
-    const N = [[0.36, 0.72], [0.44, 0.3], [0.56, 0.14], [0.66, 0.38], [0.8, 0.2], [0.9, 0.5], [0.74, 0.7]].map(([x, y]) => [x * W, y * H]);
+  def('constellation', 'Lyra Chart', 'Cosmic', 'A star chart draws itself line by line across your entire profile.', 0, (S) => {
+    const { W, H, s, full, b } = S;
+    const N = [[0.36, 0.72], [0.44, 0.3], [0.56, 0.14], [0.66, 0.38], [0.8, 0.2], [0.9, 0.5], [0.74, 0.7]].map(([x, y]) => [x * W, y * (full ? H * 0.46 : H)]);
     const E = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [3, 6]];
-    const D = Array.from({ length: Math.max(10, Math.round((W * H) / 1800)) }, () => ({ x: R(0, W), y: R(0, H), p: R(0, TAU) }));
-    return (t) => {
-      b.fillStyle = '#fff';
-      for (const q of D) {
-        b.globalAlpha = 0.1 + 0.25 * (0.5 + 0.5 * Math.sin(t * 0.9 + q.p));
-        b.beginPath();
-        b.arc(q.x, q.y, 0.7 * s, 0, TAU);
-        b.fill();
-      }
-      const ph = (t % 11) / 11;
-      const dr = Math.min(1, ph / 0.5) * E.length;
-      const fd = ph > 0.78 ? 1 - (ph - 0.78) / 0.22 : 1;
+    const N2 = full ? [[0.1, 0.76], [0.24, 0.88], [0.46, 0.84], [0.68, 0.92], [0.88, 0.78], [0.92, 0.62]].map(([x, y]) => [x * W, y * H]) : [];
+    const E2 = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]];
+    const D = Array.from({ length: Math.max(12, Math.round((W * H) / 1800)) }, () => ({ x: R(0, W), y: R(0, H), p: R(0, TAU) }));
+    const drawChart = (pts, edges, tOff, alphaScale) => {
+      const ph = ((tOff) % 11) / 11;
+      const dr = Math.min(1, ph / 0.5) * edges.length;
+      const fd = (ph > 0.78 ? 1 - (ph - 0.78) / 0.22 : 1) * alphaScale;
       b.lineCap = 'round';
-      E.forEach(([i, j], k) => {
+      edges.forEach(([i, j], k) => {
         const sg = Math.max(0, Math.min(1, dr - k));
         if (!sg) return;
-        const a = N[i];
-        const c = N[j];
+        const a = pts[i];
+        const c = pts[j];
         const x = a[0] + (c[0] - a[0]) * sg;
         const y = a[1] + (c[1] - a[1]) * sg;
         b.globalAlpha = 0.55 * fd;
@@ -1131,26 +1389,40 @@
         b.stroke();
         if (sg < 1) glow(b, x, y, 6 * s, '190,215,255', 0.8 * fd);
       });
-      N.forEach(([x, y], k) => {
+      pts.forEach(([x, y], k) => {
         if (dr < Math.max(0, k - 0.001) || dr === 0) return;
         const fl = Math.max(0, 1 - (dr - k) * 1.5);
-        const tw = 0.75 + 0.25 * Math.sin(t * 2 + k * 2);
+        const tw = 0.75 + 0.25 * Math.sin(tOff * 2 + k * 2);
         glow(b, x, y, (6 + fl * 8) * s, '190,215,255', (0.4 + fl * 0.5) * fd);
         b.globalAlpha = fd * tw;
         b.fillStyle = '#fff';
         star4(b, x, y, (2.4 + fl * 2) * s);
       });
+    };
+    return (t) => {
+      b.fillStyle = '#fff';
+      for (const q of D) {
+        b.globalAlpha = 0.1 + 0.25 * (0.5 + 0.5 * Math.sin(t * 0.9 + q.p));
+        b.beginPath();
+        b.arc(q.x, q.y, 0.7 * s, 0, TAU);
+        b.fill();
+      }
+      drawChart(N, E, t, 1);
+      if (full) drawChart(N2, E2, t + 4.5, 0.65);
       b.globalAlpha = 1;
     };
-  });
+  }, { fullCard: true, cardFrame: ['190,215,255', '244,224,175', 'double'] });
 
-  def('sigil', 'Arcane Sigil', 'Magic', 'A runic circle turns beneath you, shedding embers into the air.', 2, (S) => {
-    const { cx, cy, ra, s, b, f } = S;
+  def('sigil', 'Arcane Sigil', 'Magic', 'A runic circle turns beneath you, shedding embers across your full profile.', 2, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
     const y0 = cy + ra * 0.98;
     const sq = 0.34;
     const gold = '255,215,130';
     const vio = '190,140,255';
     const E = Array.from({ length: 26 }, () => ({ a: R(0, TAU), r: R(0.3, 1.7), h: R(0, 1), v: R(0.3, 0.7), z: R(0.8, 1.6) }));
+    const cardEmbers = full ? Array.from({ length: 14 }, (_, i) => ({
+      x: ((i + 0.35) / 14) * W, y0: R(0, 1), v: R(0.036, 0.072), ph: R(0, TAU), c: i % 2 ? gold : vio
+    })) : [];
     const Z = Math.max(0.45, Math.min(1, (cx - 4 * s) / (ra * 2.1)));
     const P = (a, k) => [cx + Math.cos(a) * ra * Z * k, y0 + Math.sin(a) * ra * Z * k * sq];
     const ring = (k, w, al, c) => {
@@ -1161,6 +1433,37 @@
       b.stroke();
     };
     return (t, dt) => {
+      if (full) {
+        // Subtle mystic arcane bottom glow, rising full-card embers & miniature corner runes
+        const veil = b.createLinearGradient(0, H * 0.76, 0, H);
+        veil.addColorStop(0, 'rgba(190,140,255,0)');
+        veil.addColorStop(1, 'rgba(190,140,255,.10)');
+        b.fillStyle = veil;
+        b.fillRect(0, H * 0.76, W, H * 0.24);
+        for (const em of cardEmbers) {
+          const prog = frac(em.y0 + t * em.v);
+          const y = H * (1.03 - prog * 1.08);
+          const x = em.x + Math.sin(t * 0.75 + em.ph) * 8 * s;
+          glow(b, x, y, 4.2 * s, em.c, Math.sin(prog * Math.PI) * 0.45);
+        }
+        const cr = 4.2 * s;
+        const corners = [[14 * s, 14 * s], [W - 14 * s, 14 * s], [W - 14 * s, H - 14 * s], [14 * s, H - 14 * s]];
+        corners.forEach(([rx, ry], idx) => {
+          f.save();
+          f.translate(rx, ry);
+          f.scale(cr, cr);
+          f.strokeStyle = `rgba(${idx % 2 ? vio : gold},.55)`;
+          f.lineWidth = (0.9 * s) / cr;
+          f.lineCap = 'round';
+          f.beginPath();
+          for (const [x1, y1, x2, y2] of GL[idx % 6]) {
+            f.moveTo(x1, y1);
+            f.lineTo(x2, y2);
+          }
+          f.stroke();
+          f.restore();
+        });
+      }
       b.save();
       b.translate(cx, y0);
       b.scale(1, 0.45);
@@ -1222,7 +1525,7 @@
         glow(f, q[0], q[1] - e.h * ra * 1.9, 3.4 * e.z * s, gold, al);
       }
     };
-  });
+  }, { fullCard: true, cardFrame: ['255,215,130', '190,140,255', 'double'] });
 
   def('laurel', 'Golden Laurel', 'Education', 'Twin gilded laurel branches weave around your avatar as luminous parchment motes drift upward.', 1, (S) => {
     const { W, H, cx, cy, ra, s, b, f } = S;

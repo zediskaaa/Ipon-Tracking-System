@@ -161,7 +161,9 @@ test('profile effects engine exports all 24 effects and renders every effect cle
   assert.equal(api.getEffect('singularity').rare, 2);
   assert.equal(api.getEffect('iponcoins').cat, 'myIPON');
   assert.equal(api.getEffect('iponcoins').fullCard, true);
-  assert.equal(api.getEffect('stardust').fullCard, false);
+  assert.equal(api.getEffect('stardust').fullCard, true);
+  assert.equal(api.EFFECTS.every((e) => e.fullCard === true), true, 'Every profile effect must support full-profile coverage');
+  assert.equal(api.NONE_EFFECT.fullCard ?? false, false);
   assert.equal(api.getEffect('laurel').cat, 'Education');
   assert.equal(api.getEffect('circuit').cat, 'Information Technology');
   assert.equal(api.getEffect('blueprint').cat, 'Architecture');
@@ -1172,9 +1174,9 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v168/);
+  assert.match(sw, /ipon-shell-v169/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
-    assert.match(html, /js\/profile-effects\.js\?v=20261122-02/);
+    assert.match(html, /js\/profile-effects\.js\?v=20261122-03/);
   }
 });
