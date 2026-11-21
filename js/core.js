@@ -2606,18 +2606,26 @@
   }
 
   function reportClientPlatform({ force = false } = {}) {
-    const platform = getClientPlatform();
     const client = getClient();
     if (!currentProfile?.id || !configured || !client?.rpc) {
-      return Promise.resolve(platform);
+      return Promise.resolve(getClientPlatform());
     }
+    const initialPlatform = getClientPlatform();
     const nowMs = Date.now();
-    if (!force && lastReportedClientPlatform === platform && nowMs - lastReportedClientPlatformAt < 60000) {
-      return clientPlatformReportPromise || Promise.resolve(platform);
+    if (!force && lastReportedClientPlatform === initialPlatform && nowMs - lastReportedClientPlatformAt < 60000) {
+      return clientPlatformReportPromise || Promise.resolve(initialPlatform);
     }
-    lastReportedClientPlatform = platform;
-    lastReportedClientPlatformAt = nowMs;
     clientPlatformReportPromise = (async () => {
+      if (typeof probeNativeScreenshotProtection === 'function') {
+        try { await probeNativeScreenshotProtection(); } catch (_) { }
+      }
+      const platform = getClientPlatform();
+      const postProbeNow = Date.now();
+      if (!force && lastReportedClientPlatform === platform && postProbeNow - lastReportedClientPlatformAt < 60000) {
+        return platform;
+      }
+      lastReportedClientPlatform = platform;
+      lastReportedClientPlatformAt = postProbeNow;
       try {
         const { error } = await client.rpc('report_client_platform', { p_platform: platform });
         if (error) throw error;
@@ -2816,6 +2824,7 @@
         .subscribe(async (status) => {
           if (status === 'SUBSCRIBED' && presenceShowOnline && document.visibilityState !== 'hidden') {
             try {
+              await probeNativeScreenshotProtection();
               await presenceChannel.track({
                 user_id: profile.id,
                 full_name: profile.full_name,

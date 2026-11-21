@@ -1805,6 +1805,17 @@
     ipon().syncMessagesBadges?.(convUnread + friendReqCount);
   }
 
+  function activeThreadLagsBehindTimestamp(convId, incomingIso) {
+    if (!convId || !incomingIso || state.activeConvId !== convId || state.loadingThread || sendTailByConv.has(convId)) return false;
+    const incomingMs = Date.parse(incomingIso);
+    if (!Number.isFinite(incomingMs) || incomingMs <= 0) return false;
+    const thread = state.activeThread;
+    if (!thread?.conversation || thread.conversation.conversation_id !== convId) return false;
+    const msgs = Array.isArray(thread.messages) ? thread.messages : [];
+    const latestLoadedMs = msgs.length ? (Date.parse(msgs[msgs.length - 1]?.created_at || '') || 0) : 0;
+    return incomingMs > latestLoadedMs;
+  }
+
   async function refreshConversations({ render = true } = {}) {
     if (!isEligible()) return [];
     const data = await ipon().rpc('get_conversations');
@@ -1812,8 +1823,16 @@
     state.conversationsLoaded = true;
     state.loadingConvs = false;
     computeTotalBadgeCount();
-    if (render && document.getElementById('msg-workspace-dialog')?.open) {
+    const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
+    if (render && dialogOpen) {
       renderConversationList();
+    }
+    if (dialogOpen && state.activeConvId) {
+      const activeSummary = state.conversations.find((c) => c.id === state.activeConvId);
+      if (activeSummary && activeThreadLagsBehindTimestamp(state.activeConvId, activeSummary.last_message_at)) {
+        const visibleHere = isThreadActivelyVisible({ ignoreFocus: true }) && document.visibilityState !== 'hidden';
+        openConversation(state.activeConvId, { markRead: visibleHere, forceMarkRead: visibleHere, silent: true }).catch(() => { });
+      }
     }
     return state.conversations;
   }
@@ -1906,12 +1925,16 @@
     const typingLabel = isGrp && typingEntries.length === 1 && typingEntries[0]?.name
       ? `${String(typingEntries[0].name).trim().split(/\s+/)[0] || 'Someone'} is typing…`
       : (isGrp && typingEntries.length > 1 ? `${typingEntries.length} typing…` : 'Typing…');
-    const isScreenshotPreview = conv.last_message_type === 'SYSTEM'
-      && / took a screenshot\.?$/i.test(String(conv.last_message_preview || ''));
-    const rawLastPreview = isScreenshotPreview
-      ? (initializedProfile?.id && String(conv.last_message_sender_id || '') === String(initializedProfile.id)
-          ? 'You took a screenshot'
-          : String(conv.last_message_preview || '').replace(/ took a screenshot\.?$/i, ' took a screenshot'))
+    const rawPrevStr = String(conv.last_message_preview || '');
+    const isMySystemPreview = conv.last_message_type === 'SYSTEM'
+      && Boolean(initializedProfile?.id && String(conv.last_message_sender_id || '') === String(initializedProfile.id));
+    const screenshotPreviewMatch = conv.last_message_type === 'SYSTEM'
+      ? rawPrevStr.match(/ (took a screenshot|turned on screenshot blocking|turned off screenshot blocking)\.?$/i)
+      : null;
+    const rawLastPreview = screenshotPreviewMatch
+      ? (isMySystemPreview
+          ? `You ${screenshotPreviewMatch[1].toLowerCase()}`
+          : rawPrevStr.replace(/\.$/, ''))
       : conv.last_message_preview;
     const previewText = isTyping
       ? `<span class="msg-typing-preview"><span class="msg-wave-dots is-inline" aria-hidden="true"><i></i><i></i><i></i></span><span>${escapeHtml(typingLabel)}</span></span>`
@@ -2148,7 +2171,7 @@
   }
 
   function isScreenshotBlockEffective(conv) {
-    return Boolean(conv && supportsNativeScreenshotProtection() && conv.screenshot_block_eligible && !hasLiveBrowserParticipant(conv));
+    return Boolean(conv && supportsNativeScreenshotProtection() && (conv.block_screenshots || (conv.screenshot_block_eligible && !hasLiveBrowserParticipant(conv))));
   }
 
   function syncNativeScreenshotLock(conv = state.activeThread?.conversation) {
@@ -3291,18 +3314,34 @@
       if (m.message_type === 'CALL_EVENT' || m.message_type === 'SYSTEM') {
         lastShownClockKey = '';
         const sysLabel = escapeHtml(m.body || (m.message_type === 'CALL_EVENT' ? 'Call event' : 'System notice'));
-        const screenshotNotice = m.message_type === 'SYSTEM' && (
-          ['screenshot_taken', 'SCREENSHOT'].includes(m.metadata?.event)
-          || / took a screenshot\.?$/i.test(String(m.body || ''))
+        const bodyText = String(m.body || '');
+        const metaEvent = String(m.metadata?.event || '');
+        const screenshotTaken = m.message_type === 'SYSTEM' && (
+          ['screenshot_taken', 'SCREENSHOT'].includes(metaEvent)
+          || / took a screenshot\.?$/i.test(bodyText)
         );
+        const screenshotBlockToggle = m.message_type === 'SYSTEM' && (
+          ['screenshot_block_enabled', 'screenshot_block_disabled'].includes(metaEvent)
+          || / turned (on|off) screenshot blocking\.?$/i.test(bodyText)
+        );
+        const screenshotNotice = screenshotTaken || screenshotBlockToggle;
         const vanishNotice = m.message_type === 'SYSTEM' && ['vanish_enabled', 'vanish_disabled', 'vanish_updated'].includes(m.metadata?.event);
-        const isMyScreenshot = screenshotNotice && Boolean(myId && String(m.sender_id || '') === String(myId));
+        const isMySystemActor = screenshotNotice && Boolean(myId && String(m.sender_id || '') === String(myId));
         const screenshotName = screenshotNotice
-          ? (isMyScreenshot ? 'You' : String(m.body || '').replace(/ took a screenshot\.?$/i, ''))
+          ? (isMySystemActor
+              ? 'You'
+              : bodyText.replace(/ (?:took a screenshot|turned (?:on|off) screenshot blocking)\.?$/i, ''))
           : '';
-        const eventText = screenshotNotice
+        const screenshotBlockAction = screenshotBlockToggle
+          ? (metaEvent === 'screenshot_block_disabled' || / turned off screenshot blocking\.?$/i.test(bodyText)
+              ? 'turned off screenshot blocking'
+              : 'turned on screenshot blocking')
+          : '';
+        const eventText = screenshotTaken
           ? `<strong>${escapeHtml(screenshotName)}</strong> took a screenshot`
-          : sysLabel;
+          : screenshotBlockToggle
+            ? `<strong>${escapeHtml(screenshotName)}</strong> ${screenshotBlockAction}`
+            : sysLabel;
         return `${dateDivider}${unreadDivider}<div class="msg-system-event${screenshotNotice ? ' is-screenshot' : vanishNotice ? ' is-vanish' : ''}" data-msg-id="${escapeHtml(m.id)}"><span>${eventText} · ${escapeHtml(formatClock(m.created_at))}</span></div>`;
       }
 
@@ -3939,12 +3978,12 @@
     const androidShell = nativePrivacy || (typeof window !== 'undefined' && (window.Capacitor?.getPlatform?.() === 'android'
       || /myIPONApp\/\d+/i.test(window.navigator?.userAgent || '')));
     conv._renderedScreenshotEligible = screenshotEligible;
-    const screenshotActive = Boolean(conv.block_screenshots && screenshotEligible);
+    const screenshotActive = Boolean(conv.block_screenshots);
     const canToggleScreenshots = canManageProtection && nativePrivacy && (screenshotEligible || Boolean(conv.block_screenshots));
     const screenshotDesc = 'Protect this chat on Android devices';
     const phoneSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10.5 18.5h3"/></svg>';
     const forwardBlockSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5 6 5-6 5v-3.2c-4.2 0-7 1.2-9 4.2.4-4.6 3.2-7.8 9-8.4V5Z"/><path d="M4 4 20 20"/></svg>';
-    const screenshotRowHtml = nativePrivacy && screenshotEligible
+    const screenshotRowHtml = nativePrivacy && screenshotEligible || (nativePrivacy && screenshotActive)
       ? `<div class="msg-privacy-row${canToggleScreenshots ? '' : ' is-disabled'}">
           <span class="msg-privacy-icon">${phoneSvg}</span>
           <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-shot-title">Block screenshots</strong><span class="msg-privacy-chip">Android</span></div><small id="msg-privacy-shot-desc">${screenshotDesc}</small></div>
@@ -6691,6 +6730,12 @@
           });
           Object.assign(conv, next);
           if (state.activeConvId === convId) syncNativeScreenshotLock(conv);
+          if (setting === 'screenshots') {
+            Promise.all([
+              openConversation(convId, { markRead: false, silent: true, scrollToBottom: true }),
+              refreshConversations()
+            ]).catch(() => { });
+          }
         } catch (err) {
           ipon().toast(ipon().friendlyError(err), 'error');
         } finally {
@@ -8128,14 +8173,22 @@
             ))
           )
         );
+        const hasNewerConvMessage = Boolean(cId && activeThreadLagsBehindTimestamp(cId, row.last_message_at));
+        if (cId && cId === state.activeConvId && curConv && row.block_screenshots !== undefined && row.block_screenshots !== curConv.block_screenshots) {
+          curConv.block_screenshots = Boolean(row.block_screenshots);
+          syncNativeScreenshotLock(curConv);
+          if (state.showThreadInfo) renderThreadInfoDrawer();
+        }
         if (cId && sendTailByConv.has(cId) && !metaOrStatusChanged) return;
         if (metaOrStatusChanged && curConv?.id && !isGroupConv(curConv)) {
           profileAppearanceCache.delete(String(curConv.id));
         }
+        const markVisibleIncoming = Boolean(hasNewerConvMessage && isThreadActivelyVisible({ ignoreFocus: true }) && document.visibilityState !== 'hidden');
         scheduleRefresh({
           convs: true,
-          thread: metaOrStatusChanged,
-          markRead: false
+          thread: metaOrStatusChanged || hasNewerConvMessage,
+          markRead: markVisibleIncoming,
+          forceMarkRead: markVisibleIncoming
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_participants', filter: `user_id=eq.${profile.id}` }, (payload) => {
@@ -8210,7 +8263,10 @@
     const syncForegroundReceipts = () => {
       pingLastSeen();
       ipon().rpc('mark_messages_delivered', { p_conversation_id: null }).catch(() => { });
-      if (isThreadActivelyVisible()) {
+      if (document.getElementById('msg-workspace-dialog')?.open) {
+        refreshConversations().catch(() => { });
+      }
+      if (document.visibilityState === 'visible' && isThreadActivelyVisible({ ignoreFocus: true })) {
         openConversation(state.activeConvId, { markRead: true, silent: true }).catch(() => { });
       }
     };

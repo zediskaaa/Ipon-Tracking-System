@@ -392,9 +392,9 @@ test('screenshot system notices use compact vertical spacing and show "You took 
 
   assert.match(css, /\.msg-system-event\s*\{\s*margin:\s*3px 0;\s*\}/);
   assert.match(css, /\.msg-system-event \+ \.msg-system-event\s*\{\s*margin-top:\s*-4px;\s*\}/);
-  assert.match(chat, /const isMyScreenshot = screenshotNotice && Boolean\(myId && String\(m\.sender_id \|\| ''\) === String\(myId\)\);/);
-  assert.match(chat, /isMyScreenshot \? 'You' : String\(m\.body \|\| ''\)\.replace\(\/ took a screenshot\\\.\?\$\/i, ''\)/);
+  assert.match(chat, /const isMySystemActor = screenshotNotice && Boolean\(myId && String\(m\.sender_id \|\| ''\) === String\(myId\)\);/);
   assert.match(chat, /<strong>\$\{escapeHtml\(screenshotName\)\}<\/strong> took a screenshot`/);
+  assert.match(chat, /<strong>\$\{escapeHtml\(screenshotName\)\}<\/strong> \$\{screenshotBlockAction\}`/);
 
   const convRowSrc = chat.match(/function renderConversationRowHtml\(conv\)\s*\{[\s\S]*?\n  \}/)?.[0];
   assert.ok(convRowSrc, 'renderConversationRowHtml must exist');
@@ -428,6 +428,28 @@ test('screenshot system notices use compact vertical spacing and show "You took 
   assert.doesNotMatch(myShotRow, /You took a screenshot\./);
   assert.doesNotMatch(myShotRow, /Zedrick De Monteverde took a screenshot/);
 
+  const myBlockOnRow = renderConvRow({
+    id: 'c1',
+    kind: 'DIRECT',
+    last_message_type: 'SYSTEM',
+    last_message_sender_id: 'u-me',
+    last_message_preview: 'Zedrick De Monteverde turned on screenshot blocking',
+    last_message_at: '2026-11-21T04:24:00Z',
+    unread_count: 0
+  });
+  assert.match(myBlockOnRow, /You turned on screenshot blocking</);
+
+  const peerBlockOnRow = renderConvRow({
+    id: 'c1',
+    kind: 'DIRECT',
+    last_message_type: 'SYSTEM',
+    last_message_sender_id: 'u-peer',
+    last_message_preview: 'Frank Lawrenze Ulog Talipan turned on screenshot blocking',
+    last_message_at: '2026-11-21T04:24:00Z',
+    unread_count: 0
+  });
+  assert.match(peerBlockOnRow, /Frank Lawrenze Ulog Talipan turned on screenshot blocking</);
+
   const peerShotRow = renderConvRow({
     id: 'c1',
     kind: 'DIRECT',
@@ -439,4 +461,37 @@ test('screenshot system notices use compact vertical spacing and show "You took 
   });
   assert.match(peerShotRow, /Frank Lawrenze Ulog Talipan took a screenshot</);
   assert.doesNotMatch(peerShotRow, /Frank Lawrenze Ulog Talipan took a screenshot\./);
+});
+
+test('migration 152 logs screenshot blocking toggles, keeps blocking persistent, and syncs lagging active threads from previews', () => {
+  const mig152 = read('database/migrations/20261121_152_screenshot_block_notices_and_persistence.sql');
+  const schema = read('database/schema.sql');
+  const chat = read('js/messages.js').replace(/\r\n/g, '\n');
+
+  for (const source of [mig152, schema]) {
+    assert.match(source, /'screenshot_block_enabled'/);
+    assert.match(source, /'screenshot_block_disabled'/);
+    assert.match(source, /turned on screenshot blocking/);
+    assert.match(source, /turned off screenshot blocking/);
+  }
+  const reportFn = mig152.match(/create or replace function public\.report_client_platform[\s\S]*?\$\$;/);
+  assert.ok(reportFn);
+  assert.doesNotMatch(reportFn[0], /set block_screenshots = false/, 'reporting platform must never auto-disable block_screenshots');
+
+  const lagSrc = chat.match(/function activeThreadLagsBehindTimestamp\(convId, incomingIso\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(lagSrc, 'activeThreadLagsBehindTimestamp must exist');
+  const sendTailByConv = new Map();
+  const state = {
+    activeConvId: 'c1',
+    loadingThread: false,
+    activeThread: {
+      conversation: { conversation_id: 'c1' },
+      messages: [{ id: 'm1', created_at: '2026-11-21T04:00:00Z' }]
+    }
+  };
+  const lags = new Function('state', 'sendTailByConv', `${lagSrc}; return activeThreadLagsBehindTimestamp;`)(state, sendTailByConv);
+  assert.equal(lags('c1', '2026-11-21T04:00:00Z'), false);
+  assert.equal(lags('c1', '2026-11-21T04:01:00Z'), true, 'newer sidebar preview timestamp must trigger active thread catch-up');
+  sendTailByConv.set('c1', Promise.resolve());
+  assert.equal(lags('c1', '2026-11-21T04:02:00Z'), false, 'do not interrupt active local send burst');
 });
