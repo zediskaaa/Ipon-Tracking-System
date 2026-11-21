@@ -127,7 +127,11 @@ Deno.serve(async (req) => {
     }
     message = String(notif.message || 'You have a new notification.');
     link = String(notif.link || 'dashboard.html');
-    if (notif.type === 'RELEASE' && /^https?:/i.test(link)) {
+    if (notif.type === 'SOCIAL_FRIEND_REQUEST') {
+      link = 'dashboard.html?messages=friend_requests';
+    } else if (notif.type === 'SOCIAL_FRIEND_ACCEPTED') {
+      link = 'dashboard.html?messages=friends';
+    } else if (notif.type === 'RELEASE' && /^https?:/i.test(link)) {
       const m = `${title} ${message} ${link}`.match(/v?(\d+\.\d+\.\d+)/i);
       link = `dashboard.html?release=${encodeURIComponent(m ? m[1] : 'latest')}`;
     }

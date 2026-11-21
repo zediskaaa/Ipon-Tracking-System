@@ -17922,7 +17922,7 @@ begin
     'SOCIAL_FRIEND_REQUEST',
     'New friend request',
     coalesce(v_sender_name, 'Someone') || ' sent you a friend request.',
-    'dashboard.html?messages=requests',
+    'dashboard.html?messages=friend_requests',
     'SOCIAL_FRIEND_REQ:' || v_pair
   );
 

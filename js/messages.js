@@ -7993,11 +7993,14 @@
     });
   }
 
-  async function openWorkspace({ tab = null, conversationId = null, messageId = null } = {}) {
+  async function openWorkspace({ tab = null, subTab = null, conversationId = null, messageId = null } = {}) {
     if (!isEligible()) return;
     ensureDialogsMounted();
     const dialog = document.getElementById('msg-workspace-dialog');
     if (!dialog) return;
+    if (subTab && ['all', 'incoming', 'sent'].includes(subTab)) {
+      state.friendsSubTab = subTab;
+    }
     const defaultLanding = !tab && !conversationId;
     const targetTab = tab || 'chats';
     if (!dialog.open) dialog.showModal();
@@ -8033,16 +8036,18 @@
     const sp = urlObj.searchParams;
     const chatId = sp.get('chat');
     const msgId = sp.get('msg');
-    const mode = sp.get('messages');
+    const mode = String(sp.get('messages') || '').toLowerCase();
+    const sub = String(sp.get('sub') || '').toLowerCase();
     const type = String(itemOrLink?.type || '').toUpperCase();
 
-    if (mode === 'friends' || type === 'SOCIAL_FRIEND_ACCEPTED') {
-      state.friendsSubTab = 'all';
-      await openWorkspace({ tab: 'friends' });
-    } else if (type === 'SOCIAL_FRIEND_REQUEST') {
+    if (type === 'SOCIAL_FRIEND_REQUEST' || mode === 'friend_requests' || (mode === 'friends' && sub === 'incoming')) {
       state.friendsSubTab = 'incoming';
-      await openWorkspace({ tab: 'friends' });
-    } else if (mode === 'requests' || type === 'SOCIAL_MESSAGE_REQUEST') {
+      await openWorkspace({ tab: 'friends', subTab: 'incoming' });
+    } else if (type === 'SOCIAL_FRIEND_ACCEPTED' || mode === 'friends') {
+      const nextSub = sub === 'sent' ? 'sent' : 'all';
+      state.friendsSubTab = nextSub;
+      await openWorkspace({ tab: 'friends', subTab: nextSub });
+    } else if (type === 'SOCIAL_MESSAGE_REQUEST' || mode === 'message_requests' || mode === 'requests') {
       await openWorkspace({ tab: 'requests', conversationId: chatId, messageId: msgId });
     } else {
       await openWorkspace({ tab: 'chats', conversationId: chatId, messageId: msgId });

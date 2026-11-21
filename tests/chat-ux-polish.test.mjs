@@ -693,3 +693,95 @@ test('chat conversation list rows never shrink vertically or clip previews on sm
   assert.match(css, /\.msg-conv-list\s*\{[^}]*env\(safe-area-inset-bottom/);
   assert.match(messagesJs, /placeholder="Search chats or people…"/);
 });
+
+test('friend request notifications route strictly to Friends > Friend Requests while message requests route to Message Requests', async () => {
+  const mig153 = read('database/migrations/20261121_153_friend_request_notification_link.sql');
+  const schema = read('database/schema.sql');
+  const coreJs = read('js/core.js');
+  const messagesJs = read('js/messages.js');
+  const androidPoll = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
+  const sendPush = read('supabase/functions/send-push/index.ts');
+
+  assert.match(mig153, /'SOCIAL_FRIEND_REQUEST'[\s\S]*?'dashboard\.html\?messages=friend_requests'/);
+  assert.match(mig153, /update public\.notifications[\s\S]*?set link = 'dashboard\.html\?messages=friend_requests'[\s\S]*?where type = 'SOCIAL_FRIEND_REQUEST'/i);
+  assert.match(schema, /'SOCIAL_FRIEND_REQUEST'[\s\S]*?'dashboard\.html\?messages=friend_requests'/);
+  assert.match(androidPoll, /"SOCIAL_FRIEND_REQUEST"\.equals\(upperType\)[\s\S]*?dashboard\.html\?messages=friend_requests/);
+  assert.match(sendPush, /notif\.type === 'SOCIAL_FRIEND_REQUEST'[\s\S]*?dashboard\.html\?messages=friend_requests/);
+  assert.match(coreJs, /if \(type === 'SOCIAL_FRIEND_REQUEST'\) return `\$\{targetPage\}\?messages=friend_requests`;/);
+
+  // Runtime check of core.js resolveNotificationTarget
+  const noop = () => {};
+  const coreCtx = {
+    console, setTimeout, clearTimeout, setInterval, clearInterval, URL, URLSearchParams, CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } },
+    location: { pathname: '/dashboard.html', href: 'https://myipon.app/dashboard.html', origin: 'https://myipon.app', search: '', hash: '' },
+    navigator: { userAgent: 'Mozilla/5.0', onLine: true },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    history: { replaceState: noop },
+    addEventListener: noop,
+    removeEventListener: noop,
+    matchMedia: () => ({ matches: false, addEventListener: noop }),
+    document: {
+      documentElement: { setAttribute: noop, dataset: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false } },
+      body: { dataset: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, appendChild: noop, insertAdjacentHTML: noop },
+      head: { appendChild: noop, insertAdjacentHTML: noop },
+      addEventListener: noop,
+      removeEventListener: noop,
+      getElementById: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      createElement: () => ({ style: {}, dataset: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, setAttribute: noop, appendChild: noop, addEventListener: noop })
+    },
+    supabase: { createClient: () => ({ rpc: async () => ({ data: null }), from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) }), auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe: noop } } }) }, channel: () => ({ on() { return this; }, subscribe: noop }) }) }
+  };
+  coreCtx.window = coreCtx;
+  coreCtx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, coreCtx, { filename: 'js/core.js' });
+
+  const resolveTarget = coreCtx.window.Ipon.resolveNotificationTarget;
+  assert.equal(resolveTarget({ type: 'SOCIAL_FRIEND_REQUEST', link: 'dashboard.html?messages=requests' }, 'MEMBER'), 'dashboard.html?messages=friend_requests');
+  assert.equal(resolveTarget({ type: 'SOCIAL_FRIEND_REQUEST', link: '' }, 'MEMBER'), 'dashboard.html?messages=friend_requests');
+  assert.equal(resolveTarget({ type: 'SOCIAL_FRIEND_ACCEPTED', link: 'dashboard.html?messages=requests' }, 'MEMBER'), 'dashboard.html?messages=friends');
+  assert.equal(resolveTarget({ type: 'SOCIAL_MESSAGE_REQUEST', link: 'dashboard.html?messages=requests&chat=conv-req-1' }, 'MEMBER'), 'dashboard.html?messages=requests&chat=conv-req-1');
+  assert.equal(resolveTarget({ type: 'SOCIAL_NEW_MESSAGE', link: 'dashboard.html?chat=conv-1&msg=m-9' }, 'MEMBER'), 'dashboard.html?chat=conv-1&msg=m-9');
+
+  // Runtime check of messages.js openFromNotification routing
+  const fnMatch = messagesJs.match(/async function openFromNotification\([\s\S]*?\n  \}/);
+  assert.ok(fnMatch, 'openFromNotification must exist in js/messages.js');
+  const calls = [];
+  const state = { friendsSubTab: 'all' };
+  const route = new Function(
+    'isEligible', 'location', 'URL', 'state', 'openWorkspace',
+    `${fnMatch[0]}\nreturn openFromNotification;`
+  )(
+    () => true,
+    { href: 'https://myipon.app/dashboard.html' },
+    URL,
+    state,
+    async (opts) => { calls.push({ ...opts, friendsSubTab: state.friendsSubTab }); }
+  );
+
+  // 1) Friend request via URL-only (e.g. Android native push tap)
+  await route({ link: 'dashboard.html?messages=friend_requests' });
+  assert.deepEqual(calls.at(-1), { tab: 'friends', subTab: 'incoming', friendsSubTab: 'incoming' });
+
+  // 2) Legacy friend request row with stale ?messages=requests link
+  await route({ type: 'SOCIAL_FRIEND_REQUEST', link: 'dashboard.html?messages=requests' });
+  assert.deepEqual(calls.at(-1), { tab: 'friends', subTab: 'incoming', friendsSubTab: 'incoming' });
+
+  // 3) Friend accepted -> Friends > My Friends
+  await route({ type: 'SOCIAL_FRIEND_ACCEPTED', link: 'dashboard.html?messages=friends' });
+  assert.deepEqual(calls.at(-1), { tab: 'friends', subTab: 'all', friendsSubTab: 'all' });
+
+  // 4) Message request -> Requests (Message Requests) with conversationId
+  await route({ type: 'SOCIAL_MESSAGE_REQUEST', link: 'dashboard.html?messages=requests&chat=conv-req-1' });
+  assert.deepEqual(calls.at(-1), { tab: 'requests', conversationId: 'conv-req-1', messageId: null, friendsSubTab: 'all' });
+
+  // 5) URL-only message request -> Requests (Message Requests)
+  await route({ link: 'dashboard.html?messages=requests&chat=conv-req-2' });
+  assert.deepEqual(calls.at(-1), { tab: 'requests', conversationId: 'conv-req-2', messageId: null, friendsSubTab: 'all' });
+
+  // 6) Regular chat message -> Chats with conversationId & messageId
+  await route({ type: 'SOCIAL_NEW_MESSAGE', link: 'dashboard.html?chat=conv-9&msg=msg-77' });
+  assert.deepEqual(calls.at(-1), { tab: 'chats', conversationId: 'conv-9', messageId: 'msg-77', friendsSubTab: 'all' });
+});

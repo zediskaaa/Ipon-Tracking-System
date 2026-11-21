@@ -8043,6 +8043,21 @@
       return goalId ? `dashboard.html?record_goal=${encodeQueryValue(goalId)}` : 'dashboard.html';
     }
 
+    if (type.startsWith('SOCIAL_') && role !== 'SUPER_ADMIN') {
+      const currentFile = (location.pathname.split('/').pop() || 'dashboard.html').toLowerCase();
+      const targetPage = ['index.html', 'login.html', 'mfa.html', 'reset-password.html', 'super-admin.html'].includes(currentFile)
+        ? 'dashboard.html'
+        : currentFile;
+      if (type === 'SOCIAL_FRIEND_REQUEST') return `${targetPage}?messages=friend_requests`;
+      if (type === 'SOCIAL_FRIEND_ACCEPTED') return `${targetPage}?messages=friends`;
+      if (safe && !/^https?:\/\//i.test(safe)) {
+        const qIndex = safe.indexOf('?');
+        const query = qIndex >= 0 ? safe.slice(qIndex) : (type === 'SOCIAL_MESSAGE_REQUEST' ? '?messages=requests' : '?messages=inbox');
+        return `${targetPage}${query}`;
+      }
+      return type === 'SOCIAL_MESSAGE_REQUEST' ? `${targetPage}?messages=requests` : `${targetPage}?messages=inbox`;
+    }
+
     if (safe && !/^https?:\/\//i.test(safe) && safe.includes('?')) {
       return normalizeRolePageTarget(safe, role);
     }
@@ -8116,19 +8131,6 @@
 
     if (type === 'REVIEW_REQUIRED' || type === 'RECORD_UPDATED') {
       return `dashboard.html?review_notice=${encodeQueryValue(item.id || '')}`;
-    }
-
-    if (type.startsWith('SOCIAL_') && role !== 'SUPER_ADMIN') {
-      const currentFile = (location.pathname.split('/').pop() || 'dashboard.html').toLowerCase();
-      const targetPage = ['index.html', 'login.html', 'mfa.html', 'reset-password.html', 'super-admin.html'].includes(currentFile)
-        ? 'dashboard.html'
-        : currentFile;
-      if (safe && !/^https?:\/\//i.test(safe)) {
-        const qIndex = safe.indexOf('?');
-        const query = qIndex >= 0 ? safe.slice(qIndex) : '?messages=inbox';
-        return `${targetPage}${query}`;
-      }
-      return `${targetPage}?messages=inbox`;
     }
 
     const baseTarget = safe && !/^https?:\/\//i.test(safe)
@@ -8680,9 +8682,10 @@
     }
     const targetFile = (parsedTarget.pathname.split('/').pop() || 'index.html').toLowerCase();
 
-    if (rawItem?.type?.startsWith('SOCIAL_') && currentProfile?.role !== 'SUPER_ADMIN' && window.IponMessages?.openFromNotification) {
+    const isSocialTarget = Boolean(rawItem?.type?.startsWith('SOCIAL_') || parsedTarget.searchParams.has('messages') || parsedTarget.searchParams.has('chat'));
+    if (isSocialTarget && currentProfile?.role !== 'SUPER_ADMIN' && window.IponMessages?.openFromNotification) {
       history.replaceState(null, '', target);
-      window.IponMessages.openFromNotification(rawItem, parsedTarget);
+      window.IponMessages.openFromNotification(rawItem || target, parsedTarget);
       return target;
     }
 

@@ -424,10 +424,17 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         String cleanTitle = cleanMessageNotificationTitle(type, dedupeKey, title);
         String cleanBody = body == null ? "" : body;
 
+        String resolvedLink = link;
+        String upperType = type == null ? "" : type.trim().toUpperCase(java.util.Locale.US);
+        if ("SOCIAL_FRIEND_REQUEST".equals(upperType)) {
+            resolvedLink = "dashboard.html?messages=friend_requests";
+        } else if ("SOCIAL_FRIEND_ACCEPTED".equals(upperType)) {
+            resolvedLink = "dashboard.html?messages=friends";
+        }
         Intent launchIntent = new Intent(appContext, MainActivity.class);
         launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        if (!TextUtils.isEmpty(link)) {
-            launchIntent.putExtra("notification_link", link);
+        if (!TextUtils.isEmpty(resolvedLink)) {
+            launchIntent.putExtra("notification_link", resolvedLink);
         }
 
         int notifId = buildNotifId(id, dedupeKey);
