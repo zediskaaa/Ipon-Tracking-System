@@ -12415,3 +12415,16 @@ test('post-login username setup modal prompts legacy users without usernames, pr
   assert.equal(oscStarts, beforeMuteOsc);
   Ipon.setUiSoundEnabled(true);
 });
+
+test('screenshot notices have a protected group toggle and readable event styling', () => {
+  const chat = read('js/messages.js');
+  const css = read('css/app.css');
+  const schema = read('database/schema.sql');
+  assert.match(chat, /data-chat-protection="screenshot_notices" aria-checked=/);
+  assert.match(chat, /isThreadActivelyVisible\(\{ ignoreFocus: true \}\)/);
+  assert.match(chat, /msg-system-event\$\{screenshotNotice \? ' is-screenshot'/);
+  assert.match(css, /\.msg-system-event\.is-screenshot span,\s*\.msg-system-event\.is-vanish span \{[\s\S]*color: #0b3428/);
+  assert.match(schema, /v_conv.kind = 'GROUP' and not v_conv.screenshot_notices_enabled then\s+return null/);
+  assert.match(chat, /\['vanish_enabled', 'vanish_disabled', 'vanish_updated'\]\.includes\(m\.metadata\?\.event\)/);
+  assert.match(schema, /when 'vanish_enabled' then ' turned on vanishing messages for '/);
+});

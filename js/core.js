@@ -2551,8 +2551,11 @@
   let lastReportedClientPlatformAt = 0;
 
   function supportsNativeScreenshotProtection() {
-    return typeof window !== 'undefined'
-      && typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function';
+    return typeof window !== 'undefined' && (
+      typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function'
+      || Boolean(window.Capacitor?.PluginHeaders?.some((header) =>
+        header.name === 'BackgroundNotifications' && header.methods?.some((method) => method.name === 'setScreenshotBlocked')))
+    );
   }
 
   function getClientPlatform() {

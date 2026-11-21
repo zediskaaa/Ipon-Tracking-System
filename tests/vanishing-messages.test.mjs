@@ -120,6 +120,22 @@ test('vanishing messages hide notification and list previews while the ring and 
   assert.match(css, /@keyframes msgVanishExit\s*\{[\s\S]*?100% \{ opacity: 0; transform: translateY\(18px\)/);
 });
 
+test('vanishing setting changes leave a named system notice in the conversation', () => {
+  const migration = read('database/migrations/20261121_151_vanish_setting_events.sql');
+  const schema = read('database/schema.sql');
+  for (const sql of [migration, schema]) {
+    assert.match(sql, /v_conv\.vanish_after_seconds is distinct from p_seconds/);
+    assert.match(sql, /v_name \|\| case v_event[\s\S]*turned on vanishing messages for/);
+    assert.match(sql, /when 'vanish_disabled' then ' turned off vanishing messages\.'/);
+    assert.match(sql, /'SYSTEM', jsonb_build_object\('event', v_event\)/);
+  }
+  const chat = read('js/messages.js');
+  assert.match(chat, /await openConversation\(conversationId, \{ markRead: false, silent: true, scrollToBottom: true \}\)/);
+  assert.match(chat, /\['vanish_enabled', 'vanish_disabled', 'vanish_updated'\]\.includes\(m\.metadata\?\.event\)/);
+  assert.match(chat, /vanishNotice \? ' is-vanish'/);
+  assert.match(read('css/app.css'), /\.msg-system-event\.is-vanish span/);
+});
+
 test('vanish countdown starts at the actual lower bubble corner at different aspect ratios', () => {
   const source = read('js/messages.js');
   const fn = source.match(/function positionVanishRing\(bubble, width = bubble\.offsetWidth, height = bubble\.offsetHeight\)\s*\{[\s\S]*?\n  \}/)?.[0];

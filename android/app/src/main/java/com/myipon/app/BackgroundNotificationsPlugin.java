@@ -27,6 +27,7 @@ import android.util.Base64;
 import android.webkit.MimeTypeMap;
 import android.webkit.URLUtil;
 import android.webkit.WebView;
+import android.view.WindowManager;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSArray;
@@ -56,6 +57,32 @@ import java.util.Locale;
     }
 )
 public class BackgroundNotificationsPlugin extends Plugin {
+    @PluginMethod
+    public void setScreenshotBlocked(PluginCall call) {
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("App privacy is unavailable.");
+            return;
+        }
+        boolean blocked = Boolean.TRUE.equals(call.getBoolean("blocked", false));
+        activity.runOnUiThread(() -> {
+            if (blocked) activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            else activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void setScreenshotMonitoring(PluginCall call) {
+        Activity activity = getActivity();
+        if (!(activity instanceof MainActivity)) {
+            call.reject("Screenshot monitoring is unavailable.");
+            return;
+        }
+        ((MainActivity) activity).setScreenshotMonitoring(Boolean.TRUE.equals(call.getBoolean("enabled", false)));
+        call.resolve();
+    }
+
     @PluginMethod
     public void openAuthBrowser(PluginCall call) {
         String state = call.getString("appState", "");

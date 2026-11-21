@@ -7952,6 +7952,24 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+.msg-system-event.is-screenshot span,
+.msg-system-event.is-vanish span {
+  background: rgba(11, 52, 40, .1);
+  color: #0b3428;
+}
+.msg-system-event.is-screenshot strong {
+  color: #0b3428;
+  font-weight: 750;
+}
+html[data-theme="dark"] .msg-system-event.is-screenshot span,
+html[data-theme="dark"] .msg-system-event.is-vanish span,
+.msg-thread-stage[data-chat-theme="midnight"] .msg-system-event.is-screenshot span,
+.msg-thread-stage[data-chat-theme="midnight"] .msg-system-event.is-vanish span,
+html[data-theme="dark"] .msg-system-event.is-screenshot strong,
+.msg-thread-stage[data-chat-theme="midnight"] .msg-system-event.is-screenshot strong {
+  color: #b9e8ce;
+}
+
 .msg-unread-sep {
   position: relative;
   align-items: center;
@@ -9315,6 +9333,9 @@ html[data-theme="dark"] .msg-privacy-card {
 .msg-privacy-titleline { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 7px; }
 .msg-privacy-titleline strong { color: var(--privacy-ink); font: 700 15px/1.25 "IPON Serif", Georgia, serif; }
 .msg-privacy-copy small { display: block; margin-top: 3px; color: var(--privacy-muted); font: 12px/1.4 Arial, sans-serif; }
+.msg-privacy-retry { padding: 0 0 0 4px; border: 0; background: none; color: #0b5d43; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+html[data-theme="dark"] .msg-privacy-retry { color: #8bdfb8; }
+.msg-privacy-retry:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .msg-privacy-chip { padding: 2px 7px; border: 1px solid var(--privacy-rule); border-radius: 999px; color: var(--privacy-muted); background: var(--privacy-track); font: 700 10px/1.2 Arial, sans-serif; }
 .msg-privacy-control { display: grid; flex: 0 0 44px; justify-items: center; gap: 0; color: var(--privacy-muted); font: 700 11px/1.2 Arial, sans-serif; }
 .msg-privacy-switch { position: relative; width: 44px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer; }

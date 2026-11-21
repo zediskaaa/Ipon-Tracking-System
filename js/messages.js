@@ -1068,7 +1068,7 @@
       syncMobilePaneState();
       state.lastTypingState = false;
       state.lastTypingSentAt = 0;
-      window.IponNativePrivacy?.setScreenshotBlocked?.(false);
+      syncNativeScreenshotLock(null);
     });
     const scrollWrapEl = document.getElementById('msg-scroll-wrap');
     scrollWrapEl?.addEventListener('scroll', closeFloatingMenus, { passive: true });
@@ -1475,12 +1475,12 @@
     });
   }
 
-  function isThreadActivelyVisible() {
+  function isThreadActivelyVisible({ ignoreFocus = false } = {}) {
     const dialog = document.getElementById('msg-workspace-dialog');
     if (!dialog?.open || !state.activeConvId) return false;
     if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
-    if (!isWindowFocused) return false;
-    if (typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
+    if (!ignoreFocus && !isWindowFocused) return false;
+    if (!ignoreFocus && typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
     const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
     if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
     if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
@@ -1588,6 +1588,7 @@
       || Boolean(pc.receipts_enabled) !== Boolean(nc.receipts_enabled)
       || Boolean(pc.block_screenshots) !== Boolean(nc.block_screenshots)
       || Boolean(pc.screenshot_block_eligible) !== Boolean(nc.screenshot_block_eligible)
+      || Boolean(pc.screenshot_notices_enabled) !== Boolean(nc.screenshot_notices_enabled)
       || Boolean(pc.block_forwarding) !== Boolean(nc.block_forwarding)
       || Boolean(pc.protection_unavailable) !== Boolean(nc.protection_unavailable)
       || Boolean(pc.vanish_unavailable) !== Boolean(nc.vanish_unavailable)
@@ -2123,7 +2124,9 @@
     if (typeof ipon()?.supportsNativeScreenshotProtection === 'function') {
       return Boolean(ipon().supportsNativeScreenshotProtection());
     }
-    return typeof window !== 'undefined' && typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function';
+    return typeof window !== 'undefined' && (typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function'
+      || Boolean(window.Capacitor?.PluginHeaders?.some((header) =>
+        header.name === 'BackgroundNotifications' && header.methods?.some((method) => method.name === 'setScreenshotBlocked'))));
   }
 
   function hasLiveBrowserParticipant(conv) {
@@ -2140,7 +2143,19 @@
   }
 
   function syncNativeScreenshotLock(conv = state.activeThread?.conversation) {
-    window.IponNativePrivacy?.setScreenshotBlocked?.(Boolean(conv?.block_screenshots && isScreenshotBlockEffective(conv)));
+    const blocked = Boolean(conv?.block_screenshots && isScreenshotBlockEffective(conv));
+    if (typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function') {
+      window.IponNativePrivacy.setScreenshotBlocked(blocked);
+    } else if (supportsNativeScreenshotProtection()) {
+      window.Capacitor?.Plugins?.BackgroundNotifications?.setScreenshotBlocked?.({ blocked })?.catch?.(() => { });
+    }
+    const monitoring = Boolean(conv && state.activeConvId && document.getElementById('msg-workspace-dialog')?.open
+      && (!isGroupConv(conv) || conv.screenshot_notices_enabled) && !blocked);
+    if (typeof window.IponNativePrivacy?.setScreenshotMonitoring === 'function') {
+      window.IponNativePrivacy.setScreenshotMonitoring(monitoring);
+    } else if (supportsNativeScreenshotProtection()) {
+      window.Capacitor?.Plugins?.BackgroundNotifications?.setScreenshotMonitoring?.({ enabled: monitoring })?.catch?.(() => { });
+    }
   }
 
   async function refreshActiveConversationProtection(convId = state.activeConvId) {
@@ -2153,6 +2168,7 @@
       const changed = Boolean(conv.block_screenshots) !== Boolean(protection.block_screenshots)
         || Boolean(conv.block_forwarding) !== Boolean(protection.block_forwarding)
         || Boolean(conv.screenshot_block_eligible) !== Boolean(protection.screenshot_block_eligible)
+        || Boolean(conv.screenshot_notices_enabled) !== Boolean(protection.screenshot_notices_enabled)
         || conv.vanish_after_seconds !== protection.vanish_after_seconds;
       Object.assign(conv, protection);
       conv.protection_unavailable = false;
@@ -3224,7 +3240,13 @@
       if (m.message_type === 'CALL_EVENT' || m.message_type === 'SYSTEM') {
         lastShownClockKey = '';
         const sysLabel = escapeHtml(m.body || (m.message_type === 'CALL_EVENT' ? 'Call event' : 'System notice'));
-        return `${dateDivider}${unreadDivider}<div class="msg-system-event" data-msg-id="${escapeHtml(m.id)}"><span>${sysLabel} · ${escapeHtml(formatClock(m.created_at))}</span></div>`;
+        const screenshotNotice = m.message_type === 'SYSTEM' && ['screenshot_taken', 'SCREENSHOT'].includes(m.metadata?.event);
+        const vanishNotice = m.message_type === 'SYSTEM' && ['vanish_enabled', 'vanish_disabled', 'vanish_updated'].includes(m.metadata?.event);
+        const screenshotName = screenshotNotice ? String(m.body || '').replace(/ took a screenshot\.$/, '') : '';
+        const eventText = screenshotNotice
+          ? `<strong>${escapeHtml(screenshotName)}</strong> took a screenshot`
+          : sysLabel;
+        return `${dateDivider}${unreadDivider}<div class="msg-system-event${screenshotNotice ? ' is-screenshot' : vanishNotice ? ' is-vanish' : ''}" data-msg-id="${escapeHtml(m.id)}"><span>${eventText} · ${escapeHtml(formatClock(m.created_at))}</span></div>`;
       }
 
       const mine = m.sender_id === myId;
@@ -3616,6 +3638,9 @@
         state.vanishDraftCustom = false;
       }
       ok = true;
+      if (state.activeConvId === conversationId) {
+        await openConversation(conversationId, { markRead: false, silent: true, scrollToBottom: true });
+      }
     } catch (error) {
       if (state.activeConvId === conversationId) state.vanishError = ipon().friendlyError(error);
     } finally {
@@ -3857,15 +3882,17 @@
     conv._renderedScreenshotEligible = screenshotEligible;
     const screenshotActive = Boolean(conv.block_screenshots && screenshotEligible);
     const canToggleScreenshots = canManageProtection && nativePrivacy && (screenshotEligible || Boolean(conv.block_screenshots));
-    const screenshotDesc = screenshotEligible
-      ? 'Protect this chat on Android devices'
-      : (isGrp ? 'Requires all members to use the mobile app' : 'Requires both people to use the mobile app');
+    const screenshotDesc = !nativePrivacy
+      ? 'Update the Android app to enable screenshot blocking'
+      : screenshotEligible
+        ? 'Protect this chat on Android devices'
+        : (isGrp ? 'Requires all members to use the mobile app' : 'Requires both people to use the mobile app');
     const phoneSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10.5 18.5h3"/></svg>';
     const forwardBlockSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5 6 5-6 5v-3.2c-4.2 0-7 1.2-9 4.2.4-4.6 3.2-7.8 9-8.4V5Z"/><path d="M4 4 20 20"/></svg>';
-    const screenshotRowHtml = nativePrivacy
+    const screenshotRowHtml = (nativePrivacy || (typeof window !== 'undefined' && (window.Capacitor?.isNativePlatform?.() || (window.navigator?.userAgent || '').includes('myIPONApp/'))))
       ? `<div class="msg-privacy-row${canToggleScreenshots ? '' : ' is-disabled'}">
           <span class="msg-privacy-icon">${phoneSvg}</span>
-          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-shot-title">Block screenshots</strong><span class="msg-privacy-chip">Android</span></div><small id="msg-privacy-shot-desc">${screenshotDesc}</small></div>
+          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-shot-title">Block screenshots</strong><span class="msg-privacy-chip">Android</span></div><small id="msg-privacy-shot-desc">${screenshotDesc}${nativePrivacy && !screenshotEligible ? ' <button type="button" class="msg-privacy-retry" data-chat-protection-retry>Check again</button>' : ''}</small></div>
           <div class="msg-privacy-control"><button type="button" class="msg-privacy-switch" role="switch" data-chat-protection="screenshots" aria-checked="${screenshotActive}" aria-labelledby="msg-privacy-shot-title" aria-describedby="msg-privacy-shot-desc"${canToggleScreenshots ? '' : ' disabled'}></button><span>${screenshotActive ? 'On' : 'Off'}</span></div>
         </div>`
       : '';
@@ -3874,6 +3901,11 @@
       ${conv.protection_unavailable ? '<div class="msg-privacy-note" role="status"><span>Chat privacy is temporarily unavailable. Messages still work.</span><button type="button" data-chat-protection-retry>Try again</button></div>' : ''}
       <div class="msg-privacy-list">
         ${screenshotRowHtml}
+        ${isGrp ? `<div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
+          <span class="msg-privacy-icon">${phoneSvg}</span>
+          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-notices-title">Screenshot notices</strong></div><small id="msg-privacy-notices-desc">Show Android app screenshot notices to everyone in this group</small></div>
+          <div class="msg-privacy-control"><button type="button" class="msg-privacy-switch" role="switch" data-chat-protection="screenshot_notices" aria-checked="${Boolean(conv.screenshot_notices_enabled)}" aria-labelledby="msg-privacy-notices-title" aria-describedby="msg-privacy-notices-desc"${canManageProtection ? '' : ' disabled'}></button><span>${conv.screenshot_notices_enabled ? 'On' : 'Off'}</span></div>
+        </div>` : ''}
         <div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
           <span class="msg-privacy-icon">${forwardBlockSvg}</span>
           <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-forward-title">Block forwarding</strong></div><small id="msg-privacy-forward-desc">Messages from this chat cannot be forwarded in myIPON</small></div>
@@ -6544,6 +6576,7 @@
       const protectionRetry = ev.target.closest?.('[data-chat-protection-retry]');
       if (protectionRetry && state.activeConvId) {
         protectionRetry.disabled = true;
+        await ipon().reportClientPlatform?.({ force: true });
         await openConversation(state.activeConvId, { markRead: false, silent: true });
         renderThreadInfoDrawer();
         return;
@@ -6573,7 +6606,7 @@
         try {
           const next = await ipon().rpc('set_conversation_protection', {
             p_conversation_id: convId, p_setting: setting,
-            p_enabled: !conv[setting === 'screenshots' ? 'block_screenshots' : 'block_forwarding']
+            p_enabled: !conv[setting === 'screenshots' ? 'block_screenshots' : setting === 'screenshot_notices' ? 'screenshot_notices_enabled' : 'block_forwarding']
           });
           Object.assign(conv, next);
           if (state.activeConvId === convId) syncNativeScreenshotLock(conv);
@@ -7793,10 +7826,11 @@
 
     window.addEventListener('myipon:screen-captured', async () => {
       const activeConv = state.activeThread?.conversation;
-      if (!supportsNativeScreenshotProtection() || !isThreadActivelyVisible() || activeConv?.protection_unavailable || (activeConv?.block_screenshots && isScreenshotBlockEffective(activeConv))) return;
+      if (!supportsNativeScreenshotProtection() || !isThreadActivelyVisible({ ignoreFocus: true }) || state.loadingThread || activeConv?.conversation_id !== state.activeConvId || activeConv?.protection_unavailable || (activeConv?.block_screenshots && isScreenshotBlockEffective(activeConv)) || (isGroupConv(activeConv) && !activeConv.screenshot_notices_enabled)) return;
+      const convId = state.activeConvId;
       try {
-        await ipon().rpc('record_conversation_screenshot', { p_conversation_id: state.activeConvId });
-        await openConversation(state.activeConvId, { markRead: false, silent: true, scrollToBottom: true });
+        const recordedId = await ipon().rpc('record_conversation_screenshot', { p_conversation_id: convId });
+        if (recordedId && state.activeConvId === convId) await openConversation(convId, { markRead: false, silent: true, scrollToBottom: true });
       } catch (err) {
         ipon().toast(ipon().friendlyError(err), 'error');
       }
@@ -7997,6 +8031,7 @@
           curConv && (
             (row.status && curConv.status && row.status !== curConv.status) ||
             (row.block_screenshots !== undefined && row.block_screenshots !== curConv.block_screenshots) ||
+            (row.screenshot_notices_enabled !== undefined && row.screenshot_notices_enabled !== curConv.screenshot_notices_enabled) ||
             (row.block_forwarding !== undefined && row.block_forwarding !== curConv.block_forwarding) ||
             (row.vanish_after_seconds !== undefined && row.vanish_after_seconds !== curConv.vanish_after_seconds) ||
             (isGroupConv(curConv) && (

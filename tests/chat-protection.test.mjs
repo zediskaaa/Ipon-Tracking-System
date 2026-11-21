@@ -67,6 +67,13 @@ test('migration 146 requires all participants to use the mobile app for Block sc
   assert.match(core, /function hasLiveBrowserSession\(/);
   assert.match(core, /client_platform: getClientPlatform\(\)/);
   assert.match(core, /supportsNativeScreenshotProtection, getClientPlatform, reportClientPlatform, hasLiveBrowserSession/);
+  const nativeSupport = core.match(/function supportsNativeScreenshotProtection\(\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  const platform = core.match(/function getClientPlatform\(\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(nativeSupport && platform);
+  const platformFor = (window) => new Function('window', `${nativeSupport}; ${platform}; return getClientPlatform();`)(window);
+  assert.equal(platformFor({}), 'browser');
+  assert.equal(platformFor({ Capacitor: { Plugins: { BackgroundNotifications: { setScreenshotBlocked() {} } } } }), 'browser');
+  assert.equal(platformFor({ Capacitor: { PluginHeaders: [{ name: 'BackgroundNotifications', methods: [{ name: 'setScreenshotBlocked' }] }] } }), 'android_app');
 });
 
 test('Block screenshots is hidden in browsers and disabled in the mobile app when the peer uses a browser', () => {
@@ -153,6 +160,7 @@ test('Block screenshots is hidden in browsers and disabled in the mobile app whe
   buildRunner()();
   assert.match(drawerEl.innerHTML, /Block screenshots/);
   assert.match(drawerEl.innerHTML, /Requires both people to use the mobile app/);
+  assert.match(drawerEl.innerHTML, /data-chat-protection-retry>Check again<\/button>/);
   assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]* disabled>/);
 
   // 3. Mobile app user + peer has active browser tab in live presence -> still disabled even if DB says eligible
@@ -186,4 +194,51 @@ test('Block screenshots is hidden in browsers and disabled in the mobile app whe
   buildRunner()();
   assert.match(drawerEl.innerHTML, /Requires all members to use the mobile app/);
   assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]* disabled>/);
+  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshot_notices" aria-checked="false"[^>]*><\/button>/);
+  state.activeThread.conversation.my_role = 'MEMBER';
+  buildRunner()();
+  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshot_notices" aria-checked="false"[^>]* disabled>/);
+
+  // 6. Android shell with an outdated privacy bridge explains why the switch is unavailable.
+  mockWin = { Capacitor: { isNativePlatform: () => true, Plugins: {} } };
+  state.activeThread.conversation.screenshot_block_eligible = true;
+  state.activeThread.conversation.my_role = 'OWNER';
+  buildRunner()();
+  assert.match(drawerEl.innerHTML, /Update the Android app to enable screenshot blocking/);
+  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]* disabled>/);
+  mockWin = { navigator: { userAgent: 'myIPONApp/20' } };
+  buildRunner()();
+  assert.match(drawerEl.innerHTML, /Update the Android app to enable screenshot blocking/);
+
+  // 7. The Capacitor privacy method works when WebView omits the JavaScript interface.
+  mockWin.Capacitor = { PluginHeaders: [{ name: 'BackgroundNotifications', methods: [{ name: 'setScreenshotBlocked' }] }], Plugins: { BackgroundNotifications: { setScreenshotBlocked() {} } } };
+  buildRunner()();
+  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false" aria-labelledby="msg-privacy-shot-title" aria-describedby="msg-privacy-shot-desc"><\/button>/);
+});
+
+test('group screenshot notices require admin opt-in and keep direct chat notices available', () => {
+  const migration = read('database/migrations/20261121_150_group_screenshot_notices.sql');
+  const schema = read('database/schema.sql');
+  for (const sql of [migration, schema]) {
+    assert.match(sql, /screenshot_notices_enabled boolean not null default false/);
+    assert.match(sql, /'screenshot_notices_enabled', v_conv\.screenshot_notices_enabled/);
+    assert.match(sql, /p_setting = 'screenshot_notices'[\s\S]*v_conv\.kind <> 'GROUP'/);
+    assert.match(sql, /v_conv\.kind = 'GROUP' and not v_conv\.screenshot_notices_enabled then\s+return null/);
+    assert.match(sql, /coalesce\(nullif\(trim\(v_name\), ''\), 'A member'\) \|\| ' took a screenshot\.'/);
+  }
+  const activity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
+  assert.match(activity, /Build\.VERSION\.SDK_INT >= 34 \|\| !screenshotMonitoringEnabled/);
+  assert.match(activity, /registerContentObserver\(MediaStore\.Images\.Media\.EXTERNAL_CONTENT_URI, true, screenshotObserver\)/);
+  assert.match(activity, /unregisterContentObserver\(screenshotObserver\)/);
+  const plugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
+  assert.match(plugin, /public void setScreenshotBlocked\(PluginCall call\)/);
+  assert.match(plugin, /public void setScreenshotMonitoring\(PluginCall call\)/);
+  assert.match(manifest, /android\.permission\.READ_MEDIA_IMAGES/);
+  const chat = read('js/messages.js');
+  assert.match(chat, /setScreenshotMonitoring\?\.\(\{ enabled: monitoring \}\)/);
+  assert.match(chat, /isThreadActivelyVisible\(\{ ignoreFocus: true \}\)/);
+  assert.match(chat, /activeConv\?\.conversation_id !== state\.activeConvId/);
+  assert.match(chat, /isGroupConv\(activeConv\) && !activeConv\.screenshot_notices_enabled/);
+  assert.match(chat, /<strong>\$\{escapeHtml\(screenshotName\)\}<\/strong> took a screenshot/);
 });
