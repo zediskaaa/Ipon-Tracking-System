@@ -2589,7 +2589,7 @@
             ${isGrp ? groupAvatarHtml(peer, 'avatar-md') : userAvatarHtml(peer, 'avatar-md')}
             <div class="msg-thread-peer-meta">
               <div class="msg-thread-peer-title">
-                <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(peer))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(peer))}</span></strong>
+                <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(peer))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(peer))}</span>${isGrp ? '' : userBadgesHtml(peer)}</strong>
               </div>
               <div class="msg-thread-peer-sub">
                 ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
@@ -2885,7 +2885,7 @@
         ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md', { showPresence: !isSelfUser(conv) && conv.profile_visible !== false })}
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
-            <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(conv))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(conv))}</span></strong>
+            <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(conv))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp ? '' : userBadgesHtml(conv)}</strong>
           </div>
           <div class="msg-thread-peer-sub">
             ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
