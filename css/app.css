@@ -8202,7 +8202,45 @@ html[data-theme="dark"] .msg-system-event.is-screenshot strong,
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   transition: background .18s ease, border-color .18s ease, opacity .18s ease, box-shadow .55s cubic-bezier(.4, 0, .2, 1);
+}
+#msg-messages-list .msg-bubble .msg-text {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+#msg-messages-list .msg-bubble.is-text-selectable,
+#msg-messages-list .msg-bubble.is-text-selectable .msg-text {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+#msg-messages-list .msg-bubble.is-text-selectable {
+  box-shadow: 0 0 0 2px rgba(21, 108, 72, .45), 0 6px 18px rgba(10, 32, 24, .12);
+}
+.msg-double-tap-heart {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 6;
+  font-size: 28px;
+  line-height: 1;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(.4);
+  animation: msgDoubleTapHeart .56s cubic-bezier(.22, 1, .36, 1) forwards;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .22));
+}
+@keyframes msgDoubleTapHeart {
+  0% { opacity: 0; transform: translate(-50%, -40%) scale(.4); }
+  28% { opacity: 1; transform: translate(-50%, -62%) scale(1.18); }
+  62% { opacity: 1; transform: translate(-50%, -74%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -105%) scale(.88); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-double-tap-heart { animation: none; opacity: 0; }
 }
 .msg-row.is-peer .msg-bubble {
   border-bottom-left-radius: 6px;

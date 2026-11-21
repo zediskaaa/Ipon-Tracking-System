@@ -785,3 +785,288 @@ test('friend request notifications route strictly to Friends > Friend Requests w
   await route({ type: 'SOCIAL_NEW_MESSAGE', link: 'dashboard.html?chat=conv-9&msg=msg-77' });
   assert.deepEqual(calls.at(-1), { tab: 'chats', conversationId: 'conv-9', messageId: 'msg-77', friendsSubTab: 'all' });
 });
+
+test('double-tap heart react, double long-press text copy unlock, and 3-dots menu toggle/outside-tap dismissal work end-to-end', async () => {
+  const css = read('css/app.css');
+  const messagesJs = read('js/messages.js');
+
+  // CSS guards for text-select lock + unlock + double-tap heart burst
+  assert.match(css, /\.msg-bubble\s*\{[^}]*user-select:\s*none;[^}]*-webkit-touch-callout:\s*none;/);
+  assert.match(css, /#msg-messages-list \.msg-bubble\.is-text-selectable,\s*#msg-messages-list \.msg-bubble\.is-text-selectable \.msg-text\s*\{[^}]*user-select:\s*text;/);
+  assert.match(css, /\.msg-double-tap-heart\s*\{/);
+  assert.match(messagesJs, /getElementById\('msg-conv-list'\)\?\.addEventListener\('scroll',\s*closeFloatingMenus/);
+
+  const convId = 'conv-gestures-1';
+  const meId = 'u-me-1';
+  const peerId = 'u-peer-1';
+  const msgId = 'msg-gest-1';
+  const docListeners = new Map();
+  const reactionRpcCalls = [];
+  let createdMenus = [];
+  let selectedRanges = [];
+  let trackedTriggers = [];
+
+  const makeCls = (initial = '') => {
+    const set = new Set(String(initial || '').split(/\s+/).filter(Boolean));
+    return {
+      add: (...a) => a.forEach((c) => set.add(c)),
+      remove: (...a) => a.forEach((c) => set.delete(c)),
+      toggle: (c, f) => (f === undefined ? (set.has(c) ? set.delete(c) : set.add(c)) : (f ? set.add(c) : set.delete(c))),
+      contains: (c) => set.has(c),
+      toString: () => [...set].join(' ')
+    };
+  };
+  const makeEl = (id = '', className = '') => {
+    const attrs = {};
+    const el = {
+      id,
+      classList: makeCls(className),
+      get className() { return this.classList.toString(); },
+      set className(v) { this.classList = makeCls(v); },
+      dataset: {},
+      style: { setProperty: () => {}, removeProperty: () => {} },
+      innerHTML: '',
+      textContent: '',
+      value: '',
+      hidden: false,
+      open: false,
+      children: [],
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      focus() {},
+      contains(target) { return target === this || this.children.includes(target); },
+      getAttribute(k) { return attrs[k] ?? null; },
+      setAttribute(k, v) { attrs[k] = String(v); },
+      removeAttribute(k) { delete attrs[k]; },
+      appendChild(node) {
+        this.children.push(node);
+        if (String(node.className || '').includes('msg-floating-menu')) createdMenus.push(node);
+        return node;
+      },
+      remove() {
+        createdMenus = createdMenus.filter((n) => n !== this);
+      },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      closest: () => null,
+      addEventListener() {},
+      getBoundingClientRect: () => ({ left: 20, right: 220, top: 100, bottom: 140, width: 200, height: 40 })
+    };
+    return el;
+  };
+
+  const els = new Map();
+  const getEl = (id) => {
+    if (!els.has(id)) els.set(id, makeEl(id));
+    return els.get(id);
+  };
+  ['msg-workspace-dialog', 'msg-conv-list', 'msg-messages-list', 'msg-scroll-wrap', 'msg-thread-header', 'msg-thread-active', 'msg-thread-empty', 'msg-composer-input'].forEach(getEl);
+
+  const rangeMock = {
+    selectedNode: null,
+    selectNodeContents(n) { this.selectedNode = n; }
+  };
+  const selectionMock = {
+    removeAllRanges() { selectedRanges = []; },
+    addRange(r) { selectedRanges.push(r); },
+    toString() { return selectedRanges.length ? 'Hello selectable text' : ''; }
+  };
+
+  const doc = {
+    visibilityState: 'visible',
+    documentElement: { dataset: {}, classList: makeCls() },
+    body: { dataset: {}, classList: makeCls(), appendChild: () => {}, insertAdjacentHTML: () => {} },
+    hasFocus: () => true,
+    getElementById: (id) => getEl(id),
+    createElement: (tag) => makeEl('', ''),
+    createRange: () => rangeMock,
+    querySelector: (sel) => {
+      if (sel.includes('msg-floating-menu')) return createdMenus[0] || null;
+      return null;
+    },
+    querySelectorAll: (sel) => {
+      if (sel.includes('msg-floating-menu')) return [...createdMenus];
+      if (sel.includes('aria-expanded="true"')) return trackedTriggers.filter((t) => t.getAttribute('aria-expanded') === 'true');
+      return [];
+    },
+    addEventListener(ev, fn, capture) {
+      const key = `${ev}:${capture ? 'cap' : 'bub'}`;
+      if (!docListeners.has(key)) docListeners.set(key, []);
+      docListeners.get(key).push(fn);
+    }
+  };
+  const fireDoc = async (evName, eventObj) => {
+    const ev = {
+      defaultPrevented: false,
+      propagationStopped: false,
+      preventDefault() { this.defaultPrevented = true; },
+      stopPropagation() { this.propagationStopped = true; },
+      ...eventObj
+    };
+    for (const fn of (docListeners.get(`${evName}:cap`) || [])) {
+      await fn(ev);
+      if (ev.propagationStopped) return ev;
+    }
+    for (const fn of (docListeners.get(`${evName}:bub`) || [])) {
+      await fn(ev);
+      if (ev.propagationStopped) return ev;
+    }
+    return ev;
+  };
+
+  const ctx = {
+    console, setTimeout, clearTimeout, setInterval, clearInterval, URL, URLSearchParams,
+    CSS: { escape: (s) => String(s) },
+    navigator: { userAgent: 'Android', vibrate: () => true },
+    location: { href: 'https://myipon.app/dashboard.html', search: '', pathname: '/dashboard.html' },
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    history: { replaceState: () => {} },
+    innerWidth: 390,
+    innerHeight: 844,
+    getSelection: () => selectionMock,
+    requestAnimationFrame: (cb) => { cb(); return 1; },
+    addEventListener: () => {},
+    document: doc,
+    Ipon: {
+      profile: { id: meId, role: 'MEMBER', status: 'ACTIVE', full_name: 'Zedrick De Monteverde' },
+      escapeHtml: (s) => String(s ?? ''),
+      initials: () => 'ZD',
+      avatarMarkup: () => '',
+      verifiedBadgesHtml: () => '',
+      renderSocialAppLinksHtml: () => '',
+      bindAvatarFallbacks: () => {},
+      syncPresenceDots: () => {},
+      syncMessagesBadges: () => {},
+      fitVerifiedNameLines: () => {},
+      playUiSound: () => {},
+      isUserOnline: () => true,
+      toast: () => {},
+      friendlyError: (e) => String(e),
+      createRealtimeChannel: () => ({ on() { return this; }, subscribe: () => {} }),
+      client: {
+        channel: () => ({ on() { return this; }, subscribe: () => {}, track: async () => {}, untrack: async () => {}, presenceState: () => ({}) }),
+        removeChannel: () => {},
+        from: () => {
+          const q = new Proxy({}, {
+            get(_t, prop) {
+              if (prop === 'then') return (res) => Promise.resolve({ data: [], error: null }).then(res);
+              return () => q;
+            }
+          });
+          return q;
+        }
+      },
+      rpc: async (name, args) => {
+        if (name === 'get_conversations') {
+          return [{ id: convId, kind: 'DIRECT', peer: { id: peerId, full_name: 'Frank Lawrenze Ulog Talipan' }, last_message_at: '2026-11-21T05:00:00Z', unread_count: 0 }];
+        }
+        if (name === 'get_social_overview') return { me: { id: meId, full_name: 'Zedrick De Monteverde' }, friends: [], incoming_requests: [], sent_requests: [], blocked: [] };
+        if (name === 'get_social_notifications') return [];
+        if (name === 'get_conversation_messages') {
+          return {
+            conversation: { id: peerId, conversation_id: convId, kind: 'DIRECT', full_name: 'Frank Lawrenze Ulog Talipan', status: 'ACCEPTED', friendship_status: 'FRIENDS' },
+            has_older: false,
+            unread_first_id: null,
+            pinned_messages: [],
+            messages: [{ id: msgId, conversation_id: convId, sender_id: peerId, body: 'Hello selectable text', created_at: '2026-11-21T05:00:00Z', reactions: [], attachments: [] }]
+          };
+        }
+        if (name === 'toggle_message_reaction') {
+          reactionRpcCalls.push(args);
+          return { ok: true };
+        }
+        return {};
+      }
+    }
+  };
+  ctx.window = ctx;
+  ctx.globalThis = ctx;
+
+  vm.runInNewContext(messagesJs, ctx, { filename: 'js/messages.js' });
+  await ctx.IponMessages.init(ctx.Ipon.profile);
+  await ctx.IponMessages.openWorkspace({ conversationId: convId });
+
+  // --- 1) Double-tap message bubble -> automatic default heart ❤️ reaction ---
+  const rowEl = makeEl('row-1', 'msg-row is-peer');
+  rowEl.dataset.msgId = msgId;
+  const wrapEl = makeEl('wrap-1', 'msg-bubble-wrap');
+  const textEl = makeEl('text-1', 'msg-text');
+  textEl.textContent = 'Hello selectable text';
+  const bubbleEl = makeEl('bubble-1', 'msg-bubble');
+  bubbleEl.children.push(textEl);
+  bubbleEl.querySelector = (s) => (s === '.msg-text' ? textEl : null);
+  bubbleEl.closest = (s) => {
+    if (s === '#msg-messages-list .msg-bubble:not(.is-deleted)') return bubbleEl;
+    if (s === '.msg-row' || s === '[data-msg-id]' || s === `[data-msg-id="${msgId}"]`) return rowEl;
+    if (s === '.msg-bubble-wrap') return wrapEl;
+    return null;
+  };
+  textEl.closest = (s) => (s === '.msg-text' ? textEl : bubbleEl.closest(s));
+
+  // Single tap -> no reaction yet
+  await fireDoc('pointerdown', { pointerType: 'touch', clientX: 60, clientY: 120, target: textEl });
+  await fireDoc('pointerup', { pointerType: 'touch', clientX: 60, clientY: 120, target: textEl });
+  assert.equal(reactionRpcCalls.length, 0, 'single tap should not trigger heart reaction');
+
+  // Second tap within 320ms -> automatic ❤️ reaction
+  await fireDoc('pointerdown', { pointerType: 'touch', clientX: 62, clientY: 121, target: textEl });
+  await fireDoc('pointerup', { pointerType: 'touch', clientX: 62, clientY: 121, target: textEl });
+  assert.equal(reactionRpcCalls.length, 1, 'double tap triggers toggle_message_reaction');
+  assert.equal(reactionRpcCalls[0].p_message_id, msgId);
+  assert.equal(reactionRpcCalls[0].p_emoji, '❤️');
+
+  // --- 2) First long-press -> reactions ONLY (no text select); Second long-press -> unlocks text select ---
+  createdMenus = [];
+  selectedRanges = [];
+  await fireDoc('pointerdown', { pointerType: 'touch', clientX: 60, clientY: 120, target: textEl });
+  await new Promise((r) => setTimeout(r, 410));
+  await fireDoc('pointerup', { pointerType: 'touch', clientX: 60, clientY: 120, target: textEl });
+  assert.equal(bubbleEl.classList.contains('is-text-selectable'), false, 'first long-press must NOT unlock text selection');
+  assert.equal(selectedRanges.length, 0, 'first long-press keeps selection empty');
+  assert.ok(createdMenus.some((m) => m.classList.contains('msg-react-menu') && !m.classList.contains('is-leaving')), 'first long-press opens reaction strip');
+
+  // Double long-press on the same text bubble -> unlocks text selection & selects text
+  await fireDoc('pointerdown', { pointerType: 'touch', clientX: 60, clientY: 120, target: textEl });
+  await new Promise((r) => setTimeout(r, 410));
+  await fireDoc('pointerup', { pointerType: 'touch', clientX: 60, clientY: 120, target: textEl });
+  assert.equal(bubbleEl.classList.contains('is-text-selectable'), true, 'double long-press unlocks text selection for copy');
+  assert.equal(selectedRanges.length, 1, 'double long-press selects message text');
+  assert.equal(rangeMock.selectedNode, textEl);
+
+  // Tapping outside re-locks text selection
+  const outsideEl = makeEl('outside-blank');
+  await fireDoc('pointerdown', { pointerType: 'touch', clientX: 10, clientY: 10, target: outsideEl });
+  assert.equal(bubbleEl.classList.contains('is-text-selectable'), false, 'tapping outside re-locks message text selection');
+
+  // --- 3) 3-dots conversation menu: toggles closed on 2nd tap & closes on ANY outside tap ---
+  createdMenus = [];
+  const threeDotsBtn = makeEl('conv-dots-btn', 'msg-conv-more-btn');
+  threeDotsBtn.dataset.convMenuToggle = convId;
+  threeDotsBtn.closest = (s) => (s.includes('[data-conv-menu-toggle]') ? threeDotsBtn : null);
+  trackedTriggers.push(threeDotsBtn);
+
+  // 1st click on 3-dots -> opens menu
+  await fireDoc('pointerdown', { pointerType: 'touch', target: threeDotsBtn });
+  await fireDoc('click', { target: threeDotsBtn });
+  const convMenu = createdMenus.find((m) => m.getAttribute('data-menu-kind') === 'conv' && !m.classList.contains('is-leaving'));
+  assert.ok(convMenu, 'first tap on 3-dots opens conversation options menu');
+  assert.equal(threeDotsBtn.getAttribute('aria-expanded'), 'true');
+
+  // 2nd click on the same 3-dots -> closes menu
+  await fireDoc('pointerdown', { pointerType: 'touch', target: threeDotsBtn });
+  await fireDoc('click', { target: threeDotsBtn });
+  assert.equal(convMenu.classList.contains('is-leaving'), true, 'second tap on 3-dots toggles menu closed');
+  assert.equal(threeDotsBtn.getAttribute('aria-expanded'), 'false');
+
+  // Re-open, then tap ANYWHERE outside on screen -> closes immediately & suppresses underlying row click
+  await new Promise((r) => setTimeout(r, 230));
+  createdMenus = [];
+  await fireDoc('pointerdown', { pointerType: 'touch', target: threeDotsBtn });
+  await fireDoc('click', { target: threeDotsBtn });
+  const convMenu2 = createdMenus.find((m) => m.getAttribute('data-menu-kind') === 'conv' && !m.classList.contains('is-leaving'));
+  assert.ok(convMenu2, 'menu re-opens cleanly');
+  await fireDoc('pointerdown', { pointerType: 'touch', target: outsideEl });
+  assert.equal(convMenu2.classList.contains('is-leaving'), true, 'tapping anywhere outside immediately closes 3-dots menu');
+  const trailingClick = await fireDoc('click', { target: outsideEl });
+  assert.equal(trailingClick.propagationStopped, true, 'outside dismiss tap suppresses accidental click on underlying chat row');
+});

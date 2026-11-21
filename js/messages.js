@@ -21,6 +21,9 @@
   const MSG_CLOSE_X_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
   const HOLD_EXCLUDE_SEL = 'a, input, textarea, select, label, [data-aact], [data-vact], [data-react-msg], [data-jump-msg], [data-retry-pending], [data-cancel-pending], .msg-video-controls, .msg-voice-wave';
   const MSG_HOLD_DELAY_MS = 380;
+  const DOUBLE_TAP_WINDOW_MS = 320;
+  const DOUBLE_HOLD_TEXT_WINDOW_MS = 3500;
+  const DEFAULT_DOUBLE_TAP_EMOJI = '❤️';
   const MENU_EXIT_MS = 200;
   const VOICE_WAVE_HEIGHTS = [28, 48, 36, 62, 42, 78, 96, 54, 44, 68, 86, 50, 74, 40, 84, 92, 60, 46, 72, 98, 56, 48, 66, 38, 76, 52, 82, 44, 70, 90, 58, 42, 74, 60, 46, 32];
   const BLOCKED_EXT_RE = /\.(exe|msi|bat|cmd|com|pif|scr|vbs|vbe|js|mjs|cjs|jse|wsf|wsh|ps1|psm1|sh|bash|html|htm|xhtml|svg|php|asp|aspx|jsp|jar|dll|sys|drv|reg|hta|cpl)$/i;
@@ -65,6 +68,10 @@
   let suppressBubbleClickId = null;
   let recentHoldMsgId = null;
   let recentHoldAt = 0;
+  let lastBubbleTap = null;
+  let lastTextHold = null;
+  let unlockedSelectBubble = null;
+  let suppressOutsideMenuClickUntil = 0;
   let isWindowFocused = typeof document !== 'undefined' && typeof document.hasFocus === 'function'
     ? Boolean(document.hasFocus())
     : true;
@@ -1074,6 +1081,7 @@
     });
     const scrollWrapEl = document.getElementById('msg-scroll-wrap');
     scrollWrapEl?.addEventListener('scroll', closeFloatingMenus, { passive: true });
+    document.getElementById('msg-conv-list')?.addEventListener('scroll', closeFloatingMenus, { passive: true });
     scrollWrapEl?.addEventListener('load', () => syncThreadScrollLock(), true);
   }
 
@@ -1763,10 +1771,15 @@
   }
 
   function showVideoOptionsMenu(player, anchorBtn) {
+    const vidMenuKey = player?.dataset?.vidPath || player?.dataset?.vidName || 'video';
+    if (toggleExistingFloatingMenu('video', vidMenuKey)) return;
     closeFloatingMenus({ immediate: true });
     activeVideoMenuPlayer = player;
+    anchorBtn?.setAttribute?.('aria-expanded', 'true');
     const menu = document.createElement('div');
     menu.className = 'msg-floating-menu msg-ctx-menu';
+    menu.setAttribute('data-menu-kind', 'video');
+    menu.setAttribute('data-menu-for', String(vidMenuKey));
     const convId = player.dataset.vidConv || state.activeConvId || '';
     const path = player.dataset.vidPath || '';
     const name = player.dataset.vidName || 'video';
@@ -5595,6 +5608,7 @@
   }
 
   function showGroupMemberMenu(memberId, anchorBtn) {
+    if (toggleExistingFloatingMenu('group-member', memberId)) return;
     closeFloatingMenus({ immediate: true });
     const conv = state.activeThread?.conversation;
     if (!conv || !isGroupConv(conv)) return;
@@ -5603,8 +5617,11 @@
     const myRole = String(conv.my_role || 'MEMBER').toUpperCase();
     const targetRole = String(member.role || 'MEMBER').toUpperCase();
     const canRemove = (myRole === 'OWNER' && targetRole !== 'OWNER') || (myRole === 'ADMIN' && targetRole === 'MEMBER');
+    anchorBtn?.setAttribute?.('aria-expanded', 'true');
     const menu = document.createElement('div');
     menu.className = 'msg-floating-menu msg-ctx-menu';
+    menu.setAttribute('data-menu-kind', 'group-member');
+    menu.setAttribute('data-menu-for', String(memberId));
     menu.innerHTML = `
       <button type="button" data-group-mact="view_profile" data-target-id="${escAttr(member.id)}">View profile</button>
       <button type="button" data-group-mact="message" data-target-id="${escAttr(member.id)}">Message privately</button>
@@ -6052,9 +6069,100 @@
     btn?.setAttribute?.('aria-expanded', 'false');
   }
 
+  function toggleExistingFloatingMenu(kind, key) {
+    const existing = Array.from(document.querySelectorAll('.msg-floating-menu') || [])
+      .find((node) => !node.classList?.contains?.('is-leaving'));
+    if (existing && existing.getAttribute?.('data-menu-kind') === kind && existing.getAttribute?.('data-menu-for') === String(key)) {
+      closeFloatingMenus();
+      return true;
+    }
+    return false;
+  }
+
+  function clearUnlockedTextSelection({ clearRanges = false } = {}) {
+    if (unlockedSelectBubble) {
+      unlockedSelectBubble.classList?.remove?.('is-text-selectable');
+      unlockedSelectBubble = null;
+    }
+    if (clearRanges) window.getSelection?.()?.removeAllRanges?.();
+  }
+
+  function unlockMessageTextSelection(bubble) {
+    if (!bubble) return false;
+    const textEl = bubble.querySelector?.('.msg-text');
+    if (!textEl) return false;
+    clearUnlockedTextSelection();
+    bubble.classList?.add?.('is-text-selectable');
+    unlockedSelectBubble = bubble;
+    try {
+      if (typeof document.createRange === 'function' && typeof window.getSelection === 'function') {
+        const range = document.createRange();
+        range.selectNodeContents(textEl);
+        const sel = window.getSelection();
+        sel?.removeAllRanges?.();
+        sel?.addRange?.(range);
+      }
+    } catch { }
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try { navigator.vibrate([10, 35, 10]); } catch { }
+    }
+    return true;
+  }
+
+  function showDoubleTapHeartBurst(bubbleEl) {
+    const host = bubbleEl?.closest?.('.msg-bubble-wrap') || bubbleEl;
+    if (!host || typeof document.createElement !== 'function') return;
+    const pop = document.createElement('span');
+    pop.className = 'msg-double-tap-heart';
+    pop.setAttribute('aria-hidden', 'true');
+    pop.textContent = DEFAULT_DOUBLE_TAP_EMOJI;
+    host.appendChild?.(pop);
+    setTimeout(() => pop.remove?.(), 580);
+  }
+
+  async function toggleMessageReaction(msgId, emoji, { showHeartPop = false, bubbleEl = null } = {}) {
+    if (!msgId || !emoji) return;
+    const targetMsg = (state.activeThread?.messages || []).find((m) => String(m.id) === String(msgId));
+    if (targetMsg?.deleted_for_everyone_at) return;
+    const prevReactions = targetMsg ? [...(targetMsg.reactions || [])] : null;
+    let added = true;
+    if (targetMsg) {
+      const myId = initializedProfile?.id;
+      const myName = initializedProfile?.full_name || 'You';
+      const existingMine = (targetMsg.reactions || []).find((r) => r.user_id === myId);
+      const others = (targetMsg.reactions || []).filter((r) => r.user_id !== myId);
+      added = existingMine?.emoji !== emoji;
+      targetMsg.reactions = added
+        ? [...others, { user_id: myId, user_name: myName, emoji }]
+        : others;
+      patchMessageReactionsDom(targetMsg);
+      state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
+    }
+    if (showHeartPop && added && bubbleEl) {
+      showDoubleTapHeartBurst(bubbleEl);
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        try { navigator.vibrate(10); } catch { }
+      }
+    }
+    try {
+      await ipon().rpc('toggle_message_reaction', { p_message_id: msgId, p_emoji: emoji });
+      if (!targetMsg && state.activeConvId) {
+        await openConversation(state.activeConvId, { markRead: false, silent: true });
+      }
+    } catch (err) {
+      if (targetMsg && prevReactions) {
+        targetMsg.reactions = prevReactions;
+        patchMessageReactionsDom(targetMsg);
+        state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
+      }
+      ipon().toast(ipon().friendlyError(err), 'error');
+    }
+  }
+
   function closeFloatingMenus(opts) {
     const immediate = Boolean(opts && opts.immediate === true);
     document.querySelectorAll('#msg-messages-list .msg-row.is-menu-target').forEach((row) => row.classList.remove('is-menu-target'));
+    document.querySelectorAll('[data-conv-menu-toggle][aria-expanded="true"], [data-msg-act][aria-expanded="true"], [data-group-member-menu][aria-expanded="true"], [data-vact="menu"][aria-expanded="true"]').forEach((btn) => btn.setAttribute?.('aria-expanded', 'false'));
     activeVideoMenuPlayer = null;
     activeFloatingMenuAnchor = null;
     document.querySelectorAll('.msg-floating-menu').forEach((node) => {
@@ -6147,7 +6255,10 @@
 
     const menu = document.createElement('div');
     menu.className = 'msg-floating-menu msg-react-menu';
+    menu.setAttribute('data-menu-kind', 'react');
+    menu.setAttribute('data-menu-for', String(msgId));
     menu.setAttribute('data-react-menu-for', String(msgId));
+    anchorEl?.setAttribute?.('aria-expanded', 'true');
     menu.setAttribute('role', 'toolbar');
     menu.setAttribute('aria-label', 'Message reactions');
     menu.innerHTML = `
@@ -6180,15 +6291,19 @@
   }
 
   function showMessageContextMenu(msgId, anchorBtn) {
+    if (toggleExistingFloatingMenu('msg-ctx', msgId)) return;
     closeFloatingMenus({ immediate: true });
     const msg = (state.activeThread?.messages || []).find((m) => m.id === msgId);
     if (!msg) return;
     const rowEl = anchorBtn?.closest?.('.msg-row');
     if (rowEl) rowEl.classList.add('is-menu-target');
+    anchorBtn?.setAttribute?.('aria-expanded', 'true');
     const mine = msg.sender_id === initializedProfile?.id;
     const atts = !msg.deleted_for_everyone_at ? (msg.attachments || []).filter((a) => a?.path) : [];
     const menu = document.createElement('div');
     menu.className = 'msg-floating-menu msg-ctx-menu';
+    menu.setAttribute('data-menu-kind', 'msg-ctx');
+    menu.setAttribute('data-menu-for', String(msgId));
     menu.innerHTML = `
       <button type="button" data-ctx-do="reply" data-msg-id="${escAttr(msgId)}">Reply</button>
       ${atts.length ? `<button type="button" data-ctx-do="download" data-msg-id="${escAttr(msgId)}">${atts.length > 1 ? `Download all (${atts.length})` : 'Download'}</button>` : ''}
@@ -6204,12 +6319,16 @@
   }
 
   function showConvContextMenu(convId, anchorBtn) {
+    if (toggleExistingFloatingMenu('conv', convId)) return;
     closeFloatingMenus({ immediate: true });
     const conv = state.conversations.find((c) => c.id === convId);
     if (!conv) return;
     const isGrp = isGroupConv(conv);
+    anchorBtn?.setAttribute?.('aria-expanded', 'true');
     const menu = document.createElement('div');
     menu.className = 'msg-floating-menu msg-ctx-menu';
+    menu.setAttribute('data-menu-kind', 'conv');
+    menu.setAttribute('data-menu-for', String(convId));
     menu.innerHTML = `
       <button type="button" data-row-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}" data-conv-id="${escAttr(convId)}">${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</button>
       <button type="button" data-row-conv-act="${conv.is_muted ? 'unmute' : 'mute'}" data-conv-id="${escAttr(convId)}">${conv.is_muted ? 'Unmute notifications' : 'Mute notifications'}</button>
@@ -6225,6 +6344,51 @@
   function bindEvents() {
     if (document.documentElement.dataset.msgEventsBound) return;
     document.documentElement.dataset.msgEventsBound = '1';
+
+    const isSameFloatingMenuTrigger = (target, menu) => {
+      const kind = menu?.getAttribute?.('data-menu-kind') || '';
+      const key = menu?.getAttribute?.('data-menu-for') || '';
+      if (!kind || !key || !target?.closest) return false;
+      if (kind === 'conv') return String(target.closest('[data-conv-menu-toggle]')?.dataset?.convMenuToggle || '') === key;
+      if (kind === 'msg-ctx') {
+        const btn = target.closest('[data-msg-act="menu"]');
+        return Boolean(btn && String(btn.dataset?.msgId || '') === key);
+      }
+      if (kind === 'react') {
+        const btn = target.closest('[data-msg-act="react"]');
+        return Boolean(btn && String(btn.dataset?.msgId || '') === key);
+      }
+      if (kind === 'group-member') return String(target.closest('[data-group-member-menu]')?.dataset?.groupMemberMenu || '') === key;
+      if (kind === 'video') {
+        const btn = target.closest('[data-vact="menu"]');
+        return Boolean(btn && btn.closest?.('.msg-video-player') === activeVideoMenuPlayer);
+      }
+      return false;
+    };
+
+    document.addEventListener('pointerdown', (ev) => {
+      const openMenu = Array.from(document.querySelectorAll('.msg-floating-menu') || [])
+        .find((node) => !node.classList?.contains?.('is-leaving'));
+      if (!openMenu) return;
+      if (ev.target?.closest?.('.msg-floating-menu')) return;
+      if (isSameFloatingMenuTrigger(ev.target, openMenu)) return;
+      const wasCtxMenu = openMenu.classList?.contains?.('msg-ctx-menu');
+      closeFloatingMenus();
+      if (wasCtxMenu && !ev.target?.closest?.('[data-conv-menu-toggle], [data-msg-act], [data-group-member-menu], [data-vact="menu"]')) {
+        suppressOutsideMenuClickUntil = Date.now() + 400;
+      }
+    }, true);
+
+    document.addEventListener('click', (ev) => {
+      if (!suppressOutsideMenuClickUntil) return;
+      const active = Date.now() <= suppressOutsideMenuClickUntil;
+      suppressOutsideMenuClickUntil = 0;
+      if (!active) return;
+      if (!ev.target?.closest?.('.msg-floating-menu, [data-conv-menu-toggle], [data-msg-act], [data-group-member-menu], [data-vact="menu"]')) {
+        ev.preventDefault?.();
+        ev.stopPropagation?.();
+      }
+    }, true);
 
     document.addEventListener('click', async (ev) => {
       const openBtn = ev.target.closest?.('[data-messages-open]');
@@ -6958,34 +7122,7 @@
       const reactPill = ev.target.closest?.('[data-react-msg]');
       if (reactPill) {
         closeFloatingMenus();
-        const rMsgId = reactPill.dataset.reactMsg;
-        const rEmoji = reactPill.dataset.reactEmoji;
-        const targetMsg = (state.activeThread?.messages || []).find((m) => String(m.id) === String(rMsgId));
-        const prevReactions = targetMsg ? [...(targetMsg.reactions || [])] : null;
-        if (targetMsg) {
-          const myId = initializedProfile?.id;
-          const myName = initializedProfile?.full_name || 'You';
-          const existingMine = (targetMsg.reactions || []).find((r) => r.user_id === myId);
-          const others = (targetMsg.reactions || []).filter((r) => r.user_id !== myId);
-          targetMsg.reactions = existingMine?.emoji === rEmoji
-            ? others
-            : [...others, { user_id: myId, user_name: myName, emoji: rEmoji }];
-          patchMessageReactionsDom(targetMsg);
-          state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
-        }
-        try {
-          await ipon().rpc('toggle_message_reaction', { p_message_id: rMsgId, p_emoji: rEmoji });
-          if (!targetMsg && state.activeConvId) {
-            await openConversation(state.activeConvId, { markRead: false, silent: true });
-          }
-        } catch (err) {
-          if (targetMsg && prevReactions) {
-            targetMsg.reactions = prevReactions;
-            patchMessageReactionsDom(targetMsg);
-            state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
-          }
-          ipon().toast(ipon().friendlyError(err), 'error');
-        }
+        await toggleMessageReaction(reactPill.dataset.reactMsg, reactPill.dataset.reactEmoji);
         return;
       }
 
@@ -7718,8 +7855,21 @@
       const msgId = bubble.closest?.('[data-msg-id]')?.dataset?.msgId;
       if (!msgId) return null;
       const anchor = target?.closest?.('.msg-att-image, .msg-video-player') || bubble;
-      return { msgId, anchor };
+      return { msgId, anchor, bubble };
     };
+    const resolveDoubleTapTarget = (target) => {
+      const bubble = target?.closest?.('#msg-messages-list .msg-bubble:not(.is-deleted)');
+      if (!bubble || bubble.classList?.contains?.('is-text-selectable')) return null;
+      if (target?.closest?.(HOLD_EXCLUDE_SEL)) return null;
+      if (target?.closest?.('.msg-img-open-btn, .msg-att-doc-btn, .msg-video-center-play, video, button')) return null;
+      if (state.activeThread?.conversation?.is_blocked) return null;
+      const row = bubble.closest?.('[data-msg-id]');
+      if (!row || row.classList?.contains?.('is-pending') || row.classList?.contains?.('is-failed')) return null;
+      const msgId = row.dataset?.msgId;
+      if (!msgId) return null;
+      return { msgId, bubble };
+    };
+    let tapCandidate = null;
     const SWIPE_REPLY_THRESHOLD = 44;
     let swipeState = null;
     const clearSwipeVisuals = (row) => {
@@ -7870,7 +8020,19 @@
 
     document.addEventListener('pointerdown', (ev) => {
       if (ev.pointerType === 'mouse' && typeof ev.button === 'number' && ev.button !== 0) return;
+      if (unlockedSelectBubble && !unlockedSelectBubble.contains?.(ev.target)) {
+        clearUnlockedTextSelection();
+      }
+      if (unlockedSelectBubble && unlockedSelectBubble.contains?.(ev.target)) {
+        cancelLongPress();
+        tapCandidate = null;
+        return;
+      }
       resetSwipe({ triggerReply: false });
+      const dtTarget = resolveDoubleTapTarget(ev.target);
+      tapCandidate = dtTarget
+        ? { ...dtTarget, x: ev.clientX || 0, y: ev.clientY || 0, at: Date.now() }
+        : null;
       const swipeTarget = resolveSwipeTarget(ev.target, ev.pointerType);
       const isMouseScrollbar = Boolean(
         swipeTarget?.carousel
@@ -7907,18 +8069,32 @@
       }
       cancelLongPress();
       suppressBubbleClickId = null;
-      const hadSelection = Boolean(window.getSelection?.()?.toString()?.trim());
       pressStart = { x: ev.clientX || 0, y: ev.clientY || 0 };
       pressTimer = setTimeout(() => {
         pressTimer = null;
         pressStart = null;
-        if (!hadSelection && ev.pointerType !== 'mouse') {
-          window.getSelection?.()?.removeAllRanges?.();
-        }
+        tapCandidate = null;
+        lastBubbleTap = null;
+        const now = Date.now();
+        const textEl = target.bubble?.querySelector?.('.msg-text') || null;
+        const isDoubleTextHold = Boolean(
+          textEl
+          && lastTextHold
+          && String(lastTextHold.msgId) === String(target.msgId)
+          && (now - lastTextHold.at) <= DOUBLE_HOLD_TEXT_WINDOW_MS
+        );
         pressHoldTriggeredId = target.msgId;
         suppressBubbleClickId = target.msgId;
         recentHoldMsgId = target.msgId;
-        recentHoldAt = Date.now();
+        recentHoldAt = now;
+        if (isDoubleTextHold) {
+          lastTextHold = null;
+          closeFloatingMenus({ immediate: true });
+          unlockMessageTextSelection(target.bubble);
+          return;
+        }
+        clearUnlockedTextSelection({ clearRanges: true });
+        lastTextHold = textEl ? { msgId: target.msgId, at: now } : null;
         showReactionFloatingMenu(target.msgId, target.anchor, { toggle: false });
       }, MSG_HOLD_DELAY_MS);
     });
@@ -7938,17 +8114,51 @@
       if (pressStart && Math.hypot((ev.clientX || 0) - pressStart.x, (ev.clientY || 0) - pressStart.y) > 10) {
         cancelLongPress();
       }
+      if (tapCandidate && Math.hypot((ev.clientX || 0) - tapCandidate.x, (ev.clientY || 0) - tapCandidate.y) > 12) {
+        tapCandidate = null;
+      }
       if (!swipeState || swipeState.cancelledVertical) return;
       if (swipeState.pointerId !== undefined && ev.pointerId !== undefined && ev.pointerId !== swipeState.pointerId) return;
       advanceSwipe(ev.clientX, ev.clientY, ev.pointerType);
     });
-    document.addEventListener('pointerup', () => {
+    document.addEventListener('pointerup', (ev) => {
+      const held = Boolean(pressHoldTriggeredId);
+      const swiped = Boolean(swipeState?.movedFar);
+      const cand = tapCandidate;
+      tapCandidate = null;
       cancelLongPress();
       resetSwipe({ triggerReply: true });
+      if (cand && !held && !swiped && (Date.now() - cand.at) < 280) {
+        const now = Date.now();
+        const cx = ev?.clientX ?? cand.x;
+        const cy = ev?.clientY ?? cand.y;
+        if (
+          lastBubbleTap
+          && String(lastBubbleTap.msgId) === String(cand.msgId)
+          && (now - lastBubbleTap.at) <= DOUBLE_TAP_WINDOW_MS
+          && Math.hypot(cx - lastBubbleTap.x, cy - lastBubbleTap.y) <= 40
+        ) {
+          lastBubbleTap = null;
+          window.getSelection?.()?.removeAllRanges?.();
+          closeFloatingMenus();
+          suppressBubbleClickId = cand.msgId;
+          clearSuppressedClickSoon(cand.msgId);
+          void toggleMessageReaction(cand.msgId, DEFAULT_DOUBLE_TAP_EMOJI, { showHeartPop: true, bubbleEl: cand.bubble });
+        } else {
+          lastBubbleTap = { msgId: cand.msgId, at: now, x: cx, y: cy };
+        }
+      }
     });
     document.addEventListener('pointercancel', () => {
+      tapCandidate = null;
       cancelLongPress();
       resetSwipe({ triggerReply: false });
+    });
+    document.addEventListener('dblclick', (ev) => {
+      const bubble = ev.target?.closest?.('#msg-messages-list .msg-bubble:not(.is-deleted):not(.is-text-selectable)');
+      if (bubble && !ev.target?.closest?.(HOLD_EXCLUDE_SEL)) {
+        window.getSelection?.()?.removeAllRanges?.();
+      }
     });
     document.addEventListener('dragstart', (ev) => {
       if (ev.target?.closest?.('#msg-messages-list .msg-bubble img, #msg-messages-list .msg-bubble video')) {
@@ -7959,7 +8169,7 @@
     document.addEventListener('contextmenu', (ev) => {
       const target = resolveHoldTarget(ev.target);
       if (!target) return;
-      if (window.getSelection?.()?.toString()?.trim()) return;
+      if (target.bubble?.classList?.contains?.('is-text-selectable') || window.getSelection?.()?.toString()?.trim()) return;
       ev.preventDefault?.();
       cancelLongPress();
       if (recentHoldMsgId === target.msgId && Date.now() - recentHoldAt < 900) return;
