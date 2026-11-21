@@ -98,11 +98,15 @@ test('personal history details open when receipt and review actions are absent',
   assert.equal(title.textContent, 'November 2026');
 });
 
-test('mobile record details keep review actions and exclude bulk checkbox', () => {
+test('mobile record details keep review actions, exclude bulk checkbox, and never collide with core record-detail dialog IDs', () => {
   const js = read('js/records.js');
+  const coreJs = read('js/core.js');
+  assert.match(coreJs, /id="record-detail-dialog"/);
+  assert.doesNotMatch(js, /id="record-detail-(?:dialog|title|subtitle|actions)"/);
+  assert.match(js, /id="record-history-detail-dialog"/);
   const fields = { innerHTML: '' };
   const actions = { innerHTML: '', hidden: false };
-  const labels = new Map([['record-detail-title', { textContent: '' }], ['record-detail-subtitle', { textContent: '' }]]);
+  const labels = new Map([['record-history-detail-title', { textContent: '' }], ['record-history-detail-subtitle', { textContent: '' }]]);
   let opened = false;
   const cells = ['<input type="checkbox">Nov 19', 'Ava', 'Nov 2026', 'Cash', '₱100', 'Pending', 'actions']
     .map((html, index) => ({
@@ -118,7 +122,7 @@ test('mobile record details keep review actions and exclude bulk checkbox', () =
     page: 'contributions', detailFields: fields, detailActions: actions,
     detailDialog: { showModal() { opened = true; } },
     document: { getElementById: (id) => labels.get(id) },
-    recordRows: [{ id: '1', transaction_reference: '987654', notes: 'Paid in person' }],
+    recordRows: [{ id: '1', transaction_reference: '987654', notes: 'Paid in person', contribution_periods: { members: { full_name: 'Ava' } } }],
     Ipon: { escapeHtml: (value) => value }
   });
   fn({ dataset: { id: '1' }, closest: () => ({ querySelectorAll: () => cells }) });
@@ -127,5 +131,6 @@ test('mobile record details keep review actions and exclude bulk checkbox', () =
   assert.match(fields.innerHTML, /<dt>Reference<\/dt><dd>987654<\/dd>/);
   assert.doesNotMatch(fields.innerHTML, /<input/);
   assert.match(actions.innerHTML, /data-action="confirm"/);
-  assert.equal(labels.get('record-detail-title').textContent, 'Addition details');
+  assert.equal(labels.get('record-history-detail-title').textContent, 'Addition details');
+  assert.equal(labels.get('record-history-detail-subtitle').textContent, 'Ava');
 });

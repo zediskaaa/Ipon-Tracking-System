@@ -111,11 +111,11 @@
     Ipon.enhancePaymentSelect?.(methodFilter, { compact: true });
   }
   document.body.insertAdjacentHTML('beforeend', `<dialog class="form-dialog" id="record-edit-dialog" aria-labelledby="record-edit-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><h2 id="record-edit-title">Edit pending record</h2><p>Only pending records can be corrected. Confirmed records must be voided and replaced.</p></div><button class="dialog-close" id="record-edit-close" type="button" aria-label="Close edit form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="record-edit-form" class="form-grid"><input type="hidden" name="record_id"><div class="field"><label for="edit-date">Date</label><input id="edit-date" name="date" type="date" min="2000-01-01" data-max-today required></div><div class="field"><label for="edit-amount">Amount</label><input id="edit-amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" required></div><div class="field transaction-edit-field"><label for="edit-category">Category</label><input id="edit-category" name="category" maxlength="80" data-category-presets="${page === 'withdrawals' ? 'deduction' : 'expense'}"></div><div class="field transaction-edit-field"><label for="edit-responsible">Person responsible</label><select id="edit-responsible" name="person_responsible"><option value="">Select member</option></select></div><div class="field field-wide transaction-edit-field"><label for="edit-description">Description</label><textarea id="edit-description" name="description" maxlength="500"></textarea></div><div class="field"><label for="edit-payment-method">${page === 'contributions' ? 'Payment method' : 'Paid from wallet'}</label><select id="edit-payment-method" name="payment_method"><option value="">Untagged (legacy)</option>${Ipon.paymentMethodOptionsHtml()}</select></div><div class="field"><label for="edit-reference">Reference</label><input id="edit-reference" name="reference" maxlength="100"></div><div class="field field-wide"><label for="edit-notes">Notes</label><textarea id="edit-notes" name="notes" maxlength="1000"></textarea></div><div class="form-actions field-wide"><button class="button button-secondary" id="record-edit-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save correction</button></div></form></div></dialog>`);
-  document.body.insertAdjacentHTML('beforeend', `<dialog class="form-dialog compact-detail-dialog" id="record-detail-dialog" aria-labelledby="record-detail-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><span class="compact-detail-eyebrow">Record history</span><h2 id="record-detail-title">Record details</h2><p id="record-detail-subtitle"></p></div><button class="dialog-close" id="record-detail-close" type="button" aria-label="Close record details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><dl class="compact-detail-grid" id="record-detail-fields"></dl><div class="compact-detail-actions" id="record-detail-actions"></div></div></dialog>`);
+  document.body.insertAdjacentHTML('beforeend', `<dialog class="form-dialog compact-detail-dialog" id="record-history-detail-dialog" aria-labelledby="record-history-detail-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><span class="compact-detail-eyebrow">Record history</span><h2 id="record-history-detail-title">Record details</h2><p id="record-history-detail-subtitle"></p></div><button class="dialog-close" id="record-history-detail-close" type="button" aria-label="Close record details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><dl class="compact-detail-grid" id="record-history-detail-fields"></dl><div class="compact-detail-actions" id="record-history-detail-actions"></div></div></dialog>`);
   const editDialog = document.getElementById('record-edit-dialog');
-  const detailDialog = document.getElementById('record-detail-dialog');
-  const detailFields = document.getElementById('record-detail-fields');
-  const detailActions = document.getElementById('record-detail-actions');
+  const detailDialog = document.getElementById('record-history-detail-dialog');
+  const detailFields = document.getElementById('record-history-detail-fields');
+  const detailActions = document.getElementById('record-history-detail-actions');
   const editForm = document.getElementById('record-edit-form');
   Ipon.enhancePaymentSelect?.(editForm?.elements?.payment_method);
   Ipon.prepareNumericInputs();
@@ -684,8 +684,8 @@
       + (record?.notes ? `<div class="compact-detail-field"><dt>Notes</dt><dd>${Ipon.escapeHtml(record.notes)}</dd></div>` : '');
     detailActions.innerHTML = cells.at(-1).querySelector('.table-actions')?.innerHTML || '';
     detailActions.hidden = !detailActions.innerHTML;
-    document.getElementById('record-detail-title').textContent = page === 'contributions' ? 'Addition details' : page === 'withdrawals' ? 'Deduction details' : 'Expense details';
-    document.getElementById('record-detail-subtitle').textContent = cells[1].textContent.trim();
+    document.getElementById('record-history-detail-title').textContent = page === 'contributions' ? 'Addition details' : page === 'withdrawals' ? 'Deduction details' : 'Expense details';
+    document.getElementById('record-history-detail-subtitle').textContent = (page === 'contributions' ? record?.contribution_periods?.members?.full_name : record?.category) || cells[1].textContent.trim();
     detailDialog.showModal();
   }
 
@@ -888,7 +888,8 @@
     });
   }
   document.getElementById('record-edit-close').addEventListener('click', () => editDialog.close());
-  document.getElementById('record-detail-close').addEventListener('click', () => detailDialog.close());
+  document.getElementById('record-history-detail-close').addEventListener('click', () => detailDialog.close());
+  detailDialog.addEventListener('click', (event) => { if (event.target === detailDialog) detailDialog.close(); });
   detailActions.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-action]');
     if (!button) return;
