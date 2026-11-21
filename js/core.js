@@ -7866,8 +7866,12 @@
     return cleanNotificationDisplayTitle(raw);
   }
 
+  function isAnonymousChatNotification(item) {
+    return formatNotificationTitle(item) === 'Anonymous' && /[?&]chat=/.test(String(item?.link || ''));
+  }
+
   function resolveNotificationAvatarUrl(item) {
-    if (!item) return '';
+    if (!item || isAnonymousChatNotification(item)) return '';
     if (item.actor_avatar_url) return String(item.actor_avatar_url);
     if (item.actor_id) {
       const byId = getMemberAvatar(item.actor_id);
@@ -8918,9 +8922,12 @@
               ? 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'
               : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
         const displayTitle = formatNotificationTitle(item);
+        const anonymousChatNotice = isAnonymousChatNotification(item);
         const senderAvatarUrl = resolveNotificationAvatarUrl(item);
         const useSenderAvatar = isMessageNotificationItem(item) || Boolean(senderAvatarUrl);
-        const iconHtml = useSenderAvatar
+        const iconHtml = anonymousChatNotice
+          ? '<span class="notification-item-icon has-sender-avatar" aria-hidden="true"><img class="avatar-circle notification-sender-avatar" src="assets/anonymous-avatar.svg" alt=""></span>'
+          : useSenderAvatar
           ? `<span class="notification-item-icon has-sender-avatar" aria-hidden="true">${avatarMarkup(senderAvatarUrl || null, displayTitle, 'notification-sender-avatar', item.actor_id || '')}</span>`
           : item.type === 'BADGE_GRANTED'
             ? `<span class="notification-item-icon is-badge-granted" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified badge')}</span>`

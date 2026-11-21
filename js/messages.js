@@ -2097,9 +2097,13 @@
           ? `You ${systemPreviewMatch[1].replace(/\.$/, '')}`
           : rawPrevStr.replace(/\.$/, ''))
       : conv.last_message_preview;
+    const safeLastPreview = conv.anonymous_enabled && ['SYSTEM', 'CALL_EVENT'].includes(conv.last_message_type)
+      ? 'Conversation update'
+      : conv.anonymous_enabled && / set a message\.$/.test(String(rawLastPreview))
+        ? 'Vanishing message' : rawLastPreview;
     const previewText = isTyping
       ? `<span class="msg-typing-preview"><span class="msg-wave-dots is-inline" aria-hidden="true"><i></i><i></i><i></i></span><span>${escapeHtml(typingLabel)}</span></span>`
-      : `${escapeHtml(previewPrefix)}${escapeHtml(rawLastPreview || (isGrp ? 'No recent messages' : 'Start a conversation'))}`;
+      : `${escapeHtml(previewPrefix)}${escapeHtml(safeLastPreview || (isGrp ? 'No recent messages' : 'Start a conversation'))}`;
     const pinIcon = conv.is_pinned
       ? '<svg class="msg-meta-icon" viewBox="0 0 24 24" role="img" aria-label="Pinned"><title>Pinned</title><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16h14v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6a1 1 0 0 1 1-1h.5a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5H8a1 1 0 0 1 1 1z"/></svg>'
       : '';
@@ -2380,7 +2384,7 @@
       if (anonymousChanged) {
         state.pendingByConv.delete(convId);
         state.draftsByConv.delete(convId);
-        await Promise.all([openConversation(convId, { markRead: false, silent: true }), refreshConversations()]);
+        await Promise.all([openConversation(convId, { markRead: false, silent: true }), refreshConversations(), refreshSocialNotifications()]);
         return;
       }
       const editForm = document.getElementById('msg-group-edit-form');
@@ -3717,6 +3721,9 @@
 
       if (m.message_type === 'CALL_EVENT' || m.message_type === 'SYSTEM') {
         lastShownClockKey = '';
+        if (conv.anonymous_enabled) {
+          return `${dateDivider}${unreadDivider}<div class="msg-system-event" data-msg-id="${escapeHtml(m.id)}"><span>Conversation update &middot; ${escapeHtml(formatClock(m.created_at))}</span></div>`;
+        }
         const sysLabel = escapeHtml(m.body || (m.message_type === 'CALL_EVENT' ? 'Call event' : 'System notice'));
         const bodyText = String(m.body || '');
         const metaEvent = String(m.metadata?.event || '');
@@ -4491,7 +4498,7 @@
         ${screenshotRowHtml}
         ${!isGrp && !isSelfUser(conv) && conv.status === 'ACCEPTED' ? `<div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
           <span class="msg-privacy-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 10c2-4 5-6 8-6s6 2 8 6v7c-2 2-5 3-8 3s-6-1-8-3z"/><path d="M8 12h3m2 0h3m-7 4h6"/></svg></span>
-          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-anon-title">Anonymous mode</strong></div><small id="msg-privacy-anon-desc">Hide names and photos for both people. Messages sent while on are deleted for both when turned off.</small></div>
+          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-anon-title">Anonymous mode</strong></div><small id="msg-privacy-anon-desc">Hide names and DPs for both people. Messages sent while on are deleted for both when turned off.</small></div>
           <div class="msg-privacy-control"><button type="button" class="msg-privacy-switch" role="switch" data-anonymous-toggle aria-checked="${Boolean(conv.anonymous_enabled)}" aria-labelledby="msg-privacy-anon-title" aria-describedby="msg-privacy-anon-desc"${canManageProtection ? '' : ' disabled'}></button><span>${conv.anonymous_enabled ? 'On' : 'Off'}</span></div>
         </div>` : ''}
         ${isGrp ? `<div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
@@ -4809,16 +4816,17 @@
       </div>
       <div class="msg-alerts-list">
         ${rows.length ? rows.map((n) => {
+          const anonymousNotice = (state.conversations || []).some((c) => c.anonymous_enabled && n.link?.includes(`chat=${c.id}`));
           const rawTitle = String(n.title || 'User').trim();
-          const cleanTitle = rawTitle.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || rawTitle;
-          const peerFromConv = (state.conversations || []).find((c) => c.peer && (c.peer.id === n.actor_id || String(c.peer.full_name || '').toLowerCase() === cleanTitle.toLowerCase()))?.peer;
-          const avatarUrl = n.actor_avatar_url || peerFromConv?.avatar_url || ipon().getMemberAvatar?.(n.actor_id || cleanTitle) || null;
+          const cleanTitle = anonymousNotice ? 'Anonymous' : (rawTitle.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || rawTitle);
+          const peerFromConv = anonymousNotice ? null : (state.conversations || []).find((c) => c.peer && (c.peer.id === n.actor_id || String(c.peer.full_name || '').toLowerCase() === cleanTitle.toLowerCase()))?.peer;
+          const avatarUrl = anonymousNotice ? 'assets/anonymous-avatar.svg' : (n.actor_avatar_url || peerFromConv?.avatar_url || ipon().getMemberAvatar?.(n.actor_id || cleanTitle) || null);
           return `
           <button type="button" class="msg-alert-row has-sender-avatar${n.read_at ? '' : ' is-unread'}" data-social-alert-id="${escapeHtml(n.id)}" data-social-link="${escAttr(n.link || '')}" data-social-type="${escAttr(n.type || '')}">
-            <span class="msg-alert-avatar" aria-hidden="true">${ipon().avatarMarkup ? ipon().avatarMarkup(avatarUrl, cleanTitle, 'avatar-md', n.actor_id || peerFromConv?.id || '') : ''}</span>
+            <span class="msg-alert-avatar" aria-hidden="true">${anonymousNotice ? '<img class="avatar-circle avatar-md" src="assets/anonymous-avatar.svg" alt="">' : (ipon().avatarMarkup ? ipon().avatarMarkup(avatarUrl, cleanTitle, 'avatar-md', n.actor_id || peerFromConv?.id || '') : '')}</span>
             <div class="msg-alert-copy">
               <strong>${escapeHtml(cleanTitle)}</strong>
-              <p>${escapeHtml(n.message)}</p>
+              <p>${escapeHtml(anonymousNotice ? 'Conversation update' : n.message)}</p>
               <small>${escapeHtml(ipon().dateLabel(n.created_at, { dateStyle: 'medium', timeStyle: 'short' }))}</small>
             </div>
             ${n.read_at ? '' : '<i class="notification-unread" aria-label="Unread"></i>'}
@@ -7433,7 +7441,8 @@
           }
           await Promise.all([
             openConversation(convId, { markRead: false, silent: true }),
-            refreshConversations()
+            refreshConversations(),
+            refreshSocialNotifications()
           ]);
         } catch (error) {
           ipon().toast(ipon().friendlyError(error), 'error');

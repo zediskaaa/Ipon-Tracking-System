@@ -29,3 +29,42 @@ test('anonymous identity and theme are shared across chat and preview surfaces',
   assert.match(css, /data-chat-theme="anonymous"/);
   assert.match(avatar, /<svg[\s\S]*Anonymous profile/);
 });
+
+test('anonymous activation notices are removed and no longer expose names', () => {
+  const migration = read('database/migrations/20261122_167_remove_anonymous_chat_notice.sql');
+  const schema = read('database/schema.sql');
+  const messages = read('js/messages.js');
+  assert.ok(schema.replace(/\r\n/g, '\n').includes(migration.trim().replace(/\r\n/g, '\n')));
+  assert.match(migration, /drop trigger if exists conversations_announce_anonymous_enabled/);
+  assert.match(migration, /delete from public\.messages[\s\S]*metadata ->> 'event' = 'anonymous_enabled'/);
+  assert.doesNotMatch(messages, /turned on anonymous chat/);
+  assert.match(messages, /Hide names and DPs for both people/);
+});
+
+test('anonymous system notices, chat previews, and linked alerts hide real names', () => {
+  const migration = read('database/migrations/20261122_168_anonymous_notice_privacy.sql');
+  const schema = read('database/schema.sql');
+  const messages = read('js/messages.js');
+  const core = read('js/core.js');
+  assert.ok(schema.replace(/\r\n/g, '\n').includes(migration.trim().replace(/\r\n/g, '\n')));
+  assert.match(migration, /new\.message_type in \('SYSTEM', 'CALL_EVENT'\)[\s\S]*new\.body := 'Conversation update'/);
+  assert.match(migration, /'\{last_message_preview\}'[\s\S]*'SYSTEM', 'CALL_EVENT'/);
+  assert.match(migration, /'body', case when m ->> 'message_type' in \('SYSTEM', 'CALL_EVENT'\)/);
+  assert.match(migration, /create trigger conversations_mask_anonymous_notifications/);
+  assert.match(migration, /update public\.notifications n[\s\S]*c\.anonymous_session_id is not null/);
+  assert.match(messages, /if \(conv\.anonymous_enabled\) \{\s*return `\$\{dateDivider\}\$\{unreadDivider\}<div class="msg-system-event"/);
+  assert.match(messages, /const safeLastPreview = conv\.anonymous_enabled/);
+  assert.match(messages, /anonymousNotice \? 'Conversation update' : n\.message/);
+  assert.match(messages, /anonymousNotice \? '<img class="avatar-circle avatar-md" src="assets\/anonymous-avatar\.svg"/);
+  assert.match(core, /anonymousChatNotice[\s\S]*assets\/anonymous-avatar\.svg/);
+});
+
+test('anonymous vanishing-message previews never include the sender name', () => {
+  const migration = read('database/migrations/20261122_169_anonymous_vanishing_preview.sql');
+  const schema = read('database/schema.sql');
+  const messages = read('js/messages.js');
+  assert.ok(schema.replace(/\r\n/g, '\n').includes(migration.trim().replace(/\r\n/g, '\n')));
+  assert.match(migration, /last_message_preview' ~ ' set a message\\\.\$'/);
+  assert.match(migration, /to_jsonb\('Vanishing message'::text\)/);
+  assert.match(messages, /conv\.anonymous_enabled && \/ set a message\\\.\$\/\.test/);
+});
