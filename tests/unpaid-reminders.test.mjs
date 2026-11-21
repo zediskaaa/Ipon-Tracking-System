@@ -61,3 +61,37 @@ test('Migration 157, schema.sql, and manage-account Edge Function dispatch dedup
   assert.match(edgeFn, /\.update\(\{ emailed_at: null \}\)[\s\S]*?\.eq\('emailed_at', claimedAt\)/);
   assert.match(edgeFn, /deliverEmail\(\{ toEmail, recipientName: safeName, subject, html, plainText \}\)/);
 });
+
+test('Migration 158 and manage-account enforce Ultra-tipid milestone warning schedule (3d before, due date, 1d overdue, weekly overdue, 7d goals)', () => {
+  const mig158 = read('database/migrations/20261121_158_unpaid_reminder_email_milestone_cadence.sql');
+  const schema = read('database/schema.sql');
+  const edgeFn = read('supabase/functions/manage-account/index.ts');
+
+  for (const sql of [mig158, schema]) {
+    assert.match(sql, /'20261121_158'/);
+    assert.match(sql, /is_unpaid_reminder_email_due/);
+    assert.match(sql, /v_days_until in \(3, 0, -1\)/);
+    assert.match(sql, /v_days_until <= -7 and mod\(-v_days_until, 7\) = 0/);
+    assert.match(sql, /interval '7 days'/);
+  }
+
+  // Runtime verification of milestone function extracted from manage-account/index.ts
+  const fnMatch = edgeFn.match(/function isContributionEmailMilestone\(daysUntilDue: number \| null\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'expected isContributionEmailMilestone helper');
+  const jsBody = fnMatch[0].replace(': number | null', '');
+  const isMilestone = new Function(`${jsBody}; return isContributionEmailMilestone;`)();
+
+  // Eligible warning days
+  for (const d of [3, 0, -1, -7, -14, -21, -28]) {
+    assert.equal(isMilestone(d), true, `expected day ${d} to send milestone warning email`);
+  }
+  // Non-milestone days must NOT spend Brevo email quota
+  for (const d of [10, 7, 4, 2, 1, -2, -3, -6, -8, -13, -15, null]) {
+    assert.equal(isMilestone(d), false, `expected day ${d} to skip email`);
+  }
+
+  assert.match(edgeFn, /'3 Days Left'/);
+  assert.match(edgeFn, /'Due Today'/);
+  assert.match(edgeFn, /'1 Day Overdue'/);
+  assert.match(edgeFn, /7 \* 24 \* 60 \* 60 \* 1000/);
+});

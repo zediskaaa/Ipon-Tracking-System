@@ -978,6 +978,53 @@ function buildSafeReminderAppUrl(link?: string | null) {
   return `${base}/${raw}`;
 }
 
+function manilaTodayIso(now = new Date()) {
+  const manilaMs = now.getTime() + (8 * 60 * 60 * 1000);
+  return new Date(manilaMs).toISOString().slice(0, 10);
+}
+
+function diffIsoDateDays(targetIso: string, baseIso: string) {
+  const t = Date.parse(`${targetIso}T00:00:00Z`);
+  const b = Date.parse(`${baseIso}T00:00:00Z`);
+  if (!Number.isFinite(t) || !Number.isFinite(b)) return null;
+  return Math.round((t - b) / 86400000);
+}
+
+function isContributionEmailMilestone(daysUntilDue: number | null) {
+  if (daysUntilDue === null || !Number.isFinite(daysUntilDue)) return false;
+  if (daysUntilDue === 3 || daysUntilDue === 0 || daysUntilDue === -1) return true;
+  return daysUntilDue <= -7 && ((-daysUntilDue) % 7 === 0);
+}
+
+function reminderWarningBadge(item: { type: string; title: string; days_until_due?: number | null }) {
+  if (item.type === 'GOAL_REMINDER') {
+    const isCarry = /carry-over/i.test(item.title || '');
+    return {
+      label: isCarry ? 'Goal Carry-Over' : 'Savings Goal',
+      bg: isCarry ? '#fdecea' : '#eaf4ef',
+      color: isCarry ? '#9b2c2c' : '#16533e'
+    };
+  }
+  const d = item.days_until_due;
+  if (d === 3) return { label: '3 Days Left', bg: '#fef5e4', color: '#8a5a00' };
+  if (d === 0) return { label: 'Due Today', bg: '#fdebd0', color: '#9a4d00' };
+  if (typeof d === 'number' && d < 0) {
+    const overdueDays = -d;
+    return {
+      label: overdueDays === 1 ? '1 Day Overdue' : `${overdueDays} Days Overdue`,
+      bg: '#fdecea',
+      color: '#9b2c2c'
+    };
+  }
+  const isOverdue = /overdue/i.test(item.title || '');
+  const isApproaching = !isOverdue && /approaching|due/i.test(item.title || '');
+  return {
+    label: isOverdue ? 'Overdue' : isApproaching ? 'Due Soon' : 'Unpaid',
+    bg: isOverdue ? '#fdecea' : isApproaching ? '#fef5e4' : '#eaf4ef',
+    color: isOverdue ? '#9b2c2c' : isApproaching ? '#8a5a00' : '#16533e'
+  };
+}
+
 async function sendUnpaidReminderEmail({
   toEmail,
   recipientName,
@@ -985,54 +1032,48 @@ async function sendUnpaidReminderEmail({
 }: {
   toEmail: string;
   recipientName: string;
-  items: Array<{ id: number; type: string; title: string; message: string; link?: string | null }>;
+  items: Array<{ id: number; type: string; title: string; message: string; link?: string | null; days_until_due?: number | null }>;
 }) {
   const safeName = String(recipientName || '').trim() || 'Member';
   const list = Array.isArray(items) ? items : [];
   if (!list.length) return { email_sent: false, email_error: 'No unpaid reminders to send.' };
 
   const primary = list[0];
+  const primaryBadge = reminderWarningBadge(primary);
   const primaryUrl = buildSafeReminderAppUrl(primary.link);
   const subject = list.length === 1
-    ? `${primary.title} — ${SYSTEM_NAME}`
-    : `You have ${list.length} unpaid savings reminders — ${SYSTEM_NAME}`;
-  const heading = list.length === 1 ? primary.title : `${list.length} unpaid savings reminders`;
+    ? `[${primaryBadge.label}] ${primary.title} — ${SYSTEM_NAME}`
+    : `You have ${list.length} unpaid savings warnings — ${SYSTEM_NAME}`;
+  const heading = list.length === 1 ? primary.title : `${list.length} unpaid savings warnings`;
 
   const plainLines = [
     `Hello ${safeName},`,
     '',
     list.length === 1
-      ? 'This is an automatic reminder from myIPON about your unpaid savings balance:'
-      : 'This is an automatic reminder from myIPON about your unpaid savings balances:',
+      ? 'This is an automatic warning reminder from myIPON about your unpaid savings balance:'
+      : 'This is an automatic warning reminder from myIPON about your unpaid savings balances:',
     '',
-    ...list.flatMap((item, idx) => [
-      `${list.length > 1 ? `${idx + 1}. ` : ''}${item.title}`,
-      item.message,
-      `Open: ${buildSafeReminderAppUrl(item.link)}`,
-      ''
-    ]),
+    ...list.flatMap((item, idx) => {
+      const badge = reminderWarningBadge(item);
+      return [
+        `${list.length > 1 ? `${idx + 1}. ` : ''}[${badge.label}] ${item.title}`,
+        item.message,
+        `Open: ${buildSafeReminderAppUrl(item.link)}`,
+        ''
+      ];
+    }),
     'You can review your contribution status and submit your payment inside myIPON.',
     'To manage reminder alerts, visit Account settings in the app.'
   ];
   const plainText = plainLines.join('\n');
 
   const cardsHtml = list.map((item) => {
-    const isOverdue = /overdue|carry-over/i.test(item.title || '');
-    const isApproaching = !isOverdue && /approaching|due/i.test(item.title || '');
-    const badgeBg = isOverdue ? '#fdecea' : isApproaching ? '#fef5e4' : '#eaf4ef';
-    const badgeColor = isOverdue ? '#9b2c2c' : isApproaching ? '#8a5a00' : '#16533e';
-    const badgeLabel = item.type === 'GOAL_REMINDER'
-      ? 'Savings Goal'
-      : isOverdue
-        ? 'Overdue'
-        : isApproaching
-          ? 'Due Soon'
-          : 'Unpaid';
+    const badge = reminderWarningBadge(item);
     const itemUrl = buildSafeReminderAppUrl(item.link);
     return `
       <div style="margin: 0 0 12px; padding: 14px 16px; background: #ffffff; border: 1px solid #d9d6c8; border-radius: 12px;">
         <div style="margin: 0 0 6px;">
-          <span style="display: inline-block; padding: 3px 9px; border-radius: 999px; background: ${badgeBg}; color: ${badgeColor}; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;">${badgeLabel}</span>
+          <span style="display: inline-block; padding: 3px 9px; border-radius: 999px; background: ${badge.bg}; color: ${badge.color}; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;">${escapeHtml(badge.label)}</span>
         </div>
         <p style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #163029;">${escapeHtml(item.title)}</p>
         <p style="margin: 0${list.length > 1 ? ' 0 8px' : ''}; font-size: 14px; color: #3c4b45;">${escapeHtml(item.message)}</p>
@@ -1063,14 +1104,15 @@ async function dispatchUnpaidReminderEmails(
   admin: ReturnType<typeof createClient>,
   { recipientId = null, batch = false }: { recipientId?: string | null; batch?: boolean } = {}
 ) {
-  const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const todayIso = manilaTodayIso();
+  const manilaDayStartIso = `${todayIso}T00:00:00+08:00`;
   let query = admin
     .from('notifications')
-    .select('id, recipient_id, group_id, type, title, message, link, created_at')
+    .select('id, recipient_id, group_id, type, title, message, link, dedupe_key, created_at')
     .in('type', ['CONTRIBUTION_REMINDER', 'GOAL_REMINDER'])
     .is('emailed_at', null)
     .is('read_at', null)
-    .gte('created_at', sinceIso)
+    .gte('created_at', manilaDayStartIso)
     .order('created_at', { ascending: true })
     .limit(200);
 
@@ -1086,8 +1128,66 @@ async function dispatchUnpaidReminderEmails(
     return { sent: 0, notifications_emailed: 0, errors: [] as string[] };
   }
 
-  const byRecipient = new Map<string, any[]>();
+  // Filter strictly to Ultra-tipid milestone days (3d before, due date 0d, 1d overdue, then every 7d overdue; goals once per 7d)
+  const periodIds = [...new Set(
+    rows
+      .filter((r: any) => r.type === 'CONTRIBUTION_REMINDER')
+      .map((r: any) => String(r.dedupe_key || '').split(':')[1] || '')
+      .filter((id: string) => /^[0-9a-f-]{36}$/i.test(id))
+  )];
+  const periodDueMap = new Map<string, string>();
+  if (periodIds.length) {
+    const { data: periodRows } = await admin
+      .from('contribution_periods')
+      .select('id, due_date, is_exempt')
+      .in('id', periodIds);
+    for (const p of periodRows || []) {
+      if (p?.id && p?.due_date && !p.is_exempt) {
+        periodDueMap.set(String(p.id), String(p.due_date).slice(0, 10));
+      }
+    }
+  }
+
+  const goalRecipientIds = [...new Set(
+    rows.filter((r: any) => r.type === 'GOAL_REMINDER').map((r: any) => String(r.recipient_id || '')).filter(Boolean)
+  )];
+  const recentGoalEmailedKeys = new Set<string>();
+  if (goalRecipientIds.length) {
+    const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: recentGoalRows } = await admin
+      .from('notifications')
+      .select('recipient_id, dedupe_key')
+      .in('recipient_id', goalRecipientIds)
+      .eq('type', 'GOAL_REMINDER')
+      .not('emailed_at', 'is', null)
+      .gte('emailed_at', sevenDaysAgoIso);
+    for (const r of recentGoalRows || []) {
+      const goalId = String(r?.dedupe_key || '').split(':')[1] || '';
+      if (r?.recipient_id && goalId) recentGoalEmailedKeys.add(`${r.recipient_id}:${goalId}`);
+    }
+  }
+
+  const eligibleRows: any[] = [];
   for (const row of rows) {
+    if (row.type === 'CONTRIBUTION_REMINDER') {
+      const periodId = String(row.dedupe_key || '').split(':')[1] || '';
+      const dueDateIso = periodDueMap.get(periodId);
+      const daysUntilDue = dueDateIso ? diffIsoDateDays(dueDateIso, todayIso) : null;
+      if (!isContributionEmailMilestone(daysUntilDue)) continue;
+      eligibleRows.push({ ...row, days_until_due: daysUntilDue });
+    } else if (row.type === 'GOAL_REMINDER') {
+      const goalId = String(row.dedupe_key || '').split(':')[1] || '';
+      if (!goalId || recentGoalEmailedKeys.has(`${row.recipient_id}:${goalId}`)) continue;
+      eligibleRows.push({ ...row, days_until_due: null });
+    }
+  }
+
+  if (!eligibleRows.length) {
+    return { sent: 0, notifications_emailed: 0, errors: [] as string[] };
+  }
+
+  const byRecipient = new Map<string, any[]>();
+  for (const row of eligibleRows) {
     const uid = String(row.recipient_id || '').trim();
     if (!uid) continue;
     const bucket = byRecipient.get(uid) || [];
@@ -1117,8 +1217,9 @@ async function dispatchUnpaidReminderEmails(
     }
     if (!toEmail || !toEmail.includes('@')) continue;
 
-    // Atomically claim unsent notifications for this recipient so concurrent triggers send only one consolidated email
+    // Atomically claim milestone-eligible notifications for this recipient so concurrent triggers send only one consolidated email
     const candidateIds = candidateRows.map((r: any) => r.id);
+    const daysById = new Map<number, number | null>(candidateRows.map((r: any) => [Number(r.id), r.days_until_due ?? null]));
     const claimedAt = new Date().toISOString();
     const { data: claimed, error: claimErr } = await admin
       .from('notifications')
@@ -1129,10 +1230,15 @@ async function dispatchUnpaidReminderEmails(
 
     if (claimErr || !claimed?.length) continue;
 
+    const enrichedClaimed = claimed.map((item: any) => ({
+      ...item,
+      days_until_due: daysById.get(Number(item.id)) ?? null
+    }));
+
     const outcome = await sendUnpaidReminderEmail({
       toEmail,
       recipientName: String(profile.full_name || '').trim() || 'Member',
-      items: claimed
+      items: enrichedClaimed
     });
 
     if (outcome.email_sent) {
