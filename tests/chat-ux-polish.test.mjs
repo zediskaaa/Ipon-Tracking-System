@@ -67,22 +67,22 @@ test('conversation intro stays in the thread, header status excludes typing, and
   assert.match(css, /\.msg-thread-welcome-hero\s*\{[^}]*margin:\s*0 auto 12px;[^}]*padding:\s*14px 10px 12px;/s);
 });
 
-test('composer focus and keyboard resize keep the latest chat visible; typing preserves bottom position', () => {
+test('composer focus and keyboard resize keep the latest chat visible when sticky at bottom, without jumping when scrolled up or replying', () => {
   const source = read('js/messages.js');
   const helper = source.match(/  function scrollActiveThreadToBottom\(\) \{[\s\S]*?\n  \}/)?.[0];
   assert.ok(helper);
   let scrollTop = 240;
-  const wrap = { scrollHeight: 900, classList: { contains: () => false }, get scrollTop() { return scrollTop; }, set scrollTop(value) { scrollTop = value; } };
+  const wrap = { scrollHeight: 900, clientHeight: 400, classList: { contains: () => false }, get scrollTop() { return scrollTop; }, set scrollTop(value) { scrollTop = value; } };
   const scroll = new Function('state', 'document', 'requestAnimationFrame', 'syncThreadScrollLock', `${helper}; return scrollActiveThreadToBottom;`)(
-    { activeConvId: 'chat-1' },
+    { activeConvId: 'chat-1', threadStickyBottom: true, lastScrollWrapHeight: 400 },
     { getElementById: (id) => id === 'msg-workspace-dialog' ? { open: true } : wrap },
     (callback) => callback(),
     () => {}
   );
   scroll();
   assert.equal(scrollTop, 900);
-  assert.match(source, /focusin[\s\S]*?msg-composer-input'\) scrollActiveThreadToBottom\(\)/);
-  assert.match(source, /visualViewport\?\.addEventListener\?\.\('resize'[\s\S]*?activeElement\?\.id === 'msg-composer-input'\) scrollActiveThreadToBottom\(\)/);
+  assert.match(source, /focusin[\s\S]*?msg-composer-input' && shouldAutoScrollOnComposer\(\)\) scrollActiveThreadToBottom\(\)/);
+  assert.match(source, /visualViewport\?\.addEventListener\?\.\('resize'[\s\S]*?activeElement\?\.id === 'msg-composer-input' && shouldAutoScrollOnComposer\(\)\) scrollActiveThreadToBottom\(\)/);
   assert.match(source, /const wasNearBottom = wrap && wrap\.scrollHeight - wrap\.scrollTop - wrap\.clientHeight < 140;/);
   assert.match(source, /if \(wasNearBottom && wrap && !wrap\.classList\?\.contains\('is-no-scroll'\)\)/);
 });

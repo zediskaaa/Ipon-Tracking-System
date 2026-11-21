@@ -127,6 +127,10 @@
     pendingByConv: new Map(), // convId -> Array<PendingMsg>
     draftsByConv: new Map(),
     signedUrlCache: new Map(), // path -> signedUrl
+    signedUrlExpiry: new Map(), // path -> expiresAtMs
+    loadedMediaUrls: new Set(), // decoded image URLs
+    threadStickyBottom: true,
+    lastScrollWrapHeight: 0,
     typingPeers: new Map(), // convId -> { timer, at }
     convoPresencePeers: new Map(), // convId -> Set<userId>
     lastTypingSentAt: 0,
@@ -1227,12 +1231,60 @@
     syncThreadPresenceRipple();
   }
 
+  const SIGNED_URL_TTL_MS = 45 * 60 * 1000;
   const missingUrlRetry = new Map(); // path -> { attempts, lastAt }
+  const preloadingImageUrls = new Set();
   let missingUrlTimer = null;
 
+  function getCachedSignedUrl(path) {
+    const key = String(path || '').trim();
+    if (!key) return '';
+    const url = state.signedUrlCache.get(key) || '';
+    if (!url) return '';
+    const exp = state.signedUrlExpiry?.get?.(key);
+    if (exp && Date.now() >= exp && !url.startsWith('blob:') && !url.startsWith('data:')) {
+      state.signedUrlCache.delete(key);
+      state.signedUrlExpiry.delete(key);
+      return '';
+    }
+    return url;
+  }
+
+  function preloadSignedImageUrls(urls = []) {
+    if (typeof Image !== 'function') return;
+    for (const raw of urls) {
+      const url = String(raw || '').trim();
+      if (!url || state.loadedMediaUrls.has(url) || preloadingImageUrls.has(url)) continue;
+      preloadingImageUrls.add(url);
+      try {
+        const img = new Image();
+        img.decoding = 'async';
+        img.onload = () => {
+          preloadingImageUrls.delete(url);
+          state.loadedMediaUrls.add(url);
+        };
+        img.onerror = () => {
+          preloadingImageUrls.delete(url);
+        };
+        img.src = url;
+      } catch {
+        preloadingImageUrls.delete(url);
+      }
+    }
+  }
+
   // Edge Storage helpers with XHR byte progress
-  async function ensureSignedViewUrls(conversationId, paths = []) {
-    const missing = [...new Set(paths.map((p) => String(p || '').trim()).filter((p) => p && !state.signedUrlCache.has(p)))];
+  async function ensureSignedViewUrls(conversationId, paths = [], { imagePaths = null } = {}) {
+    const normalized = [...new Set(paths.map((p) => String(p || '').trim()).filter(Boolean))];
+    const missing = normalized.filter((p) => !getCachedSignedUrl(p));
+    if (imagePaths?.size) {
+      const cachedImgUrls = [];
+      imagePaths.forEach((p) => {
+        const u = getCachedSignedUrl(p);
+        if (u) cachedImgUrls.push(u);
+      });
+      if (cachedImgUrls.length) preloadSignedImageUrls(cachedImgUrls);
+    }
     if (!missing.length || !conversationId) return;
     try {
       const { urls = {} } = await ipon().invokeAccountFunction({
@@ -1240,12 +1292,19 @@
         conversation_id: conversationId,
         paths: missing
       });
+      const expiresAt = Date.now() + SIGNED_URL_TTL_MS;
+      const preloadQueue = [];
       Object.entries(urls).forEach(([path, signed]) => {
         if (path && signed) {
           state.signedUrlCache.set(path, signed);
+          state.signedUrlExpiry?.set?.(path, expiresAt);
           missingUrlRetry.delete(path);
+          if (imagePaths?.has?.(path) || /\.(?:png|jpe?g|webp|gif|avif|bmp|heic)(?:\?|$)/i.test(path)) {
+            preloadQueue.push(signed);
+          }
         }
       });
+      if (preloadQueue.length) preloadSignedImageUrls(preloadQueue);
     } catch (_) { }
   }
 
@@ -1253,7 +1312,7 @@
     if (!conversationId || state.activeConvId !== conversationId || typeof setTimeout !== 'function') return;
     const now = Date.now();
     const eligible = [...new Set(paths.map((p) => String(p || '').trim()).filter((p) => {
-      if (!p || state.signedUrlCache.has(p)) return false;
+      if (!p || getCachedSignedUrl(p)) return false;
       const info = missingUrlRetry.get(p);
       return !info || (info.attempts < 3 && (now - info.lastAt) >= info.attempts * 1500);
     }))];
@@ -1263,7 +1322,7 @@
       missingUrlTimer = null;
       if (state.activeConvId !== conversationId) return;
       const runAt = Date.now();
-      const batch = eligible.filter((p) => !state.signedUrlCache.has(p));
+      const batch = eligible.filter((p) => !getCachedSignedUrl(p));
       if (!batch.length) return;
       batch.forEach((p) => {
         const prev = missingUrlRetry.get(p);
@@ -1271,9 +1330,13 @@
       });
       await ensureSignedViewUrls(conversationId, batch);
       if (state.activeConvId !== conversationId || !state.activeThread?.conversation) return;
-      if (batch.some((p) => state.signedUrlCache.has(p))) {
+      if (batch.some((p) => getCachedSignedUrl(p))) {
+        const wrap = document.getElementById('msg-scroll-wrap');
+        const prevTop = wrap ? wrap.scrollTop : 0;
+        const nearBottom = isThreadNearBottom(wrap, 96);
         state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
         renderMessagesList();
+        if (wrap) wrap.scrollTop = nearBottom ? wrap.scrollHeight : prevTop;
       }
     }, 450);
   }
@@ -1370,6 +1433,9 @@
       if (vid && meta.poster && vid.getAttribute?.('poster') !== meta.poster) {
         vid.setAttribute?.('poster', meta.poster);
         try { vid.poster = meta.poster; } catch { }
+      }
+      if (meta.poster && node.classList?.contains?.('msg-video-player') && node.dataset) {
+        node.dataset.vidState = 'ready';
       }
     });
   }
@@ -2317,6 +2383,7 @@
       state.loadingOlder = false;
       state.olderLoadError = '';
       state.olderAutoArmed = false;
+      state.threadStickyBottom = !aroundMessageId;
       state.lastThreadFingerprint = '';
       renderThreadHeaderLoading(conversationId, previewPeer);
     }
@@ -2387,8 +2454,14 @@
       state.loadingThread = false;
 
       const attPaths = [];
-      nextMsgs.forEach((m) => (m.attachments || []).forEach((a) => { if (a?.path) attPaths.push(a.path); }));
-      await ensureSignedViewUrls(conversationId, attPaths);
+      const imagePaths = new Set();
+      (data?.messages || nextMsgs).forEach((m) => (m.attachments || []).forEach((a) => {
+        if (a?.path) {
+          attPaths.push(a.path);
+          if (a.kind === 'image') imagePaths.add(a.path);
+        }
+      }));
+      await ensureSignedViewUrls(conversationId, attPaths, { imagePaths });
       if (state.activeConvId !== conversationId || reqSeq !== state.openConvSeq) return;
 
       const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
@@ -2908,13 +2981,19 @@
         if (wrap) {
           syncThreadScrollLock();
           if (!wrap.classList?.contains('is-no-scroll')) wrap.scrollTop = wrap.scrollHeight;
+          state.threadStickyBottom = true;
+          state.lastScrollWrapHeight = Number(wrap.clientHeight || 0);
         }
         state.olderAutoArmed = true;
       });
     } else if (typeof preserveScrollTop === 'number') {
       requestAnimationFrame(() => {
         const wrap = document.getElementById('msg-scroll-wrap');
-        if (wrap) wrap.scrollTop = preserveScrollTop;
+        if (wrap) {
+          wrap.scrollTop = preserveScrollTop;
+          state.threadStickyBottom = isThreadNearBottom(wrap);
+          state.lastScrollWrapHeight = Number(wrap.clientHeight || 0);
+        }
         state.olderAutoArmed = true;
       });
     } else {
@@ -2973,9 +3052,9 @@
     const safeName = escapeHtml(item.name || 'file');
     const sizeText = escapeHtml(formatBytes(item.size));
     if (item.kind === 'image' && item.previewUrl) {
-      return `<figure class="msg-att-image">
+      return `<figure class="msg-att-image is-img-loaded">
         <button type="button" class="msg-img-open-btn" data-open-img="${escAttr(item.previewUrl)}" data-img-name="${escAttr(item.name || 'image')}" aria-label="Preview ${safeName}">
-          <img src="${escAttr(item.previewUrl)}" alt="${safeName}" loading="lazy">
+          <img src="${escAttr(item.previewUrl)}" alt="${safeName}" decoding="async">
         </button>
       </figure>`;
     }
@@ -3160,10 +3239,12 @@
       pending.status = 'failed';
       pending.errorText = ipon().friendlyError(error) || 'Message failed to send';
       if (convId === state.activeConvId && state.activeThread?.conversation) {
+        const wrapBefore = document.getElementById('msg-scroll-wrap');
+        const prevTop = wrapBefore ? wrapBefore.scrollTop : 0;
         renderMessagesList();
         requestAnimationFrame(() => {
           const wrap = document.getElementById('msg-scroll-wrap');
-          if (wrap) wrap.scrollTop = wrap.scrollHeight;
+          if (wrap) wrap.scrollTop = pending.preserveScroll ? prevTop : wrap.scrollHeight;
         });
       }
     }
@@ -3177,19 +3258,39 @@
     job.finally(() => {
       if (sendTailByConv.get(convId) !== job) return;
       sendTailByConv.delete(convId);
-      if (!getPendingList(convId).some((item) => item.status === 'sent')) return;
+      const sentItems = getPendingList(convId).filter((item) => item.status === 'sent');
+      if (!sentItems.length) return;
+      const keepScroll = sentItems.some((item) => item.preserveScroll) || state.threadStickyBottom === false;
       Promise.all([
         convId === state.activeConvId
-          ? openConversation(convId, { markRead: false, silent: true, scrollToBottom: true })
+          ? openConversation(convId, { markRead: false, silent: true, scrollToBottom: !keepScroll })
           : Promise.resolve(),
         refreshConversations()
       ]).catch(() => { });
     });
   }
 
-  function enqueuePendingMessage({ conversationId, body = '', messageType = null, replyToMsg = null, files = [], deferProcess = false }) {
+  function isThreadNearBottom(wrap, threshold = 140) {
+    if (!wrap) return true;
+    const clientH = Number(wrap.clientHeight || 0);
+    const scrollH = Number(wrap.scrollHeight || 0);
+    if (clientH <= 0 || scrollH <= clientH) return true;
+    return (scrollH - Number(wrap.scrollTop || 0) - clientH) < threshold;
+  }
+
+  function shouldAutoScrollOnComposer() {
+    if (state.threadStickyBottom === false) return false;
+    const wrap = document.getElementById('msg-scroll-wrap');
+    if ((state.replyToMsg || state.editingMsg) && !isThreadNearBottom(wrap)) return false;
+    return true;
+  }
+
+  function enqueuePendingMessage({ conversationId, body = '', messageType = null, replyToMsg = null, files = [], deferProcess = false, preserveScroll = false }) {
     if (!conversationId) return null;
     const conv = state.activeThread?.conversation;
+    const wrap = conversationId === state.activeConvId ? document.getElementById('msg-scroll-wrap') : null;
+    const keepScroll = Boolean(preserveScroll || (replyToMsg && (state.threadStickyBottom === false || !isThreadNearBottom(wrap))));
+    const prevTop = wrap ? wrap.scrollTop : 0;
     const replyTargetName = replyToMsg
       ? (replyToMsg.sender_name || findGroupMember(conv, replyToMsg.sender_id)?.full_name || convDisplayTitle(conv))
       : '';
@@ -3208,6 +3309,7 @@
       progressPct: 0,
       errorText: '',
       serverMessageId: null,
+      preserveScroll: keepScroll,
       createdAt: new Date().toISOString()
     };
     if (!state.pendingByConv.has(conversationId)) state.pendingByConv.set(conversationId, []);
@@ -3217,10 +3319,18 @@
         const list = document.getElementById('msg-messages-list');
         if (list?.insertAdjacentHTML && list.querySelector('.msg-row.is-pending')) {
           list.insertAdjacentHTML('beforeend', renderPendingRowHtml(pending));
-          scrollActiveThreadToBottom();
+          if (keepScroll) {
+            if (wrap) wrap.scrollTop = prevTop;
+          } else {
+            scrollActiveThreadToBottom();
+          }
         } else {
           renderMessagesList();
-          scrollActiveThreadToBottom();
+          if (keepScroll) {
+            if (wrap) wrap.scrollTop = prevTop;
+          } else {
+            scrollActiveThreadToBottom();
+          }
         }
       }
       queuePendingMessage(pending);
@@ -3235,6 +3345,8 @@
       if (!wrap) return;
       syncThreadScrollLock();
       if (!wrap.classList.contains('is-no-scroll')) wrap.scrollTop = wrap.scrollHeight;
+      state.threadStickyBottom = true;
+      state.lastScrollWrapHeight = Number(wrap.clientHeight || 0);
     });
   }
 
@@ -3294,8 +3406,14 @@
       if (state.activeConvId !== convLoadingId || !state.activeThread) return false;
       const incoming = Array.isArray(older?.messages) ? older.messages : [];
       const attPaths = [];
-      incoming.forEach((m) => (m.attachments || []).forEach((a) => { if (a?.path) attPaths.push(a.path); }));
-      await ensureSignedViewUrls(convLoadingId, attPaths);
+      const imagePaths = new Set();
+      incoming.forEach((m) => (m.attachments || []).forEach((a) => {
+        if (a?.path) {
+          attPaths.push(a.path);
+          if (a.kind === 'image') imagePaths.add(a.path);
+        }
+      }));
+      await ensureSignedViewUrls(convLoadingId, attPaths, { imagePaths });
       if (state.activeConvId !== convLoadingId || !state.activeThread) return false;
 
       const latestMsgs = state.activeThread.messages || [];
@@ -3331,9 +3449,16 @@
 
   function handleThreadScroll() {
     closeFloatingMenus();
+    const wrap = document.getElementById('msg-scroll-wrap');
+    if (wrap) {
+      const curClientH = Number(wrap.clientHeight || 0);
+      if (!state.lastScrollWrapHeight || curClientH === state.lastScrollWrapHeight) {
+        state.threadStickyBottom = isThreadNearBottom(wrap);
+      }
+      if (curClientH > 0) state.lastScrollWrapHeight = curClientH;
+    }
     if (!state.olderAutoArmed || state.loadingOlder || state.loadingThread || state.olderLoadError) return;
     if (!state.activeConvId || !state.activeThread?.has_older || !(state.activeThread?.messages?.length)) return;
-    const wrap = document.getElementById('msg-scroll-wrap');
     if (!wrap || wrap.classList?.contains('is-no-scroll')) return;
     if (wrap.scrollTop <= OLDER_SCROLL_THRESHOLD_PX) {
       loadOlderMessages();
@@ -3674,6 +3799,7 @@
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);
     ipon().fitVerifiedNameLines?.(list);
+    hydrateThreadMediaElements(list, conv.conversation_id);
     syncThreadScrollLock();
     scheduleVanishExpiry();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => syncThreadScrollLock());
@@ -3682,22 +3808,96 @@
       msgs.forEach((m) => {
         if (m.deleted_for_everyone_at) return;
         (m.attachments || []).forEach((att) => {
-          if (att?.path && !state.signedUrlCache.has(att.path)) missingAttPaths.push(att.path);
+          if (att?.path && !getCachedSignedUrl(att.path)) missingAttPaths.push(att.path);
         });
       });
       if (missingAttPaths.length) scheduleMissingSignedUrls(conv.conversation_id, missingAttPaths);
     }
   }
 
+  function hydrateThreadMediaElements(container, conversationId) {
+    if (!container?.querySelectorAll) return;
+    container.querySelectorAll('.msg-att-image img').forEach((img) => {
+      const fig = img.closest?.('.msg-att-image');
+      if (!fig) return;
+      const markReady = () => {
+        const curSrc = img.currentSrc || img.getAttribute?.('src') || '';
+        if (curSrc) state.loadedMediaUrls.add(curSrc);
+        fig.classList?.remove?.('is-img-loading');
+        fig.classList?.add?.('is-img-loaded');
+      };
+      if (img.complete && Number(img.naturalWidth || 0) > 0) {
+        markReady();
+        return;
+      }
+      img.addEventListener?.('load', () => {
+        const finish = () => {
+          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(markReady);
+          else markReady();
+        };
+        if (typeof img.decode === 'function') img.decode().then(finish, finish);
+        else finish();
+      }, { once: true });
+      img.addEventListener?.('error', async () => {
+        const tries = Number(img.dataset?.retryCount || 0);
+        const imgPath = img.dataset?.imgPath || '';
+        const convId = img.dataset?.imgConv || conversationId || '';
+        if (!imgPath || !convId || tries >= 2) {
+          fig.classList?.remove?.('is-img-loading');
+          return;
+        }
+        if (img.dataset) img.dataset.retryCount = String(tries + 1);
+        state.signedUrlCache.delete(imgPath);
+        state.signedUrlExpiry?.delete?.(imgPath);
+        await ensureSignedViewUrls(convId, [imgPath], { imagePaths: new Set([imgPath]) });
+        const freshUrl = getCachedSignedUrl(imgPath);
+        if (freshUrl && img.isConnected !== false) {
+          const btn = img.closest?.('.msg-img-open-btn');
+          if (btn?.dataset) btn.dataset.openImg = freshUrl;
+          img.setAttribute?.('src', freshUrl);
+        }
+      });
+    });
+    container.querySelectorAll('.msg-video-player video').forEach((video) => {
+      const player = video.closest?.('.msg-video-player');
+      if (!player) return;
+      const markVidReady = () => {
+        if (player.dataset) player.dataset.vidState = 'ready';
+      };
+      if (Number(video.readyState || 0) >= 2) {
+        markVidReady();
+        return;
+      }
+      video.addEventListener?.('loadeddata', markVidReady, { once: true });
+      video.addEventListener?.('canplay', markVidReady, { once: true });
+      video.addEventListener?.('error', async () => {
+        const tries = Number(video.dataset?.retryCount || 0);
+        const vidPath = player.dataset?.vidPath || '';
+        const convId = player.dataset?.vidConv || conversationId || '';
+        if (!vidPath || !convId || tries >= 1) return;
+        if (video.dataset) video.dataset.retryCount = String(tries + 1);
+        state.signedUrlCache.delete(vidPath);
+        state.signedUrlExpiry?.delete?.(vidPath);
+        await ensureSignedViewUrls(convId, [vidPath]);
+        const freshUrl = getCachedSignedUrl(vidPath);
+        if (freshUrl && video.isConnected !== false) {
+          video.setAttribute?.('src', freshUrl);
+          try { video.load?.(); } catch { }
+        }
+      });
+    });
+  }
+
   function renderAttachmentItem(conversationId, att) {
-    const url = state.signedUrlCache.get(att.path) || '';
+    const url = getCachedSignedUrl(att.path);
     const safeName = escapeHtml(att.name || 'file');
     const sizeText = escapeHtml(formatBytes(att.size));
     if (att.kind === 'image') {
-      return `<figure class="msg-att-image">
+      const isReady = Boolean(url && state.loadedMediaUrls.has(url));
+      return `<figure class="msg-att-image${isReady ? ' is-img-loaded' : ' is-img-loading'}">
         ${url
           ? `<button type="button" class="msg-img-open-btn" data-open-img="${escAttr(url)}" data-img-name="${escAttr(att.name || 'image')}" data-img-conv="${escAttr(conversationId)}" data-img-path="${escAttr(att.path)}" aria-label="View original ${safeName}">
-              <img src="${escAttr(url)}" alt="${safeName}" loading="lazy">
+              <img src="${escAttr(url)}" alt="${safeName}" decoding="async" fetchpriority="high" data-img-conv="${escAttr(conversationId)}" data-img-path="${escAttr(att.path)}">
             </button>`
           : '<div class="msg-att-loading msg-skel" role="status"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>Loading image…</span></div>'}
       </figure>`;
@@ -3705,12 +3905,13 @@
     if (att.kind === 'video') {
       const vidKey = getVideoMetaKey(att.path, url);
       const cached = vidKey ? videoMetaCache.get(vidKey) : null;
+      const hasPoster = Boolean(cached?.poster);
       const boxStyle = formatVideoBoxStyle(cached);
       if (url && vidKey && !cached?.poster && !cached?.failed && !videoPosterInFlight.has(vidKey)) {
         Promise.resolve().then(() => probeAndCaptureVideoMeta(url, vidKey));
       }
       return `<div class="msg-att-media-card">
-        ${url ? `<div class="msg-video-player" data-vid-conv="${escAttr(conversationId)}" data-vid-path="${escAttr(att.path)}" data-vid-name="${escAttr(att.name || 'video')}" data-vid-key="${escAttr(vidKey)}"${boxStyle ? ` style="${escAttr(boxStyle)}"` : ''}>
+        ${url ? `<div class="msg-video-player" data-vid-state="${hasPoster ? 'ready' : 'loading'}" data-vid-conv="${escAttr(conversationId)}" data-vid-path="${escAttr(att.path)}" data-vid-name="${escAttr(att.name || 'video')}" data-vid-key="${escAttr(vidKey)}"${boxStyle ? ` style="${escAttr(boxStyle)}"` : ''}>
           <video class="msg-att-video" preload="metadata" playsinline poster="${escAttr(cached?.poster || VIDEO_POSTER_FALLBACK)}" src="${escAttr(url)}"></video>
           <button type="button" class="msg-video-center-play" data-vact="play" aria-label="Play video">${VIDEO_PLAY_SVG}</button>
           <div class="msg-video-controls">
@@ -5203,6 +5404,9 @@
     const convId = state.activeConvId;
     const queuedFiles = [...state.uploadQueue];
     const replyTarget = state.replyToMsg;
+    const wrapBeforeSend = document.getElementById('msg-scroll-wrap');
+    const preserveReplyScroll = Boolean(replyTarget) && (state.threadStickyBottom === false || !isThreadNearBottom(wrapBeforeSend));
+    const lockedSendScrollTop = wrapBeforeSend ? wrapBeforeSend.scrollTop : null;
 
     sendTypingBroadcast(false);
     if (input) { input.value = ''; autoResizeTextarea(input); }
@@ -5211,7 +5415,9 @@
     state.replyToMsg = null;
     renderContextBar();
     clearUploadQueue({ keepUrls: true });
-    input?.focus();
+    if (input) {
+      try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+    }
 
     if (queuedFiles.length <= MAX_ATTACHMENTS_PER_MSG) {
       enqueuePendingMessage({
@@ -5219,7 +5425,8 @@
         body,
         messageType: queuedFiles.length ? 'MEDIA' : 'TEXT',
         replyToMsg: replyTarget,
-        files: queuedFiles
+        files: queuedFiles,
+        preserveScroll: preserveReplyScroll
       });
       return;
     }
@@ -5233,7 +5440,8 @@
         messageType: 'MEDIA',
         replyToMsg: chunkIdx === 0 ? replyTarget : null,
         files: queuedFiles.slice(i, i + MAX_ATTACHMENTS_PER_MSG),
-        deferProcess: true
+        deferProcess: true,
+        preserveScroll: preserveReplyScroll
       });
       if (item) batches.push(item);
     }
@@ -5241,7 +5449,9 @@
       renderMessagesList();
       requestAnimationFrame(() => {
         const wrap = document.getElementById('msg-scroll-wrap');
-        if (wrap) wrap.scrollTop = wrap.scrollHeight;
+        if (!wrap) return;
+        if (preserveReplyScroll && typeof lockedSendScrollTop === 'number') wrap.scrollTop = lockedSendScrollTop;
+        else wrap.scrollTop = wrap.scrollHeight;
       });
     }
     batches.forEach(queuePendingMessage);
@@ -6478,12 +6688,28 @@
   function startReplyToMessage(msgObj) {
     if (!msgObj) return;
     closeFloatingMenus();
+    const wrap = document.getElementById('msg-scroll-wrap');
+    const wasNearBottom = isThreadNearBottom(wrap);
+    const lockedScrollTop = wrap ? wrap.scrollTop : null;
+    if (!wasNearBottom) state.threadStickyBottom = false;
     const wasEditing = Boolean(state.editingMsg);
     state.editingMsg = null;
     if (wasEditing) restoreDraftAfterEdit();
     state.replyToMsg = msgObj;
     renderContextBar();
-    document.getElementById('msg-composer-input')?.focus();
+    const input = document.getElementById('msg-composer-input');
+    if (input) {
+      try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+    }
+    if (!wasNearBottom && wrap && typeof lockedScrollTop === 'number') {
+      wrap.scrollTop = lockedScrollTop;
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => {
+          const liveWrap = document.getElementById('msg-scroll-wrap');
+          if (liveWrap && state.threadStickyBottom === false) liveWrap.scrollTop = lockedScrollTop;
+        });
+      }
+    }
   }
 
   function showMessageContextMenu(msgId, anchorBtn) {
@@ -7778,7 +8004,7 @@
     });
 
     document.addEventListener('focusin', (ev) => {
-      if (ev.target?.id === 'msg-composer-input') scrollActiveThreadToBottom();
+      if (ev.target?.id === 'msg-composer-input' && shouldAutoScrollOnComposer()) scrollActiveThreadToBottom();
     });
 
     document.addEventListener('focusout', (ev) => {
@@ -8395,11 +8621,15 @@
       closeFloatingMenus({ immediate: true });
       closeAttachMenu();
       syncThreadScrollLock();
-      if (document.activeElement?.id === 'msg-composer-input') scrollActiveThreadToBottom();
+      if (document.activeElement?.id === 'msg-composer-input' && shouldAutoScrollOnComposer()) scrollActiveThreadToBottom();
+      const wrap = document.getElementById('msg-scroll-wrap');
+      if (wrap && Number(wrap.clientHeight || 0) > 0) state.lastScrollWrapHeight = Number(wrap.clientHeight);
     });
     window.visualViewport?.addEventListener?.('resize', () => {
       syncThreadScrollLock();
-      if (document.activeElement?.id === 'msg-composer-input') scrollActiveThreadToBottom();
+      if (document.activeElement?.id === 'msg-composer-input' && shouldAutoScrollOnComposer()) scrollActiveThreadToBottom();
+      const wrap = document.getElementById('msg-scroll-wrap');
+      if (wrap && Number(wrap.clientHeight || 0) > 0) state.lastScrollWrapHeight = Number(wrap.clientHeight);
     });
   }
 
