@@ -712,7 +712,7 @@ test('friend request notifications route strictly to Friends > Friend Requests w
   // Runtime check of core.js resolveNotificationTarget
   const noop = () => {};
   const coreCtx = {
-    console, setTimeout, clearTimeout, setInterval, clearInterval, URL, URLSearchParams, CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } },
+    console, setTimeout, clearTimeout, setInterval: () => 1, clearInterval: () => {}, URL, URLSearchParams, CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } },
     location: { pathname: '/dashboard.html', href: 'https://myipon.app/dashboard.html', origin: 'https://myipon.app', search: '', hash: '' },
     navigator: { userAgent: 'Mozilla/5.0', onLine: true },
     localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
@@ -915,7 +915,7 @@ test('double-tap heart react, double long-press text copy unlock, and 3-dots men
   };
 
   const ctx = {
-    console, setTimeout, clearTimeout, setInterval, clearInterval, URL, URLSearchParams,
+    console, setTimeout, clearTimeout, setInterval: () => 1, clearInterval: () => {}, URL, URLSearchParams,
     CSS: { escape: (s) => String(s) },
     navigator: { userAgent: 'Android', vibrate: () => true },
     location: { href: 'https://myipon.app/dashboard.html', search: '', pathname: '/dashboard.html' },

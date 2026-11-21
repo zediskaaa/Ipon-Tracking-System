@@ -180,7 +180,28 @@
     if (!Number.isFinite(expiresAt) || !duration || expiresAt <= now) return '';
     const remaining = expiresAt - now;
     const angle = Math.min(360, Math.max(0, remaining / duration * 360));
-    return `--vanish-angle:${angle.toFixed(2)}deg;--vanish-remaining:${Math.ceil(remaining)}ms`;
+    const dashStart = Math.min(100, Math.max(0, (1 - (remaining / duration)) * 100));
+    return `--vanish-angle:${angle.toFixed(2)}deg;--vanish-remaining:${Math.ceil(remaining)}ms;--vanish-dash-start:${dashStart.toFixed(2)}`;
+  }
+
+  function buildVanishRectPath(width, height, { mine = false, rTL = 16, rTR = 16, rBR = 16, rBL = 16, inset = 1.25 } = {}) {
+    const w = Math.max(8, Number(width) || 0);
+    const h = Math.max(8, Number(height) || 0);
+    const p = Math.min(inset, w / 4, h / 4);
+    const maxR = Math.min((w - p * 2) / 2, (h - p * 2) / 2);
+    const tl = Math.max(0, Math.min(maxR, Number(rTL) || 0));
+    const tr = Math.max(0, Math.min(maxR, Number(rTR) || 0));
+    const br = Math.max(0, Math.min(maxR, Number(rBR) || 0));
+    const bl = Math.max(0, Math.min(maxR, Number(rBL) || 0));
+    const x0 = p;
+    const y0 = p;
+    const x1 = w - p;
+    const y1 = h - p;
+    const f = (n) => Number(n.toFixed(2));
+    if (mine) {
+      return `M ${f(x1 - br)} ${f(y1)} L ${f(x0 + bl)} ${f(y1)} A ${f(bl)} ${f(bl)} 0 0 1 ${f(x0)} ${f(y1 - bl)} L ${f(x0)} ${f(y0 + tl)} A ${f(tl)} ${f(tl)} 0 0 1 ${f(x0 + tl)} ${f(y0)} L ${f(x1 - tr)} ${f(y0)} A ${f(tr)} ${f(tr)} 0 0 1 ${f(x1)} ${f(y0 + tr)} L ${f(x1)} ${f(y1 - br)} A ${f(br)} ${f(br)} 0 0 1 ${f(x1 - br)} ${f(y1)} Z`;
+    }
+    return `M ${f(x0)} ${f(y1 - bl)} L ${f(x0)} ${f(y0 + tl)} A ${f(tl)} ${f(tl)} 0 0 1 ${f(x0 + tl)} ${f(y0)} L ${f(x1 - tr)} ${f(y0)} A ${f(tr)} ${f(tr)} 0 0 1 ${f(x1)} ${f(y0 + tr)} L ${f(x1)} ${f(y1 - br)} A ${f(br)} ${f(br)} 0 0 1 ${f(x1 - br)} ${f(y1)} L ${f(x0 + bl)} ${f(y1)} A ${f(bl)} ${f(bl)} 0 0 1 ${f(x0)} ${f(y1 - bl)} Z`;
   }
 
   function formatBytes(bytes) {
@@ -1462,6 +1483,8 @@
       ? inlineVideo.duration
       : Number(cached?.duration || 0);
     const sub = dur > 0 ? formatMediaDuration(dur) : '';
+    const viewerMsgId = triggerEl.closest?.('[data-msg-id]')?.dataset?.msgId || triggerEl.dataset?.vidMsgId || null;
+    state.activeVideoViewerMsgId = viewerMsgId ? String(viewerMsgId) : null;
     pauseOtherChatMedia(null);
     if (inlineVideo && !inlineVideo.paused) {
       try { inlineVideo.pause?.(); } catch { }
@@ -1473,14 +1496,17 @@
       autoplay: true,
       onDownload: path && convId ? () => downloadOriginalAttachment(convId, path, name || 'video.mp4') : null,
       onClose: ({ currentTime, muted } = {}) => {
-        if (!inlineVideo || inlineVideo.isConnected === false) return;
-        try {
-          if (typeof muted === 'boolean') inlineVideo.muted = muted;
-          if (Number.isFinite(currentTime) && Number.isFinite(inlineVideo.duration) && inlineVideo.duration > 0) {
-            inlineVideo.currentTime = Math.max(0, Math.min(inlineVideo.duration, currentTime));
-          }
-        } catch { }
-        syncVideoPlayerUi(inlineVideo);
+        state.activeVideoViewerMsgId = null;
+        if (inlineVideo && inlineVideo.isConnected !== false) {
+          try {
+            if (typeof muted === 'boolean') inlineVideo.muted = muted;
+            if (Number.isFinite(currentTime) && Number.isFinite(inlineVideo.duration) && inlineVideo.duration > 0) {
+              inlineVideo.currentTime = Math.max(0, Math.min(inlineVideo.duration, currentTime));
+            }
+          } catch { }
+          syncVideoPlayerUi(inlineVideo);
+        }
+        scheduleVanishExpiry();
       }
     });
   }
@@ -3209,13 +3235,23 @@
   function scheduleVanishExpiry() {
     clearTimeout(vanishUiTimer);
     const conversationId = state.activeConvId;
-    const active = (state.activeThread?.messages || []).filter((m) => m.vanish_at && Number.isFinite(Date.parse(m.vanish_at)));
+    const heldVidId = state.activeVideoViewerMsgId && document.getElementById('ipon-video-viewer')?.open
+      ? String(state.activeVideoViewerMsgId)
+      : null;
+    const active = (state.activeThread?.messages || []).filter(
+      (m) => m.vanish_at && Number.isFinite(Date.parse(m.vanish_at)) && (!heldVidId || String(m.id) !== heldVidId)
+    );
     if (!active.length) return;
     const nextExpiry = Math.min(...active.map((m) => Date.parse(m.vanish_at)));
     vanishUiTimer = setTimeout(() => {
       if (state.activeConvId !== conversationId || !state.activeThread) return;
+      const curHeldVidId = state.activeVideoViewerMsgId && document.getElementById('ipon-video-viewer')?.open
+        ? String(state.activeVideoViewerMsgId)
+        : null;
       const now = Date.now();
-      const expired = (state.activeThread.messages || []).filter((m) => m.vanish_at && Date.parse(m.vanish_at) <= now);
+      const expired = (state.activeThread.messages || []).filter(
+        (m) => m.vanish_at && Date.parse(m.vanish_at) <= now && (!curHeldVidId || String(m.id) !== curHeldVidId)
+      );
       if (!expired.length) { scheduleVanishExpiry(); return; }
       const expiredIds = new Set(expired.map((m) => m.id));
       const list = document.getElementById('msg-messages-list');
@@ -3235,15 +3271,52 @@
 
   function positionVanishRing(bubble, width = bubble.offsetWidth, height = bubble.offsetHeight) {
     if (!width || !height) return;
+    const mine = Boolean(bubble.closest('.msg-row.is-mine'));
     const corner = Math.atan2(width, height) * 180 / Math.PI;
-    const angle = bubble.closest('.msg-row.is-mine') ? 180 - corner : 180 + corner;
+    const angle = mine ? 180 - corner : 180 + corner;
     bubble.style.setProperty('--vanish-start', `${angle.toFixed(2)}deg`);
+    if (typeof document === 'undefined' || typeof document.createElementNS !== 'function' || typeof bubble.querySelector !== 'function' || typeof buildVanishRectPath !== 'function') return;
+    const isAudioOnly = Boolean(bubble.classList?.contains?.('has-audio-only'));
+    const isTopMedia = Boolean(bubble.classList?.contains?.('has-top-media'));
+    const cs = typeof window !== 'undefined' && typeof window.getComputedStyle === 'function' ? window.getComputedStyle(bubble) : null;
+    const rTL = parseFloat(cs?.borderTopLeftRadius) || 16;
+    const rTR = parseFloat(cs?.borderTopRightRadius) || 16;
+    const rBR = isAudioOnly ? 16 : (parseFloat(cs?.borderBottomRightRadius) || (mine ? 6 : 16));
+    const rBL = isAudioOnly ? 16 : (parseFloat(cs?.borderBottomLeftRadius) || (mine ? 16 : 6));
+    const d = buildVanishRectPath(width, height, { mine, rTL, rTR, rBR, rBL, inset: isTopMedia ? 1.5 : 1.25 });
+    let svg = bubble.querySelector(':scope > .msg-vanish-ring') || bubble.querySelector('.msg-vanish-ring');
+    if (!svg) {
+      const ns = 'http://www.w3.org/2000/svg';
+      svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('class', 'msg-vanish-ring');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('preserveAspectRatio', 'none');
+      const track = document.createElementNS(ns, 'path');
+      track.setAttribute('class', 'msg-vanish-track');
+      const progress = document.createElementNS(ns, 'path');
+      progress.setAttribute('class', 'msg-vanish-progress');
+      progress.setAttribute('pathLength', '100');
+      svg.appendChild(track);
+      svg.appendChild(progress);
+      bubble.appendChild(svg);
+      bubble.classList?.add?.('has-vanish-svg');
+    }
+    svg.setAttribute('viewBox', `0 0 ${Number(width.toFixed(2))} ${Number(height.toFixed(2))}`);
+    const trackEl = svg.querySelector('.msg-vanish-track');
+    const progEl = svg.querySelector('.msg-vanish-progress');
+    if (trackEl) trackEl.setAttribute('d', d);
+    if (progEl) progEl.setAttribute('d', d);
   }
 
   function renderMessagesList({ animate = false } = {}) {
     const list = document.getElementById('msg-messages-list');
     if (!list || !state.activeThread) return;
-    const msgs = (state.activeThread.messages || []).filter((m) => !m.vanish_at || Date.parse(m.vanish_at) > Date.now());
+    const heldVidId = state.activeVideoViewerMsgId && document.getElementById('ipon-video-viewer')?.open
+      ? String(state.activeVideoViewerMsgId)
+      : null;
+    const msgs = (state.activeThread.messages || []).filter(
+      (m) => !m.vanish_at || Date.parse(m.vanish_at) > Date.now() || (heldVidId && String(m.id) === heldVidId)
+    );
     state.activeThread.messages = msgs;
     const conv = state.activeThread.conversation || {};
     const myId = initializedProfile?.id;
@@ -7418,8 +7491,28 @@
         const dlPath = imgBtn.dataset.imgPath || '';
         const dlConv = imgBtn.dataset.imgConv || state.activeConvId || '';
         const imgName = imgBtn.dataset.imgName || 'Image';
+        const galleryHost = imgBtn.closest?.('.msg-bubble, .msg-drawer-media-grid, .msg-upload-queue');
+        const groupBtns = galleryHost
+          ? Array.from(galleryHost.querySelectorAll?.('[data-open-img]') || []).filter((b) => b.dataset?.openImg)
+          : [];
+        const gallery = groupBtns.length > 1
+          ? groupBtns.map((btn) => {
+              const bPath = btn.dataset.imgPath || '';
+              const bConv = btn.dataset.imgConv || dlConv;
+              const bName = btn.dataset.imgName || 'Image';
+              return {
+                src: btn.dataset.openImg,
+                title: bName,
+                subtitle: '',
+                downloadName: bName,
+                onDownload: bPath && bConv ? () => downloadOriginalAttachment(bConv, bPath, bName) : null
+              };
+            })
+          : null;
+        const startIndex = gallery ? Math.max(0, groupBtns.indexOf(imgBtn)) : 0;
         ipon().openImageViewer(imgBtn.dataset.openImg, imgName, '', imgName, {
-          onDownload: dlPath && dlConv ? () => downloadOriginalAttachment(dlConv, dlPath, imgName) : null
+          onDownload: dlPath && dlConv ? () => downloadOriginalAttachment(dlConv, dlPath, imgName) : null,
+          ...(gallery ? { gallery, index: startIndex } : {})
         });
         return;
       }

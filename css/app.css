@@ -2175,6 +2175,72 @@ html[data-theme="dark"] tr.is-highlight-focus td{background:rgba(234,179,8,.18)!
   height: 100%;
   cursor: zoom-out;
 }
+.image-viewer-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .12);
+  border: 1px solid rgba(255, 255, 255, .18);
+  color: #f6efe2;
+  font: 700 12px/1 Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.image-viewer-counter[hidden] {
+  display: none !important;
+}
+.image-viewer-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .2);
+  background: rgba(5, 17, 13, .66);
+  color: #f6efe2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: opacity .2s ease, background-color .15s ease, transform .15s ease;
+}
+.image-viewer-nav[hidden] {
+  display: none !important;
+}
+.image-viewer-nav.is-prev {
+  left: 14px;
+}
+.image-viewer-nav.is-next {
+  right: 14px;
+}
+.image-viewer-nav:hover:not(:disabled) {
+  background: rgba(20, 62, 48, .92);
+  border-color: rgba(230, 198, 120, .55);
+}
+.image-viewer-nav:disabled {
+  opacity: .28;
+  cursor: default;
+}
+.image-viewer-nav svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.image-viewer-dialog.is-chrome-hidden .image-viewer-nav {
+  opacity: 0;
+  pointer-events: none;
+}
 @media (max-width: 720px) {
   .image-viewer-dialog {
     width: 100vw;
@@ -8256,12 +8322,12 @@ html[data-theme="dark"] .msg-system-event.is-screenshot strong,
   inherits: false;
   initial-value: 360deg;
 }
-.msg-bubble.is-vanishing { position: relative; }
+.msg-bubble.is-vanishing { position: relative; isolation: isolate; }
 .msg-bubble.is-vanishing::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 6;
   border-radius: inherit;
   padding: 2px;
   background: conic-gradient(
@@ -8277,11 +8343,47 @@ html[data-theme="dark"] .msg-system-event.is-screenshot strong,
   pointer-events: none;
   animation: msgVanishRing var(--vanish-remaining) linear forwards;
 }
+.msg-bubble.is-vanishing.has-vanish-svg::after {
+  display: none;
+}
+.msg-vanish-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 6;
+  pointer-events: none;
+  overflow: visible;
+  display: block;
+}
+.msg-vanish-track {
+  fill: none;
+  stroke: rgba(74, 174, 255, .22);
+  stroke-width: 2.5;
+}
+.msg-vanish-progress {
+  fill: none;
+  stroke: #4aaeff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 100 100;
+  stroke-dashoffset: var(--vanish-dash-start, 0);
+  filter: drop-shadow(0 0 2.5px rgba(74, 174, 255, .52));
+  animation: msgVanishStroke var(--vanish-remaining) linear forwards;
+}
+.msg-bubble.has-top-media.is-vanishing .msg-vanish-track,
+.msg-bubble.has-top-media.is-vanishing .msg-vanish-progress {
+  stroke-width: 3;
+}
 .msg-row.is-mine .msg-bubble.is-vanishing { --vanish-start: 135deg; }
 .msg-bubble.has-audio-only.is-vanishing::after {
   border-radius: 16px;
 }
 @keyframes msgVanishRing { to { --vanish-angle: 0deg; } }
+@keyframes msgVanishStroke {
+  from { stroke-dashoffset: var(--vanish-dash-start, 0); }
+  to { stroke-dashoffset: 100; }
+}
 .msg-row.is-vanish-exit {
   pointer-events: none;
   animation: msgVanishExit .34s cubic-bezier(.32, 0, .67, 0) forwards;
@@ -8295,7 +8397,7 @@ html[data-theme="dark"] .msg-system-event.is-screenshot strong,
   100% { opacity: 0; transform: translateY(18px) scale(.96); filter: blur(6px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .msg-bubble.is-vanishing::after, .msg-row.is-vanish-exit { animation: none; }
+  .msg-bubble.is-vanishing::after, .msg-vanish-progress, .msg-row.is-vanish-exit { animation: none; }
   .msg-row.is-vanish-exit { opacity: 0; }
 }
 .msg-bubble.has-top-media {

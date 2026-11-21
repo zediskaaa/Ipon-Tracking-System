@@ -12949,17 +12949,27 @@
             </div>
           </div>
           <div class="image-viewer-actions">
+            <span class="image-viewer-counter" id="ipon-iv-counter" hidden></span>
             <a class="image-viewer-dl-pill" id="ipon-iv-download" download="myipon-attachment.jpg" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span>Download</span></a>
           </div>
         </header>
-        <div class="image-viewer-stage" id="ipon-iv-stage"><img id="ipon-iv-img" alt="" title="Pinch or double-tap to zoom"></div>
+        <div class="image-viewer-stage" id="ipon-iv-stage">
+          <button type="button" class="image-viewer-nav is-prev" id="ipon-iv-prev" aria-label="Previous image" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+          <img id="ipon-iv-img" alt="" title="Pinch or double-tap to zoom">
+          <button type="button" class="image-viewer-nav is-next" id="ipon-iv-next" aria-label="Next image" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+        </div>
       </div>`;
       document.body.appendChild(dialog);
       const stageEl = dialog.querySelector('#ipon-iv-stage');
       const imgEl = dialog.querySelector('#ipon-iv-img');
       const dlBtn = dialog.querySelector('#ipon-iv-download');
+      const prevBtn = dialog.querySelector('#ipon-iv-prev');
+      const nextBtn = dialog.querySelector('#ipon-iv-next');
+      const counterEl = dialog.querySelector('#ipon-iv-counter');
       const zoomState = { scale: 1, tx: 0, ty: 0 };
       dialog._zoomState = zoomState;
+      dialog._gallery = [];
+      dialog._galleryIndex = 0;
       const getStageOffset = (clientX, clientY) => {
         const rect = stageEl.getBoundingClientRect();
         return {
@@ -13010,8 +13020,86 @@
       };
       dialog._resetZoom = () => applyZoom(1, 0, 0, false);
 
+      const renderGallerySlide = (nextIdx, slideDir = 0) => {
+        const items = Array.isArray(dialog._gallery) ? dialog._gallery : [];
+        if (!items.length) return;
+        const clamped = Math.max(0, Math.min(items.length - 1, Number(nextIdx) || 0));
+        const item = items[clamped];
+        if (!item?.src) return;
+        dialog._galleryIndex = clamped;
+        const titleEl = dialog.querySelector('#ipon-iv-title');
+        const subEl = dialog.querySelector('#ipon-iv-subtitle');
+        const baseSub = String(item.subtitle || '').trim();
+        dialog._currentSrc = item.src;
+        dialog._onDownload = typeof item.onDownload === 'function' ? item.onDownload : null;
+        applyZoom(1, 0, 0, false);
+        if (slideDir !== 0) {
+          const enterX = slideDir > 0 ? 42 : -42;
+          imgEl.style.transition = 'none';
+          imgEl.style.opacity = '0.35';
+          imgEl.style.transform = `translate3d(${enterX}px, 0, 0) scale(1)`;
+          requestAnimationFrame?.(() => {
+            imgEl.style.transition = 'transform .22s cubic-bezier(0.22, 1, 0.36, 1), opacity .18s ease';
+            imgEl.style.opacity = '1';
+            imgEl.style.transform = 'translate3d(0, 0, 0) scale(1)';
+          });
+        } else {
+          imgEl.style.opacity = '1';
+        }
+        imgEl.title = 'Pinch or double-tap to zoom';
+        imgEl.onload = () => {
+          if (!baseSub || !imgEl.naturalWidth || !imgEl.naturalHeight || !subEl) return;
+          subEl.textContent = `${baseSub} · ${imgEl.naturalWidth} × ${imgEl.naturalHeight}`;
+          subEl.hidden = false;
+        };
+        imgEl.src = item.src;
+        imgEl.alt = item.title || 'Attachment';
+        if (titleEl) titleEl.textContent = item.title || 'Attachment';
+        if (subEl) {
+          subEl.textContent = baseSub;
+          subEl.hidden = !baseSub;
+        }
+        dlBtn.href = item.src;
+        dlBtn.removeAttribute('target');
+        const cleanDl = String(item.downloadName || '').trim();
+        dlBtn.download = cleanDl || `${String(item.title || 'attachment').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`;
+        const multi = items.length > 1;
+        if (counterEl) {
+          counterEl.hidden = !multi;
+          counterEl.textContent = multi ? `${clamped + 1} / ${items.length}` : '';
+        }
+        if (prevBtn) {
+          prevBtn.hidden = !multi;
+          prevBtn.disabled = clamped <= 0;
+        }
+        if (nextBtn) {
+          nextBtn.hidden = !multi;
+          nextBtn.disabled = clamped >= items.length - 1;
+        }
+      };
+      dialog._renderGallerySlide = renderGallerySlide;
+      prevBtn?.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (dialog._galleryIndex > 0) renderGallerySlide(dialog._galleryIndex - 1, -1);
+      });
+      nextBtn?.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (dialog._galleryIndex < (dialog._gallery?.length || 0) - 1) renderGallerySlide(dialog._galleryIndex + 1, 1);
+      });
+      dialog.addEventListener('keydown', (ev) => {
+        if (!dialog.open || (dialog._gallery?.length || 0) <= 1) return;
+        if (ev.key === 'ArrowLeft' && dialog._galleryIndex > 0) {
+          ev.preventDefault();
+          renderGallerySlide(dialog._galleryIndex - 1, -1);
+        } else if (ev.key === 'ArrowRight' && dialog._galleryIndex < dialog._gallery.length - 1) {
+          ev.preventDefault();
+          renderGallerySlide(dialog._galleryIndex + 1, 1);
+        }
+      });
+
       let pinchState = null;
       let panState = null;
+      let gallerySwipe = null;
       let lastTouchAt = 0;
       let lastTapAt = 0;
       let lastTapPos = null;
@@ -13022,6 +13110,7 @@
       const touchMid = (t1, t2) => ({ clientX: (t1.clientX + t2.clientX) / 2, clientY: (t1.clientY + t2.clientY) / 2 });
 
       stageEl.addEventListener('touchstart', (ev) => {
+        if (ev.target?.closest?.('.image-viewer-nav')) return;
         lastTouchAt = Date.now();
         clearTimeout(singleTapTimer);
         if (ev.touches.length === 2) {
@@ -13037,6 +13126,7 @@
             fy: off.fy
           };
           panState = null;
+          gallerySwipe = null;
           dragMoved = true;
         } else if (ev.touches.length === 1) {
           const t = ev.touches[0];
@@ -13046,6 +13136,7 @@
             lastTapAt = 0;
             lastTapPos = null;
             panState = null;
+            gallerySwipe = null;
             dragMoved = true;
             zoomAtPoint(zoomState.scale > 1.05 ? 1 : 2.5, t.clientX, t.clientY, true);
             return;
@@ -13054,6 +13145,9 @@
           lastTapPos = { x: t.clientX, y: t.clientY };
           dragMoved = false;
           panState = { x: t.clientX, y: t.clientY, tx: zoomState.tx, ty: zoomState.ty };
+          gallerySwipe = (dialog._gallery?.length || 0) > 1 && zoomState.scale <= 1.02
+            ? { x: t.clientX, y: t.clientY, dx: 0, startAt: now, locked: false }
+            : null;
         }
       }, { passive: false });
 
@@ -13075,6 +13169,29 @@
           const dy = t.clientY - panState.y;
           if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
           applyZoom(zoomState.scale, panState.tx + dx, panState.ty + dy, false);
+        } else if (ev.touches.length === 1 && gallerySwipe && zoomState.scale <= 1.02) {
+          const t = ev.touches[0];
+          const dx = t.clientX - gallerySwipe.x;
+          const dy = t.clientY - gallerySwipe.y;
+          if (!gallerySwipe.locked) {
+            if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) {
+              gallerySwipe = null;
+              return;
+            }
+            if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+              gallerySwipe.locked = true;
+              dragMoved = true;
+            }
+          }
+          if (gallerySwipe?.locked) {
+            ev.preventDefault();
+            gallerySwipe.dx = dx;
+            const atStart = dialog._galleryIndex <= 0 && dx > 0;
+            const atEnd = dialog._galleryIndex >= (dialog._gallery.length - 1) && dx < 0;
+            const visualDx = (atStart || atEnd) ? dx * 0.28 : dx;
+            imgEl.style.transition = 'none';
+            imgEl.style.transform = `translate3d(${visualDx.toFixed(1)}px, 0, 0) scale(1)`;
+          }
         }
       }, { passive: false });
 
@@ -13083,9 +13200,28 @@
           const t = ev.touches[0];
           pinchState = null;
           panState = { x: t.clientX, y: t.clientY, tx: zoomState.tx, ty: zoomState.ty };
+          gallerySwipe = null;
           return;
         }
         if (ev.touches.length === 0) {
+          const swipe = gallerySwipe;
+          gallerySwipe = null;
+          if (swipe?.locked) {
+            const elapsed = Math.max(1, Date.now() - swipe.startAt);
+            const velocity = swipe.dx / elapsed;
+            const canNext = dialog._galleryIndex < (dialog._gallery?.length || 0) - 1;
+            const canPrev = dialog._galleryIndex > 0;
+            if ((swipe.dx <= -48 || velocity <= -0.42) && canNext) {
+              renderGallerySlide(dialog._galleryIndex + 1, 1);
+            } else if ((swipe.dx >= 48 || velocity >= 0.42) && canPrev) {
+              renderGallerySlide(dialog._galleryIndex - 1, -1);
+            } else {
+              applyZoom(1, 0, 0, true);
+            }
+            pinchState = null;
+            panState = null;
+            return;
+          }
           const wasTap = !dragMoved && panState;
           pinchState = null;
           panState = null;
@@ -13154,35 +13290,33 @@
         if (event.target === dialog) dialog.close();
       });
     }
-    const img = dialog.querySelector('#ipon-iv-img');
     const stage = dialog.querySelector('#ipon-iv-stage');
-    const titleEl = dialog.querySelector('#ipon-iv-title');
-    const subEl = dialog.querySelector('#ipon-iv-subtitle');
-    const dl = dialog.querySelector('#ipon-iv-download');
-    const baseSub = String(subtitle || '').trim();
     dialog.classList.remove('is-chrome-hidden');
-    dialog._currentSrc = raw;
-    dialog._onDownload = typeof opts?.onDownload === 'function' ? opts.onDownload : null;
     if (stage) {
       stage.scrollTop = 0;
       stage.scrollLeft = 0;
     }
-    dialog._resetZoom?.();
-    img.title = 'Pinch or double-tap to zoom';
-    img.onload = () => {
-      if (!baseSub || !img.naturalWidth || !img.naturalHeight || !subEl) return;
-      subEl.textContent = `${baseSub} · ${img.naturalWidth} × ${img.naturalHeight}`;
-      subEl.hidden = false;
-    };
-    img.src = raw;
-    img.alt = title;
-    titleEl.textContent = title;
-    subEl.textContent = baseSub;
-    subEl.hidden = !baseSub;
-    dl.href = raw;
-    dl.removeAttribute('target');
-    const cleanDl = String(downloadName || '').trim();
-    dl.download = cleanDl || `${String(title || 'attachment').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`;
+    const rawGallery = Array.isArray(opts?.gallery) && opts.gallery.length
+      ? opts.gallery.filter((item) => {
+          const u = String(item?.src || '').trim();
+          return u && (u.startsWith('data:image/') || u.startsWith('blob:') || /^https?:\/\//i.test(u));
+        }).map((item) => ({
+          src: String(item.src).trim(),
+          title: String(item.title || title || 'Attachment'),
+          subtitle: String(item.subtitle || ''),
+          downloadName: String(item.downloadName || ''),
+          onDownload: typeof item.onDownload === 'function' ? item.onDownload : null
+        }))
+      : [];
+    dialog._gallery = rawGallery.length ? rawGallery : [{
+      src: raw,
+      title,
+      subtitle,
+      downloadName,
+      onDownload: typeof opts?.onDownload === 'function' ? opts.onDownload : null
+    }];
+    const initIdx = rawGallery.length ? Math.max(0, Math.min(rawGallery.length - 1, Number(opts?.index) || 0)) : 0;
+    dialog._renderGallerySlide?.(initIdx, 0);
     if (!dialog.open) dialog.showModal();
   }
 
