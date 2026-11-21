@@ -101,6 +101,9 @@
     activeConvId: null,
     activeThread: null,
     loadingThread: false,
+    loadingOlder: false,
+    olderLoadError: '',
+    olderAutoArmed: false,
     threadError: '',
     mobileShowThread: false,
     showThreadInfo: false,
@@ -905,7 +908,11 @@
                     <div class="msg-thread-stage" id="msg-thread-stage">
                       <div class="msg-scroll-wrap" id="msg-scroll-wrap">
                         <div class="msg-load-older-wrap" id="msg-load-older-wrap" hidden>
-                          <button type="button" class="button button-secondary button-sm" id="msg-load-older-btn">Load older messages</button>
+                          <span class="msg-load-older-status" id="msg-load-older-status" role="status" aria-live="polite" hidden>
+                            <span class="msg-load-older-spinner" aria-hidden="true"></span>
+                            <span>Loading older messages…</span>
+                          </span>
+                          <button type="button" class="button button-secondary button-sm" id="msg-load-older-btn" hidden>Retry loading older messages</button>
                         </div>
                         <div class="msg-messages-list" id="msg-messages-list" role="log" aria-live="polite"></div>
                         <div class="msg-typing-live" id="msg-typing-live" aria-hidden="true" aria-live="polite">
@@ -1101,7 +1108,7 @@
       syncNativeScreenshotLock(null);
     });
     const scrollWrapEl = document.getElementById('msg-scroll-wrap');
-    scrollWrapEl?.addEventListener('scroll', closeFloatingMenus, { passive: true });
+    scrollWrapEl?.addEventListener('scroll', handleThreadScroll, { passive: true });
     document.getElementById('msg-conv-list')?.addEventListener('scroll', closeFloatingMenus, { passive: true });
     scrollWrapEl?.addEventListener('load', () => syncThreadScrollLock(), true);
   }
@@ -1967,12 +1974,12 @@
     const rawPrevStr = String(conv.last_message_preview || '');
     const isMySystemPreview = conv.last_message_type === 'SYSTEM'
       && Boolean(initializedProfile?.id && String(conv.last_message_sender_id || '') === String(initializedProfile.id));
-    const screenshotPreviewMatch = conv.last_message_type === 'SYSTEM'
-      ? rawPrevStr.match(/ (took a screenshot|turned on screenshot blocking|turned off screenshot blocking)\.?$/i)
+    const systemPreviewMatch = conv.last_message_type === 'SYSTEM'
+      ? rawPrevStr.match(/ (took a screenshot|turned (?:on|off) screenshot blocking|turned (?:on|off) vanishing messages(?:\s+for\s+.+)?|changed vanishing messages to\s+.+|created the group\b.*|renamed the group to\b.*|updated the group\b.*|removed the group photo|added\b.*|made\b.*|removed\b.*|left the group)\.?$/i)
       : null;
-    const rawLastPreview = screenshotPreviewMatch
+    const rawLastPreview = systemPreviewMatch
       ? (isMySystemPreview
-          ? `You ${screenshotPreviewMatch[1].toLowerCase()}`
+          ? `You ${systemPreviewMatch[1].replace(/\.$/, '')}`
           : rawPrevStr.replace(/\.$/, ''))
       : conv.last_message_preview;
     const previewText = isTyping
@@ -2307,6 +2314,9 @@
       state.threadSearchQuery = '';
       state.threadSearchMatches = [];
       state.loadingThread = true;
+      state.loadingOlder = false;
+      state.olderLoadError = '';
+      state.olderAutoArmed = false;
       state.lastThreadFingerprint = '';
       renderThreadHeaderLoading(conversationId, previewPeer);
     }
@@ -2356,6 +2366,21 @@
         state.unreadAnchorFirstId = serverUnreadFirstId;
       }
       if (data) data.unread_first_id = state.unreadAnchorFirstId;
+      if (backgroundRefresh && isSameLoadedThread && !aroundMessageId && prevMsgs.length > nextMsgs.length && nextMsgs.length > 0) {
+        const firstFreshAt = Date.parse(nextMsgs[0].created_at || '');
+        const freshIds = new Set(nextMsgs.map((m) => m.id));
+        const nowMs = Date.now();
+        const olderPrefix = prevMsgs.filter((m) => (
+          m && !freshIds.has(m.id)
+          && (!m.vanish_at || Date.parse(m.vanish_at) > nowMs)
+          && Number.isFinite(firstFreshAt)
+          && Date.parse(m.created_at || '') <= firstFreshAt
+        ));
+        if (olderPrefix.length) {
+          data.messages = [...olderPrefix, ...nextMsgs];
+          data.has_older = Boolean(prevThreadSnapshot?.has_older);
+        }
+      }
 
       state.activeThread = data;
       syncNativeScreenshotLock(data?.conversation);
@@ -2491,10 +2516,10 @@
             ${isGrp ? groupAvatarHtml(peer, 'avatar-md') : userAvatarHtml(peer, 'avatar-md')}
             <div class="msg-thread-peer-meta">
               <div class="msg-thread-peer-title">
-                <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(peer))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(peer))}</span>${isGrp ? '' : userBadgesHtml(peer)}</strong>
+                <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(peer))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(peer))}</span></strong>
               </div>
               <div class="msg-thread-peer-sub">
-                ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : (peer.username ? `<span class="msg-handle-chip">@${escapeHtml(peer.username)}</span>` : '')}
+                ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
                 <small class="msg-peer-status is-syncing"><span class="msg-sync-dot" aria-hidden="true"></span>Syncing messages…</small>
               </div>
             </div>
@@ -2787,10 +2812,9 @@
         ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md', { showPresence: !isSelfUser(conv) && conv.profile_visible !== false })}
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
-            <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(conv))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp ? '' : userBadgesHtml(conv)}</strong>
+            <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(conv))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(conv))}</span></strong>
           </div>
           <div class="msg-thread-peer-sub">
-            ${!isGrp && conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
             ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
             <small class="msg-peer-status" id="msg-peer-status-text"${peerStatus ? '' : ' hidden'}>${escapeHtml(peerStatus)}</small>
           </div>
@@ -2862,8 +2886,7 @@
       if (blockedBanner) blockedBanner.hidden = true;
     }
 
-    const olderWrap = document.getElementById('msg-load-older-wrap');
-    if (olderWrap) olderWrap.hidden = !thread.has_older;
+    syncLoadOlderUi();
 
     renderMessagesList({ animate });
     syncLiveTypingBubble(typingEntries);
@@ -2875,7 +2898,10 @@
     syncMyThreadPresence();
 
     if (highlightMessageId) {
-      requestAnimationFrame(() => jumpToMessageElement(highlightMessageId));
+      requestAnimationFrame(() => {
+        jumpToMessageElement(highlightMessageId);
+        state.olderAutoArmed = true;
+      });
     } else if (scrollToBottom) {
       requestAnimationFrame(() => {
         const wrap = document.getElementById('msg-scroll-wrap');
@@ -2883,12 +2909,16 @@
           syncThreadScrollLock();
           if (!wrap.classList?.contains('is-no-scroll')) wrap.scrollTop = wrap.scrollHeight;
         }
+        state.olderAutoArmed = true;
       });
     } else if (typeof preserveScrollTop === 'number') {
       requestAnimationFrame(() => {
         const wrap = document.getElementById('msg-scroll-wrap');
         if (wrap) wrap.scrollTop = preserveScrollTop;
+        state.olderAutoArmed = true;
       });
+    } else {
+      state.olderAutoArmed = true;
     }
   }
 
@@ -3232,6 +3262,84 @@
     if (!needsScroll) wrap.scrollTop = 0;
   }
 
+  const OLDER_SCROLL_THRESHOLD_PX = 180;
+
+  function syncLoadOlderUi() {
+    const wrap = document.getElementById('msg-load-older-wrap');
+    const statusEl = document.getElementById('msg-load-older-status');
+    const btn = document.getElementById('msg-load-older-btn');
+    const hasOlder = Boolean(state.activeThread?.has_older);
+    const showLoading = hasOlder && Boolean(state.loadingOlder);
+    const showRetry = hasOlder && !state.loadingOlder && Boolean(state.olderLoadError);
+    if (wrap) wrap.hidden = !(showLoading || showRetry);
+    if (statusEl) statusEl.hidden = !showLoading;
+    if (btn) btn.hidden = !showRetry;
+  }
+
+  async function loadOlderMessages() {
+    if (state.loadingOlder || state.loadingThread || !state.activeConvId) return false;
+    const curMsgs = state.activeThread?.messages || [];
+    if (!state.activeThread?.has_older || !curMsgs.length) return false;
+    const convLoadingId = state.activeConvId;
+    const oldest = curMsgs[0].created_at;
+    state.loadingOlder = true;
+    state.olderLoadError = '';
+    syncLoadOlderUi();
+    try {
+      const older = await ipon().rpc('get_conversation_messages', {
+        p_conversation_id: convLoadingId,
+        p_before: oldest,
+        p_limit: 50
+      });
+      if (state.activeConvId !== convLoadingId || !state.activeThread) return false;
+      const incoming = Array.isArray(older?.messages) ? older.messages : [];
+      const attPaths = [];
+      incoming.forEach((m) => (m.attachments || []).forEach((a) => { if (a?.path) attPaths.push(a.path); }));
+      await ensureSignedViewUrls(convLoadingId, attPaths);
+      if (state.activeConvId !== convLoadingId || !state.activeThread) return false;
+
+      const latestMsgs = state.activeThread.messages || [];
+      const existingIds = new Set(latestMsgs.map((m) => m.id));
+      const uniqueOlder = incoming.filter((m) => m && !existingIds.has(m.id));
+      const wrap = document.getElementById('msg-scroll-wrap');
+      const prevScrollTop = wrap ? wrap.scrollTop : 0;
+      const prevScrollHeight = wrap ? wrap.scrollHeight : 0;
+
+      state.loadingOlder = false;
+      state.olderLoadError = '';
+      if (uniqueOlder.length) {
+        state.activeThread.messages = [...uniqueOlder, ...latestMsgs];
+      }
+      state.activeThread.has_older = uniqueOlder.length > 0 && Boolean(older?.has_older);
+      state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
+      renderActiveThread({ scrollToBottom: false });
+      if (wrap) {
+        syncThreadScrollLock();
+        const delta = Math.max(0, wrap.scrollHeight - prevScrollHeight);
+        wrap.scrollTop = Math.max(0, prevScrollTop + delta);
+      }
+      return uniqueOlder.length > 0;
+    } catch (err) {
+      if (state.activeConvId !== convLoadingId) return false;
+      state.loadingOlder = false;
+      state.olderLoadError = ipon().friendlyError(err);
+      syncLoadOlderUi();
+      ipon().toast(state.olderLoadError, 'error');
+      return false;
+    }
+  }
+
+  function handleThreadScroll() {
+    closeFloatingMenus();
+    if (!state.olderAutoArmed || state.loadingOlder || state.loadingThread || state.olderLoadError) return;
+    if (!state.activeConvId || !state.activeThread?.has_older || !(state.activeThread?.messages?.length)) return;
+    const wrap = document.getElementById('msg-scroll-wrap');
+    if (!wrap || wrap.classList?.contains('is-no-scroll')) return;
+    if (wrap.scrollTop <= OLDER_SCROLL_THRESHOLD_PX) {
+      loadOlderMessages();
+    }
+  }
+
   function scheduleVanishExpiry() {
     clearTimeout(vanishUiTimer);
     const conversationId = state.activeConvId;
@@ -3413,7 +3521,11 @@
           || / turned (on|off) screenshot blocking\.?$/i.test(bodyText)
         );
         const screenshotNotice = screenshotTaken || screenshotBlockToggle;
-        const vanishNotice = m.message_type === 'SYSTEM' && ['vanish_enabled', 'vanish_disabled', 'vanish_updated'].includes(m.metadata?.event);
+        const vanishNotice = m.message_type === 'SYSTEM' && (
+          ['vanish_enabled', 'vanish_disabled', 'vanish_updated'].includes(m.metadata?.event)
+          || / (?:turned (?:on|off) vanishing messages(?:\s+for\s+.+)?|changed vanishing messages to\s+.+)\.?$/i.test(bodyText)
+        );
+        const isMyActor = Boolean(myId && String(m.sender_id || '') === String(myId));
         const isMySystemActor = screenshotNotice && Boolean(myId && String(m.sender_id || '') === String(myId));
         const screenshotName = screenshotNotice
           ? (isMySystemActor
@@ -3425,11 +3537,19 @@
               ? 'turned off screenshot blocking'
               : 'turned on screenshot blocking')
           : '';
+        const otherSystemMatch = !screenshotNotice && m.message_type === 'SYSTEM'
+          ? bodyText.match(/^(.+?)\s+((?:turned (?:on|off) vanishing messages(?:\s+for\s+.+)?|changed vanishing messages to\s+.+|created the group\b.*|renamed the group to\b.*|updated the group\b.*|removed the group photo|added\b.*|made\b.*|removed\b.*|left the group))\.?$/i)
+          : null;
+        const otherSystemText = otherSystemMatch
+          ? (vanishNotice
+              ? `<strong>${escapeHtml(isMyActor ? 'You' : otherSystemMatch[1].trim())}</strong> ${escapeHtml(otherSystemMatch[2].trim())}`
+              : escapeHtml(`${isMyActor ? 'You' : otherSystemMatch[1].trim()} ${otherSystemMatch[2].trim()}`))
+          : sysLabel;
         const eventText = screenshotTaken
           ? `<strong>${escapeHtml(screenshotName)}</strong> took a screenshot`
           : screenshotBlockToggle
             ? `<strong>${escapeHtml(screenshotName)}</strong> ${screenshotBlockAction}`
-            : sysLabel;
+            : otherSystemText;
         return `${dateDivider}${unreadDivider}<div class="msg-system-event${screenshotNotice ? ' is-screenshot' : vanishNotice ? ' is-vanish' : ''}" data-msg-id="${escapeHtml(m.id)}"><span>${eventText} · ${escapeHtml(formatClock(m.created_at))}</span></div>`;
       }
 
@@ -5970,6 +6090,9 @@
     disconnectTypingChannel();
     state.activeConvId = null;
     state.activeThread = null;
+    state.loadingOlder = false;
+    state.olderLoadError = '';
+    state.olderAutoArmed = false;
     clearTimeout(vanishUiTimer);
     closeVanishModal();
     state.unreadAnchorConvId = null;
@@ -7063,24 +7186,8 @@
         return;
       }
 
-      if (ev.target.closest?.('#msg-load-older-btn') && state.activeThread?.messages?.length) {
-        const oldest = state.activeThread.messages[0].created_at;
-        const wrap = document.getElementById('msg-scroll-wrap');
-        const prevHeight = wrap ? wrap.scrollHeight : 0;
-        const convLoadingId = state.activeConvId;
-        try {
-          const older = await ipon().rpc('get_conversation_messages', { p_conversation_id: convLoadingId, p_before: oldest, p_limit: 50 });
-          if (state.activeConvId !== convLoadingId) return;
-          const attPaths = [];
-          (older?.messages || []).forEach((m) => (m.attachments || []).forEach((a) => { if (a?.path) attPaths.push(a.path); }));
-          await ensureSignedViewUrls(convLoadingId, attPaths);
-          if (state.activeConvId !== convLoadingId) return;
-          state.activeThread.messages = [...(older.messages || []), ...(state.activeThread.messages || [])];
-          state.activeThread.has_older = older.has_older;
-          state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
-          renderActiveThread({ scrollToBottom: false });
-          if (wrap) requestAnimationFrame(() => { wrap.scrollTop = Math.max(0, wrap.scrollHeight - prevHeight); });
-        } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
+      if (ev.target.closest?.('#msg-load-older-btn')) {
+        await loadOlderMessages();
         return;
       }
 

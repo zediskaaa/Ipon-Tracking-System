@@ -322,7 +322,7 @@ test('group chats runtime renders composite avatars, multi-sender bubbles, typin
   assert.match(headerHtml, /3 members · 1 active now/);
 
   const msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /msg-system-event[^>]*><span>Alex Rivera created the group/);
+  assert.match(msgsHtml, /msg-system-event[^>]*><span>You created the group/);
   assert.match(msgsHtml, /class="msg-sender-name">Maria Santos</);
   assert.match(msgsHtml, /title="Seen by Maria Santos"/);
 

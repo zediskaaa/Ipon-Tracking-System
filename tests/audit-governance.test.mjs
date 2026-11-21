@@ -104,4 +104,61 @@ test('migration 103 completes governance audit coverage, audit_logs immutability
   assert.match(mig104, /\(v_old - array\['updated_by'\]\) = \(v_new - array\['updated_by'\]\)/i);
   assert.match(coreJs, /'inactivity_warned_at'/);
   assert.match(coreJs, /'policy_accepted_at'/);
+
+  const mig154 = read('database/migrations/20261121_154_suppress_client_platform_and_social_audit_noise.sql');
+  const schemaSql = read('database/schema.sql');
+  for (const sql of [mig154, schemaSql]) {
+    assert.match(sql, /'20261121_154'/);
+    assert.match(sql, /'last_client_platform'/);
+    assert.match(sql, /'last_client_platform_at'/);
+    assert.match(sql, /'equipped_profile_effect'/);
+    assert.match(sql, /'verified_badge_acknowledged_at'/);
+    assert.match(sql, /'schedule_baseline_amount'/);
+  }
+  assert.match(mig154, /delete from public\.audit_logs/i);
+
+  // Client platform heartbeats and social cosmetics are stripped from user-facing audit diffs
+  const noisyEntry = formatAuditEntry({
+    table_name: 'profiles',
+    action: 'UPDATE',
+    changed_by: 'u2',
+    old_data: {
+      full_name: 'Zedrick De Monteverde',
+      last_client_platform: 'browser',
+      last_client_platform_at: '2026-11-21T09:40:21.968073+00:00',
+      card_theme: 'emerald',
+      equipped_profile_effect: 'none'
+    },
+    new_data: {
+      full_name: 'Zedrick De Monteverde',
+      last_client_platform: 'android_app',
+      last_client_platform_at: '2026-11-21T09:57:49.755289+00:00',
+      card_theme: 'gold',
+      equipped_profile_effect: 'sakura'
+    }
+  }, { profiles: new Map([['u2', 'Zedrick De Monteverde']]) });
+  assert.equal(noisyEntry.changes.length, 0);
+
+  // Security & savings-schedule fields render plain-language summaries and readable values
+  const otpEntry = formatAuditEntry({
+    table_name: 'profiles',
+    action: 'UPDATE',
+    changed_by: 'u2',
+    old_data: { full_name: 'Zedrick De Monteverde', new_device_email_otp_enabled: false },
+    new_data: { full_name: 'Zedrick De Monteverde', new_device_email_otp_enabled: true }
+  }, { profiles: new Map([['u2', 'Zedrick De Monteverde']]) });
+  assert.equal(otpEntry.summary, 'Enabled new-device email verification');
+  assert.equal(otpEntry.changes[0].label, 'New-device email verification');
+  assert.equal(otpEntry.changes[0].after.text, 'Enabled');
+
+  const schedEntry = formatAuditEntry({
+    table_name: 'savings_goals',
+    action: 'UPDATE',
+    changed_by: 'u2',
+    old_data: { title: 'Emergency Fund', saving_frequency: 'NONE', scheduled_amount: null, schedule_baseline_amount: 0 },
+    new_data: { title: 'Emergency Fund', saving_frequency: 'WEEKLY', scheduled_amount: 500, schedule_baseline_amount: 1200 }
+  }, { profiles: new Map([['u2', 'Zedrick De Monteverde']]) });
+  assert.ok(!schedEntry.changes.some((c) => c.key === 'schedule_baseline_amount'));
+  assert.equal(schedEntry.changes.find((c) => c.key === 'saving_frequency')?.after.text, 'Weekly');
+  assert.equal(schedEntry.changes.find((c) => c.key === 'scheduled_amount')?.after.text, '₱500.00');
 });

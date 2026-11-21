@@ -1070,3 +1070,228 @@ test('double-tap heart react, double long-press text copy unlock, and 3-dots men
   const trailingClick = await fireDoc('click', { target: outsideEl });
   assert.equal(trailingClick.propagationStopped, true, 'outside dismiss tap suppresses accidental click on underlying chat row');
 });
+
+test('scrolling up automatically loads older messages with scroll anchoring, deduplication, and no manual button', async () => {
+  const messagesJs = read('js/messages.js');
+  const css = read('css/app.css');
+
+  assert.match(css, /\.msg-load-older-status\s*\{/);
+  assert.match(css, /\.msg-load-older-spinner\s*\{/);
+  assert.match(css, /html\[data-theme="dark"\]\s+\.msg-load-older-status\s*\{/);
+  assert.doesNotMatch(messagesJs, />Load older messages</);
+
+  const meId = '11111111-1111-4111-8111-111111111111';
+  const peerId = '22222222-2222-4222-8222-222222222222';
+  const convId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+  const els = new Map();
+  const makeEl = (id = '') => {
+    const classes = new Set();
+    const listeners = new Map();
+    const attrs = new Map();
+    return {
+      id,
+      tagName: 'DIV',
+      open: false,
+      hidden: false,
+      value: '',
+      textContent: '',
+      innerHTML: '',
+      scrollTop: 0,
+      scrollHeight: 1600,
+      clientHeight: 500,
+      offsetHeight: 1600,
+      style: {},
+      dataset: {},
+      classList: {
+        add: (...c) => c.forEach((x) => classes.add(x)),
+        remove: (...c) => c.forEach((x) => classes.delete(x)),
+        toggle: (c, force) => {
+          const on = force === undefined ? !classes.has(c) : Boolean(force);
+          if (on) classes.add(c); else classes.delete(c);
+          return on;
+        },
+        contains: (c) => classes.has(c)
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k) ?? null,
+      removeAttribute: (k) => attrs.delete(k),
+      addEventListener(type, fn) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push(fn);
+      },
+      removeEventListener() {},
+      dispatch(type, ev = {}) {
+        for (const fn of listeners.get(type) || []) fn(ev);
+      },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      closest: () => null,
+      focus() {},
+      showModal() { this.open = true; },
+      close() { this.open = false; }
+    };
+  };
+  const getEl = (id) => {
+    if (!els.has(id)) els.set(id, makeEl(id));
+    return els.get(id);
+  };
+
+  const scrollWrap = getEl('msg-scroll-wrap');
+  const listEl = getEl('msg-messages-list');
+  // Simulate DOM growth whenever listEl.innerHTML receives more rendered message rows
+  let listHtml = '';
+  Object.defineProperty(listEl, 'innerHTML', {
+    get() { return listHtml; },
+    set(val) {
+      listHtml = String(val || '');
+      const count = (listHtml.match(/class="msg-row(?=["\s])/g) || []).length;
+      const nextH = Math.max(500, count * 120);
+      listEl.offsetHeight = nextH;
+      scrollWrap.scrollHeight = nextH;
+    }
+  });
+
+  const rpcCalls = [];
+  let releaseOlderFetch = null;
+  const page1Msgs = Array.from({ length: 12 }, (_, i) => ({
+    id: `m-new-${i + 1}`,
+    conversation_id: convId,
+    sender_id: peerId,
+    sender_name: 'Peer User',
+    body: `Recent message ${i + 1}`,
+    message_type: 'TEXT',
+    created_at: `2026-11-21T10:${String(i + 10).padStart(2, '0')}:00Z`,
+    attachments: [],
+    reactions: []
+  }));
+  const page2Msgs = Array.from({ length: 8 }, (_, i) => ({
+    id: `m-old-${i + 1}`,
+    conversation_id: convId,
+    sender_id: peerId,
+    sender_name: 'Peer User',
+    body: `Older message ${i + 1}`,
+    message_type: 'TEXT',
+    created_at: `2026-11-21T09:${String(i + 10).padStart(2, '0')}:00Z`,
+    attachments: [],
+    reactions: []
+  }));
+
+  const makeChannel = () => {
+    const ch = { on() { return ch; }, subscribe() { return ch; }, send: async () => 'ok' };
+    return ch;
+  };
+  const doc = {
+    visibilityState: 'visible',
+    documentElement: { dataset: {}, style: { setProperty() {} } },
+    body: { insertAdjacentHTML() {}, classList: makeEl().classList },
+    getElementById: getEl,
+    querySelector: (sel) => (sel.startsWith('#') ? getEl(sel.slice(1)) : null),
+    querySelectorAll: () => [],
+    addEventListener() {},
+    removeEventListener() {}
+  };
+  const ctx = {
+    console, Date, Math, Map, Set, JSON, Promise, URLSearchParams,
+    URL: { createObjectURL: () => 'blob:mock', revokeObjectURL() {} },
+    location: { search: '', pathname: '/dashboard.html', hash: '' },
+    navigator: { userAgent: 'Mozilla/5.0' },
+    setTimeout, clearTimeout,
+    setInterval: () => 1,
+    clearInterval() {},
+    requestAnimationFrame: (fn) => fn(),
+    matchMedia: () => ({ matches: false }),
+    innerWidth: 1200,
+    document: doc,
+    addEventListener() {},
+    removeEventListener() {},
+    Ipon: {
+      profile: { id: meId, role: 'MEMBER', status: 'ACTIVE', full_name: 'Me User', chat_privacy: { show_online: true } },
+      client: {
+        channel: makeChannel,
+        removeChannel() {},
+        from: () => new Proxy({}, {
+          get(_t, prop) {
+            if (prop === 'then') return (res) => Promise.resolve({ data: [], error: null }).then(res);
+            return () => new Proxy({}, this);
+          }
+        })
+      },
+      escapeHtml: (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+      initials: () => 'ME',
+      isUserOnline: () => false,
+      bindAvatarFallbacks() {},
+      syncPresenceDots() {},
+      verifiedBadgesHtml: () => '',
+      toast() {},
+      friendlyError: (e) => String(e?.message || e),
+      rpc: async (name, params) => {
+        if (name === 'get_social_overview') return { me: { id: meId }, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] };
+        if (name === 'get_conversations') {
+          return [{ id: convId, kind: 'DIRECT', peer: { id: peerId, full_name: 'Peer User' }, last_message_at: '2026-11-21T10:21:00Z', unread_count: 0 }];
+        }
+        if (name === 'get_social_notifications') return [];
+        if (name === 'get_conversation_protection') return { block_screenshots: false, block_forwarding: false, vanish_after_seconds: null };
+        if (name === 'mark_conversation_read') return true;
+        if (name === 'get_conversation_messages') {
+          rpcCalls.push(params);
+          if (!params.p_before) {
+            return {
+              conversation: { id: convId, kind: 'DIRECT', full_name: 'Peer User', peer: { id: peerId, full_name: 'Peer User' }, can_interact: true },
+              messages: page1Msgs,
+              has_older: true
+            };
+          }
+          await new Promise((resolve) => { releaseOlderFetch = resolve; });
+          return {
+            conversation: { id: convId, kind: 'DIRECT', full_name: 'Peer User' },
+            messages: [...page2Msgs, page1Msgs[0]], // include overlap to verify deduplication
+            has_older: false
+          };
+        }
+        return null;
+      }
+    }
+  };
+  ctx.window = ctx;
+  ctx.globalThis = ctx;
+
+  vm.runInNewContext(messagesJs, ctx, { filename: 'js/messages.js' });
+  await ctx.IponMessages.init(ctx.Ipon.profile);
+  await ctx.IponMessages.openWorkspace({ conversationId: convId });
+
+  // Initial load: stays scrolled to bottom, manual button & wrap stay hidden, no premature older fetch
+  assert.equal(rpcCalls.length, 1);
+  assert.equal(rpcCalls[0].p_before, null);
+  assert.equal(getEl('msg-load-older-wrap').hidden, true);
+  assert.equal(getEl('msg-load-older-btn').hidden, true);
+  assert.equal(scrollWrap.scrollTop, scrollWrap.scrollHeight);
+
+  // User scrolls up near top -> automatically fetches older messages and shows loading indicator
+  scrollWrap.scrollTop = 120;
+  scrollWrap.dispatch('scroll');
+  scrollWrap.scrollTop = 60;
+  scrollWrap.dispatch('scroll'); // duplicate scroll while loading must be ignored
+  assert.equal(rpcCalls.length, 2, 'scrolling up triggers a single automatic older-messages RPC');
+  assert.equal(rpcCalls[1].p_before, page1Msgs[0].created_at);
+  assert.equal(getEl('msg-load-older-wrap').hidden, false, 'loading indicator wrapper shows while fetching');
+  assert.equal(getEl('msg-load-older-status').hidden, false, 'loading spinner status shows while fetching');
+  assert.equal(getEl('msg-load-older-btn').hidden, true, 'retry button remains hidden during normal auto-load');
+
+  const heightBeforePrepend = scrollWrap.scrollHeight;
+  const topBeforePrepend = scrollWrap.scrollTop;
+  releaseOlderFetch();
+  await new Promise((r) => setTimeout(r, 20));
+
+  // Older messages prepended without duplicates, indicator hidden, scroll position preserved exactly
+  const renderedCount = (listEl.innerHTML.match(/class="msg-row(?=["\s])/g) || []).length;
+  assert.equal(renderedCount, 20, '8 older + 12 recent messages rendered with overlap deduplicated');
+  assert.equal(getEl('msg-load-older-wrap').hidden, true, 'loading indicator hides after older messages load');
+  const expectedDelta = scrollWrap.scrollHeight - heightBeforePrepend;
+  assert.equal(scrollWrap.scrollTop, topBeforePrepend + expectedDelta, 'scrollTop stays anchored to the message being read');
+
+  // Scrolling to top again once has_older is false does not fire extra RPCs
+  scrollWrap.scrollTop = 0;
+  scrollWrap.dispatch('scroll');
+  assert.equal(rpcCalls.length, 2, 'no further RPCs once all older messages are loaded');
+});

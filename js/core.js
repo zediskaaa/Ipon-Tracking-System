@@ -9522,6 +9522,7 @@
     if (/rate limit|too many requests|over_email_send_rate_limit/i.test(combined)) return 'Too many attempts. Wait a moment, then try again.';
     if (/duplicate key|unique constraint/i.test(message)) return 'That reference was already used.';
     if (/cannot remove or disable your own administrator|another active administrator/i.test(message)) return 'Assign another active administrator before changing administrator access.';
+    if (/permission denied for function|jwt expired|invalid jwt|pgrst301|pgrst303|auth session missing|sign in first/i.test(combined)) return 'Your session could not reconnect. Please check your internet connection and try again.';
     if (/row-level security|permission denied|not allowed to|only (?:a |an )?.*administrator/i.test(message)) return 'You do not have permission for that action.';
     if (!/^(?:Gemini AI failed to generate release notes:|Generative Language API|Google AI Studio|This key is a Google Cloud|Gemini server API key|Google Cloud billing is disabled for this)/i.test(message)) {
       if (/BILLING_DISABLED|requires billing to be enabled|billing is disabled/i.test(message)) return 'Google Cloud billing is disabled for the current Google Cloud project key. Enable Cloud billing on that project, or click Configure API key to save a free-tier key from Google AI Studio.';
@@ -9920,10 +9921,45 @@
 
   const READ_ONLY_RPC_RE = /^(?:get_|list_|check_|preview_|super_admin_storage_overview|record_account_activity|mark_notification_read|mark_all_notifications_read)/i;
 
+  function isAuthSessionRpcError(error) {
+    if (!error) return false;
+    const combined = `${error?.status || ''} ${error?.code || ''} ${error?.message || ''}`;
+    return /permission denied for function|jwt expired|invalid jwt|pgrst301|pgrst303|auth session missing|sign in first|authentication required|\b401\b|unauthorized/i.test(combined);
+  }
+
+  async function ensureFreshAuthSession(client, { force = false } = {}) {
+    if (!client?.auth) return null;
+    try {
+      const { data: curData } = typeof client.auth.getSession === 'function'
+        ? await client.auth.getSession()
+        : { data: {} };
+      const curSession = curData?.session || null;
+      const expMs = Number(curSession?.expires_at || 0) * 1000;
+      const nearExpiry = !curSession?.access_token || (expMs > 0 && expMs <= Date.now() + 30000);
+      if (!force && !nearExpiry) return curSession;
+      if (typeof client.auth.refreshSession === 'function') {
+        const { data: refData } = await client.auth.refreshSession();
+        if (refData?.session?.access_token) return refData.session;
+      }
+      return curSession;
+    } catch {
+      return null;
+    }
+  }
+
   async function rpc(name, params) {
     const client = getClient();
     if (!client) throw new Error('Supabase is not connected.');
-    const { data, error } = await client.rpc(name, params);
+    await ensureFreshAuthSession(client);
+    let { data, error } = await client.rpc(name, params);
+    if (error && isAuthSessionRpcError(error)) {
+      const refreshed = await ensureFreshAuthSession(client, { force: true });
+      if (refreshed?.access_token) {
+        const retried = await client.rpc(name, params);
+        data = retried.data;
+        error = retried.error;
+      }
+    }
     if (error) throw error;
     const rpcName = String(name || '');
     if (!READ_ONLY_RPC_RE.test(rpcName)) {
@@ -9959,14 +9995,22 @@
   async function invokeAccountFunction(body) {
     const client = getClient();
     if (!client) throw new Error('Supabase is not connected.');
-    const headers = {};
-    const { data: { session } } = await client.auth.getSession().catch(() => ({ data: {} }));
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    } else if (config.supabaseAnonKey) {
-      headers.Authorization = `Bearer ${config.supabaseAnonKey}`;
+    const buildHeaders = (sess) => {
+      const h = {};
+      if (sess?.access_token) h.Authorization = `Bearer ${sess.access_token}`;
+      else if (config.supabaseAnonKey) h.Authorization = `Bearer ${config.supabaseAnonKey}`;
+      return h;
+    };
+    const session = await ensureFreshAuthSession(client);
+    let { data, error } = await client.functions.invoke('manage-account', { body, headers: buildHeaders(session) });
+    if (error && (error?.context?.status === 401 || isAuthSessionRpcError(error))) {
+      const refreshed = await ensureFreshAuthSession(client, { force: true });
+      if (refreshed?.access_token) {
+        const retried = await client.functions.invoke('manage-account', { body, headers: buildHeaders(refreshed) });
+        data = retried.data;
+        error = retried.error;
+      }
     }
-    const { data, error } = await client.functions.invoke('manage-account', { body, headers });
     if (error) {
       const detail = await error.context?.json?.().catch(() => null);
       throw new Error(detail?.error || error.message);
@@ -15779,9 +15823,21 @@
     'created_at',
     'updated_at',
     'last_seen_at',
+    'last_client_platform',
+    'last_client_platform_at',
     'chat_privacy',
     'username',
     'bio',
+    'card_theme',
+    'cover_url',
+    'equipped_profile_effect',
+    'social_links',
+    'verified_badge_tier',
+    'verified_badge_expires_at',
+    'verified_badge_message',
+    'verified_badge_granted_at',
+    'verified_badge_acknowledged_at',
+    'verified_badge_granted_by',
     'name_setup_required',
     'previous_account_status',
     'inactivity_warned_at',
@@ -15791,14 +15847,15 @@
     'policy_accepted_at',
     'archived_paid_amount',
     'archived_first_paid_date',
+    'schedule_baseline_amount',
     'snapshot'
   ]);
 
   const AUDIT_TRANSITION_TIMESTAMPS = new Set(['reviewed_at', 'voided_at', 'deactivated_at', 'deleted_at']);
   const AUDIT_IMAGE_FIELDS = new Set(['avatar_url', 'receipt_url', 'payment_qr_url']);
-  const AUDIT_MONEY_FIELDS = new Set(['amount', 'default_amount', 'required_amount', 'monthly_contribution_amount', 'target_amount', 'current_amount', 'proposed_amount', 'total_additions', 'total_deductions', 'total_expenses', 'net_savings']);
+  const AUDIT_MONEY_FIELDS = new Set(['amount', 'default_amount', 'required_amount', 'monthly_contribution_amount', 'target_amount', 'scheduled_amount', 'current_amount', 'proposed_amount', 'total_additions', 'total_deductions', 'total_expenses', 'net_savings']);
   const AUDIT_MONTH_FIELDS = new Set(['effective_month', 'period_month']);
-  const AUDIT_DATE_FIELDS = new Set(['payment_date', 'transaction_date', 'date_registered', 'due_date', 'target_date', 'cycle_start_date', 'entry_date', 'period_start', 'period_end']);
+  const AUDIT_DATE_FIELDS = new Set(['payment_date', 'transaction_date', 'date_registered', 'due_date', 'target_date', 'schedule_start_date', 'cycle_start_date', 'entry_date', 'period_start', 'period_end']);
   const AUDIT_DATETIME_FIELDS = new Set(['reviewed_at', 'voided_at', 'deleted_at', 'deactivated_at', 'revoked_at', 'expires_at', 'restored_at']);
   const AUDIT_ACTOR_REF_FIELDS = new Set(['owner_id', 'submitted_by', 'reviewed_by', 'voided_by', 'deleted_by', 'created_by', 'updated_by', 'requested_by', 'requester_id', 'revoked_by']);
   const AUDIT_REASON_FIELDS = new Set(['review_note', 'void_reason', 'delete_reason', 'exempt_reason', 'reason']);
@@ -15826,7 +15883,13 @@
     COMPLETED: 'Completed',
     CANCELLED: 'Cancelled',
     JOIN_CODE: 'Group code',
-    INVITE_LINK: 'Invite link'
+    INVITE_LINK: 'Invite link',
+    SOLO: 'Solo tracker',
+    GROUP: 'Savings group',
+    NONE: 'No fixed schedule',
+    DAILY: 'Daily',
+    WEEKLY: 'Weekly',
+    MONTHLY: 'Monthly'
   };
 
   const AUDIT_FIELD_LABELS = {
@@ -15842,6 +15905,11 @@
     status: 'Status',
     approval_status: 'Approval status',
     notifications_enabled: 'Notifications',
+    new_device_email_otp_enabled: 'New-device email verification',
+    workspace_mode: 'Workspace mode',
+    saving_frequency: 'Saving schedule',
+    scheduled_amount: 'Scheduled deposit',
+    schedule_start_date: 'Schedule start date',
     group_id: 'Savings group',
     member_id: 'Member',
     owner_id: 'Group owner',
@@ -16027,7 +16095,7 @@
       return { kind: 'empty', text: 'None', muted: true };
     }
 
-    if (key === 'notifications_enabled') return { kind: 'text', text: rawValue ? 'Enabled' : 'Disabled' };
+    if (key === 'notifications_enabled' || key === 'new_device_email_otp_enabled') return { kind: 'text', text: rawValue ? 'Enabled' : 'Disabled' };
     if (key === 'allow_credit') return { kind: 'text', text: rawValue ? 'Allowed for future months' : 'Disabled' };
     if (key === 'is_exempt') return { kind: 'text', text: rawValue ? 'Exempted for this month' : 'Required' };
     if (typeof rawValue === 'boolean') return { kind: 'text', text: rawValue ? 'Yes' : 'No' };
@@ -16044,7 +16112,7 @@
     if (AUDIT_DATE_FIELDS.has(key)) {
       return { kind: 'text', text: dateLabel(String(rawValue), { month: 'short', day: 'numeric', year: 'numeric' }) };
     }
-    if (AUDIT_DATETIME_FIELDS.has(key)) {
+    if (AUDIT_DATETIME_FIELDS.has(key) || (typeof rawValue === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(rawValue.trim()))) {
       return { kind: 'text', text: dateLabel(String(rawValue), { dateStyle: 'medium', timeStyle: 'short' }) };
     }
 
@@ -16052,7 +16120,7 @@
       const normalized = normalizePaymentMethod(rawValue);
       return { kind: 'text', text: normalized ? paymentMethodMeta(normalized).label : String(rawValue) };
     }
-    if (key === 'role' || key === 'status' || key === 'approval_status') {
+    if (key === 'role' || key === 'status' || key === 'approval_status' || key === 'source' || key === 'workspace_mode' || key === 'saving_frequency') {
       const mapped = AUDIT_ENUM_VALUE_LABELS[String(rawValue).trim().toUpperCase()];
       return { kind: 'text', text: mapped || String(rawValue) };
     }
@@ -16238,6 +16306,7 @@
         return after.member_id ? (mName ? `Linked account to ${mName}` : 'Linked account to member') : 'Unlinked account from member';
       }
       if (keys.size === 1 && keys.has('avatar_url')) return after.avatar_url ? 'Updated profile photo' : 'Removed profile photo';
+      if (keys.size === 1 && keys.has('new_device_email_otp_enabled')) return after.new_device_email_otp_enabled ? 'Enabled new-device email verification' : 'Disabled new-device email verification';
       if (keys.size === 1 && keys.has('role')) return `Changed role to ${formatAuditValue('role', after.role, row, lookups).text}`;
       if (keys.size === 1 && keys.has('status')) {
       }

@@ -1635,6 +1635,8 @@
     if (!groupDialog || !groupForm) return;
     groupForm.reset();
     groupForm.elements.mode.value = mode;
+    Ipon.setFieldError?.(groupForm.elements.name, '');
+    Ipon.setFieldError?.(groupMonthlyInput, '');
     const isCreate = mode === 'create';
     const initialWorkspaceMode = isCreate
       ? (presetWorkspaceMode === 'JOIN' ? 'JOIN' : (presetWorkspaceMode === 'SOLO' ? 'SOLO' : 'GROUP'))
@@ -1653,6 +1655,14 @@
     groupDialog.showModal();
     if (initialWorkspaceMode !== 'JOIN') groupForm.elements.name.focus();
   }
+  Ipon.guardMoneyInput?.(groupMonthlyInput, { min: 1, max: 1000000, required: false, label: 'Monthly contribution amount' });
+  groupForm?.elements?.name?.addEventListener('input', () => {
+    const el = groupForm.elements.name;
+    const val = String(el.value || '').trim();
+    const err = val && (val.length < 2 || val.length > 150) ? 'Workspace name must be between 2 and 150 characters.' : '';
+    el.setCustomValidity?.(err);
+    Ipon.setFieldError?.(el, err);
+  });
   groupSelfToggle?.addEventListener('change', () => {
     if (groupWorkspaceModeInput?.value === 'SOLO') {
       groupSelfToggle.checked = true;
@@ -1663,6 +1673,7 @@
     const on = groupSelfToggle.checked;
     groupMonthlyWrap.hidden = !on;
     groupMonthlyInput.required = on;
+    if (!on) Ipon.setFieldError?.(groupMonthlyInput, '');
   });
   groupDpInput?.addEventListener('change', async () => {
     const file = groupDpInput.files?.[0];
@@ -1966,9 +1977,35 @@
     const isCreate = groupForm.elements.mode.value === 'create';
     const workspaceMode = groupWorkspaceModeInput?.value === 'SOLO' ? 'SOLO' : 'GROUP';
     const isSolo = workspaceMode === 'SOLO';
-    const name = groupForm.elements.name.value.trim();
+    const nameEl = groupForm.elements.name;
+    const name = String(nameEl?.value || '').trim();
+    Ipon.setFieldError?.(nameEl, '');
+    Ipon.setFieldError?.(groupMonthlyInput, '');
+    if (name.length < 2 || name.length > 150) {
+      Ipon.setFieldError?.(nameEl, 'Workspace name must be between 2 and 150 characters.');
+      nameEl?.focus();
+      return;
+    }
     const includeSelf = isSolo ? true : groupSelfToggle.checked;
-    const monthlyAmount = Number(groupMonthlyInput.value) > 0 ? Number(groupMonthlyInput.value) : 100;
+    let monthlyAmount = 100;
+    if (isSolo || includeSelf) {
+      const amountLabel = isSolo ? 'Monthly savings goal' : 'Monthly contribution amount';
+      const amountCheck = typeof Ipon.parseMoneyAmount === 'function'
+        ? Ipon.parseMoneyAmount(groupMonthlyInput?.value, {
+          min: 1,
+          max: 1000000,
+          required: true,
+          label: amountLabel,
+          badInput: Boolean(groupMonthlyInput?.validity?.badInput)
+        })
+        : { valid: Number(groupMonthlyInput?.value) >= 1 && Number(groupMonthlyInput?.value) <= 1000000, value: Number(groupMonthlyInput?.value), error: `${amountLabel} must be between ₱1 and ₱1,000,000.` };
+      if (!amountCheck.valid) {
+        Ipon.setFieldError?.(groupMonthlyInput, amountCheck.error || `${amountLabel} must be between ₱1 and ₱1,000,000.`);
+        groupMonthlyInput?.focus();
+        return;
+      }
+      monthlyAmount = Number(amountCheck.value);
+    }
     const invitePayloads = isCreate && !isSolo ? collectInvitePayloads(groupInviteRows, { allowEmptyRows: true }) : [];
     if (isCreate && !isSolo && invitePayloads === null) return;
     const removingSelf = !isCreate && !isSolo && !includeSelf && Boolean(currentGroup?.is_contributor);

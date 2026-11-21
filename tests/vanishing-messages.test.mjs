@@ -134,6 +134,40 @@ test('vanishing setting changes leave a named system notice in the conversation'
   assert.match(chat, /\['vanish_enabled', 'vanish_disabled', 'vanish_updated'\]\.includes\(m\.metadata\?\.event\)/);
   assert.match(chat, /vanishNotice \? ' is-vanish'/);
   assert.match(read('css/app.css'), /\.msg-system-event\.is-vanish span/);
+
+  // Actor POV uses "You" for own vanishing notices (without trailing period) while peers see actor name
+  const convRowSrc = chat.replace(/\r\n/g, '\n').match(/function renderConversationRowHtml\(conv\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(convRowSrc);
+  const renderConvRow = new Function(
+    'state', 'initializedProfile', 'isGroupConv', 'getTypingEntries', 'escapeHtml',
+    'convAvatarHtml', 'convDisplayTitle', 'userBadgesHtml', 'formatShortDate', 'formatUnreadCount',
+    `${convRowSrc}; return renderConversationRowHtml;`
+  )(
+    { activeConvId: null }, { id: 'u-me' }, () => false, () => [], (s) => String(s ?? ''),
+    () => '<div>av</div>', () => 'Peer', () => '', () => '2:21 PM', (n) => String(n)
+  );
+  const myVanishOn = renderConvRow({
+    id: 'c1', kind: 'DIRECT', last_message_type: 'SYSTEM', last_message_sender_id: 'u-me',
+    last_message_preview: 'Zedrick De Monteverde turned on vanishing messages for 1 minute.',
+    last_message_at: '2026-11-21T06:21:00Z', unread_count: 0
+  });
+  assert.match(myVanishOn, /You turned on vanishing messages for 1 minute</);
+  assert.doesNotMatch(myVanishOn, /Zedrick De Monteverde turned on vanishing/);
+
+  const myVanishOff = renderConvRow({
+    id: 'c1', kind: 'DIRECT', last_message_type: 'SYSTEM', last_message_sender_id: 'u-me',
+    last_message_preview: 'Zedrick De Monteverde turned off vanishing messages.',
+    last_message_at: '2026-11-21T06:21:00Z', unread_count: 0
+  });
+  assert.match(myVanishOff, /You turned off vanishing messages</);
+  assert.doesNotMatch(myVanishOff, /Zedrick De Monteverde turned off vanishing/);
+
+  const peerVanishOn = renderConvRow({
+    id: 'c1', kind: 'DIRECT', last_message_type: 'SYSTEM', last_message_sender_id: 'u-peer',
+    last_message_preview: 'Zedrick De Monteverde turned on vanishing messages for 1 minute.',
+    last_message_at: '2026-11-21T06:21:00Z', unread_count: 0
+  });
+  assert.match(peerVanishOn, /Zedrick De Monteverde turned on vanishing messages for 1 minute</);
 });
 
 test('vanish countdown starts at the actual lower bubble corner at different aspect ratios', () => {

@@ -534,7 +534,9 @@ test('verified badge stays glued beside surname and fits single-line name header
   assert.match(css, /\.msg-thread-peer-title strong\s*\{[^}]*display:\s*inline-flex;[^}]*flex-wrap:\s*nowrap;[^}]*white-space:\s*nowrap;/);
   assert.match(css, /\.verified-name-tail\s*\{[^}]*white-space:\s*nowrap;/);
   assert.match(css, /\.verified-name-text\s*\{[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/);
-  assert.match(messagesJs, /class="msg-thread-peer-name"[^>]*><span class="verified-name-text">\$\{escapeHtml\(convDisplayTitle\(conv\)\)\}<\/span>\$\{isGrp \? '' : userBadgesHtml\(conv\)\}/);
+  assert.match(messagesJs, /class="msg-thread-peer-name"[^>]*><span class="verified-name-text">\$\{escapeHtml\(convDisplayTitle\(conv\)\)\}<\/span><\/strong>/);
+  assert.doesNotMatch(messagesJs, /class="msg-thread-peer-name"[^>]*>[^\r\n]*userBadgesHtml/);
+  assert.doesNotMatch(messagesJs, /class="msg-thread-peer-sub"[\s\S]{0,180}msg-handle-chip/);
   assert.match(messagesJs, /<strong class="msg-conv-name"><span class="msg-conv-name-text">\$\{escapeHtml\(u\.full_name \|\| 'User'\)\}<\/span>\$\{userBadgesHtml\(u\)\}<\/strong>/);
   assert.match(messagesJs, /fitVerifiedNameLines\?\.\(headerEl\)/);
 
