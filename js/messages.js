@@ -3000,7 +3000,7 @@
           <div class="msg-req-banner-actions">
             <button type="button" class="button button-primary button-sm" data-msg-req-decision="ACCEPT">Accept</button>
             <button type="button" class="button button-secondary button-sm" data-msg-req-decision="DELETE">Delete</button>
-            <button type="button" class="button button-secondary button-sm is-danger" data-msg-req-decision="BLOCK">Block</button>
+            ${conv.can_block === false ? '' : '<button type="button" class="button button-secondary button-sm is-danger" data-msg-req-decision="BLOCK">Block</button>'}
           </div>`;
       } else if (isPendingReq && hasSentMessages && !friendsOnlyLocked) {
         reqBanner.hidden = false;
@@ -4474,7 +4474,7 @@
          <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${archiveIconSvg}<span>${conv.is_archived ? 'Unarchive' : 'Archive'}</span></button>
          <button type="button" class="msg-drawer-action-btn" data-conv-act="mark_unread">${mailUnreadIconSvg}<span>Mark unread</span></button>
          <button type="button" class="msg-drawer-action-btn" data-conv-act="delete_for_me">${trashIconSvg}<span>Delete for me</span></button>
-         ${(typeof isSelfUser === 'function' && isSelfUser(conv)) ? '' : `<button type="button" class="msg-drawer-action-btn is-danger" data-social-action="${isBlockedByMe ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${blockIconSvg}<span>${isBlockedByMe ? 'Unblock user' : 'Block user'}</span></button>`}`;
+         ${(typeof isSelfUser === 'function' && isSelfUser(conv)) || conv.anonymous_enabled || conv.can_block === false ? '' : `<button type="button" class="msg-drawer-action-btn is-danger" data-social-action="${isBlockedByMe ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${blockIconSvg}<span>${isBlockedByMe ? 'Unblock user' : 'Block user'}</span></button>`}`;
 
     const canManageProtection = !conv.protection_unavailable && !state.savingProtection && (!isGrp || canManageGroup);
     const nativePrivacy = typeof supportsNativeScreenshotProtection === 'function'
@@ -4720,7 +4720,7 @@
               <div class="msg-person-actions">
                 <button type="button" class="button button-primary button-sm" data-req-decision="ACCEPT" data-req-id="${escapeHtml(r.id)}">Accept</button>
                 <button type="button" class="button button-secondary button-sm" data-req-decision="DECLINE" data-req-id="${escapeHtml(r.id)}">Decline</button>
-                <button type="button" class="button button-secondary button-sm is-danger" data-social-action="block" data-target-id="${escapeHtml(r.user_id)}">Block</button>
+                ${r.can_block === false ? '' : `<button type="button" class="button button-secondary button-sm is-danger" data-social-action="block" data-target-id="${escapeHtml(r.user_id)}">Block</button>`}
               </div>
             </article>`;
         }).join('')}</div>`
@@ -4773,7 +4773,7 @@
       <div class="msg-person-actions">
         <button type="button" class="button button-primary button-sm" data-social-action="message" data-target-id="${escapeHtml(f.id)}">Message</button>
         <button type="button" class="button button-secondary button-sm" data-social-action="remove_friend" data-target-id="${escapeHtml(f.id)}">Remove</button>
-        <button type="button" class="button button-secondary button-sm is-danger" data-social-action="block" data-target-id="${escapeHtml(f.id)}">Block</button>
+        ${f.can_block === false ? '' : `<button type="button" class="button button-secondary button-sm is-danger" data-social-action="block" data-target-id="${escapeHtml(f.id)}">Block</button>`}
       </div>
     </article>`;
   }
@@ -5234,6 +5234,7 @@
       const peerSocialAppsHtml = !isProfilePrivate ? (ipon().renderSocialAppLinksHtml?.(peerSocialLinks, { variant: 'popover' }) || '') : '';
       const peerAppsSig = JSON.stringify(peerSocialLinks);
       const canMessage = Boolean(profile.can_message);
+      const canBlock = profile.can_block !== false;
       const popAvatar = userAvatarHtml(profile, 'avatar-lg', { clickable: false, showPresence: false });
       const popAvatarTrigger = dpPreviewTriggerHtml(profile?.avatar_url, profile?.full_name || 'User', popAvatar);
       const renderedPopAvatar = isProfilePrivate ? popAvatar : popAvatarTrigger;
@@ -5266,10 +5267,10 @@
         <div class="msg-pop-apps-slot" data-apps-sig="${escAttr(peerAppsSig)}"${peerSocialAppsHtml ? '' : ' hidden'}>${peerSocialAppsHtml}</div>
         <div class="msg-pop-actions">
           ${friendAction}
-          <div class="msg-pop-secondary-row${canMessage ? '' : ' is-single'}">
+          ${canMessage || canBlock ? `<div class="msg-pop-secondary-row${canMessage && canBlock ? '' : ' is-single'}">
             ${canMessage ? `<button type="button" class="msg-pop-btn msg-pop-outline-btn" data-social-action="message" data-target-id="${escapeHtml(profile.id)}">Message</button>` : ''}
-            <button type="button" class="msg-pop-btn msg-pop-outline-btn is-danger" data-social-action="${fs === 'BLOCKED_BY_ME' ? 'unblock' : 'block'}" data-target-id="${escapeHtml(profile.id)}">${fs === 'BLOCKED_BY_ME' ? 'Unblock User' : 'Block User'}</button>
-          </div>
+            ${canBlock ? `<button type="button" class="msg-pop-btn msg-pop-outline-btn is-danger" data-social-action="${fs === 'BLOCKED_BY_ME' ? 'unblock' : 'block'}" data-target-id="${escapeHtml(profile.id)}">${fs === 'BLOCKED_BY_ME' ? 'Unblock User' : 'Block User'}</button>` : ''}
+          </div>` : ''}
         </div>`;
 
       ipon().bindAvatarFallbacks(pop);
