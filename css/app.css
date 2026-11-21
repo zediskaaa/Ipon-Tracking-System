@@ -6838,16 +6838,23 @@ html[data-theme="dark"] .msg-topbar-actions .dialog-close:hover {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 6px 8px;
+  padding: 6px 8px max(14px, env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 3px;
+}
+.msg-conv-list > *,
+.msg-drawer-body > *,
+.msg-panel-view > *,
+.msg-messages-list > * {
+  flex-shrink: 0;
 }
 .msg-conv-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -12072,6 +12079,23 @@ html[data-theme="dark"] .msg-privacy-form #msg-settings-error {
   }
   .msg-sidebar-search {
     padding: 10px 12px 9px;
+    gap: 8px;
+  }
+  .msg-sidebar-search-row {
+    gap: 6px;
+  }
+  .msg-search-input-wrap .msg-search-icon {
+    left: 10px;
+  }
+  .msg-search-input-wrap input {
+    padding: 8px 30px 8px 33px;
+    font-size: 13px;
+  }
+  .msg-conv-list {
+    padding: 6px 6px max(14px, env(safe-area-inset-bottom, 0px));
+  }
+  .msg-conv-row {
+    padding: 8px 7px;
   }
   .msg-composer-wrap {
     padding: 8px 10px 10px;

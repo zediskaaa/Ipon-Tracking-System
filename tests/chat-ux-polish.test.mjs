@@ -683,3 +683,13 @@ test('editing a chat message clears the composer input and draft immediately wit
   assert.equal(contextRenders, 1);
   assert.equal(sendBtn.disabled, false);
 });
+
+test('chat conversation list rows never shrink vertically or clip previews on small phone viewports', () => {
+  const css = read('css/app.css');
+  const messagesJs = read('js/messages.js');
+
+  assert.match(css, /\.msg-conv-list\s*>\s*\*,\s*\.msg-drawer-body\s*>\s*\*,\s*\.msg-panel-view\s*>\s*\*,\s*\.msg-messages-list\s*>\s*\*\s*\{\s*flex-shrink:\s*0;\s*\}/);
+  assert.match(css, /\.msg-conv-row\s*\{[^}]*flex:\s*0 0 auto;[^}]*overflow:\s*hidden;/);
+  assert.match(css, /\.msg-conv-list\s*\{[^}]*env\(safe-area-inset-bottom/);
+  assert.match(messagesJs, /placeholder="Search chats or people…"/);
+});

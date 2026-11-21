@@ -819,7 +819,7 @@
                   <div class="msg-sidebar-search-row">
                     <div class="msg-search-input-wrap">
                       <svg class="msg-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                      <input id="msg-list-search" type="search" placeholder="Search chats, people, or messages…" aria-label="Search chats, people, or messages" autocomplete="off">
+                      <input id="msg-list-search" type="search" placeholder="Search chats or people…" aria-label="Search chats, people, or messages" autocomplete="off">
                       <button type="button" class="msg-search-clear" id="msg-list-search-clear" aria-label="Clear search" title="Clear search" hidden>
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
                       </button>
