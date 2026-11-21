@@ -772,7 +772,7 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   const friendReq = getEl('msg-set-friend-req');
   friendReq.value = 'EVERYONE';
   const msgReq = getEl('msg-set-msg-req');
-  msgReq.value = 'EVERYONE';
+  msgReq.value = 'FRIENDS_ONLY';
   const profileVis = getEl('msg-set-profile-vis');
   profileVis.value = 'EVERYONE';
   const showOnline = makeEl('input'); showOnline.checked = true;
@@ -873,6 +873,7 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
     target: { closest: (sel) => (sel === '#msg-privacy-btn' ? getEl('msg-privacy-btn') : null) }
   })));
   assert.doesNotMatch(getEl('msg-settings-body').innerHTML, /msg-set-username|msg-set-bio/);
+  assert.match(getEl('msg-settings-body').innerHTML, /<option value="FRIENDS_ONLY" selected>Friends only \(recommended\)<\/option>/);
   assert.equal(saveBtn.disabled, true, 'Save messaging settings button must be disabled when nothing changed');
   assert.match(getEl('msg-settings-body').innerHTML, /id="msg-settings-save"[^>]*disabled/);
 
@@ -894,10 +895,22 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   assert.equal('p_username' in (privCall.args || {}), false);
   assert.equal('p_bio' in (privCall.args || {}), false);
   assert.equal(privCall.args.p_chat_privacy.allow_friend_requests, 'MUTUAL_GROUPS');
+  assert.equal(privCall.args.p_chat_privacy.allow_message_requests, 'FRIENDS_ONLY');
   assert.equal(privCall.args.p_chat_privacy.profile_visibility, 'FRIENDS_AND_CONNECTIONS');
   assert.equal(localPatch?.chat_privacy?.allow_friend_requests, 'MUTUAL_GROUPS');
+  assert.equal(localPatch?.chat_privacy?.allow_message_requests, 'FRIENDS_ONLY');
   assert.equal(localPatch?.chat_privacy?.profile_visibility, 'FRIENDS_AND_CONNECTIONS');
   assert.match(coreJs, /function bindDirtySaveForm\(/);
+
+  // Migration 163 & schema.sql default Who can message you to FRIENDS_ONLY for all existing & new accounts
+  const mig163 = read('database/migrations/20261122_163_default_friends_only_messages.sql');
+  const schemaSql = read('database/schema.sql');
+  for (const sql of [mig163, schemaSql]) {
+    assert.match(sql, /'20261122_163'/);
+    assert.match(sql, /alter column chat_privacy set default jsonb_build_object\([\s\S]*?'allow_message_requests', 'FRIENDS_ONLY'/i);
+    assert.match(sql, /update public\.profiles[\s\S]*?jsonb_build_object\('allow_message_requests', 'FRIENDS_ONLY'\)/i);
+    assert.match(sql, /coalesce\(v_target\.chat_privacy ->> 'allow_message_requests', 'FRIENDS_ONLY'\)/i);
+  }
 
   // Opening a peer profile popover with profile_visible=false hides bio/username/apps/mutuals/theme & shows private note
   const popEl = getEl('msg-profile-popover');

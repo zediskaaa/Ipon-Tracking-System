@@ -6140,8 +6140,8 @@
         <div class="field">
           <label for="msg-set-msg-req">Who can message you (non-friends)</label>
           <select id="msg-set-msg-req" name="allow_message_requests">
-            <option value="EVERYONE"${(priv.allow_message_requests || 'EVERYONE') === 'EVERYONE' ? ' selected' : ''}>Deliver to Message Requests (recommended)</option>
-            <option value="FRIENDS_ONLY"${priv.allow_message_requests === 'FRIENDS_ONLY' ? ' selected' : ''}>Friends only (reject non-friend messages)</option>
+            <option value="FRIENDS_ONLY"${(priv.allow_message_requests || 'FRIENDS_ONLY') === 'FRIENDS_ONLY' ? ' selected' : ''}>Friends only (recommended)</option>
+            <option value="EVERYONE"${priv.allow_message_requests === 'EVERYONE' ? ' selected' : ''}>Deliver to Message Requests</option>
           </select>
         </div>
         <div class="field field-wide">
@@ -6175,7 +6175,7 @@
 
     const readPrivacySnapshot = () => JSON.stringify({
       fr: String(form.elements?.allow_friend_requests?.value || 'EVERYONE'),
-      mr: String(form.elements?.allow_message_requests?.value || 'EVERYONE'),
+      mr: String(form.elements?.allow_message_requests?.value || 'FRIENDS_ONLY'),
       pv: String(form.elements?.profile_visibility?.value || 'EVERYONE'),
       on: Boolean(form.elements?.show_online?.checked),
       ls: Boolean(form.elements?.show_last_seen?.checked),
@@ -6215,7 +6215,7 @@
         show_last_seen: Boolean(form.elements.show_last_seen.checked),
         read_receipts: Boolean(form.elements.read_receipts.checked),
         allow_friend_requests: String(fd.get('allow_friend_requests') || 'EVERYONE'),
-        allow_message_requests: String(fd.get('allow_message_requests') || 'EVERYONE'),
+        allow_message_requests: String(fd.get('allow_message_requests') || 'FRIENDS_ONLY'),
         profile_visibility: String(fd.get('profile_visibility') || 'EVERYONE')
       };
       ipon().setBusy(saveBtn, true, 'Saving…');
