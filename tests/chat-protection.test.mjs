@@ -72,11 +72,14 @@ test('migration 146 requires all participants to use the mobile app for Block sc
   assert.ok(nativeSupport && platform);
   const platformFor = (window) => new Function('window', `${nativeSupport}; ${platform}; return getClientPlatform();`)(window);
   assert.equal(platformFor({}), 'browser');
-  assert.equal(platformFor({ Capacitor: { Plugins: { BackgroundNotifications: { setScreenshotBlocked() {} } } } }), 'browser');
-  assert.equal(platformFor({ Capacitor: { PluginHeaders: [{ name: 'BackgroundNotifications', methods: [{ name: 'setScreenshotBlocked' }] }] } }), 'android_app');
+  assert.equal(platformFor({ Capacitor: { getPlatform: () => 'web', Plugins: { BackgroundNotifications: { setScreenshotBlocked() {} } } } }), 'browser');
+  assert.equal(platformFor({ Capacitor: { getPlatform: () => 'android', Plugins: { BackgroundNotifications: { setScreenshotBlocked() {} } } } }), 'android_app');
+  assert.equal(platformFor({ IponNativePrivacy: { setScreenshotBlocked() {} } }), 'android_app');
+  assert.match(core, /const \{ error \} = await client\.rpc\('report_client_platform'/);
+  assert.match(core, /if \(error\) throw error;/);
 });
 
-test('Block screenshots is hidden in browsers and disabled in the mobile app when the peer uses a browser', () => {
+test('Block screenshots appears only when all chat members use the Android app', () => {
   const src = read('js/messages.js').replace(/\r\n/g, '\n');
   const isVoiceMatch = src.match(/function isVoiceAttachment\(att, msg = null\)\s*\{[\s\S]*?\n  \}/);
   const badgeMatch = src.match(/function formatBadgeLabel\(att\)\s*\{[\s\S]*?\n  \}/);
@@ -154,21 +157,18 @@ test('Block screenshots is hidden in browsers and disabled in the mobile app whe
   assert.match(drawerEl.innerHTML, /Block forwarding/);
   assert.match(drawerEl.innerHTML, /data-chat-protection="forwarding"/);
 
-  // 2. Mobile app user + peer on browser -> shown but disabled with clear explanation
+  // 2. Mobile app user + peer on browser -> option is absent for both users
   mockWin = { IponNativePrivacy: { setScreenshotBlocked() {} } };
   state.activeThread.conversation.screenshot_block_eligible = false;
   buildRunner()();
-  assert.match(drawerEl.innerHTML, /Block screenshots/);
-  assert.match(drawerEl.innerHTML, /Requires both people to use the mobile app/);
-  assert.match(drawerEl.innerHTML, /data-chat-protection-retry>Check again<\/button>/);
-  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]* disabled>/);
+  assert.doesNotMatch(drawerEl.innerHTML, /Block screenshots|data-chat-protection="screenshots"/);
+  assert.match(drawerEl.innerHTML, /Screenshot protection needs everyone on Android\.[\s\S]*?data-chat-protection-retry>Check again<\/button>/);
 
-  // 3. Mobile app user + peer has active browser tab in live presence -> still disabled even if DB says eligible
+  // 3. A live browser tab hides the option even if the last stored platform is Android
   state.activeThread.conversation.screenshot_block_eligible = true;
   browserPeers = new Set(['u2']);
   buildRunner()();
-  assert.match(drawerEl.innerHTML, /Requires both people to use the mobile app/);
-  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]* disabled>/);
+  assert.doesNotMatch(drawerEl.innerHTML, /Block screenshots|data-chat-protection="screenshots"/);
 
   // 4. Both users on mobile app (no live browser session) -> switch enabled
   browserPeers = new Set();
@@ -176,8 +176,9 @@ test('Block screenshots is hidden in browsers and disabled in the mobile app whe
   buildRunner()();
   assert.match(drawerEl.innerHTML, /Protect this chat on Android devices/);
   assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false" aria-labelledby="msg-privacy-shot-title" aria-describedby="msg-privacy-shot-desc"><\/button>/);
+  assert.doesNotMatch(drawerEl.innerHTML, /Screenshot protection needs everyone on Android/);
 
-  // 5. Group chat on mobile app with a browser member -> group-specific copy & disabled switch
+  // 5. A browser member hides group screenshot blocking; notice opt-in remains available
   state.activeThread.conversation = {
     conversation_id: 'g1',
     id: 'g1',
@@ -192,28 +193,95 @@ test('Block screenshots is hidden in browsers and disabled in the mobile app whe
     members: [{ user_id: 'u1', full_name: 'Me' }, { user_id: 'u2', full_name: 'Peer' }]
   };
   buildRunner()();
-  assert.match(drawerEl.innerHTML, /Requires all members to use the mobile app/);
-  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]* disabled>/);
+  assert.doesNotMatch(drawerEl.innerHTML, /Block screenshots|data-chat-protection="screenshots"/);
   assert.match(drawerEl.innerHTML, /data-chat-protection="screenshot_notices" aria-checked="false"[^>]*><\/button>/);
+  state.activeThread.conversation.screenshot_block_eligible = true;
+  buildRunner()();
+  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]*><\/button>/);
   state.activeThread.conversation.my_role = 'MEMBER';
   buildRunner()();
   assert.match(drawerEl.innerHTML, /data-chat-protection="screenshot_notices" aria-checked="false"[^>]* disabled>/);
 
-  // 6. Android shell with an outdated privacy bridge explains why the switch is unavailable.
+  // 6. Android shell without a privacy method never offers a nonfunctional switch.
   mockWin = { Capacitor: { isNativePlatform: () => true, Plugins: {} } };
   state.activeThread.conversation.screenshot_block_eligible = true;
   state.activeThread.conversation.my_role = 'OWNER';
   buildRunner()();
-  assert.match(drawerEl.innerHTML, /Update the Android app to enable screenshot blocking/);
-  assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false"[^>]* disabled>/);
+  assert.doesNotMatch(drawerEl.innerHTML, /Block screenshots|data-chat-protection="screenshots"/);
   mockWin = { navigator: { userAgent: 'myIPONApp/20' } };
   buildRunner()();
-  assert.match(drawerEl.innerHTML, /Update the Android app to enable screenshot blocking/);
+  assert.doesNotMatch(drawerEl.innerHTML, /Block screenshots|data-chat-protection="screenshots"/);
 
   // 7. The Capacitor privacy method works when WebView omits the JavaScript interface.
-  mockWin.Capacitor = { PluginHeaders: [{ name: 'BackgroundNotifications', methods: [{ name: 'setScreenshotBlocked' }] }], Plugins: { BackgroundNotifications: { setScreenshotBlocked() {} } } };
+  mockWin.Capacitor = { getPlatform: () => 'android', Plugins: { BackgroundNotifications: { setScreenshotBlocked() {} } } };
   buildRunner()();
   assert.match(drawerEl.innerHTML, /data-chat-protection="screenshots" aria-checked="false" aria-labelledby="msg-privacy-shot-title" aria-describedby="msg-privacy-shot-desc"><\/button>/);
+});
+
+test('platform reports retry after a Supabase RPC error response', async () => {
+  const core = read('js/core.js').replace(/\r\n/g, '\n');
+  const reportSource = core.match(/  function reportClientPlatform\(\{ force = false \} = \{\}\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(reportSource);
+  let calls = 0;
+  const report = new Function(
+    'getClientPlatform', 'getClient', 'currentProfile', 'configured',
+    `let clientPlatformReportPromise = null; let lastReportedClientPlatform = ''; let lastReportedClientPlatformAt = 0; ${reportSource}; return reportClientPlatform;`
+  )(
+    () => 'android_app',
+    () => ({ rpc: async () => ({ error: ++calls === 1 ? new Error('Temporary failure') : null }) }),
+    { id: 'user-1' },
+    true
+  );
+  assert.equal(await report(), 'android_app');
+  assert.equal(await report(), 'android_app');
+  assert.equal(calls, 2, 'a failed platform report must not be cached for a minute');
+});
+
+test('browser presence changes notify the chat even when the same user stays online', () => {
+  const core = read('js/core.js').replace(/\r\n/g, '\n');
+  const syncSource = core.match(/      const handleSync = \(\) => \{[\s\S]*?\n      \};/)?.[0];
+  assert.ok(syncSource);
+  const onlineUserIds = new Set(['u1', 'u2']);
+  const onlineClientPlatforms = new Map([['u1', new Set(['android_app'])], ['u2', new Set(['android_app'])]]);
+  let peerPlatform = 'browser';
+  let events = 0;
+  const handleSync = new Function(
+    'onlineUserIds', 'onlineClientPlatforms', 'presenceChannel', 'presenceShowOnline', 'document', 'profile',
+    'syncPresencePlatforms', 'hasLiveBrowserSession', 'syncPresenceDots', 'broadcastLocalPresence', 'emitPresenceChange',
+    `${syncSource}; return handleSync;`
+  )(
+    onlineUserIds, onlineClientPlatforms,
+    { presenceState: () => ({ u1: [{ user_id: 'u1' }], u2: [{ user_id: 'u2' }] }) },
+    true, { visibilityState: 'visible' }, { id: 'u1' },
+    () => { onlineClientPlatforms.set('u2', new Set([peerPlatform])); },
+    (uid) => onlineClientPlatforms.get(uid)?.has('browser') || false,
+    () => {}, () => {}, () => { events += 1; }
+  );
+  handleSync();
+  assert.equal(events, 1, 'opening the browser must update the Android switch');
+  peerPlatform = 'android_app';
+  handleSync();
+  assert.equal(events, 2, 'returning to the app must update the switch');
+});
+
+test('leaving a protected chat clears the Capacitor screenshot lock', () => {
+  const src = read('js/messages.js').replace(/\r\n/g, '\n');
+  const lockSource = src.match(/  function syncNativeScreenshotLock\(conv = state\.activeThread\?\.conversation\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(lockSource);
+  assert.match(src, /function clearActiveThreadSelection\(\) \{\s*syncNativeScreenshotLock\(null\)/);
+  const blocked = [];
+  const lock = new Function('window', 'state', 'document', 'isScreenshotBlockEffective', 'isGroupConv', 'supportsNativeScreenshotProtection', `${lockSource}; return syncNativeScreenshotLock;`)(
+    { Capacitor: { Plugins: { BackgroundNotifications: {
+      setScreenshotBlocked: ({ blocked: value }) => { blocked.push(value); return Promise.resolve(); },
+      setScreenshotMonitoring: () => Promise.resolve()
+    } } } },
+    { activeConvId: 'c1', activeThread: { conversation: { block_screenshots: true } } },
+    { getElementById: () => ({ open: true }) },
+    () => true, () => false, () => true
+  );
+  lock({ block_screenshots: true, conversation_id: 'c1' });
+  lock(null);
+  assert.deepEqual(blocked, [true, false]);
 });
 
 test('group screenshot notices require admin opt-in and keep direct chat notices available', () => {

@@ -2126,8 +2126,8 @@
       return Boolean(ipon().supportsNativeScreenshotProtection());
     }
     return typeof window !== 'undefined' && (typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function'
-      || Boolean(window.Capacitor?.PluginHeaders?.some((header) =>
-        header.name === 'BackgroundNotifications' && header.methods?.some((method) => method.name === 'setScreenshotBlocked'))));
+      || (window.Capacitor?.getPlatform?.() === 'android'
+        && typeof window.Capacitor?.Plugins?.BackgroundNotifications?.setScreenshotBlocked === 'function'));
   }
 
   function hasLiveBrowserParticipant(conv) {
@@ -3916,23 +3916,20 @@
     conv._renderedScreenshotEligible = screenshotEligible;
     const screenshotActive = Boolean(conv.block_screenshots && screenshotEligible);
     const canToggleScreenshots = canManageProtection && nativePrivacy && (screenshotEligible || Boolean(conv.block_screenshots));
-    const screenshotDesc = !nativePrivacy
-      ? 'Update the Android app to enable screenshot blocking'
-      : screenshotEligible
-        ? 'Protect this chat on Android devices'
-        : (isGrp ? 'Requires all members to use the mobile app' : 'Requires both people to use the mobile app');
+    const screenshotDesc = 'Protect this chat on Android devices';
     const phoneSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10.5 18.5h3"/></svg>';
     const forwardBlockSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5 6 5-6 5v-3.2c-4.2 0-7 1.2-9 4.2.4-4.6 3.2-7.8 9-8.4V5Z"/><path d="M4 4 20 20"/></svg>';
-    const screenshotRowHtml = (nativePrivacy || (typeof window !== 'undefined' && (window.Capacitor?.isNativePlatform?.() || (window.navigator?.userAgent || '').includes('myIPONApp/'))))
+    const screenshotRowHtml = nativePrivacy && screenshotEligible
       ? `<div class="msg-privacy-row${canToggleScreenshots ? '' : ' is-disabled'}">
           <span class="msg-privacy-icon">${phoneSvg}</span>
-          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-shot-title">Block screenshots</strong><span class="msg-privacy-chip">Android</span></div><small id="msg-privacy-shot-desc">${screenshotDesc}${nativePrivacy && !screenshotEligible ? ' <button type="button" class="msg-privacy-retry" data-chat-protection-retry>Check again</button>' : ''}</small></div>
+          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-shot-title">Block screenshots</strong><span class="msg-privacy-chip">Android</span></div><small id="msg-privacy-shot-desc">${screenshotDesc}</small></div>
           <div class="msg-privacy-control"><button type="button" class="msg-privacy-switch" role="switch" data-chat-protection="screenshots" aria-checked="${screenshotActive}" aria-labelledby="msg-privacy-shot-title" aria-describedby="msg-privacy-shot-desc"${canToggleScreenshots ? '' : ' disabled'}></button><span>${screenshotActive ? 'On' : 'Off'}</span></div>
         </div>`
       : '';
     const protectionHtml = `<div class="msg-drawer-section msg-privacy-section"><section class="msg-privacy-card" aria-labelledby="msg-privacy-title">
       <div class="msg-privacy-head"><h4 id="msg-privacy-title">Chat privacy</h4></div>
       ${conv.protection_unavailable ? '<div class="msg-privacy-note" role="status"><span>Chat privacy is temporarily unavailable. Messages still work.</span><button type="button" data-chat-protection-retry>Try again</button></div>' : ''}
+      ${nativePrivacy && !screenshotEligible && !conv.protection_unavailable ? '<div class="msg-privacy-note" role="status"><span>Screenshot protection needs everyone on Android.</span><button type="button" data-chat-protection-retry>Check again</button></div>' : ''}
       <div class="msg-privacy-list">
         ${screenshotRowHtml}
         ${isGrp ? `<div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
@@ -5809,7 +5806,7 @@
   }
 
   function clearActiveThreadSelection() {
-    window.IponNativePrivacy?.setScreenshotBlocked?.(false);
+    syncNativeScreenshotLock(null);
     disconnectTypingChannel();
     state.activeConvId = null;
     state.activeThread = null;
@@ -5845,7 +5842,7 @@
       return;
     }
     state.tab = nextTab;
-    if (nextTab !== 'chats' && nextTab !== 'requests') window.IponNativePrivacy?.setScreenshotBlocked?.(false);
+    if (nextTab !== 'chats' && nextTab !== 'requests') syncNativeScreenshotLock(null);
     if (nextTab === 'chats' || nextTab === 'requests') {
       state.mobileShowThread = false;
       syncMobilePaneState();

@@ -2553,8 +2553,8 @@
   function supportsNativeScreenshotProtection() {
     return typeof window !== 'undefined' && (
       typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function'
-      || Boolean(window.Capacitor?.PluginHeaders?.some((header) =>
-        header.name === 'BackgroundNotifications' && header.methods?.some((method) => method.name === 'setScreenshotBlocked')))
+      || (window.Capacitor?.getPlatform?.() === 'android'
+        && typeof window.Capacitor?.Plugins?.BackgroundNotifications?.setScreenshotBlocked === 'function')
     );
   }
 
@@ -2600,7 +2600,8 @@
     lastReportedClientPlatformAt = nowMs;
     clientPlatformReportPromise = (async () => {
       try {
-        await client.rpc('report_client_platform', { p_platform: platform });
+        const { error } = await client.rpc('report_client_platform', { p_platform: platform });
+        if (error) throw error;
       } catch (_) {
         lastReportedClientPlatformAt = 0;
       }
@@ -2710,6 +2711,7 @@
       const handleSync = () => {
         try {
           const prev = new Set(onlineUserIds);
+          const previousBrowserIds = new Set(Array.from(onlineClientPlatforms).filter(([, platforms]) => platforms.has('browser')).map(([uid]) => uid));
           const state = presenceChannel.presenceState();
           onlineUserIds.clear();
           if (presenceShowOnline && document.visibilityState !== 'hidden') onlineUserIds.add(String(profile.id));
@@ -2722,11 +2724,13 @@
             });
           });
           syncPresencePlatforms(state);
+          const browserPresenceChanged = previousBrowserIds.size !== Array.from(onlineClientPlatforms.values()).filter((platforms) => platforms.has('browser')).length
+            || Array.from(previousBrowserIds).some((uid) => !hasLiveBrowserSession(uid));
           const leftIds = Array.from(prev).filter((id) => !onlineUserIds.has(id));
           const joinedIds = Array.from(onlineUserIds).filter((id) => !prev.has(id));
           syncPresenceDots();
           broadcastLocalPresence();
-          if (leftIds.length || joinedIds.length) emitPresenceChange(leftIds);
+          if (leftIds.length || joinedIds.length || browserPresenceChanged) emitPresenceChange(leftIds);
         } catch (_) { }
       };
 

@@ -12425,6 +12425,9 @@ test('screenshot notices have a protected group toggle and readable event stylin
   const activity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
   const manifest = read('android/app/src/main/AndroidManifest.xml');
   assert.match(chat, /data-chat-protection="screenshot_notices" aria-checked=/);
+  assert.match(chat, /const screenshotRowHtml = nativePrivacy && screenshotEligible/);
+  assert.match(chat, /function clearActiveThreadSelection\(\) \{\s*syncNativeScreenshotLock\(null\)/);
+  assert.match(read('js/core.js'), /getPlatform\?\.\(\) === 'android'[\s\S]*BackgroundNotifications\?\.setScreenshotBlocked === 'function'/);
   assert.match(chat, /!ignoreFocus && typeof document.visibilityState/);
   assert.match(activity, /screenCaptureCallback = this::dispatchScreenCaptured/);
   assert.match(activity, /if \(!screenshotMonitoringEnabled \|\| screenshotObserver != null\) return;/);
