@@ -386,7 +386,7 @@ test('native screenshot events survive transient Android focus and visibility ch
   assert.equal(isVisible({ ignoreFocus: true }), false);
 });
 
-test('screenshot system notices use compact vertical spacing and show "You took a screenshot." for the actor', () => {
+test('screenshot system notices use compact vertical spacing and show "You took a screenshot" for the actor without a trailing period', () => {
   const css = read('css/app.css');
   const chat = read('js/messages.js').replace(/\r\n/g, '\n');
 
@@ -394,7 +394,7 @@ test('screenshot system notices use compact vertical spacing and show "You took 
   assert.match(css, /\.msg-system-event \+ \.msg-system-event\s*\{\s*margin-top:\s*-4px;\s*\}/);
   assert.match(chat, /const isMyScreenshot = screenshotNotice && Boolean\(myId && String\(m\.sender_id \|\| ''\) === String\(myId\)\);/);
   assert.match(chat, /isMyScreenshot \? 'You' : String\(m\.body \|\| ''\)\.replace\(\/ took a screenshot\\\.\?\$\/i, ''\)/);
-  assert.match(chat, /<strong>\$\{escapeHtml\(screenshotName\)\}<\/strong> took a screenshot\./);
+  assert.match(chat, /<strong>\$\{escapeHtml\(screenshotName\)\}<\/strong> took a screenshot`/);
 
   const convRowSrc = chat.match(/function renderConversationRowHtml\(conv\)\s*\{[\s\S]*?\n  \}/)?.[0];
   assert.ok(convRowSrc, 'renderConversationRowHtml must exist');
@@ -424,8 +424,9 @@ test('screenshot system notices use compact vertical spacing and show "You took 
     last_message_at: '2026-11-21T04:23:00Z',
     unread_count: 0
   });
-  assert.match(myShotRow, /You took a screenshot\./);
-  assert.doesNotMatch(myShotRow, /Zedrick De Monteverde took a screenshot\./);
+  assert.match(myShotRow, /You took a screenshot</);
+  assert.doesNotMatch(myShotRow, /You took a screenshot\./);
+  assert.doesNotMatch(myShotRow, /Zedrick De Monteverde took a screenshot/);
 
   const peerShotRow = renderConvRow({
     id: 'c1',
@@ -436,5 +437,6 @@ test('screenshot system notices use compact vertical spacing and show "You took 
     last_message_at: '2026-11-21T03:30:00Z',
     unread_count: 0
   });
-  assert.match(peerShotRow, /Frank Lawrenze Ulog Talipan took a screenshot\./);
+  assert.match(peerShotRow, /Frank Lawrenze Ulog Talipan took a screenshot</);
+  assert.doesNotMatch(peerShotRow, /Frank Lawrenze Ulog Talipan took a screenshot\./);
 });

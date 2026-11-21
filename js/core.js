@@ -514,7 +514,8 @@
       if (!hadController || swReloading) return;
       if (document.querySelector('dialog[open]')) return;
       swReloading = true;
-      window.location.reload();
+      try { showAppUpdatingOverlay({ title: 'Updating the app…', message: 'Applying the latest version…', progress: 100 }); } catch (_) { }
+      setTimeout(() => window.location.reload(), 260);
     });
     navigator.serviceWorker.register('/sw.js').then((reg) => {
       reg.update().catch(() => { });
@@ -6397,6 +6398,10 @@
   let lastWebPushSyncAt = 0;
 
   function openLatestApkDownload() {
+    if (isAndroidNativeAppShell()) {
+      void runNativeAppAutoUpdate({ force: true, fallbackToBrowser: true });
+      return null;
+    }
     return typeof window !== 'undefined' && typeof window.open === 'function'
       ? window.open(APK_LATEST_DOWNLOAD_URL, '_blank', 'noopener')
       : null;
@@ -11804,13 +11809,16 @@
       closeBtn.addEventListener('click', dismiss);
       laterBtn.addEventListener('click', dismiss);
 
-      updateBtn.addEventListener('click', () => {
-        const downloadUrl = 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk';
+      updateBtn.addEventListener('click', (event) => {
+        const downloadUrl = APK_LATEST_DOWNLOAD_URL;
+        if (isAndroidNativeAppShell()) {
+          event.preventDefault();
+          dismiss();
+          void runNativeAppAutoUpdate({ force: true, apkUrl: downloadUrl, fallbackToBrowser: true });
+          return;
+        }
         updateBtn.href = downloadUrl;
         updateBtn.setAttribute('download', 'myIPON.apk');
-        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
-          try { window.open(downloadUrl, '_system'); } catch (_) { }
-        }
         toast('Downloading latest update... Please open the file to install.', 'success');
         dismiss();
       });
@@ -11883,10 +11891,263 @@
     }
   }
 
+  const APP_UPDATE_MANIFEST_URL = 'https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/app-update.json';
+  const PENDING_NATIVE_UPDATE_KEY = 'myipon_pending_native_update_url';
+  let appUpdateCheckInFlight = false;
+  let lastNativeUpdateCheckAt = 0;
+  let nativeUpdateProgressListenerBound = false;
+  let initialWebShellTag = '';
+  let webShellReloading = false;
+
+  function isAndroidNativeAppShell() {
+    return typeof window !== 'undefined' && window.Capacitor?.getPlatform?.() === 'android';
+  }
+
+  function invokeNativeUpdaterMethod(method, options = {}) {
+    if (!isAndroidNativeAppShell()) return Promise.reject(new Error('Native updater unavailable.'));
+    const plugin = getBackgroundNotificationsPlugin();
+    if (typeof plugin?.[method] === 'function') return plugin[method](options);
+    if (typeof window.Capacitor?.nativePromise === 'function') {
+      return window.Capacitor.nativePromise('BackgroundNotifications', method, options);
+    }
+    return Promise.reject(new Error('Native updater unavailable.'));
+  }
+
+  function ensureAppUpdatingOverlay() {
+    let overlay = document.getElementById('app-updating-overlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'app-updating-overlay';
+    overlay.className = 'app-updating-overlay';
+    overlay.setAttribute('role', 'alertdialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'app-updating-title');
+    overlay.setAttribute('aria-describedby', 'app-updating-status');
+    overlay.hidden = true;
+    overlay.innerHTML = `
+      <div class="app-updating-card">
+        <div class="app-updating-spinner" aria-hidden="true"></div>
+        <h2 id="app-updating-title">Updating the app…</h2>
+        <p class="app-updating-status" id="app-updating-status">Checking for the latest version…</p>
+        <div class="app-updating-bar is-indeterminate" id="app-updating-bar" aria-hidden="true">
+          <div class="app-updating-bar-fill" id="app-updating-bar-fill"></div>
+        </div>
+        <div class="app-updating-actions" id="app-updating-actions" hidden>
+          <button type="button" class="button button-primary button-sm" id="app-updating-retry">Continue update</button>
+          <button type="button" class="button button-secondary button-sm" id="app-updating-cancel">Cancel</button>
+        </div>
+      </div>`;
+    document.body?.appendChild?.(overlay);
+    return overlay;
+  }
+
+  function showAppUpdatingOverlay({ title = 'Updating the app…', message = 'Downloading the latest update…', progress = null, showActions = false, retryLabel = 'Continue update', onRetry = null, onCancel = null } = {}) {
+    const overlay = ensureAppUpdatingOverlay();
+    if (!overlay) return null;
+    const titleEl = overlay.querySelector?.('#app-updating-title');
+    const statusEl = overlay.querySelector?.('#app-updating-status');
+    const barEl = overlay.querySelector?.('#app-updating-bar');
+    const fillEl = overlay.querySelector?.('#app-updating-bar-fill');
+    const actionsEl = overlay.querySelector?.('#app-updating-actions');
+    const retryBtn = overlay.querySelector?.('#app-updating-retry');
+    const cancelBtn = overlay.querySelector?.('#app-updating-cancel');
+    if (titleEl) titleEl.textContent = title;
+    if (statusEl) statusEl.textContent = message;
+    if (barEl && fillEl) {
+      if (typeof progress === 'number' && Number.isFinite(progress)) {
+        const clamped = Math.max(0, Math.min(100, Math.round(progress)));
+        barEl.classList?.remove?.('is-indeterminate');
+        fillEl.style.width = `${clamped}%`;
+      } else {
+        barEl.classList?.add?.('is-indeterminate');
+        fillEl.style.width = '';
+      }
+    }
+    if (actionsEl) actionsEl.hidden = !showActions;
+    if (retryBtn) {
+      retryBtn.textContent = retryLabel;
+      retryBtn.onclick = typeof onRetry === 'function' ? onRetry : null;
+    }
+    if (cancelBtn) {
+      cancelBtn.onclick = typeof onCancel === 'function' ? onCancel : () => hideAppUpdatingOverlay();
+    }
+    overlay.hidden = false;
+    return overlay;
+  }
+
+  function hideAppUpdatingOverlay() {
+    const overlay = document.getElementById('app-updating-overlay');
+    if (overlay) overlay.hidden = true;
+  }
+
+  function bindNativeUpdateProgressListener() {
+    if (nativeUpdateProgressListenerBound || !isAndroidNativeAppShell()) return;
+    const plugin = getBackgroundNotificationsPlugin();
+    if (typeof plugin?.addListener !== 'function') return;
+    nativeUpdateProgressListenerBound = true;
+    try {
+      plugin.addListener('appUpdateProgress', (event) => {
+        const phase = String(event?.phase || '');
+        const pct = typeof event?.progress === 'number' ? event.progress : null;
+        if (phase === 'downloading') {
+          showAppUpdatingOverlay({
+            title: 'Updating the app…',
+            message: pct !== null && pct > 0 ? `Downloading latest update… ${pct}%` : 'Downloading latest update…',
+            progress: pct !== null && pct > 0 ? pct : null
+          });
+        } else if (phase === 'installing') {
+          showAppUpdatingOverlay({
+            title: 'Updating the app…',
+            message: 'Opening installer & closing app. Tap Install, then reopen myIPON.',
+            progress: 100
+          });
+        }
+      });
+    } catch (_) {
+      nativeUpdateProgressListenerBound = false;
+    }
+  }
+
+  async function checkWebShellUpdate() {
+    if (!isAndroidNativeAppShell() || webShellReloading || window.location.protocol !== 'https:') return false;
+    if (typeof fetch !== 'function' || navigator.onLine === false) return false;
+    try {
+      const res = await fetch(`/sw.js?_t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) return false;
+      const text = await res.text();
+      const match = text.match(/CACHE_NAME\s*=\s*['"](ipon-shell-v\d+)['"]/);
+      const liveTag = match ? match[1] : '';
+      if (!liveTag) return false;
+      if (!initialWebShellTag) {
+        initialWebShellTag = liveTag;
+        return false;
+      }
+      if (liveTag !== initialWebShellTag && !document.querySelector?.('dialog[open]')) {
+        webShellReloading = true;
+        showAppUpdatingOverlay({
+          title: 'Updating the app…',
+          message: 'Applying the latest update…',
+          progress: 100
+        });
+        setTimeout(() => window.location.reload(), 450);
+        return true;
+      }
+    } catch (_) { }
+    return false;
+  }
+
+  async function runNativeAppAutoUpdate({ force = false, apkUrl = '', fallbackToBrowser = false } = {}) {
+    if (!isAndroidNativeAppShell() || appUpdateCheckInFlight) return { status: 'skipped' };
+    const nowMs = Date.now();
+    let pendingUrl = '';
+    try { pendingUrl = sessionStorage.getItem(PENDING_NATIVE_UPDATE_KEY) || ''; } catch (_) { }
+    if (!force && !pendingUrl && nowMs - lastNativeUpdateCheckAt < 120000) return { status: 'throttled' };
+
+    appUpdateCheckInFlight = true;
+    lastNativeUpdateCheckAt = nowMs;
+    bindNativeUpdateProgressListener();
+
+    try {
+      let targetUrl = apkUrl || pendingUrl;
+      let targetVersion = '';
+      if (!targetUrl) {
+        const info = await invokeNativeUpdaterMethod('checkNativeAppUpdate', { manifestUrl: APP_UPDATE_MANIFEST_URL });
+        if (!info?.updateAvailable && !force) {
+          await checkWebShellUpdate();
+          return { status: 'up_to_date', info };
+        }
+        targetUrl = info?.apkUrl || APK_LATEST_DOWNLOAD_URL;
+        targetVersion = info?.remoteVersionName || '';
+      }
+
+      showAppUpdatingOverlay({
+        title: 'Updating the app…',
+        message: targetVersion ? `Downloading myIPON ${targetVersion}…` : 'Downloading latest update…',
+        progress: null
+      });
+
+      const res = await invokeNativeUpdaterMethod('downloadAndInstallAppUpdate', {
+        url: targetUrl,
+        closeAfterPrompt: true,
+        force: Boolean(force)
+      });
+
+      if (res?.status === 'permission_required') {
+        try { sessionStorage.setItem(PENDING_NATIVE_UPDATE_KEY, targetUrl); } catch (_) { }
+        showAppUpdatingOverlay({
+          title: 'Allow app updates',
+          message: 'Enable "Install unknown apps" for myIPON, then return here and tap Continue update.',
+          progress: 0,
+          showActions: true,
+          retryLabel: 'Continue update',
+          onRetry: () => { void runNativeAppAutoUpdate({ force: true, apkUrl: targetUrl }); },
+          onCancel: () => {
+            try { sessionStorage.removeItem(PENDING_NATIVE_UPDATE_KEY); } catch (_) { }
+            hideAppUpdatingOverlay();
+          }
+        });
+        return res;
+      }
+
+      try { sessionStorage.removeItem(PENDING_NATIVE_UPDATE_KEY); } catch (_) { }
+      if (res?.status === 'up_to_date') {
+        hideAppUpdatingOverlay();
+        return res;
+      }
+
+      showAppUpdatingOverlay({
+        title: 'Updating the app…',
+        message: 'Opening installer & closing app. Tap Install, then reopen myIPON.',
+        progress: 100
+      });
+      return res || { status: 'installing' };
+    } catch (err) {
+      if (fallbackToBrowser) {
+        hideAppUpdatingOverlay();
+        try { window.open(apkUrl || APK_LATEST_DOWNLOAD_URL, '_system'); } catch (_) { }
+        return { status: 'fallback_browser' };
+      }
+      if (force || pendingUrl) {
+        showAppUpdatingOverlay({
+          title: 'Update paused',
+          message: friendlyError(err) || 'Could not finish downloading the update. Check your connection and retry.',
+          progress: 0,
+          showActions: true,
+          retryLabel: 'Try again',
+          onRetry: () => { void runNativeAppAutoUpdate({ force: true, apkUrl: apkUrl || pendingUrl }); },
+          onCancel: () => {
+            try { sessionStorage.removeItem(PENDING_NATIVE_UPDATE_KEY); } catch (_) { }
+            hideAppUpdatingOverlay();
+          }
+        });
+      } else {
+        hideAppUpdatingOverlay();
+        await checkWebShellUpdate();
+      }
+      return { status: 'error', error: err };
+    } finally {
+      appUpdateCheckInFlight = false;
+    }
+  }
+
   function initAppUpdateChecker() {
     if (isInstalledAppUser()) {
       document.body.classList.add('is-app');
     }
+    if (!isAndroidNativeAppShell()) return;
+    bindNativeUpdateProgressListener();
+    setTimeout(() => {
+      void checkWebShellUpdate();
+      void runNativeAppAutoUpdate({ force: false });
+    }, 1200);
+    const onResumeCheck = () => {
+      if (document.visibilityState === 'hidden') return;
+      void runNativeAppAutoUpdate({ force: false });
+    };
+    document.addEventListener('visibilitychange', onResumeCheck);
+    window.Capacitor?.Plugins?.App?.addListener?.('appStateChange', ({ isActive }) => {
+      if (isActive) void runNativeAppAutoUpdate({ force: false });
+    });
   }
 
   function normalizeDownloadFileName(name, fallback = 'attachment') {
@@ -17702,7 +17963,7 @@
     computeContributionExcess, bindExcessContributionToggle, computeGoalScheduleSuggestions, computeGoalScheduleStatus, pickActiveScheduledGoal,
     resolveNotificationTarget, navigateNotificationTarget, openRecordDetails, openFeatureRequestDetails, openPeriodNoticeModal, openNoticeDetailModal, highlightFocus, consumeDeepLink, openCalendarEntryEditDialog, openChangeRequestReviewDialog,
     getRecordCommentCounts, recordDiscussionButtonHtml, openRecordDiscussion,
-    checkForAppUpdate, showAppUpdatePrompt, triggerManualRefresh,
+    checkForAppUpdate, showAppUpdatePrompt, showAppUpdatingOverlay, hideAppUpdatingOverlay, runNativeAppAutoUpdate, triggerManualRefresh,
     getDeviceNotificationPermission, requestDeviceNotificationPermission, bindDeviceNotificationControls, syncDevicePermissionUI, requestBackgroundUsageAccess, openBackgroundUsagePrompt, maybePromptBackgroundUsage, setNotificationPreference, openLatestApkDownload, maybeShowRetentionReminder, openRetentionPolicyDialog, CURRENT_POLICY_VERSION, openPolicyDialog, hasAcceptedCurrentPolicy, maybeShowPolicyConsentModal, suggestUsernamesForProfile, maybeShowUsernameSetupModal,
     auditTableLabel, auditActionLabel, collectAuditLookupsFromRows, formatAuditEntry, createRealtimeChannel,
     canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, bindInviteCodeInput, inviteShareUrl,

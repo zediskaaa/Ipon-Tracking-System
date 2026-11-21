@@ -7945,6 +7945,92 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
 .msg-system-event + .msg-system-event {
   margin-top: -4px;
 }
+.app-updating-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at top, rgba(20, 92, 65, .96), rgba(10, 31, 24, .98));
+  color: #f5eee0;
+  backdrop-filter: blur(8px);
+}
+.app-updating-overlay[hidden] {
+  display: none;
+}
+.app-updating-card {
+  width: min(360px, 100%);
+  padding: 28px 24px;
+  border-radius: 22px;
+  border: 1px solid rgba(242, 193, 78, .22);
+  background: rgba(15, 42, 33, .92);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .42);
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 14px;
+}
+.app-updating-spinner {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 3px solid rgba(242, 193, 78, .22);
+  border-top-color: #f2c14e;
+  animation: app-updating-spin .85s linear infinite;
+}
+@keyframes app-updating-spin {
+  to { transform: rotate(360deg); }
+}
+.app-updating-card h2 {
+  margin: 0;
+  font: 700 20px/1.2 "IPON Serif", Georgia, serif;
+  color: #fffaf0;
+}
+.app-updating-status {
+  margin: 0;
+  font: 500 13.5px/1.5 Arial, sans-serif;
+  color: rgba(245, 238, 224, .82);
+}
+.app-updating-bar {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .14);
+  overflow: hidden;
+}
+.app-updating-bar-fill {
+  height: 100%;
+  width: 18%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #34d399, #f2c14e);
+  transition: width .22s ease;
+}
+.app-updating-bar.is-indeterminate .app-updating-bar-fill {
+  width: 38%;
+  animation: app-updating-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes app-updating-indeterminate {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(280%); }
+}
+.app-updating-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 4px;
+}
+.app-updating-actions[hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-updating-spinner,
+  .app-updating-bar.is-indeterminate .app-updating-bar-fill {
+    animation: none;
+  }
+}
 .msg-date-sep span,
 .msg-system-event span {
   max-width: 100%;

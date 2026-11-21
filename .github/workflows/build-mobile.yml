@@ -53,11 +53,27 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
+      - name: Generate Android update manifest
+        run: |
+          node -e '
+            const fs = require("fs");
+            const runNumber = Number(process.env.GITHUB_RUN_NUMBER || 100);
+            const manifest = {
+              version: `1.0.${runNumber}`,
+              versionCode: runNumber,
+              apkUrl: "https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/myIPON.apk",
+              updatedAt: new Date().toISOString()
+            };
+            fs.writeFileSync("android/app/build/outputs/apk/debug/app-update.json", JSON.stringify(manifest, null, 2) + "\n");
+          '
+
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: myIPON-Android-APK
-          path: android/app/build/outputs/apk/debug/myIPON.apk
+          path: |
+            android/app/build/outputs/apk/debug/myIPON.apk
+            android/app/build/outputs/apk/debug/app-update.json
           if-no-files-found: error
 
       - name: Publish Android APK to GitHub Release
@@ -77,4 +93,6 @@ jobs:
           draft: false
           prerelease: false
           make_latest: true
-          files: android/app/build/outputs/apk/debug/myIPON.apk
+          files: |
+            android/app/build/outputs/apk/debug/myIPON.apk
+            android/app/build/outputs/apk/debug/app-update.json

@@ -1906,13 +1906,12 @@
     const typingLabel = isGrp && typingEntries.length === 1 && typingEntries[0]?.name
       ? `${String(typingEntries[0].name).trim().split(/\s+/)[0] || 'Someone'} is typing…`
       : (isGrp && typingEntries.length > 1 ? `${typingEntries.length} typing…` : 'Typing…');
-    const rawLastPreview = (
-      conv.last_message_type === 'SYSTEM'
-      && initializedProfile?.id
-      && String(conv.last_message_sender_id || '') === String(initializedProfile.id)
-      && / took a screenshot\.?$/i.test(String(conv.last_message_preview || ''))
-    )
-      ? 'You took a screenshot.'
+    const isScreenshotPreview = conv.last_message_type === 'SYSTEM'
+      && / took a screenshot\.?$/i.test(String(conv.last_message_preview || ''));
+    const rawLastPreview = isScreenshotPreview
+      ? (initializedProfile?.id && String(conv.last_message_sender_id || '') === String(initializedProfile.id)
+          ? 'You took a screenshot'
+          : String(conv.last_message_preview || '').replace(/ took a screenshot\.?$/i, ' took a screenshot'))
       : conv.last_message_preview;
     const previewText = isTyping
       ? `<span class="msg-typing-preview"><span class="msg-wave-dots is-inline" aria-hidden="true"><i></i><i></i><i></i></span><span>${escapeHtml(typingLabel)}</span></span>`
@@ -3302,7 +3301,7 @@
           ? (isMyScreenshot ? 'You' : String(m.body || '').replace(/ took a screenshot\.?$/i, ''))
           : '';
         const eventText = screenshotNotice
-          ? `<strong>${escapeHtml(screenshotName)}</strong> took a screenshot.`
+          ? `<strong>${escapeHtml(screenshotName)}</strong> took a screenshot`
           : sysLabel;
         return `${dateDivider}${unreadDivider}<div class="msg-system-event${screenshotNotice ? ' is-screenshot' : vanishNotice ? ' is-vanish' : ''}" data-msg-id="${escapeHtml(m.id)}"><span>${eventText} · ${escapeHtml(formatClock(m.created_at))}</span></div>`;
       }

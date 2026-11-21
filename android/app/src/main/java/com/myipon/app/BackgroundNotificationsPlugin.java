@@ -16,6 +16,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
@@ -30,6 +32,7 @@ import android.webkit.WebView;
 import android.view.WindowManager;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -42,10 +45,18 @@ import com.getcapacitor.annotation.PermissionCallback;
 import com.google.firebase.messaging.FirebaseMessaging;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+import org.json.JSONObject;
 
 @CapacitorPlugin(
     name = "BackgroundNotifications",
@@ -57,6 +68,268 @@ import java.util.Locale;
     }
 )
 public class BackgroundNotificationsPlugin extends Plugin {
+    private static final String APP_UPDATE_MANIFEST_URL = "https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/app-update.json";
+    private static final String APP_UPDATE_ALLOWED_PREFIX = "https://github.com/zediskaaa/Ipon-Tracking-System/";
+    private static final AtomicBoolean updateInProgress = new AtomicBoolean(false);
+
+    private static long getInstalledVersionCode(Context ctx) {
+        if (ctx == null) return 0L;
+        try {
+            PackageInfo info = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
+            if (info == null) return 0L;
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                ? info.getLongVersionCode()
+                : (long) info.versionCode;
+        } catch (Throwable ignored) {
+            return 0L;
+        }
+    }
+
+    private static String getInstalledVersionName(Context ctx) {
+        if (ctx == null) return "";
+        try {
+            PackageInfo info = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
+            return info != null && info.versionName != null ? info.versionName : "";
+        } catch (Throwable ignored) {
+            return "";
+        }
+    }
+
+    private static OkHttpClient createUpdateHttpClient(long readTimeoutSec) {
+        return new OkHttpClient.Builder()
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .connectTimeout(12, TimeUnit.SECONDS)
+            .readTimeout(readTimeoutSec, TimeUnit.SECONDS)
+            .build();
+    }
+
+    private void emitAppUpdateProgress(String phase, int progress, long downloadedBytes, long totalBytes, String message) {
+        JSObject payload = new JSObject();
+        payload.put("phase", phase);
+        payload.put("progress", progress);
+        payload.put("downloadedBytes", downloadedBytes);
+        payload.put("totalBytes", totalBytes);
+        if (!TextUtils.isEmpty(message)) payload.put("message", message);
+        notifyListeners("appUpdateProgress", payload);
+    }
+
+    @PluginMethod
+    public void checkNativeAppUpdate(PluginCall call) {
+        Context ctx = getContext();
+        if (ctx == null) {
+            call.reject("App context is unavailable.");
+            return;
+        }
+        String rawManifestUrl = call.getString("manifestUrl", APP_UPDATE_MANIFEST_URL);
+        String manifestUrl = TextUtils.isEmpty(rawManifestUrl) ? APP_UPDATE_MANIFEST_URL : rawManifestUrl.trim();
+        if (!manifestUrl.startsWith(APP_UPDATE_ALLOWED_PREFIX)) {
+            call.reject("Untrusted update manifest URL.");
+            return;
+        }
+        long installedCode = getInstalledVersionCode(ctx);
+        String installedName = getInstalledVersionName(ctx);
+        boolean canInstall = Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+            || ctx.getPackageManager().canRequestPackageInstalls();
+
+        new Thread(() -> {
+            try {
+                OkHttpClient client = createUpdateHttpClient(12);
+                Request req = new Request.Builder()
+                    .url(manifestUrl)
+                    .header("Cache-Control", "no-cache")
+                    .header("Accept", "application/json")
+                    .build();
+                try (Response res = client.newCall(req).execute()) {
+                    if (!res.isSuccessful() || res.body() == null) {
+                        JSObject result = new JSObject();
+                        result.put("supported", true);
+                        result.put("updateAvailable", false);
+                        result.put("installedVersionCode", installedCode);
+                        result.put("installedVersionName", installedName);
+                        result.put("canRequestPackageInstalls", canInstall);
+                        call.resolve(result);
+                        return;
+                    }
+                    String body = res.body().string();
+                    JSONObject json = new JSONObject(body);
+                    long remoteCode = json.optLong("versionCode", json.optLong("build", 0L));
+                    String remoteName = json.optString("version", "");
+                    String apkUrl = json.optString("apkUrl", APP_UPDATE_ALLOWED_PREFIX + "releases/latest/download/myIPON.apk");
+                    if (!apkUrl.startsWith(APP_UPDATE_ALLOWED_PREFIX)) {
+                        apkUrl = APP_UPDATE_ALLOWED_PREFIX + "releases/latest/download/myIPON.apk";
+                    }
+                    boolean available = installedCode > 0 && remoteCode > installedCode;
+                    JSObject result = new JSObject();
+                    result.put("supported", true);
+                    result.put("updateAvailable", available);
+                    result.put("installedVersionCode", installedCode);
+                    result.put("installedVersionName", installedName);
+                    result.put("remoteVersionCode", remoteCode);
+                    result.put("remoteVersionName", remoteName);
+                    result.put("apkUrl", apkUrl);
+                    result.put("canRequestPackageInstalls", canInstall);
+                    call.resolve(result);
+                }
+            } catch (Throwable err) {
+                call.reject("Could not check for app updates: " + err.getMessage());
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void downloadAndInstallAppUpdate(PluginCall call) {
+        Activity activity = getActivity();
+        Context ctx = activity != null ? activity : getContext();
+        if (ctx == null) {
+            call.reject("App context is unavailable.");
+            return;
+        }
+        String rawUrl = call.getString("url", APP_UPDATE_ALLOWED_PREFIX + "releases/latest/download/myIPON.apk");
+        String apkUrl = TextUtils.isEmpty(rawUrl) ? (APP_UPDATE_ALLOWED_PREFIX + "releases/latest/download/myIPON.apk") : rawUrl.trim();
+        if (!apkUrl.startsWith(APP_UPDATE_ALLOWED_PREFIX)) {
+            call.reject("Untrusted update download URL.");
+            return;
+        }
+        boolean closeAfterPrompt = !Boolean.FALSE.equals(call.getBoolean("closeAfterPrompt", true));
+        boolean forceInstall = Boolean.TRUE.equals(call.getBoolean("force", false));
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ctx.getPackageManager().canRequestPackageInstalls()) {
+            emitAppUpdateProgress("permission_required", 0, 0L, 0L, "Allow installing updates for myIPON.");
+            try {
+                Intent permIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + ctx.getPackageName()));
+                permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(permIntent);
+            } catch (Throwable ignored) { }
+            JSObject result = new JSObject();
+            result.put("status", "permission_required");
+            result.put("canRequestPackageInstalls", false);
+            call.resolve(result);
+            return;
+        }
+
+        if (!updateInProgress.compareAndSet(false, true)) {
+            JSObject result = new JSObject();
+            result.put("status", "in_progress");
+            call.resolve(result);
+            return;
+        }
+
+        long installedCode = getInstalledVersionCode(ctx);
+        emitAppUpdateProgress("downloading", 0, 0L, 0L, "Downloading latest update...");
+
+        new Thread(() -> {
+            File updateDir = new File(ctx.getCacheDir(), "updates");
+            File partFile = new File(updateDir, "myIPON.apk.part");
+            File apkFile = new File(updateDir, "myIPON.apk");
+            try {
+                if (!updateDir.exists() && !updateDir.mkdirs()) {
+                    throw new IllegalStateException("Could not prepare update folder.");
+                }
+                if (partFile.exists()) partFile.delete();
+
+                OkHttpClient client = createUpdateHttpClient(90);
+                Request req = new Request.Builder()
+                    .url(apkUrl)
+                    .header("Cache-Control", "no-cache")
+                    .build();
+                try (Response res = client.newCall(req).execute()) {
+                    if (!res.isSuccessful() || res.body() == null) {
+                        throw new IllegalStateException("Download failed (HTTP " + res.code() + ").");
+                    }
+                    ResponseBody body = res.body();
+                    long totalBytes = body.contentLength();
+                    long downloaded = 0L;
+                    long lastEmitMs = 0L;
+                    int lastPct = -1;
+                    byte[] buffer = new byte[16384];
+                    try (InputStream in = body.byteStream(); FileOutputStream out = new FileOutputStream(partFile)) {
+                        int read;
+                        while ((read = in.read(buffer)) != -1) {
+                            out.write(buffer, 0, read);
+                            downloaded += read;
+                            int pct = totalBytes > 0 ? (int) Math.min(99, (downloaded * 100L) / totalBytes) : -1;
+                            long nowMs = System.currentTimeMillis();
+                            if (nowMs - lastEmitMs >= 150 || (pct >= 0 && pct >= lastPct + 2)) {
+                                lastEmitMs = nowMs;
+                                lastPct = pct;
+                                emitAppUpdateProgress("downloading", Math.max(0, pct), downloaded, totalBytes, "");
+                            }
+                        }
+                        out.flush();
+                    }
+                }
+
+                if (apkFile.exists()) apkFile.delete();
+                if (!partFile.renameTo(apkFile)) {
+                    throw new IllegalStateException("Could not finalize update package.");
+                }
+
+                PackageInfo archiveInfo = ctx.getPackageManager().getPackageArchiveInfo(apkFile.getAbsolutePath(), 0);
+                if (archiveInfo == null || !ctx.getPackageName().equals(archiveInfo.packageName)) {
+                    apkFile.delete();
+                    throw new IllegalStateException("Downloaded update package is invalid.");
+                }
+                long archiveCode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                    ? archiveInfo.getLongVersionCode()
+                    : (long) archiveInfo.versionCode;
+                if (!forceInstall && installedCode > 0 && archiveCode > 0 && archiveCode <= installedCode) {
+                    apkFile.delete();
+                    JSObject already = new JSObject();
+                    already.put("status", "up_to_date");
+                    call.resolve(already);
+                    return;
+                }
+
+                emitAppUpdateProgress("installing", 100, apkFile.length(), apkFile.length(), "Opening installer and closing app...");
+
+                Uri apkUri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", apkFile);
+                Intent installIntent = new Intent(Intent.ACTION_VIEW);
+                installIntent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    try {
+                        ctx.startActivity(installIntent);
+                        JSObject result = new JSObject();
+                        result.put("status", "installing");
+                        result.put("closing", closeAfterPrompt);
+                        call.resolve(result);
+                        if (closeAfterPrompt && activity != null) {
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                try { activity.finishAffinity(); } catch (Throwable ignored) { }
+                            }, 900L);
+                        }
+                    } catch (Throwable launchErr) {
+                        call.reject("Could not launch installer: " + launchErr.getMessage());
+                    }
+                });
+            } catch (Throwable err) {
+                if (partFile.exists()) partFile.delete();
+                call.reject(err.getMessage() != null ? err.getMessage() : "Could not download update.");
+            } finally {
+                updateInProgress.set(false);
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void closeAppForUpdate(PluginCall call) {
+        Activity activity = getActivity();
+        if (activity == null) {
+            JSObject res = new JSObject();
+            res.put("closed", false);
+            call.resolve(res);
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            JSObject res = new JSObject();
+            res.put("closed", true);
+            call.resolve(res);
+            try { activity.finishAffinity(); } catch (Throwable ignored) { }
+        });
+    }
+
     @PluginMethod
     public void setScreenshotBlocked(PluginCall call) {
         Activity activity = getActivity();
