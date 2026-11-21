@@ -1998,7 +1998,7 @@
     return `<article class="msg-search-person-row" role="listitem">
       <div class="msg-conv-avatar">${userAvatarHtml(u, 'avatar-md', { showPresence: showPresenceDot })}</div>
       <button type="button" class="msg-search-person-main" data-social-action="message" data-target-id="${escapeHtml(u.id)}">
-        <strong class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}${userBadgesHtml(u)}</strong>
+        <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}</span>${userBadgesHtml(u)}</strong>
         <span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>
         ${presenceText ? `<span class="msg-search-person-presence">${escapeHtml(presenceText)}</span>` : ''}
       </button>
@@ -2058,7 +2058,7 @@
         parts.push(msgHits.map((hit) => `
           <button type="button" class="msg-search-hit-row" data-jump-conv="${escapeHtml(hit.conversation_id)}" data-jump-msg-id="${escapeHtml(hit.message_id)}">
             <div class="msg-conv-top">
-              <strong class="msg-conv-name-text">${escapeHtml(hit.peer_name)}${hit.peer_id ? userBadgesHtml(hit.peer_id) : ''}</strong>
+              <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(hit.peer_name)}</span>${hit.peer_id ? userBadgesHtml(hit.peer_id) : ''}</strong>
               <time class="msg-conv-time">${escapeHtml(formatShortDate(hit.created_at))}</time>
             </div>
             <span class="msg-search-hit-snippet">${escapeHtml(hit.sender_name)}: ${highlightMatches(escapeHtml(hit.body), q)}</span>
@@ -2452,7 +2452,7 @@
             ${isGrp ? groupAvatarHtml(peer, 'avatar-md') : userAvatarHtml(peer, 'avatar-md')}
             <div class="msg-thread-peer-meta">
               <div class="msg-thread-peer-title">
-                <strong>${escapeHtml(convDisplayTitle(peer))}${isGrp ? '' : userBadgesHtml(peer)}</strong>
+                <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(peer))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(peer))}</span>${isGrp ? '' : userBadgesHtml(peer)}</strong>
               </div>
               <div class="msg-thread-peer-sub">
                 ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : (peer.username ? `<span class="msg-handle-chip">@${escapeHtml(peer.username)}</span>` : '')}
@@ -2466,6 +2466,7 @@
           </div>`;
         ipon().bindAvatarFallbacks?.(headerEl);
         ipon().syncPresenceDots?.(headerEl);
+        ipon().fitVerifiedNameLines?.(headerEl);
       } else {
         headerEl.innerHTML = skeletonHtml('header');
       }
@@ -2747,7 +2748,7 @@
         ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md', { showPresence: !isSelfUser(conv) && conv.profile_visible !== false })}
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
-            <strong>${escapeHtml(convDisplayTitle(conv))}${isGrp ? '' : userBadgesHtml(conv)}</strong>
+            <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(conv))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp ? '' : userBadgesHtml(conv)}</strong>
           </div>
           <div class="msg-thread-peer-sub">
             ${!isGrp && conv.username ? `<span class="msg-handle-chip">@${escapeHtml(conv.username)}</span>` : ''}
@@ -2764,6 +2765,7 @@
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
         </button>
       </div>`;
+    ipon().fitVerifiedNameLines?.(headerEl);
 
     const senderSelect = document.getElementById('msg-thread-search-sender');
     if (senderSelect) {
@@ -3465,6 +3467,7 @@
     list.classList.toggle('is-thread-entering', Boolean(animate && !isEmpty));
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);
+    ipon().fitVerifiedNameLines?.(list);
     syncThreadScrollLock();
     scheduleVanishExpiry();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => syncThreadScrollLock());
@@ -3948,7 +3951,7 @@
             : peerAv;
           return `<div class="msg-drawer-profile">
           ${peerAvNode}
-          <strong>${escapeHtml(conv.full_name || 'User')}${iponApi?.verifiedBadgesHtml?.(conv) || ''}</strong>
+          <strong title="${escAttr(conv.full_name || 'User')}"><span class="verified-name-text">${escapeHtml(conv.full_name || 'User')}</span>${iponApi?.verifiedBadgesHtml?.(conv) || ''}</strong>
           ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
           ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
           ${iponApi?.renderSocialAppLinksHtml?.(conv.social_links, { variant: 'drawer' }) || ''}
@@ -4062,7 +4065,7 @@
               return `<li class="msg-group-member-row">
                 ${userAvatarHtml(m, 'avatar-sm', { clickable: !isMe, showPresence: !isMe })}
                 <div class="msg-group-member-meta">
-                  <strong><span>${escapeHtml(m.full_name || 'Member')}${iponApi?.verifiedBadgesHtml?.(m) || ''}</span>${isMe ? ' <em>(You)</em>' : ''}${roleBadge}</strong>
+                  <strong><span>${escapeHtml(m.full_name || 'Member')}</span>${iponApi?.verifiedBadgesHtml?.(m) || ''}${isMe ? ' <em>(You)</em>' : ''}${roleBadge}</strong>
                   ${m.username ? `<small>@${escapeHtml(m.username)}</small>` : `<small>${escapeHtml(m.is_friend ? 'Friend' : 'Group member')}</small>`}
                 </div>
                 ${!isMe ? `<button type="button" class="msg-conv-more-btn msg-group-member-more" data-group-member-menu="${escapeHtml(m.id)}" aria-label="Member options for ${escapeHtml(m.full_name || 'Member')}" title="Member options">${moreDotsSvg}</button>` : ''}
@@ -4139,6 +4142,7 @@
     }
     iponApi?.bindAvatarFallbacks?.(drawer);
     iponApi?.syncPresenceDots?.(drawer);
+    iponApi?.fitVerifiedNameLines?.(drawer);
   }
 
   // Friends, Requests & Sent Connections View
@@ -4666,6 +4670,7 @@
         </div>`;
       ipon().bindAvatarFallbacks(pop);
       ipon().syncPresenceDots(pop);
+      ipon().fitVerifiedNameLines?.(pop);
       applyProfileCardAppearance(pop, targetUserId, cachedAppearance);
       positionPopoverNearAnchor(pop, activePopoverAnchor);
       void loadProfileCardAppearance(pop, targetUserId);
@@ -4760,6 +4765,7 @@
 
       ipon().bindAvatarFallbacks(pop);
       ipon().syncPresenceDots(pop);
+      ipon().fitVerifiedNameLines?.(pop);
       if (isProfilePrivate) {
         profileAppearanceCache.delete(String(targetUserId));
         profileEffectStage?.destroy?.();
@@ -5934,6 +5940,12 @@
     const view = document.getElementById('msg-view-chats');
     if (view) view.classList.toggle('is-mobile-thread', state.mobileShowThread);
     syncMyThreadPresence();
+    if (state.mobileShowThread) {
+      ipon().fitVerifiedNameLines?.(view || document);
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => ipon().fitVerifiedNameLines?.(view || document));
+      }
+    }
   }
 
   async function runThreadSearch() {

@@ -115,7 +115,7 @@ function runCoreInVm(mockRpc) {
   ctx.window = ctx;
   ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
   vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
-  return { ipon: ctx.window.Ipon, appendedNodes, docListeners };
+  return { ipon: ctx.window.Ipon, appendedNodes, docListeners, ctx };
 }
 
 test('verified badges migration configures schema, permanent creator badges, RPCs, and silent removal', () => {
@@ -524,4 +524,164 @@ test('My Account verified badge card lets members message the creator directly w
   assert.doesNotMatch(badgeRowMatch[0], /Verified status active/);
   assert.match(badgeRowMatch[0], /pillEl\.hidden\s*=\s*true/);
   assert.match(badgeRowMatch[0], /if\s*\(isVerifiedActive\)[\s\S]*?ctaBtn\.hidden\s*=\s*true/);
+});
+
+test('verified badge stays glued beside surname and fits single-line name headers without detaching', () => {
+  const css = read('css/app.css');
+  const messagesJs = read('js/messages.js');
+
+  assert.match(css, /\.msg-thread-peer-title\s*\{[^}]*flex-wrap:\s*nowrap;/);
+  assert.match(css, /\.msg-thread-peer-title strong\s*\{[^}]*display:\s*inline-flex;[^}]*flex-wrap:\s*nowrap;[^}]*white-space:\s*nowrap;/);
+  assert.match(css, /\.verified-name-tail\s*\{[^}]*white-space:\s*nowrap;/);
+  assert.match(css, /\.verified-name-text\s*\{[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/);
+  assert.match(messagesJs, /class="msg-thread-peer-name"[^>]*><span class="verified-name-text">\$\{escapeHtml\(convDisplayTitle\(conv\)\)\}<\/span>\$\{isGrp \? '' : userBadgesHtml\(conv\)\}/);
+  assert.match(messagesJs, /<strong class="msg-conv-name"><span class="msg-conv-name-text">\$\{escapeHtml\(u\.full_name \|\| 'User'\)\}<\/span>\$\{userBadgesHtml\(u\)\}<\/strong>/);
+  assert.match(messagesJs, /fitVerifiedNameLines\?\.\(headerEl\)/);
+
+  const { ipon, ctx } = runCoreInVm(async () => ({ data: null, error: null }));
+  assert.equal(typeof ipon.fitVerifiedNameLines, 'function');
+
+  const makeClassList = (initial = '') => {
+    const set = new Set(String(initial || '').split(/\s+/).filter(Boolean));
+    return {
+      add: (...cls) => cls.forEach((c) => set.add(c)),
+      remove: (...cls) => cls.forEach((c) => set.delete(c)),
+      contains: (c) => set.has(c),
+      toString: () => [...set].join(' ')
+    };
+  };
+  const makeNode = (tag, { id = '', className = '', nodeType = 1, nodeValue = '' } = {}) => {
+    const node = {
+      tagName: tag ? tag.toUpperCase() : '',
+      id,
+      nodeType,
+      nodeValue,
+      classList: makeClassList(className),
+      get className() { return this.classList.toString(); },
+      set className(val) { this.classList = makeClassList(val); },
+      style: {},
+      attrs: {},
+      childNodes: [],
+      parentElement: null,
+      get children() { return this.childNodes.filter((c) => c.nodeType === 1); },
+      get previousSibling() {
+        const list = this.parentElement?.childNodes || [];
+        const idx = list.indexOf(this);
+        return idx > 0 ? list[idx - 1] : null;
+      },
+      get textContent() {
+        if (this.nodeType === 3) return this.nodeValue;
+        return this.childNodes.map((c) => c.textContent).join('');
+      },
+      getAttribute(k) { return this.attrs[k] ?? null; },
+      setAttribute(k, v) { this.attrs[k] = String(v); },
+      appendChild(child) {
+        if (child.parentElement) {
+          const prevList = child.parentElement.childNodes;
+          const idx = prevList.indexOf(child);
+          if (idx >= 0) prevList.splice(idx, 1);
+        }
+        child.parentElement = this;
+        this.childNodes.push(child);
+        return child;
+      },
+      insertBefore(child, ref) {
+        if (child.parentElement) {
+          const prevList = child.parentElement.childNodes;
+          const oldIdx = prevList.indexOf(child);
+          if (oldIdx >= 0) prevList.splice(oldIdx, 1);
+        }
+        child.parentElement = this;
+        const idx = ref ? this.childNodes.indexOf(ref) : -1;
+        if (idx >= 0) this.childNodes.splice(idx, 0, child);
+        else this.childNodes.push(child);
+        return child;
+      },
+      matches(sel) {
+        return String(sel).split(',').map((s) => s.trim()).some((part) => {
+          if (part === '#msg-pop-name') return this.id === 'msg-pop-name';
+          if (part === '.msg-thread-peer-title strong') return this.tagName === 'STRONG' && this.classList.contains('msg-thread-peer-name');
+          if (part.startsWith('.')) return this.classList.contains(part.slice(1));
+          return false;
+        });
+      },
+      closest(sel) {
+        let cur = this;
+        while (cur) {
+          if (cur.matches?.(sel)) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => {
+          for (const c of n.childNodes) {
+            if (c.nodeType === 1) {
+              if (c.matches(sel)) out.push(c);
+              walk(c);
+            }
+          }
+        };
+        walk(this);
+        return out;
+      }
+    };
+    return node;
+  };
+
+  ctx.document.createElement = (tag) => makeNode(tag);
+  ctx.document.createTextNode = (val) => makeNode('', { nodeType: 3, nodeValue: String(val) });
+  ctx.window.getComputedStyle = (el) => ({ fontSize: el.style.fontSize || '15px' });
+
+  // 1) Long thread header full name scales font size to fit on one straight line beside badge
+  const root = makeNode('div');
+  const headerStrong = makeNode('strong', { className: 'msg-thread-peer-name' });
+  const nameSpan = makeNode('span', { className: 'verified-name-text' });
+  nameSpan.appendChild(ctx.document.createTextNode('Frank Lawrenze Ulog Talipan'));
+  Object.defineProperty(nameSpan, 'clientWidth', { get: () => 170 });
+  Object.defineProperty(nameSpan, 'scrollWidth', {
+    get: () => {
+      const px = parseFloat(headerStrong.style.fontSize) || 15;
+      return Math.round(px * 13.6);
+    }
+  });
+  const headerBadge = makeNode('span', { className: 'verified-badges-inline' });
+  headerStrong.appendChild(nameSpan);
+  headerStrong.appendChild(headerBadge);
+  root.appendChild(headerStrong);
+
+  // 2) Short thread header name stays at base CSS font size
+  const shortStrong = makeNode('strong', { className: 'msg-thread-peer-name' });
+  const shortSpan = makeNode('span', { className: 'verified-name-text' });
+  shortSpan.appendChild(ctx.document.createTextNode('Juan Cruz'));
+  Object.defineProperty(shortSpan, 'clientWidth', { get: () => 170 });
+  Object.defineProperty(shortSpan, 'scrollWidth', { get: () => 82 });
+  shortStrong.appendChild(shortSpan);
+  shortStrong.appendChild(makeNode('span', { className: 'verified-badges-inline' }));
+  root.appendChild(shortStrong);
+
+  // 3) Popover name with raw text node wraps text cleanly in .verified-name-text
+  const popStrong = makeNode('strong', { id: 'msg-pop-name' });
+  popStrong.appendChild(ctx.document.createTextNode('Frank Lawrenze Ulog Talipan'));
+  popStrong.appendChild(makeNode('span', { className: 'verified-badges-inline' }));
+  root.appendChild(popStrong);
+
+  // 4) Wrapping table cell glues surname + verified badge into .verified-name-tail
+  const tdStrong = makeNode('strong');
+  tdStrong.appendChild(ctx.document.createTextNode('Frank Lawrenze Ulog Talipan'));
+  const tdBadge = makeNode('span', { className: 'verified-badges-inline' });
+  tdStrong.appendChild(tdBadge);
+  root.appendChild(tdStrong);
+
+  ipon.fitVerifiedNameLines(root);
+
+  assert.equal(headerStrong.style.fontSize, '12.5px', 'Long full name should scale smoothly so full name + badge fit on one line');
+  assert.equal(shortStrong.style.fontSize, '', 'Short name should retain base CSS font size');
+  assert.equal(popStrong.children[0].className, 'verified-name-text', 'Popover name text should be wrapped in .verified-name-text');
+  assert.equal(popStrong.getAttribute('title'), 'Frank Lawrenze Ulog Talipan');
+  assert.equal(tdStrong.childNodes[0].nodeValue, 'Frank Lawrenze Ulog ');
+  assert.equal(tdStrong.childNodes[1].className, 'verified-name-tail', 'Surname + verified badge must be glued inside .verified-name-tail');
+  assert.equal(tdStrong.childNodes[1].textContent, 'Talipan');
+  assert.equal(tdStrong.childNodes[1].children[0], tdBadge);
 });

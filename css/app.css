@@ -6895,6 +6895,7 @@ html[data-theme="dark"] .msg-topbar-actions .dialog-close:hover {
   gap: 3px;
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
   font-size: 13.5px;
   font-weight: 600;
 }
@@ -7432,6 +7433,7 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 .msg-back-mobile-btn {
@@ -7455,21 +7457,28 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
   stroke-width: 2.2;
 }
 .msg-thread-peer-meta {
+  flex: 1 1 auto;
   min-width: 0;
 }
 .msg-thread-peer-title {
   display: flex;
   align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
   min-width: 0;
+  max-width: 100%;
 }
 .msg-thread-peer-title strong {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.2;
   color: var(--thread-ink, var(--ink-strong, #0c261d));
-  overflow-wrap: anywhere;
 }
 .msg-thread-peer-sub {
   display: flex;
@@ -19830,6 +19839,7 @@ html[data-theme="dark"] .icon-action.is-reject-cta {
   margin-left: 4px;
   vertical-align: middle;
   flex-shrink: 0;
+  white-space: nowrap;
   background: transparent !important;
   border: 0 !important;
   padding: 0 !important;
@@ -20772,6 +20782,83 @@ html[data-theme="dark"] .msg-welcome-avatar .presence-dot {
   font-size: 13.5px;
   font-weight: 600;
   color: var(--thread-muted, var(--muted));
+}
+
+/* Verified badge always glued beside user's surname & single-line name headers */
+.verified-name-tail {
+  display: inline;
+  white-space: nowrap;
+}
+.verified-name-text {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-thread-peer-title strong,
+.msg-welcome-name,
+.msg-drawer-profile strong,
+.msg-pop-title strong,
+.effects-card-name,
+#quick-account-name,
+.sidebar-user-name,
+#my-name {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.msg-welcome-name,
+.msg-drawer-profile strong {
+  width: 100%;
+  justify-content: center;
+}
+.effects-card-name,
+#my-name {
+  display: flex;
+}
+.msg-thread-peer-title strong > span:not(.verified-badges-inline):not(.msg-self-pill),
+.msg-welcome-name > span:not(.verified-badges-inline):not(.msg-self-pill),
+.msg-drawer-profile strong > span:not(.verified-badges-inline):not(.msg-self-pill),
+.msg-pop-title strong > span:not(.verified-badges-inline):not(.msg-self-pill),
+.effects-card-name > span:not(.verified-badges-inline):not(.msg-self-pill),
+#quick-account-name > span:not(.verified-badges-inline):not(.msg-self-pill),
+.sidebar-user-name > span:not(.verified-badges-inline):not(.msg-self-pill),
+#my-name > span:not(.verified-badges-inline):not(.msg-self-pill),
+.msg-sender-name > .verified-name-text {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-group-member-meta strong .verified-badges-inline {
+  margin-left: 0;
+}
+@media (max-width: 620px) {
+  .msg-thread-header {
+    padding: 9px 10px;
+    gap: 8px;
+  }
+  .msg-thread-header-left {
+    gap: 8px;
+  }
+  .msg-thread-header .msg-avatar-wrap .avatar-md,
+  .msg-thread-header .msg-group-avatar.avatar-md {
+    width: 36px;
+    height: 36px;
+    font-size: 12.5px;
+  }
+  .msg-thread-header-actions {
+    gap: 5px;
+  }
 }
 .msg-welcome-meta {
   display: inline-flex;

@@ -3163,6 +3163,145 @@
     window.addEventListener('resize', () => hideVerifiedBadgeTooltip({ force: true }));
   }
 
+  const SINGLE_LINE_VERIFIED_NAME_RULES = [
+    { selector: '.msg-thread-peer-title strong', minPx: 10.5 },
+    { selector: '.msg-welcome-name', minPx: 12.5 },
+    { selector: '.msg-drawer-profile strong', minPx: 11.5 },
+    { selector: '#msg-pop-name', minPx: 11.5 },
+    { selector: '.effects-card-name', minPx: 11.5 },
+    { selector: '#quick-account-name', minPx: 11 },
+    { selector: '.sidebar-user-name', minPx: 10.5 },
+    { selector: '#my-name', minPx: 11 }
+  ];
+  const SINGLE_LINE_VERIFIED_NAME_SELECTOR = SINGLE_LINE_VERIFIED_NAME_RULES.map((r) => r.selector).join(', ');
+  const FLEX_BADGE_HOST_SELECTOR = `${SINGLE_LINE_VERIFIED_NAME_SELECTOR}, .msg-conv-name, .msg-sender-name, .msg-group-member-meta strong, .msg-group-pick-copy strong, .msg-group-chip > span:first-child, .msg-forward-meta strong`;
+
+  function ensureVerifiedNameTextSpan(el) {
+    if (!el || !el.childNodes) return null;
+    const directSpan = Array.from(el.children || []).find(
+      (child) => child.tagName === 'SPAN' && !child.classList.contains('verified-badges-inline') && !child.classList.contains('msg-self-pill')
+    );
+    if (directSpan) {
+      if (!directSpan.classList.contains('verified-name-text')) directSpan.classList.add('verified-name-text');
+      const fullLabel = (directSpan.textContent || '').trim();
+      if (fullLabel && !el.getAttribute?.('title')) el.setAttribute?.('title', fullLabel);
+      return directSpan;
+    }
+    const textNode = Array.from(el.childNodes).find((node) => node.nodeType === 3 && node.nodeValue && node.nodeValue.trim());
+    if (!textNode || typeof document === 'undefined' || typeof document.createElement !== 'function') return null;
+    const span = document.createElement('span');
+    span.className = 'verified-name-text';
+    const raw = textNode.nodeValue.trim();
+    el.insertBefore(span, textNode);
+    span.appendChild(textNode);
+    if (raw && !el.getAttribute?.('title')) el.setAttribute?.('title', raw);
+    return span;
+  }
+
+  function glueVerifiedBadgeToSurname(badgeEl) {
+    if (!badgeEl || badgeEl.classList?.contains('is-showcase')) return false;
+    if (badgeEl.closest?.('.verified-name-tail')) return false;
+    const parent = badgeEl.parentElement;
+    if (!parent || parent.matches?.(FLEX_BADGE_HOST_SELECTOR)) return false;
+    const prev = badgeEl.previousSibling;
+    if (!prev || prev.nodeType !== 3 || !prev.nodeValue) return false;
+    const match = prev.nodeValue.match(/^([\s\S]*?)(\S+\s*)$/);
+    if (!match || !match[2] || typeof document === 'undefined' || typeof document.createElement !== 'function') return false;
+    const tail = document.createElement('span');
+    tail.className = 'verified-name-tail';
+    prev.nodeValue = match[1];
+    parent.insertBefore(tail, badgeEl);
+    tail.appendChild(document.createTextNode(match[2]));
+    tail.appendChild(badgeEl);
+    return true;
+  }
+
+  function fitSingleLineVerifiedName(el, minPx = 10.5) {
+    if (!el || !el.style) return false;
+    const textEl = ensureVerifiedNameTextSpan(el);
+    if (!textEl) return false;
+    el.style.fontSize = '';
+    if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return false;
+    const clientW = Number(textEl.clientWidth || 0);
+    const scrollW = Number(textEl.scrollWidth || 0);
+    if (clientW <= 0 || scrollW <= clientW + 1) return false;
+    const basePx = parseFloat(window.getComputedStyle(el).fontSize) || 15;
+    if (basePx <= minPx) return false;
+    let nextPx = Math.max(minPx, Math.floor((basePx * (clientW / scrollW)) * 2) / 2);
+    el.style.fontSize = `${nextPx}px`;
+    let guard = 0;
+    while (guard < 8 && nextPx > minPx && Number(textEl.scrollWidth || 0) > Number(textEl.clientWidth || 0) + 1) {
+      nextPx = Math.max(minPx, Number((nextPx - 0.5).toFixed(1)));
+      el.style.fontSize = `${nextPx}px`;
+      guard += 1;
+    }
+    return true;
+  }
+
+  function fitVerifiedNameLines(root = document) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    if (root.nodeType === 1) {
+      for (const rule of SINGLE_LINE_VERIFIED_NAME_RULES) {
+        if (root.matches?.(rule.selector)) fitSingleLineVerifiedName(root, rule.minPx);
+      }
+      if (root.matches?.('.msg-sender-name')) ensureVerifiedNameTextSpan(root);
+    }
+    for (const rule of SINGLE_LINE_VERIFIED_NAME_RULES) {
+      root.querySelectorAll(rule.selector).forEach((el) => fitSingleLineVerifiedName(el, rule.minPx));
+    }
+    root.querySelectorAll('.msg-sender-name').forEach((el) => ensureVerifiedNameTextSpan(el));
+    root.querySelectorAll('.verified-badges-inline').forEach((badgeEl) => glueVerifiedBadgeToSurname(badgeEl));
+  }
+
+  let verifiedNameLayoutBound = false;
+  let verifiedNameLayoutRaf = 0;
+
+  function scheduleVerifiedNameLayout(targetRoot = document) {
+    if (typeof window === 'undefined') return;
+    if (verifiedNameLayoutRaf) return;
+    const run = () => {
+      verifiedNameLayoutRaf = 0;
+      fitVerifiedNameLines(targetRoot || document);
+    };
+    if (typeof window.requestAnimationFrame === 'function') {
+      verifiedNameLayoutRaf = window.requestAnimationFrame(run);
+    } else {
+      verifiedNameLayoutRaf = setTimeout(run, 0);
+    }
+  }
+
+  function initVerifiedNameLayout() {
+    if (verifiedNameLayoutBound || typeof document === 'undefined' || typeof window === 'undefined') return;
+    verifiedNameLayoutBound = true;
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', () => scheduleVerifiedNameLayout(document), { passive: true });
+    }
+    document.fonts?.ready?.then?.(() => scheduleVerifiedNameLayout(document)).catch?.(() => { });
+    const startObserver = () => {
+      if (typeof MutationObserver !== 'function' || !document.body) return;
+      const obs = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          if (m.target?.classList?.contains('verified-name-tail') || m.target?.classList?.contains('verified-name-text')) continue;
+          for (const node of m.addedNodes || []) {
+            if (node?.nodeType !== 1) continue;
+            if (node.classList?.contains('verified-name-tail') || node.classList?.contains('verified-name-text')) continue;
+            if (
+              node.matches?.('.verified-badges-inline, .msg-thread-peer-name')
+              || node.querySelector?.('.verified-badges-inline, .msg-thread-peer-name')
+            ) {
+              scheduleVerifiedNameLayout(document);
+              return;
+            }
+          }
+        }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      scheduleVerifiedNameLayout(document);
+    };
+    if (document.body) startObserver();
+    else document.addEventListener?.('DOMContentLoaded', startObserver, { once: true });
+  }
+
   const CREATOR_ACCOUNT_EMAIL = 'breadspanish231@gmail.com';
   const hasAllEffectsAccess = (profile = currentProfile) => Boolean(
     profile?.role === 'SUPER_ADMIN'
@@ -3280,6 +3419,7 @@
     const quickNameEl = document.getElementById('quick-account-name');
     if (quickNameEl && profile?.full_name) {
       quickNameEl.innerHTML = `<span>${escapeHtml(profile.full_name)}</span>${verifiedBadgesHtml(profile)}`;
+      fitVerifiedNameLines(quickNameEl);
     }
   }
 
@@ -3325,6 +3465,7 @@
     const sidebarUser = document.getElementById('sidebar-user');
     if (!sidebarUser || !profile) return;
     sidebarUser.innerHTML = `<strong class="sidebar-user-name"><span>${escapeHtml(profile.full_name)}</span>${verifiedBadgesHtml(profile)}</strong><small>${escapeHtml(profile.role === 'SUPER_ADMIN' ? 'Owner' : 'My account')}</small>`;
+    fitVerifiedNameLines(sidebarUser);
   }
 
   async function refreshVerifiedBadgesCache({ force = false, refreshOwnProfile = false } = {}) {
@@ -4376,10 +4517,12 @@
     requestAnimationFrame?.(() => {
       cardStage.refreshGeometry();
       tileControllers.forEach((ctrl) => ctrl.refreshGeometry());
+      fitVerifiedNameLines(dialog);
     });
   }
 
   initVerifiedBadgeTooltip();
+  initVerifiedNameLayout();
 
   function avatarMarkup(avatarUrl, name, className = '', userId = null) {
     const safeUrl = isSafeImageRef(avatarUrl) ? String(avatarUrl).trim() : '';
@@ -5276,8 +5419,10 @@
     if (!dialog || !currentProfile) return;
     bindDeviceNotificationControls();
     dialog.showModal();
+    fitVerifiedNameLines(dialog);
     try { await Promise.all([loadAccountDialog(), quickMfaController?.load(), syncDevicePermissionUI()]); }
     catch (error) { toast(friendlyError(error), 'error'); }
+    finally { fitVerifiedNameLines(dialog); }
   }
 
   function openAvatarCropper(file, {
@@ -17978,7 +18123,7 @@
     canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, bindInviteCodeInput, inviteShareUrl,
     setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
     generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
-    resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal, syncAccountBadgeSection, openCreatorBadgeChat,
+    resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, fitVerifiedNameLines, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal, syncAccountBadgeSection, openCreatorBadgeChat,
     refreshProfileEffectsState, maybeShowEffectAwardModal, openProfileEffectsDialog,
     SOCIAL_APPS, validateSocialAppInput, normalizeSocialAppUrl, normalizeSocialAppOrder, reorderSocialAppKeys, sanitizeSocialLinks, serializeSocialLinks, renderSocialAppLinksHtml,
     get profile() { return currentProfile; }
