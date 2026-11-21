@@ -318,14 +318,140 @@
     }
   }
 
+  function setInviteRowCommitted(row, committed, summary = null) {
+    if (!row) return;
+    const isCommitted = Boolean(committed);
+    row.classList.toggle('is-committed', isCommitted);
+    row.dataset.committed = isCommitted ? 'true' : 'false';
+    const grid = row.querySelector('.invite-row-grid');
+    const actions = row.querySelector('.invite-row-actions');
+    const summaryEl = row.querySelector('.invite-row-summary');
+    const editBtn = row.querySelector('.invite-row-edit');
+    const stateEl = row.querySelector('.invite-row-state');
+    const commitBtn = row.querySelector('.invite-row-commit');
+    if (grid) grid.hidden = isCommitted;
+    if (actions) actions.hidden = isCommitted;
+    if (summaryEl) summaryEl.hidden = !isCommitted;
+    if (editBtn) editBtn.hidden = !isCommitted;
+    if (stateEl) stateEl.hidden = !isCommitted;
+    if (commitBtn) commitBtn.textContent = isCommitted || row.dataset.everCommitted === 'true' ? 'Done' : 'Add';
+    if (isCommitted) {
+      row.dataset.everCommitted = 'true';
+      if (summaryEl && summary) {
+        const emailOut = summaryEl.querySelector('.invite-row-summary-email');
+        const metaOut = summaryEl.querySelector('.invite-row-summary-meta');
+        if (emailOut) emailOut.textContent = summary.email;
+        if (metaOut) {
+          const amountText = typeof Ipon.money === 'function'
+            ? Ipon.money(summary.monthly_contribution_amount)
+            : `₱${Number(summary.monthly_contribution_amount || 0).toFixed(2)}`;
+          const parts = [];
+          if (summary.displayName) parts.push(summary.displayName);
+          parts.push(`${amountText}/mo`);
+          parts.push('Ready to invite');
+          metaOut.textContent = parts.join(' · ');
+        }
+      }
+    }
+  }
+
+  function validateInviteRow(row, { container = null, allowEmpty = false, seenEmails = null } = {}) {
+    const emailEl = row.querySelector('[name="invite_email"]');
+    const nameEl = row.querySelector('[name="invite_name"]');
+    const amountEl = row.querySelector('[name="invite_amount"]');
+    const passEl = row.querySelector('[name="invite_password"]');
+    const email = emailEl.value.trim().toLowerCase();
+    const name = nameEl.value.trim();
+    const password = passEl.value;
+    Ipon.setFieldError(emailEl, '');
+    Ipon.setFieldError(nameEl, '');
+    Ipon.setFieldError(amountEl, '');
+    Ipon.setFieldError(passEl, '');
+    if (allowEmpty && !email && !name) return { skip: true };
+    const revealIfCollapsed = () => {
+      if (row.classList.contains('is-committed')) setInviteRowCommitted(row, false);
+    };
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      revealIfCollapsed();
+      Ipon.setFieldError(emailEl, 'Enter a valid email address.');
+      emailEl.focus();
+      return { error: true };
+    }
+    const isDuplicate = seenEmails
+      ? seenEmails.has(email)
+      : Boolean(container && [...container.querySelectorAll('.invite-row-card')].some((other) => (
+        other !== row && (other.querySelector('[name="invite_email"]')?.value || '').trim().toLowerCase() === email
+      )));
+    if (isDuplicate) {
+      revealIfCollapsed();
+      Ipon.setFieldError(emailEl, 'This email is already added to the invite list.');
+      emailEl.focus();
+      return { error: true };
+    }
+    const nameIssue = Ipon.fullNameValidationError(name, { required: false, live: false });
+    if (nameIssue) {
+      revealIfCollapsed();
+      Ipon.setFieldError(nameEl, nameIssue);
+      nameEl.focus();
+      return { error: true };
+    }
+    const amountCheck = typeof Ipon.parseMoneyAmount === 'function'
+      ? Ipon.parseMoneyAmount(amountEl.value, { min: 1, max: 1000000, required: true, label: 'Monthly share', badInput: Boolean(amountEl.validity?.badInput) })
+      : { valid: Number(amountEl.value) >= 1 && Number(amountEl.value) <= 1000000, value: Number(amountEl.value), error: 'Enter a valid monthly share (₱1 to ₱1,000,000).' };
+    if (!amountCheck.valid) {
+      revealIfCollapsed();
+      Ipon.setFieldError(amountEl, amountCheck.error || 'Enter a valid monthly share.');
+      amountEl.focus();
+      return { error: true };
+    }
+    const monthlyAmount = Number(amountCheck.value) > 0 ? Number(amountCheck.value) : 100;
+    const pwIssue = Ipon.passwordIssue(password, [name, email.split('@')[0]]);
+    if (pwIssue) {
+      revealIfCollapsed();
+      Ipon.setFieldError(passEl, pwIssue);
+      passEl.focus();
+      return { error: true };
+    }
+    if (seenEmails) seenEmails.add(email);
+    const normalizedInviteName = Ipon.normalizeNamePart(name);
+    const nameOptional = !normalizedInviteName;
+    const parsed = nameOptional
+      ? { first_name: null, middle_name: null, last_name: null }
+      : parseFullNameParts(normalizedInviteName, email);
+    return {
+      skip: false,
+      displayName: normalizedInviteName,
+      payload: {
+        role: 'MEMBER',
+        create_member: true,
+        name_optional: nameOptional,
+        ...parsed,
+        email,
+        password,
+        monthly_contribution_amount: monthlyAmount
+      }
+    };
+  }
+
   function appendInviteRow(container, { defaultAmount = 100, required = false } = {}) {
     if (!container) return null;
     const row = document.createElement('div');
     row.className = 'invite-row-card';
+    row.dataset.committed = 'false';
     row.innerHTML = `
       <div class="invite-row-head">
-        <span class="invite-row-badge">Member invite</span>
-        <button class="invite-row-remove" type="button" title="Remove member" aria-label="Remove invite row">&times;</button>
+        <div class="invite-row-head-title">
+          <span class="invite-row-badge">Member invite</span>
+          <span class="invite-row-state" hidden>Added</span>
+        </div>
+        <div class="invite-row-head-actions">
+          <button class="invite-row-edit" type="button" hidden>Edit</button>
+          <button class="invite-row-remove" type="button" title="Remove member" aria-label="Remove invite row">&times;</button>
+        </div>
+      </div>
+      <div class="invite-row-summary" hidden>
+        <strong class="invite-row-summary-email"></strong>
+        <small class="invite-row-summary-meta"></small>
       </div>
       <div class="invite-row-grid">
         <div class="field"><label>Email</label><input name="invite_email" type="email" autocomplete="off" maxlength="254" placeholder="member@example.com"${required ? ' required' : ''}></div>
@@ -333,10 +459,30 @@
         <div class="field"><label>Monthly share</label><input name="invite_amount" type="number" min="1" max="1000000" step="0.01" value="${Ipon.escapeHtml(String(defaultAmount))}"></div>
         <div class="field"><label>Temporary password</label><input name="invite_password" type="password" minlength="8" maxlength="128" autocomplete="new-password" data-temp-password placeholder="Recommended or custom password"${required ? ' required' : ''}></div>
       </div>
+      <div class="invite-row-actions">
+        <button class="button button-primary invite-row-commit" type="button">Add</button>
+      </div>
     `;
-    Ipon.prepareTemporaryPassword(row.querySelector('[name="invite_password"]'));
+    const emailInput = row.querySelector('[name="invite_email"]');
+    const passInput = row.querySelector('[name="invite_password"]');
+    Ipon.prepareTemporaryPassword(passInput);
     Ipon.prepareInviteNameInput(row.querySelector('[name="invite_name"]'));
     Ipon.preparePesoInputs(row);
+    emailInput?.addEventListener('input', () => {
+      if (emailInput.hasAttribute('aria-invalid')) Ipon.setFieldError(emailInput, '');
+    });
+    passInput?.addEventListener('input', () => {
+      if (passInput.hasAttribute('aria-invalid')) Ipon.setFieldError(passInput, '');
+    });
+    row.querySelector('.invite-row-commit').addEventListener('click', () => {
+      const result = validateInviteRow(row, { container, allowEmpty: false });
+      if (!result || result.error || result.skip) return;
+      setInviteRowCommitted(row, true, { ...result.payload, displayName: result.displayName });
+    });
+    row.querySelector('.invite-row-edit').addEventListener('click', () => {
+      setInviteRowCommitted(row, false);
+      emailInput?.focus();
+    });
     row.querySelector('.invite-row-remove').addEventListener('click', () => {
       if (required && container.querySelectorAll('.invite-row-card').length <= 1) return;
       row.remove();
@@ -367,51 +513,13 @@
 
   function collectInvitePayloads(container, { allowEmptyRows = true } = {}) {
     const entries = [];
+    const seenEmails = new Set();
     const rows = [...(container?.querySelectorAll('.invite-row-card') || [])];
     for (const row of rows) {
-      const emailEl = row.querySelector('[name="invite_email"]');
-      const nameEl = row.querySelector('[name="invite_name"]');
-      const amountEl = row.querySelector('[name="invite_amount"]');
-      const passEl = row.querySelector('[name="invite_password"]');
-      const email = emailEl.value.trim().toLowerCase();
-      const name = nameEl.value.trim();
-      const password = passEl.value;
-      const monthlyAmount = Number(amountEl.value) > 0 ? Number(amountEl.value) : 100;
-      Ipon.setFieldError(emailEl, '');
-      Ipon.setFieldError(nameEl, '');
-      Ipon.setFieldError(passEl, '');
-      if (allowEmptyRows && !email && !name) continue;
-      if (!/^\S+@\S+\.\S+$/.test(email)) {
-        Ipon.setFieldError(emailEl, 'Enter a valid email address.');
-        emailEl.focus();
-        return null;
-      }
-      const nameIssue = Ipon.fullNameValidationError(name, { required: false, live: false });
-      if (nameIssue) {
-        Ipon.setFieldError(nameEl, nameIssue);
-        nameEl.focus();
-        return null;
-      }
-      const pwIssue = Ipon.passwordIssue(password, [name, email.split('@')[0]]);
-      if (pwIssue) {
-        Ipon.setFieldError(passEl, pwIssue);
-        passEl.focus();
-        return null;
-      }
-      const normalizedInviteName = Ipon.normalizeNamePart(name);
-      const nameOptional = !normalizedInviteName;
-      const parsed = nameOptional
-        ? { first_name: null, middle_name: null, last_name: null }
-        : parseFullNameParts(normalizedInviteName, email);
-      entries.push({
-        role: 'MEMBER',
-        create_member: true,
-        name_optional: nameOptional,
-        ...parsed,
-        email,
-        password,
-        monthly_contribution_amount: monthlyAmount
-      });
+      const result = validateInviteRow(row, { container, allowEmpty: allowEmptyRows, seenEmails });
+      if (result.error) return null;
+      if (result.skip) continue;
+      entries.push(result.payload);
     }
     return entries;
   }
@@ -1588,7 +1696,8 @@
     groupDirty?.sync();
   });
   document.getElementById('group-add-invite-row')?.addEventListener('click', () => {
-    appendInviteRow(groupInviteRows, { defaultAmount: Number(groupMonthlyInput.value) > 0 ? Number(groupMonthlyInput.value) : 100, required: false });
+    const row = appendInviteRow(groupInviteRows, { defaultAmount: Number(groupMonthlyInput.value) > 0 ? Number(groupMonthlyInput.value) : 100, required: false });
+    row?.querySelector('[name="invite_email"]')?.focus();
   });
   document.getElementById('dashboard-edit-group')?.addEventListener('click', () => {
     groupHubDialog?.close();
@@ -2027,7 +2136,8 @@
     inviteDialog.showModal();
   });
   document.getElementById('invite-add-row')?.addEventListener('click', () => {
-    appendInviteRow(inviteOnlyRows, { defaultAmount: 100, required: true });
+    const row = appendInviteRow(inviteOnlyRows, { defaultAmount: 100, required: true });
+    row?.querySelector('[name="invite_email"]')?.focus();
   });
   document.getElementById('close-invite-dialog')?.addEventListener('click', () => inviteDialog?.close());
   document.getElementById('cancel-invite-dialog')?.addEventListener('click', () => inviteDialog?.close());
