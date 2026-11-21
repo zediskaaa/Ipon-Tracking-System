@@ -21661,7 +21661,7 @@ html[data-theme="dark"] .notification-item-icon.is-effect-granted {
 .effects-tile .tmeta { padding: 11px 13px 13px; }
 .effects-tile .trow { display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 3px; }
 .effects-tile .trow b { font-family: "IPON Serif", "Source Serif Pro", Georgia, serif; font-size: 15px; color: #f2f5f3; }
-.effects-tile .cat { font-style: normal; font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #98a6a0; white-space: nowrap; }
+.effects-tile .cat { font-style: normal; font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #98a6a0; white-space: normal; line-height: 1.3; max-width: 100%; }
 .effects-tile .rar1 { color: #f0c869; }
 .effects-tile .rar2 { color: #d49bff; }
 .effects-tile .tmeta p { margin: 5px 0 0; font-size: 12px; line-height: 1.45; color: #98a6a0; min-height: 2.9em; }

@@ -47,10 +47,42 @@ function makeStubCanvasContext() {
   };
 }
 
-test('profile effects engine exports all 16 effects and renders every effect cleanly without errors', () => {
+test('profile effects engine exports all 24 effects and renders every effect cleanly without errors', () => {
   const code = read('js/profile-effects.js');
   const canvases = [];
   const noop = () => { };
+  const numericErrors = [];
+  let saveDepth = 0;
+  const checkNums = (fn, args) => {
+    for (const v of args) {
+      if (typeof v === 'number' && !Number.isFinite(v)) {
+        numericErrors.push(`${fn}(${args.join(',')})`);
+      }
+    }
+  };
+  const makeStrictCtx = () => {
+    const base = makeStubCanvasContext();
+    const wrap = (name) => (...args) => {
+      checkNums(name, args);
+      return base[name](...args);
+    };
+    return {
+      ...base,
+      save: () => { saveDepth += 1; },
+      restore: () => { saveDepth -= 1; },
+      moveTo: wrap('moveTo'),
+      lineTo: wrap('lineTo'),
+      quadraticCurveTo: wrap('quadraticCurveTo'),
+      bezierCurveTo: wrap('bezierCurveTo'),
+      arc: wrap('arc'),
+      ellipse: wrap('ellipse'),
+      translate: wrap('translate'),
+      rotate: wrap('rotate'),
+      scale: wrap('scale'),
+      createLinearGradient: wrap('createLinearGradient'),
+      createRadialGradient: wrap('createRadialGradient')
+    };
+  };
   const fakeCanvas = () => ({
     className: '',
     width: 300,
@@ -61,10 +93,11 @@ test('profile effects engine exports all 16 effects and renders every effect cle
     offsetHeight: 180,
     attributes: {},
     setAttribute(k, v) { this.attributes[k] = v; },
-    getContext: () => makeStubCanvasContext(),
+    getContext: () => makeStrictCtx(),
     remove: noop
   });
 
+  const rafQueue = [];
   const sandbox = {
     window: {
       devicePixelRatio: 2,
@@ -81,7 +114,8 @@ test('profile effects engine exports all 16 effects and renders every effect cle
         return { attributes: {}, setAttribute: noop, remove: noop };
       }
     },
-    requestAnimationFrame: () => 1,
+    performance: { now: () => 1000 },
+    requestAnimationFrame: (cb) => { rafQueue.push(cb); return rafQueue.length; },
     cancelAnimationFrame: noop,
     Math,
     Date,
@@ -99,19 +133,30 @@ test('profile effects engine exports all 16 effects and renders every effect cle
 
   const api = sandbox.window.IponProfileEffects;
   assert.ok(api);
-  assert.equal(api.EFFECTS.length, 16);
-  assert.equal(api.ALL_OPTIONS.length, 17);
+  assert.equal(api.EFFECTS.length, 24);
+  assert.equal(api.ALL_OPTIONS.length, 25);
   assert.deepEqual(
     [...api.EFFECTS.map((e) => e.id)],
     [
       'stardust', 'orbit', 'butterflies', 'koi', 'robots', 'drones',
       'holo', 'glitch', 'fireflies', 'petals', 'singularity', 'warp',
-      'jelly', 'astro', 'constellation', 'sigil'
+      'jelly', 'astro', 'constellation', 'sigil',
+      'laurel', 'scholar', 'circuit', 'neural',
+      'blueprint', 'atelier', 'vetpulse', 'sanctuary'
     ]
   );
+  for (const cat of ['Education', 'Information Technology', 'Architecture', 'Veterinary Medicine']) {
+    assert.ok(api.CATEGORIES.includes(cat), `Missing category ${cat}`);
+    assert.equal(api.EFFECTS.filter((e) => e.cat === cat).length, 2, `Category ${cat} must have 2 distinct effects`);
+  }
   assert.equal(api.normalizeEffectId(' SIGIL '), 'sigil');
+  assert.equal(api.normalizeEffectId(' SANCTUARY '), 'sanctuary');
   assert.equal(api.normalizeEffectId('unknown'), 'none');
   assert.equal(api.getEffect('singularity').rare, 2);
+  assert.equal(api.getEffect('laurel').cat, 'Education');
+  assert.equal(api.getEffect('circuit').cat, 'Information Technology');
+  assert.equal(api.getEffect('blueprint').cat, 'Architecture');
+  assert.equal(api.getEffect('vetpulse').cat, 'Veterinary Medicine');
 
   const fxb = fakeCanvas();
   const fxf = fakeCanvas();
@@ -124,15 +169,28 @@ test('profile effects engine exports all 16 effects and renders every effect cle
     prepend: noop,
     appendChild: noop
   };
-  const stage = api.mountStage(host, {
-    effectId: 'stardust',
-    geometryFn: () => ({ cx: 60, cy: 96, ra: 36 }),
-    fps: 60
-  });
-  for (const effect of api.ALL_OPTIONS) {
-    assert.doesNotThrow(() => stage.setEffect(effect.id), `Failed rendering ${effect.id}`);
+  for (const geom of [
+    () => ({ cx: 60, cy: 96, ra: 36 }),
+    () => ({ cx: 150, cy: 86, ra: 24 })
+  ]) {
+    const stage = api.mountStage(host, {
+      effectId: 'stardust',
+      geometryFn: geom,
+      fps: 60
+    });
+    for (const effect of api.ALL_OPTIONS) {
+      saveDepth = 0;
+      assert.doesNotThrow(() => stage.setEffect(effect.id), `Failed rendering ${effect.id}`);
+      const tick = rafQueue[rafQueue.length - 1];
+      if (tick) {
+        tick(1040);
+        tick(1080);
+      }
+      assert.equal(saveDepth, 0, `Unbalanced canvas save/restore in ${effect.id}`);
+    }
+    stage.destroy();
   }
-  stage.destroy();
+  assert.deepEqual(numericErrors, [], `Non-finite canvas coordinates detected: ${numericErrors.slice(0, 5).join(', ')}`);
 });
 
 test('migration 117 enforces permanent Super Admin grants with zero retention expiry and strict RLS', () => {
@@ -1067,4 +1125,32 @@ test('Profile Effects gallery tiles and award/admin previews display actual user
   assert.match(appCss, /\.effects-tile \.tstage \.mav img\s*\{[^}]*object-fit:\s*cover;/s);
   assert.match(superAdminJs, /effectGrantPreviewAvatar\.innerHTML[\s\S]*data-avatar-img><span class="avatar-fallback-inner" hidden>/);
   assert.match(superAdminJs, /effectTrialPreviewAvatar\.innerHTML[\s\S]*data-avatar-img><span class="avatar-fallback-inner" hidden>/);
+});
+
+test('Migration 159, schema.sql, CSS wrapping, and HTML cache-busters wire all 8 themed profile effects end to end', () => {
+  const mig159 = read('database/migrations/20261122_159_themed_profile_effects.sql');
+  const schema = read('database/schema.sql');
+  const css = read('css/app.css');
+  const sw = read('sw.js');
+
+  const themedIds = ['laurel', 'scholar', 'circuit', 'neural', 'blueprint', 'atelier', 'vetpulse', 'sanctuary'];
+  for (const sql of [mig159, schema]) {
+    assert.match(sql, /'20261122_159'/);
+    assert.match(sql, /create or replace function public\.is_valid_profile_effect_id\(p_effect_id text\)/i);
+    assert.match(sql, /create or replace function public\.profile_effect_label\(p_effect_id text\)/i);
+    assert.match(sql, /create or replace function public\.get_own_profile_effects\(\)/i);
+    assert.match(sql, /create or replace function public\.equip_own_profile_effect\(p_effect_id text\)/i);
+    assert.match(sql, /create or replace function public\.acknowledge_my_profile_effects\(/i);
+    assert.match(sql, /create or replace function public\.submit_profile_effect_trial_request\(/i);
+    assert.match(sql, /create or replace function public\.super_admin_grant_profile_effects\(/i);
+    for (const id of themedIds) {
+      assert.match(sql, new RegExp(`'${id}'`), `SQL missing profile effect id "${id}"`);
+    }
+  }
+  assert.match(css, /\.effects-tile \.cat\s*\{[^}]*white-space:\s*normal;[^}]*max-width:\s*100%;/);
+  assert.match(sw, /ipon-shell-v167/);
+  for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
+    const html = read(file);
+    assert.match(html, /js\/profile-effects\.js\?v=20261122-01/);
+  }
 });
