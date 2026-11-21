@@ -914,7 +914,7 @@
           </div>
         </td>
         <td>
-          <span class="effect-table-pill${meta.rare === 2 ? ' is-epic' : meta.rare === 1 ? ' is-rare' : ''}">${Ipon.escapeHtml(meta.name)}</span>
+          <span class="effect-table-pill${meta.rare === 3 ? ' is-mythic' : meta.rare === 2 ? ' is-epic' : meta.rare === 1 ? ' is-rare' : ''}">${Ipon.escapeHtml(meta.name)}</span>
           <small class="field-help">${Ipon.escapeHtml(meta.cat + rarLabel)}</small>
         </td>
         <td>${req.request_note ? `<span class="effect-trial-note-preview">${Ipon.escapeHtml(req.request_note)}</span>` : '<span class="field-help">No note attached</span>'}</td>
@@ -968,7 +968,7 @@
           const label = isTrial && g.expires_at
             ? `${meta.name} (Trial · ${Ipon.dateLabel(g.expires_at, { dateStyle: 'short' })})`
             : isTrial ? `${meta.name} (Trial)` : meta.name;
-          return `<span class="effect-table-pill${isEq ? ' is-equipped' : ''}${isTrial ? ' is-trial' : meta.rare === 2 ? ' is-epic' : meta.rare === 1 ? ' is-rare' : ''}">${Ipon.escapeHtml(label)}</span>`;
+          return `<span class="effect-table-pill${isEq ? ' is-equipped' : ''}${isTrial ? ' is-trial' : meta.rare === 3 ? ' is-mythic' : meta.rare === 2 ? ' is-epic' : meta.rare === 1 ? ' is-rare' : ''}">${Ipon.escapeHtml(label)}</span>`;
         }).join('')}</div><small class="field-help">${[
           permCount ? `${permCount} permanent` : '',
           trialCount ? `${trialCount} active trial` : '',
@@ -1084,7 +1084,7 @@
     if (!profile || !effectGrantDialog || !effectGrantForm) return;
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
     const allEffects = api?.EFFECTS || [];
-    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic'];
+    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
     const grants = userEffectGrants(profile.id);
     const ownedIds = new Set(grants.filter((g) => g.is_permanent !== false).map((g) => g.effect_id));
     const trialIds = new Set(grants.filter((g) => g.is_permanent === false).map((g) => g.effect_id));
@@ -1308,7 +1308,7 @@
     if (!req || !effectTrialApproveDialog || !effectTrialApproveForm) return;
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
     const meta = api?.getEffect ? api.getEffect(req.effect_id) : { id: req.effect_id, name: req.effect_id, cat: 'Special', rare: 0 };
-    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic'];
+    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
     const rarText = meta.rare ? ` · ${rarities[meta.rare] || ''}` : '';
     effectTrialApproveForm.reset();
     effectTrialApproveForm.elements.request_id.value = req.id;

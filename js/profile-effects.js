@@ -3770,6 +3770,7 @@
 
   const CATEGORIES = [
     'All',
+    'Exclusive',
     'myIPON',
     'Education',
     'Information Technology',
@@ -3783,7 +3784,7 @@
     'Magic',
     'Special'
   ];
-  const RARITIES = ['Common', 'Rare', 'Epic'];
+  const RARITIES = ['Common', 'Rare', 'Epic', 'Mythic'];
   const NONE_EFFECT = Object.freeze({
     id: 'none',
     name: 'No Effect',
@@ -3794,6 +3795,30 @@
   const ALL_OPTIONS = [NONE_EFFECT, ...EFFECTS];
   const EFFECT_BY_ID = new Map(ALL_OPTIONS.map((item) => [item.id, item]));
   const VALID_EFFECT_IDS = new Set(EFFECTS.map((item) => item.id));
+
+  function registerEffect(id, name, cat, desc, rare, make, opts = {}) {
+    const cleanId = String(id || '').trim().toLowerCase();
+    if (!cleanId || typeof make !== 'function' || FX[cleanId]) return false;
+    const fullCard = Boolean(opts && opts.fullCard);
+    const cardFrame = Array.isArray(opts?.cardFrame) ? opts.cardFrame : null;
+    const meta = { id: cleanId, name, cat, desc, rare, fullCard };
+    FX[cleanId] = { ...meta, cardFrame, make };
+    EFFECTS.push(meta);
+    ALL_OPTIONS.push(meta);
+    EFFECT_BY_ID.set(cleanId, meta);
+    VALID_EFFECT_IDS.add(cleanId);
+    if (cat && !CATEGORIES.includes(cat)) {
+      const spIdx = CATEGORIES.indexOf('Special');
+      if (spIdx >= 0) CATEGORIES.splice(spIdx, 0, cat);
+      else CATEGORIES.push(cat);
+    }
+    return true;
+  }
+
+  const _H = Object.freeze({
+    TAU, R, frac, glow, star4, rr, planet, leaf, paw, ecgWave, sparkle,
+    tracePoly, pathMetrics, samplePath, traceComet, cardFrameMetrics, drawCardCorners, drawFullCardAura, drawCoin, GL
+  });
 
   function normalizeEffectId(raw) {
     const clean = String(raw || '').trim().toLowerCase();
@@ -4019,12 +4044,14 @@
   }
 
   const api = Object.freeze({
-    EFFECTS: Object.freeze(EFFECTS),
+    get EFFECTS() { return EFFECTS; },
     NONE_EFFECT,
-    ALL_OPTIONS: Object.freeze(ALL_OPTIONS),
-    CATEGORIES: Object.freeze(CATEGORIES),
+    get ALL_OPTIONS() { return ALL_OPTIONS; },
+    get CATEGORIES() { return CATEGORIES; },
     RARITIES: Object.freeze(RARITIES),
     VALID_EFFECT_IDS,
+    registerEffect,
+    _H,
     getEffect,
     normalizeEffectId,
     mountStage,

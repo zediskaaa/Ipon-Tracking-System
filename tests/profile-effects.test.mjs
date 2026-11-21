@@ -47,8 +47,9 @@ function makeStubCanvasContext() {
   };
 }
 
-test('profile effects engine exports all 24 effects and renders every effect cleanly without errors', () => {
+test('profile effects engine exports all 49 effects (including 14 Exclusive 4-scene looping effects) and renders every effect cleanly without errors', () => {
   const code = read('js/profile-effects.js');
+  const exclusiveCode = read('js/profile-effects-exclusive.js');
   const canvases = [];
   const noop = () => { };
   const numericErrors = [];
@@ -130,11 +131,12 @@ test('profile effects engine exports all 24 effects and renders every effect cle
   };
   sandbox.globalThis = sandbox;
   vm.runInNewContext(code, sandbox, { filename: 'js/profile-effects.js' });
+  vm.runInNewContext(exclusiveCode, sandbox, { filename: 'js/profile-effects-exclusive.js' });
 
   const api = sandbox.window.IponProfileEffects;
   assert.ok(api);
-  assert.equal(api.EFFECTS.length, 35);
-  assert.equal(api.ALL_OPTIONS.length, 36);
+  assert.equal(api.EFFECTS.length, 49);
+  assert.equal(api.ALL_OPTIONS.length, 50);
   assert.deepEqual(
     [...api.EFFECTS.map((e) => e.id)],
     [
@@ -145,9 +147,17 @@ test('profile effects engine exports all 24 effects and renders every effect cle
       'blueprint', 'atelier', 'vetpulse', 'sanctuary',
       'iponcoins', 'iponsprout', 'iponvault',
       'orrery', 'diploma', 'cybergrid', 'fibercloud',
-      'stainedglass', 'cantilever', 'biolumfauna', 'botanicvet'
+      'stainedglass', 'cantilever', 'biolumfauna', 'botanicvet',
+      'ex_phoenix', 'ex_dragon', 'ex_eclipse', 'ex_tempest', 'ex_blossom',
+      'ex_frost', 'ex_sovereign', 'ex_cybermech', 'ex_prism', 'ex_abyss',
+      'ex_valkyrie', 'ex_leviathan', 'ex_chronos', 'ex_kitsune'
     ]
   );
+  assert.ok(api.CATEGORIES.includes('Exclusive'), 'Missing category Exclusive');
+  assert.equal(api.RARITIES[3], 'Mythic');
+  const exclusives = api.EFFECTS.filter((e) => e.cat === 'Exclusive');
+  assert.equal(exclusives.length, 14, 'Category Exclusive must have 14 distinct multi-scene cinematic effects');
+  assert.equal(exclusives.every((e) => e.rare === 3 && e.fullCard === true), true, 'Every Exclusive effect must be Mythic (rare: 3) and fullCard: true');
   assert.ok(api.CATEGORIES.includes('myIPON'), 'Missing category myIPON');
   assert.equal(api.EFFECTS.filter((e) => e.cat === 'myIPON').length, 3, 'Category myIPON must have 3 distinct effects');
   for (const cat of ['Education', 'Information Technology', 'Architecture', 'Veterinary Medicine']) {
@@ -157,8 +167,11 @@ test('profile effects engine exports all 24 effects and renders every effect cle
   assert.equal(api.normalizeEffectId(' SIGIL '), 'sigil');
   assert.equal(api.normalizeEffectId(' SANCTUARY '), 'sanctuary');
   assert.equal(api.normalizeEffectId(' IPONCOINS '), 'iponcoins');
+  assert.equal(api.normalizeEffectId(' EX_SOVEREIGN '), 'ex_sovereign');
   assert.equal(api.normalizeEffectId('unknown'), 'none');
   assert.equal(api.getEffect('singularity').rare, 2);
+  assert.equal(api.getEffect('ex_phoenix').rare, 3);
+  assert.equal(api.getEffect('ex_phoenix').cat, 'Exclusive');
   assert.equal(api.getEffect('iponcoins').cat, 'myIPON');
   assert.equal(api.getEffect('iponcoins').fullCard, true);
   assert.equal(api.getEffect('stardust').fullCard, true);
@@ -193,14 +206,19 @@ test('profile effects engine exports all 24 effects and renders every effect cle
       geometryFn: geom,
       fps: 60
     });
+    let simNow = 1000;
     for (const effect of api.ALL_OPTIONS) {
       saveDepth = 0;
       assert.doesNotThrow(() => stage.setEffect(effect.id), `Failed rendering ${effect.id}`);
       assert.equal(host.dataset.effectScope, effect.fullCard ? 'full' : undefined, `Unexpected effectScope for ${effect.id}`);
       const tick = rafQueue[rafQueue.length - 1];
       if (tick) {
-        tick(1040);
-        tick(1080);
+        // Exclusive effects run 4 distinct ~6.2s scenes (24.8s full loop); step monotonically by 50ms (dt cap)
+        const steps = effect.cat === 'Exclusive' && dim[0] === 340 ? 520 : 12;
+        for (let i = 0; i < steps; i += 1) {
+          simNow += 50;
+          tick(simNow);
+        }
       }
       assert.equal(saveDepth, 0, `Unbalanced canvas save/restore in ${effect.id}`);
     }
@@ -1174,9 +1192,41 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v169/);
+  assert.match(sw, /ipon-shell-v172/);
+  assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
-    assert.match(html, /js\/profile-effects\.js\?v=20261122-03/);
+    assert.match(html, /js\/profile-effects\.js\?v=20261122-04/);
+    assert.match(html, /js\/profile-effects-exclusive\.js\?v=20261122-06/);
+    assert.match(html, /css\/app\.css\?v=20261122-05/);
   }
+});
+
+test('Migration 161, schema.sql, Exclusive/Mythic CSS badges, and super-admin pills wire all 14 Exclusive 4-scene looping effects', () => {
+  const mig161 = read('database/migrations/20261122_161_exclusive_profile_effects.sql');
+  const schema = read('database/schema.sql');
+  const css = read('css/app.css');
+  const saJs = read('js/super-admin.js');
+  const exJs = read('js/profile-effects-exclusive.js');
+  const exclusiveIds = [
+    'ex_phoenix', 'ex_dragon', 'ex_eclipse', 'ex_tempest', 'ex_blossom',
+    'ex_frost', 'ex_sovereign', 'ex_cybermech', 'ex_prism', 'ex_abyss',
+    'ex_valkyrie', 'ex_leviathan', 'ex_chronos', 'ex_kitsune'
+  ];
+  for (const sql of [mig161, schema]) {
+    assert.match(sql, /'20261122_161'/);
+    for (const id of exclusiveIds) {
+      assert.match(sql, new RegExp(`'${id}'`), `SQL missing Exclusive effect id "${id}"`);
+    }
+  }
+  for (const banned of ['drawShockRings', 'drawGatherWisps', 'drawWaveSweep', 'drawMeteorRain', 'drawWingPlume', 'drawRuneRing', 'drawHelixVortex', 'cardFrameMetrics', 'drawCardCorners']) {
+    assert.equal(exJs.includes(banned), false, `Exclusive effects must not reuse generic template helper "${banned}"`);
+  }
+  assert.match(exJs, /function castShadow\(/);
+  assert.match(exJs, /function drawBevelRing\(/);
+  assert.match(exJs, /function drawStruckCoin\(/);
+  assert.match(css, /\.effects-chip\[data-effect-cat="Exclusive"\]\s*\{/);
+  assert.match(css, /\.effects-tile \.rar3\s*\{/);
+  assert.match(css, /\.effect-table-pill\.is-mythic\s*\{/);
+  assert.match(saJs, /meta\.rare === 3 \? ' is-mythic'/);
 });

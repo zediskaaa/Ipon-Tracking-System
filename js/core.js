@@ -3790,7 +3790,7 @@
     if (existingOpen) return false;
 
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
-    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic'];
+    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
     let activeIdx = 0;
 
     const dialog = document.createElement('dialog');
@@ -4186,7 +4186,7 @@
 
     function openTrialRequestModal(previewMeta) {
       document.getElementById('effects-trial-request-dialog')?.remove();
-      const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic'];
+      const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
       const rarText = previewMeta.rare ? ` · ${rarities[previewMeta.rare] || ''}` : '';
       const reqModal = document.createElement('dialog');
       reqModal.id = 'effects-trial-request-dialog';
