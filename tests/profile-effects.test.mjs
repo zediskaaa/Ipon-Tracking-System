@@ -47,7 +47,7 @@ function makeStubCanvasContext() {
   };
 }
 
-test('profile effects engine exports all 49 effects (including 14 Exclusive 4-scene looping effects) and renders every effect cleanly without errors', () => {
+test('profile effects engine exports all 50 effects (including founding recognition) and renders every effect cleanly without errors', () => {
   const code = read('js/profile-effects.js');
   const exclusiveCode = read('js/profile-effects-exclusive.js');
   const canvases = [];
@@ -135,8 +135,8 @@ test('profile effects engine exports all 49 effects (including 14 Exclusive 4-sc
 
   const api = sandbox.window.IponProfileEffects;
   assert.ok(api);
-  assert.equal(api.EFFECTS.length, 49);
-  assert.equal(api.ALL_OPTIONS.length, 50);
+  assert.equal(api.EFFECTS.length, 50);
+  assert.equal(api.ALL_OPTIONS.length, 51);
   assert.deepEqual(
     [...api.EFFECTS.map((e) => e.id)],
     [
@@ -150,13 +150,13 @@ test('profile effects engine exports all 49 effects (including 14 Exclusive 4-sc
       'stainedglass', 'cantilever', 'biolumfauna', 'botanicvet',
       'ex_phoenix', 'ex_dragon', 'ex_eclipse', 'ex_tempest', 'ex_blossom',
       'ex_frost', 'ex_sovereign', 'ex_cybermech', 'ex_prism', 'ex_abyss',
-      'ex_valkyrie', 'ex_leviathan', 'ex_chronos', 'ex_kitsune'
+      'ex_valkyrie', 'ex_leviathan', 'ex_chronos', 'ex_kitsune', 'ex_early_user'
     ]
   );
   assert.ok(api.CATEGORIES.includes('Exclusive'), 'Missing category Exclusive');
   assert.equal(api.RARITIES[3], 'Mythic');
   const exclusives = api.EFFECTS.filter((e) => e.cat === 'Exclusive');
-  assert.equal(exclusives.length, 14, 'Category Exclusive must have 14 distinct multi-scene cinematic effects');
+  assert.equal(exclusives.length, 15, 'Category Exclusive must include the 14 cinematic effects and founding recognition');
   assert.equal(exclusives.every((e) => e.rare === 3 && e.fullCard === true), true, 'Every Exclusive effect must be Mythic (rare: 3) and fullCard: true');
   assert.ok(api.CATEGORIES.includes('myIPON'), 'Missing category myIPON');
   assert.equal(api.EFFECTS.filter((e) => e.cat === 'myIPON').length, 3, 'Category myIPON must have 3 distinct effects');
@@ -1192,12 +1192,12 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v172/);
+  assert.match(sw, /ipon-shell-v173/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
     assert.match(html, /js\/profile-effects\.js\?v=20261122-04/);
-    assert.match(html, /js\/profile-effects-exclusive\.js\?v=20261122-06/);
+    assert.match(html, /js\/profile-effects-exclusive\.js\?v=20261122-07/);
     assert.match(html, /css\/app\.css\?v=20261122-05/);
   }
 });
@@ -1229,4 +1229,19 @@ test('Migration 161, schema.sql, Exclusive/Mythic CSS badges, and super-admin pi
   assert.match(css, /\.effects-tile \.rar3\s*\{/);
   assert.match(css, /\.effect-table-pill\.is-mythic\s*\{/);
   assert.match(saJs, /meta\.rare === 3 \? ' is-mythic'/);
+});
+
+test('founding effect is grant-only and recognized by the gallery and database', () => {
+  const migration = read('database/migrations/20261122_162_early_user_profile_effect.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+  const art = read('js/profile-effects-exclusive.js');
+  for (const sql of [migration, schema]) {
+    assert.match(sql, /'ex_early_user'/);
+    assert.match(sql, /profile_effect_grants_early_user_permanent_check/);
+    assert.match(sql, /Founders'' Grove/);
+  }
+  assert.match(core, /previewMeta\.id === 'ex_early_user'/);
+  assert.match(art, /drawSculptedLeaf\(f/);
+  assert.match(art, /drawStruckCoin\(f/);
 });

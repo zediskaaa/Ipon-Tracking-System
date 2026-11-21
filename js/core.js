@@ -4289,6 +4289,11 @@
         return;
       }
       box.hidden = false;
+      if (previewMeta.id === 'ex_early_user') {
+        box.dataset.tone = 'warning';
+        box.innerHTML = '<div class="effects-trial-title">Founding community recognition</div><p class="effects-trial-msg">Reserved for early myIPON supporters. Granted permanently by Super Admin.</p>';
+        return;
+      }
       const trialState = currentState?.trial_state || {};
       const usedEffects = new Set(Array.isArray(trialState.used_effects) ? trialState.used_effects : []);
       const activeTrial = trialState.active_trial || null;

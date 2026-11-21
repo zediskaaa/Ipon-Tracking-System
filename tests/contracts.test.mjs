@@ -12441,3 +12441,12 @@ test('screenshot notices have a protected group toggle and readable event stylin
   assert.match(chat, /\['vanish_enabled', 'vanish_disabled', 'vanish_updated'\]\.includes\(m\.metadata\?\.event\)/);
   assert.match(schema, /when 'vanish_enabled' then ' turned on vanishing messages for '/);
 });
+test('early user profile effect remains a permanent, grant-only recognition', () => {
+  const migration = read('database/migrations/20261122_162_early_user_profile_effect.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+  assert.match(migration, /'ex_early_user'/);
+  assert.match(migration, /profile_effect_grants_early_user_permanent_check/);
+  assert.match(schema, /when 'ex_early_user' then 'Founders'' Grove'/);
+  assert.match(core, /previewMeta\.id === 'ex_early_user'/);
+});

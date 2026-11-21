@@ -2714,4 +2714,45 @@
       }
     };
   }, { fullCard: true });
+  // Founders' Grove: a single living branch holds the savings coins, rather than scattering motifs.
+  api.registerEffect('ex_early_user', 'Founders’ Grove', 'Exclusive', 'A sculpted emerald branch cradles struck gold savings coins—a lasting mark of the people who grew myIPON from the beginning.', 3, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const span = Math.min(W * 0.42, ra * (full ? 2.5 : 2.1));
+    const baseY = Math.min(H - 17 * s, cy + ra * 1.52);
+    const tips = [-1, 1];
+    return (t) => {
+      const sway = Math.sin(t * 0.48) * 2.2 * s;
+      b.save();
+      b.strokeStyle = 'rgba(3,21,13,.38)'; b.lineWidth = 5 * s; b.lineCap = 'round';
+      b.beginPath(); b.moveTo(cx - span + 2*s, baseY + 4*s); b.quadraticCurveTo(cx, baseY - 24*s, cx + span + 2*s, baseY + 4*s); b.stroke();
+      const branch = b.createLinearGradient(cx - span, baseY, cx + span, baseY);
+      branch.addColorStop(0, '#426948'); branch.addColorStop(.5, '#b6a05b'); branch.addColorStop(1, '#1e4f32');
+      b.strokeStyle = branch; b.lineWidth = 2.2*s;
+      b.beginPath(); b.moveTo(cx-span,baseY); b.quadraticCurveTo(cx,baseY-24*s,cx+span,baseY); b.stroke();
+      b.restore();
+      for (const side of tips) for (let i=0;i<3;i++) {
+        const x=cx+side*(span*(.28+i*.25));
+        const y=baseY-(12+9*Math.sin((i+.3)*Math.PI/3))*s;
+        const lift=(i%2?-1:1)*side;
+        drawSculptedLeaf(f,x,y, (17+i*2)*s, (7+i)*s, lift*(.82+Math.sin(t*.58+i)*.07)+sway/span,
+          '#8cbf77','#d2d99d','#195b39','#0e392a','rgba(230,246,177,.6)',.96,2*s);
+        f.save();f.strokeStyle='rgba(193,225,166,.45)';f.lineWidth=.45*s;
+        f.beginPath();f.moveTo(x+side*2*s,y);f.lineTo(x+side*10*s,y-lift*4*s);f.stroke();f.restore();
+      }
+      for (let i=0;i<3;i++) {
+        const x=cx+(i-1)*ra*.66;
+        const y=baseY-(i===1?18:9)*s+Math.sin(t*.72+i*2)*1.6*s;
+        drawStruckCoin(f,x,y,(i===1?11:8.5)*s,Math.sin(t*.33+i)*.24, -.15+i*.15,.98,s);
+      }
+      // A restrained minted origin mark remains legible at gallery and full-card sizes.
+      const markY=Math.max(14*s,cy-ra*1.55);
+      f.save();f.textAlign='center';f.font=`700 ${Math.max(6,7*s)}px Georgia,serif`;
+      f.fillStyle='rgba(8,34,22,.75)';f.fillText('EST. MYIPON',cx+.7*s,markY+1*s);
+      f.fillStyle='#e8d394';f.fillText('EST. MYIPON',cx,markY);f.restore();
+      for(let i=0;i<3;i++) {
+        const x=cx+(i-1)*span*.72,y=baseY-30*s-i*5*s;
+        sparkle(f,x,y,1.2*s,'236,204,126',.2+.22*Math.max(0,Math.sin(t*.8+i*2)));
+      }
+    };
+  }, { fullCard:true, cardFrame:['208,175,96','68,130,76','arc'] });
 })();
