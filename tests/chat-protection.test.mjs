@@ -228,7 +228,11 @@ test('group screenshot notices require admin opt-in and keep direct chat notices
   }
   const activity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
   const manifest = read('android/app/src/main/AndroidManifest.xml');
-  assert.match(activity, /Build\.VERSION\.SDK_INT >= 34 \|\| !screenshotMonitoringEnabled/);
+  assert.match(activity, /if \(!screenshotMonitoringEnabled \|\| screenshotObserver != null\) return;/);
+  assert.match(activity, /screenCaptureCallback = this::dispatchScreenCaptured/);
+  assert.match(activity, /lastScreenshotEventAtMs > 0 && now - lastScreenshotEventAtMs < 1500L/);
+  assert.match(activity, /SystemClock\.uptimeMillis\(\) - lastWindowFocusAtMs > 15000L/);
+  assert.match(activity, /checked < 5 && images\.moveToNext\(\)/);
   assert.match(activity, /registerContentObserver\(MediaStore\.Images\.Media\.EXTERNAL_CONTENT_URI, true, screenshotObserver\)/);
   assert.match(activity, /unregisterContentObserver\(screenshotObserver\)/);
   const plugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
@@ -241,4 +245,24 @@ test('group screenshot notices require admin opt-in and keep direct chat notices
   assert.match(chat, /activeConv\?\.conversation_id !== state\.activeConvId/);
   assert.match(chat, /isGroupConv\(activeConv\) && !activeConv\.screenshot_notices_enabled/);
   assert.match(chat, /<strong>\$\{escapeHtml\(screenshotName\)\}<\/strong> took a screenshot/);
+});
+
+test('native screenshot events survive transient Android focus and visibility changes', () => {
+  const source = read('js/messages.js').replace(/\r\n/g, '\n');
+  const visibility = source.match(/function isThreadActivelyVisible\(\{ ignoreFocus = false \} = \{\}\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(visibility);
+  const state = { activeConvId: 'c1', mobileShowThread: true, showThreadInfo: false, searchActive: false, tab: 'chats' };
+  const workspace = { open: true };
+  const document = {
+    visibilityState: 'hidden',
+    hasFocus: () => false,
+    getElementById: (id) => id === 'msg-workspace-dialog' ? workspace : null,
+    querySelector: () => null
+  };
+  const window = { matchMedia: () => ({ matches: true }), innerWidth: 400 };
+  const isVisible = new Function('document', 'window', 'state', 'isWindowFocused', `${visibility}; return isThreadActivelyVisible;`)(document, window, state, false);
+  assert.equal(isVisible(), false);
+  assert.equal(isVisible({ ignoreFocus: true }), true);
+  workspace.open = false;
+  assert.equal(isVisible({ ignoreFocus: true }), false);
 });

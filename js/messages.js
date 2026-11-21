@@ -1478,7 +1478,7 @@
   function isThreadActivelyVisible({ ignoreFocus = false } = {}) {
     const dialog = document.getElementById('msg-workspace-dialog');
     if (!dialog?.open || !state.activeConvId) return false;
-    if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
+    if (!ignoreFocus && typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
     if (!ignoreFocus && !isWindowFocused) return false;
     if (!ignoreFocus && typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
     const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];

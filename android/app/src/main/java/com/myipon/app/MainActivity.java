@@ -73,6 +73,8 @@ public class MainActivity extends BridgeActivity {
     private boolean screenshotMonitoringEnabled;
     private boolean screenshotPermissionRequested;
     private long lastScreenshotId = -1L;
+    private long lastWindowFocusAtMs;
+    private long lastScreenshotEventAtMs;
     private ValueCallback<Uri[]> pendingFileCallback = null;
 
     private final ActivityResultLauncher<Intent> sourceFilePickerLauncher = registerForActivityResult(
@@ -124,7 +126,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void startScreenshotObserver() {
-        if (Build.VERSION.SDK_INT >= 34 || !screenshotMonitoringEnabled || screenshotObserver != null) return;
+        if (!screenshotMonitoringEnabled || screenshotObserver != null) return;
         final String permission = Build.VERSION.SDK_INT >= 33
             ? Manifest.permission.READ_MEDIA_IMAGES : Manifest.permission.READ_EXTERNAL_STORAGE;
         if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -137,7 +139,8 @@ public class MainActivity extends BridgeActivity {
         screenshotObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange, Uri uri) {
-                if (!screenshotMonitoringEnabled || !hasWindowFocus()) return;
+                if (!screenshotMonitoringEnabled || (!hasWindowFocus()
+                    && SystemClock.uptimeMillis() - lastWindowFocusAtMs > 15000L)) return;
                 try (Cursor images = getContentResolver().query(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     new String[] { MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME,
@@ -145,20 +148,30 @@ public class MainActivity extends BridgeActivity {
                         MediaStore.Images.Media.DATE_ADDED },
                     null, null, MediaStore.Images.Media.DATE_ADDED + " DESC"
                 )) {
-                    if (images == null || !images.moveToFirst()) return;
-                    final long id = images.getLong(0);
-                    final String name = images.getString(1);
-                    final String path = images.getString(2);
-                    final long added = images.getLong(3);
-                    if (id == lastScreenshotId || Math.abs(System.currentTimeMillis() / 1000 - added) > 10) return;
-                    final String location = ((name == null ? "" : name) + " " + (path == null ? "" : path)).toLowerCase(java.util.Locale.ROOT);
-                    if (!location.contains("screenshot") && !location.contains("screen_shot") && !location.contains("screen capture")) return;
-                    lastScreenshotId = id;
-                    dispatchWindowEvent("myipon:screen-captured");
-                } catch (SecurityException ignored) { }
+                    if (images == null) return;
+                    for (int checked = 0; checked < 5 && images.moveToNext(); checked++) {
+                        final long id = images.getLong(0);
+                        final String name = images.getString(1);
+                        final String path = images.getString(2);
+                        final long added = images.getLong(3);
+                        if (id == lastScreenshotId || Math.abs(System.currentTimeMillis() / 1000 - added) > 15) continue;
+                        final String location = ((name == null ? "" : name) + " " + (path == null ? "" : path)).toLowerCase(java.util.Locale.ROOT);
+                        if (!location.contains("screenshot") && !location.contains("screen_shot") && !location.contains("screen capture")) continue;
+                        lastScreenshotId = id;
+                        dispatchScreenCaptured();
+                        return;
+                    }
+                } catch (SecurityException | IllegalArgumentException ignored) { }
             }
         };
         getContentResolver().registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, screenshotObserver);
+    }
+
+    private void dispatchScreenCaptured() {
+        final long now = SystemClock.uptimeMillis();
+        if (lastScreenshotEventAtMs > 0 && now - lastScreenshotEventAtMs < 1500L) return;
+        lastScreenshotEventAtMs = now;
+        dispatchWindowEvent("myipon:screen-captured");
     }
 
     private void stopScreenshotObserver() {
@@ -438,6 +451,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) lastWindowFocusAtMs = SystemClock.uptimeMillis();
         dispatchWindowEvent(hasFocus ? "focus" : "blur");
     }
 
@@ -468,7 +482,7 @@ public class MainActivity extends BridgeActivity {
     public void onStart() {
         super.onStart();
         if (Build.VERSION.SDK_INT >= 34) {
-            screenCaptureCallback = () -> dispatchWindowEvent("myipon:screen-captured");
+            screenCaptureCallback = this::dispatchScreenCaptured;
             registerScreenCaptureCallback(getMainExecutor(), screenCaptureCallback);
         }
         startScreenshotObserver();
@@ -494,7 +508,7 @@ public class MainActivity extends BridgeActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == 1002) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) startScreenshotObserver();
-            else Toast.makeText(this, "Allow photo access to show screenshot notices in chats.", Toast.LENGTH_LONG).show();
+            else Toast.makeText(this, "Enable Photos access in Android app settings for screenshot notices.", Toast.LENGTH_LONG).show();
         }
         if (requestCode == 1001 && NotificationPollReceiver.hasNotificationPermission(this)) {
             NotificationPollReceiver.ensureChannel(this);

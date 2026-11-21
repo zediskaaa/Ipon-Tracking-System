@@ -12420,7 +12420,13 @@ test('screenshot notices have a protected group toggle and readable event stylin
   const chat = read('js/messages.js');
   const css = read('css/app.css');
   const schema = read('database/schema.sql');
+  const activity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
   assert.match(chat, /data-chat-protection="screenshot_notices" aria-checked=/);
+  assert.match(chat, /!ignoreFocus && typeof document.visibilityState/);
+  assert.match(activity, /screenCaptureCallback = this::dispatchScreenCaptured/);
+  assert.match(activity, /if \(!screenshotMonitoringEnabled \|\| screenshotObserver != null\) return;/);
+  assert.match(manifest, /READ_MEDIA_IMAGES" \/>/);
   assert.match(chat, /isThreadActivelyVisible\(\{ ignoreFocus: true \}\)/);
   assert.match(chat, /msg-system-event\$\{screenshotNotice \? ' is-screenshot'/);
   assert.match(css, /\.msg-system-event\.is-screenshot span,\s*\.msg-system-event\.is-vanish span \{[\s\S]*color: #0b3428/);
