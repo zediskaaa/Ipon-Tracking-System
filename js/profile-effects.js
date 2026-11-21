@@ -388,12 +388,131 @@
     star4(g, x, y, r);
   }
 
+  function cardFrameMetrics(W, H, inset, rad) {
+    const x0 = inset;
+    const y0 = inset;
+    const x1 = W - inset;
+    const y1 = H - inset;
+    const r = Math.max(4, Math.min(rad, (x1 - x0) * 0.25, (y1 - y0) * 0.25));
+    const pts = [];
+    const arcCorner = (cx0, cy0, a0, a1) => {
+      for (let i = 0; i <= 5; i += 1) {
+        const a = a0 + (i / 5) * (a1 - a0);
+        pts.push([cx0 + Math.cos(a) * r, cy0 + Math.sin(a) * r]);
+      }
+    };
+    arcCorner(x1 - r, y0 + r, -Math.PI / 2, 0);
+    arcCorner(x1 - r, y1 - r, 0, Math.PI / 2);
+    arcCorner(x0 + r, y1 - r, Math.PI / 2, Math.PI);
+    arcCorner(x0 + r, y0 + r, Math.PI, Math.PI * 1.5);
+    return { pts, m: pathMetrics(pts, true), x0, y0, x1, y1, r };
+  }
+
+  function drawCardCorners(g, W, H, inset, len, rgb, lw, a, style = 'bracket') {
+    const x0 = inset;
+    const y0 = inset;
+    const x1 = W - inset;
+    const y1 = H - inset;
+    g.strokeStyle = `rgba(${rgb},${a})`;
+    g.lineWidth = lw;
+    g.lineCap = 'round';
+    const corners = [
+      [x0, y0, 1, 1],
+      [x1, y0, -1, 1],
+      [x1, y1, -1, -1],
+      [x0, y1, 1, -1]
+    ];
+    for (const [cx0, cy0, sx, sy] of corners) {
+      g.beginPath();
+      if (style === 'chamfer') {
+        const ch = len * 0.42;
+        g.moveTo(cx0 + sx * len, cy0);
+        g.lineTo(cx0 + sx * ch, cy0);
+        g.lineTo(cx0, cy0 + sy * ch);
+        g.lineTo(cx0, cy0 + sy * len);
+      } else if (style === 'arc') {
+        g.moveTo(cx0 + sx * len, cy0);
+        g.quadraticCurveTo(cx0, cy0, cx0, cy0 + sy * len);
+      } else if (style === 'double') {
+        g.moveTo(cx0 + sx * len, cy0);
+        g.lineTo(cx0, cy0);
+        g.lineTo(cx0, cy0 + sy * len);
+        g.moveTo(cx0 + sx * (len * 0.62), cy0 + sy * 4);
+        g.lineTo(cx0 + sx * 4, cy0 + sy * 4);
+        g.lineTo(cx0 + sx * 4, cy0 + sy * (len * 0.62));
+      } else {
+        g.moveTo(cx0 + sx * len, cy0);
+        g.lineTo(cx0, cy0);
+        g.lineTo(cx0, cy0 + sy * len);
+      }
+      g.stroke();
+    }
+  }
+
+  function drawFullCardAura(b, f, frame, rgb1, rgb2, s, t, style = 'arc') {
+    if (!frame) return;
+    b.strokeStyle = `rgba(${rgb1},.24)`;
+    b.lineWidth = 1.05 * s;
+    tracePoly(b, frame.pts, true);
+    b.stroke();
+    drawCardCorners(f, frame.x1 + frame.x0, frame.y1 + frame.y0, frame.x0 + 2 * s, 14 * s, rgb2, 1.25 * s, 0.56, style);
+    const u = frac(t * 0.085);
+    traceComet(f, frame.m, u, 0.14, rgb1, 1.35 * s, 0.72, s, 18);
+    traceComet(f, frame.m, frac(u + 0.5), 0.12, rgb2, 1.15 * s, 0.58, s, 16);
+  }
+
+  function drawCoin(g, x, y, r, spin, tilt, alpha = 1) {
+    if (alpha <= 0.02 || r <= 0.5) return;
+    const c = Math.cos(spin);
+    const sx = Math.max(0.16, Math.abs(c));
+    const edge = (1 - sx) * r * 0.34 * (c >= 0 ? 1 : -1);
+    g.save();
+    g.globalAlpha = Math.max(0, Math.min(1, alpha));
+    g.translate(x, y);
+    g.rotate(tilt);
+    glow(g, 0, 0, r * 2.1, '248,214,122', alpha * 0.32);
+    // Extruded milled gold edge
+    g.fillStyle = '#b47f20';
+    g.beginPath();
+    g.ellipse(edge, 0, r * sx, r, 0, 0, TAU);
+    g.fill();
+    // Main coin face
+    const gr = g.createLinearGradient(-r * sx, -r, r * sx, r);
+    gr.addColorStop(0, '#fff5c8');
+    gr.addColorStop(0.45, '#f2ca65');
+    gr.addColorStop(1, '#c58f2b');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.ellipse(0, 0, r * sx, r, 0, 0, TAU);
+    g.fill();
+    g.strokeStyle = 'rgba(255,248,215,.72)';
+    g.lineWidth = Math.max(0.6, r * 0.09);
+    g.stroke();
+    // Inner mint ring & embossed peso mark when facing viewer
+    if (sx > 0.36) {
+      g.strokeStyle = 'rgba(150,100,18,.55)';
+      g.lineWidth = Math.max(0.5, r * 0.07);
+      g.beginPath();
+      g.ellipse(0, 0, r * 0.74 * sx, r * 0.74, 0, 0, TAU);
+      g.stroke();
+      g.save();
+      g.scale(sx, 1);
+      g.fillStyle = 'rgba(130,82,12,.85)';
+      g.font = `700 ${Math.max(5, Math.round(r * 1.05))}px Arial,sans-serif`;
+      g.fillText('₱', -r * 0.32, r * 0.37);
+      g.restore();
+    }
+    g.restore();
+  }
+
   const FX = Object.create(null);
   const EFFECTS = [];
-  function def(id, name, cat, desc, rare, make) {
-    const entry = { id, name, cat, desc, rare, make };
+  function def(id, name, cat, desc, rare, make, opts = {}) {
+    const fullCard = Boolean(opts && opts.fullCard);
+    const cardFrame = Array.isArray(opts?.cardFrame) ? opts.cardFrame : null;
+    const entry = { id, name, cat, desc, rare, fullCard, cardFrame, make };
     FX[id] = entry;
-    EFFECTS.push({ id, name, cat, desc, rare });
+    EFFECTS.push({ id, name, cat, desc, rare, fullCard });
   }
 
   def('stardust', 'Stardust', 'Cosmic', 'Twinkling stars and passing comets drift across your profile.', 0, (S) => {
@@ -1234,7 +1353,7 @@
       const stR = (4.2 + apexBloom * 2.4 + 0.45 * Math.sin(t * 1.8)) * s;
       sparkle(f, cx, cy - ra * 1.24, stR, gold, 0.78 + apexBloom * 0.22);
     };
-  });
+  }, { fullCard: true, cardFrame: ['244,212,140', '255,244,214', 'arc'] });
 
   def('scholar', 'Scholar\'s Folio', 'Education', 'An ornate diamond-crested bookmark frame shines as luminous pages and a gliding quill trace golden notes.', 2, (S) => {
     const { W, H, cx, cy, ra, s, b, f } = S;
@@ -1385,7 +1504,7 @@
       glow(f, 0, 0, 4.2 * s, gold, 0.85);
       f.restore();
     };
-  });
+  }, { fullCard: true, cardFrame: ['248,206,120', '136,184,255', 'double'] });
 
   def('circuit', 'Silicon Hex', 'Information Technology', 'A chamfered silicon hex frame channels smooth emerald-cyan pulses along precision micro-traces.', 1, (S) => {
     const { W, H, cx, cy, ra, s, b, f } = S;
@@ -1505,7 +1624,7 @@
         f.stroke();
       }
     };
-  });
+  }, { fullCard: true, cardFrame: ['74,240,210', '240,204,122', 'chamfer'] });
 
   def('neural', 'Quantum Prism', 'Information Technology', 'A faceted octagonal prism frame links orbiting neural nodes with silk-smooth fiber-optic threads.', 2, (S) => {
     const { W, H, cx, cy, ra, s, b, f } = S;
@@ -1639,7 +1758,7 @@
       traceComet(f, octM, u, 0.18, ice, 1.85 * s, 0.88, s, 18);
       traceComet(f, octM, frac(u + 0.5), 0.18, vio, 1.65 * s, 0.82, s, 18);
     };
-  });
+  }, { fullCard: true, cardFrame: ['108,236,255', '172,146,255', 'chamfer'] });
 
   def('blueprint', 'Arch Blueprint', 'Architecture', 'A classic drafting-arch portal with living dimension lines and golden-ratio guides frames your avatar.', 1, (S) => {
     const { W, H, cx, cy, ra, s, b, f } = S;
@@ -1792,7 +1911,7 @@
       f.fill();
       f.stroke();
     };
-  });
+  }, { fullCard: true, cardFrame: ['128,208,255', '244,208,132', 'bracket'] });
 
   def('atelier', 'Gilded Dome', 'Architecture', 'An Art Deco stepped-diamond monolith and rotating golden-ratio compasses frame your profile in warm brass.', 2, (S) => {
     const { W, H, cx, cy, ra, s, b, f } = S;
@@ -1923,7 +2042,7 @@
       sparkle(f, cx, cy - ra * 1.38, 3.3 * s, brass, 0.85 * apexGlint);
       sparkle(f, cx, cy + ra * 1.33, 2.3 * s, ivory, 0.65 * apexGlint);
     };
-  });
+  }, { fullCard: true, cardFrame: ['245,208,128', '255,244,218', 'double'] });
 
   def('vetpulse', 'Vital Paw', 'Veterinary Medicine', 'A smooth organic shield-heart frame pulses softly with a serene ECG heartbeat and drifting glowing paw prints.', 1, (S) => {
     const { W, H, cx, cy, ra, s, b, f } = S;
@@ -2051,7 +2170,7 @@
       f.lineTo(mx, my + cr);
       f.stroke();
     };
-  });
+  }, { fullCard: true, cardFrame: ['96,240,204', '255,156,178', 'arc'] });
 
   def('sanctuary', 'Sanctuary Caduceus', 'Veterinary Medicine', 'An Art Nouveau botanical medallion with intertwined healing ribbons and floating bioluminescent petals guards your avatar.', 2, (S) => {
     const { W, H, cx, cy, ra, s, b, f } = S;
@@ -2198,20 +2317,1167 @@
       f.lineTo(bx, by + 2.2 * s);
       f.stroke();
     };
-  });
+  }, { fullCard: true, cardFrame: ['106,242,190', '248,218,144', 'arc'] });
+
+  def('iponcoins', 'Peso Cascade', 'myIPON', 'A milled sovereign coin medallion frames your avatar while 3D gilded peso coins glide smoothly across your full profile.', 1, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const gold = '248,214,122';
+    const emer = '112,232,176';
+    const ivory = '255,246,216';
+    const cardM = full ? cardFrameMetrics(W, H, 5 * s, 16 * s) : null;
+    const rimPts = Array.from({ length: 48 }, (_, i) => {
+      const a = -Math.PI / 2 + (i / 48) * TAU;
+      return [cx + Math.cos(a) * ra * 1.24, cy + Math.sin(a) * ra * 1.24];
+    });
+    const rimM = pathMetrics(rimPts, true);
+    const coinCount = full ? 10 : 6;
+    const coins = Array.from({ length: coinCount }, (_, i) => {
+      // Keep full-card coins focused along left/right flanks & banner so text stays crystal clear
+      const side = i % 2 === 0 ? 0.08 + (i % 3) * 0.055 : 0.92 - (i % 3) * 0.055;
+      return {
+        x: full ? W * (i % 5 === 0 ? 0.52 + (i % 2 ? 0.24 : -0.1) : side) : ((i + 0.5) / coinCount) * W,
+        y0: (i / coinCount) + R(0, 0.12),
+        v: R(0.048, 0.088),
+        r: R(5.4, 8.6),
+        sp: R(1.1, 1.9) * (i % 2 ? 1 : -1),
+        ph: R(0, TAU),
+        tilt: R(-0.22, 0.22),
+        amp: R(5, 11)
+      };
+    });
+    const glints = Array.from({ length: full ? 14 : 8 }, (_, i) => ({
+      x: ((i + 0.3) / (full ? 14 : 8)) * W,
+      y0: R(0, 1),
+      v: R(0.035, 0.07),
+      ph: R(0, TAU),
+      r: R(1.4, 2.5)
+    }));
+    return (t) => {
+      // Full-card minted bullion border + double-notched corner coin clasps
+      if (cardM) {
+        b.strokeStyle = 'rgba(248,214,122,.28)';
+        b.lineWidth = 1.2 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        b.strokeStyle = 'rgba(112,232,176,.16)';
+        b.lineWidth = 0.8 * s;
+        const innerC = cardFrameMetrics(W, H, 9 * s, 13 * s);
+        tracePoly(b, innerC.pts, true);
+        b.stroke();
+        for (const [qx, qy] of [[9 * s, 9 * s], [W - 9 * s, 9 * s], [W - 9 * s, H - 9 * s], [9 * s, H - 9 * s]]) {
+          f.fillStyle = '#0a2219';
+          f.strokeStyle = 'rgba(248,214,122,.72)';
+          f.lineWidth = 1.05 * s;
+          f.beginPath();
+          f.arc(qx, qy, 3.2 * s, 0, TAU);
+          f.fill();
+          f.stroke();
+        }
+        const cu = frac(t * 0.08);
+        traceComet(f, cardM.m, cu, 0.14, gold, 1.45 * s, 0.78, s, 20);
+        traceComet(f, cardM.m, frac(cu + 0.5), 0.12, emer, 1.2 * s, 0.58, s, 16);
+      }
+
+      // Soft warm gold-emerald ambient dust across full height
+      for (const gl of glints) {
+        const prog = frac(gl.y0 + t * gl.v);
+        const y = H * (1.03 - prog * 1.08);
+        const x = gl.x + Math.sin(t * 0.65 + gl.ph) * 7 * s;
+        const fade = Math.sin(prog * Math.PI) * 0.5;
+        sparkle(b, x, y, gl.r * s, gold, fade);
+      }
+
+      // 3D spinning gold peso coins cascading serenely top-to-bottom across the full profile
+      for (const c of coins) {
+        const prog = frac(c.y0 + t * c.v);
+        const y = -12 * s + prog * (H + 24 * s);
+        const x = c.x + Math.sin(t * 0.75 + c.ph) * c.amp * s;
+        const edgeFade = Math.sin(prog * Math.PI);
+        const centerDim = full && y > cy + ra * 1.25 && x > W * 0.18 && x < W * 0.82 ? 0.34 : 0.86;
+        drawCoin(b, x, y, c.r * s, t * c.sp + c.ph, c.tilt + Math.sin(t * 0.8 + c.ph) * 0.12, edgeFade * centerDim);
+      }
+
+      // Milled 36-notch sovereign gold coin rim around avatar
+      glow(b, cx, cy, ra * 1.56, gold, 0.11 + 0.03 * Math.sin(t * 1.2));
+      f.strokeStyle = 'rgba(248,214,122,.82)';
+      f.lineWidth = 1.65 * s;
+      f.beginPath();
+      f.arc(cx, cy, ra * 1.24, 0, TAU);
+      f.stroke();
+      f.strokeStyle = 'rgba(112,232,176,.46)';
+      f.lineWidth = 0.85 * s;
+      f.beginPath();
+      f.arc(cx, cy, ra * 1.12, 0, TAU);
+      f.stroke();
+
+      // 36 precision reeded mint notches
+      f.strokeStyle = 'rgba(255,244,205,.62)';
+      f.lineWidth = 0.9 * s;
+      f.lineCap = 'round';
+      f.beginPath();
+      for (let i = 0; i < 36; i += 1) {
+        const a = (i / 36) * TAU + t * 0.06;
+        const r1 = ra * 1.14;
+        const r2 = ra * (i % 3 === 0 ? 1.29 : 1.24);
+        f.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+        f.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+      }
+      f.stroke();
+
+      // Silky gold shimmer gliding around sovereign coin rim
+      const u = frac(t * 0.16);
+      traceComet(f, rimM, u, 0.2, ivory, 1.8 * s, 0.84, s, 18);
+      traceComet(f, rimM, frac(u + 0.5), 0.16, emer, 1.35 * s, 0.65, s, 14);
+
+      // Gleaming ₱ sovereign hallmark clasp at bottom center of avatar rim
+      const hx = cx;
+      const hy = cy + ra * 1.25;
+      glow(f, hx, hy, 7 * s, gold, 0.62);
+      f.fillStyle = '#09241a';
+      f.strokeStyle = '#f8dc84';
+      f.lineWidth = 1.25 * s;
+      f.beginPath();
+      f.arc(hx, hy, 5.2 * s, 0, TAU);
+      f.fill();
+      f.stroke();
+      f.fillStyle = '#fce7a2';
+      f.font = `700 ${Math.max(6, Math.round(7.6 * s))}px Arial,sans-serif`;
+      f.fillText('₱', hx - 2.3 * s, hy + 2.7 * s);
+    };
+  }, { fullCard: true });
+
+  def('iponsprout', 'Emerald Harvest', 'myIPON', 'Inspired by the myIPON emblem: living emerald sprouts unfurl around a gilded coin cradle as savings glints rise across your entire profile.', 2, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const gold = '248,218,130';
+    const sprout = '118,214,88';
+    const emer = '84,228,172';
+    const cardM = full ? cardFrameMetrics(W, H, 5 * s, 16 * s) : null;
+    const leftArc = [];
+    const rightArc = [];
+    for (let i = 0; i <= 18; i += 1) {
+      const k = i / 18;
+      const al = Math.PI * 0.5 + k * Math.PI * 0.78;
+      const ar = Math.PI * 0.5 - k * Math.PI * 0.78;
+      const rad = ra * (1.17 + 0.08 * Math.sin(k * Math.PI));
+      leftArc.push([cx + Math.cos(al) * rad, cy + Math.sin(al) * rad]);
+      rightArc.push([cx + Math.cos(ar) * rad, cy + Math.sin(ar) * rad]);
+    }
+    const leftM = pathMetrics(leftArc, false);
+    const rightM = pathMetrics(rightArc, false);
+    const rising = Array.from({ length: full ? 14 : 9 }, (_, i) => ({
+      x: ((i + 0.35) / (full ? 14 : 9)) * W,
+      y0: R(0, 1),
+      v: R(0.042, 0.078),
+      ph: R(0, TAU),
+      amp: R(6, 13),
+      coin: i % 3 === 0,
+      r: R(3.2, 5.4)
+    }));
+    return (t) => {
+      // Full-profile organic emerald-gold vine border & bottom-right stacked coin silhouette
+      if (cardM) {
+        b.strokeStyle = 'rgba(118,214,88,.26)';
+        b.lineWidth = 1.15 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        // Living sprout leaf flourishes at bottom-left and bottom-right card corners
+        const swayC = Math.sin(t * 1.1) * 0.07;
+        leaf(f, 12 * s, H - 12 * s, 15 * s, 4.5 * s, -0.55 + swayC, '#8ae068', '#2a7d46', 0.4);
+        leaf(f, 12 * s, H - 12 * s, 11 * s, 3.6 * s, -1.15 - swayC, '#f8dc84', '#b88326', 0.35);
+        leaf(f, W - 12 * s, H - 12 * s, 15 * s, 4.5 * s, Math.PI + 0.55 - swayC, '#8ae068', '#2a7d46', 0.4);
+        leaf(f, W - 12 * s, H - 12 * s, 11 * s, 3.6 * s, Math.PI + 1.15 + swayC, '#f8dc84', '#b88326', 0.35);
+        // Subtle glowing myIPON coin-stack watermark in bottom-right background
+        const sx = W - 26 * s;
+        const sy = H - 18 * s;
+        for (let k = 0; k < 3; k += 1) {
+          const yk = sy - k * 5.2 * s;
+          b.fillStyle = `rgba(248,218,130,${0.14 + k * 0.04})`;
+          b.strokeStyle = `rgba(248,218,130,${0.28 + k * 0.06})`;
+          b.lineWidth = 0.85 * s;
+          b.beginPath();
+          b.ellipse(sx, yk, 11 * s, 3.8 * s, 0, 0, TAU);
+          b.fill();
+          b.stroke();
+        }
+        const cu = frac(t * 0.09);
+        traceComet(f, cardM.m, cu, 0.14, sprout, 1.35 * s, 0.72, s, 18);
+        traceComet(f, cardM.m, frac(cu + 0.5), 0.14, gold, 1.35 * s, 0.72, s, 18);
+      }
+
+      // Soft rising mini peso coins & chlorophyll dew sparkles across the entire profile
+      for (const p of rising) {
+        const prog = frac(p.y0 + t * p.v);
+        const y = H * (1.04 - prog * 1.12);
+        const x = p.x + Math.sin(t * 0.7 + p.ph) * p.amp * s;
+        const fade = Math.sin(prog * Math.PI);
+        const dim = full && y > cy + ra * 1.3 && x > W * 0.2 && x < W * 0.8 ? 0.38 : 0.76;
+        if (p.coin) {
+          drawCoin(b, x, y, p.r * s, t * 1.35 + p.ph, 0.12, fade * dim * 0.85);
+        } else {
+          glow(b, x, y, p.r * 2.1 * s, sprout, fade * dim * 0.55);
+          b.fillStyle = `rgba(230,255,220,${fade * dim * 0.8})`;
+          b.beginPath();
+          b.arc(x, y, 1.1 * s, 0, TAU);
+          b.fill();
+        }
+      }
+
+      // Sculpted golden coin-arc crescent cradling bottom of avatar
+      glow(b, cx, cy, ra * 1.58, emer, 0.1 + 0.03 * Math.sin(t * 1.1));
+      f.strokeStyle = '#f5d274';
+      f.lineWidth = 2.1 * s;
+      f.lineCap = 'round';
+      f.beginPath();
+      f.arc(cx, cy, ra * 1.17, Math.PI * 0.18, Math.PI * 0.82);
+      f.stroke();
+
+      // Twin living emerald sprout shoots curling up both flanks
+      for (const pts of [leftArc, rightArc]) {
+        f.strokeStyle = 'rgba(118,214,88,.84)';
+        f.lineWidth = 1.45 * s;
+        tracePoly(f, pts, false);
+        f.stroke();
+      }
+      const breathe = Math.sin(t * 1.35) * 0.07;
+      for (const sd of [-1, 1]) {
+        // Upper unfurling twin myIPON sprout leaves near top shoulders
+        const topPt = sd === -1 ? leftArc[leftArc.length - 1] : rightArc[rightArc.length - 1];
+        const midPt = sd === -1 ? leftArc[11] : rightArc[11];
+        leaf(f, topPt[0], topPt[1], ra * 0.44, ra * 0.16, (sd === 1 ? -0.58 : Math.PI + 0.58) + sd * breathe, '#8fe36a', '#2c8246', 0.48);
+        leaf(f, topPt[0], topPt[1], ra * 0.32, ra * 0.12, (sd === 1 ? -1.32 : Math.PI + 1.32) - sd * breathe, '#b6f28a', '#3d9950', 0.35);
+        leaf(f, midPt[0], midPt[1], ra * 0.28, ra * 0.1, (sd === 1 ? -0.25 : Math.PI + 0.25) + sd * breathe * 0.7, '#f8dc84', '#b67f22', 0.35);
+      }
+
+      // Symmetrical golden-emerald sap pulses rising to top sprout crown
+      const wave = frac(t * 0.2);
+      traceComet(f, leftM, wave, 0.24, gold, 1.55 * s, 0.78, s, 14);
+      traceComet(f, rightM, wave, 0.24, gold, 1.55 * s, 0.78, s, 14);
+
+      // Dewdrop crown glint between twin sprouts at top center
+      const topBloom = 0.65 + 0.35 * Math.sin(t * 1.9);
+      sparkle(f, cx, cy - ra * 1.24, 3.6 * s * topBloom, gold, 0.85);
+    };
+  }, { fullCard: true });
+
+  def('iponvault', 'Sovereign Vault', 'myIPON', 'A horological bank-vault locking dial and riveted champagne-emerald chassis guard your entire profile card.', 2, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const gold = '242,208,132';
+    const emer = '92,236,184';
+    const cardM = full ? cardFrameMetrics(W, H, 5 * s, 14 * s) : null;
+    const dialPts = Array.from({ length: 48 }, (_, i) => {
+      const a = -Math.PI / 2 + (i / 48) * TAU;
+      return [cx + Math.cos(a) * ra * 1.28, cy + Math.sin(a) * ra * 1.28];
+    });
+    const dialM = pathMetrics(dialPts, true);
+    const facets = Array.from({ length: full ? 14 : 8 }, (_, i) => ({
+      x: ((i + 0.4) / (full ? 14 : 8)) * W,
+      y0: R(0, 1),
+      v: R(0.032, 0.062),
+      ph: R(0, TAU),
+      sz: R(2.2, 3.8),
+      c: i % 2 === 0 ? emer : gold
+    }));
+    return (t) => {
+      // Full-profile heavy-luxury riveted chamfered vault chassis
+      if (cardM) {
+        b.strokeStyle = 'rgba(242,208,132,.30)';
+        b.lineWidth = 1.3 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        drawCardCorners(f, W, H, 6 * s, 18 * s, gold, 1.65 * s, 0.76, 'chamfer');
+        // Corner vault rivets
+        for (const [rx, ry] of [[12 * s, 12 * s], [W - 12 * s, 12 * s], [W - 12 * s, H - 12 * s], [12 * s, H - 12 * s]]) {
+          f.fillStyle = '#0c2019';
+          f.strokeStyle = 'rgba(92,236,184,.72)';
+          f.lineWidth = 1.0 * s;
+          f.beginPath();
+          f.arc(rx, ry, 2.2 * s, 0, TAU);
+          f.fill();
+          f.stroke();
+        }
+        const su = frac(t * 0.09);
+        traceComet(f, cardM.m, su, 0.14, emer, 1.45 * s, 0.78, s, 20);
+        traceComet(f, cardM.m, frac(su + 0.5), 0.14, gold, 1.45 * s, 0.72, s, 18);
+      }
+
+      // Weightless floating emerald-gold crystal facets across full height
+      for (const q of facets) {
+        const prog = frac(q.y0 + t * q.v);
+        const y = H * (1.03 - prog * 1.08);
+        const x = q.x + Math.sin(t * 0.55 + q.ph) * 6 * s;
+        const fade = Math.sin(prog * Math.PI) * (full && y > cy + ra * 1.3 && x > W * 0.18 && x < W * 0.82 ? 0.28 : 0.62);
+        b.save();
+        b.translate(x, y);
+        b.rotate(t * 0.45 + q.ph);
+        b.strokeStyle = `rgba(${q.c},${fade})`;
+        b.lineWidth = 0.9 * s;
+        const sz = q.sz * s;
+        b.beginPath();
+        b.moveTo(0, -sz);
+        b.lineTo(sz * 0.72, 0);
+        b.lineTo(0, sz);
+        b.lineTo(-sz * 0.72, 0);
+        b.closePath();
+        b.stroke();
+        b.restore();
+      }
+
+      // Horological smooth-stepped dial rotation (turns smoothly then pauses briefly at lock detents)
+      const stepPhase = t * 0.25;
+      const stepFloor = Math.floor(stepPhase);
+      const stepFrac = stepPhase - stepFloor;
+      const eased = stepFrac < 0.65 ? (0.5 - 0.5 * Math.cos((stepFrac / 0.65) * Math.PI)) : 1;
+      const dialAngle = (stepFloor + eased) * (Math.PI / 6);
+      const lockedFlash = stepFrac > 0.62 && stepFrac < 0.85 ? Math.sin(((stepFrac - 0.62) / 0.23) * Math.PI) : 0;
+
+      // Outer brushed-gold vault bezel + 4 recessed diagonal locking lugs
+      glow(b, cx, cy, ra * 1.62, emer, 0.08 + lockedFlash * 0.12);
+      f.strokeStyle = 'rgba(242,208,132,.84)';
+      f.lineWidth = 1.75 * s;
+      f.beginPath();
+      f.arc(cx, cy, ra * 1.28, 0, TAU);
+      f.stroke();
+
+      // Rotating inner combination calibration ring & 24 micro-ticks
+      f.strokeStyle = 'rgba(92,236,184,.54)';
+      f.lineWidth = 0.95 * s;
+      f.beginPath();
+      f.arc(cx, cy, ra * 1.13, 0, TAU);
+      f.stroke();
+      f.strokeStyle = `rgba(255,244,212,${0.48 + lockedFlash * 0.35})`;
+      f.lineWidth = 0.9 * s;
+      f.beginPath();
+      for (let i = 0; i < 24; i += 1) {
+        const a = dialAngle + (i / 24) * TAU;
+        const r1 = ra * 1.13;
+        const r2 = ra * (i % 6 === 0 ? 1.25 : 1.19);
+        f.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+        f.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+      }
+      f.stroke();
+
+      // 4 diagonal vault locking lugs + emerald security status beads
+      for (let i = 0; i < 4; i += 1) {
+        const a = Math.PI * 0.25 + i * Math.PI * 0.5;
+        const lx = cx + Math.cos(a) * ra * 1.32;
+        const ly = cy + Math.sin(a) * ra * 1.32;
+        f.save();
+        f.translate(lx, ly);
+        f.rotate(a);
+        f.fillStyle = '#0e241c';
+        f.strokeStyle = '#f2d084';
+        f.lineWidth = 1.1 * s;
+        rr(f, -3.4 * s, -4.4 * s, 6.8 * s, 8.8 * s, 2.2 * s);
+        f.fill();
+        f.stroke();
+        f.fillStyle = `rgba(${emer},${0.55 + lockedFlash * 0.45})`;
+        f.beginPath();
+        f.arc(0, 0, 1.5 * s, 0, TAU);
+        f.fill();
+        f.restore();
+        if (lockedFlash > 0.05) glow(f, lx, ly, 6.5 * s, emer, lockedFlash * 0.7);
+      }
+
+      // Smooth dial sweep glint
+      traceComet(f, dialM, frac(t * 0.14), 0.18, gold, 1.6 * s, 0.78, s, 16);
+    };
+  }, { fullCard: true });
+
+  def('orrery', 'Celestial Academy', 'Education', 'Interlocking brass armillary rings and an engraved star-atlas border illuminate your entire profile.', 2, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const brass = '244,210,136';
+    const starC = '186,216,255';
+    const cardM = full ? cardFrameMetrics(W, H, 5 * s, 16 * s) : null;
+    const stars = Array.from({ length: full ? 24 : 12 }, (_, i) => ({
+      x: ((i * 0.37 + 0.13) % 1) * W,
+      y: ((i * 0.61 + 0.09) % 1) * H,
+      p: R(0, TAU),
+      v: R(0.7, 1.6),
+      r: R(0.7, 1.5)
+    }));
+    return (t) => {
+      // Engraved observatory star-atlas border & corner astrolabe quadrants
+      if (cardM) {
+        b.strokeStyle = 'rgba(244,210,136,.26)';
+        b.lineWidth = 1.05 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        // Corner brass astrolabe quadrant arcs
+        f.strokeStyle = 'rgba(244,210,136,.52)';
+        f.lineWidth = 1.0 * s;
+        for (const [qx, qy, a0, a1] of [
+          [6 * s, 6 * s, 0, Math.PI * 0.5],
+          [W - 6 * s, 6 * s, Math.PI * 0.5, Math.PI],
+          [W - 6 * s, H - 6 * s, Math.PI, Math.PI * 1.5],
+          [6 * s, H - 6 * s, Math.PI * 1.5, TAU]
+        ]) {
+          f.beginPath();
+          f.arc(qx, qy, 15 * s, a0, a1);
+          f.stroke();
+        }
+        traceComet(f, cardM.m, frac(t * 0.075), 0.14, brass, 1.35 * s, 0.72, s, 18);
+      }
+
+      // Soft star-atlas constellation background across entire card
+      for (const st of stars) {
+        const tw = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * st.v + st.p));
+        b.fillStyle = `rgba(${starC},${tw * 0.55})`;
+        b.beginPath();
+        b.arc(st.x, st.y, st.r * s, 0, TAU);
+        b.fill();
+      }
+
+      // Brass Armillary Sphere interlocking meridian gimbals around avatar (back & front 3D split)
+      const gimbals = [
+        { rx: 1.34, ry: 0.92, rot: -0.45 + Math.sin(t * 0.28) * 0.12, sp: 0.34, c: brass, ph: 0 },
+        { rx: 1.34, ry: 0.92, rot: 0.45 - Math.sin(t * 0.28) * 0.12, sp: -0.28, c: starC, ph: 2.1 }
+      ];
+      // Outer equatorial brass ring
+      f.strokeStyle = 'rgba(244,210,136,.74)';
+      f.lineWidth = 1.45 * s;
+      f.beginPath();
+      f.arc(cx, cy, ra * 1.22, 0, TAU);
+      f.stroke();
+
+      for (const gm of gimbals) {
+        const A = ra * gm.rx;
+        const B = ra * gm.ry;
+        // Draw back half on b, front half on f (only arcs outside avatar radius stay crisp; we draw full rings with gentle alpha on b so face stays 100% clear)
+        b.strokeStyle = `rgba(${gm.c},.56)`;
+        b.lineWidth = 1.15 * s;
+        b.beginPath();
+        b.ellipse(cx, cy, A, B, gm.rot, 0, TAU);
+        b.stroke();
+
+        // Orbiting planetary pearl along gimbal path (foreground only outside avatar circle)
+        const th = t * gm.sp + gm.ph;
+        const ex = A * Math.cos(th);
+        const ey = B * Math.sin(th);
+        const px = cx + ex * Math.cos(gm.rot) - ey * Math.sin(gm.rot);
+        const py = cy + ex * Math.sin(gm.rot) + ey * Math.cos(gm.rot);
+        const g = Math.hypot(px - cx, py - cy) > ra * 1.06 ? f : b;
+        glow(g, px, py, 7.5 * s, gm.c, 0.78);
+        g.fillStyle = '#fff9ea';
+        g.beginPath();
+        g.arc(px, py, 2.2 * s, 0, TAU);
+        g.fill();
+      }
+
+      // Top meridian brass finial spire & bottom compass needle tip
+      f.strokeStyle = 'rgba(244,210,136,.85)';
+      f.lineWidth = 1.25 * s;
+      f.lineCap = 'round';
+      f.beginPath();
+      f.moveTo(cx, cy - ra * 1.22);
+      f.lineTo(cx, cy - ra * 1.40);
+      f.moveTo(cx, cy + ra * 1.22);
+      f.lineTo(cx, cy + ra * 1.38);
+      f.stroke();
+      sparkle(f, cx, cy - ra * 1.40, 2.8 * s, brass, 0.85);
+      sparkle(f, cx, cy + ra * 1.38, 2.0 * s, starC, 0.72);
+    };
+  }, { fullCard: true });
+
+  def('diploma', 'Honor Seal', 'Education', 'A 20-point embossed academic wax seal with fluttering honor ribbons and parchment filigree frames your entire profile.', 1, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const gold = '246,208,124';
+    const crim = '232,116,136';
+    const ivory = '255,246,226';
+    const cardM = full ? cardFrameMetrics(W, H, 6 * s, 14 * s) : null;
+    // 20-tooth serrated embossed academic wax-seal medallion
+    const teeth = 20;
+    const sealPts = [];
+    const N = teeth * 4;
+    for (let i = 0; i < N; i += 1) {
+      const a = -Math.PI / 2 + (i / N) * TAU;
+      const r = ra * (1.22 + 0.075 * Math.cos(teeth * a));
+      sealPts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+    }
+    const sealM = pathMetrics(sealPts, true);
+    const specks = Array.from({ length: full ? 14 : 8 }, (_, i) => ({
+      x: ((i + 0.35) / (full ? 14 : 8)) * W,
+      y0: R(0, 1),
+      v: R(0.036, 0.068),
+      ph: R(0, TAU),
+      r: R(1.3, 2.3)
+    }));
+    return (t) => {
+      // Double-ruled parchment diploma full-card border with classic scrollwork corner finials
+      if (cardM) {
+        b.strokeStyle = 'rgba(246,208,124,.30)';
+        b.lineWidth = 1.2 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        drawCardCorners(f, W, H, 7 * s, 16 * s, gold, 1.3 * s, 0.65, 'double');
+        const cu = frac(t * 0.085);
+        traceComet(f, cardM.m, cu, 0.14, gold, 1.35 * s, 0.74, s, 18);
+        traceComet(f, cardM.m, frac(cu + 0.5), 0.12, crim, 1.2 * s, 0.56, s, 16);
+      }
+
+      // Soft warm gold honor dust floating across the entire card
+      for (const sp of specks) {
+        const prog = frac(sp.y0 + t * sp.v);
+        const y = H * (1.03 - prog * 1.08);
+        const x = sp.x + Math.sin(t * 0.65 + sp.ph) * 7 * s;
+        const fade = Math.sin(prog * Math.PI) * 0.54;
+        sparkle(b, x, y, sp.r * s, gold, fade);
+      }
+
+      // Twin pleated crimson-gold academic honor ribbons trailing smoothly beneath seal
+      const rbY = cy + ra * 1.12;
+      for (const sd of [-1, 1]) {
+        const fl = Math.sin(t * 1.45 + sd * 0.9) * 2.2 * s;
+        const rg = b.createLinearGradient(cx, rbY, cx + sd * ra * 0.62, rbY + ra * 0.74);
+        rg.addColorStop(0, 'rgba(220,96,118,.82)');
+        rg.addColorStop(1, 'rgba(246,208,124,.55)');
+        b.fillStyle = rg;
+        b.strokeStyle = 'rgba(246,208,124,.75)';
+        b.lineWidth = 0.85 * s;
+        b.beginPath();
+        b.moveTo(cx + sd * ra * 0.14, rbY);
+        b.lineTo(cx + sd * ra * 0.48, rbY - ra * 0.06);
+        b.quadraticCurveTo(cx + sd * ra * 0.56 + fl * 0.5, rbY + ra * 0.34, cx + sd * ra * 0.66 + fl, rbY + ra * 0.66);
+        b.lineTo(cx + sd * ra * 0.44 + fl * 0.8, rbY + ra * 0.54);
+        b.lineTo(cx + sd * ra * 0.30 + fl * 0.6, rbY + ra * 0.72);
+        b.closePath();
+        b.fill();
+        b.stroke();
+      }
+
+      // 20-tooth embossed crimson-gold wax-seal border
+      glow(b, cx, cy, ra * 1.56, crim, 0.1 + 0.03 * Math.sin(t * 1.1));
+      const sg = f.createLinearGradient(cx - ra, cy - ra, cx + ra, cy + ra);
+      sg.addColorStop(0, '#fae09a');
+      sg.addColorStop(0.5, '#e8788a');
+      sg.addColorStop(1, '#f4c76e');
+      f.strokeStyle = sg;
+      f.lineWidth = 1.65 * s;
+      tracePoly(f, sealPts, true);
+      f.stroke();
+
+      f.strokeStyle = 'rgba(255,246,226,.46)';
+      f.lineWidth = 0.85 * s;
+      f.beginPath();
+      f.arc(cx, cy, ra * 1.12, 0, TAU);
+      f.stroke();
+
+      // Smooth champagne sheen tracing the scalloped seal teeth
+      traceComet(f, sealM, frac(t * 0.15), 0.18, ivory, 1.65 * s, 0.8, s, 18);
+    };
+  }, { fullCard: true });
+
+  def('cybergrid', 'Syntax Matrix', 'Information Technology', 'Asymmetric code brackets and calm floating syntax glyphs frame your entire profile in crisp emerald-cyan telemetry.', 1, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const cyan = '84,242,226';
+    const mint = '132,248,186';
+    const amber = '248,208,118';
+    const cardM = full ? cardFrameMetrics(W, H, 5 * s, 12 * s) : null;
+    // Asymmetric < / > chamfered code-bracket shield around avatar
+    const rx = ra * 1.38;
+    const ry = ra * 1.24;
+    const leftBr = [
+      [cx - ra * 0.42, cy - ry],
+      [cx - ra * 0.96, cy - ry],
+      [cx - rx, cy],
+      [cx - ra * 0.96, cy + ry],
+      [cx - ra * 0.42, cy + ry]
+    ];
+    const rightBr = [
+      [cx + ra * 0.42, cy - ry],
+      [cx + ra * 0.96, cy - ry],
+      [cx + rx, cy],
+      [cx + ra * 0.96, cy + ry],
+      [cx + ra * 0.42, cy + ry]
+    ];
+    const leftM = pathMetrics(leftBr, false);
+    const rightM = pathMetrics(rightBr, false);
+    const glyphs = ['</>', '{ }', '=>', '01', '::', '[]', '&&', 'fn'];
+    const tokens = Array.from({ length: full ? 12 : 6 }, (_, i) => ({
+      x: full ? (i % 2 === 0 ? W * (0.05 + (i % 3) * 0.04) : W * (0.83 + (i % 3) * 0.04)) : ((i + 0.4) / 6) * W,
+      y0: (i / (full ? 12 : 6)) + R(0, 0.08),
+      v: R(0.032, 0.058),
+      txt: glyphs[i % glyphs.length],
+      c: i % 3 === 0 ? mint : cyan
+    }));
+    return (t) => {
+      // Full-profile HUD terminal chassis with notched corners & coordinate side ticks
+      if (cardM) {
+        b.strokeStyle = 'rgba(84,242,226,.22)';
+        b.lineWidth = 1.0 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        drawCardCorners(f, W, H, 6 * s, 16 * s, cyan, 1.45 * s, 0.68, 'chamfer');
+        // Minimal side telemetry ruler ticks
+        b.strokeStyle = 'rgba(132,248,186,.24)';
+        b.lineWidth = 0.85 * s;
+        b.beginPath();
+        for (let y = 34 * s; y < H - 30 * s; y += 22 * s) {
+          b.moveTo(W - 8 * s, y);
+          b.lineTo(W - 12.5 * s, y);
+        }
+        b.stroke();
+        traceComet(f, cardM.m, frac(t * 0.095), 0.14, cyan, 1.35 * s, 0.74, s, 18);
+      }
+
+      // Calm margin-drifting syntax tokens (low contrast so profile text stays spotless)
+      b.font = `600 ${Math.max(7, Math.round(8.2 * s))}px ui-monospace,Menlo,monospace`;
+      for (const tk of tokens) {
+        const prog = frac(tk.y0 + t * tk.v);
+        const y = 12 * s + prog * (H - 20 * s);
+        const fade = Math.sin(prog * Math.PI) * 0.34;
+        b.fillStyle = `rgba(${tk.c},${fade})`;
+        b.fillText(tk.txt, tk.x, y);
+      }
+
+      // Code-bracket < > avatar frame + top/bottom hairline syntax bridges
+      f.lineCap = 'round';
+      f.strokeStyle = 'rgba(84,242,226,.85)';
+      f.lineWidth = 1.75 * s;
+      tracePoly(f, leftBr, false);
+      f.stroke();
+      tracePoly(f, rightBr, false);
+      f.stroke();
+
+      f.strokeStyle = 'rgba(132,248,186,.42)';
+      f.lineWidth = 0.9 * s;
+      f.setLineDash([3 * s, 3.5 * s]);
+      f.beginPath();
+      f.moveTo(cx - ra * 0.32, cy - ry);
+      f.lineTo(cx + ra * 0.32, cy - ry);
+      f.moveTo(cx - ra * 0.32, cy + ry);
+      f.lineTo(cx + ra * 0.32, cy + ry);
+      f.stroke();
+      f.setLineDash([]);
+
+      // 3 crisp IDE window indicator micro-dots at top-left bracket shoulder
+      const dotCols = [amber, mint, cyan];
+      for (let i = 0; i < 3; i += 1) {
+        const pulse = 0.55 + 0.45 * Math.sin(t * 1.8 + i * 1.1);
+        f.fillStyle = `rgba(${dotCols[i]},${pulse})`;
+        f.beginPath();
+        f.arc(cx - ra * 0.88 + i * 4.2 * s, cy - ry - 4.2 * s, 1.35 * s, 0, TAU);
+        f.fill();
+      }
+
+      // Compiler light pulses tracing both < and > brackets synchronously
+      const u = frac(t * 0.24);
+      traceComet(f, leftM, u, 0.28, mint, 1.7 * s, 0.82, s, 14);
+      traceComet(f, rightM, u, 0.28, cyan, 1.7 * s, 0.82, s, 14);
+    };
+  }, { fullCard: true });
+
+  def('fibercloud', 'Optic Lattice', 'Information Technology', 'A curved Reuleaux delta-core prism guides silky fiber-optic light streams from top to bottom of your profile.', 2, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const aqua = '98,238,255';
+    const blue = '112,158,255';
+    const pearl = '238,250,255';
+    const cardM = full ? cardFrameMetrics(W, H, 5 * s, 18 * s) : null;
+    // 3-lobed curved Reuleaux triangle (rounded tri-wing delta core)
+    const buildDelta = (baseK, ampK) => {
+      const pts = [];
+      const N = 72;
+      for (let i = 0; i < N; i += 1) {
+        const a = -Math.PI / 2 + (i / N) * TAU;
+        const r = ra * (baseK + ampK * Math.cos(3 * (a + Math.PI / 2)));
+        pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+      }
+      return pts;
+    };
+    const outerPts = buildDelta(1.25, 0.13);
+    const innerPts = buildDelta(1.13, 0.08);
+    const deltaM = pathMetrics(outerPts, true);
+    const ports = Array.from({ length: 3 }, (_, i) => {
+      const a = -Math.PI / 2 + (i / 3) * TAU;
+      return [cx + Math.cos(a) * ra * 1.38, cy + Math.sin(a) * ra * 1.38];
+    });
+    // Graceful full-height arching fiber-optic ribbons along outer flanks
+    const fibers = [
+      { x0: W * 0.04, x1: W * 0.16, ph: 0.0, c: aqua },
+      { x0: W * 0.96, x1: W * 0.84, ph: 0.35, c: blue },
+      { x0: W * 0.92, x1: W * 0.76, ph: 0.68, c: aqua }
+    ].map((fb) => {
+      const pts = [];
+      for (let i = 0; i <= 20; i += 1) {
+        const k = i / 20;
+        pts.push([fb.x0 + (fb.x1 - fb.x0) * Math.sin(k * Math.PI), k * H]);
+      }
+      return { ...fb, pts, m: pathMetrics(pts, false) };
+    });
+    return (t) => {
+      // Full-card seamless fiber-optic light-pipe perimeter
+      if (cardM) {
+        b.strokeStyle = 'rgba(112,158,255,.24)';
+        b.lineWidth = 1.15 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        const cu = frac(t * 0.1);
+        traceComet(f, cardM.m, cu, 0.16, aqua, 1.5 * s, 0.8, s, 20);
+        traceComet(f, cardM.m, frac(cu + 0.5), 0.16, blue, 1.4 * s, 0.74, s, 18);
+      }
+
+      // Silky vertical arching fiber-optic streams carrying photon packets along full card height
+      for (const fb of fibers) {
+        b.strokeStyle = `rgba(${fb.c},.14)`;
+        b.lineWidth = 0.9 * s;
+        tracePoly(b, fb.pts, false);
+        b.stroke();
+        traceComet(b, fb.m, frac(t * 0.22 + fb.ph), 0.24, fb.c, 1.3 * s, 0.68, s, 12);
+      }
+
+      // Curved 3-lobed Reuleaux Delta-Core frame around avatar
+      glow(b, cx, cy, ra * 1.62, blue, 0.1 + 0.03 * Math.sin(t * 1.15));
+      const dg = f.createLinearGradient(cx - ra, cy - ra, cx + ra, cy + ra);
+      dg.addColorStop(0, '#8ff4ff');
+      dg.addColorStop(0.55, '#78a8ff');
+      dg.addColorStop(1, '#98f5e0');
+      f.strokeStyle = dg;
+      f.lineWidth = 1.7 * s;
+      tracePoly(f, outerPts, true);
+      f.stroke();
+
+      f.strokeStyle = 'rgba(238,250,255,.38)';
+      f.lineWidth = 0.85 * s;
+      tracePoly(f, innerPts, true);
+      f.stroke();
+
+      // Bi-directional optic waves around the 3-lobed core
+      const u = frac(t * 0.18);
+      traceComet(f, deltaM, u, 0.18, pearl, 1.8 * s, 0.86, s, 18);
+      traceComet(f, deltaM, frac(1 - u), 0.16, blue, 1.5 * s, 0.76, s, 16);
+
+      // 3 glowing fiber-optic port nodes at the 3 rounded apexes (120 deg apart)
+      for (let i = 0; i < 3; i += 1) {
+        const [px, py] = ports[i];
+        const pulse = 0.65 + 0.35 * Math.sin(t * 1.8 + i * 2.09);
+        glow(f, px, py, 7 * s, aqua, 0.65 * pulse);
+        f.fillStyle = '#0c1a2a';
+        f.strokeStyle = '#9cf5ff';
+        f.lineWidth = 1.2 * s;
+        f.beginPath();
+        f.arc(px, py, 2.7 * s, 0, TAU);
+        f.fill();
+        f.stroke();
+      }
+    };
+  }, { fullCard: true });
+
+  def('stainedglass', 'Cathedral Rose', 'Architecture', 'Twelve Gothic stained-glass lancet arches cast serene rotating jewel light shafts down your entire profile card.', 2, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const brass = '238,198,124';
+    const cols = ['120,186,255', '110,236,192', '248,186,120', '224,142,216'];
+    const cardM = full ? cardFrameMetrics(W, H, 5 * s, 16 * s) : null;
+    const N = 12;
+    const rosePts = [];
+    for (let i = 0; i < N * 6; i += 1) {
+      const a = -Math.PI / 2 + (i / (N * 6)) * TAU;
+      const arch = Math.abs(Math.sin((N * a) * 0.5));
+      const r = ra * (1.17 + 0.14 * arch);
+      rosePts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+    }
+    const roseM = pathMetrics(rosePts, true);
+    const motes = Array.from({ length: full ? 14 : 8 }, (_, i) => ({
+      x: ((i + 0.3) / (full ? 14 : 8)) * W,
+      y0: R(0, 1),
+      v: R(0.028, 0.055),
+      ph: R(0, TAU),
+      c: cols[i % cols.length]
+    }));
+    return (t) => {
+      // Soft diagonal cathedral stained-glass prism light shafts drifting down full profile height
+      for (let i = 0; i < 3; i += 1) {
+        const bx = ((t * 9 * s + i * W * 0.42) % (W + H * 0.9)) - H * 0.35;
+        const gr = b.createLinearGradient(bx - 28 * s, 0, bx + 28 * s, 0);
+        gr.addColorStop(0, `rgba(${cols[i]},0)`);
+        gr.addColorStop(0.5, `rgba(${cols[i]},.065)`);
+        gr.addColorStop(1, `rgba(${cols[i]},0)`);
+        b.fillStyle = gr;
+        b.beginPath();
+        b.moveTo(bx - 16 * s, 0);
+        b.lineTo(bx + 26 * s, 0);
+        b.lineTo(bx - 28 * s, H);
+        b.lineTo(bx - 70 * s, H);
+        b.closePath();
+        b.fill();
+      }
+
+      // Full-profile leaded-glass Gothic border with pointed lancet top corners
+      if (cardM) {
+        b.strokeStyle = 'rgba(238,198,124,.28)';
+        b.lineWidth = 1.2 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        drawCardCorners(f, W, H, 6 * s, 16 * s, brass, 1.35 * s, 0.64, 'arc');
+        traceComet(f, cardM.m, frac(t * 0.075), 0.14, brass, 1.35 * s, 0.72, s, 18);
+      }
+
+      // Floating warm cathedral dust motes tinted by stained glass
+      for (const m of motes) {
+        const prog = frac(m.y0 + t * m.v);
+        const y = H * (1.03 - prog * 1.08);
+        const x = m.x + Math.sin(t * 0.55 + m.ph) * 8 * s;
+        const a = Math.sin(prog * Math.PI) * 0.52;
+        glow(b, x, y, 4.5 * s, m.c, a * 0.7);
+      }
+
+      // 12 translucent stained-glass jewel lancet petals behind gold tracery
+      const shift = t * 0.14;
+      for (let i = 0; i < N; i += 1) {
+        const a0 = -Math.PI / 2 + (i / N) * TAU;
+        const a1 = -Math.PI / 2 + ((i + 1) / N) * TAU;
+        const am = (a0 + a1) * 0.5;
+        const shimmer = 0.24 + 0.24 * (0.5 + 0.5 * Math.sin(shift * 3 + i * 0.9));
+        f.fillStyle = `rgba(${cols[i % cols.length]},${shimmer})`;
+        f.beginPath();
+        f.moveTo(cx + Math.cos(a0) * ra * 1.12, cy + Math.sin(a0) * ra * 1.12);
+        f.quadraticCurveTo(cx + Math.cos(am) * ra * 1.38, cy + Math.sin(am) * ra * 1.38, cx + Math.cos(a1) * ra * 1.12, cy + Math.sin(a1) * ra * 1.12);
+        f.arc(cx, cy, ra * 1.12, a1, a0, true);
+        f.closePath();
+        f.fill();
+      }
+
+      // Warm bronze-gold Gothic rose-window leadwork tracery
+      f.strokeStyle = 'rgba(238,198,124,.84)';
+      f.lineWidth = 1.45 * s;
+      tracePoly(f, rosePts, true);
+      f.stroke();
+
+      f.strokeStyle = 'rgba(255,242,208,.48)';
+      f.lineWidth = 0.85 * s;
+      f.beginPath();
+      f.arc(cx, cy, ra * 1.12, 0, TAU);
+      f.stroke();
+
+      traceComet(f, roseM, frac(t * 0.13), 0.16, brass, 1.65 * s, 0.82, s, 18);
+    };
+  }, { fullCard: true });
+
+  def('cantilever', 'Zenith Wireframe', 'Architecture', 'Offset Bauhaus cantilevered squares and a subtle modernist skyline wireframe refine your full profile card.', 1, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const plat = '222,232,240';
+    const copp = '238,176,126';
+    const cardM = full ? cardFrameMetrics(W, H, 6 * s, 10 * s) : null;
+    const d = ra * 1.19;
+    const off = ra * 0.11;
+    const sq1 = [
+      [cx - d, cy - d],
+      [cx + d, cy - d],
+      [cx + d, cy + d],
+      [cx - d, cy + d]
+    ];
+    const sq2 = [
+      [cx - d + off, cy - d - off],
+      [cx + d + off, cy - d - off],
+      [cx + d + off, cy + d - off],
+      [cx - d + off, cy + d - off]
+    ];
+    const sq1M = pathMetrics(sq1, true);
+    const sq2M = pathMetrics(sq2, true);
+    return (t) => {
+      // Modernist gallery full-card hairline frame + cantilevered copper beam & mm scale ticks
+      if (cardM) {
+        b.strokeStyle = 'rgba(222,232,240,.20)';
+        b.lineWidth = 0.95 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        // Asymmetric cantilevered copper L-beam on left & bottom card margins
+        f.strokeStyle = 'rgba(238,176,126,.65)';
+        f.lineWidth = 1.8 * s;
+        f.lineCap = 'round';
+        f.beginPath();
+        f.moveTo(6 * s, cy + ra * 1.45);
+        f.lineTo(6 * s, H - 14 * s);
+        f.quadraticCurveTo(6 * s, H - 6 * s, 14 * s, H - 6 * s);
+        f.lineTo(W * 0.44, H - 6 * s);
+        f.stroke();
+        // Fine millimeter drafting scale ticks along right card margin
+        b.strokeStyle = 'rgba(222,232,240,.22)';
+        b.lineWidth = 0.8 * s;
+        b.beginPath();
+        for (let i = 0; i < 14; i += 1) {
+          const y = 26 * s + i * ((H - 52 * s) / 13);
+          const tick = i % 3 === 0 ? 7 * s : 3.8 * s;
+          b.moveTo(W - 6 * s, y);
+          b.lineTo(W - 6 * s - tick, y);
+        }
+        b.stroke();
+        // Subtle breathing modernist isometric skyline wireframe along bottom-right background
+        const ph = 0.55 + 0.45 * Math.sin(t * 0.65);
+        b.strokeStyle = `rgba(222,232,240,${0.12 * ph})`;
+        b.lineWidth = 0.85 * s;
+        const baseY = H - 12 * s;
+        const towers = [[0.64, 0.14, 0.14], [0.76, 0.11, 0.22], [0.85, 0.09, 0.17]];
+        for (const [xk, wk, hk] of towers) {
+          const tx = W * xk;
+          const tw = W * wk;
+          const th = H * hk;
+          b.strokeRect(tx, baseY - th, tw, th);
+        }
+        traceComet(f, cardM.m, frac(t * 0.08), 0.14, plat, 1.25 * s, 0.68, s, 18);
+      }
+
+      // Offset Bauhaus cantilevered double-square frame around avatar
+      f.strokeStyle = 'rgba(238,176,126,.78)';
+      f.lineWidth = 1.45 * s;
+      tracePoly(f, sq2, true);
+      f.stroke();
+
+      f.strokeStyle = 'rgba(222,232,240,.84)';
+      f.lineWidth = 1.55 * s;
+      tracePoly(f, sq1, true);
+      f.stroke();
+
+      // Tiny architectural registration crosshairs (+) at offset corner intersections
+      f.strokeStyle = 'rgba(238,176,126,.78)';
+      f.lineWidth = 0.9 * s;
+      const cr = 3.2 * s;
+      for (const [ix, iy] of [[cx - d + off, cy - d], [cx + d, cy + d - off]]) {
+        f.beginPath();
+        f.moveTo(ix - cr, iy);
+        f.lineTo(ix + cr, iy);
+        f.moveTo(ix, iy - cr);
+        f.lineTo(ix, iy + cr);
+        f.stroke();
+      }
+
+      // Smooth platinum & copper light traces gliding around both cantilevered squares
+      const u = frac(t * 0.15);
+      traceComet(f, sq1M, u, 0.18, plat, 1.65 * s, 0.84, s, 16);
+      traceComet(f, sq2M, frac(u + 0.5), 0.18, copp, 1.5 * s, 0.8, s, 16);
+    };
+  }, { fullCard: true });
+
+  def('biolumfauna', 'Moonlit Whiskers', 'Veterinary Medicine', 'A silver crescent cradle crowned with nocturnal ear crests sends spirit paw prints drifting across your full profile.', 2, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const moon = '218,236,255';
+    const lav = '184,166,255';
+    const aqua = '126,244,224';
+    const cardM = full ? cardFrameMetrics(W, H, 5 * s, 18 * s) : null;
+    // Sculpted nocturnal crescent + graceful cat/fox ear-crest silhouette
+    const buildCrown = () => {
+      const pts = [];
+      // Start at top-center brow -> right ear peak -> outer cheek -> bottom crescent -> left cheek -> left ear peak -> top brow
+      const arcSeg = (a0, a1, radK, steps) => {
+        for (let i = 0; i <= steps; i += 1) {
+          const a = a0 + (i / steps) * (a1 - a0);
+          pts.push([cx + Math.cos(a) * ra * radK, cy + Math.sin(a) * ra * radK]);
+        }
+      };
+      // Top brow bridge between ears
+      arcSeg(-Math.PI * 0.62, -Math.PI * 0.38, 1.15, 6);
+      // Right sculpted ear crest peak
+      pts.push([cx + ra * 0.94, cy - ra * 1.40]);
+      pts.push([cx + ra * 1.12, cy - ra * 0.72]);
+      // Lower moonlit crescent cradle around cheeks and chin
+      arcSeg(-0.56, Math.PI + 0.56, 1.22, 34);
+      // Left sculpted ear crest peak
+      pts.push([cx - ra * 0.94, cy - ra * 1.40]);
+      return pts;
+    };
+    const crownPts = buildCrown();
+    const crownM = pathMetrics(crownPts, true);
+    const spiritPaws = Array.from({ length: full ? 9 : 5 }, (_, i) => ({
+      x0: ((i + 0.4) / (full ? 9 : 5)) * W,
+      y0: R(0, 1),
+      v: R(0.036, 0.068),
+      ph: R(0, TAU),
+      r: R(4.2, 6.2),
+      c: i % 2 === 0 ? aqua : lav
+    }));
+    const wisps = Array.from({ length: full ? 12 : 7 }, (_, i) => ({
+      x: ((i + 0.3) / (full ? 12 : 7)) * W,
+      y: ((i * 0.43 + 0.14) % 1) * H,
+      ax: R(8, 18),
+      ay: R(6, 14),
+      fx: R(0.25, 0.5),
+      fy: R(0.25, 0.5),
+      ph: R(0, TAU)
+    }));
+    return (t) => {
+      // Moonlit sanctuary full-card border with corner silver crescents
+      if (cardM) {
+        b.strokeStyle = 'rgba(184,166,255,.26)';
+        b.lineWidth = 1.1 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        drawCardCorners(f, W, H, 6 * s, 15 * s, moon, 1.25 * s, 0.6, 'arc');
+        const cu = frac(t * 0.08);
+        traceComet(f, cardM.m, cu, 0.15, aqua, 1.4 * s, 0.76, s, 18);
+        traceComet(f, cardM.m, frac(cu + 0.5), 0.14, lav, 1.3 * s, 0.68, s, 16);
+      }
+
+      // Drifting glowing nocturnal spirit paw prints across full profile height
+      for (const p of spiritPaws) {
+        const prog = frac(p.y0 + t * p.v);
+        const y = H * (1.05 - prog * 1.12);
+        const x = p.x0 + Math.sin(t * 0.6 + p.ph) * 10 * s;
+        const fade = Math.sin(prog * Math.PI) * (full && y > cy + ra * 1.35 && x > W * 0.22 && x < W * 0.78 ? 0.26 : 0.52);
+        paw(b, x, y, p.r * s, Math.sin(t * 0.7 + p.ph) * 0.22, p.c, fade);
+      }
+
+      // Soft nocturnal firefly wisps across full card
+      for (const w of wisps) {
+        const x = w.x + Math.sin(t * w.fx + w.ph) * w.ax * s;
+        const y = w.y + Math.cos(t * w.fy + w.ph) * w.ay * s;
+        const a = Math.pow(0.5 + 0.5 * Math.sin(t * 1.2 + w.ph), 2) * 0.62;
+        glow(b, x, y, 5.5 * s, aqua, a);
+      }
+
+      // Moonlit sculpted ear-crest & silver crescent cradle around avatar
+      glow(b, cx, cy, ra * 1.6, lav, 0.1 + 0.03 * Math.sin(t * 1.1));
+      const cg = f.createLinearGradient(cx, cy - ra * 1.4, cx, cy + ra * 1.26);
+      cg.addColorStop(0, '#eef7ff');
+      cg.addColorStop(0.5, '#b8a6ff');
+      cg.addColorStop(1, '#7ef4e0');
+      f.strokeStyle = cg;
+      f.lineWidth = 1.65 * s;
+      tracePoly(f, crownPts, true);
+      f.stroke();
+
+      // Delicate luminous whisker-light filaments flanking left & right cheeks
+      f.strokeStyle = 'rgba(218,236,255,.46)';
+      f.lineWidth = 0.85 * s;
+      f.lineCap = 'round';
+      for (const sd of [-1, 1]) {
+        const sw = Math.sin(t * 1.3 + sd) * 1.2 * s;
+        for (const dy of [-2.8 * s, 2.2 * s]) {
+          f.beginPath();
+          f.moveTo(cx + sd * ra * 1.22, cy + ra * 0.14 + dy);
+          f.quadraticCurveTo(cx + sd * ra * 1.36, cy + ra * 0.12 + dy + sw * 0.4, cx + sd * ra * 1.44, cy + ra * 0.18 + dy * 1.6 + sw);
+          f.stroke();
+        }
+      }
+
+      // Smooth silver-aqua moonbeam comet gliding around the ear-crest silhouette
+      const u = frac(t * 0.15);
+      traceComet(f, crownM, u, 0.18, moon, 1.7 * s, 0.85, s, 18);
+      traceComet(f, crownM, frac(u + 0.5), 0.16, aqua, 1.45 * s, 0.72, s, 16);
+
+      // Tiny crescent moon pendant at bottom center
+      const my = cy + ra * 1.26;
+      glow(f, cx, my, 6 * s, moon, 0.65);
+      f.fillStyle = '#edf6ff';
+      f.beginPath();
+      f.arc(cx, my, 3.2 * s, 0.4, TAU - 0.8);
+      f.fill();
+    };
+  }, { fullCard: true });
+
+  def('botanicvet', 'Healing Terrarium', 'Veterinary Medicine', 'A faceted glass terrarium dome and botanical apothecary mullions float healing dewdrops across your full profile.', 1, (S) => {
+    const { W, H, cx, cy, ra, s, full, b, f } = S;
+    const jade = '112,236,178';
+    const brass = '238,208,136';
+    const dew = '196,250,255';
+    const cardM = full ? cardFrameMetrics(W, H, 5 * s, 16 * s) : null;
+    // Faceted botanical glass terrarium teardrop / marquise dome around avatar
+    const domePts = [
+      [cx, cy - ra * 1.42],
+      [cx + ra * 0.76, cy - ra * 1.06],
+      [cx + ra * 1.28, cy - ra * 0.24],
+      [cx + ra * 1.18, cy + ra * 0.64],
+      [cx + ra * 0.66, cy + ra * 1.20],
+      [cx - ra * 0.66, cy + ra * 1.20],
+      [cx - ra * 1.18, cy + ra * 0.64],
+      [cx - ra * 1.28, cy - ra * 0.24],
+      [cx - ra * 0.76, cy - ra * 1.06]
+    ];
+    const domeM = pathMetrics(domePts, true);
+    const drops = Array.from({ length: full ? 14 : 8 }, (_, i) => ({
+      x: ((i + 0.35) / (full ? 14 : 8)) * W,
+      y0: R(0, 1),
+      v: R(0.038, 0.072),
+      ph: R(0, TAU),
+      amp: R(6, 13),
+      r: R(2.2, 4.0),
+      herb: i % 3 === 0
+    }));
+    return (t) => {
+      // Botanical glasshouse full-card border with brass mullions & corner fern sprigs
+      if (cardM) {
+        b.strokeStyle = 'rgba(238,208,136,.24)';
+        b.lineWidth = 1.1 * s;
+        tracePoly(b, cardM.pts, true);
+        b.stroke();
+        drawCardCorners(f, W, H, 6 * s, 15 * s, brass, 1.2 * s, 0.62, 'bracket');
+        // Miniature hanging fern leaves in upper-right & lower-left corners
+        const sw = Math.sin(t * 1.05) * 0.06;
+        leaf(f, W - 10 * s, 10 * s, 14 * s, 4.2 * s, Math.PI * 0.78 + sw, '#88f0c0', '#2b865c', 0.38);
+        leaf(f, W - 10 * s, 10 * s, 10 * s, 3.2 * s, Math.PI * 0.56 - sw, '#b4f8d8', '#3c9a6e', 0.3);
+        leaf(f, 10 * s, H - 10 * s, 14 * s, 4.2 * s, -0.45 + sw, '#88f0c0', '#2b865c', 0.38);
+        leaf(f, 10 * s, H - 10 * s, 10 * s, 3.2 * s, -1.0 - sw, '#f0d48a', '#9c7830', 0.3);
+        const cu = frac(t * 0.08);
+        traceComet(f, cardM.m, cu, 0.14, jade, 1.35 * s, 0.72, s, 18);
+        traceComet(f, cardM.m, frac(cu + 0.5), 0.12, dew, 1.2 * s, 0.62, s, 16);
+      }
+
+      // Rising bioluminescent healing dewdrops & miniature apothecary leaves across full height
+      for (const d of drops) {
+        const prog = frac(d.y0 + t * d.v);
+        const y = H * (1.04 - prog * 1.12);
+        const x = d.x + Math.sin(t * 0.65 + d.ph) * d.amp * s;
+        const fade = Math.sin(prog * Math.PI) * (full && y > cy + ra * 1.35 && x > W * 0.2 && x < W * 0.8 ? 0.34 : 0.68);
+        if (d.herb) {
+          b.globalAlpha = fade;
+          leaf(b, x, y, d.r * 2.3 * s, d.r * 0.85 * s, -Math.PI / 3 + Math.sin(t * 0.9 + d.ph) * 0.3, '#88f2c2', '#2c845a', 0.38);
+          b.globalAlpha = 1;
+        } else {
+          glow(b, x, y, d.r * 2.4 * s, dew, fade * 0.65);
+          b.fillStyle = `rgba(${dew},${fade * 0.9})`;
+          b.beginPath();
+          b.arc(x, y, d.r * 0.45 * s, 0, TAU);
+          b.fill();
+        }
+      }
+
+      // Faceted glass terrarium teardrop dome around avatar
+      glow(b, cx, cy, ra * 1.56, jade, 0.09 + 0.03 * Math.sin(t * 1.1));
+      const tg = f.createLinearGradient(cx, cy - ra * 1.42, cx, cy + ra * 1.22);
+      tg.addColorStop(0, '#f4dca0');
+      tg.addColorStop(0.45, '#b8f5e0');
+      tg.addColorStop(1, '#68d4a2');
+      f.strokeStyle = tg;
+      f.lineWidth = 1.65 * s;
+      tracePoly(f, domePts, true);
+      f.stroke();
+
+      // Delicate curved mossy-jade terrarium base & brass hanging loop at apex
+      f.strokeStyle = 'rgba(112,236,178,.72)';
+      f.lineWidth = 1.5 * s;
+      f.lineCap = 'round';
+      f.beginPath();
+      f.moveTo(cx - ra * 0.62, cy + ra * 1.24);
+      f.quadraticCurveTo(cx, cy + ra * 1.36, cx + ra * 0.62, cy + ra * 1.24);
+      f.stroke();
+
+      // Tiny botanical leaf cluster sprouting gently on the lower-right terrarium ledge
+      const lb = Math.sin(t * 1.25) * 0.06;
+      leaf(f, cx + ra * 0.66, cy + ra * 1.16, ra * 0.3, ra * 0.11, -0.5 + lb, '#8cf2c2', '#2c845a', 0.4);
+      leaf(f, cx - ra * 0.66, cy + ra * 1.16, ra * 0.26, ra * 0.095, Math.PI + 0.5 - lb, '#8cf2c2', '#2c845a', 0.4);
+
+      // Brass hanging eyelet ring at top apex
+      f.strokeStyle = 'rgba(238,208,136,.88)';
+      f.lineWidth = 1.15 * s;
+      f.beginPath();
+      f.arc(cx, cy - ra * 1.47, 3.0 * s, 0, TAU);
+      f.stroke();
+
+      // Greenhouse sun-glint gliding cleanly along the faceted glass panes
+      traceComet(f, domeM, frac(t * 0.14), 0.18, dew, 1.65 * s, 0.82, s, 18);
+    };
+  }, { fullCard: true });
 
   const CATEGORIES = [
     'All',
+    'myIPON',
+    'Education',
+    'Information Technology',
+    'Architecture',
+    'Veterinary Medicine',
     'Cosmic',
     'Animal',
     'Robot & Cyber',
     'Sci-Fi',
     'Nature',
     'Magic',
-    'Education',
-    'Information Technology',
-    'Architecture',
-    'Veterinary Medicine',
     'Special'
   ];
   const RARITIES = ['Common', 'Rare', 'Epic'];
@@ -2355,6 +3621,12 @@
       drawn: false,
       S: null,
       build() {
+        const defEntry = FX[this.id];
+        const isFull = Boolean(defEntry?.fullCard);
+        if (this.host?.dataset) {
+          if (isFull) this.host.dataset.effectScope = 'full';
+          else delete this.host.dataset.effectScope;
+        }
         const W = this.b.clientWidth || this.b.offsetWidth || 0;
         const H = this.b.clientHeight || this.b.offsetHeight || 0;
         if (!W || !H) {
@@ -2371,8 +3643,10 @@
         this.bc.clearRect(0, 0, W, H);
         this.fc.clearRect(0, 0, W, H);
         const g = this.geom(W, H) || { cx: W / 2, cy: H / 2, ra: 30 };
-        this.S = { W, H, ...g, s: Math.max(0.35, g.ra / 36), b: this.bc, f: this.fc };
-        const defEntry = FX[this.id];
+        const full = isFull && (Boolean(this.host?.classList?.contains?.('effects-card') || this.host?.classList?.contains?.('msg-profile-popover')) || H >= W * 0.92);
+        const s = Math.max(0.35, g.ra / 36);
+        this.S = { W, H, ...g, s, full, b: this.bc, f: this.fc };
+        this.frameSpec = full && defEntry?.cardFrame ? { spec: defEntry.cardFrame, m: cardFrameMetrics(W, H, 5 * s, 16 * s) } : null;
         this.run = defEntry ? defEntry.make(this.S) : null;
         this.time = 0;
         this.drawn = false;
@@ -2380,13 +3654,17 @@
       },
       render(t, dt) {
         if (!this.S || !this.run) return;
-        const { W, H, b, f } = this.S;
+        const { W, H, s, b, f } = this.S;
         b.globalCompositeOperation = 'source-over';
         f.globalCompositeOperation = 'source-over';
         b.globalAlpha = 1;
         f.globalAlpha = 1;
         b.clearRect(0, 0, W, H);
         f.clearRect(0, 0, W, H);
+        if (this.frameSpec) {
+          const [rgb1, rgb2, style] = this.frameSpec.spec;
+          drawFullCardAura(b, f, this.frameSpec.m, rgb1, rgb2, s, t, style);
+        }
         this.run(t, dt);
         b.globalCompositeOperation = 'source-over';
         f.globalCompositeOperation = 'source-over';
@@ -2426,6 +3704,7 @@
         ro?.disconnect?.();
         io?.disconnect?.();
         stage.run = null;
+        if (stage.host?.dataset) delete stage.host.dataset.effectScope;
         if (stage.S) {
           stage.bc.clearRect(0, 0, stage.S.W, stage.S.H);
           stage.fc.clearRect(0, 0, stage.S.W, stage.S.H);

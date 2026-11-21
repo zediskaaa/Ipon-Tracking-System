@@ -133,8 +133,8 @@ test('profile effects engine exports all 24 effects and renders every effect cle
 
   const api = sandbox.window.IponProfileEffects;
   assert.ok(api);
-  assert.equal(api.EFFECTS.length, 24);
-  assert.equal(api.ALL_OPTIONS.length, 25);
+  assert.equal(api.EFFECTS.length, 35);
+  assert.equal(api.ALL_OPTIONS.length, 36);
   assert.deepEqual(
     [...api.EFFECTS.map((e) => e.id)],
     [
@@ -142,17 +142,26 @@ test('profile effects engine exports all 24 effects and renders every effect cle
       'holo', 'glitch', 'fireflies', 'petals', 'singularity', 'warp',
       'jelly', 'astro', 'constellation', 'sigil',
       'laurel', 'scholar', 'circuit', 'neural',
-      'blueprint', 'atelier', 'vetpulse', 'sanctuary'
+      'blueprint', 'atelier', 'vetpulse', 'sanctuary',
+      'iponcoins', 'iponsprout', 'iponvault',
+      'orrery', 'diploma', 'cybergrid', 'fibercloud',
+      'stainedglass', 'cantilever', 'biolumfauna', 'botanicvet'
     ]
   );
+  assert.ok(api.CATEGORIES.includes('myIPON'), 'Missing category myIPON');
+  assert.equal(api.EFFECTS.filter((e) => e.cat === 'myIPON').length, 3, 'Category myIPON must have 3 distinct effects');
   for (const cat of ['Education', 'Information Technology', 'Architecture', 'Veterinary Medicine']) {
     assert.ok(api.CATEGORIES.includes(cat), `Missing category ${cat}`);
-    assert.equal(api.EFFECTS.filter((e) => e.cat === cat).length, 2, `Category ${cat} must have 2 distinct effects`);
+    assert.equal(api.EFFECTS.filter((e) => e.cat === cat).length, 4, `Category ${cat} must have 4 distinct effects`);
   }
   assert.equal(api.normalizeEffectId(' SIGIL '), 'sigil');
   assert.equal(api.normalizeEffectId(' SANCTUARY '), 'sanctuary');
+  assert.equal(api.normalizeEffectId(' IPONCOINS '), 'iponcoins');
   assert.equal(api.normalizeEffectId('unknown'), 'none');
   assert.equal(api.getEffect('singularity').rare, 2);
+  assert.equal(api.getEffect('iponcoins').cat, 'myIPON');
+  assert.equal(api.getEffect('iponcoins').fullCard, true);
+  assert.equal(api.getEffect('stardust').fullCard, false);
   assert.equal(api.getEffect('laurel').cat, 'Education');
   assert.equal(api.getEffect('circuit').cat, 'Information Technology');
   assert.equal(api.getEffect('blueprint').cat, 'Architecture');
@@ -161,6 +170,8 @@ test('profile effects engine exports all 24 effects and renders every effect cle
   const fxb = fakeCanvas();
   const fxf = fakeCanvas();
   const host = {
+    dataset: {},
+    classList: { contains: (c) => c === 'effects-card' },
     querySelector(sel) {
       if (sel === 'canvas.fxb') return fxb;
       if (sel === 'canvas.fxf') return fxf;
@@ -169,10 +180,12 @@ test('profile effects engine exports all 24 effects and renders every effect cle
     prepend: noop,
     appendChild: noop
   };
-  for (const geom of [
-    () => ({ cx: 60, cy: 96, ra: 36 }),
-    () => ({ cx: 150, cy: 86, ra: 24 })
+  for (const [dim, geom] of [
+    [[340, 380], () => ({ cx: 60, cy: 102, ra: 36 })],
+    [[220, 147], () => ({ cx: 110, cy: 71, ra: 25 })]
   ]) {
+    fxb.clientWidth = fxb.offsetWidth = fxf.clientWidth = fxf.offsetWidth = dim[0];
+    fxb.clientHeight = fxb.offsetHeight = fxf.clientHeight = fxf.offsetHeight = dim[1];
     const stage = api.mountStage(host, {
       effectId: 'stardust',
       geometryFn: geom,
@@ -181,6 +194,7 @@ test('profile effects engine exports all 24 effects and renders every effect cle
     for (const effect of api.ALL_OPTIONS) {
       saveDepth = 0;
       assert.doesNotThrow(() => stage.setEffect(effect.id), `Failed rendering ${effect.id}`);
+      assert.equal(host.dataset.effectScope, effect.fullCard ? 'full' : undefined, `Unexpected effectScope for ${effect.id}`);
       const tick = rafQueue[rafQueue.length - 1];
       if (tick) {
         tick(1040);
@@ -189,6 +203,7 @@ test('profile effects engine exports all 24 effects and renders every effect cle
       assert.equal(saveDepth, 0, `Unbalanced canvas save/restore in ${effect.id}`);
     }
     stage.destroy();
+    assert.equal(host.dataset.effectScope, undefined, 'destroy() must clear data-effect-scope');
   }
   assert.deepEqual(numericErrors, [], `Non-finite canvas coordinates detected: ${numericErrors.slice(0, 5).join(', ')}`);
 });
@@ -1127,15 +1142,21 @@ test('Profile Effects gallery tiles and award/admin previews display actual user
   assert.match(superAdminJs, /effectTrialPreviewAvatar\.innerHTML[\s\S]*data-avatar-img><span class="avatar-fallback-inner" hidden>/);
 });
 
-test('Migration 159, schema.sql, CSS wrapping, and HTML cache-busters wire all 8 themed profile effects end to end', () => {
-  const mig159 = read('database/migrations/20261122_159_themed_profile_effects.sql');
+test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters wire all 19 themed profile effects end to end', () => {
+  const mig160 = read('database/migrations/20261122_160_full_profile_myipon_and_themed_effects.sql');
   const schema = read('database/schema.sql');
   const css = read('css/app.css');
   const sw = read('sw.js');
 
-  const themedIds = ['laurel', 'scholar', 'circuit', 'neural', 'blueprint', 'atelier', 'vetpulse', 'sanctuary'];
-  for (const sql of [mig159, schema]) {
-    assert.match(sql, /'20261122_159'/);
+  const themedIds = [
+    'laurel', 'scholar', 'orrery', 'diploma',
+    'circuit', 'neural', 'cybergrid', 'fibercloud',
+    'blueprint', 'atelier', 'stainedglass', 'cantilever',
+    'vetpulse', 'sanctuary', 'biolumfauna', 'botanicvet',
+    'iponcoins', 'iponsprout', 'iponvault'
+  ];
+  for (const sql of [mig160, schema]) {
+    assert.match(sql, /'20261122_160'/);
     assert.match(sql, /create or replace function public\.is_valid_profile_effect_id\(p_effect_id text\)/i);
     assert.match(sql, /create or replace function public\.profile_effect_label\(p_effect_id text\)/i);
     assert.match(sql, /create or replace function public\.get_own_profile_effects\(\)/i);
@@ -1148,9 +1169,12 @@ test('Migration 159, schema.sql, CSS wrapping, and HTML cache-busters wire all 8
     }
   }
   assert.match(css, /\.effects-tile \.cat\s*\{[^}]*white-space:\s*normal;[^}]*max-width:\s*100%;/);
-  assert.match(sw, /ipon-shell-v167/);
+  assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
+  assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
+  assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
+  assert.match(sw, /ipon-shell-v168/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
-    assert.match(html, /js\/profile-effects\.js\?v=20261122-01/);
+    assert.match(html, /js\/profile-effects\.js\?v=20261122-02/);
   }
 });

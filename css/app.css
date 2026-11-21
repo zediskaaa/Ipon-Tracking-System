@@ -21315,8 +21315,16 @@ html[data-theme="dark"] .account-card-effects-row {
 .msg-profile-popover > canvas.fxb { z-index: 1; }
 .msg-profile-popover .msg-pop-head > *:first-child { position: relative; z-index: 2; }
 .msg-profile-popover > canvas.fxf { z-index: 3; }
+.msg-profile-popover[data-effect-scope="full"] > canvas.fxb,
+.msg-profile-popover[data-effect-scope="full"] > canvas.fxf {
+  height: 100% !important;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
 .msg-profile-popover .msg-pop-title,
 .msg-profile-popover .msg-pop-bio,
+.msg-profile-popover .msg-pop-apps-slot,
+.msg-profile-popover .msg-pop-private-note,
 .msg-profile-popover .msg-mutual-wrap,
 .msg-profile-popover .msg-pop-groups,
 .msg-profile-popover .msg-pop-actions {
@@ -21697,6 +21705,11 @@ html[data-theme="dark"] .notification-item-icon.is-effect-granted {
   pointer-events: none;
   -webkit-mask-image: linear-gradient(#000 70%, transparent);
   mask-image: linear-gradient(#000 70%, transparent);
+}
+.effects-card[data-effect-scope="full"] > canvas {
+  height: 100% !important;
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 .effects-card > canvas.fxb { z-index: 1; }
 .effects-card > canvas.fxf { z-index: 3; }
