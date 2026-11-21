@@ -495,7 +495,7 @@ test('My Account verified badge card lets members message the creator directly w
   // Composer hides desktop scrollbar arrows; minimal DP viewer opens only for real DPs and closes on outside click
   assert.match(messagesJs, /el\.style\.overflowY\s*=\s*el\.scrollHeight\s*>\s*140\s*\?\s*'auto'\s*:\s*'hidden'/);
   assert.match(messagesJs, /function dpPreviewTriggerHtml\([\s\S]*data-view-dp-src/);
-  assert.match(messagesJs, /heroAvatarNode = dpPreviewTriggerHtml\(conv\.avatar_url/);
+  assert.match(messagesJs, /heroAvatarNode = conv\.anonymous_enabled \? heroAvatar : dpPreviewTriggerHtml\(conv\.avatar_url/);
   assert.match(messagesJs, /dpPreviewTriggerHtml\(profile\?\.avatar_url/);
   assert.match(messagesJs, /dpPreviewTriggerHtml\(initializedProfile\?\.avatar_url/);
   assert.match(messagesJs, /peerDpUrl[\s\S]*data-view-dp-src/);
@@ -534,8 +534,8 @@ test('verified badge stays glued beside surname and fits single-line name header
   assert.match(css, /\.msg-thread-peer-title strong\s*\{[^}]*display:\s*inline-flex;[^}]*flex-wrap:\s*nowrap;[^}]*white-space:\s*nowrap;/);
   assert.match(css, /\.verified-name-tail\s*\{[^}]*white-space:\s*nowrap;/);
   assert.match(css, /\.verified-name-text\s*\{[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/);
-  assert.match(messagesJs, /class="msg-thread-peer-name"[^>]*><span class="verified-name-text">\$\{escapeHtml\(convDisplayTitle\(conv\)\)\}<\/span>\$\{isGrp \? '' : userBadgesHtml\(conv\)\}<\/strong>/);
-  assert.match(messagesJs, /class="msg-thread-peer-name"[^>]*><span class="verified-name-text">\$\{escapeHtml\(convDisplayTitle\(peer\)\)\}<\/span>\$\{isGrp \? '' : userBadgesHtml\(peer\)\}<\/strong>/);
+  assert.match(messagesJs, /class="msg-thread-peer-name"[^>]*><span class="verified-name-text">\$\{escapeHtml\(convDisplayTitle\(conv\)\)\}<\/span>\$\{isGrp \|\| conv\.anonymous_enabled \? '' : userBadgesHtml\(conv\)\}<\/strong>/);
+  assert.match(messagesJs, /class="msg-thread-peer-name"[^>]*><span class="verified-name-text">\$\{escapeHtml\(convDisplayTitle\(peer\)\)\}<\/span>\$\{isGrp \|\| peer\.anonymous_enabled \? '' : userBadgesHtml\(peer\)\}<\/strong>/);
   assert.doesNotMatch(messagesJs, /class="msg-thread-peer-sub"[\s\S]{0,180}msg-handle-chip/);
   assert.match(messagesJs, /<strong class="msg-conv-name"><span class="msg-conv-name-text">\$\{escapeHtml\(u\.full_name \|\| 'User'\)\}<\/span>\$\{userBadgesHtml\(u\)\}<\/strong>/);
   assert.match(messagesJs, /fitVerifiedNameLines\?\.\(headerEl\)/);

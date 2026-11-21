@@ -7985,6 +7985,27 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
   overflow: hidden;
   background: var(--thread-stage-bg, linear-gradient(180deg, #faf6ee 0%, #f4efe6 100%));
 }
+.msg-thread-stage[data-chat-theme="anonymous"] {
+  background: linear-gradient(155deg, #e9ebec 0%, #d5d9dc 55%, #c9cfd2 100%);
+  color: #252d32;
+}
+.msg-thread-pane[data-chat-theme="anonymous"] .msg-thread-header,
+.msg-thread-pane[data-chat-theme="anonymous"] .msg-composer {
+  background: #f1f2f1;
+  border-color: #c7ced0;
+}
+.msg-thread-stage[data-chat-theme="anonymous"] .msg-row.is-mine .msg-bubble {
+  background: #424c53;
+  border-color: #313a40;
+  color: #fff;
+}
+.msg-thread-stage[data-chat-theme="anonymous"] .msg-row.is-peer .msg-bubble {
+  background: #f8f9f8;
+  border-color: #bdc6ca;
+  color: #273037;
+}
+.msg-conv-row.is-anonymous { background: linear-gradient(110deg, #f1f3f3, #e8ecec); }
+html[data-theme="dark"] .msg-conv-row.is-anonymous { background: linear-gradient(110deg, #283034, #30393d); }
 .msg-thread-stage[data-chat-theme="emerald"] {
   background: linear-gradient(180deg, #e7f3ec 0%, #d8eae0 100%);
 }
@@ -12872,6 +12893,20 @@ html[data-theme="dark"] .msg-thread-stage {
 }
 html[data-theme="dark"] .msg-thread-stage[data-chat-theme="emerald"] {
   background: linear-gradient(180deg, #0b221a 0%, #081813 100%);
+}
+html[data-theme="dark"] .msg-thread-stage[data-chat-theme="anonymous"] {
+  background: linear-gradient(155deg, #30383d 0%, #222a2f 100%);
+  color: #e8ecee;
+}
+html[data-theme="dark"] .msg-thread-pane[data-chat-theme="anonymous"] .msg-thread-header,
+html[data-theme="dark"] .msg-thread-pane[data-chat-theme="anonymous"] .msg-composer {
+  background: #2a3136;
+  border-color: #4d5a60;
+}
+html[data-theme="dark"] .msg-thread-stage[data-chat-theme="anonymous"] .msg-row.is-peer .msg-bubble {
+  background: #3b454b;
+  border-color: #56636a;
+  color: #f4f6f6;
 }
 html[data-theme="dark"] .msg-thread-stage[data-chat-theme="sage"] {
   background: linear-gradient(180deg, #101f1b 0%, #0b1613 100%);

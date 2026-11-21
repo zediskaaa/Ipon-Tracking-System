@@ -317,6 +317,7 @@
 
   function convDisplayTitle(conv) {
     if (!conv) return 'Conversation';
+    if (conv.anonymous_enabled && !isGroupConv(conv)) return 'Anonymous';
     if (isGroupConv(conv)) return String(conv.title || conv.full_name || 'Group Chat');
     return String(conv.peer?.full_name || conv.full_name || 'User');
   }
@@ -467,7 +468,7 @@
           chat_theme: conv.chat_theme || 'paper'
         };
       }
-      if (conv?.peer) return { ...conv.peer, chat_theme: conv.chat_theme || 'paper' };
+      if (conv?.peer) return { ...conv.peer, chat_theme: conv.chat_theme || 'paper', anonymous_enabled: Boolean(conv.anonymous_enabled) };
     }
     if (userId) {
       const target = String(userId);
@@ -640,6 +641,7 @@
 
   function userAvatarHtml(user, sizeClass = 'avatar-md', { clickable = true, showPresence = true } = {}) {
     if (!user) return '';
+    if (user.anonymous_enabled) return `<span class="avatar-presence-wrap msg-avatar-wrap"><img class="avatar-circle ${escapeHtml(sizeClass)}" src="assets/anonymous-avatar.svg" alt="Anonymous profile"></span>`;
     const safeUrl = user.profile_visible === false ? '' : safeDpUrl(user.avatar_url);
     const name = String(user.full_name || 'User');
     const letters = escapeHtml(ipon().initials(name));
@@ -709,7 +711,7 @@
   function convAvatarHtml(conv, sizeClass = 'avatar-md', opts = {}) {
     if (!conv) return '';
     if (isGroupConv(conv)) return groupAvatarHtml(conv, sizeClass, opts);
-    return userAvatarHtml(conv.peer || conv, sizeClass, opts);
+    return userAvatarHtml(conv.anonymous_enabled ? { ...(conv.peer || conv), anonymous_enabled: true } : (conv.peer || conv), sizeClass, opts);
   }
 
   function groupPicPreviewMarkup({ conv = null, dataUrl = null, clear = false, title = '', sizeClass = 'avatar-lg' } = {}) {
@@ -1178,7 +1180,7 @@
     const activeWrap = document.getElementById('msg-thread-active');
     if (activeWrap && activeWrap !== dialog) ipon().syncPresenceDots?.(activeWrap);
     if (!conv) return;
-    const liveStatus = formatStatusLine(conv);
+    const liveStatus = conv.anonymous_enabled ? '' : formatStatusLine(conv);
     const subEl = document.getElementById('msg-peer-status-text');
     if (subEl) {
       subEl.textContent = liveStatus;
@@ -2107,11 +2109,11 @@
     const groupPill = isGrp
       ? `<span class="msg-conv-group-pill" title="Group chat · ${Number(conv.member_count || 2)} members">${Number(conv.member_count || 2)}</span>`
       : '';
-    return `<article class="msg-conv-row${active ? ' is-active' : ''}${hasUnread ? ' is-unread' : ''}${isGrp ? ' is-group' : ''}" data-conv-row="${escapeHtml(conv.id)}" role="option" aria-selected="${active ? 'true' : 'false'}">
+    return `<article class="msg-conv-row${active ? ' is-active' : ''}${hasUnread ? ' is-unread' : ''}${isGrp ? ' is-group' : ''}${conv.anonymous_enabled ? ' is-anonymous' : ''}" data-conv-row="${escapeHtml(conv.id)}" role="option" aria-selected="${active ? 'true' : 'false'}">
       <div class="msg-conv-avatar">${convAvatarHtml(conv, 'avatar-md')}</div>
       <button type="button" class="msg-conv-main" data-open-conv="${escapeHtml(conv.id)}">
         <div class="msg-conv-top">
-          <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp ? '' : userBadgesHtml(conv.peer || conv)}${groupPill}</strong>
+          <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp || conv.anonymous_enabled ? '' : userBadgesHtml(conv.peer || conv)}${groupPill}</strong>
         </div>
         <div class="msg-conv-bottom">
           <span class="msg-conv-preview">${previewText}</span>
@@ -2217,7 +2219,7 @@
         parts.push(msgHits.map((hit) => `
           <button type="button" class="msg-search-hit-row" data-jump-conv="${escapeHtml(hit.conversation_id)}" data-jump-msg-id="${escapeHtml(hit.message_id)}">
             <div class="msg-conv-top">
-              <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(hit.peer_name)}</span>${hit.peer_id ? userBadgesHtml(hit.peer_id) : ''}</strong>
+              <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(hit.peer_name)}</span>${hit.peer_id && !hit.anonymous_enabled ? userBadgesHtml(hit.peer_id) : ''}</strong>
               <time class="msg-conv-time">${escapeHtml(formatShortDate(hit.created_at))}</time>
             </div>
             <span class="msg-search-hit-snippet">${escapeHtml(hit.sender_name)}: ${highlightMatches(escapeHtml(hit.body), q)}</span>
@@ -2369,10 +2371,18 @@
         || Boolean(conv.block_forwarding) !== Boolean(protection.block_forwarding)
         || Boolean(conv.screenshot_block_eligible) !== Boolean(protection.screenshot_block_eligible)
         || Boolean(conv.screenshot_notices_enabled) !== Boolean(protection.screenshot_notices_enabled)
-        || conv.vanish_after_seconds !== protection.vanish_after_seconds;
+        || conv.vanish_after_seconds !== protection.vanish_after_seconds
+        || Boolean(conv.anonymous_enabled) !== Boolean(protection.anonymous_enabled);
+      const anonymousChanged = Boolean(conv.anonymous_enabled) !== Boolean(protection.anonymous_enabled);
       Object.assign(conv, protection);
       conv.protection_unavailable = false;
       syncNativeScreenshotLock(conv);
+      if (anonymousChanged) {
+        state.pendingByConv.delete(convId);
+        state.draftsByConv.delete(convId);
+        await Promise.all([openConversation(convId, { markRead: false, silent: true }), refreshConversations()]);
+        return;
+      }
       const editForm = document.getElementById('msg-group-edit-form');
       if (changed && state.showThreadInfo && (!editForm || editForm.hidden)) renderThreadInfoDrawer();
     } catch (_) { }
@@ -2600,7 +2610,7 @@
   }
 
   function applyThreadTheme(theme = 'paper') {
-    const normalized = ['paper', 'emerald', 'sage', 'sand', 'midnight'].includes(theme) ? theme : 'paper';
+    const normalized = ['paper', 'emerald', 'sage', 'sand', 'midnight', 'anonymous'].includes(theme) ? theme : 'paper';
     const pane = document.getElementById('msg-thread-pane');
     const stage = document.getElementById('msg-thread-stage');
     if (pane) pane.dataset.chatTheme = normalized;
@@ -2621,7 +2631,7 @@
       typingEl.setAttribute('aria-hidden', 'true');
     }
     const peer = findKnownPeer(conversationId, explicitPeer?.id) || explicitPeer;
-    applyThreadTheme(peer?.chat_theme || 'paper');
+    applyThreadTheme(peer?.anonymous_enabled ? 'anonymous' : (peer?.chat_theme || 'paper'));
 
     const headerEl = document.getElementById('msg-thread-header');
     if (headerEl) {
@@ -2636,7 +2646,7 @@
             ${isGrp ? groupAvatarHtml(peer, 'avatar-md') : userAvatarHtml(peer, 'avatar-md')}
             <div class="msg-thread-peer-meta">
               <div class="msg-thread-peer-title">
-                <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(peer))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(peer))}</span>${isGrp ? '' : userBadgesHtml(peer)}</strong>
+                <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(peer))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(peer))}</span>${isGrp || peer.anonymous_enabled ? '' : userBadgesHtml(peer)}</strong>
               </div>
               <div class="msg-thread-peer-sub">
                 ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
@@ -2913,7 +2923,7 @@
 
     const conv = thread.conversation;
     const isGrp = isGroupConv(conv);
-    applyThreadTheme(conv.chat_theme || 'paper');
+    applyThreadTheme(conv.anonymous_enabled ? 'anonymous' : (conv.chat_theme || 'paper'));
 
     const blockedThread = isBlockedThread(conv);
     const friendsOnlyLocked = isFriendsOnlyLocked(conv);
@@ -2922,7 +2932,7 @@
     const isIncomingReq = isPendingReq && conv.initiator_id !== initializedProfile?.id;
     const hasSentMessages = Boolean((Array.isArray(thread.messages) && thread.messages.length) || getPendingList(conv.conversation_id).length);
     const typingEntries = getTypingEntries(conv.conversation_id);
-    const peerStatus = formatStatusLine(conv);
+    const peerStatus = conv.anonymous_enabled ? '' : formatStatusLine(conv);
 
     const headerEl = document.getElementById('msg-thread-header');
     headerEl.classList.toggle('is-empty-intro', !hasSentMessages);
@@ -2934,7 +2944,7 @@
         ${isGrp ? groupAvatarHtml(conv, 'avatar-md', { clickable: true }) : userAvatarHtml(conv, 'avatar-md', { showPresence: !isSelfUser(conv) && conv.profile_visible !== false })}
         <div class="msg-thread-peer-meta">
           <div class="msg-thread-peer-title">
-            <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(conv))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp ? '' : userBadgesHtml(conv)}</strong>
+            <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(conv))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(conv))}</span>${isGrp || conv.anonymous_enabled ? '' : userBadgesHtml(conv)}</strong>
           </div>
           <div class="msg-thread-peer-sub">
             ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
@@ -3660,14 +3670,14 @@
     scrollWrap?.classList.toggle('is-empty-thread', isEmpty);
     const isGrpHero = isGroupConv(conv);
     const isSelfHero = !isGrpHero && isSelfUser(conv);
-    const heroProfileVisible = isGrpHero || isSelfHero || conv.profile_visible !== false;
+    const heroProfileVisible = !conv.anonymous_enabled && (isGrpHero || isSelfHero || conv.profile_visible !== false);
     const heroTitle = convDisplayTitle(conv);
-    const statusText = formatStatusLine(conv);
+    const statusText = conv.anonymous_enabled ? '' : formatStatusLine(conv);
     const isHeroOnline = isSelfHero || (!isGrpHero && heroProfileVisible && conv.allow_online_status !== false && ipon().isUserOnline(conv.id));
     const heroAvatar = isGrpHero
       ? groupAvatarHtml(conv, 'avatar-lg', { clickable: false })
       : userAvatarHtml(conv, 'avatar-lg', { clickable: false, showPresence: !isSelfHero && heroProfileVisible });
-    const heroAvatarNode = dpPreviewTriggerHtml(conv.avatar_url, heroTitle, heroAvatar);
+    const heroAvatarNode = conv.anonymous_enabled ? heroAvatar : dpPreviewTriggerHtml(conv.avatar_url, heroTitle, heroAvatar);
     const renderedHeroAvatar = heroProfileVisible ? heroAvatarNode : heroAvatar;
     const welcomeCopy = isGrpHero
       ? 'Messages and files stay private to group members.'
@@ -3677,7 +3687,7 @@
     const welcomeHtml = `
       <div class="msg-thread-welcome msg-thread-welcome-hero">
         <div class="msg-welcome-avatar">${renderedHeroAvatar}</div>
-        <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero ? '' : userBadgesHtml(conv)}</h3>
+        <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero || conv.anonymous_enabled ? '' : userBadgesHtml(conv)}</h3>
         ${!isGrpHero && heroProfileVisible && conv.username ? `<span class="msg-welcome-username">@${escapeHtml(conv.username)}</span>` : ''}
         ${!isSelfHero ? `<div class="msg-welcome-meta" id="msg-welcome-meta"${statusText || isGrpHero ? '' : ' hidden'}>
           <span class="msg-welcome-status${isHeroOnline ? ' is-online' : ''}" id="msg-welcome-status-text"${statusText ? '' : ' hidden'}>${escapeHtml(statusText)}</span>
@@ -3792,7 +3802,7 @@
 
       const replyHtml = !isDeleted && m.reply_preview
         ? `<button type="button" class="msg-reply-quote" data-jump-msg="${escapeHtml(m.reply_preview.id)}">
-            <strong>${escapeHtml(m.reply_preview.sender_id === myId ? 'You' : (m.reply_preview.sender_name || 'User'))}${m.reply_preview.sender_id && m.reply_preview.sender_id !== myId ? userBadgesHtml(m.reply_preview.sender_id) : ''}</strong>
+            <strong>${escapeHtml(m.reply_preview.sender_id === myId ? 'You' : (m.reply_preview.sender_name || 'User'))}${!conv.anonymous_enabled && m.reply_preview.sender_id && m.reply_preview.sender_id !== myId ? userBadgesHtml(m.reply_preview.sender_id) : ''}</strong>
             <span>${escapeHtml(m.reply_preview.body || 'Attachment')}</span>
           </button>`
         : '';
@@ -4431,7 +4441,7 @@
             : peerAv;
           return `<div class="msg-drawer-profile">
           ${peerAvNode}
-          <strong title="${escAttr(conv.full_name || 'User')}"><span class="verified-name-text">${escapeHtml(conv.full_name || 'User')}</span>${iponApi?.verifiedBadgesHtml?.(conv) || ''}</strong>
+          <strong title="${escAttr(conv.full_name || 'User')}"><span class="verified-name-text">${escapeHtml(conv.full_name || 'User')}</span>${conv.anonymous_enabled ? '' : (iponApi?.verifiedBadgesHtml?.(conv) || '')}</strong>
           ${conv.username ? `<small>@${escapeHtml(conv.username)}</small>` : ''}
           ${conv.bio ? `<p class="msg-drawer-bio">${escapeHtml(conv.bio)}</p>` : ''}
           ${iponApi?.renderSocialAppLinksHtml?.(conv.social_links, { variant: 'drawer' }) || ''}
@@ -4479,6 +4489,11 @@
       ${androidShell && (!nativePrivacy || !screenshotEligible) && !conv.protection_unavailable ? `<div class="msg-privacy-note" role="status"><span>${nativePrivacy ? 'Screenshot protection needs everyone on Android.' : 'Screenshot protection is unavailable in this app session.'}</span><button type="button" data-chat-protection-retry${state.checkingProtection ? ' disabled' : ''}>${state.checkingProtection ? 'Checking…' : 'Check again'}</button></div>` : ''}
       <div class="msg-privacy-list">
         ${screenshotRowHtml}
+        ${!isGrp && !isSelfUser(conv) && conv.status === 'ACCEPTED' ? `<div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
+          <span class="msg-privacy-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 10c2-4 5-6 8-6s6 2 8 6v7c-2 2-5 3-8 3s-6-1-8-3z"/><path d="M8 12h3m2 0h3m-7 4h6"/></svg></span>
+          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-anon-title">Anonymous mode</strong></div><small id="msg-privacy-anon-desc">Hide names and photos for both people. Messages sent while on are deleted for both when turned off.</small></div>
+          <div class="msg-privacy-control"><button type="button" class="msg-privacy-switch" role="switch" data-anonymous-toggle aria-checked="${Boolean(conv.anonymous_enabled)}" aria-labelledby="msg-privacy-anon-title" aria-describedby="msg-privacy-anon-desc"${canManageProtection ? '' : ' disabled'}></button><span>${conv.anonymous_enabled ? 'On' : 'Off'}</span></div>
+        </div>` : ''}
         ${isGrp ? `<div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
           <span class="msg-privacy-icon">${phoneSvg}</span>
           <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-notices-title">Screenshot notices</strong></div><small id="msg-privacy-notices-desc">Show Android app screenshot notices to everyone in this group</small></div>
@@ -6126,7 +6141,7 @@
   }
 
   async function openForwardDialog(messageObj) {
-    if (state.activeThread?.conversation?.block_forwarding) {
+    if (state.activeThread?.conversation?.block_forwarding || state.activeThread?.conversation?.anonymous_enabled) {
       ipon().toast('Forwarding is disabled in this chat.', 'error');
       return;
     }
@@ -6824,7 +6839,7 @@
       ${canSendHere ? `<button type="button" data-ctx-do="reply" data-msg-id="${escAttr(msgId)}">Reply</button>` : ''}
       ${atts.length ? `<button type="button" data-ctx-do="download" data-msg-id="${escAttr(msgId)}">${atts.length > 1 ? `Download all (${atts.length})` : 'Download'}</button>` : ''}
       ${msg.body ? `<button type="button" data-ctx-do="copy" data-msg-id="${escAttr(msgId)}">Copy text</button>` : ''}
-      ${state.activeThread?.conversation?.block_forwarding ? '' : `<button type="button" data-ctx-do="forward" data-msg-id="${escAttr(msgId)}">Forward</button>`}
+      ${state.activeThread?.conversation?.block_forwarding || state.activeThread?.conversation?.anonymous_enabled ? '' : `<button type="button" data-ctx-do="forward" data-msg-id="${escAttr(msgId)}">Forward</button>`}
       ${canSendHere && state.activeThread?.conversation?.status === 'ACCEPTED' ? `<button type="button" data-ctx-do="pin" data-msg-id="${escAttr(msgId)}">${msg.pinned_at ? 'Unpin' : 'Pin message'}</button>` : ''}
       ${canSendHere && mine ? `<button type="button" data-ctx-do="edit" data-msg-id="${escAttr(msgId)}">Edit message</button>` : ''}
       <button type="button" data-ctx-do="del_me" data-msg-id="${escAttr(msgId)}">Delete for me</button>
@@ -7394,6 +7409,41 @@
         return;
       }
 
+      const anonymousBtn = ev.target.closest?.('[data-anonymous-toggle]');
+      if (anonymousBtn && state.activeConvId && !state.savingProtection) {
+        const convId = state.activeConvId;
+        const conv = state.activeThread?.conversation;
+        if (!conv || isGroupConv(conv) || conv.protection_unavailable) return;
+        const enabled = !conv.anonymous_enabled;
+        if (!enabled) {
+          const accepted = await ipon().confirmAction({
+            title: 'End anonymous mode?',
+            message: 'All messages and attachments sent while anonymous mode was on will be deleted for both people.',
+            confirmText: 'End and delete'
+          });
+          if (!accepted) return;
+        }
+        state.savingProtection = true;
+        anonymousBtn.disabled = true;
+        try {
+          await ipon().rpc('set_anonymous_chat', { p_conversation_id: convId, p_enabled: enabled });
+          if (!enabled) {
+            state.pendingByConv.delete(convId);
+            state.draftsByConv.delete(convId);
+          }
+          await Promise.all([
+            openConversation(convId, { markRead: false, silent: true }),
+            refreshConversations()
+          ]);
+        } catch (error) {
+          ipon().toast(ipon().friendlyError(error), 'error');
+        } finally {
+          state.savingProtection = false;
+          if (state.activeConvId === convId) renderThreadInfoDrawer();
+        }
+        return;
+      }
+
       const protectionBtn = ev.target.closest?.('[data-chat-protection]');
       if (protectionBtn && state.activeConvId && !state.savingProtection) {
         const setting = protectionBtn.dataset.chatProtection;
@@ -7444,7 +7494,7 @@
         const conv = state.activeThread?.conversation;
         const prevTheme = conv?.chat_theme || 'paper';
         if (conv) conv.chat_theme = nextTheme;
-        applyThreadTheme(nextTheme);
+        applyThreadTheme(conv?.anonymous_enabled ? 'anonymous' : nextTheme);
         if (state.showThreadInfo) renderThreadInfoDrawer();
         try {
           await ipon().rpc('update_conversation_member_state', { p_conversation_id: state.activeConvId, p_action: 'theme', p_theme: nextTheme });
@@ -8924,6 +8974,7 @@
             (row.screenshot_notices_enabled !== undefined && row.screenshot_notices_enabled !== curConv.screenshot_notices_enabled) ||
             (row.block_forwarding !== undefined && row.block_forwarding !== curConv.block_forwarding) ||
             (row.vanish_after_seconds !== undefined && row.vanish_after_seconds !== curConv.vanish_after_seconds) ||
+            (row.anonymous_session_id !== undefined && Boolean(row.anonymous_session_id) !== Boolean(curConv.anonymous_enabled)) ||
             (isGroupConv(curConv) && (
               (row.title && row.title !== curConv.title) ||
               (row.description !== undefined && row.description !== curConv.description) ||
