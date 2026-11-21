@@ -971,6 +971,186 @@ async function sendNewDeviceOtpEmail({
   return deliverEmail({ toEmail, recipientName: safeName, subject, html, plainText });
 }
 
+function buildSafeReminderAppUrl(link?: string | null) {
+  const base = 'https://my-ipon.vercel.app';
+  const raw = String(link || '').trim().replace(/^\/+/, '');
+  if (!raw || /^https?:/i.test(raw) || raw.includes('..')) return `${base}/login.html`;
+  return `${base}/${raw}`;
+}
+
+async function sendUnpaidReminderEmail({
+  toEmail,
+  recipientName,
+  items
+}: {
+  toEmail: string;
+  recipientName: string;
+  items: Array<{ id: number; type: string; title: string; message: string; link?: string | null }>;
+}) {
+  const safeName = String(recipientName || '').trim() || 'Member';
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return { email_sent: false, email_error: 'No unpaid reminders to send.' };
+
+  const primary = list[0];
+  const primaryUrl = buildSafeReminderAppUrl(primary.link);
+  const subject = list.length === 1
+    ? `${primary.title} — ${SYSTEM_NAME}`
+    : `You have ${list.length} unpaid savings reminders — ${SYSTEM_NAME}`;
+  const heading = list.length === 1 ? primary.title : `${list.length} unpaid savings reminders`;
+
+  const plainLines = [
+    `Hello ${safeName},`,
+    '',
+    list.length === 1
+      ? 'This is an automatic reminder from myIPON about your unpaid savings balance:'
+      : 'This is an automatic reminder from myIPON about your unpaid savings balances:',
+    '',
+    ...list.flatMap((item, idx) => [
+      `${list.length > 1 ? `${idx + 1}. ` : ''}${item.title}`,
+      item.message,
+      `Open: ${buildSafeReminderAppUrl(item.link)}`,
+      ''
+    ]),
+    'You can review your contribution status and submit your payment inside myIPON.',
+    'To manage reminder alerts, visit Account settings in the app.'
+  ];
+  const plainText = plainLines.join('\n');
+
+  const cardsHtml = list.map((item) => {
+    const isOverdue = /overdue|carry-over/i.test(item.title || '');
+    const isApproaching = !isOverdue && /approaching|due/i.test(item.title || '');
+    const badgeBg = isOverdue ? '#fdecea' : isApproaching ? '#fef5e4' : '#eaf4ef';
+    const badgeColor = isOverdue ? '#9b2c2c' : isApproaching ? '#8a5a00' : '#16533e';
+    const badgeLabel = item.type === 'GOAL_REMINDER'
+      ? 'Savings Goal'
+      : isOverdue
+        ? 'Overdue'
+        : isApproaching
+          ? 'Due Soon'
+          : 'Unpaid';
+    const itemUrl = buildSafeReminderAppUrl(item.link);
+    return `
+      <div style="margin: 0 0 12px; padding: 14px 16px; background: #ffffff; border: 1px solid #d9d6c8; border-radius: 12px;">
+        <div style="margin: 0 0 6px;">
+          <span style="display: inline-block; padding: 3px 9px; border-radius: 999px; background: ${badgeBg}; color: ${badgeColor}; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;">${badgeLabel}</span>
+        </div>
+        <p style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #163029;">${escapeHtml(item.title)}</p>
+        <p style="margin: 0${list.length > 1 ? ' 0 8px' : ''}; font-size: 14px; color: #3c4b45;">${escapeHtml(item.message)}</p>
+        ${list.length > 1 ? `<a href="${escapeHtml(itemUrl)}" style="font-size: 13px; font-weight: 600; color: #16533e; text-decoration: none;">View details &rarr;</a>` : ''}
+      </div>`;
+  }).join('');
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; color: #163029; line-height: 1.55; max-width: 560px; margin: 0 auto; padding: 24px; background: #fbf9f2; border: 1px solid #d9d6c8; border-radius: 14px;">
+      ${emailBrandHeaderMarkup()}
+      <h2 style="margin: 0 0 12px; font-size: 20px; color: #163029;">${escapeHtml(heading)}</h2>
+      <p style="margin: 0 0 14px;">Hello <strong>${escapeHtml(safeName)}</strong>,</p>
+      <p style="margin: 0 0 16px; font-size: 14px; color: #4a564f;">Here is your automatic savings reminder from <strong>${escapeHtml(SYSTEM_NAME)}</strong>:</p>
+      ${cardsHtml}
+      <p style="margin: 18px 0;">
+        <a href="${escapeHtml(primaryUrl)}" style="display: inline-block; background: #163029; color: #ffffff; text-decoration: none; font-weight: 600; padding: 11px 20px; border-radius: 10px; font-size: 14px;">Open ${escapeHtml(SYSTEM_NAME)}</a>
+      </p>
+      <p style="margin: 0; padding-top: 14px; border-top: 1px solid #e0ddd0; font-size: 12px; color: #7a7566;">
+        You received this email because notifications are enabled on your ${escapeHtml(SYSTEM_NAME)} account. You can manage notification settings anytime inside the app.
+      </p>
+    </div>
+  `.trim();
+
+  return deliverEmail({ toEmail, recipientName: safeName, subject, html, plainText });
+}
+
+async function dispatchUnpaidReminderEmails(
+  admin: ReturnType<typeof createClient>,
+  { recipientId = null, batch = false }: { recipientId?: string | null; batch?: boolean } = {}
+) {
+  const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  let query = admin
+    .from('notifications')
+    .select('id, recipient_id, group_id, type, title, message, link, created_at')
+    .in('type', ['CONTRIBUTION_REMINDER', 'GOAL_REMINDER'])
+    .is('emailed_at', null)
+    .is('read_at', null)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: true })
+    .limit(200);
+
+  if (recipientId && !batch) {
+    query = query.eq('recipient_id', recipientId);
+  }
+
+  const { data: rows, error: listErr } = await query;
+  if (listErr) {
+    return { sent: 0, notifications_emailed: 0, errors: [listErr.message || 'Unable to query pending reminders.'] };
+  }
+  if (!rows?.length) {
+    return { sent: 0, notifications_emailed: 0, errors: [] as string[] };
+  }
+
+  const byRecipient = new Map<string, any[]>();
+  for (const row of rows) {
+    const uid = String(row.recipient_id || '').trim();
+    if (!uid) continue;
+    const bucket = byRecipient.get(uid) || [];
+    bucket.push(row);
+    byRecipient.set(uid, bucket);
+  }
+
+  const recipientIds = [...byRecipient.keys()];
+  const { data: profiles } = await admin
+    .from('profiles')
+    .select('id, full_name, email, status, notifications_enabled')
+    .in('id', recipientIds);
+  const profileMap = new Map<string, any>((profiles || []).map((p: any) => [String(p.id), p]));
+
+  let sent = 0;
+  let notificationsEmailed = 0;
+  const errors: string[] = [];
+
+  for (const [uid, candidateRows] of byRecipient.entries()) {
+    const profile = profileMap.get(uid);
+    if (!profile || profile.status !== 'ACTIVE' || profile.notifications_enabled === false) continue;
+
+    let toEmail = String(profile.email || '').trim().toLowerCase();
+    if (!toEmail || !toEmail.includes('@')) {
+      const { data: authData } = await admin.auth.admin.getUserById(uid).catch(() => ({ data: null }));
+      toEmail = String(authData?.user?.email || '').trim().toLowerCase();
+    }
+    if (!toEmail || !toEmail.includes('@')) continue;
+
+    // Atomically claim unsent notifications for this recipient so concurrent triggers send only one consolidated email
+    const candidateIds = candidateRows.map((r: any) => r.id);
+    const claimedAt = new Date().toISOString();
+    const { data: claimed, error: claimErr } = await admin
+      .from('notifications')
+      .update({ emailed_at: claimedAt })
+      .in('id', candidateIds)
+      .is('emailed_at', null)
+      .select('id, group_id, type, title, message, link, created_at');
+
+    if (claimErr || !claimed?.length) continue;
+
+    const outcome = await sendUnpaidReminderEmail({
+      toEmail,
+      recipientName: String(profile.full_name || '').trim() || 'Member',
+      items: claimed
+    });
+
+    if (outcome.email_sent) {
+      sent += 1;
+      notificationsEmailed += claimed.length;
+    } else {
+      await admin
+        .from('notifications')
+        .update({ emailed_at: null })
+        .in('id', claimed.map((r: any) => r.id))
+        .eq('emailed_at', claimedAt);
+      errors.push(`${uid}: ${outcome.email_error || 'Unable to deliver reminder email.'}`);
+    }
+  }
+
+  return { sent, notifications_emailed: notificationsEmailed, errors };
+}
+
 async function deviceTokenHash(userId: string, deviceToken: string, serviceSecret: string) {
   return sha256(`${userId}:${deviceToken}:${serviceSecret}`);
 }
@@ -3005,6 +3185,25 @@ Deno.serve(async (request) => {
     }
     const result = await runRetentionSweep(admin, { runSqlCleanup: Boolean(body.run_sql) });
     return json({ success: result.errors.length === 0, ...result }, result.errors.length ? 500 : 200);
+  }
+
+  if (body.action === 'send-unpaid-reminder-emails') {
+    const providedSecret = String(request.headers.get('x-push-webhook-secret') || '').trim();
+    const { data: cfg } = await admin
+      .from('internal_webhook_config')
+      .select('value')
+      .eq('key', 'push_webhook_secret')
+      .maybeSingle();
+    const expectedSecret = String(cfg?.value || '').trim();
+    if (!expectedSecret || !timingSafeSecretEqual(providedSecret, expectedSecret)) {
+      return json({ error: 'Unauthorized reminder email invocation.' }, 401);
+    }
+    const recipientId = typeof body.recipient_id === 'string' && body.recipient_id.trim() ? body.recipient_id.trim() : null;
+    const result = await dispatchUnpaidReminderEmails(admin, {
+      recipientId,
+      batch: Boolean(body.batch)
+    });
+    return json({ success: result.errors.length === 0, ...result });
   }
 
   const authorization = request.headers.get('Authorization');
