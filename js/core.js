@@ -8992,13 +8992,45 @@
     document.getElementById('mark-all-notifications').onclick = async () => {
       try { await rpc('mark_all_notifications_read'); await load(); } catch (error) { toast(friendlyError(error), 'error'); }
     };
+    let dueSyncInFlight = false;
+    const syncDueReminders = (force = false) => {
+      if (dueSyncInFlight || profile.notifications_enabled === false) return;
+      const syncKey = `myipon_due_sync_${profile.id}`;
+      const manilaDay = isoDate();
+      let lastSync = 0;
+      let lastDay = '';
+      try {
+        const raw = localStorage.getItem(syncKey) || '';
+        if (raw.startsWith('{')) {
+          const parsed = JSON.parse(raw);
+          lastSync = Number(parsed?.at || 0);
+          lastDay = String(parsed?.day || '');
+        } else {
+          lastSync = Number(raw || 0);
+        }
+      } catch { /* ignore */ }
+      if (!force && lastDay === manilaDay && Date.now() - lastSync <= 15 * 60 * 1000) return;
+      dueSyncInFlight = true;
+      rpc('sync_my_due_reminders').then((scheduleRows) => {
+        try { localStorage.setItem(syncKey, JSON.stringify({ at: Date.now(), day: manilaDay })); } catch { /* ignore */ }
+        scheduleNativeDueReminders(scheduleRows).catch(() => { });
+        load().catch(() => { });
+      }).catch(() => { }).finally(() => {
+        dueSyncInFlight = false;
+      });
+    };
+
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         syncDevicePermissionUI().catch(() => { });
         load().catch(() => { });
+        syncDueReminders();
       }
     });
-    window.addEventListener('online', () => { load().catch(() => { }); });
+    window.addEventListener('online', () => {
+      load().catch(() => { });
+      syncDueReminders();
+    });
 
     activeNotificationsReload = () => load();
     await load();
@@ -9022,17 +9054,7 @@
       }
     } catch { }
 
-    if (profile.notifications_enabled !== false) {
-      const syncKey = `myipon_due_sync_${profile.id}`;
-      const lastSync = Number(localStorage.getItem(syncKey) || 0);
-      if (Date.now() - lastSync > 15 * 60 * 1000) {
-        localStorage.setItem(syncKey, String(Date.now()));
-        rpc('sync_my_due_reminders').then((scheduleRows) => {
-          scheduleNativeDueReminders(scheduleRows).catch(() => { });
-          load().catch(() => { });
-        }).catch(() => { });
-      }
-    }
+    syncDueReminders();
   }
 
   function prepareResponsiveTables() {
@@ -11741,6 +11763,9 @@
       currentProfile.workspace_mode = result.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP';
       syncWorkspaceMode(currentProfile.workspace_mode);
       await refreshMyPermissions().catch(() => { });
+      if (currentProfile.notifications_enabled !== false) {
+        rpc('sync_my_due_reminders').catch(() => { });
+      }
     }
     return result;
   }
