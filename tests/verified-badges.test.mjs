@@ -285,7 +285,7 @@ test('Super Admin Badges tab, messages integration, and CSS contracts are comple
   assert.match(messagesJs, /function userBadgesHtml\(/);
   assert.match(messagesJs, /msg-conv-bottom-meta/);
   assert.match(messagesJs, /id="msg-pop-name">\$\{escapeHtml\(profile\.full_name\)\}\$\{userBadgesHtml\(profile\)\}/);
-  assert.match(messagesJs, /msg-sender-name">\$\{escapeHtml\(senderUser\.full_name\)\}\$\{userBadgesHtml\(senderUser\)\}/);
+  assert.match(messagesJs, /msg-sender-name">\$\{escapeHtml\(conv\.anonymous_enabled \? 'Anonymous' : senderUser\.full_name\)\}\$\{conv\.anonymous_enabled \? '' : userBadgesHtml\(senderUser\)\}/);
 
   // CSS badge & celebration modal rules
   assert.match(css, /\.verified-badge-svg\s*\{[^}]*width:\s*0\.95em;[^}]*height:\s*0\.95em;[^}]*background:\s*transparent !important/);

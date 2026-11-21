@@ -230,6 +230,7 @@ test('group chats runtime renders composite avatars, multi-sender bubbles, typin
               conversation_id: cid,
               kind: 'GROUP',
               title: cid === newGrpId ? 'Study Pool' : 'Barkada Boracay Fund',
+              anonymous_enabled: Boolean(convRowData.anonymous_enabled),
               full_name: cid === newGrpId ? 'Study Pool' : 'Barkada Boracay Fund',
               description: 'Summer 2027 trip savings',
               status: 'ACCEPTED',
@@ -380,6 +381,33 @@ test('group chats runtime renders composite avatars, multi-sender bubbles, typin
   assert.equal(createCall.params.p_avatar_url, null);
   assert.equal(getEl('msg-group-dialog').open, false);
   assert.match(toasts.at(-1)?.msg || '', /Study Pool/);
+
+  // A stale response with real names must still render anonymously in every chat surface.
+  typingHandlers.at(-1)({ payload: { user_id: mariaId, user_name: 'Maria Santos', typing: false } });
+  convRowData.anonymous_enabled = true;
+  convRowData.last_message_type = 'SYSTEM';
+  convRowData.last_message_preview = 'Maria Santos took a screenshot.';
+  await ctx.window.IponMessages.openWorkspace({ tab: 'chats', conversationId: grpConvId });
+  const anonymousList = getEl('msg-conv-list').innerHTML;
+  const anonymousMessages = getEl('msg-messages-list').innerHTML;
+  const anonymousDrawer = getEl('msg-thread-drawer').innerHTML;
+  assert.match(anonymousList, /assets\/anonymous-avatar\.svg/);
+  assert.match(anonymousList, /Conversation update|Typing\.\.\./);
+  assert.doesNotMatch(anonymousList, /Maria Santos/);
+  assert.match(anonymousMessages, /class="msg-sender-name">Anonymous</);
+  assert.match(anonymousMessages, /class="msg-sender-name is-mine">You</);
+  assert.match(anonymousMessages, /Conversation update/);
+  assert.doesNotMatch(anonymousMessages, /Maria Santos|Alex Rivera|Juan Reyes/);
+  assert.match(anonymousDrawer, /data-anonymous-toggle/);
+  assert.doesNotMatch(anonymousDrawer, /Maria Santos|Alex Rivera|Juan Reyes|data-group-add-members/);
+  typingHandlers.at(-1)({ payload: { user_id: mariaId, user_name: 'Maria Santos', typing: true } });
+  assert.equal(getEl('msg-typing-sender').hidden, true);
+  assert.doesNotMatch(getEl('msg-typing-live').innerHTML + getEl('msg-typing-live-text').textContent, /Maria Santos/);
+  await Promise.all((docListeners.get('click') || []).map((fn) => fn({
+    target: { closest: (sel) => (sel === '[data-anonymous-toggle]' ? getEl('anonymous-toggle') : null) }
+  })));
+  assert.ok(rpcCalls.some((call) => call.name === 'set_anonymous_chat'
+    && call.params.p_conversation_id === grpConvId && call.params.p_enabled === false));
 });
 
 test('migration 20261117_106 adds group chat display picture support & storage cleanup trigger', () => {

@@ -420,6 +420,7 @@
     const typingList = Array.isArray(isTyping) ? isTyping : [];
     const typingOn = Array.isArray(isTyping) ? typingList.length > 0 : Boolean(isTyping);
     if (typingOn) {
+      if (user?.anonymous_enabled) return 'Typing...';
       if (isGroupConv(user) && typingList.length === 1 && typingList[0]?.name) {
         const first = String(typingList[0].name).trim().split(/\s+/)[0] || 'Someone';
         return `${first} is typing…`;
@@ -465,7 +466,8 @@
           avatar_url: conv.avatar_url || null,
           member_count: conv.member_count || 2,
           members_preview: conv.members_preview || [],
-          chat_theme: conv.chat_theme || 'paper'
+          chat_theme: conv.chat_theme || 'paper',
+          anonymous_enabled: Boolean(conv.anonymous_enabled)
         };
       }
       if (conv?.peer) return { ...conv.peer, chat_theme: conv.chat_theme || 'paper', anonymous_enabled: Boolean(conv.anonymous_enabled) };
@@ -661,6 +663,7 @@
 
   function groupAvatarHtml(conv, sizeClass = 'avatar-md', { clickable = false, showPresence = true } = {}) {
     if (!conv) return '';
+    if (conv.anonymous_enabled) return userAvatarHtml({ anonymous_enabled: true }, sizeClass);
     const title = convDisplayTitle(conv);
     const cls = escapeHtml(sizeClass);
     const safeUrl = safeDpUrl(conv.avatar_url);
@@ -1658,7 +1661,7 @@
       const prev = reactionCounts.get(r.emoji) || { count: 0, mine: false, users: [] };
       prev.count += 1;
       if (r.user_id === initializedProfile?.id) prev.mine = true;
-      prev.users.push(r.user_name || 'User');
+      prev.users.push(state.activeThread?.conversation?.anonymous_enabled ? (r.user_id === initializedProfile?.id ? 'You' : 'Anonymous') : (r.user_name || 'User'));
       reactionCounts.set(r.emoji, prev);
     });
     return reactionCounts.size
@@ -1673,7 +1676,7 @@
     const isDeleted = Boolean(m?.deleted_for_everyone_at);
     if (!mine || isDeleted) return '';
     if (conv?.receipts_enabled && m.read_at) {
-      const seenTip = isGroupConv(conv) && Array.isArray(m.seen_by) && m.seen_by.length
+      const seenTip = !conv.anonymous_enabled && isGroupConv(conv) && Array.isArray(m.seen_by) && m.seen_by.length
         ? `Seen by ${m.seen_by.map((x) => x?.full_name).filter(Boolean).join(', ')}`
         : 'Seen';
       return `<span class="msg-tick is-read" title="${escAttr(seenTip)}" aria-label="${escAttr(seenTip)}">${DOUBLE_CHECK_SVG}</span>`;
@@ -2080,10 +2083,10 @@
     } else if (conv.last_message_sender_id === initializedProfile?.id) {
       previewPrefix = 'You: ';
     } else if (isGrp && conv.last_message_sender_name) {
-      const first = String(conv.last_message_sender_name).trim().split(/\s+/)[0] || '';
+      const first = conv.anonymous_enabled ? 'Anonymous' : (String(conv.last_message_sender_name).trim().split(/\s+/)[0] || '');
       if (first) previewPrefix = `${first}: `;
     }
-    const typingLabel = isGrp && typingEntries.length === 1 && typingEntries[0]?.name
+    const typingLabel = conv.anonymous_enabled ? 'Typing...' : isGrp && typingEntries.length === 1 && typingEntries[0]?.name
       ? `${String(typingEntries[0].name).trim().split(/\s+/)[0] || 'Someone'} is typing…`
       : (isGrp && typingEntries.length > 1 ? `${typingEntries.length} typing…` : 'Typing…');
     const rawPrevStr = String(conv.last_message_preview || '');
@@ -2384,6 +2387,7 @@
       if (anonymousChanged) {
         state.pendingByConv.delete(convId);
         state.draftsByConv.delete(convId);
+        state.threadSearchSenderId = '';
         await Promise.all([openConversation(convId, { markRead: false, silent: true }), refreshConversations(), refreshSocialNotifications()]);
         return;
       }
@@ -2790,7 +2794,8 @@
             id: firstEntry.id,
             full_name: firstEntry.name || findGroupMember(conv, firstEntry.id)?.full_name || 'Member',
             avatar_url: firstEntry.avatar_url || findGroupMember(conv, firstEntry.id)?.avatar_url || '',
-            allow_online_status: true
+            allow_online_status: !conv.anonymous_enabled,
+            anonymous_enabled: Boolean(conv.anonymous_enabled)
           }
         : conv;
       const avatarKey = String(typerUser?.id || conv.id || '');
@@ -2801,7 +2806,7 @@
         ipon().syncPresenceDots?.(avatarHost);
       }
       if (senderLabel) {
-        if (isGrp && firstEntry?.name) {
+        if (isGrp && firstEntry?.name && !conv.anonymous_enabled) {
           const shortName = String(firstEntry.name).trim().split(/\s+/)[0] || 'Someone';
           senderLabel.textContent = entries.length > 1 ? `${shortName} +${entries.length - 1}` : shortName;
           senderLabel.hidden = false;
@@ -2811,7 +2816,7 @@
         }
       }
       if (liveTxt) {
-        liveTxt.textContent = isGrp && firstEntry?.name
+        liveTxt.textContent = conv.anonymous_enabled ? 'Typing...' : isGrp && firstEntry?.name
           ? `${firstEntry.name} is typing…`
           : `${convDisplayTitle(conv)} is typing…`;
       }
@@ -3379,7 +3384,7 @@
     const keepScroll = Boolean(preserveScroll || (replyToMsg && (state.threadStickyBottom === false || !isThreadNearBottom(wrap))));
     const prevTop = wrap ? wrap.scrollTop : 0;
     const replyTargetName = replyToMsg
-      ? (replyToMsg.sender_name || findGroupMember(conv, replyToMsg.sender_id)?.full_name || convDisplayTitle(conv))
+      ? (conv?.anonymous_enabled ? 'Anonymous' : (replyToMsg.sender_name || findGroupMember(conv, replyToMsg.sender_id)?.full_name || convDisplayTitle(conv)))
       : '';
     const pending = {
       localId: `pending-${Date.now()}-${++pendingMsgSeq}`,
@@ -3788,10 +3793,11 @@
             profile_visible: senderVisible,
             full_name: m.sender_name || groupMember?.full_name || 'Member',
             avatar_url: senderVisible ? (m.sender_avatar_url || groupMember?.avatar_url || '') : '',
-            allow_online_status: senderVisible && (groupMember ? groupMember.allow_online_status !== false : false)
+            allow_online_status: !conv.anonymous_enabled && senderVisible && (groupMember ? groupMember.allow_online_status !== false : false),
+            anonymous_enabled: Boolean(conv.anonymous_enabled)
           }
         : conv;
-      const senderRoleBadge = isGrp
+      const senderRoleBadge = isGrp && !conv.anonymous_enabled
         ? groupSenderRoleBadgeHtml(
             m.sender_app_role || groupMember?.app_role || (mine ? initializedProfile?.role : ''),
             groupMember?.role
@@ -3799,8 +3805,8 @@
         : '';
       const senderNameHtml = isGrp && !groupedWithPrev && !isDeleted
         ? (mine
-            ? `<span class="msg-sender-name is-mine">${escapeHtml(initializedProfile?.full_name || m.sender_name || 'You')}${senderRoleBadge}</span>`
-            : `<span class="msg-sender-name">${escapeHtml(senderUser.full_name)}${userBadgesHtml(senderUser)}${senderRoleBadge}</span>`)
+            ? `<span class="msg-sender-name is-mine">${escapeHtml(conv.anonymous_enabled ? 'You' : (initializedProfile?.full_name || m.sender_name || 'You'))}${senderRoleBadge}</span>`
+            : `<span class="msg-sender-name">${escapeHtml(conv.anonymous_enabled ? 'Anonymous' : senderUser.full_name)}${conv.anonymous_enabled ? '' : userBadgesHtml(senderUser)}${senderRoleBadge}</span>`)
         : '';
 
       const attHtml = !isDeleted && Array.isArray(m.attachments) && m.attachments.length
@@ -4460,7 +4466,7 @@
          <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_muted ? 'unmute' : 'mute'}">${bellMuteSvg}<span>${conv.is_muted ? 'Unmute' : 'Mute'}</span></button>
          <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${archiveIconSvg}<span>${conv.is_archived ? 'Unarchive' : 'Archive'}</span></button>
          <button type="button" class="msg-drawer-action-btn" data-conv-act="mark_unread">${mailUnreadIconSvg}<span>Mark unread</span></button>
-         ${canManageGroup ? `<button type="button" class="msg-drawer-action-btn" data-group-add-members="${escapeHtml(conv.conversation_id)}">${addIconSvg}<span>Add members</span></button>` : ''}
+         ${canManageGroup && !conv.anonymous_enabled ? `<button type="button" class="msg-drawer-action-btn" data-group-add-members="${escapeHtml(conv.conversation_id)}">${addIconSvg}<span>Add members</span></button>` : ''}
          <button type="button" class="msg-drawer-action-btn" data-conv-act="delete_for_me">${trashIconSvg}<span>Clear chat</span></button>
          <button type="button" class="msg-drawer-action-btn is-danger" data-group-leave="${escapeHtml(conv.conversation_id)}">${leaveIconSvg}<span>Leave group</span></button>`
       : `<button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}">${MSG_PIN_SVG}<span>${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</span></button>
@@ -4496,9 +4502,9 @@
       ${androidShell && (!nativePrivacy || !screenshotEligible) && !conv.protection_unavailable ? `<div class="msg-privacy-note" role="status"><span>${nativePrivacy ? 'Screenshot protection needs everyone on Android.' : 'Screenshot protection is unavailable in this app session.'}</span><button type="button" data-chat-protection-retry${state.checkingProtection ? ' disabled' : ''}>${state.checkingProtection ? 'Checking…' : 'Check again'}</button></div>` : ''}
       <div class="msg-privacy-list">
         ${screenshotRowHtml}
-        ${!isGrp && !isSelfUser(conv) && conv.status === 'ACCEPTED' ? `<div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
+        ${!isSelfUser(conv) && conv.status === 'ACCEPTED' ? `<div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
           <span class="msg-privacy-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 10c2-4 5-6 8-6s6 2 8 6v7c-2 2-5 3-8 3s-6-1-8-3z"/><path d="M8 12h3m2 0h3m-7 4h6"/></svg></span>
-          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-anon-title">Anonymous mode</strong></div><small id="msg-privacy-anon-desc">Hide names and DPs for both people. Messages sent while on are deleted for both when turned off.</small></div>
+          <div class="msg-privacy-copy"><div class="msg-privacy-titleline"><strong id="msg-privacy-anon-title">Anonymous mode</strong></div><small id="msg-privacy-anon-desc">Hide names and DPs for ${isGrp ? 'everyone in this group' : 'both people'}. Messages sent while on are deleted for ${isGrp ? 'everyone' : 'both'} when turned off.</small></div>
           <div class="msg-privacy-control"><button type="button" class="msg-privacy-switch" role="switch" data-anonymous-toggle aria-checked="${Boolean(conv.anonymous_enabled)}" aria-labelledby="msg-privacy-anon-title" aria-describedby="msg-privacy-anon-desc"${canManageProtection ? '' : ' disabled'}></button><span>${conv.anonymous_enabled ? 'On' : 'Off'}</span></div>
         </div>` : ''}
         ${isGrp ? `<div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
@@ -4551,7 +4557,7 @@
       ${state.vanishError && !vanishDialogOpen ? `<p class="msg-vanish-unavail" role="status">${escapeHtml(state.vanishError)}</p>` : ''}
     </section></div>`;
 
-    const membersSectionHtml = isGrp
+    const membersSectionHtml = isGrp && !conv.anonymous_enabled
       ? `<div class="msg-drawer-section">
           <div class="msg-drawer-sec-head">
             <h4>Members (${members.length})</h4>
@@ -5352,7 +5358,7 @@
     }
     if (state.replyToMsg) {
       const conv = state.activeThread?.conversation;
-      const targetName = state.replyToMsg.sender_name || findGroupMember(conv, state.replyToMsg.sender_id)?.full_name || convDisplayTitle(conv);
+      const targetName = conv?.anonymous_enabled ? 'Anonymous' : (state.replyToMsg.sender_name || findGroupMember(conv, state.replyToMsg.sender_id)?.full_name || convDisplayTitle(conv));
       const senderLabel = state.replyToMsg.sender_id === initializedProfile?.id ? 'yourself' : (targetName || 'User');
       bar.hidden = false;
       bar.innerHTML = `<div><strong>Replying to ${escapeHtml(senderLabel)}</strong><span>${escapeHtml(state.replyToMsg.body || 'Attachment')}</span></div><button type="button" class="dialog-close msg-mini-close" id="msg-cancel-context" aria-label="Cancel reply"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>`;
@@ -5588,8 +5594,8 @@
       event: 'typing',
       payload: {
         user_id: initializedProfile.id,
-        user_name: initializedProfile.full_name || '',
-        avatar_url: initializedProfile.avatar_url || '',
+        user_name: state.activeThread?.conversation?.anonymous_enabled ? 'Anonymous' : (initializedProfile.full_name || ''),
+        avatar_url: state.activeThread?.conversation?.anonymous_enabled ? '' : (initializedProfile.avatar_url || ''),
         typing: next
       }
     })?.catch?.(() => { });
@@ -6125,7 +6131,7 @@
     if (toggleExistingFloatingMenu('group-member', memberId)) return;
     closeFloatingMenus({ immediate: true });
     const conv = state.activeThread?.conversation;
-    if (!conv || !isGroupConv(conv)) return;
+    if (!conv || !isGroupConv(conv) || conv.anonymous_enabled) return;
     const member = (conv.members || []).find((m) => String(m.id) === String(memberId));
     if (!member) return;
     const myRole = String(conv.my_role || 'MEMBER').toUpperCase();
@@ -6170,7 +6176,7 @@
       });
     }
     state.conversations
-      .filter((c) => c.status === 'ACCEPTED' && (isGroupConv(c) || (!c.peer?.is_blocked && c.peer?.can_message !== false && c.peer?.friends_only_locked !== true)))
+      .filter((c) => c.status === 'ACCEPTED' && !c.anonymous_enabled && (isGroupConv(c) || (!c.peer?.is_blocked && c.peer?.can_message !== false && c.peer?.friends_only_locked !== true)))
       .forEach((c) => {
         if (isGroupConv(c)) {
           items.push({
@@ -6648,7 +6654,7 @@
     let added = true;
     if (targetMsg) {
       const myId = initializedProfile?.id;
-      const myName = initializedProfile?.full_name || 'You';
+      const myName = state.activeThread?.conversation?.anonymous_enabled ? 'Anonymous' : (initializedProfile?.full_name || 'You');
       const existingMine = (targetMsg.reactions || []).find((r) => r.user_id === myId);
       const others = (targetMsg.reactions || []).filter((r) => r.user_id !== myId);
       added = existingMine?.emoji !== emoji;
@@ -7421,12 +7427,15 @@
       if (anonymousBtn && state.activeConvId && !state.savingProtection) {
         const convId = state.activeConvId;
         const conv = state.activeThread?.conversation;
-        if (!conv || isGroupConv(conv) || conv.protection_unavailable) return;
+        if (!conv || conv.protection_unavailable || isSelfUser(conv)
+          || (isGroupConv(conv) && !['OWNER', 'ADMIN'].includes(String(conv.my_role || '').toUpperCase()))) return;
         const enabled = !conv.anonymous_enabled;
         if (!enabled) {
           const accepted = await ipon().confirmAction({
             title: 'End anonymous mode?',
-            message: 'All messages and attachments sent while anonymous mode was on will be deleted for both people.',
+            message: isGroupConv(conv)
+              ? 'All messages and attachments sent while anonymous mode was on will be deleted for everyone in this group.'
+              : 'All messages and attachments sent while anonymous mode was on will be deleted for both people.',
             confirmText: 'End and delete'
           });
           if (!accepted) return;
@@ -7439,6 +7448,7 @@
             state.pendingByConv.delete(convId);
             state.draftsByConv.delete(convId);
           }
+          state.threadSearchSenderId = '';
           await Promise.all([
             openConversation(convId, { markRead: false, silent: true }),
             refreshConversations(),
@@ -8987,7 +8997,7 @@
             (isGroupConv(curConv) && (
               (row.title && row.title !== curConv.title) ||
               (row.description !== undefined && row.description !== curConv.description) ||
-              (row.avatar_url !== undefined && row.avatar_url !== curConv.avatar_url)
+              (!curConv.anonymous_enabled && row.avatar_url !== undefined && row.avatar_url !== curConv.avatar_url)
             ))
           )
         );

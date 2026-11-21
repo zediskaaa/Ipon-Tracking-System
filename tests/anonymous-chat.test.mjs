@@ -38,7 +38,7 @@ test('anonymous activation notices are removed and no longer expose names', () =
   assert.match(migration, /drop trigger if exists conversations_announce_anonymous_enabled/);
   assert.match(migration, /delete from public\.messages[\s\S]*metadata ->> 'event' = 'anonymous_enabled'/);
   assert.doesNotMatch(messages, /turned on anonymous chat/);
-  assert.match(messages, /Hide names and DPs for both people/);
+  assert.match(messages, /Hide names and DPs for \$\{isGrp/);
 });
 
 test('anonymous system notices, chat previews, and linked alerts hide real names', () => {
@@ -67,4 +67,20 @@ test('anonymous vanishing-message previews never include the sender name', () =>
   assert.match(migration, /last_message_preview' ~ ' set a message\\\.\$'/);
   assert.match(migration, /to_jsonb\('Vanishing message'::text\)/);
   assert.match(messages, /conv\.anonymous_enabled && \/ set a message\\\.\$\/\.test/);
+});
+
+test('group anonymous mode uses admin permission and masks member identities', () => {
+  const migration = read('database/migrations/20261122_170_anonymous_group_chats.sql');
+  const schema = read('database/schema.sql');
+  const messages = read('js/messages.js');
+  assert.ok(schema.replace(/\r\n/g, '\n').includes(migration.trim().replace(/\r\n/g, '\n')));
+  assert.match(migration, /v_conv\.kind not in \('DIRECT', 'GROUP'\)/);
+  assert.match(migration, /role in \('OWNER', 'ADMIN'\)/);
+  assert.match(migration, /delete from public\.messages\s+where conversation_id = v_conv\.id and anonymous_session_id = v_conv\.anonymous_session_id/);
+  assert.ok(migration.includes("jsonb_set(item, '{members_preview}', '[]'::jsonb)"));
+  assert.match(migration, /'members', '\[\]'::jsonb/);
+  assert.match(migration, /'seen_by', '\[\]'::jsonb/);
+  assert.match(messages, /if \(conv\.anonymous_enabled\) return userAvatarHtml\(\{ anonymous_enabled: true \}/);
+  assert.match(messages, /const membersSectionHtml = isGrp && !conv\.anonymous_enabled/);
+  assert.match(messages, /conv\.anonymous_enabled \? 'You' : \(initializedProfile\?\.full_name/);
 });

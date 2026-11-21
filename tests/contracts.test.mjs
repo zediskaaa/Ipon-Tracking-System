@@ -12425,6 +12425,8 @@ test('screenshot notices have a protected group toggle and readable event stylin
   const activity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
   const manifest = read('android/app/src/main/AndroidManifest.xml');
   assert.match(chat, /data-chat-protection="screenshot_notices" aria-checked=/);
+  assert.match(chat, /data-anonymous-toggle aria-checked=/);
+  assert.match(read('database/migrations/20261122_170_anonymous_group_chats.sql'), /role in \('OWNER', 'ADMIN'\)/);
   assert.match(chat, /const screenshotRowHtml = nativePrivacy && screenshotEligible/);
   assert.match(chat, /data-chat-protection-retry[\s\S]*?refreshPeerClientPlatforms\?\.\(peerIds\)/);
   assert.match(read('js/core.js'), /reportClientPlatform, refreshPeerClientPlatforms, hasLiveBrowserSession/);
