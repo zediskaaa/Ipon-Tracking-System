@@ -21214,8 +21214,7 @@ html[data-theme="dark"] .msg-self-pill {
 .msg-welcome-avatar {
   margin-bottom: 6px;
 }
-.msg-welcome-avatar .avatar-circle.avatar-lg,
-.msg-welcome-avatar .msg-group-avatar.avatar-lg {
+.msg-welcome-avatar .avatar-circle.avatar-lg {
   width: 78px;
   height: 78px;
   font-size: 26px;
