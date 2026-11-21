@@ -51,6 +51,7 @@
   let threadSearchDebounce = null;
   let openingChatTargetId = null;
   let pendingMsgSeq = 0;
+  const sendTailByConv = new Map();
   let activeVideoMenuPlayer = null;
   let activeFloatingMenuAnchor = null;
   let activeMutualAnchor = null;
@@ -2903,7 +2904,7 @@
 
   function renderPendingRowHtml(p, clockState = null) {
     const isFailed = p.status === 'failed';
-    const isSending = p.status === 'sending';
+    const isSending = p.status === 'sending' || p.status === 'queued';
     const atts = p.files || [];
     const attHtml = atts.length
       ? `<div class="msg-attachments${atts.length > 1 ? ' is-carousel' : ''}">${atts.map(renderPendingAttachmentHtml).join('')}</div>`
@@ -2916,10 +2917,12 @@
       : '';
     const statusLabel = p.optimizing ? 'Optimizing media…' : isSending && atts.length && p.progressPct > 0 && p.progressPct < 100
       ? `Sending ${p.progressPct}%…`
-      : 'Sending…';
+      : p.status === 'queued' ? 'Queued…' : 'Sending…';
     const metaRight = isFailed
       ? '<span class="msg-tick is-failed-meta">! Not sent</span>'
-      : `<span class="msg-tick is-sending"><span class="msg-mini-spin" aria-hidden="true"></span><span class="msg-pending-status-text">${escapeHtml(statusLabel)}</span></span>`;
+      : p.status === 'sent'
+        ? `<span class="msg-tick is-sent" aria-label="Sent">${SINGLE_CHECK_SVG}</span>`
+        : `<span class="msg-tick is-sending"><span class="msg-mini-spin" aria-hidden="true"></span><span class="msg-pending-status-text">${escapeHtml(statusLabel)}</span></span>`;
     const bodyHtml = p.body ? `<p class="msg-text">${formatMessageBodyHtml(p.body)}</p>` : '';
     const { hasTopMedia, hasAudioOnly } = getBubbleMediaLayout(atts, {
       hasText: Boolean(p.body),
@@ -2946,10 +2949,10 @@
           ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${progressBar}${metaHtml}</div>`
           : `${bodyHtml}${attHtml}${progressBar}${metaHtml}`);
 
-    return `<article class="msg-row is-mine is-pending${isFailed ? ' is-failed' : ' is-sending'}" data-pending-id="${escapeHtml(p.localId)}">
+    return `<article class="msg-row is-mine is-pending${isFailed ? ' is-failed' : p.status === 'sent' ? ' is-sent' : ' is-sending'}" data-pending-id="${escapeHtml(p.localId)}">
       <div class="msg-bubble-col">
         ${replyHtml}
-        <div class="msg-bubble${isFailed ? ' is-failed' : ' is-sending'}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}">
+        <div class="msg-bubble${isFailed ? ' is-failed' : p.status === 'sent' ? ' is-sent' : ' is-sending'}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}">
           ${bubbleInner}
         </div>
         ${isFailed ? `
@@ -2971,13 +2974,11 @@
     const convId = pending.conversationId;
     pending.status = 'sending';
     pending.errorText = '';
-    if (convId === state.activeConvId) {
-      renderMessagesList();
-      requestAnimationFrame(() => {
-        const wrap = document.getElementById('msg-scroll-wrap');
-        if (wrap) wrap.scrollTop = wrap.scrollHeight;
-      });
-    }
+    const pendingRow = convId === state.activeConvId
+      ? document.querySelector(`#msg-messages-list [data-pending-id="${CSS.escape(pending.localId)}"]`)
+      : null;
+    const statusText = pendingRow?.querySelector('.msg-pending-status-text');
+    if (statusText) statusText.textContent = 'Sending…';
 
     try {
       const files = pending.files || [];
@@ -3036,14 +3037,14 @@
         p_attachments: attachments
       });
       pending.serverMessageId = sentRow?.id || null;
-
-      await Promise.all([
-        convId === state.activeConvId
-          ? openConversation(convId, { markRead: false, silent: true, scrollToBottom: true })
-          : Promise.resolve(),
-        refreshConversations()
-      ]);
-      removePendingItem(convId, pending.localId, { revokeUrls: false });
+      pending.status = 'sent';
+      const sentPendingRow = convId === state.activeConvId
+        ? document.querySelector(`#msg-messages-list [data-pending-id="${CSS.escape(pending.localId)}"]`)
+        : null;
+      const tick = sentPendingRow?.querySelector('.msg-tick');
+      if (tick) tick.outerHTML = `<span class="msg-tick is-sent" aria-label="Sent">${SINGLE_CHECK_SVG}</span>`;
+      sentPendingRow?.classList.replace('is-sending', 'is-sent');
+      sentPendingRow?.querySelector('.msg-bubble')?.classList.replace('is-sending', 'is-sent');
     } catch (error) {
       pending.status = 'failed';
       pending.errorText = ipon().friendlyError(error) || 'Message failed to send';
@@ -3055,6 +3056,24 @@
         });
       }
     }
+  }
+
+  function queuePendingMessage(pending) {
+    const convId = pending.conversationId;
+    const previous = sendTailByConv.get(convId) || Promise.resolve();
+    const job = previous.then(() => findPendingItem(convId, pending.localId) && processPendingMessage(pending));
+    sendTailByConv.set(convId, job);
+    job.finally(() => {
+      if (sendTailByConv.get(convId) !== job) return;
+      sendTailByConv.delete(convId);
+      if (!getPendingList(convId).some((item) => item.status === 'sent')) return;
+      Promise.all([
+        convId === state.activeConvId
+          ? openConversation(convId, { markRead: false, silent: true, scrollToBottom: true })
+          : Promise.resolve(),
+        refreshConversations()
+      ]).catch(() => { });
+    });
   }
 
   function enqueuePendingMessage({ conversationId, body = '', messageType = null, replyToMsg = null, files = [], deferProcess = false }) {
@@ -3074,7 +3093,7 @@
         body: replyToMsg.body || 'Attachment'
       } : null,
       files: files.map((f) => ({ ...f, progress: f.uploaded ? 100 : 0 })),
-      status: 'sending',
+      status: 'queued',
       progressPct: 0,
       errorText: '',
       serverMessageId: null,
@@ -3082,7 +3101,19 @@
     };
     if (!state.pendingByConv.has(conversationId)) state.pendingByConv.set(conversationId, []);
     state.pendingByConv.get(conversationId).push(pending);
-    if (!deferProcess) processPendingMessage(pending);
+    if (!deferProcess) {
+      if (conversationId === state.activeConvId && state.activeThread?.conversation) {
+        const list = document.getElementById('msg-messages-list');
+        if (list?.insertAdjacentHTML && list.querySelector('.msg-row.is-pending')) {
+          list.insertAdjacentHTML('beforeend', renderPendingRowHtml(pending));
+          scrollActiveThreadToBottom();
+        } else {
+          renderMessagesList();
+          scrollActiveThreadToBottom();
+        }
+      }
+      queuePendingMessage(pending);
+    }
     return pending;
   }
 
@@ -3167,8 +3198,11 @@
     // Prune any pending message that has already synced into server history
     if (conv.conversation_id && state.pendingByConv.has(conv.conversation_id)) {
       const confirmedIds = new Set(msgs.map((m) => m.id));
-      const kept = (state.pendingByConv.get(conv.conversation_id) || []).filter(
-        (p) => !(p.serverMessageId && confirmedIds.has(p.serverMessageId))
+      const pendingItems = state.pendingByConv.get(conv.conversation_id) || [];
+      const latestSent = pendingItems.slice().reverse().find((p) => p.status === 'sent' && p.serverMessageId);
+      const sentBatchLoaded = latestSent && confirmedIds.has(latestSent.serverMessageId);
+      const kept = pendingItems.filter(
+        (p) => !(p.serverMessageId && (confirmedIds.has(p.serverMessageId) || (sentBatchLoaded && p.status === 'sent')))
       );
       if (kept.length) state.pendingByConv.set(conv.conversation_id, kept);
       else state.pendingByConv.delete(conv.conversation_id);
@@ -4937,11 +4971,7 @@
         if (wrap) wrap.scrollTop = wrap.scrollHeight;
       });
     }
-    (async () => {
-      for (const item of batches) {
-        if (findPendingItem(convId, item.localId)) await processPendingMessage(item);
-      }
-    })();
+    batches.forEach(queuePendingMessage);
   }
 
   function sendTypingBroadcast(isTyping) {
@@ -6941,7 +6971,12 @@
       const retryPendingBtn = ev.target.closest?.('[data-pending-retry]');
       if (retryPendingBtn && state.activeConvId) {
         const item = findPendingItem(state.activeConvId, retryPendingBtn.dataset.pendingRetry);
-        if (item && item.status !== 'sending') processPendingMessage(item);
+        if (item && item.status === 'failed') {
+          item.status = 'queued';
+          item.errorText = '';
+          renderMessagesList();
+          queuePendingMessage(item);
+        }
         return;
       }
       const deletePendingBtn = ev.target.closest?.('[data-pending-delete]');
@@ -7913,8 +7948,8 @@
     let pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false, alerts: false };
 
     const flushRefresh = async () => {
+      refreshTimer = null;
       if (isRefreshingRealtime) {
-        clearTimeout(refreshTimer);
         refreshTimer = setTimeout(flushRefresh, 200);
         return;
       }
@@ -7949,8 +7984,7 @@
       if (opts.forceMarkRead) pendingRefresh.forceMarkRead = true;
       if (opts.overview) pendingRefresh.overview = true;
       if (opts.alerts) pendingRefresh.alerts = true;
-      clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(flushRefresh, 240);
+      if (!refreshTimer) refreshTimer = setTimeout(flushRefresh, 240);
     };
 
     if (realtimeChannel) {
@@ -7966,6 +8000,7 @@
         const isForActive = Boolean(cId && cId === state.activeConvId);
         const fromPeer = Boolean(row.sender_id && row.sender_id !== profile.id);
         const isInsert = payload?.eventType === 'INSERT';
+        if (isInsert && !fromPeer && cId && sendTailByConv.has(cId)) return;
         if (isInsert && fromPeer && cId) {
           const bucket = state.typingPeers.get(cId);
           if (bucket instanceof Map) {
@@ -8019,7 +8054,7 @@
           state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
         }
         const inActive = !row.message_id || Boolean(msgItem);
-        if (inActive) scheduleRefresh({ convs: false, thread: true, markRead: false });
+        if (inActive && !msgItem) scheduleRefresh({ convs: false, thread: true, markRead: false });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, (payload) => {
         const row = payload?.new || payload?.old || {};
@@ -8041,6 +8076,7 @@
             ))
           )
         );
+        if (cId && sendTailByConv.has(cId) && !metaOrStatusChanged) return;
         if (metaOrStatusChanged && curConv?.id && !isGroupConv(curConv)) {
           profileAppearanceCache.delete(String(curConv.id));
         }
@@ -8075,6 +8111,7 @@
             ))
           )
         );
+        if (cId && sendTailByConv.has(cId) && !metaChanged) return;
         scheduleRefresh({
           convs: true,
           thread: metaChanged,

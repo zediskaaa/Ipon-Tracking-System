@@ -6231,6 +6231,8 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(messagesJs, /id="msg-list-search"[\s\S]*?id="msg-list-search-clear"[\s\S]*?id="msg-new-chat-btn"/);
   assert.doesNotMatch(messagesJs, /setBusy\s*\(\s*sendBtn/);
   assert.match(messagesJs, /data-pending-retry[\s\S]*?data-pending-delete/);
+  assert.match(messagesJs, /p\.status === 'queued' \? 'Queued…'/);
+  assert.match(messagesJs, /p\.status === 'sent'[\s\S]*?msg-tick is-sent/);
   assert.match(messagesJs, /MAX_QUEUE_ATTACHMENTS\s*=\s*30/);
   assert.match(messagesJs, /SINGLE_CHECK_SVG[\s\S]*?DOUBLE_CHECK_SVG/);
   assert.match(messagesJs, /id="msg-typing-live"[\s\S]*?class="msg-typing-text"[^>]*>is typing<span class="msg-typing-dots">/);
