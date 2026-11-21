@@ -66,11 +66,11 @@ test('migration 146 requires all participants to use the mobile app for Block sc
   assert.match(core, /function reportClientPlatform\(/);
   assert.match(core, /function hasLiveBrowserSession\(/);
   assert.match(core, /client_platform: getClientPlatform\(\)/);
-  assert.match(core, /supportsNativeScreenshotProtection, getClientPlatform, reportClientPlatform, hasLiveBrowserSession/);
+  assert.match(core, /supportsNativeScreenshotProtection, probeNativeScreenshotProtection, getClientPlatform, reportClientPlatform, refreshPeerClientPlatforms, hasLiveBrowserSession/);
   const nativeSupport = core.match(/function supportsNativeScreenshotProtection\(\)\s*\{[\s\S]*?\n  \}/)?.[0];
   const platform = core.match(/function getClientPlatform\(\)\s*\{[\s\S]*?\n  \}/)?.[0];
   assert.ok(nativeSupport && platform);
-  const platformFor = (window) => new Function('window', `${nativeSupport}; ${platform}; return getClientPlatform();`)(window);
+  const platformFor = (window) => new Function('window', `let nativeScreenshotProbeOk = false; ${nativeSupport}; ${platform}; return getClientPlatform();`)(window);
   assert.equal(platformFor({}), 'browser');
   assert.equal(platformFor({ Capacitor: { getPlatform: () => 'web', Plugins: { BackgroundNotifications: { setScreenshotBlocked() {} } } } }), 'browser');
   assert.equal(platformFor({ Capacitor: { getPlatform: () => 'android', Plugins: { BackgroundNotifications: { setScreenshotBlocked() {} } } } }), 'android_app');
@@ -203,14 +203,16 @@ test('Block screenshots appears only when all chat members use the Android app',
   assert.match(drawerEl.innerHTML, /data-chat-protection="screenshot_notices" aria-checked="false"[^>]* disabled>/);
 
   // 6. Android shell without a privacy method never offers a nonfunctional switch.
-  mockWin = { Capacitor: { isNativePlatform: () => true, Plugins: {} } };
+  mockWin = { Capacitor: { getPlatform: () => 'android', isNativePlatform: () => true, Plugins: {} } };
   state.activeThread.conversation.screenshot_block_eligible = true;
   state.activeThread.conversation.my_role = 'OWNER';
   buildRunner()();
   assert.doesNotMatch(drawerEl.innerHTML, /Block screenshots|data-chat-protection="screenshots"/);
+  assert.match(drawerEl.innerHTML, /Screenshot protection is unavailable in this app session\.[\s\S]*?data-chat-protection-retry>Check again<\/button>/);
   mockWin = { navigator: { userAgent: 'myIPONApp/20' } };
   buildRunner()();
   assert.doesNotMatch(drawerEl.innerHTML, /Block screenshots|data-chat-protection="screenshots"/);
+  assert.match(drawerEl.innerHTML, /data-chat-protection-retry>Check again<\/button>/);
 
   // 7. The Capacitor privacy method works when WebView omits the JavaScript interface.
   mockWin.Capacitor = { getPlatform: () => 'android', Plugins: { BackgroundNotifications: { setScreenshotBlocked() {} } } };
@@ -232,9 +234,58 @@ test('platform reports retry after a Supabase RPC error response', async () => {
     { id: 'user-1' },
     true
   );
-  assert.equal(await report(), 'android_app');
+  assert.equal(await report(), null);
   assert.equal(await report(), 'android_app');
   assert.equal(calls, 2, 'a failed platform report must not be cached for a minute');
+});
+
+test('Check again requests a fresh platform report from the other connected app', async () => {
+  const core = read('js/core.js').replace(/\r\n/g, '\n');
+  const requestSource = core.match(/  function refreshPeerClientPlatforms\(userIds\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(requestSource);
+  assert.match(core, /event: 'platform-check'[\s\S]*?await reportClientPlatform\(\{ force: true \}\)[\s\S]*?event: 'platform-check-response'/);
+  const pendingPlatformRefreshes = new Map();
+  let sent = null;
+  const refresh = new Function('currentProfile', 'presenceChannel', 'pendingPlatformRefreshes', 'setTimeout', 'clearTimeout', `${requestSource}; return refreshPeerClientPlatforms;`)(
+    { id: 'u1' },
+    { send: async (message) => { sent = message; return 'ok'; } },
+    pendingPlatformRefreshes,
+    setTimeout, clearTimeout
+  );
+  const waiting = refresh(['u1', 'u2']);
+  assert.equal(sent.event, 'platform-check');
+  assert.deepEqual(sent.payload.target_ids, ['u2']);
+  const request = pendingPlatformRefreshes.get(sent.payload.request_id);
+  request.targets.delete('u2');
+  request.finish(true);
+  assert.equal(await waiting, true);
+  assert.equal(pendingPlatformRefreshes.size, 0);
+});
+
+test('Android can verify and use screenshot blocking when the generated plugin proxy is missing', async () => {
+  const core = read('js/core.js').replace(/\r\n/g, '\n');
+  const chat = read('js/messages.js').replace(/\r\n/g, '\n');
+  const supportSource = core.match(/  function supportsNativeScreenshotProtection\(\) \{[\s\S]*?\n  \}/)?.[0];
+  const probeSource = core.match(/  function probeNativeScreenshotProtection\(\) \{[\s\S]*?\n  \}/)?.[0];
+  const platformSource = core.match(/  function getClientPlatform\(\) \{[\s\S]*?\n  \}/)?.[0];
+  const lockSource = chat.match(/  function syncNativeScreenshotLock\(conv = state\.activeThread\?\.conversation\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(supportSource && probeSource && platformSource && lockSource);
+  const calls = [];
+  const window = { Capacitor: {
+    getPlatform: () => 'android',
+    nativePromise: async (plugin, method, options) => { calls.push({ plugin, method, options }); }
+  } };
+  const native = new Function('window', `let nativeScreenshotProbeOk = false; let nativeScreenshotProbePromise = null; ${supportSource}; ${probeSource}; ${platformSource}; return { supportsNativeScreenshotProtection, probeNativeScreenshotProtection, getClientPlatform };`)(window);
+  assert.equal(native.getClientPlatform(), 'browser');
+  assert.equal(await native.probeNativeScreenshotProtection(), true);
+  assert.equal(native.getClientPlatform(), 'android_app');
+  const lock = new Function('window', 'state', 'document', 'isScreenshotBlockEffective', 'isGroupConv', 'supportsNativeScreenshotProtection', `${lockSource}; return syncNativeScreenshotLock;`)(
+    window, { activeConvId: 'c1' }, { getElementById: () => ({ open: true }) },
+    () => true, () => false, native.supportsNativeScreenshotProtection
+  );
+  lock({ block_screenshots: true, conversation_id: 'c1' });
+  lock(null);
+  assert.deepEqual(calls.filter((call) => call.method === 'setScreenshotBlocked').map((call) => call.options.blocked), [false, true, false]);
 });
 
 test('browser presence changes notify the chat even when the same user stays online', () => {
@@ -308,7 +359,7 @@ test('group screenshot notices require admin opt-in and keep direct chat notices
   assert.match(plugin, /public void setScreenshotMonitoring\(PluginCall call\)/);
   assert.match(manifest, /android\.permission\.READ_MEDIA_IMAGES/);
   const chat = read('js/messages.js');
-  assert.match(chat, /setScreenshotMonitoring\?\.\(\{ enabled: monitoring \}\)/);
+  assert.match(chat, /setScreenshotMonitoring\(\{ enabled: monitoring \}\)/);
   assert.match(chat, /isThreadActivelyVisible\(\{ ignoreFocus: true \}\)/);
   assert.match(chat, /activeConv\?\.conversation_id !== state\.activeConvId/);
   assert.match(chat, /isGroupConv\(activeConv\) && !activeConv\.screenshot_notices_enabled/);
@@ -333,4 +384,57 @@ test('native screenshot events survive transient Android focus and visibility ch
   assert.equal(isVisible({ ignoreFocus: true }), true);
   workspace.open = false;
   assert.equal(isVisible({ ignoreFocus: true }), false);
+});
+
+test('screenshot system notices use compact vertical spacing and show "You took a screenshot." for the actor', () => {
+  const css = read('css/app.css');
+  const chat = read('js/messages.js').replace(/\r\n/g, '\n');
+
+  assert.match(css, /\.msg-system-event\s*\{\s*margin:\s*3px 0;\s*\}/);
+  assert.match(css, /\.msg-system-event \+ \.msg-system-event\s*\{\s*margin-top:\s*-4px;\s*\}/);
+  assert.match(chat, /const isMyScreenshot = screenshotNotice && Boolean\(myId && String\(m\.sender_id \|\| ''\) === String\(myId\)\);/);
+  assert.match(chat, /isMyScreenshot \? 'You' : String\(m\.body \|\| ''\)\.replace\(\/ took a screenshot\\\.\?\$\/i, ''\)/);
+  assert.match(chat, /<strong>\$\{escapeHtml\(screenshotName\)\}<\/strong> took a screenshot\./);
+
+  const convRowSrc = chat.match(/function renderConversationRowHtml\(conv\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(convRowSrc, 'renderConversationRowHtml must exist');
+  const renderConvRow = new Function(
+    'state', 'initializedProfile', 'isGroupConv', 'getTypingEntries', 'escapeHtml',
+    'convAvatarHtml', 'convDisplayTitle', 'userBadgesHtml', 'formatShortDate', 'formatUnreadCount',
+    `${convRowSrc}; return renderConversationRowHtml;`
+  )(
+    { activeConvId: null },
+    { id: 'u-me' },
+    () => false,
+    () => [],
+    (s) => String(s ?? ''),
+    () => '<div>av</div>',
+    () => 'Frank',
+    () => '',
+    () => '12:23 PM',
+    (n) => String(n)
+  );
+
+  const myShotRow = renderConvRow({
+    id: 'c1',
+    kind: 'DIRECT',
+    last_message_type: 'SYSTEM',
+    last_message_sender_id: 'u-me',
+    last_message_preview: 'Zedrick De Monteverde took a screenshot.',
+    last_message_at: '2026-11-21T04:23:00Z',
+    unread_count: 0
+  });
+  assert.match(myShotRow, /You took a screenshot\./);
+  assert.doesNotMatch(myShotRow, /Zedrick De Monteverde took a screenshot\./);
+
+  const peerShotRow = renderConvRow({
+    id: 'c1',
+    kind: 'DIRECT',
+    last_message_type: 'SYSTEM',
+    last_message_sender_id: 'u-peer',
+    last_message_preview: 'Frank Lawrenze Ulog Talipan took a screenshot.',
+    last_message_at: '2026-11-21T03:30:00Z',
+    unread_count: 0
+  });
+  assert.match(peerShotRow, /Frank Lawrenze Ulog Talipan took a screenshot\./);
 });

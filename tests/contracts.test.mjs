@@ -11319,7 +11319,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261121-03/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261121-04/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -12426,6 +12426,8 @@ test('screenshot notices have a protected group toggle and readable event stylin
   const manifest = read('android/app/src/main/AndroidManifest.xml');
   assert.match(chat, /data-chat-protection="screenshot_notices" aria-checked=/);
   assert.match(chat, /const screenshotRowHtml = nativePrivacy && screenshotEligible/);
+  assert.match(chat, /data-chat-protection-retry[\s\S]*?refreshPeerClientPlatforms\?\.\(peerIds\)/);
+  assert.match(read('js/core.js'), /reportClientPlatform, refreshPeerClientPlatforms, hasLiveBrowserSession/);
   assert.match(chat, /function clearActiveThreadSelection\(\) \{\s*syncNativeScreenshotLock\(null\)/);
   assert.match(read('js/core.js'), /getPlatform\?\.\(\) === 'android'[\s\S]*BackgroundNotifications\?\.setScreenshotBlocked === 'function'/);
   assert.match(chat, /!ignoreFocus && typeof document.visibilityState/);

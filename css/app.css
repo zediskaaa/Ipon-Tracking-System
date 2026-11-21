@@ -7939,6 +7939,12 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
   min-width: 0;
   max-width: 100%;
 }
+.msg-system-event {
+  margin: 3px 0;
+}
+.msg-system-event + .msg-system-event {
+  margin-top: -4px;
+}
 .msg-date-sep span,
 .msg-system-event span {
   max-width: 100%;

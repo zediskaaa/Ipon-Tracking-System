@@ -2549,13 +2549,31 @@
   let clientPlatformReportPromise = null;
   let lastReportedClientPlatform = '';
   let lastReportedClientPlatformAt = 0;
+  const pendingPlatformRefreshes = new Map();
+  let nativeScreenshotProbeOk = false;
+  let nativeScreenshotProbePromise = null;
 
   function supportsNativeScreenshotProtection() {
     return typeof window !== 'undefined' && (
-      typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function'
+      nativeScreenshotProbeOk
+      || typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function'
       || (window.Capacitor?.getPlatform?.() === 'android'
         && typeof window.Capacitor?.Plugins?.BackgroundNotifications?.setScreenshotBlocked === 'function')
     );
+  }
+
+  function probeNativeScreenshotProtection() {
+    if (supportsNativeScreenshotProtection()) return Promise.resolve(true);
+    const cap = window.Capacitor;
+    if (cap?.getPlatform?.() !== 'android' || typeof cap.nativePromise !== 'function') return Promise.resolve(false);
+    if (!nativeScreenshotProbePromise) {
+      nativeScreenshotProbePromise = Promise.resolve()
+        .then(() => cap.nativePromise('BackgroundNotifications', 'setScreenshotBlocked', { blocked: false }))
+        .then(() => { nativeScreenshotProbeOk = true; return true; })
+        .catch(() => false)
+        .finally(() => { nativeScreenshotProbePromise = null; });
+    }
+    return nativeScreenshotProbePromise;
   }
 
   function getClientPlatform() {
@@ -2604,10 +2622,29 @@
         if (error) throw error;
       } catch (_) {
         lastReportedClientPlatformAt = 0;
+        return null;
       }
       return platform;
     })();
     return clientPlatformReportPromise;
+  }
+
+  function refreshPeerClientPlatforms(userIds) {
+    const targets = new Set((userIds || []).map(String).filter((id) => id && id !== String(currentProfile?.id || '')));
+    if (!targets.size || !presenceChannel?.send) return Promise.resolve(false);
+    const requestId = `${Date.now()}-${Math.random()}`;
+    return new Promise((resolve) => {
+      const finish = (confirmed) => {
+        clearTimeout(timer);
+        pendingPlatformRefreshes.delete(requestId);
+        resolve(confirmed);
+      };
+      const timer = setTimeout(() => finish(false), 3000);
+      pendingPlatformRefreshes.set(requestId, { targets, finish });
+      presenceChannel.send({ type: 'broadcast', event: 'platform-check', payload: { request_id: requestId, target_ids: Array.from(targets) } })
+        .then((status) => { if (status !== 'ok') finish(false); })
+        .catch(() => finish(false));
+    });
   }
 
   let presenceShowOnline = true;
@@ -2735,6 +2772,19 @@
       };
 
       presenceChannel
+        .on('broadcast', { event: 'platform-check' }, async ({ payload }) => {
+          if (!payload?.request_id || !(payload.target_ids || []).includes(String(profile.id))) return;
+          const platform = await reportClientPlatform({ force: true });
+          presenceChannel?.send?.({ type: 'broadcast', event: 'platform-check-response', payload: {
+            request_id: payload.request_id, user_id: String(profile.id), platform
+          } })?.catch?.(() => { });
+        })
+        .on('broadcast', { event: 'platform-check-response' }, ({ payload }) => {
+          const pending = pendingPlatformRefreshes.get(payload?.request_id);
+          if (!pending || !pending.targets.has(String(payload?.user_id || ''))) return;
+          if (payload.platform) pending.targets.delete(String(payload.user_id));
+          if (!pending.targets.size) pending.finish(true);
+        })
         .on('presence', { event: 'sync' }, handleSync)
         .on('presence', { event: 'join' }, ({ key, newPresences }) => {
           if (key) onlineUserIds.add(String(key));
@@ -17638,7 +17688,7 @@
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     playUiSound, isUiSoundEnabled, setUiSoundEnabled,
-    setOnlineVisibility, syncMessagesBadges, canViewAnnouncementReactors, supportsNativeScreenshotProtection, getClientPlatform, reportClientPlatform, hasLiveBrowserSession,
+    setOnlineVisibility, syncMessagesBadges, canViewAnnouncementReactors, supportsNativeScreenshotProtection, probeNativeScreenshotProtection, getClientPlatform, reportClientPlatform, refreshPeerClientPlatforms, hasLiveBrowserSession,
     openTutorial: (...args) => window.IponTutorial?.open?.(...args),
     getCurrentUserId: () => currentProfile?.id || readShellSnapshot()?.userId || '',
     classifyAnnouncementFile, uploadAnnouncementAttachments, MAX_ANNOUNCEMENT_FILES,

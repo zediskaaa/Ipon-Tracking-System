@@ -98,6 +98,7 @@
     mobileShowThread: false,
     showThreadInfo: false,
     savingProtection: false,
+    checkingProtection: false,
     savingVanish: false,
     vanishError: '',
     vanishDraftSeconds: 300,
@@ -1905,9 +1906,17 @@
     const typingLabel = isGrp && typingEntries.length === 1 && typingEntries[0]?.name
       ? `${String(typingEntries[0].name).trim().split(/\s+/)[0] || 'Someone'} is typing…`
       : (isGrp && typingEntries.length > 1 ? `${typingEntries.length} typing…` : 'Typing…');
+    const rawLastPreview = (
+      conv.last_message_type === 'SYSTEM'
+      && initializedProfile?.id
+      && String(conv.last_message_sender_id || '') === String(initializedProfile.id)
+      && / took a screenshot\.?$/i.test(String(conv.last_message_preview || ''))
+    )
+      ? 'You took a screenshot.'
+      : conv.last_message_preview;
     const previewText = isTyping
       ? `<span class="msg-typing-preview"><span class="msg-wave-dots is-inline" aria-hidden="true"><i></i><i></i><i></i></span><span>${escapeHtml(typingLabel)}</span></span>`
-      : `${escapeHtml(previewPrefix)}${escapeHtml(conv.last_message_preview || (isGrp ? 'No recent messages' : 'Start a conversation'))}`;
+      : `${escapeHtml(previewPrefix)}${escapeHtml(rawLastPreview || (isGrp ? 'No recent messages' : 'Start a conversation'))}`;
     const pinIcon = conv.is_pinned
       ? '<svg class="msg-meta-icon" viewBox="0 0 24 24" role="img" aria-label="Pinned"><title>Pinned</title><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16h14v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6a1 1 0 0 1 1-1h.5a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5H8a1 1 0 0 1 1 1z"/></svg>'
       : '';
@@ -2148,20 +2157,29 @@
     if (typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function') {
       window.IponNativePrivacy.setScreenshotBlocked(blocked);
     } else if (supportsNativeScreenshotProtection()) {
-      window.Capacitor?.Plugins?.BackgroundNotifications?.setScreenshotBlocked?.({ blocked })?.catch?.(() => { });
+      const plugin = window.Capacitor?.Plugins?.BackgroundNotifications;
+      const call = typeof plugin?.setScreenshotBlocked === 'function'
+        ? plugin.setScreenshotBlocked({ blocked })
+        : window.Capacitor?.nativePromise?.('BackgroundNotifications', 'setScreenshotBlocked', { blocked });
+      call?.catch?.(() => { });
     }
     const monitoring = Boolean(conv && state.activeConvId && document.getElementById('msg-workspace-dialog')?.open
       && (!isGroupConv(conv) || conv.screenshot_notices_enabled) && !blocked);
     if (typeof window.IponNativePrivacy?.setScreenshotMonitoring === 'function') {
       window.IponNativePrivacy.setScreenshotMonitoring(monitoring);
     } else if (supportsNativeScreenshotProtection()) {
-      window.Capacitor?.Plugins?.BackgroundNotifications?.setScreenshotMonitoring?.({ enabled: monitoring })?.catch?.(() => { });
+      const plugin = window.Capacitor?.Plugins?.BackgroundNotifications;
+      const call = typeof plugin?.setScreenshotMonitoring === 'function'
+        ? plugin.setScreenshotMonitoring({ enabled: monitoring })
+        : window.Capacitor?.nativePromise?.('BackgroundNotifications', 'setScreenshotMonitoring', { enabled: monitoring });
+      call?.catch?.(() => { });
     }
   }
 
   async function refreshActiveConversationProtection(convId = state.activeConvId) {
     if (!convId || !state.activeThread?.conversation || state.activeThread.conversation.conversation_id !== convId || state.savingProtection) return;
     try {
+      await ipon().probeNativeScreenshotProtection?.();
       await ipon().reportClientPlatform?.()?.catch?.(() => { });
       const protection = await ipon().rpc('get_conversation_protection', { p_conversation_id: convId });
       if (!protection || state.activeConvId !== convId || state.activeThread?.conversation?.conversation_id !== convId) return;
@@ -3274,11 +3292,17 @@
       if (m.message_type === 'CALL_EVENT' || m.message_type === 'SYSTEM') {
         lastShownClockKey = '';
         const sysLabel = escapeHtml(m.body || (m.message_type === 'CALL_EVENT' ? 'Call event' : 'System notice'));
-        const screenshotNotice = m.message_type === 'SYSTEM' && ['screenshot_taken', 'SCREENSHOT'].includes(m.metadata?.event);
+        const screenshotNotice = m.message_type === 'SYSTEM' && (
+          ['screenshot_taken', 'SCREENSHOT'].includes(m.metadata?.event)
+          || / took a screenshot\.?$/i.test(String(m.body || ''))
+        );
         const vanishNotice = m.message_type === 'SYSTEM' && ['vanish_enabled', 'vanish_disabled', 'vanish_updated'].includes(m.metadata?.event);
-        const screenshotName = screenshotNotice ? String(m.body || '').replace(/ took a screenshot\.$/, '') : '';
+        const isMyScreenshot = screenshotNotice && Boolean(myId && String(m.sender_id || '') === String(myId));
+        const screenshotName = screenshotNotice
+          ? (isMyScreenshot ? 'You' : String(m.body || '').replace(/ took a screenshot\.?$/i, ''))
+          : '';
         const eventText = screenshotNotice
-          ? `<strong>${escapeHtml(screenshotName)}</strong> took a screenshot`
+          ? `<strong>${escapeHtml(screenshotName)}</strong> took a screenshot.`
           : sysLabel;
         return `${dateDivider}${unreadDivider}<div class="msg-system-event${screenshotNotice ? ' is-screenshot' : vanishNotice ? ' is-vanish' : ''}" data-msg-id="${escapeHtml(m.id)}"><span>${eventText} · ${escapeHtml(formatClock(m.created_at))}</span></div>`;
       }
@@ -3913,6 +3937,8 @@
       ? supportsNativeScreenshotProtection()
       : (typeof window !== 'undefined' && typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function');
     const screenshotEligible = Boolean(conv.screenshot_block_eligible) && !(typeof hasLiveBrowserParticipant === 'function' && hasLiveBrowserParticipant(conv));
+    const androidShell = nativePrivacy || (typeof window !== 'undefined' && (window.Capacitor?.getPlatform?.() === 'android'
+      || /myIPONApp\/\d+/i.test(window.navigator?.userAgent || '')));
     conv._renderedScreenshotEligible = screenshotEligible;
     const screenshotActive = Boolean(conv.block_screenshots && screenshotEligible);
     const canToggleScreenshots = canManageProtection && nativePrivacy && (screenshotEligible || Boolean(conv.block_screenshots));
@@ -3929,7 +3955,7 @@
     const protectionHtml = `<div class="msg-drawer-section msg-privacy-section"><section class="msg-privacy-card" aria-labelledby="msg-privacy-title">
       <div class="msg-privacy-head"><h4 id="msg-privacy-title">Chat privacy</h4></div>
       ${conv.protection_unavailable ? '<div class="msg-privacy-note" role="status"><span>Chat privacy is temporarily unavailable. Messages still work.</span><button type="button" data-chat-protection-retry>Try again</button></div>' : ''}
-      ${nativePrivacy && !screenshotEligible && !conv.protection_unavailable ? '<div class="msg-privacy-note" role="status"><span>Screenshot protection needs everyone on Android.</span><button type="button" data-chat-protection-retry>Check again</button></div>' : ''}
+      ${androidShell && (!nativePrivacy || !screenshotEligible) && !conv.protection_unavailable ? `<div class="msg-privacy-note" role="status"><span>${nativePrivacy ? 'Screenshot protection needs everyone on Android.' : 'Screenshot protection is unavailable in this app session.'}</span><button type="button" data-chat-protection-retry${state.checkingProtection ? ' disabled' : ''}>${state.checkingProtection ? 'Checking…' : 'Check again'}</button></div>` : ''}
       <div class="msg-privacy-list">
         ${screenshotRowHtml}
         ${isGrp ? `<div class="msg-privacy-row${canManageProtection ? '' : ' is-disabled'}">
@@ -6248,6 +6274,10 @@
         state.showThreadInfo = true;
         state.threadInfoView = 'root';
         renderThreadInfoDrawer();
+        if (isAndroidNativeShell()) {
+          await refreshActiveConversationProtection();
+          renderThreadInfoDrawer();
+        }
         return;
       }
       if (ev.target.closest?.('#msg-group-edit-toggle')) {
@@ -6601,11 +6631,36 @@
       }
 
       const protectionRetry = ev.target.closest?.('[data-chat-protection-retry]');
-      if (protectionRetry && state.activeConvId) {
-        protectionRetry.disabled = true;
-        await ipon().reportClientPlatform?.({ force: true });
-        await openConversation(state.activeConvId, { markRead: false, silent: true });
+      if (protectionRetry && state.activeConvId && !state.checkingProtection) {
+        const convId = state.activeConvId;
+        const conv = state.activeThread?.conversation;
+        if (!conv) return;
+        state.checkingProtection = true;
         renderThreadInfoDrawer();
+        try {
+          await ipon().probeNativeScreenshotProtection?.();
+          const platform = await ipon().reportClientPlatform?.({ force: true });
+          if (platform !== 'android_app' || !supportsNativeScreenshotProtection()) {
+            throw new Error('Screenshot blocking is unavailable in this app session. Reopen the latest Android app.');
+          }
+          const peerIds = isGroupConv(conv) ? (conv.members || []).map((member) => member.user_id || member.id) : [conv.id];
+          const peerReplied = await ipon().refreshPeerClientPlatforms?.(peerIds);
+          const protection = await ipon().rpc('get_conversation_protection', { p_conversation_id: convId });
+          if (state.activeConvId !== convId) return;
+          Object.assign(conv, protection);
+          conv.protection_unavailable = false;
+          syncNativeScreenshotLock(conv);
+          if (!protection?.screenshot_block_eligible || hasLiveBrowserParticipant(conv)) {
+            ipon().toast(peerReplied
+              ? 'Screenshot blocking needs everyone to use the Android app.'
+              : 'The other app did not respond. Open myIPON on both Android devices and try again.', 'error');
+          }
+        } catch (error) {
+          ipon().toast(ipon().friendlyError(error), 'error');
+        } finally {
+          state.checkingProtection = false;
+          if (state.activeConvId === convId) renderThreadInfoDrawer();
+        }
         return;
       }
 
@@ -6708,8 +6763,9 @@
         state.showThreadInfo = !state.showThreadInfo;
         state.threadInfoView = 'root';
         renderThreadInfoDrawer();
-        if (state.showThreadInfo && supportsNativeScreenshotProtection()) {
-          refreshActiveConversationProtection();
+        if (state.showThreadInfo && isAndroidNativeShell()) {
+          await refreshActiveConversationProtection();
+          renderThreadInfoDrawer();
         }
         return;
       }
