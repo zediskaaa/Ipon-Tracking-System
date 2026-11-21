@@ -10583,6 +10583,87 @@ dialog.msg-vanish-modal::backdrop {
   color: var(--thread-ink, var(--ink));
   font-size: 13px;
 }
+.msg-blocked-banner.is-friends-only {
+  gap: 12px;
+  padding: 10px 12px 10px 11px;
+  border-radius: 14px;
+  border: 1px solid var(--thread-rule, rgba(20, 45, 43, .12));
+  background: var(--thread-subbar-bg, rgba(20, 62, 48, .045));
+  box-shadow: 0 1px 2px rgba(20, 45, 43, .04), inset 0 1px 0 rgba(255, 255, 255, .65);
+  min-width: 0;
+  max-width: 100%;
+}
+.msg-friends-only-lead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.msg-friends-only-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 82, 60, .09);
+  border: 1px solid rgba(20, 82, 60, .14);
+  color: var(--rail, #165b44);
+}
+.msg-friends-only-icon svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.85;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.msg-friends-only-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.msg-friends-only-copy strong {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--thread-ink, var(--ink));
+}
+.msg-friends-only-copy span {
+  font-size: 12px;
+  line-height: 1.38;
+  color: var(--thread-muted, var(--muted));
+  overflow-wrap: anywhere;
+}
+.msg-friends-only-action {
+  flex-shrink: 0;
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(15, 68, 49, .18);
+}
+.msg-friends-only-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--thread-muted, var(--muted));
+  background: rgba(20, 45, 43, .06);
+  border: 1px solid var(--thread-rule, rgba(20, 45, 43, .1));
+}
 .msg-context-bar {
   display: flex;
   align-items: center;
@@ -12381,6 +12462,19 @@ html[data-theme="dark"] .msg-privacy-form #msg-settings-error {
   .msg-composer-wrap {
     padding: 8px 10px 10px;
   }
+  .msg-blocked-banner.is-friends-only {
+    flex-wrap: wrap;
+    gap: 9px;
+    padding: 9px 11px;
+  }
+  .msg-friends-only-icon {
+    width: 30px;
+    height: 30px;
+  }
+  .msg-friends-only-action,
+  .msg-friends-only-pill {
+    margin-left: auto;
+  }
   .msg-composer-form {
     gap: 6px;
   }
@@ -12622,6 +12716,28 @@ html[data-theme="dark"] .msg-thread-pane[data-chat-theme="sand"] {
 .msg-thread-pane[data-chat-theme="midnight"] .msg-blocked-banner {
   background: rgba(220, 68, 55, .16);
   color: #fdeae8;
+}
+.msg-thread-pane[data-chat-theme="midnight"] .msg-blocked-banner.is-friends-only {
+  background: rgba(114, 218, 165, .07);
+  border-color: rgba(218, 236, 227, .14);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .06);
+  color: #ecf4ef;
+}
+.msg-thread-pane[data-chat-theme="midnight"] .msg-friends-only-icon {
+  background: rgba(114, 218, 165, .13);
+  border-color: rgba(114, 218, 165, .24);
+  color: #8ee8b5;
+}
+.msg-thread-pane[data-chat-theme="midnight"] .msg-friends-only-copy strong {
+  color: #f3f7f4;
+}
+.msg-thread-pane[data-chat-theme="midnight"] .msg-friends-only-copy span {
+  color: #aec4b8;
+}
+.msg-thread-pane[data-chat-theme="midnight"] .msg-friends-only-pill {
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(218, 236, 227, .16);
+  color: #c2d7cc;
 }
 .msg-thread-pane[data-chat-theme="midnight"] .msg-voice-recording {
   background: linear-gradient(180deg, #122921 0%, #0d1f18 100%);
@@ -12981,6 +13097,21 @@ html[data-theme="dark"] .msg-conv-row.is-active {
 html[data-theme="dark"] .msg-request-banner {
   background: rgba(185, 121, 18, .18);
   border-bottom-color: rgba(237, 185, 90, .35);
+}
+html[data-theme="dark"] .msg-blocked-banner.is-friends-only {
+  background: rgba(255, 255, 255, .045);
+  border-color: rgba(218, 236, 227, .14);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+html[data-theme="dark"] .msg-friends-only-icon {
+  background: rgba(114, 218, 165, .12);
+  border-color: rgba(114, 218, 165, .24);
+  color: #8ee8b5;
+}
+html[data-theme="dark"] .msg-friends-only-pill {
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(218, 236, 227, .14);
+  color: #c2d7cc;
 }
 html[data-theme="dark"] .msg-forward-quote {
   background: var(--surface-subtle);

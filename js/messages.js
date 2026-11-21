@@ -268,6 +268,53 @@
     return Boolean(peerId && peerId === myId);
   }
 
+  function isBlockedThread(conv) {
+    if (!conv || isGroupConv(conv) || isSelfUser(conv)) return false;
+    const fs = String(conv.friendship_status || '').toUpperCase();
+    return Boolean(conv.is_blocked || fs === 'BLOCKED_BY_ME' || fs === 'BLOCKED_ME');
+  }
+
+  function isFriendsOnlyLocked(conv) {
+    if (!conv || isGroupConv(conv) || isSelfUser(conv) || isBlockedThread(conv)) return false;
+    return conv.friends_only_locked === true || conv.can_message === false;
+  }
+
+  function canInteractInThread(conv) {
+    return Boolean(conv && (isGroupConv(conv) || (!isBlockedThread(conv) && !isFriendsOnlyLocked(conv))));
+  }
+
+  function peerFirstName(conv) {
+    const raw = String(conv?.full_name || conv?.peer?.full_name || '').trim();
+    const first = raw.split(/\s+/).filter(Boolean)[0] || '';
+    return first || 'this user';
+  }
+
+  function renderFriendsOnlyBannerHtml(conv) {
+    const first = peerFirstName(conv);
+    const status = String(conv?.friendship_status || 'NONE').toUpperCase();
+    const canSendReq = conv?.can_send_friend_request !== false;
+    const reqId = conv?.friend_request_id || '';
+    let sub = `${first} only accepts messages and files from friends.`;
+    let actionHtml = '';
+    if (status === 'INCOMING_REQUEST' && reqId) {
+      sub = `${first} sent you a friend request. Accept to start messaging.`;
+      actionHtml = `<button type="button" class="button button-primary button-sm msg-friends-only-action" data-req-decision="ACCEPT" data-req-id="${escAttr(reqId)}">Accept</button>`;
+    } else if (status === 'OUTGOING_REQUEST') {
+      sub = `Friend request sent. Messaging unlocks once ${first} accepts.`;
+      actionHtml = '<span class="msg-friends-only-pill">Request sent</span>';
+    } else if (status === 'NONE' && canSendReq && conv?.id) {
+      sub = `Add ${first} as a friend to send messages or files.`;
+      actionHtml = `<button type="button" class="button button-primary button-sm msg-friends-only-action" data-social-action="add_friend" data-target-id="${escAttr(conv.id)}">Add friend</button>`;
+    }
+    return `<div class="msg-friends-only-lead">
+      <span class="msg-friends-only-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="11" width="15" height="9.5" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+      <div class="msg-friends-only-copy">
+        <strong>Friends only</strong>
+        <span>${escapeHtml(sub)}</span>
+      </div>
+    </div>${actionHtml}`;
+  }
+
   function convDisplayTitle(conv) {
     if (!conv) return 'Conversation';
     if (isGroupConv(conv)) return String(conv.title || conv.full_name || 'Group Chat');
@@ -2868,7 +2915,9 @@
     const isGrp = isGroupConv(conv);
     applyThreadTheme(conv.chat_theme || 'paper');
 
-    const canInteract = isGrp || (conv.friendship_status !== 'BLOCKED_BY_ME' && conv.friendship_status !== 'BLOCKED_ME');
+    const blockedThread = isBlockedThread(conv);
+    const friendsOnlyLocked = isFriendsOnlyLocked(conv);
+    const canInteract = isGrp || (!blockedThread && !friendsOnlyLocked);
     const isPendingReq = !isGrp && conv.status === 'PENDING_REQUEST';
     const isIncomingReq = isPendingReq && conv.initiator_id !== initializedProfile?.id;
     const hasSentMessages = Boolean((Array.isArray(thread.messages) && thread.messages.length) || getPendingList(conv.conversation_id).length);
@@ -2934,7 +2983,7 @@
             <button type="button" class="button button-secondary button-sm" data-msg-req-decision="DELETE">Delete</button>
             <button type="button" class="button button-secondary button-sm is-danger" data-msg-req-decision="BLOCK">Block</button>
           </div>`;
-      } else if (isPendingReq && hasSentMessages) {
+      } else if (isPendingReq && hasSentMessages && !friendsOnlyLocked) {
         reqBanner.hidden = false;
         reqBanner.innerHTML = `<div class="msg-req-banner-copy"><strong>Message request pending</strong><p>Waiting for ${escapeHtml(conv.full_name || 'recipient')} to accept. Read receipts stay hidden until accepted.</p></div>`;
       } else {
@@ -2947,16 +2996,32 @@
     const blockedBanner = document.getElementById('msg-blocked-banner');
     const composerForm = document.getElementById('msg-composer-form');
     if (!canInteract) {
+      closeAttachMenu();
+      const emojiPop = document.getElementById('msg-emoji-popover');
+      if (emojiPop) emojiPop.hidden = true;
+      if (state.replyToMsg || state.editingMsg) {
+        state.replyToMsg = null;
+        state.editingMsg = null;
+        renderContextBar();
+      }
+      if (state.uploadQueue.length) clearUploadQueue();
+      if (state.voiceRecorder) stopVoiceRecorderStream({ send: false });
       if (composerForm) composerForm.hidden = true;
       if (blockedBanner) {
         blockedBanner.hidden = false;
-        blockedBanner.innerHTML = conv.friendship_status === 'BLOCKED_BY_ME'
-          ? `<span>You blocked <strong>${escapeHtml(conv.full_name)}${userBadgesHtml(conv)}</strong>.</span><button type="button" class="button button-secondary button-sm" data-unblock-user="${escapeHtml(conv.id)}">Unblock</button>`
-          : '<span>You cannot reply to this conversation.</span>';
+        blockedBanner.classList?.toggle?.('is-friends-only', friendsOnlyLocked);
+        blockedBanner.innerHTML = blockedThread
+          ? (conv.friendship_status === 'BLOCKED_BY_ME'
+            ? `<span>You blocked <strong>${escapeHtml(conv.full_name)}${userBadgesHtml(conv)}</strong>.</span><button type="button" class="button button-secondary button-sm" data-unblock-user="${escapeHtml(conv.id)}">Unblock</button>`
+            : '<span>You cannot reply to this conversation.</span>')
+          : renderFriendsOnlyBannerHtml(conv);
       }
     } else {
       if (composerForm) composerForm.hidden = false;
-      if (blockedBanner) blockedBanner.hidden = true;
+      if (blockedBanner) {
+        blockedBanner.hidden = true;
+        blockedBanner.classList?.remove?.('is-friends-only');
+      }
     }
 
     syncLoadOlderUi();
@@ -3238,6 +3303,14 @@
     } catch (error) {
       pending.status = 'failed';
       pending.errorText = ipon().friendlyError(error) || 'Message failed to send';
+      const isFriendsOnlyErr = /only accepts messages from friends|cannot attach files to this conversation/i.test(pending.errorText);
+      if (isFriendsOnlyErr) {
+        ipon().toast(pending.errorText, 'error');
+        refreshConversations().catch(() => { });
+        if (convId === state.activeConvId) {
+          openConversation(convId, { markRead: false, silent: true }).catch(() => { });
+        }
+      }
       if (convId === state.activeConvId && state.activeThread?.conversation) {
         const wrapBefore = document.getElementById('msg-scroll-wrap');
         const prevTop = wrapBefore ? wrapBefore.scrollTop : 0;
@@ -3776,8 +3849,8 @@
               </div>
               ${!isDeleted ? `
                 <div class="msg-row-actions">
-                  <button type="button" class="msg-action-mini" data-msg-act="react" data-msg-id="${escapeHtml(m.id)}" aria-label="React" title="React">${MSG_REACT_SVG}</button>
-                  <button type="button" class="msg-action-mini" data-msg-act="reply" data-msg-id="${escapeHtml(m.id)}" aria-label="Reply" title="Reply">${MSG_REPLY_SVG}</button>
+                  ${canInteractInThread(conv) ? `<button type="button" class="msg-action-mini" data-msg-act="react" data-msg-id="${escapeHtml(m.id)}" aria-label="React" title="React">${MSG_REACT_SVG}</button>
+                  <button type="button" class="msg-action-mini" data-msg-act="reply" data-msg-id="${escapeHtml(m.id)}" aria-label="Reply" title="Reply">${MSG_REPLY_SVG}</button>` : ''}
                   <button type="button" class="msg-action-mini" data-msg-act="menu" data-msg-id="${escapeHtml(m.id)}" aria-label="More message actions" title="More options">${MSG_MORE_SVG}</button>
                 </div>` : ''}
               ${mine && !isDeleted ? `<span class="msg-swipe-reply-badge" aria-hidden="true">${MSG_REPLY_SVG}</span>` : ''}
@@ -5288,6 +5361,11 @@
   }
 
   function queuePickedFiles(fileList) {
+    const activeConv = state.activeThread?.conversation;
+    if (activeConv && !canInteractInThread(activeConv)) {
+      ipon().toast(isFriendsOnlyLocked(activeConv) ? 'This user only accepts messages and files from friends.' : 'You cannot attach files to this conversation.', 'error');
+      return;
+    }
     const files = [...(fileList || [])];
     if (!files.length) return;
     const prevBatches = Math.ceil(state.uploadQueue.length / MAX_ATTACHMENTS_PER_MSG);
@@ -5348,6 +5426,11 @@
   async function submitComposer(event) {
     event?.preventDefault();
     if (!state.activeConvId || !isEligible()) return;
+    const activeConv = state.activeThread?.conversation;
+    if (activeConv && !canInteractInThread(activeConv)) {
+      ipon().toast(isFriendsOnlyLocked(activeConv) ? 'This user only accepts messages from friends.' : 'You cannot reply to this conversation.', 'error');
+      return;
+    }
     const input = document.getElementById('msg-composer-input');
     const sendBtn = document.getElementById('msg-send-btn');
     const body = String(input?.value || '').trim();
@@ -5580,6 +5663,11 @@
   }
 
   async function startVoiceRecording() {
+    const activeConv = state.activeThread?.conversation;
+    if (activeConv && !canInteractInThread(activeConv)) {
+      ipon().toast(isFriendsOnlyLocked(activeConv) ? 'This user only accepts voice messages from friends.' : 'You cannot send voice messages here.', 'error');
+      return;
+    }
     if (state.voiceRecorder) return;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       return ipon().toast('Voice recording is not supported on this device or browser.', 'error');
@@ -6059,7 +6147,7 @@
       });
     }
     state.conversations
-      .filter((c) => c.status === 'ACCEPTED' && (isGroupConv(c) || !c.peer?.is_blocked))
+      .filter((c) => c.status === 'ACCEPTED' && (isGroupConv(c) || (!c.peer?.is_blocked && c.peer?.can_message !== false && c.peer?.friends_only_locked !== true)))
       .forEach((c) => {
         if (isGroupConv(c)) {
           items.push({
@@ -6419,14 +6507,16 @@
       if (action === 'add_friend') {
         const res = await ipon().rpc('send_friend_request', { p_target_id: targetId });
         ipon().toast(res?.auto_accepted ? 'Friend request accepted!' : 'Friend request sent.');
-        await refreshOverview();
+        await Promise.all([refreshOverview(), refreshConversations()]);
+        if (state.activeConvId) await openConversation(state.activeConvId, { markRead: false, silent: true });
         if (state.searchActive || state.chatListQuery.trim()) await runGlobalDiscovery(state.chatListQuery);
       } else if (action === 'remove_friend') {
         const ok = await ipon().confirmAction({ title: 'Remove friend?', message: 'They will no longer appear in your Friends list.', confirmText: 'Remove' });
         if (!ok) return;
         await ipon().rpc('remove_friend', { p_friend_id: targetId });
         ipon().toast('Friend removed.');
-        await refreshOverview();
+        await Promise.all([refreshOverview(), refreshConversations()]);
+        if (state.activeConvId) await openConversation(state.activeConvId, { markRead: false, silent: true });
       } else if (action === 'block') {
         const ok = await ipon().confirmAction({ title: 'Block this user?', message: 'They will no longer be able to message or find you.', confirmText: 'Block user', danger: true });
         if (!ok) return;
@@ -6528,6 +6618,7 @@
 
   async function toggleMessageReaction(msgId, emoji, { showHeartPop = false, bubbleEl = null } = {}) {
     if (!msgId || !emoji) return;
+    if (state.activeThread?.conversation && !canInteractInThread(state.activeThread.conversation)) return;
     const targetMsg = (state.activeThread?.messages || []).find((m) => String(m.id) === String(msgId));
     if (targetMsg?.deleted_for_everyone_at) return;
     const prevReactions = targetMsg ? [...(targetMsg.reactions || [])] : null;
@@ -6633,6 +6724,7 @@
   }
 
   function showReactionFloatingMenu(msgId, anchorEl, { toggle = true } = {}) {
+    if (state.activeThread?.conversation && !canInteractInThread(state.activeThread.conversation)) return;
     const existing = Array.from(document.querySelectorAll('.msg-floating-menu.msg-react-menu') || [])
       .find((node) => !node.classList?.contains?.('is-leaving'));
     if (existing && existing.getAttribute?.('data-react-menu-for') === String(msgId)) {
@@ -6687,6 +6779,7 @@
 
   function startReplyToMessage(msgObj) {
     if (!msgObj) return;
+    if (state.activeThread?.conversation && !canInteractInThread(state.activeThread.conversation)) return;
     closeFloatingMenus();
     const wrap = document.getElementById('msg-scroll-wrap');
     const wasNearBottom = isThreadNearBottom(wrap);
@@ -6726,13 +6819,14 @@
     menu.className = 'msg-floating-menu msg-ctx-menu';
     menu.setAttribute('data-menu-kind', 'msg-ctx');
     menu.setAttribute('data-menu-for', String(msgId));
+    const canSendHere = canInteractInThread(state.activeThread?.conversation);
     menu.innerHTML = `
-      <button type="button" data-ctx-do="reply" data-msg-id="${escAttr(msgId)}">Reply</button>
+      ${canSendHere ? `<button type="button" data-ctx-do="reply" data-msg-id="${escAttr(msgId)}">Reply</button>` : ''}
       ${atts.length ? `<button type="button" data-ctx-do="download" data-msg-id="${escAttr(msgId)}">${atts.length > 1 ? `Download all (${atts.length})` : 'Download'}</button>` : ''}
       ${msg.body ? `<button type="button" data-ctx-do="copy" data-msg-id="${escAttr(msgId)}">Copy text</button>` : ''}
       ${state.activeThread?.conversation?.block_forwarding ? '' : `<button type="button" data-ctx-do="forward" data-msg-id="${escAttr(msgId)}">Forward</button>`}
-      ${state.activeThread?.conversation?.status === 'ACCEPTED' ? `<button type="button" data-ctx-do="pin" data-msg-id="${escAttr(msgId)}">${msg.pinned_at ? 'Unpin' : 'Pin message'}</button>` : ''}
-      ${mine ? `<button type="button" data-ctx-do="edit" data-msg-id="${escAttr(msgId)}">Edit message</button>` : ''}
+      ${canSendHere && state.activeThread?.conversation?.status === 'ACCEPTED' ? `<button type="button" data-ctx-do="pin" data-msg-id="${escAttr(msgId)}">${msg.pinned_at ? 'Unpin' : 'Pin message'}</button>` : ''}
+      ${canSendHere && mine ? `<button type="button" data-ctx-do="edit" data-msg-id="${escAttr(msgId)}">Edit message</button>` : ''}
       <button type="button" data-ctx-do="del_me" data-msg-id="${escAttr(msgId)}">Delete for me</button>
       ${mine ? `<button type="button" class="is-danger" data-ctx-do="del_all" data-msg-id="${escAttr(msgId)}">Unsend for everyone</button>` : ''}`;
     document.getElementById('msg-workspace-dialog')?.appendChild(menu);
@@ -7485,6 +7579,7 @@
           ipon().toast(fReqBtn.dataset.reqDecision === 'ACCEPT' ? 'Friend request accepted!' : 'Friend request declined.');
           closeProfilePopover();
           await Promise.all([refreshOverview(), refreshConversations()]);
+          if (state.activeConvId) await openConversation(state.activeConvId, { markRead: false, silent: true });
           if (state.searchActive || state.chatListQuery.trim()) await runGlobalDiscovery(state.chatListQuery);
         } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
         return;
@@ -7495,7 +7590,8 @@
           await ipon().rpc('cancel_friend_request', { p_request_id: cancelBtn.dataset.cancelReq });
           ipon().toast('Friend request cancelled.');
           closeProfilePopover();
-          await refreshOverview();
+          await Promise.all([refreshOverview(), refreshConversations()]);
+          if (state.activeConvId) await openConversation(state.activeConvId, { markRead: false, silent: true });
           if (state.searchActive || state.chatListQuery.trim()) await runGlobalDiscovery(state.chatListQuery);
         } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
         return;
@@ -7646,6 +7742,7 @@
       }
       const attachTrigger = ev.target.closest?.('#msg-attach-btn');
       if (attachTrigger) {
+        if (state.activeThread?.conversation && !canInteractInThread(state.activeThread.conversation)) return;
         closeFloatingMenus();
         const emojiPopEl = document.getElementById('msg-emoji-popover');
         if (emojiPopEl) emojiPopEl.hidden = true;
@@ -7660,6 +7757,10 @@
       }
       const attachOptBtn = ev.target.closest?.('[data-attach-source]');
       if (attachOptBtn) {
+        if (state.activeThread?.conversation && !canInteractInThread(state.activeThread.conversation)) {
+          closeAttachMenu();
+          return;
+        }
         const source = attachOptBtn.dataset.attachSource || 'files';
         closeAttachMenu();
         if (typeof window !== 'undefined' && typeof window.IponNativePicker?.setSource === 'function') {
@@ -8288,7 +8389,7 @@
       if (!bubble || bubble.classList?.contains?.('is-text-selectable')) return null;
       if (target?.closest?.(HOLD_EXCLUDE_SEL)) return null;
       if (target?.closest?.('.msg-img-open-btn, .msg-att-doc-btn, .msg-video-center-play, video, button')) return null;
-      if (state.activeThread?.conversation?.is_blocked) return null;
+      if (state.activeThread?.conversation && !canInteractInThread(state.activeThread.conversation)) return null;
       const row = bubble.closest?.('[data-msg-id]');
       if (!row || row.classList?.contains?.('is-pending') || row.classList?.contains?.('is-failed')) return null;
       const msgId = row.dataset?.msgId;
@@ -8308,7 +8409,7 @@
       const row = target?.closest?.('#msg-messages-list .msg-row[data-msg-id]');
       if (!row || row.classList?.contains?.('is-pending')) return null;
       if (row.querySelector?.('.msg-bubble.is-deleted')) return null;
-      if (state.activeThread?.conversation?.is_blocked) return null;
+      if (state.activeThread?.conversation && !canInteractInThread(state.activeThread.conversation)) return null;
       const mediaSurface = target?.closest?.('.msg-img-open-btn, .msg-att-video, .msg-video-center-play, .msg-att-doc-btn');
       if (target?.closest?.('button, a, input, textarea, select, [role="button"], .msg-video-controls, .msg-voice-play-btn') && !mediaSurface) return null;
       if (pointerType === 'mouse' && target?.closest?.('.msg-text, .msg-reply-quote, .msg-sender-name')) return null;
@@ -9076,6 +9177,7 @@
   }
 
   function openWebGoogleDriveDialog() {
+    if (state.activeThread?.conversation && !canInteractInThread(state.activeThread.conversation)) return;
     const dialog = document.getElementById('msg-gdrive-dialog');
     if (!dialog) {
       document.getElementById('msg-drive-input')?.click();
