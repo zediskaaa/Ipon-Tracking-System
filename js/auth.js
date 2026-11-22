@@ -1025,13 +1025,72 @@
   const splashStartedAt = Date.now();
   const splashMinUntil = splashStartedAt + (isAppLaunch ? 300 : 0);
 
+  const splashStatusBox = document.getElementById('app-splash-status');
+  const splashStatusText = document.getElementById('app-splash-status-text');
+  const splashActions = document.getElementById('app-splash-actions');
+  const splashRetryBtn = document.getElementById('app-splash-retry');
+  const splashSignInBtn = document.getElementById('app-splash-signin');
+  let splashRetrying = false;
+  let splashOnlineRetryBound = false;
+
+  function hasStoredSupabaseSession() {
+    try {
+      return Object.keys(localStorage).some((key) => {
+        if (!key.startsWith('sb-') || !key.endsWith('-auth-token')) return false;
+        const raw = localStorage.getItem(key);
+        if (!raw) return false;
+        try {
+          const parsed = JSON.parse(raw);
+          return Boolean(parsed?.refresh_token || parsed?.access_token || parsed?.currentSession?.refresh_token);
+        } catch {
+          return raw.length > 20;
+        }
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  const shouldHoldSplashForSession = () => Boolean(
+    hasStoredSupabaseSession()
+    && !isAppHandoff
+    && !isClerkSsoCallback
+    && !acceptInviteToken
+    && statusParam !== 'pending'
+  );
+
+  const setSplashStatus = (text, { showActions = false, busy = false } = {}) => {
+    const splash = document.getElementById('app-splash');
+    if (!splash) return;
+    splash.removeAttribute('aria-hidden');
+    if (splashStatusText && text) splashStatusText.textContent = text;
+    if (splashStatusBox) splashStatusBox.hidden = false;
+    if (splashActions) splashActions.hidden = !showActions;
+    if (splashRetryBtn) {
+      splashRetryBtn.disabled = Boolean(busy);
+      splashRetryBtn.textContent = busy ? 'Reconnecting…' : 'Try again';
+    }
+  };
+
   const dismissSplash = () => {
     const splash = document.getElementById('app-splash');
     if (!splash) return;
     splash.classList.add('is-hidden');
     setTimeout(() => { try { splash.remove(); } catch (_) { } }, 240);
   };
-  const splashSafetyTimer = setTimeout(dismissSplash, 5000);
+  let splashSafetyTimer = setTimeout(() => {
+    if (shouldHoldSplashForSession()) {
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      setSplashStatus(
+        offline
+          ? 'You appear to be offline. Waiting for connection…'
+          : 'Connection is slow. Still signing you in…',
+        { showActions: true }
+      );
+      return;
+    }
+    dismissSplash();
+  }, 5000);
 
   function recordLoginActivity(sessionData) {
     const token = sessionData?.session?.access_token || '';
@@ -1043,6 +1102,7 @@
 
   // Start init immediately without delaying synchronous form/tab listener attachment
   const initPromise = Ipon.init({ requireAuth: false, allowPending: true }).catch((error) => ({ failed: true, configured: false, error }));
+  let activeInitPromise = initPromise;
   const bootNativeCallbackPromise = consumeNativeOAuthCallback();
 
   async function resolveActiveProfile(user, fallbackEmail) {
@@ -1203,7 +1263,7 @@
   deviceOtpDialog.addEventListener('cancel', (event) => { event.preventDefault(); cancelDeviceOtp(); });
 
   async function ensureInitReady() {
-    const state = await initPromise;
+    const state = await activeInitPromise;
     if (state?.failed) throw state.error || new Error('Connection failed. Please reload and try again.');
     if (!state?.configured || !Ipon.client) throw new Error('Account service is not configured yet.');
     return state;
@@ -1312,11 +1372,46 @@
     }
   }
 
-  void (async () => {
-    const state = await initPromise;
+  async function retryStoredSessionBoot() {
+    if (splashRetrying || !document.getElementById('app-splash')) return;
+    splashRetrying = true;
+    setSplashStatus('Reconnecting to your account…', { showActions: true, busy: true });
+    activeInitPromise = Ipon.init({ requireAuth: false, allowPending: true }).catch((error) => ({ failed: true, configured: false, error }));
+    const nextState = await activeInitPromise;
+    splashRetrying = false;
+    await handleStartupState(nextState);
+  }
+
+  splashRetryBtn?.addEventListener('click', () => {
+    retryStoredSessionBoot().catch(() => { });
+  });
+  splashSignInBtn?.addEventListener('click', () => {
+    clearTimeout(splashSafetyTimer);
+    dismissSplash();
+  });
+
+  async function handleStartupState(state) {
     if (!clerkExchangeInFlight) Ipon.setLoading(false);
     if (state.failed) {
       clearTimeout(splashSafetyTimer);
+      if (shouldHoldSplashForSession()) {
+        const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        setSplashStatus(
+          offline
+            ? 'You appear to be offline. Your session is still saved.'
+            : 'Couldn’t reach myIPON because your connection is slow or unstable. Your session is still saved.',
+          { showActions: true, busy: false }
+        );
+        if (!splashOnlineRetryBound && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+          splashOnlineRetryBound = true;
+          window.addEventListener('online', () => {
+            if (document.getElementById('app-splash') && shouldHoldSplashForSession()) {
+              retryStoredSessionBoot().catch(() => { });
+            }
+          });
+        }
+        return;
+      }
       dismissSplash();
       return;
     }
@@ -1348,6 +1443,14 @@
       return;
     }
     renderSecurityNotice();
+  }
+
+  void (async () => {
+    const state = await initPromise;
+    await handleStartupState(state);
+    if (state.failed || (state.session && state.profile?.status === 'ACTIVE' && !isAppHandoff && !isClerkSsoCallback) || !state.configured) {
+      return;
+    }
     if (email?.value) syncServerThrottleStatus(email.value);
     const initialJoin = getStoredJoinCode();
     if (initialJoin) loadLoginJoinPreview(initialJoin).catch(() => { });

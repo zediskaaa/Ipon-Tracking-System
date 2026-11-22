@@ -645,11 +645,18 @@
       if (!client) { setLoading(false); return document.documentElement.style.removeProperty('visibility'); }
       try {
         const { data: { session }, error } = await client.auth.getSession();
-        if (error || !session) return window.location.replace('login.html');
+        const transient = Boolean(error && (navigator.onLine === false || isTransientConnectionError(error)));
+        if ((!session && !transient && !hasStoredAuthToken()) || (error && !transient)) {
+          return window.location.replace('login.html');
+        }
         setLoading(false);
         document.documentElement.style.removeProperty('visibility');
-      } catch {
-        window.location.replace('login.html');
+      } catch (err) {
+        if (navigator.onLine !== false && !isTransientConnectionError(err) && !hasStoredAuthToken()) {
+          return window.location.replace('login.html');
+        }
+        setLoading(false);
+        document.documentElement.style.removeProperty('visibility');
       }
     });
     document.addEventListener('click', (event) => {
@@ -9384,7 +9391,7 @@
       let { data: profile, error } = profileResult;
       if (error && isJwtExpiredError(error)) {
         const refreshed = await withTimeout(client.auth.refreshSession(), 8000).catch(() => null);
-        if (refreshed?.error && options.requireAuth !== false && !isTransientConnectionError(refreshed.error)) {
+        if (refreshed?.error && options.requireAuth !== false && navigator.onLine !== false && !isTransientConnectionError(refreshed.error)) {
           window.location.replace('login.html');
           return { configured: true, profile: null, session: null, redirecting: true };
         }
@@ -9571,6 +9578,24 @@
     } catch { }
   }
 
+  function hasStoredAuthToken() {
+    try {
+      return Object.keys(localStorage).some((key) => {
+        if (!key.startsWith('sb-') || !key.endsWith('-auth-token')) return false;
+        const raw = localStorage.getItem(key);
+        if (!raw) return false;
+        try {
+          const parsed = JSON.parse(raw);
+          return Boolean(parsed?.refresh_token || parsed?.access_token || parsed?.currentSession?.refresh_token);
+        } catch {
+          return raw.length > 20;
+        }
+      });
+    } catch {
+      return false;
+    }
+  }
+
   function clearStoredAuthTokens() {
     try {
       sessionStorage.removeItem(ACTIVE_ROLE_KEY);
@@ -9609,7 +9634,8 @@
     };
     const checkSessionConsistency = async () => {
       try {
-        const { data: { session } } = await client.auth.getSession();
+        const { data: { session }, error } = await client.auth.getSession();
+        if (error && (navigator.onLine === false || isTransientConnectionError(error))) return;
         if (loginPage) {
           if (session?.user?.id) {
             const { data: profile } = await client.from('profiles').select('role,status,first_name,middle_name,last_name,contact_number,name_setup_required').eq('id', session.user.id).maybeSingle();
@@ -9617,14 +9643,17 @@
           }
           return;
         }
-        if (!session) return redirectTo('login.html');
+        if (!session) {
+          if (navigator.onLine === false && hasStoredAuthToken()) return;
+          return redirectTo('login.html');
+        }
         if (expectedUserId && session.user.id !== expectedUserId) window.location.reload();
       } catch { }
     };
     client.auth.onAuthStateChange((event, nextSession) => {
       cachedAccessToken = nextSession?.access_token || null;
       if (loginPage || event === 'INITIAL_SESSION') return;
-      if (event === 'SIGNED_OUT' || !nextSession) return redirectTo('login.html');
+      if (event === 'SIGNED_OUT' || (!nextSession && !hasStoredAuthToken())) return redirectTo('login.html');
       if (expectedUserId && nextSession.user?.id && nextSession.user.id !== expectedUserId) {
         window.location.reload();
       }

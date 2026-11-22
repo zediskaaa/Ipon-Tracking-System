@@ -11337,7 +11337,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261122-31/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261122-32/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11867,7 +11867,7 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(loginHtml, /https:\/\/\*\.protect\.clerk\.com/);
   assert.match(loginHtml, /https:\/\/challenges\.cloudflare\.com/);
   assert.match(loginHtml, /frame-src 'self' https:\/\/\*\.protect\.clerk\.com https:\/\/challenges\.cloudflare\.com/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261122-31/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261122-32/);
   assert.match(authJs, /mode === 'signup' \? 'Create with' : 'Continue with'/);
   assert.match(coreJs, /function fireKeepaliveRpc\(/);
   const signOutBody = coreJs.match(/async function signOut\(\)[\s\S]*?^  \}/m);
