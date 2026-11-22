@@ -46,5 +46,8 @@ test('sign-in validates identifiers live without recursive invalid events or shi
   assert.match(source, /email\.addEventListener\('invalid', \(\) => validateEmailLive\(true\)\)/);
   assert.match(source, /email\.addEventListener\('blur',[\s\S]*?validateEmailLive\(true\)/);
   assert.match(html, /#email-error\[hidden\][^}]*visibility:hidden/);
+  assert.match(html, /#email-error,body:not\(\.is-request-mode\) \.login-card #password-error\{display:block;min-height:16px;/);
+  assert.match(html, /body:not\(\.is-request-mode\) \.login-card \.form-grid\{gap:4px\}/);
+  assert.match(html, /body:not\(\.is-request-mode\) \.login-card \.button\{margin-top:4px\}/);
   assert.match(html, /\.auth-message:empty\{visibility:hidden\}/);
 });

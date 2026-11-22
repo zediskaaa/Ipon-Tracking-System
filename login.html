@@ -103,8 +103,11 @@
     .login-card .field input:-webkit-autofill,.login-card .field input:-webkit-autofill:hover,.login-card .field input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 1000px #f5eee0 inset!important;-webkit-text-fill-color:#112622!important;caret-color:#112622}
     .login-card .field textarea{min-height:58px}
     .login-card .field input[aria-invalid="true"],.login-card .field textarea[aria-invalid="true"],.login-card .field input[aria-invalid="true"]:focus,.login-card .field textarea[aria-invalid="true"]:focus{border-color:var(--red);background:rgba(174,57,52,.06);box-shadow:0 0 0 3px rgba(174,57,52,.14)}
-    body:not(.is-request-mode) .login-card #email-error,body:not(.is-request-mode) .login-card #password-error{display:block;min-height:34px;line-height:17px}
+    body:not(.is-request-mode) .login-card .form-grid{gap:4px}
+    body:not(.is-request-mode) .login-card .field{gap:5px}
+    body:not(.is-request-mode) .login-card #email-error,body:not(.is-request-mode) .login-card #password-error{display:block;min-height:16px;margin-top:-1px;line-height:16px}
     body:not(.is-request-mode) .login-card #email-error[hidden],body:not(.is-request-mode) .login-card #password-error[hidden]{display:block!important;visibility:hidden}
+    body:not(.is-request-mode) .login-card .button{margin-top:4px}
     .password-control{position:relative;display:flex;align-items:center;width:100%}
     .login-card .password-control input{width:100%;padding-inline-end:42px!important}
     .username-control{position:relative;display:flex;align-items:center;width:100%}
