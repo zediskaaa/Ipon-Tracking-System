@@ -3770,6 +3770,7 @@
 
   const CATEGORIES = [
     'All',
+    'Divine',
     'Exclusive',
     'myIPON',
     'Education',
@@ -3954,6 +3955,8 @@
         if (this.host?.dataset) {
           if (isFull) this.host.dataset.effectScope = 'full';
           else delete this.host.dataset.effectScope;
+          if (defEntry?.cat === 'Divine') this.host.dataset.effectFamily = 'divine';
+          else delete this.host.dataset.effectFamily;
         }
         const W = this.b.clientWidth || this.b.offsetWidth || 0;
         const H = this.b.clientHeight || this.b.offsetHeight || 0;
@@ -3977,8 +3980,8 @@
         this.frameSpec = full && defEntry?.cardFrame ? { spec: defEntry.cardFrame, m: cardFrameMetrics(W, H, 5 * s, 16 * s) } : null;
         this.run = defEntry ? defEntry.make(this.S) : null;
         this.time = 0;
-        this.drawn = false;
-        if (this.run) this.render(0.016, 0.016);
+        this.drawn = still();
+        if (this.run) this.render(this.drawn ? 3.2 : 0.016, this.drawn ? 0 : 0.016);
       },
       render(t, dt) {
         if (!this.S || !this.run) return;
@@ -4019,20 +4022,52 @@
     stage.build();
     ensureLoopRunning();
 
+    let desiredId = stage.id;
+    let exitAnimations = [];
+
+    function cancelExit() {
+      for (const animation of exitAnimations) {
+        animation.onfinish = null;
+        animation.cancel();
+      }
+      exitAnimations = [];
+    }
+
     return {
       setEffect(nextId) {
-        stage.id = normalizeEffectId(nextId);
+        desiredId = normalizeEffectId(nextId);
+        if (exitAnimations.length && !still()) return;
+        cancelExit();
+        if (FX[stage.id]?.cat === 'Divine' && stage.run && !still()) {
+          if (desiredId === stage.id) return;
+          if (typeof backCanvas.animate === 'function' && typeof frontCanvas.animate === 'function') {
+            exitAnimations = [backCanvas, frontCanvas].map((canvas) =>
+              canvas.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, easing: 'ease-in-out', fill: 'forwards' })
+            );
+            exitAnimations[1].onfinish = () => {
+              stage.id = desiredId;
+              stage.build();
+              cancelExit();
+            };
+            return;
+          }
+        }
+        stage.id = desiredId;
         stage.build();
       },
       refreshGeometry() {
         stage.build();
       },
       destroy() {
+        cancelExit();
         stages.delete(stage);
         ro?.disconnect?.();
         io?.disconnect?.();
         stage.run = null;
-        if (stage.host?.dataset) delete stage.host.dataset.effectScope;
+        if (stage.host?.dataset) {
+          delete stage.host.dataset.effectScope;
+          delete stage.host.dataset.effectFamily;
+        }
         if (stage.S) {
           stage.bc.clearRect(0, 0, stage.S.W, stage.S.H);
           stage.fc.clearRect(0, 0, stage.S.W, stage.S.H);

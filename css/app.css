@@ -21532,6 +21532,18 @@ html[data-theme="dark"] .account-card-effects-row {
   -webkit-mask-image: none;
   mask-image: none;
 }
+/* The name sits higher in the popover than in the gallery card. Feather
+   the artwork behind that row and restore its presence below the biography. */
+.msg-profile-popover[data-effect-family="divine"] > :is(canvas.fxb, canvas.fxf) {
+  -webkit-mask-image: linear-gradient(#000 42px, rgba(0, 0, 0, .23) 86px,
+    rgba(0, 0, 0, .23) 174px, #000 217px);
+  mask-image: linear-gradient(#000 42px, rgba(0, 0, 0, .23) 86px,
+    rgba(0, 0, 0, .23) 174px, #000 217px);
+}
+[data-effect-family="divine"] :is(.effects-card-name, .effects-card-meta, .effects-card-bio,
+  .msg-pop-title strong, .msg-pop-status, .msg-pop-bio) {
+  text-shadow: 0 1px 2px rgba(7, 12, 20, .95), 0 1px 8px rgba(7, 12, 20, .8);
+}
 .msg-profile-popover .msg-pop-title,
 .msg-profile-popover .msg-pop-bio,
 .msg-profile-popover .msg-pop-apps-slot,
@@ -21781,6 +21793,16 @@ html[data-theme="dark"] .notification-item-icon.is-effect-granted {
   color: #0b1612;
   border-color: rgba(255, 255, 255, .45);
   box-shadow: 0 3px 10px rgba(0, 0, 0, .36), inset 0 1px 0 rgba(255, 255, 255, .85);
+}
+.effects-chip[data-effect-cat="Divine"] {
+  border-color: #9986bc;
+  background: #2b2441;
+  color: #efe3ff;
+}
+.effects-chip[data-effect-cat="Divine"][aria-pressed="true"] {
+  background: #e5d8f6;
+  color: #251938;
+  border-color: #f3eaff;
 }
 .effects-chip[data-effect-cat="Exclusive"] {
   border-color: rgba(232, 196, 120, .38);

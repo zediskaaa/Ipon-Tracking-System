@@ -4184,8 +4184,11 @@
       emptyMsg.hidden = visibleCount > 0;
     }
 
+    const canRequestTrial = (effect) => Boolean(effect && effect.id !== 'none'
+      && effect.cat !== 'Exclusive' && effect.cat !== 'Divine' && !/^(ex_|divine_)/.test(effect.id));
+
     function openTrialRequestModal(previewMeta) {
-      if (!previewMeta || previewMeta.cat === 'Exclusive' || String(previewMeta.id || '').startsWith('ex_')) return;
+      if (!canRequestTrial(previewMeta)) return;
       document.getElementById('effects-trial-request-dialog')?.remove();
       const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
       const rarText = previewMeta.rare ? ` · ${rarities[previewMeta.rare] || ''}` : '';
@@ -4295,7 +4298,7 @@
         box.innerHTML = '<div class="effects-trial-title">Founding community recognition</div><p class="effects-trial-msg">Reserved for early myIPON supporters. Granted permanently by Super Admin.</p>';
         return;
       }
-      if (previewMeta.cat === 'Exclusive' || String(previewMeta.id || '').startsWith('ex_')) {
+      if (!canRequestTrial(previewMeta)) {
         box.hidden = true;
         box.innerHTML = '';
         return;

@@ -23,6 +23,7 @@ function makeStubCanvasContext() {
     fillRect: noop,
     strokeRect: noop,
     beginPath: noop,
+    clip: noop,
     closePath: noop,
     moveTo: noop,
     lineTo: noop,
@@ -47,9 +48,10 @@ function makeStubCanvasContext() {
   };
 }
 
-test('profile effects engine exports all 50 effects (including founding recognition) and renders every effect cleanly without errors', () => {
+test('profile effects engine exports all 55 effects and renders every effect cleanly without errors', () => {
   const code = read('js/profile-effects.js');
   const exclusiveCode = read('js/profile-effects-exclusive.js');
+  const divineCode = read('js/profile-effects-divine.js');
   const canvases = [];
   const noop = () => { };
   const numericErrors = [];
@@ -132,11 +134,12 @@ test('profile effects engine exports all 50 effects (including founding recognit
   sandbox.globalThis = sandbox;
   vm.runInNewContext(code, sandbox, { filename: 'js/profile-effects.js' });
   vm.runInNewContext(exclusiveCode, sandbox, { filename: 'js/profile-effects-exclusive.js' });
+  vm.runInNewContext(divineCode, sandbox, { filename: 'js/profile-effects-divine.js' });
 
   const api = sandbox.window.IponProfileEffects;
   assert.ok(api);
-  assert.equal(api.EFFECTS.length, 50);
-  assert.equal(api.ALL_OPTIONS.length, 51);
+  assert.equal(api.EFFECTS.length, 55);
+  assert.equal(api.ALL_OPTIONS.length, 56);
   assert.deepEqual(
     [...api.EFFECTS.map((e) => e.id)],
     [
@@ -150,9 +153,12 @@ test('profile effects engine exports all 50 effects (including founding recognit
       'stainedglass', 'cantilever', 'biolumfauna', 'botanicvet',
       'ex_phoenix', 'ex_dragon', 'ex_eclipse', 'ex_tempest', 'ex_blossom',
       'ex_frost', 'ex_sovereign', 'ex_cybermech', 'ex_prism', 'ex_abyss',
-      'ex_valkyrie', 'ex_leviathan', 'ex_chronos', 'ex_kitsune', 'ex_early_user'
+      'ex_valkyrie', 'ex_leviathan', 'ex_chronos', 'ex_kitsune', 'ex_early_user',
+      'divine_meridian', 'divine_boreal', 'divine_opal', 'divine_imperial', 'divine_hellebore'
     ]
   );
+  assert.equal(api.CATEGORIES[1], 'Divine');
+  assert.equal(api.EFFECTS.filter((e) => e.cat === 'Divine').length, 5);
   assert.ok(api.CATEGORIES.includes('Exclusive'), 'Missing category Exclusive');
   assert.equal(api.RARITIES[3], 'Mythic');
   const exclusives = api.EFFECTS.filter((e) => e.cat === 'Exclusive');
@@ -211,10 +217,11 @@ test('profile effects engine exports all 50 effects (including founding recognit
       saveDepth = 0;
       assert.doesNotThrow(() => stage.setEffect(effect.id), `Failed rendering ${effect.id}`);
       assert.equal(host.dataset.effectScope, effect.fullCard ? 'full' : undefined, `Unexpected effectScope for ${effect.id}`);
+      assert.equal(host.dataset.effectFamily, effect.cat === 'Divine' ? 'divine' : undefined);
       const tick = rafQueue[rafQueue.length - 1];
       if (tick) {
         // Exclusive effects run 4 distinct ~6.2s scenes (24.8s full loop); step monotonically by 50ms (dt cap)
-        const steps = effect.cat === 'Exclusive' && dim[0] === 340 ? 520 : 12;
+        const steps = effect.cat === 'Divine' ? 500 : effect.cat === 'Exclusive' && dim[0] === 340 ? 520 : 12;
         for (let i = 0; i < steps; i += 1) {
           simNow += 50;
           tick(simNow);
@@ -224,8 +231,29 @@ test('profile effects engine exports all 50 effects (including founding recognit
     }
     stage.destroy();
     assert.equal(host.dataset.effectScope, undefined, 'destroy() must clear data-effect-scope');
+    assert.equal(host.dataset.effectFamily, undefined, 'destroy() must clear data-effect-family');
   }
   assert.deepEqual(numericErrors, [], `Non-finite canvas coordinates detected: ${numericErrors.slice(0, 5).join(', ')}`);
+
+  const exitAnimations = [];
+  fxb.animate = fxf.animate = (keyframes) => {
+    assert.deepEqual([...keyframes].map(({ opacity }) => opacity), [1, 0]);
+    const animation = { cancel() { this.cancelled = true; } };
+    exitAnimations.push(animation);
+    return animation;
+  };
+  const transition = api.mountStage(host, { effectId: 'divine_meridian', geometryFn: () => ({ cx: 110, cy: 71, ra: 25 }) });
+  transition.setEffect('divine_opal');
+  transition.setEffect('none');
+  assert.equal(exitAnimations.length, 2, 'Rapid clicks must share the outgoing effect fade');
+  assert.equal(host.dataset.effectScope, 'full', 'Do not clear the outgoing effect before the fade');
+  exitAnimations[1].onfinish();
+  assert.equal(host.dataset.effectScope, undefined, 'Use the latest selection when the fade finishes');
+  assert.equal(exitAnimations.every((effect) => effect.cancelled), true);
+  transition.setEffect('divine_boreal');
+  transition.setEffect('divine_opal');
+  transition.destroy();
+  assert.equal(exitAnimations.every((effect) => effect.cancelled), true, 'Destroy must release unfinished fades');
 });
 
 test('migration 117 enforces permanent Super Admin grants with zero retention expiry and strict RLS', () => {
@@ -1192,13 +1220,13 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v185/);
+  assert.match(sw, /ipon-shell-v187/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
-    assert.match(html, /js\/profile-effects\.js\?v=20261122-04/);
+    assert.match(html, /js\/profile-effects\.js\?v=20261122-06/);
     assert.match(html, /js\/profile-effects-exclusive\.js\?v=20261122-07/);
-    assert.match(html, /css\/app\.css\?v=20261122-09/);
+    assert.match(html, /css\/app\.css\?v=20261122-10/);
   }
 });
 
@@ -1254,6 +1282,42 @@ test('Exclusive profile effects cannot request trials in UI or database', () => 
   assert.match(mig174, /'20261122_174'/);
   assert.ok(schema.replace(/\r\n/g, '\n').includes(mig174.trim().replace(/\r\n/g, '\n')), 'schema.sql must include Migration 174');
   assert.match(mig174, /if v_effect like 'ex\\_\%' escape '\\' then[\s\S]*?Exclusive profile effects are not eligible for trial requests\./);
-  assert.match(core, /if \(!previewMeta \|\| previewMeta\.cat === 'Exclusive' \|\| String\(previewMeta\.id \|\| ''\)\.startsWith\('ex_'\)\) return;/);
-  assert.match(core, /if \(previewMeta\.cat === 'Exclusive' \|\| String\(previewMeta\.id \|\| ''\)\.startsWith\('ex_'\)\) \{\s*box\.hidden = true;\s*box\.innerHTML = '';\s*return;\s*\}/);
+  assert.match(core, /effect\.cat !== 'Exclusive'/);
+  assert.match(core, /function openTrialRequestModal\(previewMeta\) \{\s*if \(!canRequestTrial\(previewMeta\)\) return;/);
+  assert.match(core, /if \(!canRequestTrial\(previewMeta\)\) \{\s*box\.hidden = true;\s*box\.innerHTML = '';\s*return;\s*\}/);
+});
+
+test('Divine effects can be equipped but cannot create a trial request or notify Super Admin', () => {
+  const migration = read('database/migrations/20261122_175_divine_profile_effects.sql');
+  const expanded = read('database/migrations/20261122_176_expand_divine_profile_effects.sql');
+  const schema = read('database/schema.sql').replace(/\r\n/g, '\n');
+  const core = read('js/core.js');
+  const ids = migration.split('create or replace function public.profile_effect_label')[0];
+  assert.ok(schema.includes(migration.trim().replace(/\r\n/g, '\n')));
+  assert.ok(schema.includes(expanded.trim().replace(/\r\n/g, '\n')));
+  for (const [id, label] of [
+    ['divine_meridian', 'Meridian Observatory'], ['divine_boreal', 'Boreal Veil'], ['divine_opal', 'Opal Sanctum']
+  ]) {
+    assert.ok(ids.includes(`'${id}'`), `Database must recognize ${id}`);
+    assert.ok(migration.includes(`when '${id}' then '${label}'`));
+  }
+  assert.match(migration, /check \(left\(lower\(btrim\(effect_id\)\), 7\) <> 'divine_'\)/);
+  assert.match(migration, /if left\(v_effect, 7\) = 'divine_' then\s*raise exception[^;]+;\s*end if;[\s\S]*?insert into public\.profile_effect_trial_requests[\s\S]*?insert into public\.notifications/);
+  const predicate = core.match(/const canRequestTrial = ([\s\S]*?);/)[1];
+  const canRequestTrial = vm.runInNewContext(predicate);
+  assert.equal(canRequestTrial({ id: 'divine_opal', cat: 'Divine' }), false);
+  assert.equal(canRequestTrial({ id: 'divine_future', cat: 'Special' }), false);
+  for (const [id, label] of [['divine_imperial', 'Imperial Reliquary'], ['divine_hellebore', 'Gilded Hellebore']]) {
+    assert.ok(expanded.split('create or replace function public.profile_effect_label')[0].includes(`'${id}'`));
+    assert.ok(expanded.includes(`when '${id}' then '${label}'`));
+    assert.equal(canRequestTrial({ id, cat: 'Divine' }), false);
+  }
+  assert.equal(canRequestTrial({ id: 'ex_phoenix', cat: 'Exclusive' }), false);
+  assert.equal(canRequestTrial({ id: 'stardust', cat: 'Cosmic' }), true);
+  for (const file of fs.readdirSync(root).filter((entry) => entry.endsWith('.html'))) {
+    const html = read(file);
+    if (!html.includes('js/profile-effects-exclusive.js')) continue;
+    assert.match(html, /js\/profile-effects-exclusive\.js[^<]*<\/script>\s*<script src="js\/profile-effects-divine\.js\?v=20261122-02"><\/script>\s*<script src="js\/core\.js/);
+  }
+  assert.match(read('sw.js'), /'js\/profile-effects-divine\.js'/);
 });
