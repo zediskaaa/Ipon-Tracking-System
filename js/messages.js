@@ -5950,18 +5950,16 @@
         return blob.includes(cleanQ);
       });
       if (!filtered.length) {
-        memberListEl.innerHTML = `<div class="empty-state msg-list-empty"><strong>${cleanQ ? 'No matching people' : 'No eligible people available'}</strong><p>${isAddMode ? 'Everyone available may already be in this group.' : 'Connect with friends or group members to start a group chat.'}</p></div>`;
+        memberListEl.innerHTML = `<div class="empty-state msg-list-empty"><strong>${cleanQ ? 'No matching people' : 'No eligible people available'}</strong><p>${isAddMode ? 'Everyone eligible is already in this group, or add more friends first.' : 'Add friends first, or invite people who allow messages from everyone.'}</p></div>`;
         return;
       }
       memberListEl.innerHTML = filtered.map((u) => {
         const uid = String(u.id || '');
         const isPicked = selected.has(uid);
-        const allowed = u.can_message !== false;
         const subBits = [];
         if (u.username) subBits.push(`@${u.username}`);
         if (u.friendship_status === 'FRIENDS') subBits.push('Friend');
-        if (!allowed) subBits.push('Friends only privacy');
-        return `<button type="button" class="msg-group-pick-row${isPicked ? ' is-selected' : ''}" data-group-pick="${escAttr(uid)}" role="option" aria-selected="${isPicked ? 'true' : 'false'}"${allowed ? '' : ' disabled'}>
+        return `<button type="button" class="msg-group-pick-row${isPicked ? ' is-selected' : ''}" data-group-pick="${escAttr(uid)}" role="option" aria-selected="${isPicked ? 'true' : 'false'}">
           ${userAvatarHtml(u, 'avatar-sm', { clickable: false, showPresence: false })}
           <span class="msg-group-pick-copy">
             <strong>${escapeHtml(u.full_name || 'User')}${userBadgesHtml(u)}</strong>
@@ -5980,11 +5978,17 @@
           ipon().rpc('search_social_users', { p_query: '', p_limit: 50 }),
           state.overviewLoaded ? Promise.resolve() : refreshOverview({ render: false }).catch(() => { })
         ]);
+        const canAddToGroup = (u) => {
+          if (!u) return false;
+          if (u.friendship_status === 'FRIENDS' || u.is_friend === true) return true;
+          if (typeof u.can_add_to_group === 'boolean') return u.can_add_to_group;
+          return u.can_message !== false;
+        };
         const merged = new Map();
-            (state.overview?.friends || []).forEach((f) => {
+        (state.overview?.friends || []).forEach((f) => {
           const fid = String(f?.id || '');
           if (fid && !existingIds.has(fid)) {
-            merged.set(fid, { ...f, friendship_status: 'FRIENDS', can_message: true });
+            merged.set(fid, { ...f, friendship_status: 'FRIENDS', can_message: true, can_add_to_group: true });
           }
         });
         const selfUid = String(initializedProfile?.id || '');
@@ -5992,7 +5996,11 @@
           const uid = String(u?.id || '');
           if (uid && uid !== selfUid && !existingIds.has(uid)) {
             const prev = merged.get(uid);
-            merged.set(uid, prev ? { ...u, ...prev } : u);
+            if (prev) {
+              merged.set(uid, { ...u, ...prev, can_add_to_group: true });
+            } else if (canAddToGroup(u)) {
+              merged.set(uid, u);
+            }
           }
         });
         allPeople = [...merged.values()].sort((a, b) => {

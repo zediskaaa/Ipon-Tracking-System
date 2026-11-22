@@ -365,3 +365,168 @@ test('runtime direct thread enforces Friends-only composer lock, blocks sends/fi
   assert.equal(blockedBanner.hidden, true, 'Notice bar hides once friends');
   assert.equal(blockedBanner.classList.contains('is-friends-only'), false);
 });
+
+test('group member picker hides non-friends with Friends-only messaging privacy and Migration 173 enforces FRIENDS_ONLY default', async () => {
+  const mig173 = read('database/migrations/20261122_173_group_picker_exclude_friends_only.sql');
+  const schema = read('database/schema.sql');
+  const messagesJs = read('js/messages.js');
+
+  assert.match(mig173, /'20261122_173'/);
+  assert.ok(schema.replace(/\r\n/g, '\n').includes(mig173.trim().replace(/\r\n/g, '\n')), 'schema.sql must include Migration 173');
+  assert.match(mig173, /'can_add_to_group',\s*\(\s*c\.is_friend\s+or coalesce\(c\.chat_privacy ->> 'allow_message_requests',\s*'FRIENDS_ONLY'\)\s*<>\s*'FRIENDS_ONLY'\s*\)/i);
+
+  for (const fn of ['create_group_chat', 'add_group_chat_members']) {
+    const fnMatch = mig173.match(new RegExp(`create or replace function public\\.${fn}[\\s\\S]*?\\$\\$;`, 'i'));
+    assert.ok(fnMatch, `Expected ${fn} in Migration 173`);
+    assert.match(fnMatch[0], /coalesce\(v_target\.chat_privacy ->> 'allow_message_requests',\s*'FRIENDS_ONLY'\)\s*=\s*'FRIENDS_ONLY'/i);
+  }
+
+  // Runtime check: open New Group Chat modal and verify non-friends with Friends-only privacy do not appear at all
+  const meId = '11111111-1111-4111-8111-111111111111';
+  const friendId = '22222222-2222-4222-8222-222222222222';
+  const everyonePeerId = '33333333-3333-4333-8333-333333333333';
+  const lockedNonFriendId = '44444444-4444-4444-8444-444444444444';
+  const creatorViewLockedId = '55555555-5555-4555-8555-555555555555';
+
+  const makeEl = (tag = 'div') => {
+    const attrs = new Map();
+    const classes = new Set();
+    const listeners = new Map();
+    return {
+      tagName: String(tag).toUpperCase(),
+      id: '',
+      innerHTML: '',
+      textContent: '',
+      value: '',
+      hidden: false,
+      disabled: false,
+      open: false,
+      title: '',
+      dataset: {},
+      style: { setProperty() { }, removeProperty() { } },
+      classList: {
+        add: (...c) => c.forEach((x) => classes.add(x)),
+        remove: (...c) => c.forEach((x) => classes.delete(x)),
+        toggle: (c, f) => (f === undefined ? (classes.has(c) ? classes.delete(c) : classes.add(c)) : (f ? classes.add(c) : classes.delete(c))),
+        contains: (c) => classes.has(c)
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k) ?? null,
+      removeAttribute: (k) => attrs.delete(k),
+      focus() { },
+      select() { },
+      click() { },
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      appendChild(n) { return n; },
+      insertAdjacentHTML() { },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      closest(sel) { return sel === `#${this.id}` ? this : null; },
+      addEventListener(ev, fn) {
+        if (!listeners.has(ev)) listeners.set(ev, []);
+        listeners.get(ev).push(fn);
+      },
+      removeEventListener() { }
+    };
+  };
+
+  const els = new Map();
+  const getEl = (id) => {
+    if (!els.has(id)) {
+      const el = makeEl(id.includes('dialog') ? 'dialog' : id.includes('form') ? 'form' : 'div');
+      el.id = id;
+      els.set(id, el);
+    }
+    return els.get(id);
+  };
+  const docListeners = new Map();
+
+  const ctx = {
+    window: null,
+    document: {
+      visibilityState: 'visible',
+      hasFocus: () => true,
+      documentElement: makeEl('html'),
+      body: Object.assign(makeEl('body'), { dataset: { page: 'dashboard' } }),
+      getElementById: (id) => getEl(id),
+      createElement: (t) => makeEl(t),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener(ev, fn) {
+        if (!docListeners.has(ev)) docListeners.set(ev, []);
+        docListeners.get(ev).push(fn);
+      },
+      removeEventListener() { }
+    },
+    navigator: { userAgent: 'Mozilla/5.0' },
+    location: { origin: 'https://myipon.example', search: '' },
+    CSS: { escape: (v) => String(v) },
+    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
+    setTimeout, clearTimeout, setInterval: () => 0, clearInterval() { },
+    requestAnimationFrame: (fn) => fn(),
+    addEventListener() { }, removeEventListener() { },
+    console,
+    Ipon: {
+      profile: { id: meId, role: 'MEMBER', status: 'ACTIVE', full_name: 'Alex Rivera', chat_privacy: { show_online: true } },
+      escapeHtml: (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+      initials: (n) => String(n || 'U').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join(''),
+      isUserOnline: () => false,
+      bindAvatarFallbacks() { }, syncPresenceDots() { }, syncMessagesBadges() { }, setBusy() { },
+      toast() { }, confirmAction: async () => true,
+      friendlyError: (e) => String(e?.message || e || 'Error'),
+      dateLabel: (d) => String(d || ''),
+      rpc: async (name) => {
+        if (name === 'get_conversations') return [];
+        if (name === 'get_social_overview') {
+          return {
+            me: { id: meId, full_name: 'Alex Rivera', chat_privacy: { allow_message_requests: 'FRIENDS_ONLY' } },
+            friends: [{ id: friendId, full_name: 'Juan Friend', username: 'juanf' }],
+            incoming_requests: [], sent_requests: [], blocked_users: []
+          };
+        }
+        if (name === 'search_social_users') {
+          return [
+            { id: friendId, full_name: 'Juan Friend', username: 'juanf', friendship_status: 'FRIENDS', can_message: true, can_add_to_group: true },
+            { id: everyonePeerId, full_name: 'Clara Open', username: 'clara', friendship_status: 'NONE', can_message: true, can_add_to_group: true },
+            { id: lockedNonFriendId, full_name: 'Adam Private', username: 'adam', friendship_status: 'NONE', can_message: false, can_add_to_group: false },
+            // Even if direct can_message is true (e.g. creator account), Friends-only non-friends must stay hidden in group picker
+            { id: creatorViewLockedId, full_name: 'Guille Private', username: 'guille', friendship_status: 'NONE', can_message: true, can_add_to_group: false }
+          ];
+        }
+        return {};
+      },
+      client: {
+        from: () => {
+          const res = Promise.resolve({ data: [], error: null });
+          const chain = new Proxy({}, {
+            get(_, prop) {
+              if (prop === 'then' || prop === 'catch' || prop === 'finally') return res[prop].bind(res);
+              return () => chain;
+            }
+          });
+          return chain;
+        },
+        channel: () => ({ on() { return this; }, subscribe() { return this; }, send: async () => ({}) }),
+        removeChannel() { }
+      }
+    }
+  };
+  ctx.window = ctx;
+  ctx.globalThis = ctx;
+
+  vm.runInNewContext(messagesJs, ctx, { filename: 'js/messages.js', timeout: 5000 });
+  await ctx.IponMessages.init(ctx.Ipon.profile);
+  await ctx.IponMessages.openWorkspace({ tab: 'chats' });
+
+  await Promise.all((docListeners.get('click') || []).map((fn) => fn({
+    target: { closest: (sel) => (sel === '#msg-new-group-btn' ? getEl('msg-new-group-btn') : null) }
+  })));
+
+  const listHtml = getEl('msg-group-member-list').innerHTML;
+  assert.match(listHtml, /Juan Friend/, 'Friends must appear in group member picker');
+  assert.match(listHtml, /Clara Open/, 'Non-friends who allow Everyone messaging may appear in group member picker');
+  assert.doesNotMatch(listHtml, /Adam Private/, 'Non-friends with Friends-only messaging privacy must not appear');
+  assert.doesNotMatch(listHtml, /Guille Private/, 'Friends-only non-friends must stay hidden even when direct can_message is true');
+  assert.doesNotMatch(listHtml, /Friends only privacy/, 'No disabled Friends-only placeholder rows should render');
+});
