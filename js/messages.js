@@ -3270,7 +3270,8 @@
   }
 
   function buildMetaHtml({ ts, showTime = true, pinned = false, edited = false, rightHtml = '', overlay = false } = {}) {
-    const timePart = showTime && ts ? `<time datetime="${escAttr(ts)}">${escapeHtml(formatClock(ts))}</time>` : '';
+    const clockLabel = showTime && ts ? formatClock(ts) : '';
+    const timePart = clockLabel ? `<time datetime="${escAttr(ts)}">${escapeHtml(clockLabel)}</time>` : '';
     const pinPart = pinned ? '<span title="Pinned message">📌</span>' : '';
     const editPart = edited ? '<span>Edited ·</span>' : '';
     if (!pinPart && !editPart && !timePart && !rightHtml) return '';
@@ -3280,7 +3281,7 @@
     </div>`;
   }
 
-  function renderPendingRowHtml(p, clockState = null) {
+  function renderPendingRowHtml(p) {
     const isFailed = p.status === 'failed';
     const isSending = p.status === 'sending' || p.status === 'queued';
     const atts = p.files || [];
@@ -3310,14 +3311,9 @@
     const progressBar = isSending && atts.length && p.progressPct < 100
       ? `<div class="msg-send-progress${isMediaOnly ? ' is-media-overlay' : ''}" aria-hidden="true"><span style="width:${p.progressPct}%"></span></div>`
       : '';
-    const dateStr = formatDateDivider(p.createdAt);
-    const clockLabel = formatClock(p.createdAt);
-    const clockKey = clockLabel ? `${dateStr}|${clockLabel}` : '';
-    const showTime = clockState ? Boolean(clockKey && clockKey !== clockState.lastKey) : true;
-    if (showTime && clockState) clockState.lastKey = clockKey;
     const metaHtml = buildMetaHtml({
       ts: p.createdAt,
-      showTime,
+      showTime: true,
       rightHtml: metaRight,
       overlay: isMediaOnly
     });
@@ -3813,12 +3809,10 @@
 
     const isGrp = isGroupConv(conv);
     let lastDateStr = '';
-    let lastShownClockKey = '';
     const pinnedIds = new Set((state.activeThread.pinned_messages || []).map((p) => p.id));
     const html = msgs.map((m, idx) => {
       const curDateStr = formatDateDivider(m.created_at);
       const isNewDate = curDateStr !== lastDateStr;
-      if (isNewDate) lastShownClockKey = '';
       const dateDivider = isNewDate
         ? `<div class="msg-date-sep"><span>${escapeHtml(curDateStr)}</span></div>`
         : '';
@@ -3829,7 +3823,6 @@
         : '';
 
       if (m.message_type === 'CALL_EVENT' || m.message_type === 'SYSTEM') {
-        lastShownClockKey = '';
         if (conv.anonymous_enabled) {
           return `${dateDivider}${unreadDivider}<div class="msg-system-event" data-msg-id="${escapeHtml(m.id)}"><span>Conversation update &middot; ${escapeHtml(formatClock(m.created_at))}</span></div>`;
         }
@@ -3941,15 +3934,11 @@
             hasHeaderMeta: Boolean(fwdHtml)
           });
       const bodyHtml = m.body ? `<p class="msg-text">${formatMessageBodyHtml(m.body, searchQuery)}</p>` : '';
-      const clockLabel = formatClock(m.created_at);
-      const curClockKey = clockLabel ? `${curDateStr}|${clockLabel}` : '';
-      const showTime = Boolean(curClockKey && curClockKey !== lastShownClockKey);
-      if (showTime) lastShownClockKey = curClockKey;
       const isMediaOnly = !isDeleted && hasTopMedia && !bodyHtml;
       const isPinned = Boolean(m.pinned_at || pinnedIds.has(m.id));
       const metaHtml = buildMetaHtml({
         ts: m.created_at,
-        showTime,
+        showTime: true,
         pinned: isPinned && !isDeleted,
         edited: Boolean(m.edited_at && !isDeleted),
         rightHtml: receiptIcon,
@@ -3988,8 +3977,7 @@
         </article>`;
     }).join('');
 
-    const pendingClockState = { lastKey: lastShownClockKey };
-    const pendingHtml = pendingList.map((p) => renderPendingRowHtml(p, pendingClockState)).join('');
+    const pendingHtml = pendingList.map((p) => renderPendingRowHtml(p)).join('');
     vanishRingObserver?.disconnect();
     list.innerHTML = `${welcomeHtml}${html}${pendingHtml}`;
     list.querySelectorAll('.msg-bubble.is-vanishing').forEach((bubble) => {

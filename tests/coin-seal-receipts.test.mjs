@@ -368,22 +368,50 @@ test('Coin Seal receipts animate only on live state changes, render peer DP meda
     receipts_enabled: true,
     anonymous_enabled: false
   };
-  activeMsgsPayload = [{
-    id: '55555555-5555-4555-8555-555555555555',
-    conversation_id: directConvId,
-    sender_id: meId,
-    body: 'Direct seen test',
-    message_type: 'TEXT',
-    created_at: '2026-11-22T12:05:00Z',
-    delivered_at: '2026-11-22T12:05:01Z',
-    read_at: '2026-11-22T12:05:04Z',
-    attachments: [],
-    reactions: []
-  }];
+  activeMsgsPayload = [
+    {
+      id: '55555555-5555-4555-8555-555555555555',
+      conversation_id: directConvId,
+      sender_id: meId,
+      body: 'Direct seen test',
+      message_type: 'TEXT',
+      created_at: '2026-11-22T12:05:00Z',
+      delivered_at: '2026-11-22T12:05:01Z',
+      read_at: '2026-11-22T12:05:04Z',
+      attachments: [],
+      reactions: []
+    },
+    {
+      id: '55555555-5555-4555-8555-555555555556',
+      conversation_id: directConvId,
+      sender_id: meId,
+      body: 'Second message in same minute',
+      message_type: 'TEXT',
+      created_at: '2026-11-22T12:05:20Z',
+      delivered_at: '2026-11-22T12:05:21Z',
+      read_at: '2026-11-22T12:05:24Z',
+      attachments: [],
+      reactions: []
+    },
+    {
+      id: '55555555-5555-4555-8555-555555555557',
+      conversation_id: directConvId,
+      sender_id: peerId,
+      body: 'Peer reply in same minute',
+      message_type: 'TEXT',
+      created_at: '2026-11-22T12:05:45Z',
+      delivered_at: null,
+      read_at: null,
+      attachments: [],
+      reactions: []
+    }
+  ];
   await win.IponMessages.openWorkspace({ tab: 'chats', conversationId: directConvId });
   assert.match(liveTickHtml, /src="https:\/\/cdn\.example\/maria\.jpg"[^>]*data-avatar-img/);
   assert.equal(liveTickAttrs.get('title'), 'Seen by Maria Santos');
   assert.equal(liveTickAttrs.get('aria-label'), 'Seen');
+  const renderedTimes = listEl.innerHTML.match(/<time\b[^>]*>[^<]+<\/time>/g) || [];
+  assert.equal(renderedTimes.length, 3, 'Every message including same-minute outgoing and peer replies must render a <time> label');
 
   // Anonymous mode must never leak real peer DP or name
   const anonConvId = '77777777-7777-4777-8777-777777777778';

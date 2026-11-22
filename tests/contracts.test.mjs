@@ -6242,7 +6242,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(messagesJs, /has-top-media[\s\S]*?has-audio-only|has-audio-only[\s\S]*?has-top-media/);
   assert.match(messagesJs, /class="msg-bubble-body-pad"/);
   assert.match(messagesJs, /function buildMetaHtml\(/);
-  assert.match(messagesJs, /lastShownClockKey/);
+  assert.doesNotMatch(messagesJs, /lastShownClockKey/);
   assert.match(messagesJs, /is-media-only/);
   assert.match(messagesJs, /is-media-overlay/);
   assert.match(messagesJs, /is-tick-only/);
@@ -6931,7 +6931,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(msgsHtml, /class="msg-bubble has-audio-only"[\s\S]*?class="msg-voice-card"[\s\S]*?0:00 \/ 0:06[\s\S]*?<audio class="msg-att-audio"/);
   assert.doesNotMatch(msgsHtml, /<audio[^>]*\bcontrols\b/);
 
-  // Same-minute messages show <time> only on the first message of that minute while preserving Sent / Delivered / Seen checkmarks, and reply quotes render outside/above the bottom bubble
+  // Every message shows <time> even when sent in the same minute while preserving Sent / Delivered / Seen indicators, and reply quotes render outside/above the bottom bubble
   const m5Pos = msgsHtml.indexOf('data-msg-id="m5"');
   const m6Pos = msgsHtml.indexOf('data-msg-id="m6"');
   const m7Pos = msgsHtml.indexOf('data-msg-id="m7"');
@@ -6943,8 +6943,8 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.doesNotMatch(m5Slice, /<div class="msg-bubble(?=["\s])[\s\S]*?class="msg-reply-quote"/);
   assert.match(m5Slice, /<time\b[^>]*>[^<]+<\/time>/);
   assert.match(m5Slice, /class="msg-tick is-sent"[^>]*aria-label="Sent"/);
-  assert.doesNotMatch(m6Slice, /<time\b/);
-  assert.match(m6Slice, /class="msg-bubble-meta is-tick-only"[\s\S]*?class="msg-tick is-delivered"[^>]*aria-label="Delivered"/);
+  assert.match(m6Slice, /<time\b[^>]*>[^<]+<\/time>/);
+  assert.match(m6Slice, /class="msg-bubble-meta"[\s\S]*?class="msg-tick is-delivered"[^>]*aria-label="Delivered"/);
   assert.match(m7Slice, /<time\b[^>]*>[^<]+<\/time>/);
   assert.match(m7Slice, /class="msg-tick is-read"[^>]*aria-label="Seen"/);
   assert.match(m7Slice, /class="msg-bubble has-top-media"[\s\S]*?class="msg-bubble-body-pad"[\s\S]*?Receipt copy/);
