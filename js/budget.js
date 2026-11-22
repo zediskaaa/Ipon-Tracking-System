@@ -1184,7 +1184,10 @@
   });
 
   try {
-    await load();
+    await Promise.all([
+      load(),
+      globalThis.IponCashflowMonitor?.mount?.(state)
+    ]);
   } finally {
     Ipon.setLoading(false);
   }

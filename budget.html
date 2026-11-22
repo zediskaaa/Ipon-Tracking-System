@@ -9,18 +9,18 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Budget allocation &amp; expenses — myIPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261122-31"><link rel="stylesheet" href="css/tutorial.css?v=20261120-05">
+  <link rel="stylesheet" href="css/app.css?v=20261122-31"><link rel="stylesheet" href="css/tutorial.css?v=20261120-05"><link rel="stylesheet" href="css/cashflow-monitor.css?v=20261122-01">
   <script src="js/config.js?v=20261120-78"></script>
 </head>
 
-<body data-page="budget">
+<body data-page="budget" data-budget-mode="monitor">
   <div class="app-layout">
     <aside class="app-sidebar" id="app-sidebar"></aside>
     <main class="workspace budget-workspace">
       <header class="page-header budget-page-header">
         <div>
-          <h1>Budget allocation &amp; expenses</h1>
-          <p>Plan your Needs, Wants, and Savings from your live IPON balance, with optional direct deductions synced back to savings.</p>
+          <h1 id="budget-page-title">Monthly income &amp; expense monitor</h1>
+          <p id="budget-page-desc">Track monthly income sources, automatically set aside mandatory savings, monitor expenses, and see your real net monthly income.</p>
         </div>
         <div class="header-actions" id="budget-header-actions">
           <button class="button button-secondary" id="budget-edit-split-btn" type="button" data-requires-data>
@@ -32,6 +32,258 @@
         </div>
       </header>
 
+      <div class="budget-mode-bar">
+        <div class="budget-mode-tabs" role="tablist" aria-label="Budget sections">
+          <button class="budget-mode-tab" id="budget-tab-monitor" type="button" role="tab" aria-selected="true" aria-controls="cf-monitor-section" data-budget-mode-tab="monitor">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 6-6"/></svg>
+            <span>Income &amp; Expense Monitor</span>
+          </button>
+          <button class="budget-mode-tab" id="budget-tab-allocation" type="button" role="tab" aria-selected="false" aria-controls="budget-allocation-section" data-budget-mode-tab="allocation">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12A9 9 0 1 1 12 3v9Z"/><path d="M21.2 10A9 9 0 0 0 14 2.8V10Z"/></svg>
+            <span>50 / 30 / 20 Allocation</span>
+          </button>
+        </div>
+      </div>
+
+      <section class="cf-monitor" id="cf-monitor-section" role="tabpanel" aria-labelledby="budget-tab-monitor">
+        <div id="cf-error-slot" hidden></div>
+
+        <div class="cf-toolbar">
+          <div class="cf-month-nav" role="group" aria-label="Select monitoring month">
+            <button class="cf-month-btn" id="cf-month-prev" type="button" aria-label="Previous month">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <div class="cf-month-picker-wrap">
+              <input class="cf-month-input" id="cf-month-input" type="month" min="2000-01" max="2100-12" aria-label="Choose month and year">
+            </div>
+            <button class="cf-month-btn" id="cf-month-next" type="button" aria-label="Next month">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+            <button class="cf-today-btn" id="cf-month-today" type="button" hidden>This month</button>
+          </div>
+
+          <div class="cf-toolbar-right">
+            <div class="cf-rate-pill">
+              <span>Mandatory savings: <strong class="tabular-nums" id="cf-rate-display">20%</strong></span>
+              <button class="cf-rate-edit-btn" id="cf-rate-open-btn" type="button" data-requires-data>Configure</button>
+            </div>
+          </div>
+        </div>
+
+        <section class="cf-hero" id="cf-hero-card" aria-labelledby="cf-hero-heading">
+          <div class="cf-hero-main">
+            <span class="cf-health-badge" id="cf-health-badge">
+              <i class="cf-health-dot" aria-hidden="true"></i>
+              <span id="cf-health-text">Ready to track</span>
+            </span>
+            <h2 class="cf-hero-label" id="cf-hero-heading">Net monthly income</h2>
+            <p class="cf-hero-net tabular-nums" id="cf-hero-net">₱0.00</p>
+            <p class="cf-hero-formula tabular-nums" id="cf-hero-formula">Available Income (₱0.00) − Expenses (₱0.00)</p>
+          </div>
+          <div class="cf-hero-meter-card">
+            <div>
+              <div class="cf-meter-head">
+                <span>Available income spent</span>
+                <strong class="tabular-nums" id="cf-meter-pct">0%</strong>
+              </div>
+              <div class="cf-meter-track" id="cf-meter-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Percentage of available monthly income spent">
+                <span class="cf-meter-fill" id="cf-meter-fill"></span>
+              </div>
+            </div>
+            <p class="cf-meter-caption" id="cf-meter-caption">Add your monthly income sources — 20% is set aside automatically for mandatory savings.</p>
+            <div class="cf-hero-equations tabular-nums">
+              <div class="cf-hero-eq-item">
+                <span>Total gross income</span>
+                <strong id="cf-hero-gross">₱0.00</strong>
+              </div>
+              <div class="cf-hero-eq-item">
+                <span id="cf-hero-mandatory-label">Mandatory savings (20%)</span>
+                <strong id="cf-hero-mandatory">−₱0.00</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="cf-overview-grid" aria-label="Monthly cash-flow overview">
+          <article class="cf-kpi-card">
+            <div class="cf-kpi-top">
+              <span class="cf-kpi-label">Available monthly income</span>
+              <span class="cf-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></span>
+            </div>
+            <strong class="cf-kpi-value tabular-nums" id="cf-kpi-available">₱0.00</strong>
+            <small class="cf-kpi-sub tabular-nums" id="cf-kpi-available-sub">Gross ₱0.00 − 20% savings (₱0.00)</small>
+          </article>
+          <article class="cf-kpi-card">
+            <div class="cf-kpi-top">
+              <span class="cf-kpi-label">Total monthly expenses</span>
+              <span class="cf-kpi-icon is-expense" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14m6-6-6 6-6-6"/></svg></span>
+            </div>
+            <strong class="cf-kpi-value tabular-nums" id="cf-kpi-expenses">₱0.00</strong>
+            <small class="cf-kpi-sub tabular-nums" id="cf-kpi-expenses-sub">0 recorded expenses · 0% of available</small>
+          </article>
+          <article class="cf-kpi-card">
+            <div class="cf-kpi-top">
+              <span class="cf-kpi-label">Net monthly income</span>
+              <span class="cf-kpi-icon is-net" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg></span>
+            </div>
+            <strong class="cf-kpi-value tabular-nums" id="cf-kpi-net">₱0.00</strong>
+            <small class="cf-kpi-sub" id="cf-kpi-net-sub">Available monthly income minus expenses</small>
+          </article>
+        </section>
+
+        <section class="cf-workspace-panel" aria-label="Income and expense monitoring workspace">
+          <div class="cf-segment-bar">
+            <div class="cf-segmented" role="tablist" aria-label="Switch between Income and Expense monitoring">
+              <button class="cf-seg-btn" id="cf-seg-income" type="button" role="tab" aria-selected="true" aria-controls="cf-income-panel" data-cf-view="income">
+                <span class="cf-seg-btn-label">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>
+                  <span>Income Monitoring</span>
+                </span>
+                <span class="cf-seg-btn-total tabular-nums" id="cf-seg-income-total">₱0.00</span>
+              </button>
+              <button class="cf-seg-btn" id="cf-seg-expense" type="button" role="tab" aria-selected="false" aria-controls="cf-expense-panel" data-cf-view="expense">
+                <span class="cf-seg-btn-label">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14m6-6-6 6-6-6"/></svg>
+                  <span>Expense Monitoring</span>
+                </span>
+                <span class="cf-seg-btn-total tabular-nums" id="cf-seg-expense-total">₱0.00</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="cf-view-panel" id="cf-income-panel" role="tabpanel" aria-labelledby="cf-seg-income">
+            <div class="cf-view-summary" aria-label="Monthly income breakdown">
+              <article class="cf-summary-tile">
+                <span class="cf-summary-kicker">Total gross income</span>
+                <strong class="cf-summary-amount tabular-nums" id="cf-inc-gross">₱0.00</strong>
+                <small class="cf-summary-note" id="cf-inc-gross-sub">0 income sources</small>
+              </article>
+              <article class="cf-summary-tile is-deduction">
+                <div class="cf-summary-tile-head">
+                  <span class="cf-summary-kicker" id="cf-inc-savings-label">Less: Mandatory Savings (20%)</span>
+                  <button class="cf-summary-inline-btn" id="cf-inc-savings-edit" type="button" data-requires-data>Edit %</button>
+                </div>
+                <strong class="cf-summary-amount is-deduct tabular-nums" id="cf-inc-savings">−₱0.00</strong>
+                <small class="cf-summary-note" id="cf-inc-savings-sub">Automatically deducted (20% of gross income)</small>
+              </article>
+              <article class="cf-summary-tile is-highlight">
+                <span class="cf-summary-kicker">Available monthly income</span>
+                <strong class="cf-summary-amount is-positive tabular-nums" id="cf-inc-available">₱0.00</strong>
+                <small class="cf-summary-note">Final income available for monthly expenses</small>
+              </article>
+            </div>
+
+            <div class="cf-list-toolbar">
+              <div class="cf-list-filters">
+                <input id="cf-income-search" type="search" placeholder="Search income source or description" aria-label="Search monthly income sources">
+              </div>
+              <button class="button button-primary cf-primary-add-btn" id="cf-add-income-btn" type="button" data-requires-data>+ Add income</button>
+            </div>
+
+            <div class="data-table-wrap">
+              <table class="data-table cf-table" aria-label="Monthly income sources">
+                <thead>
+                  <tr>
+                    <th class="cf-col-index">#</th>
+                    <th class="cf-col-cat">Income source</th>
+                    <th class="cf-col-desc">Description</th>
+                    <th class="cf-col-date">Date</th>
+                    <th class="cf-col-amount">Amount (PHP)</th>
+                    <th class="cf-col-actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="cf-income-body">
+                  <tr class="loading-row"><td colspan="6">Loading monthly income…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="cf-view-panel" id="cf-expense-panel" role="tabpanel" aria-labelledby="cf-seg-expense" hidden>
+            <div class="cf-view-summary" aria-label="Monthly expense summary">
+              <article class="cf-summary-tile is-expense-accent">
+                <span class="cf-summary-kicker">Total monthly expenses</span>
+                <strong class="cf-summary-amount is-negative tabular-nums" id="cf-exp-total">₱0.00</strong>
+                <small class="cf-summary-note tabular-nums" id="cf-exp-total-sub">0% of ₱0.00 available income</small>
+              </article>
+              <article class="cf-summary-tile">
+                <span class="cf-summary-kicker">Recorded expenses</span>
+                <strong class="cf-summary-amount tabular-nums" id="cf-exp-count">0 expenses</strong>
+                <small class="cf-summary-note" id="cf-exp-count-sub">No expenses logged this month</small>
+              </article>
+              <article class="cf-summary-tile is-highlight">
+                <span class="cf-summary-kicker">Net monthly balance</span>
+                <strong class="cf-summary-amount tabular-nums" id="cf-exp-remaining">₱0.00</strong>
+                <small class="cf-summary-note" id="cf-exp-remaining-sub">Net monthly income remaining</small>
+              </article>
+            </div>
+
+            <div class="cf-list-toolbar">
+              <div class="cf-list-filters">
+                <input id="cf-expense-search" type="search" placeholder="Search expense category or description" aria-label="Search monthly expenses">
+                <select id="cf-expense-cat-filter" aria-label="Filter expenses by category">
+                  <option value="">All categories</option>
+                </select>
+              </div>
+              <button class="button button-primary cf-primary-add-btn" id="cf-add-expense-btn" type="button" data-requires-data>+ Add expense</button>
+            </div>
+
+            <div class="data-table-wrap">
+              <table class="data-table cf-table" aria-label="Monthly expenses">
+                <thead>
+                  <tr>
+                    <th class="cf-col-index">#</th>
+                    <th class="cf-col-cat">Category</th>
+                    <th class="cf-col-desc">Description</th>
+                    <th class="cf-col-date">Date</th>
+                    <th class="cf-col-amount">Amount (PHP)</th>
+                    <th class="cf-col-actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="cf-expense-body">
+                  <tr class="loading-row"><td colspan="6">Loading monthly expenses…</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="cf-breakdown-card" id="cf-breakdown-wrap" hidden>
+              <div class="cf-breakdown-head">
+                <h3>Expense category breakdown</h3>
+                <small>Select any category to filter the list above</small>
+              </div>
+              <div class="cf-breakdown-list" id="cf-breakdown-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="cf-insights-grid" aria-label="Monthly trends and history">
+          <article class="cf-insight-panel">
+            <div class="cf-insight-head">
+              <div>
+                <h2>Income vs. expenses (6 months)</h2>
+                <p>Compare available income against monthly spending. Tap a month to inspect.</p>
+              </div>
+              <div class="cf-chart-legend" aria-hidden="true">
+                <span><i class="cf-chart-dot is-avail"></i>Available</span>
+                <span><i class="cf-chart-dot is-exp"></i>Expenses</span>
+              </div>
+            </div>
+            <div class="cf-bars-wrap" id="cf-chart-bars"></div>
+          </article>
+
+          <article class="cf-insight-panel">
+            <div class="cf-insight-head">
+              <div>
+                <h2>Monthly financial history</h2>
+                <p>Each month stays separated automatically with its own savings rate and net balance.</p>
+              </div>
+            </div>
+            <div class="cf-history-list" id="cf-history-list"></div>
+          </article>
+        </section>
+      </section>
+
+      <div id="budget-allocation-section" role="tabpanel" aria-labelledby="budget-tab-allocation" hidden>
       <section class="budget-workspace-strip" id="budget-group-bar" hidden>
         <div class="budget-ws-indicator">
           <span class="budget-ws-dot" aria-hidden="true"></span>
@@ -141,6 +393,120 @@
           </nav>
         </section>
       </div>
+      </div>
+
+      <dialog class="form-dialog budget-modal-dialog" id="cf-entry-dialog" aria-labelledby="cf-entry-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div>
+              <span class="budget-modal-eyebrow" id="cf-entry-eyebrow">NEW INCOME</span>
+              <h2 id="cf-entry-title">Add income source</h2>
+              <p id="cf-entry-copy">Recorded strictly under the selected month.</p>
+            </div>
+            <button class="dialog-close" id="cf-entry-close" type="button" aria-label="Close entry form">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+          </header>
+          <form id="cf-entry-form" class="budget-modal-form" novalidate>
+            <input type="hidden" id="cf-entry-id" name="entry_id">
+            <input type="hidden" id="cf-entry-type" name="entry_type" value="INCOME">
+            <div class="budget-modal-body form-grid">
+              <div class="field field-wide">
+                <label class="budget-uc-label" for="cf-entry-category" id="cf-entry-category-label">Income source / category</label>
+                <input id="cf-entry-category" name="category" type="text" minlength="1" maxlength="80" autocomplete="off" placeholder="e.g., Salary, Freelance, Business" aria-describedby="cf-entry-category-error" required>
+                <div class="cf-preset-chips" id="cf-entry-presets" aria-label="Quick category options"></div>
+                <small class="field-error budget-error-slot" id="cf-entry-category-error" role="alert" hidden></small>
+              </div>
+              <div class="field field-wide">
+                <label class="budget-uc-label" for="cf-entry-description">Description (optional)</label>
+                <input id="cf-entry-description" name="description" type="text" maxlength="240" placeholder="e.g., Bi-monthly paycheck or client project">
+              </div>
+              <div class="field">
+                <label class="budget-uc-label" for="cf-entry-amount">Amount (PHP)</label>
+                <div class="budget-peso-input-wrap">
+                  <span class="budget-peso-prefix" aria-hidden="true">₱</span>
+                  <input id="cf-entry-amount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" inputmode="decimal" placeholder="0.00" aria-describedby="cf-entry-amount-error" required>
+                </div>
+                <small class="field-error budget-error-slot" id="cf-entry-amount-error" role="alert" hidden></small>
+              </div>
+              <div class="field">
+                <label class="budget-uc-label" for="cf-entry-date">Date</label>
+                <input id="cf-entry-date" name="entry_date" type="date" aria-describedby="cf-entry-date-error" required>
+                <small class="field-error budget-error-slot" id="cf-entry-date-error" role="alert" hidden></small>
+              </div>
+              <div class="field field-wide">
+                <div class="cf-impact-box">
+                  <div class="cf-impact-grid tabular-nums">
+                    <div class="cf-impact-item">
+                      <span id="cf-impact-primary-label">Projected Available</span>
+                      <strong id="cf-impact-primary-val">₱0.00</strong>
+                    </div>
+                    <div class="cf-impact-item">
+                      <span>Projected Net Monthly Income</span>
+                      <strong id="cf-impact-net-val">₱0.00</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <footer class="budget-modal-footer">
+              <button class="button button-secondary" id="cf-entry-cancel" type="button">Cancel</button>
+              <button class="button button-primary" id="cf-entry-submit" type="submit" data-requires-data>+ Add income</button>
+            </footer>
+          </form>
+        </div>
+      </dialog>
+
+      <dialog class="form-dialog budget-modal-dialog" id="cf-rate-dialog" aria-labelledby="cf-rate-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div>
+              <span class="budget-modal-eyebrow">MANDATORY SAVINGS</span>
+              <h2 id="cf-rate-title">Configure mandatory savings %</h2>
+              <p>Automatically deducted from your total gross income before calculating available monthly income.</p>
+            </div>
+            <button class="dialog-close" id="cf-rate-close" type="button" aria-label="Close mandatory savings settings">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+          </header>
+          <form id="cf-rate-form" class="budget-modal-form" novalidate>
+            <div class="budget-modal-body form-grid">
+              <div class="field field-wide">
+                <label class="budget-uc-label" for="cf-rate-input">Mandatory savings percentage (0% – 100%)</label>
+                <div class="budget-split-input-row">
+                  <input id="cf-rate-input" name="mandatory_savings_pct" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="20" aria-describedby="cf-rate-error" required>
+                  <span class="budget-split-pct-sign" aria-hidden="true">%</span>
+                </div>
+                <div class="cf-preset-chips" id="cf-rate-presets" aria-label="Quick mandatory savings presets"></div>
+                <small class="field-error budget-error-slot" id="cf-rate-error" role="alert" hidden></small>
+              </div>
+              <div class="field field-wide">
+                <div class="cf-impact-box">
+                  <div class="cf-rate-preview-grid tabular-nums">
+                    <div class="cf-impact-item">
+                      <span>Gross income</span>
+                      <strong id="cf-rate-preview-gross">₱0.00</strong>
+                    </div>
+                    <div class="cf-impact-item">
+                      <span>Less: Savings</span>
+                      <strong id="cf-rate-preview-deduct">−₱0.00</strong>
+                    </div>
+                    <div class="cf-impact-item">
+                      <span>Available income</span>
+                      <strong class="is-positive" id="cf-rate-preview-avail">₱0.00</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <footer class="budget-modal-footer">
+              <button class="button button-secondary" id="cf-rate-reset" type="button">Reset 20%</button>
+              <button class="button button-secondary" id="cf-rate-cancel" type="button">Cancel</button>
+              <button class="button button-primary" id="cf-rate-submit" type="submit" data-requires-data>Save percentage</button>
+            </footer>
+          </form>
+        </div>
+      </dialog>
 
       <dialog class="form-dialog compact-detail-dialog" id="budget-history-detail-dialog" aria-labelledby="budget-history-detail-title"><div class="form-dialog-sheet"><header class="form-dialog-header"><div><span class="compact-detail-eyebrow">Budget expense</span><h2 id="budget-history-detail-title">Expense details</h2><p>Spending and savings information.</p></div><button class="dialog-close" id="close-budget-history-detail" type="button" aria-label="Close budget expense details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><dl class="compact-detail-grid" id="budget-history-detail-fields"></dl><div class="compact-detail-actions" id="budget-history-detail-actions"></div></div></dialog><dialog class="form-dialog budget-modal-dialog budget-item-modal" id="budget-item-dialog" aria-labelledby="budget-item-dialog-title">
         <div class="form-dialog-sheet">
@@ -392,7 +758,8 @@
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
   <script src="js/messages.js?v=20261122-30"></script>
-  <script src="js/budget.js?v=20261120-01"></script>
+  <script src="js/cashflow-monitor.js?v=20261122-01"></script>
+  <script src="js/budget.js?v=20261122-01"></script>
 </body>
 
 </html>
