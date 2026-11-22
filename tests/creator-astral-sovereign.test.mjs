@@ -137,10 +137,19 @@ test('Astral Sovereign delivers zero-teleport dt-integrated 360° effects, 3 car
   assert.equal(meta.cat, 'Creator');
   assert.deepEqual([...api.CREATOR_ANIM_MODES], ['auto', 'shake', 'pulse', 'burst', 'awakening', 'entrance']);
 
-  // Verify 360° cohesive coverage pools (sides + top + bottom) and zero time-dilation teleport formulas
-  assert.match(creatorCode, /const flankOrbCount = full \? 68 : 26;/);
-  assert.match(creatorCode, /const topOrbCount = full \? 28 : 10;/);
-  assert.match(creatorCode, /const bottomEmberCount = full \? 30 : 10;/);
+  // Verify curated quality-over-quantity composition (sides + top + bottom), 3D depth primitives, and zero wrap-teleport formulas
+  assert.match(creatorCode, /const flankMoteCount = full \? 12 : 6;/);
+  assert.match(creatorCode, /const flankCrystalCount = full \? 8 : 4;/);
+  assert.match(creatorCode, /const flankGlyphCount = full \? 4 : 2;/);
+  assert.match(creatorCode, /const topMoteCount = full \? 8 : 4;/);
+  assert.match(creatorCode, /const bottomEmberCount = full \? 9 : 4;/);
+  assert.match(creatorCode, /function drawFacetedCrystal\(/);
+  assert.match(creatorCode, /function drawTiltingGlyph\(/);
+  assert.match(creatorCode, /function drawVolumetricScanCurtain\(/);
+  assert.match(creatorCode, /function drawDiagonalPhaseFront\(/);
+  assert.match(creatorCode, /function loopEnvelope\(/);
+  assert.match(creatorCode, /const zoneDim = inTextZone \? 0\.24 : 1;/);
+  assert.doesNotMatch(creatorCode, /if \(k\.x > 0\.9[0-9]\) k\.x = 0\.0[0-9]/, 'No un-faded horizontal sparkle wrap teleports');
   assert.doesNotMatch(creatorCode, /t \* (?:st\.rate|o\.speed) \* \(1 \+ surge/, 'Must integrate velocity via dt instead of multiplying raw t by changing surge');
   assert.match(baseCode, /stage\.build\(\{ preserveTime: true \}\)/, 'ResizeObserver must preserve animation time');
 
@@ -204,16 +213,28 @@ test('Astral Sovereign delivers zero-teleport dt-integrated 360° effects, 3 car
   assert.ok(playedSounds.includes('pfx-burst'));
   stepFrames(40);
 
-  // 2. Full-Screen Cinematic A: Energy Awakening
+  // 2. Multi-loop seamless continuity check across 32s of continuous Auto cycles (no sudden CSS snaps or jumps)
+  api.setCreatorAnimMode('auto', { trigger: false, silent: true });
+  let prevScale = parseFloat(cssVars.get('--holo-pulse-scale') || '1');
+  let maxScaleDelta = 0;
+  for (let i = 0; i < 640; i += 1) {
+    stepFrames(1);
+    const curScale = parseFloat(cssVars.get('--holo-pulse-scale') || '1');
+    maxScaleDelta = Math.max(maxScaleDelta, Math.abs(curScale - prevScale));
+    prevScale = curScale;
+  }
+  assert.ok(maxScaleDelta < 0.015, `Expected silky continuous scale transitions across multi-loop auto cycles, got delta ${maxScaleDelta}`);
+
+  // 3. Full-Screen Cinematic A: Energy Awakening
   api.setCreatorAnimMode('awakening');
   assert.ok(playedSounds.includes('pfx-awakening'));
   const awakeCanvas = appendedToBody.find((c) => c.className === 'pfx-cinema-canvas');
   assert.ok(awakeCanvas, 'Energy Awakening must mount full-screen .pfx-cinema-canvas');
   assert.equal(awakeCanvas.removed, false);
-  stepFrames(105); // 5.25s -> finishes 5.0s animation cleanly and auto-unmounts
+  stepFrames(110); // 5.5s -> finishes 5.2s animation cleanly and auto-unmounts
   assert.equal(awakeCanvas.removed, true, 'Energy Awakening overlay must auto-remove cleanly after finishing');
 
-  // 3. Full-Screen Cinematic B: Legendary Entrance
+  // 4. Full-Screen Cinematic B: Legendary Entrance
   const beforeLen = appendedToBody.length;
   api.setCreatorAnimMode('entrance');
   assert.ok(playedSounds.includes('pfx-entrance'));
@@ -221,19 +242,19 @@ test('Astral Sovereign delivers zero-teleport dt-integrated 360° effects, 3 car
   assert.ok(entranceCanvas && entranceCanvas.className === 'pfx-cinema-canvas', 'Legendary Entrance must mount full-screen overlay');
   stepFrames(40); // mid-flight
 
-  // 4. SFX Mute Toggle suppresses sound and stops active voice
+  // 5. SFX Mute Toggle suppresses sound and stops active voice
   api.setEffectSfxEnabled(false);
   assert.equal(api.isEffectSfxEnabled(), false);
   const prevSfx = playedSounds.length;
   api.triggerCreatorAnimation('shake');
   assert.equal(playedSounds.length, prevSfx);
 
-  // 5. Destroy cleans up mid-flight full-screen overlay, stops SFX, and removes CSS vars
+  // 6. Destroy cleans up mid-flight full-screen overlay, stops SFX, and removes CSS vars
   stage.destroy();
   assert.equal(entranceCanvas.removed, true, 'destroy() must remove active full-screen cinema canvas');
   assert.ok(stoppedCount >= 1, 'destroy() must stop active cinematic SFX');
   assert.equal(cssVars.size, 0);
-  assert.ok(arcCalls > 800, 'Abundant 360° particles must render smoothly');
+  assert.ok(arcCalls > 600, 'Curated 360° gimbal, motifs & particles must render cleanly');
   assert.deepEqual(numericErrors, [], `Non-finite canvas args: ${numericErrors.slice(0, 5).join(', ')}`);
 });
 

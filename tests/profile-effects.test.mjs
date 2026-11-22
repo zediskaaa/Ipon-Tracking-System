@@ -1231,7 +1231,7 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v233/);
+  assert.match(sw, /ipon-shell-v234/);
   assert.match(sw, /'js\/profile-effects-sfx\.js'/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   assert.match(sw, /'js\/profile-effects-creator\.js'/);
@@ -1240,7 +1240,7 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
     assert.match(html, /js\/profile-effects\.js\?v=20261123-04/);
     assert.match(html, /js\/profile-effects-sfx\.js\?v=20261123-03/);
     assert.match(html, /js\/profile-effects-exclusive\.js\?v=20261122-07/);
-    assert.match(html, /js\/profile-effects-creator\.js\?v=20261123-04/);
+    assert.match(html, /js\/profile-effects-creator\.js\?v=20261123-05/);
     assert.match(html, /css\/app\.css\?v=20261123-04/);
   }
 });
@@ -1331,7 +1331,7 @@ test('Divine effects can be equipped but cannot create a trial request or notify
   for (const file of fs.readdirSync(root).filter((entry) => entry.endsWith('.html'))) {
     const html = read(file);
     if (!html.includes('js/profile-effects-exclusive.js')) continue;
-    assert.match(html, /js\/profile-effects-exclusive\.js[^<]*<\/script>\s*<script src="js\/profile-effects-divine\.js\?v=20261122-02"><\/script>\s*<script src="js\/profile-effects-deluxe\.js\?v=20261122-01"><\/script>\s*<script src="js\/profile-effects-creator\.js\?v=20261123-04"><\/script>\s*<script src="js\/core\.js/);
+    assert.match(html, /js\/profile-effects-exclusive\.js[^<]*<\/script>\s*<script src="js\/profile-effects-divine\.js\?v=20261122-02"><\/script>\s*<script src="js\/profile-effects-deluxe\.js\?v=20261122-01"><\/script>\s*<script src="js\/profile-effects-creator\.js\?v=20261123-05"><\/script>\s*<script src="js\/core\.js/);
   }
   assert.match(read('sw.js'), /'js\/profile-effects-divine\.js'/);
 });
