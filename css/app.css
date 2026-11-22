@@ -13897,22 +13897,6 @@ html[data-theme="dark"] .msg-drawer-actions .msg-drawer-action-btn.is-danger:hov
   font-weight: 600;
 }
 
-.msg-peer-status.is-syncing {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #166549;
-  font-weight: 600;
-}
-.msg-sync-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #197856;
-  box-shadow: 0 0 0 0 rgba(25, 120, 86, .48);
-  animation: aiPulse 1.4s ease-out infinite;
-  flex-shrink: 0;
-}
 
 .msg-messages-list:has(.msg-thread-skeleton) {
   flex: 1 0 auto;
@@ -14178,12 +14162,10 @@ html[data-theme="dark"] .msg-typing-bubble,
   color: #bfd3c8;
 }
 html[data-theme="dark"] .msg-wave-dots i,
-.msg-thread-stage[data-chat-theme="midnight"] .msg-wave-dots i,
-html[data-theme="dark"] .msg-sync-dot {
+.msg-thread-stage[data-chat-theme="midnight"] .msg-wave-dots i {
   background: #7ee0ab;
 }
-html[data-theme="dark"] .msg-typing-preview,
-html[data-theme="dark"] .msg-peer-status.is-syncing {
+html[data-theme="dark"] .msg-typing-preview {
   color: #8ee8b5;
 }
 html[data-theme="dark"] .msg-att-loading,
@@ -14365,7 +14347,6 @@ html[data-theme="dark"] .msg-failed-btn.is-delete,
   .msg-skel,
   .msg-wave-dots i,
   .msg-typing-dots > span,
-  .msg-sync-dot,
   .msg-mini-spin,
   .msg-tick-svg .coin-spin-ring,
   .msg-tick.is-anim .coin-rim,

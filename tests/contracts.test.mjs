@@ -6405,7 +6405,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
           loadingFlashes += 1;
           lastThreadSkeletonHtml = html;
         }
-        if (id === 'msg-thread-header' && html.includes('Syncing messages')) {
+        if (id === 'msg-thread-header' && html.includes('msg-skel-icon')) {
           lastLoadingHeaderHtml = html;
         }
       }
@@ -6656,7 +6656,8 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   await win2.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
   assert.equal(loadingFlashes, 1, 'initial thread load renders loading indicator exactly once');
   assert.match(lastThreadSkeletonHtml, /msg-thread-skeleton[\s\S]*msg-wave-dots[\s\S]*msg-bubble-skel/);
-  assert.match(lastLoadingHeaderHtml, /Nhicole Joy Gadia Antalan[\s\S]*Syncing messages/);
+  assert.match(lastLoadingHeaderHtml, /Nhicole Joy Gadia Antalan/);
+  assert.doesNotMatch(lastLoadingHeaderHtml, /Syncing messages|msg-sync-dot/);
   const markReadAfterOpen = rpcCalls.filter((r) => r === 'mark_conversation_read').length;
   assert.equal(markReadAfterOpen, 1);
 

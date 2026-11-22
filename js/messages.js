@@ -3093,10 +3093,7 @@
               <div class="msg-thread-peer-title">
                 <strong class="msg-thread-peer-name" title="${escAttr(convDisplayTitle(peer))}"><span class="verified-name-text">${escapeHtml(convDisplayTitle(peer))}</span>${isGrp || peer.anonymous_enabled ? '' : userBadgesHtml(peer)}</strong>
               </div>
-              <div class="msg-thread-peer-sub">
-                ${isGrp ? '<span class="msg-rel-chip is-group">Group</span>' : ''}
-                <small class="msg-peer-status is-syncing"><span class="msg-sync-dot" aria-hidden="true"></span>Syncing messages…</small>
-              </div>
+              ${isGrp ? '<div class="msg-thread-peer-sub"><span class="msg-rel-chip is-group">Group</span></div>' : ''}
             </div>
           </div>
           <div class="msg-thread-header-actions">
