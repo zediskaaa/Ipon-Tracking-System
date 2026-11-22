@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta name="description" content="Step-by-step instructions to delete your myIPON account, workspace records, and Facebook or Google Sign-In data.">
+  <meta name="description" content="Step-by-step instructions to delete your myIPON account, workspace records, and Google Sign-In data.">
   <meta name="application-name" content="IPON Group Savings Tracker">
   <meta property="og:type" content="website">
   <meta property="og:title" content="User Data Deletion Instructions — myIPON">
-  <meta property="og:description" content="Step-by-step instructions to delete your myIPON account, workspace records, and Facebook or Google Sign-In data.">
+  <meta property="og:description" content="Step-by-step instructions to delete your myIPON account, workspace records, and Google Sign-In data.">
   <meta property="og:url" content="https://my-ipon.vercel.app/data-deletion">
   <title>User Data Deletion Instructions — myIPON</title>
   <meta name="theme-color" content="#0b3428">
@@ -86,18 +86,18 @@
     <article class="legal-card" id="data-deletion-document">
       <p class="legal-kicker">User Data Rights</p>
       <h1>User Data Deletion Instructions</h1>
-      <p class="legal-meta">Last updated: November 22, 2026 &middot; Applies to myIPON accounts, Google Sign-In, and Facebook Login.</p>
+      <p class="legal-meta">Last updated: November 22, 2026 &middot; Applies to myIPON accounts and Google Sign-In.</p>
 
       <div class="legal-body">
-        <p>You can delete your myIPON data and disconnect your Google or Facebook Sign-In link at any time using the methods below.</p>
+        <p>You can delete your myIPON data and disconnect your Google Sign-In link at any time using the methods below.</p>
 
         <section id="request-email-deletion">
-          <h2>1. Request full account &amp; OAuth data deletion</h2>
-          <p>To permanently delete your entire myIPON account, profile (including <code>@username</code>, bio, cover, and connected social links), connected Google/Facebook sign-in identity, uploaded media, and personal records:</p>
+          <h2>1. Request full account &amp; Google Sign-In data deletion</h2>
+          <p>To permanently delete your entire myIPON account, profile (including <code>@username</code>, bio, cover, and connected social links), connected Google sign-in identity, uploaded media, and personal records:</p>
           <ol>
             <li>Send an email from your registered account email address to <a href="mailto:zedrickdemonteverde1@gmail.com?subject=myIPON%20Data%20Deletion%20Request">zedrickdemonteverde1@gmail.com</a>.</li>
             <li>Use the subject line <code>myIPON Data Deletion Request</code>.</li>
-            <li>Include your full name and the email address used to sign in to myIPON (including Google or Facebook Sign-In).</li>
+            <li>Include your full name and the email address used to sign in to myIPON (including Google Sign-In).</li>
           </ol>
           <div class="deletion-action-box">
             <strong>Direct deletion request email</strong>
@@ -110,24 +110,23 @@
           <h2>2. Delete workspace or profile data inside myIPON</h2>
           <ul>
             <li><strong>Profile details &amp; media:</strong> Sign in at <a href="login.html">myIPON</a>, open <strong>My Profile / Account</strong>, and clear optional payout receiving details, short bio, profile photo, cover photo, or connected social links immediately.</li>
-            <li><strong>Group &amp; solo workspaces and personal budgets:</strong> Group Owners, Administrators, and Solo workspace owners can open <strong>Settings</strong> and confirm permanent workspace deletion to immediately erase that workspace's savings records, or delete personal budget plans directly inside the <strong>Budget</strong> tracker.</li>
+            <li><strong>Group &amp; solo workspaces, personal budgets &amp; monthly monitor:</strong> Group Owners, Administrators, and Solo workspace owners can open <strong>Settings</strong> and confirm permanent workspace deletion to immediately erase that workspace's savings records, or delete personal 50/30/20 budget plans and Monthly Income &amp; Expense entries directly inside <strong>Budget</strong>.</li>
             <li><strong>Ephemeral chats:</strong> Turn off <strong>Anonymous Chat Mode</strong> to immediately erase all messages and alerts from that anonymous session, or enable <strong>Vanishing Messages</strong> so read messages self-delete automatically.</li>
           </ul>
         </section>
 
         <section id="revoke-social-access">
-          <h2>3. Revoke Google Sign-In or Facebook Login access</h2>
-          <p>You can also revoke myIPON's sign-in access directly from your Google or Facebook account settings:</p>
+          <h2>3. Revoke Google Sign-In access</h2>
+          <p>You can also revoke myIPON's sign-in access directly from your Google account settings:</p>
           <ul>
             <li><strong>Google:</strong> Visit <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">Google Account Third-Party Connections</a> &rarr; select <strong>myIPON</strong> &rarr; click <strong>Delete all connections you have with myIPON</strong>.</li>
-            <li><strong>Facebook:</strong> Go to <strong>Facebook Settings &amp; Privacy</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Apps and Websites</strong> &rarr; select <strong>myIPON</strong> &rarr; click <strong>Remove</strong>.</li>
           </ul>
         </section>
 
         <section id="what-is-deleted">
           <h2>4. What data is deleted &amp; timeline</h2>
           <ul>
-            <li><strong>Deleted upon account removal:</strong> Your user profile (name, <code>@username</code>, bio, email, phone number, payout details, social links, card theme/effects, privacy settings), authentication &amp; Clerk OAuth links, profile avatar/cover and private cloud storage files (Supabase Storage &amp; Cloudflare R2), Web Push &amp; Android FCM notification tokens, trusted-device OTP tokens, direct/group chat records, friend connections, personal solo/budget records, and personal security logs.</li>
+            <li><strong>Deleted upon account removal:</strong> Your user profile (name, <code>@username</code>, bio, email, phone number, payout details, social links, card theme/effects, privacy settings), authentication &amp; Google Sign-In (Clerk OAuth) links, profile avatar/cover and private cloud storage files (Supabase Storage &amp; Cloudflare R2), Web Push &amp; Android FCM notification tokens, trusted-device OTP tokens, direct/group chat records, friend connections, personal solo, budget, and Monthly Income &amp; Expense Monitoring records, and personal security logs.</li>
             <li><strong>Shared group accounting integrity:</strong> If you belong to an active shared savings group, group-owned ledger totals remain intact for the other active members while your personal account identity is removed or reassigned according to group ownership rules.</li>
             <li><strong>Processing timeline:</strong> Active records are removed within <strong>7 business days</strong> of verification; any items previously placed in the 30-day Recycle Bin purge automatically within <strong>30 days</strong>.</li>
           </ul>

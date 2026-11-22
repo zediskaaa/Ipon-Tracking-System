@@ -11936,13 +11936,13 @@ test('public privacy, terms, and data-deletion pages stay crawlable with Vercel 
   const vercel = JSON.parse(read('vercel.json'));
 
   assert.match(privacy, /<h1>Privacy Policy<\/h1>/);
-  assert.match(privacy, /Google &amp; Facebook Sign-In \(OAuth\)/);
+  assert.match(privacy, /Google Sign-In \(OAuth\)/);
   assert.match(privacy, /href="data-deletion\.html"/);
   assert.match(terms, /<h1>Terms of Service<\/h1>/);
   assert.match(terms, /Purpose &amp; non-custodial scope/);
   assert.match(deletion, /<h1>User Data Deletion Instructions<\/h1>/);
   assert.match(deletion, /myIPON Data Deletion Request/);
-  assert.match(deletion, /Apps and Websites/);
+  assert.match(deletion, /Third-Party Connections/);
   assert.match(robots, /Allow:\s*\/privacy\b/);
   assert.match(robots, /Allow:\s*\/terms\b/);
   assert.match(robots, /Allow:\s*\/data-deletion\b/);
