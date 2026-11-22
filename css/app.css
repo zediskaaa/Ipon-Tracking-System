@@ -23535,6 +23535,16 @@ html[data-theme="dark"] .set-award-same-btn[aria-pressed="true"] {
   gap: 6px;
   flex-wrap: wrap;
 }
+.set-award-quick-chips [data-set-award-quick].is-active {
+  border-color: #15533e;
+  background: #15533e;
+  color: #ffffff;
+}
+html[data-theme="dark"] .set-award-quick-chips [data-set-award-quick].is-active {
+  border-color: #2e8a64;
+  background: #1f6c4f;
+  color: #f3faf6;
+}
 .set-award-per-user-wrap {
   display: grid;
   gap: 10px;

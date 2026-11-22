@@ -1888,6 +1888,7 @@
 
   const setAwardState = {
     sameDateTime: true,
+    releaseNow: false,
     selectedUsers: new Set(),
     selectedEffects: new Set(),
     perUserDatetime: new Map()
@@ -1998,16 +1999,22 @@
     syncCustomExpiryControl(setAwardEffectDuration, setAwardEffectCustomWrap, setAwardEffectCustomExpiry, 7);
 
     const same = setAwardState.sameDateTime;
+    const isNow = Boolean(same && setAwardState.releaseNow);
     if (setAwardSameDtBtn) {
       setAwardSameDtBtn.setAttribute('aria-pressed', same ? 'true' : 'false');
       setAwardSameDtBtn.textContent = same ? 'Same date & time: ON' : 'Same date & time: OFF (Per user)';
     }
     if (setAwardScheduleHint) {
-      setAwardScheduleHint.textContent = same
-        ? 'All selected users receive this award at the same date & time.'
-        : 'Set a separate release date & time for each selected user below.';
+      setAwardScheduleHint.textContent = isNow
+        ? 'All selected users receive this award immediately upon confirmation.'
+        : (same
+          ? 'All selected users receive this award at the same date & time.'
+          : 'Set a separate release date & time for each selected user below.');
     }
-    if (setAwardSharedWrap) setAwardSharedWrap.hidden = !same;
+    if (setAwardSharedWrap) {
+      setAwardSharedWrap.hidden = !same;
+      setAwardSharedWrap.querySelector('[data-set-award-quick="now"]')?.classList.toggle('is-active', isNow);
+    }
     if (setAwardPerUserWrap) setAwardPerUserWrap.hidden = same;
     if (!same) renderSetAwardPerUserList();
 
@@ -2020,31 +2027,37 @@
     ].filter(Boolean);
     if (setAwardFooterSummary) {
       setAwardFooterSummary.textContent = hasReward && userCount > 0
-        ? `Scheduling ${rewardParts.join(' + ')} for ${userCount} ${userCount === 1 ? 'user' : 'users'} (${same ? 'same date & time' : 'custom schedule per user'}).`
-        : 'Select reward(s) and at least one recipient user to schedule.';
+        ? (isNow
+          ? `Awarding ${rewardParts.join(' + ')} immediately to ${userCount} ${userCount === 1 ? 'user' : 'users'}.`
+          : `Scheduling ${rewardParts.join(' + ')} for ${userCount} ${userCount === 1 ? 'user' : 'users'} (${same ? 'same date & time' : 'custom schedule per user'}).`)
+        : 'Select reward(s) and at least one recipient user to continue.';
     }
     if (setAwardSubmit) {
       setAwardSubmit.disabled = !(hasReward && userCount > 0);
       setAwardSubmit.textContent = userCount > 0
-        ? `Schedule for ${userCount} ${userCount === 1 ? 'user' : 'users'}`
-        : 'Schedule award';
+        ? (isNow
+          ? `Award ${userCount} ${userCount === 1 ? 'user' : 'users'} now`
+          : `Schedule for ${userCount} ${userCount === 1 ? 'user' : 'users'}`)
+        : (isNow ? 'Award now' : 'Schedule award');
     }
   }
 
   function openSetAwardDialog(preset = 'all') {
     if (!setAwardDialog || !setAwardForm) return;
     setAwardForm.reset();
+    const startImmediate = preset === 'effects-now' || preset === 'badge-now';
     setAwardState.sameDateTime = true;
+    setAwardState.releaseNow = startImmediate;
     setAwardState.selectedUsers.clear();
     setAwardState.selectedEffects.clear();
     setAwardState.perUserDatetime.clear();
-    if (setAwardBadgeCheck) setAwardBadgeCheck.checked = preset === 'badge';
-    if (setAwardEffectsCheck) setAwardEffectsCheck.checked = preset !== 'badge';
+    if (setAwardBadgeCheck) setAwardBadgeCheck.checked = preset === 'badge' || preset === 'badge-now';
+    if (setAwardEffectsCheck) setAwardEffectsCheck.checked = preset !== 'badge' && preset !== 'badge-now';
     if (setAwardBadgeDuration) setAwardBadgeDuration.value = '30';
     if (setAwardEffectDuration) setAwardEffectDuration.value = 'permanent';
     if (setAwardEffectsSearch) setAwardEffectsSearch.value = '';
     if (setAwardUsersSearch) setAwardUsersSearch.value = '';
-    if (setAwardSharedDatetime) setAwardSharedDatetime.value = defaultScheduleDatetimeValue(15);
+    if (setAwardSharedDatetime) setAwardSharedDatetime.value = startImmediate ? defaultScheduleDatetimeValue(0) : defaultScheduleDatetimeValue(15);
     if (setAwardRewardError) setAwardRewardError.textContent = '';
     if (setAwardUsersError) setAwardUsersError.textContent = '';
     if (setAwardScheduleError) setAwardScheduleError.textContent = '';
@@ -2121,6 +2134,7 @@
 
   setAwardSameDtBtn?.addEventListener('click', () => {
     setAwardState.sameDateTime = !setAwardState.sameDateTime;
+    if (!setAwardState.sameDateTime) setAwardState.releaseNow = false;
     if (setAwardScheduleError) setAwardScheduleError.textContent = '';
     if (!setAwardState.sameDateTime) {
       const sharedVal = setAwardSharedDatetime?.value || defaultScheduleDatetimeValue(15);
@@ -2137,15 +2151,33 @@
     if (setAwardSharedDatetime) setAwardSharedDatetime.value = masterVal;
     Array.from(setAwardState.selectedUsers).forEach((uid) => setAwardState.perUserDatetime.set(uid, masterVal));
     setAwardState.sameDateTime = true;
+    setAwardState.releaseNow = false;
     if (setAwardScheduleError) setAwardScheduleError.textContent = '';
     syncSetAwardUi();
     Ipon.toast('Applied the same release date & time to all selected users.');
+  });
+
+  setAwardSharedDatetime?.addEventListener('input', () => {
+    setAwardState.releaseNow = false;
+    Ipon.setFieldError(setAwardSharedDatetime, '');
+    if (setAwardScheduleError) setAwardScheduleError.textContent = '';
+    syncSetAwardUi();
   });
 
   setAwardSharedWrap?.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-set-award-quick]');
     if (!btn || !setAwardSharedDatetime) return;
     const mode = btn.dataset.setAwardQuick;
+    if (mode === 'now') {
+      setAwardState.sameDateTime = true;
+      setAwardState.releaseNow = true;
+      setAwardSharedDatetime.value = defaultScheduleDatetimeValue(0);
+      Ipon.setFieldError(setAwardSharedDatetime, '');
+      if (setAwardScheduleError) setAwardScheduleError.textContent = '';
+      syncSetAwardUi();
+      return;
+    }
+    setAwardState.releaseNow = false;
     let targetDate;
     if (mode === '15m') targetDate = new Date(Date.now() + 15 * 60000);
     else if (mode === '1h') targetDate = new Date(Date.now() + 60 * 60000);
@@ -2158,6 +2190,7 @@
     setAwardSharedDatetime.value = toDatetimeLocalValue(targetDate.toISOString());
     Ipon.setFieldError(setAwardSharedDatetime, '');
     if (setAwardScheduleError) setAwardScheduleError.textContent = '';
+    syncSetAwardUi();
   });
 
   setAwardPerUserList?.addEventListener('input', (event) => {
@@ -2221,9 +2254,13 @@
       effectExpiresAt = effDur.expiresAt;
     }
 
+    const isImmediate = Boolean(setAwardState.sameDateTime && setAwardState.releaseNow);
     const items = [];
     const nowGrace = Date.now() - 60000;
-    if (setAwardState.sameDateTime) {
+    if (isImmediate) {
+      const isoNow = new Date().toISOString();
+      userIds.forEach((uid) => items.push({ user_id: uid, scheduled_for: isoNow }));
+    } else if (setAwardState.sameDateTime) {
       const raw = String(setAwardSharedDatetime?.value || '').trim();
       const ms = raw ? new Date(raw).getTime() : NaN;
       if (!raw || !Number.isFinite(ms) || ms < nowGrace) {
@@ -2268,20 +2305,27 @@
       wantBadge ? 'Verified badge' : '',
       effectIds.length ? `${effectIds.length} profile ${effectIds.length === 1 ? 'effect' : 'effects'}` : ''
     ].filter(Boolean).join(' + ');
-    const scheduleDesc = setAwardState.sameDateTime
-      ? `on ${Ipon.dateLabel(items[0].scheduled_for, { dateStyle: 'medium', timeStyle: 'short' })} (same date & time for all)`
-      : 'using custom date & time per user';
+    const scheduleDesc = isImmediate
+      ? 'immediately'
+      : (setAwardState.sameDateTime
+        ? `on ${Ipon.dateLabel(items[0].scheduled_for, { dateStyle: 'medium', timeStyle: 'short' })} (same date & time for all)`
+        : 'using custom date & time per user');
     const accepted = await Ipon.confirmAction({
-      title: `Schedule award for ${items.length} ${items.length === 1 ? 'user' : 'users'}?`,
-      message: `Schedule ${rewardLabel} for ${items.length} ${items.length === 1 ? 'user' : 'users'} ${scheduleDesc}?`,
-      acceptLabel: `Schedule (${items.length})`
+      title: isImmediate
+        ? `Award ${items.length} ${items.length === 1 ? 'user' : 'users'} now?`
+        : `Schedule award for ${items.length} ${items.length === 1 ? 'user' : 'users'}?`,
+      message: `${isImmediate ? 'Award' : 'Schedule'} ${rewardLabel} for ${items.length} ${items.length === 1 ? 'user' : 'users'} ${scheduleDesc}?`,
+      acceptLabel: isImmediate ? `Award now (${items.length})` : `Schedule (${items.length})`
     });
     if (!accepted) return;
 
-    Ipon.setBusy(setAwardSubmit, true, 'Scheduling…');
+    const submitItems = isImmediate
+      ? userIds.map((uid) => ({ user_id: uid, scheduled_for: new Date().toISOString() }))
+      : items;
+    Ipon.setBusy(setAwardSubmit, true, isImmediate ? 'Awarding…' : 'Scheduling…');
     try {
       const res = await Ipon.rpc('super_admin_create_scheduled_awards', {
-        p_items: items,
+        p_items: submitItems,
         p_award_badge: wantBadge,
         p_badge_duration_days: badgeDurationDays,
         p_badge_expires_at: badgeExpiresAt,
@@ -2292,10 +2336,14 @@
       });
       setAwardDialog?.close();
       const deliveredNow = Number(res?.delivered_now || 0);
-      Ipon.toast(deliveredNow > 0
-        ? `Scheduled ${items.length} award(s) (${deliveredNow} released immediately).`
-        : `Scheduled ${items.length} award${items.length === 1 ? '' : 's'} cleanly.`);
-      activeEffectsSubtab = 'scheduled';
+      if (isImmediate) {
+        Ipon.toast(`Awarded ${deliveredNow || submitItems.length} ${submitItems.length === 1 ? 'user' : 'users'} immediately.`);
+      } else {
+        Ipon.toast(deliveredNow > 0
+          ? `Scheduled ${submitItems.length} award(s) (${deliveredNow} released immediately).`
+          : `Scheduled ${submitItems.length} award${submitItems.length === 1 ? '' : 's'} cleanly.`);
+        activeEffectsSubtab = 'scheduled';
+      }
       await load();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');

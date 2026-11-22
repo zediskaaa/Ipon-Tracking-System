@@ -31,7 +31,11 @@ test('Migration 178, schema.sql, Super Admin Set Award modal, and core auto-deli
   assert.equal(ids.length, new Set(ids).size, 'Duplicate element IDs in super-admin.html');
 
   // Set award buttons + Scheduled subtab + modal controls
-  assert.ok((html.match(/data-open-set-award=/g) || []).length >= 3, 'Expected Set award button across Users, Badges, and Profile effects');
+  assert.ok((html.match(/data-open-set-award=/g) || []).length >= 4, 'Expected Set award / Award multiple users buttons across Users, Badges, and Profile effects');
+  assert.match(html, /id="effects-award-multiple-btn"[^>]*data-open-set-award="effects-now"/);
+  assert.match(html, /data-set-award-quick="now"/);
+  assert.match(saJs, /releaseNow:\s*false/);
+  assert.match(saJs, /startImmediate = preset === 'effects-now' \|\| preset === 'badge-now'/);
   for (const id of [
     'effects-tab-scheduled',
     'effects-scheduled-badge',

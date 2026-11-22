@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261122-27">
+  <link rel="stylesheet" href="css/app.css?v=20261122-28">
   <script src="js/config.js?v=20261120-78"></script>
 </head>
 
@@ -423,6 +423,7 @@
         </div>
         <div id="effects-rewards-wrap" role="tabpanel" aria-labelledby="effects-tab-rewards">
           <div class="table-filters">
+            <button class="button button-secondary" id="effects-award-multiple-btn" type="button" data-open-set-award="effects-now">Award multiple users</button>
             <input id="effects-search" type="search" placeholder="Search users or effects"
               aria-label="Search profile effect users">
             <select id="effects-status-filter" aria-label="Filter by profile effect status">
@@ -1229,6 +1230,7 @@
               <small class="field-error" aria-live="polite"></small>
             </div>
             <div class="set-award-quick-chips" role="group" aria-label="Quick release presets">
+              <button class="icon-action" type="button" data-set-award-quick="now">Release now</button>
               <button class="icon-action" type="button" data-set-award-quick="15m">+15 min</button>
               <button class="icon-action" type="button" data-set-award-quick="1h">+1 hour</button>
               <button class="icon-action" type="button" data-set-award-quick="tomorrow9">Tomorrow 9:00 AM</button>
@@ -1292,7 +1294,7 @@
     </div>
   </dialog>
 
-  <script src="js/super-admin.js?v=20261122-05"></script>
+  <script src="js/super-admin.js?v=20261122-06"></script>
 </body>
 
 </html>
