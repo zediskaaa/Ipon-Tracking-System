@@ -219,3 +219,14 @@ test('slow or offline startup with a saved session keeps splash retry screen ins
   await new Promise((r) => setTimeout(r, 10));
   assert.deepEqual(redirects, ['dashboard.html']);
 });
+
+test('My Profile modal pre-fills instantly from cached profile, syncs in parallel, and stays fully visible and clickable while syncing', () => {
+  const coreJs = read('js/core.js');
+  const css = read('css/app.css');
+
+  assert.doesNotMatch(css, /\.account-dialog\[aria-busy="true"\]\s+\.account-dialog-content\s*\{[^}]*pointer-events:\s*none/, 'Account modal must not freeze clicks or dim content while syncing');
+  assert.match(css, /\.account-dialog\[aria-busy="true"\]::after\s*\{[^}]*pointer-events:\s*none;[^}]*animation:\s*accountSyncShimmer/, 'Account modal should show a non-blocking top shimmer bar while syncing');
+  assert.match(coreJs, /function hydrateAccountDialogFields\(data, payoutSource = data, \{ preserveDirty = false \} = \{\}\)/);
+  assert.match(coreJs, /async function openAccountDialog\(\)\s*\{[\s\S]*?hydrateAccountDialogFields\(currentProfile, currentProfile, \{ preserveDirty: false \}\);[\s\S]*?dialog\.showModal\(\);[\s\S]*?loadAccountDialog\(\{ preserveDirty: true \}\)/);
+  assert.match(coreJs, /const \[profileRes, _creatorId, appearance\] = await Promise\.all\(\[/, 'loadAccountDialog must parallelize profile, creator id, appearance, and effects requests');
+});

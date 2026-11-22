@@ -5487,24 +5487,17 @@
     if (bugDialog && bugForm) bugDialog.onclose = resetBugDialog;
   }
 
-  async function loadAccountDialog() {
-    const client = getClient();
-    if (!client || !currentProfile) return;
+  function hydrateAccountDialogFields(data, payoutSource = data, { preserveDirty = false } = {}) {
+    if (!data || !currentProfile) return;
     const dialog = document.getElementById('account-dialog');
     const profileForm = document.getElementById('quick-profile-form');
     const emailForm = document.getElementById('quick-email-form');
-    dialog.setAttribute('aria-busy', 'true');
-    try {
-      const { data, error } = await client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,username,bio,last_seen_at,social_links').eq('id', currentProfile.id).single();
-      if (error) throw error;
-      let payoutSource = data;
-      if (!data.payout_channel && (data.member_id || currentProfile.member_id)) {
-        const linkedMemberId = data.member_id || currentProfile.member_id;
-        const { data: memberRow } = await client.from('members').select('payout_channel,payout_account_number,payout_account_name').eq('id', linkedMemberId).maybeSingle();
-        if (memberRow?.payout_channel) payoutSource = memberRow;
-      }
-      currentProfile.avatar_url = data.avatar_url || null;
-      syncProfileNameMode(profileForm, currentProfile.role === 'SUPER_ADMIN');
+    if (!dialog || !profileForm || !emailForm) return;
+    const profileEdited = Boolean(preserveDirty && quickProfileDirty?.sync?.());
+    const emailEdited = Boolean(preserveDirty && quickEmailDirty?.sync?.());
+    const appsEdited = Boolean(preserveDirty && quickConnectAppsDirty?.sync?.());
+    syncProfileNameMode(profileForm, currentProfile.role === 'SUPER_ADMIN');
+    if (!profileEdited) {
       const splitLegacy = !data.first_name && !data.last_name ? String(data.full_name || '').trim().split(/\s+/).filter(Boolean) : [];
       profileForm.elements.first_name.value = data.first_name || splitLegacy[0] || '';
       profileForm.elements.middle_name.value = data.middle_name || '';
@@ -5526,13 +5519,58 @@
         if (bioCount) bioCount.textContent = `${bVal.length} / 58 characters`;
       }
       profileForm.elements.contact_number.value = data.contact_number || '';
-      setPayoutFields(profileForm, payoutSource);
-      emailForm.elements.email.value = data.email || '';
-      if (currentProfile) currentProfile.notifications_enabled = data.notifications_enabled !== false;
-      document.getElementById('quick-notifications-enabled').checked = data.notifications_enabled !== false;
+      setPayoutFields(profileForm, payoutSource || data);
+      quickProfileDirty?.reset();
+    }
+    if (!emailEdited) {
+      emailForm.elements.email.value = data.email || currentProfile.email || '';
+      quickEmailDirty?.reset();
+    }
+    const notifToggle = document.getElementById('quick-notifications-enabled');
+    if (notifToggle) notifToggle.checked = data.notifications_enabled !== false;
+    syncAccountBadgeSection(currentProfile);
+    if (!appsEdited) {
+      syncConnectAppsForm(currentProfile.social_links);
+      quickConnectAppsDirty?.reset();
+    }
+    if (document.getElementById('quick-account-role')) document.getElementById('quick-account-role').textContent = currentProfile.role === 'SUPER_ADMIN' ? 'Owner' : (data.email || 'My account');
+    syncProfileAvatars({ ...currentProfile, ...data });
+    const support = dialog.querySelector('.account-support');
+    if (support) support.hidden = currentProfile.role === 'SUPER_ADMIN';
+  }
+
+  async function loadAccountDialog({ preserveDirty = false } = {}) {
+    const client = getClient();
+    if (!client || !currentProfile) return;
+    const dialog = document.getElementById('account-dialog');
+    dialog?.setAttribute('aria-busy', 'true');
+    try {
+      const [profileRes, _creatorId, appearance] = await Promise.all([
+        client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,username,bio,last_seen_at,social_links').eq('id', currentProfile.id).single(),
+        resolveCreatorSocialId().catch(() => null),
+        rpc('get_profile_card_appearance', { p_target_id: currentProfile.id }).catch(() => null),
+        refreshProfileEffectsState({ checkModal: false }).catch(() => null)
+      ]);
+      const { data, error } = profileRes;
+      if (error) throw error;
+      let payoutSource = data;
+      if (!data.payout_channel && (data.member_id || currentProfile.member_id)) {
+        const linkedMemberId = data.member_id || currentProfile.member_id;
+        const { data: memberRow } = await client.from('members').select('payout_channel,payout_account_number,payout_account_name').eq('id', linkedMemberId).maybeSingle();
+        if (memberRow?.payout_channel) payoutSource = memberRow;
+      }
       Object.assign(currentProfile, {
+        first_name: data.first_name ?? currentProfile.first_name,
+        middle_name: data.middle_name ?? currentProfile.middle_name,
+        last_name: data.last_name ?? currentProfile.last_name,
         full_name: data.full_name,
+        contact_number: data.contact_number ?? currentProfile.contact_number,
+        payout_channel: payoutSource?.payout_channel ?? currentProfile.payout_channel,
+        payout_account_number: payoutSource?.payout_account_number ?? currentProfile.payout_account_number,
+        payout_account_name: payoutSource?.payout_account_name ?? currentProfile.payout_account_name,
         email: data.email || currentProfile.email,
+        avatar_url: data.avatar_url || null,
+        notifications_enabled: data.notifications_enabled !== false,
         verified_badge_tier: data.verified_badge_tier,
         verified_badge_granted_at: data.verified_badge_granted_at,
         verified_badge_expires_at: data.verified_badge_expires_at,
@@ -5543,23 +5581,14 @@
         last_seen_at: data.last_seen_at,
         social_links: sanitizeSocialLinks(data.social_links)
       });
-      await resolveCreatorSocialId().catch(() => null);
-      syncAccountBadgeSection(currentProfile);
-      syncConnectAppsForm(currentProfile.social_links);
-      document.getElementById('quick-account-role').textContent = currentProfile.role === 'SUPER_ADMIN' ? 'Owner' : (data.email || 'My account');
-      syncProfileAvatars({ ...currentProfile, ...data });
-      const [appearance] = await Promise.all([
-        rpc('get_profile_card_appearance', { p_target_id: currentProfile.id }).catch(() => null),
-        refreshProfileEffectsState({ checkModal: false }).catch(() => null)
-      ]);
-      syncProfileCardEditor(appearance);
-      const support = dialog.querySelector('.account-support');
-      if (support) support.hidden = currentProfile.role === 'SUPER_ADMIN';
-      quickProfileDirty?.reset();
-      quickEmailDirty?.reset();
-      quickConnectAppsDirty?.reset();
+      hydrateAccountDialogFields(data, payoutSource, { preserveDirty });
+      syncProfileCardEditor(appearance || (currentProfile.card_theme ? {
+        card_theme: currentProfile.card_theme,
+        cover_url: currentProfile.cover_url || null,
+        profile_effect: currentProfile.equipped_profile_effect || 'none'
+      } : null));
     } finally {
-      dialog.removeAttribute('aria-busy');
+      dialog?.removeAttribute('aria-busy');
     }
   }
 
@@ -5567,9 +5596,15 @@
     const dialog = document.getElementById('account-dialog');
     if (!dialog || !currentProfile) return;
     bindDeviceNotificationControls();
+    hydrateAccountDialogFields(currentProfile, currentProfile, { preserveDirty: false });
+    syncProfileCardEditor({
+      card_theme: currentProfile.card_theme || 'emerald',
+      cover_url: currentProfile.cover_url || null,
+      profile_effect: currentProfile.equipped_profile_effect || 'none'
+    });
     dialog.showModal();
     fitVerifiedNameLines(dialog);
-    try { await Promise.all([loadAccountDialog(), quickMfaController?.load(), syncDevicePermissionUI()]); }
+    try { await Promise.all([loadAccountDialog({ preserveDirty: true }), quickMfaController?.load(), syncDevicePermissionUI()]); }
     catch (error) { toast(friendlyError(error), 'error'); }
     finally { fitVerifiedNameLines(dialog); }
   }
