@@ -48,12 +48,18 @@ test('people rows show last online on a separate line without exposing self acti
     formatStatusLine: (user) => user.id === 'online' ? 'Active now' : 'Offline since 10:30 AM',
     escapeHtml: (value) => String(value),
   });
-  const offlineHtml = render({ id: 'offline', full_name: 'Offline user', shared_groups: ['Secret Savings Group'] });
-  const onlineHtml = render({ id: 'online', full_name: 'Online user', shared_groups: ['Ipon namin ni pretty'] });
+  const offlineHtml = render({ id: 'offline', full_name: 'Offline user', shared_groups: ['Secret Savings Group'], can_message: true });
+  const lockedHtml = render({ id: 'locked', full_name: 'Friends Only User', can_message: false, profile_visible: false });
+  const onlineHtml = render({ id: 'online', full_name: 'Online user', shared_groups: ['Ipon namin ni pretty'], can_message: true });
   const selfHtml = render({ id: 'self', full_name: 'Me', is_self: true });
+  assert.match(offlineHtml, /msg-search-person-sub[^>]*>Tap to message/);
+  assert.match(offlineHtml, /data-social-action="message"/);
   assert.match(offlineHtml, /msg-search-person-presence[^>]*>Offline since 10:30 AM/);
   assert.doesNotMatch(offlineHtml, /presence-dot|Secret Savings Group/);
   assert.equal(avatarOpts.get('offline')?.showPresence, false);
+  assert.doesNotMatch(lockedHtml, /Tap to message|msg-search-person-sub|data-social-action="message"/);
+  assert.match(lockedHtml, /class="msg-search-person-main" data-social-user-dp="locked"/);
+  assert.match(lockedHtml, /class="msg-row-chip-btn" data-social-action="add_friend" data-target-id="locked">Add friend<\/button>/);
   assert.doesNotMatch(onlineHtml, /msg-search-person-presence|Active now|Ipon namin ni pretty/);
   assert.equal(avatarOpts.get('online')?.showPresence, true);
   assert.doesNotMatch(selfHtml, /msg-search-person-presence/);

@@ -2422,8 +2422,9 @@
     } else if (u.friendship_status === 'INCOMING_REQUEST') {
       relChip = `<button type="button" class="msg-row-chip-btn is-accent" data-req-decision="ACCEPT" data-req-id="${escapeHtml(u.friend_request_id)}">Accept</button>`;
     } else {
-      relChip = `<button type="button" class="msg-row-chip-btn" data-social-action="add_friend" data-target-id="${escapeHtml(u.id)}">Add</button>`;
+      relChip = `<button type="button" class="msg-row-chip-btn" data-social-action="add_friend" data-target-id="${escapeHtml(u.id)}">Add friend</button>`;
     }
+    const canMsg = isSelf || (u.can_message !== false && u.friends_only_locked !== true);
     const mutualCount = Number(u.mutual_friends_count || 0);
     const friendCountText = formatFriendCountText(u.friends_count);
     const subParts = [];
@@ -2431,15 +2432,18 @@
     if (friendCountText) subParts.push(friendCountText);
     if (mutualCount > 0) subParts.push(`${mutualCount} mutual`);
     if (isSelf) subParts.unshift('Personal notes & saved messages');
-    else if (!subParts.length) subParts.push('Tap to message');
+    else if (!subParts.length && canMsg) subParts.push('Tap to message');
 
     const presenceText = isSelf || personIsOnline(u) ? '' : formatStatusLine(u);
     const showPresenceDot = !presenceText && (isSelf || (u.profile_visible !== false && u.allow_online_status !== false && !u.is_blocked && u.friendship_status !== 'BLOCKED_BY_ME' && u.friendship_status !== 'BLOCKED_ME'));
+    const mainActionAttr = canMsg
+      ? `data-social-action="message" data-target-id="${escapeHtml(u.id)}"`
+      : `data-social-user-dp="${escapeHtml(u.id)}"`;
     return `<article class="msg-search-person-row" role="listitem">
       <div class="msg-conv-avatar">${userAvatarHtml(u, 'avatar-md', { showPresence: showPresenceDot })}</div>
-      <button type="button" class="msg-search-person-main" data-social-action="message" data-target-id="${escapeHtml(u.id)}">
+      <button type="button" class="msg-search-person-main" ${mainActionAttr}>
         <strong class="msg-conv-name"><span class="msg-conv-name-text">${escapeHtml(u.full_name || 'User')}</span>${userBadgesHtml(u)}</strong>
-        <span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>
+        ${subParts.length ? `<span class="msg-search-person-sub">${escapeHtml(subParts.join(' · '))}</span>` : ''}
         ${presenceText ? `<span class="msg-search-person-presence">${escapeHtml(presenceText)}</span>` : ''}
       </button>
       <div class="msg-search-person-act">${relChip}</div>
