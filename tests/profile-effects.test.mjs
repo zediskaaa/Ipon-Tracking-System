@@ -1261,7 +1261,6 @@ test('Migration 161, schema.sql, Exclusive/Mythic CSS badges, and super-admin pi
   assert.match(exJs, /function castShadow\(/);
   assert.match(exJs, /function drawBevelRing\(/);
   assert.match(exJs, /function drawStruckCoin\(/);
-  assert.match(css, /\.effects-chip\[data-effect-cat="Exclusive"\]\s*\{/);
   assert.match(css, /\.effects-tile \.rar3\s*\{/);
   assert.match(css, /\.effect-table-pill\.is-mythic\s*\{/);
   assert.match(saJs, /meta\.rare === 3 \? ' is-mythic'/);
@@ -1351,4 +1350,17 @@ test('all seven Deluxe scenes use three motion tracks, have award labels and rej
   assert.match(migration, /check \(left\(lower\(btrim\(effect_id\)\), 7\) <> 'deluxe_'\)/);
   assert.match(migration, /if left\(v_effect, 7\) = 'deluxe_' then\s*raise exception[^;]+;\s*end if;[\s\S]*?insert into public\.profile_effect_trial_requests[\s\S]*?insert into public\.notifications/);
   assert.match(read('sw.js'), /'js\/profile-effects-deluxe\.js'/);
+});
+
+test('profile effect categories use one compact accessible dropdown', () => {
+  const core = read('js/core.js');
+  const css = read('css/app.css');
+  assert.match(core, /<label class="effects-category-field" for="effects-category">[\s\S]*?<select id="effects-category" name="effects-category">/);
+  assert.match(core, /api\.CATEGORIES\.map\(\(c\) => [^<]*<option value=/);
+  assert.match(core, /querySelector\('#effects-category'\)\?\.addEventListener\('change'/);
+  assert.doesNotMatch(core, /id="effects-chips"/);
+  assert.match(css, /\.effects-filter-bar\s*\{[^}]*display:\s*flex;[^}]*margin-bottom:\s*16px;/);
+  assert.match(css, /\.effects-category-field\s*\{[^}]*height:\s*44px;/);
+  assert.match(css, /\.effects-category-field:focus-within\s*\{[^}]*outline:\s*2px solid #8ff0bf;/);
+  assert.doesNotMatch(css, /\.effects-chip(?:\[|\s|\{|:)/);
 });

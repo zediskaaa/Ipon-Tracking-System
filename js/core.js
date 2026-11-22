@@ -4074,8 +4074,15 @@
               <span>Your device asks for reduced motion, so effects are shown as still frames.</span>
               <button type="button" id="effects-play-motion">Play animations</button>
             </div>
-            <input class="effects-find" id="effects-search" type="search" placeholder="Search effects" aria-label="Search effects">
-            <div class="effects-chips" id="effects-chips">${api.CATEGORIES.map((c) => `<button type="button" class="effects-chip" data-effect-cat="${escapeHtml(c)}" aria-pressed="${c === 'All' ? 'true' : 'false'}">${escapeHtml(c)}</button>`).join('')}</div>
+            <div class="effects-filter-bar">
+              <input class="effects-find" id="effects-search" type="search" placeholder="Search effects" aria-label="Search effects">
+              <label class="effects-category-field" for="effects-category">
+                <span>Category</span>
+                <select id="effects-category" name="effects-category">
+                  ${api.CATEGORIES.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+                </select>
+              </label>
+            </div>
             <div class="effects-grid" id="effects-grid"></div>
           </section>
           <aside class="effects-side">
@@ -4445,11 +4452,8 @@
     syncMotionNotice();
     dialog.querySelector('#effects-play-motion')?.addEventListener('click', () => api.setMotionForced(true));
 
-    dialog.querySelector('#effects-chips')?.addEventListener('click', (event) => {
-      const chip = event.target.closest('[data-effect-cat]');
-      if (!chip) return;
-      activeCategory = chip.dataset.effectCat || 'All';
-      dialog.querySelectorAll('.effects-chip').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+    dialog.querySelector('#effects-category')?.addEventListener('change', (event) => {
+      activeCategory = String(event.currentTarget.value || 'All');
       applyFilter();
     });
     dialog.querySelector('#effects-search')?.addEventListener('input', (event) => {
