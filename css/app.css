@@ -7644,48 +7644,132 @@ html[data-theme="dark"] .msg-thread-header .msg-avatar-wrap.is-in-convo-ripple >
 
 /* Search, Pinned & Message Request Banners */
 .msg-thread-search-bar {
-  padding: 8px 16px;
+  padding: 7px 14px;
   border-bottom: 1px solid var(--thread-rule, var(--rule));
   background: var(--thread-subbar-bg, var(--surface-subtle, #f6f1e8));
 }
 .msg-thread-search-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.msg-thread-search-wrap {
-  flex: 1 1 180px;
+  gap: 6px;
+  flex-wrap: nowrap;
   min-width: 0;
 }
+.msg-thread-search-wrap {
+  flex: 1 1 0;
+  min-width: 110px;
+}
 .msg-thread-search-wrap input {
-  min-height: 36px;
-  padding: 6px 12px 6px 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 5px 10px 5px 32px;
   border-radius: 10px;
   font-size: 13px;
 }
-.msg-thread-search-controls select {
+.msg-thread-search-controls select,
+.msg-thread-search-controls select#msg-thread-search-sender {
+  height: 34px;
   min-height: 34px;
-  padding: 5px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--thread-input-border, var(--rule));
-  background: var(--thread-input-bg, var(--surface-input, #fff));
-  color: var(--thread-input-ink, var(--ink));
-  font-size: 12.5px;
+  flex: 0 1 136px;
+  min-width: 96px;
+  max-width: 142px;
+  padding: 0 28px 0 10px !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--thread-input-border, var(--rule)) !important;
+  background-color: var(--thread-input-bg, var(--surface-input, #fff)) !important;
+  background-position: right 9px center !important;
+  background-size: 14px 14px !important;
+  color: var(--thread-input-ink, var(--ink)) !important;
+  font: 600 12.5px/1.2 inherit !important;
+  box-shadow: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-thread-search-controls select#msg-thread-search-sender:hover {
+  border-color: var(--thread-focus-border, rgba(20, 45, 43, .34)) !important;
+}
+.msg-thread-search-controls select#msg-thread-search-sender:focus {
+  border-color: var(--thread-focus-border, #287a4c) !important;
+  box-shadow: 0 0 0 3px var(--thread-focus-ring, rgba(40, 122, 76, .16)) !important;
+}
+html[data-theme="dark"] .msg-thread-search-controls select#msg-thread-search-sender,
+.msg-thread-pane[data-chat-theme="midnight"] .msg-thread-search-controls select#msg-thread-search-sender {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7.5L10 12.5L15 7.5' stroke='%23d7e7df' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  color-scheme: dark;
 }
 .msg-search-counter {
+  flex: 0 0 auto;
   font-size: 12px;
   color: var(--thread-muted, var(--muted));
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.msg-search-counter:empty {
+  display: none;
 }
 .msg-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
   width: 28px;
   height: 28px;
+  padding: 0;
   border-radius: 8px;
   border: 1px solid var(--thread-btn-border, var(--rule));
   background: var(--thread-btn-bg, var(--surface-input, #fff));
   color: var(--thread-btn-ink, var(--ink));
   cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.msg-mini-btn:hover {
+  background: var(--thread-btn-hover-bg, rgba(21, 83, 62, .1));
+  border-color: var(--thread-focus-border, rgba(21, 83, 62, .3));
+}
+@media (max-width: 640px) {
+  .msg-thread-search-bar {
+    padding: 8px 12px;
+  }
+  .msg-thread-search-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 6px;
+  }
+  .msg-thread-search-wrap {
+    grid-column: 1 / 4;
+    grid-row: 1;
+    min-width: 0;
+    width: 100%;
+  }
+  .msg-thread-search-bar .msg-mini-close {
+    grid-column: 4;
+    grid-row: 1;
+    justify-self: center;
+  }
+  .msg-thread-search-controls select#msg-thread-search-sender {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 30px;
+    min-height: 30px;
+  }
+  .msg-search-counter {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+  #msg-search-prev {
+    grid-column: 3;
+    grid-row: 2;
+  }
+  #msg-search-next {
+    grid-column: 4;
+    grid-row: 2;
+  }
 }
 .msg-thread-search-bar .msg-search-input-wrap input {
   background: var(--thread-input-bg, var(--surface-input, #fff));

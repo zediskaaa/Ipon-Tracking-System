@@ -78,6 +78,9 @@ test('Option 1 compact Messages header, 4-option filter pills, Requests badge, a
   assert.match(appCss, /\.msg-filter-pills\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(appCss, /\.msg-pill-badge\s*\{[^}]*background:\s*#e53935;/s);
   assert.match(appCss, /\.msg-friends-back-btn\s*\{/);
+  assert.match(appCss, /\.msg-thread-search-controls\s*\{[^}]*flex-wrap:\s*nowrap;/s);
+  assert.match(appCss, /\.msg-thread-search-controls\s+select#msg-thread-search-sender\s*\{[^}]*background-color:\s*var\(--thread-input-bg,[^}]*!important;/s);
+  assert.match(appCss, /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*?\.msg-thread-search-controls\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+auto\s+auto;/s);
   assert.doesNotMatch(appCss, /\.msg-topbar::before\s*\{|\.msg-tabs\s*\{/);
 
   // 2. Runtime behavior in sandboxed VM
