@@ -6234,7 +6234,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(messagesJs, /p\.status === 'queued' \? 'Queued…'/);
   assert.match(messagesJs, /p\.status === 'sent'[\s\S]*?msg-tick is-sent/);
   assert.match(messagesJs, /MAX_QUEUE_ATTACHMENTS\s*=\s*30/);
-  assert.match(messagesJs, /SINGLE_CHECK_SVG[\s\S]*?DOUBLE_CHECK_SVG/);
+  assert.match(messagesJs, /COIN_SENDING_SVG[\s\S]*?COIN_SENT_SVG[\s\S]*?COIN_DELIVERED_SVG[\s\S]*?COIN_SEEN_SVG/);
   assert.match(messagesJs, /id="msg-typing-live"[\s\S]*?class="msg-typing-text"[^>]*>is typing<span class="msg-typing-dots">/);
   assert.match(messagesJs, /class="msg-video-player"[\s\S]*?class="msg-att-video"[\s\S]*?class="msg-video-controls"[\s\S]*?class="msg-video-seek"[\s\S]*?data-vact="play"[\s\S]*?data-vact="mute"[\s\S]*?data-vact="fs"[\s\S]*?data-vact="menu"/);
   assert.doesNotMatch(messagesJs, /<video controls\b|<audio controls\b/);
@@ -6763,7 +6763,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   // Delivery & read checkmarks: 1 gray check (Sent) -> 2 gray checks (Delivered) -> 2 green checks (Seen)
   const sentRow = threadMessages[threadMessages.length - 1];
   assert.ok(sentRow?.id, 'sent message row present');
-  assert.match(msgsHtml, /class="msg-tick is-sent"[\s\S]*?<svg class="msg-tick-svg"/);
+  assert.match(msgsHtml, /class="msg-tick is-sent(?:\s+is-anim)?"[\s\S]*?<svg class="msg-tick-svg is-coin-sent"/);
 
   sentRow.delivered_at = '2026-11-15T10:10:05Z';
   tableHandlers.get('message_receipts')?.({
@@ -6771,7 +6771,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
     new: { message_id: sentRow.id, user_id: peerId, delivered_at: sentRow.delivered_at, read_at: null }
   });
   msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /class="msg-tick is-delivered"[\s\S]*?<svg class="msg-tick-svg is-double"/);
+  assert.match(msgsHtml, /class="msg-tick is-delivered(?:\s+is-anim)?"[\s\S]*?<svg class="msg-tick-svg is-coin-delivered"/);
 
   sentRow.read_at = '2026-11-15T10:11:00Z';
   tableHandlers.get('message_receipts')?.({
@@ -6779,7 +6779,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
     new: { message_id: sentRow.id, user_id: peerId, delivered_at: sentRow.delivered_at, read_at: sentRow.read_at }
   });
   msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /class="msg-tick is-read"[\s\S]*?<svg class="msg-tick-svg is-double"/);
+  assert.match(msgsHtml, /class="msg-tick is-read(?:\s+is-anim)?"[\s\S]*?class="msg-seen-dp-coin"/);
 
   // Batch splitting: queuing 12 files (>10, <=30) auto-splits into sequential batches of 10 + 2
   const twelveFiles = Array.from({ length: 12 }, (_, idx) => ({
@@ -7797,9 +7797,9 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   assert.match(mainJava, /public void onWindowFocusChanged\(boolean hasFocus\)/);
   assert.match(css, /\.msg-scroll-wrap[\s\S]*?overflow-anchor:\s*auto;/);
   assert.doesNotMatch(css, /\.msg-tick\.is-delivered,\s*\n\s*\.msg-tick\.is-read/);
-  assert.match(css, /\.msg-tick\.is-delivered\s*\{\s*color:\s*#7c8a83;/);
-  assert.match(css, /\.msg-tick\.is-read\s*\{\s*color:\s*#16a34a;/);
-  assert.match(css, /\.msg-row\.is-mine \.msg-tick\.is-read\s*\{\s*color:\s*#5ef29d;/);
+  assert.match(css, /\.msg-tick\.is-delivered\s*\{\s*color:\s*#4f695e;/);
+  assert.match(css, /\.msg-tick\.is-read\s*\{\s*color:\s*#c9921a;/);
+  assert.match(css, /\.msg-row\.is-mine \.msg-tick\.is-read\s*\{\s*color:\s*#f2c14e;/);
   assert.match(css, /\.msg-video-player\s*\{[\s\S]*?aspect-ratio:\s*var\(--vid-ar/);
   assert.match(css, /\.msg-att-video::-webkit-media-controls[\s\S]*?display:\s*none\s*!important;/);
   assert.match(css, /\.video-viewer-dialog \.msg-video-controls\.is-viewer-dock/);
@@ -8182,10 +8182,10 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   await msgWin.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
   const initialThreadHtml = getMsgEl('msg-messages-list').innerHTML;
 
-  // Sent = 1 gray check; Delivered = 2 gray checks; Seen = 2 green checks
-  assert.match(initialThreadHtml, /Only sent[\s\S]*?<span class="msg-tick is-sent"[^>]*aria-label="Sent"><svg class="msg-tick-svg"[^>]*><path d="M3\.2 8\.6 6\.4 11\.8 13\.2 4\.6"\/><\/svg><\/span>/);
-  assert.match(initialThreadHtml, /Delivered only[\s\S]*?<span class="msg-tick is-delivered"[^>]*aria-label="Delivered"><svg class="msg-tick-svg is-double"[\s\S]*?M7\.2 8\.6[\s\S]*?<\/svg><\/span>/);
-  assert.match(initialThreadHtml, /Seen by peer[\s\S]*?<span class="msg-tick is-read"[^>]*aria-label="Seen"><svg class="msg-tick-svg is-double"[\s\S]*?M7\.2 8\.6[\s\S]*?<\/svg><\/span>/);
+  // Sent = hollow coin rim; Delivered = rim + minted core; Seen = gold-rimmed peer DP coin medallion
+  assert.match(initialThreadHtml, /Only sent[\s\S]*?<span class="msg-tick is-sent"[^>]*aria-label="Sent"><svg class="msg-tick-svg is-coin-sent"[^>]*><circle class="coin-rim"[^>]*\/><\/svg><\/span>/);
+  assert.match(initialThreadHtml, /Delivered only[\s\S]*?<span class="msg-tick is-delivered"[^>]*aria-label="Delivered"><svg class="msg-tick-svg is-coin-delivered"[\s\S]*?<circle class="coin-core"[^>]*\/><\/svg><\/span>/);
+  assert.match(initialThreadHtml, /Seen by peer[\s\S]*?<span class="msg-tick is-read"[^>]*aria-label="Seen"><span class="msg-seen-dp-stack"><span class="msg-seen-dp-coin"[^>]*><span class="msg-seen-dp-face">/);
 
   // Inline video has SVG poster preview and custom center play button
   assert.match(initialThreadHtml, /class="msg-video-player"[\s\S]*?<video class="msg-att-video" preload="metadata" playsinline\s+poster="data:image\/svg\+xml/);
@@ -11319,7 +11319,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261122-17/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261122-18/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

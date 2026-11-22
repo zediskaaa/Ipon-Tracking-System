@@ -8740,14 +8740,21 @@ mark.msg-search-hit {
   color: #ffffff;
   opacity: .94;
 }
+.msg-bubble-meta.is-media-overlay .msg-tick.is-sending {
+  color: rgba(255, 255, 255, .82);
+}
 .msg-bubble-meta.is-media-overlay .msg-tick.is-sent {
-  color: rgba(255, 255, 255, .78);
+  color: rgba(255, 255, 255, .74);
 }
 .msg-bubble-meta.is-media-overlay .msg-tick.is-delivered {
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .96);
 }
 .msg-bubble-meta.is-media-overlay .msg-tick.is-read {
-  color: #6ef5a8;
+  color: #f5c85b;
+  --coin-ink: #112a21;
+  --seen-ring: #f5c85b;
+  --seen-cutout: rgba(7, 22, 18, .85);
+  --seen-face-bg: #112a21;
 }
 .msg-bubble.is-video-controls-active .msg-bubble-meta.is-media-overlay {
   opacity: 0;
@@ -8771,38 +8778,315 @@ mark.msg-search-hit {
   align-items: center;
   justify-content: center;
   line-height: 1;
-  transition: color .2s ease, transform .2s ease;
+  --coin-ink: #0f3a2b;
+  transition: color .24s ease, transform .24s ease;
 }
 .msg-tick-svg {
-  width: 13.5px;
-  height: 13.5px;
+  width: 15px;
+  height: 15px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2.3;
+  stroke-width: 2.15;
   stroke-linecap: round;
   stroke-linejoin: round;
   display: block;
+  overflow: visible;
+  flex-shrink: 0;
 }
-.msg-tick-svg.is-double {
-  width: 17.5px;
+.msg-tick-svg .coin-spin-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  transform-origin: 12px 12px;
+  animation: msgCoinSpin 1.1s linear infinite;
+}
+.msg-tick-svg .coin-rim {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.15;
+  transform-origin: 12px 12px;
+}
+.msg-tick-svg .coin-core {
+  fill: currentColor;
+  stroke: none;
+  transform-origin: 12px 12px;
+}
+.msg-tick-svg .coin-pulse,
+.msg-tick-svg .coin-halo {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  opacity: 0;
+  transform-origin: 12px 12px;
+}
+.msg-tick-svg .coin-seal-body {
+  transform-origin: 12px 12px;
+}
+.msg-tick-svg .coin-disc {
+  fill: currentColor;
+  stroke: none;
+}
+.msg-tick-svg .coin-inner {
+  fill: none;
+  stroke: var(--coin-ink, #0f3a2b);
+  stroke-width: 1.25;
+  stroke-opacity: .34;
+}
+.msg-tick-svg .coin-mark {
+  fill: none;
+  stroke: var(--coin-ink, #0f3a2b);
+  stroke-width: 2.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.msg-tick-svg .coin-glint {
+  fill: none;
+  stroke: #fff9e6;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-dasharray: 5 22;
+  stroke-dashoffset: 16;
+  opacity: 0;
 }
 .msg-tick.is-sent {
   color: #7c8a83;
 }
 .msg-row.is-mine .msg-tick.is-sent {
-  color: rgba(236, 242, 239, .78);
+  color: rgba(248, 245, 238, .66);
 }
 .msg-tick.is-delivered {
-  color: #7c8a83;
+  color: #4f695e;
 }
 .msg-row.is-mine .msg-tick.is-delivered {
-  color: rgba(236, 242, 239, .88);
+  color: rgba(248, 245, 238, .94);
 }
 .msg-tick.is-read {
-  color: #16a34a;
+  color: #c9921a;
+  --coin-ink: #fffaf0;
+  --seen-ring: #c9921a;
+  --seen-cutout: #f4efe6;
+  --seen-face-bg: #144937;
 }
 .msg-row.is-mine .msg-tick.is-read {
-  color: #5ef29d;
+  color: #f2c14e;
+  --coin-ink: #0f3a2b;
+  --seen-ring: #f2c14e;
+  --seen-cutout: #145a41;
+  --seen-face-bg: #0e3528;
+}
+.msg-row.is-mine .msg-tick.is-read .msg-tick-svg.is-coin-read {
+  filter: drop-shadow(0 0 3px rgba(242, 193, 78, .28));
+}
+html[data-theme="dark"] .msg-row.is-mine .msg-tick.is-read {
+  --seen-cutout: #186347;
+}
+.msg-thread-stage[data-chat-theme="midnight"] .msg-row.is-mine .msg-tick.is-read {
+  --seen-cutout: #164f3b;
+}
+.msg-thread-stage[data-chat-theme="anonymous"] .msg-row.is-mine .msg-tick.is-read {
+  color: #f2c14e;
+  --coin-ink: #222b30;
+  --seen-ring: #f2c14e;
+  --seen-cutout: #424c53;
+  --seen-face-bg: #263036;
+}
+.msg-seen-dp-stack {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  vertical-align: middle;
+}
+.msg-seen-dp-coin {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1.45px var(--seen-ring, currentColor), 0 1px 4px rgba(0, 0, 0, .24);
+  transform-origin: center;
+  transition: transform .18s cubic-bezier(.22, 1, .36, 1);
+}
+.msg-seen-dp-coin::before {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 50%;
+  border: 1.5px solid var(--seen-ring, currentColor);
+  opacity: 0;
+  pointer-events: none;
+}
+.msg-seen-dp-stack.is-multi .msg-seen-dp-coin + .msg-seen-dp-coin {
+  margin-left: -4.5px;
+  box-shadow: 0 0 0 1.35px var(--seen-ring, currentColor), 0 0 0 2.5px var(--seen-cutout, #145a41), 0 1px 4px rgba(0, 0, 0, .24);
+}
+.msg-seen-dp-coin:hover {
+  transform: scale(1.16);
+  z-index: 2;
+}
+.msg-seen-dp-face {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--seen-face-bg, #0e3528);
+}
+.msg-seen-dp-face::after {
+  content: '';
+  position: absolute;
+  inset: -38% 22%;
+  background: linear-gradient(90deg, transparent, rgba(255, 250, 232, .88), transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+.msg-seen-dp-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
+}
+.msg-seen-dp-fallback {
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1;
+  color: #f9e29c;
+  text-transform: uppercase;
+  user-select: none;
+}
+.msg-seen-dp-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3.5px;
+  margin-left: -3px;
+  border-radius: 999px;
+  background: var(--seen-ring, #f2c14e);
+  color: var(--coin-ink, #0f3a2b);
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 1.4px var(--seen-cutout, #145a41);
+  z-index: 1;
+}
+.msg-tick.is-sent.is-anim .coin-rim {
+  animation: msgCoinLock .36s cubic-bezier(.22, 1.25, .36, 1) both;
+}
+.msg-tick.is-delivered.is-anim .coin-rim {
+  animation: msgCoinDeliverRim .36s cubic-bezier(.22, 1.2, .36, 1) both;
+}
+.msg-tick.is-delivered.is-anim .coin-core {
+  animation: msgCoinCorePop .4s cubic-bezier(.22, 1.38, .36, 1) both;
+}
+.msg-tick.is-delivered.is-anim .coin-pulse {
+  animation: msgCoinDeliverPulse .46s cubic-bezier(.16, 1, .3, 1) both;
+}
+.msg-tick.is-read.is-anim .coin-seal-body {
+  animation: msgCoinSealStamp .42s cubic-bezier(.2, 1.34, .34, 1) both;
+}
+.msg-tick.is-read.is-anim .coin-mark {
+  stroke-dasharray: 16;
+  stroke-dashoffset: 16;
+  animation: msgCoinMarkDraw .28s cubic-bezier(.22, 1, .36, 1) .13s forwards;
+}
+.msg-tick.is-read.is-anim .coin-halo {
+  animation: msgCoinSealHalo .5s cubic-bezier(.16, 1, .3, 1) .05s both;
+}
+.msg-tick.is-read.is-anim .coin-glint {
+  animation: msgCoinGlint .42s ease-out .18s both;
+}
+.msg-tick.is-read.is-anim .msg-seen-dp-coin {
+  animation: msgSeenDpFlip .5s cubic-bezier(.18, 1.28, .32, 1) both;
+}
+.msg-tick.is-read.is-anim .msg-seen-dp-coin:nth-child(2) {
+  animation-delay: .065s;
+}
+.msg-tick.is-read.is-anim .msg-seen-dp-coin:nth-child(3) {
+  animation-delay: .13s;
+}
+.msg-tick.is-read.is-anim .msg-seen-dp-coin::before,
+.msg-seen-dp-coin.is-reader-new::before {
+  animation: msgSeenDpHalo .54s cubic-bezier(.16, 1, .3, 1) .06s both;
+}
+.msg-tick.is-read.is-anim .msg-seen-dp-face::after,
+.msg-seen-dp-coin.is-reader-new .msg-seen-dp-face::after {
+  animation: msgSeenDpSheen .46s ease-out .18s both;
+}
+.msg-seen-dp-coin.is-reader-new {
+  animation: msgSeenReaderJoin .42s cubic-bezier(.22, 1.35, .36, 1) both;
+}
+@keyframes msgSeenDpFlip {
+  0% { transform: perspective(120px) rotateY(-95deg) scale(.56); opacity: .25; }
+  48% { transform: perspective(120px) rotateY(14deg) scale(1.18); opacity: 1; }
+  76% { transform: perspective(120px) rotateY(-4deg) scale(.95); opacity: 1; }
+  100% { transform: perspective(120px) rotateY(0deg) scale(1); opacity: 1; }
+}
+@keyframes msgSeenDpHalo {
+  0% { transform: scale(.86); opacity: .78; }
+  100% { transform: scale(1.64); opacity: 0; }
+}
+@keyframes msgSeenDpSheen {
+  0% { transform: translateX(-145%) rotate(28deg); opacity: 0; }
+  28% { opacity: .92; }
+  100% { transform: translateX(155%) rotate(28deg); opacity: 0; }
+}
+@keyframes msgSeenReaderJoin {
+  0% { transform: translateX(-7px) scale(.35); opacity: 0; }
+  58% { transform: translateX(1.5px) scale(1.16); opacity: 1; }
+  82% { transform: translateX(0) scale(.95); opacity: 1; }
+  100% { transform: translateX(0) scale(1); opacity: 1; }
+}
+@keyframes msgCoinSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes msgCoinLock {
+  0% { transform: scale(.74) rotate(-52deg); opacity: .55; }
+  62% { transform: scale(1.1) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes msgCoinDeliverRim {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+@keyframes msgCoinCorePop {
+  0% { transform: scale(0); opacity: 0; }
+  56% { transform: scale(1.36); opacity: 1; }
+  80% { transform: scale(.92); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes msgCoinDeliverPulse {
+  0% { transform: scale(.86); opacity: .55; }
+  100% { transform: scale(1.42); opacity: 0; }
+}
+@keyframes msgCoinSealStamp {
+  0% { transform: scale(.58) rotate(-18deg); opacity: .65; }
+  48% { transform: scale(1.18) rotate(5deg); opacity: 1; }
+  74% { transform: scale(.94) rotate(-1.5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes msgCoinMarkDraw {
+  from { stroke-dashoffset: 16; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes msgCoinSealHalo {
+  0% { transform: scale(.88); opacity: .72; }
+  100% { transform: scale(1.52); opacity: 0; }
+}
+@keyframes msgCoinGlint {
+  0% { stroke-dashoffset: 16; opacity: 0; }
+  35% { opacity: .85; }
+  100% { stroke-dashoffset: -16; opacity: 0; }
 }
 
 /* Message Row Actions */
@@ -9290,26 +9574,42 @@ html[data-theme="dark"] .msg-row.is-peer .msg-bubble.has-audio-only,
   padding: 0 4px;
   color: var(--muted, #5f655f);
 }
-.msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-sent,
+.msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-sending,
+.msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-sent {
+  color: #7b8982;
+}
 .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-delivered {
-  color: #6c7a74;
+  color: #466055;
 }
 .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-read {
-  color: #16a34a;
+  color: #c9921a;
+  --coin-ink: #fffaf0;
+  --seen-ring: #c9921a;
+  --seen-cutout: #f4efe6;
+  --seen-face-bg: #144937;
+  filter: none;
 }
 html[data-theme="dark"] .msg-bubble.has-audio-only .msg-bubble-meta,
 .msg-thread-stage[data-chat-theme="midnight"] .msg-bubble.has-audio-only .msg-bubble-meta {
   color: #a8bcb2;
 }
+html[data-theme="dark"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-sending,
 html[data-theme="dark"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-sent,
+.msg-thread-stage[data-chat-theme="midnight"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-sending,
+.msg-thread-stage[data-chat-theme="midnight"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-sent {
+  color: rgba(182, 206, 195, .66);
+}
 html[data-theme="dark"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-delivered,
-.msg-thread-stage[data-chat-theme="midnight"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-sent,
 .msg-thread-stage[data-chat-theme="midnight"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-delivered {
-  color: #a8bcb2;
+  color: #cfe0d7;
 }
 html[data-theme="dark"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-read,
 .msg-thread-stage[data-chat-theme="midnight"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-read {
-  color: #5ef29d;
+  color: #f2c14e;
+  --coin-ink: #0e2a20;
+  --seen-ring: #f2c14e;
+  --seen-cutout: #0b1c17;
+  --seen-face-bg: #0e2a20;
 }
 .msg-att-audio-card {
   min-width: 0;
@@ -13806,6 +14106,17 @@ html[data-theme="dark"] .msg-failed-btn.is-delete,
   .msg-typing-dots > span,
   .msg-sync-dot,
   .msg-mini-spin,
+  .msg-tick-svg .coin-spin-ring,
+  .msg-tick.is-anim .coin-rim,
+  .msg-tick.is-anim .coin-core,
+  .msg-tick.is-anim .coin-pulse,
+  .msg-tick.is-anim .coin-seal-body,
+  .msg-tick.is-anim .coin-mark,
+  .msg-tick.is-anim .coin-halo,
+  .msg-tick.is-anim .coin-glint,
+  .msg-seen-dp-coin,
+  .msg-seen-dp-coin::before,
+  .msg-seen-dp-face::after,
   .msg-thread-status-pill,
   .msg-bubble-skel,
   .msg-row-skel,
@@ -13836,6 +14147,9 @@ html[data-theme="dark"] .msg-failed-btn.is-delete,
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+  .msg-tick.is-read.is-anim .coin-mark {
+    stroke-dashoffset: 0 !important;
   }
 }
 

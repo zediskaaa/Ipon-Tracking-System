@@ -4,8 +4,10 @@
   const MAX_ATTACHMENT_BYTES = 52428800; // 50 MB
   const MAX_ATTACHMENTS_PER_MSG = 10;
   const MAX_QUEUE_ATTACHMENTS = 30;
-  const SINGLE_CHECK_SVG = '<svg class="msg-tick-svg" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.6 6.4 11.8 13.2 4.6"/></svg>';
-  const DOUBLE_CHECK_SVG = '<svg class="msg-tick-svg is-double" viewBox="0 0 20 16" aria-hidden="true"><path d="M1.8 8.6 5 11.8 11.8 4.6"/><path d="M7.2 8.6 10.4 11.8 17.4 4.6"/></svg>';
+  const COIN_SENDING_SVG = '<svg class="msg-tick-svg is-coin-sending" viewBox="0 0 24 24" aria-hidden="true"><circle class="coin-spin-ring" cx="12" cy="12" r="8" stroke-dasharray="15 9.5"/></svg>';
+  const COIN_SENT_SVG = '<svg class="msg-tick-svg is-coin-sent" viewBox="0 0 24 24" aria-hidden="true"><circle class="coin-rim" cx="12" cy="12" r="7.8"/></svg>';
+  const COIN_DELIVERED_SVG = '<svg class="msg-tick-svg is-coin-delivered" viewBox="0 0 24 24" aria-hidden="true"><circle class="coin-pulse" cx="12" cy="12" r="7.8"/><circle class="coin-rim" cx="12" cy="12" r="7.8"/><circle class="coin-core" cx="12" cy="12" r="3"/></svg>';
+  const COIN_SEEN_SVG = '<svg class="msg-tick-svg is-coin-read" viewBox="0 0 24 24" aria-hidden="true"><circle class="coin-halo" cx="12" cy="12" r="8.6"/><g class="coin-seal-body"><circle class="coin-disc" cx="12" cy="12" r="8.8"/><circle class="coin-inner" cx="12" cy="12" r="6.1"/><path class="coin-mark" d="M8.7 12.2 10.9 14.4 15.5 9.6"/><path class="coin-glint" d="M7.6 14.4 14.4 7.6"/></g></svg>';
   const VIDEO_PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7,5 19,12 7,19" fill="currentColor" stroke="none"/></svg>';
   const VIDEO_PAUSE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/></svg>';
   const VIDEO_VOL_ON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="4,9 9,9 14,5 14,19 9,15 4,15" fill="currentColor" stroke="none"/><path d="M17.2 8.8a4.8 4.8 0 0 1 0 6.4"/><path d="M19.8 6.2a8.4 8.4 0 0 1 0 11.6"/></svg>';
@@ -1671,20 +1673,91 @@
       : '';
   }
 
-  function renderReceiptTickHtml(m, conv) {
+  const MAX_SEEN_AVATARS = 3;
+
+  function getReceiptStage(m, conv) {
+    if (conv?.receipts_enabled && m?.read_at) return 'read';
+    if (m?.delivered_at) return 'delivered';
+    return 'sent';
+  }
+
+  function resolveSeenReaders(m, conv) {
+    if (conv?.anonymous_enabled) {
+      return [{ id: 'anon', name: 'Anonymous', avatarUrl: 'assets/anonymous-avatar.svg', isAnonymous: true }];
+    }
+    if (isGroupConv(conv)) {
+      const rawList = Array.isArray(m?.seen_by) ? m.seen_by : [];
+      const seen = new Set();
+      const out = [];
+      for (const entry of rawList) {
+        const uid = String(entry?.id || entry?.user_id || '').trim();
+        const member = uid ? findGroupMember(conv, uid) : null;
+        const name = String(entry?.full_name || member?.full_name || 'Member').trim() || 'Member';
+        const key = uid || name.toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        const visible = member ? member.profile_visible !== false : true;
+        const rawUrl = visible ? (entry?.avatar_url || member?.avatar_url || ipon().getMemberAvatar?.(uid) || '') : '';
+        out.push({ id: uid || key, name, avatarUrl: safeDpUrl(rawUrl), isAnonymous: false });
+      }
+      return out;
+    }
+    const selfChat = isSelfUser(conv);
+    const peerVisible = conv?.profile_visible !== false;
+    const peerId = String(conv?.id || (selfChat ? initializedProfile?.id : '') || 'peer');
+    const peerName = String(
+      selfChat
+        ? (initializedProfile?.full_name || conv?.full_name || 'You')
+        : (conv?.full_name || convDisplayTitle(conv) || 'User')
+    ).trim() || 'User';
+    const rawUrl = peerVisible
+      ? (conv?.avatar_url || (selfChat ? initializedProfile?.avatar_url : '') || ipon().getMemberAvatar?.(peerId) || '')
+      : '';
+    return [{ id: peerId, name: peerName, avatarUrl: safeDpUrl(rawUrl), isAnonymous: false }];
+  }
+
+  function renderSeenDpCoinHtml(reader, { isNew = false } = {}) {
+    const initialsFn = ipon()?.initials;
+    const letters = escapeHtml(typeof initialsFn === 'function' ? initialsFn(reader.name || 'User') : String(reader.name || 'U').slice(0, 1).toUpperCase());
+    const faceHtml = reader.isAnonymous
+      ? '<img class="msg-seen-dp-img" src="assets/anonymous-avatar.svg" alt="" decoding="async">'
+      : reader.avatarUrl
+        ? `<img class="msg-seen-dp-img" src="${escAttr(reader.avatarUrl)}" alt="" data-avatar-img loading="lazy" decoding="async"><span class="msg-seen-dp-fallback avatar-fallback-inner" hidden>${letters}</span>`
+        : `<span class="msg-seen-dp-fallback">${letters}</span>`;
+    return `<span class="msg-seen-dp-coin${isNew ? ' is-reader-new' : ''}" data-seen-reader="${escAttr(reader.id)}" aria-hidden="true"><span class="msg-seen-dp-face">${faceHtml}</span></span>`;
+  }
+
+  function renderReceiptTickHtml(m, conv, { animate = false, addedReaderIds = null } = {}) {
     const mine = m?.sender_id === initializedProfile?.id;
     const isDeleted = Boolean(m?.deleted_for_everyone_at);
     if (!mine || isDeleted) return '';
-    if (conv?.receipts_enabled && m.read_at) {
-      const seenTip = !conv.anonymous_enabled && isGroupConv(conv) && Array.isArray(m.seen_by) && m.seen_by.length
-        ? `Seen by ${m.seen_by.map((x) => x?.full_name).filter(Boolean).join(', ')}`
+    const animCls = animate ? ' is-anim' : '';
+    const stage = getReceiptStage(m, conv);
+    if (stage === 'read') {
+      const readers = resolveSeenReaders(m, conv);
+      const isGrp = isGroupConv(conv);
+      const readerNames = readers.map((x) => x.name).filter(Boolean);
+      const seenAria = !conv?.anonymous_enabled && isGrp && readerNames.length
+        ? `Seen by ${readerNames.join(', ')}`
         : 'Seen';
-      return `<span class="msg-tick is-read" title="${escAttr(seenTip)}" aria-label="${escAttr(seenTip)}">${DOUBLE_CHECK_SVG}</span>`;
+      const seenTitle = !conv?.anonymous_enabled && !isSelfUser(conv) && readerNames.length
+        ? `Seen by ${readerNames.join(', ')}`
+        : 'Seen';
+      if (!readers.length) {
+        return `<span class="msg-tick is-read${animCls}" title="${escAttr(seenTitle)}" aria-label="${escAttr(seenAria)}">${COIN_SEEN_SVG}</span>`;
+      }
+      const visible = readers.slice(0, MAX_SEEN_AVATARS);
+      const overflow = readers.length - visible.length;
+      const seenKeys = readers.map((r) => r.id).join(',');
+      const stackCls = visible.length > 1 || overflow > 0 ? 'msg-seen-dp-stack is-multi' : 'msg-seen-dp-stack';
+      const coinsHtml = visible.map((r) => renderSeenDpCoinHtml(r, { isNew: Boolean(addedReaderIds && addedReaderIds.has(r.id)) })).join('');
+      const moreHtml = overflow > 0 ? `<span class="msg-seen-dp-more" aria-hidden="true">+${overflow}</span>` : '';
+      return `<span class="msg-tick is-read${animCls}" data-seen-keys="${escAttr(seenKeys)}" title="${escAttr(seenTitle)}" aria-label="${escAttr(seenAria)}"><span class="${stackCls}">${coinsHtml}${moreHtml}</span></span>`;
     }
-    if (m.delivered_at) {
-      return `<span class="msg-tick is-delivered" title="Delivered" aria-label="Delivered">${DOUBLE_CHECK_SVG}</span>`;
+    if (stage === 'delivered') {
+      return `<span class="msg-tick is-delivered${animCls}" title="Delivered" aria-label="Delivered">${COIN_DELIVERED_SVG}</span>`;
     }
-    return `<span class="msg-tick is-sent" title="Sent" aria-label="Sent">${SINGLE_CHECK_SVG}</span>`;
+    return `<span class="msg-tick is-sent${animCls}" title="Sent" aria-label="Sent">${COIN_SENT_SVG}</span>`;
   }
 
   function patchMessageReactionsDom(msg) {
@@ -1719,12 +1792,43 @@
     const escId = typeof CSS?.escape === 'function' ? CSS.escape(String(msg.id)) : String(msg.id);
     const row = list.querySelector(`.msg-row[data-msg-id="${escId}"]`);
     if (!row) return false;
-    const nextTick = renderReceiptTickHtml(msg, conv);
     const metaEl = row.querySelector('.msg-bubble-meta');
     if (metaEl) {
       const oldTick = metaEl.querySelector('.msg-tick');
+      const prevStage = oldTick?.classList?.contains('is-read') ? 'read'
+        : oldTick?.classList?.contains('is-delivered') ? 'delivered'
+        : oldTick?.classList?.contains('is-sent') ? 'sent'
+        : oldTick?.classList?.contains('is-sending') ? 'sending'
+        : '';
+      const nextStage = getReceiptStage(msg, conv);
+      if (oldTick && prevStage === nextStage) {
+        if (nextStage === 'read') {
+          const readers = resolveSeenReaders(msg, conv);
+          const prevKeys = String(oldTick.getAttribute?.('data-seen-keys') || '').split(',').filter(Boolean);
+          const nextKeys = readers.map((r) => r.id);
+          if (prevKeys.join(',') !== nextKeys.join(',')) {
+            const prevSet = new Set(prevKeys);
+            const addedReaderIds = new Set(nextKeys.filter((k) => !prevSet.has(k)));
+            oldTick.outerHTML = renderReceiptTickHtml(msg, conv, { animate: false, addedReaderIds });
+            ipon().bindAvatarFallbacks?.(metaEl);
+            return true;
+          }
+          const readerNames = readers.map((x) => x.name).filter(Boolean);
+          const seenAria = !conv?.anonymous_enabled && isGroupConv(conv) && readerNames.length
+            ? `Seen by ${readerNames.join(', ')}`
+            : 'Seen';
+          const seenTitle = !conv?.anonymous_enabled && !isSelfUser(conv) && readerNames.length
+            ? `Seen by ${readerNames.join(', ')}`
+            : 'Seen';
+          if (oldTick.getAttribute?.('title') !== seenTitle) oldTick.setAttribute?.('title', seenTitle);
+          if (oldTick.getAttribute?.('aria-label') !== seenAria) oldTick.setAttribute?.('aria-label', seenAria);
+        }
+        return true;
+      }
+      const nextTick = renderReceiptTickHtml(msg, conv, { animate: Boolean(prevStage && prevStage !== nextStage) });
       if (oldTick) oldTick.outerHTML = nextTick;
       else if (nextTick) metaEl.insertAdjacentHTML('beforeend', nextTick);
+      if (nextStage === 'read') ipon().bindAvatarFallbacks?.(metaEl);
       return true;
     }
     return false;
@@ -1788,7 +1892,7 @@
       if (JSON.stringify(a.reactions || []) !== JSON.stringify(b.reactions || [])) {
         changedReactions.push(b);
       }
-      if (a.delivered_at !== b.delivered_at || a.read_at !== b.read_at) {
+      if (a.delivered_at !== b.delivered_at || a.read_at !== b.read_at || JSON.stringify(a.seen_by || []) !== JSON.stringify(b.seen_by || [])) {
         changedReceipts.push(b);
       }
     }
@@ -3195,8 +3299,8 @@
     const metaRight = isFailed
       ? '<span class="msg-tick is-failed-meta">! Not sent</span>'
       : p.status === 'sent'
-        ? `<span class="msg-tick is-sent" aria-label="Sent">${SINGLE_CHECK_SVG}</span>`
-        : `<span class="msg-tick is-sending"><span class="msg-mini-spin" aria-hidden="true"></span><span class="msg-pending-status-text">${escapeHtml(statusLabel)}</span></span>`;
+        ? `<span class="msg-tick is-sent" title="Sent" aria-label="Sent">${COIN_SENT_SVG}</span>`
+        : `<span class="msg-tick is-sending" aria-label="${escAttr(statusLabel)}">${COIN_SENDING_SVG}<span class="msg-pending-status-text">${escapeHtml(statusLabel)}</span></span>`;
     const bodyHtml = p.body ? `<p class="msg-text">${formatMessageBodyHtml(p.body)}</p>` : '';
     const { hasTopMedia, hasAudioOnly } = getBubbleMediaLayout(atts, {
       hasText: Boolean(p.body),
@@ -3316,7 +3420,7 @@
         ? document.querySelector(`#msg-messages-list [data-pending-id="${CSS.escape(pending.localId)}"]`)
         : null;
       const tick = sentPendingRow?.querySelector('.msg-tick');
-      if (tick) tick.outerHTML = `<span class="msg-tick is-sent" aria-label="Sent">${SINGLE_CHECK_SVG}</span>`;
+      if (tick) tick.outerHTML = `<span class="msg-tick is-sent is-anim" title="Sent" aria-label="Sent">${COIN_SENT_SVG}</span>`;
       sentPendingRow?.classList.replace('is-sending', 'is-sent');
       sentPendingRow?.querySelector('.msg-bubble')?.classList.replace('is-sending', 'is-sent');
     } catch (error) {
@@ -5457,6 +5561,7 @@
 
   async function submitComposer(event) {
     event?.preventDefault();
+    ipon().primeUiSound?.();
     if (!state.activeConvId || !isEligible()) return;
     const activeConv = state.activeThread?.conversation;
     if (activeConv && !canInteractInThread(activeConv)) {
@@ -8981,7 +9086,19 @@
         if (msgItem) {
           if (row.delivered_at) msgItem.delivered_at = row.delivered_at;
           if (row.read_at && state.activeThread?.conversation?.receipts_enabled !== false) {
-            msgItem.read_at = row.read_at;
+            const activeConv = state.activeThread?.conversation;
+            msgItem.read_at = msgItem.read_at || row.read_at;
+            if (isGroupConv(activeConv) && !activeConv.anonymous_enabled && row.user_id) {
+              const existingSeen = Array.isArray(msgItem.seen_by) ? msgItem.seen_by : [];
+              const uidStr = String(row.user_id);
+              if (!existingSeen.some((x) => String(x?.id || x?.user_id || '') === uidStr)) {
+                const member = findGroupMember(activeConv, uidStr);
+                msgItem.seen_by = [
+                  ...existingSeen,
+                  { id: uidStr, full_name: member?.full_name || 'Member', avatar_url: member?.avatar_url || '', read_at: row.read_at }
+                ];
+              }
+            }
           }
           if (!patchMessageReceiptsDom(msgItem, state.activeThread?.conversation)) {
             renderMessagesList();

@@ -202,20 +202,21 @@
       return;
     }
     if (kind === 'msg-send') {
-      scheduleUiTone(ctx, master, { freq: 340, endFreq: 740, type: 'sine', start: 0, duration: 0.078, gain: 0.058, attack: 0.005 });
-      scheduleUiBurst(ctx, master, { start: 0.01, duration: 0.018, gain: 0.022, filterFreq: 2800, q: 1.5 });
+      scheduleUiTone(ctx, master, { freq: 440, endFreq: 880, type: 'sine', start: 0, duration: 0.115, gain: 0.088, attack: 0.004 });
+      scheduleUiTone(ctx, master, { freq: 1174.66, endFreq: 1396.91, type: 'triangle', start: 0.024, duration: 0.095, gain: 0.036, attack: 0.004 });
+      scheduleUiBurst(ctx, master, { start: 0.004, duration: 0.022, gain: 0.038, filterFreq: 3100, q: 1.5 });
       return;
     }
     if (kind === 'msg-typing') {
-      scheduleUiTone(ctx, master, { freq: 520, endFreq: 580, type: 'sine', start: 0, duration: 0.24, gain: 0.055, attack: 0.012 });
-      scheduleUiTone(ctx, master, { freq: 590, endFreq: 650, type: 'sine', start: 0.19, duration: 0.27, gain: 0.052, attack: 0.012 });
-      scheduleUiTone(ctx, master, { freq: 670, endFreq: 740, type: 'sine', start: 0.39, duration: 0.34, gain: 0.048, attack: 0.012 });
+      scheduleUiTone(ctx, master, { freq: 520, endFreq: 580, type: 'sine', start: 0, duration: 0.24, gain: 0.072, attack: 0.01 });
+      scheduleUiTone(ctx, master, { freq: 590, endFreq: 650, type: 'sine', start: 0.19, duration: 0.27, gain: 0.068, attack: 0.01 });
+      scheduleUiTone(ctx, master, { freq: 670, endFreq: 740, type: 'sine', start: 0.39, duration: 0.34, gain: 0.064, attack: 0.01 });
       return;
     }
     if (kind === 'msg-receive') {
-      scheduleUiTone(ctx, master, { freq: 659.25, type: 'sine', start: 0, duration: 0.14, gain: 0.062, attack: 0.006 });
-      scheduleUiTone(ctx, master, { freq: 880.0, type: 'sine', start: 0.075, duration: 0.24, gain: 0.068, attack: 0.006 });
-      scheduleUiTone(ctx, master, { freq: 1760.0, type: 'triangle', start: 0.075, duration: 0.16, gain: 0.014, attack: 0.006 });
+      scheduleUiTone(ctx, master, { freq: 659.25, type: 'sine', start: 0, duration: 0.15, gain: 0.08, attack: 0.005 });
+      scheduleUiTone(ctx, master, { freq: 880.0, type: 'sine', start: 0.075, duration: 0.26, gain: 0.088, attack: 0.005 });
+      scheduleUiTone(ctx, master, { freq: 1760.0, type: 'triangle', start: 0.075, duration: 0.18, gain: 0.024, attack: 0.005 });
       return;
     }
     if (kind === 'msg-voice-start') {
@@ -328,18 +329,78 @@
     }
   }
 
+  function primeUiSound() {
+    if (!isUiSoundEnabled()) return false;
+    const ctx = getUiAudioContext();
+    if (!ctx) return false;
+    if (ctx.state === 'running') return true;
+    try {
+      const resumed = ctx.resume?.();
+      if (resumed && typeof resumed.catch === 'function') resumed.catch(() => { });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-    const unlockUiAudio = () => {
+    const unlockEvents = ['pointerdown', 'touchend', 'click', 'keydown'];
+    let unlockArmed = false;
+    let stateHookedCtx = null;
+
+    const disarmUnlock = () => {
+      if (!unlockArmed) return;
+      unlockArmed = false;
+      unlockEvents.forEach((ev) => window.removeEventListener?.(ev, unlockUiAudio));
+    };
+
+    const armUnlock = () => {
+      if (unlockArmed) return;
+      unlockArmed = true;
+      unlockEvents.forEach((ev) => window.addEventListener(ev, unlockUiAudio, { passive: true }));
+    };
+
+    const bindAudioStateWatch = (ctx) => {
+      if (!ctx || stateHookedCtx === ctx) return;
+      stateHookedCtx = ctx;
+      const onStateChange = () => {
+        if (ctx.state === 'running') disarmUnlock();
+        else armUnlock();
+      };
+      if (typeof ctx.addEventListener === 'function') {
+        ctx.addEventListener('statechange', onStateChange);
+      } else {
+        ctx.onstatechange = onStateChange;
+      }
+    };
+
+    function unlockUiAudio() {
       if (!isUiSoundEnabled()) return;
       const ctx = getUiAudioContext();
-      if (ctx && ctx.state === 'suspended') {
-        ctx.resume?.().catch(() => { });
+      if (!ctx) return;
+      bindAudioStateWatch(ctx);
+      if (ctx.state === 'running') {
+        disarmUnlock();
+        return;
       }
-      window.removeEventListener?.('pointerdown', unlockUiAudio);
-      window.removeEventListener?.('keydown', unlockUiAudio);
-    };
-    window.addEventListener('pointerdown', unlockUiAudio, { passive: true });
-    window.addEventListener('keydown', unlockUiAudio, { passive: true });
+      try {
+        const resumed = ctx.resume?.();
+        if (resumed && typeof resumed.then === 'function') {
+          resumed.then(() => {
+            if (ctx.state === 'running') disarmUnlock();
+          }).catch(() => { });
+        }
+      } catch { }
+    }
+
+    armUnlock();
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && uiAudioCtx && uiAudioCtx.state !== 'running') {
+          armUnlock();
+        }
+      });
+    }
   }
   const THEME_SUN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32 1.41-1.41"/></svg>';
   const THEME_MOON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79Z"/></svg>';
@@ -18365,7 +18426,7 @@
     get client() { return getClient(); }, configured, init, rpc, fireKeepaliveRpc, money, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
-    playUiSound, isUiSoundEnabled, setUiSoundEnabled,
+    playUiSound, isUiSoundEnabled, setUiSoundEnabled, primeUiSound,
     setOnlineVisibility, syncMessagesBadges, canViewAnnouncementReactors, supportsNativeScreenshotProtection, probeNativeScreenshotProtection, getClientPlatform, reportClientPlatform, refreshPeerClientPlatforms, hasLiveBrowserSession,
     openTutorial: (...args) => window.IponTutorial?.open?.(...args),
     getCurrentUserId: () => currentProfile?.id || readShellSnapshot()?.userId || '',
