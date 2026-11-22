@@ -308,9 +308,9 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
   assert.match(css, /\/\* Mobile Curved Emerald Header & Floating Pill Navigation Dock \*\/[\s\S]*?\.app-sidebar\.is-scroll-hidden[\s\S]*?transform:\s*translate3d\(0,\s*calc\(-100% - 18px\),\s*0\)/);
   assert.match(css, /\/\* Mobile Curved Emerald Header & Floating Pill Navigation Dock \*\/[\s\S]*?\.app-nav\s*\{[\s\S]*?border-radius:\s*26px[\s\S]*?background:\s*#FBF8F0/);
   assert.match(css, /\/\* Mobile Curved Emerald Header & Floating Pill Navigation Dock \*\/[\s\S]*?\.app-nav a\.is-active\s*\{[\s\S]*?color:\s*#F2C14E/);
-  assert.match(css, /\/\* Messages & Connections — Navigation Bar Style Preset & Pull-to-Refresh \*\/[\s\S]*?\.msg-tabs\s*\{[\s\S]*?border-radius:\s*26px[\s\S]*?background:\s*#FBF8F0/);
-  assert.match(css, /\/\* Messages & Connections — Navigation Bar Style Preset & Pull-to-Refresh \*\/[\s\S]*?\.msg-tab\.is-active\s*\{[\s\S]*?color:\s*#F2C14E/);
-  assert.match(css, /\/\* Messages & Connections — Navigation Bar Style Preset & Pull-to-Refresh \*\/[\s\S]*?\.msg-topbar::before\s*\{[\s\S]*?border-radius:\s*0 0 32px 32px/);
+  assert.match(css, /\/\* Messages & Connections — Compact Header & Pull-to-Refresh \*\/[\s\S]*?\.msg-topbar\s*\{[\s\S]*?background:\s*linear-gradient/);
+  assert.match(css, /\.msg-filter-pills\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/);
+  assert.doesNotMatch(css, /\.msg-topbar::before\s*\{|\.msg-tabs\s*\{/);
   assert.match(read('js/messages.js'), /async function refreshWorkspace\(\)[\s\S]*?window\.IponMessages = \{[\s\S]*?refreshWorkspace,/);
   assert.match(read('database/migrations/20261119_133_message_notification_sender_avatar_and_title.sql'), /actor_avatar_url text[\s\S]*?v_notif_title := coalesce\(nullif\(btrim\(v_sender\.full_name\), ''\), 'User'\)/);
   assert.match(read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java'), /cleanMessageNotificationTitle[\s\S]*?loadCircularAvatarBitmap[\s\S]*?IconCompat\.createWithBitmap\(avatarBitmap\)[\s\S]*?NotificationCompat\.MessagingStyle/);
@@ -324,7 +324,7 @@ test('primary navigation stays at 5 tabs across all roles while moving Settings 
 
   for (const file of ['dashboard.html', 'reports.html', 'audit.html', 'settings.html', 'account.html']) {
     const html = read(file);
-    assert.match(html, /css\/app\.css\?v=20261122-16/);
+    assert.match(html, /css\/app\.css\?v=20261122-17/);
     assert.match(html, /js\/core\.js\?v=20261122-18/);
     const opens = (html.match(/<dialog\b/g) || []).length;
     const closes = (html.match(/<\/dialog>/g) || []).length;

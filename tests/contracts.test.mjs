@@ -6226,8 +6226,10 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(messagesJs, /id="msg-profile-popover"/);
   assert.match(messagesJs, /ipon\(\)\.confirmAction\(/);
   assert.doesNotMatch(messagesJs, /\bwindow\.(alert|confirm|prompt)\s*\(/);
-  assert.match(messagesJs, /data-msg-tab="chats"[\s\S]*?data-msg-tab="requests"[\s\S]*?data-msg-tab="friends"/);
-  assert.doesNotMatch(messagesJs, /data-msg-tab="discover"|id="msg-view-discover"|class="msg-brand-icon"/);
+  assert.match(messagesJs, /id="msg-friends-btn"[^>]*data-msg-tab="friends"[\s\S]*?id="msg-tab-friends-badge"/);
+  assert.match(messagesJs, /data-msg-filter="inbox"[\s\S]*?data-msg-filter="unread"[\s\S]*?data-msg-filter="requests"[\s\S]*?id="msg-tab-req-badge"[\s\S]*?data-msg-filter="archived"/);
+  assert.match(messagesJs, /id="msg-friends-back-btn"[^>]*data-msg-tab="chats"/);
+  assert.doesNotMatch(messagesJs, /data-msg-tab="discover"|id="msg-view-discover"|class="msg-brand-icon"|class="msg-tabs"|id="msg-workspace-subtitle"/);
   assert.match(messagesJs, /id="msg-list-search"[\s\S]*?id="msg-list-search-clear"[\s\S]*?id="msg-new-chat-btn"/);
   assert.doesNotMatch(messagesJs, /setBusy\s*\(\s*sendBtn/);
   assert.match(messagesJs, /data-pending-retry[\s\S]*?data-pending-delete/);
@@ -6261,9 +6263,10 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
 
   // 5. CSS responsive layout, circular X geometry, dark theme & badge hiding
   assert.match(appCss, /\.msg-dialog,[\s\S]*?font-family:\s*system-ui/);
-  assert.match(appCss, /\.msg-topbar\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+auto;/);
-  assert.match(appCss, /\.msg-topbar-actions\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?justify-self:\s*end;/);
+  assert.match(appCss, /\.msg-topbar\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;/);
+  assert.match(appCss, /\.msg-topbar-actions\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?justify-self:\s*end;/);
   assert.match(appCss, /\.msg-topbar-actions\s+\.msg-icon-btn\s*\{[\s\S]*?border-radius:\s*50%;/);
+  assert.match(appCss, /\.msg-filter-pills\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(appCss, /\.msg-mini-close,\s*\.msg-queue-remove,\s*\.msg-pop-close\s*\{[^}]*flex:\s*0\s+0\s+26px\s*!important;[^}]*aspect-ratio:\s*1\s*\/\s*1/s);
   assert.match(appCss, /\.msg-upload-queue\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/s);
   assert.match(appCss, /\.msg-attachments\.is-carousel\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/s);
@@ -6288,7 +6291,8 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(appCss, /@keyframes\s+msgWaveDot\s*\{/);
   assert.match(appCss, /\.msg-search-clear\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1/s);
   assert.match(appCss, /\.msg-dialog\[open\]/);
-  assert.match(appCss, /@media\s*\(max-width:\s*820px\)\s*\{[\s\S]*?\.msg-topbar-actions\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;[\s\S]*?justify-self:\s*end;[\s\S]*?\.msg-tabs\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(appCss, /@media\s*\(max-width:\s*820px\)\s*\{[\s\S]*?\.msg-topbar-actions\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;[\s\S]*?justify-self:\s*end;/s);
+  assert.doesNotMatch(appCss, /\.msg-topbar::before\s*\{|\.msg-tabs\s*\{/);
   assert.match(appCss, /@media\s*\(max-width:\s*820px\)\s*\{[\s\S]*?\.msg-chat-layout\.is-mobile-thread\s+\.msg-sidebar\s*\{\s*display:\s*none/s);
   assert.match(appCss, /\.sidebar-utility\s+\.notification-badge\[hidden\][\s\S]*?display:\s*none\s*!important/s);
   assert.match(appCss, /\.msg-thread-skeleton\s*\{/);

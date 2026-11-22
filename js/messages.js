@@ -868,24 +868,13 @@
         <div class="msg-shell">
           <header class="msg-topbar">
             <div class="msg-brand">
-              <h2 id="msg-workspace-title">Messages &amp; Connections</h2>
-              <p id="msg-workspace-subtitle">Private chats, friends, and social connections</p>
+              <h2 id="msg-workspace-title">Messages</h2>
             </div>
-            <nav class="msg-tabs" role="tablist" aria-label="Messaging sections">
-              <button class="msg-tab is-active" type="button" role="tab" data-msg-tab="chats" aria-selected="true">
-                <span>Chats</span>
-                <b id="msg-tab-chats-badge" hidden>0</b>
-              </button>
-              <button class="msg-tab" type="button" role="tab" data-msg-tab="requests" aria-selected="false" aria-label="Message Requests" title="Message Requests">
-                <span>Requests</span>
-                <b id="msg-tab-req-badge" hidden>0</b>
-              </button>
-              <button class="msg-tab" type="button" role="tab" data-msg-tab="friends" aria-selected="false">
-                <span>Friends</span>
+            <div class="msg-topbar-actions">
+              <button class="msg-icon-btn" id="msg-friends-btn" type="button" data-msg-tab="friends" aria-label="Friends and requests" aria-pressed="false" title="Friends &amp; requests">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 <b id="msg-tab-friends-badge" hidden>0</b>
               </button>
-            </nav>
-            <div class="msg-topbar-actions">
               <button class="msg-icon-btn" id="msg-privacy-btn" type="button" aria-label="Messaging & privacy settings" title="Messaging privacy & blocked users">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.66 0-1.25.4-1.51 1Z"/></svg>
               </button>
@@ -915,10 +904,11 @@
                       ${NEW_GROUP_ICON_SVG}
                     </button>
                   </div>
-                  <div class="msg-filter-pills" id="msg-filter-pills">
-                    <button type="button" class="msg-pill is-active" data-msg-filter="inbox">Inbox</button>
-                    <button type="button" class="msg-pill" data-msg-filter="unread">Unread</button>
-                    <button type="button" class="msg-pill" data-msg-filter="archived">Archived</button>
+                  <div class="msg-filter-pills" id="msg-filter-pills" role="tablist" aria-label="Chat inbox filters">
+                    <button type="button" class="msg-pill is-active" role="tab" aria-selected="true" data-msg-filter="inbox"><span>Inbox</span></button>
+                    <button type="button" class="msg-pill" role="tab" aria-selected="false" data-msg-filter="unread"><span>Unread</span></button>
+                    <button type="button" class="msg-pill" role="tab" aria-selected="false" data-msg-filter="requests" aria-label="Message Requests" title="Message Requests"><span>Requests</span><b class="msg-pill-badge" id="msg-tab-req-badge" hidden>0</b></button>
+                    <button type="button" class="msg-pill" role="tab" aria-selected="false" data-msg-filter="archived"><span>Archived</span></button>
                   </div>
                 </div>
                 <div class="msg-conv-list" id="msg-conv-list" role="listbox" aria-label="Conversation list"></div>
@@ -2254,11 +2244,6 @@
       .reduce((sum, c) => sum + ((c.unread_count > 0 || c.marked_unread) ? Math.max(1, Number(c.unread_count || 0)) : 0), 0);
     const friendReqCount = (state.overview?.incoming_requests || []).length;
     const msgReqCount = state.conversations.filter((c) => c.is_incoming_request && !c.is_archived).length;
-    const chatsUnread = state.conversations
-      .filter((c) => !c.is_incoming_request && !c.is_archived && !c.is_muted)
-      .reduce((sum, c) => sum + ((c.unread_count > 0 || c.marked_unread) ? Math.max(1, Number(c.unread_count || 0)) : 0), 0);
-    const chatsBadge = document.getElementById('msg-tab-chats-badge');
-    if (chatsBadge) { chatsBadge.textContent = String(chatsUnread); chatsBadge.hidden = chatsUnread === 0; }
     const reqBadge = document.getElementById('msg-tab-req-badge');
     if (reqBadge) { reqBadge.textContent = String(msgReqCount); reqBadge.hidden = msgReqCount === 0; }
     const friendsBadge = document.getElementById('msg-tab-friends-badge');
@@ -2544,9 +2529,12 @@
       newChatBtn.setAttribute('aria-label', inDirectoryMode ? 'Back to inbox' : 'Browse people directory');
       newChatBtn.setAttribute('title', inDirectoryMode ? 'Back to inbox' : 'New chat / Browse people');
     }
-    if (filterPills) filterPills.hidden = state.tab === 'requests' || inDirectoryMode;
+    if (filterPills) filterPills.hidden = inDirectoryMode;
+    const activeFilter = state.tab === 'requests' ? 'requests' : state.chatFilter;
     filterPills?.querySelectorAll('[data-msg-filter]').forEach((btn) => {
-      btn.classList.toggle('is-active', btn.dataset.msgFilter === state.chatFilter);
+      const isAct = btn.dataset.msgFilter === activeFilter;
+      btn.classList.toggle('is-active', isAct);
+      btn.setAttribute('aria-selected', isAct ? 'true' : 'false');
     });
 
     if (inDirectoryMode) {
@@ -2562,13 +2550,16 @@
     const items = getFilteredConversations();
     if (!items.length) {
       const emptyCopy = state.tab === 'requests'
-        ? { title: 'No message requests', body: 'Messages from people who are not in your friends list appear here before reaching your inbox.' }
-        : state.chatFilter === 'archived'
-          ? { title: 'No archived chats', body: 'Archived conversations stay tucked away cleanly until you unarchive them.' }
-          : state.chatListQuery
-            ? { title: 'No matching requests', body: 'Try clearing the filter to view all incoming message requests.' }
+        ? (state.chatListQuery
+          ? { title: 'No matching requests', body: 'Try clearing the search filter to view all incoming message requests.' }
+          : { title: 'No message requests', body: 'Messages from people who are not in your friends list appear here before reaching your inbox.' })
+        : state.chatFilter === 'unread'
+          ? { title: 'All caught up', body: 'You have no unread conversations right now.' }
+          : state.chatFilter === 'archived'
+            ? { title: 'No archived chats', body: 'Archived conversations stay tucked away cleanly until you unarchive them.' }
             : { title: 'No conversations yet', body: 'Search by name or @username above to start a direct conversation.' };
-      listEl.innerHTML = `<div class="empty-state msg-list-empty"><strong>${escapeHtml(emptyCopy.title)}</strong><p>${escapeHtml(emptyCopy.body)}</p>${!state.chatListQuery && state.tab !== 'requests' ? '<button type="button" class="button button-secondary button-sm" data-goto-discover>Browse people</button>' : ''}</div>`;
+      const showDiscoverCta = !state.chatListQuery && state.tab !== 'requests' && state.chatFilter === 'inbox';
+      listEl.innerHTML = `<div class="empty-state msg-list-empty"><strong>${escapeHtml(emptyCopy.title)}</strong><p>${escapeHtml(emptyCopy.body)}</p>${showDiscoverCta ? '<button type="button" class="button button-secondary button-sm" data-goto-discover>Browse people</button>' : ''}</div>`;
       return;
     }
 
@@ -4936,6 +4927,12 @@
     state.friendsSubTab = sub;
     view.innerHTML = `
       <section class="msg-friends-hero" aria-label="Friends and Connections">
+        <div class="msg-friends-hero-top">
+          <button type="button" class="msg-friends-back-btn" id="msg-friends-back-btn" data-msg-tab="chats" aria-label="Back to chats">
+            ${BACK_ARROW_ICON_SVG}
+            <span>Back to chats</span>
+          </button>
+        </div>
         <div class="msg-friends-hero-copy">
           <h3>Friends <span class="msg-hero-amp">&amp;</span> Connections</h3>
           <p>Manage accepted friends, incoming requests, and sent requests.</p>
@@ -6617,7 +6614,11 @@
     document.querySelectorAll('[data-msg-tab]').forEach((btn) => {
       const act = btn.dataset.msgTab === state.tab;
       btn.classList.toggle('is-active', act);
-      btn.setAttribute('aria-selected', act ? 'true' : 'false');
+      if (btn.getAttribute?.('role') === 'tab') {
+        btn.setAttribute('aria-selected', act ? 'true' : 'false');
+      } else if (btn.id === 'msg-friends-btn') {
+        btn.setAttribute('aria-pressed', act ? 'true' : 'false');
+      }
     });
     const showChats = state.tab === 'chats' || state.tab === 'requests';
     const chatsView = document.getElementById('msg-view-chats');
@@ -6628,6 +6629,7 @@
 
   function activateSidebarSearch(focusInput = true) {
     state.tab = 'chats';
+    if (state.chatFilter === 'requests') state.chatFilter = 'inbox';
     state.searchActive = true;
     state.mobileShowThread = false;
     syncTabUi();
@@ -6699,6 +6701,11 @@
     }
     const resolvedTab = nextTab === 'notifications' ? 'chats' : nextTab;
     state.tab = resolvedTab;
+    if (resolvedTab === 'requests') {
+      state.chatFilter = 'requests';
+    } else if (resolvedTab === 'chats' && state.chatFilter === 'requests') {
+      state.chatFilter = 'inbox';
+    }
     if (resolvedTab !== 'chats' && resolvedTab !== 'requests') syncNativeScreenshotLock(null);
     if (resolvedTab === 'chats' || resolvedTab === 'requests') {
       state.mobileShowThread = false;
@@ -7470,10 +7477,31 @@
       if (ev.target.closest?.('#msg-retry-thread-btn') && state.activeConvId) { await openConversation(state.activeConvId); return; }
 
       const tabBtn = ev.target.closest?.('[data-msg-tab]');
-      if (tabBtn) { switchTab(tabBtn.dataset.msgTab); return; }
+      if (tabBtn) {
+        const nextTab = tabBtn.dataset.msgTab;
+        if (tabBtn.id === 'msg-friends-btn' && state.tab === 'friends') {
+          switchTab('chats');
+        } else {
+          switchTab(nextTab);
+        }
+        return;
+      }
 
       const filterBtn = ev.target.closest?.('[data-msg-filter]');
-      if (filterBtn) { state.chatFilter = filterBtn.dataset.msgFilter; renderConversationList(); return; }
+      if (filterBtn) {
+        const nextFilter = filterBtn.dataset.msgFilter || 'inbox';
+        if (nextFilter === 'requests') {
+          switchTab('requests');
+        } else {
+          state.chatFilter = nextFilter;
+          if (state.tab !== 'chats') {
+            switchTab('chats');
+          } else {
+            renderConversationList();
+          }
+        }
+        return;
+      }
 
       const subBtn = ev.target.closest?.('[data-friends-sub]');
       if (subBtn) { state.friendsSubTab = ['all', 'incoming', 'sent'].includes(subBtn.dataset.friendsSub) ? subBtn.dataset.friendsSub : 'all'; renderFriendsView(); return; }
@@ -9044,6 +9072,7 @@
     const targetTab = tab || 'chats';
     if (!dialog.open) dialog.showModal();
     if (defaultLanding) {
+      state.chatFilter = 'inbox';
       clearSidebarSearch();
       clearActiveThreadSelection();
     }
