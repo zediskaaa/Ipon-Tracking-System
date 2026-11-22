@@ -186,10 +186,13 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.match(html, /id="users-status-filter"/);
   assert.match(html, /id="user-groups-dialog"/);
   assert.match(html, /id="user-password-dialog"/);
-  for (const view of ['overview', 'feature-requests', 'bug-reports', 'administrators', 'activity']) {
+  for (const view of ['overview', 'feature-requests', 'bug-reports', 'administrators', 'badges', 'effects']) {
     assert.match(html, new RegExp(`data-platform-view="${view}"`));
     assert.match(core, new RegExp(`super-admin\\.html#${view}`));
   }
+  assert.doesNotMatch(html, /data-platform-view="activity"|id="activity-body"|super-admin\.html#activity/);
+  assert.doesNotMatch(core, /super-admin\.html#activity/);
+  assert.doesNotMatch(script, /renderActivity|activityBody|activityLogs/);
   assert.doesNotMatch(html, /id="(?:requests|requests-body|metric-pending-requests|approve-request-dialog|reject-request-dialog)"/);
   assert.doesNotMatch(html, /super-admin\.html#requests/);
   assert.doesNotMatch(core, /super-admin\.html#requests/);
@@ -5779,7 +5782,7 @@ test('audit log renders plain-language summaries and clean field-level Before/Af
   assert.match(auditJs, /data-label="Summary"/);
   assert.doesNotMatch(auditJs, /Changed: \$\{/);
   assert.doesNotMatch(auditJs, /JSON\.stringify\(row\.old_data/);
-  assert.match(superAdminJs, /Ipon\.auditActionLabel/);
+  assert.doesNotMatch(superAdminJs, /renderActivity|activityLogs/);
   assert.match(css, /\.audit-diff-card/);
   assert.match(css, /\.audit-diff-detail\.is-reason/);
   assert.match(css, /\.audit-diff-media/);
@@ -11283,7 +11286,7 @@ test('Write with AI keeps release announcements strictly factual without AI embe
   assert.doesNotMatch(edgeTs, /function pickUniqueDomainOutcome/);
   assert.match(saJs, /RELEASE_STYLE_ANGLES\s*=\s*\[[\s\S]*Strictly factual/);
   assert.doesNotMatch(saJs, /product story|high-energy|celebrating cleaner workflows/i);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261122-06/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261122-07/);
 
   // 2. Fallback composer produces crisp factual sentences with zero fabricated outcome padding
   const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
@@ -11328,7 +11331,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261122-21/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261122-22/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11355,7 +11358,7 @@ test('Migration 099 and Super Admin Users surface each user actual latest specif
   assert.doesNotMatch(saJs, /from\(['"](?:contributions|withdrawals|expenses|members|messages|budget_configs|budget_expenses)['"]\)/);
   assert.match(saJs, /Ipon\.client\.rpc\('super_admin_user_last_activities'\)/);
   assert.match(saJs, /function formatUserActivityLabel\(activity\)/);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261122-06/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261122-07/);
 
   // Verify formatUserActivityLabel handles both new specific RPC rows and legacy fallback events
   const fnMatch = saJs.match(/function formatUserActivityLabel\(activity\)\s*\{[\s\S]*?\n  \}/);
@@ -11381,10 +11384,12 @@ test('Super Admin Platform overview counts all registered non-super-admin users 
   assert.doesNotMatch(saHtml, /id="metric-total-admins"|Monitor administrator accounts/);
   assert.doesNotMatch(saJs, /Monitor administrator accounts/);
 
-  // Functional shortcut badges and actionable attention items
-  for (const id of ['shortcut-count-features', 'shortcut-count-bugs', 'shortcut-count-users', 'shortcut-count-activity']) {
+  // Functional shortcut badges and actionable attention items (redundant Platform activity tab removed)
+  for (const id of ['shortcut-count-features', 'shortcut-count-bugs', 'shortcut-count-users', 'shortcut-count-badges', 'shortcut-count-effects']) {
     assert.match(saHtml, new RegExp(`id="${id}"`));
   }
+  assert.doesNotMatch(saHtml, /id="activity"|super-admin\.html#activity|id="shortcut-count-activity"/);
+  assert.doesNotMatch(read('js/core.js'), /super-admin\.html#activity/);
   assert.match(saJs, /const registeredUsers = profiles\.filter\(\(profile\) => profile && profile\.role !== 'SUPER_ADMIN'\)/);
   assert.match(saJs, /data-overview-bug-status="OPEN"/);
   assert.match(saJs, /data-overview-feature-status="PENDING"/);

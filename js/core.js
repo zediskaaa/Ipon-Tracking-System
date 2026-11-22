@@ -694,8 +694,7 @@
     ['bug-reports', 'super-admin.html#bug-reports', 'Bug reports', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6V5a4 4 0 0 1 8 0v1m-9 4h10a2 2 0 0 1 2 2v3a7 7 0 0 1-14 0v-3a2 2 0 0 1 2-2Zm-3 3H3m18 0h-1M6 9 4 7m14 2 2-2M6 17l-2 2m14-2 2 2"/></svg>'],
     ['administrators', 'super-admin.html#administrators', 'Users', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-1 2 2 4-4"/></svg>'],
     ['badges', 'super-admin.html#badges', 'Badges', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 14.9 4.2l3.6-.3 1.1 3.4 2.9 2-1.1 3.4 1.1 3.4-2.9 2-1.1 3.4-3.6-.3L12 22l-2.9-2.2-3.6.3-1.1-3.4-2.9-2 1.1-3.4-1.1-3.4 2.9-2 1.1-3.4 3.6.3L12 2Z"/><path d="m8.7 12.2 2.2 2.3 4.6-4.8"/></svg>'],
-    ['effects', 'super-admin.html#effects', 'Profile effects', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2Z"/><path d="M5 3v4M3 5h4M19 17v4M17 19h4"/></svg>'],
-    ['activity', 'super-admin.html#activity', 'Platform activity', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-7 4h8m-8 4h8m-8 4h5M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>']
+    ['effects', 'super-admin.html#effects', 'Profile effects', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2Z"/><path d="M5 3v4M3 5h4M19 17v4M17 19h4"/></svg>']
   ];
   const userNavItems = [
     ['dashboard', 'dashboard.html', 'Calendar', navItems[0][3]],

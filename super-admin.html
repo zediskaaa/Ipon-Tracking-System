@@ -103,10 +103,6 @@
               <span class="platform-shortcut-copy"><strong>Profile effects</strong><small>Grant permanent animated avatar effects and creator notes</small></span>
               <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-effects">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
             </a>
-            <a href="super-admin.html#activity">
-              <span class="platform-shortcut-copy"><strong>Platform activity</strong><small>Inspect recent access changes</small></span>
-              <span class="platform-shortcut-end"><em class="platform-shortcut-badge" id="shortcut-count-activity">—</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></span>
-            </a>
           </nav>
         </div>
         <section class="panel super-admin-storage" aria-labelledby="sa-storage-title">
@@ -490,39 +486,6 @@
               data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
               data-page="next">Next</button></nav>
         </div>
-      </section>
-
-      <section class="platform-view panel" id="activity" data-platform-view="activity" aria-labelledby="activity-title"
-        hidden>
-        <div class="panel-header">
-          <div>
-            <h2 id="activity-title">Recent platform activity</h2>
-            <p>Administrator and group access changes recorded by the database.</p>
-          </div>
-          <div class="table-filters">
-            <input id="activity-search" type="search" placeholder="Search activity"
-              aria-label="Search platform activity">
-          </div>
-        </div>
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Event</th>
-                <th>Subject</th>
-                <th>When</th>
-              </tr>
-            </thead>
-            <tbody id="activity-body">
-              <tr class="loading-row">
-                <td colspan="3">Loading activity…</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <nav class="table-pager" id="activity-pager" aria-label="Platform activity pages"><button type="button"
-            data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
-            data-page="next">Next</button></nav>
       </section>
     </main>
   </div>
@@ -1107,7 +1070,7 @@
   </dialog>
 
   <script src="js/profile-effects.js?v=20261122-07"></script><script src="js/profile-effects-exclusive.js?v=20261122-07"></script><script src="js/profile-effects-divine.js?v=20261122-02"></script><script src="js/profile-effects-deluxe.js?v=20261122-01"></script>
-  <script src="js/core.js?v=20261122-21"></script><script src="js/policy.js?v=20261119-09"></script>
+  <script src="js/core.js?v=20261122-22"></script><script src="js/policy.js?v=20261119-09"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
@@ -1294,7 +1257,7 @@
     </div>
   </dialog>
 
-  <script src="js/super-admin.js?v=20261122-06"></script>
+  <script src="js/super-admin.js?v=20261122-07"></script>
 </body>
 
 </html>

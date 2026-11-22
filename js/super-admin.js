@@ -9,7 +9,6 @@
   const administratorsBody = document.getElementById('administrators-body');
   const badgesBody = document.getElementById('badges-body');
   const effectsBody = document.getElementById('effects-body');
-  const activityBody = document.getElementById('activity-body');
   const badgeGrantDialog = document.getElementById('badge-grant-dialog');
   const badgeGrantForm = document.getElementById('badge-grant-form');
   const badgeGrantTitle = document.getElementById('badge-grant-title');
@@ -234,7 +233,6 @@
   let featureRequests = [];
   let bugReports = [];
   let accountActivities = [];
-  let activityLogs = [];
   let profileEffectGrants = [];
   let profileEffectTrialRequests = [];
   let scheduledAwards = [];
@@ -245,7 +243,7 @@
   let activeFeatureStatusFilter = 'ALL';
   let activeBugStatusFilter = 'OPEN';
   const PAGE_SIZE = 10;
-  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, badges: 0, effects: 0, 'effect-requests': 0, 'scheduled-awards': 0, activity: 0 };
+  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, badges: 0, effects: 0, 'effect-requests': 0, 'scheduled-awards': 0 };
   Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
   Ipon.bindPasswordStrength(userPasswordForm.elements.password, () => {
     const target = profiles.find((item) => item.id === userPasswordForm.elements.user_id.value);
@@ -257,8 +255,7 @@
     'bug-reports': ['Bug reports', 'Review reported problems, error details, and attached screenshots from IPON users.'],
     administrators: ['Users', 'Manage registered users, passwords, and assigned savings groups.'],
     badges: ['Verified badges', 'Assign blue verified badges, set temporary or permanent durations, and send a creator note.'],
-    effects: ['Profile effects', 'Award permanent profile effects or review trial requests with custom expiration durations.'],
-    activity: ['Platform activity', 'Review recent user and savings-group access changes recorded by the database.']
+    effects: ['Profile effects', 'Award permanent profile effects or review trial requests with custom expiration durations.']
   };
 
   const viewFocusHeadings = {
@@ -267,8 +264,7 @@
     'bug-reports': 'bug-reports-title',
     administrators: 'users-title',
     badges: 'badges-title',
-    effects: 'effects-title',
-    activity: 'activity-title'
+    effects: 'effects-title'
   };
 
   function showView(focusHeading = false) {
@@ -382,7 +378,6 @@
       pendingTrialReqs.length ? `${pendingTrialReqs.length} trial pending` : `${unlockedUserCount} unlocked`,
       pendingTrialReqs.length > 0
     );
-    setShortcutBadge('shortcut-count-activity', `${activityLogs.length} events`, false);
 
     const attention = [];
     if (pendingTrialReqs.length) {
@@ -2707,33 +2702,18 @@
     Ipon.syncPresenceDots(bugReportsBody);
   }
 
-  function renderActivity(logs = activityLogs) {
-    const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
-    const groupById = new Map(groups.map((group) => [group.id, group]));
-    const query = filterValue('activity-search');
-    const mapped = logs.map((log) => ({
-      event: `${Ipon.auditActionLabel ? Ipon.auditActionLabel(log.action) : `${log.action.charAt(0)}${log.action.slice(1).toLowerCase()}`} ${log.table_name === 'groups' ? 'group' : 'account'}`,
-      target: (log.table_name === 'groups' ? groupById.get(log.record_id)?.name : profileById.get(log.record_id)?.full_name) || 'Platform record',
-      changedAt: log.changed_at
-    }));
-    const filtered = mapped.filter((row) => matchesQuery(query, [row.event, row.target]));
-    const visible = paginateRows('activity', filtered);
-    activityBody.innerHTML = visible.length ? visible.map((row) => `<tr><td><strong>${Ipon.escapeHtml(row.event)}</strong></td><td>${Ipon.escapeHtml(row.target)}</td><td>${Ipon.dateLabel(row.changedAt, { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>`).join('') : `<tr><td colspan="3" class="empty-state">${query ? 'No matching platform activity.' : 'No platform activity recorded yet.'}</td></tr>`;
-  }
-
   async function load() {
     overviewError.hidden = true;
     overviewError.replaceChildren();
     await Ipon.rpc('cleanup_inactive_verified_badges').catch(() => {});
     const safeQuery = (query) => (Ipon.withTimeout ? Ipon.withTimeout(query) : Promise.resolve(query)).catch((err) => ({ data: [], error: err }));
-    const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult, effectsResult, effectTrialReqResult, scheduledAwardsResult] = await Promise.all([
+    const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, storageResult, effectsResult, effectTrialReqResult, scheduledAwardsResult] = await Promise.all([
       safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,last_seen_at,equipped_profile_effect').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,workspace_mode,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('group_memberships').select('group_id,user_id,role,status')),
       safeQuery(Ipon.client.from('feature_requests').select('id,requester_id,allow_credit,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.from('bug_reports').select('id,reporter_id,title,description,image_count,status,reviewed_at,release_version,created_at').order('created_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.rpc('super_admin_user_last_activities')),
-      safeQuery(Ipon.client.from('audit_logs').select('id,table_name,record_id,action,changed_at').in('table_name', ['profiles', 'groups']).order('changed_at', { ascending: false }).limit(200)),
       safeQuery(Ipon.client.rpc('super_admin_storage_overview')),
       safeQuery(Ipon.client.rpc('super_admin_list_profile_effects')),
       safeQuery(Ipon.client.rpc('super_admin_list_effect_trial_requests')),
@@ -2758,7 +2738,6 @@
     } else {
       accountActivities = activityResult.data || [];
     }
-    activityLogs = logResult.data || [];
     storageOverview = storageResult?.error ? null : (storageResult?.data || null);
     Ipon.registerVerifiedBadges?.(profiles.filter((p) => p && (p.verified_badge_tier === 'CREATOR_GREEN' || p.verified_badge_acknowledged_at)));
     renderOverview();
@@ -2768,7 +2747,6 @@
     renderUsers();
     renderBadges();
     renderEffects();
-    renderActivity();
   }
 
   cleanupReceiptsBtn?.addEventListener('click', async () => {
@@ -4381,8 +4359,7 @@
     ['badges', ['badges-search', 'badges-status-filter'], renderBadges],
     ['effects', ['effects-search', 'effects-status-filter'], renderEffects],
     ['effect-requests', ['effect-requests-search', 'effect-requests-status-filter'], renderEffectTrialRequests],
-    ['scheduled-awards', ['scheduled-awards-search', 'scheduled-awards-status-filter'], renderScheduledAwards],
-    ['activity', ['activity-search'], renderActivity]
+    ['scheduled-awards', ['scheduled-awards-search', 'scheduled-awards-status-filter'], renderScheduledAwards]
   ].forEach(([key, controlIds, render]) => {
     controlIds.forEach((id) => {
       const control = document.getElementById(id);
@@ -4417,7 +4394,6 @@
       if (effectsBody) Ipon.showInlineError(effectsBody, error, refresh, 5);
       if (effectRequestsBody) Ipon.showInlineError(effectRequestsBody, error, refresh, 5);
       if (scheduledAwardsBody) Ipon.showInlineError(scheduledAwardsBody, error, refresh, 5);
-      Ipon.showInlineError(activityBody, error, refresh, 3);
     }
   }
 
@@ -4534,5 +4510,5 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('super-admin', ['profiles', 'profile_effect_grants', 'profile_effect_trial_requests', 'scheduled_awards', 'groups', 'group_memberships', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
+  Ipon.subscribeToChanges('super-admin', ['profiles', 'profile_effect_grants', 'profile_effect_trial_requests', 'scheduled_awards', 'groups', 'group_memberships', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'announcements', 'announcement_reactions'], refresh);
 })();
