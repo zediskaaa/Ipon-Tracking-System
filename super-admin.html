@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261122-24">
+  <link rel="stylesheet" href="css/app.css?v=20261122-25">
   <script src="js/config.js?v=20261120-78"></script>
 </head>
 
@@ -422,7 +422,7 @@
             </select>
           </div>
           <div class="data-table-wrap">
-            <table class="data-table">
+            <table class="data-table effects-rewards-table">
               <thead>
                 <tr>
                   <th>User</th>
@@ -897,33 +897,74 @@
     </div>
   </dialog>
 
-  <dialog class="form-dialog" id="effect-remove-dialog" aria-labelledby="effect-remove-title">
+  <dialog class="form-dialog effect-manage-dialog" id="effect-remove-dialog" aria-labelledby="effect-remove-title">
     <div class="form-dialog-sheet">
       <header class="form-dialog-header">
         <div>
-          <h2 id="effect-remove-title">Remove profile effect</h2>
-          <p id="effect-remove-copy">Remove an unlocked profile effect from this user and notify them silently.</p>
+          <h2 id="effect-remove-title">Unlocked profile effects</h2>
+          <p id="effect-remove-copy">View unlocked profile effects or switch to edit mode to remove selected effects.</p>
         </div>
-        <button class="dialog-close" id="effect-remove-close" type="button" aria-label="Close remove effect dialog">
+        <button class="dialog-close" id="effect-remove-close" type="button" aria-label="Close profile effects dialog">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
         </button>
       </header>
-      <form id="effect-remove-form" class="form-grid" novalidate>
+      <form id="effect-remove-form" class="form-grid effect-manage-form" novalidate>
         <input type="hidden" name="user_id">
-        <div class="field field-wide">
-          <label for="effect-remove-select">Effect to remove</label>
-          <select id="effect-remove-select" name="effect_id" required></select>
+        <div class="effect-manage-summary field-wide">
+          <div class="effect-manage-user">
+            <div class="avatar-circle avatar-md effect-manage-avatar" id="effect-manage-avatar"></div>
+            <div class="effect-manage-user-copy">
+              <strong id="effect-manage-user-name">User</strong>
+              <small id="effect-manage-user-meta">0 unlocked</small>
+            </div>
+          </div>
+          <div class="effect-manage-mode-actions">
+            <button class="button button-secondary button-sm" id="effect-manage-award-btn" type="button" hidden>Award more</button>
+            <button class="button button-secondary button-sm" id="effect-manage-edit-toggle" type="button" aria-pressed="false">Edit / Remove</button>
+          </div>
+        </div>
+        <div class="effect-manage-toolbar field-wide">
+          <input id="effect-manage-search" type="search" placeholder="Search user's unlocked effects…" aria-label="Search user's unlocked effects">
+          <select id="effect-manage-filter" aria-label="Filter unlocked effects">
+            <option value="ALL">All unlocked</option>
+            <option value="PERMANENT">Permanent only</option>
+            <option value="TRIAL">Active trials</option>
+            <option value="MYTHIC">Mythic</option>
+            <option value="EPIC">Epic</option>
+            <option value="RARE">Rare</option>
+            <option value="COMMON">Common</option>
+          </select>
+        </div>
+        <div class="effect-manage-selectbar field-wide" id="effect-manage-selectbar" hidden>
+          <div class="effect-manage-selectbar-info">
+            <span class="effect-manage-count-pill" id="effect-manage-selected-count" aria-live="polite">0 selected to remove</span>
+            <small class="field-help" id="effect-manage-equipped-warn" hidden>Includes active profile effect (will be unequipped).</small>
+          </div>
+          <div class="effect-manage-selectbar-btns">
+            <button class="icon-action" id="effect-manage-select-visible" type="button">Select visible</button>
+            <button class="icon-action" id="effect-manage-clear-selection" type="button" disabled>Clear</button>
+          </div>
         </div>
         <div class="field field-wide">
-          <label for="effect-remove-reason">Reason for removal</label>
-          <textarea id="effect-remove-reason" name="reason" rows="3" maxlength="400" minlength="2" required
-            placeholder="Explain why this profile effect is being removed…"></textarea>
-          <small class="field-help">Sent silently to the user's notification list without a screen pop-up.</small>
-          <small class="field-error" aria-live="polite"></small>
+          <div class="effect-manage-grid" id="effect-manage-grid" role="list" aria-label="Unlocked profile effects"></div>
+          <small class="field-error" id="effect-manage-select-error" role="alert" aria-live="polite"></small>
         </div>
-        <div class="form-actions field-wide">
-          <button class="button button-secondary" id="effect-remove-cancel" type="button">Cancel</button>
-          <button class="button button-danger" id="effect-remove-submit" type="submit">Remove effect</button>
+        <div class="effect-manage-remove-panel field-wide" id="effect-manage-remove-panel" hidden>
+          <div class="effect-manage-picked-summary" id="effect-manage-picked-summary" aria-live="polite">Select one or more profile effects above to remove.</div>
+          <div class="field">
+            <label for="effect-remove-reason">Reason for removal</label>
+            <textarea id="effect-remove-reason" name="reason" rows="3" maxlength="400" minlength="2" required
+              placeholder="Explain why the selected profile effect(s) are being removed…"></textarea>
+            <small class="field-help">Sent silently to the user's notification list without a screen pop-up.</small>
+            <small class="field-error" aria-live="polite"></small>
+          </div>
+        </div>
+        <div class="effect-manage-footer field-wide">
+          <small class="field-help" id="effect-manage-footer-hint">Switch to Edit / Remove to pick which effects and how many to remove.</small>
+          <div class="form-actions">
+            <button class="button button-secondary" id="effect-remove-cancel" type="button">Close</button>
+            <button class="button button-danger" id="effect-remove-submit" type="submit" hidden disabled>Remove selected</button>
+          </div>
         </div>
       </form>
     </div>
@@ -1021,7 +1062,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261120-02"></script>
+  <script src="js/super-admin.js?v=20261122-03"></script>
 </body>
 
 </html>

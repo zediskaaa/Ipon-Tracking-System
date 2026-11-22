@@ -43,9 +43,27 @@
   const effectGrantSubmit = document.getElementById('effect-grant-submit');
   const effectRemoveDialog = document.getElementById('effect-remove-dialog');
   const effectRemoveForm = document.getElementById('effect-remove-form');
+  const effectRemoveTitle = document.getElementById('effect-remove-title');
   const effectRemoveCopy = document.getElementById('effect-remove-copy');
-  const effectRemoveSelect = document.getElementById('effect-remove-select');
+  const effectManageAvatar = document.getElementById('effect-manage-avatar');
+  const effectManageUserName = document.getElementById('effect-manage-user-name');
+  const effectManageUserMeta = document.getElementById('effect-manage-user-meta');
+  const effectManageAwardBtn = document.getElementById('effect-manage-award-btn');
+  const effectManageEditToggle = document.getElementById('effect-manage-edit-toggle');
+  const effectManageSearch = document.getElementById('effect-manage-search');
+  const effectManageFilter = document.getElementById('effect-manage-filter');
+  const effectManageSelectbar = document.getElementById('effect-manage-selectbar');
+  const effectManageSelectedCount = document.getElementById('effect-manage-selected-count');
+  const effectManageEquippedWarn = document.getElementById('effect-manage-equipped-warn');
+  const effectManageSelectVisibleBtn = document.getElementById('effect-manage-select-visible');
+  const effectManageClearBtn = document.getElementById('effect-manage-clear-selection');
+  const effectManageGrid = document.getElementById('effect-manage-grid');
+  const effectManageSelectError = document.getElementById('effect-manage-select-error');
+  const effectManageRemovePanel = document.getElementById('effect-manage-remove-panel');
+  const effectManagePickedSummary = document.getElementById('effect-manage-picked-summary');
+  const effectManageFooterHint = document.getElementById('effect-manage-footer-hint');
   const effectRemoveReason = document.getElementById('effect-remove-reason');
+  const effectRemoveCancel = document.getElementById('effect-remove-cancel');
   const effectRemoveSubmit = document.getElementById('effect-remove-submit');
   const effectsSubtabs = document.getElementById('effects-subtabs');
   const effectsTabRequests = document.getElementById('effects-tab-requests');
@@ -960,20 +978,18 @@
       const equippedMeta = equippedId !== 'none' && api?.getEffect ? api.getEffect(equippedId) : null;
       const permCount = grants.filter((g) => g.is_permanent !== false).length;
       const trialCount = grants.filter((g) => g.is_permanent === false).length;
+      const countWord = grants.length === 1 ? 'effect' : 'effects';
+      const unlockedMetaText = [
+        permCount ? `${permCount} permanent` : '',
+        trialCount ? `${trialCount} active trial` : '',
+        grants.some((g) => !g.acknowledged_at) ? 'Awaiting claim' : ''
+      ].filter(Boolean).join(' · ');
       const unlockedHtml = grants.length
-        ? `<div class="effect-table-pills">${grants.map((g) => {
-          const meta = api?.getEffect ? api.getEffect(g.effect_id) : { name: g.effect_id, rare: 0 };
-          const isEq = equippedId === g.effect_id;
-          const isTrial = g.is_permanent === false;
-          const label = isTrial && g.expires_at
-            ? `${meta.name} (Trial · ${Ipon.dateLabel(g.expires_at, { dateStyle: 'short' })})`
-            : isTrial ? `${meta.name} (Trial)` : meta.name;
-          return `<span class="effect-table-pill${isEq ? ' is-equipped' : ''}${isTrial ? ' is-trial' : meta.rare === 3 ? ' is-mythic' : meta.rare === 2 ? ' is-epic' : meta.rare === 1 ? ' is-rare' : ''}">${Ipon.escapeHtml(label)}</span>`;
-        }).join('')}</div><small class="field-help">${[
-          permCount ? `${permCount} permanent` : '',
-          trialCount ? `${trialCount} active trial` : '',
-          grants.some((g) => !g.acknowledged_at) ? 'Awaiting claim' : ''
-        ].filter(Boolean).join(' · ')}</small>`
+        ? `<button class="effect-count-trigger" type="button" data-effect-view="${profile.id}" aria-label="View ${grants.length} unlocked ${countWord} for ${Ipon.escapeHtml(profile.full_name)}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5 12 12l8-4.5L12 3Zm-8 9 8 4.5 8-4.5M4 16.5 12 21l8-4.5"/></svg>
+            <span><strong>${grants.length}</strong> ${countWord}</span>
+            <em>View</em>
+          </button><small class="field-help">${Ipon.escapeHtml(unlockedMetaText)}</small>`
         : '<span class="badge-tier-pill is-none">No effects</span>';
       const activeHtml = equippedMeta
         ? `<span class="badge-duration-pill is-permanent">${Ipon.escapeHtml(equippedMeta.name)}</span><small class="field-help">Active on profile</small>`
@@ -989,7 +1005,7 @@
         actions += `<span class="field-help">${Ipon.escapeHtml(statusLabel(profile.status))} account</span>`;
       }
       if (grants.length) {
-        actions += `<button class="icon-action danger-action" type="button" data-effect-remove="${profile.id}">Remove</button>`;
+        actions += `<button class="icon-action danger-action" type="button" data-effect-remove="${profile.id}">Edit / Remove</button>`;
       }
       return `<tr data-effect-user-id="${profile.id}">
         <td>
@@ -1009,6 +1025,14 @@
     }).join('') : `<tr><td colspan="5" class="empty-state">${query || filter ? 'No matching users.' : 'No user accounts available.'}</td></tr>`;
     Ipon.bindAvatarFallbacks(effectsBody);
     Ipon.syncPresenceDots(effectsBody);
+    if (effectRemoveDialog?.open && effectManageState.userId) {
+      const openProfile = profiles.find((item) => item.id === effectManageState.userId);
+      if (!openProfile || !userEffectGrants(openProfile.id).length) {
+        closeEffectManageDialog();
+      } else {
+        renderEffectManageModal();
+      }
+    }
   }
 
   function syncCustomExpiryControl(presetEl, wrapEl, inputEl, defaultDays = 7) {
@@ -1164,44 +1188,296 @@
     requestAnimationFrame?.(() => effectPreviewStageCtrl?.refreshGeometry?.());
   }
 
-  function openEffectRemoveDialog(profile) {
-    if (!profile || !effectRemoveDialog || !effectRemoveForm) return;
+  const effectManageState = {
+    userId: '',
+    editMode: false,
+    selectedIds: new Set()
+  };
+
+  function closeEffectManageDialog() {
+    effectManageState.userId = '';
+    effectManageState.editMode = false;
+    effectManageState.selectedIds.clear();
+    effectRemoveDialog?.close?.();
+  }
+
+  function getFilteredManageGrants(grants, api) {
+    const query = String(effectManageSearch?.value || '').trim().toLowerCase();
+    const filter = String(effectManageFilter?.value || 'ALL').toUpperCase();
+    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
+    return grants.filter((g) => {
+      const meta = api?.getEffect ? api.getEffect(g.effect_id) : { name: g.effect_id, cat: 'Effect', rare: 0 };
+      const isTrial = g.is_permanent === false;
+      if (filter === 'PERMANENT' && isTrial) return false;
+      if (filter === 'TRIAL' && !isTrial) return false;
+      if (filter === 'MYTHIC' && (meta.rare | 0) !== 3) return false;
+      if (filter === 'EPIC' && (meta.rare | 0) !== 2) return false;
+      if (filter === 'RARE' && (meta.rare | 0) !== 1) return false;
+      if (filter === 'COMMON' && (meta.rare | 0) !== 0) return false;
+      if (!query) return true;
+      const rarLabel = rarities[meta.rare | 0] || '';
+      return `${meta.name || ''} ${meta.cat || ''} ${rarLabel} ${g.effect_id || ''} ${g.grant_message || ''}`.toLowerCase().includes(query);
+    });
+  }
+
+  function syncEffectManageSelectionUi(profile, grants, visibleGrants) {
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const equippedId = api?.normalizeEffectId
+      ? api.normalizeEffectId(profile?.equipped_profile_effect)
+      : (profile?.equipped_profile_effect || 'none');
+    const grantIds = new Set(grants.map((g) => g.effect_id));
+    for (const id of Array.from(effectManageState.selectedIds)) {
+      if (!grantIds.has(id)) effectManageState.selectedIds.delete(id);
+    }
+    const selectedIds = Array.from(effectManageState.selectedIds);
+    const count = selectedIds.length;
+    const total = grants.length;
+    const edit = effectManageState.editMode;
+
+    if (effectManageSelectbar) effectManageSelectbar.hidden = !edit;
+    if (effectManageRemovePanel) effectManageRemovePanel.hidden = !edit;
+    if (effectRemoveSubmit) {
+      effectRemoveSubmit.hidden = !edit;
+      effectRemoveSubmit.disabled = !edit || count === 0;
+      effectRemoveSubmit.textContent = count > 0
+        ? `Remove ${count} ${count === 1 ? 'effect' : 'effects'}`
+        : 'Remove selected';
+    }
+    if (effectRemoveCancel) effectRemoveCancel.textContent = edit ? 'Cancel' : 'Close';
+    if (effectManageEditToggle) {
+      effectManageEditToggle.setAttribute('aria-pressed', edit ? 'true' : 'false');
+      effectManageEditToggle.textContent = edit ? 'Done editing' : 'Edit / Remove';
+    }
+    if (effectRemoveTitle) {
+      effectRemoveTitle.textContent = edit ? 'Edit & remove profile effects' : 'Unlocked profile effects';
+    }
+    if (effectRemoveCopy && profile) {
+      effectRemoveCopy.innerHTML = edit
+        ? `Select the exact profile effect(s) to remove from <strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? ` (${Ipon.escapeHtml(profile.email)})` : ''}.`
+        : `All unlocked profile effects assigned to <strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? ` (${Ipon.escapeHtml(profile.email)})` : ''}.`;
+    }
+    if (effectManageSelectedCount) {
+      effectManageSelectedCount.textContent = count > 0
+        ? `${count} of ${total} selected to remove`
+        : '0 selected to remove';
+      effectManageSelectedCount.classList.toggle('has-selection', count > 0);
+    }
+    if (effectManageEquippedWarn) {
+      effectManageEquippedWarn.hidden = !(edit && equippedId !== 'none' && effectManageState.selectedIds.has(equippedId));
+    }
+    if (effectManageClearBtn) effectManageClearBtn.disabled = count === 0;
+    if (effectManageSelectVisibleBtn) {
+      const visibleIds = visibleGrants.map((g) => g.effect_id);
+      const allVisibleChecked = visibleIds.length > 0 && visibleIds.every((id) => effectManageState.selectedIds.has(id));
+      effectManageSelectVisibleBtn.disabled = visibleIds.length === 0 || allVisibleChecked;
+      effectManageSelectVisibleBtn.textContent = allVisibleChecked ? 'All visible selected' : `Select visible (${visibleIds.length})`;
+    }
+    if (effectManagePickedSummary) {
+      if (!count) {
+        effectManagePickedSummary.textContent = 'Select one or more profile effects above to remove.';
+      } else {
+        const names = selectedIds.map((id) => (api?.getEffect ? api.getEffect(id).name : id));
+        const shown = names.slice(0, 5).map((name) => Ipon.escapeHtml(name)).join(', ');
+        const rest = names.length > 5 ? ` and ${names.length - 5} more` : '';
+        effectManagePickedSummary.innerHTML = `<strong>Removing ${count} ${count === 1 ? 'effect' : 'effects'}:</strong> ${shown}${rest}`;
+      }
+    }
+    if (effectManageFooterHint) {
+      effectManageFooterHint.textContent = edit
+        ? (count > 0
+          ? `${count} ${count === 1 ? 'effect' : 'effects'} marked for removal. Enter a brief reason before confirming.`
+          : 'Check one or more effects above to mark them for removal.')
+        : 'Switch to Edit / Remove to pick which effects and how many to remove.';
+    }
+    if (count > 0 && effectManageSelectError) effectManageSelectError.textContent = '';
+  }
+
+  function renderEffectManageModal() {
+    const profile = profiles.find((item) => item.id === effectManageState.userId);
+    if (!profile || !effectManageGrid) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
+    const grants = userEffectGrants(profile.id);
+    const equippedId = api?.normalizeEffectId
+      ? api.normalizeEffectId(profile.equipped_profile_effect)
+      : (profile.equipped_profile_effect || 'none');
+    const equippedMeta = equippedId !== 'none' && api?.getEffect ? api.getEffect(equippedId) : null;
+    const permCount = grants.filter((g) => g.is_permanent !== false).length;
+    const trialCount = grants.filter((g) => g.is_permanent === false).length;
+
+    if (effectManageAvatar) {
+      effectManageAvatar.innerHTML = Ipon.isSafeImageRef?.(profile.avatar_url)
+        ? `<img src="${Ipon.escapeHtml(profile.avatar_url)}" alt="${Ipon.escapeHtml(profile.full_name)}" data-avatar-img><span class="avatar-fallback-inner" hidden>${Ipon.escapeHtml(Ipon.initials(profile.full_name))}</span>`
+        : `<span>${Ipon.escapeHtml(Ipon.initials(profile.full_name))}</span>`;
+      Ipon.bindAvatarFallbacks(effectManageAvatar);
+    }
+    if (effectManageUserName) effectManageUserName.textContent = profile.full_name || 'User';
+    if (effectManageUserMeta) {
+      effectManageUserMeta.textContent = [
+        `${grants.length} unlocked`,
+        permCount ? `${permCount} permanent` : '',
+        trialCount ? `${trialCount} trial` : '',
+        equippedMeta ? `Active: ${equippedMeta.name}` : 'No active effect'
+      ].filter(Boolean).join(' · ');
+    }
+    if (effectManageAwardBtn) {
+      effectManageAwardBtn.hidden = profile.status !== 'ACTIVE';
+    }
+
+    const visibleGrants = getFilteredManageGrants(grants, api);
+    const edit = effectManageState.editMode;
+    if (!visibleGrants.length) {
+      effectManageGrid.innerHTML = `<div class="empty-state">
+        <p>No unlocked effects match your current filter.</p>
+        <button class="button button-secondary button-sm" type="button" data-effect-manage-reset-filter>Reset filters</button>
+      </div>`;
+    } else {
+      effectManageGrid.innerHTML = visibleGrants.map((g) => {
+        const meta = api?.getEffect ? api.getEffect(g.effect_id) : { name: g.effect_id, cat: 'Effect', rare: 0 };
+        const isEq = equippedId === g.effect_id;
+        const isTrial = g.is_permanent === false;
+        const checked = effectManageState.selectedIds.has(g.effect_id);
+        const rarityCls = isTrial ? ' is-trial' : meta.rare === 3 ? ' is-mythic' : meta.rare === 2 ? ' is-epic' : meta.rare === 1 ? ' is-rare' : '';
+        const rarText = rarities[meta.rare | 0] || 'Common';
+        const subText = isTrial && g.expires_at
+          ? `${meta.cat || 'Effect'} · Trial until ${Ipon.dateLabel(g.expires_at, { dateStyle: 'short' })}`
+          : isTrial ? `${meta.cat || 'Effect'} · Active trial` : `${meta.cat || 'Effect'} · ${rarText}`;
+        const flags = [
+          isEq ? '<span class="effect-manage-flag-active">Active on profile</span>' : '',
+          !g.acknowledged_at ? '<span class="effect-manage-flag-claim">Awaiting claim</span>' : ''
+        ].filter(Boolean).join('');
+        const titleNote = g.grant_message ? `Note: ${g.grant_message}` : meta.name;
+        const inner = `
+          ${edit ? `<input class="effect-manage-checkbox" type="checkbox" name="remove_effect_ids" value="${Ipon.escapeHtml(g.effect_id)}"${checked ? ' checked' : ''} aria-label="Select ${Ipon.escapeHtml(meta.name)} for removal">` : ''}
+          <span class="effect-manage-card-body">
+            <span class="effect-manage-card-head">
+              <span class="effect-table-pill${isEq ? ' is-equipped' : ''}${rarityCls}">${Ipon.escapeHtml(meta.name)}</span>
+            </span>
+            <small class="effect-manage-card-meta">${Ipon.escapeHtml(subText)}</small>
+            ${flags ? `<span class="effect-manage-card-flags">${flags}</span>` : ''}
+          </span>`;
+        return edit
+          ? `<label class="effect-manage-card is-editable${checked ? ' is-selected-remove' : ''}" role="listitem" title="${Ipon.escapeHtml(titleNote)}">${inner}</label>`
+          : `<div class="effect-manage-card" role="listitem" title="${Ipon.escapeHtml(titleNote)}">${inner}</div>`;
+      }).join('');
+    }
+    syncEffectManageSelectionUi(profile, grants, visibleGrants);
+  }
+
+  function openEffectRemoveDialog(profile, { editMode = false } = {}) {
+    if (!profile || !effectRemoveDialog || !effectRemoveForm) return;
     const grants = userEffectGrants(profile.id);
     if (!grants.length) return;
     effectRemoveForm.reset();
     effectRemoveForm.elements.user_id.value = profile.id;
+    effectManageState.userId = profile.id;
+    effectManageState.editMode = Boolean(editMode);
+    effectManageState.selectedIds.clear();
+    if (effectManageSearch) effectManageSearch.value = '';
+    if (effectManageFilter) effectManageFilter.value = 'ALL';
+    if (effectManageSelectError) effectManageSelectError.textContent = '';
     Ipon.setFieldError(effectRemoveReason, '');
-    if (effectRemoveCopy) {
-      effectRemoveCopy.innerHTML = `Remove an unlocked profile effect from <strong>${Ipon.escapeHtml(profile.full_name)}</strong>${profile.email ? ` (${Ipon.escapeHtml(profile.email)})` : ''}.`;
-    }
-    if (effectRemoveSelect) {
-      effectRemoveSelect.innerHTML = grants.map((g) => {
-        const meta = api?.getEffect ? api.getEffect(g.effect_id) : { name: g.effect_id };
-        const isEq = profile.equipped_profile_effect === g.effect_id;
-        const kind = g.is_permanent === false ? ' · Trial' : '';
-        return `<option value="${Ipon.escapeHtml(g.effect_id)}">${Ipon.escapeHtml(meta.name + kind)}${isEq ? ' (Currently equipped)' : ''}</option>`;
-      }).join('');
-    }
-    effectRemoveDialog.showModal();
+    renderEffectManageModal();
+    if (!effectRemoveDialog.open) effectRemoveDialog.showModal();
   }
 
   effectDurationPreset?.addEventListener('change', syncEffectGrantDurationUi);
   document.getElementById('effect-grant-close')?.addEventListener('click', closeEffectGrantDialog);
   document.getElementById('effect-grant-cancel')?.addEventListener('click', closeEffectGrantDialog);
   effectGrantDialog?.addEventListener('cancel', () => { closeEffectGrantDialog(); });
-  document.getElementById('effect-remove-close')?.addEventListener('click', () => effectRemoveDialog?.close());
-  document.getElementById('effect-remove-cancel')?.addEventListener('click', () => effectRemoveDialog?.close());
+  document.getElementById('effect-remove-close')?.addEventListener('click', closeEffectManageDialog);
+  effectRemoveCancel?.addEventListener('click', closeEffectManageDialog);
+  effectRemoveDialog?.addEventListener('cancel', () => { closeEffectManageDialog(); });
+
+  effectManageEditToggle?.addEventListener('click', () => {
+    if (!effectManageState.userId) return;
+    effectManageState.editMode = !effectManageState.editMode;
+    if (!effectManageState.editMode) {
+      effectManageState.selectedIds.clear();
+      if (effectManageSelectError) effectManageSelectError.textContent = '';
+      Ipon.setFieldError(effectRemoveReason, '');
+    }
+    renderEffectManageModal();
+  });
+
+  effectManageAwardBtn?.addEventListener('click', () => {
+    const profile = profiles.find((item) => item.id === effectManageState.userId);
+    if (!profile) return;
+    closeEffectManageDialog();
+    openEffectGrantDialog(profile);
+  });
+
+  effectManageSearch?.addEventListener('input', () => {
+    if (effectManageState.userId) renderEffectManageModal();
+  });
+  effectManageFilter?.addEventListener('change', () => {
+    if (effectManageState.userId) renderEffectManageModal();
+  });
+
+  effectManageSelectVisibleBtn?.addEventListener('click', () => {
+    const profile = profiles.find((item) => item.id === effectManageState.userId);
+    if (!profile) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const visibleGrants = getFilteredManageGrants(userEffectGrants(profile.id), api);
+    visibleGrants.forEach((g) => effectManageState.selectedIds.add(g.effect_id));
+    renderEffectManageModal();
+  });
+
+  effectManageClearBtn?.addEventListener('click', () => {
+    effectManageState.selectedIds.clear();
+    renderEffectManageModal();
+  });
+
+  effectManageGrid?.addEventListener('change', (event) => {
+    const input = event.target.closest('input[name="remove_effect_ids"]');
+    if (!input) return;
+    if (input.checked) effectManageState.selectedIds.add(input.value);
+    else effectManageState.selectedIds.delete(input.value);
+    input.closest('.effect-manage-card')?.classList.toggle('is-selected-remove', input.checked);
+    const profile = profiles.find((item) => item.id === effectManageState.userId);
+    if (!profile) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const grants = userEffectGrants(profile.id);
+    syncEffectManageSelectionUi(profile, grants, getFilteredManageGrants(grants, api));
+  });
+
+  effectManageGrid?.addEventListener('click', (event) => {
+    const resetBtn = event.target.closest('[data-effect-manage-reset-filter]');
+    if (!resetBtn) return;
+    if (effectManageSearch) effectManageSearch.value = '';
+    if (effectManageFilter) effectManageFilter.value = 'ALL';
+    renderEffectManageModal();
+  });
+
+  const validateEffectRemoveReasonLive = () => {
+    if (!effectRemoveReason || !effectManageState.editMode) return true;
+    const value = String(effectRemoveReason.value || '').trim();
+    if (value.length >= 2) {
+      Ipon.setFieldError(effectRemoveReason, '');
+      return true;
+    }
+    return false;
+  };
+  effectRemoveReason?.addEventListener('input', validateEffectRemoveReasonLive);
+  effectRemoveReason?.addEventListener('blur', () => {
+    if (!effectRemoveReason || !effectManageState.editMode) return;
+    const value = String(effectRemoveReason.value || '').trim();
+    if (value.length > 0 && value.length < 2) {
+      Ipon.setFieldError(effectRemoveReason, 'Enter at least 2 characters explaining why the selected effect(s) are being removed.');
+    }
+  });
 
   effectsBody?.addEventListener('click', (event) => {
     const grantBtn = event.target.closest('[data-effect-grant]');
+    const viewBtn = event.target.closest('[data-effect-view]');
     const removeBtn = event.target.closest('[data-effect-remove]');
-    const id = grantBtn?.dataset.effectGrant || removeBtn?.dataset.effectRemove;
+    const id = grantBtn?.dataset.effectGrant || viewBtn?.dataset.effectView || removeBtn?.dataset.effectRemove;
     if (!id) return;
     const profile = profiles.find((item) => item.id === id);
     if (!profile) return;
     if (grantBtn) openEffectGrantDialog(profile);
-    else if (removeBtn) openEffectRemoveDialog(profile);
+    else if (viewBtn) openEffectRemoveDialog(profile, { editMode: false });
+    else if (removeBtn) openEffectRemoveDialog(profile, { editMode: true });
   });
 
   effectGrantForm?.addEventListener('submit', async (event) => {
@@ -1257,40 +1533,83 @@
 
   effectRemoveForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!effectManageState.editMode) {
+      closeEffectManageDialog();
+      return;
+    }
     const userId = effectRemoveForm.elements.user_id.value;
-    const effectId = String(effectRemoveSelect?.value || '').trim();
+    const selectedIds = Array.from(effectManageState.selectedIds);
+    if (!selectedIds.length) {
+      if (effectManageSelectError) effectManageSelectError.textContent = 'Select at least one profile effect to remove.';
+      return;
+    }
+    if (effectManageSelectError) effectManageSelectError.textContent = '';
     const reason = String(effectRemoveReason?.value || '').trim();
     if (reason.length < 2) {
-      Ipon.setFieldError(effectRemoveReason, 'Enter a brief reason explaining why this effect is being removed.');
+      Ipon.setFieldError(effectRemoveReason, 'Enter a brief reason explaining why the selected effect(s) are being removed.');
       effectRemoveReason?.focus();
       return;
     }
+    Ipon.setFieldError(effectRemoveReason, '');
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
-    const effectName = api?.getEffect ? api.getEffect(effectId).name : effectId;
+    const effectNames = selectedIds.map((id) => (api?.getEffect ? api.getEffect(id).name : id));
+    const namesPreview = effectNames.length <= 4
+      ? effectNames.join(', ')
+      : `${effectNames.slice(0, 4).join(', ')} and ${effectNames.length - 4} more`;
     const targetProfile = profiles.find((item) => item.id === userId);
     const recipientLabel = targetProfile
       ? `${targetProfile.full_name}${targetProfile.email ? ` (${targetProfile.email})` : ''}`
       : 'this user';
+    const equippedId = api?.normalizeEffectId
+      ? api.normalizeEffectId(targetProfile?.equipped_profile_effect)
+      : (targetProfile?.equipped_profile_effect || 'none');
+    const includesEquipped = equippedId !== 'none' && selectedIds.includes(equippedId);
+    const count = selectedIds.length;
     const accepted = await Ipon.confirmAction({
-      title: `Remove "${effectName}"?`,
-      message: `Remove profile effect "${effectName}" from ${recipientLabel}? They will receive a silent notification with your reason.`,
-      acceptLabel: 'Remove effect'
+      title: count === 1 ? `Remove "${effectNames[0]}"?` : `Remove ${count} profile effects?`,
+      message: `Remove ${namesPreview} (${count} ${count === 1 ? 'effect' : 'effects'}) from ${recipientLabel}?${includesEquipped ? ' Their active profile effect will also be unequipped.' : ''} They will receive a silent notification with your reason.`,
+      acceptLabel: `Remove ${count} ${count === 1 ? 'effect' : 'effects'}`
     });
     if (!accepted) return;
-    Ipon.setBusy(effectRemoveSubmit, true, 'Removing…');
+    Ipon.setBusy(effectRemoveSubmit, true, count > 1 ? `Removing 1 of ${count}…` : 'Removing…');
+    const removedIds = [];
+    let firstError = null;
     try {
-      await Ipon.rpc('super_admin_revoke_profile_effect', {
-        p_user_id: userId,
-        p_effect_id: effectId,
-        p_reason: reason
-      });
-      effectRemoveDialog?.close();
-      Ipon.toast('Profile effect removed. User notified.');
-      await load();
-    } catch (error) {
-      Ipon.toast(Ipon.friendlyError(error), 'error');
+      for (let idx = 0; idx < selectedIds.length; idx += 1) {
+        const effectId = selectedIds[idx];
+        if (count > 1 && effectRemoveSubmit) {
+          effectRemoveSubmit.textContent = `Removing ${idx + 1} of ${count}…`;
+        }
+        try {
+          await Ipon.rpc('super_admin_revoke_profile_effect', {
+            p_user_id: userId,
+            p_effect_id: effectId,
+            p_reason: reason
+          });
+          removedIds.push(effectId);
+          effectManageState.selectedIds.delete(effectId);
+        } catch (err) {
+          if (!firstError) firstError = err;
+        }
+      }
+      if (!firstError) {
+        closeEffectManageDialog();
+        Ipon.toast(removedIds.length === 1
+          ? 'Profile effect removed. User notified.'
+          : `${removedIds.length} profile effects removed. User notified.`);
+        await load();
+      } else {
+        await load();
+        const failedCount = count - removedIds.length;
+        Ipon.toast(removedIds.length
+          ? `Removed ${removedIds.length} of ${count} effects; ${failedCount} failed: ${Ipon.friendlyError(firstError)}`
+          : Ipon.friendlyError(firstError), 'error');
+      }
     } finally {
       Ipon.setBusy(effectRemoveSubmit, false);
+      if (effectRemoveDialog?.open && effectManageState.userId) {
+        renderEffectManageModal();
+      }
     }
   });
 

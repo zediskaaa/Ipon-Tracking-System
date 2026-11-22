@@ -1228,13 +1228,13 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v204/);
+  assert.match(sw, /ipon-shell-v205/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
     assert.match(html, /js\/profile-effects\.js\?v=20261122-07/);
     assert.match(html, /js\/profile-effects-exclusive\.js\?v=20261122-07/);
-    assert.match(html, /css\/app\.css\?v=20261122-24/);
+    assert.match(html, /css\/app\.css\?v=20261122-25/);
   }
 });
 
@@ -1363,4 +1363,57 @@ test('profile effect categories use one compact accessible dropdown', () => {
   assert.match(css, /\.effects-category-field\s*\{[^}]*height:\s*44px;/);
   assert.match(css, /\.effects-category-field:focus-within\s*\{[^}]*outline:\s*2px solid #8ff0bf;/);
   assert.doesNotMatch(css, /\.effects-chip(?:\[|\s|\{|:)/);
+});
+
+test('Super Admin unlocked profile effects open in a responsive modal with bulk Edit/Remove selection and count tracking', () => {
+  const html = read('super-admin.html');
+  const saJs = read('js/super-admin.js');
+  const css = read('css/app.css');
+
+  // Compact table cell trigger instead of dumping inline pill walls into #effects-body
+  assert.match(html, /<table class="data-table effects-rewards-table">/);
+  assert.match(saJs, /class="effect-count-trigger"[^>]*data-effect-view="\$\{profile\.id\}"/);
+  assert.doesNotMatch(saJs, /<div class="effect-table-pills">/);
+
+  // Responsive modal markup & unique controls
+  for (const id of [
+    'effect-remove-dialog',
+    'effect-manage-avatar',
+    'effect-manage-user-name',
+    'effect-manage-user-meta',
+    'effect-manage-award-btn',
+    'effect-manage-edit-toggle',
+    'effect-manage-search',
+    'effect-manage-filter',
+    'effect-manage-selectbar',
+    'effect-manage-selected-count',
+    'effect-manage-equipped-warn',
+    'effect-manage-select-visible',
+    'effect-manage-clear-selection',
+    'effect-manage-grid',
+    'effect-manage-select-error',
+    'effect-manage-remove-panel',
+    'effect-manage-picked-summary',
+    'effect-remove-reason',
+    'effect-remove-submit'
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`), `Missing modal element id="${id}"`);
+  }
+  assert.doesNotMatch(html, /id="effect-remove-select"/);
+
+  // Runtime behavior: view vs edit mode, exact count & picked summary, equipped warning, bulk revoke loop
+  assert.match(saJs, /function openEffectRemoveDialog\(profile,\s*\{\s*editMode = false\s*\} = \{\}\)/);
+  assert.match(saJs, /else if \(viewBtn\) openEffectRemoveDialog\(profile,\s*\{\s*editMode:\s*false\s*\}\);/);
+  assert.match(saJs, /else if \(removeBtn\) openEffectRemoveDialog\(profile,\s*\{\s*editMode:\s*true\s*\}\);/);
+  assert.match(saJs, /\$\{count\} of \$\{total\} selected to remove/);
+  assert.match(saJs, /<strong>Removing \$\{count\} \$\{count === 1 \? 'effect' : 'effects'\}:<\/strong>/);
+  assert.match(saJs, /for \(let idx = 0; idx < selectedIds\.length; idx \+= 1\)[\s\S]*?Ipon\.rpc\('super_admin_revoke_profile_effect'/);
+  assert.match(saJs, /Removing \$\{idx \+ 1\} of \$\{count\}…/);
+
+  // Responsive modal & compact table CSS
+  assert.match(css, /\.effect-count-trigger\s*\{[^}]*font-variant-numeric:\s*tabular-nums;/s);
+  assert.match(css, /\.effect-manage-dialog\s*\{\s*width:\s*min\(760px,\s*calc\(100vw - 24px\)\);\s*\}/);
+  assert.match(css, /\.effect-manage-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(195px,\s*1fr\)\);[^}]*overflow-y:\s*auto;/s);
+  assert.match(css, /@media \(max-width: 640px\)\s*\{[\s\S]*?\.effect-manage-toolbar\s*\{\s*grid-template-columns:\s*1fr;\s*\}[\s\S]*?\.effect-manage-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(css, /@media \(max-width: 420px\)\s*\{[\s\S]*?\.effect-manage-grid\s*\{\s*grid-template-columns:\s*1fr;\s*\}/);
 });
