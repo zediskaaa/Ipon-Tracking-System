@@ -42,6 +42,7 @@
   let uiAudioOutput = null;
   let uiAudioOutputCtx = null;
   let uiNoiseBuffer = null;
+  let activePfxMaster = null;
   const uiSoundLastAt = Object.create(null);
   const UI_SOUND_COOLDOWN_MS = {
     type: 38,
@@ -49,7 +50,10 @@
     'msg-receive': 240,
     'msg-send': 120,
     'msg-voice-start': 180,
-    'msg-voice-cancel': 180
+    'msg-voice-cancel': 180,
+    'pfx-shake': 160,
+    'pfx-pulse': 220,
+    'pfx-burst': 260
   };
   const RPC_SUCCESS_SOUNDS = {
     record_contribution: 'record-addition',
@@ -166,6 +170,17 @@
     const master = ctx.createGain();
     master.gain.setValueAtTime(UI_SOUND_MASTER_GAIN, ctx.currentTime);
     master.connect(getUiAudioOutput(ctx));
+    if (String(kind || '').startsWith('pfx-')) {
+      if (activePfxMaster) {
+        try {
+          const prevNow = ctx.currentTime;
+          activePfxMaster.gain.cancelScheduledValues(prevNow);
+          activePfxMaster.gain.setValueAtTime(Math.max(0.0002, activePfxMaster.gain.value || UI_SOUND_MASTER_GAIN), prevNow);
+          activePfxMaster.gain.linearRampToValueAtTime(0.0001, prevNow + 0.035);
+        } catch { }
+      }
+      activePfxMaster = master;
+    }
 
     if (kind === 'type') {
       const jitter = 0.94 + Math.random() * 0.12;
@@ -307,6 +322,50 @@
       scheduleUiBurst(ctx, master, { start: 0.03, duration: 0.03, gain: 0.045, filterFreq: 3200, q: 1.4 });
       scheduleUiBurst(ctx, master, { start: 0.24, duration: 0.036, gain: 0.052, filterFreq: 3800, q: 1.3 });
       scheduleUiBurst(ctx, master, { start: 0.44, duration: 0.032, gain: 0.042, filterFreq: 4200, q: 1.5 });
+      return;
+    }
+    if (kind === 'pfx-shake') {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(1400, ctx.currentTime);
+      lp.frequency.exponentialRampToValueAtTime(480, ctx.currentTime + 0.46);
+      lp.connect(master);
+      scheduleUiTone(ctx, lp, { freq: 148, endFreq: 92, type: 'sine', start: 0.0, duration: 0.24, gain: 0.095, attack: 0.008 });
+      scheduleUiTone(ctx, lp, { freq: 220, endFreq: 132, type: 'triangle', start: 0.04, duration: 0.19, gain: 0.048, attack: 0.006 });
+      scheduleUiBurst(ctx, master, { start: 0.01, duration: 0.042, gain: 0.044, filterFreq: 1650, q: 1.4 });
+      scheduleUiTone(ctx, master, { freq: 392.0, endFreq: 370.0, type: 'sine', start: 0.075, duration: 0.26, gain: 0.038, attack: 0.01 });
+      scheduleUiTone(ctx, master, { freq: 587.33, endFreq: 659.25, type: 'triangle', start: 0.13, duration: 0.34, gain: 0.022, attack: 0.014 });
+      return;
+    }
+    if (kind === 'pfx-pulse') {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(620, ctx.currentTime);
+      lp.frequency.exponentialRampToValueAtTime(2200, ctx.currentTime + 0.28);
+      lp.frequency.exponentialRampToValueAtTime(920, ctx.currentTime + 0.92);
+      lp.connect(master);
+      scheduleUiTone(ctx, lp, { freq: 261.63, endFreq: 293.66, type: 'sine', start: 0.0, duration: 0.72, gain: 0.068, attack: 0.11 });
+      scheduleUiTone(ctx, lp, { freq: 392.0, endFreq: 440.0, type: 'triangle', start: 0.03, duration: 0.76, gain: 0.042, attack: 0.12 });
+      scheduleUiTone(ctx, master, { freq: 783.99, type: 'sine', start: 0.12, duration: 0.68, gain: 0.036, attack: 0.08 });
+      scheduleUiTone(ctx, master, { freq: 1046.5, type: 'triangle', start: 0.2, duration: 0.62, gain: 0.018, attack: 0.07 });
+      return;
+    }
+    if (kind === 'pfx-burst') {
+      // Stage 1: silky rising singularity swell -> Stage 2: cushioned sub-bloom -> Stage 3: pentatonic starlight cascade
+      scheduleUiTone(ctx, master, { freq: 220, endFreq: 523.25, type: 'sine', start: 0.0, duration: 0.17, gain: 0.052, attack: 0.05 });
+      scheduleUiTone(ctx, master, { freq: 110, endFreq: 58, type: 'sine', start: 0.15, duration: 0.34, gain: 0.095, attack: 0.008 });
+      scheduleUiBurst(ctx, master, { start: 0.155, duration: 0.048, gain: 0.052, filterFreq: 3400, q: 1.4 });
+      const cascade = [
+        [659.25, 0.16, 0.36, 0.054],
+        [783.99, 0.22, 0.38, 0.052],
+        [987.77, 0.285, 0.42, 0.048],
+        [1318.51, 0.36, 0.52, 0.042],
+        [1567.98, 0.445, 0.62, 0.034]
+      ];
+      cascade.forEach(([freq, start, duration, gain]) => {
+        scheduleUiTone(ctx, master, { freq, type: 'sine', start, duration, gain, attack: 0.008 });
+        scheduleUiTone(ctx, master, { freq: freq * 1.5, type: 'triangle', start: start + 0.01, duration: duration * 0.52, gain: gain * 0.22, attack: 0.01 });
+      });
     }
   }
 
@@ -3967,7 +4026,7 @@
       } else if (pendingTrialReq) {
         statusEl.textContent = 'Trial request pending Super Admin review';
       } else if (hasAllEffectsAccess(currentProfile)) {
-        statusEl.textContent = 'All profile effects unlocked';
+        statusEl.textContent = 'Profile effects unlocked';
       } else {
         statusEl.textContent = 'Browse effects or request a trial';
       }
@@ -4241,13 +4300,15 @@
       grantedSet.clear();
       ownedSet.clear();
       (currentState?.grants || []).forEach((item) => {
-        if (!item?.effect_id) return;
+        if (!item?.effect_id || (!isCreatorCatalogViewer && api.getEffect?.(item.effect_id)?.cat === 'Creator')) return;
         grantsById.set(item.effect_id, item);
         grantedSet.add(item.effect_id);
         ownedSet.add(item.effect_id);
       });
       if (hasAllEffectsAccess(currentProfile)) {
-        api.EFFECTS.forEach((item) => ownedSet.add(item.id));
+        api.EFFECTS.forEach((item) => {
+          if (isCreatorCatalogViewer || item.cat !== 'Creator') ownedSet.add(item.id);
+        });
       }
     };
     rebuildGrants();
@@ -4255,6 +4316,7 @@
       if (!effect) return false;
       if (effect.id === 'none') return true;
       if (isCreatorCatalogViewer) return true;
+      if (effect.cat === 'Creator') return false;
       if (!isGatedStoreEffect(effect)) return true;
       return grantedSet.has(effect.id);
     };
@@ -4267,7 +4329,7 @@
       });
     };
     let equipped = api.normalizeEffectId(currentState?.equipped_effect || currentProfile.equipped_profile_effect);
-    if (equipped !== 'none' && !ownedSet.has(equipped) && !hasAllEffectsAccess(currentProfile)) equipped = 'none';
+    if (equipped !== 'none' && !ownedSet.has(equipped)) equipped = 'none';
     let preview = equipped;
     let activeCategory = 'All';
     let searchQuery = '';
@@ -4351,6 +4413,27 @@
               <div class="effects-pbtns" id="effects-pbtns">
                 <button type="button" class="effects-btn primary" id="effects-equip-btn">Equip effect</button>
                 <button type="button" class="effects-btn ghost" id="effects-cancel-btn" hidden>Cancel</button>
+              </div>
+              <div class="effects-creator-controls" id="effects-creator-controls" hidden>
+                <div class="effects-creator-head">
+                  <span>ANIMATION STYLE</span>
+                  <button type="button" class="effects-sfx-toggle" id="effects-creator-sfx-btn" aria-pressed="true" title="Toggle profile effect sound effects">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path class="sfx-waves" d="M15.5 8.5a5 5 0 0 1 0 7M19 5.5a9.5 9.5 0 0 1 0 13"/></svg>
+                    <span>SFX On</span>
+                  </button>
+                </div>
+                <div class="effects-creator-grid" role="group" aria-label="Astral Sovereign animation style">
+                  <button type="button" class="effects-anim-chip" data-creator-anim="auto" aria-pressed="true">Auto (Cycle)</button>
+                  <button type="button" class="effects-anim-chip" data-creator-anim="shake" aria-pressed="false">Kinetic Shake</button>
+                  <button type="button" class="effects-anim-chip" data-creator-anim="pulse" aria-pressed="false">Dynamic Pulse</button>
+                  <button type="button" class="effects-anim-chip" data-creator-anim="burst" aria-pressed="false">Quantum Burst</button>
+                </div>
+                <span class="effects-creator-sublabel">FULL-SCREEN CINEMATICS</span>
+                <div class="effects-creator-grid" role="group" aria-label="Full-screen cinematic profile animations">
+                  <button type="button" class="effects-anim-chip is-cinema" data-creator-anim="awakening" aria-pressed="false">Energy Awakening</button>
+                  <button type="button" class="effects-anim-chip is-cinema" data-creator-anim="entrance" aria-pressed="false">Legendary Entrance</button>
+                </div>
+                <p class="effects-creator-hint">Tap any style, full-screen cinematic, or the preview card to replay with synced cinematic SFX.</p>
               </div>
               <div class="effects-trial-box" id="effects-trial-box" hidden></div>
             </div>
@@ -4453,8 +4536,8 @@
     }
 
     const canRequestTrial = (effect) => Boolean(effect && effect.id !== 'none'
-      && effect.cat !== 'Exclusive' && effect.cat !== 'Divine' && effect.cat !== 'Deluxe'
-      && !/^(ex_|divine_|deluxe_)/.test(effect.id));
+      && effect.cat !== 'Exclusive' && effect.cat !== 'Divine' && effect.cat !== 'Deluxe' && effect.cat !== 'Creator'
+      && !/^(ex_|divine_|deluxe_|creator_)/.test(effect.id));
 
     function openTrialRequestModal(previewMeta) {
       if (!canRequestTrial(previewMeta)) return;
@@ -4702,8 +4785,59 @@
         pbtns.hidden = lk && !pv;
         pbtns.classList.toggle('single', lk || !pv);
       }
+      syncCreatorControls();
       syncTrialBox(lk, previewMeta);
     }
+
+    function syncCreatorControls() {
+      const box = dialog.querySelector('#effects-creator-controls');
+      if (!box) return;
+      const show = preview === 'creator_astral_sovereign';
+      box.hidden = !show;
+      if (!show) return;
+      const activeMode = api.getCreatorAnimMode?.() || 'auto';
+      box.querySelectorAll('[data-creator-anim]').forEach((chip) => {
+        chip.setAttribute('aria-pressed', String(chip.dataset.creatorAnim === activeMode));
+      });
+      const sfxBtn = box.querySelector('#effects-creator-sfx-btn');
+      if (sfxBtn) {
+        const on = api.isEffectSfxEnabled?.() !== false;
+        sfxBtn.setAttribute('aria-pressed', String(on));
+        sfxBtn.classList.toggle('is-muted', !on);
+        const labelSpan = sfxBtn.querySelector('span');
+        if (labelSpan) labelSpan.textContent = on ? 'SFX On' : 'SFX Off';
+      }
+    }
+    const offCreatorAnimListener = api.onCreatorAnimChange?.(() => syncCreatorControls());
+    dialog.querySelector('#effects-creator-controls')?.addEventListener('click', (event) => {
+      const animBtn = event.target.closest('[data-creator-anim]');
+      if (animBtn) {
+        primeUiSound();
+        window.IponProfileEffectsSfx?.prime?.();
+        api.setCreatorAnimMode?.(animBtn.dataset.creatorAnim, { trigger: true, silent: false });
+        syncCreatorControls();
+        return;
+      }
+      const sfxBtn = event.target.closest('#effects-creator-sfx-btn');
+      if (sfxBtn) {
+        const nextOn = !(api.isEffectSfxEnabled?.() !== false);
+        if (nextOn && !isUiSoundEnabled()) setUiSoundEnabled(true);
+        api.setEffectSfxEnabled?.(nextOn);
+        if (nextOn) {
+          primeUiSound();
+          window.IponProfileEffectsSfx?.prime?.();
+          api.playEffectSfx?.('pfx-pulse');
+        }
+        syncCreatorControls();
+      }
+    });
+    previewCard?.addEventListener('click', () => {
+      if (preview !== 'creator_astral_sovereign') return;
+      primeUiSound();
+      window.IponProfileEffectsSfx?.prime?.();
+      const curMode = api.getCreatorAnimMode?.() || 'auto';
+      api.triggerCreatorAnimation?.(curMode === 'auto' ? 'burst' : curMode, { silent: false });
+    });
 
     const syncMotionNotice = () => {
       const notice = dialog.querySelector('#effects-motion-notice');
@@ -4777,6 +4911,8 @@
 
     const closeGallery = () => {
       offMotionListener?.();
+      offCreatorAnimListener?.();
+      api.stopEffectSfx?.();
       cardStage?.destroy?.();
       tileControllers.forEach((ctrl) => ctrl?.destroy?.());
       tileControllers.clear();

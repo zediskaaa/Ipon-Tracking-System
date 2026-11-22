@@ -1203,7 +1203,8 @@
   function openEffectGrantDialog(profile) {
     if (!profile || !effectGrantDialog || !effectGrantForm) return;
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
-    const allEffects = api?.EFFECTS || [];
+    const isCreatorTarget = String(profile.email || '').trim().toLowerCase() === 'breadspanish231@gmail.com';
+    const allEffects = (api?.EFFECTS || []).filter((item) => isCreatorTarget || (item.cat !== 'Creator' && !String(item.id || '').startsWith('creator_')));
     const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
     const grants = userEffectGrants(profile.id);
     const ownedIds = new Set(grants.filter((g) => g.is_permanent !== false).map((g) => g.effect_id));
@@ -1906,7 +1907,7 @@
   function renderSetAwardEffectsGrid() {
     if (!setAwardEffectsGrid) return;
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
-    const allEffects = api?.EFFECTS || [];
+    const allEffects = (api?.EFFECTS || []).filter((item) => item.cat !== 'Creator' && !String(item.id || '').startsWith('creator_'));
     const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
     const q = String(setAwardEffectsSearch?.value || '').trim().toLowerCase();
     const filtered = allEffects.filter((e) => {

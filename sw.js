@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v228';
+const CACHE_NAME = 'ipon-shell-v231';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname) && self.location.protocol !== 'https:';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
@@ -13,9 +13,11 @@ const STATIC_ASSETS = [
   'css/cashflow-monitor.css',
   'js/config.js',
   'js/profile-effects.js',
+  'js/profile-effects-sfx.js',
   'js/profile-effects-exclusive.js',
   'js/profile-effects-divine.js',
   'js/profile-effects-deluxe.js',
+  'js/profile-effects-creator.js',
   'js/core.js',
   'js/tutorial.js',
   'js/cashflow-monitor.js',

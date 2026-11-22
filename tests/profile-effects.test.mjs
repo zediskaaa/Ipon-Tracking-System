@@ -48,11 +48,12 @@ function makeStubCanvasContext() {
   };
 }
 
-test('profile effects engine exports all 62 effects and renders every effect cleanly without errors', () => {
+test('profile effects engine exports all 63 effects and renders every effect cleanly without errors', () => {
   const code = read('js/profile-effects.js');
   const exclusiveCode = read('js/profile-effects-exclusive.js');
   const divineCode = read('js/profile-effects-divine.js');
   const deluxeCode = read('js/profile-effects-deluxe.js');
+  const creatorCode = read('js/profile-effects-creator.js');
   const canvases = [];
   const noop = () => { };
   const numericErrors = [];
@@ -137,11 +138,12 @@ test('profile effects engine exports all 62 effects and renders every effect cle
   vm.runInNewContext(exclusiveCode, sandbox, { filename: 'js/profile-effects-exclusive.js' });
   vm.runInNewContext(divineCode, sandbox, { filename: 'js/profile-effects-divine.js' });
   vm.runInNewContext(deluxeCode, sandbox, { filename: 'js/profile-effects-deluxe.js' });
+  vm.runInNewContext(creatorCode, sandbox, { filename: 'js/profile-effects-creator.js' });
 
   const api = sandbox.window.IponProfileEffects;
   assert.ok(api);
-  assert.equal(api.EFFECTS.length, 62);
-  assert.equal(api.ALL_OPTIONS.length, 63);
+  assert.equal(api.EFFECTS.length, 63);
+  assert.equal(api.ALL_OPTIONS.length, 64);
   assert.deepEqual(
     [...api.EFFECTS.map((e) => e.id)],
     [
@@ -158,7 +160,8 @@ test('profile effects engine exports all 62 effects and renders every effect cle
       'ex_valkyrie', 'ex_leviathan', 'ex_chronos', 'ex_kitsune', 'ex_early_user',
       'divine_meridian', 'divine_boreal', 'divine_opal', 'divine_imperial', 'divine_hellebore',
       'deluxe_aureate', 'deluxe_parure', 'deluxe_nocturne',
-      'deluxe_nacre', 'deluxe_malachite', 'deluxe_argent', 'deluxe_calibre'
+      'deluxe_nacre', 'deluxe_malachite', 'deluxe_argent', 'deluxe_calibre',
+      'creator_astral_sovereign'
     ]
   );
   assert.equal(api.CATEGORIES[1], 'Divine');
@@ -223,7 +226,7 @@ test('profile effects engine exports all 62 effects and renders every effect cle
       saveDepth = 0;
       assert.doesNotThrow(() => stage.setEffect(effect.id), `Failed rendering ${effect.id}`);
       assert.equal(host.dataset.effectScope, effect.fullCard ? 'full' : undefined, `Unexpected effectScope for ${effect.id}`);
-      const cinematic = ['Divine', 'Deluxe'].includes(effect.cat);
+      const cinematic = ['Divine', 'Deluxe', 'Creator'].includes(effect.cat);
       assert.equal(host.dataset.effectFamily, cinematic ? effect.cat.toLowerCase() : undefined);
       const tick = rafQueue[rafQueue.length - 1];
       if (tick) {
@@ -1228,13 +1231,17 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v228/);
+  assert.match(sw, /ipon-shell-v231/);
+  assert.match(sw, /'js\/profile-effects-sfx\.js'/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
+  assert.match(sw, /'js\/profile-effects-creator\.js'/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
-    assert.match(html, /js\/profile-effects\.js\?v=20261122-07/);
+    assert.match(html, /js\/profile-effects\.js\?v=20261123-03/);
+    assert.match(html, /js\/profile-effects-sfx\.js\?v=20261123-03/);
     assert.match(html, /js\/profile-effects-exclusive\.js\?v=20261122-07/);
-    assert.match(html, /css\/app\.css\?v=20261122-34/);
+    assert.match(html, /js\/profile-effects-creator\.js\?v=20261123-03/);
+    assert.match(html, /css\/app\.css\?v=20261123-03/);
   }
 });
 
@@ -1324,7 +1331,7 @@ test('Divine effects can be equipped but cannot create a trial request or notify
   for (const file of fs.readdirSync(root).filter((entry) => entry.endsWith('.html'))) {
     const html = read(file);
     if (!html.includes('js/profile-effects-exclusive.js')) continue;
-    assert.match(html, /js\/profile-effects-exclusive\.js[^<]*<\/script>\s*<script src="js\/profile-effects-divine\.js\?v=20261122-02"><\/script>\s*<script src="js\/profile-effects-deluxe\.js\?v=20261122-01"><\/script>\s*<script src="js\/core\.js/);
+    assert.match(html, /js\/profile-effects-exclusive\.js[^<]*<\/script>\s*<script src="js\/profile-effects-divine\.js\?v=20261122-02"><\/script>\s*<script src="js\/profile-effects-deluxe\.js\?v=20261122-01"><\/script>\s*<script src="js\/profile-effects-creator\.js\?v=20261123-03"><\/script>\s*<script src="js\/core\.js/);
   }
   assert.match(read('sw.js'), /'js\/profile-effects-divine\.js'/);
 });
@@ -1388,7 +1395,7 @@ test('user Profile Effects store hides ungranted Exclusive and Divine effects an
       currentProfile: { email, role: 'MEMBER' },
       hasAllEffectsAccess: (p) => String(p?.email || '').toLowerCase() === 'breadspanish231@gmail.com',
       currentState: { grants: grantedIds.map((effect_id) => ({ effect_id })) },
-      api: { EFFECTS: sampleEffects, CATEGORIES: sampleCategories }
+      api: { EFFECTS: sampleEffects, CATEGORIES: sampleCategories, getEffect: (id) => sampleEffects.find((e) => e.id === id) || { id: 'none', cat: 'Clean' } }
     };
     const runner = vm.runInNewContext(`(() => { ${fnSrc} return { visibleEffects: api.EFFECTS.filter(isEffectVisibleInStore).map((e) => e.id), categories: getVisibleStoreCategories() }; })()`, ctx);
     return runner;

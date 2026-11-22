@@ -3772,6 +3772,7 @@
     'All',
     'Divine',
     'Deluxe',
+    'Creator',
     'Exclusive',
     'myIPON',
     'Education',
@@ -3837,6 +3838,117 @@
   const motion = { reduced: Boolean(mq?.matches), force: false };
   const motionListeners = new Set();
   const still = () => motion.reduced && !motion.force;
+
+  const CREATOR_ANIM_MODES = Object.freeze(['auto', 'shake', 'pulse', 'burst', 'awakening', 'entrance']);
+  const CREATOR_ANIM_STORAGE_KEY = 'ipon_creator_fx_mode_v1';
+  const PFX_SFX_STORAGE_KEY = 'ipon_pfx_sfx_v1';
+  const creatorAnimListeners = new Set();
+
+  function readStorage(key) {
+    try {
+      return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeStorage(key, val) {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      if (val === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, val);
+    } catch { }
+  }
+
+  let creatorAnimMode = (() => {
+    const saved = String(readStorage(CREATOR_ANIM_STORAGE_KEY) || 'auto').trim().toLowerCase();
+    return CREATOR_ANIM_MODES.includes(saved) ? saved : 'auto';
+  })();
+
+  function getCreatorAnimMode() {
+    return creatorAnimMode;
+  }
+
+  function isEffectSfxEnabled() {
+    if (readStorage(PFX_SFX_STORAGE_KEY) === '0') return false;
+    const iponApi = typeof window !== 'undefined' ? window.Ipon : null;
+    if (iponApi && typeof iponApi.isUiSoundEnabled === 'function' && !iponApi.isUiSoundEnabled()) {
+      return false;
+    }
+    return true;
+  }
+
+  function stopEffectSfx() {
+    const sfx = (typeof window !== 'undefined' && window.IponProfileEffectsSfx)
+      || (typeof globalThis !== 'undefined' && globalThis.IponProfileEffectsSfx);
+    sfx?.stopAll?.();
+  }
+
+  function setEffectSfxEnabled(enabled) {
+    const next = Boolean(enabled);
+    writeStorage(PFX_SFX_STORAGE_KEY, next ? null : '0');
+    if (!next) stopEffectSfx();
+    creatorAnimListeners.forEach((cb) => {
+      try { cb({ mode: creatorAnimMode, sfxEnabled: isEffectSfxEnabled() }); } catch { }
+    });
+    return isEffectSfxEnabled();
+  }
+
+  function playEffectSfx(kind, { retryOnGestureEl = null } = {}) {
+    if (!kind || still() || !isEffectSfxEnabled()) return false;
+    const sfx = (typeof window !== 'undefined' && window.IponProfileEffectsSfx)
+      || (typeof globalThis !== 'undefined' && globalThis.IponProfileEffectsSfx);
+    if (sfx && typeof sfx.play === 'function' && sfx.play(kind, { retryOnGestureEl })) {
+      return true;
+    }
+    const iponApi = typeof window !== 'undefined' ? window.Ipon : null;
+    if (iponApi && typeof iponApi.playUiSound === 'function') {
+      return Boolean(iponApi.playUiSound(kind, { retryOnGestureEl }));
+    }
+    return false;
+  }
+
+  function triggerCreatorAnimation(animName, { silent = false } = {}) {
+    const clean = String(animName || '').trim().toLowerCase();
+    if (!['shake', 'pulse', 'burst', 'awakening', 'entrance'].includes(clean)) return false;
+    let triggered = false;
+    for (const st of stages) {
+      if (st.vis && typeof st.triggerFn === 'function') {
+        st.triggerFn(clean, { silent });
+        triggered = true;
+      }
+    }
+    if (!silent && !triggered) {
+      playEffectSfx(`pfx-${clean}`);
+    }
+    return triggered;
+  }
+
+  function setCreatorAnimMode(nextMode, { trigger = true, silent = false } = {}) {
+    const clean = String(nextMode || 'auto').trim().toLowerCase();
+    if (!CREATOR_ANIM_MODES.includes(clean)) return creatorAnimMode;
+    creatorAnimMode = clean;
+    writeStorage(CREATOR_ANIM_STORAGE_KEY, clean === 'auto' ? null : clean);
+    creatorAnimListeners.forEach((cb) => {
+      try { cb({ mode: creatorAnimMode, sfxEnabled: isEffectSfxEnabled() }); } catch { }
+    });
+    if (trigger) {
+      if (clean === 'auto') {
+        for (const st of stages) {
+          if (st.vis && typeof st.triggerFn === 'function') st.triggerFn('auto', { silent });
+        }
+      } else {
+        triggerCreatorAnimation(clean, { silent });
+      }
+    }
+    return creatorAnimMode;
+  }
+
+  function onCreatorAnimChange(fn) {
+    if (typeof fn !== 'function') return () => { };
+    creatorAnimListeners.add(fn);
+    return () => creatorAnimListeners.delete(fn);
+  }
 
   const stages = new Set();
   let rafId = null;
@@ -3934,6 +4046,18 @@
       return { setEffect() { }, refreshGeometry() { }, destroy() { } };
     }
 
+    const HOLO_VARS = [
+      '--holo-opacity', '--holo-blur', '--holo-shift-y', '--holo-skew', '--holo-chroma',
+      '--holo-shake-x', '--holo-shake-y', '--holo-shake-rot', '--holo-pulse-scale', '--holo-pulse-glow',
+      '--holo-frame-glow', '--holo-sheen-pos', '--holo-sheen-alpha',
+      '--holo-mask-cut', '--holo-mask-soft', '--holo-mask-dir', '--holo-banner-o',
+      '--holo-zone-1', '--holo-zone-2', '--holo-zone-3', '--holo-zone-4', '--holo-zone-5'
+    ];
+    const clearHostFxVars = (target) => {
+      if (!target?.style || typeof target.style.removeProperty !== 'function') return;
+      for (const prop of HOLO_VARS) target.style.removeProperty(prop);
+    };
+
     const geom = typeof geometryFn === 'function' ? geometryFn : defaultAvatarGeometry(host);
     const stage = {
       host,
@@ -3945,24 +4069,42 @@
       minDt: 1 / Math.max(15, fps) - 0.002,
       vis: true,
       id: normalizeEffectId(effectId),
+      builtId: '',
+      lastW: 0,
+      lastH: 0,
       run: null,
+      triggerFn: null,
+      cleanupFn: null,
       time: 0,
       acc: 0,
       drawn: false,
       S: null,
-      build() {
+      build({ preserveTime = false } = {}) {
+        const W = this.b.clientWidth || this.b.offsetWidth || 0;
+        const H = this.b.clientHeight || this.b.offsetHeight || 0;
+        if (preserveTime && this.builtId === this.id && this.run && W === this.lastW && H === this.lastH) {
+          return;
+        }
+        const keepTime = preserveTime && this.builtId === this.id ? this.time : 0;
+        try { this.cleanupFn?.(); } catch { }
+        this.cleanupFn = null;
+        clearHostFxVars(this.host);
+        this.triggerFn = null;
         const defEntry = FX[this.id];
         const isFull = Boolean(defEntry?.fullCard);
         if (this.host?.dataset) {
           if (isFull) this.host.dataset.effectScope = 'full';
           else delete this.host.dataset.effectScope;
-          if (defEntry?.cat === 'Divine' || defEntry?.cat === 'Deluxe') this.host.dataset.effectFamily = defEntry.cat.toLowerCase();
-          else delete this.host.dataset.effectFamily;
+          if (defEntry?.cat === 'Divine' || defEntry?.cat === 'Deluxe' || defEntry?.cat === 'Creator') {
+            this.host.dataset.effectFamily = defEntry.cat.toLowerCase();
+          } else {
+            delete this.host.dataset.effectFamily;
+          }
         }
-        const W = this.b.clientWidth || this.b.offsetWidth || 0;
-        const H = this.b.clientHeight || this.b.offsetHeight || 0;
         if (!W || !H) {
           this.run = null;
+          this.lastW = 0;
+          this.lastH = 0;
           return;
         }
         const d = Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, maxDpr);
@@ -3977,12 +4119,19 @@
         const g = this.geom(W, H) || { cx: W / 2, cy: H / 2, ra: 30 };
         const full = isFull && (Boolean(this.host?.classList?.contains?.('effects-card') || this.host?.classList?.contains?.('msg-profile-popover')) || H >= W * 0.92);
         const s = Math.max(0.35, g.ra / 36);
-        this.S = { W, H, ...g, s, full, b: this.bc, f: this.fc };
+        this.S = {
+          W, H, ...g, s, full, b: this.bc, f: this.fc, host: this.host,
+          onTrigger: (fn) => { this.triggerFn = typeof fn === 'function' ? fn : null; },
+          onCleanup: (fn) => { this.cleanupFn = typeof fn === 'function' ? fn : null; }
+        };
         this.frameSpec = full && defEntry?.cardFrame ? { spec: defEntry.cardFrame, m: cardFrameMetrics(W, H, 5 * s, 16 * s) } : null;
         this.run = defEntry ? defEntry.make(this.S) : null;
-        this.time = 0;
+        this.builtId = this.id;
+        this.lastW = W;
+        this.lastH = H;
+        this.time = keepTime;
         this.drawn = still();
-        if (this.run) this.render(this.drawn ? 3.2 : 0.016, this.drawn ? 0 : 0.016);
+        if (this.run) this.render(this.drawn ? 3.2 : Math.max(0.016, this.time), this.drawn ? 0 : 0.016);
       },
       render(t, dt) {
         if (!this.S || !this.run) return;
@@ -4008,7 +4157,7 @@
     let ro = null;
     let io = null;
     if (typeof ResizeObserver === 'function') {
-      ro = new ResizeObserver(() => stage.build());
+      ro = new ResizeObserver(() => stage.build({ preserveTime: true }));
       ro.observe(backCanvas);
     }
     if (typeof IntersectionObserver === 'function') {
@@ -4057,14 +4206,18 @@
         stage.build();
       },
       refreshGeometry() {
-        stage.build();
+        stage.build({ preserveTime: true });
       },
       destroy() {
         cancelExit();
         stages.delete(stage);
         ro?.disconnect?.();
         io?.disconnect?.();
+        try { stage.cleanupFn?.(); } catch { }
+        stage.cleanupFn = null;
         stage.run = null;
+        stage.triggerFn = null;
+        clearHostFxVars(stage.host);
         if (stage.host?.dataset) {
           delete stage.host.dataset.effectScope;
           delete stage.host.dataset.effectFamily;
@@ -4105,7 +4258,16 @@
       if (typeof fn !== 'function') return () => { };
       motionListeners.add(fn);
       return () => motionListeners.delete(fn);
-    }
+    },
+    CREATOR_ANIM_MODES,
+    getCreatorAnimMode,
+    setCreatorAnimMode,
+    triggerCreatorAnimation,
+    isEffectSfxEnabled,
+    setEffectSfxEnabled,
+    playEffectSfx,
+    stopEffectSfx,
+    onCreatorAnimChange
   });
 
   if (typeof window !== 'undefined') window.IponProfileEffects = api;
