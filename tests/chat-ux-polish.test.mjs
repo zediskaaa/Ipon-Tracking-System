@@ -30,6 +30,8 @@ test('CSS aligns voice bar height to composer input, maximizes group modal space
   assert.match(css, /\.msg-group-dialog\s*\{[^}]*width:\s*min\(520px,\s*calc\(100vw - 20px\)\);[^}]*max-width:\s*calc\(100vw - 20px\);/s);
   assert.match(css, /@media\s*\(max-width:\s*720px\)\s*\{\s*\.msg-group-dialog\s*\{[^}]*width:\s*calc\(100vw - 12px\);[^}]*max-width:\s*calc\(100vw - 12px\);/s);
   assert.match(css, /\.msg-group-form\s*\{[^}]*gap:\s*8px;/s);
+  assert.match(css, /\.msg-group-dialog \.msg-group-form\s*\{[^}]*padding:\s*0;/s);
+  assert.match(css, /#msg-group-members-error:not\(\.is-visible\)\s*\{[^}]*display:\s*none;/s);
   assert.match(css, /\.msg-group-picker-block\s*\{[^}]*gap:\s*6px;/s);
   assert.match(css, /\.msg-group-form-actions\s*\{[^}]*padding:\s*6px 0 10px;/s);
   assert.match(css, /@media\s*\(max-width:\s*720px\)[\s\S]*?\.msg-group-form-actions\s*\{[^}]*padding:\s*4px 0 8px;/s);
