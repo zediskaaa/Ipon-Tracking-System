@@ -48,10 +48,11 @@ function makeStubCanvasContext() {
   };
 }
 
-test('profile effects engine exports all 55 effects and renders every effect cleanly without errors', () => {
+test('profile effects engine exports all 62 effects and renders every effect cleanly without errors', () => {
   const code = read('js/profile-effects.js');
   const exclusiveCode = read('js/profile-effects-exclusive.js');
   const divineCode = read('js/profile-effects-divine.js');
+  const deluxeCode = read('js/profile-effects-deluxe.js');
   const canvases = [];
   const noop = () => { };
   const numericErrors = [];
@@ -135,11 +136,12 @@ test('profile effects engine exports all 55 effects and renders every effect cle
   vm.runInNewContext(code, sandbox, { filename: 'js/profile-effects.js' });
   vm.runInNewContext(exclusiveCode, sandbox, { filename: 'js/profile-effects-exclusive.js' });
   vm.runInNewContext(divineCode, sandbox, { filename: 'js/profile-effects-divine.js' });
+  vm.runInNewContext(deluxeCode, sandbox, { filename: 'js/profile-effects-deluxe.js' });
 
   const api = sandbox.window.IponProfileEffects;
   assert.ok(api);
-  assert.equal(api.EFFECTS.length, 55);
-  assert.equal(api.ALL_OPTIONS.length, 56);
+  assert.equal(api.EFFECTS.length, 62);
+  assert.equal(api.ALL_OPTIONS.length, 63);
   assert.deepEqual(
     [...api.EFFECTS.map((e) => e.id)],
     [
@@ -154,10 +156,14 @@ test('profile effects engine exports all 55 effects and renders every effect cle
       'ex_phoenix', 'ex_dragon', 'ex_eclipse', 'ex_tempest', 'ex_blossom',
       'ex_frost', 'ex_sovereign', 'ex_cybermech', 'ex_prism', 'ex_abyss',
       'ex_valkyrie', 'ex_leviathan', 'ex_chronos', 'ex_kitsune', 'ex_early_user',
-      'divine_meridian', 'divine_boreal', 'divine_opal', 'divine_imperial', 'divine_hellebore'
+      'divine_meridian', 'divine_boreal', 'divine_opal', 'divine_imperial', 'divine_hellebore',
+      'deluxe_aureate', 'deluxe_parure', 'deluxe_nocturne',
+      'deluxe_nacre', 'deluxe_malachite', 'deluxe_argent', 'deluxe_calibre'
     ]
   );
   assert.equal(api.CATEGORIES[1], 'Divine');
+  assert.equal(api.CATEGORIES[2], 'Deluxe');
+  assert.equal(api.EFFECTS.filter((e) => e.cat === 'Deluxe' && e.rare === 3 && e.fullCard).length, 7);
   assert.equal(api.EFFECTS.filter((e) => e.cat === 'Divine').length, 5);
   assert.ok(api.CATEGORIES.includes('Exclusive'), 'Missing category Exclusive');
   assert.equal(api.RARITIES[3], 'Mythic');
@@ -217,11 +223,12 @@ test('profile effects engine exports all 55 effects and renders every effect cle
       saveDepth = 0;
       assert.doesNotThrow(() => stage.setEffect(effect.id), `Failed rendering ${effect.id}`);
       assert.equal(host.dataset.effectScope, effect.fullCard ? 'full' : undefined, `Unexpected effectScope for ${effect.id}`);
-      assert.equal(host.dataset.effectFamily, effect.cat === 'Divine' ? 'divine' : undefined);
+      const cinematic = ['Divine', 'Deluxe'].includes(effect.cat);
+      assert.equal(host.dataset.effectFamily, cinematic ? effect.cat.toLowerCase() : undefined);
       const tick = rafQueue[rafQueue.length - 1];
       if (tick) {
         // Exclusive effects run 4 distinct ~6.2s scenes (24.8s full loop); step monotonically by 50ms (dt cap)
-        const steps = effect.cat === 'Divine' ? 500 : effect.cat === 'Exclusive' && dim[0] === 340 ? 520 : 12;
+        const steps = cinematic ? 500 : effect.cat === 'Exclusive' && dim[0] === 340 ? 520 : 12;
         for (let i = 0; i < steps; i += 1) {
           simNow += 50;
           tick(simNow);
@@ -250,8 +257,9 @@ test('profile effects engine exports all 55 effects and renders every effect cle
   exitAnimations[1].onfinish();
   assert.equal(host.dataset.effectScope, undefined, 'Use the latest selection when the fade finishes');
   assert.equal(exitAnimations.every((effect) => effect.cancelled), true);
-  transition.setEffect('divine_boreal');
+  transition.setEffect('deluxe_argent');
   transition.setEffect('divine_opal');
+  assert.equal(exitAnimations.length, 4, 'Leaving Deluxe must also fade both canvases');
   transition.destroy();
   assert.equal(exitAnimations.every((effect) => effect.cancelled), true, 'Destroy must release unfinished fades');
 });
@@ -1220,13 +1228,13 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v187/);
+  assert.match(sw, /ipon-shell-v188/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
-    assert.match(html, /js\/profile-effects\.js\?v=20261122-06/);
+    assert.match(html, /js\/profile-effects\.js\?v=20261122-07/);
     assert.match(html, /js\/profile-effects-exclusive\.js\?v=20261122-07/);
-    assert.match(html, /css\/app\.css\?v=20261122-10/);
+    assert.match(html, /css\/app\.css\?v=20261122-11/);
   }
 });
 
@@ -1317,7 +1325,30 @@ test('Divine effects can be equipped but cannot create a trial request or notify
   for (const file of fs.readdirSync(root).filter((entry) => entry.endsWith('.html'))) {
     const html = read(file);
     if (!html.includes('js/profile-effects-exclusive.js')) continue;
-    assert.match(html, /js\/profile-effects-exclusive\.js[^<]*<\/script>\s*<script src="js\/profile-effects-divine\.js\?v=20261122-02"><\/script>\s*<script src="js\/core\.js/);
+    assert.match(html, /js\/profile-effects-exclusive\.js[^<]*<\/script>\s*<script src="js\/profile-effects-divine\.js\?v=20261122-02"><\/script>\s*<script src="js\/profile-effects-deluxe\.js\?v=20261122-01"><\/script>\s*<script src="js\/core\.js/);
   }
   assert.match(read('sw.js'), /'js\/profile-effects-divine\.js'/);
+});
+
+test('all seven Deluxe scenes use three motion tracks, have award labels and reject member trials', () => {
+  const migration = read('database/migrations/20261122_177_deluxe_profile_effects.sql').replace(/\r\n/g, '\n').trim();
+  const schema = read('database/schema.sql').replace(/\r\n/g, '\n');
+  assert.ok(schema.includes(migration));
+  assert.doesNotMatch(schema, /^(?:as \$|\$;)$/m, 'SQL function bodies must use paired dollar delimiters');
+  const art = read('js/profile-effects-deluxe.js');
+  const scenes = art.split(/\n  register\('/).slice(1);
+  assert.equal(scenes.length, 7);
+  const eligible = vm.runInNewContext(read('js/core.js').match(/const canRequestTrial = ([\s\S]*?);/)[1]);
+  for (const scene of scenes) {
+    const [, suffix, name] = scene.match(/^([^']+)', '([^']+)'/);
+    const id = 'deluxe_' + suffix;
+    assert.equal([...scene.matchAll(/^\s{6}function \w+\(/gm)].length, 3, name);
+    assert.ok(migration.split('create or replace function public.profile_effect_label')[0].includes("'" + id + "'"));
+    assert.ok(migration.includes("when '" + id + "' then '" + name + "'"));
+    assert.equal(eligible({ id, cat: 'Deluxe' }), false);
+    assert.equal(eligible({ id, cat: 'Special' }), false);
+  }
+  assert.match(migration, /check \(left\(lower\(btrim\(effect_id\)\), 7\) <> 'deluxe_'\)/);
+  assert.match(migration, /if left\(v_effect, 7\) = 'deluxe_' then\s*raise exception[^;]+;\s*end if;[\s\S]*?insert into public\.profile_effect_trial_requests[\s\S]*?insert into public\.notifications/);
+  assert.match(read('sw.js'), /'js\/profile-effects-deluxe\.js'/);
 });

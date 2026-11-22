@@ -4185,7 +4185,8 @@
     }
 
     const canRequestTrial = (effect) => Boolean(effect && effect.id !== 'none'
-      && effect.cat !== 'Exclusive' && effect.cat !== 'Divine' && !/^(ex_|divine_)/.test(effect.id));
+      && effect.cat !== 'Exclusive' && effect.cat !== 'Divine' && effect.cat !== 'Deluxe'
+      && !/^(ex_|divine_|deluxe_)/.test(effect.id));
 
     function openTrialRequestModal(previewMeta) {
       if (!canRequestTrial(previewMeta)) return;

@@ -3771,6 +3771,7 @@
   const CATEGORIES = [
     'All',
     'Divine',
+    'Deluxe',
     'Exclusive',
     'myIPON',
     'Education',
@@ -3955,7 +3956,7 @@
         if (this.host?.dataset) {
           if (isFull) this.host.dataset.effectScope = 'full';
           else delete this.host.dataset.effectScope;
-          if (defEntry?.cat === 'Divine') this.host.dataset.effectFamily = 'divine';
+          if (defEntry?.cat === 'Divine' || defEntry?.cat === 'Deluxe') this.host.dataset.effectFamily = defEntry.cat.toLowerCase();
           else delete this.host.dataset.effectFamily;
         }
         const W = this.b.clientWidth || this.b.offsetWidth || 0;
@@ -4038,7 +4039,7 @@
         desiredId = normalizeEffectId(nextId);
         if (exitAnimations.length && !still()) return;
         cancelExit();
-        if (FX[stage.id]?.cat === 'Divine' && stage.run && !still()) {
+        if (stage.host.dataset?.effectFamily && stage.run && !still()) {
           if (desiredId === stage.id) return;
           if (typeof backCanvas.animate === 'function' && typeof frontCanvas.animate === 'function') {
             exitAnimations = [backCanvas, frontCanvas].map((canvas) =>
