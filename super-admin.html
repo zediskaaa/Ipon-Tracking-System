@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261122-26">
+  <link rel="stylesheet" href="css/app.css?v=20261122-27">
   <script src="js/config.js?v=20261120-78"></script>
 </head>
 
@@ -283,6 +283,7 @@
               <p>Manage administrators, treasurers, and members across all savings groups.</p>
             </div>
             <div class="table-filters users-filters">
+              <button class="button button-secondary" type="button" data-open-set-award="all">Set award</button>
               <button class="button button-primary" id="create-administrator" type="button">Create
                 administrator</button>
               <input id="users-search" type="search" placeholder="Search name, email, or group"
@@ -328,6 +329,7 @@
             <p>Assign blue verified badges to active accounts, choose a temporary duration or permanent status, and include a message from the creator. Even permanent badges automatically expire after 2 months of account inactivity.</p>
           </div>
           <div class="table-filters">
+            <button class="button button-primary" id="badges-set-award-btn" type="button" data-open-set-award="badge">Set award</button>
             <input id="badges-search" type="search" placeholder="Search users or badge note"
               aria-label="Search badge users">
             <select id="badges-status-filter" aria-label="Filter by badge status">
@@ -366,7 +368,10 @@
         <div class="panel-header">
           <div>
             <h2 id="effects-title">Profile effects</h2>
-            <p>Award permanent animated profile effects or review one-time user trial requests and set trial expiration durations.</p>
+            <p>Award permanent animated profile effects, schedule future awards, or review one-time user trial requests.</p>
+          </div>
+          <div class="panel-header-actions">
+            <button class="button button-primary" id="effects-set-award-btn" type="button" data-open-set-award="effects">Set award</button>
           </div>
         </div>
         <div class="effect-subtabs" id="effects-subtabs" role="tablist" aria-label="Profile effects view">
@@ -376,6 +381,10 @@
           </button>
           <button type="button" class="effect-subtab" id="effects-tab-rewards" data-effects-tab="rewards" role="tab" aria-selected="true" aria-controls="effects-rewards-wrap">
             <span>User rewards</span>
+          </button>
+          <button type="button" class="effect-subtab" id="effects-tab-scheduled" data-effects-tab="scheduled" role="tab" aria-selected="false" aria-controls="effects-scheduled-wrap">
+            <span>Scheduled</span>
+            <span class="effect-subtab-badge" id="effects-scheduled-badge">0</span>
           </button>
         </div>
         <div id="effects-requests-wrap" role="tabpanel" aria-labelledby="effects-tab-requests" hidden>
@@ -443,6 +452,40 @@
             </table>
           </div>
           <nav class="table-pager" id="effects-pager" aria-label="Profile effects pages"><button type="button"
+              data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
+              data-page="next">Next</button></nav>
+        </div>
+        <div id="effects-scheduled-wrap" role="tabpanel" aria-labelledby="effects-tab-scheduled" hidden>
+          <div class="table-filters">
+            <input id="scheduled-awards-search" type="search" placeholder="Search recipient, badge, or effect"
+              aria-label="Search scheduled awards">
+            <select id="scheduled-awards-status-filter" aria-label="Filter scheduled awards by status">
+              <option value="PENDING">Scheduled (pending)</option>
+              <option value="ALL">All scheduled awards</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="FAILED">Failed</option>
+            </select>
+          </div>
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Recipient</th>
+                  <th>Reward</th>
+                  <th>Release schedule</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="scheduled-awards-body">
+                <tr class="loading-row">
+                  <td colspan="5">Loading scheduled awards…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <nav class="table-pager" id="scheduled-awards-pager" aria-label="Scheduled awards pages"><button type="button"
               data-page="previous">Previous</button><span aria-live="polite">Page 1 of 1</span><button type="button"
               data-page="next">Next</button></nav>
         </div>
@@ -1063,11 +1106,193 @@
   </dialog>
 
   <script src="js/profile-effects.js?v=20261122-07"></script><script src="js/profile-effects-exclusive.js?v=20261122-07"></script><script src="js/profile-effects-divine.js?v=20261122-02"></script><script src="js/profile-effects-deluxe.js?v=20261122-01"></script>
-  <script src="js/core.js?v=20261122-20"></script><script src="js/policy.js?v=20261119-09"></script>
+  <script src="js/core.js?v=20261122-21"></script><script src="js/policy.js?v=20261119-09"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261122-04"></script>
+  <dialog class="form-dialog set-award-dialog" id="set-award-dialog" aria-labelledby="set-award-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="set-award-title">Set award</h2>
+          <p id="set-award-copy">Schedule Verified Badges and/or Profile Effects for one or multiple users at the same date &amp; time or custom schedules.</p>
+        </div>
+        <button class="dialog-close" id="set-award-close" type="button" aria-label="Close set award dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <form id="set-award-form" class="form-grid set-award-form" novalidate>
+        <section class="set-award-section field-wide" aria-labelledby="set-award-step-rewards">
+          <div class="set-award-section-head">
+            <strong id="set-award-step-rewards">1. Choose reward(s)</strong>
+            <small class="field-help">Pick Verified badge, Profile effects, or both</small>
+          </div>
+          <div class="set-award-type-cards">
+            <label class="set-award-type-card" for="set-award-badge-check">
+              <input id="set-award-badge-check" name="award_badge" type="checkbox">
+              <span>
+                <strong>Verified badge</strong>
+                <small>Assign verified blue (or creator) seal</small>
+              </span>
+            </label>
+            <label class="set-award-type-card" for="set-award-effects-check">
+              <input id="set-award-effects-check" name="award_effects" type="checkbox" checked>
+              <span>
+                <strong>Profile effects</strong>
+                <small>Unlock one or more animated effects</small>
+              </span>
+            </label>
+          </div>
+          <small class="field-error" id="set-award-reward-error" role="alert" aria-live="polite"></small>
+
+          <div class="set-award-subpanel" id="set-award-badge-panel" hidden>
+            <div class="field">
+              <label for="set-award-badge-duration">Verified badge duration</label>
+              <select id="set-award-badge-duration" name="badge_duration_preset">
+                <option value="permanent">Permanent (until 2 months inactive)</option>
+                <option value="7">7 days</option>
+                <option value="30" selected>30 days</option>
+                <option value="90">90 days</option>
+                <option value="365">1 year</option>
+                <option value="custom">Custom expiration date &amp; time…</option>
+              </select>
+            </div>
+            <div class="field" id="set-award-badge-custom-wrap" hidden>
+              <label for="set-award-badge-custom-expiry">Badge expiration date &amp; time</label>
+              <input id="set-award-badge-custom-expiry" name="badge_expires_at" type="datetime-local">
+              <small class="field-error" aria-live="polite"></small>
+            </div>
+          </div>
+
+          <div class="set-award-subpanel" id="set-award-effects-panel">
+            <div class="set-award-effects-top">
+              <div class="field">
+                <label for="set-award-effect-duration">Profile effect duration</label>
+                <select id="set-award-effect-duration" name="effect_duration_preset">
+                  <option value="permanent" selected>Permanent</option>
+                  <option value="1">Trial · 1 day</option>
+                  <option value="3">Trial · 3 days</option>
+                  <option value="7">Trial · 7 days</option>
+                  <option value="14">Trial · 14 days</option>
+                  <option value="30">Trial · 30 days</option>
+                  <option value="custom">Trial · Custom expiration date &amp; time…</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="set-award-effects-search">Find effects</label>
+                <input id="set-award-effects-search" type="search" placeholder="Filter effects by name or tier…">
+              </div>
+            </div>
+            <div class="field" id="set-award-effect-custom-wrap" hidden>
+              <label for="set-award-effect-custom-expiry">Effect trial expiration date &amp; time</label>
+              <input id="set-award-effect-custom-expiry" name="effect_expires_at" type="datetime-local">
+              <small class="field-error" aria-live="polite"></small>
+            </div>
+            <div class="field-label-row">
+              <small class="field-help" id="set-award-effects-count">0 effects selected</small>
+              <button class="icon-action" id="set-award-effects-clear" type="button" disabled>Clear effects</button>
+            </div>
+            <div class="effect-grant-grid set-award-effects-grid" id="set-award-effects-grid"></div>
+          </div>
+        </section>
+
+        <section class="set-award-section field-wide" aria-labelledby="set-award-step-users">
+          <div class="set-award-section-head">
+            <strong id="set-award-step-users">2. Select recipient user(s)</strong>
+            <span class="set-award-count-pill" id="set-award-users-count" aria-live="polite">0 selected</span>
+          </div>
+          <div class="set-award-users-toolbar">
+            <input id="set-award-users-search" type="search" placeholder="Search active users by name or email…" aria-label="Search users to award">
+            <div class="set-award-users-btns">
+              <button class="icon-action" id="set-award-users-select-visible" type="button">Select visible</button>
+              <button class="icon-action" id="set-award-users-clear" type="button" disabled>Clear</button>
+            </div>
+          </div>
+          <div class="set-award-users-list" id="set-award-users-list" role="list" aria-label="Select users"></div>
+          <small class="field-error" id="set-award-users-error" role="alert" aria-live="polite"></small>
+        </section>
+
+        <section class="set-award-section field-wide" aria-labelledby="set-award-step-schedule">
+          <div class="set-award-schedule-head">
+            <div>
+              <strong id="set-award-step-schedule">3. Release date &amp; time</strong>
+              <small class="field-help" id="set-award-schedule-hint">All selected users receive this award at the same date &amp; time.</small>
+            </div>
+            <button class="button button-secondary button-sm set-award-same-btn" id="set-award-same-dt-btn" type="button" aria-pressed="true">
+              Same date &amp; time: ON
+            </button>
+          </div>
+          <div class="set-award-shared-row" id="set-award-shared-wrap">
+            <div class="field">
+              <label for="set-award-shared-datetime">Shared release date &amp; time</label>
+              <input id="set-award-shared-datetime" name="shared_scheduled_for" type="datetime-local">
+              <small class="field-error" aria-live="polite"></small>
+            </div>
+            <div class="set-award-quick-chips" role="group" aria-label="Quick release presets">
+              <button class="icon-action" type="button" data-set-award-quick="15m">+15 min</button>
+              <button class="icon-action" type="button" data-set-award-quick="1h">+1 hour</button>
+              <button class="icon-action" type="button" data-set-award-quick="tomorrow9">Tomorrow 9:00 AM</button>
+            </div>
+          </div>
+          <div class="set-award-per-user-wrap" id="set-award-per-user-wrap" hidden>
+            <div class="set-award-per-user-bar">
+              <small class="field-help">Set a custom release date &amp; time for each user, or copy the shared schedule to everyone.</small>
+              <button class="icon-action" id="set-award-apply-same-btn" type="button">Apply same date &amp; time to all</button>
+            </div>
+            <div class="set-award-per-user-list" id="set-award-per-user-list"></div>
+          </div>
+          <small class="field-error" id="set-award-schedule-error" role="alert" aria-live="polite"></small>
+        </section>
+
+        <div class="field field-wide">
+          <label for="set-award-message">Message from creator <span class="badge-optional-tag">(optional)</span></label>
+          <textarea id="set-award-message" name="creator_message" rows="2" maxlength="400"
+            placeholder="Write a note shown in the recipient's celebration pop-up when the award releases…"></textarea>
+        </div>
+
+        <div class="effect-manage-footer field-wide">
+          <small class="field-help" id="set-award-footer-summary">Select reward(s) and user(s) to schedule.</small>
+          <div class="form-actions">
+            <button class="button button-secondary" id="set-award-cancel" type="button">Cancel</button>
+            <button class="button button-primary" id="set-award-submit" type="submit" disabled>Schedule award</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog class="form-dialog" id="scheduled-award-edit-dialog" aria-labelledby="scheduled-award-edit-title">
+    <div class="form-dialog-sheet">
+      <header class="form-dialog-header">
+        <div>
+          <h2 id="scheduled-award-edit-title">Reschedule award</h2>
+          <p id="scheduled-award-edit-copy">Update the release date &amp; time or creator message for this pending award.</p>
+        </div>
+        <button class="dialog-close" id="scheduled-award-edit-close" type="button" aria-label="Close reschedule dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <form id="scheduled-award-edit-form" class="form-grid" novalidate>
+        <input type="hidden" name="award_id">
+        <div class="field field-wide">
+          <label for="scheduled-award-edit-datetime">Release date &amp; time</label>
+          <input id="scheduled-award-edit-datetime" name="scheduled_for" type="datetime-local" required>
+          <small class="field-error" aria-live="polite"></small>
+        </div>
+        <div class="field field-wide">
+          <label for="scheduled-award-edit-message">Message from creator <span class="badge-optional-tag">(optional)</span></label>
+          <textarea id="scheduled-award-edit-message" name="creator_message" rows="3" maxlength="400"
+            placeholder="Update the celebration pop-up message…"></textarea>
+        </div>
+        <div class="form-actions field-wide">
+          <button class="button button-secondary" id="scheduled-award-edit-cancel" type="button">Cancel</button>
+          <button class="button button-primary" id="scheduled-award-edit-submit" type="submit">Save schedule</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="js/super-admin.js?v=20261122-05"></script>
 </body>
 
 </html>

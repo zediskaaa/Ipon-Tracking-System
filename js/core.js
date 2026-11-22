@@ -9444,10 +9444,33 @@
       dismissStartupFailure();
       if (options.requireAuth === false) setLoading(false);
       if (options.requireAuth !== false) {
-        const checkRewards = () => {
+        let lastScheduledAwardCheckAt = 0;
+        const checkRewards = async ({ forceScheduled = false } = {}) => {
+          const nowMs = Date.now();
+          if (forceScheduled || nowMs - lastScheduledAwardCheckAt >= 30000) {
+            lastScheduledAwardCheckAt = nowMs;
+            try {
+              const delivered = await rpc('process_due_scheduled_awards', { p_user_id: profile.id });
+              if (Number(delivered || 0) > 0 && client?.from) {
+                const freshRes = await client
+                  .from('profiles')
+                  .select('verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,equipped_profile_effect')
+                  .eq('id', profile.id)
+                  .maybeSingle();
+                if (!freshRes?.error && freshRes?.data) {
+                  Object.assign(profile, freshRes.data);
+                  if (currentProfile && currentProfile.id === profile.id) Object.assign(currentProfile, freshRes.data);
+                  await refreshVerifiedBadgesCache({ force: true }).catch(() => { });
+                }
+              }
+            } catch (_) { }
+          }
           const shownBadge = maybeShowBadgeAwardModal(profile);
           refreshProfileEffectsState({ checkModal: !shownBadge }).catch(() => { });
         };
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') checkRewards().catch(() => { });
+        });
         const runSecondaryPrompts = () => {
           if (!options.skipBackgroundPrompt) {
             maybePromptBackgroundUsage(profile).catch(() => { });

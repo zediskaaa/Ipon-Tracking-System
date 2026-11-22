@@ -68,10 +68,54 @@
   const effectsSubtabs = document.getElementById('effects-subtabs');
   const effectsTabRequests = document.getElementById('effects-tab-requests');
   const effectsTabRewards = document.getElementById('effects-tab-rewards');
+  const effectsTabScheduled = document.getElementById('effects-tab-scheduled');
   const effectsReqBadge = document.getElementById('effects-req-badge');
+  const effectsScheduledBadge = document.getElementById('effects-scheduled-badge');
   const effectsRequestsWrap = document.getElementById('effects-requests-wrap');
   const effectsRewardsWrap = document.getElementById('effects-rewards-wrap');
+  const effectsScheduledWrap = document.getElementById('effects-scheduled-wrap');
   const effectRequestsBody = document.getElementById('effect-requests-body');
+  const scheduledAwardsBody = document.getElementById('scheduled-awards-body');
+  const setAwardDialog = document.getElementById('set-award-dialog');
+  const setAwardForm = document.getElementById('set-award-form');
+  const setAwardBadgeCheck = document.getElementById('set-award-badge-check');
+  const setAwardEffectsCheck = document.getElementById('set-award-effects-check');
+  const setAwardRewardError = document.getElementById('set-award-reward-error');
+  const setAwardBadgePanel = document.getElementById('set-award-badge-panel');
+  const setAwardBadgeDuration = document.getElementById('set-award-badge-duration');
+  const setAwardBadgeCustomWrap = document.getElementById('set-award-badge-custom-wrap');
+  const setAwardBadgeCustomExpiry = document.getElementById('set-award-badge-custom-expiry');
+  const setAwardEffectsPanel = document.getElementById('set-award-effects-panel');
+  const setAwardEffectDuration = document.getElementById('set-award-effect-duration');
+  const setAwardEffectCustomWrap = document.getElementById('set-award-effect-custom-wrap');
+  const setAwardEffectCustomExpiry = document.getElementById('set-award-effect-custom-expiry');
+  const setAwardEffectsSearch = document.getElementById('set-award-effects-search');
+  const setAwardEffectsCount = document.getElementById('set-award-effects-count');
+  const setAwardEffectsClear = document.getElementById('set-award-effects-clear');
+  const setAwardEffectsGrid = document.getElementById('set-award-effects-grid');
+  const setAwardUsersCount = document.getElementById('set-award-users-count');
+  const setAwardUsersSearch = document.getElementById('set-award-users-search');
+  const setAwardUsersSelectVisible = document.getElementById('set-award-users-select-visible');
+  const setAwardUsersClear = document.getElementById('set-award-users-clear');
+  const setAwardUsersList = document.getElementById('set-award-users-list');
+  const setAwardUsersError = document.getElementById('set-award-users-error');
+  const setAwardSameDtBtn = document.getElementById('set-award-same-dt-btn');
+  const setAwardScheduleHint = document.getElementById('set-award-schedule-hint');
+  const setAwardSharedWrap = document.getElementById('set-award-shared-wrap');
+  const setAwardSharedDatetime = document.getElementById('set-award-shared-datetime');
+  const setAwardPerUserWrap = document.getElementById('set-award-per-user-wrap');
+  const setAwardApplySameBtn = document.getElementById('set-award-apply-same-btn');
+  const setAwardPerUserList = document.getElementById('set-award-per-user-list');
+  const setAwardScheduleError = document.getElementById('set-award-schedule-error');
+  const setAwardMessage = document.getElementById('set-award-message');
+  const setAwardFooterSummary = document.getElementById('set-award-footer-summary');
+  const setAwardSubmit = document.getElementById('set-award-submit');
+  const scheduledAwardEditDialog = document.getElementById('scheduled-award-edit-dialog');
+  const scheduledAwardEditForm = document.getElementById('scheduled-award-edit-form');
+  const scheduledAwardEditCopy = document.getElementById('scheduled-award-edit-copy');
+  const scheduledAwardEditDatetime = document.getElementById('scheduled-award-edit-datetime');
+  const scheduledAwardEditMessage = document.getElementById('scheduled-award-edit-message');
+  const scheduledAwardEditSubmit = document.getElementById('scheduled-award-edit-submit');
   const effectTrialApproveDialog = document.getElementById('effect-trial-approve-dialog');
   const effectTrialApproveForm = document.getElementById('effect-trial-approve-form');
   const effectTrialApproveCopy = document.getElementById('effect-trial-approve-copy');
@@ -193,13 +237,15 @@
   let activityLogs = [];
   let profileEffectGrants = [];
   let profileEffectTrialRequests = [];
+  let scheduledAwards = [];
+  let scheduledAwardAutoTimer = null;
   let effectPreviewStageCtrl = null;
   let effectTrialPreviewStageCtrl = null;
   let activeEffectsSubtab = null;
   let activeFeatureStatusFilter = 'ALL';
   let activeBugStatusFilter = 'OPEN';
   const PAGE_SIZE = 10;
-  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, badges: 0, effects: 0, 'effect-requests': 0, activity: 0 };
+  const pageState = { 'feature-requests': 0, 'bug-reports': 0, users: 0, badges: 0, effects: 0, 'effect-requests': 0, 'scheduled-awards': 0, activity: 0 };
   Ipon.bindPasswordStrength(administratorForm.elements.password, () => [administratorForm.elements.first_name.value, administratorForm.elements.middle_name.value, administratorForm.elements.last_name.value, administratorForm.elements.email.value]);
   Ipon.bindPasswordStrength(userPasswordForm.elements.password, () => {
     const target = profiles.find((item) => item.id === userPasswordForm.elements.user_id.value);
@@ -560,7 +606,7 @@
   userGroupsDialog?.addEventListener('cancel', () => { activeUserGroupsProfileId = ''; });
 
   function syncSuperAdminPresenceUi() {
-    [administratorsBody, badgesBody, effectsBody, effectRequestsBody, featureRequestsBody, bugReportsBody].forEach((container) => {
+    [administratorsBody, badgesBody, effectsBody, effectRequestsBody, scheduledAwardsBody, featureRequestsBody, bugReportsBody].forEach((container) => {
       if (container) Ipon.syncPresenceDots?.(container);
     });
     const onlinePill = document.getElementById('users-online-pill');
@@ -922,15 +968,22 @@
 
   function syncEffectsSubtabUi() {
     const pendingCount = profileEffectTrialRequests.filter((row) => row?.status === 'PENDING').length;
+    const pendingSchedCount = scheduledAwards.filter((row) => row?.status === 'PENDING').length;
     const resolvedTab = activeEffectsSubtab || (pendingCount > 0 ? 'requests' : 'rewards');
     if (effectsReqBadge) {
       effectsReqBadge.textContent = String(pendingCount);
       effectsReqBadge.hidden = false;
     }
+    if (effectsScheduledBadge) {
+      effectsScheduledBadge.textContent = String(pendingSchedCount);
+      effectsScheduledBadge.hidden = false;
+    }
     if (effectsTabRequests) effectsTabRequests.setAttribute('aria-selected', String(resolvedTab === 'requests'));
     if (effectsTabRewards) effectsTabRewards.setAttribute('aria-selected', String(resolvedTab === 'rewards'));
+    if (effectsTabScheduled) effectsTabScheduled.setAttribute('aria-selected', String(resolvedTab === 'scheduled'));
     if (effectsRequestsWrap) effectsRequestsWrap.hidden = resolvedTab !== 'requests';
     if (effectsRewardsWrap) effectsRewardsWrap.hidden = resolvedTab !== 'rewards';
+    if (effectsScheduledWrap) effectsScheduledWrap.hidden = resolvedTab !== 'scheduled';
   }
 
   function renderEffectTrialRequests() {
@@ -994,6 +1047,7 @@
   function renderEffects() {
     syncEffectsSubtabUi();
     renderEffectTrialRequests();
+    renderScheduledAwards();
     if (!effectsBody) return;
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
     const query = filterValue('effects-search');
@@ -1726,8 +1780,595 @@
   effectsSubtabs?.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-effects-tab]');
     if (!btn) return;
-    activeEffectsSubtab = btn.dataset.effectsTab === 'requests' ? 'requests' : 'rewards';
+    const tab = btn.dataset.effectsTab;
+    activeEffectsSubtab = tab === 'requests' || tab === 'scheduled' ? tab : 'rewards';
     syncEffectsSubtabUi();
+    if (activeEffectsSubtab === 'scheduled') renderScheduledAwards();
+  });
+
+  function scheduleNextScheduledAwardTick() {
+    clearTimeout(scheduledAwardAutoTimer);
+    scheduledAwardAutoTimer = null;
+    const pendingMs = scheduledAwards
+      .filter((row) => row?.status === 'PENDING' && row?.scheduled_for)
+      .map((row) => Date.parse(row.scheduled_for))
+      .filter((ms) => Number.isFinite(ms))
+      .sort((a, b) => a - b);
+    if (!pendingMs.length) return;
+    const delayMs = Math.max(1500, Math.min(pendingMs[0] - Date.now() + 1200, 60000));
+    scheduledAwardAutoTimer = setTimeout(() => {
+      scheduledAwardAutoTimer = null;
+      if (document.visibilityState === 'hidden') {
+        scheduleNextScheduledAwardTick();
+        return;
+      }
+      load().catch(() => { });
+    }, delayMs);
+  }
+
+  function renderScheduledAwards() {
+    if (!scheduledAwardsBody) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const query = filterValue('scheduled-awards-search');
+    const statusFilter = filterValue('scheduled-awards-status-filter') || 'PENDING';
+    const filtered = scheduledAwards.filter((row) => {
+      if (!row) return false;
+      const st = String(row.status || 'PENDING').toUpperCase();
+      if (statusFilter !== 'ALL' && st !== statusFilter) return false;
+      const effNames = (Array.isArray(row.effect_ids) ? row.effect_ids : [])
+        .map((id) => (api?.getEffect ? api.getEffect(id).name : id))
+        .join(' ');
+      return matchesQuery(query, [
+        row.full_name,
+        row.email,
+        row.award_badge ? 'verified badge' : '',
+        effNames,
+        row.creator_message,
+        st
+      ]);
+    });
+    const visible = paginateRows('scheduled-awards', filtered);
+    scheduledAwardsBody.innerHTML = visible.length ? visible.map((row) => {
+      const st = String(row.status || 'PENDING').toUpperCase();
+      const effIds = Array.isArray(row.effect_ids) ? row.effect_ids : [];
+      const rewardPills = [];
+      if (row.award_badge) {
+        const badgeDur = row.badge_duration_days
+          ? `${row.badge_duration_days}d`
+          : (row.badge_expires_at ? `until ${Ipon.dateLabel(row.badge_expires_at, { dateStyle: 'short' })}` : 'Permanent');
+        rewardPills.push(`<span class="badge-tier-pill is-blue">Verified badge (${Ipon.escapeHtml(badgeDur)})</span>`);
+      }
+      if (effIds.length) {
+        const names = effIds.map((id) => (api?.getEffect ? api.getEffect(id).name : id));
+        const effLabel = names.length <= 2 ? names.join(', ') : `${names.slice(0, 2).join(', ')} +${names.length - 2} more`;
+        const effDur = row.effect_duration_days
+          ? `${row.effect_duration_days}d trial`
+          : (row.effect_expires_at ? `trial` : 'Permanent');
+        rewardPills.push(`<span class="effect-table-pill${row.effect_duration_days || row.effect_expires_at ? ' is-trial' : ''}" title="${Ipon.escapeHtml(names.join(', '))}">${Ipon.escapeHtml(effLabel)} · ${Ipon.escapeHtml(effDur)}</span>`);
+      }
+      const schedLabel = row.scheduled_for ? Ipon.dateLabel(row.scheduled_for, { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+      const subTime = st === 'DELIVERED' && row.delivered_at
+        ? `Delivered ${Ipon.dateLabel(row.delivered_at, { dateStyle: 'short', timeStyle: 'short' })}`
+        : st === 'CANCELLED' && row.cancelled_at
+          ? `Cancelled ${Ipon.dateLabel(row.cancelled_at, { dateStyle: 'short', timeStyle: 'short' })}`
+          : st === 'FAILED' && row.error_message
+            ? row.error_message
+            : 'Auto-releases at scheduled time';
+      const statusPillCls = st === 'PENDING' ? 'is-pending' : st === 'DELIVERED' ? 'is-delivered' : st === 'FAILED' ? 'is-failed' : 'is-cancelled';
+      const statusText = st === 'PENDING' ? 'Scheduled' : st === 'DELIVERED' ? 'Delivered' : st === 'FAILED' ? 'Failed' : 'Cancelled';
+      const actions = st === 'PENDING'
+        ? `<button class="icon-action" type="button" data-sched-edit="${Ipon.escapeHtml(row.id)}">Reschedule</button><button class="icon-action danger-action" type="button" data-sched-cancel="${Ipon.escapeHtml(row.id)}">Cancel</button>`
+        : '<span class="field-help">—</span>';
+      return `<tr data-scheduled-award-id="${Ipon.escapeHtml(row.id)}">
+        <td>
+          <div class="table-user-cell">
+            ${Ipon.avatarMarkup(row.avatar_url, row.full_name || 'User', 'table-user-avatar', row.user_id)}
+            <div>
+              <strong>${Ipon.escapeHtml(row.full_name || 'User')}</strong>
+              ${row.email ? `<small class="field-help">${Ipon.escapeHtml(row.email)}</small>` : ''}
+            </div>
+          </div>
+        </td>
+        <td>
+          <div class="scheduled-reward-pills">${rewardPills.join('')}</div>
+          ${row.creator_message ? `<small class="field-help">${Ipon.escapeHtml(row.creator_message)}</small>` : ''}
+        </td>
+        <td>
+          <strong>${Ipon.escapeHtml(schedLabel)}</strong>
+          <small class="field-help">${Ipon.escapeHtml(subTime)}</small>
+        </td>
+        <td><span class="scheduled-status-pill ${statusPillCls}">${statusText}</span></td>
+        <td><div class="table-actions">${actions}</div></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5" class="empty-state">${query || statusFilter !== 'PENDING' ? 'No matching scheduled awards.' : 'No pending scheduled awards. Click Set award to schedule one.'}</td></tr>`;
+    Ipon.bindAvatarFallbacks(scheduledAwardsBody);
+    Ipon.syncPresenceDots(scheduledAwardsBody);
+    scheduleNextScheduledAwardTick();
+  }
+
+  const setAwardState = {
+    sameDateTime: true,
+    selectedUsers: new Set(),
+    selectedEffects: new Set(),
+    perUserDatetime: new Map()
+  };
+
+  function defaultScheduleDatetimeValue(offsetMinutes = 15) {
+    const dt = new Date(Date.now() + offsetMinutes * 60000);
+    dt.setSeconds(0, 0);
+    return toDatetimeLocalValue(dt.toISOString());
+  }
+
+  function getActiveSetAwardUsers() {
+    const q = String(setAwardUsersSearch?.value || '').trim().toLowerCase();
+    return profiles
+      .filter((p) => p && p.role !== 'SUPER_ADMIN' && p.status === 'ACTIVE')
+      .filter((p) => !q || `${p.full_name || ''} ${p.email || ''}`.toLowerCase().includes(q))
+      .sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || '')));
+  }
+
+  function renderSetAwardEffectsGrid() {
+    if (!setAwardEffectsGrid) return;
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    const allEffects = api?.EFFECTS || [];
+    const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
+    const q = String(setAwardEffectsSearch?.value || '').trim().toLowerCase();
+    const filtered = allEffects.filter((e) => {
+      if (!q) return true;
+      const rarText = rarities[e.rare | 0] || '';
+      return `${e.name || ''} ${e.cat || ''} ${rarText} ${e.id || ''}`.toLowerCase().includes(q);
+    });
+    setAwardEffectsGrid.innerHTML = filtered.length ? filtered.map((e) => {
+      const checked = setAwardState.selectedEffects.has(e.id);
+      const rarText = e.rare ? ` · ${rarities[e.rare] || ''}` : '';
+      return `<label class="effect-grant-option${checked ? ' is-previewing' : ''}">
+        <input type="checkbox" name="set_award_effect_ids" value="${Ipon.escapeHtml(e.id)}"${checked ? ' checked' : ''}>
+        <span class="effect-grant-option-meta">
+          <strong>${Ipon.escapeHtml(e.name)}</strong>
+          <small class="rar${e.rare | 0}">${Ipon.escapeHtml((e.cat || 'Effect') + rarText)}</small>
+        </span>
+      </label>`;
+    }).join('') : '<div class="empty-state">No matching profile effects.</div>';
+    if (setAwardEffectsCount) {
+      const n = setAwardState.selectedEffects.size;
+      setAwardEffectsCount.textContent = `${n} ${n === 1 ? 'effect' : 'effects'} selected`;
+    }
+    if (setAwardEffectsClear) setAwardEffectsClear.disabled = setAwardState.selectedEffects.size === 0;
+  }
+
+  function renderSetAwardUsersList() {
+    if (!setAwardUsersList) return;
+    const visibleUsers = getActiveSetAwardUsers();
+    setAwardUsersList.innerHTML = visibleUsers.length ? visibleUsers.map((p) => {
+      const checked = setAwardState.selectedUsers.has(p.id);
+      return `<label class="set-award-user-card${checked ? ' is-selected' : ''}" role="listitem">
+        <input type="checkbox" name="set_award_user_ids" value="${Ipon.escapeHtml(p.id)}"${checked ? ' checked' : ''}>
+        ${Ipon.avatarMarkup(p.avatar_url, p.full_name, 'table-user-avatar', p.id)}
+        <span class="set-award-user-copy">
+          <strong>${Ipon.escapeHtml(p.full_name || 'User')}</strong>
+          <small>${Ipon.escapeHtml(p.email || '')}</small>
+        </span>
+      </label>`;
+    }).join('') : '<div class="empty-state">No matching active users.</div>';
+    Ipon.bindAvatarFallbacks(setAwardUsersList);
+    Ipon.syncPresenceDots(setAwardUsersList);
+    const totalSel = setAwardState.selectedUsers.size;
+    if (setAwardUsersCount) {
+      setAwardUsersCount.textContent = `${totalSel} selected`;
+      setAwardUsersCount.classList.toggle('has-selection', totalSel > 0);
+    }
+    if (setAwardUsersClear) setAwardUsersClear.disabled = totalSel === 0;
+    if (setAwardUsersSelectVisible) {
+      const allVisSel = visibleUsers.length > 0 && visibleUsers.every((p) => setAwardState.selectedUsers.has(p.id));
+      setAwardUsersSelectVisible.disabled = !visibleUsers.length || allVisSel;
+      setAwardUsersSelectVisible.textContent = allVisSel ? 'All visible selected' : `Select visible (${visibleUsers.length})`;
+    }
+  }
+
+  function renderSetAwardPerUserList() {
+    if (!setAwardPerUserList) return;
+    const selectedIds = Array.from(setAwardState.selectedUsers);
+    const fallbackDt = setAwardSharedDatetime?.value || defaultScheduleDatetimeValue(15);
+    if (!selectedIds.length) {
+      setAwardPerUserList.innerHTML = '<div class="empty-state">Select one or more users above to set individual release times.</div>';
+      return;
+    }
+    setAwardPerUserList.innerHTML = selectedIds.map((uid) => {
+      const profile = profiles.find((p) => p.id === uid);
+      if (!setAwardState.perUserDatetime.has(uid)) {
+        setAwardState.perUserDatetime.set(uid, fallbackDt);
+      }
+      const val = setAwardState.perUserDatetime.get(uid) || fallbackDt;
+      return `<div class="set-award-per-user-row">
+        <div class="set-award-user-copy">
+          <strong>${Ipon.escapeHtml(profile?.full_name || 'User')}</strong>
+          <small>${Ipon.escapeHtml(profile?.email || '')}</small>
+        </div>
+        <input type="datetime-local" data-per-user-dt="${Ipon.escapeHtml(uid)}" value="${Ipon.escapeHtml(val)}" aria-label="Release date and time for ${Ipon.escapeHtml(profile?.full_name || 'User')}">
+      </div>`;
+    }).join('');
+  }
+
+  function syncSetAwardUi() {
+    const wantBadge = Boolean(setAwardBadgeCheck?.checked);
+    const wantEffects = Boolean(setAwardEffectsCheck?.checked);
+    if (setAwardBadgePanel) setAwardBadgePanel.hidden = !wantBadge;
+    if (setAwardEffectsPanel) setAwardEffectsPanel.hidden = !wantEffects;
+    syncCustomExpiryControl(setAwardBadgeDuration, setAwardBadgeCustomWrap, setAwardBadgeCustomExpiry, 7);
+    syncCustomExpiryControl(setAwardEffectDuration, setAwardEffectCustomWrap, setAwardEffectCustomExpiry, 7);
+
+    const same = setAwardState.sameDateTime;
+    if (setAwardSameDtBtn) {
+      setAwardSameDtBtn.setAttribute('aria-pressed', same ? 'true' : 'false');
+      setAwardSameDtBtn.textContent = same ? 'Same date & time: ON' : 'Same date & time: OFF (Per user)';
+    }
+    if (setAwardScheduleHint) {
+      setAwardScheduleHint.textContent = same
+        ? 'All selected users receive this award at the same date & time.'
+        : 'Set a separate release date & time for each selected user below.';
+    }
+    if (setAwardSharedWrap) setAwardSharedWrap.hidden = !same;
+    if (setAwardPerUserWrap) setAwardPerUserWrap.hidden = same;
+    if (!same) renderSetAwardPerUserList();
+
+    const userCount = setAwardState.selectedUsers.size;
+    const effectCount = wantEffects ? setAwardState.selectedEffects.size : 0;
+    const hasReward = wantBadge || effectCount > 0;
+    const rewardParts = [
+      wantBadge ? 'Verified badge' : '',
+      effectCount > 0 ? `${effectCount} profile ${effectCount === 1 ? 'effect' : 'effects'}` : ''
+    ].filter(Boolean);
+    if (setAwardFooterSummary) {
+      setAwardFooterSummary.textContent = hasReward && userCount > 0
+        ? `Scheduling ${rewardParts.join(' + ')} for ${userCount} ${userCount === 1 ? 'user' : 'users'} (${same ? 'same date & time' : 'custom schedule per user'}).`
+        : 'Select reward(s) and at least one recipient user to schedule.';
+    }
+    if (setAwardSubmit) {
+      setAwardSubmit.disabled = !(hasReward && userCount > 0);
+      setAwardSubmit.textContent = userCount > 0
+        ? `Schedule for ${userCount} ${userCount === 1 ? 'user' : 'users'}`
+        : 'Schedule award';
+    }
+  }
+
+  function openSetAwardDialog(preset = 'all') {
+    if (!setAwardDialog || !setAwardForm) return;
+    setAwardForm.reset();
+    setAwardState.sameDateTime = true;
+    setAwardState.selectedUsers.clear();
+    setAwardState.selectedEffects.clear();
+    setAwardState.perUserDatetime.clear();
+    if (setAwardBadgeCheck) setAwardBadgeCheck.checked = preset === 'badge';
+    if (setAwardEffectsCheck) setAwardEffectsCheck.checked = preset !== 'badge';
+    if (setAwardBadgeDuration) setAwardBadgeDuration.value = '30';
+    if (setAwardEffectDuration) setAwardEffectDuration.value = 'permanent';
+    if (setAwardEffectsSearch) setAwardEffectsSearch.value = '';
+    if (setAwardUsersSearch) setAwardUsersSearch.value = '';
+    if (setAwardSharedDatetime) setAwardSharedDatetime.value = defaultScheduleDatetimeValue(15);
+    if (setAwardRewardError) setAwardRewardError.textContent = '';
+    if (setAwardUsersError) setAwardUsersError.textContent = '';
+    if (setAwardScheduleError) setAwardScheduleError.textContent = '';
+    renderSetAwardEffectsGrid();
+    renderSetAwardUsersList();
+    syncSetAwardUi();
+    if (!setAwardDialog.open) setAwardDialog.showModal();
+  }
+
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-open-set-award]');
+    if (!trigger) return;
+    openSetAwardDialog(trigger.dataset.openSetAward || 'all');
+  });
+  document.getElementById('set-award-close')?.addEventListener('click', () => setAwardDialog?.close());
+  document.getElementById('set-award-cancel')?.addEventListener('click', () => setAwardDialog?.close());
+  setAwardBadgeCheck?.addEventListener('change', () => {
+    if (setAwardRewardError) setAwardRewardError.textContent = '';
+    syncSetAwardUi();
+  });
+  setAwardEffectsCheck?.addEventListener('change', () => {
+    if (setAwardRewardError) setAwardRewardError.textContent = '';
+    syncSetAwardUi();
+  });
+  setAwardBadgeDuration?.addEventListener('change', syncSetAwardUi);
+  setAwardEffectDuration?.addEventListener('change', syncSetAwardUi);
+  setAwardEffectsSearch?.addEventListener('input', renderSetAwardEffectsGrid);
+  setAwardEffectsClear?.addEventListener('click', () => {
+    setAwardState.selectedEffects.clear();
+    renderSetAwardEffectsGrid();
+    syncSetAwardUi();
+  });
+  setAwardEffectsGrid?.addEventListener('change', (event) => {
+    const input = event.target.closest('input[name="set_award_effect_ids"]');
+    if (!input) return;
+    if (input.checked) setAwardState.selectedEffects.add(input.value);
+    else setAwardState.selectedEffects.delete(input.value);
+    input.closest('.effect-grant-option')?.classList.toggle('is-previewing', input.checked);
+    if (setAwardRewardError) setAwardRewardError.textContent = '';
+    if (setAwardEffectsCount) {
+      const n = setAwardState.selectedEffects.size;
+      setAwardEffectsCount.textContent = `${n} ${n === 1 ? 'effect' : 'effects'} selected`;
+    }
+    if (setAwardEffectsClear) setAwardEffectsClear.disabled = setAwardState.selectedEffects.size === 0;
+    syncSetAwardUi();
+  });
+
+  setAwardUsersSearch?.addEventListener('input', renderSetAwardUsersList);
+  setAwardUsersSelectVisible?.addEventListener('click', () => {
+    getActiveSetAwardUsers().forEach((p) => setAwardState.selectedUsers.add(p.id));
+    if (setAwardUsersError) setAwardUsersError.textContent = '';
+    renderSetAwardUsersList();
+    syncSetAwardUi();
+  });
+  setAwardUsersClear?.addEventListener('click', () => {
+    setAwardState.selectedUsers.clear();
+    setAwardState.perUserDatetime.clear();
+    renderSetAwardUsersList();
+    syncSetAwardUi();
+  });
+  setAwardUsersList?.addEventListener('change', (event) => {
+    const input = event.target.closest('input[name="set_award_user_ids"]');
+    if (!input) return;
+    if (input.checked) setAwardState.selectedUsers.add(input.value);
+    else {
+      setAwardState.selectedUsers.delete(input.value);
+      setAwardState.perUserDatetime.delete(input.value);
+    }
+    input.closest('.set-award-user-card')?.classList.toggle('is-selected', input.checked);
+    if (setAwardUsersError) setAwardUsersError.textContent = '';
+    renderSetAwardUsersList();
+    syncSetAwardUi();
+  });
+
+  setAwardSameDtBtn?.addEventListener('click', () => {
+    setAwardState.sameDateTime = !setAwardState.sameDateTime;
+    if (setAwardScheduleError) setAwardScheduleError.textContent = '';
+    if (!setAwardState.sameDateTime) {
+      const sharedVal = setAwardSharedDatetime?.value || defaultScheduleDatetimeValue(15);
+      Array.from(setAwardState.selectedUsers).forEach((uid) => {
+        if (!setAwardState.perUserDatetime.get(uid)) setAwardState.perUserDatetime.set(uid, sharedVal);
+      });
+    }
+    syncSetAwardUi();
+  });
+
+  setAwardApplySameBtn?.addEventListener('click', () => {
+    const firstVal = Array.from(setAwardState.perUserDatetime.values()).find(Boolean);
+    const masterVal = setAwardSharedDatetime?.value || firstVal || defaultScheduleDatetimeValue(15);
+    if (setAwardSharedDatetime) setAwardSharedDatetime.value = masterVal;
+    Array.from(setAwardState.selectedUsers).forEach((uid) => setAwardState.perUserDatetime.set(uid, masterVal));
+    setAwardState.sameDateTime = true;
+    if (setAwardScheduleError) setAwardScheduleError.textContent = '';
+    syncSetAwardUi();
+    Ipon.toast('Applied the same release date & time to all selected users.');
+  });
+
+  setAwardSharedWrap?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-set-award-quick]');
+    if (!btn || !setAwardSharedDatetime) return;
+    const mode = btn.dataset.setAwardQuick;
+    let targetDate;
+    if (mode === '15m') targetDate = new Date(Date.now() + 15 * 60000);
+    else if (mode === '1h') targetDate = new Date(Date.now() + 60 * 60000);
+    else {
+      targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + 1);
+      targetDate.setHours(9, 0, 0, 0);
+    }
+    targetDate.setSeconds(0, 0);
+    setAwardSharedDatetime.value = toDatetimeLocalValue(targetDate.toISOString());
+    Ipon.setFieldError(setAwardSharedDatetime, '');
+    if (setAwardScheduleError) setAwardScheduleError.textContent = '';
+  });
+
+  setAwardPerUserList?.addEventListener('input', (event) => {
+    const input = event.target.closest('[data-per-user-dt]');
+    if (!input) return;
+    setAwardState.perUserDatetime.set(input.dataset.perUserDt, input.value);
+    if (setAwardScheduleError) setAwardScheduleError.textContent = '';
+  });
+
+  setAwardForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const wantBadge = Boolean(setAwardBadgeCheck?.checked);
+    const wantEffects = Boolean(setAwardEffectsCheck?.checked);
+    const effectIds = wantEffects ? Array.from(setAwardState.selectedEffects) : [];
+    if (!wantBadge && !effectIds.length) {
+      if (setAwardRewardError) setAwardRewardError.textContent = 'Select Verified badge and/or at least one profile effect.';
+      return;
+    }
+    if (wantEffects && !effectIds.length) {
+      if (setAwardRewardError) setAwardRewardError.textContent = 'Select at least one profile effect or uncheck Profile effects.';
+      return;
+    }
+    if (setAwardRewardError) setAwardRewardError.textContent = '';
+
+    const userIds = Array.from(setAwardState.selectedUsers);
+    if (!userIds.length) {
+      if (setAwardUsersError) setAwardUsersError.textContent = 'Select at least one recipient user.';
+      return;
+    }
+    if (setAwardUsersError) setAwardUsersError.textContent = '';
+
+    let badgeDurationDays = null;
+    let badgeExpiresAt = null;
+    if (wantBadge) {
+      const bPreset = setAwardBadgeDuration?.value || '30';
+      if (bPreset === 'custom') {
+        const raw = String(setAwardBadgeCustomExpiry?.value || '').trim();
+        const ms = raw ? new Date(raw).getTime() : NaN;
+        if (!raw || !Number.isFinite(ms) || ms <= Date.now() + 60000) {
+          Ipon.setFieldError(setAwardBadgeCustomExpiry, 'Select a badge expiration date & time in the future.');
+          setAwardBadgeCustomExpiry?.focus();
+          return;
+        }
+        Ipon.setFieldError(setAwardBadgeCustomExpiry, '');
+        badgeExpiresAt = new Date(ms).toISOString();
+      } else if (bPreset !== 'permanent') {
+        badgeDurationDays = Number.parseInt(bPreset, 10) || 30;
+      }
+    }
+
+    let effectDurationDays = null;
+    let effectExpiresAt = null;
+    if (effectIds.length) {
+      const effDur = readEffectDurationInput(setAwardEffectDuration, setAwardEffectCustomExpiry, { defaultPreset: 'permanent' });
+      if (!effDur.valid) return;
+      if (!effDur.isPermanent && effectIds.includes('ex_early_user')) {
+        if (setAwardRewardError) setAwardRewardError.textContent = "Founders' Grove can only be scheduled as a permanent award.";
+        return;
+      }
+      effectDurationDays = effDur.durationDays;
+      effectExpiresAt = effDur.expiresAt;
+    }
+
+    const items = [];
+    const nowGrace = Date.now() - 60000;
+    if (setAwardState.sameDateTime) {
+      const raw = String(setAwardSharedDatetime?.value || '').trim();
+      const ms = raw ? new Date(raw).getTime() : NaN;
+      if (!raw || !Number.isFinite(ms) || ms < nowGrace) {
+        Ipon.setFieldError(setAwardSharedDatetime, 'Choose a valid release date & time that is not in the past.');
+        setAwardSharedDatetime?.focus();
+        return;
+      }
+      Ipon.setFieldError(setAwardSharedDatetime, '');
+      const iso = new Date(ms).toISOString();
+      userIds.forEach((uid) => items.push({ user_id: uid, scheduled_for: iso }));
+    } else {
+      for (const uid of userIds) {
+        const raw = String(setAwardState.perUserDatetime.get(uid) || '').trim();
+        const ms = raw ? new Date(raw).getTime() : NaN;
+        if (!raw || !Number.isFinite(ms) || ms < nowGrace) {
+          const p = profiles.find((row) => row.id === uid);
+          if (setAwardScheduleError) {
+            setAwardScheduleError.textContent = `Enter a valid upcoming release date & time for ${p?.full_name || 'each selected user'}.`;
+          }
+          setAwardPerUserList?.querySelector(`[data-per-user-dt="${CSS.escape ? CSS.escape(uid) : uid}"]`)?.focus();
+          return;
+        }
+        items.push({ user_id: uid, scheduled_for: new Date(ms).toISOString() });
+      }
+    }
+    if (setAwardScheduleError) setAwardScheduleError.textContent = '';
+
+    for (const item of items) {
+      const schedMs = Date.parse(item.scheduled_for);
+      if (badgeExpiresAt && Date.parse(badgeExpiresAt) <= schedMs) {
+        if (setAwardScheduleError) setAwardScheduleError.textContent = 'Custom badge expiration must be after the scheduled release time.';
+        return;
+      }
+      if (effectExpiresAt && Date.parse(effectExpiresAt) <= schedMs) {
+        if (setAwardScheduleError) setAwardScheduleError.textContent = 'Custom effect trial expiration must be after the scheduled release time.';
+        return;
+      }
+    }
+
+    const creatorMsg = String(setAwardMessage?.value || '').trim();
+    const rewardLabel = [
+      wantBadge ? 'Verified badge' : '',
+      effectIds.length ? `${effectIds.length} profile ${effectIds.length === 1 ? 'effect' : 'effects'}` : ''
+    ].filter(Boolean).join(' + ');
+    const scheduleDesc = setAwardState.sameDateTime
+      ? `on ${Ipon.dateLabel(items[0].scheduled_for, { dateStyle: 'medium', timeStyle: 'short' })} (same date & time for all)`
+      : 'using custom date & time per user';
+    const accepted = await Ipon.confirmAction({
+      title: `Schedule award for ${items.length} ${items.length === 1 ? 'user' : 'users'}?`,
+      message: `Schedule ${rewardLabel} for ${items.length} ${items.length === 1 ? 'user' : 'users'} ${scheduleDesc}?`,
+      acceptLabel: `Schedule (${items.length})`
+    });
+    if (!accepted) return;
+
+    Ipon.setBusy(setAwardSubmit, true, 'Scheduling…');
+    try {
+      const res = await Ipon.rpc('super_admin_create_scheduled_awards', {
+        p_items: items,
+        p_award_badge: wantBadge,
+        p_badge_duration_days: badgeDurationDays,
+        p_badge_expires_at: badgeExpiresAt,
+        p_effect_ids: effectIds,
+        p_effect_duration_days: effectDurationDays,
+        p_effect_expires_at: effectExpiresAt,
+        p_creator_message: creatorMsg
+      });
+      setAwardDialog?.close();
+      const deliveredNow = Number(res?.delivered_now || 0);
+      Ipon.toast(deliveredNow > 0
+        ? `Scheduled ${items.length} award(s) (${deliveredNow} released immediately).`
+        : `Scheduled ${items.length} award${items.length === 1 ? '' : 's'} cleanly.`);
+      activeEffectsSubtab = 'scheduled';
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(setAwardSubmit, false);
+    }
+  });
+
+  document.getElementById('scheduled-award-edit-close')?.addEventListener('click', () => scheduledAwardEditDialog?.close());
+  document.getElementById('scheduled-award-edit-cancel')?.addEventListener('click', () => scheduledAwardEditDialog?.close());
+
+  scheduledAwardsBody?.addEventListener('click', async (event) => {
+    const editBtn = event.target.closest('[data-sched-edit]');
+    const cancelBtn = event.target.closest('[data-sched-cancel]');
+    const id = editBtn?.dataset.schedEdit || cancelBtn?.dataset.schedCancel;
+    if (!id) return;
+    const row = scheduledAwards.find((item) => String(item.id) === String(id));
+    if (!row) return;
+    if (editBtn && scheduledAwardEditDialog && scheduledAwardEditForm) {
+      scheduledAwardEditForm.reset();
+      scheduledAwardEditForm.elements.award_id.value = row.id;
+      if (scheduledAwardEditCopy) {
+        scheduledAwardEditCopy.innerHTML = `Update the release schedule for <strong>${Ipon.escapeHtml(row.full_name || 'User')}</strong>.`;
+      }
+      if (scheduledAwardEditDatetime) {
+        scheduledAwardEditDatetime.value = toDatetimeLocalValue(row.scheduled_for);
+        Ipon.setFieldError(scheduledAwardEditDatetime, '');
+      }
+      if (scheduledAwardEditMessage) scheduledAwardEditMessage.value = row.creator_message || '';
+      scheduledAwardEditDialog.showModal();
+    } else if (cancelBtn) {
+      const accepted = await Ipon.confirmAction({
+        title: 'Cancel scheduled award?',
+        message: `Cancel the pending scheduled award for ${row.full_name || 'this user'}? They will not receive it.`,
+        acceptLabel: 'Cancel award'
+      });
+      if (!accepted) return;
+      try {
+        await Ipon.rpc('super_admin_cancel_scheduled_award', { p_id: row.id });
+        Ipon.toast('Scheduled award cancelled.');
+        await load();
+      } catch (error) {
+        Ipon.toast(Ipon.friendlyError(error), 'error');
+      }
+    }
+  });
+
+  scheduledAwardEditForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const id = scheduledAwardEditForm.elements.award_id.value;
+    const raw = String(scheduledAwardEditDatetime?.value || '').trim();
+    const ms = raw ? new Date(raw).getTime() : NaN;
+    if (!raw || !Number.isFinite(ms) || ms < Date.now() - 60000) {
+      Ipon.setFieldError(scheduledAwardEditDatetime, 'Select a release date & time that is not in the past.');
+      scheduledAwardEditDatetime?.focus();
+      return;
+    }
+    Ipon.setFieldError(scheduledAwardEditDatetime, '');
+    Ipon.setBusy(scheduledAwardEditSubmit, true, 'Saving…');
+    try {
+      await Ipon.rpc('super_admin_update_scheduled_award', {
+        p_id: id,
+        p_scheduled_for: new Date(ms).toISOString(),
+        p_creator_message: String(scheduledAwardEditMessage?.value || '').trim()
+      });
+      scheduledAwardEditDialog?.close();
+      Ipon.toast('Scheduled award updated.');
+      await load();
+    } catch (error) {
+      Ipon.toast(Ipon.friendlyError(error), 'error');
+    } finally {
+      Ipon.setBusy(scheduledAwardEditSubmit, false);
+    }
   });
 
   effectRequestsBody?.addEventListener('click', (event) => {
@@ -2037,7 +2678,7 @@
     overviewError.replaceChildren();
     await Ipon.rpc('cleanup_inactive_verified_badges').catch(() => {});
     const safeQuery = (query) => (Ipon.withTimeout ? Ipon.withTimeout(query) : Promise.resolve(query)).catch((err) => ({ data: [], error: err }));
-    const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult, effectsResult, effectTrialReqResult] = await Promise.all([
+    const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, logResult, storageResult, effectsResult, effectTrialReqResult, scheduledAwardsResult] = await Promise.all([
       safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,last_seen_at,equipped_profile_effect').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,workspace_mode,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('group_memberships').select('group_id,user_id,role,status')),
@@ -2048,6 +2689,7 @@
       safeQuery(Ipon.client.rpc('super_admin_storage_overview')),
       safeQuery(Ipon.client.rpc('super_admin_list_profile_effects')),
       safeQuery(Ipon.client.rpc('super_admin_list_effect_trial_requests')),
+      safeQuery(Ipon.client.rpc('super_admin_list_scheduled_awards')),
       announcements ? safeQuery(announcements.load()) : Promise.resolve()
     ]);
     if (profileResult.error) throw profileResult.error;
@@ -2059,6 +2701,7 @@
     bugReports = bugReportResult.data || [];
     profileEffectGrants = !effectsResult?.error && Array.isArray(effectsResult?.data) ? effectsResult.data : [];
     profileEffectTrialRequests = !effectTrialReqResult?.error && Array.isArray(effectTrialReqResult?.data) ? effectTrialReqResult.data : [];
+    scheduledAwards = !scheduledAwardsResult?.error && Array.isArray(scheduledAwardsResult?.data) ? scheduledAwardsResult.data : [];
     if (activityResult?.error) {
       const legacyActivity = await safeQuery(
         Ipon.client.from('account_activity').select('user_id,event,created_at').order('created_at', { ascending: false }).limit(200)
@@ -3690,6 +4333,7 @@
     ['badges', ['badges-search', 'badges-status-filter'], renderBadges],
     ['effects', ['effects-search', 'effects-status-filter'], renderEffects],
     ['effect-requests', ['effect-requests-search', 'effect-requests-status-filter'], renderEffectTrialRequests],
+    ['scheduled-awards', ['scheduled-awards-search', 'scheduled-awards-status-filter'], renderScheduledAwards],
     ['activity', ['activity-search'], renderActivity]
   ].forEach(([key, controlIds, render]) => {
     controlIds.forEach((id) => {
@@ -3724,6 +4368,7 @@
       if (badgesBody) Ipon.showInlineError(badgesBody, error, refresh, 5);
       if (effectsBody) Ipon.showInlineError(effectsBody, error, refresh, 5);
       if (effectRequestsBody) Ipon.showInlineError(effectRequestsBody, error, refresh, 5);
+      if (scheduledAwardsBody) Ipon.showInlineError(scheduledAwardsBody, error, refresh, 5);
       Ipon.showInlineError(activityBody, error, refresh, 3);
     }
   }
@@ -3841,5 +4486,5 @@
     }
     return false;
   });
-  Ipon.subscribeToChanges('super-admin', ['profiles', 'profile_effect_grants', 'profile_effect_trial_requests', 'groups', 'group_memberships', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
+  Ipon.subscribeToChanges('super-admin', ['profiles', 'profile_effect_grants', 'profile_effect_trial_requests', 'scheduled_awards', 'groups', 'group_memberships', 'admin_requests', 'feature_requests', 'bug_reports', 'account_activity', 'audit_logs', 'announcements', 'announcement_reactions'], refresh);
 })();

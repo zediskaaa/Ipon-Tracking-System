@@ -23344,6 +23344,252 @@ html[data-theme="dark"] .effect-manage-remove-panel {
   .effect-manage-grid { grid-template-columns: 1fr; }
 }
 
+/* Set Award / Scheduled Awards Modal & Table */
+.set-award-dialog { width: min(780px, calc(100vw - 24px)); }
+.set-award-form { gap: 14px; }
+.set-award-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--rule);
+  background: var(--surface-subtle, #f7f1e7);
+  min-width: 0;
+}
+.set-award-section-head,
+.set-award-schedule-head,
+.set-award-per-user-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.set-award-section-head strong,
+.set-award-schedule-head strong {
+  font: 700 14px/1.25 Arial, sans-serif;
+  color: var(--ink);
+}
+.set-award-type-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.set-award-type-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1.5px solid var(--rule);
+  background: var(--surface, #fffdf9);
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.set-award-type-card:has(input:checked) {
+  border-color: #15533e;
+  background: rgba(21, 83, 62, .08);
+}
+html[data-theme="dark"] .set-award-type-card:has(input:checked) {
+  border-color: #8ff0bf;
+  background: rgba(46, 138, 100, .2);
+}
+.set-award-type-card input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  flex: 0 0 18px;
+  accent-color: #15533e;
+}
+.set-award-type-card span { display: grid; gap: 2px; min-width: 0; }
+.set-award-type-card strong { font: 700 13.5px/1.25 Arial, sans-serif; color: var(--ink); }
+.set-award-type-card small { font: 600 11.5px/1.3 Arial, sans-serif; color: var(--muted); }
+.set-award-subpanel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--rule);
+  background: var(--surface, #fffdf9);
+}
+.set-award-effects-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.set-award-effects-grid { max-height: 200px; }
+.set-award-count-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font: 700 12px/1.2 Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  background: rgba(20, 45, 43, .08);
+  color: var(--ink);
+}
+.set-award-count-pill.has-selection {
+  background: #15533e;
+  color: #ffffff;
+}
+.set-award-users-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.set-award-users-toolbar input {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 38px;
+}
+.set-award-users-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.set-award-users-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.set-award-users-list .empty-state {
+  grid-column: 1 / -1;
+  padding: 18px 12px;
+  text-align: center;
+}
+.set-award-user-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 11px;
+  border: 1px solid var(--rule);
+  background: var(--surface, #fffdf9);
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.set-award-user-card:hover { border-color: rgba(21, 83, 62, .4); }
+.set-award-user-card.is-selected {
+  border-color: #15533e;
+  background: rgba(21, 83, 62, .08);
+}
+html[data-theme="dark"] .set-award-user-card.is-selected {
+  border-color: #8ff0bf;
+  background: rgba(46, 138, 100, .2);
+}
+.set-award-user-card input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  accent-color: #15533e;
+}
+.set-award-user-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.set-award-user-copy strong {
+  font: 700 12.5px/1.25 Arial, sans-serif;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-award-user-copy small {
+  font: 500 11px/1.25 Arial, sans-serif;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-award-same-btn {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.set-award-same-btn[aria-pressed="true"] {
+  border-color: #15533e;
+  background: #15533e;
+  color: #ffffff;
+}
+html[data-theme="dark"] .set-award-same-btn[aria-pressed="true"] {
+  border-color: #2e8a64;
+  background: #1f6c4f;
+  color: #f3faf6;
+}
+.set-award-shared-row {
+  display: grid;
+  gap: 8px;
+}
+.set-award-quick-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.set-award-per-user-wrap {
+  display: grid;
+  gap: 10px;
+}
+.set-award-per-user-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.set-award-per-user-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 230px);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 11px;
+  border: 1px solid var(--rule);
+  background: var(--surface, #fffdf9);
+}
+.set-award-per-user-row input[type="datetime-local"] {
+  min-height: 38px;
+  min-width: 0;
+  width: 100%;
+}
+.scheduled-reward-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+.scheduled-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font: 700 11.5px/1.2 Arial, sans-serif;
+  white-space: nowrap;
+}
+.scheduled-status-pill.is-pending { background: rgba(185, 121, 18, .16); color: #8c5607; border: 1px solid rgba(185, 121, 18, .35); }
+.scheduled-status-pill.is-delivered { background: rgba(40, 122, 76, .14); color: #166534; border: 1px solid rgba(40, 122, 76, .32); }
+.scheduled-status-pill.is-cancelled { background: rgba(20, 45, 43, .08); color: var(--muted); border: 1px solid var(--rule); }
+.scheduled-status-pill.is-failed { background: rgba(174, 57, 52, .12); color: #9b2622; border: 1px solid rgba(174, 57, 52, .32); }
+html[data-theme="dark"] .scheduled-status-pill.is-pending { color: #f5cf72; background: rgba(240, 200, 105, .16); }
+html[data-theme="dark"] .scheduled-status-pill.is-delivered { color: #86efac; background: rgba(34, 197, 94, .16); }
+html[data-theme="dark"] .scheduled-status-pill.is-failed { color: #fecaca; background: rgba(174, 57, 52, .24); }
+@media (max-width: 640px) {
+  .set-award-type-cards,
+  .set-award-effects-top,
+  .set-award-per-user-row { grid-template-columns: 1fr; }
+  .set-award-users-list { grid-template-columns: 1fr; }
+  .set-award-same-btn { width: 100%; justify-content: center; }
+}
+
 .effect-grant-dialog { width: min(680px, calc(100vw - 24px)); }
 .effect-grant-top { display: grid; gap: 10px; }
 .effect-grant-stage {
