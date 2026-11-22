@@ -194,11 +194,15 @@ test('vanishing media uses constant-speed SVG border, protects maximized video u
   const coreJs = read('js/core.js');
   const css = read('css/app.css');
 
-  // 1) Constant-speed SVG perimeter ring for text, pictures, and videos
-  assert.match(css, /\.msg-vanish-ring\s*\{[^}]*z-index:\s*6;[^}]*pointer-events:\s*none;/);
+  // 1) Constant-speed SVG perimeter ring unclipped over the outer painted bubble edge (no outer green border bleed)
+  assert.match(css, /\.msg-bubble\.is-vanishing\s*\{[^}]*border-color:\s*transparent\s*!important;[^}]*background-clip:\s*padding-box;[^}]*overflow:\s*visible\s*!important;/s);
+  assert.match(css, /\.msg-vanish-ring\s*\{[^}]*inset:\s*-1px;[^}]*width:\s*calc\(100% \+ 2px\);[^}]*z-index:\s*6;[^}]*pointer-events:\s*none;/s);
+  assert.match(css, /\.msg-vanish-track\s*\{[^}]*stroke:\s*transparent;/s);
   assert.match(css, /\.msg-vanish-progress\s*\{[^}]*stroke-dasharray:\s*100 100;[^}]*animation:\s*msgVanishStroke var\(--vanish-remaining\) linear forwards;/);
   assert.match(css, /@keyframes msgVanishStroke\s*\{[\s\S]*?to\s*\{\s*stroke-dashoffset:\s*100;\s*\}/);
   assert.match(css, /\.msg-bubble\.has-top-media\.is-vanishing \.msg-vanish-progress\s*\{\s*stroke-width:\s*3;\s*\}/);
+  assert.match(messagesJs, /const paintW = \(bubble\.clientWidth \|\| width\) \+ 2;[\s\S]*?const paintH = \(bubble\.clientHeight \|\| height\) \+ 2;/);
+  assert.match(messagesJs, /buildVanishRectPath\(paintW, paintH, \{ mine, rTL, rTR, rBR, rBL, inset: 1\.5 \}\)/);
   assert.match(messagesJs, /function buildVanishRectPath\(/);
   assert.match(messagesJs, /--vanish-dash-start:/);
 

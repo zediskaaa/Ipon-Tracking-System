@@ -3908,13 +3908,15 @@
     bubble.style.setProperty('--vanish-start', `${angle.toFixed(2)}deg`);
     if (typeof document === 'undefined' || typeof document.createElementNS !== 'function' || typeof bubble.querySelector !== 'function' || typeof buildVanishRectPath !== 'function') return;
     const isAudioOnly = Boolean(bubble.classList?.contains?.('has-audio-only'));
-    const isTopMedia = Boolean(bubble.classList?.contains?.('has-top-media'));
     const cs = typeof window !== 'undefined' && typeof window.getComputedStyle === 'function' ? window.getComputedStyle(bubble) : null;
-    const rTL = parseFloat(cs?.borderTopLeftRadius) || 16;
-    const rTR = parseFloat(cs?.borderTopRightRadius) || 16;
-    const rBR = isAudioOnly ? 16 : (parseFloat(cs?.borderBottomRightRadius) || (mine ? 6 : 16));
-    const rBL = isAudioOnly ? 16 : (parseFloat(cs?.borderBottomLeftRadius) || (mine ? 16 : 6));
-    const d = buildVanishRectPath(width, height, { mine, rTL, rTR, rBR, rBL, inset: isTopMedia ? 1.5 : 1.25 });
+    const bW = parseFloat(cs?.borderLeftWidth) || 0;
+    const paintW = (bubble.clientWidth || width) + 2;
+    const paintH = (bubble.clientHeight || height) + 2;
+    const rTL = Math.max(0, (parseFloat(cs?.borderTopLeftRadius) || 16) - bW - 0.5);
+    const rTR = Math.max(0, (parseFloat(cs?.borderTopRightRadius) || 16) - bW - 0.5);
+    const rBR = isAudioOnly ? 15.5 : Math.max(0, (parseFloat(cs?.borderBottomRightRadius) || (mine ? 6 : 16)) - bW - 0.5);
+    const rBL = isAudioOnly ? 15.5 : Math.max(0, (parseFloat(cs?.borderBottomLeftRadius) || (mine ? 16 : 6)) - bW - 0.5);
+    const d = buildVanishRectPath(paintW, paintH, { mine, rTL, rTR, rBR, rBL, inset: 1.5 });
     let svg = bubble.querySelector(':scope > .msg-vanish-ring') || bubble.querySelector('.msg-vanish-ring');
     if (!svg) {
       const ns = 'http://www.w3.org/2000/svg';
@@ -3932,7 +3934,7 @@
       bubble.appendChild(svg);
       bubble.classList?.add?.('has-vanish-svg');
     }
-    svg.setAttribute('viewBox', `0 0 ${Number(width.toFixed(2))} ${Number(height.toFixed(2))}`);
+    svg.setAttribute('viewBox', `0 0 ${Number(paintW.toFixed(2))} ${Number(paintH.toFixed(2))}`);
     const trackEl = svg.querySelector('.msg-vanish-track');
     const progEl = svg.querySelector('.msg-vanish-progress');
     if (trackEl) trackEl.setAttribute('d', d);
