@@ -114,4 +114,13 @@ test('chat sends avoid dashboard reloads, silent refreshes skip redundant protec
   assert.match(messages, /function onIncomingSocialNotification\(notif\)/);
   assert.match(messages, /status === 'CHANNEL_ERROR' \|\| status === 'TIMED_OUT' \|\| status === 'CLOSED'/);
   assert.match(messages, /window\.IponMessages = \{[\s\S]*?onIncomingSocialNotification,/);
+
+  // Smooth bottom-to-top entrance animation triggers only for fresh live messages (no double-bounce on pending confirmation)
+  const css = fs.readFileSync('css/app.css', 'utf8');
+  assert.match(messages, /prePrunePendingServerIds[\s\S]*?const isFreshLiveMsg = \(m\) => Boolean\([\s\S]*?!prePrunePendingServerIds\.has\(String\(m\.id\)\)/);
+  assert.match(messages, /renderPendingRowHtml\(pending, \{ animateEnter: true \}\)/);
+  assert.match(css, /\.msg-row\.is-msg-enter,\s*\.msg-system-event\.is-msg-enter\s*\{[^}]*animation:\s*msgRowRiseIn/s);
+  assert.match(css, /@keyframes\s+msgRowRiseIn\s*\{[\s\S]*?translate3d\(0,\s*18px,\s*0\)/);
+  assert.match(css, /@keyframes\s+msgBubbleRisePop\s*\{/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.msg-row\.is-msg-enter,/);
 });

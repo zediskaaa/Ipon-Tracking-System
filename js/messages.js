@@ -60,6 +60,9 @@
   let threadSearchDebounce = null;
   let openingChatTargetId = null;
   let pendingMsgSeq = 0;
+  let lastRenderedMsgIds = new Set();
+  let lastRenderedPendingIds = new Set();
+  let lastRenderedLatestCreatedAt = 0;
   const sendTailByConv = new Map();
   let activeVideoMenuPlayer = null;
   let activeFloatingMenuAnchor = null;
@@ -3472,7 +3475,7 @@
     </div>`;
   }
 
-  function renderPendingRowHtml(p) {
+  function renderPendingRowHtml(p, { animateEnter = false } = {}) {
     const isFailed = p.status === 'failed';
     const isSending = p.status === 'sending' || p.status === 'queued';
     const atts = p.files || [];
@@ -3514,7 +3517,7 @@
           ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${progressBar}${metaHtml}</div>`
           : `${bodyHtml}${attHtml}${progressBar}${metaHtml}`);
 
-    return `<article class="msg-row is-mine is-pending${isFailed ? ' is-failed' : p.status === 'sent' ? ' is-sent' : ' is-sending'}" data-pending-id="${escapeHtml(p.localId)}">
+    return `<article class="msg-row is-mine is-pending${isFailed ? ' is-failed' : p.status === 'sent' ? ' is-sent' : ' is-sending'}${animateEnter ? ' is-msg-enter' : ''}" data-pending-id="${escapeHtml(p.localId)}">
       <div class="msg-bubble-col">
         ${replyHtml}
         <div class="msg-bubble${isFailed ? ' is-failed' : p.status === 'sent' ? ' is-sent' : ' is-sending'}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}">
@@ -3701,7 +3704,8 @@
       if (conversationId === state.activeConvId && state.activeThread?.conversation) {
         const list = document.getElementById('msg-messages-list');
         if (list?.insertAdjacentHTML && list.querySelector('.msg-row.is-pending')) {
-          list.insertAdjacentHTML('beforeend', renderPendingRowHtml(pending));
+          lastRenderedPendingIds.add(String(pending.localId));
+          list.insertAdjacentHTML('beforeend', renderPendingRowHtml(pending, { animateEnter: true }));
           if (keepScroll) {
             if (wrap) wrap.scrollTop = prevTop;
           } else {
@@ -3938,6 +3942,9 @@
     const myId = initializedProfile?.id;
     const searchQuery = state.showThreadSearch ? state.threadSearchQuery.trim() : '';
     const unreadFirstId = state.activeThread.unread_first_id;
+    const prePrunePendingServerIds = new Set(
+      getPendingList(conv.conversation_id).map((p) => p?.serverMessageId).filter(Boolean).map(String)
+    );
 
     // Prune any pending message that has already synced into server history
     if (conv.conversation_id && state.pendingByConv.has(conv.conversation_id)) {
@@ -4005,8 +4012,16 @@
     const isGrp = isGroupConv(conv);
     let lastDateStr = '';
     const pinnedIds = new Set((state.activeThread.pinned_messages || []).map((p) => p.id));
+    const isFreshLiveMsg = (m) => Boolean(
+      sameConvRerender
+      && m?.id
+      && !lastRenderedMsgIds.has(String(m.id))
+      && !prePrunePendingServerIds.has(String(m.id))
+      && (Date.parse(m.created_at || '') || 0) >= lastRenderedLatestCreatedAt - 5000
+    );
     const html = msgs.map((m, idx) => {
       const curDateStr = formatDateDivider(m.created_at);
+      const enterCls = isFreshLiveMsg(m) ? ' is-msg-enter' : '';
       const isNewDate = curDateStr !== lastDateStr;
       const dateDivider = isNewDate
         ? `<div class="msg-date-sep"><span>${escapeHtml(curDateStr)}</span></div>`
@@ -4019,7 +4034,7 @@
 
       if (m.message_type === 'CALL_EVENT' || m.message_type === 'SYSTEM') {
         if (conv.anonymous_enabled) {
-          return `${dateDivider}${unreadDivider}<div class="msg-system-event" data-msg-id="${escapeHtml(m.id)}"><span>Conversation update &middot; ${escapeHtml(formatClock(m.created_at))}</span></div>`;
+          return `${dateDivider}${unreadDivider}<div class="msg-system-event${enterCls}" data-msg-id="${escapeHtml(m.id)}"><span>Conversation update &middot; ${escapeHtml(formatClock(m.created_at))}</span></div>`;
         }
         const sysLabel = escapeHtml(m.body || (m.message_type === 'CALL_EVENT' ? 'Call event' : 'System notice'));
         const bodyText = String(m.body || '');
@@ -4062,7 +4077,7 @@
           : screenshotBlockToggle
             ? `<strong>${escapeHtml(screenshotName)}</strong> ${screenshotBlockAction}`
             : otherSystemText;
-        return `${dateDivider}${unreadDivider}<div class="msg-system-event${screenshotNotice ? ' is-screenshot' : vanishNotice ? ' is-vanish' : ''}" data-msg-id="${escapeHtml(m.id)}"><span>${eventText} · ${escapeHtml(formatClock(m.created_at))}</span></div>`;
+        return `${dateDivider}${unreadDivider}<div class="msg-system-event${screenshotNotice ? ' is-screenshot' : vanishNotice ? ' is-vanish' : ''}${enterCls}" data-msg-id="${escapeHtml(m.id)}"><span>${eventText} · ${escapeHtml(formatClock(m.created_at))}</span></div>`;
       }
 
       const mine = m.sender_id === myId;
@@ -4151,7 +4166,7 @@
 
       const isActivePinned = Boolean(isPinned && !isDeleted && state.activePinnedId && m.id === state.activePinnedId);
       return `${dateDivider}${unreadDivider}
-        <article class="msg-row${mine ? ' is-mine' : ' is-peer'}${groupedWithPrev ? ' is-grouped-prev' : ''}${groupedWithNext ? ' is-grouped-next' : ''}${isMatch ? ' is-search-match' : ''}${activeMatch ? ' is-active-search-match' : ''}" data-msg-id="${escapeHtml(m.id)}">
+        <article class="msg-row${mine ? ' is-mine' : ' is-peer'}${groupedWithPrev ? ' is-grouped-prev' : ''}${groupedWithNext ? ' is-grouped-next' : ''}${isMatch ? ' is-search-match' : ''}${activeMatch ? ' is-active-search-match' : ''}${enterCls}" data-msg-id="${escapeHtml(m.id)}">
           ${!mine && !isDeleted ? `<span class="msg-swipe-reply-badge" aria-hidden="true">${MSG_REPLY_SVG}</span>` : ''}
           ${!mine ? `<div class="msg-row-avatar">${groupedWithNext ? '' : userAvatarHtml(senderUser, 'avatar-sm')}</div>` : ''}
           <div class="msg-bubble-col">
@@ -4174,7 +4189,7 @@
         </article>`;
     }).join('');
 
-    const pendingHtml = pendingList.map((p) => renderPendingRowHtml(p)).join('');
+    const pendingHtml = pendingList.map((p) => renderPendingRowHtml(p, { animateEnter: sameConvRerender && !lastRenderedPendingIds.has(String(p.localId)) })).join('');
     vanishRingObserver?.disconnect();
     list.innerHTML = `${welcomeHtml}${html}${pendingHtml}`;
     list.querySelectorAll('.msg-bubble.is-vanishing').forEach((bubble) => {
@@ -4185,6 +4200,9 @@
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);
     lastRenderedSeenConvId = conv?.conversation_id || null;
+    lastRenderedMsgIds = new Set(msgs.map((m) => String(m.id)));
+    lastRenderedPendingIds = new Set(pendingList.map((p) => String(p.localId)));
+    lastRenderedLatestCreatedAt = msgs.reduce((max, m) => Math.max(max, Date.parse(m.created_at || '') || 0), 0);
     if (sameConvRerender && prevSeenPositions.size) {
       animateMovedSeenDps(list, prevSeenPositions);
     }

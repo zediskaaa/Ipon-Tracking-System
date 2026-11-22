@@ -8367,6 +8367,39 @@ html[data-theme="dark"] .msg-system-event.is-screenshot strong,
   max-width: 100%;
   touch-action: pan-y;
 }
+.msg-row.is-msg-enter,
+.msg-system-event.is-msg-enter {
+  animation: msgRowRiseIn .34s cubic-bezier(.22, 1, .36, 1) backwards;
+}
+.msg-row.is-mine.is-msg-enter .msg-bubble {
+  transform-origin: bottom right;
+  animation: msgBubbleRisePop .34s cubic-bezier(.2, 1.12, .34, 1) backwards;
+}
+.msg-row.is-peer.is-msg-enter .msg-bubble {
+  transform-origin: bottom left;
+  animation: msgBubbleRisePop .34s cubic-bezier(.2, 1.12, .34, 1) backwards;
+}
+@keyframes msgRowRiseIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes msgBubbleRisePop {
+  0% {
+    transform: scale(.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
 .msg-row .msg-row-avatar,
 .msg-row .msg-bubble-col {
   transform: translate3d(var(--swipe-x, 0px), 0, 0);
@@ -14257,6 +14290,9 @@ html[data-theme="dark"] .msg-failed-btn.is-delete,
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .msg-row.is-msg-enter,
+  .msg-row.is-msg-enter .msg-bubble,
+  .msg-system-event.is-msg-enter,
   .msg-skel,
   .msg-wave-dots i,
   .msg-typing-dots > span,

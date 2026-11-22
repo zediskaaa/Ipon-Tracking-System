@@ -52,7 +52,7 @@ test('anonymous system notices, chat previews, and linked alerts hide real names
   assert.match(migration, /'body', case when m ->> 'message_type' in \('SYSTEM', 'CALL_EVENT'\)/);
   assert.match(migration, /create trigger conversations_mask_anonymous_notifications/);
   assert.match(migration, /update public\.notifications n[\s\S]*c\.anonymous_session_id is not null/);
-  assert.match(messages, /if \(conv\.anonymous_enabled\) \{\s*return `\$\{dateDivider\}\$\{unreadDivider\}<div class="msg-system-event"/);
+  assert.match(messages, /if \(conv\.anonymous_enabled\) \{\s*return `\$\{dateDivider\}\$\{unreadDivider\}<div class="msg-system-event\$\{enterCls\}"/);
   assert.match(messages, /const safeLastPreview = conv\.anonymous_enabled/);
   assert.doesNotMatch(messages, /id="msg-alerts-btn"|id="msg-view-alerts"/);
   assert.match(core, /anonymousChatNotice[\s\S]*assets\/anonymous-avatar\.svg/);
