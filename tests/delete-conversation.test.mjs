@@ -32,6 +32,8 @@ test('css/app.css defines premium Delete conversation modal and full-width drawe
   assert.match(css, /\.msg-delete-conv-option\[aria-checked="true"\]\s*\{/);
   assert.match(css, /\.msg-delete-conv-option\.is-everyone\[aria-checked="true"\]\s*\{/);
   assert.match(css, /html\[data-theme="dark"\] \.msg-delete-conv-option/);
+  assert.match(css, /\.msg-vanish-modal \.msg-vanish-close svg\s*\{[^}]*stroke:\s*currentColor;/s);
+  assert.match(read('js/messages.js'), /class="dialog-close msg-vanish-close" data-delete-conv-close/);
 });
 
 test('Delete conversation modal offers for you vs for everyone, deletes for both participants, cleans media, and closes peer thread on realtime hide', async () => {

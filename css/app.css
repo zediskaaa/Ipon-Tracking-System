@@ -10621,10 +10621,20 @@ dialog.msg-vanish-modal::backdrop {
   display: grid;
   place-items: center;
   cursor: pointer;
-  color: var(--vm-muted);
+  color: var(--vm-ink);
   background: var(--vm-chip-bg);
   border: 1px solid var(--vm-chip-border);
   transition: background .15s ease, color .15s ease;
+}
+.msg-vanish-modal .msg-vanish-close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
 }
 .msg-vanish-modal .msg-vanish-close:hover {
   background: var(--vm-chip-hover);

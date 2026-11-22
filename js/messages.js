@@ -4803,7 +4803,7 @@
           <h3 id="msg-delete-conv-title">Delete conversation</h3>
           <p>${subtitle}</p>
         </div>
-        <button type="button" class="msg-vanish-close" data-delete-conv-close aria-label="Close dialog"${state.deleteConvBusy ? ' disabled' : ''}>${closeSvg}</button>
+        <button type="button" class="dialog-close msg-vanish-close" data-delete-conv-close aria-label="Close dialog"${state.deleteConvBusy ? ' disabled' : ''}>${closeSvg}</button>
       </div>
       <div class="msg-delete-conv-options" role="radiogroup" aria-label="Delete scope">
         <button type="button" class="msg-delete-conv-option" role="radio" data-delete-conv-scope="delete_for_me" aria-checked="${!isEveryone ? 'true' : 'false'}"${state.deleteConvBusy ? ' disabled' : ''}>
