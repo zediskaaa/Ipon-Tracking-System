@@ -5,19 +5,24 @@ import vm from 'node:vm';
 
 const read = (rel) => fs.readFileSync(rel, 'utf8');
 
-test('Migration 182 and schema.sql extend update_conversation_member_state with delete_for_everyone, media purge, notification cleanup, and group role guard', () => {
-  const mig = read('database/migrations/20261123_182_delete_conversation_for_everyone.sql');
+test('Migration 183 and schema.sql extend update_conversation_member_state with delete_for_everyone using message_attachments and notifications.recipient_id', () => {
+  const mig = read('database/migrations/20261123_183_fix_delete_conversation_for_everyone_columns.sql');
   const schema = read('database/schema.sql');
 
   for (const sql of [mig, schema]) {
-    assert.match(sql, /'20261123_182'/);
+    assert.match(sql, /'20261123_183'/);
     assert.match(sql, /elsif v_act = 'delete_for_everyone' then/i);
     assert.match(sql, /Only group owners or admins can delete a group conversation for everyone\./i);
+    assert.match(sql, /from public\.message_attachments ma[\s\S]*?ma\.storage_path/i);
     assert.match(sql, /insert into public\.pending_storage_deletions \(bucket_id, object_path\)/i);
+    assert.match(sql, /delete from public\.notifications n\s+where n\.recipient_id in/i);
     assert.match(sql, /delete from public\.messages where conversation_id = v_conv\.id;/i);
     assert.match(sql, /set deleted_before_at = v_now,\s*hidden_at = v_now,[\s\S]*?where conversation_id = v_conv\.id;/i);
     assert.match(sql, /'removed_paths',\s*coalesce\(v_own_paths,\s*'\[\\?\]'::jsonb\)/i);
   }
+  const migCode = mig.replace(/--[^\n]*/g, '');
+  assert.doesNotMatch(migCode, /\bm\.attachments\b/i);
+  assert.doesNotMatch(migCode, /\bn\.user_id\b/i);
 });
 
 test('css/app.css defines premium Delete conversation modal and full-width drawer danger styling in light and dark mode', () => {
