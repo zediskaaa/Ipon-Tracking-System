@@ -435,7 +435,7 @@ test('login provides development, terms, and privacy disclosures', () => {
   assert.match(html, /IPON is still under active development/);
   assert.match(html, /data-policy-open="terms"/);
   assert.match(html, /data-policy-open="privacy"/);
-  assert.match(html, /Last updated: November 16, 2026/);
+  assert.match(html, /Last updated: November 22, 2026/);
   assert.match(html, /90-day chat &amp; operational TTL|older than 90 days/i);
   assert.match(html, /6-month inactive accounts|inactive for 6 months/i);
   assert.match(html, /7 days prior|7-day prior email notice/i);
@@ -9918,7 +9918,7 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
         },
         rpc: async (fnName, args) => {
           rpcCalls.push({ fnName, args });
-          return { data: { policy_accepted_version: args?.p_version || '2026-11-16', policy_accepted_at: '2026-11-16T05:00:00Z' }, error: null };
+          return { data: { policy_accepted_version: args?.p_version || '2026-11-22', policy_accepted_at: '2026-11-22T05:00:00Z' }, error: null };
         }
       })
     },
@@ -9976,8 +9976,8 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
   await agreeBtn._emit('click');
   assert.equal(rpcCalls.length, 1);
   assert.equal(rpcCalls[0].fnName, 'accept_current_policy');
-  assert.equal(rpcCalls[0].args.p_version, '2026-11-16');
-  assert.equal(userProfile.policy_accepted_version, '2026-11-16');
+  assert.equal(rpcCalls[0].args.p_version, '2026-11-22');
+  assert.equal(userProfile.policy_accepted_version, '2026-11-22');
   assert.equal(consentDlg.open, false);
   assert.equal(afterAcceptTriggered, true);
   assert.equal(ctx.window.Ipon.hasAcceptedCurrentPolicy(userProfile), true);

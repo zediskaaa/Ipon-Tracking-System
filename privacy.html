@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta name="description" content="Privacy Policy for myIPON — Group Savings Record Tracker, including Google and Facebook Sign-In disclosures, data retention rules, and user data deletion rights.">
+  <meta name="description" content="Privacy Policy for myIPON — Group &amp; Solo Savings and Budget Record Tracker, including Google and Facebook Sign-In disclosures, cloud storage, chat privacy, data retention rules, and user data deletion rights.">
   <meta name="application-name" content="IPON Group Savings Tracker">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Privacy Policy — myIPON">
-  <meta property="og:description" content="Privacy Policy for myIPON — Group Savings Record Tracker, including Google and Facebook Sign-In disclosures and user data deletion rights.">
+  <meta property="og:description" content="Privacy Policy for myIPON — Group &amp; Solo Savings and Budget Record Tracker, including OAuth disclosures, data retention rules, and user data deletion rights.">
   <meta property="og:url" content="https://my-ipon.vercel.app/privacy">
   <title>Privacy Policy — myIPON</title>
   <meta name="theme-color" content="#0b3428">
@@ -82,19 +82,23 @@
     <article class="legal-card" id="privacy-policy-document">
       <p class="legal-kicker">Legal &amp; Privacy</p>
       <h1>Privacy Policy</h1>
-      <p class="legal-meta">Effective &amp; last updated: November 19, 2026 &middot; Applies to myIPON Web (<code>my-ipon.vercel.app</code>) and the myIPON Android app.</p>
+      <p class="legal-meta">Effective &amp; last updated: November 22, 2026 &middot; Applies to myIPON Web (<code>my-ipon.vercel.app</code>) and the myIPON Android app.</p>
 
       <div class="legal-body">
-        <p>myIPON is a private, non-custodial group savings record tracker. This Privacy Policy explains what personal and savings-group data we process, how Google and Facebook Sign-In work, how long data is retained, and how you can delete your data at any time.</p>
+        <p>myIPON is a private, non-custodial group and solo savings record tracker with optional personal budget tracking. This Privacy Policy explains what personal, savings, budget, and messaging data we process, how OAuth sign-in and cloud storage work, how long data is retained, and how you can delete your data at any time.</p>
 
         <section id="information-processed">
           <h2>1. Information we process</h2>
-          <p>myIPON may store your formal name, email address, mobile number, optional profile picture, optional payout receiving account details (channel, account name, and account number), policy consent version and timestamp, assigned roles, savings-group memberships, contributions, expenses, withdrawals, annual archived summaries, payment channel tags, reconciliation records, in-record comments, direct messages, media attachments, announcement reactions, feature requests, bug reports, and security-related account events.</p>
+          <ul>
+            <li><strong>Account &amp; profile identity:</strong> formal name, unique <code>@username</code>, email address, mobile number, short bio (up to 58 characters), optional profile picture and cover photo, profile card theme, granted or trial profile visual effects, verified badge status, scheduled awards, optional connected social links (Telegram, Instagram, Facebook, Threads, X, Discord), optional payout receiving account details (channel, account name, and account number), policy consent version and timestamp, and privacy preferences (profile visibility, searchability, connection visibility, read receipts, online/last-seen status, and messaging controls).</li>
+            <li><strong>Savings &amp; personal budget records:</strong> assigned roles, group and solo workspace memberships, invite links/codes, contributions, expenses, withdrawals, savings goals and schedules, personal budget plans, allocations, and budget expenses, annual archived summaries, payment channel tags, wallet reconciliation records, and in-record comments/proofs.</li>
+            <li><strong>Messaging, community &amp; security data:</strong> direct and group messages, voice notes, media attachments, vanishing/anonymous chat session states, message reactions, friend relationships, message requests, hidden user blocks, announcements and reactions, feature requests, bug reports, push notification tokens (Web Push and Android FCM), trusted-device verification hashes, client platform status (<code>browser</code> or <code>android_app</code> for native chat screenshot protection), login rate-limit counters, and reported account activity events.</li>
+          </ul>
         </section>
 
         <section id="social-sign-in">
           <h2>2. Google &amp; Facebook Sign-In (OAuth)</h2>
-          <p>When you choose <strong>Continue with Google</strong>, <strong>Create with Google</strong>, <strong>Continue with Facebook</strong>, or <strong>Create with Facebook</strong>, authentication is processed securely through our identity provider (Clerk) using OAuth 2.0:</p>
+          <p>When you choose <strong>Continue with Google</strong> or <strong>Create with Google</strong> (or <strong>Facebook Login</strong> where enabled), authentication is processed securely through our identity provider (Clerk) using OAuth 2.0:</p>
           <ul>
             <li><strong>Data requested:</strong> Only basic profile identity fields needed to create or match your account &mdash; your verified email address, full name, and optional profile photo.</li>
             <li><strong>How it is used:</strong> Strictly to verify your identity, sign you in, and pre-fill your myIPON profile.</li>
@@ -103,48 +107,51 @@
         </section>
 
         <section id="how-information-is-used">
-          <h2>3. How information is used &amp; media storage</h2>
+          <h2>3. How information is used, media storage &amp; delivery</h2>
           <ul>
-            <li>Authenticate accounts (including email OTP verification, OAuth social sign-in, password recovery, and optional TOTP two-factor authentication) and enforce database row-level isolation per group and role.</li>
-            <li>Calculate monthly summaries, calendar progress, wallet balances, CSV/print reports, annual roll-up summaries, and audit logs.</li>
-            <li>Store uploaded images, voice notes, documents, and receipts inside dedicated cloud object storage buckets (<code>ipon-media</code>, <code>chat-attachments</code>, <code>announcements</code>, <code>record-comments</code>) referenced by URL rather than storing raw binary blobs or Base64 strings inside database tables.</li>
-            <li>Deliver <strong>real-time device and in-app notifications</strong> (arriving on your phone as long as myIPON is kept in Recent Apps and not swiped away) for payment reviews, chat messages, discussion replies, account status changes, and announcements. Activity alerts are <strong>not sent to your email</strong>; email is reserved strictly for OTP verification codes, password recovery links, dormant savings reminders (90 days idle), and 7-day inactivity/retention warnings.</li>
-            <li>Summarize high-level platform updates in Super Admin release notes without exposing private group financial balances, and display optional requester credit on implemented feature requests when attribution is enabled.</li>
+            <li>Authenticate accounts (email or username sign-in, 6-digit email OTP verification, Clerk OAuth social sign-in, optional new-device email OTP with 90-day trusted-device tokens, password recovery, and optional TOTP two-factor authentication) and enforce database row-level isolation per workspace and role.</li>
+            <li>Calculate monthly summaries, calendar progress, goal schedules, personal budget allocations, wallet balances, CSV/print reports, annual roll-up summaries, and audit logs.</li>
+            <li>Store uploaded images, voice notes, documents, and receipts securely inside dedicated cloud object storage referenced by URL rather than storing raw binary blobs or Base64 strings inside database tables: public profile/workspace media and receipts use <strong>Supabase Storage</strong> (<code>ipon-media</code>), while private attachments (<code>chat-attachments</code>, <code>announcements</code>, <code>record-comments</code>) use <strong>Cloudflare R2</strong> (with legacy Supabase Storage support) protected by time-limited signed URLs and automatic client-side media optimization where applicable.</li>
+            <li>Deliver <strong>real-time device and in-app notifications</strong> via <strong>Firebase Cloud Messaging (FCM)</strong> on Android and optional <strong>Web Push</strong> in supported browsers (arriving on your phone as long as myIPON stays in Recent Apps and is not swiped away) for payment reviews, direct and group chat messages, discussion replies, friend requests, account status changes, and announcements. Automated transactional <strong>emails</strong> (delivered via Brevo / Resend) are reserved strictly for OTP and new-device login verification codes, password recovery links, workspace invitations, account status notices, milestone unpaid contribution &amp; goal reminders (when notifications are enabled), dormant savings reminders (90 days idle), and 7-day inactivity/retention warnings.</li>
+            <li>Enforce optional chat privacy controls, including vanishing message deletion, anonymous chat masking and permanent session teardown, forwarding restrictions, screenshot notices, and native Android screen-capture blocking using your active client platform flag.</li>
+            <li>Summarize high-level platform updates in Super Admin release notes (including optional AI-assisted drafting from non-private release summaries) without exposing private savings ledgers or chat messages, and display optional requester credit on implemented feature requests when attribution is enabled.</li>
           </ul>
         </section>
 
         <section id="browser-storage">
-          <h2>4. Browser storage &amp; device alerts</h2>
-          <p>The app stores session credentials, cross-tab sync keys, your light or dark theme selection, per-account policy consent cache keys, periodic data-retention reminder timestamps, and optional Web Push subscription tokens locally on your browser or Android app so settings stay consistent. Keep myIPON in your phone's Recent Apps (do not remove it from Recent Apps) to receive incoming messages and activity notifications in real time (activity alerts are not emailed). Device alerts can be disabled anytime in your device settings or Account preferences.</p>
+          <h2>4. Browser storage, device tokens &amp; alerts</h2>
+          <p>The app stores session credentials, cross-tab sync keys, your light or dark theme selection, per-account policy consent cache keys, periodic data-retention reminder timestamps, local new-device verification tokens (90-day trust window), optional <strong>Web Push subscription tokens</strong>, and Android <strong>Firebase Cloud Messaging (FCM)</strong> device tokens so sessions and alerts stay consistent. Keep myIPON in your phone's Recent Apps (do not remove it from Recent Apps) and allow background usage to receive incoming messages and activity notifications in real time. Device alerts and unpaid reminder emails can be managed or disabled anytime in your device settings or Account preferences.</p>
         </section>
 
         <section id="who-can-access">
           <h2>5. Who can access your data</h2>
-          <p>Access is strictly limited by assigned role and active savings group. Authorized group administrators and treasurers review permitted group workspace activity and payout info. Platform administrators manage system health, storage hygiene, account access, bug reports, and feature requests, and are not intended to view private group savings ledgers.</p>
+          <p>Access is strictly limited by assigned role, active savings workspace (Group or Solo), and your profile and chat privacy settings. Authorized group administrators and treasurers review permitted group workspace activity and payout info. Solo workspaces and personal budget plans are private to the workspace owner. Platform administrators manage system health, storage hygiene, account access, verified badges, profile effects, scheduled awards, bug reports, and feature requests, and are not intended to view private savings ledgers or private chats.</p>
         </section>
 
         <section id="data-retention">
           <h2>6. Detailed data retention &amp; automatic deletion</h2>
-          <p>To keep the app fast and storage clean while protecting active group savers permanently, automated system cleanup runs nightly at <strong>12:00 AM Manila time</strong>:</p>
+          <p>To keep the app fast and storage clean while protecting active savers permanently, automated system cleanup runs nightly at <strong>12:00 AM Manila time</strong>:</p>
           <div class="policy-retention-grid">
-            <div class="policy-retention-row"><span class="policy-ttl-badge is-keep">Ongoing</span><div class="policy-retention-detail"><strong>Active savings &amp; ongoing goals (Immune)</strong><span>Active goals (<code>savings_goals</code>) and unbinned savings records (<code>contributions</code>, <code>withdrawals</code>, <code>expenses</code>, <code>contribution_periods</code>) are never automatically erased while contributions or goal updates remain active.</span></div></div>
-            <div class="policy-retention-row"><span class="policy-ttl-badge is-warn">90d &rarr; 6m</span><div class="policy-retention-detail"><strong>Dormant / forgotten savings (Email + 7d notice)</strong><span>Groups with zero deposits or goal updates receive an email reminder at <strong>90 days</strong> and a final warning <strong>7 days prior to 6 months</strong> before dormant ledgers and untouched goals move into the 30-day Bin.</span></div></div>
-            <div class="policy-retention-row"><span class="policy-ttl-badge">7 days</span><div class="policy-retention-detail"><strong>Login rate-limit &amp; throttle logs</strong><span>Failed sign-in attempt counters (<code>auth_login_throttles</code>) expire automatically after 7 days.</span></div></div>
-            <div class="policy-retention-row"><span class="policy-ttl-badge">30-day Bin</span><div class="policy-retention-detail"><strong>Done / reset batches, binned goals, members &amp; notices</strong><span>Completed goals or reset savings batches (<code>savings_cycle_batches</code>), deleted announcements, and soft-deleted member profiles remain recoverable for <strong>30 days</strong> with an exact remaining-days countdown before permanent purge from PostgreSQL and cloud Storage.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge is-keep">Ongoing</span><div class="policy-retention-detail"><strong>Active savings, ongoing goals &amp; personal budgets (Immune)</strong><span>Active goals (<code>savings_goals</code>), personal budget records, and unbinned savings records (<code>contributions</code>, <code>withdrawals</code>, <code>expenses</code>, <code>contribution_periods</code>) are never automatically erased while contributions or goal updates remain active.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge">Instant</span><div class="policy-retention-detail"><strong>Vanishing messages &amp; Anonymous Chat sessions</strong><span>Vanishing messages permanently delete when their read timer expires. Anonymous Chat messages and linked notifications permanently delete as soon as Anonymous Mode is ended.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge is-warn">90d &rarr; 6m</span><div class="policy-retention-detail"><strong>Dormant / forgotten savings (Email + 7d notice)</strong><span>Workspaces with zero deposits or goal updates receive an email reminder at <strong>90 days</strong> and a final warning <strong>7 days prior to 6 months</strong> before dormant ledgers and untouched goals move into the 30-day Bin.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge">7 days</span><div class="policy-retention-detail"><strong>Login rate-limit &amp; OTP challenge logs</strong><span>Failed sign-in attempt counters (<code>auth_login_throttles</code>) expire automatically after 7 days, and 6-digit email/new-device OTP codes expire after 10 minutes.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge">30-day Bin</span><div class="policy-retention-detail"><strong>Done / reset batches, binned goals, members &amp; notices</strong><span>Completed goals or reset savings batches (<code>savings_cycle_batches</code>), deleted announcements, and soft-deleted member profiles remain recoverable for <strong>30 days</strong> with an exact remaining-days countdown before permanent purge from PostgreSQL and cloud storage (Supabase Storage / Cloudflare R2).</span></div></div>
             <div class="policy-retention-row"><span class="policy-ttl-badge">30 days</span><div class="policy-retention-detail"><strong>Call logs &amp; read notifications</strong><span>Voice/video call session metadata (<code>call_sessions</code>) and read alerts (<code>notifications</code>) are purged automatically after 30 days.</span></div></div>
-            <div class="policy-retention-row"><span class="policy-ttl-badge">90 days</span><div class="policy-retention-detail"><strong>Direct &amp; group messages &amp; chat Storage files</strong><span>Messages (<code>messages</code>) and uploaded media in <code>chat-attachments</code> older than 90 days are deleted automatically. Messages, notes, and replies are capped at 500 characters.</span></div></div>
-            <div class="policy-retention-row"><span class="policy-ttl-badge">90 days</span><div class="policy-retention-detail"><strong>Unread alerts, rejected receipts &amp; logs</strong><span>Unread notifications, rejected or voided receipt attachments (alongside their Storage files), <code>audit_logs</code>, and <code>account_activity</code> clear automatically after 90 days.</span></div></div>
-            <div class="policy-retention-row"><span class="policy-ttl-badge is-warn">6 months</span><div class="policy-retention-detail"><strong>Inactive accounts (7-day warning email)</strong><span>Accounts inactive for 6 months (zero logins, member contributions, or active group savings activity) receive an email warning <strong>7 days prior</strong> to permanent removal (shared groups promote an active successor automatically).</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge">2 months</span><div class="policy-retention-detail"><strong>Permanent verified badges (Inactivity rule)</strong><span>Standard permanent Blue verified badges are automatically removed after 2 months of account inactivity; time-limited badges and profile effect trials expire at their scheduled end time.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge">90 days</span><div class="policy-retention-detail"><strong>Direct &amp; group messages, chat files &amp; trusted devices</strong><span>Messages (<code>messages</code>), uploaded media in <code>chat-attachments</code>, and trusted-device OTP tokens (<code>account_trusted_devices</code>) older than 90 days expire or delete automatically (empty orphaned group chats are also removed). Messages, notes, and replies are capped at 500 characters.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge">90 days</span><div class="policy-retention-detail"><strong>Unread alerts, rejected receipts &amp; logs</strong><span>Unread notifications, rejected or voided receipt attachments (alongside their cloud storage files), <code>audit_logs</code>, and <code>account_activity</code> clear automatically after 90 days.</span></div></div>
+            <div class="policy-retention-row"><span class="policy-ttl-badge is-warn">6 months</span><div class="policy-retention-detail"><strong>Inactive accounts (7-day warning email)</strong><span>Non-exempt accounts inactive for 6 months (zero logins, member contributions, messages, or active savings activity) receive an email warning <strong>7 days prior</strong> to permanent removal (shared groups promote an active successor automatically).</span></div></div>
             <div class="policy-retention-row"><span class="policy-ttl-badge is-keep">1+ year</span><div class="policy-retention-detail"><strong>Annual financial roll-ups</strong><span>Confirmed transactions older than 1 year can be exported to CSV first and summarized into permanent <code>financial_annual_archives</code> totals&mdash;never erased silently.</span></div></div>
           </div>
-          <p>Confirming permanent group deletion immediately clears that group's workspace data. Users are also shown a periodic in-app storage reminder every 14 days and can review retention rules anytime under Account Preferences.</p>
+          <p>Confirming permanent workspace deletion immediately clears that workspace's data. Users are also shown a periodic in-app storage reminder every 14 days and can review retention rules anytime under Account Preferences.</p>
         </section>
 
         <section id="data-deletion">
           <h2>7. User data deletion</h2>
           <div class="legal-callout">
-            <strong>Need to delete your myIPON account or Facebook/Google Sign-In data?</strong>
-            Follow our step-by-step <a href="data-deletion.html">User Data Deletion Instructions</a> to delete your workspace data inside myIPON, disconnect Facebook or Google access, or request full permanent account removal by email.
+            <strong>Need to delete your myIPON account or Google/Facebook Sign-In data?</strong>
+            Follow our step-by-step <a href="data-deletion.html">User Data Deletion Instructions</a> to delete your workspace or profile data inside myIPON, disconnect Google or Facebook access, or request full permanent account removal by email.
           </div>
         </section>
 
@@ -157,7 +164,7 @@
   </main>
 
   <footer class="legal-footer">
-    <span>&copy; 2026 myIPON &middot; Non-custodial group savings record tracker.</span>
+    <span>&copy; 2026 myIPON &middot; Non-custodial group &amp; solo savings record tracker.</span>
     <span><a href="privacy.html">Privacy Policy</a> &middot; <a href="terms.html">Terms of Service</a> &middot; <a href="data-deletion.html">Data Deletion</a> &middot; <a href="index.html">Home</a></span>
   </footer>
   <script src="js/core.js?v=20261122-33"></script>

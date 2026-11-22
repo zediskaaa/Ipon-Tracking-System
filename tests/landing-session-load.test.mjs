@@ -40,7 +40,7 @@ test('returning-user session check loads its dependencies and retains the redire
   const result = await runSessionCheck({ 'sb-project-auth-token': '{}' });
   assert.deepEqual(result.scripts.map((script) => script.src), [
     'js/core.js?v=20261122-33',
-    'js/policy.js?v=20261119-09',
+    'js/policy.js?v=20261122-01',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js'
   ]);
   assert.equal(result.scripts[2].crossOrigin, 'anonymous');

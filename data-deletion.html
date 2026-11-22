@@ -86,14 +86,14 @@
     <article class="legal-card" id="data-deletion-document">
       <p class="legal-kicker">User Data Rights</p>
       <h1>User Data Deletion Instructions</h1>
-      <p class="legal-meta">Last updated: November 19, 2026 &middot; Applies to myIPON accounts, Google Sign-In, and Facebook Login.</p>
+      <p class="legal-meta">Last updated: November 22, 2026 &middot; Applies to myIPON accounts, Google Sign-In, and Facebook Login.</p>
 
       <div class="legal-body">
-        <p>You can delete your myIPON data and disconnect your Facebook or Google Sign-In link at any time using the methods below.</p>
+        <p>You can delete your myIPON data and disconnect your Google or Facebook Sign-In link at any time using the methods below.</p>
 
         <section id="request-email-deletion">
           <h2>1. Request full account &amp; OAuth data deletion</h2>
-          <p>To permanently delete your entire myIPON account, profile, connected Google/Facebook sign-in identity, uploaded profile photo, and personal records:</p>
+          <p>To permanently delete your entire myIPON account, profile (including <code>@username</code>, bio, cover, and connected social links), connected Google/Facebook sign-in identity, uploaded media, and personal records:</p>
           <ol>
             <li>Send an email from your registered account email address to <a href="mailto:zedrickdemonteverde1@gmail.com?subject=myIPON%20Data%20Deletion%20Request">zedrickdemonteverde1@gmail.com</a>.</li>
             <li>Use the subject line <code>myIPON Data Deletion Request</code>.</li>
@@ -101,7 +101,7 @@
           </ol>
           <div class="deletion-action-box">
             <strong>Direct deletion request email</strong>
-            We verify account ownership and permanently remove your profile, OAuth connection, notifications, and uploaded personal files within <strong>7 business days</strong>, then send a confirmation reply.
+            We verify account ownership and permanently remove your profile, OAuth connection, push/trusted-device tokens, notifications, and uploaded personal files (Supabase Storage &amp; Cloudflare R2) within <strong>7 business days</strong>, then send a confirmation reply.
             <div><a class="deletion-cta" href="mailto:zedrickdemonteverde1@gmail.com?subject=myIPON%20Data%20Deletion%20Request&amp;body=Please%20permanently%20delete%20my%20myIPON%20account%20and%20associated%20personal%20data.%0A%0ARegistered%20email%3A%20%0AFull%20name%3A%20">Email Data Deletion Request</a></div>
           </div>
         </section>
@@ -109,24 +109,25 @@
         <section id="in-app-deletion">
           <h2>2. Delete workspace or profile data inside myIPON</h2>
           <ul>
-            <li><strong>Profile details &amp; media:</strong> Sign in at <a href="login.html">myIPON</a>, open <strong>Account</strong>, and clear optional payout receiving details, profile photo, or social links immediately.</li>
-            <li><strong>Savings group workspaces:</strong> Group Owners and Administrators can open <strong>Settings</strong> and confirm permanent group deletion to immediately erase that group's savings workspace data.</li>
+            <li><strong>Profile details &amp; media:</strong> Sign in at <a href="login.html">myIPON</a>, open <strong>My Profile / Account</strong>, and clear optional payout receiving details, short bio, profile photo, cover photo, or connected social links immediately.</li>
+            <li><strong>Group &amp; solo workspaces and personal budgets:</strong> Group Owners, Administrators, and Solo workspace owners can open <strong>Settings</strong> and confirm permanent workspace deletion to immediately erase that workspace's savings records, or delete personal budget plans directly inside the <strong>Budget</strong> tracker.</li>
+            <li><strong>Ephemeral chats:</strong> Turn off <strong>Anonymous Chat Mode</strong> to immediately erase all messages and alerts from that anonymous session, or enable <strong>Vanishing Messages</strong> so read messages self-delete automatically.</li>
           </ul>
         </section>
 
         <section id="revoke-social-access">
-          <h2>3. Revoke Facebook Login or Google Sign-In access</h2>
-          <p>You can also revoke myIPON's sign-in access directly from your Facebook or Google account settings:</p>
+          <h2>3. Revoke Google Sign-In or Facebook Login access</h2>
+          <p>You can also revoke myIPON's sign-in access directly from your Google or Facebook account settings:</p>
           <ul>
-            <li><strong>Facebook:</strong> Go to <strong>Facebook Settings &amp; Privacy</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Apps and Websites</strong> &rarr; select <strong>myIPON</strong> &rarr; click <strong>Remove</strong>.</li>
             <li><strong>Google:</strong> Visit <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">Google Account Third-Party Connections</a> &rarr; select <strong>myIPON</strong> &rarr; click <strong>Delete all connections you have with myIPON</strong>.</li>
+            <li><strong>Facebook:</strong> Go to <strong>Facebook Settings &amp; Privacy</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Apps and Websites</strong> &rarr; select <strong>myIPON</strong> &rarr; click <strong>Remove</strong>.</li>
           </ul>
         </section>
 
         <section id="what-is-deleted">
           <h2>4. What data is deleted &amp; timeline</h2>
           <ul>
-            <li><strong>Deleted upon account removal:</strong> Your user profile (name, email, phone number, payout details), authentication &amp; OAuth links, profile avatar/cover media, notification tokens, direct message records, and personal security logs.</li>
+            <li><strong>Deleted upon account removal:</strong> Your user profile (name, <code>@username</code>, bio, email, phone number, payout details, social links, card theme/effects, privacy settings), authentication &amp; Clerk OAuth links, profile avatar/cover and private cloud storage files (Supabase Storage &amp; Cloudflare R2), Web Push &amp; Android FCM notification tokens, trusted-device OTP tokens, direct/group chat records, friend connections, personal solo/budget records, and personal security logs.</li>
             <li><strong>Shared group accounting integrity:</strong> If you belong to an active shared savings group, group-owned ledger totals remain intact for the other active members while your personal account identity is removed or reassigned according to group ownership rules.</li>
             <li><strong>Processing timeline:</strong> Active records are removed within <strong>7 business days</strong> of verification; any items previously placed in the 30-day Recycle Bin purge automatically within <strong>30 days</strong>.</li>
           </ul>
@@ -137,7 +138,7 @@
   </main>
 
   <footer class="legal-footer">
-    <span>&copy; 2026 myIPON &middot; Non-custodial group savings record tracker.</span>
+    <span>&copy; 2026 myIPON &middot; Non-custodial group &amp; solo savings record tracker.</span>
     <span><a href="privacy.html">Privacy Policy</a> &middot; <a href="terms.html">Terms of Service</a> &middot; <a href="data-deletion.html">Data Deletion</a> &middot; <a href="index.html">Home</a></span>
   </footer>
   <script src="js/core.js?v=20261122-33"></script>
