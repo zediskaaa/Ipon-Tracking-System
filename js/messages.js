@@ -214,9 +214,9 @@
     const y1 = h - p;
     const f = (n) => Number(n.toFixed(2));
     if (mine) {
-      return `M ${f(x1 - br)} ${f(y1)} L ${f(x0 + bl)} ${f(y1)} A ${f(bl)} ${f(bl)} 0 0 1 ${f(x0)} ${f(y1 - bl)} L ${f(x0)} ${f(y0 + tl)} A ${f(tl)} ${f(tl)} 0 0 1 ${f(x0 + tl)} ${f(y0)} L ${f(x1 - tr)} ${f(y0)} A ${f(tr)} ${f(tr)} 0 0 1 ${f(x1)} ${f(y0 + tr)} L ${f(x1)} ${f(y1 - br)} A ${f(br)} ${f(br)} 0 0 1 ${f(x1 - br)} ${f(y1)} Z`;
+      return `M ${f(x1 - br)} ${f(y1)} L ${f(x0 + bl)} ${f(y1)} A ${f(bl)} ${f(bl)} 0 0 1 ${f(x0)} ${f(y1 - bl)} L ${f(x0)} ${f(y0 + tl)} A ${f(tl)} ${f(tl)} 0 0 1 ${f(x0 + tl)} ${f(y0)} L ${f(x1 - tr)} ${f(y0)} A ${f(tr)} ${f(tr)} 0 0 1 ${f(x1)} ${f(y0 + tr)} L ${f(x1)} ${f(y1 - br)} A ${f(br)} ${f(br)} 0 0 1 ${f(x1 - br)} ${f(y1)}`;
     }
-    return `M ${f(x0)} ${f(y1 - bl)} L ${f(x0)} ${f(y0 + tl)} A ${f(tl)} ${f(tl)} 0 0 1 ${f(x0 + tl)} ${f(y0)} L ${f(x1 - tr)} ${f(y0)} A ${f(tr)} ${f(tr)} 0 0 1 ${f(x1)} ${f(y0 + tr)} L ${f(x1)} ${f(y1 - br)} A ${f(br)} ${f(br)} 0 0 1 ${f(x1 - br)} ${f(y1)} L ${f(x0 + bl)} ${f(y1)} A ${f(bl)} ${f(bl)} 0 0 1 ${f(x0)} ${f(y1 - bl)} Z`;
+    return `M ${f(x0)} ${f(y1 - bl)} L ${f(x0)} ${f(y0 + tl)} A ${f(tl)} ${f(tl)} 0 0 1 ${f(x0 + tl)} ${f(y0)} L ${f(x1 - tr)} ${f(y0)} A ${f(tr)} ${f(tr)} 0 0 1 ${f(x1)} ${f(y0 + tr)} L ${f(x1)} ${f(y1 - br)} A ${f(br)} ${f(br)} 0 0 1 ${f(x1 - br)} ${f(y1)} L ${f(x0 + bl)} ${f(y1)} A ${f(bl)} ${f(bl)} 0 0 1 ${f(x0)} ${f(y1 - bl)}`;
   }
 
   function formatBytes(bytes) {
@@ -3921,11 +3921,22 @@
       bubble.appendChild(svg);
       bubble.classList?.add?.('has-vanish-svg');
     }
-    svg.setAttribute('viewBox', `0 0 ${Number(paintW.toFixed(2))} ${Number(paintH.toFixed(2))}`);
+    const nextViewBox = `0 0 ${Number(paintW.toFixed(2))} ${Number(paintH.toFixed(2))}`;
+    if (svg.getAttribute?.('viewBox') !== nextViewBox) svg.setAttribute('viewBox', nextViewBox);
     const trackEl = svg.querySelector('.msg-vanish-track');
     const progEl = svg.querySelector('.msg-vanish-progress');
-    if (trackEl) trackEl.setAttribute('d', d);
-    if (progEl) progEl.setAttribute('d', d);
+    const pathChanged = !progEl || progEl.getAttribute?.('d') !== d;
+    if (trackEl && pathChanged) trackEl.setAttribute('d', d);
+    if (progEl && pathChanged) progEl.setAttribute('d', d);
+    const totalLen = typeof progEl?.getTotalLength === 'function' ? Number(progEl.getTotalLength() || 0) : 0;
+    if (progEl && Number.isFinite(totalLen) && totalLen > 1) {
+      progEl.removeAttribute?.('pathLength');
+      const dashPct = Math.max(0, Math.min(100, parseFloat(bubble.style?.getPropertyValue?.('--vanish-dash-start')) || 0));
+      progEl.style?.setProperty?.('--vanish-len', totalLen.toFixed(2));
+      progEl.style?.setProperty?.('--vanish-gap', (totalLen * 2 + 20).toFixed(2));
+      progEl.style?.setProperty?.('--vanish-dash-offset-start', ((totalLen * dashPct) / 100).toFixed(2));
+      progEl.style?.setProperty?.('--vanish-dash-offset-end', (totalLen + 4).toFixed(2));
+    }
   }
 
   function renderMessagesList({ animate = false } = {}) {

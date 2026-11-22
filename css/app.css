@@ -8605,8 +8605,8 @@ html[data-theme="dark"] .msg-system-event.is-screenshot strong,
   stroke: #4aaeff;
   stroke-width: 3;
   stroke-linecap: round;
-  stroke-dasharray: 100 100;
-  stroke-dashoffset: var(--vanish-dash-start, 0);
+  stroke-dasharray: var(--vanish-len, 100) var(--vanish-gap, 220);
+  stroke-dashoffset: var(--vanish-dash-offset-start, var(--vanish-dash-start, 0));
   filter: drop-shadow(0 0 2.5px rgba(74, 174, 255, .52));
   animation: msgVanishStroke var(--vanish-remaining) linear forwards;
 }
@@ -8620,8 +8620,8 @@ html[data-theme="dark"] .msg-system-event.is-screenshot strong,
 }
 @keyframes msgVanishRing { to { --vanish-angle: 0deg; } }
 @keyframes msgVanishStroke {
-  from { stroke-dashoffset: var(--vanish-dash-start, 0); }
-  to { stroke-dashoffset: 100; }
+  from { stroke-dashoffset: var(--vanish-dash-offset-start, var(--vanish-dash-start, 0)); }
+  to { stroke-dashoffset: var(--vanish-dash-offset-end, 102); }
 }
 .msg-row.is-vanish-exit {
   pointer-events: none;

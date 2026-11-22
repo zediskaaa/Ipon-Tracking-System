@@ -198,8 +198,9 @@ test('vanishing media uses constant-speed SVG border, protects maximized video u
   assert.match(css, /\.msg-bubble\.is-vanishing\s*\{[^}]*border-color:\s*transparent\s*!important;[^}]*background-clip:\s*padding-box;[^}]*overflow:\s*visible\s*!important;/s);
   assert.match(css, /\.msg-vanish-ring\s*\{[^}]*inset:\s*-1px;[^}]*width:\s*calc\(100% \+ 2px\);[^}]*z-index:\s*6;[^}]*pointer-events:\s*none;/s);
   assert.match(css, /\.msg-vanish-track\s*\{[^}]*stroke:\s*transparent;/s);
-  assert.match(css, /\.msg-vanish-progress\s*\{[^}]*stroke-dasharray:\s*100 100;[^}]*animation:\s*msgVanishStroke var\(--vanish-remaining\) linear forwards;/);
-  assert.match(css, /@keyframes msgVanishStroke\s*\{[\s\S]*?to\s*\{\s*stroke-dashoffset:\s*100;\s*\}/);
+  assert.match(css, /\.msg-vanish-progress\s*\{[^}]*stroke-dasharray:\s*var\(--vanish-len,\s*100\)\s+var\(--vanish-gap,\s*220\);[^}]*animation:\s*msgVanishStroke var\(--vanish-remaining\) linear forwards;/);
+  assert.match(css, /@keyframes msgVanishStroke\s*\{[\s\S]*?to\s*\{\s*stroke-dashoffset:\s*var\(--vanish-dash-offset-end,\s*102\);\s*\}/);
+  assert.match(messagesJs, /progEl\.removeAttribute\?\.\('pathLength'\);[\s\S]*?--vanish-gap', \(totalLen \* 2 \+ 20\)\.toFixed\(2\)/);
   assert.match(css, /\.msg-bubble\.has-top-media\.is-vanishing \.msg-vanish-progress\s*\{\s*stroke-width:\s*3;\s*\}/);
   assert.match(messagesJs, /const paintW = \(bubble\.clientWidth \|\| width\) \+ 2;[\s\S]*?const paintH = \(bubble\.clientHeight \|\| height\) \+ 2;/);
   assert.match(messagesJs, /buildVanishRectPath\(paintW, paintH, \{ mine, rTL, rTR, rBR, rBL, inset: 1\.5 \}\)/);
@@ -214,6 +215,8 @@ test('vanishing media uses constant-speed SVG border, protects maximized video u
   const minePath = buildVanishRectPath(260, 150, { mine: true, inset: 1.5 });
   assert.match(peerPath, /^M 1\.5 /);
   assert.match(minePath, /^M 242\.5 148\.5 /);
+  assert.doesNotMatch(peerPath, /\sZ$/, 'Open vanish perimeter must omit trailing Z to avoid Skia zero-length round-cap glitch dot');
+  assert.doesNotMatch(minePath, /\sZ$/, 'Open vanish perimeter must omit trailing Z to avoid Skia zero-length round-cap glitch dot');
   const t0 = Date.parse('2026-11-21T10:00:00.000Z');
   assert.match(vanishBubbleStyle({ vanish_after_seconds: 20, vanish_at: '2026-11-21T10:00:20.000Z' }, t0 + 5000), /--vanish-dash-start:25\.00/);
 
