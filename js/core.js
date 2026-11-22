@@ -4185,6 +4185,7 @@
     }
 
     function openTrialRequestModal(previewMeta) {
+      if (!previewMeta || previewMeta.cat === 'Exclusive' || String(previewMeta.id || '').startsWith('ex_')) return;
       document.getElementById('effects-trial-request-dialog')?.remove();
       const rarities = api?.RARITIES || ['Common', 'Rare', 'Epic', 'Mythic'];
       const rarText = previewMeta.rare ? ` · ${rarities[previewMeta.rare] || ''}` : '';
@@ -4292,6 +4293,11 @@
       if (previewMeta.id === 'ex_early_user') {
         box.dataset.tone = 'warning';
         box.innerHTML = '<div class="effects-trial-title">Founding community recognition</div><p class="effects-trial-msg">Reserved for early myIPON supporters. Granted permanently by Super Admin.</p>';
+        return;
+      }
+      if (previewMeta.cat === 'Exclusive' || String(previewMeta.id || '').startsWith('ex_')) {
+        box.hidden = true;
+        box.innerHTML = '';
         return;
       }
       const trialState = currentState?.trial_state || {};

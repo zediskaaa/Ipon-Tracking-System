@@ -1192,7 +1192,7 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v184/);
+  assert.match(sw, /ipon-shell-v185/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
@@ -1244,4 +1244,16 @@ test('founding effect is grant-only and recognized by the gallery and database',
   assert.match(core, /previewMeta\.id === 'ex_early_user'/);
   assert.match(art, /drawSculptedLeaf\(f/);
   assert.match(art, /drawStruckCoin\(f/);
+});
+
+test('Exclusive profile effects cannot request trials in UI or database', () => {
+  const mig174 = read('database/migrations/20261122_174_block_exclusive_effect_trials.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+
+  assert.match(mig174, /'20261122_174'/);
+  assert.ok(schema.replace(/\r\n/g, '\n').includes(mig174.trim().replace(/\r\n/g, '\n')), 'schema.sql must include Migration 174');
+  assert.match(mig174, /if v_effect like 'ex\\_\%' escape '\\' then[\s\S]*?Exclusive profile effects are not eligible for trial requests\./);
+  assert.match(core, /if \(!previewMeta \|\| previewMeta\.cat === 'Exclusive' \|\| String\(previewMeta\.id \|\| ''\)\.startsWith\('ex_'\)\) return;/);
+  assert.match(core, /if \(previewMeta\.cat === 'Exclusive' \|\| String\(previewMeta\.id \|\| ''\)\.startsWith\('ex_'\)\) \{\s*box\.hidden = true;\s*box\.innerHTML = '';\s*return;\s*\}/);
 });
