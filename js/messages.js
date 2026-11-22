@@ -1674,6 +1674,16 @@
   }
 
   const MAX_SEEN_AVATARS = 3;
+  let lastRenderedSeenConvId = null;
+  const activeSeenFlyers = new Map();
+
+  function clearActiveSeenFlyers() {
+    activeSeenFlyers.forEach((entry) => {
+      if (entry?.timer) clearTimeout(entry.timer);
+      entry?.el?.remove?.();
+    });
+    activeSeenFlyers.clear();
+  }
 
   function getReceiptStage(m, conv) {
     if (conv?.receipts_enabled && m?.read_at) return 'read';
@@ -1716,7 +1726,31 @@
     return [{ id: peerId, name: peerName, avatarUrl: safeDpUrl(rawUrl), isAnonymous: false }];
   }
 
-  function renderSeenDpCoinHtml(reader, { isNew = false } = {}) {
+  function computeLatestSeenMap(msgs, conv) {
+    const byMsgId = new Map();
+    if (!conv?.receipts_enabled || !Array.isArray(msgs) || !msgs.length) return byMsgId;
+    const myId = String(initializedProfile?.id || '');
+    const latestForReader = new Map();
+    for (const m of msgs) {
+      if (!m?.id || m.deleted_for_everyone_at || m.message_type === 'SYSTEM' || m.message_type === 'CALL_EVENT') continue;
+      if (String(m.sender_id || '') !== myId || !m.read_at) continue;
+      const readers = resolveSeenReaders(m, conv);
+      if (readers.length) {
+        for (const r of readers) {
+          latestForReader.set(r.id, { msgId: String(m.id), reader: r });
+        }
+      } else {
+        latestForReader.set('__coin_fallback__', { msgId: String(m.id), reader: null });
+      }
+    }
+    for (const { msgId, reader } of latestForReader.values()) {
+      if (!byMsgId.has(msgId)) byMsgId.set(msgId, []);
+      if (reader) byMsgId.get(msgId).push(reader);
+    }
+    return byMsgId;
+  }
+
+  function renderSeenDpCoinHtml(reader, { isNew = false, isGlideWaiting = false } = {}) {
     const initialsFn = ipon()?.initials;
     const letters = escapeHtml(typeof initialsFn === 'function' ? initialsFn(reader.name || 'User') : String(reader.name || 'U').slice(0, 1).toUpperCase());
     const faceHtml = reader.isAnonymous
@@ -1724,17 +1758,18 @@
       : reader.avatarUrl
         ? `<img class="msg-seen-dp-img" src="${escAttr(reader.avatarUrl)}" alt="" data-avatar-img loading="lazy" decoding="async"><span class="msg-seen-dp-fallback avatar-fallback-inner" hidden>${letters}</span>`
         : `<span class="msg-seen-dp-fallback">${letters}</span>`;
-    return `<span class="msg-seen-dp-coin${isNew ? ' is-reader-new' : ''}" data-seen-reader="${escAttr(reader.id)}" aria-hidden="true"><span class="msg-seen-dp-face">${faceHtml}</span></span>`;
+    const modCls = isGlideWaiting ? ' is-glide-waiting' : isNew ? ' is-reader-new' : '';
+    return `<span class="msg-seen-dp-coin${modCls}" data-seen-reader="${escAttr(reader.id)}" aria-hidden="true"><span class="msg-seen-dp-face">${faceHtml}</span></span>`;
   }
 
-  function renderReceiptTickHtml(m, conv, { animate = false, addedReaderIds = null } = {}) {
+  function renderReceiptTickHtml(m, conv, { animate = false, addedReaderIds = null, seenReaders = undefined, glideReaderIds = null } = {}) {
     const mine = m?.sender_id === initializedProfile?.id;
     const isDeleted = Boolean(m?.deleted_for_everyone_at);
     if (!mine || isDeleted) return '';
-    const animCls = animate ? ' is-anim' : '';
     const stage = getReceiptStage(m, conv);
     if (stage === 'read') {
-      const readers = resolveSeenReaders(m, conv);
+      if (seenReaders === null) return '';
+      const readers = Array.isArray(seenReaders) ? seenReaders : resolveSeenReaders(m, conv);
       const isGrp = isGroupConv(conv);
       const readerNames = readers.map((x) => x.name).filter(Boolean);
       const seenAria = !conv?.anonymous_enabled && isGrp && readerNames.length
@@ -1744,20 +1779,139 @@
         ? `Seen by ${readerNames.join(', ')}`
         : 'Seen';
       if (!readers.length) {
+        const animCls = animate ? ' is-anim' : '';
         return `<span class="msg-tick is-read${animCls}" title="${escAttr(seenTitle)}" aria-label="${escAttr(seenAria)}">${COIN_SEEN_SVG}</span>`;
       }
       const visible = readers.slice(0, MAX_SEEN_AVATARS);
       const overflow = readers.length - visible.length;
       const seenKeys = readers.map((r) => r.id).join(',');
+      const hasGliding = Boolean(glideReaderIds && visible.some((r) => glideReaderIds.has(r.id)));
+      const animCls = animate && !hasGliding ? ' is-anim' : '';
       const stackCls = visible.length > 1 || overflow > 0 ? 'msg-seen-dp-stack is-multi' : 'msg-seen-dp-stack';
-      const coinsHtml = visible.map((r) => renderSeenDpCoinHtml(r, { isNew: Boolean(addedReaderIds && addedReaderIds.has(r.id)) })).join('');
+      const coinsHtml = visible.map((r) => renderSeenDpCoinHtml(r, {
+        isGlideWaiting: Boolean(glideReaderIds && glideReaderIds.has(r.id)),
+        isNew: Boolean(addedReaderIds && addedReaderIds.has(r.id))
+      })).join('');
       const moreHtml = overflow > 0 ? `<span class="msg-seen-dp-more" aria-hidden="true">+${overflow}</span>` : '';
       return `<span class="msg-tick is-read${animCls}" data-seen-keys="${escAttr(seenKeys)}" title="${escAttr(seenTitle)}" aria-label="${escAttr(seenAria)}"><span class="${stackCls}">${coinsHtml}${moreHtml}</span></span>`;
     }
+    const animCls = animate ? ' is-anim' : '';
     if (stage === 'delivered') {
       return `<span class="msg-tick is-delivered${animCls}" title="Delivered" aria-label="Delivered">${COIN_DELIVERED_SVG}</span>`;
     }
     return `<span class="msg-tick is-sent${animCls}" title="Sent" aria-label="Sent">${COIN_SENT_SVG}</span>`;
+  }
+
+  function captureSeenCoinPositions(list) {
+    const map = new Map();
+    if (!list?.querySelectorAll) return map;
+    const coins = list.querySelectorAll('.msg-row[data-msg-id] .msg-seen-dp-coin[data-seen-reader]') || [];
+    coins.forEach((coin) => {
+      const readerId = String(coin.getAttribute?.('data-seen-reader') || '');
+      const row = coin.closest?.('.msg-row[data-msg-id]');
+      const msgId = String(row?.getAttribute?.('data-msg-id') || '');
+      if (!readerId || !msgId) return;
+      const rect = typeof coin.getBoundingClientRect === 'function' ? coin.getBoundingClientRect() : null;
+      map.set(readerId, { msgId, rect });
+    });
+    activeSeenFlyers.forEach((entry, readerId) => {
+      if (entry?.el && typeof entry.el.getBoundingClientRect === 'function') {
+        const rect = entry.el.getBoundingClientRect();
+        if (rect && rect.width > 0) {
+          map.set(readerId, { msgId: entry.fromMsgId || '__flyer__', rect });
+        }
+      }
+    });
+    return map;
+  }
+
+  function animateMovedSeenDps(list, prevPositions) {
+    if (!list || !prevPositions?.size || !list.querySelectorAll) return;
+    const reducedMotion = Boolean(typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+    const listRect = typeof list.getBoundingClientRect === 'function' ? list.getBoundingClientRect() : null;
+    const coins = list.querySelectorAll('.msg-row[data-msg-id] .msg-seen-dp-coin[data-seen-reader]') || [];
+    coins.forEach((coin) => {
+      const readerId = String(coin.getAttribute?.('data-seen-reader') || '');
+      const prev = readerId ? prevPositions.get(readerId) : null;
+      const row = coin.closest?.('.msg-row[data-msg-id]');
+      const newMsgId = String(row?.getAttribute?.('data-msg-id') || '');
+      if (!prev || !newMsgId || prev.msgId === newMsgId) {
+        coin.classList?.remove?.('is-glide-waiting');
+        return;
+      }
+      if (reducedMotion) {
+        coin.classList?.remove?.('is-glide-waiting');
+        return;
+      }
+      const prevFlyer = activeSeenFlyers.get(readerId);
+      if (prevFlyer) {
+        if (prevFlyer.timer) clearTimeout(prevFlyer.timer);
+        prevFlyer.el?.remove?.();
+        activeSeenFlyers.delete(readerId);
+      }
+      const nextRect = typeof coin.getBoundingClientRect === 'function' ? coin.getBoundingClientRect() : null;
+      const canFly = Boolean(
+        listRect && prev.rect && nextRect
+        && prev.rect.width > 0 && nextRect.width > 0
+        && typeof document?.createElement === 'function'
+        && typeof list.appendChild === 'function'
+      );
+      if (!canFly) {
+        coin.classList?.remove?.('is-glide-waiting');
+        coin.classList?.add?.('is-glide-drop');
+        return;
+      }
+      const rawDx = nextRect.left - prev.rect.left;
+      const rawDy = nextRect.top - prev.rect.top;
+      if (Math.hypot(rawDx, rawDy) < 2) {
+        coin.classList?.remove?.('is-glide-waiting');
+        return;
+      }
+      const clampedDy = Math.abs(rawDy) > 520 ? Math.sign(rawDy) * 520 : rawDy;
+      const startLeft = (nextRect.left - rawDx) - listRect.left;
+      const startTop = (nextRect.top - clampedDy) - listRect.top;
+      const dist = Math.hypot(rawDx, clampedDy);
+      const durationMs = Math.round(Math.min(540, Math.max(360, 310 + dist * 0.42)));
+      const arcX = Math.abs(clampedDy) >= 18 ? -4.5 : 0;
+      const flyer = document.createElement('span');
+      flyer.className = 'msg-seen-dp-coin is-glide-flyer';
+      flyer.setAttribute('data-seen-reader', readerId);
+      flyer.setAttribute('aria-hidden', 'true');
+      flyer.innerHTML = coin.innerHTML;
+      flyer.style.left = `${startLeft}px`;
+      flyer.style.top = `${startTop}px`;
+      flyer.style.setProperty('--fly-dx', `${rawDx}px`);
+      flyer.style.setProperty('--fly-dy', `${clampedDy}px`);
+      flyer.style.setProperty('--fly-arc', `${arcX}px`);
+      flyer.style.setProperty('--fly-ms', `${durationMs}ms`);
+      if (typeof window?.getComputedStyle === 'function') {
+        const cs = window.getComputedStyle(coin);
+        const ring = cs.getPropertyValue('--seen-ring')?.trim() || cs.color;
+        const faceBg = cs.getPropertyValue('--seen-face-bg')?.trim();
+        if (ring) flyer.style.setProperty('--seen-ring', ring);
+        if (faceBg) flyer.style.setProperty('--seen-face-bg', faceBg);
+      }
+      coin.classList?.add?.('is-glide-waiting');
+      list.appendChild(flyer);
+      ipon().bindAvatarFallbacks?.(flyer);
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        const cur = activeSeenFlyers.get(readerId);
+        if (cur?.el === flyer) activeSeenFlyers.delete(readerId);
+        if (cur?.timer) clearTimeout(cur.timer);
+        flyer.remove?.();
+        if (coin.isConnected !== false) {
+          coin.classList?.remove?.('is-glide-waiting');
+          coin.classList?.add?.('is-glide-landed');
+          setTimeout(() => coin.classList?.remove?.('is-glide-landed'), 620);
+        }
+      };
+      const timer = setTimeout(finish, durationMs + 70);
+      flyer.addEventListener?.('animationend', finish, { once: true });
+      activeSeenFlyers.set(readerId, { el: flyer, timer, fromMsgId: newMsgId, finish });
+    });
   }
 
   function patchMessageReactionsDom(msg) {
@@ -1786,33 +1940,51 @@
     return true;
   }
 
-  function patchMessageReceiptsDom(msg, conv = state.activeThread?.conversation) {
+  function syncThreadReceiptsDom(msgs = state.activeThread?.messages, conv = state.activeThread?.conversation, { targetMsgIds = null } = {}) {
     const list = document.getElementById('msg-messages-list');
-    if (!msg?.id || !list?.querySelector) return false;
-    const escId = typeof CSS?.escape === 'function' ? CSS.escape(String(msg.id)) : String(msg.id);
-    const row = list.querySelector(`.msg-row[data-msg-id="${escId}"]`);
-    if (!row) return false;
-    const metaEl = row.querySelector('.msg-bubble-meta');
-    if (metaEl) {
+    if (!list?.querySelector || !Array.isArray(msgs) || !msgs.length) return false;
+    const prevPositions = captureSeenCoinPositions(list);
+    const latestSeenMap = computeLatestSeenMap(msgs, conv);
+    const myId = String(initializedProfile?.id || '');
+    let patchedAny = false;
+    let targetMatched = !targetMsgIds || targetMsgIds.size === 0;
+
+    for (const msg of msgs) {
+      if (!msg?.id || String(msg.sender_id || '') !== myId || msg.deleted_for_everyone_at) continue;
+      const idStr = String(msg.id);
+      const isTarget = Boolean(targetMsgIds && targetMsgIds.has(idStr));
+      const isLatestSeen = latestSeenMap.has(idStr);
+      const stage = getReceiptStage(msg, conv);
+      if (!isTarget && !isLatestSeen && stage !== 'read') continue;
+      const escId = typeof CSS?.escape === 'function' ? CSS.escape(idStr) : idStr;
+      const row = list.querySelector(`.msg-row[data-msg-id="${escId}"]`);
+      if (!row) continue;
+      const metaEl = row.querySelector('.msg-bubble-meta');
+      if (!metaEl) continue;
+      if (isTarget) targetMatched = true;
+
       const oldTick = metaEl.querySelector('.msg-tick');
       const prevStage = oldTick?.classList?.contains('is-read') ? 'read'
         : oldTick?.classList?.contains('is-delivered') ? 'delivered'
         : oldTick?.classList?.contains('is-sent') ? 'sent'
         : oldTick?.classList?.contains('is-sending') ? 'sending'
         : '';
-      const nextStage = getReceiptStage(msg, conv);
-      if (oldTick && prevStage === nextStage) {
-        if (nextStage === 'read') {
-          const readers = resolveSeenReaders(msg, conv);
-          const prevKeys = String(oldTick.getAttribute?.('data-seen-keys') || '').split(',').filter(Boolean);
-          const nextKeys = readers.map((r) => r.id);
-          if (prevKeys.join(',') !== nextKeys.join(',')) {
-            const prevSet = new Set(prevKeys);
-            const addedReaderIds = new Set(nextKeys.filter((k) => !prevSet.has(k)));
-            oldTick.outerHTML = renderReceiptTickHtml(msg, conv, { animate: false, addedReaderIds });
-            ipon().bindAvatarFallbacks?.(metaEl);
-            return true;
-          }
+
+      if (stage === 'read' && !isLatestSeen) {
+        if (oldTick) {
+          oldTick.remove?.();
+          patchedAny = true;
+        }
+        continue;
+      }
+
+      if (stage === 'read') {
+        const readers = latestSeenMap.get(idStr) || [];
+        const prevKeys = prevStage === 'read'
+          ? String(oldTick?.getAttribute?.('data-seen-keys') || '').split(',').filter(Boolean)
+          : [];
+        const nextKeys = readers.map((r) => r.id);
+        if (oldTick && prevStage === 'read' && prevKeys.join(',') === nextKeys.join(',')) {
           const readerNames = readers.map((x) => x.name).filter(Boolean);
           const seenAria = !conv?.anonymous_enabled && isGroupConv(conv) && readerNames.length
             ? `Seen by ${readerNames.join(', ')}`
@@ -1822,16 +1994,50 @@
             : 'Seen';
           if (oldTick.getAttribute?.('title') !== seenTitle) oldTick.setAttribute?.('title', seenTitle);
           if (oldTick.getAttribute?.('aria-label') !== seenAria) oldTick.setAttribute?.('aria-label', seenAria);
+          patchedAny = true;
+          continue;
         }
-        return true;
+        const prevSet = new Set(prevKeys);
+        const glideReaderIds = new Set();
+        const addedReaderIds = new Set();
+        for (const r of readers) {
+          const prevPos = prevPositions.get(r.id);
+          if (prevPos && prevPos.msgId !== idStr) glideReaderIds.add(r.id);
+          else if (prevStage === 'read' && !prevSet.has(r.id)) addedReaderIds.add(r.id);
+        }
+        const nextTick = renderReceiptTickHtml(msg, conv, {
+          animate: Boolean(prevStage && prevStage !== 'read' && glideReaderIds.size === 0),
+          addedReaderIds: addedReaderIds.size ? addedReaderIds : null,
+          seenReaders: readers,
+          glideReaderIds: glideReaderIds.size ? glideReaderIds : null
+        });
+        if (oldTick) oldTick.outerHTML = nextTick;
+        else if (nextTick) metaEl.insertAdjacentHTML('beforeend', nextTick);
+        ipon().bindAvatarFallbacks?.(metaEl);
+        patchedAny = true;
+        continue;
       }
-      const nextTick = renderReceiptTickHtml(msg, conv, { animate: Boolean(prevStage && prevStage !== nextStage) });
+
+      if (oldTick && prevStage === stage) {
+        patchedAny = true;
+        continue;
+      }
+      const nextTick = renderReceiptTickHtml(msg, conv, { animate: Boolean(prevStage && prevStage !== stage) });
       if (oldTick) oldTick.outerHTML = nextTick;
       else if (nextTick) metaEl.insertAdjacentHTML('beforeend', nextTick);
-      if (nextStage === 'read') ipon().bindAvatarFallbacks?.(metaEl);
-      return true;
+      patchedAny = true;
     }
-    return false;
+
+    if (patchedAny && prevPositions.size) {
+      animateMovedSeenDps(list, prevPositions);
+    }
+    return targetMatched && patchedAny;
+  }
+
+  function patchMessageReceiptsDom(msg, conv = state.activeThread?.conversation) {
+    if (!msg?.id) return false;
+    const msgs = state.activeThread?.messages?.length ? state.activeThread.messages : [msg];
+    return syncThreadReceiptsDom(msgs, conv, { targetMsgIds: new Set([String(msg.id)]) });
   }
 
   function tryPatchActiveThreadInPlace(prevThread, nextThread) {
@@ -1899,8 +2105,8 @@
     for (const m of changedReactions) {
       if (!patchMessageReactionsDom(m)) return false;
     }
-    for (const m of changedReceipts) {
-      patchMessageReceiptsDom(m, nc);
+    if (changedReceipts.length) {
+      syncThreadReceiptsDom(nextMsgs, nc, { targetMsgIds: new Set(changedReceipts.map((m) => String(m.id))) });
     }
     return true;
   }
@@ -3807,6 +4013,10 @@
         <p class="msg-welcome-hint">${escapeHtml(welcomeCopy)}</p>
       </div>`;
 
+    const sameConvRerender = Boolean(conv?.conversation_id && lastRenderedSeenConvId === conv.conversation_id);
+    const prevSeenPositions = sameConvRerender ? captureSeenCoinPositions(list) : new Map();
+    clearActiveSeenFlyers();
+    const latestSeenMap = computeLatestSeenMap(msgs, conv);
     const isGrp = isGroupConv(conv);
     let lastDateStr = '';
     const pinnedIds = new Set((state.activeThread.pinned_messages || []).map((p) => p.id));
@@ -3923,7 +4133,9 @@
       // Group reactions by emoji
       const reactionHtml = isDeleted ? '' : renderReactionsRowHtml(m);
 
-      const receiptIcon = renderReceiptTickHtml(m, conv);
+      const receiptIcon = renderReceiptTickHtml(m, conv, {
+        seenReaders: latestSeenMap.has(String(m.id)) ? latestSeenMap.get(String(m.id)) : null
+      });
 
       const activeMatch = state.threadSearchMatches[state.threadSearchCursor] === m.id;
       const isMatch = searchQuery && state.threadSearchMatches.includes(m.id);
@@ -3987,6 +4199,10 @@
     list.classList.toggle('is-thread-entering', Boolean(animate && !isEmpty));
     ipon().bindAvatarFallbacks(list);
     ipon().syncPresenceDots(list);
+    lastRenderedSeenConvId = conv?.conversation_id || null;
+    if (sameConvRerender && prevSeenPositions.size) {
+      animateMovedSeenDps(list, prevSeenPositions);
+    }
     ipon().fitVerifiedNameLines?.(list);
     hydrateThreadMediaElements(list, conv.conversation_id);
     syncThreadScrollLock();

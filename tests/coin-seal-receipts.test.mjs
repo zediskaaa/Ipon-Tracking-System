@@ -31,10 +31,19 @@ test('Coin Seal receipt CSS & SVG tokens define all 4 states, transitions, theme
     'msgSeenDpFlip',
     'msgSeenDpHalo',
     'msgSeenDpSheen',
-    'msgSeenReaderJoin'
+    'msgSeenReaderJoin',
+    'msgSeenDpFly',
+    'msgSeenDpLand',
+    'msgSeenDpDrop'
   ]) {
     assert.match(css, new RegExp(`@keyframes\\s+${kf}\\s*\\{`), `Missing @keyframes ${kf}`);
   }
+
+  assert.match(css, /\.msg-messages-list\s*\{[^}]*position:\s*relative;/s);
+  assert.match(css, /\.msg-seen-dp-coin\.is-glide-flyer\s*\{[^}]*position:\s*absolute;/s);
+  assert.match(css, /\.msg-seen-dp-coin\.is-glide-landed\s*\{/);
+  const glideKeyframesBlock = css.slice(css.indexOf('@keyframes msgSeenDpFly'), css.indexOf('@keyframes msgSeenDpFlip'));
+  assert.doesNotMatch(glideKeyframesBlock, /scale\(/, 'Gliding seen DP must stay constant size without scaling up or down');
 
   assert.match(css, /\.msg-tick-svg\s*\{[^}]*width:\s*15px;[^}]*height:\s*15px;[^}]*overflow:\s*visible;/s);
   assert.match(css, /\.msg-seen-dp-coin\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px;[^}]*border-radius:\s*50%;/s);
@@ -425,6 +434,321 @@ test('Coin Seal receipts animate only on live state changes, render peer DP meda
   assert.doesNotMatch(liveTickHtml, /maria\.jpg|Maria Santos/);
   assert.equal(liveTickAttrs.get('title'), 'Seen');
   assert.equal(primeCalls, 0);
+});
+
+test('Seen peer DP stays only on the last seen message per reader and smoothly glides down via FLIP flyer on newer reads', async () => {
+  const messagesJs = read('js/messages.js');
+  const meId = '11111111-1111-4111-8111-111111111111';
+  const anaId = '22222222-2222-4222-8222-222222222222';
+  const benId = '33333333-3333-4333-8333-333333333333';
+  const convId = '44444444-4444-4444-8444-444444444444';
+  const m1Id = '55555555-5555-4555-8555-555555555551';
+  const m2Id = '55555555-5555-4555-8555-555555555552';
+
+  const makeBasicEl = (id = '') => {
+    const cls = new Set();
+    const attrs = new Map();
+    const listeners = new Map();
+    const props = new Map();
+    let html = '';
+    const el = {
+      id,
+      open: false,
+      hidden: false,
+      disabled: false,
+      value: '',
+      scrollTop: 0,
+      scrollHeight: 300,
+      clientHeight: 300,
+      isConnected: true,
+      dataset: {},
+      style: {
+        setProperty: (k, v) => props.set(k, String(v)),
+        getPropertyValue: (k) => props.get(k) || '',
+        removeProperty: (k) => props.delete(k)
+      },
+      classList: {
+        add: (...c) => c.forEach((x) => cls.add(x)),
+        remove: (...c) => c.forEach((x) => cls.delete(x)),
+        toggle: (x, f) => (f === undefined ? (cls.has(x) ? cls.delete(x) : cls.add(x)) : (f ? cls.add(x) : cls.delete(x))),
+        contains: (x) => cls.has(x),
+        replace: (a, b) => { cls.delete(a); cls.add(b); }
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+      removeAttribute: (k) => attrs.delete(k),
+      addEventListener: (ev, fn) => { if (!listeners.has(ev)) listeners.set(ev, []); listeners.get(ev).push(fn); },
+      removeEventListener() { },
+      dispatchEvent: (ev) => { (listeners.get(ev) || []).slice().forEach((fn) => fn()); },
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      focus() { },
+      remove() { this.isConnected = false; },
+      closest: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      insertAdjacentHTML() { },
+      get innerHTML() { return html; },
+      set innerHTML(v) { html = String(v || ''); },
+      get textContent() { return html; },
+      set textContent(v) { html = String(v || ''); }
+    };
+    return el;
+  };
+
+  // Structured multi-row mock DOM supporting per-row ticks, coin rects, and flyer appendChild
+  const rowStates = new Map(); // msgId -> { tickHtml, tickNode, coins: [] }
+  const flyers = [];
+  const rowYByMsg = new Map([[m1Id, 100], [m2Id, 190]]);
+
+  const extractBalancedTick = (fragment) => {
+    const startIdx = fragment.indexOf('<span class="msg-tick');
+    if (startIdx < 0) return '';
+    const sub = fragment.slice(startIdx);
+    let depth = 0;
+    const tagRe = /<\/?span\b[^>]*>/g;
+    let tok;
+    while ((tok = tagRe.exec(sub)) !== null) {
+      if (tok[0].startsWith('</')) depth -= 1;
+      else depth += 1;
+      if (depth === 0) return sub.slice(0, tok.index + tok[0].length);
+    }
+    return sub;
+  };
+
+  const buildRowState = (msgId, tickHtml) => {
+    const rowObj = { getAttribute: (k) => (k === 'data-msg-id' ? msgId : null) };
+    const stateObj = { msgId, tickHtml: '', tickNode: null, coins: [] };
+    const setTick = (nextHtml) => {
+      stateObj.tickHtml = String(nextHtml || '');
+      stateObj.coins = [];
+      if (!stateObj.tickHtml) {
+        stateObj.tickNode = null;
+        return;
+      }
+      const openM = stateObj.tickHtml.match(/^<span class="(msg-tick[^"]*)"([^>]*)>/);
+      const clsSet = new Set((openM?.[1] || '').split(/\s+/).filter(Boolean));
+      const attrs = new Map();
+      for (const attr of ['title', 'aria-label', 'data-seen-keys']) {
+        const m = openM?.[2]?.match(new RegExp(`${attr}="([^"]*)"`));
+        if (m) attrs.set(attr, m[1]);
+      }
+      const coinRe = /<span class="(msg-seen-dp-coin[^"]*)" data-seen-reader="([^"]*)"[^>]*>([\s\S]*?)<\/span><\/span>/g;
+      let cm;
+      let idx = 0;
+      while ((cm = coinRe.exec(stateObj.tickHtml)) !== null) {
+        const coinCls = new Set(cm[1].split(/\s+/).filter(Boolean));
+        const readerId = cm[2];
+        const xPos = 260 + idx * 12;
+        const yPos = rowYByMsg.get(msgId) || 100;
+        idx += 1;
+        stateObj.coins.push({
+          readerId,
+          isConnected: true,
+          innerHTML: `${cm[3]}</span>`,
+          classList: {
+            add: (...c) => c.forEach((x) => coinCls.add(x)),
+            remove: (...c) => c.forEach((x) => coinCls.delete(x)),
+            contains: (x) => coinCls.has(x)
+          },
+          getAttribute: (k) => (k === 'data-seen-reader' ? readerId : null),
+          closest: (sel) => (sel.includes('data-msg-id') ? rowObj : null),
+          getBoundingClientRect: () => ({ left: xPos, top: yPos, width: 16, height: 16, right: xPos + 16, bottom: yPos + 16 })
+        });
+      }
+      stateObj.tickNode = {
+        classList: { contains: (c) => clsSet.has(c) },
+        getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+        setAttribute: (k, v) => attrs.set(k, String(v)),
+        remove: () => setTick(''),
+        set outerHTML(v) { setTick(v); },
+        get outerHTML() { return stateObj.tickHtml; }
+      };
+    };
+    setTick(tickHtml);
+    return stateObj;
+  };
+
+  const els = new Map();
+  const getEl = (id) => { if (!els.has(id)) els.set(id, makeBasicEl(id)); return els.get(id); };
+  const listEl = getEl('msg-messages-list');
+  listEl.getBoundingClientRect = () => ({ left: 0, top: 0, width: 320, height: 400 });
+  listEl.appendChild = (node) => { flyers.push(node); return node; };
+  listEl.querySelector = (sel) => {
+    for (const [id, st] of rowStates.entries()) {
+      if (sel.includes(id)) {
+        return {
+          querySelector: (s2) => (s2 === '.msg-bubble-meta'
+            ? {
+                querySelector: (s3) => (s3 === '.msg-tick' ? st.tickNode : null),
+                insertAdjacentHTML: (_pos, h) => {
+                  const next = buildRowState(id, h);
+                  rowStates.set(id, next);
+                }
+              }
+            : null)
+        };
+      }
+    }
+    return null;
+  };
+  listEl.querySelectorAll = (sel) => {
+    if (sel.includes('.msg-seen-dp-coin')) {
+      return [...rowStates.values()].flatMap((st) => st.coins);
+    }
+    return [];
+  };
+
+  const origListHtml = Object.getOwnPropertyDescriptor(listEl, 'innerHTML');
+  Object.defineProperty(listEl, 'innerHTML', {
+    get() { return origListHtml.get.call(this); },
+    set(v) {
+      origListHtml.set.call(this, v);
+      rowStates.clear();
+      const s = String(v || '');
+      const rowMatches = [...s.matchAll(/<article[^>]*data-msg-id="([^"]+)"/g)];
+      for (let i = 0; i < rowMatches.length; i += 1) {
+        const id = rowMatches[i][1];
+        const start = rowMatches[i].index;
+        const end = i + 1 < rowMatches.length ? rowMatches[i + 1].index : s.length;
+        rowStates.set(id, buildRowState(id, extractBalancedTick(s.slice(start, end))));
+      }
+    }
+  });
+
+  const tableHandlers = new Map();
+  const fakeChannel = {
+    on(_t, f, fn) { if (f?.table) tableHandlers.set(f.table, fn); return fakeChannel; },
+    subscribe() { return fakeChannel; }
+  };
+
+  const groupConv = {
+    id: convId,
+    conversation_id: convId,
+    kind: 'GROUP',
+    title: 'Ipon Squad',
+    status: 'ACCEPTED',
+    chat_theme: 'paper',
+    receipts_enabled: true,
+    members: [
+      { id: meId, full_name: 'Me', role: 'MEMBER' },
+      { id: anaId, full_name: 'Ana Cruz', avatar_url: 'https://cdn.example/ana.jpg', role: 'MEMBER' },
+      { id: benId, full_name: 'Ben Reyes', avatar_url: 'https://cdn.example/ben.jpg', role: 'MEMBER' }
+    ]
+  };
+  const groupMsgs = [
+    {
+      id: m1Id, conversation_id: convId, sender_id: meId, body: 'First update',
+      message_type: 'TEXT', created_at: '2026-11-22T12:10:00Z',
+      delivered_at: '2026-11-22T12:10:01Z', read_at: '2026-11-22T12:10:03Z',
+      seen_by: [{ id: anaId, full_name: 'Ana Cruz' }, { id: benId, full_name: 'Ben Reyes' }],
+      attachments: [], reactions: []
+    },
+    {
+      id: m2Id, conversation_id: convId, sender_id: meId, body: 'Latest update',
+      message_type: 'TEXT', created_at: '2026-11-22T12:10:20Z',
+      delivered_at: '2026-11-22T12:10:21Z', read_at: '2026-11-22T12:10:25Z',
+      seen_by: [{ id: anaId, full_name: 'Ana Cruz' }],
+      attachments: [], reactions: []
+    }
+  ];
+
+  const win = {
+    Ipon: {
+      client: {
+        channel: () => fakeChannel,
+        removeChannel: () => Promise.resolve(),
+        from: () => {
+          const q = { select: () => q, eq: () => q, in: () => q, like: () => q, or: () => q, order: () => q, limit: async () => ({ data: [], error: null }), then: (r) => Promise.resolve({ data: [], error: null }).then(r) };
+          return q;
+        }
+      },
+      rpc: async (name) => {
+        if (name === 'get_conversations') return [groupConv];
+        if (name === 'get_conversation_messages') return { conversation: groupConv, messages: groupMsgs, pinned_messages: [], has_older: false };
+        if (name === 'get_social_overview') return { me: { id: meId, chat_privacy: {} }, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] };
+        if (name === 'mark_conversation_read') return { read_at: '2026-11-22T12:10:26Z', receipts_shared: true };
+        return [];
+      },
+      primeUiSound: () => true,
+      playUiSound: () => true,
+      escapeHtml: (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
+      initials: (n) => String(n || 'U').trim().split(/\s+/).slice(0, 2).map((p) => p[0] || '').join('').toUpperCase() || 'U',
+      avatarMarkup: () => '<span>AV</span>',
+      bindAvatarFallbacks() { },
+      syncPresenceDots() { },
+      syncMessagesBadges() { },
+      isUserOnline: () => false,
+      friendlyError: (e) => e?.message || 'Error',
+      toast() { },
+      verifiedBadgesHtml: () => '',
+      fitVerifiedNameLines() { },
+      registerVerifiedBadges() { },
+      registerMemberAvatars() { },
+      getClientPlatform: () => 'web',
+      supportsNativeScreenshotProtection: () => false
+    },
+    addEventListener() { },
+    removeEventListener() { },
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    getComputedStyle: () => ({ getPropertyValue: () => '#f2c14e', color: '#f2c14e' }),
+    location: { origin: 'https://my-ipon.vercel.app', pathname: '/dashboard.html', search: '', hash: '' },
+    navigator: { userAgent: 'test' },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } }
+  };
+  win.window = win;
+
+  const doc = {
+    visibilityState: 'visible',
+    body: makeBasicEl('body'),
+    documentElement: makeBasicEl('html'),
+    getElementById: getEl,
+    querySelector: (sel) => (sel.startsWith('#') ? getEl(sel.slice(1).split(/\s/)[0]) : null),
+    querySelectorAll: () => [],
+    createElement: (tag) => makeBasicEl(tag),
+    addEventListener() { },
+    removeEventListener() { }
+  };
+
+  vm.runInNewContext(messagesJs, {
+    window: win, document: doc, location: win.location, navigator: win.navigator,
+    localStorage: win.localStorage, sessionStorage: win.sessionStorage,
+    CSS: { escape: (s) => String(s) },
+    URL: { createObjectURL: () => 'blob:mock', revokeObjectURL() { } },
+    URLSearchParams, requestAnimationFrame: (fn) => fn(),
+    setTimeout, clearTimeout, setInterval: () => 0, clearInterval() { }, console
+  });
+
+  await win.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', chat_privacy: { show_online: true } });
+  await win.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
+
+  // Initial state: Ana is already on m2 -> m1 shows ONLY Ben's DP; m2 shows ONLY Ana's DP
+  assert.deepEqual(rowStates.get(m1Id).coins.map((c) => c.readerId), [benId], 'm1 should hold only Ben whose latest read is m1');
+  assert.deepEqual(rowStates.get(m2Id).coins.map((c) => c.readerId), [anaId], 'm2 should hold only Ana whose latest read is m2');
+  assert.equal(flyers.length, 0, 'Initial thread load must not launch glide flyers');
+
+  // Now Ben reads m2 in realtime -> Ben's DP leaves m1 and smoothly glides down to m2 beside Ana!
+  tableHandlers.get('message_receipts')?.({
+    eventType: 'UPDATE',
+    new: { message_id: m2Id, user_id: benId, delivered_at: '2026-11-22T12:10:21Z', read_at: '2026-11-22T12:10:30Z' }
+  });
+
+  assert.equal(rowStates.get(m1Id).tickHtml, '', 'm1 must retire its Seen DP once every reader moves to m2');
+  assert.deepEqual(rowStates.get(m2Id).coins.map((c) => c.readerId), [anaId, benId], 'm2 must stack Ana and Ben');
+  assert.equal(flyers.length, 1, 'Exactly one FLIP flyer must launch for Ben gliding from m1 to m2');
+  assert.equal(flyers[0].getAttribute('data-seen-reader'), benId);
+  assert.equal(flyers[0].style.getPropertyValue('--fly-dy'), '90px');
+  const benTargetCoin = rowStates.get(m2Id).coins.find((c) => c.readerId === benId);
+  const anaTargetCoin = rowStates.get(m2Id).coins.find((c) => c.readerId === anaId);
+  assert.equal(benTargetCoin.classList.contains('is-glide-waiting'), true, 'Target coin waits hidden while flyer glides');
+  assert.equal(anaTargetCoin.classList.contains('is-glide-waiting'), false, 'Ana stays steady without hiding or gliding');
+
+  // When flyer animation completes -> flyer removes itself and Ben's coin lands with cushion settle!
+  flyers[0].dispatchEvent('animationend');
+  assert.equal(flyers[0].isConnected, false, 'Flyer cleans itself up after landing');
+  assert.equal(benTargetCoin.classList.contains('is-glide-waiting'), false);
+  assert.equal(benTargetCoin.classList.contains('is-glide-landed'), true);
 });
 
 test('core.js primeUiSound and self-rearming audio unlock recover from suspended contexts and boost msg-send audibility', async () => {

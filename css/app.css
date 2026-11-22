@@ -8119,6 +8119,7 @@ html[data-theme="dark"] .msg-load-older-spinner {
   border-top-color: #8fd2ae;
 }
 .msg-messages-list {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
@@ -9024,6 +9025,59 @@ html[data-theme="dark"] .msg-row.is-mine .msg-tick.is-read {
 }
 .msg-seen-dp-coin.is-reader-new {
   animation: msgSeenReaderJoin .42s cubic-bezier(.22, 1.35, .36, 1) both;
+}
+.msg-seen-dp-coin.is-glide-waiting {
+  opacity: 0;
+}
+.msg-seen-dp-coin.is-glide-flyer {
+  position: absolute;
+  z-index: 20;
+  margin: 0 !important;
+  pointer-events: none;
+  will-change: transform;
+  animation: msgSeenDpFly var(--fly-ms, 420ms) cubic-bezier(.22, 1, .36, 1) both;
+}
+.msg-seen-dp-coin.is-glide-landed {
+  animation: msgSeenDpLand .28s cubic-bezier(.22, 1.4, .36, 1) both;
+}
+.msg-seen-dp-coin.is-glide-drop {
+  animation: msgSeenDpDrop .38s cubic-bezier(.22, 1.28, .36, 1) both;
+}
+.msg-seen-dp-coin.is-glide-landed::before,
+.msg-seen-dp-coin.is-glide-drop::before {
+  animation: msgSeenDpHalo .5s cubic-bezier(.16, 1, .3, 1) both;
+}
+.msg-seen-dp-coin.is-glide-landed .msg-seen-dp-face::after,
+.msg-seen-dp-coin.is-glide-drop .msg-seen-dp-face::after {
+  animation: msgSeenDpSheen .42s ease-out .06s both;
+}
+@keyframes msgSeenDpFly {
+  0% {
+    transform: translate3d(0, 0, 0);
+    box-shadow: 0 0 0 1.45px var(--seen-ring, #f2c14e), 0 2px 6px rgba(0, 0, 0, .24);
+  }
+  34% {
+    transform: translate3d(calc(var(--fly-dx, 0px) * .32 + var(--fly-arc, -4.5px)), calc(var(--fly-dy, 0px) * .3), 0);
+    box-shadow: 0 0 0 1.45px var(--seen-ring, #f2c14e), 0 5px 12px rgba(10, 32, 24, .28);
+  }
+  82% {
+    transform: translate3d(calc(var(--fly-dx, 0px) * .97), calc(var(--fly-dy, 0px) * 1.015), 0);
+    box-shadow: 0 0 0 1.45px var(--seen-ring, #f2c14e), 0 2px 7px rgba(10, 32, 24, .24);
+  }
+  100% {
+    transform: translate3d(var(--fly-dx, 0px), var(--fly-dy, 0px), 0);
+    box-shadow: 0 0 0 1.45px var(--seen-ring, #f2c14e), 0 1px 4px rgba(0, 0, 0, .24);
+  }
+}
+@keyframes msgSeenDpLand {
+  0% { transform: translate3d(0, 1.5px, 0); }
+  55% { transform: translate3d(0, -.5px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+@keyframes msgSeenDpDrop {
+  0% { transform: translate3d(0, -14px, 0); opacity: .35; }
+  62% { transform: translate3d(0, 1.5px, 0); opacity: 1; }
+  100% { transform: translate3d(0, 0, 0); opacity: 1; }
 }
 @keyframes msgSeenDpFlip {
   0% { transform: perspective(120px) rotateY(-95deg) scale(.56); opacity: .25; }
