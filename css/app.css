@@ -7236,6 +7236,7 @@ html[data-theme="dark"] .msg-search-person-presence.is-online { color: #86efac; 
   color: var(--ink);
 }
 .msg-dp-btn {
+  margin: 0;
   border: 0;
   padding: 0;
   background: transparent;
@@ -8063,6 +8064,7 @@ html[data-theme="dark"] .msg-thread-search-controls select#msg-thread-search-sen
   position: relative;
   flex: 1 1 0%;
   min-height: 0;
+  --msg-gutter-x: 18px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
@@ -8124,7 +8126,7 @@ html[data-theme="dark"] .msg-conv-row.is-anonymous { background: linear-gradient
   overflow-anchor: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 14px 18px 10px;
+  padding: 14px var(--msg-gutter-x, 18px) 10px;
   display: flex;
   flex-direction: column;
 }
@@ -8458,6 +8460,8 @@ html[data-theme="dark"] .msg-system-event.is-screenshot strong,
 .msg-row-avatar {
   width: 30px;
   flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
 }
 .msg-bubble-col {
   display: flex;
@@ -12922,11 +12926,11 @@ html[data-theme="dark"] .msg-privacy-form #msg-settings-error {
     border: 0;
     overflow: hidden;
   }
-  .msg-scroll-wrap {
-    padding: 12px 14px 8px;
+  .msg-thread-stage {
+    --msg-gutter-x: 14px;
   }
-  .msg-typing-live.is-visible .msg-typing-live-inner {
-    padding: 4px 14px 8px;
+  .msg-scroll-wrap {
+    padding: 12px var(--msg-gutter-x, 14px) 8px;
   }
   .msg-panel-view {
     padding: 14px 14px;
@@ -13986,37 +13990,50 @@ html[data-theme="dark"] .msg-drawer-actions .msg-drawer-action-btn.is-danger:hov
   opacity: 0;
   pointer-events: none;
   margin-top: 0;
-  transition: grid-template-rows .24s cubic-bezier(.22, 1, .36, 1),
-              opacity .18s ease,
-              margin-top .22s ease,
-              visibility 0s linear .24s;
+  transition: grid-template-rows .22s cubic-bezier(.4, 0, .2, 1),
+              opacity .16s ease-out,
+              visibility 0s linear .22s;
 }
 .msg-typing-live.is-visible {
   grid-template-rows: 1fr;
   visibility: visible;
   opacity: 1;
   margin-top: 0;
-  transition: grid-template-rows .24s cubic-bezier(.22, 1, .36, 1),
-              opacity .18s ease,
-              margin-top .22s ease,
+  transition: grid-template-rows .28s cubic-bezier(.22, 1, .36, 1),
+              opacity .22s cubic-bezier(.22, 1, .36, 1),
               visibility 0s linear 0s;
 }
 .msg-typing-live-inner {
   min-height: 0;
   overflow: hidden;
+  padding: 0;
+}
+.msg-typing-live-row {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 0;
+  padding: 4px var(--msg-gutter-x, 18px) 8px;
+  transform: translate3d(0, 12px, 0);
+  transform-origin: left bottom;
+  will-change: transform;
+  transition: transform .22s cubic-bezier(.4, 0, .2, 1);
 }
-.msg-typing-live.is-visible .msg-typing-live-inner {
-  padding: 4px 18px 8px;
+.msg-typing-live.is-visible .msg-typing-live-row {
+  transform: translate3d(0, 0, 0);
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1);
 }
 .msg-typing-avatar {
   width: 30px;
   flex-shrink: 0;
   display: flex;
   align-items: flex-end;
+  transform: scale(.92);
+  transform-origin: center bottom;
+  transition: transform .22s cubic-bezier(.4, 0, .2, 1);
+}
+.msg-typing-live.is-visible .msg-typing-avatar {
+  transform: scale(1);
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1);
 }
 .msg-typing-bubble {
   display: inline-flex;
@@ -14027,6 +14044,13 @@ html[data-theme="dark"] .msg-drawer-actions .msg-drawer-action-btn.is-danger:hov
   background: var(--surface, #ffffff);
   color: var(--muted, #455952);
   box-shadow: 0 2px 8px rgba(10, 32, 24, .05);
+  transform: scale(.94);
+  transform-origin: left bottom;
+  transition: transform .22s cubic-bezier(.4, 0, .2, 1);
+}
+.msg-typing-live.is-visible .msg-typing-bubble {
+  transform: scale(1);
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1);
 }
 .msg-typing-text {
   display: inline;
@@ -14317,6 +14341,9 @@ html[data-theme="dark"] .msg-failed-btn.is-delete,
   .msg-pop-skeleton,
   .msg-pop-groups-list,
   .msg-typing-live,
+  .msg-typing-live-row,
+  .msg-typing-avatar,
+  .msg-typing-bubble,
   .msg-video-controls,
   .msg-video-ctrl-btn,
   .msg-bubble-meta.is-media-overlay,

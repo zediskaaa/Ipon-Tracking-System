@@ -51,6 +51,7 @@
   let myTrackedConvoId = null;
   let typingIdleTimer = null;
   let typingScrollSettleTimer = null;
+  let typingScrollRafId = 0;
   let lastSeenTimer = null;
   let vanishUiTimer = null;
   const vanishRingObserver = typeof ResizeObserver === 'function'
@@ -968,11 +969,13 @@
                       </div>
                       <div class="msg-typing-live" id="msg-typing-live" aria-hidden="true" aria-live="polite">
                         <div class="msg-typing-live-inner">
-                          <div class="msg-typing-avatar" id="msg-typing-avatar"></div>
-                          <div class="msg-typing-bubble">
-                            <span class="msg-typing-sender" id="msg-typing-sender" hidden></span>
-                            <span class="msg-typing-text" aria-hidden="true">is typing<span class="msg-typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
-                            <span class="sr-only" id="msg-typing-live-text">Typing…</span>
+                          <div class="msg-typing-live-row">
+                            <div class="msg-typing-avatar" id="msg-typing-avatar"></div>
+                            <div class="msg-typing-bubble">
+                              <span class="msg-typing-sender" id="msg-typing-sender" hidden></span>
+                              <span class="msg-typing-text" aria-hidden="true">is typing<span class="msg-typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
+                              <span class="sr-only" id="msg-typing-live-text">Typing…</span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1127,8 +1130,7 @@
       sendTypingBroadcast(false);
       clearTimeout(typingIdleTimer);
       typingIdleTimer = null;
-      clearTimeout(typingScrollSettleTimer);
-      typingScrollSettleTimer = null;
+      stopTypingScrollSync();
       state.typingPeers.forEach((bucket) => {
         if (bucket instanceof Map) {
           bucket.forEach((entry) => { if (entry?.timer) clearTimeout(entry.timer); });
@@ -3114,27 +3116,57 @@
     liveRow.classList.toggle('is-visible', Boolean(typing));
     liveRow.setAttribute('aria-hidden', typing ? 'false' : 'true');
     syncThreadScrollLock();
-    clearTimeout(typingScrollSettleTimer);
-    typingScrollSettleTimer = null;
-    if (!wasVisible && typing) {
-      const keepBottomPinned = () => {
+    stopTypingScrollSync();
+    if ((!wasVisible && typing) || (wasVisible && !typing)) {
+      const expanding = Boolean(!wasVisible && typing);
+      const durationMs = expanding ? 340 : 280;
+      const nowMs = () => (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now());
+      const startedAt = nowMs();
+      let lastPinnedScrollTop = -1;
+      let userScrolledUp = false;
+      let frames = 0;
+      let inStep = false;
+      const syncFrame = () => {
+        if (expanding && wasNearBottom && !userScrolledUp && lastPinnedScrollTop >= 0 && wrap && wrap.scrollTop < lastPinnedScrollTop - 16) {
+          userScrolledUp = true;
+        }
         syncThreadScrollLock();
-        if (wasNearBottom && wrap && !wrap.classList?.contains('is-no-scroll')) {
-          wrap.scrollTop = wrap.scrollHeight;
+        if (expanding && !userScrolledUp) {
+          if (wasNearBottom && wrap && !wrap.classList?.contains('is-no-scroll')) {
+            wrap.scrollTop = wrap.scrollHeight;
+            lastPinnedScrollTop = wrap.scrollTop;
+          }
         }
       };
-      requestAnimationFrame(keepBottomPinned);
+      const step = () => {
+        if (inStep) return;
+        inStep = true;
+        frames += 1;
+        syncFrame();
+        if (frames < 60 && nowMs() - startedAt < durationMs && typeof requestAnimationFrame === 'function') {
+          typingScrollRafId = requestAnimationFrame(step);
+        } else {
+          typingScrollRafId = 0;
+        }
+        inStep = false;
+      };
+      if (typeof requestAnimationFrame === 'function') {
+        typingScrollRafId = requestAnimationFrame(step);
+      }
       typingScrollSettleTimer = setTimeout(() => {
-        typingScrollSettleTimer = null;
-        keepBottomPinned();
-      }, 260);
-    } else if (wasVisible && !typing) {
-      requestAnimationFrame(() => syncThreadScrollLock());
-      typingScrollSettleTimer = setTimeout(() => {
-        typingScrollSettleTimer = null;
-        syncThreadScrollLock();
-      }, 260);
+        stopTypingScrollSync();
+        syncFrame();
+      }, durationMs + 24);
     }
+  }
+
+  function stopTypingScrollSync() {
+    if (typingScrollRafId && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(typingScrollRafId);
+    }
+    typingScrollRafId = 0;
+    clearTimeout(typingScrollSettleTimer);
+    typingScrollSettleTimer = null;
   }
 
   function updateTypingIndicators({ listChanged = true } = {}) {

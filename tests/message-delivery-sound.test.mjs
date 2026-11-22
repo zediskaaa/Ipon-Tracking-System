@@ -36,9 +36,12 @@ test('message alerts use a custom audible channel, typing cue echoes with fading
   for (let i = 1; i < gains.length; i += 1) {
     assert.ok(gains[i] < gains[i - 1], `Expected fading echo gains (index ${i}: ${gains[i]} < ${gains[i - 1]})`);
   }
-  assert.match(messages, /<div class="msg-messages-list" id="msg-messages-list"[^>]*><\/div>\s*<\/div>\s*<div class="msg-typing-live" id="msg-typing-live"/);
-  assert.match(css, /\.msg-thread-stage\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto;/s);
-  assert.match(css, /\.msg-typing-live\.is-visible\s+\.msg-typing-live-inner\s*\{[^}]*padding:\s*4px 18px 8px;/s);
+  assert.match(messages, /<div class="msg-messages-list" id="msg-messages-list"[^>]*><\/div>\s*<\/div>\s*<div class="msg-typing-live" id="msg-typing-live"[\s\S]*?<div class="msg-typing-live-row">/);
+  assert.match(messages, /typingScrollRafId = requestAnimationFrame\(step\)/);
+  assert.match(css, /\.msg-thread-stage\s*\{[^}]*--msg-gutter-x:\s*18px;[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto;/s);
+  assert.match(css, /\.msg-row-avatar\s*\{[^}]*width:\s*30px;[^}]*display:\s*flex;[^}]*align-items:\s*flex-end;/s);
+  assert.match(css, /\.msg-typing-live-row\s*\{[^}]*gap:\s*8px;[^}]*padding:\s*4px var\(--msg-gutter-x,\s*18px\) 8px;[^}]*transform:\s*translate3d\(0,\s*12px,\s*0\);/s);
+  assert.match(css, /@media \(max-width: 720px\)\s*\{[\s\S]*?\.msg-thread-stage\s*\{\s*--msg-gutter-x:\s*14px;\s*\}/);
   assert.equal(wav.toString('ascii', 0, 4), 'RIFF');
   assert.equal(wav.toString('ascii', 8, 12), 'WAVE');
   assert.ok((wav.length - 44) / (wav.readUInt32LE(28)) > 0.6);
