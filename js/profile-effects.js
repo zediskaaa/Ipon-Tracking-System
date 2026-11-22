@@ -3997,17 +3997,23 @@
     mq.addEventListener?.('change', handleMq);
   }
 
-  function defaultAvatarGeometry(host) {
+  function defaultAvatarGeometry(host, canvasEl) {
     return (W, H) => {
-      const av = host?.querySelector?.('.avatar-circle, .avatar, .mav, .effect-hero-avatar');
-      if (av && typeof host.getBoundingClientRect === 'function' && typeof av.getBoundingClientRect === 'function') {
-        const hr = host.getBoundingClientRect();
+      const av = host?.querySelector?.('.effects-card-avatar, .avatar-circle, .avatar, .mav, .effect-hero-avatar');
+      const ref = canvasEl && typeof canvasEl.getBoundingClientRect === 'function' ? canvasEl : host;
+      if (av && ref && typeof ref.getBoundingClientRect === 'function' && typeof av.getBoundingClientRect === 'function') {
+        let rr = ref.getBoundingClientRect();
+        if ((!rr || rr.width <= 0 || rr.height <= 0) && ref !== host && typeof host?.getBoundingClientRect === 'function') {
+          rr = host.getBoundingClientRect();
+        }
         const ar = av.getBoundingClientRect();
-        if (hr.width > 0 && ar.width > 0) {
+        if (rr && rr.width > 0 && rr.height > 0 && ar.width > 0 && ar.height > 0) {
+          const sx = W > 0 ? W / rr.width : 1;
+          const sy = H > 0 ? H / rr.height : 1;
           return {
-            cx: ar.left - hr.left + ar.width / 2,
-            cy: ar.top - hr.top + ar.height / 2,
-            ra: Math.max(12, ar.width / 2)
+            cx: (ar.left - rr.left + ar.width / 2) * sx,
+            cy: (ar.top - rr.top + ar.height / 2) * sy,
+            ra: Math.max(12, Math.min(ar.width * sx, ar.height * sy) / 2)
           };
         }
       }
@@ -4058,7 +4064,7 @@
       for (const prop of HOLO_VARS) target.style.removeProperty(prop);
     };
 
-    const geom = typeof geometryFn === 'function' ? geometryFn : defaultAvatarGeometry(host);
+    const geom = typeof geometryFn === 'function' ? geometryFn : defaultAvatarGeometry(host, backCanvas);
     const stage = {
       host,
       b: backCanvas,
@@ -4079,10 +4085,10 @@
       acc: 0,
       drawn: false,
       S: null,
-      build({ preserveTime = false } = {}) {
+      build({ preserveTime = false, force = false } = {}) {
         const W = this.b.clientWidth || this.b.offsetWidth || 0;
         const H = this.b.clientHeight || this.b.offsetHeight || 0;
-        if (preserveTime && this.builtId === this.id && this.run && W === this.lastW && H === this.lastH) {
+        if (!force && preserveTime && this.builtId === this.id && this.run && W === this.lastW && H === this.lastH) {
           return;
         }
         const keepTime = preserveTime && this.builtId === this.id ? this.time : 0;
@@ -4206,7 +4212,7 @@
         stage.build();
       },
       refreshGeometry() {
-        stage.build({ preserveTime: true });
+        stage.build({ preserveTime: true, force: true });
       },
       destroy() {
         cancelExit();

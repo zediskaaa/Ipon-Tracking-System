@@ -600,7 +600,24 @@
     'Exclusive founder-only hologram with 360° top/bottom/side cosmic fields, zero-teleport dt-integrated physics, 3 card animations + 2 full-screen cinematics, and Hollywood SFX.',
     3,
     (S) => {
-      const { W, H, cx, cy, ra, s, full, b, f, host, onTrigger, onCleanup } = S;
+      const { W, H, s, full, b, f, host, onTrigger, onCleanup } = S;
+      let { cx, cy, ra } = S;
+      const syncLiveAvatar = () => {
+        if (!full || !host?.querySelector) return;
+        const av = host.querySelector('.effects-card-avatar, .avatar-circle, .avatar, .mav, .effect-hero-avatar');
+        const cv = f?.canvas || host.querySelector('canvas.fxf') || host.querySelector('canvas.fxb');
+        if (!av || !cv || typeof av.getBoundingClientRect !== 'function' || typeof cv.getBoundingClientRect !== 'function') return;
+        const cr = cv.getBoundingClientRect();
+        const ar = av.getBoundingClientRect();
+        if (cr.width > 0 && cr.height > 0 && ar.width > 0 && ar.height > 0) {
+          const sx = W / cr.width;
+          const sy = H / cr.height;
+          cx = (ar.left - cr.left + ar.width * 0.5) * sx;
+          cy = (ar.top - cr.top + ar.height * 0.5) * sy;
+          ra = Math.max(12, Math.min(ar.width * sx, ar.height * sy) * 0.5);
+        }
+      };
+      syncLiveAvatar();
       const zones = measureHostZones(host, W, H, cx, cy, ra);
       const frameM = full ? buildRoundedFrame(W, H, 3.5 * s, 18 * s) : null;
       const groupsM = full ? buildRoundedFrame(zones.groupsRect.w, zones.groupsRect.h, 0.75 * s, 13 * s) : null;
@@ -912,19 +929,20 @@
       // ---------------------------------------------------------------------
       const drawAvatarGimbal = (energy, pal) => {
         const expand = 1 + energy * 0.035;
-        const rOuter = Math.max(4, ra * 1.24 * expand);
-        const rMid = Math.max(3, ra * 1.12 * expand);
-        const rInner = Math.max(2, ra * 1.02 * expand);
+        const baseR = full ? ra + 3.5 : ra;
+        const rOuter = Math.max(4, baseR * 1.21 * expand);
+        const rMid = Math.max(3, baseR * 1.11 * expand);
+        const rInner = Math.max(2, baseR * 1.02 * expand);
 
-        glow(b, cx, cy, ra * (2.25 + energy * 0.4), pal.accent, 0.24 + energy * 0.14);
-        glow(b, cx - ra * 0.28, cy - ra * 0.32, ra * 1.48, pal.gold, 0.16 + energy * 0.12);
+        glow(b, cx, cy, baseR * (2.25 + energy * 0.4), pal.accent, 0.24 + energy * 0.14);
+        glow(b, cx - baseR * 0.22, cy - baseR * 0.24, baseR * 1.48, pal.gold, 0.16 + energy * 0.12);
 
         b.save();
-        b.globalAlpha = 0.48;
+        b.globalAlpha = 0.44;
         b.strokeStyle = 'rgba(2,5,12,0.72)';
-        b.lineWidth = Math.max(1.2, 4.0 * s);
+        b.lineWidth = Math.max(1.2, 3.4 * s);
         b.beginPath();
-        b.arc(cx + L_DX * 2.1 * s, cy + L_DY * 2.1 * s, rOuter, 0, TAU);
+        b.arc(cx, cy, rOuter, 0, TAU);
         b.stroke();
         b.restore();
 
@@ -940,10 +958,10 @@
         for (let i = 0; i < 3; i += 1) {
           const a0 = st.rotA + (i * TAU) / 3;
           const a1 = a0 + 1.48;
-          f.strokeStyle = 'rgba(2,5,11,0.54)';
-          f.lineWidth = Math.max(1.1, 2.9 * s);
+          f.strokeStyle = 'rgba(2,5,11,0.52)';
+          f.lineWidth = Math.max(1.1, 2.8 * s);
           f.beginPath();
-          f.arc(cx + L_DX * 1.25 * s, cy + L_DY * 1.25 * s, rOuter, a0, a1);
+          f.arc(cx, cy, rOuter, a0, a1);
           f.stroke();
 
           f.strokeStyle = gradTi;
@@ -973,7 +991,7 @@
           f.stroke();
         }
 
-        const rGold = rInner + 2.3 * s;
+        const rGold = rInner + 1.8 * s;
         f.strokeStyle = `rgba(${pal.gold},0.8)`;
         f.lineWidth = Math.max(0.75, 1.3 * s);
         f.beginPath();
@@ -1532,6 +1550,7 @@
         const pal = getPalette(host);
         const isStill = dt === 0;
         const safeDt = isStill ? 0.016 : Math.min(0.05, Math.max(0.001, dt));
+        syncLiveAvatar();
 
         // Compact gallery tile & reduced-motion still frame
         if (!full || isStill) {
@@ -1795,6 +1814,7 @@
         }
 
         // Paint cohesive 360° field + live physics entities + 3D avatar gimbal
+        syncLiveAvatar();
         updateAndDraw360Field(t, safeDt, st.smoothSurge, pal);
         updateAndDrawLiveEntities(safeDt, pal);
         drawAvatarGimbal(st.smoothSurge, pal);

@@ -322,3 +322,76 @@ test('DP cover-clipping root cause is eliminated (zero mask-image on card body/p
   }
   assert.match(core, /api\.stopEffectSfx\?\.\(\);/);
 });
+
+test('Astral Sovereign gimbal border tracks the live DP center relative to canvas origin (compensating host border and CSS transforms)', () => {
+  const baseCode = read('js/profile-effects.js');
+  const creatorCode = read('js/profile-effects-creator.js');
+  const noop = () => { };
+  const grad = () => ({ addColorStop: noop });
+  const frontArcs = [];
+  const makeCtx = (capture) => ({
+    globalAlpha: 1, globalCompositeOperation: 'source-over', fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'butt',
+    clearRect: noop, fillRect: noop, strokeRect: noop, beginPath: noop, closePath: noop, clip: noop, fill: noop, stroke: noop,
+    setTransform: noop, setLineDash: noop, drawImage: noop, save: noop, restore: noop, moveTo: noop, lineTo: noop,
+    quadraticCurveTo: noop, bezierCurveTo: noop, arcTo: noop, ellipse: noop, translate: noop, rotate: noop, scale: noop,
+    createLinearGradient: grad, createRadialGradient: grad,
+    arc(x, y, r) { if (capture) frontArcs.push({ x, y, r }); }
+  });
+
+  // Host sits at (400, 120) with 1px border -> canvas padding-box sits at (401, 121)
+  const canvasRect = { left: 401, top: 121, width: 338, height: 390 };
+  const avatarRect = { left: 425, top: 187, width: 72, height: 72 };
+  const fxb = { className: 'fxb', width: 338, height: 390, clientWidth: 338, clientHeight: 390, getBoundingClientRect: () => canvasRect, getContext: () => makeCtx(false) };
+  const fxf = { className: 'fxf', width: 338, height: 390, clientWidth: 338, clientHeight: 390, getBoundingClientRect: () => canvasRect, getContext: () => makeCtx(true) };
+  const avEl = { getBoundingClientRect: () => avatarRect };
+  const host = {
+    dataset: { theme: 'mono' },
+    style: { setProperty: noop, removeProperty: noop },
+    classList: { contains: (c) => c === 'effects-card' },
+    closest: () => null,
+    getBoundingClientRect: () => ({ left: 400, top: 120, width: 340, height: 392 }),
+    querySelector: (sel) => {
+      if (sel === 'canvas.fxb') return fxb;
+      if (sel === 'canvas.fxf') return fxf;
+      if (sel.includes('.effects-card-avatar') || sel.includes('.avatar-circle')) return avEl;
+      return null;
+    },
+    prepend: noop, appendChild: noop
+  };
+
+  const rafQueue = [];
+  const sandbox = {
+    window: { innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1, matchMedia: () => ({ matches: false, addEventListener: noop }) },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    document: { hidden: false, body: { appendChild: noop }, createElement: () => fxf },
+    performance: { now: () => 1000 },
+    requestAnimationFrame: (cb) => { rafQueue.push(cb); return rafQueue.length; },
+    cancelAnimationFrame: noop,
+    Math, Date, Set, Map, Array, Object, String, Number, Boolean, console
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(baseCode, sandbox);
+  vm.runInNewContext(creatorCode, sandbox);
+
+  const stage = sandbox.window.IponProfileEffects.mountStage(host, { effectId: 'creator_astral_sovereign', fps: 60 });
+  // Expected live DP center in canvas coords: (425 - 401) + 36 = 60, (187 - 121) + 36 = 102
+  const outerRingArcs = frontArcs.filter((a) => a.r > 40 && a.r < 60);
+  assert.ok(outerRingArcs.length >= 3, 'Expected gimbal outer ring arcs');
+  for (const arc of outerRingArcs) {
+    assert.ok(Math.abs(arc.x - 60) < 0.01, `Expected gimbal x=60, got ${arc.x}`);
+    assert.ok(Math.abs(arc.y - 102) < 0.01, `Expected gimbal y=102, got ${arc.y}`);
+  }
+
+  // Simulate CSS pulse/shake moving the avatar live to (422.5, 184) -> canvas center (57.5, 99)
+  frontArcs.length = 0;
+  avatarRect.left = 422.5;
+  avatarRect.top = 184;
+  rafQueue[rafQueue.length - 1](1050);
+  const shiftedRingArcs = frontArcs.filter((a) => a.r > 40 && a.r < 60);
+  assert.ok(shiftedRingArcs.length >= 3);
+  for (const arc of shiftedRingArcs) {
+    assert.ok(Math.abs(arc.x - 57.5) < 0.01, `Expected shifted gimbal x=57.5, got ${arc.x}`);
+    assert.ok(Math.abs(arc.y - 99) < 0.01, `Expected shifted gimbal y=99, got ${arc.y}`);
+  }
+  stage.destroy();
+});
