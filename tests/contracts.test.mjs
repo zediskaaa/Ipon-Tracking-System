@@ -1033,7 +1033,10 @@ test('multi-group workspaces support editable group name/DP, admin contributor t
   assert.match(edge, /async function sendInviteEmail\(/);
   assert.match(edge, /BREVO_API_KEY/);
   assert.match(edge, /RESEND_API_KEY/);
-  assert.match(edge, /IPON Group Savings Tracker/);
+  assert.match(edge, /const SYSTEM_NAME = 'myIPON';/);
+  assert.match(edge, /EMAIL_LOGO_URL = 'https:\/\/my-ipon\.vercel\.app\/assets\/icon-192\.png\?v=2'/);
+  assert.match(edge, /alt="myIPON"[\s\S]*?>\s*myIPON\s*<\/td>/);
+  assert.doesNotMatch(edge, /const SYSTEM_NAME = 'IPON Group Savings Tracker'/);
   assert.match(core, /function inviteAccount\(/);
   assert.match(core, /function showInviteSummary\(/);
   assert.match(core, /function switchActiveGroup\(/);
@@ -1110,6 +1113,8 @@ test('multi-group workspaces support editable group name/DP, admin contributor t
   assert.match(clerkEmailWebhook, /event\.type !== 'email\.created'/);
   assert.match(clerkEmailWebhook, /messageData\.otp_code/);
   assert.match(clerkEmailWebhook, /api\.brevo\.com\/v3\/smtp\/email/);
+  assert.match(clerkEmailWebhook, /const SYSTEM_NAME = 'myIPON';/);
+  assert.match(clerkEmailWebhook, /EMAIL_LOGO_URL = 'https:\/\/my-ipon\.vercel\.app\/assets\/icon-192\.png\?v=2'/);
   assert.match(dashboardJs, /activeIds\.has\(item\.member_id\)/);
   assert.match(schema, /delete from public\.contribution_periods cp[\s\S]*cp\.member_id = v_member_id[\s\S]*not exists \([\s\S]*select 1 from public\.contributions c/);
   const migration033 = read('database/migrations/20261113_033_clean_unpaid_periods_on_admin_contributor_toggle.sql');
@@ -11931,6 +11936,9 @@ test('public privacy, terms, and data-deletion pages stay crawlable with Vercel 
   assert.match(robots, /Allow:\s*\/terms\b/);
   assert.match(robots, /Allow:\s*\/data-deletion\b/);
   assert.match(robots, /Allow:\s*\/deletion\b/);
+  assert.match(robots, /Allow:\s*\/assets\/icon-192\.png/);
+  assert.match(robots, /Allow:\s*\/assets\/icon-512\.png/);
+  assert.match(robots, /Allow:\s*\/assets\/logo\.png/);
 
   for (const [slug, html] of [['/privacy', '/privacy.html'], ['/terms', '/terms.html'], ['/data-deletion', '/data-deletion.html'], ['/deletion', '/data-deletion.html']]) {
     assert.ok(
@@ -11941,6 +11949,10 @@ test('public privacy, terms, and data-deletion pages stay crawlable with Vercel 
   assert.ok(
     vercel.headers?.some((rule) => rule.source.includes('data-deletion') && rule.headers?.some((h) => h.key === 'X-Robots-Tag' && h.value === 'index, follow')),
     'vercel.json must allow indexing for public legal pages'
+  );
+  assert.ok(
+    vercel.headers?.some((rule) => rule.source.includes('icon-192') && rule.headers?.some((h) => h.key === 'X-Robots-Tag' && h.value === 'index, follow') && rule.headers?.some((h) => h.key === 'Cross-Origin-Resource-Policy' && h.value === 'cross-origin')),
+    'vercel.json must allow email image proxies to fetch and cache brand logos'
   );
 });
 

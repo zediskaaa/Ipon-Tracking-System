@@ -37,6 +37,14 @@
       "headers": [
         { "key": "X-Robots-Tag", "value": "index, follow" }
       ]
+    },
+    {
+      "source": "/assets/(icon-192|icon-512|logo)\\.png",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "index, follow" },
+        { "key": "Cache-Control", "value": "public, max-age=86400" },
+        { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" }
+      ]
     }
   ],
   "rewrites": [

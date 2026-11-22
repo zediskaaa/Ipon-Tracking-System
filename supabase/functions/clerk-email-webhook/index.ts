@@ -1,6 +1,7 @@
 import { Webhook } from 'npm:svix@1.76.1';
 
-const SYSTEM_NAME = 'IPON Group Savings Tracker';
+const SYSTEM_NAME = 'myIPON';
+const EMAIL_LOGO_URL = 'https://my-ipon.vercel.app/assets/icon-192.png?v=2';
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -16,7 +17,16 @@ function escapeHtml(value: string) {
 function emailHtml(code: string) {
   return `
     <div style="font-family:Arial,sans-serif;color:#163029;line-height:1.55;max-width:540px;margin:0 auto;padding:24px;background:#fbf9f2;border:1px solid #d9d6c8;border-radius:14px">
-      <div style="margin:0 0 16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase">${SYSTEM_NAME}</div>
+      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px">
+        <tr>
+          <td style="vertical-align:middle;padding-right:10px">
+            <img src="${EMAIL_LOGO_URL}" alt="myIPON" width="34" height="34" style="display:block;width:34px;height:34px;border-radius:8px;border:0" />
+          </td>
+          <td style="vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;font-weight:800;letter-spacing:.01em;color:#163029">
+            ${SYSTEM_NAME}
+          </td>
+        </tr>
+      </table>
       <h2 style="margin:0 0 12px;color:#163029">Your sign-in verification code</h2>
       <p style="margin:0 0 14px">Use this code to continue signing in:</p>
       <div style="margin:0 0 18px;padding:16px 20px;background:#fff;border:1px solid #c9c5b5;border-radius:12px;text-align:center">
@@ -30,9 +40,14 @@ function emailHtml(code: string) {
 function parseSender(raw: string) {
   const value = raw.trim();
   const match = value.match(/^(.*?)<([^<>]+)>$/);
-  return match
-    ? { name: match[1].trim().replace(/^["']|["']$/g, '') || SYSTEM_NAME, email: match[2].trim() }
-    : { name: SYSTEM_NAME, email: value };
+  if (match) {
+    const parsedName = match[1].trim().replace(/^["']|["']$/g, '');
+    const normalizedName = !parsedName || /^IPON(?:\s+Group\s+Savings\s+Tracker)?$/i.test(parsedName)
+      ? SYSTEM_NAME
+      : parsedName;
+    return { name: normalizedName, email: match[2].trim() };
+  }
+  return { name: SYSTEM_NAME, email: value };
 }
 
 function plainText(code: string) {

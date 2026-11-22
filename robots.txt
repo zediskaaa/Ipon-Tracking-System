@@ -6,4 +6,7 @@ Allow: /terms.html
 Allow: /data-deletion
 Allow: /data-deletion.html
 Allow: /deletion
+Allow: /assets/icon-192.png
+Allow: /assets/icon-512.png
+Allow: /assets/logo.png
 Disallow: /

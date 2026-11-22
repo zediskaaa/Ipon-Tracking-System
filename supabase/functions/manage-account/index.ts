@@ -4,8 +4,8 @@ import { createRemoteJWKSet, jwtVerify } from 'npm:jose@6.1.2';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
-const SYSTEM_NAME = 'IPON Group Savings Tracker';
-const EMAIL_LOGO_URL = 'https://my-ipon.vercel.app/assets/icon-192.png';
+const SYSTEM_NAME = 'myIPON';
+const EMAIL_LOGO_URL = 'https://my-ipon.vercel.app/assets/icon-192.png?v=2';
 const R2_PATH_MARKER = '/r2/';
 let r2Client: AwsClient | null = null;
 const CLERK_ISSUER = 'https://solid-gannet-2021.clerk.accounts.dev';
@@ -83,10 +83,10 @@ function emailBrandHeaderMarkup() {
     <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 16px;">
       <tr>
         <td style="vertical-align: middle; padding-right: 10px;">
-          <img src="${EMAIL_LOGO_URL}" alt="IPON" width="34" height="34" style="display: block; width: 34px; height: 34px; border-radius: 8px; border: 0;" />
+          <img src="${EMAIL_LOGO_URL}" alt="myIPON" width="34" height="34" style="display: block; width: 34px; height: 34px; border-radius: 8px; border: 0;" />
         </td>
-        <td style="vertical-align: middle; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #163029;">
-          IPON
+        <td style="vertical-align: middle; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; font-weight: 800; letter-spacing: 0.01em; color: #163029;">
+          myIPON
         </td>
       </tr>
     </table>
@@ -192,8 +192,12 @@ function parseSender(raw: string | undefined, fallbackName: string, fallbackEmai
   const safeFallback = fallbackEmail?.trim() || 'breadspanish231@gmail.com';
   const match = value.match(/^(.*?)<([^<>]+)>$/);
   if (match) {
+    const parsedName = match[1].trim().replace(/^["']|["']$/g, '');
+    const normalizedName = !parsedName || /^IPON(?:\s+Group\s+Savings\s+Tracker)?$/i.test(parsedName)
+      ? fallbackName
+      : parsedName;
     return {
-      name: match[1].trim().replace(/^["']|["']$/g, '') || fallbackName,
+      name: normalizedName,
       email: match[2].trim() || safeFallback
     };
   }
@@ -276,8 +280,9 @@ async function deliverEmail({
   }
 
   if (resendKey) {
+    const resendSender = parseSender(rawFrom, SYSTEM_NAME, 'onboarding@resend.dev');
     const resendPayload: Record<string, unknown> = {
-      from: rawFrom || `${SYSTEM_NAME} <onboarding@resend.dev>`,
+      from: `${resendSender.name} <${resendSender.email}>`,
       to: [toEmail],
       subject,
       html,
