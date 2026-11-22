@@ -8979,12 +8979,17 @@
         if (incomingType === 'EFFECT_GRANTED' || incomingType === 'EFFECT_REMOVED' || incomingType === 'EFFECT_TRIAL_REJECTED') {
           refreshProfileEffectsState({ checkModal: incomingType === 'EFFECT_GRANTED' }).catch(() => { });
         }
-        if (typeof activeLiveRefresh === 'function') {
+        if (incomingType.startsWith('SOCIAL_')) {
+          try { window.IponMessages?.onIncomingSocialNotification?.(match); } catch { }
+        } else if (typeof activeLiveRefresh === 'function') {
           try { activeLiveRefresh(); } catch { }
         }
       } else if (realtimePayload?.eventType !== 'DELETE' && realtimePayload?.new?.id) {
         const match = rows.find((item) => String(item.id) === String(realtimePayload.new.id)) || realtimePayload.new;
         dispatchDeviceNotification(match, profile.id).catch(() => { });
+        if (String(match?.type || '').toUpperCase().startsWith('SOCIAL_')) {
+          try { window.IponMessages?.onIncomingSocialNotification?.(match); } catch { }
+        }
       } else if (lastSeenMs === null) {
         const newestMs = rows.reduce((max, item) => Math.max(max, Date.parse(item.created_at || '') || 0), Date.now());
         lastSeenMs = newestMs;
@@ -8993,6 +8998,9 @@
         const unseenNew = rows.filter((item) => !item.read_at && (Date.parse(item.created_at || '') || 0) > lastSeenMs);
         unseenNew.slice(0, 3).reverse().forEach((item) => {
           dispatchDeviceNotification(item, profile.id).catch(() => { });
+          if (String(item?.type || '').toUpperCase().startsWith('SOCIAL_')) {
+            try { window.IponMessages?.onIncomingSocialNotification?.(item); } catch { }
+          }
         });
       }
 
@@ -10057,7 +10065,10 @@
     });
   }
 
-  const READ_ONLY_RPC_RE = /^(?:get_|list_|check_|preview_|super_admin_storage_overview|record_account_activity|mark_notification_read|mark_all_notifications_read)/i;
+  const READ_ONLY_RPC_RE = /^(?:get_|list_|check_|preview_|super_admin_storage_overview|record_account_activity|mark_notification_read|mark_all_notifications_read|send_chat_message|edit_chat_message|delete_chat_message|toggle_message_reaction|mark_conversation_read|mark_messages_delivered|touch_user_last_seen|report_client_platform|update_conversation_member_state|respond_message_request|start_or_open_direct_chat|pin_chat_message|unpin_chat_message)/i;
+  let lastVerifiedSession = null;
+  let lastVerifiedSessionClient = null;
+  let lastVerifiedSessionAt = 0;
 
   function isAuthSessionRpcError(error) {
     if (!error) return false;
@@ -10067,6 +10078,12 @@
 
   async function ensureFreshAuthSession(client, { force = false } = {}) {
     if (!client?.auth) return null;
+    if (!force && lastVerifiedSessionClient === client && lastVerifiedSession?.access_token) {
+      const cachedExpMs = Number(lastVerifiedSession.expires_at || 0) * 1000;
+      if (Date.now() - lastVerifiedSessionAt < 15000 && (!cachedExpMs || cachedExpMs > Date.now() + 45000)) {
+        return lastVerifiedSession;
+      }
+    }
     try {
       const { data: curData } = typeof client.auth.getSession === 'function'
         ? await client.auth.getSession()
@@ -10074,13 +10091,25 @@
       const curSession = curData?.session || null;
       const expMs = Number(curSession?.expires_at || 0) * 1000;
       const nearExpiry = !curSession?.access_token || (expMs > 0 && expMs <= Date.now() + 30000);
-      if (!force && !nearExpiry) return curSession;
+      if (!force && !nearExpiry) {
+        lastVerifiedSession = curSession;
+        lastVerifiedSessionClient = client;
+        lastVerifiedSessionAt = Date.now();
+        return curSession;
+      }
       if (typeof client.auth.refreshSession === 'function') {
         const { data: refData } = await client.auth.refreshSession();
-        if (refData?.session?.access_token) return refData.session;
+        if (refData?.session?.access_token) {
+          lastVerifiedSession = refData.session;
+          lastVerifiedSessionClient = client;
+          lastVerifiedSessionAt = Date.now();
+          return refData.session;
+        }
       }
+      lastVerifiedSession = null;
       return curSession;
     } catch {
+      lastVerifiedSession = null;
       return null;
     }
   }
@@ -11656,7 +11685,10 @@
     let pending = Promise.resolve();
     const run = () => {
       dirty = false;
-      pending = pending.then(refresh).catch((error) => toast(friendlyError(error), 'error'));
+      pending = pending.then(refresh).catch((error) => {
+        if (document.getElementById('msg-workspace-dialog')?.open) return;
+        toast(friendlyError(error), 'error');
+      });
       return pending;
     };
     activeLiveRefresh = run;

@@ -5,8 +5,8 @@
   const MAX_ATTACHMENTS_PER_MSG = 10;
   const MAX_QUEUE_ATTACHMENTS = 30;
   const COIN_SENDING_SVG = '<svg class="msg-tick-svg is-coin-sending" viewBox="0 0 24 24" aria-hidden="true"><circle class="coin-spin-ring" cx="12" cy="12" r="8" stroke-dasharray="15 9.5"/></svg>';
-  const COIN_SENT_SVG = '<svg class="msg-tick-svg is-coin-sent" viewBox="0 0 24 24" aria-hidden="true"><circle class="coin-rim" cx="12" cy="12" r="7.8"/></svg>';
-  const COIN_DELIVERED_SVG = '<svg class="msg-tick-svg is-coin-delivered" viewBox="0 0 24 24" aria-hidden="true"><circle class="coin-pulse" cx="12" cy="12" r="7.8"/><circle class="coin-rim" cx="12" cy="12" r="7.8"/><circle class="coin-core" cx="12" cy="12" r="3"/></svg>';
+  const COIN_SENT_SVG = '<svg class="msg-tick-svg is-coin-sent" viewBox="0 0 24 24" aria-hidden="true"><circle class="coin-rim" cx="12" cy="12" r="8"/><path class="coin-sent-check" d="M8.6 12.2 10.9 14.5 15.6 9.5"/></svg>';
+  const COIN_DELIVERED_SVG = '<svg class="msg-tick-svg is-coin-delivered" viewBox="0 0 24 24" aria-hidden="true"><circle class="coin-pulse" cx="12" cy="12" r="8"/><circle class="coin-rim" cx="12" cy="12" r="8"/><circle class="coin-core" cx="12" cy="12" r="8"/><path class="coin-mark" d="M8.6 12.2 10.9 14.5 15.6 9.5"/></svg>';
   const COIN_SEEN_SVG = '<svg class="msg-tick-svg is-coin-read" viewBox="0 0 24 24" aria-hidden="true"><circle class="coin-halo" cx="12" cy="12" r="8.6"/><g class="coin-seal-body"><circle class="coin-disc" cx="12" cy="12" r="8.8"/><circle class="coin-inner" cx="12" cy="12" r="6.1"/><path class="coin-mark" d="M8.7 12.2 10.9 14.4 15.5 9.6"/><path class="coin-glint" d="M7.6 14.4 14.4 7.6"/></g></svg>';
   const VIDEO_PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7,5 19,12 7,19" fill="currentColor" stroke="none"/></svg>';
   const VIDEO_PAUSE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/></svg>';
@@ -43,6 +43,9 @@
   let meSocial = null;
   let rootMounted = false;
   let realtimeChannel = null;
+  let realtimeReconnectTimer = null;
+  let realtimeReconnectAttempt = 0;
+  let scheduleRealtimeRefresh = null;
   let typingChannel = null;
   let typingChannelSubscribed = false;
   let myTrackedConvoId = null;
@@ -2667,7 +2670,7 @@
   }
 
   // Conversation opening & thread loading
-  async function openConversation(conversationId, { aroundMessageId = null, markRead = true, silent = false, scrollToBottom = null, forceMarkRead = false, previewPeer = null } = {}) {
+  async function openConversation(conversationId, { aroundMessageId = null, markRead = true, silent = false, scrollToBottom = null, forceMarkRead = false, previewPeer = null, refreshProtection = null } = {}) {
     if (!conversationId || !isEligible()) return;
     const isSwitchingConv = state.activeConvId !== conversationId;
     const isSameLoadedThread = Boolean(
@@ -2723,6 +2726,10 @@
       renderThreadHeaderLoading(conversationId, previewPeer);
     }
 
+    const prevConvMeta = isSameLoadedThread ? state.activeThread?.conversation : null;
+    const shouldFetchProtection = refreshProtection !== null
+      ? Boolean(refreshProtection)
+      : (!backgroundRefresh || !isSameLoadedThread || !prevConvMeta || Boolean(prevConvMeta.protection_unavailable));
     try {
       const [data, protection] = await Promise.all([
         ipon().rpc('get_conversation_messages', {
@@ -2731,18 +2738,28 @@
           p_limit: 60,
           p_around_message_id: aroundMessageId || null
         }),
-        (async () => {
-          await ipon().reportClientPlatform?.()?.catch?.(() => { });
-          return ipon().rpc('get_conversation_protection', { p_conversation_id: conversationId }).catch((error) => {
-            if (error?.code === 'PGRST202') return null;
-            throw error;
-          });
-        })()
+        shouldFetchProtection
+          ? (async () => {
+              await ipon().reportClientPlatform?.()?.catch?.(() => { });
+              return ipon().rpc('get_conversation_protection', { p_conversation_id: conversationId }).catch((error) => {
+                if (error?.code === 'PGRST202') return null;
+                throw error;
+              });
+            })()
+          : Promise.resolve(null)
       ]);
       if (data?.conversation) {
-        if (protection) Object.assign(data.conversation, protection);
-        data.conversation.protection_unavailable = !protection;
-        data.conversation.vanish_unavailable = !protection || !Object.prototype.hasOwnProperty.call(protection, 'vanish_after_seconds');
+        if (shouldFetchProtection) {
+          if (protection) Object.assign(data.conversation, protection);
+          data.conversation.protection_unavailable = !protection;
+          data.conversation.vanish_unavailable = !protection || !Object.prototype.hasOwnProperty.call(protection, 'vanish_after_seconds');
+        } else if (prevConvMeta) {
+          for (const key of ['block_screenshots', 'screenshot_block_eligible', 'screenshot_block_reason', 'screenshot_notices_enabled', 'block_forwarding', 'vanish_after_seconds', 'protection_unavailable', 'vanish_unavailable']) {
+            if (Object.prototype.hasOwnProperty.call(prevConvMeta, key) && !Object.prototype.hasOwnProperty.call(data.conversation, key)) {
+              data.conversation[key] = prevConvMeta[key];
+            }
+          }
+        }
       }
       if (state.activeConvId !== conversationId || reqSeq !== state.openConvSeq) return;
 
@@ -9133,39 +9150,47 @@
     }
   }
 
-  function subscribeRealtime(profile) {
+  function subscribeRealtime(profile, { force = false } = {}) {
     const client = ipon().client;
-    if (!client || !profile?.id || realtimeChannel) return;
+    if (!client || !profile?.id) return;
+    if (realtimeChannel && !force) return;
+    clearTimeout(realtimeReconnectTimer);
+    realtimeReconnectTimer = null;
     let refreshTimer = null;
     let isRefreshingRealtime = false;
-    let pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false };
+    let pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false, refreshProtection: false };
 
     const flushRefresh = async () => {
       refreshTimer = null;
       if (isRefreshingRealtime) {
-        refreshTimer = setTimeout(flushRefresh, 200);
+        refreshTimer = setTimeout(flushRefresh, 120);
         return;
       }
       const opts = { ...pendingRefresh };
-      pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false };
+      pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false, refreshProtection: false };
       if (!opts.convs && !opts.thread && !opts.overview) return;
 
       isRefreshingRealtime = true;
       try {
-        await Promise.all([
-          opts.convs ? refreshConversations() : Promise.resolve(),
-          opts.overview ? refreshOverview() : Promise.resolve()
-        ]);
         const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
-        if (opts.thread && state.activeConvId && dialogOpen) {
-          await openConversation(state.activeConvId, {
-            markRead: Boolean(opts.markRead),
-            forceMarkRead: Boolean(opts.forceMarkRead),
-            silent: true
-          });
-        }
+        const activeConvId = opts.thread && state.activeConvId && dialogOpen ? state.activeConvId : null;
+        await Promise.all([
+          activeConvId
+            ? openConversation(activeConvId, {
+                markRead: Boolean(opts.markRead),
+                forceMarkRead: Boolean(opts.forceMarkRead),
+                silent: true,
+                refreshProtection: opts.refreshProtection ? true : null
+              }).catch(() => { })
+            : Promise.resolve(),
+          opts.convs ? refreshConversations().catch(() => { }) : Promise.resolve(),
+          opts.overview ? refreshOverview().catch(() => { }) : Promise.resolve()
+        ]);
       } finally {
         isRefreshingRealtime = false;
+        if ((pendingRefresh.convs || pendingRefresh.thread || pendingRefresh.overview) && !refreshTimer) {
+          refreshTimer = setTimeout(flushRefresh, 40);
+        }
       }
     };
 
@@ -9176,8 +9201,10 @@
       if (opts.forceMarkRead) pendingRefresh.forceMarkRead = true;
       if (opts.overview) pendingRefresh.overview = true;
       if (opts.alerts) pendingRefresh.alerts = true;
-      if (!refreshTimer) refreshTimer = setTimeout(flushRefresh, 240);
+      if (opts.refreshProtection) pendingRefresh.refreshProtection = true;
+      if (!refreshTimer) refreshTimer = setTimeout(flushRefresh, opts.immediate ? 40 : 240);
     };
+    scheduleRealtimeRefresh = scheduleRefresh;
 
     if (realtimeChannel) {
       try { client.removeChannel(realtimeChannel)?.catch?.(() => { }); } catch { }
@@ -9217,7 +9244,8 @@
           convs: true,
           thread: isForActive,
           markRead: markIncomingReadHere,
-          forceMarkRead: markIncomingReadHere
+          forceMarkRead: markIncomingReadHere,
+          immediate: Boolean(isForActive && isInsert && fromPeer)
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, (payload) => {
@@ -9286,16 +9314,20 @@
           syncNativeScreenshotLock(curConv);
           if (state.showThreadInfo) renderThreadInfoDrawer();
         }
-        if (cId && sendTailByConv.has(cId) && !metaOrStatusChanged) return;
+        const fromPeerConv = Boolean(row.last_message_sender_id && row.last_message_sender_id !== profile.id);
+        if (cId && sendTailByConv.has(cId) && !metaOrStatusChanged && !fromPeerConv) return;
         if (metaOrStatusChanged && curConv?.id && !isGroupConv(curConv)) {
           profileAppearanceCache.delete(String(curConv.id));
         }
-        const markVisibleIncoming = Boolean(hasNewerConvMessage && isThreadActivelyVisible({ ignoreFocus: true }) && document.visibilityState !== 'hidden');
+        const shouldRefreshThread = metaOrStatusChanged || hasNewerConvMessage || Boolean(fromPeerConv && cId && cId === state.activeConvId);
+        const markVisibleIncoming = Boolean((hasNewerConvMessage || fromPeerConv) && cId && cId === state.activeConvId && isThreadActivelyVisible({ ignoreFocus: true }) && document.visibilityState !== 'hidden');
         scheduleRefresh({
           convs: true,
-          thread: metaOrStatusChanged || hasNewerConvMessage,
+          thread: shouldRefreshThread,
           markRead: markVisibleIncoming,
-          forceMarkRead: markVisibleIncoming
+          forceMarkRead: markVisibleIncoming,
+          refreshProtection: metaOrStatusChanged,
+          immediate: Boolean(fromPeerConv && cId && cId === state.activeConvId)
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_participants', filter: `user_id=eq.${profile.id}` }, (payload) => {
@@ -9339,7 +9371,75 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_users', filter: `blocker_id=eq.${profile.id}` }, () => {
         scheduleRefresh({ overview: true, thread: Boolean(state.activeConvId), markRead: false });
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          const wasReconnecting = realtimeReconnectAttempt > 0;
+          realtimeReconnectAttempt = 0;
+          if (wasReconnecting && document.getElementById('msg-workspace-dialog')?.open) {
+            scheduleRefresh({
+              convs: true,
+              thread: Boolean(state.activeConvId),
+              markRead: isThreadActivelyVisible(),
+              immediate: true
+            });
+          }
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          if (navigator.onLine === false) return;
+          const delay = Math.min(12000, 1200 * Math.pow(2, realtimeReconnectAttempt));
+          realtimeReconnectAttempt = Math.min(realtimeReconnectAttempt + 1, 5);
+          clearTimeout(realtimeReconnectTimer);
+          realtimeReconnectTimer = setTimeout(() => {
+            realtimeReconnectTimer = null;
+            if (!initializedProfile) return;
+            subscribeRealtime(initializedProfile, { force: true });
+          }, delay);
+        }
+      });
+  }
+
+  function onIncomingSocialNotification(notif) {
+    if (!isEligible() || !notif) return;
+    const type = String(notif.type || '').toUpperCase();
+    if (type === 'SOCIAL_FRIEND_REQUEST' || type === 'SOCIAL_FRIEND_ACCEPTED') {
+      if (typeof scheduleRealtimeRefresh === 'function') {
+        scheduleRealtimeRefresh({ convs: false, overview: true, immediate: true });
+      } else {
+        refreshOverview().catch(() => { });
+      }
+      return;
+    }
+    if (type !== 'SOCIAL_NEW_MESSAGE' && type !== 'SOCIAL_MESSAGE_REPLY' && type !== 'SOCIAL_MESSAGE_REQUEST') return;
+    let chatId = '';
+    try {
+      const parsed = new URL(String(notif.link || ''), location.href);
+      chatId = String(parsed.searchParams.get('chat') || '').trim();
+    } catch { }
+    if (chatId && notif.actor_id) {
+      const bucket = state.typingPeers.get(chatId);
+      if (bucket instanceof Map) {
+        const entry = bucket.get(String(notif.actor_id));
+        if (entry?.timer) clearTimeout(entry.timer);
+        bucket.delete(String(notif.actor_id));
+        if (!bucket.size) state.typingPeers.delete(chatId);
+        updateTypingIndicators({ listChanged: false });
+      }
+    }
+    const isForActive = Boolean(state.activeConvId && (!chatId || chatId === state.activeConvId));
+    const markHere = Boolean(isForActive && isThreadActivelyVisible({ ignoreFocus: true }) && document.visibilityState !== 'hidden');
+    if (typeof scheduleRealtimeRefresh === 'function') {
+      scheduleRealtimeRefresh({
+        convs: true,
+        thread: isForActive,
+        markRead: markHere,
+        forceMarkRead: markHere,
+        immediate: true
+      });
+    } else {
+      refreshConversations().catch(() => { });
+      if (isForActive && document.getElementById('msg-workspace-dialog')?.open) {
+        openConversation(state.activeConvId, { markRead: markHere, forceMarkRead: markHere, silent: true }).catch(() => { });
+      }
+    }
   }
 
   async function init(profile) {
@@ -9367,6 +9467,9 @@
       }
     };
     const syncForegroundReceipts = () => {
+      if (initializedProfile && (!realtimeChannel || (realtimeChannel.state && realtimeChannel.state !== 'joined' && realtimeChannel.state !== 'joining'))) {
+        subscribeRealtime(initializedProfile, { force: true });
+      }
       pingLastSeen();
       ipon().rpc('mark_messages_delivered', { p_conversation_id: null }).catch(() => { });
       if (document.getElementById('msg-workspace-dialog')?.open) {
@@ -9376,6 +9479,8 @@
         openConversation(state.activeConvId, { markRead: true, silent: true }).catch(() => { });
       }
     };
+    window.addEventListener('online', () => { syncForegroundReceipts(); });
+    document.addEventListener('resume', () => { syncForegroundReceipts(); });
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         sendTypingBroadcast(false);
@@ -9627,6 +9732,7 @@
     init,
     openWorkspace,
     refreshWorkspace,
+    onIncomingSocialNotification,
     openFromNotification,
     openDirectMessage,
     openProfilePopover,

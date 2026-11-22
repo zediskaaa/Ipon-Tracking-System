@@ -8191,9 +8191,9 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   await msgWin.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
   const initialThreadHtml = getMsgEl('msg-messages-list').innerHTML;
 
-  // Sent = hollow coin rim; Delivered = rim + minted core; Seen = gold-rimmed peer DP coin medallion
-  assert.match(initialThreadHtml, /Only sent[\s\S]*?<span class="msg-tick is-sent"[^>]*aria-label="Sent"><svg class="msg-tick-svg is-coin-sent"[^>]*><circle class="coin-rim"[^>]*\/><\/svg><\/span>/);
-  assert.match(initialThreadHtml, /Delivered only[\s\S]*?<span class="msg-tick is-delivered"[^>]*aria-label="Delivered"><svg class="msg-tick-svg is-coin-delivered"[\s\S]*?<circle class="coin-core"[^>]*\/><\/svg><\/span>/);
+  // Sent = outlined coin ring + check; Delivered = solid coin + cutout check; Seen = gold-rimmed peer DP coin medallion
+  assert.match(initialThreadHtml, /Only sent[\s\S]*?<span class="msg-tick is-sent"[^>]*aria-label="Sent"><svg class="msg-tick-svg is-coin-sent"[^>]*><circle class="coin-rim"[^>]*\/><path class="coin-sent-check"[^>]*\/><\/svg><\/span>/);
+  assert.match(initialThreadHtml, /Delivered only[\s\S]*?<span class="msg-tick is-delivered"[^>]*aria-label="Delivered"><svg class="msg-tick-svg is-coin-delivered"[\s\S]*?<circle class="coin-core"[^>]*\/><path class="coin-mark"[^>]*\/><\/svg><\/span>/);
   assert.match(initialThreadHtml, /Seen by peer[\s\S]*?<span class="msg-tick is-read"[^>]*aria-label="Seen"><span class="msg-seen-dp-stack"><span class="msg-seen-dp-coin"[^>]*><span class="msg-seen-dp-face">/);
 
   // Inline video has SVG poster preview and custom center play button
@@ -11328,7 +11328,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261122-19/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261122-20/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

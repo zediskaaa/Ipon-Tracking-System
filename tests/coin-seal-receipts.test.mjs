@@ -10,8 +10,8 @@ test('Coin Seal receipt CSS & SVG tokens define all 4 states, transitions, theme
   const messagesJs = read('js/messages.js');
 
   assert.match(messagesJs, /const COIN_SENDING_SVG = '<svg class="msg-tick-svg is-coin-sending"/);
-  assert.match(messagesJs, /const COIN_SENT_SVG = '<svg class="msg-tick-svg is-coin-sent"/);
-  assert.match(messagesJs, /const COIN_DELIVERED_SVG = '<svg class="msg-tick-svg is-coin-delivered"/);
+  assert.match(messagesJs, /const COIN_SENT_SVG = '<svg class="msg-tick-svg is-coin-sent"[^>]*><circle class="coin-rim"[^>]*\/><path class="coin-sent-check"/);
+  assert.match(messagesJs, /const COIN_DELIVERED_SVG = '<svg class="msg-tick-svg is-coin-delivered"[^>]*>[\s\S]*?<circle class="coin-core"[^>]*\/><path class="coin-mark"/);
   assert.match(messagesJs, /const COIN_SEEN_SVG = '<svg class="msg-tick-svg is-coin-read"/);
   const coinSvgBlock = messagesJs.slice(messagesJs.indexOf('const COIN_SENDING_SVG'), messagesJs.indexOf('const VIDEO_PLAY_SVG'));
   assert.doesNotMatch(coinSvgBlock, /<clipPath|<defs|\bid="/);

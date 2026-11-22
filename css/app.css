@@ -8834,10 +8834,11 @@ mark.msg-search-hit {
   color: rgba(255, 255, 255, .82);
 }
 .msg-bubble-meta.is-media-overlay .msg-tick.is-sent {
-  color: rgba(255, 255, 255, .74);
+  color: rgba(255, 255, 255, .86);
 }
 .msg-bubble-meta.is-media-overlay .msg-tick.is-delivered {
   color: rgba(255, 255, 255, .96);
+  --coin-ink: #112a21;
 }
 .msg-bubble-meta.is-media-overlay .msg-tick.is-read {
   color: #f5c85b;
@@ -8901,6 +8902,14 @@ mark.msg-search-hit {
   stroke: none;
   transform-origin: 12px 12px;
 }
+.msg-tick-svg .coin-sent-check {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-origin: 12px 12px;
+}
 .msg-tick-svg .coin-pulse,
 .msg-tick-svg .coin-halo {
   fill: none;
@@ -8939,16 +8948,18 @@ mark.msg-search-hit {
   opacity: 0;
 }
 .msg-tick.is-sent {
-  color: #7c8a83;
+  color: #6b7d75;
 }
 .msg-row.is-mine .msg-tick.is-sent {
-  color: rgba(248, 245, 238, .66);
+  color: rgba(248, 245, 238, .82);
 }
 .msg-tick.is-delivered {
   color: #4f695e;
+  --coin-ink: #fffaf0;
 }
 .msg-row.is-mine .msg-tick.is-delivered {
   color: rgba(248, 245, 238, .94);
+  --coin-ink: #0f3a2b;
 }
 .msg-tick.is-read {
   color: #c9921a;
@@ -8972,6 +8983,9 @@ html[data-theme="dark"] .msg-row.is-mine .msg-tick.is-read {
 }
 .msg-thread-stage[data-chat-theme="midnight"] .msg-row.is-mine .msg-tick.is-read {
   --seen-cutout: #164f3b;
+}
+.msg-thread-stage[data-chat-theme="anonymous"] .msg-row.is-mine .msg-tick.is-delivered {
+  --coin-ink: #222b30;
 }
 .msg-thread-stage[data-chat-theme="anonymous"] .msg-row.is-mine .msg-tick.is-read {
   color: #f2c14e;
@@ -9072,11 +9086,21 @@ html[data-theme="dark"] .msg-row.is-mine .msg-tick.is-read {
 .msg-tick.is-sent.is-anim .coin-rim {
   animation: msgCoinLock .36s cubic-bezier(.22, 1.25, .36, 1) both;
 }
+.msg-tick.is-sent.is-anim .coin-sent-check {
+  stroke-dasharray: 16;
+  stroke-dashoffset: 16;
+  animation: msgCoinMarkDraw .26s cubic-bezier(.22, 1, .36, 1) .08s forwards;
+}
 .msg-tick.is-delivered.is-anim .coin-rim {
   animation: msgCoinDeliverRim .36s cubic-bezier(.22, 1.2, .36, 1) both;
 }
 .msg-tick.is-delivered.is-anim .coin-core {
   animation: msgCoinCorePop .4s cubic-bezier(.22, 1.38, .36, 1) both;
+}
+.msg-tick.is-delivered.is-anim .coin-mark {
+  stroke-dasharray: 16;
+  stroke-dashoffset: 16;
+  animation: msgCoinMarkDraw .24s cubic-bezier(.22, 1, .36, 1) .1s forwards;
 }
 .msg-tick.is-delivered.is-anim .coin-pulse {
   animation: msgCoinDeliverPulse .46s cubic-bezier(.16, 1, .3, 1) both;
@@ -9723,6 +9747,7 @@ html[data-theme="dark"] .msg-row.is-peer .msg-bubble.has-audio-only,
 }
 .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-delivered {
   color: #466055;
+  --coin-ink: #fffaf0;
 }
 .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-read {
   color: #c9921a;
@@ -9745,6 +9770,7 @@ html[data-theme="dark"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is
 html[data-theme="dark"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-delivered,
 .msg-thread-stage[data-chat-theme="midnight"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-delivered {
   color: #cfe0d7;
+  --coin-ink: #0e2a20;
 }
 html[data-theme="dark"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-read,
 .msg-thread-stage[data-chat-theme="midnight"] .msg-row.is-mine .msg-bubble.has-audio-only .msg-tick.is-read {
@@ -14278,6 +14304,8 @@ html[data-theme="dark"] .msg-failed-btn.is-delete,
     transition: none !important;
     scroll-behavior: auto !important;
   }
+  .msg-tick.is-sent.is-anim .coin-sent-check,
+  .msg-tick.is-delivered.is-anim .coin-mark,
   .msg-tick.is-read.is-anim .coin-mark {
     stroke-dashoffset: 0 !important;
   }

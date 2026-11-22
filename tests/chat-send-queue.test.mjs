@@ -96,3 +96,22 @@ test('confirmed bursts clear pending bubbles even when older sends fall outside 
   );
   assert.deepEqual(pendingByConv.get(conversationId).map((item) => item.localId), ['retry']);
 });
+
+test('chat sends avoid dashboard reloads, silent refreshes skip redundant protection roundtrips, and chat notifications sync the active thread', () => {
+  const core = fs.readFileSync('js/core.js', 'utf8');
+  const messages = fs.readFileSync('js/messages.js', 'utf8');
+
+  // Chat/social RPCs must not trigger full dashboard BroadcastChannel reloads
+  assert.match(core, /READ_ONLY_RPC_RE\s*=.*send_chat_message.*mark_conversation_read.*mark_messages_delivered/);
+  // Incoming SOCIAL_* notifications route straight to IponMessages instead of reloading the dashboard
+  assert.match(core, /incomingType\.startsWith\('SOCIAL_'\)[\s\S]*?IponMessages\?\.onIncomingSocialNotification\?\.\(match\)/);
+  // Background dashboard errors must not show timeout toasts over an open Messages dialog
+  assert.match(core, /if \(document\.getElementById\('msg-workspace-dialog'\)\?\.open\) return;/);
+
+  // Silent same-thread refreshes skip redundant reportClientPlatform + get_conversation_protection calls
+  assert.match(messages, /const shouldFetchProtection = refreshProtection !== null/);
+  // Realtime flush refreshes active thread in parallel with sidebar and heals on channel errors
+  assert.match(messages, /function onIncomingSocialNotification\(notif\)/);
+  assert.match(messages, /status === 'CHANNEL_ERROR' \|\| status === 'TIMED_OUT' \|\| status === 'CLOSED'/);
+  assert.match(messages, /window\.IponMessages = \{[\s\S]*?onIncomingSocialNotification,/);
+});
