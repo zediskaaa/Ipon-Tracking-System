@@ -47,6 +47,7 @@
   let typingChannelSubscribed = false;
   let myTrackedConvoId = null;
   let typingIdleTimer = null;
+  let typingScrollSettleTimer = null;
   let lastSeenTimer = null;
   let vanishUiTimer = null;
   const vanishRingObserver = typeof ResizeObserver === 'function'
@@ -958,14 +959,14 @@
                           <button type="button" class="button button-secondary button-sm" id="msg-load-older-btn" hidden>Retry loading older messages</button>
                         </div>
                         <div class="msg-messages-list" id="msg-messages-list" role="log" aria-live="polite"></div>
-                        <div class="msg-typing-live" id="msg-typing-live" aria-hidden="true" aria-live="polite">
-                          <div class="msg-typing-live-inner">
-                            <div class="msg-typing-avatar" id="msg-typing-avatar"></div>
-                            <div class="msg-typing-bubble">
-                              <span class="msg-typing-sender" id="msg-typing-sender" hidden></span>
-                              <span class="msg-typing-text" aria-hidden="true">is typing<span class="msg-typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
-                              <span class="sr-only" id="msg-typing-live-text">Typing…</span>
-                            </div>
+                      </div>
+                      <div class="msg-typing-live" id="msg-typing-live" aria-hidden="true" aria-live="polite">
+                        <div class="msg-typing-live-inner">
+                          <div class="msg-typing-avatar" id="msg-typing-avatar"></div>
+                          <div class="msg-typing-bubble">
+                            <span class="msg-typing-sender" id="msg-typing-sender" hidden></span>
+                            <span class="msg-typing-text" aria-hidden="true">is typing<span class="msg-typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
+                            <span class="sr-only" id="msg-typing-live-text">Typing…</span>
                           </div>
                         </div>
                       </div>
@@ -1120,6 +1121,8 @@
       sendTypingBroadcast(false);
       clearTimeout(typingIdleTimer);
       typingIdleTimer = null;
+      clearTimeout(typingScrollSettleTimer);
+      typingScrollSettleTimer = null;
       state.typingPeers.forEach((bucket) => {
         if (bucket instanceof Map) {
           bucket.forEach((entry) => { if (entry?.timer) clearTimeout(entry.timer); });
@@ -3091,15 +3094,26 @@
     liveRow.classList.toggle('is-visible', Boolean(typing));
     liveRow.setAttribute('aria-hidden', typing ? 'false' : 'true');
     syncThreadScrollLock();
+    clearTimeout(typingScrollSettleTimer);
+    typingScrollSettleTimer = null;
     if (!wasVisible && typing) {
-      requestAnimationFrame(() => {
+      const keepBottomPinned = () => {
         syncThreadScrollLock();
         if (wasNearBottom && wrap && !wrap.classList?.contains('is-no-scroll')) {
           wrap.scrollTop = wrap.scrollHeight;
         }
-      });
+      };
+      requestAnimationFrame(keepBottomPinned);
+      typingScrollSettleTimer = setTimeout(() => {
+        typingScrollSettleTimer = null;
+        keepBottomPinned();
+      }, 260);
     } else if (wasVisible && !typing) {
       requestAnimationFrame(() => syncThreadScrollLock());
+      typingScrollSettleTimer = setTimeout(() => {
+        typingScrollSettleTimer = null;
+        syncThreadScrollLock();
+      }, 260);
     }
   }
 
@@ -3714,13 +3728,11 @@
     if (clientH <= 0) return;
     const list = document.getElementById('msg-messages-list');
     const older = document.getElementById('msg-load-older-wrap');
-    const typing = document.getElementById('msg-typing-live');
     const cs = typeof window !== 'undefined' && typeof window.getComputedStyle === 'function' ? window.getComputedStyle(wrap) : null;
     const padY = (parseFloat(cs?.paddingTop) || 0) + (parseFloat(cs?.paddingBottom) || 0);
     const olderH = older && !older.hidden ? (Number(older.offsetHeight || 0) + 14) : 0;
     const listH = Number(list?.offsetHeight || 0);
-    const typingH = typing && typing.classList?.contains('is-visible') ? (Number(typing.offsetHeight || 0) + 8) : 0;
-    const contentH = listH > 0 ? (padY + olderH + listH + typingH) : Number(wrap.scrollHeight || 0);
+    const contentH = listH > 0 ? (padY + olderH + listH) : Number(wrap.scrollHeight || 0);
     const needsScroll = contentH > clientH + 2;
     wrap.classList?.toggle('is-no-scroll', !needsScroll);
     if (!needsScroll) wrap.scrollTop = 0;

@@ -19,15 +19,26 @@ test('Android message display acknowledges only the matching recipient and conve
   assert.match(receiver, /channel\.getImportance\(\) == NotificationManager\.IMPORTANCE_NONE\) continue/);
 });
 
-test('message alerts use a custom audible channel and typing cue lasts over half a second', () => {
+test('message alerts use a custom audible channel, typing cue echoes with fading tail over 2s, and typing indicator stays docked visible', () => {
   const receiver = read('android/app/src/main/java/com/myipon/app/NotificationPollReceiver.java');
   const activity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
   const core = read('js/core.js');
+  const messages = read('js/messages.js');
+  const css = read('css/app.css');
   const wav = readFileSync(new URL('../android/app/src/main/res/raw/myipon_message.wav', import.meta.url));
   assert.match(receiver, /MESSAGE_CHANNEL_ID = "myipon_messages_v2"/);
   assert.match(receiver, /messageChannel\.setSound\(messageSoundUri\(context\)/);
   assert.match(activity, /setMediaPlaybackRequiresUserGesture\(false\)/);
-  assert.match(core, /kind === 'msg-typing'[\s\S]*?start: 0\.39, duration: 0\.34/);
+  assert.match(core, /kind === 'msg-typing'[\s\S]*?lp\.frequency\.exponentialRampToValueAtTime\(860,\s*ctx\.currentTime \+ 2\.05\)[\s\S]*?start: 0\.39, duration: 0\.34[\s\S]*?start: 1\.60, duration: 0\.48, gain: 0\.009/);
+  const typingBlock = core.match(/if \(kind === 'msg-typing'\) \{[\s\S]*?return;\s*\}/)?.[0] || '';
+  const gains = [...typingBlock.matchAll(/gain:\s*(0\.\d+)/g)].map((m) => Number(m[1]));
+  assert.ok(gains.length >= 6, `Expected multi-tap echo sequence, got ${gains.length} taps`);
+  for (let i = 1; i < gains.length; i += 1) {
+    assert.ok(gains[i] < gains[i - 1], `Expected fading echo gains (index ${i}: ${gains[i]} < ${gains[i - 1]})`);
+  }
+  assert.match(messages, /<div class="msg-messages-list" id="msg-messages-list"[^>]*><\/div>\s*<\/div>\s*<div class="msg-typing-live" id="msg-typing-live"/);
+  assert.match(css, /\.msg-thread-stage\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto;/s);
+  assert.match(css, /\.msg-typing-live\.is-visible\s+\.msg-typing-live-inner\s*\{[^}]*padding:\s*4px 18px 8px;/s);
   assert.equal(wav.toString('ascii', 0, 4), 'RIFF');
   assert.equal(wav.toString('ascii', 8, 12), 'WAVE');
   assert.ok((wav.length - 44) / (wav.readUInt32LE(28)) > 0.6);

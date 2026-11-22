@@ -45,7 +45,7 @@
   const uiSoundLastAt = Object.create(null);
   const UI_SOUND_COOLDOWN_MS = {
     type: 38,
-    'msg-typing': 450,
+    'msg-typing': 1400,
     'msg-receive': 240,
     'msg-send': 120,
     'msg-voice-start': 180,
@@ -208,9 +208,32 @@
       return;
     }
     if (kind === 'msg-typing') {
-      scheduleUiTone(ctx, master, { freq: 520, endFreq: 580, type: 'sine', start: 0, duration: 0.24, gain: 0.072, attack: 0.01 });
-      scheduleUiTone(ctx, master, { freq: 590, endFreq: 650, type: 'sine', start: 0.19, duration: 0.27, gain: 0.068, attack: 0.01 });
-      scheduleUiTone(ctx, master, { freq: 670, endFreq: 740, type: 'sine', start: 0.39, duration: 0.34, gain: 0.064, attack: 0.01 });
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(1850, ctx.currentTime);
+      lp.frequency.exponentialRampToValueAtTime(860, ctx.currentTime + 2.05);
+      lp.connect(master);
+      const echoes = [
+        { freq: 480, endFreq: 590, start: 0.00, duration: 0.22, gain: 0.088 },
+        { freq: 560, endFreq: 675, start: 0.19, duration: 0.26, gain: 0.070 },
+        { freq: 640, endFreq: 760, start: 0.39, duration: 0.34, gain: 0.055 },
+        { freq: 610, endFreq: 715, start: 0.65, duration: 0.36, gain: 0.040 },
+        { freq: 580, endFreq: 670, start: 0.94, duration: 0.40, gain: 0.027 },
+        { freq: 555, endFreq: 630, start: 1.26, duration: 0.44, gain: 0.017 },
+        { freq: 530, endFreq: 595, start: 1.60, duration: 0.48, gain: 0.009 }
+      ];
+      echoes.forEach((step) => {
+        scheduleUiTone(ctx, lp, { ...step, type: 'sine', attack: 0.012 });
+        scheduleUiTone(ctx, lp, {
+          freq: step.freq * 1.5,
+          endFreq: step.endFreq * 1.5,
+          type: 'triangle',
+          start: step.start + 0.012,
+          duration: step.duration * 0.72,
+          gain: step.gain * 0.22,
+          attack: 0.014
+        });
+      });
       return;
     }
     if (kind === 'msg-receive') {

@@ -73,7 +73,8 @@ test('Option 1 compact Messages header, 4-option filter pills, Requests badge, a
   assert.doesNotMatch(messagesJs, /class="msg-tabs"|id="msg-tab-chats-badge"|id="msg-workspace-subtitle"/);
 
   assert.match(appCss, /\.msg-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;/s);
-  assert.match(appCss, /\.msg-topbar-actions\s+\.msg-icon-btn\.is-active,/);
+  assert.match(appCss, /\.msg-topbar-actions\s+\.msg-icon-btn:hover:not\(:disabled\),[\s\S]*?color:\s*#fff;/);
+  assert.match(appCss, /\.msg-topbar-actions\s+\.msg-icon-btn\.is-active:hover:not\(:disabled\),[\s\S]*?color:\s*#F2C14E;/);
   assert.match(appCss, /\.msg-filter-pills\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(appCss, /\.msg-pill-badge\s*\{[^}]*background:\s*#e53935;/s);
   assert.match(appCss, /\.msg-friends-back-btn\s*\{/);
