@@ -601,6 +601,20 @@ test('anonymous group chat renders 1 crisp anonymous DP first, then blurs DP wit
   await win.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
   const youLabels = listEl.innerHTML.match(/<span class="msg-sender-name is-mine">You<\/span>/g) || [];
   assert.equal(youLabels.length, 2, 'Expected "You" once for the initial 3-message run (6:02/6:18/6:34) and once again after peer reply');
+
+  // Consecutive messages from the SAME anonymous peer across >2 minute gaps show ONE "Anonymous" label at top and ONE DP at bottom,
+  // then show a fresh "Anonymous" label + DP when a DIFFERENT anonymous peer replies
+  activeMsgsPayload = [
+    { id: '44444444-4444-4444-8444-444444444471', conversation_id: convId, sender_id: memberA, sender_name: 'Anonymous', body: 'oh', message_type: 'TEXT', created_at: '2026-11-22T10:02:00Z', delivered_at: null, read_at: null, seen_by: [], attachments: [], reactions: [] },
+    { id: '44444444-4444-4444-8444-444444444472', conversation_id: convId, sender_id: memberA, sender_name: 'Anonymous', body: 'heyyy', message_type: 'TEXT', created_at: '2026-11-22T10:18:00Z', delivered_at: null, read_at: null, seen_by: [], attachments: [], reactions: [] },
+    { id: '44444444-4444-4444-8444-444444444473', conversation_id: convId, sender_id: memberA, sender_name: 'Anonymous', body: 'dfsf', message_type: 'TEXT', created_at: '2026-11-22T10:34:00Z', delivered_at: null, read_at: null, seen_by: [], attachments: [], reactions: [] },
+    { id: '44444444-4444-4444-8444-444444444474', conversation_id: convId, sender_id: memberB, sender_name: 'Anonymous', body: 'another speaker', message_type: 'TEXT', created_at: '2026-11-22T10:35:00Z', delivered_at: null, read_at: null, seen_by: [], attachments: [], reactions: [] }
+  ];
+  await win.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
+  const anonLabels = listEl.innerHTML.match(/<span class="msg-sender-name">Anonymous<\/span>/g) || [];
+  const anonAvatarSlots = listEl.innerHTML.match(/<div class="msg-row-avatar">(?!<\/div>)/g) || [];
+  assert.equal(anonLabels.length, 2, 'Expected 1 "Anonymous" label for memberA (6:02/6:18/6:34) and 1 for memberB');
+  assert.equal(anonAvatarSlots.length, 2, 'Expected 1 bottom DP for memberA run and 1 DP for memberB');
 });
 
 test('anonymous group chat hydrates seen counts from message_receipts fallback and never flashes or jumps DP upward during multi-row reads', async () => {

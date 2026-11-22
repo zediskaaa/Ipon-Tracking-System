@@ -4285,8 +4285,17 @@
       );
       const groupedWithPrev = sameSenderAsPrev
         && (Date.parse(m.created_at) - Date.parse(prev.created_at) < 120000);
-      const groupedWithNext = next && !next.deleted_for_everyone_at && next.sender_id === m.sender_id
+      const nextHasDivider = Boolean(
+        next && (
+          formatDateDivider(next.created_at) !== curDateStr
+          || (unreadFirstId && next.id === unreadFirstId)
+        )
+      );
+      const sameSenderAsNext = Boolean(
+        next && !nextHasDivider && !next.deleted_for_everyone_at && next.sender_id === m.sender_id
         && next.message_type !== 'CALL_EVENT' && next.message_type !== 'SYSTEM'
+      );
+      const groupedWithNext = sameSenderAsNext
         && (Date.parse(next.created_at) - Date.parse(m.created_at) < 120000);
 
       const groupMember = isGrp ? findGroupMember(conv, m.sender_id) : null;
@@ -4307,8 +4316,7 @@
             groupMember?.role
           )
         : '';
-      const hideRepeatedSenderName = groupedWithPrev || (sameSenderAsPrev && (mine || !conv.anonymous_enabled));
-      const senderNameHtml = isGrp && !hideRepeatedSenderName && !isDeleted
+      const senderNameHtml = isGrp && !sameSenderAsPrev && !isDeleted
         ? (mine
             ? `<span class="msg-sender-name is-mine">${escapeHtml(conv.anonymous_enabled ? 'You' : (initializedProfile?.full_name || m.sender_name || 'You'))}${senderRoleBadge}</span>`
             : `<span class="msg-sender-name">${escapeHtml(conv.anonymous_enabled ? 'Anonymous' : senderUser.full_name)}${conv.anonymous_enabled ? '' : userBadgesHtml(senderUser)}${senderRoleBadge}</span>`)
@@ -4366,7 +4374,7 @@
       return `${dateDivider}${unreadDivider}
         <article class="msg-row${mine ? ' is-mine' : ' is-peer'}${groupedWithPrev ? ' is-grouped-prev' : ''}${groupedWithNext ? ' is-grouped-next' : ''}${isMatch ? ' is-search-match' : ''}${activeMatch ? ' is-active-search-match' : ''}${enterCls}" data-msg-id="${escapeHtml(m.id)}">
           ${!mine && !isDeleted ? `<span class="msg-swipe-reply-badge" aria-hidden="true">${MSG_REPLY_SVG}</span>` : ''}
-          ${!mine ? `<div class="msg-row-avatar">${groupedWithNext ? '' : userAvatarHtml(senderUser, 'avatar-sm')}</div>` : ''}
+          ${!mine ? `<div class="msg-row-avatar">${sameSenderAsNext ? '' : userAvatarHtml(senderUser, 'avatar-sm')}</div>` : ''}
           <div class="msg-bubble-col">
             ${senderNameHtml}
             ${replyHtml}
