@@ -46,8 +46,12 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(html, /id="cf-seg-expense"/);
   assert.match(html, /id="cf-entry-dialog"/);
   assert.match(html, /id="cf-rate-dialog"/);
-  assert.match(html, /css\/cashflow-monitor\.css\?v=20261122-04/);
+  assert.match(html, /css\/cashflow-monitor\.css\?v=20261122-05/);
   assert.match(html, /js\/cashflow-monitor\.js\?v=20261122-03/);
+  const appCss = read('css/app.css');
+  assert.match(appCss, /select:not\(\.custom-select-native\)\{[^}]*padding:\s*9px 36px 9px 14px/);
+  assert.match(appCss, /input\[type="search"\]:not\(\.effects-find\):not\(\.tutorial-search-input\)/);
+  assert.match(appCss, /html\[data-theme="dark"\] input\[type="search"\]:not\(\.effects-find\):not\(\.tutorial-search-input\)/);
   assert.match(html, /id="cf-chart-title"/);
   assert.match(html, /id="cf-chart-prev"/);
   assert.match(html, /id="cf-chart-next"/);

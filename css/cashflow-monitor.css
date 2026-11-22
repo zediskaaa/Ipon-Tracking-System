@@ -628,15 +628,19 @@ body[data-budget-mode="monitor"] #budget-header-actions {
 }
 .cf-list-filters input[type="search"],
 .cf-list-filters select {
-  min-height: 40px;
-  border-radius: 11px;
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  box-sizing: border-box;
 }
 .cf-list-filters input[type="search"] {
-  flex: 1 1 200px;
-  max-width: 280px;
+  flex: 1 1 220px;
+  max-width: 300px;
+  padding: 10px 14px 10px 38px;
 }
 .cf-list-filters select {
-  min-width: 170px;
+  min-width: 180px;
+  padding: 9px 36px 9px 14px;
 }
 .cf-primary-add-btn {
   display: inline-flex;
@@ -1309,9 +1313,9 @@ body[data-budget-mode="monitor"] #budget-header-actions {
   text-transform: uppercase;
 }
 .cf-compare-select {
-  min-height: 32px;
-  padding: 4px 10px;
-  border-radius: 9px;
+  min-height: 36px;
+  padding: 6px 32px 6px 11px;
+  border-radius: 10px;
   border: 1px solid rgba(201, 154, 59, .45);
   background: #ffffff;
   color: var(--ink);
@@ -1738,8 +1742,8 @@ html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184,
   .cf-compare-select {
     width: 100%;
     min-width: 0;
-    min-height: 36px;
-    padding: 6px 8px;
+    min-height: 38px;
+    padding: 6px 30px 6px 10px;
     font-size: 12px;
     text-overflow: ellipsis;
   }
