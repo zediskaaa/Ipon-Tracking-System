@@ -7175,6 +7175,26 @@ html[data-theme="dark"] .msg-search-person-presence.is-online { color: #86efac; 
   border-color: #143e30;
   color: #fff;
 }
+.msg-row-chip-btn.is-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  color: #143e30;
+}
+.msg-row-chip-btn.is-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .msg-rel-badge {
   display: inline-flex;
   align-items: center;
@@ -13603,6 +13623,14 @@ html[data-theme="dark"] .msg-row-chip-btn {
   background: var(--surface-input);
   border-color: var(--rule);
   color: var(--ink);
+}
+html[data-theme="dark"] .msg-row-chip-btn.is-icon {
+  color: #a8e6c5;
+}
+html[data-theme="dark"] .msg-row-chip-btn.is-icon:hover {
+  background: rgba(70, 195, 130, .14);
+  border-color: rgba(114, 218, 165, .4);
+  color: #d6f7e5;
 }
 html[data-theme="dark"] .msg-icon-btn {
   background: var(--thread-btn-bg, var(--surface-input));

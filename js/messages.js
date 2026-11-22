@@ -2410,7 +2410,7 @@
     } else if (u.friendship_status === 'INCOMING_REQUEST') {
       relChip = `<button type="button" class="msg-row-chip-btn is-accent" data-req-decision="ACCEPT" data-req-id="${escapeHtml(u.friend_request_id)}">Accept</button>`;
     } else {
-      relChip = `<button type="button" class="msg-row-chip-btn" data-social-action="add_friend" data-target-id="${escapeHtml(u.id)}">Add friend</button>`;
+      relChip = `<button type="button" class="msg-row-chip-btn is-icon" data-social-action="add_friend" data-target-id="${escapeHtml(u.id)}" aria-label="Add friend" title="Add friend"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg></button>`;
     }
     const canMsg = isSelf || (u.can_message !== false && u.friends_only_locked !== true);
     const mutualCount = Number(u.mutual_friends_count || 0);
