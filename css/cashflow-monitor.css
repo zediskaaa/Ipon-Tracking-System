@@ -874,27 +874,63 @@ body[data-budget-mode="monitor"] #budget-header-actions {
 .cf-chart-dot.is-exp { background: #C2443A; }
 .cf-bars-wrap {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(6, minmax(84px, 1fr));
+  gap: 8px;
   align-items: stretch;
-  min-height: 196px;
-  padding: 14px 6px 6px;
+  min-height: 204px;
+  padding: 12px 10px 10px;
   border-radius: 16px;
   background: #faf7f0;
   border: 1px solid rgba(20, 45, 43, .07);
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.cf-bars-wrap.is-compare-only {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 12px 12px;
+  overflow-x: hidden;
+  scroll-snap-type: none;
 }
 .cf-bar-col {
+  scroll-snap-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 20px 4px 8px;
+  gap: 7px;
+  padding: 20px 6px 8px;
   border: 1px solid transparent;
   border-radius: 12px;
   background: transparent;
   cursor: pointer;
   transition: background-color .16s ease, border-color .16s ease;
+}
+.cf-bars-wrap.is-compare-only .cf-bar-col {
+  padding: 28px 12px 12px;
+  gap: 8px;
+}
+.cf-bars-wrap.is-compare-only .cf-bar-pair {
+  gap: 10px;
+  height: 124px;
+}
+.cf-bars-wrap.is-compare-only .cf-bar {
+  width: 24px;
+  border-radius: 7px 7px 2px 2px;
+}
+.cf-bars-wrap.is-compare-only .cf-bar-month {
+  font-size: 13px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
+}
+.cf-bars-wrap.is-compare-only .cf-bar-net {
+  font-size: 13px;
+  font-weight: 800;
 }
 .cf-bar-col:hover {
   background: rgba(20, 45, 43, .05);
@@ -1196,17 +1232,42 @@ body[data-budget-mode="monitor"] #budget-header-actions {
 }
 .cf-bar-tag {
   position: absolute;
-  top: 4px;
+  top: 6px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: 999px;
   background: #C99A3B;
   color: #ffffff;
   font: 800 9.5px/1.25 Arial, sans-serif;
-  letter-spacing: .03em;
+  letter-spacing: .04em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+.cf-bar-tag.is-primary {
+  background: #0D3326;
+  color: #F6EDD3;
+}
+.cf-bar-compare-meta {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(20, 45, 43, .12);
+  font: 600 11px/1.3 Arial, sans-serif;
+  text-align: center;
+}
+.cf-bar-compare-meta span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cf-bar-compare-meta .is-avail {
+  color: #166a4e;
+}
+.cf-bar-compare-meta .is-exp {
+  color: #b8372e;
 }
 .cf-compare-panel {
   padding: 14px 16px;
@@ -1280,6 +1341,7 @@ body[data-budget-mode="monitor"] #budget-header-actions {
   gap: 10px;
 }
 .cf-compare-metric {
+  min-width: 0;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(20, 45, 43, .09);
@@ -1294,8 +1356,9 @@ body[data-budget-mode="monitor"] #budget-header-actions {
   color: var(--muted);
 }
 .cf-compare-main-val {
-  font: 800 15px/1.2 Arial, sans-serif;
+  font: 800 clamp(14px, 3.6vw, 15.5px)/1.2 Arial, sans-serif;
   color: var(--ink);
+  word-break: break-word;
 }
 .cf-compare-sub-row {
   display: flex;
@@ -1344,6 +1407,19 @@ html[data-theme="dark"] .cf-compare-toggle[aria-pressed="true"] {
 html[data-theme="dark"] .cf-bar-col.is-compare {
   background: rgba(233, 184, 76, .14);
   border-color: rgba(233, 184, 76, .58);
+}
+html[data-theme="dark"] .cf-bar-tag.is-primary {
+  background: #1f7455;
+  color: #ffffff;
+}
+html[data-theme="dark"] .cf-bar-compare-meta {
+  border-top-color: rgba(218, 236, 227, .14);
+}
+html[data-theme="dark"] .cf-bar-compare-meta .is-avail {
+  color: #7ae5b6;
+}
+html[data-theme="dark"] .cf-bar-compare-meta .is-exp {
+  color: #fca5a5;
 }
 html[data-theme="dark"] .cf-delta-pill.is-good {
   background: rgba(52, 211, 153, .18);
@@ -1665,6 +1741,7 @@ html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184,
     min-height: 36px;
     padding: 6px 8px;
     font-size: 12px;
+    text-overflow: ellipsis;
   }
   .cf-compare-actions {
     display: grid;
@@ -1742,22 +1819,39 @@ html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184,
     white-space: normal;
   }
   .cf-bars-wrap {
-    gap: 3px;
-    padding: 10px 4px 6px;
+    grid-template-columns: repeat(6, minmax(84px, 1fr));
+    gap: 8px;
+    padding: 12px 8px 10px;
   }
   .cf-bar-col {
-    padding: 18px 2px 6px;
+    padding: 18px 6px 8px;
     gap: 6px;
   }
   .cf-bar {
-    width: 10px;
+    width: 13px;
   }
   .cf-bar-month {
-    font-size: 10.5px;
-    letter-spacing: -.02em;
+    font-size: 11.5px;
   }
   .cf-bar-net {
-    font-size: 9.5px;
+    font-size: 11px;
+  }
+  .cf-bars-wrap.is-compare-only {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px 10px 10px;
+  }
+  .cf-bars-wrap.is-compare-only .cf-bar-col {
+    padding: 26px 8px 10px;
+  }
+  .cf-bars-wrap.is-compare-only .cf-bar {
+    width: 22px;
+  }
+  .cf-bars-wrap.is-compare-only .cf-bar-month {
+    font-size: 12px;
+  }
+  .cf-bars-wrap.is-compare-only .cf-bar-net {
+    font-size: 12px;
   }
   .cf-history-row {
     flex-wrap: wrap;
@@ -1779,24 +1873,25 @@ html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184,
     grid-template-columns: minmax(0, 1fr);
   }
   .cf-bars-wrap {
-    gap: 2px;
-    padding: 8px 2px 6px;
+    grid-template-columns: repeat(6, minmax(82px, 1fr));
+    gap: 6px;
+    padding: 10px 8px 10px;
   }
-  .cf-bar-col {
-    padding: 17px 1px 6px;
-    gap: 5px;
+  .cf-bars-wrap.is-compare-only {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px 8px;
   }
-  .cf-bar-pair {
-    gap: 3px;
+  .cf-bars-wrap.is-compare-only .cf-bar-col {
+    padding: 25px 6px 8px;
   }
-  .cf-bar {
-    width: 8px;
+  .cf-bars-wrap.is-compare-only .cf-bar {
+    width: 19px;
   }
-  .cf-bar-month {
-    font-size: 9.5px;
-    letter-spacing: -.03em;
+  .cf-bars-wrap.is-compare-only .cf-bar-month {
+    font-size: 11.5px;
   }
-  .cf-bar-net {
-    font-size: 9px;
+  .cf-bars-wrap.is-compare-only .cf-bar-compare-meta {
+    font-size: 10.5px;
   }
 }

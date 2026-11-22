@@ -46,8 +46,9 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(html, /id="cf-seg-expense"/);
   assert.match(html, /id="cf-entry-dialog"/);
   assert.match(html, /id="cf-rate-dialog"/);
-  assert.match(html, /css\/cashflow-monitor\.css\?v=20261122-03/);
-  assert.match(html, /js\/cashflow-monitor\.js\?v=20261122-02/);
+  assert.match(html, /css\/cashflow-monitor\.css\?v=20261122-04/);
+  assert.match(html, /js\/cashflow-monitor\.js\?v=20261122-03/);
+  assert.match(html, /id="cf-chart-title"/);
   assert.match(html, /id="cf-chart-prev"/);
   assert.match(html, /id="cf-chart-next"/);
   assert.match(html, /id="cf-compare-toggle"/);
@@ -57,7 +58,8 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(css, /@media \(max-width: 780px\)/);
   assert.match(css, /@media \(max-width: 440px\)/);
   assert.match(css, /\.cf-compare-pair\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
-  assert.match(css, /\.cf-bars-wrap\s*\{[\s\S]*align-items:\s*stretch/);
+  assert.match(css, /\.cf-bars-wrap\s*\{[\s\S]*grid-template-columns:\s*repeat\(6, minmax\(84px, 1fr\)\)[\s\S]*overflow-x:\s*auto/);
+  assert.match(css, /\.cf-bars-wrap\.is-compare-only\s*\{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.cf-bar-month\s*\{[\s\S]*white-space:\s*nowrap/);
 });
 
@@ -191,6 +193,10 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
       expenses,
       expense_breakdown: breakdown,
       comparison_trend: [
+        { year: 2026, month: 6, mandatory_savings_pct: 20, gross_income: 1500000, mandatory_savings: 300000, available_income: 1200000, total_expenses: 350000, net_income: 850000 },
+        { year: 2026, month: 7, mandatory_savings_pct: 20, gross_income: 180000, mandatory_savings: 36000, available_income: 144000, total_expenses: 95000, net_income: 49000 },
+        { year: 2026, month: 8, mandatory_savings_pct: 20, gross_income: 50000, mandatory_savings: 10000, available_income: 40000, total_expenses: 45500, net_income: -5500 },
+        { year: 2026, month: 9, mandatory_savings_pct: 20, gross_income: 25000, mandatory_savings: 5000, available_income: 20000, total_expenses: 12000, net_income: 8000 },
         { year: 2026, month: 10, mandatory_savings_pct: 20, gross_income: 40000, mandatory_savings: 8000, available_income: 32000, total_expenses: 0, net_income: 32000 },
         { year: yr, month: mo, mandatory_savings_pct: pct, gross_income: gross, mandatory_savings: mandatory, available_income: avail, total_expenses: expTotal, net_income: net }
       ],
@@ -341,13 +347,33 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
   assert.equal(els.get('cf-hero-net').textContent, '₱0.00');
   assert.equal(els.get('cf-hero-card').classList.contains('is-deficit'), false);
 
-  // 6. Chart Compare toggle compares active month side-by-side against previous month (Nov vs Oct)
+  // 6. Chart Compare toggle shows ONLY the 2 compared months in the chart and updates live when changing target
+  const chartMonths = () => [...els.get('cf-chart-bars').innerHTML.matchAll(/data-cf-chart-ym="([^"]+)"/g)].map((m) => m[1]);
   assert.equal(els.get('cf-compare-panel').hidden, true);
+  assert.equal(chartMonths().length, 6, 'Normal mode should show all 6 months');
+  assert.equal(els.get('cf-chart-bars').classList.contains('is-compare-only'), false);
+
   await els.get('cf-compare-toggle')._emit('click');
   assert.equal(els.get('cf-compare-panel').hidden, false);
+  assert.equal(els.get('cf-chart-title').textContent, 'Comparing 2 months');
+  assert.equal(els.get('cf-chart-bars').classList.contains('is-compare-only'), true);
+  assert.deepEqual(chartMonths(), ['2026-11', '2026-10'], 'Compare mode must render strictly the 2 compared months only');
   assert.equal(els.get('cf-compare-primary-label').textContent, 'November 2026');
   assert.match(els.get('cf-compare-grid').innerHTML, /Oct 26: ₱32,000\.00/);
   assert.match(els.get('cf-compare-grid').innerHTML, /cf-delta-pill/);
+
+  els.get('cf-compare-select').value = '2026-6';
+  await els.get('cf-compare-select')._emit('change');
+  assert.deepEqual(chartMonths(), ['2026-11', '2026-6'], 'Switching compare dropdown must update chart to strictly those 2 months');
+  assert.match(els.get('cf-chart-bars').innerHTML, /Avail ₱1\.2M/);
+  assert.match(els.get('cf-chart-bars').innerHTML, /Exp ₱350k/);
+  assert.match(els.get('cf-chart-bars').innerHTML, /Net ₱850k/);
+
+  await els.get('cf-compare-close-btn')._emit('click');
+  assert.equal(els.get('cf-compare-panel').hidden, true);
+  assert.equal(els.get('cf-chart-title').textContent, 'Income vs. expenses (6 months)');
+  assert.equal(els.get('cf-chart-bars').classList.contains('is-compare-only'), false);
+  assert.equal(chartMonths().length, 6, 'Closing compare mode must restore all 6 months');
 
   // 7. Chart Prev button shifts month directly to October 2026 and isolates records strictly to October
   await els.get('cf-chart-prev')._emit('click');

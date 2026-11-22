@@ -104,6 +104,7 @@
   const breakdownWrap = document.getElementById('cf-breakdown-wrap');
   const breakdownList = document.getElementById('cf-breakdown-list');
 
+  const chartTitleEl = document.getElementById('cf-chart-title');
   const chartBarsWrap = document.getElementById('cf-chart-bars');
   const chartPrevBtn = document.getElementById('cf-chart-prev');
   const chartNextBtn = document.getElementById('cf-chart-next');
@@ -180,8 +181,18 @@
     const num = roundCentavos(value);
     const abs = Math.abs(num);
     const sign = num < 0 ? '−' : '';
-    if (abs >= 1_000_000) return `${sign}₱${(abs / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
-    if (abs >= 1_000) return `${sign}₱${(abs / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
+    if (abs >= 1_000_000_000) {
+      const b = abs / 1_000_000_000;
+      return `${sign}₱${(b >= 100 ? Math.round(b) : b.toFixed(1).replace(/\.0$/, ''))}B`;
+    }
+    if (abs >= 1_000_000) {
+      const m = abs / 1_000_000;
+      return `${sign}₱${(m >= 100 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, ''))}M`;
+    }
+    if (abs >= 1_000) {
+      const k = abs / 1_000;
+      return `${sign}₱${(k >= 100 ? Math.round(k) : k.toFixed(1).replace(/\.0$/, ''))}k`;
+    }
     return `${sign}₱${Math.round(abs)}`;
   }
 
@@ -587,14 +598,17 @@
   }
 
   function renderComparisonPanel(data) {
-    if (!comparePanelEl) return;
+    if (chartTitleEl) {
+      chartTitleEl.textContent = compareMode ? 'Comparing 2 months' : 'Income vs. expenses (6 months)';
+    }
     if (compareToggleBtn) compareToggleBtn.setAttribute('aria-pressed', compareMode ? 'true' : 'false');
     if (compareLegendEl) compareLegendEl.hidden = !compareMode;
     if (chartHintEl) {
       chartHintEl.textContent = compareMode
-        ? 'Tap any month bar to compare side-by-side'
+        ? 'Showing only your 2 compared months'
         : 'Tap a month bar to inspect';
     }
+    if (!comparePanelEl) return;
     comparePanelEl.hidden = !compareMode;
     if (!compareMode) return;
 
@@ -666,14 +680,30 @@
     renderComparisonPanel(data);
 
     if (chartBarsWrap) {
-      if (!trend.length) {
+      const compMap = buildComparableMonthsMap(data);
+      const activeKey = `${selectedYear}-${selectedMonth}`;
+      let pointsToRender = trend;
+      if (compareMode) {
+        const primaryPt = compMap.get(activeKey) || {
+          year: selectedYear,
+          month: selectedMonth,
+          available_income: Number(data?.totals?.available_income || 0),
+          total_expenses: Number(data?.totals?.total_expenses || 0),
+          net_income: Number(data?.totals?.net_income || 0)
+        };
+        const comparePt = compareTargetKey && compareTargetKey !== activeKey ? compMap.get(compareTargetKey) : null;
+        pointsToRender = comparePt ? [primaryPt, comparePt] : [primaryPt];
+      }
+      chartBarsWrap.classList.toggle('is-compare-only', compareMode);
+
+      if (!pointsToRender.length) {
         chartBarsWrap.innerHTML = '<div class="empty-state cf-empty-box" style="grid-column:1/-1"><strong>No monthly trend data yet</strong><small>Record income or expenses to compare monthly performance.</small></div>';
       } else {
         const maxVal = Math.max(
           1,
-          ...trend.map((pt) => Math.max(Number(pt.available_income || 0), Number(pt.total_expenses || 0)))
+          ...pointsToRender.map((pt) => Math.max(Number(pt.available_income || 0), Number(pt.total_expenses || 0)))
         );
-        chartBarsWrap.innerHTML = trend.map((pt) => {
+        chartBarsWrap.innerHTML = pointsToRender.map((pt) => {
           const yr = Number(pt.year);
           const mo = Number(pt.month);
           const key = `${yr}-${mo}`;
@@ -684,19 +714,40 @@
           const expH = exp > 0 ? Math.max(8, Math.round((exp / maxVal) * 100)) : 3;
           const isSelected = yr === selectedYear && mo === selectedMonth;
           const isCompared = compareMode && !isSelected && compareTargetKey === key;
-          const label = `${MONTH_SHORT[(mo - 1) % 12]} ${String(yr).slice(-2)}`;
+          const label = compareMode
+            ? monthLabel(yr, mo)
+            : `${MONTH_SHORT[(mo - 1) % 12]} ${String(yr).slice(-2)}`;
           const tip = `${monthLabel(yr, mo)} — Available: ${Ipon.money(avail)}, Expenses: ${Ipon.money(exp)}, Net: ${formatSignedMoney(net)}`;
+          const tagHtml = compareMode
+            ? (isSelected ? '<span class="cf-bar-tag is-primary">Current</span>' : '<span class="cf-bar-tag">VS</span>')
+            : '';
+          const compareMetaHtml = compareMode
+            ? `<div class="cf-bar-compare-meta tabular-nums"><span class="is-avail">Avail ${formatCompactPeso(avail)}</span><span class="is-exp">Exp ${formatCompactPeso(exp)}</span></div>`
+            : '';
           return `
             <button class="cf-bar-col${isSelected ? ' is-selected' : ''}${isCompared ? ' is-compare' : ''}" type="button" data-cf-chart-ym="${key}" title="${Ipon.escapeHtml(tip)}" aria-label="${Ipon.escapeHtml(tip)}">
-              ${isCompared ? '<span class="cf-bar-tag">VS</span>' : ''}
+              ${tagHtml}
               <div class="cf-bar-pair" aria-hidden="true">
                 <span class="cf-bar is-avail" style="height:${availH}%"></span>
                 <span class="cf-bar is-exp" style="height:${expH}%"></span>
               </div>
               <span class="cf-bar-month">${Ipon.escapeHtml(label)}</span>
-              <span class="cf-bar-net tabular-nums${net < 0 ? ' is-negative' : ''}">${formatCompactPeso(net)}</span>
+              <span class="cf-bar-net tabular-nums${net < 0 ? ' is-negative' : ''}">${compareMode ? `Net ${formatCompactPeso(net)}` : formatCompactPeso(net)}</span>
+              ${compareMetaHtml}
             </button>`;
         }).join('');
+
+        if (compareMode) {
+          if ('scrollLeft' in chartBarsWrap) chartBarsWrap.scrollLeft = 0;
+        } else if (Number(chartBarsWrap.scrollWidth) > Number(chartBarsWrap.clientWidth)) {
+          const activeCol = typeof chartBarsWrap.querySelector === 'function'
+            ? chartBarsWrap.querySelector('.cf-bar-col.is-selected')
+            : null;
+          if (activeCol && typeof activeCol.offsetLeft === 'number') {
+            const targetLeft = activeCol.offsetLeft - Math.max(0, (chartBarsWrap.clientWidth - activeCol.offsetWidth) / 2);
+            chartBarsWrap.scrollLeft = Math.max(0, targetLeft);
+          }
+        }
       }
     }
 
@@ -1113,6 +1164,10 @@
     if (!Number.isFinite(y) || !Number.isFinite(m)) return;
     if (compareMode) {
       if (y === selectedYear && m === selectedMonth) return;
+      if (compareTargetKey === `${y}-${m}`) {
+        compareSelectEl?.focus();
+        return;
+      }
       compareTargetKey = `${y}-${m}`;
       if (monitorData) renderInsights(monitorData);
       return;
