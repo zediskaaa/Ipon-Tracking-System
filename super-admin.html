@@ -16,7 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261122-25">
+  <link rel="stylesheet" href="css/app.css?v=20261122-26">
   <script src="js/config.js?v=20261120-78"></script>
 </head>
 
@@ -276,7 +276,10 @@
         <section class="panel" aria-labelledby="users-title">
           <div class="panel-header">
             <div>
-              <h2 id="users-title">Users</h2>
+              <div class="sa-users-title-row">
+                <h2 id="users-title">Users</h2>
+                <span class="sa-online-pill" id="users-online-pill" aria-live="polite"><i class="sa-online-dot" aria-hidden="true"></i><span id="users-online-count">0 online</span></span>
+              </div>
               <p>Manage administrators, treasurers, and members across all savings groups.</p>
             </div>
             <div class="table-filters users-filters">
@@ -738,9 +741,11 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
         </button>
       </header>
-      <div class="user-groups-list" id="user-groups-list"></div>
-      <div class="form-actions">
-        <button class="button button-primary" id="user-groups-done" type="button">Done</button>
+      <div class="user-groups-body">
+        <div class="user-groups-list" id="user-groups-list"></div>
+        <div class="form-actions">
+          <button class="button button-primary" id="user-groups-done" type="button">Done</button>
+        </div>
       </div>
     </div>
   </dialog>
@@ -1062,7 +1067,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/super-admin.js?v=20261122-03"></script>
+  <script src="js/super-admin.js?v=20261122-04"></script>
 </body>
 
 </html>

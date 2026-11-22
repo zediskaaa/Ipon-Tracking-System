@@ -463,30 +463,31 @@
         .map((gm) => gm.group_id)
     );
 
-    const addGroup = (group, membershipStatus = 'ACTIVE', isOwner = false) => {
+    const addGroup = (group, membershipStatus = 'ACTIVE', isOwner = false, role = '') => {
       if (!group || group.status !== 'ACTIVE' || seen.has(group.id)) return;
       seen.set(group.id, {
         id: group.id,
         name: group.name || 'Savings workspace',
         workspace_mode: group.workspace_mode === 'SOLO' ? 'SOLO' : 'GROUP',
         status: membershipStatus || 'ACTIVE',
+        role: String(role || '').toUpperCase(),
         isOwner
       });
     };
 
     groupMemberships
       .filter((gm) => gm.user_id === profile.id && gm.status !== 'DISABLED')
-      .forEach((gm) => addGroup(groupById.get(gm.group_id), gm.status, false));
+      .forEach((gm) => addGroup(groupById.get(gm.group_id), gm.status, false, gm.role));
 
     groups
       .filter((group) => group.owner_id === profile.id && group.status === 'ACTIVE')
       .forEach((group) => {
         if (seen.has(group.id)) seen.get(group.id).isOwner = true;
-        else addGroup(group, 'ACTIVE', true);
+        else addGroup(group, 'ACTIVE', true, 'ADMIN');
       });
 
     if (profile.group_id && !disabledGroupIds.has(profile.group_id)) {
-      addGroup(groupById.get(profile.group_id), 'ACTIVE', false);
+      addGroup(groupById.get(profile.group_id), 'ACTIVE', false, profile.role);
     }
 
     return Array.from(seen.values());
@@ -494,42 +495,83 @@
 
   function renderUserGroupsCell(userGroups, userId) {
     if (!userGroups.length) return '<span class="field-help">No groups yet</span>';
-    const preview = userGroups.slice(0, 2);
-    const overflow = userGroups.length - preview.length;
-    const pills = preview.map((group) => `
-      <span class="sa-group-chip${group.workspace_mode === 'SOLO' ? ' is-solo' : ''}" title="${Ipon.escapeHtml(group.name)}${group.workspace_mode === 'SOLO' ? ' (Solo savings)' : ''}">
-        <span class="sa-group-name">${Ipon.escapeHtml(group.name)}</span>${group.workspace_mode === 'SOLO' ? '<em class="sa-group-mode">Solo</em>' : ''}
-      </span>`).join('');
-    const moreBtn = overflow > 0
-      ? `<button class="sa-group-more-btn" type="button" data-view-user-groups="${userId}" title="View all ${userGroups.length} workspaces">+${overflow} more</button>`
-      : '';
-    return `<div class="sa-group-pills">${pills}${moreBtn}</div>`;
+    if (userGroups.length === 1) {
+      const group = userGroups[0];
+      return `<div class="sa-group-pills">
+        <span class="sa-group-chip${group.workspace_mode === 'SOLO' ? ' is-solo' : ''}" title="${Ipon.escapeHtml(group.name)}${group.workspace_mode === 'SOLO' ? ' (Solo savings)' : ''}">
+          <span class="sa-group-name">${Ipon.escapeHtml(group.name)}</span>${group.workspace_mode === 'SOLO' ? '<em class="sa-group-mode">Solo</em>' : ''}
+        </span>
+      </div>`;
+    }
+    const groupCount = userGroups.length;
+    const soloCount = userGroups.filter((group) => group.workspace_mode === 'SOLO').length;
+    const sharedCount = groupCount - soloCount;
+    const subParts = [
+      sharedCount ? `${sharedCount} group` : '',
+      soloCount ? `${soloCount} solo` : ''
+    ].filter(Boolean).join(' · ');
+    const namesTip = userGroups.map((group) => `${group.name}${group.workspace_mode === 'SOLO' ? ' (Solo)' : ''}`).join(', ');
+    return `<div class="sa-group-pills sa-group-pills-summary">
+      <button class="sa-group-more-btn" type="button" data-view-user-groups="${userId}" title="${Ipon.escapeHtml(namesTip)}" aria-label="View all ${groupCount} groups">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span><strong>${groupCount}</strong> groups</span>
+        <em>View</em>
+      </button>
+      ${subParts ? `<small class="field-help sa-group-sub">${Ipon.escapeHtml(subParts)}</small>` : ''}
+    </div>`;
   }
+
+  let activeUserGroupsProfileId = '';
 
   function openUserGroupsDialog(profile) {
     if (!userGroupsDialog || !userGroupsList || !profile) return;
+    activeUserGroupsProfileId = profile.id;
     const groupById = new Map(groups.map((group) => [group.id, group]));
     const userGroups = getUserGroups(profile, groupById);
-    if (userGroupsTitle) userGroupsTitle.textContent = `${profile.full_name || 'User'}'s workspaces`;
+    if (userGroupsTitle) userGroupsTitle.textContent = `${profile.full_name || 'User'}'s groups`;
     if (userGroupsSubtitle) {
       userGroupsSubtitle.textContent = `${userGroups.length} active workspace${userGroups.length === 1 ? '' : 's'} linked to ${profile.email || 'this account'}.`;
     }
-    userGroupsList.innerHTML = userGroups.length ? userGroups.map((group) => `
+    userGroupsList.innerHTML = userGroups.length ? userGroups.map((group) => {
+      const roleText = group.workspace_mode === 'SOLO'
+        ? (group.isOwner ? 'Solo owner' : 'Solo workspace')
+        : [ROLE_LABELS[group.role] || '', group.isOwner ? 'Created by user' : 'Joined workspace'].filter(Boolean).join(' · ');
+      return `
       <div class="user-groups-item">
         <div class="user-groups-item-copy">
           <strong>${Ipon.escapeHtml(group.name)}</strong>
-          <small class="field-help">${group.isOwner ? 'Created by user' : 'Joined workspace'}</small>
+          <small class="field-help">${Ipon.escapeHtml(roleText || 'Joined workspace')}</small>
         </div>
         <div class="user-groups-item-badges">
           <span class="sa-group-chip${group.workspace_mode === 'SOLO' ? ' is-solo' : ''}">${group.workspace_mode === 'SOLO' ? 'Solo savings' : 'Group savings'}</span>
           ${statusLabel(group.status)}
         </div>
-      </div>`).join('') : '<p class="empty-state">No groups linked to this account yet.</p>';
+      </div>`;
+    }).join('') : '<p class="empty-state">No groups linked to this account yet.</p>';
     if (!userGroupsDialog.open) userGroupsDialog.showModal();
   }
 
-  document.getElementById('user-groups-close')?.addEventListener('click', () => userGroupsDialog?.close());
-  document.getElementById('user-groups-done')?.addEventListener('click', () => userGroupsDialog?.close());
+  const closeUserGroupsDialog = () => {
+    activeUserGroupsProfileId = '';
+    userGroupsDialog?.close?.();
+  };
+  document.getElementById('user-groups-close')?.addEventListener('click', closeUserGroupsDialog);
+  document.getElementById('user-groups-done')?.addEventListener('click', closeUserGroupsDialog);
+  userGroupsDialog?.addEventListener('cancel', () => { activeUserGroupsProfileId = ''; });
+
+  function syncSuperAdminPresenceUi() {
+    [administratorsBody, badgesBody, effectsBody, effectRequestsBody, featureRequestsBody, bugReportsBody].forEach((container) => {
+      if (container) Ipon.syncPresenceDots?.(container);
+    });
+    const onlinePill = document.getElementById('users-online-pill');
+    const onlineCountEl = document.getElementById('users-online-count');
+    if (onlineCountEl) {
+      const onlineTotal = profiles.filter((p) => p && p.role !== 'SUPER_ADMIN' && Ipon.isUserOnline?.(p.id)).length;
+      onlineCountEl.textContent = `${onlineTotal} online`;
+      onlinePill?.classList.toggle('has-online', onlineTotal > 0);
+    }
+  }
+  window.addEventListener('ipon:presence-change', syncSuperAdminPresenceUi);
 
   function formatUserActivityLabel(activity) {
     if (!activity) return '';
@@ -591,7 +633,12 @@
       </tr>`;
     }).join('') : `<tr><td colspan="6" class="empty-state">${query || status ? 'No matching user accounts.' : 'No user accounts.'}</td></tr>`;
     Ipon.bindAvatarFallbacks(administratorsBody);
-    Ipon.syncPresenceDots(administratorsBody);
+    syncSuperAdminPresenceUi();
+    if (userGroupsDialog?.open && activeUserGroupsProfileId) {
+      const openProfile = profiles.find((item) => item.id === activeUserGroupsProfileId);
+      if (openProfile) openUserGroupsDialog(openProfile);
+      else closeUserGroupsDialog();
+    }
   }
 
   function formatBadgeDurationCell(profile, tier) {
