@@ -7866,6 +7866,11 @@
     return cleanNotificationDisplayTitle(raw);
   }
 
+  function formatNotificationPreview(item) {
+    const raw = String(item?.message || '').replace(/\r?\n+/g, ' · ').replace(/\s{2,}/g, ' ').trim();
+    return raw || 'Open to view details.';
+  }
+
   function isAnonymousChatNotification(item) {
     return formatNotificationTitle(item) === 'Anonymous' && /[?&]chat=/.test(String(item?.link || ''));
   }
@@ -8922,6 +8927,7 @@
               ? 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'
               : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
         const displayTitle = formatNotificationTitle(item);
+        const displayMessage = formatNotificationPreview(item);
         const anonymousChatNotice = isAnonymousChatNotification(item);
         const senderAvatarUrl = resolveNotificationAvatarUrl(item);
         const useSenderAvatar = isMessageNotificationItem(item) || Boolean(senderAvatarUrl);
@@ -8939,8 +8945,8 @@
         return `<article class="notification-item${item.read_at ? '' : ' is-unread'}" data-notification-id="${item.id}"${safeTarget ? ` data-nav-target="${escapeHtml(safeTarget)}"` : ''}>
           ${iconHtml}
           <div class="notification-item-copy">
-            <strong>${escapeHtml(displayTitle)}</strong>
-            <p>${escapeHtml(item.message)}</p>
+            <strong title="${escapeHtml(displayTitle)}">${escapeHtml(displayTitle)}</strong>
+            <p title="${escapeHtml(displayMessage)}">${escapeHtml(displayMessage)}</p>
             <small>${dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</small>
             ${isInvite ? `
               <div class="notification-invite-actions">

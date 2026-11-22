@@ -998,7 +998,7 @@ test('review and void reasons appear in submitter notifications, calendar detail
   assert.match(dashboard, /activity\.review_note/);
   assert.match(records, /function reasonNoteHtml/);
   assert.match(members, /review_note,void_reason/);
-  assert.match(css, /\.notification-item p\{[^}]*white-space:pre-line/);
+  assert.match(css, /\.notification-item p\{[^}]*white-space:nowrap;overflow:hidden;text-overflow:ellipsis/);
   assert.match(css, /\.record-reason-note/);
 });
 
@@ -6121,8 +6121,8 @@ test('desktop dashboard calendar maintains fixed row heights and announcement pa
   assert.match(appCss, /\.announcement-panel \.announcement-item\{[^}]*flex:\s*0 0 auto;[^}]*height:\s*260px;/);
   assert.match(appCss, /\.announcement-item\{[^}]*height:\s*260px;/);
   assert.match(appCss, /\.announcement-item-head \.announcement-item-title\{[^}]*-webkit-line-clamp:\s*3;/);
-  assert.match(appCss, /\.notification-item\{[^}]*height:\s*106px;/);
-  assert.match(appCss, /\.notification-item p\{[^}]*-webkit-line-clamp:\s*2;/);
+  assert.match(appCss, /\.notification-item\{[^}]*height:\s*78px;/);
+  assert.match(appCss, /\.notification-item p\{[^}]*white-space:nowrap;overflow:hidden;text-overflow:ellipsis/);
 });
 
 test('migration 075 restores group summary RPC and read-only group transparency RLS for members', () => {
@@ -11319,7 +11319,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261122-13/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261122-14/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

@@ -4828,12 +4828,13 @@
           const cleanTitle = anonymousNotice ? 'Anonymous' : (rawTitle.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || rawTitle);
           const peerFromConv = anonymousNotice ? null : (state.conversations || []).find((c) => c.peer && (c.peer.id === n.actor_id || String(c.peer.full_name || '').toLowerCase() === cleanTitle.toLowerCase()))?.peer;
           const avatarUrl = anonymousNotice ? 'assets/anonymous-avatar.svg' : (n.actor_avatar_url || peerFromConv?.avatar_url || ipon().getMemberAvatar?.(n.actor_id || cleanTitle) || null);
+          const cleanAlertMsg = anonymousNotice ? 'Conversation update' : (String(n.message || '').replace(/\r?\n+/g, ' · ').replace(/\s{2,}/g, ' ').trim() || 'Open to view details.');
           return `
           <button type="button" class="msg-alert-row has-sender-avatar${n.read_at ? '' : ' is-unread'}" data-social-alert-id="${escapeHtml(n.id)}" data-social-link="${escAttr(n.link || '')}" data-social-type="${escAttr(n.type || '')}">
             <span class="msg-alert-avatar" aria-hidden="true">${anonymousNotice ? '<img class="avatar-circle avatar-md" src="assets/anonymous-avatar.svg" alt="">' : (ipon().avatarMarkup ? ipon().avatarMarkup(avatarUrl, cleanTitle, 'avatar-md', n.actor_id || peerFromConv?.id || '') : '')}</span>
             <div class="msg-alert-copy">
-              <strong>${escapeHtml(cleanTitle)}</strong>
-              <p>${escapeHtml(anonymousNotice ? 'Conversation update' : n.message)}</p>
+              <strong title="${escAttr(cleanTitle)}">${escapeHtml(cleanTitle)}</strong>
+              <p title="${escAttr(cleanAlertMsg)}">${escapeHtml(cleanAlertMsg)}</p>
               <small>${escapeHtml(ipon().dateLabel(n.created_at, { dateStyle: 'medium', timeStyle: 'short' }))}</small>
             </div>
             ${n.read_at ? '' : '<i class="notification-unread" aria-label="Unread"></i>'}
