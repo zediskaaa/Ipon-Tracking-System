@@ -388,7 +388,7 @@
       document.body.append(script);
     });
     await Promise.all([
-      loadScript('js/core.js?v=20261122-30'),
+      loadScript('js/core.js?v=20261122-31'),
       loadScript('js/policy.js?v=20261119-09'),
       loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js', 'sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb')
     ]);

@@ -7876,8 +7876,17 @@
 
   function safeNotificationTarget(link) {
     if (!link || typeof link !== 'string') return '';
-    if (/^https:\/\//i.test(link)) return link;
-    const clean = link.replace(/^\/+/, '');
+    let clean = link.trim();
+    if (/^https?:\/\//i.test(clean)) {
+      try {
+        const target = new URL(clean);
+        if (target.origin !== location.origin) return '';
+        clean = `${target.pathname}${target.search}${target.hash}`;
+      } catch {
+        return '';
+      }
+    }
+    clean = clean.replace(/^\/+/, '');
     return /^[a-z0-9_-]+\.html(?:\?[a-z0-9_=&:%.-]+)?(?:#[a-z0-9_-]+)?$/i.test(clean) ? clean : '';
   }
 

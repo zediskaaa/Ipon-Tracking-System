@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v210';
+const CACHE_NAME = 'ipon-shell-v211';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname) && self.location.protocol !== 'https:';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
@@ -65,8 +65,17 @@ self.addEventListener('fetch', (event) => {
 function normalizeNotificationPath(rawTarget) {
   const value = String(rawTarget || '').trim();
   if (!value) return '/dashboard.html';
-  if (/^https?:\/\//i.test(value) || value.startsWith('/')) return value;
-  return `/${value}`;
+  const rawPath = value.split(/[?#]/, 1)[0];
+  if (rawPath.includes('..') || /%2e/i.test(rawPath)) return '/dashboard.html';
+  try {
+    const target = new URL(value, self.location.origin);
+    if (target.origin !== self.location.origin || !/^\/[a-z0-9_-]+\.html$/i.test(target.pathname)) {
+      return '/dashboard.html';
+    }
+    return `${target.pathname}${target.search}${target.hash}`;
+  } catch {
+    return '/dashboard.html';
+  }
 }
 
 self.addEventListener('push', (event) => {
@@ -123,10 +132,6 @@ self.addEventListener('notificationclick', (event) => {
   const parsedTarget = new URL(rawTarget, self.location.origin);
   const targetUrl = parsedTarget.href;
   event.waitUntil((async () => {
-    if (parsedTarget.origin !== self.location.origin) {
-      await self.clients.openWindow(targetUrl);
-      return;
-    }
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of clients) {
       if (client.url.startsWith(self.location.origin)) {

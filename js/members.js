@@ -640,7 +640,7 @@
       if (!accepted) return;
       Ipon.setBusy(button, true, 'Sending…');
       try {
-        const { error } = await Ipon.client.auth.resetPasswordForEmail(account.email, { redirectTo: new URL('account.html', location.href).href });
+        const { error } = await Ipon.client.auth.resetPasswordForEmail(account.email, { redirectTo: 'https://my-ipon.vercel.app/reset-password.html' });
         if (error) throw error;
         Ipon.toast('Password recovery email sent.');
       } catch (error) { Ipon.toast(Ipon.friendlyError(error), 'error'); }

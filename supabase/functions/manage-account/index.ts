@@ -6,6 +6,7 @@ const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const SYSTEM_NAME = 'myIPON';
 const EMAIL_LOGO_URL = 'https://my-ipon.vercel.app/assets/icon-192.png?v=2';
+const APP_LOGIN_URL = 'https://my-ipon.vercel.app/login.html';
 const R2_PATH_MARKER = '/r2/';
 let r2Client: AwsClient | null = null;
 const CLERK_ISSUER = 'https://solid-gannet-2021.clerk.accounts.dev';
@@ -2784,15 +2785,13 @@ Deno.serve(async (request) => {
     if (!USERNAME_RE.test(cleanUsername)) {
       return json({ ok: true, valid: false, available: false });
     }
-    const excludeEmail = String(body.email || '').trim().toLowerCase();
     const { data: existing } = await admin
       .from('profiles')
-      .select('id, email')
+      .select('id')
       .ilike('username', cleanUsername)
       .limit(1)
       .maybeSingle();
-    const available = !existing || (Boolean(excludeEmail) && String(existing.email || '').trim().toLowerCase() === excludeEmail);
-    return json({ ok: true, valid: true, available });
+    return json({ ok: true, valid: true, available: !existing });
   }
 
   if (body.action === 'login-throttle-status') {
@@ -3770,9 +3769,7 @@ Deno.serve(async (request) => {
       resolvedGroupName = groupRow?.name || null;
     }
     const recipientName = target.full_name || [target.first_name, target.middle_name, target.last_name].filter(Boolean).join(' ') || recipientEmail;
-    const originUrl = typeof body.login_url === 'string' && /^https?:\/\//i.test(body.login_url)
-      ? body.login_url
-      : 'https://my-ipon.vercel.app/login.html';
+    const originUrl = APP_LOGIN_URL;
 
     const superAdminEmail = actor.email || userResult.user.email || null;
 
@@ -4442,9 +4439,7 @@ Output strictly valid JSON with only these flat arrays of plain strings (no nest
     ]);
     const groupName = groupRow?.name || 'Savings Group';
     const recipientName = existingProfile?.full_name || [firstName, middleName, lastName].filter(Boolean).join(' ');
-    const originUrl = typeof body.login_url === 'string' && /^https?:\/\//i.test(body.login_url)
-      ? body.login_url
-      : 'https://my-ipon.vercel.app/login.html';
+    const originUrl = APP_LOGIN_URL;
 
     if (existingProfile && actor.group_id) {
       await admin.from('notifications').insert({

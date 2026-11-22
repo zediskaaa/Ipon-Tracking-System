@@ -1456,8 +1456,7 @@
       await ensureInitReady();
       const res = await Ipon.invokeAccountFunction({
         action: 'check-signup-username',
-        username: clean,
-        email: email.value.trim().toLowerCase()
+        username: clean
       });
       if (seq !== signupUsernameCheckSeq) return null;
       if (normalizeSignupUsername(usernameInput?.value) !== clean) return null;
@@ -1788,7 +1787,7 @@
     recoveryMessage.textContent = '';
     try {
       await ensureInitReady();
-      const redirectTo = new URL('reset-password.html', window.location.href).href;
+      const redirectTo = 'https://my-ipon.vercel.app/reset-password.html';
       const { error } = await Ipon.client.auth.resetPasswordForEmail(recoveryEmail, { redirectTo });
       if (error) throw error;
       recoveryMessage.dataset.tone = 'success';
@@ -1897,8 +1896,7 @@
         if (usernameInput && availableSignupUsername !== submittedUsername) {
           const checkRes = await Ipon.invokeAccountFunction({
             action: 'check-signup-username',
-            username: submittedUsername,
-            email: submittedEmail
+            username: submittedUsername
           }).catch(() => null);
           if (checkRes?.available === false) {
             takenSignupUsername = submittedUsername;
