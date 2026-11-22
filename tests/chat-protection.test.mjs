@@ -495,3 +495,11 @@ test('migration 152 logs screenshot blocking toggles, keeps blocking persistent,
   sendTailByConv.set('c1', Promise.resolve());
   assert.equal(lags('c1', '2026-11-21T04:02:00Z'), false, 'do not interrupt active local send burst');
 });
+
+test('Check again / Try again link in Chat privacy note uses high-contrast link color in light and dark modes', () => {
+  const css = read('css/app.css');
+  assert.match(css, /\.msg-privacy-card\s*\{[^}]*--privacy-link:\s*#145a41;/);
+  assert.match(css, /html\[data-theme="dark"\] \.msg-privacy-card\s*\{[^}]*--privacy-link:\s*#7fe0b8;/);
+  assert.match(css, /\.msg-privacy-note button\s*\{[^}]*color:\s*var\(--privacy-link\);/);
+  assert.doesNotMatch(css, /\.msg-privacy-note button\s*\{[^}]*color:\s*var\(--privacy-icon-ink\);/);
+});

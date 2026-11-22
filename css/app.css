@@ -9715,6 +9715,7 @@ html[data-theme="dark"] .msg-row.is-failed .msg-bubble.has-audio-only .msg-tick.
   --privacy-muted: #52645d;
   --privacy-icon-bg: linear-gradient(145deg, #1a5a45, #0b3428);
   --privacy-icon-ink: #f5eadb;
+  --privacy-link: #145a41;
   --privacy-track: #e7e1d4;
   --privacy-knob: #fff;
   padding: 18px 16px;
@@ -9733,6 +9734,7 @@ html[data-theme="dark"] .msg-privacy-card {
   --privacy-muted: #a8c5b8;
   --privacy-icon-bg: linear-gradient(145deg, rgba(52,211,153,.20), rgba(52,211,153,.06));
   --privacy-icon-ink: #7fe0b8;
+  --privacy-link: #7fe0b8;
   --privacy-track: rgba(255,255,255,.08);
   --privacy-knob: #b9cdc5;
   box-shadow: 0 22px 38px -22px rgba(0,0,0,.6);
@@ -9740,7 +9742,9 @@ html[data-theme="dark"] .msg-privacy-card {
 .msg-privacy-head { display: flex; align-items: center; gap: 10px; margin: 0 4px 14px; }
 .msg-privacy-card .msg-privacy-head h4 { margin: 0; color: var(--privacy-ink); font: 700 19px/1.2 "IPON Serif", Georgia, serif; letter-spacing: -.01em; text-transform: none; }
 .msg-privacy-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 4px 14px; color: var(--privacy-muted); font-size: 12px; line-height: 1.5; }
-.msg-privacy-note button { padding: 0; border: 0; background: none; color: var(--privacy-icon-ink); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.msg-privacy-note button { padding: 0; border: 0; background: none; color: var(--privacy-link); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.msg-privacy-note button:hover:not(:disabled) { opacity: .82; }
+.msg-privacy-note button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 4px; }
 .msg-privacy-note button:disabled { opacity: .6; cursor: wait; }
 .msg-privacy-list { overflow: hidden; border: 1px solid var(--privacy-border); border-radius: 16px; background: var(--privacy-surface); }
 .msg-privacy-row { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 14px; }
