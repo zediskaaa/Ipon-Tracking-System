@@ -375,6 +375,23 @@
   try { hasStoredSession = Object.keys(localStorage).some((key) => /^sb-.+-auth-token$/.test(key)); } catch {}
   if (!hasStoredSession) return;
   try {
+    const loadScript = (src, integrity) => new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = false;
+      if (integrity) {
+        script.integrity = integrity;
+        script.crossOrigin = 'anonymous';
+      }
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`Could not load ${src}`));
+      document.body.append(script);
+    });
+    await Promise.all([
+      loadScript('js/core.js?v=20261122-30'),
+      loadScript('js/policy.js?v=20261119-09'),
+      loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js', 'sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb')
+    ]);
     const state = await Ipon.init({ requireAuth: false, allowPending: true });
     if (!state.failed && state.session && state.profile?.status === 'ACTIVE') {
       location.replace(Ipon.homeForRole(state.profile.role));

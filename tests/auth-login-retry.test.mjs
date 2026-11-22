@@ -34,3 +34,17 @@ test('manual login returns its session without waiting for Clerk password synchr
   assert.match(source, /if \(existingSession\) \{\s*await Ipon\.client\.auth\.signOut\(\)/);
   assert.doesNotMatch(source, /syncClerkSession/);
 });
+
+test('sign-in validates identifiers live without recursive invalid events or shifting fields', () => {
+  const core = fs.readFileSync('js/core.js', 'utf8');
+  const html = fs.readFileSync('login.html', 'utf8');
+  const validation = core.match(/function prepareFormValidation\(\)\s*\{[\s\S]*?document\.addEventListener\('invalid'/)?.[0];
+  assert.ok(validation);
+  assert.match(validation, /control\.validity\.valid \? '' : getValidationMessage\(control\)/);
+  assert.doesNotMatch(validation, /control\.checkValidity\(\)/);
+  assert.match(source, /email\.addEventListener\('input',[\s\S]*?validateEmailLive\(\)/);
+  assert.match(source, /email\.addEventListener\('invalid', \(\) => validateEmailLive\(true\)\)/);
+  assert.match(source, /email\.addEventListener\('blur',[\s\S]*?validateEmailLive\(true\)/);
+  assert.match(html, /#email-error\[hidden\][^}]*visibility:hidden/);
+  assert.match(html, /\.auth-message:empty\{visibility:hidden\}/);
+});

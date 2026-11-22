@@ -16,6 +16,9 @@ test('Migration 178, schema.sql, Super Admin Set Award modal, and core auto-deli
   assert.ok(schema.includes(mig), 'database/schema.sql must include Migration 178 identically');
   assert.match(mig, /create table if not exists public\.scheduled_awards/);
   assert.match(mig, /create or replace function public\.process_due_scheduled_awards\(/);
+  assert.match(mig, /if v_caller is null then\s+raise exception 'Authentication required to process scheduled awards\.' using errcode = '42501';/);
+  assert.match(mig, /if not public\.is_super_admin\(\) then\s+v_scope_user_id := v_caller;/);
+  assert.match(mig, /revoke all on function public\.process_due_scheduled_awards\(uuid\) from public, anon;\s+grant execute on function public\.process_due_scheduled_awards\(uuid\) to authenticated;/);
   assert.match(mig, /create or replace function public\.super_admin_create_scheduled_awards\(/);
   assert.match(mig, /create or replace function public\.super_admin_list_scheduled_awards\(/);
   assert.match(mig, /create or replace function public\.super_admin_update_scheduled_award\(/);

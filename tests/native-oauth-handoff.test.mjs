@@ -310,7 +310,7 @@ test('Android native Google OAuth deep-link handoff contracts stay intact across
   assert.match(mainActivity, /pendingAuthCallbackJson != null\) dispatchWindowEvent\("myipon:native-oauth-callback"\)/);
   assert.match(loginHtml, /id="clerk-app-handoff"/);
   assert.match(loginHtml, /id="clerk-app-handoff-btn"/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261121-02/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261122-30/);
 });
 
 test('Android app Google login resets Connecting state when user backs out without finishing OAuth', async () => {

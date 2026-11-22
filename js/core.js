@@ -1870,7 +1870,7 @@
         validateMoneyInput(control);
         return;
       }
-      setFieldError(control, control.checkValidity() ? '' : getValidationMessage(control));
+      setFieldError(control, control.validity.valid ? '' : getValidationMessage(control));
     };
     document.addEventListener('invalid', (event) => {
       const control = event.target;

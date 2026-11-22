@@ -1850,7 +1850,12 @@ test('HTML files have valid UTF-8 characters and intact stylesheet/script asset 
     assert.doesNotMatch(html, /\uFFFD|\u00E2\u20AC|\u00E2\u201A/, `${file} must not contain replacement characters or mojibake`);
     assert.doesNotMatch(html, /(?:href|src)="=2026/, `${file} must not have corrupted asset URL`);
     assert.match(html, /href="css\/app\.css\?v=/, `${file} must link css/app.css`);
-    assert.match(html, /src="js\/core\.js\?v=/, `${file} must load js/core.js`);
+    if (file === 'index.html') {
+      assert.match(html, /src="js\/index\.js\?v=/, 'index.html must load its session-aware bootstrap');
+      assert.match(read('js/index.js'), /loadScript\('js\/core\.js\?v=/, 'landing bootstrap must load core.js for returning users');
+    } else {
+      assert.match(html, /src="js\/core\.js\?v=/, `${file} must load js/core.js`);
+    }
   }
 });
 
@@ -11331,7 +11336,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261122-23/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261122-30/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11861,7 +11866,7 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(loginHtml, /https:\/\/\*\.protect\.clerk\.com/);
   assert.match(loginHtml, /https:\/\/challenges\.cloudflare\.com/);
   assert.match(loginHtml, /frame-src 'self' https:\/\/\*\.protect\.clerk\.com https:\/\/challenges\.cloudflare\.com/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261121-02/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261122-30/);
   assert.match(authJs, /mode === 'signup' \? 'Create with' : 'Continue with'/);
   assert.match(coreJs, /function fireKeepaliveRpc\(/);
   const signOutBody = coreJs.match(/async function signOut\(\)[\s\S]*?^  \}/m);

@@ -80,7 +80,11 @@ declare
   v_message text;
   v_delivered integer := 0;
 begin
-  if v_caller is not null and not public.is_super_admin() then
+  if v_caller is null then
+    raise exception 'Authentication required to process scheduled awards.' using errcode = '42501';
+  end if;
+
+  if not public.is_super_admin() then
     v_scope_user_id := v_caller;
   end if;
 
@@ -605,6 +609,7 @@ begin
 end;
 $$;
 
+revoke all on function public.process_due_scheduled_awards(uuid) from public, anon;
 grant execute on function public.process_due_scheduled_awards(uuid) to authenticated;
 grant execute on function public.super_admin_create_scheduled_awards(jsonb, boolean, integer, timestamptz, text[], integer, timestamptz, text) to authenticated;
 grant execute on function public.super_admin_list_scheduled_awards() to authenticated;

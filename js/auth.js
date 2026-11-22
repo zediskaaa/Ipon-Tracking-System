@@ -1721,13 +1721,28 @@
     [email, password].forEach((input) => input.removeAttribute('aria-invalid'));
     message.textContent = '';
   };
+  const validateEmailLive = (required = false) => {
+    const value = email.value.trim();
+    if (!value && !required) {
+      clearFieldError(email);
+      return;
+    }
+    const error = mode === 'signup'
+      ? (!value ? 'Enter your email address.' : !EMAIL_RE.test(value) ? 'Enter a valid email address.' : '')
+      : (!value ? 'Enter your email address or username.' : !isValidLoginIdentifier(value) ? 'Enter a valid email address or username.' : '');
+    if (error) setFieldError(email, error);
+    else clearFieldError(email);
+  };
   email.addEventListener('input', () => {
     clearCredentialError();
+    validateEmailLive();
     if (mode === 'login') renderSecurityNotice();
   });
+  email.addEventListener('invalid', () => validateEmailLive(true));
   password.addEventListener('input', clearCredentialError);
   email.addEventListener('blur', () => {
     email.value = email.value.trim();
+    validateEmailLive(true);
     if (mode === 'login') {
       renderSecurityNotice();
       syncServerThrottleStatus(email.value);
