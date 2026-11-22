@@ -84,12 +84,11 @@
   const CAMERA_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
 
   const state = {
-    tab: 'chats', // chats | requests | friends | discover | notifications
+    tab: 'chats', // chats | requests | friends
     chatFilter: 'inbox', // inbox | unread | archived
     friendsSubTab: 'all', // all | incoming | sent
     conversations: [],
     overview: { me: null, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] },
-    socialNotifications: [],
     discoverUsers: [],
     discoverMessages: [],
     discoverQuery: '',
@@ -887,10 +886,6 @@
               </button>
             </nav>
             <div class="msg-topbar-actions">
-              <button class="msg-icon-btn" id="msg-alerts-btn" type="button" aria-label="Social alerts" title="Messaging & friend notifications">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg>
-                <b id="msg-alerts-badge" hidden>0</b>
-              </button>
               <button class="msg-icon-btn" id="msg-privacy-btn" type="button" aria-label="Messaging & privacy settings" title="Messaging privacy & blocked users">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.66 0-1.25.4-1.51 1Z"/></svg>
               </button>
@@ -1047,9 +1042,6 @@
 
             <!-- Friends & connections view -->
             <section class="msg-panel-view" id="msg-view-friends" hidden></section>
-
-            <!-- Dedicated Social Notifications view -->
-            <section class="msg-panel-view" id="msg-view-alerts" hidden></section>
           </div>
         </div>
       </dialog>
@@ -2265,16 +2257,12 @@
     const chatsUnread = state.conversations
       .filter((c) => !c.is_incoming_request && !c.is_archived && !c.is_muted)
       .reduce((sum, c) => sum + ((c.unread_count > 0 || c.marked_unread) ? Math.max(1, Number(c.unread_count || 0)) : 0), 0);
-    const alertUnread = state.socialNotifications.filter((n) => !n.read_at).length;
-
     const chatsBadge = document.getElementById('msg-tab-chats-badge');
     if (chatsBadge) { chatsBadge.textContent = String(chatsUnread); chatsBadge.hidden = chatsUnread === 0; }
     const reqBadge = document.getElementById('msg-tab-req-badge');
     if (reqBadge) { reqBadge.textContent = String(msgReqCount); reqBadge.hidden = msgReqCount === 0; }
     const friendsBadge = document.getElementById('msg-tab-friends-badge');
     if (friendsBadge) { friendsBadge.textContent = String(friendReqCount); friendsBadge.hidden = friendReqCount === 0; }
-    const alertsBadge = document.getElementById('msg-alerts-badge');
-    if (alertsBadge) { alertsBadge.textContent = String(alertUnread); alertsBadge.hidden = alertUnread === 0; }
 
     ipon().syncMessagesBadges?.(convUnread + friendReqCount);
   }
@@ -2324,32 +2312,6 @@
       renderFriendsView();
     }
     return state.overview;
-  }
-
-  async function refreshSocialNotifications({ render = true } = {}) {
-    if (!isEligible()) return [];
-    let { data, error } = await ipon().client
-      .from('notifications')
-      .select('id,type,title,message,link,dedupe_key,actor_id,actor_avatar_url,read_at,created_at')
-      .like('type', 'SOCIAL_%')
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (error) {
-      ({ data, error } = await ipon().client
-        .from('notifications')
-        .select('id,type,title,message,link,dedupe_key,read_at,created_at')
-        .like('type', 'SOCIAL_%')
-        .order('created_at', { ascending: false })
-        .limit(50));
-    }
-    if (!error) {
-      state.socialNotifications = data || [];
-      computeTotalBadgeCount();
-      if (render && document.getElementById('msg-workspace-dialog')?.open && state.tab === 'notifications') {
-        renderAlertsView();
-      }
-    }
-    return state.socialNotifications;
   }
 
   // Rendering: Conversation List & Unified Inline Search
@@ -2698,7 +2660,7 @@
         state.pendingByConv.delete(convId);
         state.draftsByConv.delete(convId);
         state.threadSearchSenderId = '';
-        await Promise.all([openConversation(convId, { markRead: false, silent: true }), refreshConversations(), refreshSocialNotifications()]);
+        await Promise.all([openConversation(convId, { markRead: false, silent: true }), refreshConversations()]);
         return;
       }
       const editForm = document.getElementById('msg-group-edit-form');
@@ -2841,16 +2803,12 @@
 
       const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
       const convItem = state.conversations.find((c) => c.id === conversationId);
-      const hasUnreadSocialNotif = state.socialNotifications.some(
-        (n) => !n.read_at && String(n.link || '').includes(conversationId)
-      );
       const shouldMarkRead = Boolean(
         markRead && dialogOpen && isThreadActivelyVisible() && (
           forceMarkRead ||
           serverUnreadFirstId ||
           convItem?.unread_count > 0 ||
           convItem?.marked_unread ||
-          hasUnreadSocialNotif ||
           (!backgroundRefresh && !convItem)
         )
       );
@@ -2866,10 +2824,6 @@
           convItem.unread_count = 0;
           convItem.marked_unread = false;
         }
-        const readStamp = new Date().toISOString();
-        state.socialNotifications.forEach((n) => {
-          if (!n.read_at && String(n.link || '').includes(conversationId)) n.read_at = readStamp;
-        });
         computeTotalBadgeCount();
         renderConversationList();
         if (hasPendingIncomingVanish && state.activeConvId === conversationId && reqSeq === state.openConvSeq) {
@@ -5118,42 +5072,6 @@
     }
   }
 
-  function renderAlertsView() {
-    const view = document.getElementById('msg-view-alerts');
-    if (!view) return;
-    const rows = state.socialNotifications || [];
-    const hasUnread = rows.some((r) => !r.read_at);
-    view.innerHTML = `
-      <div class="msg-panel-header">
-        <div>
-          <h3>Messaging &amp; Social Notifications</h3>
-          <p>Friend requests, accepted connections, new messages, and message requests.</p>
-        </div>
-        ${hasUnread ? '<button type="button" class="button button-secondary button-sm" id="msg-mark-alerts-read">Mark all read</button>' : ''}
-      </div>
-      <div class="msg-alerts-list">
-        ${rows.length ? rows.map((n) => {
-          const anonymousNotice = (state.conversations || []).some((c) => c.anonymous_enabled && n.link?.includes(`chat=${c.id}`));
-          const rawTitle = String(n.title || 'User').trim();
-          const cleanTitle = anonymousNotice ? 'Anonymous' : (rawTitle.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || rawTitle);
-          const peerFromConv = anonymousNotice ? null : (state.conversations || []).find((c) => c.peer && (c.peer.id === n.actor_id || String(c.peer.full_name || '').toLowerCase() === cleanTitle.toLowerCase()))?.peer;
-          const avatarUrl = anonymousNotice ? 'assets/anonymous-avatar.svg' : (n.actor_avatar_url || peerFromConv?.avatar_url || ipon().getMemberAvatar?.(n.actor_id || cleanTitle) || null);
-          const cleanAlertMsg = anonymousNotice ? 'Conversation update' : (String(n.message || '').replace(/\r?\n+/g, ' · ').replace(/\s{2,}/g, ' ').trim() || 'Open to view details.');
-          return `
-          <button type="button" class="msg-alert-row has-sender-avatar${n.read_at ? '' : ' is-unread'}" data-social-alert-id="${escapeHtml(n.id)}" data-social-link="${escAttr(n.link || '')}" data-social-type="${escAttr(n.type || '')}">
-            <span class="msg-alert-avatar" aria-hidden="true">${anonymousNotice ? '<img class="avatar-circle avatar-md" src="assets/anonymous-avatar.svg" alt="">' : (ipon().avatarMarkup ? ipon().avatarMarkup(avatarUrl, cleanTitle, 'avatar-md', n.actor_id || peerFromConv?.id || '') : '')}</span>
-            <div class="msg-alert-copy">
-              <strong title="${escAttr(cleanTitle)}">${escapeHtml(cleanTitle)}</strong>
-              <p title="${escAttr(cleanAlertMsg)}">${escapeHtml(cleanAlertMsg)}</p>
-              <small>${escapeHtml(ipon().dateLabel(n.created_at, { dateStyle: 'medium', timeStyle: 'short' }))}</small>
-            </div>
-            ${n.read_at ? '' : '<i class="notification-unread" aria-label="Unread"></i>'}
-          </button>`;
-        }).join('') : '<div class="empty-state"><strong>No messaging notifications yet</strong><p>Friend requests, replies, and message requests will show up here in real time.</p></div>'}
-      </div>`;
-    ipon().bindAvatarFallbacks?.(view);
-  }
-
   // Profile Quick Action Popover (anchored near clicked DP with automatic edge clamping)
   let activePopoverAnchor = null;
 
@@ -6692,14 +6610,11 @@
       btn.classList.toggle('is-active', act);
       btn.setAttribute('aria-selected', act ? 'true' : 'false');
     });
-    document.getElementById('msg-alerts-btn')?.classList.toggle('is-active', state.tab === 'notifications');
     const showChats = state.tab === 'chats' || state.tab === 'requests';
     const chatsView = document.getElementById('msg-view-chats');
     const friendsView = document.getElementById('msg-view-friends');
-    const alertsView = document.getElementById('msg-view-alerts');
     if (chatsView) chatsView.hidden = !showChats;
     if (friendsView) friendsView.hidden = state.tab !== 'friends';
-    if (alertsView) alertsView.hidden = state.tab !== 'notifications';
   }
 
   function activateSidebarSearch(focusInput = true) {
@@ -6773,28 +6688,26 @@
       activateSidebarSearch(true);
       return;
     }
-    state.tab = nextTab;
-    if (nextTab !== 'chats' && nextTab !== 'requests') syncNativeScreenshotLock(null);
-    if (nextTab === 'chats' || nextTab === 'requests') {
+    const resolvedTab = nextTab === 'notifications' ? 'chats' : nextTab;
+    state.tab = resolvedTab;
+    if (resolvedTab !== 'chats' && resolvedTab !== 'requests') syncNativeScreenshotLock(null);
+    if (resolvedTab === 'chats' || resolvedTab === 'requests') {
       state.mobileShowThread = false;
       syncMobilePaneState();
       const activeConv = state.activeThread?.conversation;
       const isReq = Boolean(activeConv?.is_incoming_request);
-      if (state.activeConvId && activeConv && ((nextTab === 'requests' && !isReq) || (nextTab === 'chats' && isReq))) {
+      if (state.activeConvId && activeConv && ((resolvedTab === 'requests' && !isReq) || (resolvedTab === 'chats' && isReq))) {
         clearActiveThreadSelection();
       }
     }
     syncTabUi();
     syncMyThreadPresence();
 
-    if (nextTab === 'chats' || nextTab === 'requests') {
+    if (resolvedTab === 'chats' || resolvedTab === 'requests') {
       renderConversationList();
-    } else if (nextTab === 'friends') {
+    } else if (resolvedTab === 'friends') {
       refreshOverview().catch(() => { });
       renderFriendsView();
-    } else if (nextTab === 'notifications') {
-      refreshSocialNotifications().catch(() => { });
-      renderAlertsView();
     }
   }
 
@@ -7340,7 +7253,6 @@
         return;
       }
       if (ev.target.closest?.('#msg-privacy-btn')) { await openPrivacySettingsModal(); return; }
-      if (ev.target.closest?.('#msg-alerts-btn')) { switchTab('notifications'); return; }
       if (ev.target.closest?.('#msg-empty-find-btn') || ev.target.closest?.('[data-goto-discover]')) { activateSidebarSearch(true); return; }
       if (ev.target.closest?.('#msg-new-group-btn') || ev.target.closest?.('#msg-empty-group-btn') || ev.target.closest?.('#msg-inline-create-group')) {
         await openGroupChatDialog({ mode: 'create' });
@@ -7773,8 +7685,7 @@
           state.threadSearchSenderId = '';
           await Promise.all([
             openConversation(convId, { markRead: false, silent: true }),
-            refreshConversations(),
-            refreshSocialNotifications()
+            refreshConversations()
           ]);
         } catch (error) {
           ipon().toast(ipon().friendlyError(error), 'error');
@@ -8348,19 +8259,6 @@
         return;
       }
 
-      // Social alerts actions
-      if (ev.target.closest?.('#msg-mark-alerts-read')) {
-        await ipon().rpc('mark_all_notifications_read').catch(() => { });
-        await refreshSocialNotifications();
-        return;
-      }
-      const alertBtn = ev.target.closest?.('[data-social-alert-id]');
-      if (alertBtn) {
-        const nId = Number(alertBtn.dataset.socialAlertId);
-        if (nId) ipon().rpc('mark_notification_read', { p_notification_id: nId }).catch(() => { });
-        await openFromNotification({ type: alertBtn.dataset.socialType, link: alertBtn.dataset.socialLink });
-        return;
-      }
     });
 
     document.addEventListener('submit', async (ev) => {
@@ -9145,7 +9043,7 @@
       state.loadingConvs = true;
       renderConversationList();
     }
-    await Promise.all([refreshConversations(), refreshOverview(), refreshSocialNotifications()]);
+    await Promise.all([refreshConversations(), refreshOverview()]);
     if (conversationId) {
       switchTab(targetTab);
       await openConversation(conversationId, { aroundMessageId: messageId });
@@ -9153,7 +9051,6 @@
       syncTabUi();
       syncMobilePaneState();
       if (state.tab === 'friends') renderFriendsView();
-      else if (state.tab === 'notifications') renderAlertsView();
       else renderConversationList();
     }
   }
@@ -9191,7 +9088,7 @@
     if (!client || !profile?.id || realtimeChannel) return;
     let refreshTimer = null;
     let isRefreshingRealtime = false;
-    let pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false, alerts: false };
+    let pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false };
 
     const flushRefresh = async () => {
       refreshTimer = null;
@@ -9200,15 +9097,14 @@
         return;
       }
       const opts = { ...pendingRefresh };
-      pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false, alerts: false };
-      if (!opts.convs && !opts.thread && !opts.overview && !opts.alerts) return;
+      pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false };
+      if (!opts.convs && !opts.thread && !opts.overview) return;
 
       isRefreshingRealtime = true;
       try {
         await Promise.all([
           opts.convs ? refreshConversations() : Promise.resolve(),
-          opts.overview ? refreshOverview() : Promise.resolve(),
-          opts.alerts ? refreshSocialNotifications() : Promise.resolve()
+          opts.overview ? refreshOverview() : Promise.resolve()
         ]);
         const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
         if (opts.thread && state.activeConvId && dialogOpen) {
@@ -9271,8 +9167,7 @@
           convs: true,
           thread: isForActive,
           markRead: markIncomingReadHere,
-          forceMarkRead: markIncomingReadHere,
-          alerts: Boolean(isInsert && fromPeer)
+          forceMarkRead: markIncomingReadHere
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, (payload) => {
@@ -9386,7 +9281,7 @@
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, () => {
-        scheduleRefresh({ overview: true, alerts: true });
+        scheduleRefresh({ overview: true });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
         scheduleRefresh({ overview: true });
@@ -9412,7 +9307,6 @@
     await Promise.all([
       refreshConversations({ render: false }).catch(() => { }),
       refreshOverview({ render: false }).catch(() => { }),
-      refreshSocialNotifications({ render: false }).catch(() => { }),
       ipon().rpc('mark_messages_delivered', { p_conversation_id: null }).catch(() => { })
     ]);
 
@@ -9669,12 +9563,11 @@
 
   async function refreshWorkspace() {
     if (!isEligible()) return false;
-    await Promise.all([refreshConversations(), refreshOverview(), refreshSocialNotifications()]);
+    await Promise.all([refreshConversations(), refreshOverview()]);
     if (document.getElementById('msg-workspace-dialog')?.open) {
       syncTabUi();
       syncMobilePaneState();
       if (state.tab === 'friends') renderFriendsView();
-      else if (state.tab === 'notifications') renderAlertsView();
       else renderConversationList();
     }
     return true;

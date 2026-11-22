@@ -54,8 +54,7 @@ test('anonymous system notices, chat previews, and linked alerts hide real names
   assert.match(migration, /update public\.notifications n[\s\S]*c\.anonymous_session_id is not null/);
   assert.match(messages, /if \(conv\.anonymous_enabled\) \{\s*return `\$\{dateDivider\}\$\{unreadDivider\}<div class="msg-system-event"/);
   assert.match(messages, /const safeLastPreview = conv\.anonymous_enabled/);
-  assert.match(messages, /anonymousNotice \? 'Conversation update' :[\s\S]*?n\.message/);
-  assert.match(messages, /anonymousNotice \? '<img class="avatar-circle avatar-md" src="assets\/anonymous-avatar\.svg"/);
+  assert.doesNotMatch(messages, /id="msg-alerts-btn"|id="msg-view-alerts"/);
   assert.match(core, /anonymousChatNotice[\s\S]*assets\/anonymous-avatar\.svg/);
 });
 

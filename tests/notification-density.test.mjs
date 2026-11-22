@@ -19,14 +19,12 @@ test('notification drawer and messaging alerts use uniform compact single-line 3
   // Dark mode uniform surface borders
   assert.match(css, /html\[data-theme="dark"\] \.notification-item\s*\{[^}]*border-color:/);
 
-  // Messages > Alerts tab matches uniform 76px single-line density
-  assert.match(css, /\.msg-alert-row\s*\{\s*min-height:\s*76px;\s*height:\s*76px;/);
-  assert.match(css, /\.msg-alert-copy strong\s*\{[^}]*white-space:\s*nowrap;\s*overflow:\s*hidden;\s*text-overflow:\s*ellipsis;/);
-  assert.match(css, /\.msg-alert-copy p\s*\{[^}]*white-space:\s*nowrap;\s*overflow:\s*hidden;\s*text-overflow:\s*ellipsis;/);
+  // Redundant notification bell & alerts panel removed from Messages & Connections modal
+  assert.doesNotMatch(messages, /id="msg-alerts-btn"|id="msg-alerts-badge"|id="msg-view-alerts"|function renderAlertsView|function refreshSocialNotifications/);
+  assert.doesNotMatch(css, /\.msg-alerts-list|\.msg-alert-row|\.msg-alert-copy|\.msg-alert-avatar/);
 
   // Multi-line notifications flatten cleanly to single-line summaries with hover tooltips
   assert.match(core, /function formatNotificationPreview\(item\)/);
   assert.match(core, /<strong title="\$\{escapeHtml\(displayTitle\)\}">\$\{escapeHtml\(displayTitle\)\}<\/strong>/);
   assert.match(core, /<p title="\$\{escapeHtml\(displayMessage\)\}">\$\{escapeHtml\(displayMessage\)\}<\/p>/);
-  assert.match(messages, /const cleanAlertMsg = anonymousNotice \? 'Conversation update'/);
 });
