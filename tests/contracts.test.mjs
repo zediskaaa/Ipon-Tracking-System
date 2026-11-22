@@ -751,8 +751,8 @@ test('administrator request form uses a desktop grid with a mobile fallback', ()
   assert.match(html, /body\.is-request-mode \.login-card \.form-grid\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\);gap:14px 16px\}/);
   assert.doesNotMatch(read('js/core.js'), /<meter\b/i);
   assert.doesNotMatch(html, /zediskaaa(?:%40|@)gmail\.com/i);
-  assert.match(html, /@media\(max-width:520px\)[\s\S]*?\.field label \.label-extra\{display:none\}/);
-  assert.match(html, /@media\(max-width:330px\)[\s\S]*?\.login-card \.form-grid\{grid-template-columns:1fr\}/);
+  assert.match(html, /Middle name<span class="label-extra"> \(optional\)<\/span>/);
+  assert.match(html, /@media\(max-width:520px\)[\s\S]*?body\.is-request-mode \.login-card \.form-grid\{grid-template-columns:1fr;gap:12px\}/);
   assert.doesNotMatch(html, /#auth-submit[^}]*(\\2192|→)/);
 });
 
@@ -11867,7 +11867,7 @@ test('Clerk social sign-in preserves Supabase authorization and mobile-safe logi
   assert.match(loginHtml, /https:\/\/\*\.protect\.clerk\.com/);
   assert.match(loginHtml, /https:\/\/challenges\.cloudflare\.com/);
   assert.match(loginHtml, /frame-src 'self' https:\/\/\*\.protect\.clerk\.com https:\/\/challenges\.cloudflare\.com/);
-  assert.match(loginHtml, /js\/auth\.js\?v=20261122-32/);
+  assert.match(loginHtml, /js\/auth\.js\?v=20261122-33/);
   assert.match(authJs, /mode === 'signup' \? 'Create with' : 'Continue with'/);
   assert.match(coreJs, /function fireKeepaliveRpc\(/);
   const signOutBody = coreJs.match(/async function signOut\(\)[\s\S]*?^  \}/m);
@@ -12057,9 +12057,15 @@ test('username sign-in and required signup username enforce format, uniqueness, 
     'show-login', 'show-signup', 'auth-tab-indicator', 'auth-title', 'auth-copy',
     'first-name-error', 'middle-name-error', 'last-name-error', 'email-error', 'contact-number-error', 'request-reason-error', 'password-error', 'password-confirmation-error'
   ].map((id) => [id, makeEl(id)]));
-  els.get('recovery-request-form').elements = { email: makeEl('recovery-email') };
+  let focusedId = '';
+  const recoveryEmailInput = makeEl('recovery-email');
+  recoveryEmailInput.focus = () => { focusedId = 'recovery-email'; };
+  els.get('recovery-request-form').elements = { email: recoveryEmailInput };
+  els.get('forgot-password-open').focus = () => { focusedId = 'forgot-password-open'; };
+  els.get('email').focus = () => { focusedId = 'email'; };
 
   const loginPayloads = [];
+  let eligibilityFailure = false;
   const checkedUsernames = [];
   let redirectedTo = '';
   const storage = new Map();
@@ -12081,7 +12087,11 @@ test('username sign-in and required signup username enforce format, uniqueness, 
     friendlyError: (e) => String(e?.message || e || 'Error'),
     broadcastAuthEvent() { },
     requiresMfaChallenge: async () => false,
-    rpc: async (name) => (name === 'check_admin_request_eligibility' ? { eligible: true } : null),
+    rpc: async (name) => {
+      if (name !== 'check_admin_request_eligibility') return null;
+      if (eligibilityFailure) throw new Error('Network unavailable');
+      return { eligible: true };
+    },
     fireKeepaliveRpc: () => true,
     homeForRole: () => 'dashboard.html',
     accountSetupUrl: () => null,
@@ -12150,6 +12160,13 @@ test('username sign-in and required signup username enforce format, uniqueness, 
   });
   await new Promise((r) => setTimeout(r, 15));
 
+  await els.get('forgot-password-open').dispatch('click');
+  assert.equal(els.get('recovery-dialog').open, true);
+  assert.equal(focusedId, 'recovery-email');
+  els.get('recovery-dialog').close();
+  await els.get('recovery-dialog').dispatch('close');
+  assert.equal(focusedId, 'forgot-password-open');
+
   // 1. Login with @username strips leading @ and resolves login cleanly
   els.get('email').value = '@Zed_User';
   els.get('password').value = 'StrongPass!1';
@@ -12163,6 +12180,12 @@ test('username sign-in and required signup username enforce format, uniqueness, 
   assert.equal(els.get('email-label').textContent, 'Email');
   assert.equal(els.get('email').type, 'email');
   els.get('email').value = 'newmember@example.com';
+  eligibilityFailure = true;
+  await els.get('auth-form').dispatch('submit');
+  assert.equal(els.get('username-field').hidden, true);
+  assert.equal(els.get('email-error').textContent, 'Could not check this email right now. Try again.');
+  assert.equal(focusedId, 'email');
+  eligibilityFailure = false;
   await els.get('auth-form').dispatch('submit');
   assert.equal(els.get('username-field').hidden, false);
   assert.equal(els.get('username').required, true);

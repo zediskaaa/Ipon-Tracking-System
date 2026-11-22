@@ -1906,7 +1906,10 @@
     recoveryRequestForm.elements.email.focus();
   });
   document.querySelectorAll('[data-recovery-close]').forEach((button) => button.addEventListener('click', () => recoveryDialog.close()));
-  recoveryDialog.addEventListener('close', resetRecoveryDialog);
+  recoveryDialog.addEventListener('close', () => {
+    resetRecoveryDialog();
+    forgotButton.focus();
+  });
   recoveryRequestForm.addEventListener('submit', (event) => { event.preventDefault(); sendRecoveryLink(event.submitter); });
   const policyDialog = document.getElementById('policy-dialog');
   function openPolicyModal(policyName) {
@@ -1976,7 +1979,11 @@
           email.focus();
           return;
         }
-      } catch (_) { }
+      } catch (error) {
+        setFieldError(email, 'Could not check this email right now. Try again.');
+        email.focus();
+        return;
+      }
       finally {
         Ipon.setBusy(submit, false);
       }
