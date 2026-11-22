@@ -2907,7 +2907,9 @@
 
     const headerEl = document.getElementById('msg-thread-header');
     if (headerEl) {
-      headerEl.classList.remove('is-empty-intro');
+      const knownConv = (state.conversations || []).find((c) => c.id === conversationId);
+      const likelyEmpty = !knownConv?.last_message_at && !getPendingList(conversationId).length;
+      headerEl.classList.toggle('is-empty-intro', likelyEmpty);
       if (peer) {
         const isGrp = isGroupConv(peer);
         headerEl.innerHTML = `
@@ -3203,7 +3205,10 @@
     const canInteract = isGrp || (!blockedThread && !friendsOnlyLocked);
     const isPendingReq = !isGrp && conv.status === 'PENDING_REQUEST';
     const isIncomingReq = isPendingReq && conv.initiator_id !== initializedProfile?.id;
-    const hasSentMessages = Boolean((Array.isArray(thread.messages) && thread.messages.length) || getPendingList(conv.conversation_id).length);
+    const visibleThreadMsgs = (Array.isArray(thread.messages) ? thread.messages : []).filter(
+      (m) => !m.vanish_at || Date.parse(m.vanish_at) > Date.now()
+    );
+    const hasSentMessages = Boolean(visibleThreadMsgs.length || getPendingList(conv.conversation_id).length);
     const typingEntries = getTypingEntries(conv.conversation_id);
     const peerStatus = conv.anonymous_enabled ? '' : formatStatusLine(conv);
 
@@ -3955,7 +3960,7 @@
       : isSelfHero
         ? 'Personal notes, reminders, photos, and files saved here are visible only to you.'
         : 'Messages and files in this conversation stay private between you two.';
-    const welcomeHtml = `
+    const welcomeHtml = isEmpty ? `
       <div class="msg-thread-welcome msg-thread-welcome-hero">
         <div class="msg-welcome-avatar">${renderedHeroAvatar}</div>
         <h3 class="msg-welcome-name"><span>${escapeHtml(heroTitle)}</span>${isGrpHero || conv.anonymous_enabled ? '' : userBadgesHtml(conv)}</h3>
@@ -3967,7 +3972,7 @@
         ${heroProfileVisible && (isGrpHero ? conv.description : conv.bio) ? `<p class="msg-welcome-bio">${escapeHtml(isGrpHero ? conv.description : conv.bio)}</p>` : ''}
         ${!isGrpHero && heroProfileVisible && conv.social_links ? (ipon().renderSocialAppLinksHtml?.(conv.social_links, { variant: 'welcome' }) || '') : ''}
         <p class="msg-welcome-hint">${escapeHtml(welcomeCopy)}</p>
-      </div>`;
+      </div>` : '';
 
     const sameConvRerender = Boolean(conv?.conversation_id && lastRenderedSeenConvId === conv.conversation_id);
     const prevSeenPositions = sameConvRerender ? captureSeenCoinPositions(list) : new Map();

@@ -51,6 +51,8 @@ test('conversation intro stays in the thread, header status excludes typing, and
   const messagesJs = read('js/messages.js');
   const css = read('css/app.css');
 
+  assert.match(messagesJs, /const welcomeHtml = isEmpty \? `\s*<div class="msg-thread-welcome msg-thread-welcome-hero">/);
+  assert.match(messagesJs, /if \(headerEl\) headerEl\.classList\.toggle\('is-empty-intro', isEmpty\);/);
   assert.match(messagesJs, /list\.innerHTML = `\$\{welcomeHtml\}\$\{html\}\$\{pendingHtml\}`/);
   assert.match(messagesJs, /scrollWrap\?\.classList\.toggle\('is-empty-thread', isEmpty\)/);
   assert.match(messagesJs, /const peerStatus = conv\.anonymous_enabled \? '' : formatStatusLine\(conv\);/);
