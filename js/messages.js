@@ -1669,6 +1669,25 @@
   const MAX_SEEN_AVATARS = 3;
   let lastRenderedSeenConvId = null;
   const activeSeenFlyers = new Map();
+  const anonRealtimeReaderTokens = new Map();
+
+  function getOpaqueAnonRealtimeReaderKey(convId, rawUserId) {
+    const cid = String(convId || '').trim();
+    const uid = String(rawUserId || '').trim();
+    if (!cid || !uid) return '';
+    let perConv = anonRealtimeReaderTokens.get(cid);
+    if (!perConv) {
+      if (anonRealtimeReaderTokens.size > 16) anonRealtimeReaderTokens.clear();
+      perConv = new Map();
+      anonRealtimeReaderTokens.set(cid, perConv);
+    }
+    let token = perConv.get(uid);
+    if (!token) {
+      token = `anon_rt_${perConv.size + 1}`;
+      perConv.set(uid, token);
+    }
+    return token;
+  }
 
   function clearActiveSeenFlyers() {
     activeSeenFlyers.forEach((entry) => {
@@ -1686,6 +1705,30 @@
 
   function resolveSeenReaders(m, conv) {
     if (conv?.anonymous_enabled) {
+      if (isGroupConv(conv)) {
+        const rawKeys = Array.isArray(m?.anon_seen_keys) ? m.anon_seen_keys : [];
+        const seen = new Set();
+        const out = [];
+        for (const rawKey of rawKeys) {
+          const key = String(rawKey || '').trim();
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          out.push({ id: key, name: 'Anonymous', avatarUrl: 'assets/anonymous-avatar.svg', isAnonymous: true });
+        }
+        if (out.length) return out;
+        const count = Math.max(0, Math.floor(Number(m?.seen_count) || 0));
+        if (count > 0) {
+          return Array.from({ length: count }, (_, idx) => ({
+            id: `anon-${idx + 1}`,
+            name: 'Anonymous',
+            avatarUrl: 'assets/anonymous-avatar.svg',
+            isAnonymous: true
+          }));
+        }
+        return m?.read_at
+          ? [{ id: 'anon', name: 'Anonymous', avatarUrl: 'assets/anonymous-avatar.svg', isAnonymous: true }]
+          : [];
+      }
       return [{ id: 'anon', name: 'Anonymous', avatarUrl: 'assets/anonymous-avatar.svg', isAnonymous: true }];
     }
     if (isGroupConv(conv)) {
@@ -1743,19 +1786,27 @@
     return byMsgId;
   }
 
-  function renderSeenDpCoinHtml(reader, { isNew = false, isGlideWaiting = false } = {}) {
+  function renderSeenDpCoinHtml(reader, { isNew = false, isGlideWaiting = false, anonExtraCount = 0, anonTotalCount = 0, isAnonBump = false } = {}) {
     const initialsFn = ipon()?.initials;
     const letters = escapeHtml(typeof initialsFn === 'function' ? initialsFn(reader.name || 'User') : String(reader.name || 'U').slice(0, 1).toUpperCase());
+    const hasAnonCount = Boolean(reader.isAnonymous && anonExtraCount > 0);
+    const countLabel = hasAnonCount ? (anonExtraCount > 99 ? '99+' : String(anonExtraCount)) : '';
     const faceHtml = reader.isAnonymous
-      ? '<img class="msg-seen-dp-img" src="assets/anonymous-avatar.svg" alt="" decoding="async">'
+      ? `<img class="msg-seen-dp-img" src="assets/anonymous-avatar.svg" alt="" decoding="async">${hasAnonCount ? `<span class="msg-seen-dp-anon-count" aria-hidden="true">${countLabel}</span>` : ''}`
       : reader.avatarUrl
         ? `<img class="msg-seen-dp-img" src="${escAttr(reader.avatarUrl)}" alt="" data-avatar-img loading="lazy" decoding="async"><span class="msg-seen-dp-fallback avatar-fallback-inner" hidden>${letters}</span>`
         : `<span class="msg-seen-dp-fallback">${letters}</span>`;
-    const modCls = isGlideWaiting ? ' is-glide-waiting' : isNew ? ' is-reader-new' : '';
-    return `<span class="msg-seen-dp-coin${modCls}" data-seen-reader="${escAttr(reader.id)}" aria-hidden="true"><span class="msg-seen-dp-face">${faceHtml}</span></span>`;
+    const modCls = [
+      isGlideWaiting ? 'is-glide-waiting' : isNew ? 'is-reader-new' : '',
+      hasAnonCount ? 'is-anon-count' : '',
+      hasAnonCount && countLabel.length >= 2 ? 'is-anon-count-wide' : '',
+      isAnonBump ? 'is-anon-bump' : ''
+    ].filter(Boolean).join(' ');
+    const countAttr = hasAnonCount ? ` data-anon-seen-count="${anonTotalCount || (anonExtraCount + 1)}"` : '';
+    return `<span class="msg-seen-dp-coin${modCls ? ` ${modCls}` : ''}" data-seen-reader="${escAttr(reader.id)}"${countAttr} aria-hidden="true"><span class="msg-seen-dp-face">${faceHtml}</span></span>`;
   }
 
-  function renderReceiptTickHtml(m, conv, { animate = false, addedReaderIds = null, seenReaders = undefined, glideReaderIds = null } = {}) {
+  function renderReceiptTickHtml(m, conv, { animate = false, addedReaderIds = null, seenReaders = undefined, glideReaderIds = null, isAnonBump = false } = {}) {
     const mine = m?.sender_id === initializedProfile?.id;
     const isDeleted = Boolean(m?.deleted_for_everyone_at);
     if (!mine || isDeleted) return '';
@@ -1764,20 +1815,38 @@
       if (seenReaders === null) return '';
       const readers = Array.isArray(seenReaders) ? seenReaders : resolveSeenReaders(m, conv);
       const isGrp = isGroupConv(conv);
+      const isAnonGroup = Boolean(conv?.anonymous_enabled && isGrp);
       const readerNames = readers.map((x) => x.name).filter(Boolean);
-      const seenAria = !conv?.anonymous_enabled && isGrp && readerNames.length
-        ? `Seen by ${readerNames.join(', ')}`
-        : 'Seen';
-      const seenTitle = !conv?.anonymous_enabled && !isSelfUser(conv) && readerNames.length
-        ? `Seen by ${readerNames.join(', ')}`
-        : 'Seen';
+      const seenAria = isAnonGroup
+        ? (readers.length > 1 ? `Seen by ${readers.length}` : 'Seen')
+        : !conv?.anonymous_enabled && isGrp && readerNames.length
+          ? `Seen by ${readerNames.join(', ')}`
+          : 'Seen';
+      const seenTitle = isAnonGroup
+        ? (readers.length > 1 ? `Seen by ${readers.length}` : 'Seen')
+        : !conv?.anonymous_enabled && !isSelfUser(conv) && readerNames.length
+          ? `Seen by ${readerNames.join(', ')}`
+          : 'Seen';
       if (!readers.length) {
         const animCls = animate ? ' is-anim' : '';
         return `<span class="msg-tick is-read${animCls}" title="${escAttr(seenTitle)}" aria-label="${escAttr(seenAria)}">${COIN_SEEN_SVG}</span>`;
       }
+      const seenKeys = readers.map((r) => r.id).join(',');
+      if (isAnonGroup) {
+        const primary = readers[0];
+        const extraCount = Math.max(0, readers.length - 1);
+        const hasGliding = Boolean(glideReaderIds && glideReaderIds.has(primary.id));
+        const animCls = animate && !hasGliding ? ' is-anim' : '';
+        const coinHtml = renderSeenDpCoinHtml(primary, {
+          isGlideWaiting: hasGliding,
+          anonExtraCount: extraCount,
+          anonTotalCount: readers.length,
+          isAnonBump: Boolean(isAnonBump && !hasGliding)
+        });
+        return `<span class="msg-tick is-read${animCls}" data-seen-keys="${escAttr(seenKeys)}" title="${escAttr(seenTitle)}" aria-label="${escAttr(seenAria)}"><span class="msg-seen-dp-stack">${coinHtml}</span></span>`;
+      }
       const visible = readers.slice(0, MAX_SEEN_AVATARS);
       const overflow = readers.length - visible.length;
-      const seenKeys = readers.map((r) => r.id).join(',');
       const hasGliding = Boolean(glideReaderIds && visible.some((r) => glideReaderIds.has(r.id)));
       const animCls = animate && !hasGliding ? ' is-anim' : '';
       const stackCls = visible.length > 1 || overflow > 0 ? 'msg-seen-dp-stack is-multi' : 'msg-seen-dp-stack';
@@ -1868,6 +1937,8 @@
       const arcX = Math.abs(clampedDy) >= 18 ? -4.5 : 0;
       const flyer = document.createElement('span');
       flyer.className = 'msg-seen-dp-coin is-glide-flyer';
+      if (coin.classList?.contains?.('is-anon-count')) flyer.classList.add('is-anon-count');
+      if (coin.classList?.contains?.('is-anon-count-wide')) flyer.classList.add('is-anon-count-wide');
       flyer.setAttribute('data-seen-reader', readerId);
       flyer.setAttribute('aria-hidden', 'true');
       flyer.innerHTML = coin.innerHTML;
@@ -1972,6 +2043,7 @@
       }
 
       if (stage === 'read') {
+        const isAnonGroup = Boolean(conv?.anonymous_enabled && isGroupConv(conv));
         const readers = latestSeenMap.get(idStr) || [];
         const prevKeys = prevStage === 'read'
           ? String(oldTick?.getAttribute?.('data-seen-keys') || '').split(',').filter(Boolean)
@@ -1979,12 +2051,16 @@
         const nextKeys = readers.map((r) => r.id);
         if (oldTick && prevStage === 'read' && prevKeys.join(',') === nextKeys.join(',')) {
           const readerNames = readers.map((x) => x.name).filter(Boolean);
-          const seenAria = !conv?.anonymous_enabled && isGroupConv(conv) && readerNames.length
-            ? `Seen by ${readerNames.join(', ')}`
-            : 'Seen';
-          const seenTitle = !conv?.anonymous_enabled && !isSelfUser(conv) && readerNames.length
-            ? `Seen by ${readerNames.join(', ')}`
-            : 'Seen';
+          const seenAria = isAnonGroup
+            ? (readers.length > 1 ? `Seen by ${readers.length}` : 'Seen')
+            : !conv?.anonymous_enabled && isGroupConv(conv) && readerNames.length
+              ? `Seen by ${readerNames.join(', ')}`
+              : 'Seen';
+          const seenTitle = isAnonGroup
+            ? (readers.length > 1 ? `Seen by ${readers.length}` : 'Seen')
+            : !conv?.anonymous_enabled && !isSelfUser(conv) && readerNames.length
+              ? `Seen by ${readerNames.join(', ')}`
+              : 'Seen';
           if (oldTick.getAttribute?.('title') !== seenTitle) oldTick.setAttribute?.('title', seenTitle);
           if (oldTick.getAttribute?.('aria-label') !== seenAria) oldTick.setAttribute?.('aria-label', seenAria);
           patchedAny = true;
@@ -2002,7 +2078,8 @@
           animate: Boolean(prevStage && prevStage !== 'read' && glideReaderIds.size === 0),
           addedReaderIds: addedReaderIds.size ? addedReaderIds : null,
           seenReaders: readers,
-          glideReaderIds: glideReaderIds.size ? glideReaderIds : null
+          glideReaderIds: glideReaderIds.size ? glideReaderIds : null,
+          isAnonBump: Boolean(isAnonGroup && prevStage === 'read' && readers.length > prevKeys.length)
         });
         if (oldTick) oldTick.outerHTML = nextTick;
         else if (nextTick) metaEl.insertAdjacentHTML('beforeend', nextTick);
@@ -2091,7 +2168,13 @@
       if (JSON.stringify(a.reactions || []) !== JSON.stringify(b.reactions || [])) {
         changedReactions.push(b);
       }
-      if (a.delivered_at !== b.delivered_at || a.read_at !== b.read_at || JSON.stringify(a.seen_by || []) !== JSON.stringify(b.seen_by || [])) {
+      if (
+        a.delivered_at !== b.delivered_at
+        || a.read_at !== b.read_at
+        || Number(a.seen_count || 0) !== Number(b.seen_count || 0)
+        || JSON.stringify(a.seen_by || []) !== JSON.stringify(b.seen_by || [])
+        || JSON.stringify(a.anon_seen_keys || []) !== JSON.stringify(b.anon_seen_keys || [])
+      ) {
         changedReceipts.push(b);
       }
     }
@@ -9323,30 +9406,48 @@
         const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
         if (!dialogOpen || !state.activeConvId) return;
         const msgItem = row.message_id ? (state.activeThread?.messages || []).find((m) => m.id === row.message_id) : null;
+        let needsAnonReceiptSync = false;
         if (msgItem) {
+          const activeConv = state.activeThread?.conversation;
           if (row.delivered_at) msgItem.delivered_at = row.delivered_at;
-          if (row.read_at && state.activeThread?.conversation?.receipts_enabled !== false) {
-            const activeConv = state.activeThread?.conversation;
+          if (row.read_at && activeConv?.receipts_enabled !== false) {
             msgItem.read_at = msgItem.read_at || row.read_at;
-            if (isGroupConv(activeConv) && !activeConv.anonymous_enabled && row.user_id) {
-              const existingSeen = Array.isArray(msgItem.seen_by) ? msgItem.seen_by : [];
-              const uidStr = String(row.user_id);
-              if (!existingSeen.some((x) => String(x?.id || x?.user_id || '') === uidStr)) {
-                const member = findGroupMember(activeConv, uidStr);
-                msgItem.seen_by = [
-                  ...existingSeen,
-                  { id: uidStr, full_name: member?.full_name || 'Member', avatar_url: member?.avatar_url || '', read_at: row.read_at }
-                ];
+            if (isGroupConv(activeConv) && row.user_id) {
+              if (activeConv.anonymous_enabled) {
+                needsAnonReceiptSync = true;
+                const existingKeys = Array.isArray(msgItem.anon_seen_keys) ? msgItem.anon_seen_keys : [];
+                const hasServerKeys = existingKeys.some((k) => !String(k).startsWith('anon_rt_'));
+                if (!hasServerKeys) {
+                  const token = getOpaqueAnonRealtimeReaderKey(activeConv.conversation_id || state.activeConvId, row.user_id);
+                  if (token && !existingKeys.includes(token)) {
+                    msgItem.anon_seen_keys = [...existingKeys, token];
+                    msgItem.seen_count = msgItem.anon_seen_keys.length;
+                  }
+                }
+              } else {
+                const existingSeen = Array.isArray(msgItem.seen_by) ? msgItem.seen_by : [];
+                const uidStr = String(row.user_id);
+                if (!existingSeen.some((x) => String(x?.id || x?.user_id || '') === uidStr)) {
+                  const member = findGroupMember(activeConv, uidStr);
+                  msgItem.seen_by = [
+                    ...existingSeen,
+                    { id: uidStr, full_name: member?.full_name || 'Member', avatar_url: member?.avatar_url || '', read_at: row.read_at }
+                  ];
+                }
               }
             }
           }
-          if (!patchMessageReceiptsDom(msgItem, state.activeThread?.conversation)) {
+          if (!patchMessageReceiptsDom(msgItem, activeConv)) {
             renderMessagesList();
           }
           state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
         }
         const inActive = !row.message_id || Boolean(msgItem);
-        if (inActive && !msgItem) scheduleRefresh({ convs: false, thread: true, markRead: false });
+        if (needsAnonReceiptSync) {
+          scheduleRefresh({ convs: false, thread: true, markRead: false, immediate: true });
+        } else if (inActive && !msgItem) {
+          scheduleRefresh({ convs: false, thread: true, markRead: false });
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, (payload) => {
         const row = payload?.new || payload?.old || {};

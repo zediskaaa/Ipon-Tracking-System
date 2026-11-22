@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 
 const read = (file) => fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8');
 
@@ -92,4 +93,431 @@ test('anonymous mode preserves null reply_preview without rendering ghost User A
   assert.match(migration, /'reply_preview', case when jsonb_typeof\(m -> 'reply_preview'\) = 'object' then/);
   assert.doesNotMatch(migration, /m -> 'reply_preview' is not null/);
   assert.match(messages, /const hasReplyPreview = Boolean\(m\.reply_preview && typeof m\.reply_preview === 'object' && !Array\.isArray\(m\.reply_preview\) && m\.reply_preview\.id\);/);
+});
+
+test('anonymous group chat seen receipts expose privacy-safe hashed reader keys and blurred count styling', () => {
+  const migration = read('database/migrations/20261122_179_anonymous_gc_seen_count.sql');
+  const schema = read('database/schema.sql');
+  const css = read('css/app.css');
+  assert.ok(schema.replace(/\r\n/g, '\n').includes(migration.trim().replace(/\r\n/g, '\n')), 'Schema baseline must include Migration 179');
+  assert.match(migration, /'seen_by', '\[\]'::jsonb/);
+  assert.match(migration, /'seen_count', case/);
+  assert.match(migration, /'anon_seen_keys', case/);
+  assert.match(migration, /md5\(v_session_id::text \|\| ':' \|\|/);
+  assert.match(css, /\.msg-seen-dp-coin\.is-anon-count \.msg-seen-dp-img\s*\{[^}]*filter:\s*blur\(/s);
+  assert.match(css, /\.msg-seen-dp-anon-count\s*\{[^}]*font-variant-numeric:\s*tabular-nums;/s);
+  assert.match(css, /\.msg-seen-dp-coin\.is-anon-count-wide \.msg-seen-dp-anon-count\s*\{/);
+  assert.match(css, /@keyframes msgSeenAnonBump\s*\{/);
+});
+
+test('anonymous group chat renders 1 crisp anonymous DP first, then blurs DP with incrementing extra count (1, 2, 3...) live without leaking identities', async () => {
+  const messagesJs = read('js/messages.js');
+  const meId = '11111111-1111-4111-8111-111111111111';
+  const convId = '33333333-3333-4333-8333-333333333333';
+  const msg1Id = '44444444-4444-4444-8444-444444444441';
+  const msg2Id = '44444444-4444-4444-8444-444444444442';
+  const memberA = 'aaaa1111-1111-4111-8111-111111111111';
+  const memberB = 'bbbb2222-2222-4222-8222-222222222222';
+  const memberC = 'cccc3333-3333-4333-8333-333333333333';
+  const memberD = 'dddd4444-4444-4444-8444-444444444444';
+
+  const makeEl = (id = '') => {
+    const cls = new Set();
+    const attrs = new Map();
+    let html = '';
+    return {
+      id,
+      open: false,
+      hidden: false,
+      disabled: false,
+      value: '',
+      scrollTop: 0,
+      scrollHeight: 200,
+      clientHeight: 200,
+      dataset: {},
+      style: { setProperty() { }, removeProperty() { } },
+      classList: {
+        add: (...c) => c.forEach((x) => cls.add(x)),
+        remove: (...c) => c.forEach((x) => cls.delete(x)),
+        toggle: (x, f) => (f === undefined ? (cls.has(x) ? cls.delete(x) : cls.add(x)) : (f ? cls.add(x) : cls.delete(x))),
+        contains: (x) => cls.has(x),
+        replace: (a, b) => { cls.delete(a); cls.add(b); }
+      },
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+      removeAttribute: (k) => attrs.delete(k),
+      addEventListener() { },
+      removeEventListener() { },
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      focus() { },
+      closest: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      insertAdjacentHTML() { },
+      get innerHTML() { return html; },
+      set innerHTML(v) { html = String(v || ''); },
+      get textContent() { return html; },
+      set textContent(v) { html = String(v || ''); }
+    };
+  };
+
+  const els = new Map();
+  const getEl = (id) => { if (!els.has(id)) els.set(id, makeEl(id)); return els.get(id); };
+  const listEl = getEl('msg-messages-list');
+
+  const extractBalancedTick = (fragment) => {
+    const startIdx = fragment.indexOf('<span class="msg-tick');
+    if (startIdx < 0) return '';
+    const sub = fragment.slice(startIdx);
+    let depth = 0;
+    const tagRe = /<\/?span\b[^>]*>/g;
+    let tok;
+    while ((tok = tagRe.exec(sub)) !== null) {
+      if (tok[0].startsWith('</')) depth -= 1;
+      else depth += 1;
+      if (depth === 0) return sub.slice(0, tok.index + tok[0].length);
+    }
+    return sub;
+  };
+
+  const rowTicks = new Map();
+  const setRowTick = (msgId, tickHtml) => {
+    const html = String(tickHtml || '');
+    const openM = html.match(/^<span class="(msg-tick[^"]*)"([^>]*)>/);
+    const clsSet = new Set((openM?.[1] || '').split(/\s+/).filter(Boolean));
+    const attrs = new Map();
+    for (const attr of ['title', 'aria-label', 'data-seen-keys']) {
+      const m = openM?.[2]?.match(new RegExp(`${attr}="([^"]*)"`));
+      if (m) attrs.set(attr, m[1]);
+    }
+    const entry = {
+      html,
+      attrs,
+      node: html ? {
+        classList: { contains: (c) => clsSet.has(c) },
+        getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+        setAttribute: (k, v) => attrs.set(k, String(v)),
+        remove: () => setRowTick(msgId, ''),
+        set outerHTML(next) { setRowTick(msgId, next); },
+        get outerHTML() { return rowTicks.get(msgId)?.html || ''; }
+      } : null
+    };
+    rowTicks.set(msgId, entry);
+  };
+
+  const origDesc = Object.getOwnPropertyDescriptor(listEl, 'innerHTML');
+  Object.defineProperty(listEl, 'innerHTML', {
+    get() { return origDesc.get.call(this); },
+    set(v) {
+      const s = String(v || '');
+      origDesc.set.call(this, s);
+      rowTicks.clear();
+      const rowRe = /<article class="msg-row[^"]*"[^>]*data-msg-id="([^"]+)"/g;
+      const matches = [...s.matchAll(rowRe)];
+      for (let i = 0; i < matches.length; i += 1) {
+        const mId = matches[i][1];
+        const start = matches[i].index;
+        const end = i + 1 < matches.length ? matches[i + 1].index : s.length;
+        setRowTick(mId, extractBalancedTick(s.slice(start, end)));
+      }
+    }
+  });
+
+  listEl.querySelector = (sel) => {
+    for (const [mId] of rowTicks.entries()) {
+      if (sel.includes(mId)) {
+        return {
+          querySelector: (s2) => (s2 === '.msg-bubble-meta'
+            ? {
+                querySelector: (s3) => (s3 === '.msg-tick' ? rowTicks.get(mId)?.node || null : null),
+                insertAdjacentHTML: (_pos, h) => setRowTick(mId, h)
+              }
+            : null)
+        };
+      }
+    }
+    return null;
+  };
+
+  const tableHandlers = new Map();
+  const anonGroupConv = {
+    id: convId,
+    conversation_id: convId,
+    kind: 'GROUP',
+    title: 'Secret Circle',
+    status: 'ACCEPTED',
+    chat_theme: 'anonymous',
+    receipts_enabled: true,
+    anonymous_enabled: true,
+    members: []
+  };
+
+  let activeMsgsPayload = [
+    {
+      id: msg1Id,
+      conversation_id: convId,
+      sender_id: meId,
+      sender_name: 'Anonymous',
+      body: 'Hello anonymous GC',
+      message_type: 'TEXT',
+      created_at: '2026-11-22T12:00:00Z',
+      delivered_at: '2026-11-22T12:00:01Z',
+      read_at: null,
+      seen_by: [],
+      seen_count: 0,
+      anon_seen_keys: [],
+      attachments: [],
+      reactions: []
+    }
+  ];
+
+  const fakeChannel = {
+    on(_type, filter, fn) {
+      if (filter?.table) tableHandlers.set(filter.table, fn);
+      return fakeChannel;
+    },
+    subscribe() { return fakeChannel; }
+  };
+
+  const win = {
+    Ipon: {
+      client: {
+        channel: () => fakeChannel,
+        removeChannel: () => Promise.resolve(),
+        from: () => {
+          const q = {
+            select: () => q, eq: () => q, in: () => q, like: () => q, or: () => q, order: () => q,
+            limit: async () => ({ data: [], error: null }),
+            then: (res) => Promise.resolve({ data: [], error: null }).then(res)
+          };
+          return q;
+        }
+      },
+      rpc: async (name) => {
+        if (name === 'get_conversations') return [anonGroupConv];
+        if (name === 'get_conversation_messages') {
+          return {
+            conversation: anonGroupConv,
+            messages: activeMsgsPayload.map((m) => ({ ...m })),
+            pinned_messages: [],
+            has_older: false,
+            anonymous_enabled: true
+          };
+        }
+        if (name === 'get_social_overview') return { me: { id: meId, chat_privacy: {} }, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] };
+        if (name === 'mark_conversation_read') return { read_at: '2026-11-22T12:00:02Z', receipts_shared: true };
+        return [];
+      },
+      primeUiSound: () => true,
+      playUiSound: () => true,
+      escapeHtml: (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
+      initials: (name) => String(name || 'U').slice(0, 1).toUpperCase(),
+      avatarMarkup: () => '<span>AV</span>',
+      bindAvatarFallbacks() { },
+      syncPresenceDots() { },
+      syncMessagesBadges() { },
+      isUserOnline: () => false,
+      friendlyError: (e) => e?.message || 'Error',
+      toast() { },
+      verifiedBadgesHtml: () => '',
+      fitVerifiedNameLines() { },
+      registerVerifiedBadges() { },
+      registerMemberAvatars() { },
+      getClientPlatform: () => 'web',
+      supportsNativeScreenshotProtection: () => false
+    },
+    addEventListener() { },
+    removeEventListener() { },
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    location: { origin: 'https://my-ipon.vercel.app', pathname: '/dashboard.html', search: '', hash: '' },
+    navigator: { userAgent: 'test' },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } }
+  };
+  win.window = win;
+
+  const doc = {
+    visibilityState: 'visible',
+    body: makeEl('body'),
+    documentElement: makeEl('html'),
+    getElementById: getEl,
+    querySelector: (sel) => (sel.startsWith('#') && !sel.includes(' ') ? getEl(sel.slice(1)) : null),
+    querySelectorAll: () => [],
+    createElement: (tag) => makeEl(tag),
+    addEventListener() { },
+    removeEventListener() { }
+  };
+
+  const timers = [];
+  const sandbox = {
+    window: win,
+    document: doc,
+    location: win.location,
+    navigator: win.navigator,
+    localStorage: win.localStorage,
+    sessionStorage: win.sessionStorage,
+    CSS: { escape: (s) => String(s) },
+    URL: { createObjectURL: () => 'blob:mock', revokeObjectURL() { } },
+    URLSearchParams,
+    requestAnimationFrame: (fn) => fn(),
+    setTimeout: (fn, ms) => { const id = timers.length + 1; timers.push({ id, fn, ms, cleared: false }); return id; },
+    clearTimeout: (id) => { const t = timers.find((x) => x.id === id); if (t) t.cleared = true; },
+    setInterval: () => 0,
+    clearInterval() { },
+    console
+  };
+  vm.runInNewContext(messagesJs, sandbox);
+
+  await win.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', chat_privacy: { show_online: true } });
+  await win.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
+
+  // 1st member sees the message live -> 1 crisp unblurred anonymous DP (no number overlay)
+  tableHandlers.get('message_receipts')?.({
+    eventType: 'UPDATE',
+    new: { message_id: msg1Id, user_id: memberA, delivered_at: '2026-11-22T12:00:01Z', read_at: '2026-11-22T12:00:05Z' }
+  });
+  let tick1 = rowTicks.get(msg1Id);
+  assert.match(tick1.html, /src="assets\/anonymous-avatar\.svg"/);
+  assert.doesNotMatch(tick1.html, /is-anon-count|msg-seen-dp-anon-count|msg-seen-dp-more|is-multi/);
+  assert.equal((tick1.html.match(/msg-seen-dp-coin/g) || []).length, 1);
+  assert.equal(tick1.attrs.get('title'), 'Seen');
+  assert.doesNotMatch(tick1.html, new RegExp(memberA), 'Must never leak raw reader UUID in DOM');
+
+  // Duplicate receipt from same 1st member must NOT increment to blurred count
+  tableHandlers.get('message_receipts')?.({
+    eventType: 'UPDATE',
+    new: { message_id: msg1Id, user_id: memberA, delivered_at: '2026-11-22T12:00:01Z', read_at: '2026-11-22T12:00:06Z' }
+  });
+  tick1 = rowTicks.get(msg1Id);
+  assert.doesNotMatch(tick1.html, /is-anon-count|msg-seen-dp-anon-count/);
+
+  // 2nd member sees the message -> single blurred anonymous DP with visible "1" centered on top
+  tableHandlers.get('message_receipts')?.({
+    eventType: 'UPDATE',
+    new: { message_id: msg1Id, user_id: memberB, delivered_at: '2026-11-22T12:00:01Z', read_at: '2026-11-22T12:00:08Z' }
+  });
+  tick1 = rowTicks.get(msg1Id);
+  assert.equal((tick1.html.match(/msg-seen-dp-coin/g) || []).length, 1, 'Must stay a single collapsed anonymous DP');
+  assert.match(tick1.html, /class="msg-seen-dp-coin is-anon-count is-anon-bump"/);
+  assert.match(tick1.html, /data-anon-seen-count="2"/);
+  assert.match(tick1.html, /<span class="msg-seen-dp-anon-count" aria-hidden="true">1<\/span>/);
+  assert.doesNotMatch(tick1.html, /msg-seen-dp-more|is-multi/);
+  assert.equal(tick1.attrs.get('title'), 'Seen by 2');
+  assert.equal(tick1.attrs.get('aria-label'), 'Seen by 2');
+  assert.doesNotMatch(tick1.html, new RegExp(`${memberA}|${memberB}`));
+
+  // 3rd and 4th members see the message -> overlaid number increments 2, then 3
+  tableHandlers.get('message_receipts')?.({
+    eventType: 'UPDATE',
+    new: { message_id: msg1Id, user_id: memberC, delivered_at: '2026-11-22T12:00:01Z', read_at: '2026-11-22T12:00:10Z' }
+  });
+  tick1 = rowTicks.get(msg1Id);
+  assert.match(tick1.html, /<span class="msg-seen-dp-anon-count" aria-hidden="true">2<\/span>/);
+  assert.equal(tick1.attrs.get('title'), 'Seen by 3');
+
+  tableHandlers.get('message_receipts')?.({
+    eventType: 'UPDATE',
+    new: { message_id: msg1Id, user_id: memberD, delivered_at: '2026-11-22T12:00:01Z', read_at: '2026-11-22T12:00:12Z' }
+  });
+  tick1 = rowTicks.get(msg1Id);
+  assert.match(tick1.html, /<span class="msg-seen-dp-anon-count" aria-hidden="true">3<\/span>/);
+  assert.equal(tick1.attrs.get('title'), 'Seen by 4');
+
+  // Flush any previously queued debounce timers from the initial realtime receipts before testing server-keyed progression
+  for (const t of timers.splice(0)) {
+    if (!t.cleared) {
+      t.cleared = true;
+      await t.fn();
+    }
+  }
+
+  // Multi-message progression with server-hashed anon_seen_keys + 2-digit wide class check
+  activeMsgsPayload = [
+    {
+      id: msg1Id,
+      conversation_id: convId,
+      sender_id: meId,
+      sender_name: 'Anonymous',
+      body: 'Earlier anonymous message',
+      message_type: 'TEXT',
+      created_at: '2026-11-22T12:00:00Z',
+      delivered_at: '2026-11-22T12:00:01Z',
+      read_at: '2026-11-22T12:00:05Z',
+      seen_by: [],
+      seen_count: 3,
+      anon_seen_keys: ['anon_h1', 'anon_h2', 'anon_h3'],
+      attachments: [],
+      reactions: []
+    },
+    {
+      id: msg2Id,
+      conversation_id: convId,
+      sender_id: meId,
+      sender_name: 'Anonymous',
+      body: 'Latest anonymous message',
+      message_type: 'TEXT',
+      created_at: '2026-11-22T12:01:00Z',
+      delivered_at: '2026-11-22T12:01:01Z',
+      read_at: '2026-11-22T12:01:05Z',
+      seen_by: [],
+      seen_count: 1,
+      anon_seen_keys: ['anon_h1'],
+      attachments: [],
+      reactions: []
+    }
+  ];
+  await win.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
+  // Msg 1 still has 2 readers (anon_h2, anon_h3) -> blurred DP with "1"; Msg 2 has 1 reader (anon_h1) -> crisp DP
+  const m1Tick = rowTicks.get(msg1Id);
+  const m2Tick = rowTicks.get(msg2Id);
+  assert.match(m1Tick.html, /is-anon-count/);
+  assert.match(m1Tick.html, /<span class="msg-seen-dp-anon-count" aria-hidden="true">1<\/span>/);
+  assert.equal(m1Tick.attrs.get('title'), 'Seen by 2');
+  assert.match(m2Tick.html, /src="assets\/anonymous-avatar\.svg"/);
+  assert.doesNotMatch(m2Tick.html, /is-anon-count|msg-seen-dp-anon-count/);
+  assert.equal(m2Tick.attrs.get('title'), 'Seen');
+
+  // Realtime receipt on server-keyed Msg 2 triggers immediate background sync and patches both rows in-place
+  timers.length = 0;
+  activeMsgsPayload = [
+    activeMsgsPayload[0],
+    {
+      ...activeMsgsPayload[1],
+      seen_count: 2,
+      anon_seen_keys: ['anon_h1', 'anon_h2']
+    }
+  ];
+  tableHandlers.get('message_receipts')?.({
+    eventType: 'UPDATE',
+    new: { message_id: msg2Id, user_id: memberB, delivered_at: '2026-11-22T12:01:01Z', read_at: '2026-11-22T12:01:09Z' }
+  });
+  const pendingRefreshTimers = timers.filter((t) => !t.cleared);
+  assert.ok(pendingRefreshTimers.length > 0, 'Anonymous GC receipt update must schedule immediate server sync');
+  for (const t of pendingRefreshTimers) {
+    t.cleared = true;
+    await t.fn();
+  }
+  const m1After = rowTicks.get(msg1Id);
+  const m2After = rowTicks.get(msg2Id);
+  assert.match(m1After.html, /src="assets\/anonymous-avatar\.svg"/);
+  assert.doesNotMatch(m1After.html, /is-anon-count|msg-seen-dp-anon-count/, 'Msg 1 drops back to 1 crisp anonymous DP once 2nd reader advances to Msg 2');
+  assert.equal(m1After.attrs.get('title'), 'Seen');
+  assert.match(m2After.html, /is-anon-count is-anon-bump/);
+  assert.match(m2After.html, /<span class="msg-seen-dp-anon-count" aria-hidden="true">1<\/span>/);
+  assert.equal(m2After.attrs.get('title'), 'Seen by 2');
+
+  // 12 readers on Msg 2 -> shows "11" with is-anon-count-wide for tight fit
+  activeMsgsPayload = [
+    {
+      ...activeMsgsPayload[1],
+      seen_count: 12,
+      anon_seen_keys: Array.from({ length: 12 }, (_, i) => `anon_k${i + 1}`)
+    }
+  ];
+  await win.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
+  const wideTick = rowTicks.get(msg2Id);
+  assert.match(wideTick.html, /is-anon-count is-anon-count-wide/);
+  assert.match(wideTick.html, /<span class="msg-seen-dp-anon-count" aria-hidden="true">11<\/span>/);
+  assert.equal(wideTick.attrs.get('title'), 'Seen by 12');
 });

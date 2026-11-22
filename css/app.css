@@ -9093,6 +9093,40 @@ html[data-theme="dark"] .msg-row.is-mine .msg-tick.is-read {
   display: block;
   border-radius: 50%;
 }
+.msg-seen-dp-coin.is-anon-count .msg-seen-dp-img {
+  filter: blur(1.35px) brightness(.52) contrast(1.08);
+  transform: scale(1.14);
+}
+.msg-seen-dp-coin.is-anon-count .msg-seen-dp-face::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(16, 22, 26, .46) 0%, rgba(16, 22, 26, .24) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+.msg-seen-dp-anon-count {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  color: #fffdf7;
+  text-shadow: 0 1px 2.5px rgba(0, 0, 0, .88), 0 0 1px rgba(0, 0, 0, .92);
+  user-select: none;
+  pointer-events: none;
+}
+.msg-seen-dp-coin.is-anon-count-wide .msg-seen-dp-anon-count {
+  font-size: 7.8px;
+  letter-spacing: -.05em;
+}
 .msg-seen-dp-fallback {
   font-size: 7.5px;
   font-weight: 800;
@@ -9176,6 +9210,12 @@ html[data-theme="dark"] .msg-row.is-mine .msg-tick.is-read {
 .msg-seen-dp-coin.is-reader-new {
   animation: msgSeenReaderJoin .42s cubic-bezier(.22, 1.35, .36, 1) both;
 }
+.msg-seen-dp-coin.is-anon-bump {
+  animation: msgSeenAnonBump .34s cubic-bezier(.22, 1.35, .36, 1) both;
+}
+.msg-seen-dp-coin.is-anon-bump::before {
+  animation: msgSeenDpHalo .5s cubic-bezier(.16, 1, .3, 1) both;
+}
 .msg-seen-dp-coin.is-glide-waiting {
   opacity: 0;
 }
@@ -9249,6 +9289,11 @@ html[data-theme="dark"] .msg-row.is-mine .msg-tick.is-read {
   58% { transform: translateX(1.5px) scale(1.16); opacity: 1; }
   82% { transform: translateX(0) scale(.95); opacity: 1; }
   100% { transform: translateX(0) scale(1); opacity: 1; }
+}
+@keyframes msgSeenAnonBump {
+  0% { transform: scale(.88); }
+  52% { transform: scale(1.16); }
+  100% { transform: scale(1); }
 }
 @keyframes msgCoinSpin {
   to { transform: rotate(360deg); }
