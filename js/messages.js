@@ -1670,6 +1670,63 @@
   let lastRenderedSeenConvId = null;
   const activeSeenFlyers = new Map();
   const anonRealtimeReaderTokens = new Map();
+  let receiptDomFlushTimer = null;
+  const pendingReceiptDomIds = new Set();
+
+  function clearPendingReceiptDomFlush() {
+    if (receiptDomFlushTimer) {
+      clearTimeout(receiptDomFlushTimer);
+      receiptDomFlushTimer = null;
+    }
+    pendingReceiptDomIds.clear();
+  }
+
+  async function hydrateAnonymousGroupSeenKeys(conv, msgs) {
+    if (!isGroupConv(conv) || !conv?.anonymous_enabled || conv?.receipts_enabled === false) return;
+    if (!Array.isArray(msgs) || !msgs.length) return;
+    const myId = String(initializedProfile?.id || '');
+    if (!myId) return;
+    if (msgs.some((m) => Array.isArray(m?.anon_seen_keys))) return;
+    const myReadIds = msgs
+      .filter((m) => m?.id && String(m.sender_id || '') === myId && m.read_at && !m.deleted_for_everyone_at)
+      .map((m) => m.id);
+    if (!myReadIds.length) return;
+    const client = ipon()?.client;
+    if (!client || typeof client.from !== 'function') return;
+    try {
+      const q = client
+        .from('message_receipts')
+        .select('message_id, user_id, read_at')
+        .in('message_id', myReadIds);
+      const res = typeof q?.not === 'function'
+        ? await q.not('read_at', 'is', null)
+        : await q;
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      if (!rows.length) return;
+      const sorted = rows
+        .filter((r) => r?.message_id && r?.read_at && r?.user_id && String(r.user_id) !== myId)
+        .sort((a, b) => (Date.parse(a.read_at || '') || 0) - (Date.parse(b.read_at || '') || 0));
+      const convKey = conv.conversation_id || conv.id || state.activeConvId;
+      const byMsg = new Map();
+      sorted.forEach((r) => {
+        const mId = String(r.message_id);
+        const token = getOpaqueAnonRealtimeReaderKey(convKey, r.user_id);
+        if (!token) return;
+        let list = byMsg.get(mId);
+        if (!list) { list = []; byMsg.set(mId, list); }
+        if (!list.includes(token)) list.push(token);
+      });
+      msgs.forEach((m) => {
+        const mId = String(m?.id || '');
+        if (!mId || String(m.sender_id || '') !== myId || !m.read_at) return;
+        const keys = byMsg.get(mId);
+        if (keys && keys.length) {
+          m.anon_seen_keys = keys;
+          m.seen_count = keys.length;
+        }
+      });
+    } catch { /* fallback to single anonymous DP */ }
+  }
 
   function getOpaqueAnonRealtimeReaderKey(convId, rawUserId) {
     const cid = String(convId || '').trim();
@@ -1786,11 +1843,11 @@
     return byMsgId;
   }
 
-  function renderSeenDpCoinHtml(reader, { isNew = false, isGlideWaiting = false, anonExtraCount = 0, anonTotalCount = 0, isAnonBump = false } = {}) {
+  function renderSeenDpCoinHtml(reader, { isNew = false, isGlideWaiting = false, anonSeenCount = 0, isAnonBump = false } = {}) {
     const initialsFn = ipon()?.initials;
     const letters = escapeHtml(typeof initialsFn === 'function' ? initialsFn(reader.name || 'User') : String(reader.name || 'U').slice(0, 1).toUpperCase());
-    const hasAnonCount = Boolean(reader.isAnonymous && anonExtraCount > 0);
-    const countLabel = hasAnonCount ? (anonExtraCount > 99 ? '99+' : String(anonExtraCount)) : '';
+    const hasAnonCount = Boolean(reader.isAnonymous && anonSeenCount > 1);
+    const countLabel = hasAnonCount ? (anonSeenCount > 99 ? '99+' : String(anonSeenCount)) : '';
     const faceHtml = reader.isAnonymous
       ? `<img class="msg-seen-dp-img" src="assets/anonymous-avatar.svg" alt="" decoding="async">${hasAnonCount ? `<span class="msg-seen-dp-anon-count" aria-hidden="true">${countLabel}</span>` : ''}`
       : reader.avatarUrl
@@ -1802,7 +1859,7 @@
       hasAnonCount && countLabel.length >= 2 ? 'is-anon-count-wide' : '',
       isAnonBump ? 'is-anon-bump' : ''
     ].filter(Boolean).join(' ');
-    const countAttr = hasAnonCount ? ` data-anon-seen-count="${anonTotalCount || (anonExtraCount + 1)}"` : '';
+    const countAttr = hasAnonCount ? ` data-anon-seen-count="${anonSeenCount}"` : '';
     return `<span class="msg-seen-dp-coin${modCls ? ` ${modCls}` : ''}" data-seen-reader="${escAttr(reader.id)}"${countAttr} aria-hidden="true"><span class="msg-seen-dp-face">${faceHtml}</span></span>`;
   }
 
@@ -1834,13 +1891,11 @@
       const seenKeys = readers.map((r) => r.id).join(',');
       if (isAnonGroup) {
         const primary = readers[0];
-        const extraCount = Math.max(0, readers.length - 1);
         const hasGliding = Boolean(glideReaderIds && glideReaderIds.has(primary.id));
         const animCls = animate && !hasGliding ? ' is-anim' : '';
         const coinHtml = renderSeenDpCoinHtml(primary, {
           isGlideWaiting: hasGliding,
-          anonExtraCount: extraCount,
-          anonTotalCount: readers.length,
+          anonSeenCount: readers.length,
           isAnonBump: Boolean(isAnonBump && !hasGliding)
         });
         return `<span class="msg-tick is-read${animCls}" data-seen-keys="${escAttr(seenKeys)}" title="${escAttr(seenTitle)}" aria-label="${escAttr(seenAria)}"><span class="msg-seen-dp-stack">${coinHtml}</span></span>`;
@@ -1925,7 +1980,8 @@
       }
       const rawDx = nextRect.left - prev.rect.left;
       const rawDy = nextRect.top - prev.rect.top;
-      if (Math.hypot(rawDx, rawDy) < 2) {
+      // Seen DPs only glide downward to newer messages; never fly upward.
+      if (rawDy < 2) {
         coin.classList?.remove?.('is-glide-waiting');
         return;
       }
@@ -2010,6 +2066,10 @@
     const prevPositions = captureSeenCoinPositions(list);
     const latestSeenMap = computeLatestSeenMap(msgs, conv);
     const myId = String(initializedProfile?.id || '');
+    const msgOrder = new Map();
+    msgs.forEach((item, idx) => {
+      if (item?.id) msgOrder.set(String(item.id), idx);
+    });
     let patchedAny = false;
     let targetMatched = !targetMsgIds || targetMsgIds.size === 0;
 
@@ -2069,9 +2129,11 @@
         const prevSet = new Set(prevKeys);
         const glideReaderIds = new Set();
         const addedReaderIds = new Set();
+        const curIdx = msgOrder.get(idStr) ?? -1;
         for (const r of readers) {
           const prevPos = prevPositions.get(r.id);
-          if (prevPos && prevPos.msgId !== idStr) glideReaderIds.add(r.id);
+          const prevIdx = prevPos ? (msgOrder.get(prevPos.msgId) ?? -1) : -1;
+          if (prevPos && prevPos.msgId !== idStr && prevIdx >= 0 && curIdx > prevIdx) glideReaderIds.add(r.id);
           else if (prevStage === 'read' && !prevSet.has(r.id)) addedReaderIds.add(r.id);
         }
         const nextTick = renderReceiptTickHtml(msg, conv, {
@@ -2802,7 +2864,10 @@
       state.editingMsg = null;
       state.showThreadSearch = false;
       state.showPinnedList = false;
-      if (isSwitchingConv) state.activePinnedId = null;
+      if (isSwitchingConv) {
+        state.activePinnedId = null;
+        clearPendingReceiptDomFlush();
+      }
       state.threadSearchQuery = '';
       state.threadSearchMatches = [];
       state.loadingThread = true;
@@ -2942,6 +3007,9 @@
           }
         }
       }
+
+      await hydrateAnonymousGroupSeenKeys(data?.conversation, data?.messages);
+      if (state.activeConvId !== conversationId || reqSeq !== state.openConvSeq) return;
 
       const nextFingerprint = computeThreadFingerprint(data);
       const shouldScrollBottom = typeof scrollToBottom === 'boolean'
@@ -4211,8 +4279,11 @@
       const vanishStyle = isDeleted ? '' : vanishBubbleStyle(m);
       const prev = msgs[idx - 1];
       const next = msgs[idx + 1];
-      const groupedWithPrev = !isNewDate && !unreadDivider && prev && !prev.deleted_for_everyone_at && prev.sender_id === m.sender_id
+      const sameSenderAsPrev = Boolean(
+        !isNewDate && !unreadDivider && prev && !prev.deleted_for_everyone_at && prev.sender_id === m.sender_id
         && prev.message_type !== 'CALL_EVENT' && prev.message_type !== 'SYSTEM'
+      );
+      const groupedWithPrev = sameSenderAsPrev
         && (Date.parse(m.created_at) - Date.parse(prev.created_at) < 120000);
       const groupedWithNext = next && !next.deleted_for_everyone_at && next.sender_id === m.sender_id
         && next.message_type !== 'CALL_EVENT' && next.message_type !== 'SYSTEM'
@@ -4236,7 +4307,8 @@
             groupMember?.role
           )
         : '';
-      const senderNameHtml = isGrp && !groupedWithPrev && !isDeleted
+      const hideRepeatedSenderName = groupedWithPrev || (sameSenderAsPrev && (mine || !conv.anonymous_enabled));
+      const senderNameHtml = isGrp && !hideRepeatedSenderName && !isDeleted
         ? (mine
             ? `<span class="msg-sender-name is-mine">${escapeHtml(conv.anonymous_enabled ? 'You' : (initializedProfile?.full_name || m.sender_name || 'You'))}${senderRoleBadge}</span>`
             : `<span class="msg-sender-name">${escapeHtml(conv.anonymous_enabled ? 'Anonymous' : senderUser.full_name)}${conv.anonymous_enabled ? '' : userBadgesHtml(senderUser)}${senderRoleBadge}</span>`)
@@ -9405,26 +9477,36 @@
         if (row.user_id === profile.id) return;
         const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
         if (!dialogOpen || !state.activeConvId) return;
-        const msgItem = row.message_id ? (state.activeThread?.messages || []).find((m) => m.id === row.message_id) : null;
+        const threadMsgs = state.activeThread?.messages || [];
+        const msgItem = row.message_id ? threadMsgs.find((m) => m.id === row.message_id) : null;
         let needsAnonReceiptSync = false;
+        let skipImmediateAnonPatch = false;
         if (msgItem) {
           const activeConv = state.activeThread?.conversation;
+          const isAnonGrp = Boolean(isGroupConv(activeConv) && activeConv?.anonymous_enabled);
           if (row.delivered_at) msgItem.delivered_at = row.delivered_at;
           if (row.read_at && activeConv?.receipts_enabled !== false) {
-            msgItem.read_at = msgItem.read_at || row.read_at;
-            if (isGroupConv(activeConv) && row.user_id) {
-              if (activeConv.anonymous_enabled) {
-                needsAnonReceiptSync = true;
-                const existingKeys = Array.isArray(msgItem.anon_seen_keys) ? msgItem.anon_seen_keys : [];
-                const hasServerKeys = existingKeys.some((k) => !String(k).startsWith('anon_rt_'));
-                if (!hasServerKeys) {
-                  const token = getOpaqueAnonRealtimeReaderKey(activeConv.conversation_id || state.activeConvId, row.user_id);
-                  if (token && !existingKeys.includes(token)) {
-                    msgItem.anon_seen_keys = [...existingKeys, token];
-                    msgItem.seen_count = msgItem.anon_seen_keys.length;
-                  }
-                }
+            if (isAnonGrp && row.user_id) {
+              needsAnonReceiptSync = true;
+              const threadHasServerKeys = threadMsgs.some(
+                (m) => Array.isArray(m?.anon_seen_keys) && m.anon_seen_keys.some((k) => !String(k).startsWith('anon_rt_'))
+              );
+              if (threadHasServerKeys) {
+                // Server already provides authoritative hashed anon_seen_keys (Migration 179+):
+                // let the atomic immediate sync patch all rows cleanly without flashing a temporary coin upward.
+                skipImmediateAnonPatch = true;
               } else {
+                msgItem.read_at = msgItem.read_at || row.read_at;
+                const existingKeys = Array.isArray(msgItem.anon_seen_keys) ? msgItem.anon_seen_keys : [];
+                const token = getOpaqueAnonRealtimeReaderKey(activeConv.conversation_id || state.activeConvId, row.user_id);
+                if (token && !existingKeys.includes(token)) {
+                  msgItem.anon_seen_keys = [...existingKeys, token];
+                  msgItem.seen_count = msgItem.anon_seen_keys.length;
+                }
+              }
+            } else {
+              msgItem.read_at = msgItem.read_at || row.read_at;
+              if (isGroupConv(activeConv) && !activeConv.anonymous_enabled && row.user_id) {
                 const existingSeen = Array.isArray(msgItem.seen_by) ? msgItem.seen_by : [];
                 const uidStr = String(row.user_id);
                 if (!existingSeen.some((x) => String(x?.id || x?.user_id || '') === uidStr)) {
@@ -9437,10 +9519,41 @@
               }
             }
           }
-          if (!patchMessageReceiptsDom(msgItem, activeConv)) {
-            renderMessagesList();
+          if (!skipImmediateAnonPatch) {
+            let lastOutgoingId = '';
+            for (let i = threadMsgs.length - 1; i >= 0; i -= 1) {
+              const cand = threadMsgs[i];
+              if (cand?.id && String(cand.sender_id || '') === String(profile.id || '') && !cand.deleted_for_everyone_at && cand.message_type !== 'SYSTEM' && cand.message_type !== 'CALL_EVENT') {
+                lastOutgoingId = String(cand.id);
+                break;
+              }
+            }
+            const msgIdStr = String(msgItem.id);
+            const deferIntermediateRead = Boolean(row.read_at && lastOutgoingId && msgIdStr !== lastOutgoingId);
+            if (deferIntermediateRead) {
+              pendingReceiptDomIds.add(msgIdStr);
+              if (!receiptDomFlushTimer) {
+                receiptDomFlushTimer = setTimeout(() => {
+                  receiptDomFlushTimer = null;
+                  const ids = new Set(pendingReceiptDomIds);
+                  pendingReceiptDomIds.clear();
+                  if (!ids.size || !state.activeThread?.messages?.length) return;
+                  if (!syncThreadReceiptsDom(state.activeThread.messages, state.activeThread.conversation, { targetMsgIds: ids })) {
+                    renderMessagesList();
+                  }
+                  state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
+                }, 90);
+              }
+            } else {
+              const targetIds = new Set(pendingReceiptDomIds);
+              targetIds.add(msgIdStr);
+              clearPendingReceiptDomFlush();
+              if (!syncThreadReceiptsDom(threadMsgs, activeConv, { targetMsgIds: targetIds })) {
+                renderMessagesList();
+              }
+              state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
+            }
           }
-          state.lastThreadFingerprint = computeThreadFingerprint(state.activeThread);
         }
         const inActive = !row.message_id || Boolean(msgItem);
         if (needsAnonReceiptSync) {
