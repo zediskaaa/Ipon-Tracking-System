@@ -854,7 +854,8 @@ body[data-budget-mode="monitor"] #budget-header-actions {
 .cf-chart-legend {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 8px 14px;
   font: 600 12px/1.2 Arial, sans-serif;
   color: var(--muted);
 }
@@ -875,7 +876,7 @@ body[data-budget-mode="monitor"] #budget-header-actions {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
-  align-items: end;
+  align-items: stretch;
   min-height: 196px;
   padding: 14px 6px 6px;
   border-radius: 16px;
@@ -886,8 +887,9 @@ body[data-budget-mode="monitor"] #budget-header-actions {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  padding: 8px 4px;
+  padding: 20px 4px 8px;
   border: 1px solid transparent;
   border-radius: 12px;
   background: transparent;
@@ -925,11 +927,15 @@ body[data-budget-mode="monitor"] #budget-header-actions {
 .cf-bar-month {
   font: 700 12px/1.2 Arial, sans-serif;
   color: var(--ink);
+  white-space: nowrap;
 }
 .cf-bar-net {
   font: 600 11px/1.15 Arial, sans-serif;
   color: #166a4e;
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cf-bar-net.is-negative {
   color: #b8372e;
@@ -1191,14 +1197,16 @@ body[data-budget-mode="monitor"] #budget-header-actions {
 .cf-bar-tag {
   position: absolute;
   top: 4px;
-  right: 4px;
-  padding: 1px 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
   border-radius: 999px;
   background: #C99A3B;
   color: #ffffff;
   font: 800 9.5px/1.25 Arial, sans-serif;
   letter-spacing: .03em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .cf-compare-panel {
   padding: 14px 16px;
@@ -1460,6 +1468,20 @@ html[data-theme="dark"] .cf-cat-pill.is-shopping { background: rgba(244, 114, 18
 html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184, .18); color: #e2e8f0; }
 
 /* Responsive Breakpoints (Zero Horizontal Overflow) */
+.cf-monitor,
+.cf-monitor > *,
+.cf-hero-meter-card,
+.cf-workspace-panel,
+.cf-insight-panel,
+.cf-kpi-card,
+.cf-summary-tile,
+.cf-compare-panel,
+.cf-chart-nav,
+.cf-bar-col,
+.cf-history-row,
+.cf-history-left {
+  min-width: 0;
+}
 @media (max-width: 1140px) {
   .cf-hero,
   .cf-overview-grid,
@@ -1469,24 +1491,191 @@ html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184,
   }
 }
 @media (max-width: 780px) {
+  .budget-mode-bar {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+  }
+  .budget-mode-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    overflow: visible;
+    gap: 5px;
+    padding: 4px;
+  }
+  .budget-mode-tab {
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    min-height: 42px;
+    padding: 8px 8px;
+    gap: 6px;
+    font-size: 12.5px;
+    line-height: 1.25;
+  }
+  .budget-mode-tab svg {
+    width: 15px;
+    height: 15px;
+  }
+  .cf-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .cf-month-nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .cf-month-picker-wrap {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 0;
+  }
+  .cf-month-input {
+    width: 100%;
+    text-align: center;
+    padding: 6px 8px;
+  }
+  .cf-toolbar-right {
+    width: 100%;
+  }
+  .cf-rate-pill {
+    width: 100%;
+    justify-content: space-between;
+  }
   .cf-hero {
-    padding: 24px 20px 22px;
+    padding: 22px 18px 20px;
     border-radius: 22px;
+    gap: 18px;
+  }
+  .cf-hero-meter-card {
+    padding: 16px;
+  }
+  .cf-kpi-card {
+    padding: 18px 18px;
   }
   .cf-workspace-panel,
   .cf-insight-panel {
-    padding: 18px 16px;
+    padding: 16px 14px;
     border-radius: 20px;
+  }
+  .cf-segment-bar {
+    margin-bottom: 16px;
   }
   .cf-segmented {
     width: 100%;
     min-width: 0;
+    gap: 5px;
+    padding: 4px;
   }
   .cf-seg-btn {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 6px;
+    padding: 10px 8px;
+    min-height: 62px;
+  }
+  .cf-seg-btn-label {
+    justify-content: center;
     gap: 5px;
-    padding: 10px 12px;
+    font-size: 12.5px;
+    line-height: 1.2;
+  }
+  .cf-seg-btn-total {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cf-list-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .cf-list-filters {
+    width: 100%;
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .cf-list-filters input[type="search"],
+  .cf-list-filters select {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .cf-primary-add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .cf-chart-controls {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+  .cf-chart-nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .cf-chart-range {
+    font-size: 11.5px;
+    padding: 0 4px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cf-compare-toggle {
+    justify-content: center;
+    padding: 6px 11px;
+  }
+  .cf-compare-panel {
+    padding: 12px;
+  }
+  .cf-compare-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .cf-compare-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .cf-compare-pill {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+    padding: 6px 8px;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cf-compare-select {
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .cf-compare-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+  .cf-compare-mini-btn {
+    width: 100%;
+    min-height: 36px;
+    text-align: center;
   }
   .cf-breakdown-list,
   .cf-rate-preview-grid,
@@ -1553,12 +1742,61 @@ html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184,
     white-space: normal;
   }
   .cf-bars-wrap {
-    gap: 4px;
+    gap: 3px;
+    padding: 10px 4px 6px;
+  }
+  .cf-bar-col {
+    padding: 18px 2px 6px;
+    gap: 6px;
   }
   .cf-bar {
-    width: 11px;
+    width: 10px;
+  }
+  .cf-bar-month {
+    font-size: 10.5px;
+    letter-spacing: -.02em;
   }
   .cf-bar-net {
-    font-size: 10px;
+    font-size: 9.5px;
+  }
+  .cf-history-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .cf-history-right {
+    margin-left: auto;
+  }
+}
+@media (max-width: 440px) {
+  .budget-mode-tab {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+  .cf-hero-equations,
+  .cf-impact-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cf-bars-wrap {
+    gap: 2px;
+    padding: 8px 2px 6px;
+  }
+  .cf-bar-col {
+    padding: 17px 1px 6px;
+    gap: 5px;
+  }
+  .cf-bar-pair {
+    gap: 3px;
+  }
+  .cf-bar {
+    width: 8px;
+  }
+  .cf-bar-month {
+    font-size: 9.5px;
+    letter-spacing: -.03em;
+  }
+  .cf-bar-net {
+    font-size: 9px;
   }
 }

@@ -46,7 +46,7 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(html, /id="cf-seg-expense"/);
   assert.match(html, /id="cf-entry-dialog"/);
   assert.match(html, /id="cf-rate-dialog"/);
-  assert.match(html, /css\/cashflow-monitor\.css\?v=20261122-02/);
+  assert.match(html, /css\/cashflow-monitor\.css\?v=20261122-03/);
   assert.match(html, /js\/cashflow-monitor\.js\?v=20261122-02/);
   assert.match(html, /id="cf-chart-prev"/);
   assert.match(html, /id="cf-chart-next"/);
@@ -55,6 +55,10 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(css, /\.cf-cents\s*\{/);
   assert.match(css, /html\[data-theme="dark"\] \.cf-segmented/);
   assert.match(css, /@media \(max-width: 780px\)/);
+  assert.match(css, /@media \(max-width: 440px\)/);
+  assert.match(css, /\.cf-compare-pair\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
+  assert.match(css, /\.cf-bars-wrap\s*\{[\s\S]*align-items:\s*stretch/);
+  assert.match(css, /\.cf-bar-month\s*\{[\s\S]*white-space:\s*nowrap/);
 });
 
 test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net income, negative deficit, view switches, CRUD, and month isolation', async () => {
