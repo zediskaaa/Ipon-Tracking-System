@@ -153,6 +153,19 @@
     return Math.round((Number(value) || 0) * 100) / 100;
   }
 
+  function setBudgetMoneyEl(el, formatted) {
+    if (!el) return;
+    const text = String(formatted || '');
+    if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+      const idx = text.lastIndexOf('.');
+      if (idx > 0 && idx === text.length - 3) {
+        el.innerHTML = `${Ipon.escapeHtml(text.slice(0, idx))}<span class="cf-cents">${Ipon.escapeHtml(text.slice(idx))}</span>`;
+        return;
+      }
+    }
+    el.textContent = text;
+  }
+
   function computeSplitAmounts(balance, needsPct, wantsPct, savingsPct) {
     const ref = Math.max(0, roundCentavos(balance));
     let needs = roundCentavos((ref * needsPct) / 100);
@@ -266,7 +279,7 @@
     if (legendWantsAmt) legendWantsAmt.textContent = Ipon.money(cats.WANTS?.allocated ?? fallbackAmounts.WANTS);
     if (legendSavingsAmt) legendSavingsAmt.textContent = Ipon.money(cats.SAVINGS?.allocated ?? fallbackAmounts.SAVINGS);
 
-    if (refBalanceEl) refBalanceEl.textContent = Ipon.money(currentSavings);
+    setBudgetMoneyEl(refBalanceEl, Ipon.money(currentSavings));
     if (refNoteEl) {
       refNoteEl.hidden = rawBalance >= 0;
       refNoteEl.textContent = rawBalance < 0
@@ -274,9 +287,9 @@
         : '';
     }
 
-    if (totalAllocatedEl) totalAllocatedEl.textContent = Ipon.money(totals.allocated);
+    setBudgetMoneyEl(totalAllocatedEl, Ipon.money(totals.allocated));
     if (totalItemizedEl) totalItemizedEl.textContent = `Itemized plan: ${Ipon.money(totals.itemized)}`;
-    if (totalSpentEl) totalSpentEl.textContent = Ipon.money(spent);
+    setBudgetMoneyEl(totalSpentEl, Ipon.money(spent));
     const usedRatio = refBalance > 0 ? Math.round((spent / refBalance) * 1000) / 10 : (spent > 0 ? 100 : 0);
     if (spentPctEl) {
       const parts = [`${usedRatio}% of allocated budget`];
@@ -286,7 +299,7 @@
     }
 
     if (totalRemainingEl) {
-      totalRemainingEl.textContent = Ipon.money(remaining);
+      setBudgetMoneyEl(totalRemainingEl, Ipon.money(remaining));
       totalRemainingEl.classList.toggle('is-over', remaining < 0);
     }
     if (remainingNoteEl) {

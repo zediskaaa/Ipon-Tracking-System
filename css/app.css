@@ -26473,3 +26473,42 @@ html[data-theme="dark"] .goal-autofill-hint.is-ahead {
     margin-left: 0;
   }
 }
+
+/* Global smaller-centavos (.00) typography across all Peso amounts */
+.ipon-peso-num {
+  white-space: nowrap;
+}
+.ipon-cents,
+.cf-cents {
+  font-size: 0.62em;
+  font-weight: 500;
+  opacity: 0.72;
+  letter-spacing: 0;
+}
+.tracked-total .ipon-cents,
+.l-mock-total .ipon-cents,
+.budget-hero-balance .ipon-cents,
+.budget-hero-balance .cf-cents,
+.cf-hero-net .ipon-cents,
+.cf-hero-net .cf-cents,
+.stat-card strong .ipon-cents,
+.summary-stat strong .ipon-cents,
+.cf-kpi-value .ipon-cents,
+.cf-kpi-value .cf-cents,
+.user-hero-total .ipon-cents,
+.goal-hero-saved .ipon-cents {
+  font-size: 0.56em;
+}
+.data-table td .ipon-cents,
+.data-table td .cf-cents,
+.day-cell .ipon-cents,
+.day-total .ipon-cents,
+.calendar-day-total .ipon-cents,
+.cf-seg-btn-total .ipon-cents,
+.cf-seg-btn-total .cf-cents,
+.pill .ipon-cents,
+.badge .ipon-cents,
+small .ipon-cents {
+  font-size: 0.76em;
+  opacity: 0.76;
+}

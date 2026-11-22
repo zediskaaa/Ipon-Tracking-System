@@ -2317,7 +2317,138 @@
     return 'ADMIN';
   }
 
+  const PESO_CENTS_RE = /₱(?:\d{1,3}(?:,\d{3})+|\d+)(\.\d{2})(?!\d)/g;
+  const CENTS_SKIP_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE', 'SVG', 'CANVAS', 'TITLE']);
+  let centsObserverInstalled = false;
+  let centsMutating = false;
+  let centsScheduled = false;
+  const pendingCentsRoots = new Set();
+
+  function moneyHtml(value) {
+    const text = money(value);
+    const idx = text.lastIndexOf('.');
+    if (idx < 0 || idx !== text.length - 3) return escapeHtml(text);
+    return `<span class="ipon-peso-num">${escapeHtml(text.slice(0, idx))}<span class="ipon-cents">${escapeHtml(text.slice(idx))}</span></span>`;
+  }
+
+  function shouldSkipCentavosParent(el) {
+    if (!el || el.nodeType !== 1) return true;
+    if (CENTS_SKIP_TAGS.has(el.tagName)) return true;
+    if (typeof el.closest === 'function' && el.closest('.ipon-peso-num,.ipon-cents,.cf-cents,[data-no-cents-format],[contenteditable="true"],.msg-bubble-text,.msg-text,.msg-reply-preview-text')) {
+      return true;
+    }
+    return false;
+  }
+
+  function formatCentavosInTextNode(textNode) {
+    if (!textNode || textNode.nodeType !== 3) return false;
+    const raw = textNode.nodeValue;
+    if (!raw || !raw.includes('₱') || !raw.includes('.')) return false;
+    const parent = textNode.parentNode;
+    if (shouldSkipCentavosParent(parent)) return false;
+    PESO_CENTS_RE.lastIndex = 0;
+    let match = PESO_CENTS_RE.exec(raw);
+    if (!match) return false;
+    const frag = document.createDocumentFragment();
+    let cursor = 0;
+    while (match) {
+      const full = match[0];
+      const cents = match[1];
+      const start = match.index;
+      if (start > cursor) frag.appendChild(document.createTextNode(raw.slice(cursor, start)));
+      const wrap = document.createElement('span');
+      wrap.className = 'ipon-peso-num';
+      wrap.appendChild(document.createTextNode(full.slice(0, full.length - cents.length)));
+      const small = document.createElement('span');
+      small.className = 'ipon-cents';
+      small.textContent = cents;
+      wrap.appendChild(small);
+      frag.appendChild(wrap);
+      cursor = start + full.length;
+      match = PESO_CENTS_RE.exec(raw);
+    }
+    if (cursor < raw.length) frag.appendChild(document.createTextNode(raw.slice(cursor)));
+    parent.replaceChild(frag, textNode);
+    return true;
+  }
+
+  function formatCentavosInNode(root) {
+    if (!root || typeof document === 'undefined' || typeof document.createDocumentFragment !== 'function' || typeof document.createElement !== 'function') return 0;
+    const prev = centsMutating;
+    centsMutating = true;
+    let count = 0;
+    try {
+      if (root.nodeType === 3) {
+        if (formatCentavosInTextNode(root)) count += 1;
+        return count;
+      }
+      if (root.nodeType !== 1 && root.nodeType !== 11) return 0;
+      if (root.nodeType === 1 && shouldSkipCentavosParent(root)) return 0;
+      const textNodes = [];
+      if (typeof document.createTreeWalker === 'function') {
+        const walker = document.createTreeWalker(root, 4);
+        let node = walker.nextNode();
+        while (node) {
+          if (node.nodeValue && node.nodeValue.includes('₱') && node.nodeValue.includes('.')) textNodes.push(node);
+          node = walker.nextNode();
+        }
+      } else if (Array.isArray(root.childNodes)) {
+        const stack = [...root.childNodes];
+        while (stack.length) {
+          const n = stack.shift();
+          if (!n) continue;
+          if (n.nodeType === 3) {
+            if (n.nodeValue && n.nodeValue.includes('₱') && n.nodeValue.includes('.')) textNodes.push(n);
+          } else if (n.nodeType === 1 && !shouldSkipCentavosParent(n) && Array.isArray(n.childNodes)) {
+            stack.push(...n.childNodes);
+          }
+        }
+      }
+      for (const tn of textNodes) {
+        if (formatCentavosInTextNode(tn)) count += 1;
+      }
+    } finally {
+      centsMutating = prev;
+    }
+    return count;
+  }
+
+  function flushPendingCentavos() {
+    centsScheduled = false;
+    if (!pendingCentsRoots.size) return;
+    const roots = [...pendingCentsRoots];
+    pendingCentsRoots.clear();
+    for (const root of roots) { formatCentavosInNode(root); }
+  }
+
+  function installGlobalCentavosFormatter() {
+    if (centsObserverInstalled || typeof document === 'undefined' || !document.body) return;
+    if (typeof document.createTreeWalker !== 'function' || typeof document.createDocumentFragment !== 'function') return;
+    centsObserverInstalled = true;
+    formatCentavosInNode(document.body);
+    if (typeof MutationObserver !== 'function') return;
+    const observer = new MutationObserver((mutations) => {
+      if (centsMutating) return;
+      for (const m of mutations) {
+        if (m.type === 'characterData' && m.target) {
+          pendingCentsRoots.add(m.target);
+        } else if (m.type === 'childList') {
+          for (const added of m.addedNodes || []) {
+            if (added && (added.nodeType === 1 || added.nodeType === 3)) pendingCentsRoots.add(added);
+          }
+        }
+      }
+      if (pendingCentsRoots.size && !centsScheduled) {
+        centsScheduled = true;
+        if (typeof queueMicrotask === 'function') queueMicrotask(flushPendingCentavos);
+        else Promise.resolve().then(flushPendingCentavos);
+      }
+    });
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+  }
+
   function mountShell(role = currentProfile?.role) {
+    installGlobalCentavosFormatter();
     const host = document.getElementById('app-sidebar');
     const effectiveRole = resolveActiveRole(role);
     const snapshot = readShellSnapshot();
@@ -18613,7 +18744,7 @@
   }
 
   window.Ipon = {
-    get client() { return getClient(); }, configured, init, rpc, fireKeepaliveRpc, money, dateLabel, isoDate, monthStart,
+    get client() { return getClient(); }, configured, init, rpc, fireKeepaliveRpc, money, moneyHtml, formatCentavosInNode, dateLabel, isoDate, monthStart,
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     playUiSound, isUiSoundEnabled, setUiSoundEnabled, primeUiSound,
@@ -18642,4 +18773,11 @@
     SOCIAL_APPS, validateSocialAppInput, normalizeSocialAppUrl, normalizeSocialAppOrder, reorderSocialAppKeys, sanitizeSocialLinks, serializeSocialLinks, renderSocialAppLinksHtml,
     get profile() { return currentProfile; }
   };
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading' && typeof document.addEventListener === 'function') {
+      document.addEventListener('DOMContentLoaded', installGlobalCentavosFormatter, { once: true });
+    } else {
+      installGlobalCentavosFormatter();
+    }
+  }
 })();

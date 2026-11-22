@@ -370,6 +370,56 @@
     revealItems.forEach((item) => item.classList.add('is-in'));
   }, 1200);
 
+  // Subtle smaller-centavos (.00) formatting on public landing page peso figures
+  if (typeof document.createTreeWalker === 'function' && typeof document.createDocumentFragment === 'function') {
+    const pesoRe = /₱(?:\d{1,3}(?:,\d{3})+|\d+)(\.\d{2})(?!\d)/g;
+    const formatLandingCents = (root) => {
+      if (!root) return;
+      const walker = document.createTreeWalker(root, 4);
+      const nodes = [];
+      let n = walker.nextNode();
+      while (n) {
+        if (n.nodeValue && n.nodeValue.includes('₱') && n.nodeValue.includes('.')) {
+          const p = n.parentNode;
+          if (p && p.nodeType === 1 && !['SCRIPT', 'STYLE'].includes(p.tagName) && !p.closest?.('.ipon-peso-num,.ipon-cents')) nodes.push(n);
+        }
+        n = walker.nextNode();
+      }
+      for (const tn of nodes) {
+        const raw = tn.nodeValue;
+        pesoRe.lastIndex = 0;
+        let m = pesoRe.exec(raw);
+        if (!m) continue;
+        const frag = document.createDocumentFragment();
+        let cur = 0;
+        while (m) {
+          if (m.index > cur) frag.appendChild(document.createTextNode(raw.slice(cur, m.index)));
+          const wrap = document.createElement('span');
+          wrap.className = 'ipon-peso-num';
+          wrap.appendChild(document.createTextNode(m[0].slice(0, m[0].length - m[1].length)));
+          const sm = document.createElement('span');
+          sm.className = 'ipon-cents';
+          sm.textContent = m[1];
+          wrap.appendChild(sm);
+          frag.appendChild(wrap);
+          cur = m.index + m[0].length;
+          m = pesoRe.exec(raw);
+        }
+        if (cur < raw.length) frag.appendChild(document.createTextNode(raw.slice(cur)));
+        tn.parentNode?.replaceChild(frag, tn);
+      }
+    };
+    formatLandingCents(document.body);
+    if (typeof MutationObserver === 'function') {
+      let busy = false;
+      new MutationObserver(() => {
+        if (busy) return;
+        busy = true;
+        try { formatLandingCents(document.body); } finally { busy = false; }
+      }).observe(document.body, { childList: true, characterData: true, subtree: true });
+    }
+  }
+
   // 9. Fast session check for returning users (bypasses landing page for active users)
   let hasStoredSession = false;
   try { hasStoredSession = Object.keys(localStorage).some((key) => /^sb-.+-auth-token$/.test(key)); } catch {}
@@ -388,7 +438,7 @@
       document.body.append(script);
     });
     await Promise.all([
-      loadScript('js/core.js?v=20261122-33'),
+      loadScript('js/core.js?v=20261122-34'),
       loadScript('js/policy.js?v=20261122-01'),
       loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js', 'sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb')
     ]);

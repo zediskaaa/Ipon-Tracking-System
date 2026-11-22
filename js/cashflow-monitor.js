@@ -105,6 +105,18 @@
   const breakdownList = document.getElementById('cf-breakdown-list');
 
   const chartBarsWrap = document.getElementById('cf-chart-bars');
+  const chartPrevBtn = document.getElementById('cf-chart-prev');
+  const chartNextBtn = document.getElementById('cf-chart-next');
+  const chartRangeEl = document.getElementById('cf-chart-range');
+  const compareToggleBtn = document.getElementById('cf-compare-toggle');
+  const compareLegendEl = document.getElementById('cf-compare-legend');
+  const chartHintEl = document.getElementById('cf-chart-hint');
+  const comparePanelEl = document.getElementById('cf-compare-panel');
+  const comparePrimaryLabelEl = document.getElementById('cf-compare-primary-label');
+  const compareSelectEl = document.getElementById('cf-compare-select');
+  const comparePrevBtn = document.getElementById('cf-compare-prev-btn');
+  const compareCloseBtn = document.getElementById('cf-compare-close-btn');
+  const compareGridEl = document.getElementById('cf-compare-grid');
   const historyListEl = document.getElementById('cf-history-list');
 
   const entryDialog = document.getElementById('cf-entry-dialog');
@@ -147,6 +159,21 @@
     const num = roundCentavos(value);
     if (num < 0) return `−${Ipon.money(Math.abs(num))}`;
     return Ipon.money(num);
+  }
+
+  function formatMoneyWithSmallCentsHtml(formattedText) {
+    const text = String(formattedText || '');
+    const idx = text.lastIndexOf('.');
+    if (idx < 0 || idx !== text.length - 3) return Ipon.escapeHtml(text);
+    const whole = Ipon.escapeHtml(text.slice(0, idx));
+    const cents = Ipon.escapeHtml(text.slice(idx));
+    return `${whole}<span class="cf-cents">${cents}</span>`;
+  }
+
+  function setMoneyDisplay(el, formattedText) {
+    if (!el) return;
+    const text = String(formattedText || '');
+    el.innerHTML = formatMoneyWithSmallCentsHtml(text);
   }
 
   function formatCompactPeso(value) {
@@ -249,6 +276,8 @@
   let activeView = resolveInitialView();
   let selectedYear = nowYm.year;
   let selectedMonth = nowYm.month;
+  let compareMode = false;
+  let compareTargetKey = '';
   let monitorData = null;
   let loadSeq = 0;
 
@@ -321,8 +350,8 @@
 
     if (rateDisplayEl) rateDisplayEl.textContent = pctLabel;
     if (heroMandatoryLabelEl) heroMandatoryLabelEl.textContent = `Mandatory savings (${pctLabel})`;
-    if (heroGrossEl) heroGrossEl.textContent = Ipon.money(gross);
-    if (heroMandatoryEl) heroMandatoryEl.textContent = `−${Ipon.money(mandatory)}`;
+    setMoneyDisplay(heroGrossEl, Ipon.money(gross));
+    setMoneyDisplay(heroMandatoryEl, `−${Ipon.money(mandatory)}`);
 
     if (heroCard) heroCard.classList.toggle('is-deficit', isDeficit);
     if (healthBadge) {
@@ -336,7 +365,7 @@
       else healthText.textContent = 'Spending within available income';
     }
 
-    if (heroNetEl) heroNetEl.textContent = formatSignedMoney(net);
+    setMoneyDisplay(heroNetEl, formatSignedMoney(net));
     if (heroFormulaEl) {
       heroFormulaEl.textContent = `Available Income (${Ipon.money(available)}) − Expenses (${Ipon.money(expenses)})`;
     }
@@ -359,15 +388,15 @@
       }
     }
 
-    if (kpiAvailableEl) kpiAvailableEl.textContent = Ipon.money(available);
+    setMoneyDisplay(kpiAvailableEl, Ipon.money(available));
     if (kpiAvailableSubEl) kpiAvailableSubEl.textContent = `Gross ${Ipon.money(gross)} − ${pctLabel} savings (${Ipon.money(mandatory)})`;
-    if (kpiExpensesEl) kpiExpensesEl.textContent = Ipon.money(expenses);
+    setMoneyDisplay(kpiExpensesEl, Ipon.money(expenses));
     if (kpiExpensesSubEl) {
       const count = Number(t.expense_count || 0);
       kpiExpensesSubEl.textContent = `${count} recorded expense${count === 1 ? '' : 's'} · ${ratio}% of available`;
     }
     if (kpiNetEl) {
-      kpiNetEl.textContent = formatSignedMoney(net);
+      setMoneyDisplay(kpiNetEl, formatSignedMoney(net));
       kpiNetEl.classList.toggle('is-negative', isDeficit);
       kpiNetEl.classList.toggle('is-positive', net > 0);
     }
@@ -378,20 +407,20 @@
     }
 
     // Immediate visible totals directly inside the switcher & active view summaries
-    if (segIncomeTotalEl) segIncomeTotalEl.textContent = Ipon.money(available);
-    if (segExpenseTotalEl) segExpenseTotalEl.textContent = Ipon.money(expenses);
+    setMoneyDisplay(segIncomeTotalEl, Ipon.money(available));
+    setMoneyDisplay(segExpenseTotalEl, Ipon.money(expenses));
 
-    if (incGrossEl) incGrossEl.textContent = Ipon.money(gross);
+    setMoneyDisplay(incGrossEl, Ipon.money(gross));
     if (incGrossSubEl) {
       const c = Number(t.income_count || 0);
       incGrossSubEl.textContent = `${c} income source${c === 1 ? '' : 's'} in ${monthLabel(selectedYear, selectedMonth)}`;
     }
     if (incSavingsLabelEl) incSavingsLabelEl.textContent = `Less: Mandatory Savings (${pctLabel})`;
-    if (incSavingsEl) incSavingsEl.textContent = `−${Ipon.money(mandatory)}`;
+    setMoneyDisplay(incSavingsEl, `−${Ipon.money(mandatory)}`);
     if (incSavingsSubEl) incSavingsSubEl.textContent = `Automatically deducted (${pctLabel} of gross income)`;
-    if (incAvailableEl) incAvailableEl.textContent = Ipon.money(available);
+    setMoneyDisplay(incAvailableEl, Ipon.money(available));
 
-    if (expTotalEl) expTotalEl.textContent = Ipon.money(expenses);
+    setMoneyDisplay(expTotalEl, Ipon.money(expenses));
     if (expTotalSubEl) expTotalSubEl.textContent = `${ratio}% of ${Ipon.money(available)} available income`;
     if (expCountEl) {
       const c = Number(t.expense_count || 0);
@@ -404,7 +433,7 @@
         : `No expenses logged for ${monthLabel(selectedYear, selectedMonth)}`;
     }
     if (expRemainingEl) {
-      expRemainingEl.textContent = formatSignedMoney(net);
+      setMoneyDisplay(expRemainingEl, formatSignedMoney(net));
       expRemainingEl.classList.toggle('is-negative', isDeficit);
       expRemainingEl.classList.toggle('is-positive', net > 0);
     }
@@ -436,7 +465,7 @@
         <td class="cf-col-cat"><span class="cf-cat-pill" title="${Ipon.escapeHtml(row.category)}">${Ipon.escapeHtml(row.category)}</span></td>
         <td class="cf-col-desc"><span class="cf-desc-text" title="${Ipon.escapeHtml(row.description || '')}">${row.description ? Ipon.escapeHtml(row.description) : '<span class="field-help">—</span>'}</span></td>
         <td class="cf-col-date">${Ipon.dateLabel(row.entry_date)}</td>
-        <td class="cf-col-amount cf-amount-cell is-income tabular-nums">${Ipon.money(row.amount)}</td>
+        <td class="cf-col-amount cf-amount-cell is-income tabular-nums">${formatMoneyWithSmallCentsHtml(Ipon.money(row.amount))}</td>
         <td class="cf-col-actions cf-actions-cell">
           <div class="table-actions">
             <button class="icon-action" type="button" data-cf-edit-income="${Ipon.escapeHtml(row.id)}">Edit</button>
@@ -487,7 +516,7 @@
             <td class="cf-col-cat"><span class="cf-cat-pill ${categoryToneClass(row.category, 'EXPENSE')}" title="${Ipon.escapeHtml(row.category)}">${Ipon.escapeHtml(row.category)}</span></td>
             <td class="cf-col-desc"><span class="cf-desc-text" title="${Ipon.escapeHtml(row.description || '')}">${row.description ? Ipon.escapeHtml(row.description) : '<span class="field-help">—</span>'}</span></td>
             <td class="cf-col-date">${Ipon.dateLabel(row.entry_date)}</td>
-            <td class="cf-col-amount cf-amount-cell is-expense tabular-nums">${Ipon.money(row.amount)}</td>
+            <td class="cf-col-amount cf-amount-cell is-expense tabular-nums">${formatMoneyWithSmallCentsHtml(Ipon.money(row.amount))}</td>
             <td class="cf-col-actions cf-actions-cell">
               <div class="table-actions">
                 <button class="icon-action" type="button" data-cf-edit-expense="${Ipon.escapeHtml(row.id)}">Edit</button>
@@ -507,7 +536,7 @@
           <button class="cf-breakdown-item${selected ? ' is-active' : ''}" type="button" data-cf-breakdown-cat="${Ipon.escapeHtml(item.category)}" aria-pressed="${selected ? 'true' : 'false'}">
             <div class="cf-breakdown-row">
               <span class="cf-breakdown-name">${Ipon.escapeHtml(item.category)}</span>
-              <span class="cf-breakdown-val tabular-nums">${Ipon.money(item.total)}</span>
+              <span class="cf-breakdown-val tabular-nums">${formatMoneyWithSmallCentsHtml(Ipon.money(item.total))}</span>
             </div>
             <div class="cf-breakdown-bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
             <div class="cf-breakdown-meta tabular-nums">
@@ -519,9 +548,122 @@
     }
   }
 
+  function buildComparableMonthsMap(data) {
+    const map = new Map();
+    const trend = Array.isArray(data?.comparison_trend) ? data.comparison_trend : [];
+    const history = Array.isArray(data?.monthly_history) ? data.monthly_history : [];
+    [...trend, ...history].forEach((pt) => {
+      const yr = Number(pt.year);
+      const mo = Number(pt.month);
+      if (!Number.isFinite(yr) || !Number.isFinite(mo)) return;
+      map.set(`${yr}-${mo}`, {
+        year: yr,
+        month: mo,
+        available_income: roundCentavos(pt.available_income || 0),
+        total_expenses: roundCentavos(pt.total_expenses || 0),
+        net_income: roundCentavos(pt.net_income || 0),
+        gross_income: roundCentavos(pt.gross_income || 0),
+        mandatory_savings: roundCentavos(pt.mandatory_savings || 0)
+      });
+    });
+    const activeKey = `${selectedYear}-${selectedMonth}`;
+    if (data?.totals) {
+      map.set(activeKey, {
+        year: selectedYear,
+        month: selectedMonth,
+        available_income: roundCentavos(data.totals.available_income || 0),
+        total_expenses: roundCentavos(data.totals.total_expenses || 0),
+        net_income: roundCentavos(data.totals.net_income || 0),
+        gross_income: roundCentavos(data.totals.gross_income || 0),
+        mandatory_savings: roundCentavos(data.totals.mandatory_savings || 0)
+      });
+    }
+    return map;
+  }
+
+  function prevMonthKey(year, month) {
+    const dt = new Date(Date.UTC(year, month - 2, 1));
+    return `${dt.getUTCFullYear()}-${dt.getUTCMonth() + 1}`;
+  }
+
+  function renderComparisonPanel(data) {
+    if (!comparePanelEl) return;
+    if (compareToggleBtn) compareToggleBtn.setAttribute('aria-pressed', compareMode ? 'true' : 'false');
+    if (compareLegendEl) compareLegendEl.hidden = !compareMode;
+    if (chartHintEl) {
+      chartHintEl.textContent = compareMode
+        ? 'Tap any month bar to compare side-by-side'
+        : 'Tap a month bar to inspect';
+    }
+    comparePanelEl.hidden = !compareMode;
+    if (!compareMode) return;
+
+    const map = buildComparableMonthsMap(data);
+    const activeKey = `${selectedYear}-${selectedMonth}`;
+    const defaultPrevKey = prevMonthKey(selectedYear, selectedMonth);
+    const options = [...map.entries()]
+      .filter(([key]) => key !== activeKey)
+      .sort((a, b) => (b[1].year - a[1].year) || (b[1].month - a[1].month));
+
+    if (!compareTargetKey || compareTargetKey === activeKey || !map.has(compareTargetKey)) {
+      compareTargetKey = map.has(defaultPrevKey) ? defaultPrevKey : (options[0]?.[0] || '');
+    }
+
+    if (comparePrimaryLabelEl) comparePrimaryLabelEl.textContent = monthLabel(selectedYear, selectedMonth);
+    if (compareSelectEl) {
+      compareSelectEl.innerHTML = options.length
+        ? options.map(([key, item]) => `<option value="${key}">${Ipon.escapeHtml(monthLabel(item.year, item.month))}</option>`).join('')
+        : '<option value="">No other month</option>';
+      if (compareTargetKey) compareSelectEl.value = compareTargetKey;
+    }
+
+    const current = map.get(activeKey) || { available_income: 0, total_expenses: 0, net_income: 0 };
+    const other = map.get(compareTargetKey) || { year: selectedYear, month: selectedMonth, available_income: 0, total_expenses: 0, net_income: 0 };
+    const otherShort = other.year ? `${MONTH_SHORT[(other.month - 1) % 12]} ${String(other.year).slice(-2)}` : 'Prev';
+
+    const formatDelta = (diff, higherIsBetter) => {
+      const val = roundCentavos(diff);
+      if (val === 0) return { text: 'Same', cls: '' };
+      const sign = val > 0 ? '+' : '−';
+      const cls = (val > 0 ? higherIsBetter : !higherIsBetter) ? 'is-good' : 'is-bad';
+      return { text: `${sign}${Ipon.money(Math.abs(val))}`, cls };
+    };
+
+    const availDelta = formatDelta(current.available_income - other.available_income, true);
+    const expDelta = formatDelta(current.total_expenses - other.total_expenses, false);
+    const netDelta = formatDelta(current.net_income - other.net_income, true);
+
+    if (compareGridEl) {
+      const cards = [
+        { label: 'Available income', cur: Ipon.money(current.available_income), prev: Ipon.money(other.available_income), delta: availDelta },
+        { label: 'Monthly expenses', cur: Ipon.money(current.total_expenses), prev: Ipon.money(other.total_expenses), delta: expDelta },
+        { label: 'Net income', cur: formatSignedMoney(current.net_income), prev: formatSignedMoney(other.net_income), delta: netDelta }
+      ];
+      compareGridEl.innerHTML = cards.map((card) => `
+        <div class="cf-compare-metric">
+          <span class="cf-compare-metric-label">${Ipon.escapeHtml(card.label)}</span>
+          <strong class="cf-compare-main-val">${formatMoneyWithSmallCentsHtml(card.cur)}</strong>
+          <div class="cf-compare-sub-row">
+            <span>${Ipon.escapeHtml(otherShort)}: ${Ipon.escapeHtml(card.prev)}</span>
+            <span class="cf-delta-pill ${card.delta.cls}">${Ipon.escapeHtml(card.delta.text)}</span>
+          </div>
+        </div>`).join('');
+    }
+  }
+
   function renderInsights(data) {
     const trend = Array.isArray(data?.comparison_trend) ? data.comparison_trend : [];
     const history = Array.isArray(data?.monthly_history) ? data.monthly_history : [];
+
+    if (chartRangeEl && trend.length) {
+      const first = trend[0];
+      const last = trend[trend.length - 1];
+      const firstLbl = `${MONTH_SHORT[(Number(first.month) - 1) % 12]} ${String(first.year).slice(-2)}`;
+      const lastLbl = `${MONTH_SHORT[(Number(last.month) - 1) % 12]} ${String(last.year).slice(-2)}`;
+      chartRangeEl.textContent = `${firstLbl} – ${lastLbl}`;
+    }
+
+    renderComparisonPanel(data);
 
     if (chartBarsWrap) {
       if (!trend.length) {
@@ -534,16 +676,19 @@
         chartBarsWrap.innerHTML = trend.map((pt) => {
           const yr = Number(pt.year);
           const mo = Number(pt.month);
+          const key = `${yr}-${mo}`;
           const avail = Number(pt.available_income || 0);
           const exp = Number(pt.total_expenses || 0);
           const net = Number(pt.net_income || 0);
           const availH = avail > 0 ? Math.max(8, Math.round((avail / maxVal) * 100)) : 3;
           const expH = exp > 0 ? Math.max(8, Math.round((exp / maxVal) * 100)) : 3;
           const isSelected = yr === selectedYear && mo === selectedMonth;
+          const isCompared = compareMode && !isSelected && compareTargetKey === key;
           const label = `${MONTH_SHORT[(mo - 1) % 12]} ${String(yr).slice(-2)}`;
           const tip = `${monthLabel(yr, mo)} — Available: ${Ipon.money(avail)}, Expenses: ${Ipon.money(exp)}, Net: ${formatSignedMoney(net)}`;
           return `
-            <button class="cf-bar-col${isSelected ? ' is-selected' : ''}" type="button" data-cf-jump-ym="${yr}-${mo}" title="${Ipon.escapeHtml(tip)}" aria-label="${Ipon.escapeHtml(tip)}">
+            <button class="cf-bar-col${isSelected ? ' is-selected' : ''}${isCompared ? ' is-compare' : ''}" type="button" data-cf-chart-ym="${key}" title="${Ipon.escapeHtml(tip)}" aria-label="${Ipon.escapeHtml(tip)}">
+              ${isCompared ? '<span class="cf-bar-tag">VS</span>' : ''}
               <div class="cf-bar-pair" aria-hidden="true">
                 <span class="cf-bar is-avail" style="height:${availH}%"></span>
                 <span class="cf-bar is-exp" style="height:${expH}%"></span>
@@ -574,7 +719,7 @@
                 <small class="tabular-nums">Avail ${Ipon.money(avail)} · Exp ${Ipon.money(exp)} · ${formatPct(item.mandatory_savings_pct)} saved</small>
               </div>
               <div class="cf-history-right tabular-nums">
-                <span class="cf-history-net${isNeg ? ' is-negative' : ''}">${formatSignedMoney(net)}</span>
+                <span class="cf-history-net${isNeg ? ' is-negative' : ''}">${formatMoneyWithSmallCentsHtml(formatSignedMoney(net))}</span>
                 <span class="cf-history-status${isNeg ? ' is-negative' : ''}">${isNeg ? 'Deficit' : 'Surplus'}</span>
               </div>
             </button>`;
@@ -623,12 +768,12 @@
         : 'Projected Total Expenses';
     }
     if (entryImpactPrimaryVal) {
-      entryImpactPrimaryVal.textContent = type === 'INCOME'
+      setMoneyDisplay(entryImpactPrimaryVal, type === 'INCOME'
         ? Ipon.money(preview.available_income)
-        : Ipon.money(preview.total_expenses);
+        : Ipon.money(preview.total_expenses));
     }
     if (entryImpactNetVal) {
-      entryImpactNetVal.textContent = formatSignedMoney(preview.net_income);
+      setMoneyDisplay(entryImpactNetVal, formatSignedMoney(preview.net_income));
       entryImpactNetVal.classList.toggle('is-negative', preview.net_income < 0);
       entryImpactNetVal.classList.toggle('is-positive', preview.net_income > 0);
     }
@@ -736,9 +881,9 @@
     const deduct = roundCentavos((gross * pct) / 100);
     const avail = roundCentavos(gross - deduct);
 
-    if (ratePreviewGross) ratePreviewGross.textContent = Ipon.money(gross);
-    if (ratePreviewDeduct) ratePreviewDeduct.textContent = `−${Ipon.money(deduct)}`;
-    if (ratePreviewAvail) ratePreviewAvail.textContent = Ipon.money(avail);
+    setMoneyDisplay(ratePreviewGross, Ipon.money(gross));
+    setMoneyDisplay(ratePreviewDeduct, `−${Ipon.money(deduct)}`);
+    setMoneyDisplay(ratePreviewAvail, Ipon.money(avail));
     if (rateInput) Ipon.setFieldError(rateInput, check.valid ? '' : check.error);
     if (rateSubmitBtn) rateSubmitBtn.disabled = !check.valid;
     renderRatePresets();
@@ -938,6 +1083,47 @@
   incomeBody?.addEventListener('click', handleTableClick);
   expenseBody?.addEventListener('click', handleTableClick);
 
+  chartPrevBtn?.addEventListener('click', () => shiftMonth(-1));
+  chartNextBtn?.addEventListener('click', () => shiftMonth(1));
+  compareToggleBtn?.addEventListener('click', () => {
+    compareMode = !compareMode;
+    if (compareMode && (!compareTargetKey || compareTargetKey === `${selectedYear}-${selectedMonth}`)) {
+      compareTargetKey = prevMonthKey(selectedYear, selectedMonth);
+    }
+    if (monitorData) renderInsights(monitorData);
+  });
+  compareSelectEl?.addEventListener('change', () => {
+    compareTargetKey = compareSelectEl.value || '';
+    if (monitorData) renderInsights(monitorData);
+  });
+  comparePrevBtn?.addEventListener('click', () => {
+    compareTargetKey = prevMonthKey(selectedYear, selectedMonth);
+    if (monitorData) renderInsights(monitorData);
+  });
+  compareCloseBtn?.addEventListener('click', () => {
+    compareMode = false;
+    if (monitorData) renderInsights(monitorData);
+  });
+
+  function handleChartBarClick(event) {
+    const btn = event.target.closest('[data-cf-chart-ym]');
+    if (!btn) return;
+    const key = String(btn.dataset.cfChartYm || '');
+    const [y, m] = key.split('-').map(Number);
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return;
+    if (compareMode) {
+      if (y === selectedYear && m === selectedMonth) return;
+      compareTargetKey = `${y}-${m}`;
+      if (monitorData) renderInsights(monitorData);
+      return;
+    }
+    selectedYear = y;
+    selectedMonth = m;
+    if (expCatFilter) expCatFilter.value = '';
+    syncMonthControls();
+    return loadMonitor();
+  }
+
   function handleJumpMonth(event) {
     const btn = event.target.closest('[data-cf-jump-ym]');
     if (!btn) return;
@@ -947,9 +1133,9 @@
     selectedMonth = m;
     if (expCatFilter) expCatFilter.value = '';
     syncMonthControls();
-    loadMonitor();
+    return loadMonitor();
   }
-  chartBarsWrap?.addEventListener('click', handleJumpMonth);
+  chartBarsWrap?.addEventListener('click', handleChartBarClick);
   historyListEl?.addEventListener('click', handleJumpMonth);
 
   entryForm?.addEventListener('submit', async (event) => {

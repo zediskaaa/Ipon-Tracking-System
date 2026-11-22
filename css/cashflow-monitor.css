@@ -1066,7 +1066,285 @@ body[data-budget-mode="monitor"] #budget-header-actions {
   gap: 10px;
 }
 
+/* Refined smaller centavos (.00) typography so whole Pesos read cleanly at a glance */
+.cf-cents {
+  font-size: 0.56em;
+  font-weight: 500;
+  opacity: 0.72;
+  letter-spacing: 0;
+}
+.cf-seg-btn-total .cf-cents,
+.cf-amount-cell .cf-cents,
+.cf-breakdown-val .cf-cents,
+.cf-history-net .cf-cents,
+.cf-compare-main-val .cf-cents {
+  font-size: 0.76em;
+  opacity: 0.76;
+}
+
+/* Chart Navigation & Side-by-Side Comparison Controls */
+.cf-chart-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cf-chart-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 11px;
+  border: 1px solid var(--budget-line, rgba(20, 45, 43, .13));
+  background: #faf7f0;
+}
+.cf-chart-nav-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.cf-chart-nav-btn:hover {
+  background: rgba(20, 45, 43, .08);
+}
+.cf-chart-nav-btn:focus-visible,
+.cf-compare-toggle:focus-visible,
+.cf-compare-mini-btn:focus-visible {
+  outline: 2px solid var(--green, #1f6a43);
+  outline-offset: 2px;
+}
+.cf-chart-nav-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cf-chart-range {
+  padding: 0 8px;
+  font: 700 12px/1.2 Arial, sans-serif;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.cf-compare-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 11px;
+  border: 1px solid rgba(20, 45, 43, .16);
+  background: #ffffff;
+  color: var(--ink);
+  font: 700 12.5px/1.2 Arial, sans-serif;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+.cf-compare-toggle svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cf-compare-toggle:hover {
+  border-color: rgba(13, 51, 38, .35);
+  background: #f4f8f6;
+}
+.cf-compare-toggle[aria-pressed="true"] {
+  border-color: #0D3326;
+  background: #0D3326;
+  color: #F6EDD3;
+}
+.cf-chart-legend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: -6px;
+}
+.cf-chart-hint {
+  font: 600 12px/1.25 Arial, sans-serif;
+  color: var(--muted);
+}
+.cf-chart-dot.is-compare {
+  background: #C99A3B;
+}
+.cf-bar-col {
+  position: relative;
+}
+.cf-bar-col.is-compare {
+  background: rgba(201, 154, 59, .1);
+  border-color: rgba(201, 154, 59, .55);
+}
+.cf-bar-tag {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #C99A3B;
+  color: #ffffff;
+  font: 800 9.5px/1.25 Arial, sans-serif;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.cf-compare-panel {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(20, 45, 43, .12);
+  background: #faf7f0;
+  display: grid;
+  gap: 12px;
+}
+.cf-compare-panel[hidden] {
+  display: none !important;
+}
+.cf-compare-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cf-compare-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cf-compare-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 11px;
+  border-radius: 9px;
+  background: #0D3326;
+  color: #F6EDD3;
+  font: 700 12.5px/1.2 Arial, sans-serif;
+}
+.cf-compare-vs {
+  font: 700 12px/1.2 Arial, sans-serif;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.cf-compare-select {
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(201, 154, 59, .45);
+  background: #ffffff;
+  color: var(--ink);
+  font: 700 12.5px/1.2 Arial, sans-serif;
+}
+.cf-compare-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cf-compare-mini-btn {
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(20, 45, 43, .14);
+  background: #ffffff;
+  color: var(--ink);
+  font: 700 12px/1.2 Arial, sans-serif;
+  cursor: pointer;
+}
+.cf-compare-mini-btn:hover {
+  background: rgba(20, 45, 43, .06);
+}
+.cf-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.cf-compare-metric {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 45, 43, .09);
+  background: #ffffff;
+  display: grid;
+  gap: 4px;
+}
+.cf-compare-metric-label {
+  font: 700 11px/1.2 Arial, sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cf-compare-main-val {
+  font: 800 15px/1.2 Arial, sans-serif;
+  color: var(--ink);
+}
+.cf-compare-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+  font: 500 11.5px/1.3 Arial, sans-serif;
+  color: var(--muted);
+}
+.cf-delta-pill {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font: 700 11px/1.2 Arial, sans-serif;
+  background: rgba(20, 45, 43, .08);
+  color: var(--ink);
+}
+.cf-delta-pill.is-good {
+  background: rgba(31, 138, 102, .13);
+  color: #115b42;
+}
+.cf-delta-pill.is-bad {
+  background: rgba(194, 68, 58, .12);
+  color: #a93228;
+}
+
 /* Dark Theme */
+html[data-theme="dark"] .cf-chart-nav,
+html[data-theme="dark"] .cf-compare-panel {
+  background: #15251f;
+  border-color: rgba(218, 236, 227, .14);
+}
+html[data-theme="dark"] .cf-compare-toggle,
+html[data-theme="dark"] .cf-compare-mini-btn,
+html[data-theme="dark"] .cf-compare-select,
+html[data-theme="dark"] .cf-compare-metric {
+  background: #101d18;
+  border-color: rgba(218, 236, 227, .16);
+  color: #e9f2ed;
+}
+html[data-theme="dark"] .cf-compare-toggle[aria-pressed="true"] {
+  background: #1f7455;
+  border-color: #34d399;
+  color: #ffffff;
+}
+html[data-theme="dark"] .cf-bar-col.is-compare {
+  background: rgba(233, 184, 76, .14);
+  border-color: rgba(233, 184, 76, .58);
+}
+html[data-theme="dark"] .cf-delta-pill.is-good {
+  background: rgba(52, 211, 153, .18);
+  color: #8cecc1;
+}
+html[data-theme="dark"] .cf-delta-pill.is-bad {
+  background: rgba(248, 113, 113, .18);
+  color: #fecaca;
+}
 html[data-theme="dark"] .budget-mode-tabs,
 html[data-theme="dark"] .cf-segmented {
   background: rgba(255, 255, 255, .06);
@@ -1211,7 +1489,8 @@ html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184,
     padding: 10px 12px;
   }
   .cf-breakdown-list,
-  .cf-rate-preview-grid {
+  .cf-rate-preview-grid,
+  .cf-compare-grid {
     grid-template-columns: minmax(0, 1fr);
   }
   .cf-table {

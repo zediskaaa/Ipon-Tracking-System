@@ -9,7 +9,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Budget allocation &amp; expenses — myIPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261122-31"><link rel="stylesheet" href="css/tutorial.css?v=20261120-05"><link rel="stylesheet" href="css/cashflow-monitor.css?v=20261122-01">
+  <link rel="stylesheet" href="css/app.css?v=20261122-32"><link rel="stylesheet" href="css/tutorial.css?v=20261120-05"><link rel="stylesheet" href="css/cashflow-monitor.css?v=20261122-02">
   <script src="js/config.js?v=20261120-78"></script>
 </head>
 
@@ -261,14 +261,47 @@
             <div class="cf-insight-head">
               <div>
                 <h2>Income vs. expenses (6 months)</h2>
-                <p>Compare available income against monthly spending. Tap a month to inspect.</p>
+                <p id="cf-chart-subtitle">Compare available income against monthly spending. Use arrows to shift or Compare to inspect two months.</p>
               </div>
+              <div class="cf-chart-controls" role="group" aria-label="Chart navigation and comparison">
+                <div class="cf-chart-nav">
+                  <button class="cf-chart-nav-btn" id="cf-chart-prev" type="button" aria-label="Show earlier month">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                  </button>
+                  <span class="cf-chart-range tabular-nums" id="cf-chart-range">—</span>
+                  <button class="cf-chart-nav-btn" id="cf-chart-next" type="button" aria-label="Show later month">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                  </button>
+                </div>
+                <button class="cf-compare-toggle" id="cf-compare-toggle" type="button" aria-pressed="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12m0 0-3-3m3 3-3 3M16 17H4m0 0 3 3m-3-3 3-3"/></svg>
+                  <span>Compare</span>
+                </button>
+              </div>
+            </div>
+            <div class="cf-chart-legend-row">
               <div class="cf-chart-legend" aria-hidden="true">
                 <span><i class="cf-chart-dot is-avail"></i>Available</span>
                 <span><i class="cf-chart-dot is-exp"></i>Expenses</span>
+                <span class="cf-compare-legend-item" id="cf-compare-legend" hidden><i class="cf-chart-dot is-compare"></i>Compare month</span>
               </div>
+              <small class="cf-chart-hint" id="cf-chart-hint">Tap a month bar to inspect</small>
             </div>
             <div class="cf-bars-wrap" id="cf-chart-bars"></div>
+            <div class="cf-compare-panel" id="cf-compare-panel" hidden>
+              <div class="cf-compare-head">
+                <div class="cf-compare-pair">
+                  <span class="cf-compare-pill is-primary" id="cf-compare-primary-label">—</span>
+                  <span class="cf-compare-vs" aria-hidden="true">vs</span>
+                  <select class="cf-compare-select" id="cf-compare-select" aria-label="Select month to compare against"></select>
+                </div>
+                <div class="cf-compare-actions">
+                  <button class="cf-compare-mini-btn" id="cf-compare-prev-btn" type="button">Prev month</button>
+                  <button class="cf-compare-mini-btn" id="cf-compare-close-btn" type="button">Done</button>
+                </div>
+              </div>
+              <div class="cf-compare-grid tabular-nums" id="cf-compare-grid"></div>
+            </div>
           </article>
 
           <article class="cf-insight-panel">
@@ -752,14 +785,14 @@
     </main>
   </div>
 
-  <script src="js/profile-effects.js?v=20261122-07"></script><script src="js/profile-effects-exclusive.js?v=20261122-07"></script><script src="js/profile-effects-divine.js?v=20261122-02"></script><script src="js/profile-effects-deluxe.js?v=20261122-01"></script><script src="js/core.js?v=20261122-33"></script><script src="js/tutorial.js?v=20261120-07"></script>
+  <script src="js/profile-effects.js?v=20261122-07"></script><script src="js/profile-effects-exclusive.js?v=20261122-07"></script><script src="js/profile-effects-divine.js?v=20261122-02"></script><script src="js/profile-effects-deluxe.js?v=20261122-01"></script><script src="js/core.js?v=20261122-34"></script><script src="js/tutorial.js?v=20261120-07"></script>
   <script src="js/policy.js?v=20261122-01"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
   <script src="js/messages.js?v=20261122-30"></script>
-  <script src="js/cashflow-monitor.js?v=20261122-01"></script>
-  <script src="js/budget.js?v=20261122-01"></script>
+  <script src="js/cashflow-monitor.js?v=20261122-02"></script>
+  <script src="js/budget.js?v=20261122-02"></script>
 </body>
 
 </html>

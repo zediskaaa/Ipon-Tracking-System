@@ -46,8 +46,13 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(html, /id="cf-seg-expense"/);
   assert.match(html, /id="cf-entry-dialog"/);
   assert.match(html, /id="cf-rate-dialog"/);
-  assert.match(html, /css\/cashflow-monitor\.css\?v=20261122-01/);
-  assert.match(html, /js\/cashflow-monitor\.js\?v=20261122-01/);
+  assert.match(html, /css\/cashflow-monitor\.css\?v=20261122-02/);
+  assert.match(html, /js\/cashflow-monitor\.js\?v=20261122-02/);
+  assert.match(html, /id="cf-chart-prev"/);
+  assert.match(html, /id="cf-chart-next"/);
+  assert.match(html, /id="cf-compare-toggle"/);
+  assert.match(html, /id="cf-compare-panel"/);
+  assert.match(css, /\.cf-cents\s*\{/);
   assert.match(css, /html\[data-theme="dark"\] \.cf-segmented/);
   assert.match(css, /@media \(max-width: 780px\)/);
 });
@@ -59,6 +64,7 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
     const cls = new Set();
     const listeners = new Map();
     const attrs = new Map();
+    let _html = '';
     const el = {
       id,
       tagName: tag,
@@ -69,7 +75,11 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
       disabled: false,
       open: false,
       textContent: '',
-      innerHTML: '',
+      get innerHTML() { return _html; },
+      set innerHTML(v) {
+        _html = String(v ?? '');
+        this.textContent = _html.replace(/<[^>]+>/g, '');
+      },
       dataset: {},
       style: {},
       validity: { badInput: false, valid: true },
@@ -118,7 +128,7 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
     'cf-income-search', 'cf-add-income-btn', 'cf-income-body',
     'cf-exp-total', 'cf-exp-total-sub', 'cf-exp-count', 'cf-exp-count-sub', 'cf-exp-remaining', 'cf-exp-remaining-sub',
     'cf-expense-search', 'cf-expense-cat-filter', 'cf-add-expense-btn', 'cf-expense-body', 'cf-breakdown-wrap', 'cf-breakdown-list',
-    'cf-chart-bars', 'cf-history-list',
+    'cf-chart-bars', 'cf-chart-prev', 'cf-chart-next', 'cf-chart-range', 'cf-compare-toggle', 'cf-compare-legend', 'cf-chart-hint', 'cf-compare-panel', 'cf-compare-primary-label', 'cf-compare-select', 'cf-compare-prev-btn', 'cf-compare-close-btn', 'cf-compare-grid', 'cf-history-list',
     'cf-entry-dialog', 'cf-entry-form', 'cf-entry-id', 'cf-entry-type', 'cf-entry-eyebrow', 'cf-entry-title', 'cf-entry-copy',
     'cf-entry-category-label', 'cf-entry-category', 'cf-entry-presets', 'cf-entry-description', 'cf-entry-amount', 'cf-entry-date',
     'cf-impact-primary-label', 'cf-impact-primary-val', 'cf-impact-net-val', 'cf-entry-submit', 'cf-entry-close', 'cf-entry-cancel',
@@ -176,8 +186,14 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
       incomes,
       expenses,
       expense_breakdown: breakdown,
-      comparison_trend: [{ year: yr, month: mo, mandatory_savings_pct: pct, gross_income: gross, mandatory_savings: mandatory, available_income: avail, total_expenses: expTotal, net_income: net }],
-      monthly_history: [{ year: yr, month: mo, mandatory_savings_pct: pct, gross_income: gross, mandatory_savings: mandatory, available_income: avail, total_expenses: expTotal, net_income: net, income_count: incomes.length, expense_count: expenses.length }]
+      comparison_trend: [
+        { year: 2026, month: 10, mandatory_savings_pct: 20, gross_income: 40000, mandatory_savings: 8000, available_income: 32000, total_expenses: 0, net_income: 32000 },
+        { year: yr, month: mo, mandatory_savings_pct: pct, gross_income: gross, mandatory_savings: mandatory, available_income: avail, total_expenses: expTotal, net_income: net }
+      ],
+      monthly_history: [
+        { year: yr, month: mo, mandatory_savings_pct: pct, gross_income: gross, mandatory_savings: mandatory, available_income: avail, total_expenses: expTotal, net_income: net, income_count: incomes.length, expense_count: expenses.length },
+        { year: 2026, month: 10, mandatory_savings_pct: 20, gross_income: 40000, mandatory_savings: 8000, available_income: 32000, total_expenses: 0, net_income: 32000, income_count: 1, expense_count: 0 }
+      ]
     };
   };
 
@@ -264,8 +280,10 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
   vm.runInNewContext(js, ctx, { filename: 'js/cashflow-monitor.js' });
   await ctx.window.IponCashflowMonitor.mount({ failed: false, redirecting: false, configured: true, profile: { id: 'u1', role: 'MEMBER' } });
 
-  // 1. Exact prompt example verification: ₱30,000 gross -> 20% = ₱6,000 -> ₱24,000 avail -> ₱15,000 exp -> ₱9,000 net (Oct ₱40,000 NOT mixed in!)
+  // 1. Exact prompt example verification + smaller centavos markup (<span class="cf-cents">.00</span>)
   assert.equal(els.get('cf-inc-gross').textContent, '₱30,000.00');
+  assert.match(els.get('cf-hero-net').innerHTML, /₱9,000<span class="cf-cents">\.00<\/span>/);
+  assert.match(els.get('cf-kpi-available').innerHTML, /₱24,000<span class="cf-cents">\.00<\/span>/);
   assert.equal(els.get('cf-inc-savings').textContent, '−₱6,000.00');
   assert.equal(els.get('cf-inc-available').textContent, '₱24,000.00');
   assert.equal(els.get('cf-kpi-available').textContent, '₱24,000.00');
@@ -319,11 +337,175 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
   assert.equal(els.get('cf-hero-net').textContent, '₱0.00');
   assert.equal(els.get('cf-hero-card').classList.contains('is-deficit'), false);
 
-  // 6. Switching to previous month (October 2026) isolates records strictly to October
-  await els.get('cf-month-prev')._emit('click');
+  // 6. Chart Compare toggle compares active month side-by-side against previous month (Nov vs Oct)
+  assert.equal(els.get('cf-compare-panel').hidden, true);
+  await els.get('cf-compare-toggle')._emit('click');
+  assert.equal(els.get('cf-compare-panel').hidden, false);
+  assert.equal(els.get('cf-compare-primary-label').textContent, 'November 2026');
+  assert.match(els.get('cf-compare-grid').innerHTML, /Oct 26: ₱32,000\.00/);
+  assert.match(els.get('cf-compare-grid').innerHTML, /cf-delta-pill/);
+
+  // 7. Chart Prev button shifts month directly to October 2026 and isolates records strictly to October
+  await els.get('cf-chart-prev')._emit('click');
   assert.equal(els.get('cf-inc-gross').textContent, '₱40,000.00');
   assert.equal(els.get('cf-inc-savings').textContent, '−₱8,000.00');
   assert.equal(els.get('cf-inc-available').textContent, '₱32,000.00');
   assert.equal(els.get('cf-kpi-expenses').textContent, '₱0.00');
   assert.equal(els.get('cf-hero-net').textContent, '₱32,000.00');
+});
+
+test('global centavos formatter in js/core.js shrinks .XX centavos across all pages while preserving textContent and skipping inputs/chat', () => {
+  const coreJs = read('js/core.js');
+  const appCss = read('css/app.css');
+
+  assert.match(appCss, /\.ipon-cents,\s*\.cf-cents\s*\{/);
+  assert.match(appCss, /\.tracked-total \.ipon-cents/);
+
+  function makeDomNode(type, tagOrText) {
+    const node = {
+      nodeType: type,
+      tagName: type === 1 ? String(tagOrText || 'DIV').toUpperCase() : undefined,
+      nodeValue: type === 3 ? String(tagOrText ?? '') : null,
+      className: '',
+      id: '',
+      innerHTML: '',
+      dataset: {},
+      style: { setProperty() { }, removeProperty() { } },
+      classList: { add() { }, remove() { }, toggle() { }, contains: () => false },
+      setAttribute() { },
+      removeAttribute() { },
+      addEventListener() { },
+      removeEventListener() { },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      parentNode: null,
+      childNodes: [],
+      get textContent() {
+        return this.nodeType === 3 ? String(this.nodeValue ?? '') : this.childNodes.map((c) => c.textContent).join('');
+      },
+      set textContent(v) {
+        if (this.nodeType === 3) {
+          this.nodeValue = String(v ?? '');
+        } else {
+          this.childNodes = [];
+          this.appendChild(makeDomNode(3, v));
+        }
+      },
+      appendChild(child) {
+        if (child.nodeType === 11) {
+          const kids = [...child.childNodes];
+          child.childNodes = [];
+          for (const k of kids) this.appendChild(k);
+          return child;
+        }
+        child.parentNode = this;
+        this.childNodes.push(child);
+        return child;
+      },
+      replaceChild(nextNode, oldNode) {
+        const idx = this.childNodes.indexOf(oldNode);
+        if (idx < 0) return oldNode;
+        const inserts = nextNode.nodeType === 11 ? [...nextNode.childNodes] : [nextNode];
+        if (nextNode.nodeType === 11) nextNode.childNodes = [];
+        inserts.forEach((n) => { n.parentNode = this; });
+        this.childNodes.splice(idx, 1, ...inserts);
+        oldNode.parentNode = null;
+        return oldNode;
+      },
+      closest(sel) {
+        const parts = String(sel || '').split(',');
+        let cur = this;
+        while (cur && cur.nodeType === 1) {
+          for (const p of parts) {
+            if (p.startsWith('.') && cur.className.split(/\s+/).includes(p.slice(1))) return cur;
+          }
+          cur = cur.parentNode;
+        }
+        return null;
+      }
+    };
+    return node;
+  }
+
+  const rootBody = makeDomNode(1, 'BODY');
+  rootBody.dataset = { page: 'dashboard' };
+  rootBody.classList = { add() { }, remove() { }, toggle() { }, contains: () => false };
+  rootBody.insertAdjacentHTML = () => { };
+  const loaderStub = { hidden: false, setAttribute() { }, removeAttribute() { }, querySelector: () => ({ textContent: '' }) };
+  const docStub = {
+    readyState: 'complete',
+    head: { insertAdjacentHTML() { } },
+    body: rootBody,
+    documentElement: { dataset: {}, style: { setProperty() { } }, classList: { add() { }, remove() { }, toggle() { }, contains: () => false } },
+    getElementById: (id) => (id === 'app-loader' ? loaderStub : null),
+    createElement: (tag) => makeDomNode(1, tag),
+    createTextNode: (txt) => makeDomNode(3, txt),
+    createDocumentFragment: () => makeDomNode(11, ''),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener() { },
+    removeEventListener() { }
+  };
+  const ctx = {
+    window: null,
+    document: docStub,
+    navigator: { userAgent: 'Mozilla/5.0', onLine: true },
+    location: { protocol: 'https:', pathname: '/dashboard.html', search: '', href: 'https://my-ipon.vercel.app/dashboard.html' },
+    localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
+    Date, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, JSON, Promise, RegExp, Error, Intl, Blob, Uint8Array, atob,
+    setTimeout: () => 0,
+    clearTimeout() { },
+    addEventListener() { },
+    removeEventListener() { },
+    matchMedia: () => ({ matches: false, addEventListener() { } }),
+    requestAnimationFrame: (fn) => fn(),
+    console
+  };
+  ctx.window = ctx;
+  ctx.window.IPON_CONFIG = { supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co', supabaseAnonKey: 'test' };
+  vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
+
+  // 1. moneyHtml wraps cents cleanly
+  assert.equal(ctx.window.Ipon.moneyHtml(400), '<span class="ipon-peso-num">₱400<span class="ipon-cents">.00</span></span>');
+  assert.equal(ctx.window.Ipon.money(400), '₱400.00');
+
+  // 2. formatCentavosInNode transforms hero totals & multi-amount text while preserving textContent
+  const hero = makeDomNode(1, 'P');
+  hero.className = 'tracked-total';
+  hero.textContent = '₱400.00';
+  const summary = makeDomNode(1, 'P');
+  summary.textContent = 'Available (₱24,000.50) − Expenses (₱15,000.00) · v2.10 · 12.50%';
+  const chatBubble = makeDomNode(1, 'DIV');
+  chatBubble.className = 'msg-bubble-text';
+  chatBubble.textContent = 'Sent ₱400.00 already';
+  const inputEl = makeDomNode(1, 'TEXTAREA');
+  inputEl.textContent = '₱400.00';
+
+  rootBody.appendChild(hero);
+  rootBody.appendChild(summary);
+  rootBody.appendChild(chatBubble);
+  rootBody.appendChild(inputEl);
+
+  ctx.window.Ipon.formatCentavosInNode(rootBody);
+
+  assert.equal(hero.textContent, '₱400.00', 'exact textContent must stay untouched');
+  assert.equal(hero.childNodes[0].className, 'ipon-peso-num');
+  assert.equal(hero.childNodes[0].childNodes[0].nodeValue, '₱400');
+  assert.equal(hero.childNodes[0].childNodes[1].className, 'ipon-cents');
+  assert.equal(hero.childNodes[0].childNodes[1].textContent, '.00');
+
+  // Re-running is strictly idempotent (no double-wrapping)
+  assert.equal(ctx.window.Ipon.formatCentavosInNode(rootBody), 0);
+
+  // Summary formatted both Peso amounts without touching v2.10 or 12.50%
+  assert.equal(summary.textContent, 'Available (₱24,000.50) − Expenses (₱15,000.00) · v2.10 · 12.50%');
+  const wrappedSpans = summary.childNodes.filter((n) => n.nodeType === 1 && n.className === 'ipon-peso-num');
+  assert.equal(wrappedSpans.length, 2);
+
+  // Chat bubble prose & form textareas are skipped
+  assert.equal(chatBubble.childNodes.length, 1);
+  assert.equal(chatBubble.childNodes[0].nodeType, 3);
+  assert.equal(inputEl.childNodes.length, 1);
+  assert.equal(inputEl.childNodes[0].nodeType, 3);
 });
