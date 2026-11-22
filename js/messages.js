@@ -124,6 +124,10 @@
     vanishDraftCustom: false,
     vanishCustomValue: '',
     vanishCustomUnit: 'seconds',
+    deleteConvId: null,
+    deleteConvScope: 'delete_for_me',
+    deleteConvBusy: false,
+    deleteConvTrigger: null,
     threadInfoView: 'root', // root | media | files
     showThreadSearch: false,
     threadSearchQuery: '',
@@ -1124,6 +1128,11 @@
       <dialog class="msg-vanish-modal" id="msg-vanish-dialog" aria-labelledby="msg-vanish-modal-title">
         <div class="msg-vanish-modal-in" id="msg-vanish-modal-body"></div>
       </dialog>
+
+      <!-- Delete Conversation Scope Modal -->
+      <dialog class="msg-vanish-modal msg-delete-conv-modal" id="msg-delete-conv-dialog" aria-labelledby="msg-delete-conv-title">
+        <div class="msg-delete-conv-in" id="msg-delete-conv-body"></div>
+      </dialog>
     `);
 
     document.getElementById('msg-workspace-dialog')?.addEventListener('close', () => {
@@ -1229,7 +1238,7 @@
     const dialog = document.getElementById('msg-workspace-dialog');
     if (!dialog?.open || !state.activeConvId) return false;
     if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
-    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
+    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'msg-delete-conv-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
     if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
     if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
       return false;
@@ -1637,7 +1646,7 @@
     if (!ignoreFocus && typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
     if (!ignoreFocus && !isWindowFocused) return false;
     if (!ignoreFocus && typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
-    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
+    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'msg-delete-conv-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
     if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
     if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
       return false;
@@ -4736,6 +4745,114 @@
     restoreDrawerScrollInstant(savedScrollTop);
   }
 
+  function resolveDeleteConvMeta(convId) {
+    const listRow = state.conversations.find((c) => c.id === convId) || null;
+    const activeConv = state.activeThread?.conversation?.conversation_id === convId ? state.activeThread.conversation : null;
+    const conv = activeConv || listRow;
+    const isGrp = Boolean(conv && isGroupConv(conv));
+    const peerObj = activeConv || listRow?.peer || null;
+    const isSelf = Boolean(!isGrp && peerObj && typeof isSelfUser === 'function' && isSelfUser(peerObj));
+    const isGrpManager = Boolean(isGrp && ['OWNER', 'ADMIN'].includes(String(conv?.my_role || '').toUpperCase()));
+    const canDeleteForEveryone = Boolean(conv && !isSelf && (!isGrp || isGrpManager));
+    const name = isGrp
+      ? (conv?.title || 'this group')
+      : (isSelf ? 'Saved Notes' : (conv?.anonymous_enabled ? 'Anonymous' : (peerObj?.full_name || 'this person')));
+    return { conv, isGrp, isSelf, canDeleteForEveryone, name };
+  }
+
+  function renderDeleteConversationModal() {
+    const body = document.getElementById('msg-delete-conv-body');
+    if (!body || !state.deleteConvId) return;
+    const { isGrp, isSelf, canDeleteForEveryone, name } = resolveDeleteConvMeta(state.deleteConvId);
+    if (!canDeleteForEveryone && state.deleteConvScope === 'delete_for_everyone') {
+      state.deleteConvScope = 'delete_for_me';
+    }
+    const isEveryone = state.deleteConvScope === 'delete_for_everyone';
+    const safeName = escapeHtml(name);
+    const trashSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
+    const closeSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
+    const userIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    const everyoneIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+    const selfDesc = isSelf
+      ? 'Clears all saved notes and removes this conversation from your inbox.'
+      : (isGrp
+        ? 'Removes all messages and hides this group chat from your inbox only. Other members keep their copy.'
+        : `Removes all messages and hides this chat from your inbox only. ${safeName} will still see their copy.`);
+    const everyoneDesc = isGrp
+      ? 'Permanently deletes all messages, photos, and files for everyone in this group. This cannot be undone.'
+      : `Permanently deletes all messages, photos, and files for both you and ${safeName}. This cannot be undone.`;
+    const subtitle = canDeleteForEveryone
+      ? (isGrp ? `Choose how to delete ${safeName}.` : `Choose who this conversation with ${safeName} should be deleted for.`)
+      : (isSelf ? 'This will permanently clear your saved notes thread.' : `This will clear ${safeName} from your inbox only.`);
+    const bannerText = isEveryone
+      ? (isGrp
+        ? 'Permanent action: all chat history and uploaded attachments will be erased immediately for every member.'
+        : `Permanent action: all chat history and attachments will be erased immediately for both you and ${safeName}.`)
+      : (isSelf
+        ? 'You can message yourself again anytime to start a fresh Saved Notes thread.'
+        : (isGrp
+          ? 'New messages in this group will still appear if someone sends a message later.'
+          : `You can still message ${safeName} again anytime to start a fresh conversation.`));
+    const confirmLabel = state.deleteConvBusy
+      ? 'Deleting…'
+      : (isEveryone ? 'Delete for everyone' : 'Delete for you');
+    body.innerHTML = `
+      <div class="msg-delete-conv-head">
+        <span class="msg-delete-conv-icon" aria-hidden="true">${trashSvg}</span>
+        <div class="msg-delete-conv-title-wrap">
+          <h3 id="msg-delete-conv-title">Delete conversation</h3>
+          <p>${subtitle}</p>
+        </div>
+        <button type="button" class="msg-vanish-close" data-delete-conv-close aria-label="Close dialog"${state.deleteConvBusy ? ' disabled' : ''}>${closeSvg}</button>
+      </div>
+      <div class="msg-delete-conv-options" role="radiogroup" aria-label="Delete scope">
+        <button type="button" class="msg-delete-conv-option" role="radio" data-delete-conv-scope="delete_for_me" aria-checked="${!isEveryone ? 'true' : 'false'}"${state.deleteConvBusy ? ' disabled' : ''}>
+          <span class="msg-delete-conv-opt-icon" aria-hidden="true">${userIconSvg}</span>
+          <span class="msg-delete-conv-opt-copy">
+            <strong>Delete for you</strong>
+            <small>${selfDesc}</small>
+          </span>
+          <span class="msg-delete-conv-radio" aria-hidden="true"></span>
+        </button>
+        ${canDeleteForEveryone ? `
+        <button type="button" class="msg-delete-conv-option is-everyone" role="radio" data-delete-conv-scope="delete_for_everyone" aria-checked="${isEveryone ? 'true' : 'false'}"${state.deleteConvBusy ? ' disabled' : ''}>
+          <span class="msg-delete-conv-opt-icon" aria-hidden="true">${everyoneIconSvg}</span>
+          <span class="msg-delete-conv-opt-copy">
+            <span class="msg-delete-conv-opt-titleline"><strong>Delete for everyone</strong><span class="msg-delete-conv-pill">Permanent</span></span>
+            <small>${everyoneDesc}</small>
+          </span>
+          <span class="msg-delete-conv-radio" aria-hidden="true"></span>
+        </button>` : ''}
+      </div>
+      <p class="msg-delete-conv-banner${isEveryone ? ' is-danger' : ''}" role="status" aria-live="polite">${bannerText}</p>
+      <div class="msg-delete-conv-foot">
+        <button type="button" class="msg-vanish-btn-ghost" data-delete-conv-close${state.deleteConvBusy ? ' disabled' : ''}>Cancel</button>
+        <button type="button" class="msg-delete-conv-confirm${isEveryone ? ' is-everyone' : ''}" data-delete-conv-confirm="1"${state.deleteConvBusy ? ' disabled aria-busy="true"' : ''}>${confirmLabel}</button>
+      </div>`;
+  }
+
+  function openDeleteConversationModal(convId, triggerBtn = null) {
+    if (!convId) return;
+    const dlg = document.getElementById('msg-delete-conv-dialog');
+    if (!dlg) return;
+    state.deleteConvId = convId;
+    state.deleteConvScope = 'delete_for_me';
+    state.deleteConvBusy = false;
+    state.deleteConvTrigger = triggerBtn || null;
+    renderDeleteConversationModal();
+    if (!dlg.open) dlg.showModal();
+  }
+
+  function closeDeleteConversationModal() {
+    const dlg = document.getElementById('msg-delete-conv-dialog');
+    state.deleteConvBusy = false;
+    if (dlg?.open) dlg.close();
+    const focusBack = state.deleteConvTrigger;
+    state.deleteConvId = null;
+    state.deleteConvTrigger = null;
+    focusBack?.focus?.({ preventScroll: true });
+  }
+
   async function saveVanishSetting(seconds, { closeModalOnSuccess = false } = {}) {
     if (state.savingVanish || !state.activeConvId || !Number.isInteger(seconds) || seconds < 0 || seconds > 3600) return false;
     const conversationId = state.activeConvId;
@@ -4982,13 +5099,13 @@
          <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${archiveIconSvg}<span>${conv.is_archived ? 'Unarchive' : 'Archive'}</span></button>
          <button type="button" class="msg-drawer-action-btn" data-conv-act="mark_unread">${mailUnreadIconSvg}<span>Mark unread</span></button>
          ${canManageGroup && !conv.anonymous_enabled ? `<button type="button" class="msg-drawer-action-btn" data-group-add-members="${escapeHtml(conv.conversation_id)}">${addIconSvg}<span>Add members</span></button>` : ''}
-         <button type="button" class="msg-drawer-action-btn" data-conv-act="delete_for_me">${trashIconSvg}<span>Clear chat</span></button>
+         <button type="button" class="msg-drawer-action-btn is-danger" data-conv-act="delete_conversation">${trashIconSvg}<span>Delete conversation</span></button>
          <button type="button" class="msg-drawer-action-btn is-danger" data-group-leave="${escapeHtml(conv.conversation_id)}">${leaveIconSvg}<span>Leave group</span></button>`
       : `<button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_pinned ? 'unpin' : 'pin'}">${MSG_PIN_SVG}<span>${conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</span></button>
          <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_muted ? 'unmute' : 'mute'}">${bellMuteSvg}<span>${conv.is_muted ? 'Unmute' : 'Mute'}</span></button>
          <button type="button" class="msg-drawer-action-btn" data-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}">${archiveIconSvg}<span>${conv.is_archived ? 'Unarchive' : 'Archive'}</span></button>
          <button type="button" class="msg-drawer-action-btn" data-conv-act="mark_unread">${mailUnreadIconSvg}<span>Mark unread</span></button>
-         <button type="button" class="msg-drawer-action-btn" data-conv-act="delete_for_me">${trashIconSvg}<span>Delete for me</span></button>
+         <button type="button" class="msg-drawer-action-btn is-danger" data-conv-act="delete_conversation">${trashIconSvg}<span>Delete conversation</span></button>
          ${(typeof isSelfUser === 'function' && isSelfUser(conv)) || conv.anonymous_enabled || conv.can_block === false ? '' : `<button type="button" class="msg-drawer-action-btn is-danger" data-social-action="${isBlockedByMe ? 'unblock' : 'block'}" data-target-id="${escapeHtml(conv.id)}">${blockIconSvg}<span>${isBlockedByMe ? 'Unblock user' : 'Block user'}</span></button>`}`;
 
     const canManageProtection = !conv.protection_unavailable && !state.savingProtection && (!isGrp || canManageGroup);
@@ -6920,6 +7037,7 @@
     state.olderAutoArmed = false;
     clearTimeout(vanishUiTimer);
     closeVanishModal();
+    closeDeleteConversationModal();
     state.unreadAnchorConvId = null;
     state.unreadAnchorFirstId = null;
     state.replyToMsg = null;
@@ -7380,7 +7498,7 @@
       <button type="button" data-row-conv-act="${conv.is_muted ? 'unmute' : 'mute'}" data-conv-id="${escAttr(convId)}">${conv.is_muted ? 'Unmute notifications' : 'Mute notifications'}</button>
       <button type="button" data-row-conv-act="${conv.is_archived ? 'unarchive' : 'archive'}" data-conv-id="${escAttr(convId)}">${conv.is_archived ? 'Move to Inbox' : 'Archive chat'}</button>
       <button type="button" data-row-conv-act="${conv.unread_count > 0 || conv.marked_unread ? 'mark_read' : 'mark_unread'}" data-conv-id="${escAttr(convId)}">${conv.unread_count > 0 || conv.marked_unread ? 'Mark as read' : 'Mark as unread'}</button>
-      <button type="button" class="${isGrp ? '' : 'is-danger'}" data-row-conv-act="delete_for_me" data-conv-id="${escAttr(convId)}">${isGrp ? 'Clear chat history' : 'Delete conversation'}</button>
+      <button type="button" class="is-danger" data-row-conv-act="delete_conversation" data-conv-id="${escAttr(convId)}">Delete conversation</button>
       ${isGrp ? `<button type="button" class="is-danger" data-row-group-leave="${escAttr(convId)}">Leave group</button>` : ''}`;
     document.getElementById('msg-workspace-dialog')?.appendChild(menu);
     placeFloatingMenu(menu, anchorBtn, { preferAbove: false, estWidth: 196, estHeight: isGrp ? 226 : 190, align: 'end' });
@@ -7774,7 +7892,8 @@
         archive: 'Chat archived.',
         unarchive: 'Chat unarchived.',
         mark_unread: 'Marked as unread.',
-        delete_for_me: 'Chat cleared.'
+        delete_for_me: 'Conversation deleted for you.',
+        delete_for_everyone: 'Conversation deleted for everyone.'
       };
       const snapshotConvFlags = (row) => (row ? {
         is_pinned: Boolean(row.is_pinned),
@@ -7797,12 +7916,13 @@
         else if (actName === 'mark_unread') target.marked_unread = true;
       };
       const runConvMemberAction = async (cId, act, triggerBtn) => {
-        if (!cId || !act) return;
+        if (!cId || !act) return false;
+        const isDeleteAct = act === 'delete_for_me' || act === 'delete_for_everyone';
         const listRow = state.conversations.find((c) => c.id === cId) || null;
         const activeConv = state.activeThread?.conversation?.conversation_id === cId ? state.activeThread.conversation : null;
         const rowSnap = snapshotConvFlags(listRow);
         const activeSnap = snapshotConvFlags(activeConv);
-        if (act !== 'delete_for_me') {
+        if (!isDeleteAct) {
           applyConvFlagMutation(listRow, act);
           applyConvFlagMutation(activeConv, act);
           renderConversationList();
@@ -7813,10 +7933,19 @@
           triggerBtn.setAttribute?.('aria-busy', 'true');
         }
         try {
-          await ipon().rpc('update_conversation_member_state', { p_conversation_id: cId, p_action: act });
+          const res = await ipon().rpc('update_conversation_member_state', { p_conversation_id: cId, p_action: act });
+          if (act === 'delete_for_everyone' && Array.isArray(res?.removed_paths) && res.removed_paths.length) {
+            ipon().invokeAccountFunction?.({ action: 'chat-cleanup-media', paths: res.removed_paths }).catch(() => { });
+          }
           if (CONV_ACT_TOAST[act]) ipon().toast(CONV_ACT_TOAST[act]);
-          if (act === 'delete_for_me') {
-            if (state.activeConvId === cId) clearActiveThreadSelection();
+          if (isDeleteAct) {
+            state.pendingByConv.delete(cId);
+            state.draftsByConv.delete(cId);
+            if (state.activeConvId === cId) {
+              clearActiveThreadSelection();
+              state.mobileShowThread = false;
+              syncMobilePaneState();
+            }
             await refreshConversations();
           } else {
             await Promise.all([
@@ -7824,12 +7953,14 @@
               refreshConversations()
             ]);
           }
+          return true;
         } catch (err) {
           if (rowSnap) applyConvFlagMutation(listRow, act, rowSnap);
           if (activeSnap) applyConvFlagMutation(activeConv, act, activeSnap);
           renderConversationList();
           if (state.showThreadInfo && state.activeConvId === cId) renderThreadInfoDrawer();
           ipon().toast(ipon().friendlyError(err), 'error');
+          return false;
         } finally {
           if (triggerBtn) {
             triggerBtn.disabled = false;
@@ -7838,14 +7969,46 @@
         }
       };
 
+      const deleteConvDlg = document.getElementById('msg-delete-conv-dialog');
+      if (deleteConvDlg?.open && ev.target === deleteConvDlg && !state.deleteConvBusy) {
+        closeDeleteConversationModal();
+        return;
+      }
+      if (ev.target.closest?.('[data-delete-conv-close]') && !state.deleteConvBusy) {
+        closeDeleteConversationModal();
+        return;
+      }
+      const deleteScopeOpt = ev.target.closest?.('[data-delete-conv-scope]');
+      if (deleteScopeOpt && !state.deleteConvBusy) {
+        const nextScope = deleteScopeOpt.dataset.deleteConvScope === 'delete_for_everyone' ? 'delete_for_everyone' : 'delete_for_me';
+        state.deleteConvScope = nextScope;
+        renderDeleteConversationModal();
+        return;
+      }
+      const deleteConfirmBtn = ev.target.closest?.('[data-delete-conv-confirm]');
+      if (deleteConfirmBtn && state.deleteConvId && !state.deleteConvBusy) {
+        const targetConvId = state.deleteConvId;
+        const targetAct = state.deleteConvScope === 'delete_for_everyone' ? 'delete_for_everyone' : 'delete_for_me';
+        state.deleteConvBusy = true;
+        renderDeleteConversationModal();
+        const done = await runConvMemberAction(targetConvId, targetAct, null);
+        state.deleteConvBusy = false;
+        if (done) {
+          closeDeleteConversationModal();
+        } else if (document.getElementById('msg-delete-conv-dialog')?.open) {
+          renderDeleteConversationModal();
+        }
+        return;
+      }
+
       const rowConvAct = ev.target.closest?.('[data-row-conv-act]');
       if (rowConvAct) {
         closeFloatingMenus();
         const act = rowConvAct.dataset.rowConvAct;
         const cId = rowConvAct.dataset.convId;
-        if (act === 'delete_for_me') {
-          const ok = await ipon().confirmAction({ title: 'Delete conversation from your inbox?', message: 'This removes the chat history for you only.', confirmText: 'Delete' });
-          if (!ok) return;
+        if (act === 'delete_conversation' || act === 'delete_for_me') {
+          openDeleteConversationModal(cId, rowConvAct);
+          return;
         }
         await runConvMemberAction(cId, act, rowConvAct);
         return;
@@ -7854,9 +8017,9 @@
       const convActBtn = ev.target.closest?.('[data-conv-act]');
       if (convActBtn && state.activeConvId) {
         const act = convActBtn.dataset.convAct;
-        if (act === 'delete_for_me') {
-          const ok = await ipon().confirmAction({ title: 'Delete conversation for you?', message: 'Messages will be cleared from your own inbox view.', confirmText: 'Delete' });
-          if (!ok) return;
+        if (act === 'delete_conversation' || act === 'delete_for_me') {
+          openDeleteConversationModal(state.activeConvId, convActBtn);
+          return;
         }
         await runConvMemberAction(state.activeConvId, act, convActBtn);
         return;
@@ -9588,6 +9751,7 @@
             ))
           )
         );
+        const convClearedByPeer = Boolean(cId && cId === state.activeConvId && payload?.eventType === 'UPDATE' && row.last_message_id === null && row.last_message_at === null && (state.activeThread?.messages?.length || 0) > 0);
         const hasNewerConvMessage = Boolean(cId && activeThreadLagsBehindTimestamp(cId, row.last_message_at));
         if (cId && cId === state.activeConvId && curConv && row.block_screenshots !== undefined && row.block_screenshots !== curConv.block_screenshots) {
           curConv.block_screenshots = Boolean(row.block_screenshots);
@@ -9599,7 +9763,7 @@
         if (metaOrStatusChanged && curConv?.id && !isGroupConv(curConv)) {
           profileAppearanceCache.delete(String(curConv.id));
         }
-        const shouldRefreshThread = metaOrStatusChanged || hasNewerConvMessage || Boolean(fromPeerConv && cId && cId === state.activeConvId);
+        const shouldRefreshThread = convClearedByPeer || metaOrStatusChanged || hasNewerConvMessage || Boolean(fromPeerConv && cId && cId === state.activeConvId);
         const markVisibleIncoming = Boolean((hasNewerConvMessage || fromPeerConv) && cId && cId === state.activeConvId && isThreadActivelyVisible({ ignoreFocus: true }) && document.visibilityState !== 'hidden');
         scheduleRefresh({
           convs: true,
@@ -9613,11 +9777,18 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_participants', filter: `user_id=eq.${profile.id}` }, (payload) => {
         const row = payload?.new || payload?.old || {};
         const cId = row.conversation_id;
-        // If current user was removed from active group chat, close the active thread cleanly
-        if (payload?.eventType === 'DELETE' && cId && cId === state.activeConvId) {
-          clearActiveThreadSelection();
-          state.mobileShowThread = false;
-          syncMobilePaneState();
+        // If current user was removed or conversation was deleted for everyone, close active thread & refresh immediately
+        const convHiddenNow = Boolean(row.hidden_at && (payload?.eventType === 'UPDATE' || payload?.eventType === 'INSERT'));
+        if ((payload?.eventType === 'DELETE' || convHiddenNow) && cId) {
+          state.pendingByConv.delete(cId);
+          state.draftsByConv.delete(cId);
+          if (cId === state.activeConvId) {
+            clearActiveThreadSelection();
+            state.mobileShowThread = false;
+            syncMobilePaneState();
+          }
+          scheduleRefresh({ convs: true, thread: false, markRead: false, immediate: true });
+          return;
         }
         // Skip self-triggered last_read_at / marked_unread echoes immediately after mark_conversation_read.
         if (cId && (Date.now() - (state.recentMarkReadAt.get(cId) || 0) < 2500)) return;
