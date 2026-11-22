@@ -53,3 +53,13 @@ Password recovery uses Supabase's hosted reset link and redirects back to `reset
 ## Messaging and media
 
 Direct messaging, friends management, message requests, and notifications run on Supabase Postgres RPCs, Row-Level Security (`SUPER_ADMIN` excluded at database, Edge Function, and UI levels), and Supabase Realtime. Private chat, announcement, and record-comment attachments use short-lived signed upload and download URLs issued by the `manage-account` Edge Function. New JPEG and static PNG uploads are converted to WebP with a 2560 px maximum edge, and MP4 and MP3 uploads are re-encoded. The result is used only when at least 20% smaller. Animated images, unsupported devices, and other file types keep the original upload. Existing stored files are not changed.
+
+## Credits & inspiration
+
+The messaging and chat experience in this project draws UI/UX and feature inspiration from the following platforms:
+
+- **Discord** — reference and inspiration for group chat ergonomics, message actions, and expressive user/chat interactions.
+- **Messenger** — reference and inspiration for conversation flow, inbox layout, typing feedback, reactions, replies, and delivery/read receipt cues.
+- **Telegram** — reference and inspiration for vanishing messages, chat privacy controls, smooth message transitions, and responsive media handling.
+
+All messaging features are independently designed and implemented for this project. Discord, Messenger, and Telegram are credited purely as design and feature references and are not affiliated with this repository.
