@@ -36,13 +36,14 @@ test('creator direct chats bypass friends-only at each server gate while other u
 });
 
 test('chat discovery and UI expose messaging but hide block controls for the creator', () => {
-  for (const name of ['get_social_user_profile', 'search_social_users', 'get_social_overview', 'get_conversations', 'get_conversation_messages']) {
+  for (const name of ['get_social_user_profile', 'search_social_users', 'get_social_overview', 'get_conversations']) {
     assert.equal(definition(schema, name), definition(migration, name), `${name} must match the cumulative schema`);
   }
   assert.match(definition(migration, 'get_social_user_profile'), /'can_block', not public\.is_creator_messaging_account\(p_target_id\)/);
   assert.match(definition(migration, 'search_social_users'), /'can_message',[\s\S]*?is_creator_messaging_account\(v_uid\)/);
   assert.match(definition(migration, 'get_conversations'), /'friends_only_locked', false/);
   assert.match(definition(migration, 'get_conversation_messages'), /'can_block', false, 'anonymous_enabled', true/);
+  assert.match(definition(schema, 'get_conversation_messages'), /'can_block', false, 'anonymous_enabled', true/);
   assert.match(messages, /conv\.anonymous_enabled \|\| conv\.can_block === false/);
   assert.match(messages, /r\.can_block === false/);
   assert.match(messages, /f\.can_block === false/);

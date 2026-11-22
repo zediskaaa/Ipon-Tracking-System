@@ -3813,7 +3813,8 @@
         ? `<div class="msg-attachments${m.attachments.length > 1 ? ' is-carousel' : ''}">${m.attachments.map((att) => renderAttachmentItem(conv.conversation_id, att)).join('')}</div>`
         : '';
 
-      const replyHtml = !isDeleted && m.reply_preview
+      const hasReplyPreview = Boolean(m.reply_preview && typeof m.reply_preview === 'object' && !Array.isArray(m.reply_preview) && m.reply_preview.id);
+      const replyHtml = !isDeleted && hasReplyPreview
         ? `<button type="button" class="msg-reply-quote" data-jump-msg="${escapeHtml(m.reply_preview.id)}">
             <strong>${escapeHtml(m.reply_preview.sender_id === myId ? 'You' : (m.reply_preview.sender_name || 'User'))}${!conv.anonymous_enabled && m.reply_preview.sender_id && m.reply_preview.sender_id !== myId ? userBadgesHtml(m.reply_preview.sender_id) : ''}</strong>
             <span>${escapeHtml(m.reply_preview.body || 'Attachment')}</span>

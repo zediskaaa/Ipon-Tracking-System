@@ -84,3 +84,13 @@ test('group anonymous mode uses admin permission and masks member identities', (
   assert.match(messages, /const membersSectionHtml = isGrp && !conv\.anonymous_enabled/);
   assert.match(messages, /conv\.anonymous_enabled \? 'You' : \(initializedProfile\?\.full_name/);
 });
+
+test('anonymous mode preserves null reply_preview without rendering ghost User Attachment quotes', () => {
+  const migration = read('database/migrations/20261122_172_fix_anonymous_null_reply_preview.sql');
+  const schema = read('database/schema.sql');
+  const messages = read('js/messages.js');
+  assert.ok(schema.replace(/\r\n/g, '\n').includes(migration.trim().replace(/\r\n/g, '\n')));
+  assert.match(migration, /'reply_preview', case when jsonb_typeof\(m -> 'reply_preview'\) = 'object' then/);
+  assert.doesNotMatch(migration, /m -> 'reply_preview' is not null/);
+  assert.match(messages, /const hasReplyPreview = Boolean\(m\.reply_preview && typeof m\.reply_preview === 'object' && !Array\.isArray\(m\.reply_preview\) && m\.reply_preview\.id\);/);
+});
