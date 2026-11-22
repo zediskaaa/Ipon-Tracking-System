@@ -1228,7 +1228,7 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v209/);
+  assert.match(sw, /ipon-shell-v210/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
@@ -1356,13 +1356,70 @@ test('profile effect categories use one compact accessible dropdown', () => {
   const core = read('js/core.js');
   const css = read('css/app.css');
   assert.match(core, /<label class="effects-category-field" for="effects-category">[\s\S]*?<select id="effects-category" name="effects-category">/);
-  assert.match(core, /api\.CATEGORIES\.map\(\(c\) => [^<]*<option value=/);
+  assert.match(core, /getVisibleStoreCategories\(\)\.map\(\(c\) => [^<]*<option value=/);
   assert.match(core, /querySelector\('#effects-category'\)\?\.addEventListener\('change'/);
   assert.doesNotMatch(core, /id="effects-chips"/);
   assert.match(css, /\.effects-filter-bar\s*\{[^}]*display:\s*flex;[^}]*margin-bottom:\s*16px;/);
   assert.match(css, /\.effects-category-field\s*\{[^}]*height:\s*44px;/);
   assert.match(css, /\.effects-category-field:focus-within\s*\{[^}]*outline:\s*2px solid #8ff0bf;/);
   assert.doesNotMatch(css, /\.effects-chip(?:\[|\s|\{|:)/);
+});
+
+test('user Profile Effects store hides ungranted Exclusive and Divine effects and omits empty categories except for breadspanish231@gmail.com', () => {
+  const core = read('js/core.js');
+  assert.match(core, /const isCreatorCatalogViewer = String\(currentProfile\?\.email \|\| ''\)\.trim\(\)\.toLowerCase\(\) === CREATOR_ACCOUNT_EMAIL;/);
+  assert.match(core, /const isGatedStoreEffect = \(effect\) => Boolean\([\s\S]*?effect\.cat === 'Exclusive'[\s\S]*?effect\.cat === 'Divine'[\s\S]*?\/\^\(ex_\|divine_\)\//);
+  assert.match(core, /function syncStoreCategories\(\)/);
+
+  // Runtime check of visibility + dynamic "no items, no category" logic extracted directly from js/core.js
+  const sampleEffects = [
+    { id: 'stardust', cat: 'Cosmic', rare: 0 },
+    { id: 'deluxe_gold', cat: 'Deluxe', rare: 3 },
+    { id: 'ex_cybermech', cat: 'Exclusive', rare: 3 },
+    { id: 'ex_phoenix', cat: 'Exclusive', rare: 3 },
+    { id: 'divine_opal', cat: 'Divine', rare: 3 }
+  ];
+  const sampleCategories = ['All', 'Divine', 'Deluxe', 'Exclusive', 'Cosmic', 'EmptyCategory', 'Special'];
+  const evalStoreVisibility = (email, grantedIds) => {
+    const fnSrc = core.match(/const isCreatorCatalogViewer = [\s\S]*?const getVisibleStoreCategories = \(\) => \{[\s\S]*?\};/)?.[0];
+    assert.ok(fnSrc, 'Expected store visibility helpers in js/core.js');
+    const ctx = {
+      CREATOR_ACCOUNT_EMAIL: 'breadspanish231@gmail.com',
+      currentProfile: { email, role: 'MEMBER' },
+      hasAllEffectsAccess: (p) => String(p?.email || '').toLowerCase() === 'breadspanish231@gmail.com',
+      currentState: { grants: grantedIds.map((effect_id) => ({ effect_id })) },
+      api: { EFFECTS: sampleEffects, CATEGORIES: sampleCategories }
+    };
+    const runner = vm.runInNewContext(`(() => { ${fnSrc} return { visibleEffects: api.EFFECTS.filter(isEffectVisibleInStore).map((e) => e.id), categories: getVisibleStoreCategories() }; })()`, ctx);
+    return runner;
+  };
+
+  // 1. Regular user with no grants: no Exclusive, no Divine, no EmptyCategory
+  const plainUser = evalStoreVisibility('member@example.com', []);
+  assert.deepEqual(plainUser.visibleEffects, ['stardust', 'deluxe_gold']);
+  assert.equal(plainUser.categories.includes('Exclusive'), false);
+  assert.equal(plainUser.categories.includes('Divine'), false);
+  assert.equal(plainUser.categories.includes('EmptyCategory'), false);
+  assert.ok(plainUser.categories.includes('All') && plainUser.categories.includes('Cosmic') && plainUser.categories.includes('Deluxe'));
+
+  // 2. Regular user awarded 1 Exclusive effect: Exclusive category appears with ONLY that effect; Divine stays hidden
+  const awardedEx = evalStoreVisibility('member@example.com', ['ex_cybermech']);
+  assert.deepEqual(awardedEx.visibleEffects, ['stardust', 'deluxe_gold', 'ex_cybermech']);
+  assert.equal(awardedEx.categories.includes('Exclusive'), true);
+  assert.equal(awardedEx.categories.includes('Divine'), false);
+
+  // 3. Regular user awarded 1 Divine effect: Divine category appears with ONLY that effect; Exclusive stays hidden
+  const awardedDiv = evalStoreVisibility('member@example.com', ['divine_opal']);
+  assert.deepEqual(awardedDiv.visibleEffects, ['stardust', 'deluxe_gold', 'divine_opal']);
+  assert.equal(awardedDiv.categories.includes('Divine'), true);
+  assert.equal(awardedDiv.categories.includes('Exclusive'), false);
+
+  // 4. Creator account breadspanish231@gmail.com sees ALL Exclusive and Divine effects & categories
+  const creator = evalStoreVisibility('breadspanish231@gmail.com', []);
+  assert.deepEqual(creator.visibleEffects, ['stardust', 'deluxe_gold', 'ex_cybermech', 'ex_phoenix', 'divine_opal']);
+  assert.equal(creator.categories.includes('Exclusive'), true);
+  assert.equal(creator.categories.includes('Divine'), true);
+  assert.equal(creator.categories.includes('EmptyCategory'), false);
 });
 
 test('Super Admin unlocked profile effects open in a responsive modal with bulk Edit/Remove selection and count tracking', () => {

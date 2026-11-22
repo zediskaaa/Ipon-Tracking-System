@@ -4087,22 +4087,47 @@
       ? (appearance?.cover_url || currentProfile.cover_url)
       : '';
     let currentState = effectsState && typeof effectsState === 'object' ? effectsState : ownProfileEffectsState;
+    const isCreatorCatalogViewer = String(currentProfile?.email || '').trim().toLowerCase() === CREATOR_ACCOUNT_EMAIL;
+    const isGatedStoreEffect = (effect) => Boolean(
+      effect && (
+        effect.cat === 'Exclusive'
+        || effect.cat === 'Divine'
+        || /^(ex_|divine_)/.test(String(effect.id || ''))
+      )
+    );
     const grantsById = new Map();
+    const grantedSet = new Set();
     const ownedSet = new Set();
     const rebuildGrants = () => {
       grantsById.clear();
+      grantedSet.clear();
       ownedSet.clear();
-      if (hasAllEffectsAccess(currentProfile)) {
-        api.EFFECTS.forEach((item) => ownedSet.add(item.id));
-        return;
-      }
       (currentState?.grants || []).forEach((item) => {
         if (!item?.effect_id) return;
         grantsById.set(item.effect_id, item);
+        grantedSet.add(item.effect_id);
         ownedSet.add(item.effect_id);
       });
+      if (hasAllEffectsAccess(currentProfile)) {
+        api.EFFECTS.forEach((item) => ownedSet.add(item.id));
+      }
     };
     rebuildGrants();
+    const isEffectVisibleInStore = (effect) => {
+      if (!effect) return false;
+      if (effect.id === 'none') return true;
+      if (isCreatorCatalogViewer) return true;
+      if (!isGatedStoreEffect(effect)) return true;
+      return grantedSet.has(effect.id);
+    };
+    const getVisibleStoreCategories = () => {
+      const visibleEffects = api.EFFECTS.filter(isEffectVisibleInStore);
+      return api.CATEGORIES.filter((c) => {
+        if (c === 'All') return true;
+        if (c === 'Special') return visibleEffects.some((e) => e.rare > 0);
+        return visibleEffects.some((e) => e.cat === c);
+      });
+    };
     let equipped = api.normalizeEffectId(currentState?.equipped_effect || currentProfile.equipped_profile_effect);
     if (equipped !== 'none' && !ownedSet.has(equipped) && !hasAllEffectsAccess(currentProfile)) equipped = 'none';
     let preview = equipped;
@@ -4162,7 +4187,7 @@
               <label class="effects-category-field" for="effects-category">
                 <span>Category</span>
                 <select id="effects-category" name="effects-category">
-                  ${api.CATEGORIES.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+                  ${getVisibleStoreCategories().map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
                 </select>
               </label>
             </div>
@@ -4207,6 +4232,7 @@
     const tiles = new Map();
 
     for (const e of api.ALL_OPTIONS) {
+      if (!isEffectVisibleInStore(e)) continue;
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'effects-tile';
@@ -4253,16 +4279,30 @@
 
     const isLocked = (id) => id !== 'none' && !ownedSet.has(id);
 
+    function syncStoreCategories() {
+      const catSelect = dialog.querySelector('#effects-category');
+      if (!catSelect) return;
+      const cats = getVisibleStoreCategories();
+      if (!cats.includes(activeCategory)) activeCategory = 'All';
+      const currentVals = Array.from(catSelect.options || []).map((opt) => opt.value);
+      if (currentVals.length !== cats.length || currentVals.some((v, idx) => v !== cats[idx])) {
+        catSelect.innerHTML = cats.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+      }
+      catSelect.value = activeCategory;
+    }
+
     function applyFilter() {
+      syncStoreCategories();
       let visibleCount = 0;
       for (const e of api.ALL_OPTIONS) {
         const tile = tiles.get(e.id);
         if (!tile) continue;
+        const visibleInStore = isEffectVisibleInStore(e);
         const catMatch = activeCategory === 'All' || e.cat === activeCategory || (activeCategory === 'Special' && e.rare > 0);
         const noneMatch = e.id !== 'none' || activeCategory === 'All';
         const hay = `${e.name} ${e.cat} ${e.desc} ${api.RARITIES[e.rare] || ''}`.toLowerCase();
         const queryMatch = !searchQuery || hay.includes(searchQuery);
-        const show = catMatch && noneMatch && queryMatch;
+        const show = visibleInStore && catMatch && noneMatch && queryMatch;
         tile.hidden = !show;
         if (show) {
           tile.classList.remove('in');
