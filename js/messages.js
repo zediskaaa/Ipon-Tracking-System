@@ -1084,6 +1084,20 @@
         </div>
       </dialog>
 
+      <!-- Share External Link to Chat Dialog -->
+      <dialog class="form-dialog msg-sub-dialog msg-share-dialog" id="msg-share-dialog" aria-labelledby="msg-share-title">
+        <div class="form-dialog-sheet">
+          <header class="form-dialog-header">
+            <div>
+              <h2 id="msg-share-title">Send to chat</h2>
+              <p>Choose who should receive this shared link in myIPON Messages.</p>
+            </div>
+            <button class="dialog-close" type="button" data-msg-share-close aria-label="Close share dialog"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="msg-share-body" id="msg-share-body"></div>
+        </div>
+      </dialog>
+
       <!-- Create Group Chat / Add Members Dialog -->
       <dialog class="form-dialog msg-sub-dialog msg-group-dialog" id="msg-group-dialog" aria-labelledby="msg-group-dialog-title">
         <div class="form-dialog-sheet">
@@ -1159,6 +1173,7 @@
       state.showThreadInfo = false;
       state.threadInfoView = 'root';
       document.querySelectorAll('#msg-messages-list video, #msg-messages-list audio').forEach((m) => { try { m.pause?.(); } catch { } });
+      window.IponSocialEmbeds?.stopOtherActivePlayers?.(document.getElementById('msg-messages-list'), null);
       if (typeof disconnectTypingChannel === 'function') disconnectTypingChannel();
       clearActiveThreadSelection();
       state.mobileShowThread = false;
@@ -1166,6 +1181,9 @@
       state.lastTypingState = false;
       state.lastTypingSentAt = 0;
       syncNativeScreenshotLock(null);
+    });
+    document.getElementById('msg-share-dialog')?.addEventListener('close', () => {
+      window.IponSocialEmbeds?.stopOtherActivePlayers?.(document.getElementById('msg-share-body'), null);
     });
     const scrollWrapEl = document.getElementById('msg-scroll-wrap');
     scrollWrapEl?.addEventListener('scroll', handleThreadScroll, { passive: true });
@@ -1238,7 +1256,7 @@
     const dialog = document.getElementById('msg-workspace-dialog');
     if (!dialog?.open || !state.activeConvId) return false;
     if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
-    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'msg-delete-conv-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
+    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-share-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'msg-delete-conv-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
     if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
     if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
       return false;
@@ -1646,7 +1664,7 @@
     if (!ignoreFocus && typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return false;
     if (!ignoreFocus && !isWindowFocused) return false;
     if (!ignoreFocus && typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
-    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'msg-delete-conv-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
+    const blockingOverlayIds = ['msg-settings-dialog', 'msg-forward-dialog', 'msg-share-dialog', 'msg-group-dialog', 'msg-gdrive-dialog', 'msg-vanish-dialog', 'msg-delete-conv-dialog', 'notification-dialog', 'account-dialog', 'confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog'];
     if (blockingOverlayIds.some((id) => Boolean(document.getElementById(id)?.open))) return false;
     if (typeof document.querySelector === 'function' && document.querySelector('dialog[open]:not(#msg-workspace-dialog):not(#ipon-image-viewer):not(#ipon-video-viewer)')) {
       return false;
@@ -3686,6 +3704,9 @@
         ? `<span class="msg-tick is-sent" title="Sent" aria-label="Sent">${COIN_SENT_SVG}</span>`
         : `<span class="msg-tick is-sending" aria-label="${escAttr(statusLabel)}">${COIN_SENDING_SVG}<span class="msg-pending-status-text">${escapeHtml(statusLabel)}</span></span>`;
     const bodyHtml = p.body ? `<p class="msg-text">${formatMessageBodyHtml(p.body)}</p>` : '';
+    const socialEmbedHtml = p.body && window.IponSocialEmbeds?.renderSocialEmbedsBlockHtml
+      ? window.IponSocialEmbeds.renderSocialEmbedsBlockHtml(p.body)
+      : '';
     const { hasTopMedia, hasAudioOnly } = getBubbleMediaLayout(atts, {
       hasText: Boolean(p.body),
       hasHeaderMeta: false
@@ -3703,13 +3724,13 @@
     const bubbleInner = isMediaOnly
       ? `${attHtml}${progressBar}${metaHtml}`
       : (hasTopMedia
-          ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${progressBar}${metaHtml}</div>`
-          : `${bodyHtml}${attHtml}${progressBar}${metaHtml}`);
+          ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${socialEmbedHtml}${progressBar}${metaHtml}</div>`
+          : `${bodyHtml}${socialEmbedHtml}${attHtml}${progressBar}${metaHtml}`);
 
     return `<article class="msg-row is-mine is-pending${isFailed ? ' is-failed' : p.status === 'sent' ? ' is-sent' : ' is-sending'}${animateEnter ? ' is-msg-enter' : ''}" data-pending-id="${escapeHtml(p.localId)}">
       <div class="msg-bubble-col">
         ${replyHtml}
-        <div class="msg-bubble${isFailed ? ' is-failed' : p.status === 'sent' ? ' is-sent' : ' is-sending'}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}">
+        <div class="msg-bubble${isFailed ? ' is-failed' : p.status === 'sent' ? ' is-sent' : ' is-sending'}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}${socialEmbedHtml ? ' has-social-embed' : ''}${socialEmbedHtml && socialEmbedHtml.includes('is-portrait') ? ' has-social-portrait' : ''}">
           ${bubbleInner}
         </div>
         ${isFailed ? `
@@ -4358,6 +4379,9 @@
             hasHeaderMeta: Boolean(fwdHtml)
           });
       const bodyHtml = m.body ? `<p class="msg-text">${formatMessageBodyHtml(m.body, searchQuery)}</p>` : '';
+      const socialEmbedHtml = !isDeleted && m.body && window.IponSocialEmbeds?.renderSocialEmbedsBlockHtml
+        ? window.IponSocialEmbeds.renderSocialEmbedsBlockHtml(m.body)
+        : '';
       const isMediaOnly = !isDeleted && hasTopMedia && !bodyHtml;
       const isPinned = Boolean(m.pinned_at || pinnedIds.has(m.id));
       const metaHtml = buildMetaHtml({
@@ -4373,8 +4397,8 @@
         : (isMediaOnly
             ? `${attHtml}${metaHtml}`
             : (hasTopMedia
-                ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${metaHtml}</div>`
-                : `${fwdHtml}${bodyHtml}${attHtml}${metaHtml}`));
+                ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${socialEmbedHtml}${metaHtml}</div>`
+                : `${fwdHtml}${bodyHtml}${socialEmbedHtml}${attHtml}${metaHtml}`));
 
       const isActivePinned = Boolean(isPinned && !isDeleted && state.activePinnedId && m.id === state.activePinnedId);
       return `${dateDivider}${unreadDivider}
@@ -4385,7 +4409,7 @@
             ${senderNameHtml}
             ${replyHtml}
             <div class="msg-bubble-wrap">
-              <div class="msg-bubble${isDeleted ? ' is-deleted' : ''}${isActivePinned ? ' is-pinned' : ''}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}${vanishStyle ? ' is-vanishing' : ''}"${vanishStyle ? ` style="${vanishStyle}" title="Vanishing message"` : ''}>
+              <div class="msg-bubble${isDeleted ? ' is-deleted' : ''}${isActivePinned ? ' is-pinned' : ''}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}${socialEmbedHtml ? ' has-social-embed' : ''}${socialEmbedHtml && socialEmbedHtml.includes('is-portrait') ? ' has-social-portrait' : ''}${vanishStyle ? ' is-vanishing' : ''}"${vanishStyle ? ` style="${vanishStyle}" title="Vanishing message"` : ''}>
                 ${bubbleContent}
               </div>
               ${!isDeleted ? `
@@ -4420,6 +4444,7 @@
     }
     ipon().fitVerifiedNameLines?.(list);
     hydrateThreadMediaElements(list, conv.conversation_id);
+    window.IponSocialEmbeds?.hydrateVisibleSocialMeta?.(list, resolveSocialEmbedUrl);
     syncThreadScrollLock();
     scheduleVanishExpiry();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => syncThreadScrollLock());
@@ -6846,6 +6871,158 @@
     if (!dialog.open) dialog.showModal();
   }
 
+  function resolveSocialEmbedUrl(url) {
+    if (typeof ipon().invokeSocialEmbedResolver !== 'function') {
+      return Promise.reject(new Error('Social embed resolver unavailable.'));
+    }
+    return ipon().invokeSocialEmbedResolver(url);
+  }
+
+  function collectShareRecipients() {
+    const items = [];
+    const seenDirectUsers = new Set();
+    if (initializedProfile?.id) {
+      seenDirectUsers.add(initializedProfile.id);
+      items.push({
+        isGroup: false,
+        userId: initializedProfile.id,
+        name: initializedProfile.full_name || 'You',
+        avatar_url: initializedProfile.avatar_url,
+        sub: 'You · Personal notes & saved messages',
+        convId: state.conversations.find((c) => !isGroupConv(c) && String(c.peer?.id || '') === String(initializedProfile.id))?.id || null
+      });
+    }
+    state.conversations
+      .filter((c) => c.status === 'ACCEPTED' && !c.anonymous_enabled && (isGroupConv(c) || (!c.peer?.is_blocked && c.peer?.can_message !== false && c.peer?.friends_only_locked !== true)))
+      .forEach((c) => {
+        if (isGroupConv(c)) {
+          items.push({
+            isGroup: true,
+            conv: c,
+            userId: c.id,
+            name: convDisplayTitle(c),
+            sub: `Group · ${Number(c.member_count || 2)} members`,
+            convId: c.id
+          });
+        } else if (c.peer?.id && !seenDirectUsers.has(c.peer.id)) {
+          seenDirectUsers.add(c.peer.id);
+          items.push({
+            isGroup: false,
+            userId: c.peer.id,
+            name: c.peer.full_name,
+            avatar_url: c.peer.avatar_url,
+            sub: c.peer.username ? `@${c.peer.username}` : '',
+            convId: c.id
+          });
+        }
+      });
+    (state.overview?.friends || []).forEach((f) => {
+      if (!seenDirectUsers.has(f.id)) {
+        seenDirectUsers.add(f.id);
+        items.push({
+          isGroup: false,
+          userId: f.id,
+          name: f.full_name,
+          avatar_url: f.avatar_url,
+          sub: f.username ? `@${f.username}` : 'Friend',
+          convId: null
+        });
+      }
+    });
+    return items;
+  }
+
+  async function openShareLinkDialog(rawPayload) {
+    const norm = window.IponSocialEmbeds?.normalizeSharedPayload
+      ? window.IponSocialEmbeds.normalizeSharedPayload(rawPayload)
+      : {
+          title: String(rawPayload?.title || '').trim().slice(0, 180),
+          text: [String(rawPayload?.text || '').trim(), String(rawPayload?.url || '').trim()].filter(Boolean).join('\n').slice(0, 2000),
+          url: String(rawPayload?.url || '').trim(),
+          social: null
+        };
+    if (!norm.text) return false;
+    if (!initializedProfile && ipon().profile) {
+      await init(ipon().profile);
+    }
+    if (!isEligible()) return false;
+    ensureDialogsMounted();
+    const ws = document.getElementById('msg-workspace-dialog');
+    if (!ws?.open) {
+      await openWorkspace({ tab: 'chats' });
+    } else if (!state.conversations.length && !state.overview) {
+      await Promise.all([refreshConversations(), refreshOverview()]);
+    }
+    const dialog = document.getElementById('msg-share-dialog');
+    const body = document.getElementById('msg-share-body');
+    if (!dialog || !body) return false;
+
+    const items = collectShareRecipients();
+    const previewHtml = norm.social && window.IponSocialEmbeds?.renderSocialEmbedCardHtml
+      ? `<div class="msg-share-preview">${window.IponSocialEmbeds.renderSocialEmbedCardHtml(norm.social, { compact: true })}</div>`
+      : '';
+    const listHtml = items.length
+      ? `<div class="msg-search-input-wrap msg-share-search-wrap">
+           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+           <input type="search" id="msg-share-search" placeholder="Search people or groups…" autocomplete="off" aria-label="Search chats or people to share with">
+         </div>
+         <div class="msg-forward-list msg-share-list" id="msg-share-list">${items.map((item) => {
+           const searchBlob = `${item.name || ''} ${item.sub || ''}`.toLowerCase();
+           return `<button type="button" class="msg-forward-row msg-share-row" data-share-send-user="${escAttr(item.userId)}" data-share-send-conv="${escAttr(item.convId || '')}" data-share-search="${escAttr(searchBlob)}">
+             ${item.isGroup
+               ? groupAvatarHtml(item.conv, 'avatar-sm', { clickable: false, showPresence: false })
+               : userAvatarHtml({ id: item.userId, full_name: item.name, avatar_url: item.avatar_url, allow_online_status: false }, 'avatar-sm', { clickable: false, showPresence: false })}
+             <span class="msg-forward-meta">
+               <strong>${escapeHtml(item.name)}${item.isGroup ? '' : userBadgesHtml({ id: item.userId, full_name: item.name })}</strong>
+               ${item.sub ? `<small>${escapeHtml(item.sub)}</small>` : ''}
+             </span>
+             <span class="button button-primary button-sm" data-share-btn-label>Send</span>
+           </button>`;
+         }).join('')}</div>
+         <p class="empty-state msg-share-empty" id="msg-share-empty" hidden>No matching chats or friends found.</p>`
+      : '<p class="empty-state">Add friends or open conversations first to send shared links.</p>';
+
+    body.innerHTML = `${previewHtml}
+      <div class="field msg-share-field">
+        <div class="msg-share-label-row">
+          <label for="msg-share-text">Message</label>
+          <small class="msg-share-count" id="msg-share-count">${norm.text.length} / 2000</small>
+        </div>
+        <textarea id="msg-share-text" class="msg-share-textarea" rows="3" maxlength="2000" placeholder="Add a message or paste a video link…" required>${escapeHtml(norm.text)}</textarea>
+        <p class="field-error msg-field-help" id="msg-share-text-err" aria-live="polite" aria-hidden="true"></p>
+      </div>
+      ${listHtml}`;
+    ipon().bindAvatarFallbacks?.(body);
+    window.IponSocialEmbeds?.hydrateVisibleSocialMeta?.(body, resolveSocialEmbedUrl);
+    if (!dialog.open) dialog.showModal();
+    return true;
+  }
+
+  async function checkIncomingSharePayload() {
+    let payload = null;
+    try {
+      if (typeof window !== 'undefined' && window.IponNativeShare && typeof window.IponNativeShare.consumePendingShare === 'function') {
+        const rawNative = window.IponNativeShare.consumePendingShare();
+        if (rawNative) {
+          const parsed = typeof rawNative === 'string' ? JSON.parse(rawNative) : rawNative;
+          if (parsed && (parsed.text || parsed.url || parsed.title)) payload = parsed;
+        }
+      }
+    } catch { }
+    if (!payload && typeof ipon().consumePendingSharePayload === 'function') {
+      payload = ipon().consumePendingSharePayload();
+    }
+    if (!payload && typeof location !== 'undefined' && location.search) {
+      const sp = new URLSearchParams(location.search);
+      const st = String(sp.get('share_title') || '').trim();
+      const sx = String(sp.get('share_text') || '').trim();
+      const su = String(sp.get('share_url') || '').trim();
+      if (st || sx || su) payload = { title: st, text: sx, url: su };
+    }
+    if (!payload) return false;
+    return openShareLinkDialog(payload);
+  }
+
   async function openPrivacySettingsModal() {
     const dialog = document.getElementById('msg-settings-dialog');
     const body = document.getElementById('msg-settings-body');
@@ -7629,6 +7806,23 @@
       if (ev.target.closest?.('#msg-workspace-close')) { document.getElementById('msg-workspace-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-settings-close]')) { document.getElementById('msg-settings-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-forward-close]')) { document.getElementById('msg-forward-dialog')?.close(); return; }
+      if (ev.target.closest?.('[data-msg-share-close]')) { document.getElementById('msg-share-dialog')?.close(); return; }
+
+      const socialPlayBtn = ev.target.closest?.('[data-social-play]');
+      if (socialPlayBtn) {
+        const card = socialPlayBtn.closest?.('.msg-social-card');
+        if (card) {
+          const scopeEl = card.closest?.('#msg-messages-list, #msg-share-body') || document.getElementById('msg-messages-list');
+          window.IponSocialEmbeds?.activateSocialPlayer?.(card, resolveSocialEmbedUrl, { scopeEl });
+        }
+        return;
+      }
+      const socialCloseBtn = ev.target.closest?.('[data-social-close]');
+      if (socialCloseBtn) {
+        const card = socialCloseBtn.closest?.('.msg-social-card');
+        if (card) window.IponSocialEmbeds?.resetCardToPoster?.(card);
+        return;
+      }
       if (ev.target.closest?.('[data-msg-group-close]')) { document.getElementById('msg-group-dialog')?.close(); return; }
       if (ev.target.closest?.('[data-msg-gdrive-close]') || ev.target?.id === 'msg-gdrive-dialog') { document.getElementById('msg-gdrive-dialog')?.close?.(); return; }
       if (ev.target.closest?.('#msg-gdrive-browse-local')) {
@@ -8467,6 +8661,51 @@
         return;
       }
 
+      const shareRow = ev.target.closest?.('[data-share-send-user]');
+      if (shareRow) {
+        const dialog = document.getElementById('msg-share-dialog');
+        const textEl = document.getElementById('msg-share-text');
+        const errEl = document.getElementById('msg-share-text-err');
+        const msgBody = String(textEl?.value || '').trim();
+        if (!msgBody) {
+          if (errEl) {
+            errEl.textContent = 'Enter a message or link before sending.';
+            errEl.classList?.add?.('is-visible');
+            errEl.setAttribute?.('aria-hidden', 'false');
+          }
+          textEl?.setAttribute?.('aria-invalid', 'true');
+          textEl?.focus?.();
+          return;
+        }
+        if (shareRow.disabled) return;
+        shareRow.disabled = true;
+        const pill = shareRow.querySelector('[data-share-btn-label]');
+        const prevLabel = pill ? pill.textContent : 'Send';
+        if (pill) pill.textContent = 'Sending…';
+        try {
+          let convId = shareRow.dataset.shareSendConv;
+          if (!convId) {
+            const opened = await ipon().rpc('start_or_open_direct_chat', { p_target_id: shareRow.dataset.shareSendUser });
+            convId = opened.id;
+          }
+          await ipon().rpc('send_chat_message', {
+            p_conversation_id: convId,
+            p_body: msgBody.slice(0, 2000),
+            p_message_type: 'TEXT'
+          });
+          dialog?.close();
+          ipon().toast('Shared to chat.');
+          await refreshConversations();
+          await openConversation(convId);
+        } catch (err) {
+          ipon().toast(ipon().friendlyError(err), 'error');
+        } finally {
+          shareRow.disabled = false;
+          if (pill) pill.textContent = prevLabel;
+        }
+        return;
+      }
+
       // Composer attachments, retry/delete failed messages, emoji, voice note, cancel context
       const retryPendingBtn = ev.target.closest?.('[data-pending-retry]');
       if (retryPendingBtn && state.activeConvId) {
@@ -8805,6 +9044,27 @@
         if (fClear) fClear.hidden = !q;
         const fEmpty = document.getElementById('msg-friend-filter-empty');
         if (fEmpty) fEmpty.hidden = visibleCount > 0;
+      } else if (ev.target?.id === 'msg-share-search') {
+        const q = String(ev.target.value || '').trim().toLowerCase();
+        let visible = 0;
+        document.querySelectorAll('#msg-share-list .msg-share-row').forEach((row) => {
+          const hide = q ? !(row.dataset.shareSearch || '').includes(q) : false;
+          row.hidden = hide;
+          if (!hide) visible += 1;
+        });
+        const emptyEl = document.getElementById('msg-share-empty');
+        if (emptyEl) emptyEl.hidden = visible > 0;
+      } else if (ev.target?.id === 'msg-share-text') {
+        const len = String(ev.target.value || '').length;
+        const countEl = document.getElementById('msg-share-count');
+        if (countEl) countEl.textContent = `${len} / 2000`;
+        const errEl = document.getElementById('msg-share-text-err');
+        if (errEl && String(ev.target.value || '').trim()) {
+          errEl.textContent = '';
+          errEl.classList?.remove?.('is-visible');
+          errEl.setAttribute?.('aria-hidden', 'true');
+          ev.target.setAttribute?.('aria-invalid', 'false');
+        }
       } else if (ev.target?.id === 'msg-thread-search-input') {
         state.threadSearchQuery = ev.target.value;
         clearTimeout(threadSearchDebounce);
@@ -10002,6 +10262,9 @@
         window.addEventListener('focus', onWindowFocus);
         window.addEventListener('blur', onWindowBlur);
         window.addEventListener('ipon:presence-change', onPresenceChange);
+        window.addEventListener('myipon:native-share', () => {
+          checkIncomingSharePayload().catch(() => { });
+        });
         window.addEventListener('ipon:profile-updated', (ev) => {
           const updated = ev?.detail;
           if (!updated || typeof updated !== 'object') return;
@@ -10040,6 +10303,7 @@
     if (params.get('chat') || params.get('messages')) {
       await openFromNotification({ link: location.href });
     }
+    await checkIncomingSharePayload();
   }
 
   bindEvents();
@@ -10096,6 +10360,11 @@
   }
 
   function handleBackNavigation() {
+    const shareDlg = document.getElementById('msg-share-dialog');
+    if (shareDlg?.open) {
+      shareDlg.close();
+      return true;
+    }
     const gdriveDlg = document.getElementById('msg-gdrive-dialog');
     if (gdriveDlg?.open) {
       gdriveDlg.close();
@@ -10182,6 +10451,7 @@
   window.IponMessages = {
     init,
     openWorkspace,
+    openShareLinkDialog,
     refreshWorkspace,
     onIncomingSocialNotification,
     openFromNotification,

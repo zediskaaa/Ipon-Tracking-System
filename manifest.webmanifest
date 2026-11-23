@@ -12,6 +12,15 @@
   "background_color": "#0b3428",
   "theme_color": "#0b3428",
   "categories": ["finance", "productivity", "utilities"],
+  "share_target": {
+    "action": "/dashboard.html",
+    "method": "GET",
+    "params": {
+      "title": "share_title",
+      "text": "share_text",
+      "url": "share_url"
+    }
+  },
   "icons": [
     {
       "src": "/assets/icon-192.png",

@@ -33,6 +33,12 @@
                 <data android:scheme="myipon" android:host="auth-callback" />
             </intent-filter>
 
+            <intent-filter android:label="Send to myIPON Messages">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
         </activity>
 
         <provider

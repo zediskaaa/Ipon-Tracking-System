@@ -68,6 +68,7 @@ public class MainActivity extends BridgeActivity {
     private volatile String pendingPickerSource = "";
     private volatile long pendingPickerSetAtMs = 0L;
     private volatile String pendingAuthCallbackJson = null;
+    private volatile String pendingSharedPayloadJson = null;
     private Activity.ScreenCaptureCallback screenCaptureCallback;
     private ContentObserver screenshotObserver;
     private boolean screenshotMonitoringEnabled;
@@ -205,9 +206,27 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private class ShareBridge {
+        @JavascriptInterface
+        public boolean isSupported() {
+            return true;
+        }
+
+        @JavascriptInterface
+        public String consumePendingShare() {
+            return consumePendingSharedPayload();
+        }
+    }
+
     public synchronized String consumePendingAuthCallback() {
         final String payload = pendingAuthCallbackJson;
         pendingAuthCallbackJson = null;
+        return payload != null ? payload : "";
+    }
+
+    public synchronized String consumePendingSharedPayload() {
+        final String payload = pendingSharedPayloadJson;
+        pendingSharedPayloadJson = null;
         return payload != null ? payload : "";
     }
 
@@ -333,6 +352,7 @@ public class MainActivity extends BridgeActivity {
             webView.addJavascriptInterface(new PickerSourceBridge(), "IponNativePicker");
             webView.addJavascriptInterface(new PrivacyBridge(), "IponNativePrivacy");
             webView.addJavascriptInterface(new AuthCallbackBridge(), "IponNativeAuth");
+            webView.addJavascriptInterface(new ShareBridge(), "IponNativeShare");
             if (getBridge() != null) {
                 webView.setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
                     @Override
@@ -390,6 +410,7 @@ public class MainActivity extends BridgeActivity {
         NotificationSyncWorker.ensureScheduled(this);
         handleNotificationIntent(getIntent());
         handleAuthCallbackIntent(getIntent());
+        handleShareIntent(getIntent());
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -436,6 +457,7 @@ public class MainActivity extends BridgeActivity {
         setIntent(intent);
         handleNotificationIntent(intent);
         handleAuthCallbackIntent(intent);
+        handleShareIntent(intent);
     }
 
     private void dispatchWindowEvent(final String eventName) {
@@ -462,6 +484,7 @@ public class MainActivity extends BridgeActivity {
         NotificationSyncWorker.ensureScheduled(this);
         dispatchWindowEvent("myipon:native-resume");
         if (pendingAuthCallbackJson != null) dispatchWindowEvent("myipon:native-oauth-callback");
+        if (pendingSharedPayloadJson != null) dispatchWindowEvent("myipon:native-share");
         if (connectionOverlay != null) {
             updateConnectionOverlay();
             final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
@@ -592,6 +615,46 @@ public class MainActivity extends BridgeActivity {
                 }
                 webView.evaluateJavascript(
                     "(function(){try{window.dispatchEvent(new Event('myipon:native-oauth-callback'));}catch(e){}})()",
+                    null
+                );
+            });
+        }
+    }
+
+    private void handleShareIntent(Intent intent) {
+        if (intent == null) return;
+        if (!Intent.ACTION_SEND.equals(intent.getAction())) return;
+        final String mime = intent.getType();
+        if (mime == null || !mime.startsWith("text/")) return;
+        String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
+        String sharedTitle = intent.getStringExtra(Intent.EXTRA_SUBJECT);
+        intent.setAction(Intent.ACTION_MAIN);
+        intent.removeExtra(Intent.EXTRA_TEXT);
+        intent.removeExtra(Intent.EXTRA_SUBJECT);
+        sharedText = sharedText != null ? sharedText.trim() : "";
+        sharedTitle = sharedTitle != null ? sharedTitle.trim() : "";
+        if (sharedText.isEmpty() && sharedTitle.isEmpty()) return;
+        if (sharedText.length() > 4000) sharedText = sharedText.substring(0, 4000);
+        if (sharedTitle.length() > 200) sharedTitle = sharedTitle.substring(0, 200);
+        try {
+            final JSONObject payload = new JSONObject();
+            payload.put("text", sharedText);
+            payload.put("title", sharedTitle);
+            payload.put("url", "");
+            pendingSharedPayloadJson = payload.toString();
+        } catch (Throwable err) {
+            return;
+        }
+        final WebView webView = bridge != null ? bridge.getWebView() : null;
+        if (webView != null) {
+            webView.post(() -> {
+                final String currentUrl = webView.getUrl();
+                if (currentUrl == null || currentUrl.isEmpty() || "about:blank".equals(currentUrl) || currentUrl.endsWith("offline.html")) {
+                    webView.loadUrl(APP_ENTRY_URL);
+                    return;
+                }
+                webView.evaluateJavascript(
+                    "(function(){try{window.dispatchEvent(new Event('myipon:native-share'));}catch(e){}})()",
                     null
                 );
             });

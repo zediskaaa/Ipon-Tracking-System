@@ -33,6 +33,59 @@
   let loaderSlowTimer = null;
   let navLoaderTimer = null;
   let activeLiveRefresh = null;
+  const PENDING_SHARE_STORAGE_KEY = 'ipon_pending_share_v1';
+
+  function capturePendingShareFromUrl() {
+    if (typeof window === 'undefined' || !window.location) return null;
+    try {
+      const url = new URL(window.location.href);
+      const title = String(url.searchParams.get('share_title') || '').trim();
+      const text = String(url.searchParams.get('share_text') || '').trim();
+      const sharedUrl = String(url.searchParams.get('share_url') || '').trim();
+      if (!title && !text && !sharedUrl) return null;
+      const payload = {
+        title: title.slice(0, 180),
+        text: text.slice(0, 2000),
+        url: sharedUrl.slice(0, 1000),
+        capturedAt: Date.now()
+      };
+      try { sessionStorage.setItem(PENDING_SHARE_STORAGE_KEY, JSON.stringify(payload)); } catch { }
+      url.searchParams.delete('share_title');
+      url.searchParams.delete('share_text');
+      url.searchParams.delete('share_url');
+      if (typeof history !== 'undefined' && typeof history.replaceState === 'function') {
+        history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`);
+      }
+      return payload;
+    } catch {
+      return null;
+    }
+  }
+
+  function consumePendingSharePayload() {
+    const fromUrl = capturePendingShareFromUrl();
+    if (fromUrl) {
+      try { sessionStorage.removeItem(PENDING_SHARE_STORAGE_KEY); } catch { }
+      return fromUrl;
+    }
+    try {
+      const raw = sessionStorage.getItem(PENDING_SHARE_STORAGE_KEY);
+      if (!raw) return null;
+      sessionStorage.removeItem(PENDING_SHARE_STORAGE_KEY);
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (parsed.capturedAt && Date.now() - Number(parsed.capturedAt) > 15 * 60 * 1000) return null;
+      return {
+        title: String(parsed.title || '').trim().slice(0, 180),
+        text: String(parsed.text || '').trim().slice(0, 2000),
+        url: String(parsed.url || '').trim().slice(0, 1000)
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  capturePendingShareFromUrl();
 
   const THEME_STORAGE_KEY = 'myipon_theme';
   const UI_SOUND_STORAGE_KEY = 'myipon_ui_sounds';
@@ -10587,6 +10640,34 @@
     return data || {};
   }
 
+  async function invokeSocialEmbedResolver(rawUrl) {
+    const url = String(rawUrl || '').trim();
+    if (!url) throw new Error('Missing URL to resolve.');
+    const client = getClient();
+    if (!client) throw new Error('Supabase is not connected.');
+    const buildHeaders = (sess) => {
+      const h = {};
+      if (sess?.access_token) h.Authorization = `Bearer ${sess.access_token}`;
+      else if (config.supabaseAnonKey) h.Authorization = `Bearer ${config.supabaseAnonKey}`;
+      return h;
+    };
+    const session = await ensureFreshAuthSession(client);
+    let { data, error } = await client.functions.invoke('resolve-social-embed', { body: { url }, headers: buildHeaders(session) });
+    if (error && (error?.context?.status === 401 || isAuthSessionRpcError(error))) {
+      const refreshed = await ensureFreshAuthSession(client, { force: true });
+      if (refreshed?.access_token) {
+        const retried = await client.functions.invoke('resolve-social-embed', { body: { url }, headers: buildHeaders(refreshed) });
+        data = retried.data;
+        error = retried.error;
+      }
+    }
+    if (error) {
+      const detail = await error.context?.json?.().catch(() => null);
+      throw new Error(detail?.error || error.message);
+    }
+    return data || {};
+  }
+
   const VIDEO_FILE_RE = /\.(mp4|webm|mov|m4v|avi|mkv|3gp|ogv|mpeg|mpg|flv|wmv)$/i;
   const MAX_ANNOUNCEMENT_MEDIA_BYTES = 50 * 1024 * 1024;
   const MAX_ANNOUNCEMENT_FILES = 20;
@@ -18907,6 +18988,7 @@
     resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, fitVerifiedNameLines, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal, syncAccountBadgeSection, openCreatorBadgeChat,
     refreshProfileEffectsState, maybeShowEffectAwardModal, openProfileEffectsDialog,
     SOCIAL_APPS, validateSocialAppInput, normalizeSocialAppUrl, normalizeSocialAppOrder, reorderSocialAppKeys, sanitizeSocialLinks, serializeSocialLinks, renderSocialAppLinksHtml,
+    capturePendingShareFromUrl, consumePendingSharePayload, invokeSocialEmbedResolver,
     get profile() { return currentProfile; }
   };
   if (typeof document !== 'undefined') {
