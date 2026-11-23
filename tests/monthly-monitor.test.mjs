@@ -52,6 +52,7 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(appCss, /select:not\(\.custom-select-native\)\{[^}]*padding:\s*9px 36px 9px 14px/);
   assert.match(appCss, /input\[type="search"\]:not\(\.effects-find\):not\(\.tutorial-search-input\)/);
   assert.match(appCss, /html\[data-theme="dark"\] input\[type="search"\]:not\(\.effects-find\):not\(\.tutorial-search-input\)/);
+  assert.match(appCss, /\.audit-search-wrap input\[type="search"\],\.msg-search-input-wrap input\[type="search"\],\.tutorial-search-wrap input\[type="search"\]\{background-image:none!important;/);
   assert.match(html, /id="cf-chart-title"/);
   assert.match(html, /id="cf-chart-prev"/);
   assert.match(html, /id="cf-chart-next"/);

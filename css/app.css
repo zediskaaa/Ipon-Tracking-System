@@ -1300,7 +1300,7 @@ input[type="search"]:not(.effects-find):not(.tutorial-search-input)::placeholder
 input[type="search"]:not(.effects-find):not(.tutorial-search-input):hover,.table-filters input[type="search"]:hover,.field input[type="search"]:hover{border-color:rgba(20,45,43,.34);background-color:#fffefb}
 input[type="search"]:not(.effects-find):not(.tutorial-search-input):focus,.table-filters input[type="search"]:focus,.field input[type="search"]:focus{border-color:#1f6a43;background-color:#ffffff;box-shadow:0 0 0 3.5px rgba(31,106,67,.15);outline:none}
 input[type="search"]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin-left:6px;border-radius:999px;background:rgba(20,45,43,.1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M7 7l10 10M17 7L7 17' stroke='%233d5149' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") center/11px 11px no-repeat;cursor:pointer}
-.audit-search-wrap input[type="search"],.msg-search-input-wrap input[type="search"]{background-image:none;box-shadow:none}
+.audit-search-wrap input[type="search"],.msg-search-input-wrap input[type="search"],.tutorial-search-wrap input[type="search"]{background-image:none!important;box-shadow:none}
 @media (max-width:720px){.table-filters input[type="search"]{grid-column:1 / -1}}
 
 /* Custom Member Dropdown with Avatars (DPs) */
@@ -3629,7 +3629,8 @@ html[data-theme="dark"] input[type="search"]::-webkit-search-cancel-button {
   background: rgba(218, 236, 227, .16) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M7 7l10 10M17 7L7 17' stroke='%23e5f2ec' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") center/11px 11px no-repeat;
 }
 html[data-theme="dark"] .audit-search-wrap input[type="search"],
-html[data-theme="dark"] .msg-search-input-wrap input[type="search"] {
+html[data-theme="dark"] .msg-search-input-wrap input[type="search"],
+html[data-theme="dark"] .tutorial-search-wrap input[type="search"] {
   background-image: none !important;
 }
 html[data-theme="dark"] .field input:not([type="checkbox"]):not([type="radio"]):focus,
@@ -6804,10 +6805,11 @@ html[data-theme="dark"] .msg-topbar-actions .dialog-close:hover {
   width: 100%;
   min-width: 0;
   min-height: 40px;
-  padding: 8px 34px 8px 36px;
+  padding: 8px 34px 8px 36px !important;
   border-radius: 11px;
   border: 1px solid rgba(20, 45, 43, .18);
   background: var(--surface-input, #fff);
+  background-image: none !important;
   color: var(--ink);
   font: 500 13.5px/1.35 inherit;
   transition: border-color .15s ease, box-shadow .15s ease;
