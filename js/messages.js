@@ -1187,6 +1187,12 @@
     });
     const scrollWrapEl = document.getElementById('msg-scroll-wrap');
     scrollWrapEl?.addEventListener('scroll', handleThreadScroll, { passive: true });
+    scrollWrapEl?.addEventListener('play', (ev) => {
+      const media = ev.target;
+      if (media?.matches?.('.msg-social-video')) {
+        pauseOtherChatMedia(media, { keepSocialCard: media.closest?.('.msg-social-card') || null });
+      }
+    }, true);
     document.getElementById('msg-conv-list')?.addEventListener('scroll', closeFloatingMenus, { passive: true });
     scrollWrapEl?.addEventListener('load', () => syncThreadScrollLock(), true);
   }
@@ -7815,7 +7821,8 @@
         if (card) {
           pauseOtherChatMedia(null, { keepSocialCard: card });
           const scopeEl = card.closest?.('#msg-messages-list, #msg-share-body') || document.getElementById('msg-messages-list');
-          window.IponSocialEmbeds?.activateSocialPlayer?.(card, resolveSocialEmbedUrl, { scopeEl });
+          const forceResolve = socialPlayBtn.dataset?.socialForceResolve === '1';
+          window.IponSocialEmbeds?.activateSocialPlayer?.(card, resolveSocialEmbedUrl, { scopeEl, forceResolve });
         }
         return;
       }
@@ -9411,7 +9418,7 @@
       if (!row || row.classList?.contains?.('is-pending')) return null;
       if (row.querySelector?.('.msg-bubble.is-deleted')) return null;
       if (state.activeThread?.conversation && !canInteractInThread(state.activeThread.conversation)) return null;
-      const mediaSurface = target?.closest?.('.msg-img-open-btn, .msg-att-video, .msg-video-center-play, .msg-att-doc-btn, .msg-social-poster, .msg-social-stage, .msg-social-fallback');
+      const mediaSurface = target?.closest?.('.msg-img-open-btn, .msg-att-video, .msg-video-center-play, .msg-att-doc-btn, .msg-social-poster, .msg-social-stage, .msg-social-video, .msg-social-fallback');
       if (target?.closest?.('button, a, input, textarea, select, [role="button"], .msg-video-controls, .msg-voice-play-btn') && !mediaSurface) return null;
       if (pointerType === 'mouse' && target?.closest?.('.msg-text, .msg-reply-quote, .msg-sender-name')) return null;
       const msgId = row.dataset?.msgId;

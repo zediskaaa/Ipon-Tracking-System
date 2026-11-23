@@ -27119,7 +27119,7 @@ small .ipon-cents {
   z-index: 2147483640;
 }
 
-/* ══ Inline Social Video Embeds (YouTube / TikTok / Facebook) & Share-to-Chat ══ */
+/* ══ Inline Social Video Embeds (YouTube / TikTok / Facebook / X / Instagram) & Share-to-Chat ══ */
 .msg-row.is-mine .msg-bubble-wrap {
   justify-content: flex-end;
 }
@@ -27181,6 +27181,7 @@ small .ipon-cents {
   width: 100%;
   background: #0a1411;
   overflow: hidden;
+  touch-action: pan-y;
 }
 .msg-social-card.is-landscape .msg-social-stage {
   aspect-ratio: var(--social-ar, 16 / 9);
@@ -27217,6 +27218,12 @@ small .ipon-cents {
 }
 .msg-social-card.is-facebook .msg-social-poster {
   background: radial-gradient(circle at 22% 18%, rgba(24, 119, 242, .48), rgba(12, 20, 34, .96) 72%);
+}
+.msg-social-card.is-x .msg-social-poster {
+  background: radial-gradient(circle at 22% 18%, rgba(148, 163, 184, .28), rgba(11, 13, 16, .98) 72%);
+}
+.msg-social-card.is-instagram .msg-social-poster {
+  background: radial-gradient(circle at 18% 16%, rgba(249, 115, 22, .38), rgba(217, 70, 239, .34) 45%, rgba(24, 12, 32, .96) 82%);
 }
 .msg-social-thumb {
   position: absolute;
@@ -27268,6 +27275,10 @@ small .ipon-cents {
 .msg-social-card.is-tiktok .msg-social-player-tag svg { color: #25f4ee; }
 .msg-social-card.is-facebook .msg-social-badge svg,
 .msg-social-card.is-facebook .msg-social-player-tag svg { color: #5ca2ff; }
+.msg-social-card.is-x .msg-social-badge svg,
+.msg-social-card.is-x .msg-social-player-tag svg { color: #ffffff; }
+.msg-social-card.is-instagram .msg-social-badge svg,
+.msg-social-card.is-instagram .msg-social-player-tag svg { color: #ff6aa8; }
 .msg-social-play-circle {
   position: relative;
   z-index: 2;
@@ -27304,6 +27315,11 @@ small .ipon-cents {
   color: rgba(255, 255, 255, .94);
   font-size: 11px;
   font-weight: 600;
+}
+.msg-social-watch-pill.is-restricted {
+  background: rgba(82, 46, 12, .86);
+  border-color: rgba(242, 193, 78, .48);
+  color: #fde7b2;
 }
 .msg-social-foot {
   display: flex;
@@ -27418,7 +27434,8 @@ small .ipon-cents {
   background: rgba(196, 52, 45, .92);
   border-color: rgba(255, 255, 255, .45);
 }
-.msg-social-iframe {
+.msg-social-iframe,
+.msg-social-video {
   position: absolute;
   inset: 0;
   display: block;
@@ -27427,8 +27444,13 @@ small .ipon-cents {
   border: 0;
   background: #000000;
 }
+.msg-social-video {
+  object-fit: contain;
+  touch-action: pan-y;
+}
 .msg-social-loading,
 .msg-social-fallback {
+  touch-action: pan-y;
   position: absolute;
   inset: 0;
   width: 100%;
