@@ -350,13 +350,23 @@
     return `<div class="msg-social-embeds">${embeds.map((e) => renderSocialEmbedCardHtml(e, opts)).join('')}</div>`;
   }
 
+  let activeSessionToken = 0;
+
   function resetCardToPoster(cardEl) {
     if (!cardEl) return;
     const oldIframe = cardEl.querySelector?.('iframe');
     if (oldIframe) {
+      if (cardEl.dataset?.socialProvider === 'tiktok') {
+        try {
+          oldIframe.contentWindow?.postMessage?.({ 'x-tiktok-player': true, type: 'pause', value: '' }, 'https://www.tiktok.com');
+          oldIframe.contentWindow?.postMessage?.({ 'x-tiktok-player': true, type: 'mute', value: '' }, 'https://www.tiktok.com');
+        } catch { }
+      }
       try { oldIframe.src = 'about:blank'; } catch { }
+      try { oldIframe.remove?.(); } catch { }
     }
-    const rawUrl = cardEl.dataset.socialUrl || '';
+    cardEl.classList?.remove?.('is-playing', 'is-loading');
+    const rawUrl = cardEl.dataset?.socialUrl || '';
     const parsed = parseSocialVideoUrl(rawUrl);
     if (!parsed) return;
     const tmp = typeof document !== 'undefined' ? document.createElement('div') : null;
@@ -369,10 +379,22 @@
   }
 
   function stopOtherActivePlayers(scopeEl, exceptCard) {
-    const root = scopeEl || (typeof document !== 'undefined' ? document : null);
-    if (!root || typeof root.querySelectorAll !== 'function') return;
-    root.querySelectorAll('.msg-social-card.is-playing').forEach((other) => {
-      if (other !== exceptCard) resetCardToPoster(other);
+    if (!exceptCard) activeSessionToken += 1;
+    const doc = typeof document !== 'undefined' ? document : null;
+    const roots = [];
+    if (doc && typeof doc.querySelectorAll === 'function') roots.push(doc);
+    if (scopeEl && scopeEl !== doc && typeof scopeEl.querySelectorAll === 'function') roots.push(scopeEl);
+    const visited = new Set();
+    roots.forEach((root) => {
+      root.querySelectorAll('.msg-social-card').forEach((other) => {
+        if (other === exceptCard || visited.has(other)) return;
+        const isActive = other.classList?.contains?.('is-playing')
+          || other.classList?.contains?.('is-loading')
+          || Boolean(other.querySelector?.('iframe'));
+        if (!isActive) return;
+        visited.add(other);
+        resetCardToPoster(other);
+      });
     });
   }
 
@@ -405,7 +427,9 @@
     const parsed = parseSocialVideoUrl(rawUrl);
     if (!parsed) return false;
 
-    stopOtherActivePlayers(scopeEl || cardEl.closest?.('#msg-messages-list'), cardEl);
+    const myToken = ++activeSessionToken;
+    const targetScope = scopeEl || cardEl.closest?.('#msg-messages-list');
+    stopOtherActivePlayers(targetScope, cardEl);
 
     const stage = cardEl.querySelector('.msg-social-stage');
     if (!stage) return false;
@@ -424,6 +448,10 @@
         } finally {
           cardEl.classList.remove('is-loading');
         }
+        if (myToken !== activeSessionToken || cardEl.isConnected === false) {
+          if (cardEl.isConnected !== false) resetCardToPoster(cardEl);
+          return false;
+        }
       } else {
         resolved = { ...parsed, playable: true };
         // Enrich title/author quietly in background without delaying playback
@@ -439,6 +467,11 @@
       }
     }
 
+    if (myToken !== activeSessionToken) {
+      resetCardToPoster(cardEl);
+      return false;
+    }
+
     const embedUrl = String(resolved?.embedUrl || '').trim();
     if (!embedUrl || !isSafeEmbedUrl(embedUrl) || resolved?.playable === false) {
       const openHref = resolved?.canonicalUrl || rawUrl;
@@ -452,6 +485,9 @@
       </div>`;
       return false;
     }
+
+    // Re-enforce single active player right before mounting iframe in case another card started while resolving
+    stopOtherActivePlayers(targetScope, cardEl);
 
     const nextAspect = resolved?.aspect === 'portrait' ? 'portrait' : 'landscape';
     applyCardAspect(cardEl, resolved?.aspectRatio || cardEl.dataset.socialAspectRatio, nextAspect);

@@ -189,6 +189,34 @@ test('social video embeds runtime activates inline player, resolves shortlinks, 
   assert.match(badFbCard._stage.innerHTML, /data-social-play="1"/);
   assert.match(badFbCard._stage.innerHTML, /Open link/);
 
+  // 3b. Starting a second social video immediately stops the first and aborts stale async shortlink loads
+  let firstIframeRemoved = false;
+  const firstIframe = { src: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ', remove() { firstIframeRemoved = true; } };
+  const firstCard = makeCard('https://youtu.be/dQw4w9WgXcQ');
+  firstCard.classList.add('is-playing');
+  const origQ = firstCard.querySelector.bind(firstCard);
+  firstCard.querySelector = (sel) => (sel === 'iframe' ? firstIframe : origQ(sel));
+  const secondCard = makeCard('https://www.tiktok.com/@creator/video/7345678901234567890');
+  const scopeEl = { querySelectorAll(sel) { return sel === '.msg-social-card' ? [firstCard, secondCard] : []; } };
+  const ok2 = await api.activateSocialPlayer(secondCard, null, { scopeEl });
+  assert.equal(ok2, true);
+  assert.equal(firstIframe.src, 'about:blank');
+  assert.equal(firstIframeRemoved, true);
+  assert.equal(firstCard.classList.contains('is-playing'), false);
+  assert.equal(secondCard.classList.contains('is-playing'), true);
+
+  // Stale async shortlink load is cancelled if another video starts before it finishes
+  let finishSlowResolve;
+  const slowCard = makeCard('https://vt.tiktok.com/ZS2slow11/');
+  const fastCard = makeCard('https://youtu.be/dQw4w9WgXcQ');
+  const slowPromise = api.activateSocialPlayer(slowCard, () => new Promise((r) => { finishSlowResolve = r; }), { scopeEl: { querySelectorAll: () => [slowCard, fastCard] } });
+  const fastOk = await api.activateSocialPlayer(fastCard, null, { scopeEl: { querySelectorAll: () => [slowCard, fastCard] } });
+  finishSlowResolve({ provider: 'tiktok', videoId: '7399999999999999991', embedUrl: 'https://www.tiktok.com/player/v1/7399999999999999991?autoplay=1&muted=0&loop=1&rel=0&controls=1&music_info=1&description=1', aspect: 'portrait', playable: true });
+  const slowOk = await slowPromise;
+  assert.equal(fastOk, true);
+  assert.equal(slowOk, false);
+  assert.equal(slowCard.classList.contains('is-playing'), false);
+
   // 4. Shared payload normalization deduplicates URL and recognizes social video
   const norm = api.normalizeSharedPayload({
     title: 'Cool video',
@@ -253,7 +281,7 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   // Messaging HTML pages load social-video-embeds.js before messages.js
   for (const page of ['account.html', 'audit.html', 'budget.html', 'contributions.html', 'dashboard.html', 'expenses.html', 'members.html', 'reports.html', 'requests.html', 'savings.html', 'settings.html', 'user.html', 'withdrawals.html']) {
     const html = read(page);
-    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-13"><\/script>\s*<script src="js\/messages\.js\?v=20261123-09"/, `${page} must load social-video-embeds.js right before messages.js`);
+    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-14"><\/script>\s*<script src="js\/messages\.js\?v=20261123-10"/, `${page} must load social-video-embeds.js right before messages.js`);
   }
 
   // core.js exports share capture + Edge Function resolver
@@ -272,6 +300,8 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   assert.match(msgJs, /openShareLinkDialog/);
   assert.match(msgJs, /myipon:native-share/);
   assert.match(msgJs, /\.msg-social-poster,\s*\.msg-social-stage,\s*\.msg-social-fallback/);
+  assert.match(msgJs, /function pauseOtherChatMedia\(activeMedia, \{ keepSocialCard = null \} = \{\}\)\s*\{[\s\S]*?stopOtherActivePlayers/);
+  assert.match(msgJs, /pauseOtherChatMedia\(null, \{ keepSocialCard: card \}\);/);
 
   // CSS rules for inline social player & share dialog: zero side margin on bubble, fixed non-growing portrait size, circular close button
   const css = read('css/app.css');

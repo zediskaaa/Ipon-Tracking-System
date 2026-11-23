@@ -2319,12 +2319,13 @@
     }
   }
 
-  function pauseOtherChatMedia(activeMedia) {
+  function pauseOtherChatMedia(activeMedia, { keepSocialCard = null } = {}) {
     document.querySelectorAll('#msg-messages-list audio, #msg-messages-list video').forEach((el) => {
       if (el !== activeMedia && !el.paused) {
         try { el.pause?.(); } catch { }
       }
     });
+    window.IponSocialEmbeds?.stopOtherActivePlayers?.(typeof document !== 'undefined' ? document : null, keepSocialCard);
   }
 
   function renderVoicePlayerHtml(url, durationSec = 0) {
@@ -7812,6 +7813,7 @@
       if (socialPlayBtn) {
         const card = socialPlayBtn.closest?.('.msg-social-card');
         if (card) {
+          pauseOtherChatMedia(null, { keepSocialCard: card });
           const scopeEl = card.closest?.('#msg-messages-list, #msg-share-body') || document.getElementById('msg-messages-list');
           window.IponSocialEmbeds?.activateSocialPlayer?.(card, resolveSocialEmbedUrl, { scopeEl });
         }
