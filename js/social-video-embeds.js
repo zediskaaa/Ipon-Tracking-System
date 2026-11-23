@@ -156,7 +156,7 @@
       }
       if (!YOUTUBE_ID_RE.test(id)) return null;
       const start = parseStartSeconds(u.searchParams.get('t') || u.searchParams.get('start'));
-      const qs = new URLSearchParams({ rel: '0', modestbranding: '1', playsinline: '1', autoplay: '1' });
+      const qs = new URLSearchParams({ rel: '0', modestbranding: '1', playsinline: '1', autoplay: '1', mute: '0' });
       if (start > 0) qs.set('start', String(start));
       return {
         provider: 'youtube',
@@ -182,7 +182,7 @@
         videoId,
         rawUrl: u.toString(),
         canonicalUrl: videoId ? `https://www.tiktok.com${u.pathname}` : u.toString(),
-        embedUrl: videoId ? `https://www.tiktok.com/player/v1/${videoId}?autoplay=1&music_info=1&description=1` : '',
+        embedUrl: videoId ? `https://www.tiktok.com/player/v1/${videoId}?autoplay=1&muted=0&loop=1&rel=0&controls=1&music_info=1&description=1` : '',
         thumbnailUrl: '',
         aspect: 'portrait',
         badge: PROVIDER_META.tiktok.label,
@@ -215,7 +215,7 @@
         canonicalUrl,
         embedUrl: isShortFb
           ? ''
-          : `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(canonicalUrl)}&show_text=false&autoplay=true&mute=0`,
+          : `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(canonicalUrl)}&show_text=false`,
         thumbnailUrl: '',
         aspect: isReel ? 'portrait' : 'landscape',
         badge: isReel ? PROVIDER_META.facebook.shortLabel : PROVIDER_META.facebook.label,
@@ -320,19 +320,26 @@
       : info.provider === 'tiktok'
         ? 'Play TikTok video'
         : (info.aspect === 'portrait' ? 'Play Facebook Reel' : 'Play Facebook video'));
+    const directFbEmbed = !compact && info.provider === 'facebook' && !info.needsResolve && info.playable !== false && isSafeEmbedUrl(info.embedUrl);
     const subText = info.author
       ? `${info.author} · Plays inside chat`
-      : (info.needsResolve ? 'Tap play to load inside chat' : 'Tap play to watch inside chat');
+      : (directFbEmbed
+          ? 'Tap video to play with sound'
+          : (info.needsResolve ? 'Tap play to load inside chat' : 'Tap play to watch inside chat'));
 
-    return `<div class="msg-social-card is-${escapeHtml(info.provider)} ${aspectCls}${compact ? ' is-compact' : ''}" data-social-embed="1" data-social-provider="${escapeHtml(info.provider)}" data-social-url="${escapeHtml(info.rawUrl)}" data-social-embed-url="${escapeHtml(info.embedUrl || '')}" data-social-aspect="${escapeHtml(info.aspect)}" data-social-aspect-ratio="${escapeHtml(String(aspectRatio))}">
-      <div class="msg-social-stage" style="--social-ar:${escapeHtml(String(aspectRatio))}">
-        <button type="button" class="msg-social-poster" data-social-play="1" aria-label="Play ${escapeHtml(info.badge)} video inside conversation">
+    const stageInner = directFbEmbed
+      ? `<iframe class="msg-social-iframe" src="${escapeHtml(info.embedUrl)}" title="${escapeHtml(titleText)}" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" loading="lazy"></iframe>`
+      : `<button type="button" class="msg-social-poster" data-social-play="1" aria-label="Play ${escapeHtml(info.badge)} video inside conversation">
           ${safeThumb ? `<img class="msg-social-thumb" src="${escapeHtml(safeThumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
           <span class="msg-social-poster-scrim" aria-hidden="true"></span>
           <span class="msg-social-badge">${iconSvg}<span>${escapeHtml(info.badge)}</span></span>
           <span class="msg-social-play-circle" aria-hidden="true">${PLAY_SVG}</span>
           <span class="msg-social-watch-pill">Watch in chat</span>
-        </button>
+        </button>`;
+
+    return `<div class="msg-social-card is-${escapeHtml(info.provider)} ${aspectCls}${compact ? ' is-compact' : ''}${directFbEmbed ? ' is-fb-direct' : ''}" data-social-embed="1" data-social-provider="${escapeHtml(info.provider)}" data-social-url="${escapeHtml(info.rawUrl)}" data-social-embed-url="${escapeHtml(info.embedUrl || '')}" data-social-aspect="${escapeHtml(info.aspect)}" data-social-aspect-ratio="${escapeHtml(String(aspectRatio))}">
+      <div class="msg-social-stage" style="--social-ar:${escapeHtml(String(aspectRatio))}">
+        ${stageInner}
       </div>
       <div class="msg-social-foot">
         <div class="msg-social-copy">
@@ -352,6 +359,10 @@
 
   function resetCardToPoster(cardEl) {
     if (!cardEl) return;
+    const oldIframe = cardEl.querySelector?.('iframe');
+    if (oldIframe) {
+      try { oldIframe.src = 'about:blank'; } catch { }
+    }
     const rawUrl = cardEl.dataset.socialUrl || '';
     const parsed = parseSocialVideoUrl(rawUrl);
     if (!parsed) return;
@@ -370,10 +381,45 @@
     root.querySelectorAll('.msg-social-card.is-playing').forEach((other) => {
       if (other !== exceptCard) resetCardToPoster(other);
     });
+    root.querySelectorAll('.msg-social-card.is-fb-direct').forEach((other) => {
+      if (other === exceptCard) return;
+      const frame = other.querySelector?.('iframe.msg-social-iframe');
+      if (!frame) return;
+      const embedUrl = other.dataset.socialEmbedUrl || '';
+      try {
+        frame.src = 'about:blank';
+        if (exceptCard && embedUrl && isSafeEmbedUrl(embedUrl)) {
+          frame.src = embedUrl;
+        }
+      } catch { }
+    });
+  }
+
+  let tiktokBridgeBound = false;
+  function ensureTikTokAudioBridge() {
+    if (tiktokBridgeBound || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+    tiktokBridgeBound = true;
+    window.addEventListener('message', (ev) => {
+      if (ev.origin !== 'https://www.tiktok.com') return;
+      const msg = ev.data;
+      if (!msg || typeof msg !== 'object' || msg['x-tiktok-player'] !== true) return;
+      if (msg.type !== 'onPlayerReady') return;
+      if (typeof document === 'undefined' || !ev.source) return;
+      const frames = document.querySelectorAll('.msg-social-card.is-tiktok.is-playing iframe.msg-social-iframe');
+      frames.forEach((frame) => {
+        if (frame.contentWindow !== ev.source || frame.dataset.tiktokUnmuted === '1') return;
+        frame.dataset.tiktokUnmuted = '1';
+        try {
+          frame.contentWindow.postMessage({ 'x-tiktok-player': true, type: 'unMute', value: '' }, 'https://www.tiktok.com');
+          frame.contentWindow.postMessage({ 'x-tiktok-player': true, type: 'play', value: '' }, 'https://www.tiktok.com');
+        } catch { }
+      });
+    });
   }
 
   async function activateSocialPlayer(cardEl, invokeResolveFn, { scopeEl = null } = {}) {
     if (!cardEl) return false;
+    ensureTikTokAudioBridge();
     const rawUrl = cardEl.dataset.socialUrl || '';
     const parsed = parseSocialVideoUrl(rawUrl);
     if (!parsed) return false;
@@ -472,6 +518,23 @@
         if (meta.canonicalUrl && extEl) extEl.setAttribute('href', meta.canonicalUrl);
         if (meta.aspect || meta.aspectRatio) {
           applyCardAspect(card, meta.aspectRatio, meta.aspect);
+        }
+        // Upgrade resolved non-compact Facebook shortlinks to Facebook's native unmuted one-tap player
+        if (
+          meta.provider === 'facebook'
+          && meta.playable !== false
+          && !card.classList.contains('is-compact')
+          && !card.classList.contains('is-fb-direct')
+          && isSafeEmbedUrl(meta.embedUrl)
+        ) {
+          const stage = card.querySelector('.msg-social-stage');
+          if (stage) {
+            card.classList.add('is-fb-direct');
+            card.dataset.socialEmbedUrl = meta.embedUrl;
+            if (subEl) subEl.textContent = meta.author ? `${meta.author} · Tap video to play with sound` : 'Tap video to play with sound';
+            stage.innerHTML = `<iframe class="msg-social-iframe" src="${escapeHtml(meta.embedUrl)}" title="${escapeHtml(meta.title || meta.badge || 'Facebook video')}" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" loading="lazy"></iframe>`;
+            return;
+          }
         }
         if (meta.thumbnailUrl && isSafeThumbUrl(meta.thumbnailUrl) && !card.querySelector('.msg-social-thumb')) {
           const poster = card.querySelector('.msg-social-poster');

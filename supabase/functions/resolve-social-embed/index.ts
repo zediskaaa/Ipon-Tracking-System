@@ -92,7 +92,8 @@ function parseYouTube(u: URL) {
     rel: '0',
     modestbranding: '1',
     playsinline: '1',
-    autoplay: '1'
+    autoplay: '1',
+    mute: '0'
   });
   if (start > 0) embedParams.set('start', String(start));
   return {
@@ -135,7 +136,7 @@ function parseFacebookCanonical(u: URL) {
   return {
     provider: 'facebook' as const,
     canonicalUrl,
-    embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(canonicalUrl)}&show_text=false&autoplay=true&mute=0`,
+    embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(canonicalUrl)}&show_text=false`,
     aspect: isReel ? ('portrait' as const) : ('landscape' as const),
     playable: !isShort
   };
@@ -474,6 +475,30 @@ Deno.serve(async (req: Request) => {
         }
       } catch { }
 
+      // Opportunistically read real title, author, cover, and video dimensions from SSR rehydration JSON when available
+      if (htmlSnippet && (!title || !thumbnailUrl || aspectRatio === 0.5625)) {
+        try {
+          const rehy = htmlSnippet.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/i);
+          if (rehy?.[1]) {
+            const parsedRehy = JSON.parse(rehy[1]);
+            const item = parsedRehy?.__DEFAULT_SCOPE__?.['webapp.video-detail']?.itemInfo?.itemStruct;
+            if (item) {
+              if (!title && item.desc) title = String(item.desc).trim().slice(0, 180);
+              if (!author && item.author?.uniqueId) author = `@${String(item.author.uniqueId).trim()}`.slice(0, 90);
+              if (!thumbnailUrl) {
+                const cover = safeHttpsImage(String(item.video?.cover || item.video?.originCover || ''));
+                if (cover) thumbnailUrl = cover;
+              }
+              const realRatio = clampAspectRatio(Number(item.video?.width), Number(item.video?.height));
+              if (realRatio) {
+                aspectRatio = realRatio;
+                aspect = realRatio < 0.85 ? 'portrait' : 'landscape';
+              }
+            }
+          }
+        } catch { }
+      }
+
       if (!videoId) {
         return json({
           ok: true,
@@ -495,7 +520,7 @@ Deno.serve(async (req: Request) => {
         provider: 'tiktok',
         videoId,
         canonicalUrl,
-        embedUrl: `https://www.tiktok.com/player/v1/${videoId}?autoplay=1&music_info=1&description=1`,
+        embedUrl: `https://www.tiktok.com/player/v1/${videoId}?autoplay=1&muted=0&loop=1&rel=0&controls=1&music_info=1&description=1`,
         aspect,
         aspectRatio,
         title,

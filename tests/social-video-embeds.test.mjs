@@ -60,7 +60,7 @@ test('social video embeds parser handles YouTube, TikTok, and Facebook links and
   assert.equal(ttFull.videoId, '7345678901234567890');
   assert.equal(ttFull.aspect, 'portrait');
   assert.equal(ttFull.needsResolve, false);
-  assert.equal(ttFull.embedUrl, 'https://www.tiktok.com/player/v1/7345678901234567890?autoplay=1&music_info=1&description=1');
+  assert.equal(ttFull.embedUrl, 'https://www.tiktok.com/player/v1/7345678901234567890?autoplay=1&muted=0&loop=1&rel=0&controls=1&music_info=1&description=1');
 
   // TikTok mobile share shortlinks require server resolution
   const ttVt = api.parseSocialVideoUrl('https://vt.tiktok.com/ZS2abcdEF/');
@@ -78,6 +78,7 @@ test('social video embeds parser handles YouTube, TikTok, and Facebook links and
   assert.equal(fbReel.aspect, 'portrait');
   assert.equal(fbReel.needsResolve, false);
   assert.match(fbReel.embedUrl, /^https:\/\/www\.facebook\.com\/plugins\/video\.php\?href=/);
+  assert.doesNotMatch(fbReel.embedUrl, /autoplay=true/);
 
   const fbWatch = api.parseSocialVideoUrl('https://m.facebook.com/watch/?v=987654321098765');
   assert.equal(fbWatch.provider, 'facebook');
@@ -249,7 +250,7 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   // Messaging HTML pages load social-video-embeds.js before messages.js
   for (const page of ['account.html', 'audit.html', 'budget.html', 'contributions.html', 'dashboard.html', 'expenses.html', 'members.html', 'reports.html', 'requests.html', 'savings.html', 'settings.html', 'user.html', 'withdrawals.html']) {
     const html = read(page);
-    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-09"><\/script>\s*<script src="js\/messages\.js\?v=20261123-08"/, `${page} must load social-video-embeds.js right before messages.js`);
+    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-12"><\/script>\s*<script src="js\/messages\.js\?v=20261123-08"/, `${page} must load social-video-embeds.js right before messages.js`);
   }
 
   // core.js exports share capture + Edge Function resolver
