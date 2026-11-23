@@ -7854,7 +7854,7 @@
     const type = String(item.type || '').toUpperCase();
     if (type.startsWith('SOCIAL_')) return true;
     const dedupe = String(item.dedupe_key || '').toUpperCase();
-    if (dedupe.startsWith('SOCIAL_MSG')) return true;
+    if (dedupe.startsWith('SOCIAL_') || dedupe.startsWith('FRIEND_')) return true;
     return /[?&](?:chat|messages)=/i.test(String(item.link || ''));
   }
 

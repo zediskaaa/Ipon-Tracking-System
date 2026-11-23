@@ -246,8 +246,11 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         if (!TextUtils.isEmpty(type) && type.trim().toUpperCase(java.util.Locale.US).startsWith("SOCIAL_")) {
             return true;
         }
-        if (!TextUtils.isEmpty(dedupeKey) && dedupeKey.trim().toUpperCase(java.util.Locale.US).startsWith("SOCIAL_MSG")) {
-            return true;
+        if (!TextUtils.isEmpty(dedupeKey)) {
+            String upperDedupe = dedupeKey.trim().toUpperCase(java.util.Locale.US);
+            if (upperDedupe.startsWith("SOCIAL_") || upperDedupe.startsWith("FRIEND_")) {
+                return true;
+            }
         }
         if (!TextUtils.isEmpty(link)) {
             String lower = link.trim().toLowerCase(java.util.Locale.US);

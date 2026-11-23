@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v261';
+const CACHE_NAME = 'ipon-shell-v262';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname) && self.location.protocol !== 'https:';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
@@ -87,7 +87,10 @@ self.addEventListener('push', (event) => {
     const text = event.data ? event.data.text() : '';
     payload = text ? { body: text } : {};
   }
-  if (String(payload.type || '').toUpperCase().startsWith('SOCIAL_')) {
+  const notifType = String(payload.type || '').toUpperCase();
+  const notifDedupe = String(payload.dedupe_key || '').toUpperCase();
+  const notifRawLink = String(payload.url || payload.link || '');
+  if (notifType.startsWith('SOCIAL_') || notifDedupe.startsWith('SOCIAL_') || notifDedupe.startsWith('FRIEND_') || /[?&](?:chat|messages)=/i.test(notifRawLink)) {
     return;
   }
   const title = String(payload.title || 'myIPON');

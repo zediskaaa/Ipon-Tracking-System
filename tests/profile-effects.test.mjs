@@ -1215,7 +1215,7 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   }
   assert.match(css, /\.effects-tile \.cat\s*\{[^}]*white-space:\s*normal;[^}]*max-width:\s*100%;/);
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
-  assert.match(sw, /ipon-shell-v261/);
+  assert.match(sw, /ipon-shell-v262/);
   assert.match(sw, /'js\/profile-effects-sfx\.js'/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   assert.match(sw, /'js\/profile-effects-creator\.js'/);

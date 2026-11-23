@@ -7877,8 +7877,8 @@ test('confirmation dialogs match the warm-cream card, top gold rule, editorial s
   assert.equal(elements['confirm-cancel'].textContent, 'Cancel');
 
   await ctx.window.Ipon.confirmAction({
-    title: 'Remove friend?',
-    message: 'Remove from Friends?',
+    title: 'Remove member?',
+    message: 'Move this member to the 30-day recovery bin?',
     confirmText: 'Remove',
     cancelLabel: 'Not now'
   });
