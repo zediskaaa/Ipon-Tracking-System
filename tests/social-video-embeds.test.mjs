@@ -260,9 +260,15 @@ test('social video embeds runtime activates inline player, resolves shortlinks, 
   }), {});
   assert.equal(xOk, true);
   assert.equal(xCard.classList.contains('is-playing'), true);
+  assert.match(xCard._stage.innerHTML, /<div class="msg-video-player is-social-video-player is-controls-visible"/);
   assert.match(xCard._stage.innerHTML, /<video class="msg-social-video" src="https:\/\/woslmwokhhyszkgevnli\.supabase\.co\/functions\/v1\/resolve-social-embed\?media=/);
-  assert.match(xCard._stage.innerHTML, /controls controlsList="nofullscreen" playsinline/);
-  assert.match(xCard._stage.innerHTML, /data-social-maximize="1"/);
+  assert.doesNotMatch(xCard._stage.innerHTML, /<video[^>]*\scontrols(?:\s|>)/);
+  assert.match(xCard._stage.innerHTML, /class="msg-video-controls"/);
+  assert.match(xCard._stage.innerHTML, /class="msg-video-seek"/);
+  assert.match(xCard._stage.innerHTML, /data-vact="play"/);
+  assert.match(xCard._stage.innerHTML, /data-vact="mute"/);
+  assert.match(xCard._stage.innerHTML, /data-vact="fs"/);
+  assert.match(xCard._stage.innerHTML, /data-vact="menu"/);
 
   // Maximizing an X/Instagram video delegates to Ipon.openVideoViewer with synced time/mute & hideDownload
   let viewerCall = null;
@@ -467,7 +473,7 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   // Messaging HTML pages load social-video-embeds.js before messages.js
   for (const page of ['account.html', 'audit.html', 'budget.html', 'contributions.html', 'dashboard.html', 'expenses.html', 'members.html', 'reports.html', 'requests.html', 'savings.html', 'settings.html', 'user.html', 'withdrawals.html']) {
     const html = read(page);
-    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-16"><\/script>\s*<script src="js\/messages\.js\?v=20261123-12"/, `${page} must load social-video-embeds.js right before messages.js`);
+    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-17"><\/script>\s*<script src="js\/messages\.js\?v=20261123-13"/, `${page} must load social-video-embeds.js right before messages.js`);
   }
 
   // core.js exports share capture, Edge Function resolver, fullscreen Back exit, and browser popstate Back for video viewer
@@ -503,6 +509,8 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   assert.match(css, /\.msg-social-card\.is-x\s+\.msg-social-poster\s*\{/);
   assert.match(css, /\.msg-social-card\.is-instagram\s+\.msg-social-poster\s*\{/);
   assert.match(css, /\.msg-social-video\s*\{[\s\S]*?touch-action:\s*pan-y;/);
+  assert.match(css, /\.msg-social-stage > \.msg-video-player\.is-social-video-player\s*\{/);
+  assert.match(css, /\.msg-social-video::-webkit-media-controls/);
   assert.match(css, /\.msg-social-card\s*\{/);
   assert.match(css, /\.msg-social-close-btn\s*\{[\s\S]*?border-radius:\s*50%/);
   assert.match(css, /\.msg-share-dialog\s*\{/);

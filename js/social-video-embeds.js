@@ -76,8 +76,11 @@
 
   const PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.14v13.72a1 1 0 0 0 1.52.85l11.04-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14Z"/></svg>';
   const EXTERNAL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 14 20 4M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/></svg>';
-  const MAXIMIZE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
   const CLOSE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
+  const DOCK_PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="6,4 20,12 6,20" fill="currentColor" stroke="none"/></svg>';
+  const DOCK_VOL_ON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="4,9 9,9 14,5 14,19 9,15 4,15" fill="currentColor" stroke="none"/><path d="M17.2 8.8a4.8 4.8 0 0 1 0 6.4"/><path d="M19.8 6.2a8.4 8.4 0 0 1 0 11.6"/></svg>';
+  const DOCK_FS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M8 20H4v-4M16 20h4v-4"/></svg>';
+  const DOCK_MORE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5.5" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor" stroke="none"/></svg>';
 
   const resolveCache = new Map();
   const inflightMap = new Map();
@@ -744,13 +747,27 @@
       stage.innerHTML = `
         <div class="msg-social-player-bar">
           <span class="msg-social-player-tag">${iconSvg}<span>${escapeHtml(badgeLabel)}</span></span>
-          <div class="msg-social-player-actions">
-            <button type="button" class="msg-social-fs-btn" data-social-maximize="1" aria-label="Maximize video" title="Maximize">${MAXIMIZE_SVG}</button>
-            <button type="button" class="dialog-close msg-social-close-btn" data-social-close="1" aria-label="Close inline video player" title="Close player">${CLOSE_SVG}</button>
-          </div>
+          <button type="button" class="dialog-close msg-social-close-btn" data-social-close="1" aria-label="Close inline video player" title="Close player">${CLOSE_SVG}</button>
         </div>
-        <video class="msg-social-video" src="${escapeHtml(videoUrl)}"${safePoster ? ` poster="${escapeHtml(safePoster)}"` : ''} controls controlsList="nofullscreen" playsinline preload="auto"${loopAttr} aria-label="${escapeHtml(resolved?.title || badgeLabel)}"></video>`;
+        <div class="msg-video-player is-social-video-player is-controls-visible" data-vid-state="ready" data-vid-name="${escapeHtml(resolved?.title || badgeLabel)}">
+          <video class="msg-social-video" src="${escapeHtml(videoUrl)}"${safePoster ? ` poster="${escapeHtml(safePoster)}"` : ''} playsinline preload="auto"${loopAttr} aria-label="${escapeHtml(resolved?.title || badgeLabel)}"></video>
+          <button type="button" class="msg-video-center-play" data-vact="play" aria-label="Play video">${DOCK_PLAY_SVG}</button>
+          <div class="msg-video-controls">
+            <input type="range" class="msg-video-seek" min="0" max="1000" value="0" aria-label="Seek video">
+            <div class="msg-video-bar-actions">
+              <div class="msg-video-bar-left">
+                <button type="button" class="msg-video-ctrl-btn" data-vact="play" aria-label="Play video" title="Play">${DOCK_PLAY_SVG}</button>
+                <button type="button" class="msg-video-ctrl-btn" data-vact="mute" aria-label="Mute audio" title="Mute">${DOCK_VOL_ON_SVG}</button>
+              </div>
+              <div class="msg-video-bar-right">
+                <button type="button" class="msg-video-ctrl-btn" data-vact="fs" aria-label="Toggle fullscreen" title="Fullscreen">${DOCK_FS_SVG}</button>
+                <button type="button" class="msg-video-ctrl-btn" data-vact="menu" aria-label="Video options" title="More options">${DOCK_MORE_SVG}</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
 
+      const playerEl = stage.querySelector?.('.msg-video-player.is-social-video-player');
       const videoEl = stage.querySelector?.('video.msg-social-video');
       if (videoEl) {
         videoEl.muted = false;
@@ -769,6 +786,23 @@
 
         videoEl.addEventListener?.('play', () => {
           stopOtherActivePlayers(targetScope, cardEl);
+          if (playerEl) {
+            playerEl.classList.add('is-playing');
+            clearTimeout(playerEl._hideTimer);
+            playerEl._hideTimer = setTimeout(() => {
+              if (!playerEl.dataset?.seeking && !videoEl.paused && !videoEl.ended) {
+                playerEl.classList.remove('is-controls-visible');
+              }
+            }, 2400);
+          }
+        });
+
+        videoEl.addEventListener?.('pause', () => {
+          if (playerEl) {
+            clearTimeout(playerEl._hideTimer);
+            playerEl.classList.remove('is-playing');
+            playerEl.classList.add('is-controls-visible');
+          }
         });
 
         videoEl.addEventListener?.('error', async () => {

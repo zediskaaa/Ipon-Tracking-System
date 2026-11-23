@@ -2304,12 +2304,11 @@
     const muted = Boolean(video.muted || video.volume === 0);
     player.classList.toggle('is-playing', playing);
     player.classList.toggle('is-muted', muted);
-    const playBtn = player.querySelector('[data-vact="play"]');
-    if (playBtn) {
+    player.querySelectorAll('[data-vact="play"]').forEach((playBtn) => {
       playBtn.innerHTML = playing ? VIDEO_PAUSE_SVG : VIDEO_PLAY_SVG;
       playBtn.setAttribute('aria-label', playing ? 'Pause video' : 'Play video');
       playBtn.setAttribute('title', playing ? 'Pause' : 'Play');
-    }
+    });
     const muteBtn = player.querySelector('[data-vact="mute"]');
     if (muteBtn) {
       muteBtn.innerHTML = muted ? VIDEO_VOL_OFF_SVG : VIDEO_VOL_ON_SVG;
@@ -2404,7 +2403,7 @@
   }
 
   function showVideoOptionsMenu(player, anchorBtn) {
-    const vidMenuKey = player?.dataset?.vidPath || player?.dataset?.vidName || 'video';
+    const vidMenuKey = player?.dataset?.vidPath || player?.closest?.('.msg-social-card')?.dataset?.socialUrl || player?.dataset?.vidName || 'video';
     if (toggleExistingFloatingMenu('video', vidMenuKey)) return;
     closeFloatingMenus({ immediate: true });
     activeVideoMenuPlayer = player;
@@ -2422,7 +2421,7 @@
     menu.innerHTML = `
       ${path ? `<button type="button" data-dl-conv="${escAttr(convId)}" data-dl-path="${escAttr(path)}" data-dl-name="${escAttr(name)}">Download</button>` : ''}
       ${video ? `<button type="button" data-vspeed="${nextSpeed}">Playback speed (${curRate}x → ${nextSpeed}x)</button>` : ''}`;
-    document.getElementById('msg-workspace-dialog')?.appendChild(menu);
+    (player?.closest?.('dialog[open]') || document.getElementById('msg-workspace-dialog') || document.body)?.appendChild(menu);
     placeFloatingMenu(menu, anchorBtn, { preferAbove: true, estWidth: 196, estHeight: 84, align: 'end' });
     revealFloatingMenu(menu);
   }
@@ -8840,8 +8839,9 @@
         const vact = vCtrlBtn.dataset.vact;
         if (!player || !video) return;
         if (vact === 'play') {
+          const socialCard = player.closest?.('.msg-social-card') || null;
           if (video.paused || video.ended) {
-            pauseOtherChatMedia(video);
+            pauseOtherChatMedia(video, { keepSocialCard: socialCard });
             video.play?.().catch(() => { });
           } else video.pause?.();
           syncVideoPlayerUi(video);
@@ -8851,7 +8851,9 @@
           syncVideoPlayerUi(video);
           revealVideoControls(player);
         } else if (vact === 'fs') {
-          openVideoViewerForPlayer(player);
+          const socialCard = player.closest?.('.msg-social-card') || null;
+          if (socialCard) window.IponSocialEmbeds?.maximizeSocialVideo?.(socialCard);
+          else openVideoViewerForPlayer(player);
           revealVideoControls(player);
         } else if (vact === 'menu') {
           const existingMenu = Array.from(document.querySelectorAll('.msg-floating-menu') || [])
@@ -8876,7 +8878,7 @@
         if (!video) return;
         const shown = vidPlayer.classList.contains('is-controls-visible');
         if (video.paused || video.ended) {
-          pauseOtherChatMedia(video);
+          pauseOtherChatMedia(video, { keepSocialCard: vidPlayer.closest?.('.msg-social-card') || null });
           video.play?.().catch(() => { });
           syncVideoPlayerUi(video);
           revealVideoControls(vidPlayer);
@@ -9170,7 +9172,9 @@
     });
 
     const onMediaEvent = (ev) => {
-      if (ev.target?.classList?.contains('msg-att-video')) {
+      if (ev.target?.classList?.contains('msg-social-video')) {
+        syncVideoPlayerUi(ev.target);
+      } else if (ev.target?.classList?.contains('msg-att-video')) {
         const video = ev.target;
         const player = video.closest?.('.msg-video-player');
         if (player && (ev.type === 'loadedmetadata' || ev.type === 'loadeddata' || ev.type === 'seeked')) {

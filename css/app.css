@@ -27458,9 +27458,27 @@ small .ipon-cents {
   border: 0;
   background: #000000;
 }
+.msg-social-stage > .msg-video-player.is-social-video-player {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  background: #000000;
+}
+.msg-social-stage > .msg-video-player.is-social-video-player .msg-video-controls {
+  z-index: 3;
+}
 .msg-social-video {
   object-fit: contain;
+  cursor: pointer;
   touch-action: pan-y;
+}
+.msg-social-video::-webkit-media-controls,
+.msg-social-video::-webkit-media-controls-enclosure {
+  display: none !important;
 }
 .msg-social-loading,
 .msg-social-fallback {
