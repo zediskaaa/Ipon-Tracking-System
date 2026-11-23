@@ -266,3 +266,23 @@ test('core.js stages background boot tasks behind setLoading(false) and cleans n
   assert.match(dash, /let dashboardLoadPromise = null;/);
   assert.match(dash, /const shouldRefreshPerms = initialLoadCompleted && typeof Ipon\.refreshMyPermissions === 'function';/);
 });
+
+test('migration 192 adds per-user chat RPC concurrency guard and lightweight direct peer header; core.js retries Supabase 504/PGRST003 error payloads', () => {
+  const mig192 = read('database/migrations/20261123_192_chat_rpc_concurrency_guard_and_light_peer.sql');
+  const schema = read('database/schema.sql');
+  const core = read('js/core.js');
+  const sa = read('js/super-admin.js');
+
+  for (const sql of [mig192, schema]) {
+    assert.match(sql, /'20261123_192'/);
+    assert.match(sql, /pg_try_advisory_xact_lock\(hashtext\('ipon_chat_convs'\)/);
+    assert.match(sql, /pg_try_advisory_xact_lock\(hashtext\('ipon_chat_msgs'\)/);
+    assert.match(sql, /errcode = '53300'/);
+  }
+  const unmaskedMsgs192 = mig192.match(/create or replace function public\.get_conversation_messages_unmasked\([\s\S]*?\$\$;/i)?.[0] || '';
+  assert.doesNotMatch(unmaskedMsgs192, /get_social_user_profile\(/i, 'get_conversation_messages_unmasked must avoid heavy profile-popover queries on every thread refresh');
+
+  assert.match(core, /PGRST003\|57014\|53300\|connection pool/);
+  assert.match(core, /result && typeof result === 'object' && result\.error && i < attempts - 1 && isTransientConnectionError\(result\.error\)/);
+  assert.match(sa, /if \(state\.failed\) \{[\s\S]*?Connection interrupted[\s\S]*?Ipon\.showInlineError\(overviewErrEl/);
+});

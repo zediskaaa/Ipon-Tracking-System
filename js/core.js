@@ -9533,8 +9533,8 @@
 
   function isTransientConnectionError(error) {
     if (navigator.onLine === false) return false;
-    const text = `${error?.name || ''} ${error?.message || error?.code || error || ''}`;
-    return /timed out|timeout|Failed to fetch|Load failed|NetworkError|fetch|502|503|504|temporarily|ECONN|NavigatorLock|LockManager/i.test(text);
+    const text = `${error?.status || ''} ${error?.code || ''} ${error?.name || ''} ${error?.message || error || ''}`;
+    return /timed out|timeout|Failed to fetch|Load failed|NetworkError|fetch|502|503|504|PGRST003|57014|53300|connection pool|canceling statement|Too many concurrent|temporarily|ECONN|NavigatorLock|LockManager/i.test(text);
   }
 
   function isJwtExpiredError(error) {
@@ -9546,7 +9546,12 @@
     let lastError;
     for (let i = 0; i < attempts; i++) {
       try {
-        return await withTimeout(fn(), timeoutMs);
+        const result = await withTimeout(fn(), timeoutMs);
+        if (result && typeof result === 'object' && result.error && i < attempts - 1 && isTransientConnectionError(result.error)) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs * (i + 1)));
+          continue;
+        }
+        return result;
       } catch (err) {
         lastError = err;
         if (i === attempts - 1 || !isTransientConnectionError(err)) throw err;
@@ -9646,7 +9651,7 @@
         .single();
       const [needsMfa, profileResult] = await Promise.all([
         mfaPromise,
-        runWithStartupRetry(fetchProfile).catch((fetchErr) => ({ data: null, error: fetchErr }))
+        runWithStartupRetry(fetchProfile, { attempts: 4, timeoutMs: 10000, delayMs: 650 }).catch((fetchErr) => ({ data: null, error: fetchErr }))
       ]);
       if (needsMfa) {
         window.location.replace('mfa.html');

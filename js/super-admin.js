@@ -2,7 +2,39 @@
   'use strict';
 
   const state = await Ipon.init({ allowedRoles: ['SUPER_ADMIN'] });
-  if (state.failed || !state.configured || !state.profile) return;
+  if (state.failed || !state.configured || !state.profile) {
+    if (state.failed) {
+      const requestedView = location.hash.slice(1);
+      const validViews = ['overview', 'feature-requests', 'bug-reports', 'administrators', 'badges', 'effects'];
+      const activeView = validViews.includes(requestedView) ? requestedView : 'overview';
+      document.querySelectorAll('[data-platform-view]').forEach((section) => { section.hidden = section.dataset.platformView !== activeView; });
+      const pageHeader = document.getElementById('platform-page-header');
+      if (pageHeader) pageHeader.hidden = activeView !== 'overview';
+      document.querySelectorAll('[data-nav-section]').forEach((link) => {
+        const current = link.dataset.navSection === activeView;
+        link.classList.toggle('is-active', current);
+        if (current) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+      });
+      const statusEl = document.getElementById('platform-status');
+      if (statusEl) {
+        statusEl.classList.remove('is-loading');
+        statusEl.classList.add('is-error');
+        statusEl.textContent = 'Connection interrupted';
+      }
+      const attentionEl = document.getElementById('platform-attention');
+      if (attentionEl) attentionEl.innerHTML = '<p>Platform data could not load right now. Select Retry or Refresh to try again.</p>';
+      const overviewErrEl = document.getElementById('overview-error');
+      const retryReload = () => window.location.reload();
+      if (overviewErrEl) {
+        overviewErrEl.hidden = false;
+        Ipon.showInlineError(overviewErrEl, state.error || new Error('Unable to connect right now.'), retryReload);
+      }
+      document.querySelectorAll('[data-sa-refresh]').forEach((btn) => {
+        btn.addEventListener('click', retryReload);
+      });
+    }
+    return;
+  }
 
   const featureRequestsBody = document.getElementById('feature-requests-body');
   const bugReportsBody = document.getElementById('bug-reports-body');

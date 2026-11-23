@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const migration = readFileSync('database/migrations/20261122_171_creator_messaging_exception.sql', 'utf8');
 const retentionMigration = readFileSync('database/migrations/20261123_187_session_and_account_activity_retention.sql', 'utf8');
-const perfMigration = readFileSync('database/migrations/20261123_191_optimize_chat_rpcs_performance.sql', 'utf8');
+const perfMigration = readFileSync('database/migrations/20261123_192_chat_rpc_concurrency_guard_and_light_peer.sql', 'utf8');
 const schema = readFileSync('database/schema.sql', 'utf8');
 const messages = readFileSync('js/messages.js', 'utf8');
 
