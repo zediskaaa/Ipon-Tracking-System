@@ -332,6 +332,7 @@ test('all three role dashboards subscribe to permitted database changes', () => 
   const realtimeHelper = core.match(/function subscribeToChanges[\s\S]*?return channel;/)?.[0] || '';
   assert.match(realtimeHelper, /\['INSERT', 'UPDATE'\]/);
   assert.doesNotMatch(realtimeHelper, /'DELETE'/);
+  assert.match(realtimeHelper, /const autoSyncTimer = setInterval\([\s\S]*?\}, 60000\);/);
   assert.match(read('js/dashboard.js'), /subscribeToChanges\('dashboard'/);
   assert.match(read('js/user.js'), /subscribeToChanges\('member-dashboard'/);
   assert.match(read('js/reports.js'), /subscribeToChanges\('reports'/);

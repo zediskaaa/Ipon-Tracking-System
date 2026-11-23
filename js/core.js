@@ -12279,7 +12279,7 @@
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       run();
-    }, 20000);
+    }, 60000);
     document.addEventListener('visibilitychange', resume);
     document.addEventListener('resume', resume);
     window.addEventListener('focus', resume);
