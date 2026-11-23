@@ -35,6 +35,7 @@ public class NotificationSyncService extends Service {
     private static final int FOREGROUND_NOTIF_ID = 4401;
     private static final long HEARTBEAT_INTERVAL_MS = 25_000L;
     private static final long SAFETY_POLL_INTERVAL_MS = 45_000L;
+    private static final long HEALTHY_WS_SAFETY_POLL_INTERVAL_MS = 300_000L;
     private static final long INITIAL_RETRY_MS = 3_000L;
     private static final long MAX_RETRY_MS = 60_000L;
 
@@ -91,6 +92,10 @@ public class NotificationSyncService extends Service {
     }
 
     public static void pokeOrReconnect(Context context) {
+        pokeOrReconnect(context, true);
+    }
+
+    public static void pokeOrReconnect(Context context, boolean triggerPollWhenHealthy) {
         NotificationSyncService svc = activeInstance;
         if (svc == null || svc.destroyed) {
             if (context != null && canStartFromBackground(context)) {
@@ -102,8 +107,8 @@ public class NotificationSyncService extends Service {
             if (svc.destroyed) return;
             long age = SystemClock.elapsedRealtime() - lastWsActivityElapsedMs;
             if (svc.activeSocket == null || !wsConnected || lastWsActivityElapsedMs == 0L || age > 40_000L) {
-                svc.connectSocket(true);
-            } else {
+                svc.connectSocket(triggerPollWhenHealthy);
+            } else if (triggerPollWhenHealthy) {
                 NotificationPollReceiver.pollAsync(svc.getApplicationContext());
             }
         });
@@ -143,7 +148,9 @@ public class NotificationSyncService extends Service {
             }
             long now = SystemClock.elapsedRealtime();
             long lastPoll = NotificationPollReceiver.getLastPollSuccessElapsedMs();
-            if (lastPoll == 0L || now - lastPoll >= SAFETY_POLL_INTERVAL_MS) {
+            boolean healthyWs = wsConnected && socket != null && lastWsActivityElapsedMs > 0L && (now - lastWsActivityElapsedMs) < 60_000L;
+            long safetyIntervalMs = healthyWs ? HEALTHY_WS_SAFETY_POLL_INTERVAL_MS : SAFETY_POLL_INTERVAL_MS;
+            if (lastPoll == 0L || now - lastPoll >= safetyIntervalMs) {
                 NotificationPollReceiver.pollAsync(appContext);
             }
             handler.postDelayed(this, HEARTBEAT_INTERVAL_MS);
@@ -494,10 +501,12 @@ public class NotificationSyncService extends Service {
                     handler.post(() -> {
                         if (destroyed) return;
                         retryDelayMs = INITIAL_RETRY_MS;
-                        long age = SystemClock.elapsedRealtime() - lastWsActivityElapsedMs;
+                        long now = SystemClock.elapsedRealtime();
+                        long age = now - lastWsActivityElapsedMs;
+                        long lastPoll = NotificationPollReceiver.getLastPollSuccessElapsedMs();
                         if (activeSocket == null || !wsConnected || lastWsActivityElapsedMs == 0L || age > 40_000L) {
                             connectSocket(true);
-                        } else {
+                        } else if (lastPoll == 0L || (now - lastPoll) >= 15_000L) {
                             NotificationPollReceiver.pollAsync(getApplicationContext());
                         }
                     });

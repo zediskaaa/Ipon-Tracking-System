@@ -54,6 +54,8 @@ public class NotificationPollReceiver extends BroadcastReceiver {
     private static final int ALARM_REQUEST_CODE = 4419;
     private static final long POLL_INTERVAL_MS = 60_000L;
     private static final long RESTRICTED_POLL_INTERVAL_MS = 90_000L;
+    private static final long HEALTHY_WS_POLL_INTERVAL_MS = 300_000L;
+    private static final long MIN_ALARM_POLL_GAP_MS = 15_000L;
     private static final long POLL_WAKELOCK_TIMEOUT_MS = 15_000L;
     private static final ExecutorService POLL_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final AtomicBoolean POLL_IN_FLIGHT = new AtomicBoolean(false);
@@ -73,6 +75,9 @@ public class NotificationPollReceiver extends BroadcastReceiver {
     }
 
     public static long recommendedPollIntervalMs(Context context) {
+        if (NotificationSyncService.isWsConnected()) {
+            return HEALTHY_WS_POLL_INTERVAL_MS;
+        }
         return isBatteryOptimizationIgnored(context) ? POLL_INTERVAL_MS : RESTRICTED_POLL_INTERVAL_MS;
     }
 
@@ -648,7 +653,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         scheduleNext(appContext, recommendedPollIntervalMs(appContext));
         NotificationSyncWorker.ensureScheduled(appContext);
         if (NotificationSyncService.isRunning()) {
-            NotificationSyncService.pokeOrReconnect(appContext);
+            NotificationSyncService.pokeOrReconnect(appContext, false);
         } else if (NotificationSyncService.canStartFromBackground(appContext)) {
             NotificationSyncService.ensureStarted(appContext);
         }
@@ -657,11 +662,27 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             return;
         }
 
+        long now = SystemClock.elapsedRealtime();
+        long lastPoll = lastPollSuccessElapsedMs;
+        if (NotificationSyncService.isWsConnected()
+            && lastPoll > 0L
+            && (now - lastPoll) < (HEALTHY_WS_POLL_INTERVAL_MS - MIN_ALARM_POLL_GAP_MS)) {
+            return;
+        }
+        if (POLL_IN_FLIGHT.get() || (lastPoll > 0L && (now - lastPoll) < MIN_ALARM_POLL_GAP_MS)) {
+            return;
+        }
+
         final PendingResult pendingResult = goAsync();
         POLL_EXECUTOR.execute(() -> {
+            if (!POLL_IN_FLIGHT.compareAndSet(false, true)) {
+                pendingResult.finish();
+                return;
+            }
             try {
                 pollWithWakeLock(appContext);
             } finally {
+                POLL_IN_FLIGHT.set(false);
                 pendingResult.finish();
             }
         });

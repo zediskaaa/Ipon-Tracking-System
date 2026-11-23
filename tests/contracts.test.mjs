@@ -322,8 +322,8 @@ test('sessions stay synchronized across browser tabs for sign-in and logout', ()
 test('all three role dashboards subscribe to permitted database changes', () => {
   const core = read('js/core.js');
   const realtimeHelper = core.match(/function subscribeToChanges[\s\S]*?return channel;/)?.[0] || '';
-  assert.match(realtimeHelper, /\['INSERT', 'UPDATE'\]/);
-  assert.doesNotMatch(realtimeHelper, /'DELETE'/);
+  assert.match(realtimeHelper, /event: '\*'/);
+  assert.match(realtimeHelper, /payload\?\.eventType[\s\S]*?=== 'DELETE'\) return;/);
   assert.match(realtimeHelper, /const autoSyncTimer = setInterval\([\s\S]*?\}, 600000\);/);
   assert.match(realtimeHelper, /document\.hasFocus\?\.\(\) === false/);
   assert.match(read('js/dashboard.js'), /subscribeToChanges\('dashboard'/);
@@ -8503,7 +8503,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261123-16/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261123-17/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

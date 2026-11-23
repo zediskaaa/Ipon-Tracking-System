@@ -9016,39 +9016,71 @@
       });
     };
 
-    document.addEventListener('visibilitychange', () => {
+    let lastNotifResumeLoadAt = Date.now();
+    let notifRealtimeTimer = null;
+    let pendingNotifPayload = null;
+    const scheduleNotifLoad = (payload = null) => {
+      if (String(payload?.eventType || '').toUpperCase() === 'INSERT') {
+        pendingNotifPayload = payload;
+      }
+      lastNotifResumeLoadAt = Date.now();
+      clearTimeout(notifRealtimeTimer);
+      notifRealtimeTimer = setTimeout(() => {
+        notifRealtimeTimer = null;
+        const nextPayload = pendingNotifPayload;
+        pendingNotifPayload = null;
+        load(nextPayload).catch(() => { });
+      }, 250);
+    };
+    const onNotifVisibility = () => {
       if (document.visibilityState === 'visible') {
         syncDevicePermissionUI().catch(() => { });
-        load().catch(() => { });
+        if (Date.now() - lastNotifResumeLoadAt >= 15_000) {
+          lastNotifResumeLoadAt = Date.now();
+          load().catch(() => { });
+        }
         syncDueReminders();
       }
-    });
-    window.addEventListener('online', () => {
+    };
+    const onNotifOnline = () => {
+      lastNotifResumeLoadAt = Date.now();
       load().catch(() => { });
       syncDueReminders();
-    });
+    };
+    document.addEventListener('visibilitychange', onNotifVisibility);
+    window.addEventListener('online', onNotifOnline);
 
-    activeNotificationsReload = () => load();
+    activeNotificationsReload = () => { lastNotifResumeLoadAt = Date.now(); return load(); };
     await load();
     const notifChannel = createRealtimeChannel(`notifications:${profile.id}`, undefined, client);
     notifChannel
-      ?.on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, (payload) => load(payload))
-      ?.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'announcements' }, (payload) => {
-        if (payload?.new?.deleted_at) load().catch(() => { });
+      ?.on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${profile.id}` }, (payload) => scheduleNotifLoad(payload))
+      ?.on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, (payload) => {
+        const evType = String(payload?.eventType || '').toUpperCase();
+        if (evType === 'DELETE' || (evType === 'UPDATE' && payload?.new?.deleted_at)) {
+          scheduleNotifLoad();
+        }
       })
-      ?.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'announcements' }, () => load().catch(() => { }))
       ?.subscribe();
+    let notifBc = null;
     try {
       if ('BroadcastChannel' in window) {
-        const notifBc = new BroadcastChannel(LIVE_SYNC_CHANNEL);
+        notifBc = new BroadcastChannel(LIVE_SYNC_CHANNEL);
         notifBc.onmessage = (event) => {
           const topic = String(event?.data?.topic || '');
           if (topic === 'announcements' || topic === 'notifications') {
-            load().catch(() => { });
+            scheduleNotifLoad();
           }
         };
       }
     } catch { }
+    window.addEventListener('pagehide', () => {
+      clearTimeout(notifRealtimeTimer);
+      document.removeEventListener('visibilitychange', onNotifVisibility);
+      window.removeEventListener('online', onNotifOnline);
+      try { notifBc?.close?.(); } catch { }
+      if (notifChannel) { try { client.removeChannel?.(notifChannel)?.catch?.(() => { }); } catch { } }
+    }, { once: true });
 
     syncDueReminders();
   }
@@ -11607,11 +11639,15 @@
   function subscribeToChanges(name, tables, refresh) {
     const client = getClient();
     if (!client || !tables.length) return null;
+    const uniqueTables = [...new Set(tables.filter(Boolean))];
+    if (!uniqueTables.length) return null;
     let timer;
     let dirty = false;
+    let lastRunAt = Date.now();
     let pending = Promise.resolve();
     const run = () => {
       dirty = false;
+      lastRunAt = Date.now();
       pending = pending.then(refresh).catch((error) => {
         toast(friendlyError(error), 'error');
       });
@@ -11624,16 +11660,20 @@
       timer = setTimeout(() => { if (document.visibilityState === 'visible') run(); }, delayMs);
     };
     let channel = createRealtimeChannel(`live:${name}:${currentProfile?.id || 'session'}`, undefined, client);
-    tables.forEach((table) => ['INSERT', 'UPDATE'].forEach((event) => {
-      channel = channel.on('postgres_changes', { event, schema: 'public', table }, () => schedule(350));
-    }));
+    uniqueTables.forEach((table) => {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
+        if (String(payload?.eventType || '').toUpperCase() === 'DELETE') return;
+        schedule(350);
+      });
+    });
     channel.subscribe((status) => {
       if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && navigator.onLine !== false) {
         schedule(1500);
       }
     });
-    const resume = () => {
-      if (document.visibilityState === 'visible') {
+    const resume = (event) => {
+      if (document.visibilityState !== 'visible') return;
+      if (dirty || event?.type === 'online' || (Date.now() - lastRunAt) >= 30_000) {
         schedule(dirty ? 0 : 120);
       }
     };
