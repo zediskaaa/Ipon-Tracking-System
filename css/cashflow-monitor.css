@@ -715,21 +715,43 @@ body[data-budget-mode="monitor"] #budget-header-actions {
 .cf-actions-cell .table-actions {
   justify-content: flex-end;
 }
+.cf-table tbody tr.cf-empty-tr:hover {
+  background: transparent;
+}
+.cf-table tbody tr.cf-empty-tr > td,
+.cf-table tbody td[colspan] {
+  text-align: center;
+}
 .cf-empty-box {
   display: grid;
   justify-items: center;
+  align-content: center;
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+  box-sizing: border-box;
   padding: 28px 18px;
   text-align: center;
 }
 .cf-empty-box strong {
+  max-width: 100%;
   color: var(--ink);
   font: 700 15px/1.3 Arial, sans-serif;
+  text-align: center;
 }
 .cf-empty-box small {
-  max-width: 44ch;
+  max-width: min(44ch, 100%);
+  margin-inline: auto;
   color: var(--muted);
   font: 500 13px/1.45 Arial, sans-serif;
+  text-align: center;
+}
+.cf-empty-box .button {
+  margin-top: 4px;
+  margin-inline: auto;
+  max-width: 100%;
+  justify-self: center;
 }
 
 /* Expense Category Breakdown inside Expense View */
@@ -899,6 +921,13 @@ body[data-budget-mode="monitor"] #budget-header-actions {
   padding: 14px 12px 12px;
   overflow-x: hidden;
   scroll-snap-type: none;
+}
+.cf-bars-wrap:has(> .cf-empty-box),
+.cf-bars-wrap.is-compare-only:has(> .cf-empty-box) {
+  grid-template-columns: minmax(0, 1fr);
+  overflow-x: hidden;
+  scroll-snap-type: none;
+  place-items: center;
 }
 .cf-bar-col {
   scroll-snap-align: center;
@@ -1570,6 +1599,37 @@ html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184,
     grid-template-columns: minmax(0, 1fr);
   }
 }
+@media (max-width: 960px) {
+  .cf-table tbody tr.cf-empty-tr,
+  html[data-theme="dark"] .cf-table tbody tr.cf-empty-tr {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .cf-table tbody tr.cf-empty-tr > td,
+  .cf-table tbody td[colspan] {
+    display: block;
+    width: 100%;
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    border: 0;
+    text-align: center;
+  }
+  .cf-table tbody tr.cf-empty-tr > td {
+    padding: 0;
+  }
+  .cf-table tbody td[colspan] > * {
+    grid-column: auto;
+    justify-self: auto;
+  }
+  .cf-table tbody td[colspan] > .cf-empty-box {
+    width: 100%;
+    justify-self: stretch;
+    margin-inline: auto;
+  }
+}
 @media (max-width: 780px) {
   .budget-mode-bar {
     margin-bottom: 16px;
@@ -1779,13 +1839,16 @@ html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184,
     border-radius: 14px;
     background: var(--budget-card-bg, #ffffff);
   }
-  .cf-table tbody tr.cf-empty-tr {
+  .cf-table tbody tr.cf-empty-tr,
+  html[data-theme="dark"] .cf-table tbody tr.cf-empty-tr {
     display: block;
+    width: 100%;
     padding: 0;
+    margin-bottom: 0;
     border: 0;
     background: transparent;
   }
-  .cf-table tbody td {
+  .cf-table tbody td:not([colspan]) {
     display: block;
     width: auto !important;
     padding: 0 !important;
@@ -1866,6 +1929,9 @@ html[data-theme="dark"] .cf-cat-pill.is-others { background: rgba(148, 163, 184,
   }
 }
 @media (max-width: 440px) {
+  .cf-empty-box {
+    padding: 22px 12px;
+  }
   .budget-mode-tab {
     flex-direction: column;
     gap: 4px;

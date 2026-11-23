@@ -46,13 +46,18 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(html, /id="cf-seg-expense"/);
   assert.match(html, /id="cf-entry-dialog"/);
   assert.match(html, /id="cf-rate-dialog"/);
-  assert.match(html, /css\/cashflow-monitor\.css\?v=20261122-05/);
+  assert.match(html, /css\/cashflow-monitor\.css\?v=20261123-01/);
   assert.match(html, /js\/cashflow-monitor\.js\?v=20261122-03/);
   const appCss = read('css/app.css');
   assert.match(appCss, /select:not\(\.custom-select-native\)\{[^}]*padding:\s*9px 36px 9px 14px/);
   assert.match(appCss, /input\[type="search"\]:not\(\.effects-find\):not\(\.tutorial-search-input\)/);
   assert.match(appCss, /html\[data-theme="dark"\] input\[type="search"\]:not\(\.effects-find\):not\(\.tutorial-search-input\)/);
   assert.match(appCss, /\.audit-search-wrap input\[type="search"\],\.msg-search-input-wrap input\[type="search"\],\.tutorial-search-wrap input\[type="search"\]\{background-image:none!important;/);
+  assert.equal(
+    (appCss.match(/\.data-table td\[colspan\] \{ display:block; width:100%; grid-column:1\/-1; justify-self:stretch; padding:24px 8px; border:0; text-align:center; \}\.data-table td\[colspan\] > \* \{ grid-column:auto; justify-self:auto; \}/g) || []).length,
+    2,
+    'app.css must reset grid-column/justify-self on td[colspan] children at both <=960px and <=720px so block-level empty states never right-align'
+  );
   assert.match(html, /id="cf-chart-title"/);
   assert.match(html, /id="cf-chart-prev"/);
   assert.match(html, /id="cf-chart-next"/);
@@ -60,8 +65,13 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(html, /id="cf-compare-panel"/);
   assert.match(css, /\.cf-cents\s*\{/);
   assert.match(css, /html\[data-theme="dark"\] \.cf-segmented/);
+  assert.match(css, /@media \(max-width: 960px\)/);
   assert.match(css, /@media \(max-width: 780px\)/);
   assert.match(css, /@media \(max-width: 440px\)/);
+  assert.match(css, /\.cf-empty-box\s*\{[^}]*width:\s*100%;[^}]*margin-inline:\s*auto;[^}]*text-align:\s*center;/s);
+  assert.match(css, /\.cf-table tbody td:not\(\[colspan\]\)\s*\{/);
+  assert.match(css, /\.cf-table tbody td\[colspan\] > \.cf-empty-box\s*\{[^}]*width:\s*100%;[^}]*justify-self:\s*stretch;/s);
+  assert.match(css, /\.cf-bars-wrap:has\(> \.cf-empty-box\)/);
   assert.match(css, /\.cf-compare-pair\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
   assert.match(css, /\.cf-bars-wrap\s*\{[\s\S]*grid-template-columns:\s*repeat\(6, minmax\(84px, 1fr\)\)[\s\S]*overflow-x:\s*auto/);
   assert.match(css, /\.cf-bars-wrap\.is-compare-only\s*\{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
