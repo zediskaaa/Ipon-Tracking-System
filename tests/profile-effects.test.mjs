@@ -527,8 +527,16 @@ test('runtime profile effect celebration modal shows permanent award, live previ
     grants: [{ effect_id: 'singularity', acknowledged_at: '2026-11-18T11:00:00Z' }]
   }), false);
 
+  assert.equal(ipon.canBrowseProfileEffects({ email: 'breadspanish231@gmail.com' }), true);
+  assert.equal(ipon.canBrowseProfileEffects({ email: 'antalannhicolejoy19@gmail.com' }), true);
+  assert.equal(ipon.canBrowseProfileEffects({ email: 'another@example.com', role: 'SUPER_ADMIN' }), false);
+  assert.equal(ipon.maybeShowEffectAwardModal({
+    profile: { id: 'u2', role: 'MEMBER', email: 'another@example.com' },
+    grants: [{ effect_id: 'singularity', acknowledged_at: null }]
+  }), false);
+
   const shown = ipon.maybeShowEffectAwardModal({
-    profile: { id: 'u1', role: 'MEMBER', full_name: 'Sample Saver', card_theme: 'midnight' },
+    profile: { id: 'u1', role: 'MEMBER', email: 'antalannhicolejoy19@gmail.com', full_name: 'Sample Saver', card_theme: 'midnight' },
     grants: [
       { effect_id: 'singularity', granted_at: '2026-11-18T12:00:00Z', grant_message: 'Earned by top saver!', acknowledged_at: null },
       { effect_id: 'sigil', granted_at: '2026-11-18T12:00:00Z', grant_message: 'Bonus rune!', acknowledged_at: null }
@@ -911,7 +919,7 @@ test('migration 118 and runtime enforce 1-per-effect trials, 1-month cooldown, a
 
   const futureIso = new Date(Date.now() + 7 * 86400000).toISOString();
   const shown = ctx.window.Ipon.maybeShowEffectAwardModal({
-    profile: { id: 'u1', full_name: 'Trial Saver', role: 'MEMBER', card_theme: 'midnight' },
+    profile: { id: 'u1', full_name: 'Trial Saver', email: 'antalannhicolejoy19@gmail.com', role: 'MEMBER', card_theme: 'midnight' },
     grants: [
       { effect_id: 'warp', is_permanent: false, expires_at: futureIso, granted_at: new Date().toISOString(), grant_message: 'Enjoy your 7-day trial!', acknowledged_at: null }
     ]
@@ -1215,7 +1223,7 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   }
   assert.match(css, /\.effects-tile \.cat\s*\{[^}]*white-space:\s*normal;[^}]*max-width:\s*100%;/);
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
-  assert.match(sw, /ipon-shell-v271/);
+  assert.match(sw, /ipon-shell-v272/);
   assert.match(sw, /'js\/profile-effects-sfx\.js'/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   assert.match(sw, /'js\/profile-effects-creator\.js'/);
@@ -1473,4 +1481,22 @@ test('creator effect reads do not rewrite already permanent acknowledged grants'
   assert.match(migration, /create or replace function public\.get_own_profile_effects\(\)/);
   assert.match(migration, guardedUpsert);
   assert.match(schema.slice(schema.lastIndexOf('create or replace function public.get_own_profile_effects()')), guardedUpsert);
+});
+
+test('migration 198 revokes other users effects while retaining badge-only scheduled rewards', () => {
+  const sql = read('database/migrations/20261123_198_limit_profile_effects_to_two_accounts.sql');
+  const schema = read('database/schema.sql');
+  for (const email of ['breadspanish231@gmail.com', 'antalannhicolejoy19@gmail.com']) {
+    assert.match(sql, new RegExp(email.replaceAll('.', '\\.')));
+  }
+  assert.match(sql, /delete from public\.profile_effect_grants g[\s\S]*not public\.can_use_profile_effects\(g\.user_id\)/);
+  assert.match(sql, /set equipped_profile_effect = 'none'[\s\S]*not public\.can_use_profile_effects\(p\.id\)/);
+  assert.match(sql, /s\.award_badge = true[\s\S]*s\.effect_ids/);
+  assert.match(sql, /create trigger profile_effect_grants_allowed_accounts/);
+  assert.match(sql, /create trigger profile_effect_trials_allowed_accounts/);
+  assert.match(sql, /create trigger profiles_equipped_effect_allowed_accounts/);
+  assert.match(sql, /create trigger scheduled_effects_allowed_accounts/);
+  assert.match(sql, /if not public\.can_use_profile_effects\(v_uid\) then[\s\S]*'grants', '\[\]'::jsonb/);
+  assert.doesNotMatch(sql, /delete from public\.verified_badges|set verified_badge_tier = 'NONE'/);
+  assert.match(schema, /values \('20261123_198', 'restrict profile effects to two named accounts'\)/);
 });

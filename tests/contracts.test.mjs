@@ -8492,7 +8492,7 @@ test('Super Admin selects feature_requests.allow_credit and uses updated script 
   const saHtml = read('super-admin.html');
 
   assert.match(saJs, /from\('feature_requests'\)\.select\('[^']*allow_credit[^']*'\)/);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-04/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-05/);
   assert.doesNotMatch(saJs, /RELEASE_STYLE_ANGLES|stripReleaseFluffTails/);
 });
 
@@ -8503,7 +8503,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261123-18/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261123-19/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -8530,7 +8530,7 @@ test('Migration 099 and Super Admin Users surface each user actual latest specif
   assert.doesNotMatch(saJs, /from\(['"](?:contributions|withdrawals|expenses|members|messages|budget_configs|budget_expenses)['"]\)/);
   assert.match(saJs, /Ipon\.client\.rpc\('super_admin_user_last_activities'\)/);
   assert.match(saJs, /function formatUserActivityLabel\(activity\)/);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-04/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-05/);
 
   // Verify formatUserActivityLabel handles both new specific RPC rows and legacy fallback events
   const fnMatch = saJs.match(/function formatUserActivityLabel\(activity\)\s*\{[\s\S]*?\n  \}/);

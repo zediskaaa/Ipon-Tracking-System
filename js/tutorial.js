@@ -862,7 +862,7 @@
       icon: 'shield',
       tone: 'emerald',
       title: 'How to Customize Your Profile, Dark Mode & Security',
-      summary: 'Edit your profile photo, cover, username, payout details, dark theme, profile effects, and security or bug-report tools.',
+      summary: 'Edit your profile photo, cover, username, payout details, dark theme, and security or bug-report tools.',
       duration: '2 min',
       scope: 'All users',
       keywords: ['account', 'profile', 'avatar', 'cover', 'username', 'dark mode', 'theme', 'password', 'bug report', 'feature request', 'sign out'],
@@ -898,9 +898,9 @@
           page: 'dashboard.html'
         },
         {
-          title: 'Explore Profile Effects, Connected Apps, Feedback & Sign Out',
-          body: 'Inside My Account, you can equip awarded Profile effects, add clickable social links via Connected apps, submit a Request a feature idea, or Report a bug with up to 5 screenshots. When using a shared device, sign out cleanly from Settings → Account session → Sign out.',
-          uiRefs: ['Browse effects', 'Connect apps', 'Request a feature', 'Report a bug', 'Sign out'],
+          title: 'Explore Connected Apps, Feedback & Sign Out',
+          body: 'Inside My Account, you can add clickable social links via Connected apps, submit a Request a feature idea, or Report a bug with up to 5 screenshots. When using a shared device, sign out cleanly from Settings → Account session → Sign out.',
+          uiRefs: ['Connect apps', 'Request a feature', 'Report a bug', 'Sign out'],
           result: 'Your account looks personal, matches your preferred light/dark theme, and stays secure.'
         }
       ]

@@ -1054,7 +1054,7 @@
     const filter = filterValue('effects-status-filter');
     const candidates = profiles
       .filter((profile) => {
-        if (!profile || profile.role === 'SUPER_ADMIN') return false;
+        if (!profile || profile.role === 'SUPER_ADMIN' || !Ipon.canBrowseProfileEffects(profile)) return false;
         const grants = userEffectGrants(profile.id);
         const equipped = api?.normalizeEffectId ? api.normalizeEffectId(profile.equipped_profile_effect) : (profile.equipped_profile_effect || 'none');
         if (filter === 'UNLOCKED' && !grants.length) return false;
@@ -1205,7 +1205,7 @@
   }
 
   function openEffectGrantDialog(profile) {
-    if (!profile || !effectGrantDialog || !effectGrantForm) return;
+    if (!profile || !Ipon.canBrowseProfileEffects(profile) || !effectGrantDialog || !effectGrantForm) return;
     const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
     const isCreatorTarget = String(profile.email || '').trim().toLowerCase() === 'breadspanish231@gmail.com';
     const allEffects = (api?.EFFECTS || []).filter((item) => isCreatorTarget || (item.cat !== 'Creator' && !String(item.id || '').startsWith('creator_')));
@@ -1584,6 +1584,10 @@
   effectGrantForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const userId = effectGrantForm.elements.user_id.value;
+    if (!Ipon.canBrowseProfileEffects(profiles.find((item) => item.id === userId))) {
+      if (effectGrantError) effectGrantError.textContent = 'Profile effects are available only to the two selected accounts.';
+      return;
+    }
     const selectedIds = Array.from(effectGrantGrid?.querySelectorAll('input[name="effect_ids"]:checked') || []).map((el) => el.value);
     if (!selectedIds.length) {
       if (effectGrantError) effectGrantError.textContent = 'Select at least one new profile effect to award.';
@@ -1882,6 +1886,7 @@
     const q = String(setAwardUsersSearch?.value || '').trim().toLowerCase();
     return profiles
       .filter((p) => p && p.role !== 'SUPER_ADMIN' && p.status === 'ACTIVE')
+      .filter((p) => !setAwardEffectsCheck?.checked || Ipon.canBrowseProfileEffects(p))
       .filter((p) => !q || `${p.full_name || ''} ${p.email || ''}`.toLowerCase().includes(q))
       .sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || '')));
   }
@@ -2057,6 +2062,12 @@
   });
   setAwardEffectsCheck?.addEventListener('change', () => {
     if (setAwardRewardError) setAwardRewardError.textContent = '';
+    if (setAwardEffectsCheck.checked) {
+      for (const id of setAwardState.selectedUsers) {
+        if (!Ipon.canBrowseProfileEffects(profiles.find((item) => item.id === id))) setAwardState.selectedUsers.delete(id);
+      }
+    }
+    renderSetAwardUsersList();
     syncSetAwardUi();
   });
   setAwardBadgeDuration?.addEventListener('change', syncSetAwardUi);
@@ -2195,6 +2206,10 @@
     const userIds = Array.from(setAwardState.selectedUsers);
     if (!userIds.length) {
       if (setAwardUsersError) setAwardUsersError.textContent = 'Select at least one recipient user.';
+      return;
+    }
+    if (effectIds.length && userIds.some((id) => !Ipon.canBrowseProfileEffects(profiles.find((item) => item.id === id)))) {
+      if (setAwardUsersError) setAwardUsersError.textContent = 'Profile effects can only be scheduled for the two selected accounts. Use a badge-only award for other users.';
       return;
     }
     if (setAwardUsersError) setAwardUsersError.textContent = '';
