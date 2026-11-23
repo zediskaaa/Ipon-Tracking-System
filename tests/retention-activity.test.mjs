@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const sql = fs.readFileSync('database/migrations/20261123_187_session_and_account_activity_retention.sql', 'utf8');
+const badgeFix = fs.readFileSync('database/migrations/20261123_188_protect_active_badges_during_cleanup.sql', 'utf8');
 const fn = (name) => sql.match(new RegExp(`create or replace function public\\.${name}\\([\\s\\S]*?\\$\\$;`, 'i'))?.[0] || '';
 
 test('retention uses refreshed sessions and recorded account activity with null-safe precedence', () => {
@@ -17,7 +18,10 @@ test('retention uses refreshed sessions and recorded account activity with null-
 test('warning reset, warning, purge, badge cleanup and badge display share recent activity', () => {
   assert.equal((fn('collect_inactive_account_candidates').match(/latest_retention_activity_at\(p\.id\)/g) || []).length, 4);
   assert.equal((fn('get_active_verified_badges').match(/latest_retention_activity_at\(p\.id\)/g) || []).length, 2);
-  assert.equal((fn('cleanup_inactive_verified_badges').match(/latest_retention_activity_at\(p\.id\)/g) || []).length, 1);
+  const cleanup = badgeFix.match(/create or replace function public\.cleanup_inactive_verified_badges\(\)[\s\S]*?\$\$;/)?.[0] || '';
+  const removalPredicate = cleanup.match(/where p\.verified_badge_tier <> 'NONE'[\s\S]*?= 'NONE'/)?.[0] || '';
+  assert.match(removalPredicate, /greatest\(p\.last_seen_at, public\.latest_retention_activity_at\(p\.id\)\)/);
+  assert.ok(fs.readFileSync('database/schema.sql', 'utf8').replaceAll('\r\n', '\n').includes(cleanup.replaceAll('\r\n', '\n')));
   assert.equal((fn('get_social_user_profile').match(/latest_retention_activity_at\(v_target\.id\)/g) || []).length, 1);
   assert.match(fn('cleanup_inactive_verified_badges'), /verified_badge_expires_at is not null and v_row\.verified_badge_expires_at <= now\(\)/);
 });
