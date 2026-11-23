@@ -2243,14 +2243,6 @@ html[data-theme="dark"] .group-bar-msg-btn:hover {
     width:21px;
     height:21px;
   }
-  .dashboard-sidebar .sidebar-user-card .presence-dot {
-    width:12px;
-    height:12px;
-    right:-2px;
-    bottom:-2px;
-    border:2.5px solid #0A3629;
-    background:#34D17A;
-  }
   .dashboard-sidebar .sidebar-nav {
     display:grid;
     grid-column:1 / -1;

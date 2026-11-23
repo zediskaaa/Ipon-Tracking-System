@@ -203,7 +203,7 @@ test('Super Admin panel is role-routed and excludes savings operations', () => {
   assert.match(script, /Ipon\.init\(\{ allowedRoles: \['SUPER_ADMIN'\] \}\)/);
   assert.match(script, /super_admin_set_administrator_status/);
   assert.match(script, /admin-set-password/);
-  assert.match(script, /subscribeToChanges\('super-admin'/);
+  assert.doesNotMatch(script, /subscribeToChanges\('super-admin'/);
   assert.doesNotMatch(script, /from\(['"](?:contributions|withdrawals|expenses|members)['"]\)/);
   assert.match(core, /function homeForRole\(role\)/);
   assert.match(core, /\['super-admin', 'account'\]\.includes\(document\.body\.dataset\.page\)/);
@@ -226,7 +226,7 @@ test('users can submit feature requests and Super Admin can review them', () => 
   assert.match(core, /from\('feature_requests'\)\.insert\(\{ requester_id: currentProfile\.id, title:/);
   assert.match(html, /data-platform-view="feature-requests"/);
   assert.match(script, /from\('feature_requests'\)\.select\('id,requester_id,allow_credit,title,details,status,reviewed_at,reviewed_by,release_version,created_at'\)/);
-  assert.match(script, /subscribeToChanges\('super-admin',[\s\S]*?'feature_requests'/);
+  assert.doesNotMatch(script, /subscribeToChanges\('super-admin'/);
   assert.match(schema, /create table if not exists public\.feature_requests/i);
   assert.match(migration, /create policy feature_requests_select[\s\S]*?requester_id = auth\.uid\(\) or public\.is_super_admin\(\)/i);
   assert.match(migration, /create policy feature_requests_insert[\s\S]*?requester_id = auth\.uid\(\) and public\.current_user_role\(\) in \('ADMIN', 'TREASURER', 'MEMBER'\)/i);
@@ -248,7 +248,7 @@ test('users can submit bug reports with up to 5 images and Super Admin can inspe
   assert.match(html, /data-platform-view="bug-reports"/);
   assert.match(html, /id="bug-viewer-dialog"/);
   assert.match(script, /from\('bug_reports'\)\.select\('id,reporter_id,title,description,image_count,status,reviewed_at,release_version,created_at'\)/);
-  assert.match(script, /subscribeToChanges\('super-admin',[\s\S]*?'bug_reports'/);
+  assert.doesNotMatch(script, /subscribeToChanges\('super-admin'/);
   assert.match(schema, /create table if not exists public\.bug_reports/i);
   assert.match(migration, /jsonb_array_length\(attachments\) <= 5/i);
   assert.match(migration, /create policy bug_reports_select[\s\S]*?reporter_id = auth\.uid\(\) or public\.is_super_admin\(\)/i);
@@ -291,7 +291,7 @@ test('Owner and Admins can post and delete unlimited-length announcements with p
   assert.match(superAdminHtml, /id="sa-announcement-list"/);
   assert.match(superAdminHtml, /id="sa-add-announcement"/);
   assert.match(dashboardJs, /subscribeToChanges\('dashboard',[\s\S]*?'announcements'/);
-  assert.match(superAdminJs, /subscribeToChanges\('super-admin',[\s\S]*?'announcements'/);
+  assert.doesNotMatch(superAdminJs, /subscribeToChanges\('super-admin'/);
   assert.match(core, /id="announcement-media-input"[^>]*accept="image\/\*,video\/\*"/);
   assert.doesNotMatch(core, /id="announcement-(?:title|description)-input"[^>]*maxlength/i);
   assert.doesNotMatch(core, /announcement-role-badge/);
@@ -1183,7 +1183,7 @@ test('announcements support Messenger-style reaction picker, Facebook-style reac
   assert.match(core, /get_announcement_reactions/);
 
   assert.match(dashboard, /'announcement_reactions'/);
-  assert.match(superAdmin, /'announcement_reactions'/);
+  assert.doesNotMatch(superAdmin, /subscribeToChanges\('super-admin'/);
 
   assert.match(css, /\.announcement-reactions-pill/);
   assert.match(css, /\.announcement-reaction-picker/);
@@ -1263,10 +1263,8 @@ test('Super Admin can manage feature request statuses and publish release update
   assert.match(script, /req\.status === 'IMPLEMENTED' && !req\.release_version/);
   assert.match(script, /confirmAction\(\{[\s\S]*?title:[\s\S]*?'Publish release update\?'/);
   assert.match(script, /p_announcement_type:\s*'RELEASE'/);
-  assert.doesNotMatch(script, /RELEASE_INTROS|RELEASE_OUTROS|composeReleaseNotes|humanizeReleaseUpdate/);
-  assert.match(script, /release-update-ai-btn/);
-  assert.match(script, /ai-generate-release-notes/);
-  assert.match(html, /id="release-update-ai-error"/);
+  assert.doesNotMatch(script, /RELEASE_INTROS|RELEASE_OUTROS|composeReleaseNotes|humanizeReleaseUpdate|release-update-ai-btn|ai-generate-release-notes/);
+  assert.doesNotMatch(html, /id="release-update-ai-error"|id="release-update-ai-btn"/);
 
   assert.match(core, /is-release-update/);
   assert.match(core, /announcement-release-banner/);
@@ -1281,7 +1279,7 @@ test('Super Admin can manage feature request statuses and publish release update
   assert.match(css, /\.announcement-release-badge/);
 });
 
-test('Super Admin feature requests display requester avatars and system tracks real-time active now presence', () => {
+test('Super Admin feature requests display requester avatars without Online/Last Seen presence dots', () => {
   const html = read('super-admin.html');
   const dashHtml = read('dashboard.html');
   const script = read('js/super-admin.js');
@@ -1298,21 +1296,16 @@ test('Super Admin feature requests display requester avatars and system tracks r
   assert.match(script, /select\('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at(?:,[^']*)?'\)/);
 
   assert.match(core, /ipon-active-presence/);
-  assert.match(core, /isUserOnline/);
-  assert.match(core, /syncPresenceDots/);
   assert.match(core, /avatar-presence-wrap/);
-  assert.match(core, /presence-dot/);
-  assert.match(core, /data-presence-id/);
+  assert.doesNotMatch(core, /isUserOnline|syncPresenceDots|presence-dot|touch_user_last_seen/);
   assert.match(dashHtml, /avatar-presence-wrap/);
 
   assert.match(css, /\.avatar-presence-wrap/);
-  assert.match(css, /\.presence-dot/);
-  assert.match(css, /\.presence-dot\.is-online/);
+  assert.doesNotMatch(css, /\.presence-dot/);
   assert.match(css, /\.view-mode-toggle/);
   assert.match(css, /\.feature-cards-grid/);
   assert.match(css, /\.feature-card/);
   assert.match(css, /\.table-user-cell/);
-  assert.match(css, /\.account-avatar-picker \.presence-dot,\.reaction-user-avatar-wrap \.presence-dot\{display:none!important\}/);
   assert.doesNotMatch(core, /quickPreview\.innerHTML = avatarMarkup\([^)]*profile\.id\)/);
   assert.doesNotMatch(core, /avatarMarkup\(entry\.avatar_url,\s*name,\s*'reaction-user-avatar',\s*entry\.user_id\)/);
 });
@@ -1393,7 +1386,7 @@ test('feature requests support credit consent toggle and release updates display
   assert.match(css, /\.announcement-release-section\{/);
 });
 
-test('system integrates server-side Gemini AI for release updates without procedural templates', () => {
+test('Gemini AI release-notes integration is removed while manual release publishing stays intact', () => {
   const edge = read('supabase/functions/manage-account/index.ts');
   const superAdminHtml = read('super-admin.html');
   const superAdminJs = read('js/super-admin.js');
@@ -1401,40 +1394,15 @@ test('system integrates server-side Gemini AI for release updates without proced
   const dashboardJs = read('js/dashboard.js');
   const css = read('css/app.css');
 
-  assert.match(edge, /generateWithGemini/);
-  assert.doesNotMatch(edge, /generateProceduralReleaseNotes|humanizeReleaseUpdate/);
-  assert.match(edge, /action === 'ai-generate-release-notes'/);
-  assert.match(edge, /action === 'gemini-key-status'/);
-  assert.match(edge, /action === 'save-gemini-key'/);
-  assert.match(edge, /resolveServerGeminiKey/);
-  assert.match(edge, /internal_webhook_config/);
-  assert.match(edge, /BILLING_DISABLED/);
-  assert.match(edge, /Deno\.env\.get\('GEMINI_API_KEY'\)/);
-  assert.doesNotMatch(edge, /action === 'ai-savings-insights'/);
-  assert.match(edge, /action === 'test-gemini-key'/);
-  assert.match(edge, /gemini-1\.5-flash/);
+  assert.doesNotMatch(edge, /generateWithGemini|ai-generate-release-notes|gemini-key-status|save-gemini-key|test-gemini-key|GEMINI_API_KEY|generativelanguage/i);
+  assert.doesNotMatch(superAdminHtml, /release-update-ai-btn|release-update-key-btn|release-update-ai-status|release-update-ai-error|gemini-key-dialog|generativelanguage/i);
+  assert.doesNotMatch(superAdminJs, /release-update-ai-btn|ai-generate-release-notes|save-gemini-key|gemini-key-status|test-gemini-key|ipon_gemini_api_key/i);
+  assert.doesNotMatch(dashboardHtml, /id="dashboard-ai-insights-btn"|id="ai-insights-dialog"|generativelanguage/i);
+  assert.doesNotMatch(dashboardJs, /ai-insights-dialog|ai-savings-insights/);
+  assert.doesNotMatch(css, /\.button-ai-trigger|\.button-ai-inline|\.ai-insights-dialog|\.gemini-status-badge/);
 
-  assert.match(superAdminHtml, /id="release-update-ai-btn"/);
-  assert.match(superAdminHtml, /id="release-update-key-btn"/);
-  assert.match(superAdminHtml, /id="release-update-ai-status"/);
-  assert.match(superAdminHtml, /id="release-update-ai-error"/);
-
-  assert.match(superAdminJs, /release-update-ai-btn/);
-  assert.match(superAdminJs, /ai-generate-release-notes/);
-  assert.match(superAdminJs, /save-gemini-key/);
-  assert.match(superAdminJs, /Configure API key/);
-  assert.match(superAdminJs, /Ipon\.showInlineError\(\s*releaseAiError/);
-  assert.doesNotMatch(superAdminJs, /localStorage\.setItem\('ipon_gemini_api_key'/);
-  assert.doesNotMatch(superAdminJs, /RELEASE_INTROS|RELEASE_OUTROS|composeReleaseNotes|humanizeReleaseUpdate/);
-
-  assert.doesNotMatch(dashboardHtml, /id="dashboard-ai-insights-btn"/);
-  assert.doesNotMatch(dashboardHtml, /id="ai-insights-dialog"/);
-  assert.doesNotMatch(dashboardJs, /ai-insights-dialog/);
-  assert.doesNotMatch(dashboardJs, /ai-savings-insights/);
-
-  assert.match(css, /\.button-ai-trigger/);
-  assert.doesNotMatch(css, /\.button-ai-inline/);
-  assert.doesNotMatch(css, /\.ai-insights-dialog/);
+  assert.match(superAdminHtml, /id="release-update-dialog"[\s\S]*?id="release-update-details"/);
+  assert.match(superAdminJs, /async function openReleaseUpdateDialog\(\)/);
 });
 
 test('self-serve group creation, direct signup, and interactive invitation acceptance/decline', () => {
@@ -1958,259 +1926,17 @@ test('announcement reaction notifications replace or remove prior reaction entri
   assert.match(coreJs, /realtimePayload\?\.eventType !== 'DELETE'/);
 });
 
-test('release composer reads live recent commits and prior releases instead of frozen Update 1.0 bullets', () => {
+test('manual release composer increments version cleanly and tracks unreleased features/bugs without Gemini or commit feeds', () => {
   const superAdminJs = read('js/super-admin.js');
+  const superAdminHtml = read('super-admin.html');
   const edgeTs = read('supabase/functions/manage-account/index.ts');
 
-  assert.match(superAdminJs, /fetchRecentSystemUpdates/);
-  assert.match(superAdminJs, /collectReleaseContext/);
-  assert.match(superAdminJs, /api\.github\.com\/repos\/zediskaaa\/Ipon-Tracking-System\/commits/);
-  assert.doesNotMatch(superAdminJs, /Interactive Avatar Studio/);
-  assert.doesNotMatch(superAdminJs, /Synchronized Group Pledges/);
-
-  assert.match(edgeTs, /fetchRecentSystemUpdates/);
-  assert.match(edgeTs, /previous_releases/);
-  assert.doesNotMatch(edgeTs, /Profile Picture Editor: Crop, rotate 90 degrees/);
-
-  assert.match(superAdminJs, /TECH_COMMIT_RE/);
-  assert.match(superAdminJs, /CODE_TOKEN_RE/);
-  assert.match(edgeTs, /cleanCommitSummary/);
-  assert.match(edgeTs, /findMissingReleaseItems/);
-  assert.match(edgeTs, /Missed changes/);
-
-  assert.doesNotMatch(superAdminJs, /RELEASE_FEATURE_CATALOG|RELEASE_FALLBACK_POOLS|RELEASE_FALLBACK_UPDATES|RELEASE_INTROS|RELEASE_OUTROS|humanizeReleaseUpdate|composeReleaseNotes/);
-  assert.doesNotMatch(edgeTs, /RELEASE_FEATURE_CATALOG|EDGE_FALLBACK_UPDATES|humanizeReleaseUpdate|generateProceduralReleaseNotes/);
-
-  const techMatch = superAdminJs.match(/const TECH_COMMIT_RE = (\/.*\/[a-z]*);/);
-  const codeMatch = superAdminJs.match(/const CODE_TOKEN_RE = (\/.*\/[a-z]*);/);
-  const noiseMatch = superAdminJs.match(/const NOISE_CLAUSE_RE = (\/.*\/[a-z]*);/);
-  const verbMatch = superAdminJs.match(/const COMMIT_VERB_RE = (\/.*\/[a-z]*);/);
-  const stopWordsMatch = superAdminJs.match(/const COMMIT_STOP_WORDS = new Set\(\[[\s\S]*?\]\);/);
-  const canonClauseMatch = superAdminJs.match(/function canonicalizeClauseForParsing\(rawLine\)\s*\{[\s\S]*?\n  \}/);
-  const extractMatch = superAdminJs.match(/function extractCommitUpdates\(rawMessage\)\s*\{[\s\S]*?\n  \}/);
-  const fnMatch = superAdminJs.match(/function cleanCommitSummary\(rawMessage\)\s*\{[\s\S]*?\n  \}/);
-  const stemsMatch = superAdminJs.match(/function extractCommitStems\(text\)\s*\{[\s\S]*?\n  \}/);
-  const overlapMatch = superAdminJs.match(/function clausesOverlapTopic\(a, b\)\s*\{[\s\S]*?\n  \}/);
-  const canonUpdatesMatch = superAdminJs.match(/function canonicalizeCommitUpdates\(rawItems = \[\], excludedText = ''\)\s*\{[\s\S]*?\n  \}/);
-  const missingMatch = superAdminJs.match(/function findMissingReleaseItems\(buckets, expectedRawItems = \[\]\)\s*\{[\s\S]*?\n  \}/);
-  assert.ok(techMatch && codeMatch && noiseMatch && verbMatch && stopWordsMatch && canonClauseMatch && extractMatch && fnMatch && stemsMatch && overlapMatch && canonUpdatesMatch && missingMatch, 'release commit extraction and missing-item helpers must exist in js/super-admin.js');
-  const sharedCommitScope = `
-    const TECH_COMMIT_RE = ${techMatch[1]};
-    const CODE_TOKEN_RE = ${codeMatch[1]};
-    const NOISE_CLAUSE_RE = ${noiseMatch[1]};
-    const COMMIT_VERB_RE = ${verbMatch[1]};
-    ${stopWordsMatch[0]}
-    ${canonClauseMatch[0]}
-    ${extractMatch[0]}
-    ${fnMatch[0]}
-    ${stemsMatch[0]}
-    ${overlapMatch[0]}
-    ${canonUpdatesMatch[0]}
-    ${missingMatch[0]}
-  `;
-  const {
-    cleanCommitSummary: cleanFn,
-    extractCommitUpdates: extractFn,
-    canonicalizeCommitUpdates: canonFn,
-    findMissingReleaseItems: findMissingFn
-  } = new Function(`${sharedCommitScope}; return { cleanCommitSummary, extractCommitUpdates, canonicalizeCommitUpdates, findMissingReleaseItems };`)();
-
-  assert.equal(cleanFn('Add group ownership transfer and permanent deletion flow'), 'Add group ownership transfer and permanent deletion flow');
-  assert.equal(cleanFn('Start group creation without pre-opened invite row and fix enforce_group_scope old.amount'), '');
-  assert.equal(cleanFn('Keep Add group action visible to members, align HTML CSP, and sync Edge Function cache'), 'Keep Add group action visible to members');
-  assert.equal(cleanFn('Make release AI and composer read live repo commits and prior releases'), '');
-  assert.equal(cleanFn('Render release feature credits with requester avatar and name pill'), '');
-  assert.equal(cleanFn('Auto-sync Supabase migrations and Edge Functions on IDE open and changes'), '');
-  assert.equal(cleanFn('Automate Supabase CLI migrations and Edge Function deployment'), '');
-
-  const bundledA = extractFn('Add wallet reconciliation, payout accounts, record discussion threads, and UI polish');
-  assert.ok(bundledA.includes('Add wallet reconciliation'), `Expected wallet reconciliation in ${JSON.stringify(bundledA)}`);
-  assert.ok(bundledA.includes('Add payout accounts'), `Expected payout accounts in ${JSON.stringify(bundledA)}`);
-  assert.ok(bundledA.includes('Add record discussion threads'), `Expected record discussion threads in ${JSON.stringify(bundledA)}`);
-
-  const bundledB = extractFn('Add settings theme switcher, payment channel icons, live announcement names, and AI release notes polish');
-  assert.ok(bundledB.includes('Add settings theme switcher'), `Expected theme switcher in ${JSON.stringify(bundledB)}`);
-  assert.ok(bundledB.includes('Add payment channel icons'), `Expected payment channel icons in ${JSON.stringify(bundledB)}`);
-  assert.ok(bundledB.includes('Add live announcement names'), `Expected live announcement names in ${JSON.stringify(bundledB)}`);
-
-  const bundledC = extractFn('Add money input validation, zero-layout-shift wallet table, mobile-only drawer alerts, and workspace UI/UX skills');
-  assert.ok(bundledC.includes('Add money input validation'), `Expected money input validation in ${JSON.stringify(bundledC)}`);
-  assert.ok(bundledC.includes('Add zero-layout-shift wallet table'), `Expected zero-layout-shift wallet table in ${JSON.stringify(bundledC)}`);
-  assert.ok(bundledC.includes('Add mobile-only drawer alerts'), `Expected mobile-only drawer alerts in ${JSON.stringify(bundledC)}`);
-  assert.ok(!bundledC.some(item => /skills/i.test(item)), `Unexpected dev skill item in ${JSON.stringify(bundledC)}`);
-
-  const canonicalPreferLonger = canonFn([
-    'Add settings theme switcher\n\n- Add Light/Dark mode switcher inside Settings with readable contrast across dashboards, hero plates, and landing views'
-  ]);
-  assert.ok(canonicalPreferLonger.some((item) => /Light\/Dark mode switcher inside Settings/i.test(item)), 'canonicalizeCommitUpdates must replace short subject clause with richer commit body explanation');
-
-  const fluffMatch = superAdminJs.match(/function stripReleaseFluffTails\(text\)\s*\{[\s\S]*?\n  \}/);
-  const sanMatch = superAdminJs.match(/function sanitizeReleaseDetails\(rawDetails\)\s*\{[\s\S]*?\n  \}/);
-  assert.ok(fluffMatch && sanMatch, 'stripReleaseFluffTails and sanitizeReleaseDetails must exist in js/super-admin.js');
-  const sanitizeFn = new Function(`${sharedCommitScope}; ${fluffMatch[0]}; ${sanMatch[0]}; return sanitizeReleaseDetails;`)();
-  const cleaned = sanitizeFn([
-    'Welcome to myIPON Update 1.4!',
-    'New Features\n• Add group ownership transfer and permanent deletion flow\n• Start group creation without pre-opened invite row and fix enforce_group_scope old.amount\n• Automate Supabase CLI migrations and Edge Function deployment',
-    'Thank you for saving with myIPON!'
-  ].join('\n\n'));
-  assert.equal(cleaned.bulletCount, 1);
-  assert.equal(cleaned.strippedCount, 2);
-  assert.match(cleaned.text, /Add group ownership transfer and permanent deletion flow/);
-  assert.doesNotMatch(cleaned.text, /enforce_group_scope|old\.amount|Edge Function|invite row|CLI|migrations/i);
-
-  const missingDraft = findMissingFn(
-    { newFeatures: ['Group Ownership Transfer: Group owners can transfer ownership cleanly.'], fixes: [], improvements: [], securityUpdates: [], otherChanges: [] },
-    [
-      'Add Light/Dark mode switcher inside Settings with readable contrast across dashboards, hero plates, and landing views',
-      'Add record discussion threads',
-      'Add payout accounts',
-      'Add wallet reconciliation',
-      'Fix author names on announcements when a user updates their profile name'
-    ]
-  );
-  assert.ok(missingDraft.some((b) => /Light\/Dark mode switcher/i.test(b)), 'Missing detector must flag Dark Mode when AI omits it');
-  assert.ok(missingDraft.some((b) => /record discussion threads/i.test(b)), 'Missing detector must flag Record Discussion Threads when AI omits it');
-  assert.ok(missingDraft.some((b) => /payout accounts/i.test(b)), 'Missing detector must flag Payout Accounts when AI omits it');
-  assert.ok(missingDraft.some((b) => /wallet reconciliation/i.test(b)), 'Missing detector must flag Wallet Reconciliation when AI omits it');
-  assert.ok(missingDraft.some((b) => /author names/i.test(b)), 'Missing detector must flag Author Names fix when AI omits it');
-
-  // Natural AI English bullets with examples ("e.g.,"), "headers", or "functions" must NOT be falsely stripped as code.
-  const naturalAiSanitized = sanitizeFn([
-    'Welcome to myIPON Update 1.1!',
-    'New Features\n• Payment Methods: Tag deposits with clear payment methods (e.g., GCash, Maya, or Bank) inside forms.\n• Dark Mode Polish: Improved dashboard headers, chart contrast, and core tracking functions for smoother navigation.',
-    'Thank you!'
-  ].join('\n\n'));
-  assert.equal(naturalAiSanitized.strippedCount, 0, 'Natural AI English with e.g., headers, or functions must not be falsely stripped');
-  assert.equal(naturalAiSanitized.bulletCount, 2);
-
-  // When Gemini naturally paraphrases a commit, findMissingReleaseItems should recognize it instead of re-prompting.
-  const naturalAiParaphrase = findMissingFn(
-    {
-      newFeatures: ['Appearance Modes: Switch smoothly between Warm Light and Forest Dark themes right inside Settings for comfortable viewing day or night.'],
-      fixes: [],
-      improvements: []
-    },
-    ['Add Light/Dark mode switcher inside Settings with readable contrast across dashboards, hero plates, and landing views']
-  );
-  assert.equal(naturalAiParaphrase.length, 0, 'Natural AI paraphrase of Light/Dark mode must not be flagged as missing');
-
-  // Even when another unrelated bullet shares stray words (like "group" or "notifications"), missing items must still be flagged 1-to-1.
-  const mergedDecoyDraft = findMissingFn(
-    {
-      newFeatures: ['Notifications Overview: Updated alert preferences inside Settings for everyday users.'],
-      fixes: [],
-      improvements: []
-    },
-    [
-      'Make notification cards clickable anywhere and fix mobile My Account dialog width',
-      'Upgrade group switcher dropdowns with avatar DPs and role badges'
-    ]
-  );
-  assert.ok(mergedDecoyDraft.some((b) => /notification cards clickable/i.test(b)), 'Per-bullet check must detect missing clickable notification cards item');
-  assert.ok(mergedDecoyDraft.some((b) => /group switcher dropdowns/i.test(b)), 'Per-bullet check must detect missing group switcher dropdowns item');
-
-  const coerceMatch = superAdminJs.match(/function coerceReleaseBulletText\(raw\)\s*\{[\s\S]*?\n  \}/);
-  const formatBodyMatch = superAdminJs.match(/function formatSectionedReleaseBody\([\s\S]*?\n  \}/);
-  assert.ok(coerceMatch && formatBodyMatch, 'coerceReleaseBulletText and formatSectionedReleaseBody must exist in js/super-admin.js');
-  const formatBodyFn = new Function(`${sharedCommitScope}; ${fluffMatch[0]}; ${coerceMatch[0]}; ${formatBodyMatch[0]}; return formatSectionedReleaseBody;`)();
-  assert.match(edgeTs, /coerceReleaseBulletText/);
-  assert.match(edgeTs, /coerceReleaseBulletList/);
-  assert.match(edgeTs, /OBJECT_STR_RE/);
-  const objectBulletBody = formatBodyFn({
-    intro: 'Welcome to myIPON Update 1.1.',
-    newFeatures: [
-      {
-        feature: 'Dark Mode Toggle',
-        description: 'Added a theme switcher inside Settings.',
-        impact: 'Reduces eye strain at night.'
-      }
-    ],
-    fixes: ['• [object Object]', 'Calendar Icons: Restored scheduled icon spacing across mobile screens.'],
-    outro: 'Thanks for saving with myIPON!'
-  });
-  assert.doesNotMatch(objectBulletBody, /\[object Object\]/);
-  assert.match(objectBulletBody, /Dark Mode Toggle:\s*Added a theme switcher/);
-  assert.match(objectBulletBody, /Calendar Icons:\s*Restored scheduled icon spacing/);
-  const cleanedObjects = sanitizeFn('Fixes\n• [object Object]\n• Calendar Icons: Restored scheduled icon spacing across mobile screens.');
-  assert.equal(cleanedObjects.bulletCount, 1);
-  assert.equal(cleanedObjects.strippedCount, 1);
-  assert.doesNotMatch(cleanedObjects.text, /\[object Object\]/);
-
-  const cssLeakCommit = [
-    'Standardize confirmation dialogs to warm-cream card with top gold accent and equal pill actions',
-    '',
-    '- Update .confirm-dialog in css/app.css (22px rounded #faf6ee card, 26px #b88c3e top accent rule, bold serif heading, equal 2-column button bar with #ffffff Cancel and #102420 forest-emerald primary button, plus dark-mode and <=720px responsive tuning)',
-    '- Elevate .app-sidebar (z-index 190), .dashboard-sidebar (z-index 190), and fixed [data-messages-open]/[data-notifications-open] controls above workspace panels',
-    '- Remove duplicated outer page headers on Super Admin Users, add 0 pending), and update verify 143/143 tests'
-  ].join('\n');
-  assert.deepEqual(extractFn(cssLeakCommit), []);
-
-  const cssSanitized = sanitizeFn([
-    'Improvements',
-    '• .confirm-Dialog (22px Rounded #faf6ee: Updated .confirm-dialog (22px rounded #faf6ee card.',
-    '• 26px #b88c3e Top Accent: Updated 26px #b88c3e top accent rule.',
-    '• Equal 2-Column Button Bar: Updated equal 2-column button bar with #ffffff Cancel and #102420 forest-emerald primary button,.',
-    '• Floating Chat & Notification Buttons: Kept floating chat and notification buttons visible above scrolling workspace panels.'
-  ].join('\n'));
-  assert.equal(cssSanitized.bulletCount, 1);
-  assert.equal(cssSanitized.strippedCount, 3);
-  assert.doesNotMatch(cssSanitized.text, /\.confirm-dialog|#faf6ee|#b88c3e|#ffffff|#102420|22px|26px|button bar|top accent rule|forest-emerald/i);
-  assert.match(cssSanitized.text, /Floating Chat & Notification Buttons/);
-
-  assert.deepEqual(
-    extractFn('fix: expand budget workspace full-width and harden supabase:sync CLI parsing'),
-    ['Expand budget workspace full-width']
-  );
-
-  assert.match(edgeTs, /gemini-2\.5-flash/);
-  assert.match(edgeTs, /current_draft/);
-  assert.match(edgeTs, /previous_title/);
-  assert.match(edgeTs, /formatReleaseTitle/);
-  assert.match(edgeTs, /maxOutputTokens:\s*8192/);
-  assert.match(edgeTs, /security_updates/);
-  assert.match(edgeTs, /other_changes/);
-  assert.match(edgeTs, /findMissingReleaseItems/);
-  assert.match(edgeTs, /no_new_changes/);
-  assert.match(superAdminJs, /findMissingReleaseItems/);
-  assert.match(superAdminJs, /release-update-change-notice/);
-  assert.match(superAdminJs, /No new system changes yet/);
-  assert.match(superAdminJs, /js\/release-commits\.json/);
-  assert.match(read('super-admin.html'), /id="release-update-change-notice"/);
-  assert.match(read('js/core.js'), /maxOutputTokens:\s*8192/);
-  const releaseFeed = JSON.parse(read('js/release-commits.json'));
-  assert.ok(Array.isArray(releaseFeed) && releaseFeed.length > 0, 'js/release-commits.json must be a non-empty array');
-  assert.ok(typeof releaseFeed[0].date === 'string' && typeof releaseFeed[0].message === 'string', 'release-commits.json entries must have date and message');
-  const feedCanonical = canonFn(releaseFeed.map((e) => e.message));
-  assert.ok(feedCanonical.length >= 30, `Expected all 30+ recent release items without early truncation, got ${feedCanonical.length}`);
-  assert.ok(!feedCanonical.some((item) => /^Maximum limits up to 999$|^Hero plates$|validateMoneyInput|NotificationSyncWorker|\bVAPID\b/i.test(item)), `Unexpected broken fragment in ${JSON.stringify(feedCanonical)}`);
-
-  const genericTitleMatch = superAdminJs.match(/const GENERIC_RELEASE_TITLE_RE = (\/.*\/[a-z]*);/);
-  const verPrefixMatch = superAdminJs.match(/function formatReleaseVersionPrefix\(ver\)\s*\{[\s\S]*?\n  \}/);
-  const topicExtractMatch = superAdminJs.match(/function extractReleaseTopicLabels\(items = \[\]\)\s*\{[\s\S]*?\n  \}/);
-  const titleFormatMatch = superAdminJs.match(/function formatReleaseTitle\(ver, candidateTitle = '', contentItems = \[\], variant = 0\)\s*\{[\s\S]*?\n  \}/);
-  assert.ok(genericTitleMatch && verPrefixMatch && topicExtractMatch && titleFormatMatch, 'release title helpers must exist in js/super-admin.js');
-  const titleFn = new Function(`
-    const TECH_COMMIT_RE = ${techMatch[1]};
-    const CODE_TOKEN_RE = ${codeMatch[1]};
-    const GENERIC_RELEASE_TITLE_RE = ${genericTitleMatch[1]};
-    ${verPrefixMatch[0]}
-    ${topicExtractMatch[0]}
-    ${titleFormatMatch[0]}
-    return formatReleaseTitle;
-  `)();
-
-  const bodyBullets = [
-    '• Group Ownership & Deletion: Admins can now transfer group ownership cleanly.',
-    '• Dark Mode Contrast: Improved arrows and icons across every calendar view.'
-  ];
-  const fromGeneric = titleFn('Update 1.1', 'myIPON Update 1.1 Feature Update', bodyBullets, 0);
-  assert.ok(fromGeneric.startsWith('myIPON Update 1.1: '), `Expected prefix at start, got: ${fromGeneric}`);
-  assert.doesNotMatch(fromGeneric, /Feature Update/i);
-  assert.match(fromGeneric, /Group Ownership & Deletion/i);
-  assert.match(fromGeneric, /Dark Mode Contrast/i);
-
-  const fromAiReversed = titleFn('Update 1.2', 'Faster Savings & Clearer Group Transfers in myIPON Update 1.2', bodyBullets, 0);
-  assert.equal(fromAiReversed, 'myIPON Update 1.2: Faster Savings & Clearer Group Transfers');
+  assert.match(superAdminJs, /async function collectReleaseContext\(\)/);
+  assert.match(superAdminJs, /function formatReleaseVersionPrefix\(ver\)/);
+  assert.match(superAdminJs, /function updateReleaseChangeNotice\(context\)/);
+  assert.match(superAdminHtml, /id="release-update-change-notice"/);
+  assert.doesNotMatch(superAdminJs, /release-commits\.json|ai-generate-release-notes|gemini/i);
+  assert.doesNotMatch(edgeTs, /ai-generate-release-notes|generateWithGemini|GEMINI_API_KEY/i);
 });
 
 test('self-serve admin_create_group allows any non-super-admin active user without requiring prior admin role', () => {
@@ -2293,19 +2019,8 @@ test('release announcements render and generate sectioned New Features, Fixes, I
   assert.match(css, /\.announcement-section-block\.is-security/);
   assert.match(css, /\.announcement-section-block\.is-other/);
 
-  assert.match(superAdminJs, /function formatSectionedReleaseBody\(/);
-  assert.match(superAdminJs, /pushSection\('New Features'/);
-  assert.match(superAdminJs, /pushSection\('Fixes'/);
-  assert.match(superAdminJs, /pushSection\('Improvements'/);
-  assert.match(superAdminJs, /pushSection\('Security Updates'/);
-  assert.match(superAdminJs, /pushSection\('Other Changes'/);
-
-  assert.match(edgeTs, /function formatSectionedReleaseBody\(/);
-  assert.match(edgeTs, /pushSection\('New Features'/);
-  assert.match(edgeTs, /pushSection\('Fixes'/);
-  assert.match(edgeTs, /pushSection\('Improvements'/);
-  assert.match(edgeTs, /pushSection\('Security Updates'/);
-  assert.match(edgeTs, /pushSection\('Other Changes'/);
+  assert.doesNotMatch(superAdminJs, /function formatSectionedReleaseBody\(/);
+  assert.doesNotMatch(edgeTs, /function formatSectionedReleaseBody\(/);
 });
 
 test('payment method tagging and wallet reconciliation stay wired end to end', () => {
@@ -4085,7 +3800,7 @@ test('dark and light theme toggle persists across tabs, updates charts, preserve
   assert.match(appCss, /html\[data-theme="dark"\]\s+\.release-credit-anonymous/);
   assert.match(appCss, /html\[data-theme="dark"\]\s+\.invite-row-badge/);
   assert.match(appCss, /\.avatar-circle\s+img\s*\{[^}]*border-radius:50%/);
-  assert.match(appCss, /html\[data-theme="dark"\]\s+\.presence-dot\s*\{[^}]*border-color:\s*var\(--surface\)/);
+  assert.doesNotMatch(appCss, /html\[data-theme="dark"\]\s+\.presence-dot/);
   assert.match(appCss, /html\[data-theme="dark"\]\s+\.announcement-avatar\.is-owner\s*\{[^}]*border-color:/);
   assert.match(appCss, /html\[data-theme="dark"\]\s+\.reaction-stack-emoji,\s*html\[data-theme="dark"\]\s+\.reaction-user-emoji-badge\s*\{[^}]*box-shadow:\s*0 0 0 1\.5px var\(--surface\)/);
   assert.match(landingCss, /html\[data-theme="dark"\]\s+\.landing/);
@@ -6227,7 +5942,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   }
   assert.match(core, /data-messages-open/);
   assert.match(core, /function syncMessagesBadges\(/);
-  assert.match(core, /function setOnlineVisibility\(/);
+  assert.doesNotMatch(core, /function setOnlineVisibility\(/);
   assert.match(core, /window\.IponMessages\?\.openFromNotification/);
   assert.match(core, /role !== 'SUPER_ADMIN'[\s\S]*?window\.IponMessages\?\.init\?\.\(profile\)/);
   assert.match(sw, /'js\/messages\.js'/);
@@ -8398,8 +8113,7 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
   assert.match(settingsHtml, /<form id="msg-privacy-form" class="form-grid msg-privacy-form"/);
   assert.doesNotMatch(settingsHtml, /msg-set-username|msg-set-bio/);
   assert.match(settingsHtml, /id="msg-set-profile-vis" name="profile_visibility"[\s\S]*?value="EVERYONE"[\s\S]*?Everyone[\s\S]*?value="FRIENDS_OF_FRIENDS"[\s\S]*?Friends of friends[\s\S]*?value="FRIENDS_AND_CONNECTIONS"[\s\S]*?Friends &amp; connections[\s\S]*?value="NOBODY"[\s\S]*?No one/);
-  assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Show active status[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="show_online"/);
-  assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Show last seen timestamp[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="show_last_seen"/);
+  assert.doesNotMatch(settingsHtml, /name="show_online"|name="show_last_seen"/);
   assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Send &amp; receive read receipts[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="read_receipts"/);
   assert.match(settingsHtml, /id="msg-settings-save"[\s\S]*?Save messaging settings/);
   assert.match(settingsHtml, /class="msg-blocked-section"[\s\S]*?class="msg-blocked-count">0<\/span>[\s\S]*?class="msg-blocked-empty"[\s\S]*?You have not blocked anyone\./);
@@ -8702,11 +8416,8 @@ test('presence dot size, Chat Info drawer overlay over pinned banner, inline Fri
   const manifest = read('android/app/src/main/AndroidManifest.xml');
   const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
 
-  // Pic 1: Larger green online indicator across avatar sizes + header theme ring contrast
-  assert.match(css, /\.presence-dot\{[^}]*width:12px;height:12px;/);
-  assert.match(css, /\.sidebar-user-card \.presence-dot\{width:13\.5px;height:13\.5px;/);
-  assert.match(css, /\.avatar-lg-wrap \.presence-dot\{width:15px;height:15px;/);
-  assert.match(css, /\.msg-thread-header \.presence-dot\s*\{[^}]*border-color:\s*var\(--thread-chrome-bg/);
+  // Pic 1: Online/Last Seen presence dots are removed across avatar sizes and thread headers
+  assert.doesNotMatch(css, /\.presence-dot/);
 
   // Pic 2: Drawer sits as direct child of #msg-thread-active (sibling of .msg-thread-main) and covers pinned banner
   assert.match(messagesJs, /<div class="msg-thread-active" id="msg-thread-active" hidden>[\s\S]*?<div class="msg-thread-main">[\s\S]*?<\/div>\s*<aside class="msg-thread-drawer" id="msg-thread-drawer" hidden/);
@@ -10419,7 +10130,7 @@ test('migrations 088-089 restore drifted RPCs, fix enforce_group_scope guards, e
   assert.match(auditJs, /get_group_member_identities/);
   assert.match(reportsJs, /financial_annual_archives/);
   assert.match(settingsJs, /group_memberships/);
-  assert.match(superAdminJs, /admin_requests/);
+  assert.doesNotMatch(superAdminJs, /subscribeToChanges\('super-admin'/);
   assert.match(withdrawalsHtml, /<section class="panel sticky-panel" data-role="ADMIN,TREASURER">/);
   assert.match(expensesHtml, /<section class="panel sticky-panel" data-role="ADMIN,TREASURER">/);
   assert.match(css, /\.split-layout:has\(> \.sticky-panel\[hidden\]\)/);
@@ -10618,9 +10329,8 @@ test('migration 092 and UI fixes elevate floating utilities, clean Brainier grou
   assert.match(saJs, /review_bug_report/);
   assert.match(saJs, /data-bug-action="FIXED"/);
   assert.match(saJs, /targetFixedBugs\s*=\s*bugReports\.filter/);
-  assert.match(saJs, /fixed_bugs:\s*targetFixedBugs\.map/);
-  assert.match(edgeFn, /Verified bug reports fixed for/);
-  assert.match(edgeFn, /fixedBugPromptLines/);
+  assert.doesNotMatch(saJs, /ai-generate-release-notes/);
+  assert.doesNotMatch(edgeFn, /fixedBugPromptLines/);
 });
 
 test('migration 093 and workspace UI remove global Role from Super Admin Users, add multi-group +N overflow, and add Solo vs Group saving with full retention', () => {
@@ -11089,157 +10799,14 @@ test('createRealtimeChannel and Realtime callers avoid adding postgres_changes o
   assert.deepEqual(removed, ['realtime:live:budget:user-1']);
 });
 
-test('generateWithGemini tries all AI Studio models before Vertex and preserves free-tier diagnostics', async () => {
-  const { stripTypeScriptTypes } = await import('node:module');
+test('Gemini helpers, endpoints, and client hooks are completely removed from manage-account and js/core.js', () => {
   const edgeTs = read('supabase/functions/manage-account/index.ts');
   const coreJs = read('js/core.js');
+  const configJs = read('js/config.js');
 
-  assert.match(edgeTs, /resolveServerGeminiKeys/);
-  const blockMatch = edgeTs.match(/const GEMINI_RELEASE_MODELS = \[[\s\S]*?\nasync function generateWithGemini\([\s\S]*?\n\}(?=\r?\n\r?\nconst TECH_COMMIT_RE)/);
-  assert.ok(blockMatch, 'Gemini helper block should exist in manage-account/index.ts');
-
-  const jsCode = stripTypeScriptTypes(blockMatch[0], { mode: 'transform' });
-  const buildRunner = (fakeFetch) => new Function('fetch', 'AbortController', 'setTimeout', 'clearTimeout', `
-    ${jsCode}
-    return { GEMINI_RELEASE_MODELS, generateWithGemini, formatGeminiApiError };
-  `)(fakeFetch, AbortController, setTimeout, clearTimeout);
-
-  // 1. Continues across AI Studio models if first model fails with 403/BILLING_DISABLED, succeeding on 2.0-flash without hitting Vertex
-  const calls1 = [];
-  const { generateWithGemini: gen1 } = buildRunner(async (url) => {
-    calls1.push(url);
-    if (url.includes('gemini-2.5-flash-lite')) {
-      return new Response(JSON.stringify({ error: { status: 'PERMISSION_DENIED', message: 'Quota check failed', details: [{ reason: 'BILLING_DISABLED' }] } }), { status: 403 });
-    }
-    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"title":"Update 1.1: Smoother savings"}' }] } }] }), { status: 200 });
-  });
-  const okRes = await gen1({ apiKey: 'AQ.fake-key', prompt: 'Draft notes' });
-  assert.equal(okRes.model, 'gemini-2.0-flash');
-  assert.ok(calls1.every((u) => u.includes('generativelanguage.googleapis.com')));
-
-  // 2. Preserves SERVICE_DISABLED hint on generativelanguage.googleapis.com instead of masking behind Vertex BILLING_DISABLED
-  const { generateWithGemini: gen2 } = buildRunner(async (url) => {
-    if (url.includes('generativelanguage.googleapis.com')) {
-      return new Response(JSON.stringify({
-        error: {
-          status: 'PERMISSION_DENIED',
-          message: 'Generative Language API has not been used in project 123 before or it is disabled.',
-          details: [{ reason: 'SERVICE_DISABLED' }]
-        }
-      }), { status: 403 });
-    }
-    return new Response(JSON.stringify({
-      error: {
-        status: 'PERMISSION_DENIED',
-        message: 'This API method requires billing to be enabled.',
-        details: [{ reason: 'BILLING_DISABLED' }]
-      }
-    }), { status: 403 });
-  });
-  await assert.rejects(
-    () => gen2({ apiKey: 'AQ.fake-key', prompt: 'Draft notes' }),
-    /Generative Language API is disabled.*no Cloud billing needed/i
-  );
-
-  // 3. Clearly distinguishes Vertex Express AQ. key + disabled billing vs AI Studio free-tier key
-  const { generateWithGemini: gen3 } = buildRunner(async (url) => {
-    if (url.includes('generativelanguage.googleapis.com')) {
-      return new Response(JSON.stringify({
-        error: {
-          status: 'UNAUTHENTICATED',
-          message: 'Request is missing required authentication credential.',
-          details: [{ reason: 'ACCESS_TOKEN_TYPE_UNSUPPORTED' }]
-        }
-      }), { status: 401 });
-    }
-    return new Response(JSON.stringify({
-      error: {
-        status: 'PERMISSION_DENIED',
-        message: 'This API method requires billing to be enabled.',
-        details: [{ reason: 'BILLING_DISABLED' }]
-      }
-    }), { status: 403 });
-  });
-  await assert.rejects(
-    () => gen3({ apiKey: 'AQ.vertex-express-key', prompt: 'Draft notes' }),
-    /Vertex AI Express key whose Cloud billing is disabled.*aistudio\.google\.com\/app\/apikey/i
-  );
-
-  // 4. js/core.js friendlyError preserves structured server diagnostics and still maps raw errors
-  assert.match(coreJs, /Gemini AI failed to generate release notes:\|Generative Language API/);
-});
-
-test('draftVerifiedReleaseNotesFallback writes plain-English topics and cleanly excludes CSS specs and dev jargon', async () => {
-  const { stripTypeScriptTypes } = await import('node:module');
-  const edgeTs = read('supabase/functions/manage-account/index.ts');
-  const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
-  const end = edgeTs.indexOf('Deno.serve(');
-  assert.ok(start !== -1 && end > start, 'Fallback helper blocks must exist in manage-account/index.ts');
-
-  const jsCode = stripTypeScriptTypes(edgeTs.slice(start, end), { mode: 'transform' });
-  const { extractCommitUpdates, canonicalizeCommitUpdates, draftVerifiedReleaseNotesFallback } = new Function('Deno', 'crypto', 'process', `
-    ${jsCode}
-    return { extractCommitUpdates, canonicalizeCommitUpdates, draftVerifiedReleaseNotesFallback };
-  `)({ env: { get: () => '' }, serve() {} }, globalThis.crypto, process);
-
-  const rawCommits = [
-    [
-      'Standardize confirmation dialogs to warm-cream card with top gold accent and equal pill actions',
-      '',
-      '- Update .confirm-dialog in css/app.css (22px rounded #faf6ee card, 26px #b88c3e top accent rule, bold serif heading, equal 2-column button bar with #ffffff Cancel and #102420 forest-emerald primary button, plus dark-mode and <=720px responsive tuning)'
-    ].join('\n'),
-    [
-      'fix: strip CSS tokens, hex colors, and code jargon from Write with AI notes',
-      '',
-      '- Filter CSS class/ID selectors, hex colors, pixel/viewport units, broken fragments, and design-spec jargon across TECH_COMMIT_RE, CODE_TOKEN_RE, and canonicalizeClauseForParsing',
-      '- Preserve parenthetical and multi-modal lists cleanly during clause splitting while fixing \'and <verb>\' splitting and stripping conventional \'fix:\' before other verbs',
-      '- Improve fallback release-note topic labels and phrasing (Make ... verb rewrites and Improvements categorization)',
-      '- Fix migration 084 test declarations and generateWithGemini block extraction in tests/contracts.test.mjs, and add plain-English release-note contract coverage (npm test: 157/157 passing)'
-    ].join('\n'),
-    [
-      'fix: deduplicate prior release announcements and eliminate repetitive endings in Write with AI',
-      '',
-      '- Fix collectReleaseContext to select description on public.announcements, recovering latestReleaseAt, version incrementing, and prior release text.',
-      '- Rewrite draftVerifiedReleaseNotesFallback to conjugate commit clauses cleanly, while updating the Gemini prompt to pass prior bullet topics and disallow repetitive tail phrases.'
-    ].join('\n'),
-    [
-      'not finish',
-      '',
-      '- Add Budget Allocation & Expenses page (budget.html, js/budget.js, migration 094) with hero allocation card, 3-bucket tracking, and non-destructive history',
-      '- Fix dashboard group header/tracked savings sync, Solo quick-record fallback, Super Admin table wrapping, and localhost Service Worker caching (v18 / www sync)'
-    ].join('\n'),
-    'Elevate floating chat/notif buttons, align Needs, Wants, and Savings category cards, and make tracked budget expenses empty row center across table columns',
-    'feat: remove Super Admin user role column, add multi-group overflow & Solo/Group workspaces',
-    'fix: expand budget workspace full-width and harden supabase:sync CLI parsing'
-  ];
-
-  const updates = canonicalizeCommitUpdates(rawCommits);
-  const draft = draftVerifiedReleaseNotesFallback({
-    version: '1.5',
-    features: [],
-    fixedBugs: [],
-    systemUpdates: updates,
-    variationSeed: 0
-  });
-
-  assert.doesNotMatch(draft.details, /\.confirm-dialog|#faf6ee|#b88c3e|#ffffff|#102420|22px|26px|button bar|top accent rule|forest-emerald|supabase:sync|CLI parsing|CSS class|viewport units|clause splitting|contract coverage|npm test|Gemini prompt|tail phrases|version incrementing|Service Worker/i);
-  assert.doesNotMatch(draft.details, /Floating Chat And Notification:|• Needs:|Make tracked budget|Access checks apply strictly|While updating|Fallback/i);
-  assert.match(draft.details, /New Features[\s\S]*• Budget Allocation & Expenses Page:/);
-  assert.match(draft.details, /Improvements[\s\S]*• Floating Chat & Notification Buttons:/);
-  assert.match(draft.details, /• Tracked Budget Expenses: Updated tracked budget expenses empty row to center across table columns\./);
-  assert.match(draft.details, /Improvements[\s\S]*• Super Admin User Role: Removed Super Admin user role column\./);
-  assert.match(draft.details, /Improvements[\s\S]*• Budget Workspace: Expanded budget workspace full-width\./);
-  assert.match(draft.details, /New Features[\s\S]*• Multi-Group Overflow & Solo\/Group Workspaces:/);
-  assert.match(draft.details, /Fixes[\s\S]*• Solo Quick-Record Saving:/);
-
-  const needsCategoryDraft = draftVerifiedReleaseNotesFallback({
-    version: '1.5',
-    features: [],
-    fixedBugs: [],
-    systemUpdates: ['Align Needs, Wants, and Savings category cards'],
-    variationSeed: 0
-  });
-  assert.match(needsCategoryDraft.details, /Improvements[\s\S]*• Needs, Wants, and Savings Category:/);
+  assert.doesNotMatch(edgeTs, /GEMINI_RELEASE_MODELS|generateWithGemini|resolveServerGeminiKey|draftVerifiedReleaseNotesFallback|generativelanguage/i);
+  assert.doesNotMatch(coreJs, /STABLE_GEMINI_MODELS|getGeminiApiKey|getGeminiModel|callGemini|generativelanguage/i);
+  assert.doesNotMatch(configJs, /geminiApiKey/i);
 });
 
 test('budget expense dialog removes single-option create dropdown when empty or typing and migration 097 cleans deleted announcement notifications', () => {
@@ -11271,65 +10838,13 @@ test('budget expense dialog removes single-option create dropdown when empty or 
   assert.match(coreJs, /activeNotificationsReload\?\.\(\)/);
 });
 
-test('Super Admin and manage-account select and enforce feature_requests.allow_credit for release credits', () => {
-  const saJs = read('js/super-admin.js');
-  const edgeTs = read('supabase/functions/manage-account/index.ts');
-
-  assert.match(saJs, /from\('feature_requests'\)\.select\('[^']*allow_credit[^']*'\)/);
-  assert.match(edgeTs, /from\('feature_requests'\)[\s\S]*?\.select\('title,details,requester_id,allow_credit'\)/);
-  assert.match(edgeTs, /f\.allow_credit !== false && f\.requester_name/);
-  assert.match(edgeTs, /from\('profiles'\)[\s\S]*?\.select\('id,full_name'\)/);
-});
-
-test('Write with AI keeps release announcements strictly factual without AI embellishment or canned outcome padding', async () => {
-  const { stripTypeScriptTypes } = await import('node:module');
-  const edgeTs = read('supabase/functions/manage-account/index.ts');
+test('Super Admin selects feature_requests.allow_credit and uses updated script version without AI composer', () => {
   const saJs = read('js/super-admin.js');
   const saHtml = read('super-admin.html');
 
-  // 1. Gemini generation config uses low temperature for factual fidelity and prompts forbid embellishment
-  assert.match(edgeTs, /temperature:\s*0\.25\b/);
-  assert.match(edgeTs, /topP:\s*0\.8\b/);
-  assert.match(edgeTs, /NEVER invent, exaggerate, extrapolate, or guess unmentioned mechanisms/);
-  assert.doesNotMatch(edgeTs, /function pickUniqueDomainOutcome/);
-  assert.match(saJs, /RELEASE_STYLE_ANGLES\s*=\s*\[[\s\S]*Strictly factual/);
-  assert.doesNotMatch(saJs, /product story|high-energy|celebrating cleaner workflows/i);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-01/);
-
-  // 2. Fallback composer produces crisp factual sentences with zero fabricated outcome padding
-  const start = edgeTs.indexOf('const TECH_COMMIT_RE =');
-  const end = edgeTs.indexOf('Deno.serve(');
-  const jsCode = stripTypeScriptTypes(edgeTs.slice(start, end), { mode: 'transform' });
-  const { draftVerifiedReleaseNotesFallback, sanitizeReleaseDetails } = new Function('Deno', 'crypto', 'process', `
-    ${jsCode}
-    return { draftVerifiedReleaseNotesFallback, sanitizeReleaseDetails };
-  `)({ env: { get: () => '' }, serve() {} }, globalThis.crypto, process);
-
-  const shortFallback = draftVerifiedReleaseNotesFallback({
-    version: '1.6',
-    features: [{ title: 'Dark Mode Switch', description: 'Dark theme option', requester_name: 'Ana' }],
-    fixedBugs: [{ title: 'Fix retention bugs', description: '' }],
-    systemUpdates: ['Expand budget workspace full-width']
-  });
-
-  assert.match(shortFallback.details, /• Dark Mode Switch: Dark theme option\. \(Requested by: Ana\)/);
-  assert.match(shortFallback.details, /• Fix retention bugs: Fixed retention bugs\./);
-  assert.match(shortFallback.details, /• Budget Workspace: Expanded budget workspace full-width\./);
-  assert.doesNotMatch(shortFallback.details, /Related actions now complete|without unexpected resets|without unintended resets|saved preferences|resulting in a more stable and dependable experience|stay protected behind verified permissions/i);
-
-  // 3. sanitizeReleaseDetails strips empty promotional tails while keeping real facts intact
-  const dirtyText = [
-    'Fixes',
-    '• Data Retention: Fixed retention issue. Users can now rely on consistent data storage without unexpected resets, resulting in a more stable and dependable experience.',
-    '• Modal Scroll: Fixed dialog scrolling, for a smoother workflow.',
-    '• History Audit: Retained 30-day audit history on deleted records.'
-  ].join('\n');
-  const edgeSanitized = sanitizeReleaseDetails(dirtyText);
-  assert.match(edgeSanitized.text, /• Data Retention: Fixed retention issue\./);
-  assert.match(edgeSanitized.text, /• Modal Scroll: Fixed dialog scrolling\./);
-  assert.match(edgeSanitized.text, /• History Audit: Retained 30-day audit history on deleted records\./);
-  assert.doesNotMatch(edgeSanitized.text, /without unexpected resets|more stable and dependable experience|for a smoother workflow/i);
-  assert.match(saJs, /function stripReleaseFluffTails\(text\)/);
+  assert.match(saJs, /from\('feature_requests'\)\.select\('[^']*allow_credit[^']*'\)/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-02/);
+  assert.doesNotMatch(saJs, /RELEASE_STYLE_ANGLES|stripReleaseFluffTails/);
 });
 
 test('Android MainActivity clears consumed notification_link intent extra and asset caches match v22', () => {
@@ -11339,7 +10854,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261123-10/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261123-11/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -11366,7 +10881,7 @@ test('Migration 099 and Super Admin Users surface each user actual latest specif
   assert.doesNotMatch(saJs, /from\(['"](?:contributions|withdrawals|expenses|members|messages|budget_configs|budget_expenses)['"]\)/);
   assert.match(saJs, /Ipon\.client\.rpc\('super_admin_user_last_activities'\)/);
   assert.match(saJs, /function formatUserActivityLabel\(activity\)/);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-01/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-02/);
 
   // Verify formatUserActivityLabel handles both new specific RPC rows and legacy fallback events
   const fnMatch = saJs.match(/function formatUserActivityLabel\(activity\)\s*\{[\s\S]*?\n  \}/);

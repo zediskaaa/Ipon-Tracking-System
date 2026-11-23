@@ -320,7 +320,8 @@ test('group chats runtime renders composite avatars, multi-sender bubbles, typin
   const headerHtml = getEl('msg-thread-header').innerHTML;
   assert.match(headerHtml, /Barkada Boracay Fund/);
   assert.match(headerHtml, /msg-rel-chip is-group/);
-  assert.match(headerHtml, /3 members · 1 active now/);
+  assert.match(headerHtml, /3 members/);
+  assert.doesNotMatch(headerHtml, /active now/i);
 
   const msgsHtml = getEl('msg-messages-list').innerHTML;
   assert.match(msgsHtml, /msg-system-event[^>]*><span>You created the group/);
@@ -803,16 +804,12 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   msgReq.value = 'FRIENDS_ONLY';
   const profileVis = getEl('msg-set-profile-vis');
   profileVis.value = 'EVERYONE';
-  const showOnline = makeEl('input'); showOnline.checked = true;
-  const showLastSeen = makeEl('input'); showLastSeen.checked = true;
   const readReceipts = makeEl('input'); readReceipts.checked = true;
   const privacyForm = getEl('msg-privacy-form');
   privacyForm.elements = {
     allow_friend_requests: friendReq,
     allow_message_requests: msgReq,
     profile_visibility: profileVis,
-    show_online: showOnline,
-    show_last_seen: showLastSeen,
     read_receipts: readReceipts
   };
   const saveBtn = getEl('msg-settings-save');
@@ -905,11 +902,13 @@ test('messaging privacy form excludes moved handle/bio fields & save button stay
   assert.equal(saveBtn.disabled, true, 'Save messaging settings button must be disabled when nothing changed');
   assert.match(getEl('msg-settings-body').innerHTML, /id="msg-settings-save"[^>]*disabled/);
 
-  // Toggling a privacy switch enables Save; reverting disables Save again
-  showOnline.checked = false;
+  // Toggling read receipts enables Save; reverting disables Save again
+  assert.doesNotMatch(getEl('msg-settings-body').innerHTML, /name="show_online"|name="show_last_seen"/);
+  assert.match(getEl('msg-settings-body').innerHTML, /name="read_receipts"/);
+  readReceipts.checked = false;
   await privacyForm._emit('change');
   assert.equal(saveBtn.disabled, false, 'Save button enables when privacy setting changes');
-  showOnline.checked = true;
+  readReceipts.checked = true;
   await privacyForm._emit('change');
   assert.equal(saveBtn.disabled, true, 'Save button disables again when reverted');
 

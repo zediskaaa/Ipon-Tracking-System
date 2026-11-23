@@ -953,7 +953,7 @@ test('migration 118 and runtime enforce 1-per-effect trials, 1-month cooldown, a
   assert.match(coreJs, /<section class="account-card account-profile-card"><button class="dialog-close account-dialog-close" data-account-close/);
   assert.match(appCss, /\.account-profile-card>\.account-dialog-close\{[^}]*width:28px;height:28px;flex:0 0 28px;aspect-ratio:1 \/ 1;[^}]*border-radius:50%/);
   assert.match(appCss, /\.account-profile-identity strong\{[^}]*white-space:normal;/);
-  assert.match(appCss, /\.msg-welcome-avatar \.presence-dot\s*\{[^}]*width:\s*20px;\s*height:\s*20px;/);
+  assert.doesNotMatch(appCss, /\.msg-welcome-avatar \.presence-dot/);
   assert.match(msgJs, /avatar-presence-wrap msg-avatar-wrap\$\{wrapCls/);
 });
 
@@ -1231,7 +1231,7 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v256/);
+  assert.match(sw, /ipon-shell-v257/);
   assert.match(sw, /'js\/profile-effects-sfx\.js'/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   assert.match(sw, /'js\/profile-effects-creator\.js'/);
@@ -1241,7 +1241,7 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
     assert.match(html, /js\/profile-effects-sfx\.js\?v=20261123-03/);
     assert.match(html, /js\/profile-effects-exclusive\.js\?v=20261122-07/);
     assert.match(html, /js\/profile-effects-creator\.js\?v=20261123-05/);
-    assert.match(html, /css\/app\.css\?v=20261123-18/);
+    assert.match(html, /css\/app\.css\?v=20261123-19/);
   }
 });
 

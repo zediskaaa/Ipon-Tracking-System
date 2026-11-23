@@ -26,7 +26,6 @@
   }
   let currentProfile = null;
   let cachedAccessToken = null;
-  let lastSeenFlushAt = 0;
   let quickMfaController = null;
   const STARTUP_TIMEOUT_MS = 15000;
   let loaderSafetyTimer = null;
@@ -2176,19 +2175,34 @@
     const client = getClient();
     if (!client?.storage) return raw;
     const blob = dataUrlToBlob(raw);
+    const contentType = blob.type || 'image/jpeg';
     const meta = await invokeAccountFunction({
       action: 'media-upload-url',
       category,
       name: String(name || 'image.jpg').slice(0, 120),
-      content_type: blob.type || 'image/jpeg'
+      content_type: contentType
     });
-    if (!meta?.path || !meta?.token || !meta?.publicUrl) {
+    if (!meta?.path || !meta?.publicUrl) {
+      throw new Error('Could not prepare cloud storage upload.');
+    }
+    if (meta.token === 'r2' && meta.signedUrl) {
+      const putRes = await fetch(meta.signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: blob
+      });
+      if (!putRes.ok) {
+        throw new Error(`Could not upload media (${putRes.status}).`);
+      }
+      return meta.publicUrl;
+    }
+    if (!meta.token) {
       throw new Error('Could not prepare cloud storage upload.');
     }
     const { error } = await client.storage
       .from(meta.bucket || 'ipon-media')
       .uploadToSignedUrl(meta.path, meta.token, blob, {
-        contentType: blob.type || 'image/jpeg',
+        contentType,
         upsert: true
       });
     if (error) throw error;
@@ -2660,7 +2674,6 @@
               <span class="sidebar-user-avatar${cachedName && !cachedAvatar ? ' has-initials' : ''}" aria-hidden="true">
                 ${sidebarAvatarFallbackHtml(cachedName)}
               </span>
-              <span class="presence-dot is-online" data-presence-id="${escapeHtml(cachedUserId)}" aria-label="Active now" title="Active now"></span>
             </span>
             <div class="sidebar-user-info" id="sidebar-user">
               <strong>${escapeHtml(cachedName || 'Checking session…')}</strong>
@@ -2845,83 +2858,13 @@
     return parts.length === 1 ? parts[0].slice(0, 2).toUpperCase() : `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
   }
 
-  const onlineUserIds = new Set();
-  const PRESENCE_STORAGE_KEY = 'iponOnlineUsers';
-  const PRESENCE_SYNC_CHANNEL = 'ipon-presence-local-sync';
   let presenceChannel = null;
-
-  function isUserOnline(userId) {
-    if (!userId) return false;
-    return onlineUserIds.has(String(userId));
-  }
-
-  function syncPresenceDots(root = document) {
-    if (!root || typeof root.querySelectorAll !== 'function') return;
-    root.querySelectorAll('[data-presence-id]').forEach((dot) => {
-      const uid = dot.dataset.presenceId;
-      if (!uid) return;
-      const isOnline = isUserOnline(uid);
-      dot.classList.toggle('is-online', isOnline);
-      const label = isOnline ? 'Active now' : 'Offline';
-      dot.setAttribute('aria-label', label);
-      dot.title = label;
-    });
-  }
 
   function emitPresenceChange(leftIds = []) {
     try {
       window.dispatchEvent(new CustomEvent('ipon:presence-change', {
-        detail: { onlineIds: Array.from(onlineUserIds), leftIds, at: new Date().toISOString() }
+        detail: { leftIds, at: new Date().toISOString() }
       }));
-    } catch (_) { }
-  }
-
-  function flushLastSeen({ keepalive = false, force = false } = {}) {
-    if (!currentProfile?.id || !presenceShowOnline || !configured) return;
-    const nowMs = Date.now();
-    if (!force && nowMs - lastSeenFlushAt < 1500) return;
-    lastSeenFlushAt = nowMs;
-    const nowIso = new Date(nowMs).toISOString();
-    currentProfile.last_seen_at = nowIso;
-    if (keepalive && cachedAccessToken && typeof fetch === 'function') {
-      try {
-        fetch(`${config.supabaseUrl}/rest/v1/rpc/touch_user_last_seen`, {
-          method: 'POST',
-          keepalive: true,
-          headers: {
-            apikey: config.supabaseAnonKey,
-            Authorization: `Bearer ${cachedAccessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: '{}'
-        }).catch(() => { });
-        return;
-      } catch (_) { }
-    }
-    const client = getClient();
-    if (client?.rpc) {
-      (async () => { try { await client.rpc('touch_user_last_seen'); } catch (_) { } })();
-    }
-  }
-
-  let lastPresenceUpdateAt = 0;
-
-  function broadcastLocalPresence() {
-    try {
-      const at = Date.now();
-      lastPresenceUpdateAt = Math.max(lastPresenceUpdateAt, at);
-      const payload = {
-        type: 'SYNC',
-        userId: String(currentProfile?.id || ''),
-        ids: Array.from(onlineUserIds),
-        at
-      };
-      if ('BroadcastChannel' in window) {
-        const bc = new BroadcastChannel(PRESENCE_SYNC_CHANNEL);
-        bc.postMessage(payload);
-        bc.close();
-      }
-      localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify(payload));
     } catch (_) { }
   }
 
@@ -2968,7 +2911,7 @@
 
   function syncPresencePlatforms(stateObj) {
     onlineClientPlatforms.clear();
-    if (presenceShowOnline && document.visibilityState !== 'hidden' && currentProfile?.id) {
+    if (document.visibilityState !== 'hidden' && currentProfile?.id) {
       onlineClientPlatforms.set(String(currentProfile.id), new Set([getClientPlatform()]));
     }
     Object.keys(stateObj || {}).forEach((key) => {
@@ -3035,74 +2978,13 @@
     });
   }
 
-  let presenceShowOnline = true;
   let presenceLifecycleBound = false;
-
-  function setOnlineVisibility(showOnline) {
-    presenceShowOnline = showOnline !== false;
-    if (!currentProfile?.id) return;
-    const myId = String(currentProfile.id);
-    if (presenceShowOnline) {
-      onlineUserIds.add(myId);
-      presenceChannel?.track?.({
-        user_id: currentProfile.id,
-        full_name: currentProfile.full_name,
-        role: currentProfile.role,
-        client_platform: getClientPlatform(),
-        online_at: new Date().toISOString()
-      }).catch?.(() => { });
-    } else {
-      onlineUserIds.delete(myId);
-      presenceChannel?.untrack?.().catch?.(() => { });
-    }
-    syncPresenceDots();
-    broadcastLocalPresence();
-    emitPresenceChange(presenceShowOnline ? [] : [myId]);
-  }
 
   function initPresence(profile) {
     const client = getClient();
-    if (!client || !profile?.id) return;
+    if (!client || !profile?.id || profile.role === 'SUPER_ADMIN') return;
     reportClientPlatform();
-    presenceShowOnline = profile?.chat_privacy?.show_online !== false;
     if (presenceChannel) return;
-
-    if (presenceShowOnline) onlineUserIds.add(String(profile.id));
-    else onlineUserIds.delete(String(profile.id));
-    syncPresenceDots();
-
-    const applyLocalPresenceSnapshot = (data) => {
-      if (!data || !Array.isArray(data.ids)) return;
-      if (data.userId && String(data.userId) !== String(profile.id)) return;
-      const ts = Number(data.at) || 0;
-      if (ts && ts <= lastPresenceUpdateAt) return;
-      if (ts) lastPresenceUpdateAt = ts;
-      const prev = new Set(onlineUserIds);
-      onlineUserIds.clear();
-      data.ids.forEach((id) => { if (id) onlineUserIds.add(String(id)); });
-      if (presenceShowOnline && document.visibilityState !== 'hidden') onlineUserIds.add(String(profile.id));
-      else onlineUserIds.delete(String(profile.id));
-      const leftIds = Array.from(prev).filter((id) => !onlineUserIds.has(id));
-      const joinedIds = Array.from(onlineUserIds).filter((id) => !prev.has(id));
-      syncPresenceDots();
-      if (leftIds.length || joinedIds.length) emitPresenceChange(leftIds);
-    };
-
-    try {
-      if ('BroadcastChannel' in window) {
-        const bc = new BroadcastChannel(PRESENCE_SYNC_CHANNEL);
-        bc.addEventListener('message', (event) => {
-          applyLocalPresenceSnapshot(event.data);
-        });
-      }
-      window.addEventListener('storage', (event) => {
-        if (event.key === PRESENCE_STORAGE_KEY && event.newValue) {
-          try {
-            applyLocalPresenceSnapshot(JSON.parse(event.newValue));
-          } catch (_) { }
-        }
-      });
-    } catch (_) { }
 
     try {
       const existingPresence = typeof client.getChannels === 'function'
@@ -3110,7 +2992,6 @@
         : null;
       if (existingPresence && (existingPresence.channelAdapter?.isJoined?.() || existingPresence.channelAdapter?.isJoining?.() || existingPresence.state === 'joined' || existingPresence.state === 'joining')) {
         presenceChannel = existingPresence;
-        syncPresenceDots();
         return;
       }
       if (existingPresence) {
@@ -3135,27 +3016,13 @@
 
       const handleSync = () => {
         try {
-          const prev = new Set(onlineUserIds);
           const previousBrowserIds = new Set(Array.from(onlineClientPlatforms).filter(([, platforms]) => platforms.has('browser')).map(([uid]) => uid));
           const state = presenceChannel.presenceState();
-          onlineUserIds.clear();
-          if (presenceShowOnline && document.visibilityState !== 'hidden') onlineUserIds.add(String(profile.id));
-          Object.keys(state || {}).forEach((key) => {
-            const presences = state[key];
-            if (!Array.isArray(presences) || !presences.length) return;
-            if (key) onlineUserIds.add(String(key));
-            presences.forEach((entry) => {
-              if (entry?.user_id) onlineUserIds.add(String(entry.user_id));
-            });
-          });
           syncPresencePlatforms(state);
-          const browserPresenceChanged = previousBrowserIds.size !== Array.from(onlineClientPlatforms.values()).filter((platforms) => platforms.has('browser')).length
+          const currentBrowserCount = Array.from(onlineClientPlatforms.values()).filter((platforms) => platforms.has('browser')).length;
+          const browserPresenceChanged = previousBrowserIds.size !== currentBrowserCount
             || Array.from(previousBrowserIds).some((uid) => !hasLiveBrowserSession(uid));
-          const leftIds = Array.from(prev).filter((id) => !onlineUserIds.has(id));
-          const joinedIds = Array.from(onlineUserIds).filter((id) => !prev.has(id));
-          syncPresenceDots();
-          broadcastLocalPresence();
-          if (leftIds.length || joinedIds.length || browserPresenceChanged) emitPresenceChange(leftIds);
+          if (browserPresenceChanged) emitPresenceChange([]);
         } catch (_) { }
       };
 
@@ -3174,42 +3041,29 @@
           if (!pending.targets.size) pending.finish(true);
         })
         .on('presence', { event: 'sync' }, handleSync)
-        .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-          if (key) onlineUserIds.add(String(key));
-          (newPresences || []).forEach((p) => { if (p?.user_id) onlineUserIds.add(String(p.user_id)); });
+        .on('presence', { event: 'join' }, () => {
           syncPresencePlatforms(presenceChannel.presenceState());
-          syncPresenceDots();
-          broadcastLocalPresence();
           emitPresenceChange([]);
         })
         .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
           const state = presenceChannel.presenceState();
           const leftIds = [];
           const keyId = key ? String(key) : '';
-          if (keyId && !hasActivePresence(state, keyId) && (keyId !== String(profile.id) || !presenceShowOnline || document.visibilityState === 'hidden')) {
-            if (onlineUserIds.delete(keyId)) leftIds.push(keyId);
-          }
+          if (keyId && !hasActivePresence(state, keyId)) leftIds.push(keyId);
           (leftPresences || []).forEach((p) => {
             const uid = p?.user_id ? String(p.user_id) : '';
-            if (uid && (uid !== String(profile.id) || !presenceShowOnline || document.visibilityState === 'hidden') && !hasActivePresence(state, uid)) {
-              if (onlineUserIds.delete(uid)) leftIds.push(uid);
-            }
+            if (uid && !leftIds.includes(uid) && !hasActivePresence(state, uid)) leftIds.push(uid);
           });
           syncPresencePlatforms(state);
-          syncPresenceDots();
-          broadcastLocalPresence();
           if (leftIds.length) emitPresenceChange(leftIds);
         })
         .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED' && presenceShowOnline && document.visibilityState !== 'hidden') {
+          if (status === 'SUBSCRIBED' && document.visibilityState !== 'hidden') {
             try {
               await probeNativeScreenshotProtection();
               await presenceChannel.track({
                 user_id: profile.id,
-                full_name: profile.full_name,
-                role: profile.role,
-                client_platform: getClientPlatform(),
-                online_at: new Date().toISOString()
+                client_platform: getClientPlatform()
               });
             } catch (_) { }
           }
@@ -3217,30 +3071,19 @@
 
       const handleAppAway = () => {
         const myId = String(profile.id);
-        const wasOnline = onlineUserIds.delete(myId);
         try { presenceChannel?.untrack?.().catch?.(() => { }); } catch (_) { }
-        syncPresenceDots();
-        broadcastLocalPresence();
-        emitPresenceChange(wasOnline ? [myId] : []);
-        flushLastSeen({ keepalive: true });
+        onlineClientPlatforms.delete(myId);
+        emitPresenceChange([myId]);
       };
       const handleAppActive = () => {
         reportClientPlatform();
-        if (!presenceShowOnline) return;
-        onlineUserIds.add(String(profile.id));
         try {
           presenceChannel?.track?.({
             user_id: profile.id,
-            full_name: profile.full_name,
-            role: profile.role,
-            client_platform: getClientPlatform(),
-            online_at: new Date().toISOString()
+            client_platform: getClientPlatform()
           }).catch?.(() => { });
         } catch (_) { }
-        syncPresenceDots();
-        broadcastLocalPresence();
         emitPresenceChange([]);
-        flushLastSeen({ keepalive: false });
       };
       if (!presenceLifecycleBound) {
         presenceLifecycleBound = true;
@@ -5048,16 +4891,13 @@
       : `<span class="avatar-circle ${cls}" title="${escapeHtml(name || '')}"><img src="${safeUrl}" alt="${escapeHtml(name || 'User picture')}" data-avatar-img><span class="avatar-fallback-inner" hidden>${letters}</span></span>`;
 
     if (!userId) return circle;
-    const isOnline = isUserOnline(userId);
-    const label = isOnline ? 'Active now' : 'Offline';
     const wrapCls = String(className || '')
       .trim()
       .split(/\s+/)
       .filter(Boolean)
       .map((token) => `${escapeHtml(token)}-wrap`)
       .join(' ');
-    const presenceDot = `<span class="presence-dot${isOnline ? ' is-online' : ''}" data-presence-id="${escapeHtml(userId)}" aria-label="${label}" title="${label}"></span>`;
-    return `<span class="avatar-presence-wrap${wrapCls ? ` ${wrapCls}` : ''}" data-presence-user="${escapeHtml(userId)}">${circle}${presenceDot}</span>`;
+    return `<span class="avatar-presence-wrap${wrapCls ? ` ${wrapCls}` : ''}">${circle}</span>`;
   }
 
   function bindAvatarFallbacks(root = document) {
@@ -5095,12 +4935,6 @@
       });
     }
     document.querySelectorAll('.sidebar-user-avatar').forEach((slot) => {
-      const parentWrap = slot.closest('.avatar-presence-wrap');
-      const dot = parentWrap ? parentWrap.querySelector('.presence-dot') : null;
-      if (dot && profile.id) {
-        dot.dataset.presenceId = profile.id;
-        dot.classList.add('is-online');
-      }
       const existingImg = slot.querySelector('img[data-avatar-img]');
       if (safeUrl) {
         slot.classList?.remove?.('has-initials');
@@ -5415,7 +5249,6 @@
       },
       afterRenderMenu: (root) => {
         bindAvatarFallbacks(root);
-        syncPresenceDots(root);
       }
     });
   }
@@ -10108,7 +9941,6 @@
     let endpoint = '';
     try { endpoint = localStorage.getItem('myipon_webpush_endpoint') || ''; } catch { }
     // Dispatch server cleanup via keepalive so navigation happens immediately without blocking
-    flushLastSeen({ keepalive: true, force: true });
     fireKeepaliveRpc('delete_push_subscription', { p_endpoint: endpoint || null });
     fireKeepaliveRpc('revoke_notification_feed_token', {});
     if (currentProfile?.id) {
@@ -10171,10 +10003,6 @@
     if (/cannot remove or disable your own administrator|another active administrator/i.test(message)) return 'Assign another active administrator before changing administrator access.';
     if (/permission denied for function|jwt expired|invalid jwt|pgrst301|pgrst303|auth session missing|sign in first/i.test(combined)) return 'Your session could not reconnect. Please check your internet connection and try again.';
     if (/row-level security|permission denied|not allowed to|only (?:a |an )?.*administrator/i.test(message)) return 'You do not have permission for that action.';
-    if (!/^(?:Gemini AI failed to generate release notes:|Generative Language API|Google AI Studio|This key is a Google Cloud|Gemini server API key|Google Cloud billing is disabled for this)/i.test(message)) {
-      if (/BILLING_DISABLED|requires billing to be enabled|billing is disabled/i.test(message)) return 'Google Cloud billing is disabled for the current Google Cloud project key. Enable Cloud billing on that project, or click Configure API key to save a free-tier key from Google AI Studio.';
-      if (/ACCESS_TOKEN_TYPE_UNSUPPORTED|API key not valid|API_KEY_INVALID|API key expired/i.test(message)) return 'The server Gemini API key was rejected or revoked by Google. Click Configure API key to test and save a fresh Google AI Studio key.';
-    }
     if (!message || /^(?:TypeError|ReferenceError|SyntaxError|RangeError|URIError|EvalError):/i.test(message) || message === '[object Object]') {
       return 'Something went wrong. Please try again.';
     }
@@ -10566,7 +10394,7 @@
     });
   }
 
-  const READ_ONLY_RPC_RE = /^(?:get_|list_|check_|preview_|super_admin_storage_overview|record_account_activity|mark_notification_read|mark_all_notifications_read|send_chat_message|edit_chat_message|delete_chat_message|toggle_message_reaction|mark_conversation_read|mark_messages_delivered|touch_user_last_seen|report_client_platform|update_conversation_member_state|respond_message_request|start_or_open_direct_chat|pin_chat_message|unpin_chat_message)/i;
+  const READ_ONLY_RPC_RE = /^(?:get_|list_|check_|preview_|super_admin_storage_overview|record_account_activity|mark_notification_read|mark_all_notifications_read|send_chat_message|edit_chat_message|delete_chat_message|toggle_message_reaction|mark_conversation_read|mark_messages_delivered|report_client_platform|update_conversation_member_state|respond_message_request|start_or_open_direct_chat|pin_chat_message|unpin_chat_message)/i;
   let lastVerifiedSession = null;
   let lastVerifiedSessionClient = null;
   let lastVerifiedSessionAt = 0;
@@ -11623,7 +11451,6 @@
           </article>`;
       }).join('');
       bindAvatarFallbacks(listElement);
-      syncPresenceDots(listElement);
     };
 
     const stopViewerMedia = () => {
@@ -11646,7 +11473,6 @@
       }
       viewerMeta.innerHTML = announcementAuthorMeta(item);
       bindAvatarFallbacks(viewerMeta);
-      syncPresenceDots(viewerMeta);
       const titleParts = (item.title || '').split(/:\s+/);
       if (titleParts.length > 1) {
         viewerTitle.innerHTML = `<span class="announcement-hero-headline">${escapeHtml(titleParts[0])}:</span><span class="announcement-hero-subhead">${escapeHtml(titleParts.slice(1).join(': '))}</span>`;
@@ -11735,7 +11561,6 @@
             viewerReleaseFeatures.innerHTML = releaseMarkup;
           }
           bindAvatarFallbacks(host);
-          syncPresenceDots(host);
         } catch (_) { }
       };
       loadReleaseFeatures();
@@ -12518,153 +12343,6 @@
       return `<article class="invite-summary-item"><div class="invite-summary-head"><strong>${escapeHtml(item.email)}</strong>${badge}</div>${detail}</article>`;
     }).join('');
     dialog.showModal();
-  }
-
-  const STABLE_GEMINI_MODELS = [
-    'gemini-2.5-flash-lite',
-    'gemini-2.0-flash',
-    'gemini-2.5-flash',
-    'gemini-flash-lite-latest',
-    'gemini-flash-latest',
-    'gemini-1.5-flash'
-  ];
-
-  let cachedWorkingGeminiModel = null;
-
-  function getGeminiApiKey() {
-    let configKey = (window.IPON_CONFIG?.geminiApiKey || '').trim();
-    if (configKey.startsWith('base64:')) {
-      try { configKey = atob(configKey.slice(7)).trim(); } catch (_) { }
-    }
-    if (configKey && !configKey.startsWith('AQ.')) {
-      return configKey;
-    }
-
-    let storageKey = (localStorage.getItem('ipon_gemini_api_key') || '').trim();
-    if (storageKey.startsWith('base64:')) {
-      try { storageKey = atob(storageKey.slice(7)).trim(); } catch (_) { }
-    }
-    if (storageKey.startsWith('AQ.')) {
-      try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
-      return '';
-    }
-    return storageKey;
-  }
-
-  function getGeminiModel() {
-    return cachedWorkingGeminiModel || 'gemini-1.5-flash';
-  }
-
-  async function callGemini({ prompt, systemInstruction, apiKey, model, jsonResponse = true }) {
-    const key = (apiKey || getGeminiApiKey()).trim();
-    if (!key) {
-      throw new Error('No Gemini API key found. Please save your API key in the configuration dialog or define geminiApiKey in js/config.js.');
-    }
-    if (key.startsWith('AQ.')) {
-      try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
-      throw new Error('API key is a Google Cloud service account token (AQ.) which is not supported by Gemini API. Please generate a fresh key starting with AIzaSy from Google AI Studio (aistudio.google.com/app/apikey).');
-    }
-
-    // Fast candidate resolution: at most 3 models with quick 3s timeout per model
-    let candidateModels = STABLE_GEMINI_MODELS;
-    if (cachedWorkingGeminiModel) {
-      candidateModels = [cachedWorkingGeminiModel, ...STABLE_GEMINI_MODELS.filter((m) => m !== cachedWorkingGeminiModel)];
-    } else if (model && STABLE_GEMINI_MODELS.includes(model)) {
-      candidateModels = [model, ...STABLE_GEMINI_MODELS.filter((m) => m !== model)];
-    }
-
-    let lastError = null;
-    for (const curModel of candidateModels) {
-      let timer = null;
-      try {
-        const ctrl = new AbortController();
-        timer = setTimeout(() => ctrl.abort(), 25000);
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(curModel)}:generateContent?key=${encodeURIComponent(key)}`;
-        const body = {
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.92,
-            topP: 0.95,
-            maxOutputTokens: 8192
-          }
-        };
-        if (jsonResponse) {
-          body.generationConfig.responseMimeType = 'application/json';
-        }
-        if (systemInstruction) {
-          body.systemInstruction = { parts: [{ text: systemInstruction }] };
-        }
-
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': key
-          },
-          body: JSON.stringify(body),
-          signal: ctrl.signal
-        });
-        clearTimeout(timer);
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          let errMsg = errData?.error?.message || `HTTP ${res.status} (${res.statusText})`;
-          const errReason = errData?.error?.details?.[0]?.reason;
-          if (errReason === 'ACCESS_TOKEN_TYPE_UNSUPPORTED' || res.status === 401) {
-            try { localStorage.removeItem('ipon_gemini_api_key'); } catch (_) { }
-            throw new Error('API key is revoked or invalid (ACCESS_TOKEN_TYPE_UNSUPPORTED). Please generate a fresh key from Google AI Studio (aistudio.google.com/app/apikey).');
-          }
-          if (res.status === 404 || res.status === 503 || res.status === 429) {
-            lastError = new Error(`Model ${curModel} (${res.status}): ${errMsg}`);
-            continue;
-          }
-          throw new Error(errMsg);
-        }
-
-        const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) {
-          lastError = new Error(`No content from ${curModel}`);
-          continue;
-        }
-
-        let parsed = null;
-        if (jsonResponse) {
-          try {
-            parsed = JSON.parse(text);
-          } catch (_) {
-            const match = text.match(/\{[\s\S]*\}/);
-            if (match) parsed = JSON.parse(match[0]);
-            else throw new Error('Could not parse JSON from Gemini response.');
-          }
-        }
-
-        cachedWorkingGeminiModel = curModel;
-        return {
-          text,
-          parsed,
-          model: curModel,
-          success: true
-        };
-      } catch (err) {
-        if (timer) clearTimeout(timer);
-        lastError = err;
-        if (/aborted/i.test(err.message)) {
-          lastError = new Error(`Model ${curModel} timed out.`);
-          continue;
-        }
-        if (/failed to fetch/i.test(err.message)) {
-          throw new Error('Connection blocked (Failed to fetch). Check your internet connection or ad-blocker for generativelanguage.googleapis.com.');
-        }
-        if (/revoked|ACCESS_TOKEN_TYPE_UNSUPPORTED/i.test(err.message)) {
-          throw err;
-        }
-        if (!/404|503|429|unavailable|high demand|parse JSON|Unterminated|Unexpected token/i.test(err.message)) {
-          throw err;
-        }
-      }
-    }
-    throw lastError || new Error('Could not connect to Google Gemini API.');
   }
 
   function isMobileAppContext() {
@@ -19086,10 +18764,10 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, fireKeepaliveRpc, money, moneyHtml, formatCentavosInNode, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, detachPickedFile, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, detachPickedFile, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     playUiSound, isUiSoundEnabled, setUiSoundEnabled, primeUiSound,
-    setOnlineVisibility, syncMessagesBadges, canViewAnnouncementReactors, supportsNativeScreenshotProtection, probeNativeScreenshotProtection, getClientPlatform, reportClientPlatform, refreshPeerClientPlatforms, hasLiveBrowserSession,
+    syncMessagesBadges, canViewAnnouncementReactors, supportsNativeScreenshotProtection, probeNativeScreenshotProtection, getClientPlatform, reportClientPlatform, refreshPeerClientPlatforms, hasLiveBrowserSession,
     openTutorial: (...args) => window.IponTutorial?.open?.(...args),
     getCurrentUserId: () => currentProfile?.id || readShellSnapshot()?.userId || '',
     classifyAnnouncementFile, uploadAnnouncementAttachments, MAX_ANNOUNCEMENT_FILES,

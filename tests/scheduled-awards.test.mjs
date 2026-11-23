@@ -67,7 +67,7 @@ test('Migration 178, schema.sql, Super Admin Set Award modal, and core auto-deli
   assert.match(saJs, /super_admin_list_scheduled_awards/);
   assert.match(saJs, /super_admin_update_scheduled_award/);
   assert.match(saJs, /super_admin_cancel_scheduled_award/);
-  assert.match(saJs, /scheduleNextScheduledAwardTick\(\)/);
+  assert.doesNotMatch(saJs, /scheduleNextScheduledAwardTick\(\)/);
   assert.match(coreJs, /rpc\('process_due_scheduled_awards',\s*\{\s*p_user_id:\s*profile\.id\s*\}\)/);
 
   // Responsive CSS styles

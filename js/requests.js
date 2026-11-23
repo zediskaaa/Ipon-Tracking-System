@@ -413,7 +413,6 @@
     }).join('');
 
     Ipon.bindAvatarFallbacks?.(tbody);
-    Ipon.syncPresenceDots?.(tbody);
     Ipon.prepareResponsiveTables?.();
   }
 

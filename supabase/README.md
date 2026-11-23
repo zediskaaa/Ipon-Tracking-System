@@ -14,7 +14,7 @@ Migration `database/migrations/20261111_010_enable_dashboard_realtime.sql` enabl
 
 ## Cloudflare R2 private media
 
-The `manage-account` function stores new chat, announcement, and record-comment files in the private `myipon-private-media` R2 bucket when all four secrets below are configured. Existing Supabase Storage paths remain readable and deletable, and missing R2 configuration safely keeps new uploads on Supabase Storage.
+The `manage-account` function stores chat, announcement, record-comment, and `ipon-media` (avatars, covers, payment QR, receipts, and bug screenshots) files in the private `myipon-private-media` R2 bucket when all four secrets below are configured. Legacy Supabase Storage paths remain readable and deletable, and missing R2 configuration safely falls back to Supabase Storage. Public `ipon-media` objects are served via short-lived `302` redirects from `GET /functions/v1/manage-account?media=<object-path>`.
 
 ```sh
 supabase secrets set \

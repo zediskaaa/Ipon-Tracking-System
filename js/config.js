@@ -2,8 +2,7 @@ window.IPON_CONFIG = Object.freeze({
   supabaseUrl: 'https://woslmwokhhyszkgevnli.supabase.co',
   supabaseAnonKey: 'sb_publishable_4R7H8GK6Ay6l4Jv1tEt0SA_LzedpmBH',
   clerkPublishableKey: 'pk_test_c29saWQtZ2FubmV0LTIwMjEuY2xlcmsuYWNjb3VudHMuZGV2JA==',
-  vapidPublicKey: 'BAmuooDoG5lqI9NV0Wx2DLFUT87v6ut4cLe4qFHd7KcEgjs8kDOe2GMguN4xeOMkFUWGt0SJdYEUjmrIEZ08sX0',
-  geminiApiKey: ''
+  vapidPublicKey: 'BAmuooDoG5lqI9NV0Wx2DLFUT87v6ut4cLe4qFHd7KcEgjs8kDOe2GMguN4xeOMkFUWGt0SJdYEUjmrIEZ08sX0'
 });
 
 try {

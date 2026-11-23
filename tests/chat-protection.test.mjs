@@ -292,21 +292,18 @@ test('browser presence changes notify the chat even when the same user stays onl
   const core = read('js/core.js').replace(/\r\n/g, '\n');
   const syncSource = core.match(/      const handleSync = \(\) => \{[\s\S]*?\n      \};/)?.[0];
   assert.ok(syncSource);
-  const onlineUserIds = new Set(['u1', 'u2']);
   const onlineClientPlatforms = new Map([['u1', new Set(['android_app'])], ['u2', new Set(['android_app'])]]);
   let peerPlatform = 'browser';
   let events = 0;
   const handleSync = new Function(
-    'onlineUserIds', 'onlineClientPlatforms', 'presenceChannel', 'presenceShowOnline', 'document', 'profile',
-    'syncPresencePlatforms', 'hasLiveBrowserSession', 'syncPresenceDots', 'broadcastLocalPresence', 'emitPresenceChange',
+    'onlineClientPlatforms', 'presenceChannel', 'syncPresencePlatforms', 'hasLiveBrowserSession', 'emitPresenceChange',
     `${syncSource}; return handleSync;`
   )(
-    onlineUserIds, onlineClientPlatforms,
+    onlineClientPlatforms,
     { presenceState: () => ({ u1: [{ user_id: 'u1' }], u2: [{ user_id: 'u2' }] }) },
-    true, { visibilityState: 'visible' }, { id: 'u1' },
     () => { onlineClientPlatforms.set('u2', new Set([peerPlatform])); },
     (uid) => onlineClientPlatforms.get(uid)?.has('browser') || false,
-    () => {}, () => {}, () => { events += 1; }
+    () => { events += 1; }
   );
   handleSync();
   assert.equal(events, 1, 'opening the browser must update the Android switch');

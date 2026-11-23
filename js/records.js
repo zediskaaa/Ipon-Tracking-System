@@ -396,7 +396,6 @@
     if (avatarEl) {
       avatarEl.innerHTML = Ipon.avatarMarkup(avatarUrl, safeName, 'avatar-lg', memberUserId);
       Ipon.bindAvatarFallbacks(avatarEl);
-      Ipon.syncPresenceDots(avatarEl);
     }
     const nameEl = document.getElementById('member-spotlight-name');
     if (nameEl) nameEl.textContent = safeName;
